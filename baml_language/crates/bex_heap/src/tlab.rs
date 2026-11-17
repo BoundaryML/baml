@@ -328,6 +328,11 @@ impl Tlab {
         self.alloc(Object::Array(Array::new(element_ty, values)))
     }
 
+    #[inline]
+    pub fn alloc_tuple(&mut self, tuple: bex_vm_types::Tuple) -> HeapPtr {
+        self.alloc(Object::Tuple(tuple))
+    }
+
     /// Allocate a map object whose keys/values have static types `key_ty`/`value_ty`.
     #[inline]
     pub fn alloc_map(
@@ -563,6 +568,10 @@ pub trait TlabHolder {
         values: IndexMap<bex_str::BexStr, Value>,
     ) -> HeapPtr {
         self.tlab_mut().alloc_map(key_ty, value_ty, values)
+    }
+
+    fn alloc_tuple(&mut self, tuple: bex_vm_types::Tuple) -> HeapPtr {
+        self.tlab_mut().alloc_tuple(tuple)
     }
 
     fn alloc_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> HeapPtr {

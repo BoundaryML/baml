@@ -100,10 +100,10 @@ mod thread;
 pub use bex_vm::{CompiledBodies, CompiledBodyTable, compiled_rt::STACKFUL_FIBERS_SUPPORTED};
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_types::ProcessStatus;
-#[cfg(not(target_arch = "wasm32"))]
-pub use telemetry::TelemetryRecording;
 #[cfg(all(not(target_arch = "wasm32"), feature = "telemetry_diagnostics"))]
 pub use telemetry::append_diagnostics_line;
+#[cfg(not(target_arch = "wasm32"))]
+pub use telemetry::{BuildProvider, TelemetryRecording};
 mod task_report;
 pub use task_report::{StuckTask, TaskReport, Waiting, WaitsOn};
 mod telemetry_network;
@@ -1032,6 +1032,8 @@ pub struct EngineConfig {
     /// Recorded engines in one OS process must receive the same launch context:
     /// recordings share a process identity and queries expose one process row.
     /// The caller owns this invariant; engines do not coordinate global state.
+    /// Automatic application version metadata is overlaid on each program's
+    /// execution context, without changing this shared process context.
     pub launch_context: btel_types::context::Context,
     pub runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
     pub clock_mode: btel_clock::ClockMode,
@@ -1912,6 +1914,32 @@ impl BexEngine {
             recording,
             compiled_bodies,
         } = config;
+        // Application identity is execution context, independent of recording.
+        // Apply it before any package initializer executes, so pack and every
+        // bridge inherit the same root metadata. The language version is shared
+        // with the recorded process context; app identity belongs to this program,
+        // since one OS process can host multiple differently versioned programs.
+        let mut versions = btel_types::context::ContextPatch::default();
+        versions.metadata.insert(
+            "baml.ctx.baml_version".into(),
+            Some(btel_types::context::ContextValue::String(
+                baml_version::CANONICAL_VERSION.to_owned(),
+            )),
+        );
+        #[cfg(not(target_arch = "wasm32"))]
+        let process_context = launch_context.with_patch(&versions);
+        if let Some(version) = bytecode_program
+            .packages
+            .get(bytecode_program.root as usize)
+            .and_then(|package| package.metadata.as_ref())
+            .and_then(|metadata| metadata.claimed.version.as_ref())
+        {
+            versions.metadata.insert(
+                "baml.ctx.app_version".into(),
+                Some(btel_types::context::ContextValue::String(version.clone())),
+            );
+        }
+        let launch_context = launch_context.with_patch(&versions);
         let auto_telemetry_level = match &artifact_telemetry {
             Some(policy) => policy.resolve_level(),
             None => btel_settings::mode::from_env()
@@ -1929,7 +1957,9 @@ impl BexEngine {
         let argv: Arc<[String]> = Arc::from(argv);
         let process_euid = ProcessEuid::current();
         let engine_id = Self::next_engine_id();
-        let program_id = ProgramId::new_random();
+        let program_id = bytecode_program
+            .linked_id()
+            .map_or_else(ProgramId::new_random, ProgramId);
         let source_snapshot_id = bytecode_program
             .source_content_hash
             .map(bex_events::ids::SourceSnapshotId);
@@ -2112,8 +2142,9 @@ impl BexEngine {
                     // Compile-time metadata is copied once, before any VM executes.
                     Some(recording) => recording.start(
                         source_snapshot_id.map(|id| id.0),
+                        Some(program_id.0),
                         Arc::new(heap.static_function_metadata()),
-                        &launch_context,
+                        &process_context,
                     )?,
                     None => (
                         btel_processor::TelemetryRuntime::new().map_err(|error| {
@@ -3933,12 +3964,7 @@ impl BexEngine {
         vm.set_root_context(self.launch_context.clone());
         let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
-        let mut permit = inactive.acquire().await;
-        // A callback a sys-op runs for its caller, such as a server's request
-        // handler, is a spawned future: its body runs from here. Unmarked, it
-        // would record its start at its completion, as if cancelled unstarted.
-        permit.vm.mark_telemetry_running();
-        permit
+        inactive.acquire().await
     }
 
     /// A VM over this engine's heap and program for task `thread_id`, running
@@ -4777,6 +4803,13 @@ impl BexEngine {
             thread.vm.set_entry_trace(&options, None);
         }
         thread.vm.set_root_context(context);
+        // A callback a sys-op runs for its caller, such as a server's request
+        // handler, is a spawned future: its body runs from here. Unmarked, it
+        // would record its start at its completion, as if cancelled unstarted.
+        // Marking it announces the thread, so it waits for the caller's
+        // context: announced before, the future would record the launch
+        // context instead.
+        thread.vm.mark_telemetry_running();
         Ok(())
     }
 
@@ -8483,6 +8516,66 @@ mod type_identity_tests {
             panic!("a statement lands as a type value")
         };
         assert_eq!(landed.ty, baml_type::RealizedTy::int());
+    }
+
+    #[tokio::test]
+    async fn a_cycle_through_a_tuple_fails_outbound_conversion() {
+        use bex_vm_types::{
+            RealizedTy, Value,
+            types::{Array, Tuple},
+        };
+
+        let engine = engine();
+        let mut thread = engine.new_root_thread(CancellationToken::new()).await;
+        let list_ty = RealizedTy::List(Box::new(RealizedTy::Unknown));
+        let tuple_ty = RealizedTy::Tuple(Box::new([list_ty.clone()]));
+        let list = thread
+            .tlab_mut()
+            .alloc(Object::Array(Array::new(tuple_ty.clone(), Vec::new())));
+        let tuple = thread.tlab_mut().alloc(Object::Tuple(
+            Tuple::new(vec![list_ty], vec![Value::object(list)]).unwrap(),
+        ));
+        let shared = thread.tlab_mut().alloc(Object::Tuple(
+            Tuple::new(
+                vec![tuple_ty.clone(), tuple_ty.clone()],
+                vec![Value::object(tuple), Value::object(tuple)],
+            )
+            .unwrap(),
+        ));
+        let Object::Array(array) = thread.vm.get_object(list) else {
+            unreachable!("allocated as an array")
+        };
+        // SAFETY: this test is the array's only reader or writer.
+        unsafe { array.data_unchecked_mut() }.push(Value::object(tuple));
+
+        for (value, ty) in [(tuple, &tuple_ty), (shared, &RealizedTy::Unknown)] {
+            let error = engine
+                .convert_vm_value_to_external_with_type(
+                    Value::object(value),
+                    ty,
+                    &thread.vm,
+                    thread.proof(),
+                )
+                .expect_err("a cyclic value has no finite host form");
+            assert!(
+                matches!(&error, super::EngineError::CannotConvert { type_name } if type_name.starts_with("cyclic")),
+                "{error}"
+            );
+        }
+
+        unsafe { array.data_unchecked_mut() }.clear();
+        let exported = engine
+            .convert_vm_value_to_external_with_type(
+                Value::object(shared),
+                &RealizedTy::Unknown,
+                &thread.vm,
+                thread.proof(),
+            )
+            .expect("a shared, acyclic tuple converts");
+        let bex_external_types::BexExternalValue::Tuple { items, .. } = exported else {
+            panic!("a tuple exports as a tuple, got {exported:?}")
+        };
+        assert_eq!(items.len(), 2);
     }
 
     /// A handle from a *different* engine does not resolve here, so a

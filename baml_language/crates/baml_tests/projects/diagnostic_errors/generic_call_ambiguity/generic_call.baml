@@ -2,7 +2,6 @@
 // `>` is followed directly by `(`, the truly ambiguous shape — at the token
 // level `f < K , V > ( ... )` could read as either:
 //   - a generic call `f<K, V>(...)`, or
-//   - two comparisons `f < K , V > (...)`  (Baml has no tuples, but the
 //     parser would have to look further to know that).
 //
 // The parser's `looks_like_generic_args` heuristic (parser.rs:3914) commits

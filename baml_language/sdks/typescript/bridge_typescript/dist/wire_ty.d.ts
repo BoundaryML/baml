@@ -32,6 +32,8 @@ export type BamlTypeToken = BamlPrimitiveToken | StringConstructor | BooleanCons
     optional: BamlTypeToken;
 } | {
     union: BamlTypeToken[];
+} | {
+    tuple: BamlTypeToken[];
 };
 export interface BamlTypeMetadata {
     alias?: string;

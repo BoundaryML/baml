@@ -105,6 +105,28 @@ const PROGRAMS: &[(&str, &str)] = &[
         "#,
     ),
     (
+        "tuples across allocation, field loads and generic calls",
+        r#"
+        class Box { value: int }
+        function make(n: int) -> (int, Box) { (n, Box { value: n + 1 }) }
+        function tagged<T>(value: T) -> (T, int?) { (value, null) }
+        function score(pair: (int, Box)) -> int { pair.0 + pair.1.value }
+        function main() -> int {
+            let total = 0;
+            for (let i = 0; i < 30; i += 1) {
+                let pair = make(i);
+                let (let n, let box) = pair;
+                total += score(pair) + n + box.value;
+            }
+            let nested = tagged<(int, Box)>(make(4));
+            if (reflect.Type.of_value(nested) == reflect.Type.of<((int, Box), int?)>()) {
+                total += 10000;
+            }
+            total + nested.0.1.value
+        }
+        "#,
+    ),
+    (
         "arrays and maps",
         r#"
         function sort(xs: int[]) -> int[] {

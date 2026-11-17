@@ -138,18 +138,21 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Version 30: a class field and an enum variant carry their `@json`
 /// attributes.
 ///
-/// Version 31: `Bytecode` carries `inline_frames` and `inline_table`, the
+/// Version 31: a package interface opens with the package's claimed identity
+/// and the compiler version, both covered by its digest, and a
+/// `ProgramPackage` carries the package's `metadata` (BEP-085).
+///
+/// Version 34: `Bytecode` carries `inline_frames` and `inline_table`, the
 /// calls the optimizer inlined into a function and the PCs each one covers,
-/// which a stack trace expands back into frames.
+/// which a stack trace expands back into frames, and the instruction and
+/// opcode sets gained `IsNull`, `IsNotNull`, `CallEquals`, `AddLocalSmall`,
+/// `LoadVarField`, `LoadVarFieldLocal`, `JumpIfLocalsCmp` and
+/// `JumpIfLocalConstCmp`. Versions 32 and 33 are skipped: unreleased builds
+/// wrote other layouts under them.
 ///
-/// Version 33: the instruction and opcode sets gained `IsNull`, `IsNotNull`,
-/// `CallEquals`, `AddLocalSmall`, `LoadVarField`, `LoadVarFieldLocal`,
-/// `JumpIfLocalsCmp` and `JumpIfLocalConstCmp`. Version 32 is skipped:
-/// unreleased builds wrote a different instruction set under it.
-///
-/// Version 34: `int` is 64-bit. An int constant may lie outside the 63-bit
+/// Version 35: `int` is 64-bit. An int constant may lie outside the 63-bit
 /// inline range of a runtime `Value`; an older runtime would truncate it.
-pub const FORMAT_VERSION: u32 = 34;
+pub const FORMAT_VERSION: u32 = 35;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

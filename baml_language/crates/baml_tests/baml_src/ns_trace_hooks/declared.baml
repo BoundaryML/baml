@@ -23,7 +23,7 @@ function decide(
     assert.equal(settings.context.metadata["caller"], "kept");
     settings.context.metadata["snapshot_only"] = "changed";
     assert.equal(trace.current_context().metadata["root"], "inherited");
-    assert.equal(trace.current_context().metadata.length(), 1);
+    assert.equal(trace.current_context().metadata.length(), 2);
     (
         () -> {
             assert.equal(trace.current_context().metadata["hook_local"], "isolated");
@@ -38,7 +38,7 @@ function defaulted(counts: Counts, value: int = resolved_default(counts)) -> int
     assert.equal(trace.current_context().metadata["decision"], "hidden");
     assert.equal(trace.current_context().metadata["caller"], "kept");
     assert.equal(trace.current_context().metadata["root"], "inherited");
-    assert.equal(trace.current_context().metadata.length(), 3);
+    assert.equal(trace.current_context().metadata.length(), 4);
     value
 }
 
@@ -61,7 +61,7 @@ test "declared hooks bind defaults once and isolate context" {
                 ),
                 7,
             );
-            assert.equal(trace.current_context().metadata.length(), 1);
+            assert.equal(trace.current_context().metadata.length(), 2);
         }
     )($trace = trace.context(metadata = { "root": "inherited" }));
     assert.equal(counts.hooks, 2);
@@ -316,6 +316,7 @@ function context_target(value: string) -> trace.Context {
 }
 
 test "hook options preserve caller context and reservation context wins" {
+    let baml_version = trace.current_context().metadata["baml.ctx.baml_version"];
     (
         () -> {
             let caller = trace.span(inputs = true).context(
@@ -326,19 +327,37 @@ test "hook options preserve caller context and reservation context wins" {
             assert.equal(ordinary.distinct_id, "hook");
             assert.equal(
                 ordinary.metadata,
-                { "winner": "hook", "caller": true, "added": true, "root": true },
+                {
+                    "winner": "hook",
+                    "caller": true,
+                    "added": true,
+                    "root": true,
+                    "baml.ctx.baml_version": baml_version,
+                },
             );
             let unchanged = context_target("null", $trace = caller);
             assert.equal(unchanged.distinct_id, "caller");
             assert.equal(
                 unchanged.metadata,
-                { "winner": "caller", "caller": true, "root": true, "removed": true },
+                {
+                    "winner": "caller",
+                    "caller": true,
+                    "root": true,
+                    "removed": true,
+                    "baml.ctx.baml_version": baml_version,
+                },
             );
             let reserved = context_target("options", $trace = caller.reserve());
             assert.equal(reserved.distinct_id, "caller");
             assert.equal(
                 reserved.metadata,
-                { "winner": "caller", "caller": true, "added": true, "root": true },
+                {
+                    "winner": "caller",
+                    "caller": true,
+                    "added": true,
+                    "root": true,
+                    "baml.ctx.baml_version": baml_version,
+                },
             );
         }
     )($trace = trace.context(metadata = { "root": true, "removed": true }));

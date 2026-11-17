@@ -17,6 +17,7 @@ pub enum AnyPattern {
     Array(Id<ArrayPattern>),
     Type(Id<TypePattern>),
     Paren(Id<ParenPattern>),
+    Tuple(Id<TuplePattern>),
     Union(Id<UnionPattern>),
     Bogus(Id<Bogus>),
 }
@@ -108,4 +109,11 @@ pub struct UnionPattern {
 pub struct PatternArm {
     pub pipe: Token!["|"],
     pub pattern: Result<AnyPattern, Missing>,
+}
+
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TuplePattern {
+    pub l: Token!["("],
+    pub elements: Sep<AnyPattern, punct::Comma>,
+    pub r: Result<Token![")"], Missing>,
 }

@@ -3,16 +3,17 @@ use std::{io::Write as _, path::Path, process::Command};
 
 use serde_json::Value;
 
+// `Leaf` declares a span so the optimizer keeps its call: an inlined
+// function has no record of its own. `Work` is kept because it recurses, and
+// declares nothing, so only a high-mode run retains its calls.
 const PROGRAM: &str = r"
+/// baml:$trace=trace.span
 function Leaf(n: int) -> int { n + 1 }
 function Work(n: int) -> int {
-    let i = 0;
-    let sum = 0;
-    while (i < n) {
-        sum = sum + Leaf(i);
-        i = i + 1;
+    if (n == 0) {
+        return 0;
     }
-    sum
+    Leaf(n - 1) + Work(n - 1)
 }
 function main() -> int {
     let child = spawn { Work(5) };
@@ -235,10 +236,10 @@ fn fresh_query_processes_index_once_and_then_only_new_files() {
         project.path(),
         "SELECT SUM(invocation_count), SUM(return_count), SUM(error_count),
            SUM(panic_error_count), SUM(future_cancel_count), SUM(missing_count)
-         FROM profiler WHERE function_name = 'user.Leaf'",
+         FROM profiler WHERE function_name = 'user.Work'",
     );
     assert_eq!(code, 0);
-    assert_eq!(outcomes["rows"], serde_json::json!([[75, 75, 0, 0, 0, 0]]));
+    assert_eq!(outcomes["rows"], serde_json::json!([[81, 81, 0, 0, 0, 0]]));
     assert_eq!(outcomes["outcome"]["query"]["cas_loads"], 0);
 
     // Retained calls exist only for the high-mode run; values render as NULL
@@ -248,7 +249,7 @@ fn fresh_query_processes_index_once_and_then_only_new_files() {
         "SELECT span_name, output_value['x'] FROM spans WHERE span_name = 'user.Work'",
     );
     assert_eq!(code, 0);
-    assert_eq!(calls["rows"].as_array().unwrap().len(), 2);
+    assert_eq!(calls["rows"].as_array().unwrap().len(), 27);
     assert_eq!(calls["outcome"]["status"], "complete");
 }
 

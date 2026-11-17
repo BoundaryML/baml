@@ -202,6 +202,12 @@ pub(crate) fn filter_throws_type(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
                 .collect::<Option<Box<[_]>>>()?;
             Some(Ty::Class(name.clone(), args))
         }
+        Ty::Tuple(items) => Some(Ty::Tuple(
+            items
+                .iter()
+                .map(|item| filter_throws_type(item, analysis))
+                .collect::<Option<Box<[_]>>>()?,
+        )),
         Ty::TypeAlias(name)
             if !crate::translate_ty::is_canonical_json(name) && !analysis.is_emitted(name) =>
         {
@@ -233,8 +239,7 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
         Ty::List(inner) => register_unions_in(inner, leaf, analysis, registry),
         Ty::Map { key: _, value, .. } => register_unions_in(value, leaf, analysis, registry),
         // A union nested inside a generic instantiation (`GenericBox<int |
-        // string>`) is registered in the same leaf as its enclosing symbol.
-        Ty::Class(_, args) => {
+        Ty::Class(_, args) | Ty::Tuple(args) => {
             for arg in args {
                 register_unions_in(arg, leaf, analysis, registry);
             }
@@ -347,7 +352,7 @@ fn collect_arm_type_vars(ty: &Ty, out: &mut Vec<String>, seen: &mut HashSet<Stri
             collect_arm_type_vars(key, out, seen);
             collect_arm_type_vars(value, out, seen);
         }
-        Ty::Union(items) => items
+        Ty::Union(items) | Ty::Tuple(items) => items
             .iter()
             .for_each(|item| collect_arm_type_vars(item, out, seen)),
         Ty::Class(_, args) => args
@@ -372,6 +377,12 @@ pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
             analysis.is_emitted(name)
         }
         Ty::List(inner) => arm_is_representable(inner, analysis),
+        Ty::Tuple(items) => {
+            crate::translate_ty::tuple_arity_is_supported(items.len())
+                && items
+                    .iter()
+                    .all(|item| matches!(item, Ty::Null) || arm_is_representable(item, analysis))
+        }
         Ty::Map { key, value, .. } => {
             matches!(key.as_ref(), Ty::String) && arm_is_representable(value, analysis)
         }
@@ -490,6 +501,17 @@ fn variant_name(arm: &Ty, qualify: usize) -> Option<String> {
         // (`T | string` → `TOrString { T(T), String(String) }`).
         Ty::TypeVar(var) => Some(var.as_str().to_string()),
         Ty::List(inner) => Some(format!("{}List", variant_name(inner, qualify)?)),
+        Ty::Tuple(items) => {
+            let mut name = String::new();
+            for item in items {
+                match item {
+                    Ty::Null => name.push_str("Null"),
+                    item => name.push_str(&variant_name(item, qualify)?),
+                }
+            }
+            name.push_str("Tuple");
+            Some(name)
+        }
         Ty::Map { key: _, value, .. } => Some(format!("{}Map", variant_name(value, qualify)?)),
         Ty::Literal(baml_base::Literal::String(value), ..) => {
             let mut chars = value.chars();

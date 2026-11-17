@@ -209,3 +209,25 @@ pub fn assert_no_compile_file_status(stderr: &str) {
         );
     }
 }
+
+/// Seed an endpoint-scoped saved-login fixture without touching process env or user auth.
+pub fn write_saved_login(home: &std::path::Path, endpoint: &bcs_api::Endpoint, token: &str) {
+    use sha2::Digest as _;
+    let file = home.join("login/cache").join(format!(
+        "{}.json",
+        hex::encode(sha2::Sha256::digest(endpoint.as_str().as_bytes()))
+    ));
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(
+        file,
+        serde_json::to_vec(&bcs_api::StoredSession {
+            refresh_token: bcs_api::Secret::new(token.into()),
+            caller: bcs_api::auth::Caller {
+                user_id: "fixture".into(),
+                email: "fixture@example.invalid".into(),
+            },
+        })
+        .unwrap(),
+    )
+    .unwrap();
+}

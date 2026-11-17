@@ -315,6 +315,8 @@ const FieldInput: FC<FieldInputProps> = (props) => {
       return <ListField {...props} schema={schema} />;
     case 'map':
       return <MapField {...props} schema={schema} />;
+    case 'tuple':
+      return <TupleField {...props} schema={schema} />;
     case 'optional':
       return <OptionalField {...props} schema={schema} />;
     case 'union':
@@ -512,6 +514,39 @@ const ListField: FC<
       >
         <Plus /> add item
       </Button>
+    </div>
+  );
+};
+
+/** A fixed-arity tuple: one row per slot, labeled by position. Slots can be
+ *  neither added nor removed — the arity is part of the type. */
+const TupleField: FC<
+  FieldInputProps & { schema: Extract<FieldSchema, { type: 'tuple' }> }
+> = ({ schema, value, onChange, depth }) => {
+  const lookup = useContext(TypeLookupContext);
+  // A mismatched value never reaches here after reconciliation; seeding
+  // missing slots keeps every edit a full-arity array regardless.
+  const slots = schema.elements.map((element, i) =>
+    Array.isArray(value) && i < value.length
+      ? value[i]
+      : defaultValueForSchema(element, lookup),
+  );
+  return (
+    <div className="flex flex-col gap-1 border-l border-vsc-border ml-1.5 pl-2.5">
+      {schema.elements.map((element, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: A tuple slot is identified by its position.
+        <div className="flex flex-col gap-0.5" key={i}>
+          <FieldLabel name={String(i)} schema={element} />
+          <FieldInput
+            depth={depth + 1}
+            onChange={(v) =>
+              onChange(slots.map((cur, j) => (j === i ? v : cur)))
+            }
+            schema={element}
+            value={slots[i]}
+          />
+        </div>
+      ))}
     </div>
   );
 };

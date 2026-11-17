@@ -781,3 +781,99 @@ async fn a_type_value_naming_an_undeclared_variant_is_refused() {
         Ok(BexExternalValue::Variant { variant_name, .. }) if variant_name == "Red"
     ),);
 }
+
+#[tokio::test]
+async fn a_tuple_is_built_at_its_stated_slot_types_and_is_invariant() {
+    let source = r#"
+        function second(t: (int, string)) -> string { t.1 }
+        function first_of_wide(t: (int | string, string?)) -> int | string { t.0 }
+        function wide_is_wide(t: (int | string, string?)) -> bool {
+            is_of<(int | string, string?)>(t) && !is_of<(int, string)>(t)
+        }
+        function is_of<T>(t: unknown) -> bool { t is T }
+        function slot_is_wide(t: unknown) -> bool { is_of<(int | string, string)>(t) }
+        function slot_is_int(t: unknown) -> bool { is_of<(int, string)>(t) }
+    "#;
+    let tuple = |element_types: Vec<WireTy>, items| BexExternalValue::Tuple {
+        element_types,
+        items,
+    };
+    let pair = || {
+        tuple(
+            vec![WireTy::int(), WireTy::string()],
+            vec![BexExternalValue::Int(1), s("a")],
+        )
+    };
+    assert_eq!(call(source, "second", vec![pair()]).await.unwrap(), s("a"));
+    let declared_wide = || {
+        tuple(
+            vec![
+                WireTy::Union(Box::new([WireTy::int(), WireTy::string()])),
+                WireTy::optional(WireTy::string()),
+            ],
+            vec![BexExternalValue::Int(1), s("a")],
+        )
+    };
+    let wide = call(source, "first_of_wide", vec![declared_wide()])
+        .await
+        .unwrap();
+    assert!(
+        matches!(&wide, BexExternalValue::Int(1))
+            || matches!(&wide, BexExternalValue::Union { value, .. }
+                if **value == BexExternalValue::Int(1)),
+        "{wide:?}"
+    );
+    assert_eq!(
+        call(source, "wide_is_wide", vec![declared_wide()])
+            .await
+            .unwrap(),
+        BexExternalValue::Bool(true)
+    );
+    let message = refusal(call(source, "first_of_wide", vec![pair()]).await);
+    assert!(
+        message.contains("does not match the declared type") && message.contains("(int, string)"),
+        "{message}"
+    );
+    let stated_wide = || {
+        tuple(
+            vec![
+                WireTy::Union(Box::new([WireTy::int(), WireTy::string()])),
+                WireTy::string(),
+            ],
+            vec![BexExternalValue::Int(1), s("a")],
+        )
+    };
+    assert_eq!(
+        call(source, "slot_is_wide", vec![stated_wide()])
+            .await
+            .unwrap(),
+        BexExternalValue::Bool(true)
+    );
+    assert_eq!(
+        call(source, "slot_is_int", vec![stated_wide()])
+            .await
+            .unwrap(),
+        BexExternalValue::Bool(false)
+    );
+    assert_eq!(
+        call(source, "slot_is_wide", vec![pair()]).await.unwrap(),
+        BexExternalValue::Bool(false)
+    );
+    assert_eq!(
+        call(source, "slot_is_int", vec![pair()]).await.unwrap(),
+        BexExternalValue::Bool(true)
+    );
+    assert!(refusal(call(source, "second", vec![stated_wide()]).await).contains("`(int, string)`"));
+    let swapped = tuple(
+        vec![WireTy::string(), WireTy::int()],
+        vec![s("a"), BexExternalValue::Int(1)],
+    );
+    assert!(refusal(call(source, "second", vec![swapped]).await).contains("`(int, string)`"));
+    let short = tuple(vec![WireTy::int()], vec![BexExternalValue::Int(1)]);
+    assert!(refusal(call(source, "second", vec![short]).await).contains("`(int, string)`"));
+    let mislabeled = tuple(
+        vec![WireTy::string(), WireTy::string()],
+        vec![BexExternalValue::Int(1), s("a")],
+    );
+    assert!(refusal(call(source, "second", vec![mislabeled]).await).contains("`string`"));
+}

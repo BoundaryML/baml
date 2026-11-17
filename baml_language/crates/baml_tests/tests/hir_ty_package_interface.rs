@@ -256,6 +256,8 @@ fn slotted(own: &str, mut table: Vec<Locator>, rows: PackageInterface<TypeName>)
         })
         .unwrap_or_else(|never| match never {});
     WireInterface {
+        claimed: baml_base::ClaimedIdentity::default(),
+        compiler_version: baml_compiler2_hir_ty::package_interface::COMPILER_VERSION.to_owned(),
         dependencies: table,
         rows,
     }

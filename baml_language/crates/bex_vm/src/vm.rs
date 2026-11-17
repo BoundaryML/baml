@@ -2554,6 +2554,7 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Variant(_) => type_tags::ENUM,
                 Object::Array(_) => type_tags::LIST,
                 Object::Map(_) => type_tags::MAP,
+                Object::Tuple(_) => type_tags::TUPLE,
                 Object::Function(_) => type_tags::FUNCTION,
                 Object::Closure(_) => type_tags::FUNCTION,
                 Object::BoundMethod(_) => type_tags::FUNCTION,
@@ -3099,11 +3100,17 @@ impl BexVm {
         Ok(())
     }
 
+    /// The context the invocation runs under. Telemetry takes it at once: a
+    /// thread marked running before its entry frame announces itself with
+    /// the context it has then.
     pub fn set_root_context(&mut self, context: Context) {
         assert!(
             self.frames.is_empty(),
             "root context must precede invocation entry"
         );
+        if let Some(telemetry) = &mut self.telemetry {
+            telemetry.set_context(context.clone());
+        }
         self.root_context = context;
     }
 
@@ -4254,6 +4261,23 @@ impl BexVm {
         }
     }
 
+    pub(crate) fn tuple_at_type(
+        tuple_ty: bex_vm_types::RealizedTy,
+        elements: Vec<Value>,
+    ) -> Result<bex_vm_types::Tuple, VmInternalError> {
+        let arity = elements.len();
+        match tuple_ty {
+            bex_vm_types::RealizedTy::Tuple(slots) if slots.len() == arity => {
+                bex_vm_types::Tuple::new(slots, elements)
+                    .map_err(|_| unreachable!("slot and element counts checked above"))
+            }
+            other => Err(VmInternalError::TupleTypeMismatch {
+                arity,
+                ty: other.to_string(),
+            }),
+        }
+    }
+
     /// Get string from a Value.
     pub fn as_string(&self, value: &Value) -> Result<&bex_vm_types::BexStr, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
@@ -4598,7 +4622,6 @@ impl BexVm {
                     ),
                 },
                 // A float has no literal type to be precise about, and every
-                // other object's precise type is already its concrete one.
                 _ => {}
             }
         }
@@ -4822,6 +4845,7 @@ impl BexVm {
                 key: Box::new((*map.key_ty).clone()),
                 value: Box::new((*map.value_ty).clone()),
             },
+            Object::Tuple(tuple) => ConcreteRealizedTy::Tuple(tuple.element_tys.clone()),
             // A cell is a transparent capture/mutable-binding slot, not a value
             // of its own: its concrete type is that of the value it holds.
             Object::Cell(cell) => return self.value_concrete_ty(cell.load()),
@@ -6498,6 +6522,16 @@ impl BexVm {
         }
     }
 
+    pub fn as_tuple(&self, value: &Value) -> Result<&bex_vm_types::Tuple, VmInternalError> {
+        match value.as_object_ptr().map(|ptr| self.get_object(ptr)) {
+            Some(Object::Tuple(tuple)) => Ok(tuple),
+            _ => Err(VmInternalError::TypeError {
+                expected: Type::Object(ObjectType::Tuple),
+                got: self.type_of(value),
+            }),
+        }
+    }
+
     fn real_local_count_for_frame(
         &mut self,
         function_ptr: HeapPtr,
@@ -7828,6 +7862,7 @@ impl BexVm {
             | Concrete::Uint8Array
             | Concrete::Media(_)
             | Concrete::Enum(_)
+            | Concrete::Tuple(_)
             | Concrete::Function { .. }
             | Concrete::RustType
             | Concrete::Type
@@ -11394,6 +11429,29 @@ impl BexVm {
                         }
                     }
 
+                    OpCode::LoadTupleField => {
+                        let idx = { read_u32_unchecked(code, pc) as usize };
+                        let top = self.stack.ensure_pop();
+                        let obj_ptr = self.as_object_ptr(top, ObjectType::Tuple)?;
+                        let load_result = {
+                            let Object::Tuple(tuple) = self.get_object(obj_ptr) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Tuple.into(),
+                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                                }
+                                .into());
+                            };
+                            tuple.try_load_slot(idx).ok_or_else(|| tuple.len())
+                        };
+                        let value = match load_result {
+                            Ok(value) => value,
+                            Err(length) => {
+                                return Err(self.invalid_field_access_error(idx, length));
+                            }
+                        };
+                        self.push_stack(value)?;
+                    }
+
                     // ── VirtualLoadField / VirtualStoreField ──────────────────────
                     // The field analogue of `VirtualCall`: the operand indexes the
                     // *interface's* declared fields, and the receiver's resolved impl
@@ -11521,6 +11579,16 @@ impl BexVm {
                         let array: Vec<Value> = self.stack.drain(drain_range).collect();
                         let array_index = self.tlab.alloc_array(element_ty, array);
                         self.push_stack(Value::object(array_index))?;
+                    }
+
+                    OpCode::AllocTuple => {
+                        let size = { read_u32_unchecked(code, pc) as usize };
+                        let tuple_ty = self.ensure_pop_type()?;
+                        let drain_range = StackIndex::from_raw(self.stack.len() - size)..;
+                        let elements: Vec<Value> = self.stack.drain(drain_range).collect();
+                        let tuple = Self::tuple_at_type(tuple_ty, elements)?;
+                        let tuple_index = self.tlab.alloc_tuple(tuple);
+                        self.stack.push(Value::object(tuple_index));
                     }
 
                     OpCode::AllocMap => {
@@ -11741,10 +11809,14 @@ impl BexVm {
                                             }
                                             _ => btel_types::InvocationMode::Span,
                                         }),
+                                        // `trace.span`'s own defaults, as in
+                                        // `TraceHookMode::config`.
                                         inputs: if op == OpCode::TraceHookEmptySpan {
                                             Some(false)
                                         } else {
-                                            (op == OpCode::TraceHookRich).then_some(true)
+                                            (op == OpCode::TraceHookRich
+                                                || op == OpCode::TraceHookSpan)
+                                                .then_some(true)
                                         },
                                         output: if op == OpCode::TraceHookEmptySpan {
                                             Some(false)
@@ -13200,6 +13272,7 @@ impl BexVm {
                             }
                             Object::Array(arr) => arr.len() as i64,
                             Object::Uint8Array(bytes) => bytes.len() as i64,
+                            Object::Tuple(tuple) => tuple.len() as i64,
                             Object::Map(map) => map.len() as i64,
                             Object::String(s) => s.byte_len() as i64,
                             other => {

@@ -2,7 +2,41 @@ This is the standalone BAML implementation of the `baml` toolchain wrapper. It r
 
 The wrapper uses the process APIs adopted in #5456 and the filesystem, path, archive, atomic-write, locking, and typed TOML implementations adopted in #5457. Host telemetry metadata and strict archive preflight are included in #5457. Subprocess execution retains normal platform signal delivery without automatic parent-to-child signal forwarding.
 
-BCS retains explicit spans for dispatch, argument parsing, management command preflight/execution, and self-update. These spans capture no arguments, outputs, or error payloads. Counting argument-parser spans excludes detached telemetry/replacement helpers; update handler spans exclude command help. An error escaping dispatch is a wrapper failure, while recovered internal errors and delegated CLI exit codes are excluded. These boundaries remain queryable independently of completed aggregate profiles.
+BCS records canonical command context and sanitized operational-error metadata. Full input snapshots and argument-bearing return snapshots are not requested. The existing `http_bodies=false` policy suppresses all error payloads, including requested errors; this wrapper preserves that policy.
+
+| Boundary | Captured values |
+| --- | --- |
+| `dispatch`, `WrapperInvocation.parse`, `management_command`, `selection_impl`, management `preflight` / `execute`, acquisition, version reporting, passive checks and self-update | Outcomes only; no input, returned-value or error snapshots. |
+| `run_toolchain` | Only returned `baml.sys.ProcessExit { exit_code, signal }`. No selected binary, arguments or stdout/stderr buffers. |
+| `user.wrapper_error` | A parameterless marker adding only the three allowlisted metadata fields below; no input, output or error values. |
+
+Child stdout/stderr remain inherited and uncaptured. A delegated CLI/project keeps its own recording policy. `sys.exit` has no returned output; cancellation records only its status. A nonzero child exit or signal is retained in ProcessExit and does not itself emit a wrapper-error marker. VM panics retain their runtime panic status and bypass error handlers, so they do not produce these catch-handler markers. HTTP bodies remain excluded, and no runtime policy, identity, destination or PostHog usage property is changed.
+
+The error marker schema is closed:
+
+| Metadata key | Allowed values |
+| --- | --- |
+| `wrapper.error.stage` | `dispatch`, `parse`, `management_command`, `preflight`, `execute`, `selection`, `acquisition`, `status_acquisition`, `freshness`, `refresh`, `version`, `self_update`, `child_launch` |
+| `wrapper.error.category` | `usage`, `invalid_selection`, `project_not_found`, `configuration`, `io`, `timeout`, `invalid_argument`, `other` |
+| `wrapper.error.disposition` | `propagated`, `recovered`, `terminal` |
+
+Classification inspects only known error types through a hidden call; unrecognized types become `other`. It never reads error fields, stringifies exceptions, or derives labels from messages, class names, argv/flags/values, paths, credentials, response bodies or user-defined data. The marker adds these three fields to existing trace context; it does not copy the exception into context or snapshots. Internal telemetry sender objects and payloads are not captured.
+
+`propagated` means that boundary rethrows; `recovered` means its handler continues; `terminal` identifies the dispatch catch that reports the command failure. A single error can have several markers. Recovered version, status-acquisition and passive-check failures remain visible even if the process succeeds. Use process status for the invocation's final outcome. The existing stderr diagnostic and exit behavior are preserved. This instruments selected operational boundaries, not every utility or errors consumed inside unrelated untraced utilities. Help bypasses management and self-update handlers; internal telemetry/replacement helpers bypass parsing.
+
+The foreground `user.dispatch` span carries `context_metadata['command']`, computed by the same `WrapperCli.command_name(args)` normalization as PostHog before argument parsing. Parser/operational spans and error markers inherit that bounded label independently of PostHog. The terminal marker restores the bounded label after dispatch context unwinds, preserving other parent context. Labels include `baml check`, `baml local`, `baml self update` and `baml toolchain use`; flags, argument values and unknown command names do not enter this field. `baml` can mean empty argv, root help, version, an unknown command or `--` termination. Helpers remove an inherited foreground command label.
+
+These are span fields, not process launch metadata. Join the single dispatch span to `processes` by process_id when counting invocations; inherited descendants or multiple error markers otherwise duplicate counts. Cloud OS argv omission is unchanged. For isolated local recording, use `DO_NOT_TRACK=1 BOUNDARY_API_KEY=local BAML_TELEMETRY=medium BAML_HOME=/tmp/wrapper-command-home/.baml /path/to/baml toolchain list`, then query:
+
+```sh
+DO_NOT_TRACK=1 BOUNDARY_API_KEY=local BAML_TELEMETRY=off /path/to/baml-cli local recordings query --project-dir /tmp/wrapper-command-home --output-format json \
+  "SELECT s.context_metadata['command'] AS command, p.status, COUNT(*) AS invocations
+   FROM spans s JOIN processes p ON s.process_id = p.process_id
+   WHERE s.span_name = 'user.dispatch'
+   GROUP BY s.context_metadata['command'], p.status"
+```
+
+For diagnostics, query `user.wrapper_error` spans and their `wrapper.error.stage`, `wrapper.error.category` and `wrapper.error.disposition` metadata, joining processes for the final outcome. `BAML_TELEMETRY=off` disables markers and local sinks too. `DO_NOT_TRACK` controls PostHog separately. `high` adds automatic spans without requesting input/output capture; packed `on` retains the baked level (normally medium). No errors or cancellation payloads are restored through these markers.
 
 The command line is declared once in `cli.baml` with the parser in `ns_clap`, a port of clap to BAML laid out like clap (lexer, `Arg`, `Command`, parser, validator, `ArgMatches`, `Error`, help). `crates/baml_cli/tests/clap_conformance_e2e.rs` parses generated command lines with both and requires the same outcome; the one setting beyond clap, `external_subcommand_passthrough`, is tested next to the parser. In the wrapper: `toolchain` and `self` are the wrapper's commands, `--project-dir` and `--output-format` are global options accepted before or after them, and every other command is an external subcommand forwarded to the selected CLI with its tokens untouched. The CLI's other value-taking global options are declared there too, so the wrapper can find the command that follows them.
 

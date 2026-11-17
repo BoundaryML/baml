@@ -317,6 +317,7 @@ class ProjectShape {
 
 class PackageShape {
     name: string?,
+    version: string?,
     prelude: bool?,
 }
 

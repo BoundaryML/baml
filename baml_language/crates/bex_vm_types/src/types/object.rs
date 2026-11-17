@@ -106,6 +106,8 @@ pub enum Object {
     /// mutation under `spawn`.
     Map(Map),
 
+    Tuple(crate::Tuple),
+
     /// Boxed 64-bit float. Floats are heap-allocated because `Value`
     /// itself is a single tagged 64-bit word with no inline encoding
     /// for full-precision f64. Allocation rate is low in practice —
@@ -165,6 +167,7 @@ impl Object {
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::Array(_)
+            | Object::Tuple(_)
             | Object::Map(_)
             | Object::Float(_)
             | Object::Int(_)
@@ -232,6 +235,7 @@ impl Object {
             | Object::HostClosure(_)
             | Object::Cell(_)
             | Object::Array(_)
+            | Object::Tuple(_)
             | Object::Map(_)
             | Object::Float(_)
             | Object::Int(_)
@@ -266,6 +270,7 @@ impl Object {
             | Object::HostClosure(_)
             | Object::Cell(_)
             | Object::Array(_)
+            | Object::Tuple(_)
             | Object::Map(_)
             | Object::Float(_)
             | Object::Int(_)
@@ -347,6 +352,7 @@ enum ObjectWire {
     /// (`ConstValue::Type` templates materialize through the VM's `LoadType`),
     /// so this round trip is exercised only by unit/link tooling.
     Type(Box<crate::RealizedTy>),
+    Tuple(Vec<crate::RealizedTy>, Vec<Value>),
     Int(i64),
 }
 
@@ -385,6 +391,7 @@ impl BorshSerialize for Object {
             Self::Int(v) => ObjectWire::Int(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
+            Self::Tuple(v) => ObjectWire::Tuple(v.element_tys.to_vec(), v.slot_values().collect()),
             Self::RustData(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -448,6 +455,10 @@ impl BorshDeserialize for Object {
             ObjectWire::Int(v) => Self::Int(v),
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::Type(v) => Self::Type(Box::new(crate::types::TypeValue::new(*v))),
+            ObjectWire::Tuple(tys, data) => Self::Tuple(
+                crate::Tuple::new(tys, data)
+                    .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?,
+            ),
         })
     }
 }
@@ -490,6 +501,7 @@ impl std::fmt::Display for Object {
                 map.value_ty,
                 map.data.lock().len()
             ),
+            Object::Tuple(tuple) => write!(f, "<tuple len={}>", tuple.len()),
             Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
@@ -531,6 +543,7 @@ pub enum ObjectType {
     Int,
     /// Not a value: the slot's object is gone. See [`Object::Tombstone`].
     Tombstone,
+    Tuple,
 }
 
 impl ObjectType {
@@ -556,6 +569,7 @@ impl ObjectType {
             Object::Uint8Array(_) => Self::Uint8Array,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
+            Object::Tuple(_) => Self::Tuple,
             Object::RustData(_) => Self::RustData,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
@@ -607,6 +621,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Float => write!(f, "float"),
             ObjectType::Int => write!(f, "int"),
             ObjectType::Tombstone => write!(f, "tombstone"),
+            ObjectType::Tuple => write!(f, "tuple"),
         }
     }
 }

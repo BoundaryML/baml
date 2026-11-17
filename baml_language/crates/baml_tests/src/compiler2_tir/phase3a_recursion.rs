@@ -85,6 +85,10 @@ fn class_required_cycle_matrix() {
             "class_required_field_three_way_cycle",
             "class A { b B }\nclass B { c C }\nclass C { a A }",
         ),
+        (
+            "class_required_tuple_element_cycle",
+            "class Knot { next (int, Knot) }",
+        ),
     ]));
 }
 
@@ -94,6 +98,10 @@ fn class_structural_guard_matrix() {
         (
             "class_optional_field_breaks_cycle",
             "class A { b B? }\nclass B { a A }",
+        ),
+        (
+            "class_optional_tuple_element_breaks_cycle",
+            "class Link { next (int, Link?) }",
         ),
         (
             "class_list_field_breaks_cycle",

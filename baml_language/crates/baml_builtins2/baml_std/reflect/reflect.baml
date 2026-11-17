@@ -202,7 +202,8 @@ type TypeKind = root.Class
     | root.Map
     | root.Interface
     | root.Primitive
-    | root.Function;
+    | root.Function
+    | root.Tuple;
 
 /// Implemented automatically by every function value, with its parameter
 /// list erased. `Returns` pins the held function's return type and `Throws`

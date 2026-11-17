@@ -80,5 +80,11 @@ jobs:
           install_args: "node github:rustwasm/wasm-pack"
 
       - name: "Run wasm tests (bridge_wasm)"
+        # Full DWARF makes wasm-bindgen spend minutes processing each compiler
+        # test binary before Node starts. Basic optimization also keeps the
+        # embedded stdlib checks fast. Retain dev assertions/overflow checks.
+        env:
+          CARGO_PROFILE_DEV_DEBUG: "0"
+          CARGO_PROFILE_DEV_OPT_LEVEL: "1"
         run: wasm-pack test --node
         working-directory: baml_language/crates/bridge_wasm

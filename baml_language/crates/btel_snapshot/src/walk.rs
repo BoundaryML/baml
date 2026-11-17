@@ -374,6 +374,19 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
             v.length(*original_len)?;
             values(v, r, s, *items)
         }
+        SnapshotObject::Tuple {
+            element_types,
+            items,
+            original_len,
+        } => {
+            v.byte(ObjectTag::Tuple as u8)?;
+            v.begin_range(element_types.len())?;
+            for ty in &s.types[element_types.indexes()] {
+                described(v, r, ty)?;
+            }
+            v.length(*original_len)?;
+            values(v, r, s, *items)
+        }
         SnapshotObject::Map {
             key_type,
             value_type,

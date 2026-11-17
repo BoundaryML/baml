@@ -346,10 +346,13 @@ async fn initial_ids_match_metadata_and_runtime_identity_is_not_serialized() {
     let serialized = borsh::to_vec(&program).unwrap();
     let reloaded = borsh::from_slice(&serialized).unwrap();
     let second = from_program(reloaded);
-    assert_ne!(
+    // The program's identity is its content, which serialization carries;
+    // the engine and its function ids are not part of it.
+    assert_eq!(
         first.program_metadata().await.program_id,
         second.program_metadata().await.program_id
     );
+    assert_ne!(first.engine_id(), second.engine_id());
     for engine in [&first, &second] {
         let table = engine.program_metadata().await.function_table;
         engine.collect_garbage().await;

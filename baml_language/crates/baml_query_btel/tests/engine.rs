@@ -1686,13 +1686,16 @@ async fn manual_span_can_resume_in_another_root_call_and_close_during_gc() {
         }
         function child() -> int { 77 }
         function resume(span: trace.Span) -> int {
+            let initial_metadata = trace.current_context().metadata;
+            assert.equal(initial_metadata.length(), 1);
+            assert.is_true(initial_metadata.has("baml.ctx.baml_version"));
             let value = span.run(() -> {
                 assert.equal(trace.current_context().metadata["phase"], "owner");
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(5));
                 child($trace = trace.span())
             });
             span.run(() -> { throw "expected"; }) catch_all (e) { _ => {} };
-            assert.equal(trace.current_context().metadata, {});
+            assert.equal(trace.current_context().metadata, initial_metadata);
             span.finish(value);
             value
         }
@@ -1825,6 +1828,9 @@ async fn manual_scopes_preserve_execution_spawn_and_unwind_ancestry() {
         function Leaf() -> int { 1 }
         function Boom() -> int { throw "expected"; }
         function main(n: int) -> int {
+            let initial_metadata = trace.current_context().metadata;
+            assert.equal(initial_metadata.length(), 1);
+            assert.is_true(initial_metadata.has("baml.ctx.baml_version"));
             let outer = trace.start_span("outer", metadata = { "scope": "outer" });
             let inner = trace.start_span("inner", parent = outer, metadata = { "scope": "inner" });
             outer.run(() -> {
@@ -1846,7 +1852,7 @@ async fn manual_scopes_preserve_execution_spawn_and_unwind_ancestry() {
                 assert.equal(await task, 1);
                 assert.equal(trace.current_context().metadata["scope"], "outer");
             });
-            assert.equal(trace.current_context().metadata, {});
+            assert.equal(trace.current_context().metadata, initial_metadata);
             inner.close();
             outer.close();
             Leaf($trace = trace.span())

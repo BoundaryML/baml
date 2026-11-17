@@ -129,12 +129,13 @@ impl<N: Clone> RuntimeTy<N> {
         matches!(self, RuntimeTy::Null)
     }
 
-    /// True if this is the unit type — the type with exactly one value, which
-    /// source spells `null` or `void`. A unit-returning function carries no
+    /// True if this is the unit type — a type whose only value is `null`,
+    /// spelled `null` or `void`. A unit-returning function carries no
     /// information in its result, which is what a consumer that elides the
     /// result (a CLI's stdout) keys on. A type that merely *admits* the unit
     /// value (`int?`) is not unit; one that admits nothing else is, however it
-    /// is spelled (`null | null`, `never | null`).
+    /// is spelled (`null | null`, `never | null`). Tuples are distinct values,
+    /// including the empty tuple and tuples containing only `null`.
     ///
     /// Decided structurally, which is exact for a runtime type: non-recursive
     /// aliases are already expanded, and a recursive alias always reaches a
@@ -162,6 +163,7 @@ impl<N: Clone> RuntimeTy<N> {
             | RuntimeTy::Enum(..)
             | RuntimeTy::EnumVariant(..)
             | RuntimeTy::List(..)
+            | RuntimeTy::Tuple(..)
             | RuntimeTy::Map { .. }
             | RuntimeTy::Function { .. }
             | RuntimeTy::Future(..)
@@ -181,6 +183,7 @@ impl<N: Clone> RuntimeTy<N> {
         match self {
             RuntimeTy::Never => true,
             RuntimeTy::Union(members) => members.iter().all(RuntimeTy::is_uninhabited),
+            RuntimeTy::Tuple(elements) => elements.iter().any(RuntimeTy::is_uninhabited),
             RuntimeTy::Null => false,
             RuntimeTy::Int
             | RuntimeTy::Bigint
@@ -419,6 +422,7 @@ pub fn lower_to_runtime<N: Head>(
             value: Box::new(lower_to_runtime(v, resolved)?),
         },
         Ty::Union(members) => RuntimeTy::Union(lower_vec(members, resolved)?),
+        Ty::Tuple(elements) => RuntimeTy::Tuple(lower_vec(elements, resolved)?),
         // Freshness is a compiler-only flag; runtime literal types are uniform,
         // so normalize to `Regular` at the boundary.
         Ty::Literal(lit, _freshness) => RuntimeTy::Literal(lit.clone(), Freshness::Regular),
@@ -536,9 +540,13 @@ fn ty_has_cycle<N: Head>(
             ty_has_cycle(key, aliases, visited, stack)
                 || ty_has_cycle(value, aliases, visited, stack)
         }
-        Ty::Union(types) => types
+        Ty::Union(types) | Ty::Tuple(types) => types
             .iter()
             .any(|t| ty_has_cycle(t, aliases, visited, stack)),
+        Ty::Future(value, error) => {
+            ty_has_cycle(value, aliases, visited, stack)
+                || ty_has_cycle(error, aliases, visited, stack)
+        }
         Ty::Class(_, type_args) => type_args
             .iter()
             .any(|t| ty_has_cycle(t, aliases, visited, stack)),
@@ -570,7 +578,26 @@ fn ty_has_cycle<N: Head>(
                 || ty_has_cycle(ret, aliases, visited, stack)
                 || ty_has_cycle(throws, aliases, visited, stack)
         }
-        _ => false,
+        Ty::TypeAlias(_)
+        | Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Uint8Array
+        | Ty::Media(..)
+        | Ty::Literal(..)
+        | Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::RustType
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::TypeVar(..)
+        | Ty::Unknown
+        | Ty::Never
+        | Ty::Error => false,
     }
 }
 
@@ -589,11 +616,18 @@ mod tests {
         for ty in unit {
             assert!(ty.is_unit(), "{ty:?}");
         }
-        let not_unit: [RuntimeTy; 4] = [
+        let not_unit: [RuntimeTy; 8] = [
             RuntimeTy::Never,
             RuntimeTy::Union(Box::new([RuntimeTy::Int, RuntimeTy::Null])),
             RuntimeTy::Union(Box::new([RuntimeTy::Never, RuntimeTy::Never])),
             RuntimeTy::Unknown,
+            RuntimeTy::Tuple(Box::new([])),
+            RuntimeTy::Tuple(Box::new([RuntimeTy::Null])),
+            RuntimeTy::Tuple(Box::new([RuntimeTy::Null, RuntimeTy::Null])),
+            RuntimeTy::Union(Box::new([
+                RuntimeTy::Null,
+                RuntimeTy::Tuple(Box::new([RuntimeTy::Null])),
+            ])),
         ];
         for ty in not_unit {
             assert!(!ty.is_unit(), "{ty:?}");

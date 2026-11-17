@@ -1,0 +1,67 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function tuples.tpe_carried_calls() -> (int, string) {
+    load_const 1
+    load_const "s"
+    load_type (int, string)
+    alloc_tuple 2
+    return
+}
+
+function tuples.tpe_carried_prefix() -> (int, int) {
+    load_const 1
+    load_const 2
+    load_type (int, int)
+    alloc_tuple 2
+    return
+}
+
+function tuples.tpe_slot_sum(t: (int, string, int)) -> int {
+    load_var t
+    load_tuple_field .0
+    store_var_load_var a
+    load_var t
+    load_tuple_field .2
+    add_int
+    return
+}
+
+function tuples.tpe_union_slot_mixed(t: (int, bool) | (float, bool)) -> string {
+    load_var t
+    store_var _2
+    load_var _2
+    narrow_bind (int, bool), slot=2
+    pop_jump_if_true L0
+    load_const "float"
+    return
+
+  L0:
+    load_const "int"
+    return
+}
+
+function tuples.tpe_union_slot_sum(t: (int, bool) | (int, string, float)) -> int {
+    load_var t
+    is_type type tag 14
+    pop_jump_if_false L0
+    load_var t
+    container_len
+    load_const 2
+    cmp_int_op ==
+    pop_jump_if_true L1
+
+  L0:
+    load_var t
+    load_tuple_field .0
+    load_const 2
+    add_int
+    return
+
+  L1:
+    load_var t
+    load_tuple_field .0
+    load_const 1
+    add_int
+    return
+}

@@ -709,7 +709,7 @@ function messages_request(
     stream: bool,
     preview: bool = false,
 ) -> MessagesRequest {
-    let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
+    let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type));
     let lowered_prompt = _lower_prompt(prompt, params.default_cache_args, preview = preview);
     let system = lowered_prompt.system;
     let lowered = lowered_prompt.messages;

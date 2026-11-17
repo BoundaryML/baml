@@ -52,7 +52,7 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         .respond_with(ResponseTemplate::new(200))
         .mount(&server)
         .await;
-    let program = baml_test_support::compile_source(trace_context::SOURCE);
+    let program = trace_context::program_with_version(trace_context::SOURCE, "3.4.5+cloud");
     let launch_context = Context::default().with_patch(&ContextPatch {
         metadata: [(
             "root".into(),
@@ -150,6 +150,14 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         );
         let id: btel_snapshot::CasId = header.initial_context_cas_id.unwrap().into();
         let (identity, metadata) = trace_context::metadata(&snapshots[id.as_bytes()]);
+        assert_eq!(
+            metadata["baml.ctx.baml_version"],
+            &btel_snapshot::DecodedValue::String(baml_version::CANONICAL_VERSION.into())
+        );
+        assert!(
+            !metadata.contains_key("baml.ctx.app_version"),
+            "program version is not process-shared metadata"
+        );
         assert_eq!(identity, Some("launch-user"));
         assert_eq!(
             metadata["root"],
@@ -186,6 +194,8 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
                 .as_ref()
         );
         let allowed = [
+            "baml_version",
+            "app_version",
             "os",
             "os_version",
             "os_distro",
@@ -200,7 +210,7 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
                     .is_some_and(|key| allowed.contains(&key))
         }));
     }
-    trace_context::assert_leaf_contexts(&files, &snapshots, 3);
+    trace_context::assert_leaf_contexts(&files, &snapshots, 3, Some("3.4.5+cloud"));
 }
 
 fn engine(server: &MockServer, flush_interval_duration: Duration) -> Arc<BexEngine> {
@@ -451,12 +461,16 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         let header = file.header.unwrap();
         assert_eq!(header.recording_id, recording_id.as_bytes());
         assert!(header.source_cas_id.is_none(), "cloud sources stay local");
+        // Cloud files carry nothing recording minor 14 added.
+        assert!(header.program_id.is_none() && header.build.is_none());
+        assert!(header.format_minor < btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR);
         // Normal shutdown settles every run: the last uploaded file ends it.
         assert_eq!(file.end.is_some(), index + 1 == prepares.len());
         for definition in file.definitions.unwrap_or_default().functions {
             if let Some(proto::function_definition::Resolution::Metadata(metadata)) =
                 definition.resolution
             {
+                assert!(metadata.compilation_unit_hash.is_none());
                 if metadata.fqn == "user.leaf" || metadata.fqn == "user.main" {
                     assert!(metadata.argument_layout.as_ref().unwrap().slots.is_empty());
                     named_functions.insert(metadata.fqn);

@@ -54,6 +54,9 @@ fn build_type(
             part(value)?
         ),
         TyTemplate::Union(members) => format!("RealizedTy::Union(Box::new([{}]))", parts(members)?),
+        TyTemplate::Tuple(elements) => {
+            format!("RealizedTy::Tuple(Box::new([{}]))", parts(elements)?)
+        }
         TyTemplate::Class(name, args) => {
             let (object, _) = index.class_at(name).ok_or("a class not in the program")?;
             if args.is_empty() {
