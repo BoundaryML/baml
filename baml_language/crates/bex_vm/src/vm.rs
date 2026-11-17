@@ -4069,6 +4069,12 @@ impl BexVm {
     /// and end of a run, and after an operation that allocates in bulk.
     #[inline]
     fn settle(&mut self) {
+        // Text a rope materialized when it was read, which its allocation
+        // was not charged for (see `BexStr::unshared_heap_bytes`).
+        let materialized = bex_str::take_materialized_bytes();
+        if materialized != 0 {
+            self.tlab.alloc_debt().grow(materialized);
+        }
         if self.tlab.alloc_debt().balance().unsigned_abs()
             >= bex_heap::SETTLE_QUANTUM.unsigned_abs()
         {
@@ -4091,6 +4097,9 @@ impl BexVm {
     #[cold]
     #[inline(never)]
     fn poll_for_yield(&mut self) -> bool {
+        self.tlab
+            .alloc_debt()
+            .grow(bex_str::take_materialized_bytes());
         self.tlab.flush_alloc_debt();
         // The poll reads the pressure flag the settlement may have raised.
         self.tlab.take_budget_crossed();

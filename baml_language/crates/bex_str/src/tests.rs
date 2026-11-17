@@ -42,11 +42,12 @@ fn unshared_heap_bytes_counts_each_handle_in_full() {
     // A slice is sized by what it views, not by the parent it pins.
     assert_eq!(flat.byte_slice(1..1_001).unshared_heap_bytes(), 1_000);
 
-    // A concatenation is sized by the buffer reading it would materialize,
-    // and sizing it does not materialize that buffer.
+    // A concatenation is sized by its node alone: its pieces are strings of
+    // their own. Sizing it does not materialize its text.
     let rope = BexStr::concat(flat.clone(), BexStr::from("y".repeat(100)));
     assert!(matches!(rope, BexStr::Concat(_)));
-    assert!(rope.unshared_heap_bytes() > rope.byte_len());
+    assert!(rope.unshared_heap_bytes() > 0);
+    assert!(rope.unshared_heap_bytes() < 1_000);
     assert!(matches!(
         &rope,
         BexStr::Concat(node) if matches!(
@@ -54,6 +55,74 @@ fn unshared_heap_bytes_counts_each_handle_in_full() {
             super::bex_str::ConcatState::Deferred { .. }
         )
     ));
+}
+
+/// A run of short parts `concat_many` copies into a rope is reported like a
+/// flattened buffer; a copy that is the whole result is not, since the
+/// string's own charge counts it.
+#[test]
+fn concat_many_reports_runs_it_copies_into_a_rope() {
+    let long = BexStr::from("x".repeat(2_000));
+    let short = BexStr::from("y".repeat(1_000));
+    crate::take_materialized_bytes();
+    let parts: Vec<&BexStr> = std::iter::once(&long)
+        .chain(std::iter::repeat_n(&short, 8))
+        .collect();
+    let rope = BexStr::concat_many(&parts);
+    assert!(matches!(rope, BexStr::Concat(_)));
+    let reported = crate::take_materialized_bytes();
+    assert!(
+        reported >= 8_000,
+        "{reported} bytes reported for an 8 kB copy"
+    );
+    assert!(
+        reported < 9_000,
+        "{reported} bytes reported for an 8 kB copy"
+    );
+
+    let flat = BexStr::concat_many(&[&short, &short, &short]);
+    assert!(matches!(flat, BexStr::Flat(_)));
+    assert_eq!(crate::take_materialized_bytes(), 0);
+}
+
+/// The buffer a rope materializes when it is read is reported once, on the
+/// thread that read it, and taking the count resets it.
+#[test]
+fn flattening_reports_the_materialized_buffer_once() {
+    crate::take_materialized_bytes();
+    let mut text = BexStr::from("x".repeat(1_000));
+    for _ in 0..100 {
+        text = BexStr::concat(text, BexStr::from("y".repeat(100)));
+    }
+    assert_eq!(
+        crate::take_materialized_bytes(),
+        0,
+        "building a rope reads none of it"
+    );
+    assert_eq!(text.byte_len(), 11_000);
+    assert!(text.as_str().ends_with('y'));
+    let reported = crate::take_materialized_bytes();
+    assert!(
+        reported >= 11_000,
+        "{reported} bytes reported for an 11 kB buffer"
+    );
+    assert!(
+        reported < 12_000,
+        "{reported} bytes reported for an 11 kB buffer"
+    );
+    assert_eq!(crate::take_materialized_bytes(), 0);
+    // A second read uses the cached buffer.
+    assert!(text.as_str().starts_with('x'));
+    assert_eq!(crate::take_materialized_bytes(), 0);
+    // Another thread's reads are its own.
+    let other = BexStr::concat(text.byte_slice(0..5_000), BexStr::from("z".repeat(100)));
+    std::thread::spawn(move || {
+        assert_eq!(other.as_str().len(), 5_100);
+        assert!(crate::take_materialized_bytes() >= 5_100);
+    })
+    .join()
+    .unwrap();
+    assert_eq!(crate::take_materialized_bytes(), 0);
 }
 
 #[test]
