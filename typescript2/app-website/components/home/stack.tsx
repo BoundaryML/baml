@@ -1513,7 +1513,7 @@ export default function Stack() {
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         {/* The worry, asked out loud, then answered in the order it's asked: fast, then small
-            (storage, then the multimodal store), then the answer. */}
+            (storage, then the multimodal store). */}
         {/* Given room on both sides, so it reads as a new beat, not a caption on the figure. */}
         <h2 className="v4-h2 text-head max-w-[22em]" id="stack">
           Is <Hyper /> practical?
@@ -1544,9 +1544,6 @@ export default function Stack() {
             <Media p={1} pick={() => {}} still="second" wait={null} />
           </div>
         </div>
-        <p className="mt-16 md:mt-20 v4-h2 text-head max-w-[22em]">
-          So yes, <Hyper /> is practical. By design.
-        </p>
         <h2 className="mt-32 md:mt-48 v4-h2 text-head max-w-[22em]">
           But to make <Hyper /> possible, we had to build a programming
           language.
