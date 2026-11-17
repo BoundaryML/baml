@@ -1438,14 +1438,31 @@ fn emit_glue_adapter(
     suffix: &str,
     b: &NativeBuiltin,
 ) {
-    let args = (0..entry_params(b).len()).fold(String::new(), |mut args, i| {
-        write!(args, ", args[{i}]").unwrap();
-        args
-    });
+    let params = entry_params(b).len();
+    if b.may_yield {
+        let args = (0..params).fold(String::new(), |mut args, i| {
+            write!(args, ", args[{i}]").unwrap();
+            args
+        });
+        writeln!(
+            out,
+            "    fn __glue_{method_name}{suffix}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{\n        \
+             <Self as {trait_name}>::__entry_{method_name}{suffix}(vm{args})\n    }}"
+        )
+        .unwrap();
+        return;
+    }
+    let args = (0..params)
+        .map(|i| format!("args[{i}]"))
+        .collect::<Vec<_>>()
+        .join(", ");
     writeln!(
         out,
         "    fn __glue_{method_name}{suffix}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{\n        \
-         <Self as {trait_name}>::__entry_{method_name}{suffix}(vm{args})\n    }}"
+         match <Self as {trait_name}>::__body_{method_name}{suffix}(vm, [{args}]) {{\n            \
+         Ok(r) => NativeCallResult::Done(r),\n            \
+         Err(e) => NativeCallResult::Error(e),\n        \
+         }}\n    }}"
     )
     .unwrap();
 }
