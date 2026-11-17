@@ -112,6 +112,26 @@ impl BexVm {
         level: usize,
         landing: Option<(usize, usize)>,
     ) -> Result<(Value, Value), Box<VmError>> {
+        // As in the bytecode unwinder, only the innermost span the error
+        // escapes records it by default. Without this every popped span
+        // snapshots the error's context, trace included: quadratic in depth.
+        let enclosing = self
+            .telemetry
+            .as_mut()
+            .and_then(crate::telemetry::TelemetryState::begin_unwind);
+        let result = self.land_compiled_catch_frames(error, level, landing);
+        if let Some(state) = self.telemetry.as_mut() {
+            state.end_unwind(enclosing);
+        }
+        result
+    }
+
+    fn land_compiled_catch_frames(
+        &mut self,
+        error: Box<VmError>,
+        level: usize,
+        landing: Option<(usize, usize)>,
+    ) -> Result<(Value, Value), Box<VmError>> {
         let VmError::Thrown(thrown) = *error else {
             return Err(error);
         };
