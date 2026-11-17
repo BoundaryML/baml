@@ -20,16 +20,6 @@ function error_message(error: unknown) -> string {
     }
 }
 
-// Capture native package metadata before invocation-specific context patches.
-const WRAPPER_VERSION = match (trace.current_context().metadata.get("baml.ctx.app_version")) {
-    let version: string => version,
-    _ => baml.sys.panic("the wrapper requires package.version in baml.toml"),
-};
-
-function wrapper_version() -> string {
-    WRAPPER_VERSION
-}
-
 // Exit statuses, as the toolchain's CLI uses them.
 const EXIT_FAILURE = 1;
 
