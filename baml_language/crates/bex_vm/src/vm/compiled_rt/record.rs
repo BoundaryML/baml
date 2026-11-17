@@ -1028,7 +1028,7 @@ mod tests {
         let Frame::Bytecode(outer) = &vm.frames[0] else {
             unreachable!();
         };
-        let mut outer = outer.clone();
+        let mut outer = outer.duplicate_for_test();
         outer.faulting_pc = 0;
         vm.frames.try_push(Frame::Bytecode(outer)).unwrap();
         vm.frames.rotate_right(1);

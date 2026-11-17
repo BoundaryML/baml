@@ -100,6 +100,9 @@ impl BytecodeFrame {
             faulting_pc: 0,
             telemetry,
             context,
+            // A compiled frame starts at `RUNNING`: its body runs natively,
+            // and the dispatch loop runs only its resume stub.
+            room: crate::vm::frame_room::FrameRoom::for_compiled_body(),
         }
     }
 }

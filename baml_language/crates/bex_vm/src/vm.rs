@@ -178,6 +178,7 @@ impl Drop for ObjectMut<'_> {
     }
 }
 
+pub(crate) mod frame_room;
 pub(crate) mod frame_stack;
 use frame_stack::ThreadStackBudget;
 pub use frame_stack::{FrameStack, THREAD_STACK_BUDGET_BYTES};
@@ -664,8 +665,9 @@ impl FrameTypeArgs {
     }
 }
 
-/// Bytecode call frame — pushed when entering a bytecode function.
-#[derive(Clone, Debug)]
+/// Bytecode call frame — pushed when entering a bytecode function. Not
+/// `Clone`: each frame holds the proof of one stack reservation.
+#[derive(Debug)]
 pub struct BytecodeFrame {
     /// Pointer to the running function (or closure) object.
     pub function: HeapPtr,
@@ -694,6 +696,10 @@ pub struct BytecodeFrame {
     /// Producer-only invocation state. `None` means the invocation is hidden.
     pub(crate) telemetry: Option<FrameTelemetry>,
     context: Context,
+    /// The frame's stack room, reserved before it could run: what lets the
+    /// dispatch loop push without a capacity check. See `vm::frame_room`.
+    #[expect(dead_code, reason = "a proof: required to build a frame, never read")]
+    room: frame_room::FrameRoom,
 }
 
 struct ManualActivation {
@@ -741,6 +747,23 @@ impl BytecodeFrame {
     }
 }
 
+#[cfg(test)]
+impl BytecodeFrame {
+    /// A copy of this frame for tests that stack one twice.
+    pub(crate) fn duplicate_for_test(&self) -> Self {
+        Self {
+            function: self.function,
+            instruction_ptr: self.instruction_ptr,
+            locals_offset: self.locals_offset,
+            type_args: self.type_args.clone(),
+            faulting_pc: self.faulting_pc,
+            telemetry: self.telemetry,
+            context: self.context.clone(),
+            room: frame_room::FrameRoom::for_test(),
+        }
+    }
+}
+
 impl RootHaver for BytecodeFrame {
     fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
         let Self {
@@ -751,6 +774,7 @@ impl RootHaver for BytecodeFrame {
             faulting_pc: _,
             telemetry: _,
             context: _,
+            room: _,
         } = self;
         function.visit_roots(visitor);
         // A frame's type arguments may name runtime declarations (a slot
@@ -6317,12 +6341,13 @@ impl BexVm {
         }
         match callable_kind {
             FunctionKind::Bytecode => {
-                let (locals, frame_reserve) = self
-                    .frame_slots_for(dispatch_ptr)
+                let callee = self
+                    .frame_function_for(dispatch_ptr)
                     .expect("entry point must be a valid function frame");
+                let locals = callee.real_local_count;
                 let reserve = args
                     .len()
-                    .checked_add(frame_reserve)
+                    .checked_add(callee.frame_reserve())
                     .ok_or(VmPanic::StackOverflow)
                     .and_then(|additional| self.stack.try_reserve(additional));
                 if let Err(panic) = reserve {
@@ -6385,6 +6410,14 @@ impl BexVm {
                 self.stack
                     .try_extend(args.iter().copied())
                     .expect("entry values were reserved");
+                let room = callee
+                    .bytecode
+                    .compact
+                    .as_ref()
+                    .and_then(|code| {
+                        Self::frame_room_within(self.stack.capacity(), self.stack.len(), code)
+                    })
+                    .expect("the entry frame's room was reserved");
                 self.frames.push_reserved(Frame::Bytecode(BytecodeFrame {
                     function: dispatch_ptr,
                     instruction_ptr: 0,
@@ -6393,6 +6426,7 @@ impl BexVm {
                     faulting_pc: 0,
                     telemetry: frame_telemetry,
                     context: self.root_context.clone(),
+                    room,
                 }));
 
                 // Entry functions need the same frame-local pre-allocation as normal
@@ -6540,9 +6574,15 @@ impl BexVm {
         let compact = bytecode
             .lower_verified(&ctx, 0, false)
             .expect("a trampoline's call takes the values it is entered with");
-        // The frame starts at the bottom of the stack, over its entry values.
+        // The frame starts under its entry values, which `max_stack` counts.
         self.stack
-            .try_reserve(compact.max_stack.saturating_sub(ctx.entry_depth))?;
+            .try_reserve(compact.frame_slots.saturating_sub(ctx.entry_depth))?;
+        let room = Self::frame_room_within(
+            self.stack.capacity(),
+            self.stack.len() - ctx.entry_depth,
+            &compact,
+        )
+        .ok_or(VmPanic::StackOverflow)?;
         bytecode.compact = Some(compact);
 
         let display_return_type = return_type.to_string();
@@ -6615,6 +6655,7 @@ impl BexVm {
             faulting_pc: 0,
             telemetry: frame_telemetry,
             context: self.root_context.clone(),
+            room,
         }));
         Ok(())
     }
@@ -6668,9 +6709,15 @@ impl BexVm {
         let compact = bytecode
             .lower_verified(&ctx, 0, false)
             .expect("a trampoline's call takes the values it is entered with");
-        // The frame starts at the bottom of the stack, over its entry values.
+        // The frame starts under its entry values, which `max_stack` counts.
         self.stack
-            .try_reserve(compact.max_stack.saturating_sub(ctx.entry_depth))?;
+            .try_reserve(compact.frame_slots.saturating_sub(ctx.entry_depth))?;
+        let room = Self::frame_room_within(
+            self.stack.capacity(),
+            self.stack.len() - ctx.entry_depth,
+            &compact,
+        )
+        .ok_or(VmPanic::StackOverflow)?;
         bytecode.compact = Some(compact);
 
         let display_return_type = return_type.to_string();
@@ -6740,6 +6787,7 @@ impl BexVm {
             faulting_pc: 0,
             telemetry: frame_telemetry,
             context: self.root_context.clone(),
+            room,
         }));
         Ok(())
     }
@@ -7175,23 +7223,23 @@ impl BexVm {
         }
     }
 
-    /// The locals and the whole frame reservation
-    /// ([`Function::frame_reserve`]) of the function a frame for
-    /// `function_ptr` runs.
-    fn frame_slots_for(
+    /// The function a frame for `function_ptr` runs: the callable itself, or
+    /// the function a closure, bound method or generic function wraps.
+    fn frame_function_for(
         &mut self,
         function_ptr: HeapPtr,
-    ) -> Result<(usize, usize), VmInternalError> {
-        let slots = |f: &Function| (f.real_local_count, f.frame_reserve());
-        let obj = self.get_object(function_ptr);
-        let frame_slots = match obj {
-            Object::Function(function) => slots(function),
+    ) -> Result<&'static Function, VmInternalError> {
+        // SAFETY: an entry point's callable, and the function it wraps, are
+        // live for the whole call.
+        let obj: &'static Object = unsafe { function_ptr.get() };
+        let frame_function = match obj {
+            Object::Function(function) => function.as_ref(),
             Object::Closure(closure) => {
                 // SAFETY: closure.function points to a Function object with
                 // appropriate lifetime guarantees.
                 let func_obj = unsafe { closure.function.get() };
                 match func_obj {
-                    Object::Function(f) => slots(f),
+                    Object::Function(f) => f.as_ref(),
                     _ => {
                         return Err(VmInternalError::TypeError {
                             expected: Type::Object(ObjectType::Function(FunctionType::Any)),
@@ -7205,7 +7253,7 @@ impl BexVm {
                 // lifetime guarantees.
                 let func_obj = unsafe { bm.function.get() };
                 match func_obj {
-                    Object::Function(f) => slots(f),
+                    Object::Function(f) => f.as_ref(),
                     _ => {
                         return Err(VmInternalError::TypeError {
                             expected: Type::Object(ObjectType::Function(FunctionType::Any)),
@@ -7219,7 +7267,7 @@ impl BexVm {
                 // SAFETY: function globals hold compile-time Function objects.
                 let func_obj = unsafe { func_ptr.get() };
                 match func_obj {
-                    Object::Function(f) => slots(f),
+                    Object::Function(f) => f.as_ref(),
                     _ => {
                         return Err(VmInternalError::TypeError {
                             expected: Type::Object(ObjectType::Function(FunctionType::Any)),
@@ -7236,7 +7284,7 @@ impl BexVm {
             }
         };
 
-        Ok(frame_slots)
+        Ok(frame_function)
     }
 
     /// Context of the frame `run_compact` is dispatching, which is the top
@@ -8759,7 +8807,7 @@ impl BexVm {
         };
         caller_frame.faulting_pc = self.cur_pc;
         self.reserve_call_frame()?;
-        self.reserve_stack(callee.frame_reserve())?;
+        let room = self.reserve_frame_room(callee)?;
         let context = self.dispatch_frame_context(frame_idx).clone();
         if let Some(telemetry) = &mut self.telemetry {
             telemetry.set_context(context.clone());
@@ -8787,6 +8835,7 @@ impl BexVm {
                 faulting_pc: 0,
                 telemetry: frame_telemetry,
                 context,
+                room,
             })
         });
         if callee.real_local_count != 0 {
@@ -8912,7 +8961,7 @@ impl BexVm {
         caller_frame.instruction_ptr = return_pc;
         caller_frame.faulting_pc = self.cur_pc;
         self.reserve_call_frame()?;
-        self.reserve_stack(callee.frame_reserve())?;
+        let room = self.reserve_frame_room(callee)?;
         let context = self.dispatch_frame_context(frame_idx).clone();
         self.frames.push_reserved_with(|| {
             Frame::Bytecode(BytecodeFrame {
@@ -8923,6 +8972,7 @@ impl BexVm {
                 faulting_pc: 0,
                 telemetry: None,
                 context,
+                room,
             })
         });
         if callee.real_local_count != 0 {
@@ -9206,7 +9256,7 @@ impl BexVm {
 
             FunctionKind::Bytecode => {
                 self.reserve_call_frame()?;
-                self.reserve_stack(callee.frame_reserve())?;
+                let room = self.reserve_frame_room(callee)?;
                 // Push the new frame.
                 let hooked = callee
                     .bytecode
@@ -9289,6 +9339,7 @@ impl BexVm {
                         faulting_pc: 0,
                         telemetry: frame_telemetry,
                         context,
+                        room,
                     })
                 });
                 // Update frame_idx to point to the new frame.
@@ -11358,9 +11409,10 @@ impl BexVm {
     /// return PC and call-site PC, push the callee frame with the caller's
     /// context, and initialize the callee's locals to null.
     ///
-    /// The caller is the top frame. A frame slot and `callee.frame_reserve()`
-    /// stack slots must already be reserved, and the arguments must be the
-    /// top `callee.arity` stack values, starting at `locals_offset`.
+    /// The caller is the top frame. A frame slot must already be reserved,
+    /// `room` proves the stack holds `callee.frame_reserve()` more slots, and
+    /// the arguments must be the top `callee.arity` stack values, starting at
+    /// `locals_offset`.
     ///
     /// The frame is pushed with an empty context and the caller's written
     /// in after: with a cloned context live across the push's capacity
@@ -11369,6 +11421,10 @@ impl BexVm {
     /// stores for the same reason: LLVM turns a plain fill into a `memset`
     /// call.
     #[allow(clippy::inline_always, unsafe_code)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "inlined into the dispatch loops; the room is zero-sized"
+    )]
     #[inline(always)]
     fn enter_exact_callee(
         &mut self,
@@ -11378,6 +11434,7 @@ impl BexVm {
         callee: &Function,
         locals_offset: StackIndex,
         telemetry: Option<FrameTelemetry>,
+        room: frame_room::FrameRoom,
     ) {
         let Some(Frame::Bytecode(caller)) = self.frames.last_mut() else {
             verifier_unreachable!()
@@ -11393,6 +11450,7 @@ impl BexVm {
                 faulting_pc: 0,
                 telemetry,
                 context: Context::default(),
+                room,
             })
         });
         let [.., Frame::Bytecode(caller), Frame::Bytecode(frame)] = &mut self.frames[..] else {
@@ -11476,6 +11534,10 @@ impl BexVm {
     /// Returns where dispatch continues, in the callee. Out of line, so the
     /// fast path's telemetry-off call keeps its registers.
     #[inline(never)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the fast path's frame entry, called with what it holds in registers"
+    )]
     fn enter_observed_exact_callee(
         &mut self,
         frame_idx: usize,
@@ -11484,6 +11546,7 @@ impl BexVm {
         callee_ptr: HeapPtr,
         callee: &'static Function,
         locals_offset: StackIndex,
+        room: frame_room::FrameRoom,
     ) -> DispatchState {
         let telemetry =
             self.observe_exact_call(frame_idx, call_pc, callee_ptr, callee, locals_offset, &[]);
@@ -11494,6 +11557,7 @@ impl BexVm {
             callee,
             locals_offset,
             telemetry,
+            room,
         );
         self.resume_state(frame_idx + 1, callee)
     }
@@ -11936,10 +12000,12 @@ impl BexVm {
                         let Some(callee_code) = callee.bytecode.compact.as_ref() else {
                             break;
                         };
+                        let Some(room) = Self::frame_room_within(cap, sp, callee_code) else {
+                            break;
+                        };
                         if !matches!(callee.kind, FunctionKind::Bytecode)
                             || callee.compiled_body.is_some()
                             || sp < callee.arity
-                            || cap - sp < callee_code.frame_slots
                             || self.frames.len() == self.frames.capacity()
                             // Last check, so a handed-back call has not ticked.
                             || !self.early_yield.tick_unless_due()
@@ -11967,6 +12033,7 @@ impl BexVm {
                                 callee_ptr,
                                 callee,
                                 StackIndex::from_raw(locals_offset),
+                                room,
                             );
                             (base, sp, cap) = self.stack.raw_parts();
                         } else {
@@ -11977,6 +12044,7 @@ impl BexVm {
                                 callee,
                                 StackIndex::from_raw(locals_offset),
                                 None,
+                                room,
                             );
                             sp = self.stack.len();
                             frame_idx += 1;
@@ -12995,7 +13063,7 @@ impl BexVm {
                                     )?,
                                 );
                                 self.reserve_call_frame()?;
-                                self.reserve_stack(callee.frame_reserve())?;
+                                let room = self.reserve_frame_room(callee)?;
                                 let frame_telemetry = if self.telemetry.is_some() {
                                     self.observe_exact_call(
                                         *frame_idx,
@@ -13016,6 +13084,7 @@ impl BexVm {
                                     callee,
                                     locals_offset,
                                     frame_telemetry,
+                                    room,
                                 );
                                 // Attached after the push so the frame of a
                                 // non-generic call is built exactly as before.
