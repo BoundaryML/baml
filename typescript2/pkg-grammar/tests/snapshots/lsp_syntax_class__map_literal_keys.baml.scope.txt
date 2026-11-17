@@ -10,43 +10,43 @@
 7:14-15      "{"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.begin.baml
 8:3-4        "e"                source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 8:5-8        "map"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-8:8-9        "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-8:9-15       "MapKey"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-8:15-16      ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-8:17-23      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-8:23-24      ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+8:8-9        "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+8:9-15       "MapKey"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+8:15-16      ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+8:17-23      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml support.type.primitive.baml
+8:23-24      ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 9:3-5        "l1"               source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 9:6-9        "map"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-9:9-10       "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-9:10-11      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-9:11-18      "literal"          source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
-9:18-19      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
-9:19-20      ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-9:21-27      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-9:27-28      ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+9:9-10       "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+9:10-11      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+9:11-18      "literal"          source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml string.quoted.double.baml
+9:18-19      "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+9:19-20      ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+9:21-27      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml support.type.primitive.baml
+9:27-28      ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 10:3-5       "l2"               source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 10:6-9       "map"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-10:9-10      "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-10:10-11     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-10:11-14     "one"              source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
-10:14-15     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
-10:16-17     "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
-10:18-19     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-10:19-22     "two"              source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
-10:22-23     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
-10:24-25     "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
-10:26-27     "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-10:27-28     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-10:28-33     "three"            source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
-10:33-34     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
-10:35-36     "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
-10:37-38     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-10:38-42     "four"             source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
-10:42-43     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
-10:43-44     ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-10:44-45     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-10:46-52     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-10:52-53     ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+10:9-10      "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+10:10-11     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+10:11-14     "one"              source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml string.quoted.double.baml
+10:14-15     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+10:16-17     "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml keyword.operator.type.baml
+10:18-19     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+10:19-22     "two"              source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml string.quoted.double.baml
+10:22-23     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
+10:24-25     "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml keyword.operator.type.baml
+10:26-27     "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.group.type.baml punctuation.definition.type.begin.baml
+10:27-28     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+10:28-33     "three"            source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml
+10:33-34     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.end.baml
+10:35-36     "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.group.type.baml keyword.operator.type.baml
+10:37-38     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+10:38-42     "four"             source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml
+10:42-43     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.end.baml
+10:43-44     ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.group.type.baml punctuation.definition.type.end.baml
+10:44-45     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+10:46-52     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml support.type.primitive.baml
+10:52-53     ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 11:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 13:1-9       "function"         source.baml meta.function.baml keyword.declaration.function.baml
 13:10-22     "InOutEnumKey"     source.baml meta.function.baml entity.name.function.baml
@@ -114,15 +114,15 @@
 23:20-23     "two"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml
 23:23-24     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
 23:25-26     "|"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
-23:27-28     "("                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
-23:28-29     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-23:29-34     "three"            source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml
-23:34-35     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
-23:36-37     "|"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
-23:38-39     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-23:39-43     "four"             source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml
-23:43-44     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
-23:44-45     ")"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+23:27-28     "("                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml punctuation.definition.type.begin.baml
+23:28-29     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+23:29-34     "three"            source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml
+23:34-35     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.end.baml
+23:36-37     "|"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml keyword.operator.type.baml
+23:38-39     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+23:39-43     "four"             source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml
+23:43-44     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.end.baml
+23:44-45     ")"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml punctuation.definition.type.end.baml
 23:45-46     ","                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
 23:47-53     "string"           source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
 23:53-54     ">"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
@@ -139,15 +139,15 @@
 24:20-23     "two"              source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml
 24:23-24     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
 24:25-26     "|"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
-24:27-28     "("                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
-24:28-29     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-24:29-34     "three"            source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml
-24:34-35     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
-24:36-37     "|"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml keyword.operator.type.baml
-24:38-39     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-24:39-43     "four"             source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml
-24:43-44     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
-24:44-45     ")"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
+24:27-28     "("                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml punctuation.definition.type.begin.baml
+24:28-29     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+24:29-34     "three"            source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml
+24:34-35     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.end.baml
+24:36-37     "|"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml keyword.operator.type.baml
+24:38-39     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+24:39-43     "four"             source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml
+24:43-44     "\""               source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.end.baml
+24:44-45     ")"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml meta.group.type.baml punctuation.definition.type.end.baml
 24:45-46     ","                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type.baml
 24:47-53     "string"           source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml support.type.primitive.baml
 24:53-54     ">"                source.baml meta.function.baml meta.parameters.baml meta.parameter.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
@@ -163,15 +163,15 @@
 25:19-22     "two"              source.baml meta.function.baml meta.return-type.baml string.quoted.double.baml
 25:22-23     "\""               source.baml meta.function.baml meta.return-type.baml string.quoted.double.baml punctuation.definition.string.end.baml
 25:24-25     "|"                source.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
-25:26-27     "("                source.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
-25:27-28     "\""               source.baml meta.function.baml meta.return-type.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-25:28-33     "three"            source.baml meta.function.baml meta.return-type.baml string.quoted.double.baml
-25:33-34     "\""               source.baml meta.function.baml meta.return-type.baml string.quoted.double.baml punctuation.definition.string.end.baml
-25:35-36     "|"                source.baml meta.function.baml meta.return-type.baml keyword.operator.type.baml
-25:37-38     "\""               source.baml meta.function.baml meta.return-type.baml string.quoted.double.baml punctuation.definition.string.begin.baml
-25:38-42     "four"             source.baml meta.function.baml meta.return-type.baml string.quoted.double.baml
-25:42-43     "\""               source.baml meta.function.baml meta.return-type.baml string.quoted.double.baml punctuation.definition.string.end.baml
-25:43-44     ")"                source.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
+25:26-27     "("                source.baml meta.function.baml meta.return-type.baml meta.group.type.baml punctuation.definition.type.begin.baml
+25:27-28     "\""               source.baml meta.function.baml meta.return-type.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+25:28-33     "three"            source.baml meta.function.baml meta.return-type.baml meta.group.type.baml string.quoted.double.baml
+25:33-34     "\""               source.baml meta.function.baml meta.return-type.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.end.baml
+25:35-36     "|"                source.baml meta.function.baml meta.return-type.baml meta.group.type.baml keyword.operator.type.baml
+25:37-38     "\""               source.baml meta.function.baml meta.return-type.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.begin.baml
+25:38-42     "four"             source.baml meta.function.baml meta.return-type.baml meta.group.type.baml string.quoted.double.baml
+25:42-43     "\""               source.baml meta.function.baml meta.return-type.baml meta.group.type.baml string.quoted.double.baml punctuation.definition.string.end.baml
+25:43-44     ")"                source.baml meta.function.baml meta.return-type.baml meta.group.type.baml punctuation.definition.type.end.baml
 25:44-45     ","                source.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml
 25:46-52     "string"           source.baml meta.function.baml meta.return-type.baml support.type.primitive.baml
 25:52-53     ">"                source.baml meta.function.baml meta.return-type.baml punctuation.definition.type.baml

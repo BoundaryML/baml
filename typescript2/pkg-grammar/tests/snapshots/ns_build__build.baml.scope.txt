@@ -10,11 +10,11 @@
 9:5-10       "entry"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 9:10-11      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 9:12-18      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-9:18-19      ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+9:18-19      ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 10:5-8       "out"              source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 10:8-9       ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 10:10-16     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-10:16-17     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+10:16-17     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 11:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 13:1-55      "// Two toolchain-0.11.x workarounds in the loop below:" source.baml comment.line.double-slash.baml
 14:1-78      "// - `while` + index instead of `for (let t in targets)`, and `cmd` passed to" source.baml comment.line.double-slash.baml

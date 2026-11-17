@@ -615,6 +615,7 @@ contexts:
     - include: function
     - include: field
     - include: semicolon
+    - include: comma
   class-body:
     - match: '\{'
       scope: punctuation.definition.block.begin.baml
@@ -738,6 +739,7 @@ contexts:
     - include: upcast-expression
     - include: postfix-method-call-expression
     - include: field-access-expression
+    - include: tuple-field-access-expression
     - include: expression-operator
     - include: function-call-expression
     - include: dotted-expression
@@ -757,6 +759,7 @@ contexts:
     - include: wildcard-binding-pattern
     - include: typed-binding-pattern
     - include: array-destructure-pattern
+    - include: tuple-destructure-pattern
     - include: bare-binding-pattern
     - include: wildcard-pattern
     - include: type-expression
@@ -998,6 +1001,7 @@ contexts:
     - include: upcast-expression
     - include: postfix-method-call-expression
     - include: field-access-expression
+    - include: tuple-field-access-expression
     - include: expression-operator
     - include: function-call-expression
     - include: dotted-expression
@@ -1052,12 +1056,13 @@ contexts:
       scope: keyword.operator.spread.baml
   field--body:
     - meta_scope: meta.field.baml
-    - match: '(?=\})|$'
+    - match: '(?=[,}])|$'
       pop: true
     - include: comments
+    - include: field-type-arguments
     - include: type-expression
   field:
-    - match: '(?:^\s*|(?<=\{)\s*)(?!@)(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(:)?'
+    - match: '(?:^\s*|(?<=[{,])\s*)(?!@)(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(:)?'
       captures:
         1: variable.other.property.baml
         2: punctuation.separator.colon.baml
@@ -1068,6 +1073,18 @@ contexts:
       captures:
         1: punctuation.accessor.baml
         2: variable.other.readwrite.baml
+  field-type-arguments--body:
+    - meta_scope: meta.type-arguments.baml
+    - match: '>'
+      scope: punctuation.definition.type-arguments.end.baml
+      pop: true
+    - include: comments
+    - include: field-type-arguments
+    - include: type-expression
+  field-type-arguments:
+    - match: '<'
+      scope: punctuation.definition.type-arguments.begin.baml
+      push: field-type-arguments--body
   float-literal:
     - match: '\b[0-9]+(?:\.[0-9]+[eE][+-]?[0-9]+|\.[0-9]+|[eE][+-]?[0-9]+)'
       scope: constant.numeric.float.baml
@@ -1182,7 +1199,7 @@ contexts:
     - include: function-call-type-arguments
     - include: call-arguments
   function-call-expression:
-    - match: '\b(?:(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(\.)\s*)?((?:\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*\s*\.\s*)*)(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<[^(){};]*>\s*)?\()'
+    - match: '\b(?:(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(\.)\s*)?((?:\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*\s*\.\s*)*)(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<(?:[^(){};]|\([^(){};]*\))*>\s*)?\()'
       captures:
         1: variable.other.readwrite.baml
         2: punctuation.accessor.baml
@@ -1236,6 +1253,45 @@ contexts:
         1: keyword.declaration.generator.baml
         2: entity.name.generator.baml
       push: generator--body
+  guard-expression:
+    - include: literal
+    - include: array-expression
+    - include: guard-lambda-expression
+    - include: parenthesized-expression
+    - include: if-expression
+    - include: match-expression
+    - include: spawn-expression
+    - include: map-expression
+    - include: constructor-expression
+    - include: braced-expression
+    - include: await-expression
+    - include: throw-expression
+    - include: catch-expression
+    - include: is-pattern-expression
+    - include: optional-call-expression
+    - include: optional-index-expression
+    - include: optional-method-call-expression
+    - include: optional-field-access-expression
+    - include: upcast-expression
+    - include: postfix-method-call-expression
+    - include: field-access-expression
+    - include: tuple-field-access-expression
+    - include: expression-operator
+    - include: function-call-expression
+    - include: dotted-expression
+  guard-lambda-expression--body:
+    - meta_scope: meta.expression.lambda.baml
+    - match: '(?<=\})'
+      pop: true
+    - include: comments
+    - include: function-parameters
+    - include: lambda-arrow
+    - include: lambda-return-type
+    - include: lambda-throws-clause
+    - include: code-block
+  guard-lambda-expression:
+    - match: '(?=\((?:[^()]|\([^()]*\))*\)\s*->)'
+      push: guard-lambda-expression--body
   if-condition--body:
     - meta_scope: meta.if.condition.baml
     - match: '(?=\{)'
@@ -1611,7 +1667,7 @@ contexts:
     - match: '(?=\s*=>)'
       pop: true
     - include: comments
-    - include: expression
+    - include: guard-expression
   match-arm-guard:
     - match: '\b(if)\b'
       captures:
@@ -1662,18 +1718,30 @@ contexts:
     - include: await-expression
     - include: throw-expression
     - include: catch-expression
+    - include: tuple-field-access-expression
     - include: expression-operator
     - include: function-call-expression
     - include: dotted-expression
   match-scrutinee:
     - match: '(?=[^\s\{])'
       push: match-scrutinee--body
+  match-scrutinee-ascription--body:
+    - meta_scope: meta.type.annotation.baml
+    - match: '(?=\))'
+      pop: true
+    - include: comments
+    - include: type-expression
+  match-scrutinee-ascription:
+    - match: ':'
+      scope: punctuation.separator.colon.baml
+      push: match-scrutinee-ascription--body
   match-scrutinee-group--body:
     - meta_scope: meta.match.scrutinee.group.baml
     - match: '\)'
       scope: punctuation.definition.group.end.baml
       pop: true
     - include: comments
+    - include: match-scrutinee-ascription
     - include: expression
     - include: type-expression
   match-scrutinee-group:
@@ -1753,7 +1821,7 @@ contexts:
     - include: optional-method-call-type-arguments
     - include: call-arguments
   optional-method-call-expression:
-    - match: '(\?\.)\s*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<[^(){};]*>\s*)?\()'
+    - match: '(\?\.)\s*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<(?:[^(){};]|\([^(){};]*\))*>\s*)?\()'
       captures:
         1: punctuation.accessor.baml
         2: entity.name.function.baml
@@ -1836,6 +1904,7 @@ contexts:
     - include: typed-binding-pattern
     - include: class-destructure-pattern
     - include: array-destructure-pattern
+    - include: tuple-destructure-pattern
     - include: bare-binding-pattern
     - include: wildcard-pattern
     - include: type-expression
@@ -1847,7 +1916,7 @@ contexts:
     - include: postfix-method-call-type-arguments
     - include: call-arguments
   postfix-method-call-expression:
-    - match: '([.$])\s*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<[^(){};]*>\s*)?\()'
+    - match: '([.$])\s*(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<(?:[^(){};]|\([^(){};]*\))*>\s*)?\()'
       captures:
         1: punctuation.accessor.baml
         2: entity.name.function.baml
@@ -2345,6 +2414,26 @@ contexts:
   throw-expression:
     - match: '\bthrow\b'
       scope: keyword.control.flow.throw.baml
+  tuple-destructure-pattern--body:
+    - meta_scope: meta.pattern.destructure.tuple.baml
+    - match: '\)'
+      scope: punctuation.definition.group.end.baml
+      pop: true
+    - include: comments
+    - include: pattern
+    - include: comma
+  tuple-destructure-pattern:
+    - match: '(?:\b((?:let|const))\b\s*)?(\()(?![^)"''\x60\r\n]*\bas\b[^)\r\n]*\)\s*\.)(?!(?:[^()]|\([^()]*\))*\)\s*(?:->|[\[?]))'
+      captures:
+        1: keyword.declaration.binding.baml
+        2: punctuation.definition.group.begin.baml
+      push: tuple-destructure-pattern--body
+  tuple-field-access-expression:
+    - match: '(?<!\.)(\?\.|\.)\s*([0-9]+)\b'
+      scope: meta.field-access.tuple.baml
+      captures:
+        1: punctuation.accessor.baml
+        2: variable.other.property.baml
   type-alias--body:
     - meta_scope: meta.type-alias.baml
     - match: '(?<=;)|(?=^\s*(?:client|retry_policy|generator|template_string|class|enum|interface|implements|implement|function|testset|test|type)\b)'
@@ -2379,6 +2468,7 @@ contexts:
     - include: assignment-operator
     - include: optional-operator
     - include: union-operator
+    - include: type-group
     - include: type-punctuation
     - include: colon-separator
   type-fragment--body:
@@ -2390,6 +2480,17 @@ contexts:
   type-fragment:
     - match: '^\s*(?=\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)(?=[^:=;{}()#"''\r\n]*$)(?=[^<.\[?|\r\n]*[<.\[?|]|(?:(?:int|float|bigint|string|bool|image|audio|map|json|unknown|never|Self))\s*$)'
       push: type-fragment--body
+  type-group--body:
+    - meta_scope: meta.group.type.baml
+    - match: '\)'
+      scope: punctuation.definition.type.end.baml
+      pop: true
+    - include: comments
+    - include: type-expression
+  type-group:
+    - match: '\('
+      scope: punctuation.definition.type.begin.baml
+      push: type-group--body
   type-literal:
     - include: boolean-literal
     - include: null-literal

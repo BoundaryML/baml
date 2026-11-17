@@ -7,11 +7,11 @@
 6:5-12       "message"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 6:12-13      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 6:14-20      "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-6:20-21      ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+6:20-21      ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 7:5-12       "letters"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 7:12-13      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 7:14-17      "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-7:17-18      ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+7:17-18      ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 9:5-65       "// Factory (no self) — construct a Greeting from a raw name." source.baml meta.class.baml meta.class.body.baml comment.line.double-slash.baml
 10:5-13      "function"         source.baml meta.class.baml meta.class.body.baml meta.function.baml keyword.declaration.function.baml
 10:14-17     "new"              source.baml meta.class.baml meta.class.body.baml meta.function.baml entity.name.function.baml
@@ -198,11 +198,11 @@
 39:5-10      "hello"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 39:10-11     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 39:12-18     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-39:18-19     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+39:18-19     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 40:5-9       "conn"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 40:9-10      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 40:11-14     "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-40:14-15     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+40:14-15     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 41:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 43:1-74      "// Curl the ns_server demo with BAML's own HTTP client, decoding the JSON" source.baml comment.line.double-slash.baml
 44:1-85      "// body into a typed ServerReply. (python_demo/server_roundtrip.py runs server.serve" source.baml comment.line.double-slash.baml

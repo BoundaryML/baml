@@ -9,6 +9,7 @@
 
 (identifier) @variable
 (property_identifier) @property
+(tuple_index) @property
 
 ; ---------------------------------------------------------------------------
 ; Comments

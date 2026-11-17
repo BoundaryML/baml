@@ -193,6 +193,10 @@
              Claimed before numbers so digits inside a name stay plain. -->
         <RegExpr attribute="Normal Text" context="#stay" String="\$?[A-Za-z_][A-Za-z0-9_-]*"/>
 
+        <!-- Tuple slots (`t.0`, `t?.1`) are member names, not numbers;
+             `t.0.1` is two slots. The lookbehind keeps `..2` a number. -->
+        <RegExpr attribute="Normal Text" context="#stay" String="(?&lt;!\.)\.[0-9]+\b"/>
+
         <!-- Numbers, in lexer order: bigint (`42n`) and floats before
              integers, so the integer rule cannot peel their digits off. -->
         <RegExpr attribute="BigInt" context="#stay" String="\b[0-9]+n"/>

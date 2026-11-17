@@ -17,15 +17,15 @@
 13:5-9       "name"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 13:9-10      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 13:11-17     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-13:17-18     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+13:17-18     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 14:5-11      "amount"           source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 14:11-12     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 14:13-18     "float"            source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-14:18-19     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+14:18-19     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 15:5-13      "priority"         source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 15:13-14     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 15:15-23     "Priority"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-15:23-24     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+15:23-24     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 16:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 18:1-6       "class"            source.baml meta.class.baml keyword.declaration.class.baml
 18:7-14      "Invoice"          source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
@@ -40,7 +40,7 @@
 19:28-34     "seller"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
 19:34-35     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
 19:35-36     ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
-19:36-37     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+19:36-37     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 20:5-11      "status"           source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 20:11-12     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 20:13-14     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
@@ -57,18 +57,18 @@
 20:45-58     "invoice state"    source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml
 20:58-59     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml string.quoted.double.baml punctuation.definition.string.end.baml
 20:59-60     ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.attribute.baml meta.attribute.arguments.baml punctuation.definition.annotation-arguments.end.bracket.round.baml
-20:60-61     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+20:60-61     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 21:5-10      "items"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 21:10-11     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 21:12-20     "LineItem"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 21:20-21     "["                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
 21:21-22     "]"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-21:22-23     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+21:22-23     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 22:5-9       "note"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 22:9-10      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 22:11-17     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
 22:17-18     "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
-22:18-19     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+22:18-19     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 23:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 25:1-70      "// Clients are ordinary values, wrapped to add retries and fallbacks." source.baml comment.line.double-slash.baml
 26:1-7       "client"           source.baml meta.client.baml keyword.declaration.client.baml
@@ -158,7 +158,7 @@
 41:5-12      "attempt"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 41:12-13     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 41:14-17     "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-41:17-18     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+41:17-18     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 42:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 44:1-6       "class"            source.baml meta.class.baml keyword.declaration.class.baml
 44:7-11      "Done"             source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
@@ -166,7 +166,7 @@
 45:5-12      "invoice"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 45:12-13     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 45:14-21     "Invoice"          source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-45:21-22     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+45:21-22     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 46:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 48:1-5       "type"             source.baml meta.type-alias.baml keyword.declaration.type-alias.baml
 48:6-9       "Job"              source.baml meta.type-alias.baml entity.name.type.alias.baml
@@ -199,7 +199,7 @@
 55:11-14     "Job"              source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 55:14-15     "["                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
 55:15-16     "]"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-55:16-17     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+55:16-17     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 56:5-15      "implements"       source.baml meta.class.baml meta.class.body.baml meta.implements.baml keyword.declaration.implements.baml
 56:16-23     "Labeled"          source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.target.baml meta.type-reference.baml entity.name.type.baml
 56:24-25     "{"                source.baml meta.class.baml meta.class.body.baml meta.implements.baml meta.implements.body.baml punctuation.definition.block.begin.baml

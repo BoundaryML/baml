@@ -1364,16 +1364,16 @@
 218:3-7      "iter"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 218:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 218:9-17     "Iterator"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-218:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-218:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-218:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-218:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-218:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+218:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+218:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+218:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+218:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+218:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 219:3-7      "func"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 219:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
-219:9-10     "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-219:10-11    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-219:11-12    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+219:9-10     "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml punctuation.definition.type.begin.baml
+219:10-11    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml meta.type-reference.baml entity.name.type.baml
+219:11-12    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml punctuation.definition.type.end.baml
 219:13-15    "->"               source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.arrow.baml
 219:16-17    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 219:18-24    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.expression.throws.baml
@@ -1478,16 +1478,16 @@
 236:3-7      "iter"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 236:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 236:9-17     "Iterator"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-236:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-236:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-236:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-236:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-236:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+236:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+236:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+236:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+236:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+236:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 237:3-12     "predicate"        source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 237:12-13    ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
-237:14-15    "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-237:15-16    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-237:16-17    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+237:14-15    "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml punctuation.definition.type.begin.baml
+237:15-16    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml meta.type-reference.baml entity.name.type.baml
+237:16-17    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml punctuation.definition.type.end.baml
 237:18-20    "->"               source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.arrow.baml
 237:21-25    "bool"             source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
 237:26-32    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.expression.throws.baml
@@ -1617,16 +1617,16 @@
 261:3-7      "iter"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 261:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 261:9-17     "Iterator"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-261:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-261:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-261:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-261:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-261:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+261:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+261:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+261:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+261:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+261:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 262:3-7      "func"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 262:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
-262:9-10     "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-262:10-11    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-262:11-12    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+262:9-10     "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml punctuation.definition.type.begin.baml
+262:10-11    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml meta.type-reference.baml entity.name.type.baml
+262:11-12    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml punctuation.definition.type.end.baml
 262:13-15    "->"               source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.arrow.baml
 262:16-17    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 262:17-18    "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
@@ -1772,33 +1772,33 @@
 287:3-7      "iter"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 287:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 287:9-17     "Iterator"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-287:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-287:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-287:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-287:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-287:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+287:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+287:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+287:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+287:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+287:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 288:3-7      "func"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 288:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
-288:9-10     "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-288:10-11    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-288:11-12    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+288:9-10     "("                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml punctuation.definition.type.begin.baml
+288:10-11    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml meta.type-reference.baml entity.name.type.baml
+288:11-12    ")"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.group.type.baml punctuation.definition.type.end.baml
 288:13-15    "->"               source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.arrow.baml
 288:16-24    "Iterable"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-288:24-25    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-288:25-26    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-288:26-27    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-288:28-30    "E3"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-288:30-31    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+288:24-25    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+288:25-26    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+288:26-27    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+288:28-30    "E3"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+288:30-31    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 288:32-38    "throws"           source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.expression.throws.baml
 288:39-41    "E2"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 289:3-8      "inner"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 289:8-9      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 289:10-18    "Iterator"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-289:18-19    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-289:19-20    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-289:20-21    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-289:22-24    "E3"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-289:24-25    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+289:18-19    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+289:19-20    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+289:20-21    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+289:22-24    "E3"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+289:24-25    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 289:26-27    "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
 289:28-32    "Done"             source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 291:3-13     "implements"       source.baml meta.class.baml meta.class.body.baml meta.implements.baml keyword.declaration.implements.baml
@@ -1998,24 +1998,24 @@
 322:3-7      "iter"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 322:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 322:9-17     "Iterator"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-322:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-322:18-26    "Iterable"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-322:26-27    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-322:27-28    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-322:28-29    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-322:30-32    "E3"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-322:32-33    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-322:33-34    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-322:35-36    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-322:36-37    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+322:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+322:18-26    "Iterable"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+322:26-27    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+322:27-28    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+322:28-29    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-arguments.baml punctuation.definition.type.baml
+322:30-32    "E3"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+322:32-33    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+322:33-34    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+322:35-36    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+322:36-37    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 323:3-8      "inner"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 323:8-9      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 323:10-18    "Iterator"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-323:18-19    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-323:19-20    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-323:20-21    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-323:22-24    "E3"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-323:24-25    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+323:18-19    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+323:19-20    "R"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+323:20-21    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+323:22-24    "E3"               source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+323:24-25    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 323:26-27    "|"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.type.baml
 323:28-32    "Done"             source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
 325:3-13     "implements"       source.baml meta.class.baml meta.class.body.baml meta.implements.baml keyword.declaration.implements.baml
@@ -2205,11 +2205,11 @@
 356:3-7      "iter"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 356:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 356:9-17     "Iterator"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-356:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-356:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-356:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-356:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-356:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+356:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+356:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+356:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+356:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+356:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 357:3-9      "buffer"           source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 357:9-10     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 357:11-12    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
@@ -2367,11 +2367,11 @@
 388:3-7      "iter"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 388:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 388:9-17     "Iterator"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-388:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-388:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-388:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-388:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-388:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+388:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+388:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+388:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+388:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+388:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 389:3-4      "n"                source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 389:4-5      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 389:6-9      "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
@@ -2519,19 +2519,19 @@
 414:3-7      "iter"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 414:7-8      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 414:9-17     "Iterator"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-414:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-414:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-414:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-414:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-414:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+414:17-18    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+414:18-19    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+414:19-20    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+414:21-22    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+414:22-23    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 415:3-8      "other"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 415:8-9      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 415:10-18    "Iterator"         source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-415:18-19    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-415:19-20    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-415:20-21    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-415:22-23    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-415:23-24    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+415:18-19    "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+415:19-20    "T"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+415:20-21    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+415:22-23    "E"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+415:23-24    ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 416:3-13     "first_done"       source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 416:13-14    ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 416:15-19    "bool"             source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
