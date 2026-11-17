@@ -493,6 +493,7 @@ const FAST_PATH_OPS: [bool; 256] = {
         Op::LoadVarFieldLocal,
         Op::JumpIfLocalsCmp,
         Op::JumpIfLocalConstCmp,
+        Op::LoadVariant,
         Op::CallExactArgs,
         Op::Return,
     ];
@@ -4190,6 +4191,55 @@ impl BexVm {
         } else {
             self.package_object(package, idx)
         }
+    }
+
+    /// Variant `variant` (an int) of the enum at `enum_idx` in `package`, for
+    /// `LoadVariant`, built as `AllocVariant` builds it. A compile-time enum's
+    /// variants are permanent shared objects (see `Enum::shared_variants`); an
+    /// enum created at runtime has none, so its variant is allocated here.
+    ///
+    /// Out of line: `run_compact` is sensitive to what its arms hold.
+    #[inline(never)]
+    fn variant_value(
+        &mut self,
+        package: HeapPtr,
+        enum_idx: ObjectIndex,
+        variant: Value,
+    ) -> Result<Value, VmError> {
+        let enum_ptr = self.object_in(package, enum_idx);
+        let Object::Enum(enm) = self.get_object(enum_ptr) else {
+            return Err(VmInternalError::TypeError {
+                expected: ObjectType::Enum.into(),
+                got: ObjectType::of(self.get_object(enum_ptr)).into(),
+            }
+            .into());
+        };
+        let Some(variant_index) = variant.as_int() else {
+            return Err(VmInternalError::TypeError {
+                expected: bex_vm_types::types::Type::Int,
+                got: self.type_of(&variant),
+            }
+            .into());
+        };
+        let variant_count = enm.variants.len();
+        let Some(variant_usize) = usize::try_from(variant_index)
+            .ok()
+            .filter(|&index| index < variant_count)
+        else {
+            return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                VmPanic::IndexOutOfBounds {
+                    index: variant_index,
+                    length: variant_count,
+                },
+            )));
+        };
+        if let Some(&shared) = enm.shared_variants.get(variant_usize) {
+            return Ok(Value::object(shared));
+        }
+        Ok(Value::object(self.tlab.alloc(Object::Variant(Variant {
+            enm: enum_ptr,
+            index: variant_usize,
+        }))))
     }
 
     /// The object at `idx` in the runtime package `package_ptr`.
@@ -10400,6 +10450,23 @@ impl BexVm {
         }
     }
 
+    /// The shared object for variant `variant` of the enum at `enum_idx`, for
+    /// `LoadVariant` in a static function (null `package`) naming a
+    /// compile-time enum: those variants are permanent shared objects (see
+    /// `Enum::shared_variants`). `None` sends the instruction to
+    /// [`Self::variant_value`], which handles every other case.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn shared_variant(&self, package: HeapPtr, enum_idx: usize, variant: usize) -> Option<Value> {
+        if !package.is_null() || enum_idx >= self.heap.compile_time_len() {
+            return None;
+        }
+        let Object::Enum(enm) = self.get_object(self.heap.compile_time_ptr(enum_idx)) else {
+            return None;
+        };
+        enm.shared_variants.get(variant).copied().map(Value::object)
+    }
+
     /// The error `LoadField` raises when [`Self::instance_field`] declines.
     #[cold]
     #[inline(never)]
@@ -10523,9 +10590,10 @@ impl BexVm {
     /// frame and instruction the full dispatch continues with.
     ///
     /// The fast path covers what tight scalar loops and plain calls execute:
-    /// local and constant loads and stores, instance field loads, int
-    /// arithmetic and comparisons, truthiness, branches, and, when `CALLS`,
-    /// exact calls into and returns out of plain bytecode functions. It is
+    /// local and constant loads and stores, instance field loads, enum variant
+    /// constants (without `CALLS`), int arithmetic and comparisons,
+    /// truthiness, branches, and, when `CALLS`, exact calls into and returns
+    /// out of plain bytecode functions. It is
     /// small and out of line so the program counter, stack top, and locals
     /// base stay in registers; inside [`Self::run_compact`] they were
     /// reloaded from spill slots on every instruction. It never allocates on
@@ -10722,6 +10790,24 @@ impl BexVm {
                         ) else {
                             break;
                         };
+                        at!(sp) = value;
+                        sp += 1;
+                        pc += 9;
+                    }
+                    // Only in the leaf variant: in the one that switches
+                    // frames this arm slowed call-heavy code. There it stops,
+                    // and the full dispatch re-enters the leaf variant here.
+                    OpCode::LoadVariant if !CALLS => {
+                        let Some(value) = self.shared_variant(
+                            runtime_package,
+                            operand_u32(code, pc + 1),
+                            operand_u32(code, pc + 5),
+                        ) else {
+                            break;
+                        };
+                        if sp == cap {
+                            break;
+                        }
                         at!(sp) = value;
                         sp += 1;
                         pc += 9;
@@ -11648,6 +11734,18 @@ impl BexVm {
                             index: variant_usize,
                         }));
                         self.push_stack(Value::object(variant_ptr))?;
+                    }
+
+                    // `Status.X` in one step: `LoadConst` + `AllocVariant`.
+                    OpCode::LoadVariant => {
+                        let raw = { read_u32_unchecked(code, pc) };
+                        let variant = { read_u32_unchecked(code, pc) };
+                        let value = self.variant_value(
+                            runtime_package,
+                            ObjectIndex::from_raw(raw as usize),
+                            Value::int(i64::from(variant)),
+                        )?;
+                        self.push_stack(value)?;
                     }
 
                     // ── SysOp (BEP-034 phase D′) ──────────────────────────────────

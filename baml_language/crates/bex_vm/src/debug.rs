@@ -244,6 +244,16 @@ pub(crate) fn display_instruction(
                 instruction_ptr.wrapping_add_signed(*offset)
             )
         }
+        Instruction::LoadVariant { enum_obj, variant } => operand_meta.map_or_else(
+            || match objects {
+                Some(objs) => format!(
+                    "({}.{variant})",
+                    display_object_from_pool(enum_obj.raw(), objs)
+                ),
+                None => format!("(variant {variant})"),
+            },
+            |meta| format!("({})", meta.as_str()),
+        ),
         Instruction::AllocInstance {
             class_obj: index, ..
         }
@@ -535,6 +545,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
+        | Instruction::LoadVariant { .. }
         | Instruction::AllocArray(_)
         | Instruction::ConcatStrings(_)
         | Instruction::AllocTuple(_) => Style::new().cyan(),
@@ -1082,6 +1093,7 @@ fn display_instruction_textual(
             }
         }
         Instruction::AllocVariant(_) => format!("alloc_variant {}", meta_str(&"")),
+        Instruction::LoadVariant { .. } => format!("load_variant {}", meta_str(&"")),
 
         // --- Array/Map element access ---
         Instruction::LoadArrayElement => "load_array_element".to_string(),
@@ -1384,7 +1396,8 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::SysOp(_)
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
-        | Instruction::AllocVariant(_) => meta
+        | Instruction::AllocVariant(_)
+        | Instruction::LoadVariant { .. } => meta
             .map(|m| format!("({})", sanitize_operand_text(m.as_str())))
             .unwrap_or_default(),
 
@@ -1688,7 +1701,8 @@ pub fn display_compact_bytecode(
             | OpCode::ArrayIterNext
             | OpCode::ArrayIterNextLocal
             | OpCode::LoadVarField
-            | OpCode::LoadVarFieldLocal => {
+            | OpCode::LoadVarFieldLocal
+            | OpCode::LoadVariant => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b}")?;
