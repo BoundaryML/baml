@@ -1884,12 +1884,6 @@ fn find_matching_union_member<'a>(
                     }),
                 Object::Instance => {
                     let inst = unsafe { InstanceRef::of(ptr) }.expect("an instance pointer");
-                    // Compare both class name and type args.  When the union
-                    // member has empty type args (e.g. a bare `Foo`) it matches
-                    // any instance of `Foo` regardless of its type args —
-                    // preserving first-match semantics for `Foo<int> | Foo`.
-                    // When type args are present on the union member they must
-                    // equal the instance's exactly.
                     let head =
                         inst.head();
                     let actual = inst.type_args();

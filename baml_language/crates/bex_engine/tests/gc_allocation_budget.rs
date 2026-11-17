@@ -137,8 +137,6 @@ async fn spawn_services_pressure_after_rooting_child_and_future() {
 #[tokio::test]
 async fn long_compute_collects_before_returning() {
     let engine = engine();
-    // A `Node` is a 16-byte cell: enough of them spend the 32 MiB initial
-    // allowance more than once.
     let n = 5_000_000;
     assert_eq!(
         call(&engine, "Churn", vec![Ext::Int(n)], true).await,

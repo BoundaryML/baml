@@ -301,7 +301,6 @@ fn collect_to_string_overrides_within(
             .into_iter()
             .flat_map(|(key, value)| [key, value])
             .collect(),
-        // A raw float field has no override to find.
         Object::Instance => vm
             .get_instance(ptr)
             .into_iter()
@@ -1073,8 +1072,6 @@ fn deep_copy_value_recursive(
 
                 Object::Instance => {
                     let source = vm.get_instance(ptr).expect("an instance pointer");
-                    // The copy starts zeroed and is filled slot by slot: a field
-                    // may reach back to this instance.
                     let copy = vm
                         .tlab
                         .alloc_instance_zeroed(source.class(), source.type_args().into());

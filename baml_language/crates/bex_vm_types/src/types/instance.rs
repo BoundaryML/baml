@@ -539,7 +539,6 @@ fn slot_bits(kind: SlotKind, value: Value) -> Option<u64> {
         SlotKind::Int => value.as_int().map(i64::cast_unsigned),
         SlotKind::Bool => value.as_bool().map(u64::from),
         SlotKind::Value => Some(value.bits()),
-        // Inline or boxed: a value being stored is live.
         SlotKind::Float => value.as_float().map(f64::to_bits),
     }
 }

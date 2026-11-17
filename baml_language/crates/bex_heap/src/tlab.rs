@@ -371,8 +371,6 @@ impl Tlab {
             // SAFETY: the layout gives a generic class this type-args slot.
             unsafe { instance.set_slot_value(slot, value) };
         }
-        // BEP-042: an instance of a class with a finalizer joins the
-        // collector's finalizable list.
         if declaration.cleanup.is_some() {
             self.heap.register_finalizable(self.instance_ptr(instance));
         }
@@ -406,7 +404,6 @@ impl Tlab {
         // SAFETY: the cell was just carved for this instance alone.
         let instance = unsafe { InstanceRef::from_cell(self.alloc_cell(N + 1)) };
         unsafe { instance.set_class(class) };
-        // The instance is fresh: no other thread can reach it yet.
         for (slot, word) in (1..).zip(words) {
             // SAFETY: the layout has `N` field words after the header.
             unsafe { instance.word(slot) }.store(word, Ordering::Relaxed);
@@ -695,7 +692,6 @@ mod tests {
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap);
 
-        // Fill the first block.
         let per_block = FIRST_BLOCK_WORDS / OBJECT_CELL_WORDS;
         for i in 0..per_block {
             let _ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!("obj{i}"))));
@@ -1153,7 +1149,6 @@ mod tests {
                 thread::spawn(move || {
                     let mut tlab = Tlab::new(heap);
 
-                    // More cells than the first block holds, so it refills.
                     let mut pointers = Vec::new();
                     for i in 0..100 {
                         let ptr = tlab.alloc(Object::String(bex_str::BexStr::from(format!(

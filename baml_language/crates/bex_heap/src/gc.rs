@@ -383,10 +383,6 @@ impl BexHeap {
     /// SAFETY: GC safepoint, after the root scan, before from-space is released.
     unsafe fn keepalive_finalizers(&self, scan: &mut Scan) {
         let seeds = unsafe { self.scan_dead_finalizers(&[&*self.gen0.get(), &*self.gen2.get()]) };
-        // The instance keeps its class alive and the class its `cleanup`
-        // method, so copying the instance keeps the finalizer too. Its new
-        // address is read from the instance's scanned copy: the seed's may
-        // already be a new address, which must not be forwarded again.
         let instances: Vec<_> = seeds.into_iter().map(|seed| self.forward(seed)).collect();
         self.scan(scan);
         for instance in instances {
@@ -410,7 +406,6 @@ impl BexHeap {
         let mut errors = Vec::new();
         for space in gens {
             space.for_each_cell(|cell| {
-                // A survivor's error was seen through its copy.
                 // SAFETY: GC has exclusive access, and from-space is intact
                 // until it is released.
                 if !unsafe { is_forwarded(cell) }
@@ -475,7 +470,6 @@ impl BexHeap {
         // SAFETY: GC safepoint; nothing has been copied yet.
         unsafe { self.refresh_finalizable_instances() };
 
-        // The inactive space becomes the copy destination.
         // SAFETY: GC runs at safepoints, exclusive access guaranteed.
         unsafe { (*self.inactive.get()).clear() };
         let mut scan = Scan {
@@ -490,8 +484,6 @@ impl BexHeap {
         self.scan(&mut scan);
         profile.finish_phase(crate::gc_profile::HeapPhase::Trace);
 
-        // Preserve unobserved spawn errors before reclaiming their futures,
-        // then keep alive every dead instance with a `cleanup` finalizer.
         // SAFETY: GC safepoint; exclusive access.
         unsafe {
             self.keepalive_unhandled_spawn_errors(&mut scan);
@@ -499,16 +491,12 @@ impl BexHeap {
         }
         profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
 
-        // Resolve weak lookups before releasing from-space. These pointers
-        // are deliberately absent from the root set.
         self.update_function_lookup();
         self.update_finalizable_instances();
         profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
         // SAFETY: GC safepoint; every survivor has been copied and scanned.
         let collected_count = unsafe { self.drop_dead_objects() };
-        // Survivors become Gen2; the old Gen0 and Gen2 go to the caller's
-        // `Forwarding`, which releases them when it is dropped.
         let from_space = {
             let _stats = self.growth_lock.lock().unwrap();
             // SAFETY: GC safepoint, and `stats` waits on the lock held here.
@@ -599,8 +587,6 @@ impl BexHeap {
             // nothing reads it again.
             unsafe { std::ptr::drop_in_place(object) };
         }
-        // heap_debug: leave a tombstone where each dead object was, so a
-        // read through a stale pointer panics instead of seeing freed storage.
         #[cfg(feature = "heap_debug")]
         for object in dead_objects {
             // SAFETY: the object was dropped, so overwriting it without a
@@ -695,9 +681,6 @@ pub(crate) fn visit_refs(obj: &mut Object, visit: &mut impl FnMut(&mut HeapPtr))
         | Object::ImplRule(_)
         | Object::Interface(_) => visit_callable_refs(obj, visit),
         Object::Class(_) | Object::Enum(_) | Object::TypeAlias(_) => visit_type_refs(obj, visit),
-        // An instance's references live in its cell (`visit_instance_refs`).
-        // `HostClosure` holds only a Rust-side handle and a type. A `type`
-        // value is exactly the type it denotes: every edge it has is a head.
         Object::Instance
         | Object::HostClosure(_)
         | Object::Type(_)
@@ -711,11 +694,6 @@ pub(crate) fn visit_refs(obj: &mut Object, visit: &mut impl FnMut(&mut HeapPtr))
         Object::Sentinel(_) => {}
     }
 
-    // Heads are ordinary references: a type naming a declaration keeps that
-    // declaration alive. Identity is untouched by a move — only the access
-    // path — so nothing rehashes or reorders. An unresolved head has no
-    // pointer: emit mints those, and the loader binds them before the VM
-    // exists.
     bex_vm_types::head_walk::visit_object_heads_mut(obj, &mut |head| {
         if head.is_resolved() {
             let mut ptr = head.ptr();
@@ -785,8 +763,6 @@ fn visit_cell_refs(obj: &mut Object, visit: &mut impl FnMut(&mut HeapPtr)) {
 /// compile-time objects.
 fn visit_callable_refs(obj: &mut Object, visit: &mut impl FnMut(&mut HeapPtr)) {
     match obj {
-        // A function's constants are its own only when it has an owner; a
-        // compile-time function's constants name compile-time objects.
         Object::Function(function) => {
             visit(&mut function.owner);
             if !function.owner.as_ptr().is_null() {
@@ -802,8 +778,6 @@ fn visit_callable_refs(obj: &mut Object, visit: &mut impl FnMut(&mut HeapPtr)) {
                 .values_mut()
                 .for_each(|method| visit(&mut method.fqn));
         }
-        // A runtime-declared interface back-references its owning package
-        // (null for a static one); its default bodies are direct pointers.
         Object::Interface(interface) => {
             visit(&mut interface.owner);
             if let Some(default) = &mut interface.structural_default {
@@ -861,8 +835,6 @@ fn visit_package_refs(
     if let Objects::Own(objects) = &mut package.objects {
         objects.iter_mut().for_each(&mut *visit);
     }
-    // Rules are keyed by their interface, so a moved interface rebuilds the
-    // map.
     package.impl_rules = std::mem::take(&mut package.impl_rules)
         .into_iter()
         .map(|(mut interface, mut rules)| {
@@ -896,8 +868,6 @@ mod tests {
         use bex_vm_types::types::{CancellationToken, FutureId};
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(heap.clone());
-        // Fill the first chunk of cells but one object, so the futures
-        // straddle a chunk boundary. A TLAB's blocks tile a chunk exactly.
         for _ in 0..crate::cell_space::CHUNK_WORDS / OBJECT_CELL_WORDS - 1 {
             tlab.alloc_string(String::new());
         }
@@ -2998,8 +2968,6 @@ mod tests {
         let finalizer = low.alloc_string("cleanup".to_string());
         let class = low.alloc(class_object(Some(finalizer)));
         heap.note_finalizable_class();
-        // `low` takes the first block of cells, so `high`'s come after it,
-        // but `high` registers its instance first.
         let plain = low.alloc(class_object(None));
         low.alloc_instance(plain, vec![]);
         let late = high.alloc_instance(class, vec![]);

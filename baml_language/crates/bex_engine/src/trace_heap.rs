@@ -430,8 +430,6 @@ impl TraceSnapshotBuilder {
                     };
                     type_args.push(type_arg);
                 }
-                // A trace is read by a person: the display name, never an
-                // internal identity.
                 let type_name = Self::copy_str(&class.name().to_string())?;
                 self.alloc(TraceValue::Instance {
                     type_name,

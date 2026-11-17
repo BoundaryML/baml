@@ -465,20 +465,11 @@ impl EqualsDriver {
     fn compare_instances(&mut self, vm: &BexVm, pa: HeapPtr, pb: HeapPtr) -> Cmp {
         let x = vm.get_instance(pa).expect("an instance pointer");
         let y = vm.get_instance(pb).expect("an instance pointer");
-        // Different concrete type (class or generic instantiation) ⇒ never equal.
-        // `Equals.eq(self, other: Self)` requires the same `Self`, so differing
-        // `class_type_args` (`Box<int>` vs `Box<string>`) is unequal up front.
-        // Compared with `ty_args_equivalent`, not `==`, so union args match
-        // order-insensitively (`Box<int | string>` is the same `Self` as
-        // `Box<string | int>`) — the same notion of "same instantiation" the
-        // resolver and reflection use.
         if x.class() != y.class()
             || !resolve::ImplResolver::new(vm).ty_args_equivalent(x.type_args(), y.type_args())
         {
             return Cmp::NotEqual;
         }
-        // Same concrete type: dispatch to the class's custom `Equals.eq` if it has
-        // one, else compare structurally (field by field).
         match value_concrete_ty(vm, pa).map(|ty| resolve_equals_eq(vm, Value::object(pa), &ty)) {
             Some(Ok(Some((callee, type_args)))) => {
                 return Cmp::Yield {
@@ -490,7 +481,6 @@ impl EqualsDriver {
             Some(Err(e)) => return Cmp::Error(e),
             Some(Ok(None)) | None => {}
         }
-        // One class, one layout: a raw float pairs with a raw float.
         for (fx, fy) in x.fields().zip(y.fields()) {
             match (fx, fy) {
                 (Field::Value(fx), Field::Value(fy)) => self.stack.push((fx, fy)),

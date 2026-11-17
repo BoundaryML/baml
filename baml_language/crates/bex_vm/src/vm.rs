@@ -3133,8 +3133,6 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Tombstone => Object::tombstone_reached(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => type_tags::UNKNOWN,
-                // An instance dispatches on its class's head identity; the
-                // primitive arms above are raw tags in the same space.
                 Object::Instance => unsafe { InstanceRef::of(ptr) }
                     .expect("an instance pointer")
                     .class_object()
@@ -5440,18 +5438,10 @@ impl BexVm {
                 let inst = self.get_instance(value.as_object_ptr()?)?;
                 let class = inst.class_object();
                 let head = bex_vm_types::TypeHead::new(inst.class(), class.type_tag);
-                // Media values are instances of the std media classes
-                // (`baml.media.{Image,Audio,Video,Pdf}`), but their concrete
-                // type is the `image`/`audio`/… primitive
-                // (`ConcreteRealizedTy::Media`) — which is how the impl registry
-                // keys `implement I for image`. Return that, not the class.
                 if let Some(kind) = self.stdlib_heads.media_kind(head) {
                     ConcreteRealizedTy::Media(kind)
                 } else {
                     debug_assert_eq!(inst.type_args().len(), class.generic_param_count);
-                    // A generic instance's stored class type args are already
-                    // realized (`Box<int>` ⇒ `T = int`), so they are exactly the
-                    // `ConcreteRealizedTy::Class` argument list.
                     ConcreteRealizedTy::Class(head, inst.type_args().into())
                 }
             }
@@ -9871,8 +9861,6 @@ impl BexVm {
         source_value: Value,
         field_copy_set: &bytecode::FieldCopySet,
     ) -> Result<(), VmError> {
-        // Every field is read before any is written, so a spread of an
-        // instance into itself sees the fields as they were.
         let mut copied_fields = Vec::with_capacity(field_copy_set.fields.len());
         for copy in &field_copy_set.fields {
             self.checked_field(dest_value, copy.dest)?;
@@ -9915,7 +9903,6 @@ impl BexVm {
         };
         let values: Vec<Value> = self.stack.drain(StackIndex::from_raw(base)..).collect();
 
-        // A field the plan leaves out keeps its zero: null in a value slot.
         let instance = self.tlab.alloc_instance_zeroed(class_ptr, class_type_args);
         for (&field, value) in plan.fields.iter().zip(values) {
             instance

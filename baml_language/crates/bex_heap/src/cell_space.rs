@@ -60,8 +60,6 @@ pub(crate) unsafe fn forward_to(cell: *mut AtomicU64, to: *mut AtomicU64) {
     // SAFETY: the caller guarantees `cell` starts a cell.
     let header = unsafe { &*cell };
     let kind = header.load(Ordering::Relaxed) & OBJECT_BODY;
-    // Exposed, so `forwarding_address` can rebuild a pointer into `to`'s
-    // chunk from the address alone.
     header.store(
         to.expose_provenance() as u64 | FORWARDED | kind,
         Ordering::Relaxed,
@@ -230,8 +228,6 @@ impl CellSpace {
 }
 
 fn zeroed_chunk(words: usize) -> Box<[AtomicU64]> {
-    // `vec!` of zeros asks the allocator for zeroed memory, which it can
-    // supply without writing it.
     let raw = Box::into_raw(vec![0u64; words].into_boxed_slice());
     // SAFETY: `AtomicU64` has `u64`'s size, alignment (asserted above) and bit
     // validity, so the buffer is a valid `[AtomicU64]` owned by the box.

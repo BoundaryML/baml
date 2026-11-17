@@ -317,8 +317,6 @@ enum ObjectWire {
     Interface(Box<InterfaceDef>),
     ImplRule(Box<RuntimeImplRule>),
     Class(Box<Class>),
-    // Reserved tag: an instance is never pooled, and keeping its place
-    // keeps every later tag.
     Instance,
     Enum(Box<Enum>),
     TypeAlias(Box<TypeAliasDef>),

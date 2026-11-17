@@ -432,7 +432,6 @@ impl<'db> Generator<'_, 'db> {
             .map(|(field, operand)| {
                 let value = self.operand(block, operand)?;
                 let (_, repr) = super::place::slot_repr(layout.kind(field));
-                // Bound first: a coercion may itself call into the VM.
                 let code = self.repr_arg(&value, repr);
                 Ok(match repr {
                     Repr::Int => format!("i64::cast_unsigned({code})"),

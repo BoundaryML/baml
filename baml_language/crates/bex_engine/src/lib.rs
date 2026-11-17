@@ -3551,7 +3551,6 @@ impl BexEngine {
         }
 
         self.heap.verify_quick();
-        // Release the retired spaces now, not after the finalizers below.
         drop(forwarding);
 
         // Roots are forwarded; a panic past this point leaves a readable heap.

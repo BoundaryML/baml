@@ -320,7 +320,6 @@ fn children(vm: &BexVm, ptr: HeapPtr, options: WriteOptions) -> Vec<Value> {
             if vm.stdlib_heads().media_kind(head).is_some() {
                 return Vec::new();
             }
-            // A raw float field is a leaf: nothing to descend into.
             instance
                 .fields()
                 .zip(&class.fields)

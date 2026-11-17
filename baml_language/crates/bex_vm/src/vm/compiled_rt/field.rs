@@ -288,7 +288,6 @@ impl BexVm {
     ) -> Value {
         let instance = self.tlab.alloc_instance_zeroed(class, Box::default());
         assert_eq!(instance.layout().words(), N + 1, "fields for {class:?}");
-        // The instance is fresh: no other thread can reach it yet.
         for (slot, word) in (1..).zip(words) {
             // SAFETY: the class has `N` fields after its header, as checked.
             unsafe { instance.word(slot) }.store(word, Ordering::Relaxed);

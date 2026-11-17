@@ -382,8 +382,6 @@ impl BexHeap {
     /// Freeze the heap behind the shared `Arc`. Compile-time slots can no
     /// longer be replaced. See [`Self::build_unsealed`].
     pub fn seal(mut self) -> Arc<Self> {
-        // The collector never scans a compile-time object, so none may
-        // reference a runtime one (see the `gc` module docs).
         #[cfg(debug_assertions)]
         self.assert_compile_time_closed();
         // Assign IDs only after all placeholders have been replaced. The Vec
@@ -928,7 +926,6 @@ impl BexHeap {
                 );
             }
         }
-        // Safe to mutate now; every entry is guaranteed to have been kept.
         let moved = |ptr: HeapPtr| forwarding.get(ptr).expect("a handle's object was kept");
         let mut handles = self.handles.write().expect("handles lock poisoned");
         for ptr in handles.values_mut() {

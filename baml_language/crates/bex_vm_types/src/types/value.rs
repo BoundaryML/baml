@@ -427,7 +427,6 @@ impl Value {
                 None => unreachable!("malformed Value bits 0x{x:x}"),
             },
             _ => {
-                // Must be a pointer — not a sentinel pattern.
                 debug_assert!(self.is_object(), "malformed Value bits 0x{:x}", self.0);
                 // SAFETY: see [`Value::as_object_ptr`].
                 let ptr = self.0 as *mut Object;

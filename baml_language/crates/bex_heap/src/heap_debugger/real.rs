@@ -143,7 +143,7 @@ impl BexHeap {
                 // SAFETY: as above.
                 let obj = unsafe { &*object };
                 if let Object::Tombstone = obj {
-                    return; // an unpublished reservation
+                    return;
                 }
                 // SAFETY: the object is in a live cell.
                 let ptr = unsafe { self.make_heap_ptr(object) };

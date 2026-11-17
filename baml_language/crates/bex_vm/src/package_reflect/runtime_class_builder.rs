@@ -1038,10 +1038,6 @@ fn build_group(
         prepare_class_witnesses(vm, &plans[&start_id].ty, witnesses).map_err(|diagnostic| {
             VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
         })?;
-    // Each builder's type, published only once its class is complete: a
-    // reader that could reach the type before then could instantiate a class
-    // with no fields yet, which the collector would then size by the fields
-    // written later.
     let unpublished: Vec<(Value, Value)> = group
         .values()
         .map(|node| {

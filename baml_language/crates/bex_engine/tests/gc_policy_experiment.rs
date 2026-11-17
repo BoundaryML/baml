@@ -232,7 +232,6 @@ fn compare_gc_policy() {
         .unwrap();
     runtime.block_on(async {
         let engine = Arc::new(BexEngine::new(program, Arc::new(sys_native::SysOps::native()), vec![]).unwrap());
-        // Sizes below are heap words; the experiment's "slots" are words now.
         let slot_size = std::mem::size_of::<u64>();
         engine.collect_garbage().await;
         let mut policy = Policy::new(policy_name);
@@ -278,8 +277,6 @@ fn compare_gc_policy() {
             Some(engine.call_function("Batch", vec![BexExternalValue::Int(cache_n)], context(), false).await.unwrap())
         } else { None };
         engine.collect_garbage().await;
-        // A permanent cache is part of the survivor baseline before timings;
-        // the nursery is what the heap grew by since the last collection.
         let mut survivors = engine.heap_stats().runtime_words;
         policy.after_gc(survivors * slot_size);
         let mut cycles = Vec::new();
