@@ -524,9 +524,11 @@ fn refused(error: &bcs_api::Error) -> bool {
     }
 }
 
-/// Whether BCS answered that it does not know the process.
+/// Whether BCS answered that it does not know the process, or no longer
+/// takes its token, such as after BCS's key changed: either way the process
+/// registers again.
 fn unknown_process(error: &bcs_api::Error) -> bool {
     error
         .http_failure()
-        .is_some_and(|failure| failure.status.as_u16() == 404)
+        .is_some_and(|failure| matches!(failure.status.as_u16(), 403 | 404))
 }
