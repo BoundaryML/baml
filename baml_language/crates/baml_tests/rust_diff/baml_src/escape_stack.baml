@@ -219,5 +219,5 @@ function StackTests() -> void {
     let tested = match (v) {
         let s: StackVec => s.x + 10,
     };
-    baml.io.println(`tests:${tested}:${maybe == null}`);
+    baml.io.println(`tests:${tested}:${v == null}:${null == v}:${maybe == null}`);
 }
