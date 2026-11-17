@@ -346,3 +346,87 @@ impl BamlClassString for PackageBamlImpl {
         Ok(BexStr::from(result))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use bex_str::BexStr;
+
+    use super::{BamlClassString, PackageBamlImpl};
+
+    /// Every whitespace character `char::is_whitespace` knows, ASCII first.
+    fn whitespace() -> Vec<char> {
+        (0..=0x10FFFF_u32)
+            .filter_map(char::from_u32)
+            .filter(|c| c.is_whitespace())
+            .collect()
+    }
+
+    /// Inputs that mix ASCII and Unicode whitespace on either side of text
+    /// that itself starts and ends with ASCII, non-ASCII and whitespace-like
+    /// characters.
+    fn trim_inputs() -> Vec<String> {
+        let mut inputs = vec![
+            String::new(),
+            " ".to_string(),
+            "x".to_string(),
+            "é".to_string(),
+            "\u{0B}\u{0C} vertical tab and form feed \u{0B}".to_string(),
+            "\u{85}next line\u{85}".to_string(),
+        ];
+        for ws in whitespace() {
+            for core in ["hi", "é", "a b", "\u{200B}zero width\u{200B}"] {
+                inputs.push(format!("{ws}{core}{ws}"));
+                inputs.push(format!("  {ws} \t{core}\n{ws}  "));
+                inputs.push(format!("{ws}{ws}"));
+                inputs.push(format!("{ws} {}", core.repeat(30)));
+            }
+        }
+        inputs
+    }
+
+    #[test]
+    fn trims_like_str() {
+        for input in trim_inputs() {
+            let string = BexStr::from(input.as_str());
+            assert_eq!(
+                PackageBamlImpl::trim(&string).as_str(),
+                input.trim(),
+                "{input:?}"
+            );
+            assert_eq!(
+                PackageBamlImpl::trim_start(&string).as_str(),
+                input.trim_start(),
+                "{input:?}"
+            );
+            assert_eq!(
+                PackageBamlImpl::trim_end(&string).as_str(),
+                input.trim_end(),
+                "{input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn splits_like_str() {
+        let long = "the quick brown fox jumps over the lazy dog ".repeat(4);
+        let texts = [
+            "",
+            ",",
+            ",,",
+            "a,b,,c,",
+            ",leading",
+            "héllo,wörld,😀,",
+            "no delimiter here",
+            long.as_str(),
+        ];
+        for text in texts {
+            for delimiter in [",", " ", "o", "é", "😀", ", ", "the"] {
+                let string = BexStr::from(text);
+                let parts = PackageBamlImpl::split(&string, &BexStr::from(delimiter));
+                let parts: Vec<&str> = parts.iter().map(BexStr::as_str).collect();
+                let expected: Vec<&str> = text.split(delimiter).collect();
+                assert_eq!(parts, expected, "{text:?}.split({delimiter:?})");
+            }
+        }
+    }
+}
