@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 import { getEapEvents } from '@/lib/luma';
 import { section } from './analytics';
 import { BoundaryLogo, BoundaryMark } from './boundary-logo';
@@ -7,7 +8,15 @@ import { PlatformMenu } from './nav-menu';
 import { Socials } from './nav-socials';
 import { WRAP } from './ui';
 
-export default async function Nav(_: { current?: 'blog' }) {
+/** The early access banner and the nav bar. The two stay pinned together by default. The homepage
+ *  passes `pinBanner={false}`: its banner scrolls away with the page and only the bar stays pinned,
+ *  which leaves more of a long page's window for reading. */
+export default async function Nav({
+  pinBanner = true,
+}: {
+  current?: 'blog';
+  pinBanner?: boolean;
+}) {
   const sessions = (await getEapEvents()).map(
     ({ id, start_at, end_at, timezone }) => ({
       end_at,
@@ -16,12 +25,25 @@ export default async function Nav(_: { current?: 'blog' }) {
       timezone,
     }),
   );
+  const banner = <EarlyAccessBanner sessions={sessions} />;
+  return (
+    <>
+      {/* Outside the pinned bar, the banner keeps the bar's section name, so its clicks are still
+          recorded under "nav". */}
+      {!pinBanner && <div {...section('nav')}>{banner}</div>}
+      <NavBar>{pinBanner && banner}</NavBar>
+    </>
+  );
+}
+
+/** The pinned bar, with anything pinned above it passed as children. */
+function NavBar({ children }: { children: ReactNode }) {
   return (
     <header
       {...section('nav')}
       className="sticky top-0 z-30 border-b border-rule bg-ground"
     >
-      <EarlyAccessBanner sessions={sessions} />
+      {children}
       <nav
         aria-label="Main"
         className={`${WRAP} h-12 sm:h-14 flex items-center justify-between gap-3 sm:gap-6`}

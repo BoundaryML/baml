@@ -11,7 +11,6 @@ import Logos from '@/components/home/logos';
 import Nav from '@/components/home/nav';
 import Observe from '@/components/home/observe';
 import Review from '@/components/home/review';
-import SeenEnough from '@/components/home/seen-enough';
 import Software from '@/components/home/software';
 import Stack from '@/components/home/stack';
 import { CtaClicks, SectionViews } from '@/components/home/track';
@@ -27,7 +26,7 @@ export default function Home() {
       data-theme="dark"
     >
       <ForceDark />
-      <Nav />
+      <Nav pinBanner={false} />
       <main id="main">
         <Hero />
         <Logos />
@@ -36,15 +35,14 @@ export default function Home() {
         </Hyperobs>
         <Agents />
         <Stack />
-        <Adopt />
         <Language />
+        <Adopt />
         <Review />
         <Software />
         <Improve />
         <Book />
       </main>
       <Footer />
-      <SeenEnough />
       <SectionViews />
       <CtaClicks />
     </div>
