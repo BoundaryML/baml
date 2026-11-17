@@ -352,7 +352,7 @@ function Speed() {
   const most = Math.max(...times);
   const base = times[BAML_ROW];
   return (
-    <Box title="Honest compile times">
+    <Box title="Our (honest) compile times">
       <div className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-black/40">
         <div className="flex flex-wrap items-center border-b border-white/10 px-2">
           {KINDS.map((kind, i) => (
