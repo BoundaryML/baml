@@ -60,16 +60,16 @@ impl ClientBody {
         }
         let reader = Arc::clone(&state);
         let release = state.released.clone();
-        let task_network = network.clone();
+        let on_refused = network.clone();
         let finished = ReaderFinished(Arc::clone(&reader));
         if !readers.spawn(release, async move {
             // Abort/panic must wake an application already waiting for this
             // reader, rather than leaving its body sys-op pending forever.
             let _finished = finished;
-            reader.run(response, options, task_network).await;
+            reader.run(response, options, network).await;
         }) {
             state.stopped();
-            if let Some(network) = &network {
+            if let Some(network) = &on_refused {
                 network.abandon();
             }
         }
