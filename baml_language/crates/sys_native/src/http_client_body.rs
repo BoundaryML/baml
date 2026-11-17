@@ -1,6 +1,4 @@
 //! One reader owns each fetch/send body; task references never own VM carriers.
-use crate::io_impls::{HttpTimeoutOptions, http_transport_error};
-use bytes::{Bytes, BytesMut};
 use std::{
     sync::{
         Arc, Mutex,
@@ -8,11 +6,15 @@ use std::{
     },
     time::Duration,
 };
+
+use bytes::{Bytes, BytesMut};
 use sys_types::{
     CancellationToken, VmBamlError,
     network::{NetworkContext, NetworkError},
 };
 use tokio::sync::Notify;
+
+use crate::io_impls::{HttpTimeoutOptions, http_transport_error};
 
 /// Explicit BAML allowance, independent of Hyper's internal buffering.
 pub(crate) const HTTP_EAGER_BODY_BYTES: usize = 8 * 1024;
@@ -24,6 +26,7 @@ pub(crate) struct ClientBody {
 }
 struct State {
     consumed: AtomicBool,
+    finished: AtomicBool,
     requested: Notify,
     released: CancellationToken,
     done: Notify,
@@ -44,6 +47,7 @@ impl ClientBody {
     ) -> Self {
         let state = Arc::new(State {
             consumed: AtomicBool::new(false),
+            finished: AtomicBool::new(false),
             requested: Notify::new(),
             released: CancellationToken::new(),
             done: Notify::new(),
@@ -56,10 +60,19 @@ impl ClientBody {
         }
         let reader = Arc::clone(&state);
         let release = state.released.clone();
-        let handle = tokio::spawn(async move {
-            reader.run(response, options, network).await;
-        });
-        readers.register(release, handle);
+        let task_network = network.clone();
+        let finished = ReaderFinished(Arc::clone(&reader));
+        if !readers.spawn(release, async move {
+            // Abort/panic must wake an application already waiting for this
+            // reader, rather than leaving its body sys-op pending forever.
+            let _finished = finished;
+            reader.run(response, options, task_network).await;
+        }) {
+            state.stopped();
+            if let Some(network) = &network {
+                network.abandon();
+            }
+        }
         Self { state }
     }
     pub(crate) fn retained(&self) -> usize {
@@ -90,7 +103,26 @@ impl ClientBody {
         }
     }
 }
+struct ReaderFinished(Arc<State>);
+impl Drop for ReaderFinished {
+    fn drop(&mut self) {
+        self.0.stopped();
+    }
+}
 impl State {
+    fn stopped(&self) {
+        if !self.finished.swap(true, Ordering::AcqRel) {
+            *self
+                .result
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Err(VmBamlError::Io {
+                message: "Response body reader stopped before completion".into(),
+            }));
+            self.retained.store(0, Ordering::Relaxed);
+            self.done.notify_waiters();
+        }
+    }
+
     fn finish(&self, result: Result<Bytes, VmBamlError>, network: Option<&NetworkContext>) {
         if let Some(network) = network {
             match &result {
@@ -117,6 +149,7 @@ impl State {
             .result
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(result);
+        self.finished.store(true, Ordering::Release);
         self.done.notify_waiters();
     }
     async fn run(
@@ -218,12 +251,13 @@ impl State {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use sys_types::{
         http_readers::HttpReaders,
         network::{NetworkEventKind, NetworkQueue},
     };
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    use super::*;
 
     // Raw framing is intentional: BAML cannot force the exact chunk/window,
     // truncated transport, or reader/GC races exercised by these regressions.
@@ -560,6 +594,42 @@ mod tests {
         assert_eq!(body.read_text(None).await.unwrap(), "a\u{fffd}");
         assert!(body.read_bytes(None).await.is_err());
         readers.shutdown(Duration::from_millis(100)).await;
+    }
+
+    #[tokio::test]
+    async fn shutdown_wakes_waiting_reads_and_refuses_late_admission() {
+        let readers = HttpReaders::default();
+        let body = ClientBody::new(
+            response(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\n".to_vec(),
+                Duration::from_secs(2),
+                None,
+            )
+            .await,
+            options(None),
+            None,
+            &readers,
+        );
+        let read = body.read();
+        let shutdown = readers.shutdown(Duration::from_millis(10));
+        let (result, ()) = tokio::time::timeout(Duration::from_secs(1), async {
+            tokio::join!(read, shutdown)
+        })
+        .await
+        .unwrap();
+        assert!(result.is_err());
+        let late = ClientBody::new(
+            response(fixed(b"late"), Duration::from_secs(1), None).await,
+            options(None),
+            None,
+            &readers,
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_secs(1), late.read())
+                .await
+                .unwrap()
+                .is_err()
+        );
     }
 
     #[tokio::test]

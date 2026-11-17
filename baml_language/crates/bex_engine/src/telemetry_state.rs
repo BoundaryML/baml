@@ -132,8 +132,9 @@ impl EngineTelemetry {
     /// A heap-free recording producer makes native EOF/error visible even
     /// while every BAML VM is idle. The queue serializes calls to this writer.
     pub(super) fn start_network_recording(&self) {
-        use bex_vm::telemetry::{ClockInstant, InvocationOutcome, TelemetryId};
         use std::sync::Mutex;
+
+        use bex_vm::telemetry::{ClockInstant, InvocationOutcome, TelemetryId};
         use sys_types::network::NetworkEventKind;
         struct Writer {
             state: Mutex<TelemetryState>,
