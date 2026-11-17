@@ -380,6 +380,9 @@ jobs:
       # Drop to "0" if this is still too tight.
       CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
       CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
+      WINDOWS_CLI_E2E_FILTER: >-
+        binary(=pack_e2e) or binary(=exit_code_e2e) or
+        (binary(=telemetry_recording_e2e) and test(=packed_modes_write_to_user_home_even_when_launched_in_another_project))
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
     timeout-minutes: 50
@@ -444,9 +447,10 @@ jobs:
         run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
-      # CLI binary e2e tests run separately below.
+      # Keep tests that need the pack host together in the prebuilt CLI phase.
+      # Negate the same filter in the workspace run so each case runs once.
       - name: "Run tests"
-        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e) and not binary(=baml_corpus) and not binary(=type_quiz)'
+        run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E "not ($WINDOWS_CLI_E2E_FILTER) and not binary(=baml_corpus) and not binary(=type_quiz)"
         working-directory: baml_language
 
       - name: "Preserve workspace Cargo timings"
@@ -454,13 +458,12 @@ jobs:
         working-directory: baml_language
 
       - name: "Build CLI binary e2e tests and pack host (windows)"
-        # Include the normal host executable and both integration targets in
-        # one feature graph. No nested default-feature Cargo build is needed.
-        run: cargo build -p baml_cli -p baml_pack_host --bins --test pack_e2e --test exit_code_e2e --all-features
+        # Build the host executable and integration targets in one feature graph.
+        run: cargo build -p baml_cli -p baml_pack_host --bins --test pack_e2e --test exit_code_e2e --test telemetry_recording_e2e --all-features
         working-directory: baml_language
 
       - name: "Run CLI binary e2e tests (windows)"
-        run: cargo nextest run -p baml_cli -p baml_pack_host --test pack_e2e --test exit_code_e2e --all-features
+        run: cargo nextest run -p baml_cli -p baml_pack_host --test pack_e2e --test exit_code_e2e --test telemetry_recording_e2e --all-features -E "$WINDOWS_CLI_E2E_FILTER"
         working-directory: baml_language
         env:
           BAML_PACK_HOST_PREBUILT: "1"
