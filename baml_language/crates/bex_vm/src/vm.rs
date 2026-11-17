@@ -267,7 +267,7 @@ enum VirtualReceiverKey {
 /// The borrowed form of a [`VirtualSiteKey`]: the receiver's and the
 /// interface's type arguments are read where they live (the instance and the
 /// interface operand's type object).
-#[derive(Debug, PartialEq, Hash)]
+#[derive(Debug, PartialEq)]
 struct VirtualSiteQuery<'a> {
     caller_function_addr: usize,
     call_pc: usize,
@@ -283,6 +283,26 @@ enum VirtualReceiverQuery<'a> {
         type_args: &'a [bex_vm_types::RealizedTy],
     },
     Other(&'a bex_vm_types::RealizedTy),
+}
+
+/// Type arguments are compared, not hashed. Hashing them walked every
+/// argument's type on every dispatch, and a site rarely sees two
+/// instantiations of one receiver class, so they would seldom separate two
+/// entries anyway: entries that differ only there share a hash and are told
+/// apart by equality.
+impl std::hash::Hash for VirtualSiteQuery<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.caller_function_addr.hash(state);
+        self.call_pc.hash(state);
+        match self.receiver {
+            VirtualReceiverQuery::Class {
+                type_tag,
+                type_args: _,
+            } => type_tag.hash(state),
+            VirtualReceiverQuery::Other(ty) => ty.hash(state),
+        }
+        self.interface_head.hash(state);
+    }
 }
 
 impl VirtualSiteQuery<'_> {
@@ -375,6 +395,11 @@ struct StaticVirtualCallTarget {
     /// Weak, like the key: the cache must not keep a runtime callee alive.
     callee: Weak,
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
+    /// `frame_type_args` as a slice the callee frames of cache hits share,
+    /// when it is non-empty and names compile-time declarations only (so a
+    /// collection has nothing in it to visit or forward). `None` otherwise,
+    /// and for entries a compiled body made.
+    shared_frame_type_args: Option<Arc<[bex_vm_types::RealizedTy]>>,
     /// The callee's value count when the site's pushed arguments are already
     /// the callee's own slots (the site recorded no layout, or the layout it
     /// recorded is the callee's), so a hit skips the layout lookup. `None`
@@ -505,6 +530,74 @@ const FAST_PATH_OPS: [bool; 256] = {
     table
 };
 
+/// A bytecode frame's type arguments: owned, or shared with the
+/// virtual-call cache entry that dispatched to the frame's function.
+///
+/// Sharing is what makes a cached interface call into a generic impl (an
+/// iterator adapter's `next`) cheap: entering the callee bumps a reference
+/// count instead of allocating and cloning the impl's type arguments, and
+/// leaving it drops one. A shared slice names compile-time declarations
+/// only, which never move or die, so a collection has nothing in it to
+/// visit. Writing to the arguments (`BindType`, a call's extra lane) makes
+/// them owned first.
+#[derive(Clone, Debug)]
+pub enum FrameTypeArgs {
+    Owned(Vec<bex_vm_types::RealizedTy>),
+    Shared(Arc<[bex_vm_types::RealizedTy]>),
+}
+
+impl Default for FrameTypeArgs {
+    fn default() -> Self {
+        Self::Owned(Vec::new())
+    }
+}
+
+impl From<Vec<bex_vm_types::RealizedTy>> for FrameTypeArgs {
+    fn from(args: Vec<bex_vm_types::RealizedTy>) -> Self {
+        Self::Owned(args)
+    }
+}
+
+impl std::ops::Deref for FrameTypeArgs {
+    type Target = [bex_vm_types::RealizedTy];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl FrameTypeArgs {
+    pub fn as_slice(&self) -> &[bex_vm_types::RealizedTy] {
+        match self {
+            Self::Owned(args) => args,
+            Self::Shared(args) => args,
+        }
+    }
+
+    /// The arguments as an owned vector, copying a shared slice first.
+    pub fn to_mut(&mut self) -> &mut Vec<bex_vm_types::RealizedTy> {
+        if let Self::Shared(args) = self {
+            *self = Self::Owned(args.to_vec());
+        }
+        match self {
+            Self::Owned(args) => args,
+            Self::Shared(_) => unreachable!("made owned just above"),
+        }
+    }
+
+    /// Whether dropping these arguments frees nothing: an owned vector that
+    /// never allocated.
+    fn owns_nothing(&self) -> bool {
+        matches!(self, Self::Owned(args) if args.capacity() == 0)
+    }
+}
+
+impl PartialEq<Vec<bex_vm_types::RealizedTy>> for FrameTypeArgs {
+    fn eq(&self, other: &Vec<bex_vm_types::RealizedTy>) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
 /// Bytecode call frame — pushed when entering a bytecode function.
 #[derive(Clone, Debug)]
 pub struct BytecodeFrame {
@@ -524,7 +617,7 @@ pub struct BytecodeFrame {
     /// concrete type, seeded from the callee's realized `Object` type args
     /// (`GenericFunction`/`BoundMethod`/`Closure`/`Instance`), so a `LoadType`
     /// substitutes them into a fully realized type.
-    pub type_args: Vec<bex_vm_types::RealizedTy>,
+    pub type_args: FrameTypeArgs,
     /// Byte offset of the most recently dispatched opcode (compact path).
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
@@ -597,8 +690,12 @@ impl RootHaver for BytecodeFrame {
         // A frame's type arguments may name runtime declarations (a slot
         // bound from a runtime class, a receiver's live binding). The
         // realized argument is the type `LoadType` reads, so its heads must
-        // survive and move with the frame.
-        type_args.visit_roots(visitor);
+        // survive and move with the frame. A shared slice names compile-time
+        // declarations only: nothing to visit.
+        match type_args {
+            FrameTypeArgs::Owned(args) => args.visit_roots(visitor),
+            FrameTypeArgs::Shared(_) => {}
+        }
     }
 }
 
@@ -1511,6 +1608,28 @@ pub(crate) mod tests {
         );
     }
 
+    /// A frame that shares a dispatch cache entry's type arguments copies
+    /// them before writing (`BindType`), so the entry and the next frames
+    /// that share it keep the original arguments.
+    #[test]
+    fn shared_frame_type_args_copy_before_a_write() {
+        let shared: Arc<[bex_vm_types::RealizedTy]> =
+            Arc::from(vec![bex_vm_types::RealizedTy::int()]);
+        let mut args = super::FrameTypeArgs::Shared(Arc::clone(&shared));
+        assert!(!args.owns_nothing());
+        args.to_mut().push(bex_vm_types::RealizedTy::string());
+        assert_eq!(&shared[..], &[bex_vm_types::RealizedTy::int()]);
+        assert_eq!(
+            args.as_slice(),
+            &[
+                bex_vm_types::RealizedTy::int(),
+                bex_vm_types::RealizedTy::string()
+            ]
+        );
+        assert!(matches!(args, super::FrameTypeArgs::Owned(_)));
+        assert!(super::FrameTypeArgs::default().owns_nothing());
+    }
+
     /// A declaration is reachable from a frame's bound types through the type's
     /// own head, so it is rooted and repointed with no table to keep in step.
     #[test]
@@ -1539,10 +1658,10 @@ pub(crate) mod tests {
         let Some(Frame::Bytecode(frame)) = vm.frames.last_mut() else {
             panic!("expected trampoline bytecode frame");
         };
-        frame.type_args = vec![bex_vm_types::RealizedTy::Class(
+        frame.type_args = super::FrameTypeArgs::Owned(vec![bex_vm_types::RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, tag),
             Box::new([]),
-        )];
+        )]);
 
         let mut roots = Vec::new();
         vm.collect_roots(&mut roots);
@@ -5778,7 +5897,7 @@ impl BexVm {
                     function: dispatch_ptr,
                     instruction_ptr: 0,
                     locals_offset: StackIndex::from_raw(0),
-                    type_args: effective_type_args,
+                    type_args: effective_type_args.into(),
                     faulting_pc: 0,
                     telemetry: frame_telemetry,
                     context: self.root_context.clone(),
@@ -5981,7 +6100,7 @@ impl BexVm {
             function: entry_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
-            type_args: Vec::new(),
+            type_args: FrameTypeArgs::default(),
             faulting_pc: 0,
             telemetry: frame_telemetry,
             context: self.root_context.clone(),
@@ -6092,7 +6211,7 @@ impl BexVm {
             function: entry_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
-            type_args: Vec::new(),
+            type_args: FrameTypeArgs::default(),
             faulting_pc: 0,
             telemetry: frame_telemetry,
             context: self.root_context.clone(),
@@ -8118,7 +8237,7 @@ impl BexVm {
                 locals_offset,
                 // A closure made in a generic context reads the type
                 // arguments it captured.
-                type_args: captured_type_args.to_vec(),
+                type_args: captured_type_args.to_vec().into(),
                 faulting_pc: 0,
                 telemetry: frame_telemetry,
                 context,
@@ -8129,6 +8248,132 @@ impl BexVm {
             self.resize_stack(new_len, Value::NULL)?;
         }
         Ok(Some(callee))
+    }
+
+    /// `VirtualCall [nargs, ntypeargs, self_arg]` when its site cache already
+    /// holds the callee, entered like a plain bytecode callee of
+    /// [`Self::enter_indirect_bytecode_call`]: the frame is pushed here and
+    /// dispatch continues in it, without the general call path or a
+    /// type-argument lane. A generic impl's frame shares the cache entry's
+    /// type arguments. Returns `None` with nothing changed when the call
+    /// needs the general path: a miss, method type arguments, telemetry, a
+    /// pending trace or lane, arguments the site remaps, type arguments that
+    /// name runtime declarations, or a callee that is not a plain bytecode
+    /// function.
+    #[inline(never)]
+    fn enter_cached_virtual_call(
+        &mut self,
+        [nargs, ntypeargs, self_arg]: [usize; 3],
+        frame_idx: usize,
+        caller: &'static Function,
+        runtime_package: HeapPtr,
+        return_pc: usize,
+    ) -> Result<Option<&'static Function>, VmError> {
+        if ntypeargs != 0
+            || self.telemetry.is_some()
+            || self.pending_call_trace.is_some()
+            || !self.pending_call_type_args.is_empty()
+        {
+            return Ok(None);
+        }
+        // `[args..., iface_type, method_name]`, top last.
+        let len = self.stack.len();
+        let Some(args_offset) = len.checked_sub(nargs + 2) else {
+            return Ok(None);
+        };
+        let receiver = self.stack[StackIndex::from_raw(args_offset + self_arg)];
+        let Some(iface_ptr) = self.stack[StackIndex::from_raw(len - 2)].as_object_ptr() else {
+            return Ok(None);
+        };
+        if !matches!(self.get_object(iface_ptr), Object::Type(_)) {
+            return Ok(None);
+        }
+        let identity = self.static_cache_identity(caller, runtime_package, frame_idx);
+        let (callee_ptr, type_args) = {
+            let mut scratch = None;
+            let Some(query) = self.virtual_site_query(identity, receiver, iface_ptr, &mut scratch)
+            else {
+                return Ok(None);
+            };
+            let Some(target) = self.static_virtual_call_cache.get(&query) else {
+                return Ok(None);
+            };
+            if target.arg_count != Some(nargs) {
+                return Ok(None);
+            }
+            let type_args = if target.frame_type_args.is_empty() {
+                FrameTypeArgs::default()
+            } else if let Some(shared) = &target.shared_frame_type_args {
+                FrameTypeArgs::Shared(Arc::clone(shared))
+            } else {
+                return Ok(None);
+            };
+            (target.callee.ptr(), type_args)
+        };
+        // SAFETY: a hit's callee is live (collection drops entries whose
+        // callee died), and the active heap permit prevents collection
+        // during frame/stack growth, as at `CallExactArgs`.
+        let Object::Function(callee) = (unsafe { callee_ptr.get() }) else {
+            return Ok(None);
+        };
+        if !matches!(callee.kind, FunctionKind::Bytecode)
+            || callee.compiled_body.is_some()
+            || callee.trace_passthrough
+            || callee.arity != nargs
+            || callee
+                .bytecode
+                .compact
+                .as_ref()
+                .is_none_or(|code| code.trace_hook_finish_pc.is_some())
+        {
+            return Ok(None);
+        }
+
+        self.stack.truncate(len - 2);
+        let Frame::Bytecode(caller_frame) = &mut self.frames[frame_idx] else {
+            verifier_unreachable!()
+        };
+        caller_frame.instruction_ptr = return_pc;
+        caller_frame.faulting_pc = self.cur_pc;
+        self.reserve_call_frame()?;
+        self.reserve_stack(callee.real_local_count)?;
+        let context = self.dispatch_frame_context(frame_idx).clone();
+        self.frames.push_reserved_with(|| {
+            Frame::Bytecode(BytecodeFrame {
+                function: callee_ptr,
+                instruction_ptr: 0,
+                locals_offset: StackIndex::from_raw(args_offset),
+                type_args,
+                faulting_pc: 0,
+                telemetry: None,
+                context,
+            })
+        });
+        if callee.real_local_count != 0 {
+            let new_len = self.stack.len() + callee.real_local_count;
+            self.resize_stack(new_len, Value::NULL)?;
+        }
+        Ok(Some(callee))
+    }
+
+    /// `args` as a slice the callee frames of virtual-call cache hits can
+    /// share ([`FrameTypeArgs::Shared`]): when there are any, and every
+    /// declaration they name is compile-time, so a frame holding them has
+    /// nothing for a collection to visit.
+    fn shareable_frame_type_args(
+        &self,
+        args: &[bex_vm_types::RealizedTy],
+    ) -> Option<Arc<[bex_vm_types::RealizedTy]>> {
+        if args.is_empty() {
+            return None;
+        }
+        let mut runtime = false;
+        for ty in args {
+            ty.visit_heads(&mut |head| {
+                runtime |= head.is_resolved() && !self.heap.is_compile_time_ptr(head.ptr());
+            });
+        }
+        (!runtime).then(|| Arc::from(args))
     }
 
     /// Telemetry entry for a bytecode callee `CallIndirect` enters directly:
@@ -8444,7 +8689,7 @@ impl BexVm {
                         function: callee_ptr,
                         instruction_ptr: 0,
                         locals_offset,
-                        type_args: carried_type_args.to_vec(),
+                        type_args: carried_type_args.to_vec().into(),
                         faulting_pc: 0,
                         telemetry: frame_telemetry,
                         context,
@@ -8809,10 +9054,12 @@ impl BexVm {
                 // function, not a closure or bound method) takes the lane
                 // as its frame. The lane is restored just below, so nothing
                 // reads it again.
-                std::mem::swap(&mut frame.type_args, &mut self.pending_call_type_args);
+                frame.type_args =
+                    FrameTypeArgs::Owned(std::mem::take(&mut self.pending_call_type_args));
             } else {
                 frame
                     .type_args
+                    .to_mut()
                     .extend_from_slice(&self.pending_call_type_args);
             }
         }
@@ -10456,7 +10703,7 @@ impl BexVm {
                 function: callee_ptr,
                 instruction_ptr: 0,
                 locals_offset,
-                type_args: Vec::new(),
+                type_args: FrameTypeArgs::default(),
                 faulting_pc: 0,
                 telemetry,
                 context: Context::default(),
@@ -10907,7 +11154,7 @@ impl BexVm {
                         // Only a frame that owns nothing is popped here; see
                         // the `mem::forget` below.
                         if returning.telemetry.is_some()
-                            || returning.type_args.capacity() != 0
+                            || !returning.type_args.owns_nothing()
                             || !returning.context.is_empty()
                         {
                             break;
@@ -11915,7 +12162,7 @@ impl BexVm {
                                 if !type_args.is_empty()
                                     && let Some(Frame::Bytecode(frame)) = self.frames.last_mut()
                                 {
-                                    frame.type_args = type_args;
+                                    frame.type_args = type_args.into();
                                 }
                                 *frame_idx = self.frames.len() - 1;
                                 *function = callee;
@@ -12009,6 +12256,28 @@ impl BexVm {
                         let nargs = read_u16_unchecked(code, pc) as usize;
                         let ntypeargs = usize::from(read_u16_unchecked(code, pc));
                         let self_arg = usize::from(read_u16_unchecked(code, pc));
+
+                        // A site whose cache knows the callee enters it as
+                        // `CallIndirect` enters a plain bytecode function.
+                        if let Some(callee) = self.enter_cached_virtual_call(
+                            [nargs, ntypeargs, self_arg],
+                            *frame_idx,
+                            function,
+                            runtime_package,
+                            *pc,
+                        )? {
+                            *frame_idx = self.frames.len() - 1;
+                            *function = callee;
+                            runtime_package = self.runtime_package_of(function);
+                            if self.should_early_yield() {
+                                return Ok(Some(VmExecState::EarlyYield));
+                            }
+                            *pc = 0;
+                            *code = &callee.bytecode.compact.as_ref().unwrap().code;
+                            *dispatch_frame_idx = *frame_idx;
+                            locals_base = self.frame_locals_base(*frame_idx);
+                            continue;
+                        }
 
                         // Pop the method name (top) then the interface type. Keep
                         // both as values until after the static-cache probe: their
@@ -12119,11 +12388,14 @@ impl BexVm {
                                                 .layout_is(layout)
                                                 .then(|| layout.len()),
                                         };
+                                    let shared_frame_type_args =
+                                        self.shareable_frame_type_args(&frame);
                                     self.static_virtual_call_cache.insert(
                                         cache_key,
                                         StaticVirtualCallTarget {
                                             callee: Weak::new(callee),
                                             frame_type_args: frame,
+                                            shared_frame_type_args,
                                             arg_count,
                                         },
                                     );
@@ -12815,10 +13087,9 @@ impl BexVm {
                         let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] else {
                             unreachable!("compact bytecode runs in a bytecode frame")
                         };
-                        frame
-                            .type_args
-                            .resize(slot + 1, bex_vm_types::RealizedTy::unknown());
-                        frame.type_args[slot] = type_value.ty;
+                        let type_args = frame.type_args.to_mut();
+                        type_args.resize(slot + 1, bex_vm_types::RealizedTy::unknown());
+                        type_args[slot] = type_value.ty;
                     }
                     // ── Package.current() ───────────────────────────────────────
                     OpCode::LoadCurrentPackage => {
