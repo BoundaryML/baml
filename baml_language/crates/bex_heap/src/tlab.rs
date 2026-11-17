@@ -185,10 +185,6 @@ impl Tlab {
         self.charge(&mut obj);
         let cell = self.alloc_cell(OBJECT_CELL_WORDS);
 
-        // Track allocation for GC profiling
-        #[cfg(feature = "gc_profiling")]
-        self.heap.record_alloc();
-
         // SAFETY: the cell was just carved for this object alone; the pointer
         // names the object written into it.
         unsafe {
@@ -345,7 +341,7 @@ impl Tlab {
                 panic!("building an instance of {class:?}: {mismatch:?}");
             }
         }
-        instance.ptr()
+        self.instance_ptr(instance)
     }
 
     /// Allocate an instance of `class` whose fields are all zero: null in a
@@ -370,7 +366,7 @@ impl Tlab {
         };
         // SAFETY: the cell was just carved for this instance alone.
         let instance = unsafe { InstanceRef::from_cell(self.alloc_cell(layout.words())) };
-        instance.set_class(class);
+        unsafe { instance.set_class(class) };
         if let Some((slot, value)) = type_args {
             // SAFETY: the layout gives a generic class this type-args slot.
             unsafe { instance.set_slot_value(slot, value) };
@@ -378,7 +374,7 @@ impl Tlab {
         // BEP-042: an instance of a class with a finalizer joins the
         // collector's finalizable list.
         if declaration.cleanup.is_some() {
-            self.heap.register_finalizable(instance.ptr());
+            self.heap.register_finalizable(self.instance_ptr(instance));
         }
         instance
     }
@@ -409,18 +405,26 @@ impl Tlab {
         }
         // SAFETY: the cell was just carved for this instance alone.
         let instance = unsafe { InstanceRef::from_cell(self.alloc_cell(N + 1)) };
-        instance.set_class(class);
+        unsafe { instance.set_class(class) };
         // The instance is fresh: no other thread can reach it yet.
         for (slot, word) in (1..).zip(words) {
             // SAFETY: the layout has `N` field words after the header.
             unsafe { instance.word(slot) }.store(word, Ordering::Relaxed);
         }
-        instance.ptr()
+        self.instance_ptr(instance)
+    }
+
+    /// The pointer naming `instance`, stamped with the heap's epoch like
+    /// any other pointer the allocator hands out.
+    pub fn instance_ptr(&self, instance: InstanceRef) -> HeapPtr {
+        unsafe { self.heap.make_heap_ptr(instance.ptr().as_ptr()) }
     }
 
     /// Carve `words` zeroed words from this TLAB's block of cells.
     #[inline]
     fn alloc_cell(&mut self, words: usize) -> *mut AtomicU64 {
+        #[cfg(feature = "gc_profiling")]
+        self.heap.record_alloc();
         if self.cells.words_left() < words {
             self.refill_cells(words);
         }

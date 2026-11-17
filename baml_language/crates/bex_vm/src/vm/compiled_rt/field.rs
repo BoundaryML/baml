@@ -8,11 +8,17 @@
 //! `LOCAL` drops the ordering for an instance escape analysis proved
 //! thread-local, as `load_field_local` does.
 //!
-//! Like the rest of `compiled_rt`, the typed accessors trust their arguments
-//! to be the emitter's: `slot` is the word of field `field` of `class`, and
-//! the accessor matches the slot's kind. The emitter reads both from
-//! `class`'s layout, and the body table's fingerprint ties the code to that
-//! program. Debug builds check that `slot` holds `field`.
+//! # Safety
+//!
+//! The typed accessors and constructors read and write raw words, so they
+//! are `unsafe`: a caller passes what `class`'s layout says. For an
+//! accessor, `slot` is the word of field `field` of `class`, and the
+//! accessor's type is that slot's kind. For a constructor, `class` is a
+//! live, non-generic class of exactly `N` fields and `words` holds each in
+//! its slot's encoding (a `Value` slot holds a live value's bits);
+//! `new_plain_instance` also needs a class without a finalizer. The emitter
+//! reads all of it from the layout, and the body table's fingerprint ties
+//! the code to that program. Debug builds check the slot.
 
 #![allow(unsafe_code)]
 #![allow(
@@ -125,8 +131,11 @@ impl BexVm {
             .map_err(Box::new)
     }
 
+    /// # Safety
+    ///
+    /// As the `compiled_rt::field` module docs say.
     #[inline(always)]
-    pub fn field_f64<const LOCAL: bool>(
+    pub unsafe fn field_f64<const LOCAL: bool>(
         &mut self,
         instance: Value,
         class: HeapPtr,
@@ -136,8 +145,11 @@ impl BexVm {
         self.load_slot::<LOCAL, _>((instance, class, field, slot), f64::from_bits, expect_f64)
     }
 
+    /// # Safety
+    ///
+    /// As the `compiled_rt::field` module docs say.
     #[inline(always)]
-    pub fn field_i64<const LOCAL: bool>(
+    pub unsafe fn field_i64<const LOCAL: bool>(
         &mut self,
         instance: Value,
         class: HeapPtr,
@@ -147,8 +159,11 @@ impl BexVm {
         self.load_slot::<LOCAL, _>((instance, class, field, slot), u64::cast_signed, expect_int)
     }
 
+    /// # Safety
+    ///
+    /// As the `compiled_rt::field` module docs say.
     #[inline(always)]
-    pub fn field_bool<const LOCAL: bool>(
+    pub unsafe fn field_bool<const LOCAL: bool>(
         &mut self,
         instance: Value,
         class: HeapPtr,
@@ -162,8 +177,11 @@ impl BexVm {
         )
     }
 
+    /// # Safety
+    ///
+    /// As the `compiled_rt::field` module docs say.
     #[inline(always)]
-    pub fn field_value<const LOCAL: bool>(
+    pub unsafe fn field_value<const LOCAL: bool>(
         &mut self,
         instance: Value,
         class: HeapPtr,
@@ -173,8 +191,11 @@ impl BexVm {
         self.load_slot::<LOCAL, _>((instance, class, field, slot), value_from_bits, Ok)
     }
 
+    /// # Safety
+    ///
+    /// As the `compiled_rt::field` module docs say.
     #[inline(always)]
-    pub fn set_field_f64<const LOCAL: bool>(
+    pub unsafe fn set_field_f64<const LOCAL: bool>(
         &mut self,
         instance: Value,
         class: HeapPtr,
@@ -187,8 +208,11 @@ impl BexVm {
         })
     }
 
+    /// # Safety
+    ///
+    /// As the `compiled_rt::field` module docs say.
     #[inline(always)]
-    pub fn set_field_i64<const LOCAL: bool>(
+    pub unsafe fn set_field_i64<const LOCAL: bool>(
         &mut self,
         instance: Value,
         class: HeapPtr,
@@ -201,8 +225,11 @@ impl BexVm {
         })
     }
 
+    /// # Safety
+    ///
+    /// As the `compiled_rt::field` module docs say.
     #[inline(always)]
-    pub fn set_field_bool<const LOCAL: bool>(
+    pub unsafe fn set_field_bool<const LOCAL: bool>(
         &mut self,
         instance: Value,
         class: HeapPtr,
@@ -215,8 +242,11 @@ impl BexVm {
         })
     }
 
+    /// # Safety
+    ///
+    /// As the `compiled_rt::field` module docs say.
     #[inline(always)]
-    pub fn set_field_value<const LOCAL: bool>(
+    pub unsafe fn set_field_value<const LOCAL: bool>(
         &mut self,
         instance: Value,
         class: HeapPtr,
@@ -229,21 +259,33 @@ impl BexVm {
 
     /// [`Self::new_instance_of`] for a class without a finalizer: one bump
     /// and the header and field stores.
+    ///
+    /// # Safety
+    ///
+    /// As the `compiled_rt::field` module docs say.
     #[inline(always)]
-    pub fn new_plain_instance<const N: usize>(&mut self, class: HeapPtr, words: [u64; N]) -> Value {
-        // SAFETY: emitted code calls this only for a class of its own
-        // program that is non-generic and has no finalizer
-        // (`baml_compiler2_rust`'s `ProgramIndex::plain_class`), passing one
-        // word per field.
-        #[allow(unsafe_code)]
+    pub unsafe fn new_plain_instance<const N: usize>(
+        &mut self,
+        class: HeapPtr,
+        words: [u64; N],
+    ) -> Value {
+        // SAFETY: the caller's contract is `alloc_plain_instance`'s.
         let instance = unsafe { self.tlab.alloc_plain_instance(class, words) };
         Value::object(instance)
     }
 
     /// An instance of the non-generic `class` whose fields, in order, hold
     /// `words`, each already in its slot's encoding.
+    ///
+    /// # Safety
+    ///
+    /// As the `compiled_rt::field` module docs say.
     #[inline(always)]
-    pub fn new_instance_of<const N: usize>(&mut self, class: HeapPtr, words: [u64; N]) -> Value {
+    pub unsafe fn new_instance_of<const N: usize>(
+        &mut self,
+        class: HeapPtr,
+        words: [u64; N],
+    ) -> Value {
         let instance = self.tlab.alloc_instance_zeroed(class, Box::default());
         assert_eq!(instance.layout().words(), N + 1, "fields for {class:?}");
         // The instance is fresh: no other thread can reach it yet.
@@ -251,6 +293,6 @@ impl BexVm {
             // SAFETY: the class has `N` fields after its header, as checked.
             unsafe { instance.word(slot) }.store(word, Ordering::Relaxed);
         }
-        Value::object(instance.ptr())
+        Value::object(self.tlab.instance_ptr(instance))
     }
 }

@@ -129,10 +129,13 @@ impl HeapPtr {
     /// carries no tag of its own: every low bit a [`Value`](crate::Value)
     /// leaves free of a pointer encodes an inline float.
     ///
-    /// The pointer must name a live cell (or a forwarded one, during a
-    /// collection), as for [`Self::get`].
+    /// A non-null pointer must name a live cell (or a forwarded one, during
+    /// a collection), as for [`Self::get`]; null names no cell.
     #[inline]
     pub fn is_instance(self) -> bool {
+        if self.is_null() {
+            return false;
+        }
         // SAFETY: a non-null `HeapPtr` names a cell, whose first word is its
         // header; the allocator writes it before the pointer escapes.
         let header = unsafe { (*self.ptr.cast::<AtomicU64>()).load(Ordering::Relaxed) };

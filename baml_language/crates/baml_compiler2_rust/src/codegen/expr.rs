@@ -124,7 +124,7 @@ impl<'db> Generator<'_, 'db> {
                     } else {
                         "new_instance_of"
                     };
-                    format!("vm.{new}({class}, [{words}])")
+                    format!("unsafe {{ vm.{new}({class}, [{words}]) }}")
                 } else {
                     let values = self.arg_values(block, fields)?.join(", ");
                     let type_args = self.realized_all(type_arg_templates)?.join(", ");

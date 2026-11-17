@@ -246,7 +246,12 @@ impl InstanceRef {
 
     /// Point the instance at `class`, keeping its flags: how an allocator
     /// writes a fresh cell's header, and how the collector moves a class.
-    pub fn set_class(self, class: HeapPtr) {
+    ///
+    /// # Safety
+    ///
+    /// `class` is a live class whose layout is this cell's, and no other
+    /// thread reads the header meanwhile.
+    pub unsafe fn set_class(self, class: HeapPtr) {
         let flags = self.header_word().load(Ordering::Relaxed) & HEADER_FLAGS;
         self.header_word()
             .store(Self::header(class) | flags, Ordering::Relaxed);

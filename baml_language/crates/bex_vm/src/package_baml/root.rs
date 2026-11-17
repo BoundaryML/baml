@@ -1078,14 +1078,14 @@ fn deep_copy_value_recursive(
                     let copy = vm
                         .tlab
                         .alloc_instance_zeroed(source.class(), source.type_args().into());
-                    copied_objects.insert(ptr, copy.ptr());
+                    copied_objects.insert(ptr, vm.tlab.instance_ptr(copy));
                     for field in 0..source.field_len() {
                         let value = vm.load_field_value(source, field);
                         let copied = deep_copy_value_recursive(vm, value, copied_objects)?;
                         copy.store_relaxed(field, copied)
                             .map_err(|mismatch| vm.slot_kind_error(mismatch))?;
                     }
-                    copy.ptr()
+                    vm.tlab.instance_ptr(copy)
                 }
 
                 // Bigint is behind Arc — clone() is cheap (increments refcount).

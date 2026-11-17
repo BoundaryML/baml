@@ -125,8 +125,8 @@ impl<'db> Generator<'_, 'db> {
                 let (suffix, repr) = slot_repr(class.layout.kind(field));
                 let args = format!("{base}, {}", class.args());
                 (
-                    format!("vm.field_{suffix}::<true>({args})"),
-                    format!("vm.field_{suffix}::<false>({args})"),
+                    format!("unsafe {{ vm.field_{suffix}::<true>({args}) }}"),
+                    format!("unsafe {{ vm.field_{suffix}::<false>({args}) }}"),
                     repr,
                 )
             }
@@ -162,8 +162,8 @@ impl<'db> Generator<'_, 'db> {
             Some(class) => {
                 let args = format!("{base}, {}, {value}", class.args());
                 (
-                    format!("vm.set_field_{suffix}::<true>({args})"),
-                    format!("vm.set_field_{suffix}::<false>({args})"),
+                    format!("unsafe {{ vm.set_field_{suffix}::<true>({args}) }}"),
+                    format!("unsafe {{ vm.set_field_{suffix}::<false>({args}) }}"),
                 )
             }
             None => (

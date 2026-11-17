@@ -160,19 +160,15 @@ impl BexHeap {
             return None;
         }
         // SAFETY: as above, and the cell was forwarded.
-        let (to, object) = unsafe { forwarding_address(cell) };
-        Some(self.ptr_to(to, object))
+        let (to, _) = unsafe { forwarding_address(cell) };
+        Some(self.ptr_to(to))
     }
 
-    /// The pointer naming the cell at `cell`.
-    fn ptr_to(&self, cell: *mut AtomicU64, object: bool) -> HeapPtr {
-        if object {
-            // SAFETY: `cell` starts an object cell, which is its object.
-            unsafe { self.make_heap_ptr(cell.cast()) }
-        } else {
-            // SAFETY: `cell` starts an instance cell.
-            unsafe { InstanceRef::from_cell(cell) }.ptr()
-        }
+    /// The pointer naming the cell at `cell`, of either kind, stamped with
+    /// the heap's epoch.
+    fn ptr_to(&self, cell: *mut AtomicU64) -> HeapPtr {
+        // SAFETY: `cell` starts a cell; a pointer names a cell by its start.
+        unsafe { self.make_heap_ptr(cell.cast()) }
     }
 
     /// Copy the cell `ptr` names into the inactive space, unless it is
@@ -207,7 +203,7 @@ impl BexHeap {
             forward_to(old, to);
             to
         };
-        self.ptr_to(new, !ptr.is_instance())
+        self.ptr_to(new)
     }
 
     /// Scan the inactive space from the scan's cursor to its end, copying
@@ -665,7 +661,7 @@ pub(crate) fn visit_instance_refs(
 ) -> usize {
     let mut class = instance.class();
     visit(&mut class);
-    instance.set_class(class);
+    unsafe { instance.set_class(class) };
     let layout = instance.layout();
     for slot in layout.value_slots() {
         // SAFETY: the layout names these value slots.
@@ -1054,13 +1050,9 @@ mod tests {
         assert!(result.is_err());
     }
 
-    /// An instance's size comes from its class, so values that do not fit
-    /// the class are refused when the instance is built, not stored.
-    #[test]
-    fn an_instance_is_built_only_from_values_its_class_holds() {
-        use std::panic::{AssertUnwindSafe, catch_unwind};
-
-        let compile_time = vec![Object::Class(Box::new(bex_vm_types::Class {
+    /// A compile-time class `C` with one `int` field.
+    fn one_int_class() -> Object {
+        Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("C")),
             fields: vec![bex_vm_types::ClassField {
@@ -1093,7 +1085,66 @@ mod tests {
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
             redact: false,
-        }))];
+        }))
+    }
+
+    #[cfg(feature = "gc_profiling")]
+    #[test]
+    fn every_allocation_path_counts_one_new_object() {
+        let heap = BexHeap::new(vec![one_int_class()]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let class_ptr = heap.compile_time_ptr(0);
+
+        tlab.alloc_string("s".to_string());
+        tlab.alloc_instance(class_ptr, vec![Value::int(1)]);
+        tlab.alloc_instance_zeroed(class_ptr, Box::default());
+        unsafe { tlab.alloc_plain_instance(class_ptr, [2]) };
+        assert_eq!(heap.allocs_since_gc(), 4);
+    }
+
+    #[cfg(feature = "heap_debug")]
+    #[test]
+    fn instance_pointers_carry_the_heap_epoch_after_a_collection() {
+        use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
+
+        let debug = HeapDebuggerConfig {
+            enabled: true,
+            verify: HeapVerifyMode::Off,
+        };
+        let heap = BexHeap::with_debug(vec![one_int_class()], debug);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let class_ptr = heap.compile_time_ptr(0);
+
+        let kept = tlab.alloc_instance(class_ptr, vec![Value::int(1)]);
+        let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[kept]) };
+        drop(forwarding);
+        tlab.invalidate();
+        let epoch = heap.heap_epoch();
+        assert!(epoch > 0);
+        assert_eq!(roots[0].epoch(), epoch, "a moved instance");
+
+        let fresh = tlab.alloc_instance(class_ptr, vec![Value::int(2)]);
+        assert_eq!(fresh.epoch(), epoch, "a new instance");
+        let zeroed = tlab.alloc_instance_zeroed(class_ptr, Box::default());
+        assert_eq!(
+            tlab.instance_ptr(zeroed).epoch(),
+            epoch,
+            "a zeroed instance"
+        );
+        let plain = unsafe { tlab.alloc_plain_instance(class_ptr, [3]) };
+        assert_eq!(plain.epoch(), epoch, "a plain instance");
+        for ptr in [roots[0], fresh, plain] {
+            let _ = unsafe { heap.get_object(ptr) };
+        }
+    }
+
+    /// An instance's size comes from its class, so values that do not fit
+    /// the class are refused when the instance is built, not stored.
+    #[test]
+    fn an_instance_is_built_only_from_values_its_class_holds() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        let compile_time = vec![one_int_class()];
         let heap = BexHeap::new(compile_time);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let class_ptr = heap.compile_time_ptr(0);
