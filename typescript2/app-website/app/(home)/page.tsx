@@ -36,11 +36,11 @@ export default function Home() {
         </Hyperobs>
         <Agents />
         <Stack />
+        <Adopt />
         <Language />
         <Review />
         <Software />
         <Improve />
-        <Adopt />
         <Book />
       </main>
       <Footer />

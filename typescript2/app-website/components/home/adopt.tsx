@@ -1,9 +1,10 @@
 import { section } from './analytics';
 
-// Section 8: three ways into Boundary, each with the same codebase drawn small and filled as far as
-// that way takes it: all of it in BAML, some of it, or none (sending OpenTelemetry instead). Only
-// incremental adoption is recommended, so only its card shows Learn more without a hover, and on a
-// phone it comes first. Each card leads to that route's section on /adopt.
+// Adoption, right after the language section: three ways into Boundary, each with the same codebase
+// drawn small and filled as far as that way takes it: all of it in BAML, some of it, or none
+// (sending OpenTelemetry instead). Only incremental adoption is recommended, so only its card shows
+// Learn more without a hover, and on a phone it comes first. Each card leads to that route's
+// section on /adopt.
 
 // A codebase as a 6 by 4 treemap: [name, column, row, columns spanned, rows spanned, the order it
 // moves into BAML]. A file that never moves has no order.
