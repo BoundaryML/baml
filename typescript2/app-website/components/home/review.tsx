@@ -617,10 +617,11 @@ function Run() {
 const POST = {
   href: '/blog/teaching-agents-to-write-maintainable-code',
   slug: 'teaching-agents-to-write-maintainable-code',
+  title: 'Teaching Agents to Write Maintainable Code',
 };
 
-/** The post behind the section's answer, under the question: its before-and-after drawing and a link
- *  to the post. */
+/** The post behind the section's answer, under the question: its before-and-after drawing, its title,
+ *  and a link to the post. */
 function Research() {
   return (
     <a
@@ -633,7 +634,8 @@ function Research() {
         slug={POST.slug}
       />
       <div className="px-3 pb-3 md:px-2 md:pb-0">
-        <p className="v4-body text-clover">
+        <p className="v4-h3 text-head">{POST.title}</p>
+        <p className="mt-3 v4-body text-clover">
           Read the blog{' '}
           <span className="inline-block transition-transform group-hover:translate-x-1">
             →
