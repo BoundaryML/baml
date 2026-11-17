@@ -156,20 +156,34 @@ impl ClassShape {
         (self.0 & 0x3f) as usize
     }
 
-    /// The value raw word `bits` of `field` holds, decoded without a
-    /// branch on the slot's kind: an int slot's value is `bits * 2 + 1`, a
-    /// bool's `bits * 2 + 2`, a value slot's `bits` itself. `None` for a raw
-    /// float with no inline encoding, which only boxing makes a value.
+    /// The two-bit code of `field`'s [`SlotKind`]: 0 int, 1 float, 2 bool,
+    /// 3 value.
     #[must_use]
     #[inline(always)]
-    pub fn value_of(self, field: usize, bits: u64) -> Option<Value> {
-        let code = (self.0 >> (Self::KINDS_SHIFT as usize + 2 * field)) & 0b11;
+    pub fn kind_code(self, field: usize) -> u64 {
+        (self.0 >> (Self::KINDS_SHIFT as usize + 2 * field)) & 0b11
+    }
+
+    /// The value raw word `bits` of a slot of kind `code` holds, decoded
+    /// without a branch on the kind: an int slot's value is `bits * 2 + 1`,
+    /// a bool's `bits * 2 + 2`, a value slot's `bits` itself. `None` for a
+    /// raw float with no inline encoding, which only boxing makes a value.
+    #[must_use]
+    #[inline(always)]
+    pub fn decode(code: u64, bits: u64) -> Option<Value> {
         if code == 1 {
             return Value::try_inline_float(f64::from_bits(bits));
         }
         let shift = (0b0101 >> code) & 1;
         let add = (0x0002_0001 >> (code * 8)) & 0xff;
         Some(unsafe { Value::from_bits((bits << shift).wrapping_add(add)) })
+    }
+
+    /// The value raw word `bits` of `field` holds; see [`Self::decode`].
+    #[must_use]
+    #[inline(always)]
+    pub fn value_of(self, field: usize, bits: u64) -> Option<Value> {
+        Self::decode(self.kind_code(field), bits)
     }
 
     #[must_use]

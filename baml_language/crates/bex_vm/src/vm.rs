@@ -23,7 +23,10 @@
 use std::{
     collections::HashMap,
     num::NonZeroU64,
-    sync::{Arc, atomic::Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
@@ -97,10 +100,10 @@ use ::core::any::TypeId;
 use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Finalizable, Tlab};
 use bex_vm_types::{
-    BinOp, CmpOp, Field, FieldRef, FunctionKind, FutureRead, GlobalIndex, HeapPtr, InstanceRef,
-    Object, ObjectIndex, ObjectPool, ObjectType, PanicClass, PermitProof, RustDataArc as _,
-    SlotKind, SlotKindMismatch, StackIndex, UnaryOp, Value, Variant, VmGlobals,
-    bytecode::{self, Instruction},
+    BinOp, ClassShape, CmpOp, Field, FieldRef, FunctionKind, FutureRead, GlobalIndex, HeapPtr,
+    InstanceRef, Object, ObjectIndex, ObjectPool, ObjectType, PanicClass, PermitProof,
+    RustDataArc as _, SlotKind, SlotKindMismatch, StackIndex, UnaryOp, Value, Variant, VmGlobals,
+    bytecode::{self, FieldSites, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Type, TypeValue,
     },
@@ -7716,6 +7719,122 @@ impl BexVm {
             .map_err(|mismatch| self.slot_kind_error(mismatch).into())
     }
 
+    /// Field `index` of the instance `value` names, read by the field
+    /// instruction whose site is `site` in `function`: one compare against
+    /// the class the site remembers, else [`Self::shaped_load`].
+    #[allow(clippy::inline_always, reason = "every interpreted field read")]
+    #[inline(always)]
+    fn site_load(
+        &self,
+        function: &Function,
+        site: usize,
+        value: Value,
+        index: usize,
+        thread_local: bool,
+    ) -> Option<Value> {
+        let (instance, class) = unsafe { InstanceRef::with_class_bits(value.as_object_ptr()?) }?;
+        let entry = Self::field_site(function, site);
+        if let Some(entry) = entry
+            && let Some(code) = FieldSites::hit(entry.load(Ordering::Relaxed), class)
+        {
+            let bits = unsafe { instance.word(1 + index) }.load(load_order(thread_local));
+            return ClassShape::decode(code, bits);
+        }
+        self.site_load_miss(entry, value, index, thread_local)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn site_load_miss(
+        &self,
+        entry: Option<&AtomicU64>,
+        value: Value,
+        index: usize,
+        thread_local: bool,
+    ) -> Option<Value> {
+        self.remember_field_site(entry, value, index);
+        self.shaped_load(value, index, thread_local)
+    }
+
+    /// Store `new_value` into field `index` by the field instruction whose
+    /// site is `site` in `function`. `false`, having stored nothing, for
+    /// anything the slow path must decide or report.
+    #[allow(clippy::inline_always, reason = "every interpreted field write")]
+    #[inline(always)]
+    fn site_store(
+        &self,
+        function: &Function,
+        site: usize,
+        value: Value,
+        index: usize,
+        new_value: Value,
+        thread_local: bool,
+    ) -> bool {
+        let Some((instance, class)) = value
+            .as_object_ptr()
+            .and_then(|ptr| unsafe { InstanceRef::with_class_bits(ptr) })
+        else {
+            return false;
+        };
+        let entry = Self::field_site(function, site);
+        if let Some(entry) = entry
+            && let Some(code) = FieldSites::hit(entry.load(Ordering::Relaxed), class)
+        {
+            let bits = match code {
+                3 => Some(new_value.bits()),
+                0 => new_value.as_int().map(i64::cast_unsigned),
+                2 => new_value.as_bool().map(u64::from),
+                _ => new_value.as_float().map(f64::to_bits),
+            };
+            let Some(bits) = bits else {
+                return false;
+            };
+            unsafe { instance.word(1 + index) }.store(bits, store_order(thread_local));
+            return true;
+        }
+        self.site_store_miss(entry, value, index, new_value, thread_local)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn site_store_miss(
+        &self,
+        entry: Option<&AtomicU64>,
+        value: Value,
+        index: usize,
+        new_value: Value,
+        thread_local: bool,
+    ) -> bool {
+        self.remember_field_site(entry, value, index);
+        self.shaped_store(value, index, new_value, thread_local)
+    }
+
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    fn field_site(function: &Function, site: usize) -> Option<&AtomicU64> {
+        function.bytecode.compact.as_ref()?.field_sites.get(site)
+    }
+
+    /// Point `entry` at the class of the instance `value` names when that
+    /// class never moves, so no later class can reuse its address.
+    fn remember_field_site(&self, entry: Option<&AtomicU64>, value: Value, index: usize) {
+        let Some(entry) = entry else {
+            return;
+        };
+        let Some(ptr) = value.as_object_ptr() else {
+            return;
+        };
+        let Some((instance, class)) = (unsafe { InstanceRef::with_class_bits(ptr) }) else {
+            return;
+        };
+        let Some((_, shape)) = (unsafe { self.shapes.shape(ptr) }) else {
+            return;
+        };
+        if index < shape.field_count() && self.heap.is_compile_time_ptr(instance.class()) {
+            FieldSites::remember(entry, class, shape.kind_code(index));
+        }
+    }
+
     /// Field `index` of the instance `value` names, read through its class's
     /// cached shape. `None` for anything the slow path must decide: an
     /// operand that is not an instance, a class too wide to pack, a field
@@ -11474,18 +11593,6 @@ impl BexVm {
         Value::bool(truthiness == (op == bex_vm_types::bytecode::OpCode::Truthy))
     }
 
-    /// The field `LoadField` / `LoadFieldLocal` reads when `value` is an
-    /// instance with field `index` (`relaxed`: the instance is thread-local,
-    /// so the slot needs no ordering), for the fast path. `None` for any
-    /// other operand, and for a raw float field with no inline encoding,
-    /// which only boxing makes a value: the general dispatch then reruns the
-    /// load through [`Self::load_instance_field`], which boxes or reports.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
-    fn instance_field(&self, value: Value, index: usize, relaxed: bool) -> Option<Value> {
-        self.shaped_load(value, index, relaxed)
-    }
-
     /// The shared object for variant `variant` of the enum at `enum_idx`, for
     /// `LoadVariant` in a static function (null `package`) naming a
     /// compile-time enum: those variants are permanent shared objects (see
@@ -11923,7 +12030,9 @@ impl BexVm {
                         pc += 5;
                     }
                     OpCode::LoadField | OpCode::LoadFieldLocal => {
-                        let Some(value) = self.instance_field(
+                        let Some(value) = self.site_load(
+                            function,
+                            operand_u16(code, pc + 5),
                             at!(sp - 1),
                             operand_u32(code, pc + 1),
                             op == OpCode::LoadFieldLocal,
@@ -11931,7 +12040,7 @@ impl BexVm {
                             break;
                         };
                         at!(sp - 1) = value;
-                        pc += 5;
+                        pc += 7;
                     }
                     OpCode::AddLocalSmall => {
                         let addend = Value::int(i64::from(*code.get_unchecked(pc + 9) as i8));
@@ -11945,7 +12054,9 @@ impl BexVm {
                         pc += 10;
                     }
                     OpCode::LoadVarField | OpCode::LoadVarFieldLocal => {
-                        let Some(value) = self.instance_field(
+                        let Some(value) = self.site_load(
+                            function,
+                            operand_u16(code, pc + 9),
                             local!(operand_u32(code, pc + 1)),
                             operand_u32(code, pc + 5),
                             op == OpCode::LoadVarFieldLocal,
@@ -11954,7 +12065,7 @@ impl BexVm {
                         };
                         at!(sp) = value;
                         sp += 1;
-                        pc += 9;
+                        pc += 11;
                     }
                     // Only in the leaf variant: in the one that switches
                     // frames this arm slowed call-heavy code. There it stops,
@@ -12567,12 +12678,14 @@ impl BexVm {
                     OpCode::LoadVarField | OpCode::LoadVarFieldLocal => {
                         let slot = { read_u32_unchecked(code, pc) as usize };
                         let idx = { read_u32_unchecked(code, pc) as usize };
+                        let site = { read_u16_unchecked(code, pc) as usize };
                         let instance = self.stack.get_at(Self::local_at(locals_base, slot));
-                        let value = self.load_instance_field(
-                            instance,
-                            idx,
-                            op == OpCode::LoadVarFieldLocal,
-                        )?;
+                        let thread_local = op == OpCode::LoadVarFieldLocal;
+                        let value =
+                            match self.site_load(function, site, instance, idx, thread_local) {
+                                Some(value) => value,
+                                None => self.load_instance_field(instance, idx, thread_local)?,
+                            };
                         push_operand!(value);
                     }
 
@@ -12612,22 +12725,37 @@ impl BexVm {
                     // so the slot needs no ordering.
                     OpCode::LoadField | OpCode::LoadFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
+                        let site = { read_u16_unchecked(code, pc) as usize };
                         let top = self.stack.ensure_pop();
-                        let value =
-                            self.load_instance_field(top, idx, op == OpCode::LoadFieldLocal)?;
+                        let thread_local = op == OpCode::LoadFieldLocal;
+                        let value = match self.site_load(function, site, top, idx, thread_local) {
+                            Some(value) => value,
+                            None => self.load_instance_field(top, idx, thread_local)?,
+                        };
                         push_operand!(value);
                     }
 
                     OpCode::StoreField | OpCode::StoreFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
+                        let site = { read_u16_unchecked(code, pc) as usize };
                         let new_value = self.stack.ensure_pop();
                         let instance_value = self.stack.ensure_pop();
-                        self.store_instance_field(
+                        let thread_local = op == OpCode::StoreFieldLocal;
+                        if !self.site_store(
+                            function,
+                            site,
                             instance_value,
                             idx,
                             new_value,
-                            op == OpCode::StoreFieldLocal,
-                        )?;
+                            thread_local,
+                        ) {
+                            self.store_instance_field(
+                                instance_value,
+                                idx,
+                                new_value,
+                                thread_local,
+                            )?;
+                        }
                     }
 
                     OpCode::LoadTupleField => {

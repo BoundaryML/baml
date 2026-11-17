@@ -1723,6 +1723,9 @@ pub fn display_compact_bytecode(
                 writeln!(f, "{dst} {src} {value}")?;
             }
         }
+        if op.has_field_site() {
+            read_u16(code, &mut pc);
+        }
     }
     Ok(())
 }

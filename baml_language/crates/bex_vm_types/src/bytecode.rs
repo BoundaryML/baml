@@ -1,6 +1,9 @@
 //! Instruction set and bytecode representation.
 
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use baml_base::Span;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -1482,6 +1485,20 @@ pub enum OpCode {
 
 impl OpCode {
     /// Total encoded size in bytes (opcode + operands).
+    /// Whether the instruction ends with a [`FieldSites`] index.
+    #[must_use]
+    pub const fn has_field_site(self) -> bool {
+        matches!(
+            self,
+            Self::LoadField
+                | Self::StoreField
+                | Self::LoadFieldLocal
+                | Self::StoreFieldLocal
+                | Self::LoadVarField
+                | Self::LoadVarFieldLocal
+        )
+    }
+
     pub const fn encoded_size(self) -> usize {
         match self {
             // Unit ops + expanded arith/cmp/unary + LoadNull/LoadTrue/LoadFalse
@@ -1573,10 +1590,6 @@ impl OpCode {
             | Self::StoreVarLoadVar
             | Self::LoadGlobal
             | Self::StoreGlobal
-            | Self::LoadField
-            | Self::StoreField
-            | Self::LoadFieldLocal
-            | Self::StoreFieldLocal
             | Self::InitField
             | Self::InitSpread
             | Self::Pop
@@ -1654,9 +1667,13 @@ impl OpCode {
             | Self::NarrowBind
             | Self::ArrayIterNext
             | Self::ArrayIterNextLocal
-            | Self::LoadVarField
-            | Self::LoadVarFieldLocal
             | Self::LoadVariant => 9,
+
+            // 7-byte: opcode + u32 field + u16 field site
+            Self::LoadField | Self::StoreField | Self::LoadFieldLocal | Self::StoreFieldLocal => 7,
+
+            // 11-byte: opcode + u32 slot + u32 field + u16 field site
+            Self::LoadVarField | Self::LoadVarFieldLocal => 11,
 
             // 10-byte: opcode + u32 + u32 + i8
             Self::AddLocalSmall => 10,
@@ -2556,6 +2573,56 @@ impl CompactJumpTable {
     }
 }
 
+/// One word per field instruction of a function, remembering the class of
+/// the instance it last read or wrote and how that field is stored: the
+/// class's bits with the field's two-bit kind code above the valid bit 0.
+/// Only classes that never move are remembered, so an entry never names a
+/// different class. Zero is empty.
+#[derive(Debug, Default)]
+pub struct FieldSites(Box<[AtomicU64]>);
+
+impl FieldSites {
+    /// The site index of an instruction past the last one a function can
+    /// remember.
+    pub const NONE: u16 = u16::MAX;
+
+    fn new(len: usize) -> Self {
+        Self((0..len).map(|_| AtomicU64::new(0)).collect())
+    }
+
+    /// The entry for site `site`, if it has one.
+    #[must_use]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub fn get(&self, site: usize) -> Option<&AtomicU64> {
+        self.0.get(site)
+    }
+
+    /// The kind code site `entry` holds for an instance of class `class`.
+    #[must_use]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub fn hit(entry: u64, class: u64) -> Option<u64> {
+        (entry & !0b111 == class).then_some((entry >> 1) & 0b11)
+    }
+
+    /// The entry remembering `kind_code` for instances of class `class`.
+    #[must_use]
+    pub fn entry(class: u64, kind_code: u64) -> u64 {
+        class | kind_code << 1 | 1
+    }
+
+    pub fn remember(entry: &AtomicU64, class: u64, kind_code: u64) {
+        entry.store(Self::entry(class, kind_code), Ordering::Relaxed);
+    }
+}
+
+impl Clone for FieldSites {
+    fn clone(&self) -> Self {
+        Self::new(self.0.len())
+    }
+}
+
 /// Compact bytecode encoding.
 ///
 /// A re-encoding of `Vec<Instruction>` as `Vec<u8>` with 1-byte opcodes and
@@ -2599,6 +2666,9 @@ pub struct CompactCode {
     /// the dispatch loop asserts against the live stack.
     #[cfg(debug_assertions)]
     pub operand_depths: Vec<u32>,
+    /// The field sites the encoded field instructions name.
+    #[borsh(skip)]
+    pub field_sites: FieldSites,
 }
 
 impl CompactCode {
@@ -2852,6 +2922,7 @@ impl Bytecode {
 
         // ── Pass 2: emit bytes ───────────────────────────────────────
         let mut code: Vec<u8> = Vec::with_capacity(byte_offset);
+        let mut field_sites: usize = 0;
 
         for (i, instr) in self.instructions.iter().enumerate() {
             let op = opcodes[i];
@@ -3210,6 +3281,14 @@ impl Bytecode {
                     );
                 }
             }
+            if op.has_field_site() {
+                let site = u16::try_from(field_sites)
+                    .ok()
+                    .filter(|&site| site != FieldSites::NONE)
+                    .unwrap_or(FieldSites::NONE);
+                code.extend_from_slice(&site.to_le_bytes());
+                field_sites += 1;
+            }
         }
 
         debug_assert_eq!(code.len(), byte_offset, "pass 2 size mismatch");
@@ -3344,6 +3423,7 @@ impl Bytecode {
             handler_context_table,
             shield_table,
             jump_tables,
+            field_sites: FieldSites::new(field_sites.min(usize::from(FieldSites::NONE))),
             instruction_offsets: if keep_offsets {
                 index_to_offset.clone()
             } else {
