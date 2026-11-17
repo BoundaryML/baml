@@ -444,18 +444,13 @@ jobs:
         run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
-      # CLI binary e2e tests run separately after disk cleanup below.
+      # CLI binary e2e tests run separately below.
       - name: "Run tests"
         run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge -E 'not binary(=pack_e2e) and not binary(=exit_code_e2e) and not binary(=baml_corpus) and not binary(=type_quiz)'
         working-directory: baml_language
 
-      - name: "Free disk for CLI binary e2e tests"
-        run: |
-          set -euo pipefail
-          mv target/cargo-timings/cargo-timing.html cargo-timing-test-windows.html
-          cp target/debug/baml-sccache.exe baml-sccache.exe
-          echo "RUSTC_WRAPPER=$(pwd -W)/baml-sccache.exe" >> "$GITHUB_ENV"
-          cargo clean
+      - name: "Preserve workspace Cargo timings"
+        run: mv target/cargo-timings/cargo-timing.html cargo-timing-test-windows.html
         working-directory: baml_language
 
       - name: "Build CLI binary e2e tests and pack host (windows)"
