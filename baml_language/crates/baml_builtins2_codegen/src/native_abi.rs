@@ -110,9 +110,37 @@ enum AbiTy {
     /// array or a field holds it in. Whether that word is a reference is
     /// known from the call's type id for the parameter.
     Elem(usize),
+    /// A value of any type as a union holds it: a reference whose object's
+    /// header says what it is, zero for `null`. What `baml.json` takes and
+    /// returns a `json` as.
+    Any,
+    /// An `unknown` parameter of `baml.json`: the id of the description of
+    /// the argument's static type, zero when it has none, and then the
+    /// value as [`Self::Any`].
+    Typed,
+    /// The builtin's type parameter at this position, as [`Self::Any`]:
+    /// what `baml.json` returns a value it decoded as.
+    BoxedElem(usize),
 }
 
 impl AbiTy {
+    /// The type as a builtin of `baml.json` takes or returns it.
+    fn of_json(ty: &BamlType, generics: &[&str]) -> Option<Self> {
+        match ty {
+            BamlType::Named(name) if name == "unknown" => Some(Self::Typed),
+            BamlType::Named(name)
+                if name == "json" || name == "baml.json.json" || name == "union" =>
+            {
+                Some(Self::Any)
+            }
+            BamlType::Generic(name) => generics
+                .iter()
+                .position(|generic| generic == name)
+                .map(Self::BoxedElem),
+            other => Self::of(other, generics),
+        }
+    }
+
     fn of(ty: &BamlType, generics: &[&str]) -> Option<Self> {
         match ty {
             BamlType::Generic(name) => generics
@@ -162,6 +190,9 @@ impl AbiTy {
             Self::Map => "Ty::Map".to_owned(),
             Self::Optional(inner) => format!("Ty::Optional(&{})", inner.table()),
             Self::Elem(index) => format!("Ty::Elem({index})"),
+            Self::Any => "Ty::Any".to_owned(),
+            Self::Typed => "Ty::Typed".to_owned(),
+            Self::BoxedElem(index) => format!("Ty::BoxedElem({index})"),
         }
     }
 
@@ -173,9 +204,14 @@ impl AbiTy {
             Self::Bool => "u8",
             Self::Null => "()",
             Self::Optional(inner) if !inner.is_ref() => "OptionalScalar",
-            Self::String | Self::Array(_) | Self::Map | Self::Optional(_) | Self::Elem(_) => {
-                "usize"
-            }
+            Self::String
+            | Self::Array(_)
+            | Self::Map
+            | Self::Optional(_)
+            | Self::Elem(_)
+            | Self::Any
+            | Self::Typed
+            | Self::BoxedElem(_) => "usize",
         }
     }
 
@@ -184,6 +220,8 @@ impl AbiTy {
     fn c_parameters(&self, name: &str) -> Vec<String> {
         if self.is_pair() {
             vec![format!("r#{name}: u64"), format!("{name}_present: u64")]
+        } else if *self == Self::Typed {
+            vec![format!("{name}_type: u32"), format!("r#{name}: usize")]
         } else {
             vec![format!("r#{name}: {}", self.c())]
         }
@@ -200,7 +238,7 @@ impl AbiTy {
             Self::Array(element) => format!("Arr<{}>", element.marker()),
             Self::Map => "Map".to_owned(),
             Self::Optional(inner) => inner.marker(),
-            Self::Elem(_) => "Slot".to_owned(),
+            Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_) => "Slot".to_owned(),
         }
     }
 
@@ -211,8 +249,13 @@ impl AbiTy {
                 "Option<usize>".to_owned()
             }
             (Self::Optional(inner), _) => format!("Option<{}>", inner.parameter(kind)),
-            (Self::Elem(_), NativeKind::Leaf) => "usize".to_owned(),
-            (Self::Elem(_), NativeKind::Reentrant) => "Elem<'s>".to_owned(),
+            (Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_), NativeKind::Leaf) => {
+                "usize".to_owned()
+            }
+            (
+                Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_),
+                NativeKind::Reentrant,
+            ) => "Elem<'s>".to_owned(),
             (Self::Int, _) => "i64".to_owned(),
             (Self::Float, _) => "f64".to_owned(),
             (Self::Bool, _) => "bool".to_owned(),
@@ -230,7 +273,14 @@ impl AbiTy {
     /// parameter `name`.
     fn argument(&self, name: &str, kind: NativeKind) -> String {
         match (self, kind) {
-            (Self::Int | Self::Float, _) | (Self::Elem(_), NativeKind::Leaf) => name.to_owned(),
+            (Self::Int | Self::Float, _)
+            | (Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_), NativeKind::Leaf) => {
+                name.to_owned()
+            }
+            // Any value at all: a reference, whatever it refers to.
+            (Self::Any | Self::Typed | Self::BoxedElem(_), NativeKind::Reentrant) => {
+                format!("unsafe {{ scope.elem_raw({name}, TypeId(0)) }}")
+            }
             (Self::Elem(index), NativeKind::Reentrant) => {
                 format!("unsafe {{ scope.elem_raw({name}, types[{index}]) }}")
             }
@@ -262,7 +312,9 @@ impl AbiTy {
             Self::Bool => format!("u64::from({value})"),
             Self::Null => format!("{{ let () = {value}; 0 }}"),
             Self::String | Self::Array(_) | Self::Map => format!("{value}.raw() as u64"),
-            Self::Elem(_) => format!("{value} as u64"),
+            Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_) => {
+                format!("{value} as u64")
+            }
             // An optional scalar has no fallible form: see `listed`.
             Self::Optional(_) => format!("{value}.map_or(0, |value| value.raw() as u64)"),
         }
@@ -272,7 +324,13 @@ impl AbiTy {
     /// infallible symbol returns.
     fn returned(&self, value: &str) -> String {
         match self {
-            Self::Int | Self::Float | Self::Null | Self::Elem(_) => value.to_owned(),
+            Self::Int
+            | Self::Float
+            | Self::Null
+            | Self::Elem(_)
+            | Self::Any
+            | Self::Typed
+            | Self::BoxedElem(_) => value.to_owned(),
             Self::Bool => format!("u8::from({value})"),
             Self::String | Self::Array(_) | Self::Map => format!("{value}.raw()"),
             Self::Optional(inner) if inner.is_ref() => {
@@ -312,8 +370,14 @@ fn abi_of(builtin: &NativeBuiltin) -> Option<Abi> {
             params.push((receiver.class_name.to_lowercase(), ty));
         }
     }
+    // `baml.json` moves values of any type, as a union holds them.
+    let of = if builtin.path.starts_with("baml.json.") {
+        AbiTy::of_json
+    } else {
+        AbiTy::of
+    };
     for param in &builtin.params {
-        match AbiTy::of(&param.ty, &generics)? {
+        match of(&param.ty, &generics)? {
             AbiTy::Null => return None,
             // The two words of an optional value of a type parameter are
             // only ever a result.
@@ -323,7 +387,7 @@ fn abi_of(builtin: &NativeBuiltin) -> Option<Abi> {
     }
     Some(Abi {
         params,
-        result: AbiTy::of(&builtin.return_type, &generics)?,
+        result: of(&builtin.return_type, &generics)?,
     })
 }
 
@@ -403,8 +467,15 @@ fn listed<'a>(
         }
         if abi_of(builtin).is_none() {
             return Err(format!(
-                "`{}` is listed as a native but its signature has a type natives cannot take yet",
-                entry.path
+                "`{}` is listed as a native but its signature has a type natives cannot take \
+                 yet: {:?} -> {:?}",
+                entry.path,
+                builtin
+                    .params
+                    .iter()
+                    .map(|param| &param.ty)
+                    .collect::<Vec<_>>(),
+                builtin.return_type
             ));
         }
         if throws(builtin, Some(entry.kind))
@@ -493,6 +564,9 @@ pub fn generate_native_shims(
             parameters.push(format!("types: [TypeId; {type_args}]"));
         }
         for (name, ty) in &abi.params {
+            if *ty == AbiTy::Typed {
+                parameters.push(format!("{name}_type: TypeId"));
+            }
             parameters.push(format!("r#{name}: {}", ty.parameter(kind)));
         }
         let value = match (&abi.result, reentrant) {
@@ -545,7 +619,14 @@ pub fn generate_native_shims(
             let _ = writeln!(body, "    let types = [{}];", ids.join(", "));
         }
         for (name, ty) in &abi.params {
-            if ty.is_ref() || (reentrant && matches!(ty, AbiTy::Elem(_))) {
+            if *ty == AbiTy::Typed {
+                arguments.push(format!("TypeId({name}_type)"));
+            }
+            let held = matches!(
+                ty,
+                AbiTy::Elem(_) | AbiTy::Any | AbiTy::Typed | AbiTy::BoxedElem(_)
+            );
+            if ty.is_ref() || (reentrant && held) {
                 let _ = writeln!(
                     body,
                     "    // SAFETY: compiled code passes a live object of the declared type.\n    \

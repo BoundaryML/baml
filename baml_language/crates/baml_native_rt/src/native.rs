@@ -609,8 +609,17 @@ impl<'s> Scope<'s> {
     /// An instance of the well-known error class `class`, whose one field
     /// is its message.
     fn error(&mut self, class: usize, message: &str) -> Thrown<'s> {
-        let error =
-            crate::class::well_known(self.mutator, class, &[crate::class::Init::Text(message)]);
+        self.error_of(class, &[message])
+    }
+
+    /// An instance of the well-known error class `class`, whose fields are
+    /// these strings, in declaration order.
+    pub(crate) fn error_of(&mut self, class: usize, fields: &[&str]) -> Thrown<'s> {
+        let mut texts = [crate::class::Init::Int(0); crate::class::MOST_FIELDS];
+        for (text, field) in texts.iter_mut().zip(fields) {
+            *text = crate::class::Init::Text(field);
+        }
+        let error = crate::class::well_known(self.mutator, class, &texts[..fields.len()]);
         // SAFETY: just made.
         Thrown(unsafe { self.root_raw(error) })
     }
@@ -947,6 +956,7 @@ pub struct Natives;
 mod array;
 mod float;
 mod int;
+mod json;
 mod map;
 mod root;
 mod string;

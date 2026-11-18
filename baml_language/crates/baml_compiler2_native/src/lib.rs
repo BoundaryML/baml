@@ -17,6 +17,16 @@ mod check;
 mod codegen;
 mod dispatch;
 mod flow;
+mod json;
+/// How types are described to `baml.json`, shared with the runtime by
+/// including its file.
+#[path = "../../baml_native_rt/src/json_layout.rs"]
+#[allow(
+    dead_code,
+    unreachable_pub,
+    reason = "the runtime's file: it exports and uses every constant, compiled code only some"
+)]
+mod json_layout;
 /// Object and mutator layout, shared with the runtime by including its file.
 #[path = "../../baml_native_rt/src/layout.rs"]
 #[allow(

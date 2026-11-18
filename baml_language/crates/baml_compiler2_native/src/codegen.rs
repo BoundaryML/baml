@@ -66,6 +66,7 @@ use crate::{
 };
 
 mod classes;
+mod json;
 mod map;
 mod native_call;
 mod spawn;
@@ -330,6 +331,9 @@ struct Backend<'db> {
     /// The program's type table so far: the fixed types, then one entry per
     /// class met.
     types: Vec<u8>,
+    /// What `baml.json` is told about the types calls of it name: the last
+    /// section of the type table.
+    json: crate::json::JsonTypes<'db>,
     /// The type id of each class met, at each tuple of type arguments it is
     /// met at: the offset of its entry in `types`.
     class_types: HashMap<(ClassRef<'db>, Vec<TypeArg<'db>>), usize>,
@@ -398,6 +402,7 @@ impl<'db> Backend<'db> {
                 .iter()
                 .flat_map(|word| word.to_ne_bytes())
                 .collect(),
+            json: crate::json::JsonTypes::new(),
             class_types: HashMap::new(),
             descriptions: Vec::new(),
             well_known: None,
@@ -765,6 +770,9 @@ impl<'db> Backend<'db> {
             .module
             .declare_data(TYPES_SYMBOL, Linkage::Export, false, false)
             .map_err(internal)?;
+        // The method table has a row for every word of types, and is
+        // already laid out: what follows them costs it nothing.
+        self.append_descriptions();
         let types = std::mem::take(&mut self.types);
         self.define_data(id, DataDescription::new(), types)
     }
@@ -1539,6 +1547,21 @@ impl<'a, 'db> Translator<'a, 'db> {
             self.builder.declare_value_needs_stack_map(value);
         }
         value
+    }
+
+    /// What a parameter of type `ty` is passed as when the call leaves it
+    /// to its default: a word no value of the type is. The callee tests
+    /// for it first, and puts the default in its place.
+    fn omitted(&mut self, ty: &NativeTy<'db>) -> ir::Value {
+        match ty {
+            // No variant is at this position.
+            NativeTy::Enum(_) => self.builder.ins().iconst(WORD, -1),
+            // Neither `false` nor `true`.
+            NativeTy::Bool => self.builder.ins().iconst(types::I8, 2),
+            // No object is at this address, and it is not `null`. The
+            // collector leaves what is outside the heap alone.
+            _ => self.builder.ins().iconst(WORD, 8),
+        }
     }
 
     /// Change the representation of `value` from `from` to `to`, which it is
@@ -2335,6 +2358,9 @@ impl<'a, 'db> Translator<'a, 'db> {
         operand: &Operand<'db>,
         expected: &NativeTy<'db>,
     ) -> Result<ir::Value, CompileError> {
+        if crate::types::is_omitted(operand) {
+            return Ok(self.omitted(expected));
+        }
         // A union kept as one goes where a union is expected as it is,
         // whatever the block knows it holds.
         if expected.is_boxed()
@@ -2805,7 +2831,18 @@ impl<'a, 'db> Translator<'a, 'db> {
             return Ok(self.builder.use_var(*passed));
         }
         let id = match template_ty(self.db, template, self.body.arguments) {
-            Some(ty) => self.backend.type_id(self.db, &ty)?.unwrap_or(0),
+            Some(ty) => self.backend.type_id(self.db, &ty)?,
+            None => None,
+        };
+        let id = match id {
+            Some(id) => id,
+            // A type whose values share no one type id is passed as its
+            // description, when it has one: `baml.json` reads it, and a
+            // type test finds no header equal to it.
+            None if template.is_fully_concrete() => self
+                .backend
+                .describe(self.db, &template.substitute_symbolic(&[]))
+                .unwrap_or(0),
             None => 0,
         };
         Ok(self.builder.ins().iconst(types::I32, imm(id)))
@@ -2940,6 +2977,12 @@ impl<'a, 'db> Translator<'a, 'db> {
         right: &Operand<'db>,
     ) -> Result<ir::Value, CompileError> {
         let left_ty = self.operand_ty(left)?;
+        if crate::types::is_omitted(right) {
+            // Whether a parameter was left to its default.
+            let held = self.operand(left)?;
+            let omitted = self.omitted(&left_ty);
+            return Ok(self.builder.ins().icmp(IntCC::Equal, held, omitted));
+        }
         let right_ty = self.operand_ty(right)?;
         let (mode, _) = binary_typing(op, &left_ty, &right_ty).map_err(internal)?;
         let left_value = self.operand(left)?;
@@ -3777,6 +3820,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         let mut arguments = Vec::new();
         if callee.type_ids != 0 {
             for argument in types {
+                self.describe_type_argument(argument);
                 arguments.push(self.type_id(argument)?);
             }
         }

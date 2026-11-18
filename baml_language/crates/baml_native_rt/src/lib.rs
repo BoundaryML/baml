@@ -21,6 +21,7 @@
 pub mod array;
 mod class;
 pub mod heap;
+pub mod json_layout;
 pub mod layout;
 pub mod map;
 pub mod native;

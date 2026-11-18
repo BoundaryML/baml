@@ -209,16 +209,25 @@ pub(crate) fn identified_arguments<'db>(
     key: &FnKey<'db>,
 ) -> Vec<bool> {
     identified(db, key, &mut Vec::new(), &mut Vec::new())
+        .iter()
+        .map(|uses| *uses != 0)
+        .collect()
 }
+
+/// A value is tested against the type argument: it must have one type id.
+const TESTED: u8 = 1;
+/// The type argument is handed on to `baml.json`, which takes the
+/// description of any type it can write and read.
+const DESCRIBED: u8 = 2;
 
 fn identified<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     key: &FnKey<'db>,
     visiting: &mut Vec<FnKey<'db>>,
-    assumed: &mut Vec<(FnKey<'db>, Vec<bool>)>,
-) -> Vec<bool> {
+    assumed: &mut Vec<(FnKey<'db>, Vec<u8>)>,
+) -> Vec<u8> {
     let any_reference = |slot: usize| key.arguments.get(slot) == Some(&Some(NativeTy::Unknown));
-    let mut needed = vec![false; key.arguments.len()];
+    let mut needed = vec![0; key.arguments.len()];
     if !(0..key.arguments.len()).any(any_reference) {
         return needed;
     }
@@ -244,10 +253,12 @@ fn identified<'db>(
             if let TypeTest::Template(TyTemplate::TypeArgRef(slot)) = test
                 && any_reference(*slot as usize)
             {
-                needed[*slot as usize] = true;
+                needed[*slot as usize] |= TESTED;
             }
         };
         let mut calls = Vec::new();
+        // The type parameters handed on to `baml.json`.
+        let mut handed_on = Vec::new();
         for block in &body.blocks {
             for statement in &block.statements {
                 if let StatementKind::Assign {
@@ -261,7 +272,7 @@ fn identified<'db>(
             match &block.terminator {
                 Some(Terminator::NarrowBind { test: asked, .. }) => test(asked),
                 Some(Terminator::Call {
-                    callee: Operand::Constant(Constant::Function(DeclRef::Source(function))),
+                    callee: Operand::Constant(Constant::Function(function)),
                     args,
                     ntypeargs,
                     ..
@@ -270,12 +281,32 @@ fn identified<'db>(
                         .iter()
                         .map(|argument| operand_local(argument).and_then(|local| types[local.0]))
                         .collect();
-                    if let Some(templates) = templates {
-                        calls.push((*function, templates));
+                    let native = crate::natives::named(&function_display_name(db, *function));
+                    match (templates, native, function) {
+                        // `baml.json` is passed the description of each of
+                        // its type arguments.
+                        (Some(templates), Some(native), _) => {
+                            if crate::json::takes_descriptions(native) {
+                                for template in templates {
+                                    if let TyTemplate::TypeArgRef(slot) = template
+                                        && any_reference(*slot as usize)
+                                    {
+                                        handed_on.push(*slot as usize);
+                                    }
+                                }
+                            }
+                        }
+                        (Some(templates), None, DeclRef::Source(function)) => {
+                            calls.push((*function, templates));
+                        }
+                        _ => {}
                     }
                 }
                 _ => {}
             }
+        }
+        for slot in handed_on {
+            needed[slot] |= DESCRIBED;
         }
         for (function, templates) in calls {
             let callee = FnKey::new(function, Entry::Direct).with_arguments(
@@ -286,11 +317,11 @@ fn identified<'db>(
             );
             let wanted = identified(db, &callee, visiting, assumed);
             for (template, wanted) in templates.iter().zip(wanted) {
-                if wanted
+                if wanted != 0
                     && let TyTemplate::TypeArgRef(slot) = template
                     && any_reference(*slot as usize)
                 {
-                    needed[*slot as usize] = true;
+                    needed[*slot as usize] |= wanted;
                 }
             }
         }
@@ -443,6 +474,11 @@ pub(crate) fn native_type_arguments<'db>(
                 .type_value(argument)
                 .ok_or_else(|| unsupported("a type argument that is not a type loaded once"))?;
             match template_ty(db, template, body.arguments) {
+                // `baml.json` returns a value of a type parameter as a
+                // union holds it, whatever the type.
+                Some(ty) if ty != NativeTy::Null && crate::json::takes_descriptions(native) => {
+                    Ok(ty)
+                }
                 // A native moves a value of a type parameter as one word.
                 Some(ty) if ty != NativeTy::Null && !ty.is_pair() => Ok(ty),
                 Some(ty) => Err(unsupported(&format!("at {}", describe(&ty)))),
@@ -596,19 +632,34 @@ fn call_fits<'db>(
     args: &[Operand<'db>],
     result: &NativeTy<'db>,
 ) -> Result<(), Blocker> {
+    // An argument left to its default has whatever type its parameter has.
     let found = args
         .iter()
-        .map(|argument| operand_ty(db, body, argument))
+        .map(|argument| {
+            if crate::types::is_omitted(argument) {
+                Ok(None)
+            } else {
+                operand_ty(db, body, argument).map(Some)
+            }
+        })
         .collect::<Result<Vec<_>, _>>()?;
     // A callee outside the subset is reported as its own blocked function;
     // only a callee that will be compiled constrains the call.
     if let Ok(expected) = function_signature(db, key) {
+        if expected
+            .params
+            .iter()
+            .zip(&found)
+            .any(|(expected, found)| found.is_none() && !crate::types::has_omitted_form(expected))
+        {
+            return Err(Blocker::new("defaulted argument", "of an int or float"));
+        }
         let fits = expected.params.len() == found.len()
-            && expected
-                .params
-                .iter()
-                .zip(&found)
-                .all(|(expected, found)| assignable(expected, found))
+            && expected.params.iter().zip(&found).all(|(expected, found)| {
+                found
+                    .as_ref()
+                    .is_none_or(|found| assignable(expected, found))
+            })
             && assignable(result, &expected.result);
         if !fits {
             return Err(Blocker::new(
@@ -812,9 +863,21 @@ impl<'db> Checker<'_, 'db> {
             ..
         } = terminator
         {
-            if let Ok(Callee::Function(key)) = call_target(self.db, body, callee, args, *ntypeargs)
-            {
-                self.need(key, Vec::new());
+            match call_target(self.db, body, callee, args, *ntypeargs) {
+                Ok(Callee::Function(key)) => self.need(key, Vec::new()),
+                // What `baml.json` decodes is made by the runtime.
+                Ok(Callee::Native(native)) => {
+                    let made = crate::json::check_call(self.db, body, native, args, *ntypeargs);
+                    for described in made.unwrap_or_default() {
+                        self.construct(match described {
+                            crate::json::Described::Class(class) => {
+                                NativeTy::Class(class, Vec::new())
+                            }
+                            crate::json::Described::Enum(enum_ref) => NativeTy::Enum(enum_ref),
+                        });
+                    }
+                }
+                _ => {}
             }
             for argument in args {
                 self.operand_needs(argument);
@@ -956,6 +1019,18 @@ pub(crate) fn rvalue_ty<'db>(
     }
     match value {
         Rvalue::Use(operand) => operand_ty(db, body, operand),
+        // Whether a parameter was left to its default.
+        Rvalue::BinaryOp {
+            op: BinOp::Eq,
+            left,
+            right,
+        } if crate::types::is_omitted(right) => {
+            if crate::types::has_omitted_form(&operand_ty(db, body, left)?) {
+                Ok(NativeTy::Bool)
+            } else {
+                Err(Blocker::new("defaulted argument", "of an int or float"))
+            }
+        }
         Rvalue::BinaryOp { op, left, right } => {
             let left = operand_ty(db, body, left)?;
             let right = operand_ty(db, body, right)?;
@@ -1402,6 +1477,7 @@ fn terminator_supported<'db>(
                 Callee::Native(native) => {
                     let (signature, _) = native.callable()?;
                     let types = native_type_arguments(db, body, native, args, *ntypeargs)?;
+                    crate::json::check_call(db, body, native, args, *ntypeargs)?;
                     let values = &args[*ntypeargs..];
                     if values.len() != signature.params.len()
                         || !assignable(&result, &signature.result.native(&types))
@@ -1423,19 +1499,32 @@ fn terminator_supported<'db>(
                     let name = || function_display_name(db, DeclRef::Source(key.loc));
                     // The callee is told the type id of each type argument
                     // it tests values against.
-                    for (slot, _) in identified_arguments(db, &key)
-                        .iter()
+                    for (slot, uses) in identified(db, &key, &mut Vec::new(), &mut Vec::new())
+                        .into_iter()
                         .enumerate()
-                        .filter(|(_, needed)| **needed)
+                        .filter(|(_, uses)| *uses != 0)
                     {
                         let known = match body.type_value(&args[slot]) {
                             Some(TyTemplate::TypeArgRef(own)) => body
                                 .arguments
                                 .get(*own as usize)
                                 .is_some_and(Option::is_some),
-                            Some(template) => template_ty(db, template, body.arguments)
-                                .is_some_and(|ty| has_type_id(&ty)),
-                            None => false,
+                            Some(template)
+                                if template_ty(db, template, body.arguments)
+                                    .is_some_and(|ty| has_type_id(&ty)) =>
+                            {
+                                true
+                            }
+                            // `baml.json` takes any type it has a
+                            // description of.
+                            Some(template)
+                                if uses & TESTED == 0 && template.is_fully_concrete() =>
+                            {
+                                crate::json::JsonTypes::new()
+                                    .describe(db, &template.substitute_symbolic(&[]))?;
+                                true
+                            }
+                            _ => false,
                         };
                         if !known {
                             return Err(Blocker::new(

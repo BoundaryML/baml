@@ -358,11 +358,12 @@ const _: () = {
 /// The classes of the standard library the runtime makes instances of: the
 /// panics, which are every class of `baml.panics` in declaration order, and
 /// then the errors its natives throw and the classes of an error's context.
+/// The runtime gives the fields of one it makes in declaration order.
 /// Each is the namespace under `baml`
 /// and the class's name. The compiler emits the type id of each, in this
 /// order, as the `u32`s of its well-known table, after a `u32` count; the
 /// description of the type says where the fields are.
-pub const WELL_KNOWN: [(&str, &str); 21] = [
+pub const WELL_KNOWN: [(&str, &str); 25] = [
     ("panics", "DivisionByZero"),
     ("panics", "IndexOutOfBounds"),
     ("panics", "InvalidFieldAccess"),
@@ -384,6 +385,10 @@ pub const WELL_KNOWN: [(&str, &str); 21] = [
     ("errors", "Context"),
     ("errors", "StackTrace"),
     ("errors", "StackFrame"),
+    ("json", "ParseError"),
+    ("json", "DecodeError"),
+    ("json", "SerializationError"),
+    ("json", "PathError"),
 ];
 /// How many of [`WELL_KNOWN`], from the first, are panics.
 pub const WELL_KNOWN_PANICS: usize = 16;
@@ -397,6 +402,10 @@ pub const WELL_KNOWN_PARSE_ERROR: usize = 17;
 pub const WELL_KNOWN_CONTEXT: usize = 18;
 pub const WELL_KNOWN_STACK_TRACE: usize = 19;
 pub const WELL_KNOWN_STACK_FRAME: usize = 20;
+pub const WELL_KNOWN_JSON_PARSE_ERROR: usize = 21;
+pub const WELL_KNOWN_JSON_DECODE_ERROR: usize = 22;
+pub const WELL_KNOWN_JSON_SERIALIZATION_ERROR: usize = 23;
+pub const WELL_KNOWN_JSON_PATH_ERROR: usize = 24;
 
 /// What a handler of the unwind table takes, and what it does with what it
 /// takes. A handler lands with an error when it takes every error, when it

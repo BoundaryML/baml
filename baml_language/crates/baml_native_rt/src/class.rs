@@ -194,7 +194,7 @@ pub(crate) enum Init<'a> {
 }
 
 /// The most fields any class the runtime makes an instance of has.
-const MOST_FIELDS: usize = 2;
+pub(crate) const MOST_FIELDS: usize = 3;
 
 /// The type id of the class `class` of [`crate::layout::WELL_KNOWN`].
 pub(crate) fn well_known_type(mutator: &Mutator, class: usize) -> usize {
