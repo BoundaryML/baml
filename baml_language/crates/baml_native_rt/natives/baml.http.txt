@@ -1,0 +1,4 @@
+# Natives of `baml.http`, implemented in `src/native/http.rs`. A `Response`
+# owns the body it has not read yet as Rust state.
+baml.http._fetch async
+baml.http.Response.text async

@@ -20,19 +20,21 @@
     reason = "words of the heap are read as the types their descriptions say"
 )]
 
-mod decode;
+pub(super) mod decode;
 mod encode;
 mod out;
 mod text;
 
 use out::Out;
 
-use super::{Elem, NativeBamlJson, Natives, Root, Scope, Str, StrRef, Thrown, TypeId};
+use super::{
+    Arr, Elem, NativeBamlJson, Natives, Root, Scope, Slot, Str, StrRef, Thrown, TypeId, array_size,
+};
 use crate::{
     describe::Types,
-    heap::load,
+    heap::{load, store},
     layout::{
-        ARRAY_LENGTH, BOX_VALUE, MAP_ENTRIES, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
+        ARRAY_DATA, ARRAY_LENGTH, BOX_VALUE, MAP_ENTRIES, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
         TYPE_ARRAY_OF_VALUES, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ENTRIES_KEY_REF,
         TYPE_ENTRIES_REFS, TYPE_ENTRIES_VALUE_REF, TYPE_ID_MASK, TYPE_MAP,
         WELL_KNOWN_JSON_DECODE_ERROR, WELL_KNOWN_JSON_PARSE_ERROR, WELL_KNOWN_JSON_PATH_ERROR,
@@ -225,21 +227,19 @@ impl NativeBamlJson for Natives {
         scope.with_room(|scope| parse_rooted(scope, s))
     }
 
-    fn _decode<'s>(
+    async fn _decode<'s>(
         scope: &mut Scope<'s>,
         types: [TypeId; 1],
         s: Root<'s, Str>,
         aliased: bool,
     ) -> Result<usize, Thrown<'s>> {
-        scope.with_room(|scope| {
-            let json = parse_rooted(scope, s)?;
-            // SAFETY: a `json` value just built.
-            let json = unsafe { scope.elem_raw(json, TypeId(0)) };
-            decode::to(scope, types[0], json, aliased)
-        })
+        let json = scope.with_room(|scope| parse_rooted(scope, s))?;
+        // SAFETY: a `json` value just built.
+        let json = unsafe { scope.elem_raw(json, TypeId(0)) };
+        decode::to(scope, types[0], json, aliased, false).await
     }
 
-    fn _stringify<'s>(
+    async fn _stringify<'s>(
         scope: &mut Scope<'s>,
         value_type: TypeId,
         value: Elem<'s>,
@@ -247,12 +247,16 @@ impl NativeBamlJson for Natives {
         indent: Elem<'s>,
         omit_nulls: bool,
     ) -> Result<Root<'s, Str>, Thrown<'s>> {
-        let written = encode::indent_text(indent.get(scope)).and_then(|indent| {
+        let options = encode::Options {
+            aliased,
+            omit_nulls,
+        };
+        let indent = match encode::indent_text(indent.get(scope)) {
+            Ok(indent) => indent,
+            Err(refused) => return Err(serialization_error(scope, &refused)),
+        };
+        let write = move |scope: &Scope<'s>, overrides: &mut encode::Overrides| {
             let types = Types::of(scope);
-            let options = encode::Options {
-                aliased,
-                omit_nulls,
-            };
             let mut sink = encode::TextSink::new(&indent);
             // SAFETY: the value compiled code passed, of the static type
             // it described; nothing is allocated while it is walked.
@@ -263,64 +267,44 @@ impl NativeBamlJson for Natives {
                     types.described(value_type),
                     options,
                     false,
+                    overrides,
                     &mut sink,
                 )?;
             }
             Ok(sink.into_string())
-        });
+        };
+        let mut met = encode::Overrides::Count(0);
+        let mut written = write(scope, &mut met);
+        // Nothing to call when the walk met no `to_json` and went to the
+        // end. One that was refused stopped before it had met them all.
+        if !(written.is_ok() && matches!(met, encode::Overrides::Count(0)))
+            && let Some(held) = to_json_of_each(scope, value, options).await?
+        {
+            written = write(scope, &mut held.splice());
+        }
         match written {
             Ok(text) => Ok(scope.alloc_str(&text)),
             Err(refused) => Err(serialization_error(scope, &refused)),
         }
     }
 
-    fn _from<'s>(
+    async fn _from<'s>(
         scope: &mut Scope<'s>,
         value_type: TypeId,
         value: Elem<'s>,
         aliased: bool,
         omit_nulls: bool,
     ) -> Result<usize, Thrown<'s>> {
-        let options = encode::Options {
-            aliased,
-            omit_nulls,
-        };
-        let build = |scope: &Scope<'s>, out: Out| {
-            let types = Types::of(scope);
-            let mut sink = encode::JsonSink::new(out);
-            // SAFETY: as in `_stringify`.
-            unsafe {
-                encode::walk(
-                    &types,
-                    value.get(scope),
-                    types.described(value_type),
-                    options,
-                    false,
-                    &mut sink,
-                )?;
-            }
-            Ok(sink.finish())
-        };
-        match build(scope, Out::counting()) {
-            Ok((_, out)) => {
-                let bytes = out.bytes();
-                let reservation = scope.reserve(bytes);
-                let base = reservation.take(bytes);
-                let built: Result<_, Refused> =
-                    build(reservation.scope, Out::building(base, bytes));
-                Ok(built.map_or(0, |(root, _)| root))
-            }
-            Err(refused) => Err(serialization_error(scope, &refused)),
-        }
+        to_json_value(scope, value_type, value, aliased, omit_nulls).await
     }
 
-    fn _to<'s>(
+    async fn _to<'s>(
         scope: &mut Scope<'s>,
         types: [TypeId; 1],
         j: Elem<'s>,
         aliased: bool,
     ) -> Result<usize, Thrown<'s>> {
-        scope.with_room(|scope| decode::to(scope, types[0], j, aliased))
+        decode::to(scope, types[0], j, aliased, false).await
     }
 
     fn _path<'s>(
@@ -347,6 +331,139 @@ impl NativeBamlJson for Natives {
             }
             object_get_keyed(j, super::View::raw(key)).unwrap_or(0)
         }
+    }
+}
+
+/// The values under one being written whose class has a `to_json` of its
+/// own, and after them what the `to_json` of each returned: `count` words
+/// and `count` more.
+struct Held<'s> {
+    array: Root<'s, Arr<Slot>>,
+    count: usize,
+}
+
+impl Held<'_> {
+    /// How the walk writes the value now. The addresses are good until
+    /// the next allocation.
+    fn splice(&self) -> encode::Overrides {
+        encode::Overrides::Splice {
+            // SAFETY: a live array of `2 * count` elements.
+            held: unsafe { load(self.array.raw() + ARRAY_DATA) },
+            count: self.count,
+            next: 0,
+        }
+    }
+}
+
+/// Call the `to_json` of every value under `value` whose class has one of
+/// its own, in the order the walk meets them. `None` when there is none.
+///
+/// Every `to_json` runs before the caller's next walk can refuse a value,
+/// as in the interpreter.
+async fn to_json_of_each<'s>(
+    scope: &mut Scope<'s>,
+    value: Elem<'s>,
+    options: encode::Options,
+) -> Result<Option<Held<'s>>, Thrown<'s>> {
+    let types = Types::of(scope);
+    let mut count = 0;
+    // SAFETY: a value compiled code passed, and nothing is allocated.
+    unsafe { encode::overriding(&types, value.get(scope), options, |_| count += 1) };
+    if count == 0 {
+        return Ok(None);
+    }
+    let reservation = scope.reserve(array_size(2 * count));
+    let array = reservation.slots(2 * count, true);
+    let mut found = 0;
+    // SAFETY: as above: nothing moves while the reservation is open.
+    unsafe {
+        encode::overriding(&types, value.get(reservation.scope), options, |object| {
+            array.set(found, object);
+            found += 1;
+        });
+    }
+    let kept = array.keep();
+    let array = reservation.finish(kept);
+    for index in 0..count {
+        let object = array.get(scope).get(index).unwrap_or(0);
+        // SAFETY: a live instance, found to have one.
+        let Some(to_json) = (unsafe { encode::own_to_json(&types, object) }) else {
+            continue;
+        };
+        // SAFETY: as above.
+        let instance = unsafe { scope.elem_raw(object, TypeId(0)) };
+        let returned = scope.call_baml(to_json, &[instance]).await?;
+        // SAFETY: the array has `2 * count` elements, each a reference,
+        // and neither slot is used again.
+        unsafe {
+            let data = load(array.raw() + ARRAY_DATA);
+            store(
+                data + (count + index) * crate::layout::WORD,
+                returned.get(scope),
+            );
+            scope.release_last(2);
+        }
+    }
+    Ok(Some(Held { array, count }))
+}
+
+/// `value`, of the type `value_type` describes, as a `json` value: what
+/// `baml.json.from` returns, and with declared names and every field what
+/// a `to_json` nothing overrides does.
+pub(super) async fn to_json_value<'s>(
+    scope: &mut Scope<'s>,
+    value_type: TypeId,
+    value: Elem<'s>,
+    aliased: bool,
+    omit_nulls: bool,
+) -> Result<usize, Thrown<'s>> {
+    let options = encode::Options {
+        aliased,
+        omit_nulls,
+    };
+    let build = move |scope: &Scope<'s>, out: Out, overrides: &mut encode::Overrides| {
+        let types = Types::of(scope);
+        let mut sink = encode::JsonSink::new(out);
+        // SAFETY: as in `_stringify`.
+        unsafe {
+            encode::walk(
+                &types,
+                value.get(scope),
+                types.described(value_type),
+                options,
+                false,
+                overrides,
+                &mut sink,
+            )?;
+        }
+        Ok(sink.finish())
+    };
+    let mut met = encode::Overrides::Count(0);
+    let mut counted = build(scope, Out::counting(), &mut met);
+    let mut held = None;
+    if !(counted.is_ok() && matches!(met, encode::Overrides::Count(0))) {
+        held = to_json_of_each(scope, value, options).await?;
+        if let Some(held) = &held {
+            counted = build(scope, Out::counting(), &mut held.splice());
+        }
+    }
+    match counted {
+        Ok((_, out)) => {
+            let bytes = out.bytes();
+            let reservation = scope.reserve(bytes);
+            let base = reservation.take(bytes);
+            // The values may have moved when the room was made.
+            let mut overrides = held
+                .as_ref()
+                .map_or(encode::Overrides::Count(0), Held::splice);
+            let built: Result<_, Refused> = build(
+                reservation.scope,
+                Out::building(base, bytes),
+                &mut overrides,
+            );
+            Ok(built.map_or(0, |(root, _)| root))
+        }
+        Err(refused) => Err(serialization_error(scope, &refused)),
     }
 }
 

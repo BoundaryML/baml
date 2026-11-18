@@ -3,6 +3,7 @@
 
 use baml_compiler2_mir::{Operand, TyTemplate};
 use cranelift_codegen::ir::{self, InstBuilder, types};
+use cranelift_module::{DataDescription, FuncId, Module};
 
 use super::{Backend, Translator, imm, internal};
 use crate::{
@@ -59,13 +60,23 @@ impl<'db> Backend<'db> {
     }
 
     /// End the type table with the descriptions, and say where they start.
-    pub(super) fn append_descriptions(&mut self) {
+    /// Returns what the table needs of the linker: the address of each
+    /// entry a description names.
+    pub(super) fn append_descriptions(&mut self) -> DataDescription {
         let json = std::mem::replace(&mut self.json, crate::json::JsonTypes::new());
         self.types.resize(layout::words(self.types.len()), 0);
         let start = super::table_word(self.types.len());
         self.types[JSON_SECTION..JSON_SECTION + 4].copy_from_slice(&start.to_ne_bytes());
+        let mut description = DataDescription::new();
+        for (at, entry) in json.addresses() {
+            let entry = self
+                .module
+                .declare_func_in_data(FuncId::from_u32(*entry), &mut description);
+            description.write_function_addr(start + at, entry);
+        }
         self.types.extend(json.section());
         self.types.resize(layout::words(self.types.len()), 0);
+        description
     }
 }
 

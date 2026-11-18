@@ -1,5 +1,24 @@
 //! Reading a `json` value into a value of a described type, by the
 //! interpreter's rules: a shape check, not a coercion.
+//!
+//! A class with a `from_json` of its own is built by that, from the `json`
+//! in its place. The decoder calls nothing. It runs up to three times over
+//! the same value, and the native calls each `from_json` between two runs
+//! ([`to`]), so the recursion here never stops halfway:
+//!
+//! - A first run counts the bytes of what it builds and notes, in the
+//!   order it meets them, each `json` a `from_json` is to read. It stops
+//!   at the first value that does not fit, as the interpreter does, having
+//!   noted only what comes before.
+//! - When there are any, a run like it leaves those values in an array,
+//!   which is how the native holds them while each `from_json` runs.
+//! - The last run builds, taking what each `from_json` returned in the
+//!   same order.
+//!
+//! A member of a union is chosen by shape, with every class read by its
+//! fields: a `from_json` that throws ends the decode, so no member can be
+//! tried through one. The member chosen is then read again as any other
+//! value, when a `from_json` was met inside it.
 
 use std::fmt::Write as _;
 
@@ -11,27 +30,18 @@ use crate::{
     describe::{Desc, Types},
     heap::{load, store},
     json_layout::{
-        KIND_ARRAY, KIND_BOOL, KIND_BOOL_IS, KIND_CLASS, KIND_ENUM, KIND_FLOAT, KIND_INT,
-        KIND_INT_IS, KIND_MAP, KIND_NULL, KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS, KIND_UNION,
-        KIND_VARIANT, REPR_BOXED, REPR_PAIR, REPR_REF,
+        HOOK_FROM_JSON, KIND_ARRAY, KIND_BOOL, KIND_BOOL_IS, KIND_CLASS, KIND_ENUM, KIND_FLOAT,
+        KIND_INT, KIND_INT_IS, KIND_MAP, KIND_NULL, KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS,
+        KIND_UNION, KIND_VARIANT, REPR_BOXED, REPR_REF,
     },
-    layout::{ARRAY_DATA, ARRAY_LENGTH, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, WORD},
+    layout::{ARRAY_DATA, ARRAY_LENGTH, WORD},
     map,
-    native::{Elem, Scope, Thrown, TypeId},
+    native::{
+        Elem, Scope, Thrown, TypeId, array_size,
+        build::{Got, place, put},
+        drive::BamlFn,
+    },
 };
-
-/// A decoded value, before it is put in the form its place holds it in.
-#[derive(Clone, Copy)]
-enum Got {
-    Null,
-    Bool(bool),
-    Int(i64),
-    Float(f64),
-    /// A variant of the enum whose boxes have this type id.
-    Variant(usize, usize),
-    /// A reference to an object.
-    Ref(usize),
-}
 
 /// Why a value does not fit.
 struct Misfit {
@@ -61,6 +71,16 @@ enum Fit {
     Keys,
 }
 
+/// What the decoder does at a class with a `from_json` of its own.
+enum Provided {
+    /// Note its `from_json`, and when `into` is not zero leave the `json`
+    /// it is to read there, one word after the one before.
+    Note { entries: Vec<BamlFn>, into: usize },
+    /// Take what its `from_json` returned: the next of the words at this
+    /// address.
+    Take(usize),
+}
+
 struct Decoder<'a> {
     types: &'a Types,
     aliased: bool,
@@ -74,51 +94,155 @@ struct Decoder<'a> {
     /// How many unions' members are being tried. The interpreter words
     /// two misfits differently there.
     trying: usize,
+    provided: Provided,
+    /// Whether the value being decoded next is read by its fields whatever
+    /// `from_json` its class has: the root of a default `from_json`.
+    by_fields: bool,
+    /// Whether a class with a `from_json` of its own was read by its
+    /// fields, while a member of a union was tried.
+    tried_provided: bool,
+}
+
+/// What a decode is asked for: the `json` value to read, the type a call
+/// named to read it as, and how.
+#[derive(Clone, Copy)]
+struct Asked<'s> {
+    ty: TypeId,
+    json: Elem<'s>,
+    aliased: bool,
+    by_fields: bool,
+}
+
+/// What a run that went to the end made: the value as a union holds it,
+/// the room it took, and the member each union decoded as.
+type Made = (usize, Out, Vec<usize>);
+
+/// One run of the decoder: what it made, and what it noted or has left to
+/// take of what each `from_json` is for.
+fn run(
+    scope: &Scope<'_>,
+    asked: Asked<'_>,
+    out: Out,
+    choices: Vec<usize>,
+    provided: Provided,
+) -> (Result<Made, Misfit>, Provided) {
+    let Asked {
+        ty,
+        json,
+        aliased,
+        by_fields,
+    } = asked;
+    let types = Types::of(scope);
+    let mut decoder = Decoder {
+        types: &types,
+        aliased,
+        out,
+        choices,
+        next_choice: 0,
+        path: String::new(),
+        depth: 0,
+        trying: 0,
+        provided,
+        by_fields,
+        tried_provided: false,
+    };
+    // SAFETY: a `json` value, read before anything is allocated or in
+    // reserved room.
+    let value = unsafe {
+        match types.described(ty) {
+            Some(described) => decoder
+                .decode(json.get(scope), described)
+                .map(|got| decoder.place(got, REPR_BOXED).0),
+            // A type the call does not describe is `unknown`.
+            None => decoder
+                .copy(json.get(scope))
+                .map(|got| decoder.place(got, REPR_BOXED).0),
+        }
+    };
+    (
+        value.map(|value| (value, decoder.out, decoder.choices)),
+        decoder.provided,
+    )
 }
 
 /// Decode the `json` value `json` as the type a call named by `ty`, and
-/// return it as a union holds it.
-pub(super) fn to<'s>(
+/// return it as a union holds it. With `by_fields` the value itself is
+/// read by its fields whatever `from_json` its class has.
+///
+/// Each `from_json` is called here, between runs of the decoder. A run
+/// recurses as deep as the value nests, so it is made where there is room
+/// for that, which is nowhere a call of compiled code can be made from.
+pub(in crate::native) async fn to<'s>(
     scope: &mut Scope<'s>,
     ty: TypeId,
     json: Elem<'s>,
     aliased: bool,
+    by_fields: bool,
 ) -> Result<usize, Thrown<'s>> {
-    let run = |scope: &Scope<'s>, out: Out, choices: Vec<usize>| {
-        let types = Types::of(scope);
-        let mut decoder = Decoder {
-            types: &types,
-            aliased,
-            out,
-            choices,
-            next_choice: 0,
-            path: String::new(),
-            depth: 0,
-            trying: 0,
-        };
-        // SAFETY: a `json` value, read before anything is allocated or in
-        // reserved room.
-        let value = unsafe {
-            match types.described(ty) {
-                Some(described) => decoder
-                    .decode(json.get(scope), described)
-                    .map(|got| decoder.place(got, REPR_BOXED).0),
-                // A type the call does not describe is `unknown`.
-                None => decoder
-                    .copy(json.get(scope))
-                    .map(|got| decoder.place(got, REPR_BOXED).0),
-            }
-        };
-        value.map(|value| (value, decoder.out, decoder.choices))
+    let asked = Asked {
+        ty,
+        json,
+        aliased,
+        by_fields,
     };
-    match run(scope, Out::counting(), Vec::new()) {
-        Ok((_, out, choices)) => {
+    let note = |into| Provided::Note {
+        entries: Vec::new(),
+        into,
+    };
+    let (counted, provided) =
+        scope.with_room(|scope| run(scope, asked, Out::counting(), Vec::new(), note(0)));
+    let Provided::Note { entries, .. } = provided else {
+        unreachable!("a run hands back what it was handed");
+    };
+    // What each `from_json` is to read, then what each returned.
+    let mut held = None;
+    if !entries.is_empty() {
+        let count = entries.len();
+        let array = scope.with_room(|scope| {
+            let reservation = scope.reserve(array_size(2 * count));
+            let array = reservation.slots(2 * count, true).keep();
+            let array = reservation.finish(array);
+            // Nothing is allocated between the array and the run that
+            // fills it, which notes the same values in the same order and
+            // ends as the first did.
+            // SAFETY: a live array of `2 * count` elements.
+            let into = unsafe { load(array.raw() + ARRAY_DATA) };
+            drop(run(scope, asked, Out::counting(), Vec::new(), note(into)));
+            array
+        });
+        for (index, from_json) in entries.into_iter().enumerate() {
+            // SAFETY: the array's elements are `json` values and what was
+            // returned for them, and neither slot is used again.
+            unsafe {
+                let read = load(load(array.raw() + ARRAY_DATA) + index * WORD);
+                let read = scope.elem_raw(read, TypeId(0));
+                let made = scope.call_baml(from_json, &[read]).await?;
+                let data = load(array.raw() + ARRAY_DATA);
+                store(data + (count + index) * WORD, made.get(scope));
+                scope.release_last(2);
+            }
+        }
+        held = Some((array, count));
+    }
+    match counted {
+        Ok((_, out, choices)) => Ok(scope.with_room(|scope| {
             let bytes = out.bytes();
             let reservation = scope.reserve(bytes);
             let base = reservation.take(bytes);
-            let built = run(reservation.scope, Out::building(base, bytes), choices);
-            Ok(built.map_or(0, |(value, ..)| value))
-        }
+            // SAFETY: a live array of `2 * count` elements, which may have
+            // moved when the room was made.
+            let made = held.map_or(0, |(array, count)| unsafe {
+                load(array.raw() + ARRAY_DATA) + count * WORD
+            });
+            let (built, _) = run(
+                reservation.scope,
+                asked,
+                Out::building(base, bytes),
+                choices,
+                Provided::Take(made),
+            );
+            built.map_or(0, |(value, ..)| value)
+        })),
         Err(misfit) => Err(decode_error(
             scope,
             &Refused {
@@ -162,27 +286,10 @@ impl Decoder<'_> {
         result
     }
 
-    /// The words a place of representation `repr` holds `got` as: the
-    /// slot, and for an optional scalar whether there is a value.
+    /// The words a place of representation `repr` holds `got` as, with a
+    /// box made where this run builds.
     fn place(&mut self, got: Got, repr: u32) -> (usize, usize) {
-        let bits = match got {
-            Got::Null => return (0, 0),
-            Got::Bool(value) => usize::from(value),
-            Got::Int(value) => value as usize,
-            Got::Float(value) => value.to_bits() as usize,
-            Got::Variant(_, index) => index,
-            Got::Ref(object) => return (object, 1),
-        };
-        if repr != REPR_BOXED {
-            return (bits, 1);
-        }
-        let type_id = match got {
-            Got::Bool(_) => TYPE_BOX_BOOL,
-            Got::Float(_) => TYPE_BOX_FLOAT,
-            Got::Variant(type_id, _) => type_id,
-            _ => TYPE_BOX_INT,
-        };
-        (self.out.boxed(type_id, bits), 1)
+        place(got, repr, |type_id, bits| self.out.boxed(type_id, bits))
     }
 
     /// Whether elements or values of the type described are references.
@@ -194,6 +301,7 @@ impl Decoder<'_> {
         if self.depth > MAX_DEPTH {
             return self.too_deep();
         }
+        let by_fields = std::mem::take(&mut self.by_fields);
         // SAFETY: the caller's contract, for everything reached from the
         // value.
         unsafe {
@@ -226,7 +334,12 @@ impl Decoder<'_> {
                 },
                 KIND_ARRAY => self.array(node, described.of_a()),
                 KIND_MAP => self.map(node, described.of_a(), described.of_b()),
-                KIND_CLASS => self.class(node, described),
+                KIND_CLASS => match described.hook(HOOK_FROM_JSON) {
+                    Some(from_json) if !by_fields => {
+                        self.provided(json, node, described, from_json)
+                    }
+                    _ => self.class(node, described),
+                },
                 KIND_ENUM => {
                     let Some(written) = node.text() else {
                         return self.fail("expected enum variant string");
@@ -308,7 +421,17 @@ impl Decoder<'_> {
         let out = std::mem::replace(&mut self.out, Out::counting());
         let mut sink = encode::JsonSink::new(out);
         // SAFETY: the caller's contract.
-        let walked = unsafe { encode::walk(self.types, json, None, options, true, &mut sink) };
+        let walked = unsafe {
+            encode::walk(
+                self.types,
+                json,
+                None,
+                options,
+                true,
+                &mut encode::Overrides::Count(0),
+                &mut sink,
+            )
+        };
         let (copied, out) = sink.finish();
         self.out = out;
         match walked {
@@ -399,6 +522,41 @@ impl Decoder<'_> {
         }
     }
 
+    /// A value of a class with a `from_json` of its own: what that makes
+    /// of the `json` at `json`. While a member of a union is tried the
+    /// class is read by its fields, like any other.
+    unsafe fn provided(
+        &mut self,
+        json: usize,
+        node: Node,
+        described: Desc,
+        from_json: BamlFn,
+    ) -> Result<Got, Misfit> {
+        if self.trying != 0 {
+            self.tried_provided = true;
+            // SAFETY: the caller's contract.
+            return unsafe { self.class(node, described) };
+        }
+        match &mut self.provided {
+            Provided::Note { entries, into } => {
+                if *into != 0 {
+                    // SAFETY: the native has room there for each value a
+                    // run like this one noted.
+                    unsafe { store(*into + entries.len() * WORD, json) };
+                }
+                entries.push(from_json);
+                Ok(Got::Null)
+            }
+            Provided::Take(next) => {
+                // SAFETY: the native has there what each `from_json`
+                // returned, in the order a run like this one noted them.
+                let made = unsafe { load(*next) };
+                *next += WORD;
+                Ok(Got::Ref(made))
+            }
+        }
+    }
+
     unsafe fn class(&mut self, node: Node, described: Desc) -> Result<Got, Misfit> {
         let Node::Object(object) = node else {
             return self.fail(format!(
@@ -450,11 +608,8 @@ impl Decoder<'_> {
                 .out
                 .instance(type_id, self.types.instance_size(type_id));
             if instance != 0 {
-                for (offset, repr, (word, present)) in slots {
-                    store(instance + offset, word);
-                    if repr == REPR_PAIR {
-                        store(instance + offset + WORD, present);
-                    }
+                for (offset, repr, placed) in slots {
+                    put(instance, offset, repr, placed);
                 }
             }
             Ok(Got::Ref(instance))
@@ -573,6 +728,7 @@ impl Decoder<'_> {
         self.choices.push(0);
         let (bytes, path) = (self.out.bytes(), std::mem::take(&mut self.path));
         self.trying += 1;
+        let tried_before = std::mem::take(&mut self.tried_provided);
         for (index, _) in &ranked {
             self.choices[choice] = *index;
             // SAFETY: the caller's contract.
@@ -580,11 +736,23 @@ impl Decoder<'_> {
                 Ok(got) => {
                     self.path = path;
                     self.trying -= 1;
+                    let met = std::mem::replace(&mut self.tried_provided, tried_before);
+                    self.tried_provided |= met;
+                    if met && self.trying == 0 {
+                        // The member is the one. It is read again as any
+                        // other value is: its `from_json` builds it.
+                        self.out.rewind(bytes);
+                        self.choices.truncate(choice + 1);
+                        self.tried_provided = tried_before;
+                        // SAFETY: the caller's contract.
+                        return unsafe { self.decode(json, members[*index]) };
+                    }
                     return Ok(got);
                 }
                 Err(misfit) if misfit.deep => {
                     self.path = path;
                     self.trying -= 1;
+                    self.tried_provided = tried_before;
                     return self.too_deep();
                 }
                 Err(_) => {
@@ -608,6 +776,7 @@ impl Decoder<'_> {
                 if misfit.deep {
                     self.path = path;
                     self.trying -= 1;
+                    self.tried_provided = tried_before;
                     return self.too_deep();
                 }
                 misfits.push((member.name(), misfit));
@@ -617,6 +786,7 @@ impl Decoder<'_> {
         }
         self.path = path;
         self.trying -= 1;
+        self.tried_provided = tried_before;
         match misfits.as_slice() {
             [] => self.fail("no union member can come from JSON"),
             [(_, only)] => Err(Misfit {

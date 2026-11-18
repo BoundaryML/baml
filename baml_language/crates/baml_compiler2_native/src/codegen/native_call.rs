@@ -9,7 +9,7 @@ use super::{Translator, WORD, internal};
 use crate::{
     CompileError,
     check::native_type_arguments,
-    natives::{Kind, Native, Ty},
+    natives::{Native, Ty},
     types::NativeTy,
 };
 
@@ -26,7 +26,9 @@ fn abi_param(ty: &Ty) -> Option<AbiParam> {
         | Ty::Elem(_)
         | Ty::Any
         | Ty::Typed
-        | Ty::BoxedElem(_) => Some(AbiParam::new(WORD)),
+        | Ty::BoxedElem(_)
+        | Ty::Class(_)
+        | Ty::Rust => Some(AbiParam::new(WORD)),
         Ty::Float => Some(AbiParam::new(types::F64)),
         // The C ABI has the caller extend an argument narrower than a
         // register.
@@ -81,11 +83,12 @@ impl<'db> Translator<'_, 'db> {
         arguments: &[Operand<'db>],
         ntypeargs: usize,
     ) -> Result<(ir::Value, NativeTy<'db>), CompileError> {
-        let (signature, kind) = native.callable().map_err(internal)?;
-        let takes_worker = kind != Kind::Leaf;
+        let (signature, flags) = native.callable().map_err(internal)?;
+        let takes_worker = flags.allocates;
         let types = native_type_arguments(self.db, self.body, native, arguments, ntypeargs)
             .map_err(internal)?;
         let (type_arguments, arguments) = arguments.split_at(ntypeargs);
+        self.backend.name_classes(self.db, native)?;
 
         let mut params = Vec::new();
         let mut values = Vec::new();
@@ -113,7 +116,7 @@ impl<'db> Translator<'_, 'db> {
             }
         }
         for (argument, ty) in arguments.iter().zip(signature.params) {
-            let expected = ty.native(&types);
+            let expected = ty.native(self.db, &types);
             if matches!(ty, Ty::Typed) {
                 // What the value is, as far as its static type says.
                 let found = self.operand_ty(argument)?;
@@ -153,29 +156,44 @@ impl<'db> Translator<'_, 'db> {
                 ty => abi_param(ty).into_iter().collect(),
             }
         };
-        let produced = signature.result.native(&types);
-        let callee = self.import(native.symbol, params, returns)?;
-
+        let produced = signature.result.native(self.db, &types);
         if takes_worker {
             // The native can collect, which moves storage.
             self.forget_arrays();
         }
-        let call = self.builder.ins().call(callee, &values);
-        let results = self.builder.inst_results(call).to_vec();
+        // The bits of what a native that can throw returned, and the two
+        // words of any other.
+        let (thrown_or, results) = if flags.is_async {
+            // It runs compiled code, which throws by unwinding, so it is
+            // called as a BAML function is, through one.
+            let stub = self.backend.async_stub(native, &params)?;
+            let stub = self.function_ref(stub);
+            let bits = self.baml_call(&super::unwind::Called::Direct(stub), &values[1..])?;
+            (Some(bits), Vec::new())
+        } else {
+            let callee = self.import(native.symbol, params, returns)?;
+            let call = self.builder.ins().call(callee, &values);
+            let results = self.builder.inst_results(call).to_vec();
+            if native.throws {
+                let (bits, thrown) = (results[0], results[1]);
+                let raise = self.builder.create_block();
+                let resume = self.builder.create_block();
+                self.builder.set_cold_block(raise);
+                self.builder.ins().brif(thrown, raise, &[], resume, &[]);
+                self.builder.seal_block(raise);
+                self.builder.seal_block(resume);
 
-        let result = if native.throws {
-            let (bits, thrown) = (results[0], results[1]);
-            let raise = self.builder.create_block();
-            let resume = self.builder.create_block();
-            self.builder.set_cold_block(raise);
-            self.builder.ins().brif(thrown, raise, &[], resume, &[]);
-            self.builder.seal_block(raise);
-            self.builder.seal_block(resume);
+                self.builder.switch_to_block(raise);
+                self.raise(thrown, None)?;
 
-            self.builder.switch_to_block(raise);
-            self.raise(thrown, None)?;
+                self.builder.switch_to_block(resume);
+                (Some(bits), results)
+            } else {
+                (None, results)
+            }
+        };
 
-            self.builder.switch_to_block(resume);
+        let result = if let Some(bits) = thrown_or {
             match &signature.result {
                 Ty::Float => self
                     .builder
@@ -192,7 +210,9 @@ impl<'db> Translator<'_, 'db> {
                 | Ty::Map
                 | Ty::Optional(_)
                 | Ty::Any
-                | Ty::Typed => bits,
+                | Ty::Typed
+                | Ty::Class(_)
+                | Ty::Rust => bits,
             }
         } else {
             match (&signature.result, results.as_slice()) {

@@ -582,12 +582,14 @@ unsafe fn thrown_through(mutator: &Mutator, trace: usize) -> Vec<&'static str> {
 
 /// The names of the functions these return addresses are in. The last is
 /// in the function that enters compiled code, which has no name a program
-/// knows.
+/// knows. Nor has an entry the runtime calls a function of the program
+/// through, whose name is empty, and nor has the runtime itself.
 fn named(mutator: &Mutator, addresses: impl Iterator<Item = usize>) -> Vec<&'static str> {
     let mut names: Vec<&str> = addresses
         .filter_map(|address| mutator.unwind.function_name(address))
         .collect();
     names.pop();
+    names.retain(|name| !name.is_empty());
     names
 }
 
@@ -674,9 +676,10 @@ pub(crate) unsafe fn report(mutator: &Mutator, what: &str, error: usize, trace: 
 /// with.
 #[unsafe(no_mangle)]
 #[expect(clippy::exit, reason = "an uncaught throw ends the program")]
-pub unsafe extern "C" fn baml_rt_uncaught(mutator: &Mutator, error: usize, trace: usize) -> ! {
+pub unsafe extern "C" fn baml_rt_uncaught(mutator: &mut Mutator, error: usize, trace: usize) -> ! {
     // SAFETY: the caller's contract.
     unsafe { report(mutator, "", error, trace) };
     crate::sched::report_unhandled(mutator);
+    mutator.drop_owned();
     std::process::exit(crate::UNCAUGHT_EXIT_STATUS)
 }

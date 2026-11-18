@@ -23,6 +23,9 @@ use crate::{
 pub(super) struct WellKnown {
     /// The type id of each class of [`layout::WELL_KNOWN`], in its order.
     ids: Vec<usize>,
+    /// The type id of each class of [`layout::NAMED`], in its order: zero
+    /// until the program calls a native whose declaration names it.
+    named: [usize; layout::NAMED.len()],
 }
 
 /// The types that pass a test, as a header says them.
@@ -103,24 +106,77 @@ impl<'db> Backend<'db> {
                     "the runtime's list of panics is the standard library's",
                 ));
             }
-            self.well_known = Some(WellKnown { ids });
+            self.well_known = Some(WellKnown {
+                ids,
+                named: [0; layout::NAMED.len()],
+            });
         }
         self.well_known
             .as_ref()
             .ok_or_else(|| internal("the well-known classes were just found"))
     }
 
+    /// Give every class the declaration of `native` names a type and a
+    /// description, for the native to be passed an instance or to build
+    /// one, and note the type id of each the runtime finds by position.
+    /// The classes their fields hold are named with them: a native that
+    /// builds a `Timeout` builds the `Duration` in it.
+    pub(super) fn name_classes(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        native: &crate::natives::Native,
+    ) -> Result<(), CompileError> {
+        let mut found = Vec::new();
+        for path in native.classes {
+            found.push(
+                crate::natives::class_at(db, *path).ok_or_else(|| {
+                    internal(format!("the standard library declares `{}`", path.1))
+                })?,
+            );
+        }
+        let mut named = 0;
+        while let Some(&class) = found.get(named) {
+            named += 1;
+            let fields = class_layout(db, class, &[]).map_err(internal)?;
+            let id = self.class_type(db, class, &[], &fields);
+            let listed = layout::NAMED.iter().position(|(namespace, name)| {
+                lang_class(db, baml_base::LangPackage::Baml, &[namespace], name) == Some(class)
+            });
+            if let Some(position) = listed {
+                self.well_known(db)?;
+                if let Some(known) = &mut self.well_known {
+                    known.named[position] = id;
+                }
+            }
+            for field in &fields {
+                let held = match field {
+                    NativeTy::Optional(inner) => inner,
+                    held => held,
+                };
+                if let NativeTy::Class(held, arguments) = held
+                    && arguments.is_empty()
+                    && !found.contains(held)
+                {
+                    found.push(*held);
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Finish the type table's types: after the last, the list of
-    /// well-known types, which the table's first word locates.
+    /// well-known types and then of named ones, which the table's first
+    /// word locates.
     pub(super) fn finish_types(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
     ) -> Result<(), CompileError> {
-        let well_known = self.well_known(db)?.ids.clone();
+        let known = self.well_known(db)?;
+        let listed: Vec<usize> = known.ids.iter().chain(&known.named).copied().collect();
         let list = table_word(self.types.len());
         self.types[..4].copy_from_slice(&list.to_ne_bytes());
-        for word in std::iter::once(table_word(well_known.len()))
-            .chain(well_known.into_iter().map(table_word))
+        for word in
+            std::iter::once(table_word(listed.len())).chain(listed.into_iter().map(table_word))
         {
             self.types.extend_from_slice(&word.to_ne_bytes());
         }

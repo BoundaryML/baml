@@ -91,6 +91,13 @@
 //! its package (`user.Point`), as an uncaught throw of an instance writes
 //! it. Names that are the same text are the same bytes: the three of a
 //! field with no alias, and a class's name where it ends its full one.
+//!
+//! A class with a `to_json` or a `from_json` of its own ([`FLAG_HOOKS`])
+//! has one more `u32` there: the offset of two words of 64 bits each,
+//! aligned as such, the addresses of the code `baml.json` calls for the
+//! one and for the other, zero for the one it leaves to the language. Each
+//! is an entry the compiler makes for natives to call, not the function
+//! itself.
 
 /// Where in the type table the offset of the JSON section is: the second
 /// half of the eight bytes no type lives at.
@@ -152,6 +159,16 @@ pub const FLAG_JSON: u32 = 1;
 /// The description of a class or an enum says only how a value is written
 /// when it is thrown: `baml.json` neither writes nor reads one by it.
 pub const FLAG_SHOWN_ONLY: u32 = 2;
+
+/// The description of a class is followed by the entries of its own
+/// `to_json` and `from_json`.
+pub const FLAG_HOOKS: u32 = 4;
+
+/// Where the offset of the two entries is, after a class's records, and
+/// where each entry is from that offset.
+pub const HOOKS: usize = 8;
+pub const HOOK_TO_JSON: usize = 0;
+pub const HOOK_FROM_JSON: usize = 8;
 
 pub const VARIANT_RECORD: usize = 28;
 pub const FIELD_RECORD: usize = 36;

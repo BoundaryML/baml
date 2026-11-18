@@ -126,7 +126,7 @@ fn ensure_capacity<'s>(scope: &mut Scope<'s>, array: Root<'s, Arr<Slot>>, needed
         // Read after the reservation: the array may have moved.
         let array = array.raw();
         let array_type = load(array) & TYPE_ID_MASK;
-        store(storage, reservation.scope.mutator.storage_type(array_type));
+        store(storage, reservation.scope.storage_type(array_type));
         store(storage + STORAGE_CAPACITY, capacity);
         let grown = (storage + STORAGE_ELEMENTS) as *mut usize;
         let old = load(array + ARRAY_DATA);

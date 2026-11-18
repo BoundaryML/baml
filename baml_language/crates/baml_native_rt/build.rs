@@ -9,11 +9,15 @@ fn main() {
     let lists = manifest_dir.join("natives");
     println!("cargo:rerun-if-changed={}", lists.display());
 
-    let implemented =
+    let mut implemented =
         baml_builtins2_codegen::read_native_lists(&lists).unwrap_or_else(|error| panic!("{error}"));
-    let (vm, io, _) =
+    // A runtime built without `baml.http` has none of its natives.
+    if env::var_os("CARGO_FEATURE_HTTP").is_none() {
+        implemented.retain(|native| !native.path.starts_with("baml.http."));
+    }
+    let (vm, io, classes) =
         baml_builtins2_codegen::extract_native_builtins().unwrap_or_else(|error| panic!("{error}"));
-    let shims = baml_builtins2_codegen::generate_native_shims(&vm, &io, &implemented)
+    let shims = baml_builtins2_codegen::generate_native_shims(&vm, &io, &classes, &implemented)
         .unwrap_or_else(|error| panic!("{error}"));
     std::fs::write(out_dir.join("natives_generated.rs"), shims)
         .expect("the output directory is writable");

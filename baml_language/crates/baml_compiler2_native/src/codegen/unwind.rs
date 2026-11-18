@@ -56,6 +56,19 @@ pub(super) struct Catch {
     ids: Vec<u32>,
 }
 
+impl Catch {
+    /// What the handler of an entry the runtime calls takes: every error,
+    /// to hand it to the runtime, which has compiled code throw it again
+    /// further out. Whether its trace is wanted is for the handlers out
+    /// there to say.
+    pub(super) fn handing_on() -> Self {
+        Self {
+            flags: layout::HANDLER_TAKES_ALL | layout::HANDLER_MAY_RETHROW,
+            ids: Vec::new(),
+        }
+    }
+}
+
 /// A call with handlers.
 pub(super) struct Site {
     /// The offset in the function of the call's return address.

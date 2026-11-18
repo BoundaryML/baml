@@ -189,6 +189,10 @@ macro_rules! native_type_of {
                 // A value of an interface type is any implementor: a
                 // reference whose header says which.
                 $family::Unknown | $family::Interface(..) => NativeTy::Unknown,
+                // Rust state: a reference to the object that holds it,
+                // whose header says which form it has. Only natives read
+                // or write the field.
+                $family::RustType => NativeTy::Unknown,
                 // A `json` is any of its arms, as a union holds them.
                 $family::TypeAlias(head) if crate::json::is_json_alias(db, head) => {
                     NativeTy::Unknown
@@ -714,7 +718,7 @@ impl<'a, 'db> Body<'a, 'db> {
                                 crate::check::native_type_arguments(
                                     db, &typed, native, args, *ntypeargs,
                                 )
-                                .map(|types| signature.result.native(&types))
+                                .map(|types| signature.result.native(db, &types))
                             })
                         }
                         Ok(Callee::Intrinsic(intrinsic)) => passed(args, *has_trace)[*ntypeargs..]

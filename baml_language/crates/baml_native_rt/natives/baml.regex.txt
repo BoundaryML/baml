@@ -1,0 +1,5 @@
+# Natives of `baml.regex`, implemented in `src/native/regex.rs`. A `Regex`
+# owns its compiled program as Rust state.
+baml.regex._compile allocates
+baml.regex.Regex.has_match allocates
+baml.regex.Regex.match_once allocates

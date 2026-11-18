@@ -8,37 +8,36 @@
 //! symbol.
 //!
 //! Which builtins the native runtime implements is listed in its `natives`
-//! directory, one `<path> <kind>` per line. A builtin not listed there is in
+//! directory, one `<path> [flags]` per line. A builtin not listed there is in
 //! the compiler's table all the same, marked as not ported.
 
 use std::{collections::BTreeMap, fmt::Write as _, path::Path};
 
-use crate::types::{BamlType, NativeBuiltin};
+use crate::types::{BamlType, NativeBuiltin, NativeClassDef};
 
-/// How a native may be called, which later selects the stub it is reached
-/// through.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum NativeKind {
-    /// Reads its arguments and returns: no allocation, no throw.
-    Leaf,
-    /// May allocate, and so collect, and may throw.
-    Reentrant,
+/// What the native runtime's lists promise of a native. The promises are
+/// explained in the runtime's `natives/README.md`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct NativeFlags {
+    /// May allocate, and so collect. It is passed roots and a scope, where
+    /// a native without the flag is passed borrowed views.
+    pub allocates: bool,
+    /// May stop and go on later: it is an `async fn`. Implies `allocates`.
+    pub is_async: bool,
 }
 
-impl NativeKind {
-    fn parse(word: &str) -> Option<Self> {
-        match word {
-            "leaf" => Some(Self::Leaf),
-            "reentrant" => Some(Self::Reentrant),
-            _ => None,
+impl NativeFlags {
+    fn parse<'a>(words: impl Iterator<Item = &'a str>) -> Option<Self> {
+        let mut flags = Self::default();
+        for word in words {
+            match word {
+                "allocates" if !flags.allocates => flags.allocates = true,
+                "async" if !flags.is_async => flags.is_async = true,
+                _ => return None,
+            }
         }
-    }
-
-    fn variant(self) -> &'static str {
-        match self {
-            Self::Leaf => "Leaf",
-            Self::Reentrant => "Reentrant",
-        }
+        flags.allocates |= flags.is_async;
+        Some(flags)
     }
 }
 
@@ -47,10 +46,10 @@ impl NativeKind {
 pub struct NativeListEntry {
     /// The builtin's dotted path, as its declaration has it.
     pub path: String,
-    pub kind: NativeKind,
+    pub flags: NativeFlags,
 }
 
-/// Read every `*.txt` file of `dir`: a `<path> <kind>` per line, with blank
+/// Read every `*.txt` file of `dir`: a `<path> [flags]` per line, with blank
 /// lines and `#` comments skipped.
 pub fn read_native_lists(dir: &Path) -> Result<Vec<NativeListEntry>, String> {
     let mut files: Vec<_> = std::fs::read_dir(dir)
@@ -70,20 +69,18 @@ pub fn read_native_lists(dir: &Path) -> Result<Vec<NativeListEntry>, String> {
                 continue;
             }
             let mut words = line.split_whitespace();
-            let entry = match (words.next(), words.next().and_then(NativeKind::parse)) {
-                (Some(path), Some(kind)) if words.next().is_none() => NativeListEntry {
-                    path: path.to_owned(),
-                    kind,
-                },
-                _ => {
-                    return Err(format!(
-                        "{}:{}: expected `<path> leaf` or `<path> reentrant`",
-                        file.display(),
-                        number + 1
-                    ));
-                }
+            let path = words.next().unwrap_or_default();
+            let Some(flags) = NativeFlags::parse(words) else {
+                return Err(format!(
+                    "{}:{}: expected `<path>` and then any of `allocates` and `async`",
+                    file.display(),
+                    number + 1
+                ));
             };
-            entries.push(entry);
+            entries.push(NativeListEntry {
+                path: path.to_owned(),
+                flags,
+            });
         }
     }
     Ok(entries)
@@ -122,15 +119,73 @@ enum AbiTy {
     /// The builtin's type parameter at this position, as [`Self::Any`]:
     /// what `baml.json` returns a value it decoded as.
     BoxedElem(usize),
+    /// An instance of a class of the standard library that takes no type
+    /// arguments: its namespace under `baml`, dotted, and its name.
+    Class(String, String),
+    /// A `$rust_type` value: a reference to the object that holds the Rust
+    /// state.
+    Rust,
+}
+
+/// The classes of the `baml` package a signature can name: those without
+/// type parameters, each as its dotted namespace and its name.
+struct Classes<'a> {
+    known: Vec<(&'a str, &'a str)>,
+}
+
+impl<'a> Classes<'a> {
+    fn new(classes: &'a [NativeClassDef]) -> Self {
+        let known = classes
+            .iter()
+            .filter(|class| class.generic_params.is_empty())
+            .filter_map(|class| {
+                let namespace = match class.namespace_prefix.split_once('.') {
+                    Some(("baml", namespace)) => namespace,
+                    None if class.namespace_prefix == "baml" => "",
+                    _ => return None,
+                };
+                Some((namespace, class.name.as_str()))
+            })
+            .collect();
+        Self { known }
+    }
+
+    /// The class a declaration in `namespace` names by `written`: a name
+    /// of its own namespace, or a path from the package's root.
+    fn resolve(&self, namespace: &str, written: &str) -> Option<AbiTy> {
+        let (namespace, name) = match written
+            .strip_prefix("root.")
+            .or_else(|| written.strip_prefix("baml."))
+        {
+            Some(path) => path.rsplit_once('.').unwrap_or(("", path)),
+            None if written.contains('.') => return None,
+            None => (namespace, written),
+        };
+        self.known
+            .contains(&(namespace, name))
+            .then(|| AbiTy::Class(namespace.to_owned(), name.to_owned()))
+    }
+}
+
+/// What a type of a builtin's declaration is read against.
+struct Scope<'a> {
+    generics: Vec<&'a str>,
+    /// The namespace the builtin is declared in.
+    namespace: &'a str,
+    classes: &'a Classes<'a>,
 }
 
 impl AbiTy {
     /// The type as a builtin of `baml.json` takes or returns it.
-    fn of_json(ty: &BamlType, generics: &[&str]) -> Option<Self> {
+    fn of_json(ty: &BamlType, scope: &Scope<'_>) -> Option<Self> {
+        let generics = &scope.generics;
         match ty {
             BamlType::Named(name) if name == "unknown" => Some(Self::Typed),
             BamlType::Named(name)
-                if name == "json" || name == "baml.json.json" || name == "union" =>
+                if matches!(
+                    name.as_str(),
+                    "json" | "baml.json.json" | "root.json.json" | "union"
+                ) =>
             {
                 Some(Self::Any)
             }
@@ -138,12 +193,15 @@ impl AbiTy {
                 .iter()
                 .position(|generic| generic == name)
                 .map(Self::BoxedElem),
-            other => Self::of(other, generics),
+            other => Self::of(other, scope),
         }
     }
 
-    fn of(ty: &BamlType, generics: &[&str]) -> Option<Self> {
+    fn of(ty: &BamlType, scope: &Scope<'_>) -> Option<Self> {
+        let generics = &scope.generics;
         match ty {
+            BamlType::Named(name) => scope.classes.resolve(scope.namespace, name),
+            BamlType::RustType => Some(Self::Rust),
             BamlType::Generic(name) => generics
                 .iter()
                 .position(|generic| generic == name)
@@ -154,11 +212,11 @@ impl AbiTy {
             BamlType::Null => Some(Self::Null),
             BamlType::String => Some(Self::String),
             BamlType::Bigint => Some(Self::Bigint),
-            BamlType::List(element) => match Self::of(element, generics)? {
+            BamlType::List(element) => match Self::of(element, scope)? {
                 Self::Null | Self::Optional(_) => None,
                 element => Some(Self::Array(Box::new(element))),
             },
-            BamlType::Optional(inner) => match Self::of(inner, generics)? {
+            BamlType::Optional(inner) => match Self::of(inner, scope)? {
                 Self::Null | Self::Optional(_) => None,
                 inner => Some(Self::Optional(Box::new(inner))),
             },
@@ -168,7 +226,12 @@ impl AbiTy {
 
     fn is_ref(&self) -> bool {
         match self {
-            Self::String | Self::Bigint | Self::Array(_) | Self::Map => true,
+            Self::String
+            | Self::Bigint
+            | Self::Array(_)
+            | Self::Map
+            | Self::Class(..)
+            | Self::Rust => true,
             Self::Optional(inner) => inner.is_ref(),
             _ => false,
         }
@@ -196,6 +259,22 @@ impl AbiTy {
             Self::Any => "Ty::Any".to_owned(),
             Self::Typed => "Ty::Typed".to_owned(),
             Self::BoxedElem(index) => format!("Ty::BoxedElem({index})"),
+            Self::Class(namespace, name) => format!("Ty::Class({})", class_path(namespace, name)),
+            Self::Rust => "Ty::Rust".to_owned(),
+        }
+    }
+
+    /// The classes the type names.
+    fn classes(&self, into: &mut Vec<String>) {
+        match self {
+            Self::Class(namespace, name) => {
+                let path = class_path(namespace, name);
+                if !into.contains(&path) {
+                    into.push(path);
+                }
+            }
+            Self::Array(inner) | Self::Optional(inner) => inner.classes(into),
+            _ => {}
         }
     }
 
@@ -215,7 +294,9 @@ impl AbiTy {
             | Self::Elem(_)
             | Self::Any
             | Self::Typed
-            | Self::BoxedElem(_) => "usize",
+            | Self::BoxedElem(_)
+            | Self::Class(..)
+            | Self::Rust => "usize",
         }
     }
 
@@ -242,58 +323,62 @@ impl AbiTy {
             Self::Bigint => "Big".to_owned(),
             Self::Array(element) => format!("Arr<{}>", element.marker()),
             Self::Map => "Map".to_owned(),
+            Self::Class(..) => "Obj".to_owned(),
+            Self::Rust => "Opaque".to_owned(),
             Self::Optional(inner) => inner.marker(),
             Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_) => "Slot".to_owned(),
         }
     }
 
-    /// The type as a trait method takes it.
-    fn parameter(&self, kind: NativeKind) -> String {
-        match (self, kind) {
+    /// The type as a trait method takes it: a root when the native
+    /// `allocates`, a view otherwise.
+    fn parameter(&self, allocates: bool) -> String {
+        match (self, allocates) {
             (Self::Optional(inner), _) if matches!(**inner, Self::Elem(_)) => {
                 "Option<usize>".to_owned()
             }
-            (Self::Optional(inner), _) => format!("Option<{}>", inner.parameter(kind)),
-            (Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_), NativeKind::Leaf) => {
+            (Self::Optional(inner), _) => format!("Option<{}>", inner.parameter(allocates)),
+            (Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_), false) => {
                 "usize".to_owned()
             }
-            (
-                Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_),
-                NativeKind::Reentrant,
-            ) => "Elem<'s>".to_owned(),
+            (Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_), true) => {
+                "Elem<'s>".to_owned()
+            }
             (Self::Int, _) => "i64".to_owned(),
             (Self::Float, _) => "f64".to_owned(),
             (Self::Bool, _) => "bool".to_owned(),
             (Self::Null, _) => "()".to_owned(),
-            (Self::String, NativeKind::Leaf) => "StrRef<'_>".to_owned(),
-            (Self::Bigint, NativeKind::Leaf) => "BigRef<'_>".to_owned(),
-            (Self::Array(element), NativeKind::Leaf) => {
+            (Self::String, false) => "StrRef<'_>".to_owned(),
+            (Self::Bigint, false) => "BigRef<'_>".to_owned(),
+            (Self::Array(element), false) => {
                 format!("ArrRef<'_, {}>", element.marker())
             }
-            (Self::Map, NativeKind::Leaf) => "MapRef<'_>".to_owned(),
-            (_, NativeKind::Reentrant) => format!("Root<'s, {}>", self.marker()),
+            (Self::Map, false) => "MapRef<'_>".to_owned(),
+            (Self::Class(..), false) => "ObjRef<'_>".to_owned(),
+            (Self::Rust, false) => "OpaqueRef<'_>".to_owned(),
+            (_, true) => format!("Root<'s, {}>", self.marker()),
         }
     }
 
     /// The expression making a trait method's argument out of the symbol's
     /// parameter `name`.
-    fn argument(&self, name: &str, kind: NativeKind) -> String {
-        match (self, kind) {
+    fn argument(&self, name: &str, allocates: bool) -> String {
+        match (self, allocates) {
             (Self::Int | Self::Float, _)
-            | (Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_), NativeKind::Leaf) => {
+            | (Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_), false) => {
                 name.to_owned()
             }
             // Any value at all: a reference, whatever it refers to.
-            (Self::Any | Self::Typed | Self::BoxedElem(_), NativeKind::Reentrant) => {
+            (Self::Any | Self::Typed | Self::BoxedElem(_), true) => {
                 format!("unsafe {{ scope.elem_raw({name}, TypeId(0)) }}")
             }
-            (Self::Elem(index), NativeKind::Reentrant) => {
+            (Self::Elem(index), true) => {
                 format!("unsafe {{ scope.elem_raw({name}, types[{index}]) }}")
             }
             (Self::Bool, _) => format!("{name} != 0"),
             (Self::Null, _) => "()".to_owned(),
             (Self::Optional(inner), _) if inner.is_ref() => {
-                format!("({name} != 0).then(|| {})", inner.argument(name, kind))
+                format!("({name} != 0).then(|| {})", inner.argument(name, allocates))
             }
             (Self::Optional(inner), _) => {
                 let present = format!("{}_present", name.trim_start_matches("r#"));
@@ -304,8 +389,8 @@ impl AbiTy {
                 };
                 format!("({present} != 0).then_some({value})")
             }
-            (_, NativeKind::Leaf) => format!("unsafe {{ View::from_raw({name}) }}"),
-            (_, NativeKind::Reentrant) => format!("unsafe {{ scope.root_raw({name}) }}"),
+            (_, false) => format!("unsafe {{ View::from_raw({name}) }}"),
+            (_, true) => format!("unsafe {{ scope.root_raw({name}) }}"),
         }
     }
 
@@ -317,7 +402,12 @@ impl AbiTy {
             Self::Float => format!("{value}.to_bits()"),
             Self::Bool => format!("u64::from({value})"),
             Self::Null => format!("{{ let () = {value}; 0 }}"),
-            Self::String | Self::Bigint | Self::Array(_) | Self::Map => {
+            Self::String
+            | Self::Bigint
+            | Self::Array(_)
+            | Self::Map
+            | Self::Class(..)
+            | Self::Rust => {
                 format!("{value}.raw() as u64")
             }
             Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_) => {
@@ -340,7 +430,12 @@ impl AbiTy {
             | Self::Typed
             | Self::BoxedElem(_) => value.to_owned(),
             Self::Bool => format!("u8::from({value})"),
-            Self::String | Self::Bigint | Self::Array(_) | Self::Map => format!("{value}.raw()"),
+            Self::String
+            | Self::Bigint
+            | Self::Array(_)
+            | Self::Map
+            | Self::Class(..)
+            | Self::Rust => format!("{value}.raw()"),
             Self::Optional(inner) if inner.is_ref() => {
                 format!("{value}.map_or(0, |value| value.raw())")
             }
@@ -349,10 +444,24 @@ impl AbiTy {
     }
 }
 
+/// A class as the compiler's table names it: the parts of its namespace
+/// under `baml`, and its name.
+fn class_path(namespace: &str, name: &str) -> String {
+    let parts: Vec<String> = namespace
+        .split('.')
+        .filter(|part| !part.is_empty())
+        .map(|part| format!("{part:?}"))
+        .collect();
+    format!("(&[{}], {name:?})", parts.join(", "))
+}
+
 /// The ABI of a builtin, when every type in its signature has one.
 struct Abi {
     params: Vec<(String, AbiTy)>,
     result: AbiTy,
+    /// The classes its declaration names, in what it takes, returns and
+    /// throws: what the native can be passed or make an instance of.
+    classes: Vec<String>,
 }
 
 /// The builtin's type parameters, in the order a call passes their types:
@@ -361,8 +470,20 @@ fn generics(builtin: &NativeBuiltin) -> Vec<&str> {
     builtin.generics.iter().map(String::as_str).collect()
 }
 
-fn abi_of(builtin: &NativeBuiltin) -> Option<Abi> {
-    let generics = generics(builtin);
+fn abi_of(builtin: &NativeBuiltin, classes: &Classes<'_>) -> Option<Abi> {
+    // Only a builtin of `baml` names the package's classes by their bare
+    // names.
+    let none = Classes { known: Vec::new() };
+    let scope = Scope {
+        generics: generics(builtin),
+        namespace: &builtin.namespace,
+        classes: if builtin.path.starts_with("baml.") {
+            classes
+        } else {
+            &none
+        },
+    };
+    let classes = scope.classes;
     let mut params = Vec::new();
     if let Some(receiver) = &builtin.receiver {
         if !receiver.receiver_type.is_static() {
@@ -374,19 +495,27 @@ fn abi_of(builtin: &NativeBuiltin) -> Option<Abi> {
                 "Float" => AbiTy::Float,
                 "Int" => AbiTy::Int,
                 "Bool" => AbiTy::Bool,
+                _ if receiver.instance_backed && receiver.class_generics.is_empty() => {
+                    classes.resolve(&receiver.namespace, &receiver.class_name)?
+                }
                 _ => return None,
             };
             params.push((receiver.class_name.to_lowercase(), ty));
         }
     }
-    // `baml.json` moves values of any type, as a union holds them.
-    let of = if builtin.path.starts_with("baml.json.") {
+    // `baml.json` moves values of any type, as a union holds them, and so
+    // do the two defaults a `to_json` and a `from_json` fall back on.
+    let of = if builtin.path.starts_with("baml.json.")
+        || matches!(
+            builtin.path.as_str(),
+            "baml._to_json_default" | "baml._from_json_structural_default"
+        ) {
         AbiTy::of_json
     } else {
         AbiTy::of
     };
     for param in &builtin.params {
-        match of(&param.ty, &generics)? {
+        match of(&param.ty, &scope)? {
             AbiTy::Null => return None,
             // The two words of an optional value of a type parameter are
             // only ever a result.
@@ -394,9 +523,24 @@ fn abi_of(builtin: &NativeBuiltin) -> Option<Abi> {
             ty => params.push((param.name.clone(), ty)),
         }
     }
+    let result = of(&builtin.return_type, &scope)?;
+    let mut named = Vec::new();
+    for ty in params.iter().map(|(_, ty)| ty).chain([&result]) {
+        ty.classes(&mut named);
+    }
+    // A category of `baml.errors` is written without its namespace.
+    for thrown in builtin.throws.iter().flatten() {
+        let class = classes
+            .resolve(scope.namespace, thrown)
+            .or_else(|| classes.resolve("errors", thrown));
+        if let Some(class) = class {
+            class.classes(&mut named);
+        }
+    }
     Some(Abi {
         params,
-        result: of(&builtin.return_type, &generics)?,
+        result,
+        classes: named,
     })
 }
 
@@ -409,10 +553,14 @@ fn is_fallible(builtin: &NativeBuiltin) -> bool {
 }
 
 /// Whether the native's symbol returns a thrown object beside its value. A
-/// leaf throws nothing, whatever the declaration allows: listing a builtin
-/// as one says its native implementation cannot fail.
-fn throws(builtin: &NativeBuiltin, kind: Option<NativeKind>) -> bool {
-    kind != Some(NativeKind::Leaf) && is_fallible(builtin)
+/// native that does not allocate throws nothing, whatever the declaration
+/// allows: an error is an object. One that is `async` can always throw,
+/// since the BAML it calls can.
+fn throws(builtin: &NativeBuiltin, flags: Option<NativeFlags>) -> bool {
+    match flags {
+        Some(flags) => flags.is_async || (flags.allocates && is_fallible(builtin)),
+        None => is_fallible(builtin),
+    }
 }
 
 /// How many type arguments a call of the builtin passes.
@@ -457,24 +605,25 @@ fn method_name(builtin: &NativeBuiltin) -> &str {
 fn listed<'a>(
     vm: &'a [NativeBuiltin],
     io: &'a [NativeBuiltin],
+    classes: &Classes<'_>,
     implemented: &[NativeListEntry],
-) -> Result<BTreeMap<&'a str, (&'a NativeBuiltin, Option<NativeKind>)>, String> {
-    let mut builtins: BTreeMap<&str, (&NativeBuiltin, Option<NativeKind>)> = vm
+) -> Result<BTreeMap<&'a str, (&'a NativeBuiltin, Option<NativeFlags>)>, String> {
+    let mut builtins: BTreeMap<&str, (&NativeBuiltin, Option<NativeFlags>)> = vm
         .iter()
         .chain(io)
         .map(|builtin| (builtin.path.as_str(), (builtin, None)))
         .collect();
     for entry in implemented {
-        let Some((builtin, kind)) = builtins.get_mut(entry.path.as_str()) else {
+        let Some((builtin, flags)) = builtins.get_mut(entry.path.as_str()) else {
             return Err(format!(
                 "`{}` is listed as a native but the standard library declares no such builtin",
                 entry.path
             ));
         };
-        if kind.replace(entry.kind).is_some() {
+        if flags.replace(entry.flags).is_some() {
             return Err(format!("`{}` is listed as a native twice", entry.path));
         }
-        if abi_of(builtin).is_none() {
+        if abi_of(builtin, classes).is_none() {
             return Err(format!(
                 "`{}` is listed as a native but its signature has a type natives cannot take \
                  yet: {:?} -> {:?}",
@@ -487,8 +636,8 @@ fn listed<'a>(
                 builtin.return_type
             ));
         }
-        if throws(builtin, Some(entry.kind))
-            && abi_of(builtin).is_some_and(|abi| abi.result.is_pair())
+        if throws(builtin, Some(entry.flags))
+            && abi_of(builtin, classes).is_some_and(|abi| abi.result.is_pair())
         {
             return Err(format!(
                 "`{}` is listed as a native but it throws and returns an optional scalar, which \
@@ -496,10 +645,10 @@ fn listed<'a>(
                 entry.path
             ));
         }
-        if entry.kind == NativeKind::Leaf && abi_of(builtin).is_some_and(|abi| abi.result.is_ref())
+        if !entry.flags.allocates && abi_of(builtin, classes).is_some_and(|abi| abi.result.is_ref())
         {
             return Err(format!(
-                "`{}` is listed as a leaf, but it returns an object: list it as reentrant",
+                "`{}` returns an object, so it allocates: list it with `allocates`",
                 entry.path
             ));
         }
@@ -512,11 +661,16 @@ fn listed<'a>(
 pub fn generate_native_table(
     vm: &[NativeBuiltin],
     io: &[NativeBuiltin],
+    classes: &[NativeClassDef],
     implemented: &[NativeListEntry],
 ) -> Result<String, String> {
+    let classes = &Classes::new(classes);
     let mut out = String::from("pub(crate) static NATIVES: &[Native] = &[\n");
-    for (path, (builtin, kind)) in listed(vm, io, implemented)? {
-        let abi = abi_of(builtin);
+    for (path, (builtin, flags)) in listed(vm, io, classes, implemented)? {
+        let abi = abi_of(builtin, classes);
+        let named = abi
+            .as_ref()
+            .map_or_else(String::new, |abi| abi.classes.join(", "));
         let signature = abi.as_ref().map_or_else(
             || "None".to_owned(),
             |abi| {
@@ -531,12 +685,15 @@ pub fn generate_native_table(
         let _ = writeln!(
             out,
             "    Native {{ path: {path:?}, symbol: {:?}, signature: {signature}, throws: {}, \
-             kind: {}, type_args: {} }},",
+             flags: {}, type_args: {}, classes: &[{named}] }},",
             symbol(builtin),
-            throws(builtin, kind),
-            kind.map_or_else(
+            throws(builtin, flags),
+            flags.map_or_else(
                 || "None".to_owned(),
-                |kind| format!("Some(Kind::{})", kind.variant())
+                |flags| format!(
+                    "Some(Flags {{ allocates: {}, is_async: {} }})",
+                    flags.allocates, flags.is_async
+                )
             ),
             type_args(builtin),
         );
@@ -547,25 +704,32 @@ pub fn generate_native_table(
 
 /// The native runtime's side: the traits its implementations fill in, and
 /// the symbols compiled code calls.
+///
+/// A native that `allocates` is called with a scope whose roots are in the
+/// symbol's own frame. One that is `async` is an `async fn`: its symbol
+/// makes the future in a block of its own and hands it to the runtime's
+/// driver, which polls it until it is done.
 pub fn generate_native_shims(
     vm: &[NativeBuiltin],
     io: &[NativeBuiltin],
+    classes: &[NativeClassDef],
     implemented: &[NativeListEntry],
 ) -> Result<String, String> {
+    let classes = &Classes::new(classes);
     let mut traits: BTreeMap<String, String> = BTreeMap::new();
     let mut shims = String::new();
-    for (path, (builtin, kind)) in listed(vm, io, implemented)? {
-        let Some(kind) = kind else { continue };
-        let abi = abi_of(builtin).expect("checked when listed");
-        let fallible = throws(builtin, Some(kind));
+    for (path, (builtin, flags)) in listed(vm, io, classes, implemented)? {
+        let Some(flags) = flags else { continue };
+        let abi = abi_of(builtin, classes).expect("checked when listed");
+        let fallible = throws(builtin, Some(flags));
         let type_args = type_args(builtin);
         let trait_name = trait_name(builtin);
         let method = method_name(builtin);
-        let reentrant = kind == NativeKind::Reentrant;
+        let allocates = flags.allocates;
 
         // The trait method.
         let mut parameters: Vec<String> = Vec::new();
-        if reentrant {
+        if allocates {
             parameters.push("scope: &mut Scope<'s>".to_owned());
         }
         // The type id of each type argument of the call.
@@ -576,27 +740,25 @@ pub fn generate_native_shims(
             if *ty == AbiTy::Typed {
                 parameters.push(format!("{name}_type: TypeId"));
             }
-            parameters.push(format!("r#{name}: {}", ty.parameter(kind)));
+            parameters.push(format!("r#{name}: {}", ty.parameter(allocates)));
         }
-        let value = match (&abi.result, reentrant) {
-            (ty, true) if ty.is_ref() => ty.parameter(NativeKind::Reentrant),
-            (ty, _) => ty.parameter(NativeKind::Leaf),
-        };
+        let value = abi.result.parameter(allocates && abi.result.is_ref());
         let returned = if fallible {
             format!("Result<{value}, Thrown<'s>>")
         } else {
             value
         };
-        let lifetime = if reentrant { "<'s>" } else { "" };
+        let lifetime = if allocates { "<'s>" } else { "" };
+        let keyword = if flags.is_async { "async fn" } else { "fn" };
         let _ = writeln!(
             traits.entry(trait_name.clone()).or_default(),
-            "    /// `{path}`\n    fn r#{method}{lifetime}({}) -> {returned};",
+            "    /// `{path}`\n    {keyword} r#{method}{lifetime}({}) -> {returned};",
             parameters.join(", "),
         );
 
         // The symbol.
         let mut c_parameters: Vec<String> = Vec::new();
-        if reentrant {
+        if allocates {
             c_parameters.push("mutator: &mut Mutator".to_owned());
         }
         for index in 0..type_args {
@@ -606,19 +768,23 @@ pub fn generate_native_shims(
             c_parameters.extend(ty.c_parameters(name));
         }
         let mut arguments: Vec<String> = Vec::new();
-        if reentrant {
+        if flags.is_async {
+            arguments.push("scope".to_owned());
+        } else if allocates {
             arguments.push("&mut scope".to_owned());
         }
         if type_args != 0 {
             arguments.push("types".to_owned());
         }
         let mut body = String::new();
-        if reentrant {
+        if allocates {
+            body.push_str("    mutator.enter(current_frame());\n");
+        }
+        if allocates && !flags.is_async {
             body.push_str(
-                "    mutator.enter(current_frame());\n    let slots = RootSlots::new();\n    \
-                 // SAFETY: `slots` outlives the scope, and the arguments are live objects of \
-                 the declared types.\n    let mut scope = unsafe { Scope::new(mutator, &slots) \
-                 };\n",
+                "    let slots = RootSlots::new();\n    // SAFETY: `slots` outlives the scope, and \
+                 the arguments are live objects of the declared types.\n    let mut scope = \
+                 unsafe { Scope::new(mutator, &slots) };\n",
             );
         }
         if type_args != 0 {
@@ -627,6 +793,9 @@ pub fn generate_native_shims(
                 .collect();
             let _ = writeln!(body, "    let types = [{}];", ids.join(", "));
         }
+        // What roots the arguments: in an `async` native, the first lines
+        // of the closure that makes the future, which is handed the scope.
+        let mut rooting = String::new();
         for (name, ty) in &abi.params {
             if *ty == AbiTy::Typed {
                 arguments.push(format!("TypeId({name}_type)"));
@@ -635,23 +804,35 @@ pub fn generate_native_shims(
                 ty,
                 AbiTy::Elem(_) | AbiTy::Any | AbiTy::Typed | AbiTy::BoxedElem(_)
             );
-            if ty.is_ref() || (reentrant && held) {
+            if ty.is_ref() || (allocates && held) {
                 let _ = writeln!(
-                    body,
+                    rooting,
                     "    // SAFETY: compiled code passes a live object of the declared type.\n    \
                      let r#{name} = {};",
-                    ty.argument(&format!("r#{name}"), kind)
+                    ty.argument(&format!("r#{name}"), allocates)
                 );
                 arguments.push(format!("r#{name}"));
             } else {
-                arguments.push(ty.argument(&format!("r#{name}"), kind));
+                arguments.push(ty.argument(&format!("r#{name}"), allocates));
             }
         }
         let call = format!(
             "<Natives as {trait_name}>::r#{method}({})",
             arguments.join(", ")
         );
-        let c_result = if fallible {
+        let c_result = if flags.is_async {
+            let _ = writeln!(
+                body,
+                "    let start = move |scope: &'static mut Scope<'static>| {{\n{rooting}    async \
+                 move {{\n        match {call}.await {{\n            Ok(value) => \
+                 RtResult::ok({}),\n            Err(thrown) => scope.throw_again(&thrown),\n        \
+                 }}\n    }}\n    }};\n    // SAFETY: called on a task, by compiled code whose \
+                 frame the mutator was just told.\n    unsafe {{ drive(mutator, {path:?}, start) }}",
+                abi.result.bits("value")
+            );
+            "RtResult"
+        } else if fallible {
+            body.push_str(&rooting);
             let _ = writeln!(
                 body,
                 "    match {call} {{\n        Ok(value) => RtResult::ok({}),\n        \
@@ -660,6 +841,7 @@ pub fn generate_native_shims(
             );
             "RtResult"
         } else {
+            body.push_str(&rooting);
             let _ = writeln!(
                 body,
                 "    let value = {call};\n    {}",

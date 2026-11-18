@@ -1,0 +1,2 @@
+# Natives of `baml.fs`, implemented in `src/native/fs.rs`.
+baml.fs.read async

@@ -409,8 +409,7 @@ pub(crate) fn call_target<'db>(
                     .map_or(DeclRef::Source(*function), DeclRef::Source),
                 DeclRef::External(_) => *function,
             };
-            let name = function_display_name(db, function);
-            if let Some(native) = crate::natives::named(&name) {
+            if let Some(native) = crate::natives::of(db, function) {
                 return native.callable().map(|_| Callee::Native(native));
             }
             match &function {
@@ -1633,7 +1632,7 @@ fn terminator_supported<'db>(
                     crate::json::check_call(db, body, native, args, *ntypeargs)?;
                     let values = &args[*ntypeargs..];
                     if values.len() != signature.params.len()
-                        || !assignable(&result, &signature.result.native(&types))
+                        || !assignable(&result, &signature.result.native(db, &types))
                     {
                         return Err(Blocker::new(
                             "call that does not match its callee's layout",
@@ -1644,7 +1643,7 @@ fn terminator_supported<'db>(
                         db,
                         body,
                         values,
-                        |index| signature.params.get(index).map(|ty| ty.native(&types)),
+                        |index| signature.params.get(index).map(|ty| ty.native(db, &types)),
                         "argument",
                     )
                 }
@@ -1750,6 +1749,26 @@ fn terminator_supported<'db>(
                     }
                     call_fits(db, body, &key, args, &result)
                 }
+                Virtual::Static(Target::Native(native)) => {
+                    let (signature, _) = native.callable()?;
+                    if *ntypeargs != 0
+                        || native.type_args != 0
+                        || args.len() != signature.params.len()
+                        || !assignable(&result, &signature.result.native(db, &[]))
+                    {
+                        return Err(Blocker::new(
+                            "call that does not match its callee's layout",
+                            native.path,
+                        ));
+                    }
+                    all_assignable(
+                        db,
+                        body,
+                        args,
+                        |index| signature.params.get(index).map(|ty| ty.native(db, &[])),
+                        "argument",
+                    )
+                }
                 // Checked against every implementation once the whole
                 // program is known.
                 Virtual::Dynamic(..) => args
@@ -1777,6 +1796,27 @@ fn terminator_supported<'db>(
                 && assignable(&place_ty(db, body, destination)?, &NativeTy::Null)
             {
                 Ok(())
+            } else if let Some(native) =
+                crate::natives::named(&name).filter(|native| native.flags.is_some())
+            {
+                // One the runtime implements is called as any native is.
+                let (signature, _) = native.callable()?;
+                let result = place_ty(db, body, destination)?;
+                if args.len() != signature.params.len()
+                    || !assignable(&result, &signature.result.native(db, &[]))
+                {
+                    return Err(Blocker::new(
+                        "call that does not match its callee's layout",
+                        native.path,
+                    ));
+                }
+                all_assignable(
+                    db,
+                    body,
+                    args,
+                    |index| signature.params.get(index).map(|ty| ty.native(db, &[])),
+                    "argument",
+                )
             } else {
                 Err(Blocker::new("system operation", name))
             }

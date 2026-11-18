@@ -47,11 +47,20 @@
 //! context of the task's throw, not of the `await`. An error no `await`
 //! took is reported with that trace once the program is over.
 //!
+//! # Waiting for another thread
+//!
+//! A task that waits for I/O parks, and the thread that finishes the I/O
+//! puts it in the worker's [`Inbox`]: the one thing here another thread
+//! touches. The worker empties the inbox where it looks at its timers, and
+//! sleeps on it when it has nothing to run. Whoever empties it wakes the
+//! tasks, through the same states as any waker, so several workers can
+//! share one.
+//!
 //! # The collector
 //!
 //! Every task is on one list, which the collector walks: a task's future
 //! and what it is to run are roots, and so is the stack of every task that
-//! has one in use. The task running is walked from where it called the
+//! has one in use, and what the `async` natives it is inside hold. The task running is walked from where it called the
 //! runtime, as before. Any other is walked from its switch frame, whose
 //! frame record is the top of its chain of compiled frames and whose result
 //! word is a root.
@@ -62,8 +71,11 @@ use std::{
     cmp::Reverse,
     collections::{BinaryHeap, VecDeque},
     io::Write,
-    sync::atomic::{AtomicU32, AtomicUsize, Ordering},
-    time::Instant,
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
+    },
+    time::{Duration, Instant},
 };
 
 use switch::{
@@ -130,9 +142,10 @@ pub struct Task {
     future: usize,
     /// The closure it is to run, until it starts. A root.
     entry: usize,
-    /// Reserved: what a waker hands it, and what kind of thing that is.
+    /// Reserved: what a waker hands it.
     wait_value: usize,
-    wait_tag: usize,
+    /// The state of the `async` native it is inside, innermost first.
+    pub(crate) natives: *mut crate::native::drive::Head,
     /// Reserved: its cancellation state.
     cancel: usize,
     /// Reserved: its telemetry node.
@@ -158,6 +171,28 @@ unsafe fn future_state<'a>(future: usize) -> &'a AtomicUsize {
     unsafe { &*((future + FUTURE_STATE) as *const AtomicUsize) }
 }
 
+/// The tasks other threads have woken: each parked on I/O that is now
+/// done.
+pub(crate) struct Inbox {
+    /// Whether `woken` holds a task, for a worker to read without the lock.
+    filled: AtomicBool,
+    woken: Mutex<Vec<usize>>,
+    /// Signalled when a task arrives, for a worker asleep on it.
+    arrived: Condvar,
+}
+
+impl Inbox {
+    /// Hand `task` to a worker. Called from any thread, once for each time
+    /// the task parked on I/O.
+    fn wake(&self, task: usize) {
+        let mut woken = self.woken.lock().expect("no thread panics holding it");
+        woken.push(task);
+        self.filled.store(true, Ordering::Release);
+        drop(woken);
+        self.arrived.notify_one();
+    }
+}
+
 /// What one worker schedules with.
 pub(crate) struct Sched {
     /// The tasks ready to run. The one queued last runs first.
@@ -177,6 +212,10 @@ pub(crate) struct Sched {
     next_id: u64,
     main_done: bool,
     started: Instant,
+    /// Where other threads leave the tasks they wake.
+    inbox: Arc<Inbox>,
+    /// How many tasks are parked on I/O, each to arrive in the inbox.
+    on_io: usize,
 }
 
 impl Sched {
@@ -191,6 +230,12 @@ impl Sched {
             next_id: 0,
             main_done: false,
             started: Instant::now(),
+            inbox: Arc::new(Inbox {
+                filled: AtomicBool::new(false),
+                woken: Mutex::new(Vec::new()),
+                arrived: Condvar::new(),
+            }),
+            on_io: 0,
         }
     }
 
@@ -216,7 +261,7 @@ impl Sched {
                 future: 0,
                 entry: 0,
                 wait_value: 0,
-                wait_tag: 0,
+                natives: std::ptr::null_mut(),
                 cancel: 0,
                 tele_node: 0,
                 all_prev: std::ptr::null_mut(),
@@ -278,6 +323,9 @@ impl Sched {
             }
             (*task).future = 0;
             (*task).entry = 0;
+            // A task that ends runs its natives to their ends first. One
+            // that is ended from outside has their state dropped here.
+            crate::native::drive::drop_all(task);
             (*task).state.store(FREE, Ordering::Release);
             if (*task).stack_hi - (*task).stack_lo + 2 * WORD == TASK_STACK {
                 (*task).link = self.free;
@@ -357,6 +405,56 @@ impl Sched {
         }
     }
 
+    /// Wake every task another thread has put in the inbox. They run next,
+    /// as the tasks a timer wakes do.
+    fn take_woken(&mut self) {
+        if !self.inbox.filled.load(Ordering::Acquire) {
+            return;
+        }
+        let woken = {
+            let mut woken = self
+                .inbox
+                .woken
+                .lock()
+                .expect("no thread panics holding it");
+            self.inbox.filled.store(false, Ordering::Release);
+            std::mem::take(&mut *woken)
+        };
+        self.on_io -= woken.len();
+        for task in woken {
+            // SAFETY: a task is put in the inbox once it has parked on
+            // I/O, and once for each time.
+            unsafe { self.wake(task as *mut Task, true) };
+        }
+    }
+
+    /// With nothing to run: sleep until the next timer fires or a task
+    /// arrives in the inbox, whichever is first. Returns false when
+    /// neither can happen.
+    fn sleep(&mut self) -> bool {
+        let until = self.timers.peek().map(|Reverse((when, ..))| *when);
+        if until.is_none() && self.on_io == 0 {
+            return false;
+        }
+        let woken = self
+            .inbox
+            .woken
+            .lock()
+            .expect("no thread panics holding it");
+        if !woken.is_empty() {
+            return true;
+        }
+        // Woken early or for nothing, the worker's loop looks again.
+        match until {
+            Some(when) => {
+                let wait = Duration::from_nanos(when.saturating_sub(self.now()));
+                drop(self.inbox.arrived.wait_timeout(woken, wait));
+            }
+            None => drop(self.inbox.arrived.wait(woken)),
+        }
+        true
+    }
+
     /// The tasks in use.
     pub(crate) fn tasks(&self) -> impl Iterator<Item = *mut Task> {
         let mut next = self.all;
@@ -370,6 +468,15 @@ impl Sched {
             Some(task)
         })
     }
+}
+
+/// A task `worker` is running, for a test of what runs on one. It has a
+/// stack, which the test does not switch to.
+#[cfg(test)]
+pub(crate) fn task_for_tests(worker: &mut Mutator) -> *mut Task {
+    let task = worker.sched.new_task(TASK_STACK, 0);
+    worker.cur_task = task;
+    task
 }
 
 /// What the collector reads of a task.
@@ -661,7 +768,9 @@ pub(crate) unsafe extern "C" fn exit_pick(worker: &mut Mutator) -> *mut Task {
         sched.dead = task;
         // A run of tasks that each end by handing over to the next never
         // returns to the worker's loop, so the timers are looked at here
-        // too: a sleeper is not kept waiting until the run is over.
+        // too: a sleeper is not kept waiting until the run is over. So is
+        // the inbox.
+        sched.take_woken();
         sched.fire_timers();
         match sched.queue.pop_back() {
             Some(next) => {
@@ -760,6 +869,59 @@ pub(crate) unsafe extern "C" fn sleep_park(
     1
 }
 
+/// What a task parked on I/O waits for: it ends when the I/O has, having
+/// left its result where the task will look.
+pub(crate) type Job = std::pin::Pin<Box<dyn Future<Output = ()> + Send>>;
+
+/// A job, and what starts it somewhere other than on a worker. The worker
+/// names no runtime of its own for that: whoever makes the job says where
+/// it runs.
+pub(crate) struct IoWait {
+    pub(crate) job: Job,
+    pub(crate) start: fn(Job, Wake),
+}
+
+/// What hands a task parked on I/O back to a worker, once.
+pub(crate) struct Wake {
+    inbox: Arc<Inbox>,
+    task: usize,
+}
+
+impl Wake {
+    /// Called from any thread, when the job has ended.
+    pub(crate) fn wake(self) {
+        self.inbox.wake(self.task);
+    }
+}
+
+/// The Rust half of [`switch::baml_rt_io_wait`], on the waiting task's
+/// stack: start the job of the [`IoWait`] at `wait` and leave the task
+/// parking until the job has ended.
+///
+/// The job starts only once the task is parking, so that whichever worker
+/// finds it in the inbox finds it in a state a waker knows.
+pub(crate) unsafe extern "C" fn io_park(wait: usize, worker: &mut Mutator, frame: usize) -> usize {
+    let sched = &mut worker.sched;
+    sched.settle_last_switch();
+    let task = worker.cur_task;
+    // SAFETY: called on a task with the stub's frame, and with a wait the
+    // caller gives up here.
+    let IoWait { job, start } = unsafe {
+        (*task).sp = frame;
+        (*task).state.store(PARKING, Ordering::Release);
+        (wait as *mut IoWait).read()
+    };
+    sched.on_io += 1;
+    start(
+        job,
+        Wake {
+            inbox: Arc::clone(&sched.inbox),
+            task: task as usize,
+        },
+    );
+    1
+}
+
 /// A `spawn` whose plan asks for what tasks cannot do yet.
 #[unsafe(no_mangle)]
 pub extern "C" fn baml_rt_spawn_unsupported() -> ! {
@@ -784,6 +946,7 @@ pub unsafe fn run(worker: *mut Mutator, entry: usize) -> i32 {
         loop {
             let sched = &mut (*worker).sched;
             sched.settle_last_switch();
+            sched.take_woken();
             sched.fire_timers();
             if let Some(task) = sched.queue.pop_back() {
                 (*task).state.store(RUNNING, Ordering::Release);
@@ -803,12 +966,8 @@ pub unsafe fn run(worker: *mut Mutator, entry: usize) -> i32 {
                 }
                 continue;
             }
-            let Some(Reverse((when, ..))) = sched.timers.peek().copied() else {
+            if !sched.sleep() {
                 break;
-            };
-            let now = sched.now();
-            if when > now {
-                std::thread::sleep(std::time::Duration::from_nanos(when - now));
             }
         }
         if !(*worker).sched.main_done {

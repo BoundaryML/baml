@@ -23,7 +23,7 @@
 //! [`baml_rt_sleep`]) build the switch frame first and then call Rust with
 //! its address, on the task's own stack. Rust decides; the stub switches.
 
-use super::{Task, await_park, exit_pick, sleep_park, spawn_prepare};
+use super::{Task, await_park, exit_pick, io_park, sleep_park, spawn_prepare};
 use crate::layout::{MUTATOR_CUR_TASK, MUTATOR_G0_SP, MUTATOR_STACK_LIMIT};
 
 /// The size of a switch frame, and where in it the frame record and the
@@ -461,4 +461,11 @@ parking_stub! {
     /// `baml.sys.sleep`: takes a count of nanoseconds and returns once that
     /// long has passed.
     baml_rt_sleep => sleep_park
+}
+
+parking_stub! {
+    /// Waiting for I/O: takes a job and what starts it, and returns once
+    /// the job has ended. The one parking stub Rust calls, as
+    /// compiled code would: with the worker in the pinned register.
+    baml_rt_io_wait => io_park
 }

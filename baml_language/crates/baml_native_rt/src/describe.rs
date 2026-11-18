@@ -8,15 +8,17 @@
 )]
 
 use crate::{
+    heap::load,
     json_layout::{
-        DESCRIBED, DESCRIPTION_A, DESCRIPTION_B, DESCRIPTION_C, DESCRIPTION_NAME, DESCRIPTION_REPR,
-        FIELD_FLAGS, FIELD_MAY_BE_ABSENT, FIELD_OFFSET, FIELD_OMIT_NULL, FIELD_RECORD, FIELD_TYPE,
-        JSON_DIRECTORY_AT, JSON_DIRECTORY_COUNT, JSON_SECTION, KIND_CLASS, KIND_ENUM,
-        KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, MEMBER_ALIASED,
-        MEMBER_DECLARED, MEMBER_SKIP, REPR_REF, VARIANT_FLAGS, VARIANT_RECORD,
+        DESCRIBED, DESCRIPTION_A, DESCRIPTION_B, DESCRIPTION_C, DESCRIPTION_FLAGS,
+        DESCRIPTION_NAME, DESCRIPTION_REPR, FIELD_FLAGS, FIELD_MAY_BE_ABSENT, FIELD_OFFSET,
+        FIELD_OMIT_NULL, FIELD_RECORD, FIELD_TYPE, FLAG_HOOKS, HOOKS, JSON_DIRECTORY_AT,
+        JSON_DIRECTORY_COUNT, JSON_SECTION, KIND_CLASS, KIND_ENUM, KIND_OPTIONAL, KIND_STRING,
+        KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, MEMBER_ALIASED, MEMBER_DECLARED, MEMBER_SKIP,
+        REPR_REF, VARIANT_FLAGS, VARIANT_RECORD,
     },
-    layout::{KIND_FIXED, TYPE_DESCRIBED, TYPE_STRING},
-    native::{Scope, TypeId},
+    layout::{KIND_FIXED, TYPE_DESCRIBED, TYPE_STRING, WELL_KNOWN, WELL_KNOWN_PANICS},
+    native::{Scope, TypeId, drive::BamlFn},
 };
 
 /// Read the `u32` at `address`.
@@ -168,6 +170,28 @@ impl Types {
             })
     }
 
+    /// The list of types the runtime knows by position, which the table's
+    /// first word locates: a count, then the type id of each.
+    fn listed(&self, position: usize) -> Option<usize> {
+        // SAFETY: the type table starts with where the list is.
+        unsafe {
+            let list = self.table + word(self.table);
+            (word(self.table) != 0 && position < word(list)).then(|| word(list + 4 + position * 4))
+        }
+    }
+
+    /// The type id of the class at `index` of [`crate::layout::NAMED`],
+    /// when the program describes it.
+    pub(crate) fn named(&self, index: usize) -> Option<usize> {
+        self.listed(WELL_KNOWN.len() + index).filter(|id| *id != 0)
+    }
+
+    /// Whether `type_id` is the type of a panic: one of the first of
+    /// [`WELL_KNOWN`].
+    pub(crate) fn is_panic(&self, type_id: usize) -> bool {
+        (0..WELL_KNOWN_PANICS).any(|class| self.listed(class) == Some(type_id))
+    }
+
     /// The size in bytes of an instance of the class whose type id is
     /// `type_id`.
     pub(crate) fn instance_size(&self, type_id: usize) -> usize {
@@ -236,6 +260,19 @@ impl Desc {
         // SAFETY: the records of an enum and of a class are followed by
         // where its full name is.
         unsafe { self.text(word(after), word(after + 4)) }
+    }
+
+    /// The entry of the class's own `to_json` or `from_json`, by where its
+    /// address is after the class's records: `None` for a class that
+    /// leaves it to the language, and for anything not a class.
+    pub(crate) fn hook(self, which: usize) -> Option<BamlFn> {
+        if !self.is_class() || self.field(DESCRIPTION_FLAGS) as u32 & FLAG_HOOKS == 0 {
+            return None;
+        }
+        let after = self.section + self.b() + self.count() * FIELD_RECORD;
+        // SAFETY: a class with the flag has, after its records, where
+        // both addresses are.
+        BamlFn::at(unsafe { load(self.section + word(after + HOOKS) + which) })
     }
 
     pub(crate) fn is_enum(self) -> bool {
@@ -327,6 +364,22 @@ impl Desc {
     pub(crate) fn fields(self) -> impl Iterator<Item = Member> {
         (0..self.count())
             .map(move |index| self.member(self.section + self.b() + index * FIELD_RECORD, true))
+    }
+
+    /// Where field `index` of a class is in an instance, and its type:
+    /// two words of its record, read without its names.
+    pub(crate) fn field_place(self, index: usize) -> Option<(usize, Self)> {
+        if index >= self.count() {
+            return None;
+        }
+        let record = self.section + self.b() + index * FIELD_RECORD;
+        // SAFETY: the record is one of this class's.
+        unsafe {
+            Some((
+                word(record + FIELD_OFFSET),
+                self.at(word(record + FIELD_TYPE)),
+            ))
+        }
     }
 
     /// Whether a map with keys of this type is a JSON object: `string`, or

@@ -37,6 +37,9 @@ pub(crate) enum Target<'db> {
     /// A function written in source: what the type's implementation
     /// provides, or the interface's default body.
     Function(FnKey<'db>),
+    /// A method the runtime implements in Rust, called where the
+    /// receiver's type is known.
+    Native(&'static crate::natives::Native),
     /// The language's own `to_string` of a type that declares none.
     ToString,
     /// The standard library's `sort` of an array whose elements the runtime
@@ -272,6 +275,14 @@ pub(crate) fn resolve<'db>(
                 // implementation's type parameters, as the receiver's type
                 // binds them, and then the method's own.
                 Some(DeclRef::Source(function)) => {
+                    if let Some(native) = crate::natives::of(db, DeclRef::Source(function)) {
+                        if !resolved.facts.generic_params().is_empty() {
+                            return Err(unsupported(
+                                "a native of an implementation with type parameters",
+                            ));
+                        }
+                        return native.callable().map(|_| Some(Target::Native(native)));
+                    }
                     let frame = resolved
                         .facts
                         .generic_params()

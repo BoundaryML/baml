@@ -2,19 +2,19 @@
 #
 # `length`, `push` and indexing are compiled inline. A method that takes a
 # closure is compiled from its loop form in the standard library.
-baml.Array.pop leaf
-baml.Array.shift leaf
-baml.Array.remove_at leaf
-baml.Array.clear leaf
-baml.Array._truncate leaf
-baml.Array.at leaf
-baml.Array.reverse reentrant
-baml.Array.slice reentrant
-baml.Array.concat reentrant
-baml.Array._copy reentrant
-baml.Array._results reentrant
-baml.Array.filled reentrant
-baml.Array.unshift reentrant
-baml.Array.insert reentrant
-baml.Array.splice reentrant
-baml.Array.join reentrant
+baml.Array.pop
+baml.Array.shift
+baml.Array.remove_at
+baml.Array.clear
+baml.Array._truncate
+baml.Array.at
+baml.Array.reverse allocates
+baml.Array.slice allocates
+baml.Array.concat allocates
+baml.Array._copy allocates
+baml.Array._results allocates
+baml.Array.filled allocates
+baml.Array.unshift allocates
+baml.Array.insert allocates
+baml.Array.splice allocates
+baml.Array.join allocates

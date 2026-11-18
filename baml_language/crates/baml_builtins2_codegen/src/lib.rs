@@ -19,7 +19,7 @@ pub use extract::{
     ExtractNativeBuiltinsError, extract_native_builtins, extract_native_builtins_for,
 };
 pub use native_abi::{
-    NativeKind, NativeListEntry, generate_native_shims, generate_native_table, read_native_lists,
+    NativeFlags, NativeListEntry, generate_native_shims, generate_native_table, read_native_lists,
 };
 pub use types::{
     BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
