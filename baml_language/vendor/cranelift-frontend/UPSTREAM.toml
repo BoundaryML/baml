@@ -7,4 +7,11 @@ license = "Apache-2.0 WITH LLVM-exception"
 # unchanged. Packaging omits Cargo.lock and Cargo.toml.orig.
 #
 # Changes from upstream, one entry per patch:
-# (none)
+#
+# src/frontend/safepoints.rs: `rewrite` resolves value aliases on an
+#   instruction's operands before `rewrite_use`, so a use through an alias of a
+#   spilled stack-map value is reloaded after a safepoint (liveness already
+#   resolved aliases; the rewrite did not). New test
+#   `use_through_alias_is_reloaded`; the expectations of
+#   `vars_block_params_and_needs_stack_map` and
+#   `issue_10397_stack_map_vars_and_indirect_block_params` gain the reloads.

@@ -760,7 +760,11 @@ impl SafepointSpiller {
                 // Replace all uses of needs-stack-map values with loads from
                 // the value's associated stack slot.
                 let mut pos = FuncCursor::new(func).at_inst(inst);
-                vals.extend(pos.func.dfg.inst_values(inst));
+                // Liveness was computed with aliases resolved, so resolve
+                // them here too: an operand naming an alias of a spilled
+                // value must be reloaded like one naming the value itself.
+                let dfg = &pos.func.dfg;
+                vals.extend(dfg.inst_values(inst).map(|val| dfg.resolve_aliases(val)));
                 let mut replaced_any = false;
                 for val in &mut vals {
                     replaced_any |= self.rewrite_use(&mut pos, val);
@@ -1845,13 +1849,15 @@ block0(v0: i32):
     v2 -> v1
     v4 -> v1
     stack_store v1, ss0  ; v1 = 42
-    v13 = stack_load.i32 ss0
-    call fn0(v13), stack_map=[i32 @ ss0+0]
+    v17 = stack_load.i32 ss0
+    call fn0(v17), stack_map=[i32 @ ss0+0]
     brif v0, block1, block2
 
 block1:
-    call fn0(v2), stack_map=[i32 @ ss0+0]  ; v2 = 42
-    call fn0(v2)  ; v2 = 42
+    v12 = stack_load.i32 ss0
+    call fn0(v12), stack_map=[i32 @ ss0+0]
+    v11 = stack_load.i32 ss0
+    call fn0(v11)
     v3 = iconst.i32 36
     stack_store v3, ss0  ; v3 = 36
     v10 = stack_load.i32 ss0
@@ -1860,14 +1866,16 @@ block1:
     jump block3(v9)
 
 block2:
-    call fn0(v4), stack_map=[i32 @ ss0+0]  ; v4 = 42
-    call fn0(v4)  ; v4 = 42
+    v16 = stack_load.i32 ss0
+    call fn0(v16), stack_map=[i32 @ ss0+0]
+    v15 = stack_load.i32 ss0
+    call fn0(v15)
     v5 = iconst.i32 36
     stack_store v5, ss1  ; v5 = 36
-    v12 = stack_load.i32 ss1
-    call fn0(v12), stack_map=[i32 @ ss1+0]
-    v11 = stack_load.i32 ss1
-    jump block3(v11)
+    v14 = stack_load.i32 ss1
+    call fn0(v14), stack_map=[i32 @ ss1+0]
+    v13 = stack_load.i32 ss1
+    jump block3(v13)
 
 block3(v6: i32):
     stack_store v6, ss0
@@ -2730,41 +2738,105 @@ block3:
     jump block2(v7)
 
 block4:
-    v26 = stack_load.i32 ss1
-    jump block5(v26)
+    v32 = stack_load.i32 ss1
+    jump block5(v32)
 
 block5(v20: i32):
     v19 -> v20
     stack_store v20, ss2
     v9 = iconst.i32 0
-    v10 = icmp.i32 eq v8, v9  ; v9 = 0
+    v31 = stack_load.i32 ss0
+    v10 = icmp eq v31, v9  ; v9 = 0
     brif v10, block8(v9), block6  ; v9 = 0
 
 block6:
-    v11 = call fn3(v8), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
+    v30 = stack_load.i32 ss0
+    v11 = call fn3(v30), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
     v12 = iconst.i32 -1091584273
     v13 = icmp eq v11, v12  ; v12 = -1091584273
     v14 = iconst.i32 1
     brif v13, block8(v14), block7  ; v14 = 1
 
 block7:
-    v15 = call fn4(v8, v12), stack_map=[i32 @ ss0+0, i32 @ ss2+0]  ; v12 = -1091584273
+    v29 = stack_load.i32 ss0
+    v15 = call fn4(v29, v12), stack_map=[i32 @ ss0+0, i32 @ ss2+0]  ; v12 = -1091584273
     jump block8(v15)
 
 block8(v16: i32):
     trapz v16, user1
-    call fn5(v8), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
+    v28 = stack_load.i32 ss0
+    call fn5(v28), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
     v17 = call fn6(), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
-    brif v17, block5(v19), block9
+    v27 = stack_load.i32 ss2
+    brif v17, block5(v27), block9
 
 block9:
-    v25 = stack_load.i32 ss2
-    call fn7(v25), stack_map=[i32 @ ss2+0]
+    v26 = stack_load.i32 ss2
+    call fn7(v26), stack_map=[i32 @ ss2+0]
     v23 = call fn8(), stack_map=[i32 @ ss2+0]
-    brif v23, block10, block1(v19)
+    v25 = stack_load.i32 ss2
+    brif v23, block10, block1(v25)
 
 block10:
     return
+}
+            "#,
+        );
+    }
+
+    #[test]
+    fn use_through_alias_is_reloaded() {
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(ir::types::I32));
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ir::UserFuncName::testcase("f"), sig);
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+        let consume = import_func(&mut builder, Some(ir::types::I32), None);
+
+        // The loop header reads `x` before it is sealed, which gives it a
+        // block parameter. Sealing finds the parameter redundant and turns it
+        // into an alias of `v0`, and the calls keep naming the alias. The
+        // second call's operand is live across the first, so it must be a
+        // reload.
+        let x = builder.declare_var(ir::types::I32);
+        builder.declare_var_needs_stack_map(x);
+        let block0 = builder.create_block();
+        let block1 = builder.create_block();
+        builder.append_block_params_for_function_params(block0);
+        builder.switch_to_block(block0);
+        let param = builder.func.dfg.block_params(block0)[0];
+        builder.def_var(x, param);
+        builder.ins().jump(block1, &[]);
+
+        builder.switch_to_block(block1);
+        let value = builder.use_var(x);
+        builder.ins().call(consume, &[value]);
+        builder.ins().call(consume, &[value]);
+        builder.ins().jump(block1, &[]);
+
+        builder.seal_all_blocks();
+        builder.finalize();
+
+        assert_eq_output!(
+            func.display().to_string(),
+            r#"
+function %f(i32) system_v {
+    ss0 = explicit_slot 4, align = 4
+    sig0 = (i32) system_v
+    fn0 = colocated u0:0 sig0
+
+block0(v0: i32):
+    v1 -> v0
+    stack_store v0, ss0
+    jump block1
+
+block1:
+    v3 = stack_load.i32 ss0
+    call fn0(v3), stack_map=[i32 @ ss0+0]
+    v2 = stack_load.i32 ss0
+    call fn0(v2), stack_map=[i32 @ ss0+0]
+    jump block1
 }
             "#,
         );
