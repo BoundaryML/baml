@@ -378,3 +378,84 @@ function unwind_interface_arm() -> int {
   let passed = unwind_coded_arm(3) catch (e) { string => e.length(), _ => -1 };
   unwind_coded_arm(1) * 100 + unwind_coded_arm(2) * 10 + passed
 }
+
+// A handler that binds the context reads a `baml.errors.Context`: the error,
+// and the functions it was thrown through. Native frames do not say their
+// file and line yet, so no case here reads those.
+function unwind_context_error() -> int {
+  unwind_dive(3, 1) catch (e, context) {
+    _ => match (context.error) {
+      let thrown: UnwindError => thrown.code,
+      _ => -1,
+    },
+  }
+}
+function unwind_context_cause() -> int {
+  unwind_dive(3, 2) catch (e, context) {
+    _ => if context.cause == null { 1 } else { 2 },
+  }
+}
+function unwind_context_frames() -> int {
+  unwind_dive(3, 1) catch (e, context) {
+    UnwindError => context.stack_trace.frames.length() * 10 + e.code,
+    _ => -1,
+  }
+}
+function unwind_context_innermost() -> string {
+  let r = unwind_dive(3, 2) catch (e, context) {
+    _ => context.stack_trace.frames[0].function_name.length(),
+  };
+  `${r}`
+}
+function unwind_context_local() -> int {
+  let n = unwind_count(3);
+  {
+    if n == 3 { throw UnwindError { code: 5 } }
+    n
+  } catch (e, context) {
+    UnwindError => context.stack_trace.frames.length() + e.code * 10,
+  }
+}
+// The context an inner handler read is the one the outer handler reads when
+// the error goes on: the same frames, from where it was first thrown.
+function unwind_context_inner(kind: int) -> int throws UnwindError | string | baml.errors.InvalidArgument {
+  unwind_dive(2, kind) catch (e, context) {
+    UnwindOther => context.stack_trace.frames.length(),
+  }
+}
+function unwind_context_carried() -> int {
+  let log = [9];
+  let deep = {
+    defer { log.push(1); }
+    unwind_context_inner(1)
+  } catch (e, context) {
+    _ => context.stack_trace.frames.length(),
+  };
+  let caught = unwind_context_inner(3) catch (e) { _ => -1 };
+  unwind_digits(log) * 10000 + deep * 100 + caught
+}
+function unwind_dive_text(kind: int) -> string throws UnwindError | UnwindOther | string | baml.errors.InvalidArgument {
+  `${unwind_dive(1, kind)}`
+}
+function unwind_context_outermost() -> string {
+  unwind_dive_text(2) catch (e, context) {
+    _ => {
+      let frames = context.stack_trace.frames;
+      `${frames[0].function_name} ${frames[frames.length() - 1].function_name}`
+    },
+  }
+}
+// A native frame has no file and line, and a function inlined into its
+// caller no frame.
+// native prints: "Traceback (most recent call last):\n  in user.unwind_context_text\n  in user.unwind_dive\n  in user.unwind_dive\ntext"
+function unwind_context_text() -> string {
+  unwind_dive_text(2) catch (e, context) {
+    _ => context.to_string(),
+  }
+}
+// native prints: 0
+function unwind_context_line() -> int {
+  unwind_dive(1, 2) catch (e, context) {
+    _ => context.stack_trace.frames[0].line,
+  }
+}

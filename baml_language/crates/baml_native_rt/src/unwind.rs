@@ -41,7 +41,7 @@ use crate::{
         ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, HANDLER_BINDS_CONTEXT, HANDLER_MAY_RETHROW,
         HANDLER_TAKES_ALL, HANDLER_TAKES_NULL, HANDLER_TAKES_OTHERS, HANDLER_TAKES_PANICS,
         HEADER_PANIC, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_TYPES_END, TYPE_ARRAY_OF_VALUES,
-        TYPE_ID_MASK, TYPE_STRING, TYPE_VALUES, WELL_KNOWN_DIVISION_BY_ZERO,
+        TYPE_ID_MASK, TYPE_STRING, TYPE_VALUES, WELL_KNOWN_CONTEXT, WELL_KNOWN_DIVISION_BY_ZERO,
         WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_NEGATIVE_BIT_SHIFT, WORD,
     },
 };
@@ -494,6 +494,80 @@ pub extern "C" fn baml_rt_error_index_out_of_bounds(
     index_out_of_bounds(mutator, index, length)
 }
 
+/// The functions an error was thrown through, innermost first, from what
+/// it travels with: the trace of the throw, or the context a handler made
+/// of that.
+///
+/// # Safety
+///
+/// `trace` is a live trace or `baml.errors.Context`.
+unsafe fn thrown_through(mutator: &Mutator, trace: usize) -> Vec<&'static str> {
+    // SAFETY: the caller's contract: a trace is an `int[]` of return
+    // addresses.
+    unsafe {
+        if is_context(mutator, trace) {
+            return class::context_functions(mutator, trace);
+        }
+        let addresses = std::slice::from_raw_parts(
+            load(trace + ARRAY_DATA) as *const usize,
+            load(trace + ARRAY_LENGTH),
+        );
+        named(mutator, addresses.iter().copied())
+    }
+}
+
+/// The names of the functions these return addresses are in. The last is
+/// in the function that enters compiled code, which has no name a program
+/// knows.
+fn named(mutator: &Mutator, addresses: impl Iterator<Item = usize>) -> Vec<&'static str> {
+    let mut names: Vec<&str> = addresses
+        .filter_map(|address| mutator.unwind.function_name(address))
+        .collect();
+    names.pop();
+    names
+}
+
+/// Whether what an error travels with is already its context.
+///
+/// # Safety
+///
+/// `trace` is a live trace or `baml.errors.Context`.
+unsafe fn is_context(mutator: &Mutator, trace: usize) -> bool {
+    // SAFETY: the caller's contract.
+    unsafe { load(trace) & TYPE_ID_MASK == class::well_known_type(mutator, WELL_KNOWN_CONTEXT) }
+}
+
+/// The `baml.errors.Context` a handler that reads its context lands with:
+/// made of the trace the error travelled with, or the one an earlier
+/// handler made, which is the same error still in flight. A throw in the
+/// handler's own function arrives with no trace: it was thrown through
+/// the frames that are still there.
+///
+/// # Safety
+///
+/// Called from compiled code with its mutator, an error and what the
+/// handler landed with.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_rt_error_context(
+    mutator: &mut Mutator,
+    error: usize,
+    trace: usize,
+) -> usize {
+    mutator.enter(current_frame());
+    // SAFETY: the caller's contract.
+    let functions = unsafe {
+        if trace == 0 {
+            let addresses: Vec<usize> = frames(mutator).map(|(pc, _)| pc).collect();
+            named(mutator, addresses.into_iter())
+        } else if is_context(mutator, trace) {
+            return trace;
+        } else {
+            thrown_through(mutator, trace)
+        }
+    };
+    class::context(mutator, error, &functions)
+}
+
 /// Nothing caught `error`: report it as `baml run` does, after the
 /// functions it was thrown through, and end the process. `trace` is zero or
 /// the trace of the throw.
@@ -506,24 +580,11 @@ pub extern "C" fn baml_rt_error_index_out_of_bounds(
 pub unsafe extern "C" fn baml_rt_uncaught(mutator: &Mutator, error: usize, trace: usize) -> ! {
     let mut report = String::new();
     if trace != 0 {
-        // SAFETY: a trace is an `int[]` of return addresses.
-        let addresses = unsafe {
-            std::slice::from_raw_parts(
-                load(trace + ARRAY_DATA) as *const usize,
-                load(trace + ARRAY_LENGTH),
-            )
-        };
-        // The outermost frame is the entry function's caller, which has no
-        // name a program knows.
-        let named: Vec<&str> = addresses
-            .iter()
-            .rev()
-            .filter_map(|address| mutator.unwind.function_name(*address))
-            .skip(1)
-            .collect();
+        // SAFETY: the caller's contract.
+        let named = unsafe { thrown_through(mutator, trace) };
         if !named.is_empty() {
             report.push_str("Traceback (most recent call last):\n");
-            for name in named {
+            for name in named.into_iter().rev() {
                 report.push_str("  in ");
                 report.push_str(name);
                 report.push('\n');

@@ -32,7 +32,11 @@ use cranelift_module::{DataDescription, FuncId, Linkage, Module};
 use std::collections::HashMap;
 
 use super::{Backend, TRAP_AFTER_PANIC, Translator, WORD, internal};
-use crate::{CompileError, layout, narrow::TestKind, types::NativeTy};
+use crate::{
+    CompileError, layout,
+    narrow::TestKind,
+    types::{NativeTy, binds_context},
+};
 
 /// The symbol of the table of call sites that have a handler.
 pub(crate) const UNWIND_SYMBOL: &str = "baml_native_unwind";
@@ -513,8 +517,9 @@ impl<'db> Translator<'_, 'db> {
         if may_rethrow {
             flags |= layout::HANDLER_MAY_RETHROW;
         }
-        // A function whose handler reads its context is not compiled yet,
-        // so no handler has `HANDLER_BINDS_CONTEXT` but the entry's.
+        if binds_context(body, landing) {
+            flags |= layout::HANDLER_BINDS_CONTEXT;
+        }
         ids.sort_unstable();
         ids.dedup();
         let ids = ids
@@ -552,7 +557,7 @@ impl<'db> Translator<'_, 'db> {
 
     /// Give every landing block its code. Called once the function's own
     /// blocks are translated.
-    pub(super) fn finish_landings(&mut self) {
+    pub(super) fn finish_landings(&mut self) -> Result<(), CompileError> {
         let mut landings: Vec<(usize, ir::Block)> = self
             .landings
             .iter()
@@ -567,6 +572,21 @@ impl<'db> Translator<'_, 'db> {
             };
             self.builder.declare_value_needs_stack_map(error);
             self.builder.declare_value_needs_stack_map(context);
+            // A handler that reads its context reads a `baml.errors.Context`:
+            // made here, of the trace it landed with.
+            let binds = self.body.blocks[pad]
+                .landing
+                .is_some_and(|landing| binds_context(self.body, landing));
+            let context = if binds {
+                let mutator = self.mutator();
+                let made = self
+                    .emit_runtime_call(super::Runtime::ErrorContext, &[mutator, error, context])?
+                    .ok_or_else(|| internal("the runtime returns the context it makes"))?;
+                self.builder.declare_value_needs_stack_map(made);
+                made
+            } else {
+                context
+            };
             if let Some(landing) = self.body.blocks[pad].landing {
                 self.write_local(landing.error_local, error);
                 self.write_local(landing.context_local, context);
@@ -574,6 +594,7 @@ impl<'db> Translator<'_, 'db> {
             let handler = self.blocks[pad];
             self.builder.ins().jump(handler, &[]);
         }
+        Ok(())
     }
 
     /// Mark what is emitted from here on as part of a `defer` body or not.

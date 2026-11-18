@@ -260,9 +260,14 @@ pub unsafe extern "C" fn baml_rt_string_from_any(mutator: &mut Mutator, value: u
         }
         // Anything else is written as an uncaught throw of it is.
         _ => {
-            let mut text = String::new();
             // SAFETY: the caller's contract.
-            unsafe { crate::class::write_value(mutator, &mut text, value) };
+            let text = unsafe {
+                crate::class::context_text(mutator, value).unwrap_or_else(|| {
+                    let mut text = String::new();
+                    crate::class::write_value(mutator, &mut text, value);
+                    text
+                })
+            };
             from_str(mutator, &text)
         }
     }

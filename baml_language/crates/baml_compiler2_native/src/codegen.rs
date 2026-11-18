@@ -175,6 +175,7 @@ enum Runtime {
     ErrorDivisionByZero,
     ErrorNegativeShift,
     ErrorIndexOutOfBounds,
+    ErrorContext,
     Throw,
     Rethrow,
     Uncaught,
@@ -207,6 +208,7 @@ impl Runtime {
             Self::ErrorDivisionByZero => "baml_rt_error_division_by_zero",
             Self::ErrorNegativeShift => "baml_rt_error_negative_shift",
             Self::ErrorIndexOutOfBounds => "baml_rt_error_index_out_of_bounds",
+            Self::ErrorContext => "baml_rt_error_context",
             Self::Throw => "baml_rt_throw",
             Self::Rethrow => "baml_rt_rethrow",
             Self::Uncaught => "baml_rt_uncaught",
@@ -239,7 +241,9 @@ impl Runtime {
             Self::PrintBool => (vec![byte], vec![]),
             Self::PanicIndexOutOfBounds | Self::Throw | Self::Rethrow => (vec![word, word], vec![]),
             Self::ErrorDivisionByZero | Self::ErrorNegativeShift => (vec![word, word], vec![word]),
-            Self::ErrorIndexOutOfBounds => (vec![word, word, word], vec![word]),
+            Self::ErrorIndexOutOfBounds | Self::ErrorContext => {
+                (vec![word, word, word], vec![word])
+            }
             Self::Uncaught => (vec![word, word, word], vec![]),
             Self::FloatRem => (vec![float, float], vec![float]),
             Self::StringFromInt | Self::StringFromAny => (vec![word, word], vec![word]),
@@ -1385,7 +1389,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             self.terminator(terminator)?;
         }
-        self.finish_landings();
+        self.finish_landings()?;
         self.builder.seal_all_blocks();
         self.builder.finalize();
         Ok(())

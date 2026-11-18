@@ -256,11 +256,12 @@ const _: () = {
 
 /// The classes of the standard library the runtime makes instances of: the
 /// panics, which are every class of `baml.panics` in declaration order, and
-/// then the errors its natives throw. Each is the namespace under `baml`
+/// then the errors its natives throw and the classes of an error's context.
+/// Each is the namespace under `baml`
 /// and the class's name. The compiler emits the type id of each, in this
 /// order, as the `u32`s of its well-known table, after a `u32` count; the
 /// description of the type says where the fields are.
-pub const WELL_KNOWN: [(&str, &str); 18] = [
+pub const WELL_KNOWN: [(&str, &str); 21] = [
     ("panics", "DivisionByZero"),
     ("panics", "IndexOutOfBounds"),
     ("panics", "InvalidFieldAccess"),
@@ -279,6 +280,9 @@ pub const WELL_KNOWN: [(&str, &str); 18] = [
     ("panics", "IntegerOverflow"),
     ("errors", "InvalidArgument"),
     ("errors", "ParseError"),
+    ("errors", "Context"),
+    ("errors", "StackTrace"),
+    ("errors", "StackFrame"),
 ];
 /// How many of [`WELL_KNOWN`], from the first, are panics.
 pub const WELL_KNOWN_PANICS: usize = 16;
@@ -287,6 +291,9 @@ pub const WELL_KNOWN_INDEX_OUT_OF_BOUNDS: usize = 1;
 pub const WELL_KNOWN_NEGATIVE_BIT_SHIFT: usize = 12;
 pub const WELL_KNOWN_INVALID_ARGUMENT: usize = 16;
 pub const WELL_KNOWN_PARSE_ERROR: usize = 17;
+pub const WELL_KNOWN_CONTEXT: usize = 18;
+pub const WELL_KNOWN_STACK_TRACE: usize = 19;
+pub const WELL_KNOWN_STACK_FRAME: usize = 20;
 
 /// What a handler of the unwind table takes, and what it does with what it
 /// takes. A handler lands with an error when it takes every error, when it

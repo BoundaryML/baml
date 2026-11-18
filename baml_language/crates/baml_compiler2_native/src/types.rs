@@ -14,9 +14,9 @@ use baml_compiler2_hir_ty::{
     },
 };
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, CellId, Constant, IndexKind, Local, MirFunction, MirFunctionBody,
-    Operand, Place, RuntimeTy, Rvalue, StatementKind, Terminator, TyTemplate, UnaryOp,
-    resolved_aliases_for_package,
+    AggregateKind, BinOp, CellId, Constant, IndexKind, Landing, Local, MirFunction,
+    MirFunctionBody, Operand, Place, RuntimeTy, Rvalue, StatementKind, Terminator, TyTemplate,
+    UnaryOp, resolved_aliases_for_package,
 };
 use baml_type::Literal;
 
@@ -371,6 +371,26 @@ pub(crate) fn class_layout<'db>(
         .collect()
 }
 
+/// Whether the handler that lands with `landing` reads its context: names
+/// the local anywhere but as what a rethrow passes on.
+pub(crate) fn binds_context(body: &MirFunctionBody<'_>, landing: Landing) -> bool {
+    use std::fmt::Write as _;
+
+    let context = format!("{:?}", landing.context_local);
+    body.blocks.iter().any(|block| {
+        let mut code = String::new();
+        for statement in &block.statements {
+            let _ = write!(code, "{:?};", statement.kind);
+        }
+        let _ = match &block.terminator {
+            Some(Terminator::Rethrow { value, .. }) => write!(code, "{value:?}"),
+            Some(terminator) => write!(code, "{terminator:?}"),
+            None => Ok(()),
+        };
+        code.contains(&context)
+    })
+}
+
 /// A function body together with the types of the locals whose declarations
 /// do not give one.
 ///
@@ -451,7 +471,10 @@ impl<'a, 'db> Body<'a, 'db> {
                 let mut landed = vec![false; body.locals.len()];
                 for (_, landing) in body.handlers() {
                     landed[landing.error_local.0] = true;
-                    landed[landing.context_local.0] = true;
+                    // A context that is read is the `baml.errors.Context` it
+                    // is declared as; one that is only passed on is the
+                    // trace of the throw, or nothing.
+                    landed[landing.context_local.0] = !binds_context(body, landing);
                 }
                 landed
             },

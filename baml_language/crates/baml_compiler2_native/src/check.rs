@@ -3,7 +3,7 @@
 
 use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_mir::{
-    AggregateKind, BasicBlock, BinOp, BoundFrame, Constant, Local, MirFunction, MirFunctionBody,
+    AggregateKind, BinOp, BoundFrame, Constant, Local, MirFunction, MirFunctionBody,
     MirFunctionKind, Operand, OptLevel, Place, RuntimeTy, Rvalue, ShortCircuitKind, StatementKind,
     SwitchKey, Terminator, TyTemplate, TyTemplateInterface, TypeTest, UnaryOp,
     function_display_name,
@@ -633,7 +633,6 @@ pub(crate) fn check_function<'db>(
                     continue;
                 }
                 body.enter(index);
-                checker.note(context_unread(body, block));
                 checker.note(type_tags_switched(body, index));
                 for statement in &block.statements {
                     checker.statement_needs(body, &statement.kind);
@@ -1492,35 +1491,6 @@ fn terminator_supported<'db>(
             expect_bool(&operand_ty(db, body, operand)?, "short-circuit operand")?;
             expect_bool(&place_ty(db, body, destination)?, "short-circuit result")
         }
-    }
-}
-
-/// A handler's context local holds the trace of the throw, not yet the
-/// `baml.errors.Context` a program reads: only a rethrow may name it, which
-/// passes it on.
-fn context_unread(body: &Body<'_, '_>, block: &BasicBlock<'_>) -> Result<(), Blocker> {
-    use std::fmt::Write as _;
-
-    let contexts: Vec<String> = body
-        .handlers()
-        .map(|(_, landing)| format!("{:?}", landing.context_local))
-        .collect();
-    if contexts.is_empty() {
-        return Ok(());
-    }
-    let mut code = String::new();
-    for statement in &block.statements {
-        let _ = write!(code, "{:?};", statement.kind);
-    }
-    let _ = match &block.terminator {
-        Some(Terminator::Rethrow { value, .. }) => write!(code, "{value:?}"),
-        Some(terminator) => write!(code, "{terminator:?}"),
-        None => Ok(()),
-    };
-    if contexts.iter().any(|context| code.contains(context)) {
-        Err(Blocker::new("error context", block.id.to_string()))
-    } else {
-        Ok(())
     }
 }
 
