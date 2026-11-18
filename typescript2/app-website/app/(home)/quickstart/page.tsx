@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { createMetadata } from '@/app/_lib/metadata';
 import { DiscordCard } from '@/components/community-cards';
@@ -213,12 +214,12 @@ export default function QuickstartPage() {
           <p className={BODY}>
             BAML generates a typed SDK for most languages, so your existing code
             calls those functions like its own.{' '}
-            <a
+            <Link
               className="underline underline-offset-4 hover:text-ink"
               href="/adopt#incremental"
             >
               See the three ways to adopt BAML
-            </a>
+            </Link>
             .
           </p>
         </div>

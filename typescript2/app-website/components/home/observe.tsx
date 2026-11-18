@@ -10,7 +10,7 @@ import {
   Timer,
   TrendingUp,
 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type KeyboardEvent, type ReactNode, useRef, useState } from 'react';
 import { section } from './analytics';
 import { RED } from './story';
 import { Cmd } from './ui';
@@ -387,7 +387,7 @@ ORDER BY tokens DESC`,
     sql: `SELECT span_id, start_time, input_args['url'] AS url
 FROM spans
 WHERE span_name = 'http.get'
-  AND input_args['url'] NOT LIKE '%acme.com%'`,
+  AND input_args['url'] NOT LIKE 'https://acme.com/%'`,
     title: 'Security issue detected',
     tone: 'alert',
   },
@@ -439,7 +439,8 @@ ORDER BY errors DESC`,
     finding: 'classify crossed its 2% threshold five hours ago.',
     Icon: TrendingUp,
     number: '6.2%',
-    sql: `SELECT avg(output_value = 'other')
+    sql: `SELECT date_trunc('hour', start_time) AS hour,
+       avg(output_value = 'other') AS share
 FROM spans
 WHERE span_name = 'classify'
 GROUP BY hour`,
@@ -527,11 +528,32 @@ const PHONE = 3;
  *  the rest are named. */
 function Board() {
   const [at, setAt] = useState(0);
+  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  // The tab list is one stop in the Tab order, and the arrow keys move through it: picking a
+  // query also moves focus to its tab.
+  const onKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const last = QUERIES.length - 1;
+    const next =
+      e.key === 'ArrowDown'
+        ? (at + 1) % QUERIES.length
+        : e.key === 'ArrowUp'
+          ? (at + last) % QUERIES.length
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? last
+              : null;
+    if (next === null) return;
+    e.preventDefault();
+    setAt(next);
+    tabs.current[next]?.focus();
+  };
   return (
     <>
       <div className="hidden overflow-hidden rounded-xl border border-rule bg-raised md:grid md:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
         <div
           aria-label="Saved queries"
+          aria-orientation="vertical"
           className="flex flex-col gap-0.5 border-r border-rule p-2"
           role="tablist"
         >
@@ -540,9 +562,15 @@ function Board() {
               aria-controls="query-panel"
               aria-selected={i === at}
               className={`focus-ring flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${i === at ? 'bg-white/[0.07]' : 'hover:bg-white/[0.03]'}`}
+              id={`query-tab-${i}`}
               key={q.title}
               onClick={() => setAt(i)}
+              onKeyDown={onKey}
+              ref={(el) => {
+                tabs.current[i] = el;
+              }}
               role="tab"
+              tabIndex={i === at ? 0 : -1}
               type="button"
             >
               <Mark q={q} small />
@@ -561,6 +589,7 @@ function Board() {
           ))}
         </div>
         <div
+          aria-labelledby={`query-tab-${at}`}
           className="min-w-0 p-6 md:min-h-[37.5rem] lg:min-h-[28.75rem] lg:p-8"
           id="query-panel"
           role="tabpanel"

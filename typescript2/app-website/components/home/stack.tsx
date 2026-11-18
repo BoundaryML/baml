@@ -858,7 +858,9 @@ export function Cheap() {
       </div>
 
       <div className="mt-6 grid gap-y-6 border-t border-rule pt-5 lg:gap-y-4">
-        {/* The columns' names, once, where the rows sit side by side. */}
+        {/* The columns' names, once, where the rows sit side by side. They are hidden from screen
+            readers, which get each row's own labels instead: those stay in the page at every
+            width, and are only visually hidden here. */}
         <div
           aria-hidden
           className={`hidden lg:grid lg:grid-cols-[9.5rem_minmax(0,1fr)_minmax(0,1fr)_9.5rem] lg:gap-x-8 ${label}`}
@@ -882,7 +884,7 @@ export function Cheap() {
                 {r.name}
               </p>
               <div>
-                <p className={`mb-1.5 lg:hidden ${label}`}>Storage</p>
+                <p className={`mb-1.5 lg:sr-only ${label}`}>Storage</p>
                 <div className="flex items-center gap-3">
                   <span className="h-3 flex-1 overflow-hidden rounded-full bg-white/[0.07]">
                     <span
@@ -899,7 +901,7 @@ export function Cheap() {
                 </div>
               </div>
               <div>
-                <p className={`mb-1.5 lg:hidden ${label}`}>Calls recorded</p>
+                <p className={`mb-1.5 lg:sr-only ${label}`}>Calls recorded</p>
                 <CallStrip boxes={30} lit={r.lit} rate={r.kept} />
               </div>
               <p className="lg:text-right">
@@ -908,7 +910,7 @@ export function Cheap() {
                 >
                   {lost}%
                 </span>
-                <span className={`ml-2 lg:hidden ${label}`}>
+                <span className={`ml-2 lg:sr-only ${label}`}>
                   of errors lost to sampling
                 </span>
               </p>
