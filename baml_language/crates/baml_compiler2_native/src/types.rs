@@ -12,15 +12,22 @@ use baml_compiler2_hir_ty::{
     layout::{class_fields, class_generic_params, class_head, class_ref_of, enum_ref_of},
 };
 use baml_compiler2_mir::{
-    BinOp, CellId, Constant, IndexKind, Local, MirFunction, MirFunctionBody, Operand, Place,
-    RuntimeTy, Rvalue, StatementKind, UnaryOp, resolved_aliases_for_package,
+    AggregateKind, BinOp, CellId, Constant, IndexKind, Local, MirFunction, MirFunctionBody,
+    Operand, Place, RuntimeTy, Rvalue, StatementKind, Terminator, TyTemplate, UnaryOp,
+    resolved_aliases_for_package,
 };
 use baml_type::Literal;
 
-use crate::{Blocker, check::function_signature, flow::terminator_destination, loops::ArrayLoops};
+use crate::{
+    Blocker,
+    check::{Callee, call_target, function_signature},
+    flow::terminator_destination,
+    loops::ArrayLoops,
+    program::{Entry, FnKey},
+};
 
 /// Parameter and result types of a function with a native calling convention.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub(crate) struct Signature<'db> {
     pub(crate) params: Vec<NativeTy<'db>>,
     pub(crate) result: NativeTy<'db>,
@@ -39,7 +46,7 @@ pub(crate) enum Repr {
 
 /// A type whose values native code knows the representation of. There are no
 /// tags: the static type alone says what the bits mean.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub(crate) enum NativeTy<'db> {
     /// A signed 64-bit integer.
     Int,
@@ -52,8 +59,10 @@ pub(crate) enum NativeTy<'db> {
     Enum(EnumRef<'db>),
     /// A reference to an immutable string object.
     String,
-    /// A reference to an instance of a class without type parameters.
-    Class(ClassRef<'db>),
+    /// A reference to an instance of a class at these type arguments.
+    /// Instantiations whose arguments are the same under [`type_argument`]
+    /// are laid out alike and share a type id.
+    Class(ClassRef<'db>, Vec<TypeArg<'db>>),
     /// A reference to a growable array of the element type.
     Array(Box<NativeTy<'db>>),
     /// A reference to a closure: a function value. Calling it passes the
@@ -79,7 +88,7 @@ impl NativeTy<'_> {
     pub(crate) fn is_ref(&self) -> bool {
         match self {
             Self::String
-            | Self::Class(_)
+            | Self::Class(..)
             | Self::Array(_)
             | Self::Function(_)
             | Self::Cell(_)
@@ -117,70 +126,116 @@ impl NativeTy<'_> {
     }
 }
 
-pub(crate) fn native_ty<'db>(
-    db: &'db dyn baml_compiler2_mir::Db,
-    ty: &RuntimeTy,
-) -> Option<NativeTy<'db>> {
-    Some(match ty {
-        RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), _) => NativeTy::Int,
-        RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _) => NativeTy::Float,
-        RuntimeTy::Bool | RuntimeTy::Literal(Literal::Bool(_), _) => NativeTy::Bool,
-        RuntimeTy::Null => NativeTy::Null,
-        RuntimeTy::Enum(head) | RuntimeTy::EnumVariant(head, _) => {
-            NativeTy::Enum(enum_ref_of(db, head)?)
-        }
-        RuntimeTy::Unknown => NativeTy::Unknown,
-        RuntimeTy::String | RuntimeTy::Literal(Literal::String(_), _) => NativeTy::String,
-        RuntimeTy::Class(head, arguments) if arguments.is_empty() => {
-            let class = class_ref_of(db, head)?;
-            // A class with type parameters has no single layout.
-            if !class_generic_params(db, class).is_empty() {
-                return None;
-            }
-            NativeTy::Class(class)
-        }
-        RuntimeTy::List(element) => {
-            let element = native_ty(db, element)?;
-            // Elements are one slot each so far.
-            if element.is_pair() {
-                return None;
-            }
-            NativeTy::Array(Box::new(element))
-        }
-        RuntimeTy::Function { params, ret, .. } => {
-            let params = params
-                .iter()
-                .map(|param| native_ty(db, &param.ty))
-                .collect::<Option<_>>()?;
-            let result = native_ty(db, ret)?;
-            NativeTy::Function(Box::new(Signature { params, result }))
-        }
-        RuntimeTy::Union(members) => {
-            let mut flat = Vec::new();
-            for member in members {
-                let members = match native_ty(db, member)? {
-                    NativeTy::Unknown => return Some(NativeTy::Unknown),
-                    NativeTy::Union(members) => members,
-                    NativeTy::Optional(inner) => vec![*inner, NativeTy::Null],
-                    other => vec![other],
-                };
-                for member in members {
-                    if !flat.contains(&member) {
-                        flat.push(member);
+/// A type argument as compiled code is keyed by it: `None` for a type with
+/// no native representation, which a function may still be given as long
+/// as it holds no value of it (the type of what it throws, say).
+pub(crate) type TypeArg<'db> = Option<NativeTy<'db>>;
+
+/// A type as a type argument: every reference type is `unknown`, since code
+/// that only moves a reference is the same for all of them. An `int`,
+/// `float`, `bool`, enum or optional scalar stays itself: it travels in its
+/// own registers, and an enum's box names the enum.
+pub(crate) fn type_argument(ty: Option<NativeTy<'_>>) -> TypeArg<'_> {
+    ty.map(|ty| if ty.is_ref() { NativeTy::Unknown } else { ty })
+}
+
+/// `RuntimeTy` and `TyTemplate` are one family of types with the same
+/// variant names; the native type of either is found the same way, apart
+/// from how each names a type parameter.
+macro_rules! native_type_of {
+    ($name:ident, $family:ident, $parameter:pat => $slot:expr) => {
+        pub(crate) fn $name<'db>(
+            db: &'db dyn baml_compiler2_mir::Db,
+            ty: &$family,
+            arguments: &[TypeArg<'db>],
+        ) -> Option<NativeTy<'db>> {
+            Some(match ty {
+                $family::Int | $family::Literal(Literal::Int(_), _) => NativeTy::Int,
+                $family::Float | $family::Literal(Literal::Float(_), _) => NativeTy::Float,
+                $family::Bool | $family::Literal(Literal::Bool(_), _) => NativeTy::Bool,
+                $family::Null => NativeTy::Null,
+                $family::Enum(head) | $family::EnumVariant(head, _) => {
+                    NativeTy::Enum(enum_ref_of(db, head)?)
+                }
+                $family::Unknown => NativeTy::Unknown,
+                $family::String | $family::Literal(Literal::String(_), _) => NativeTy::String,
+                $parameter => arguments.get($slot)?.clone()?,
+                $family::Class(head, class_arguments) => {
+                    let class = class_ref_of(db, head)?;
+                    // Every type parameter has its argument, or there is no
+                    // layout.
+                    if class_generic_params(db, class).len() != class_arguments.len() {
+                        return None;
+                    }
+                    NativeTy::Class(
+                        class,
+                        class_arguments
+                            .iter()
+                            .map(|argument| $name(db, argument, arguments))
+                            .collect(),
+                    )
+                }
+                $family::List(element) => {
+                    let element = $name(db, element, arguments)?;
+                    // Elements are one slot each so far.
+                    if element.is_pair() {
+                        return None;
+                    }
+                    NativeTy::Array(Box::new(element))
+                }
+                $family::Function { params, ret, .. } => {
+                    let params = params
+                        .iter()
+                        .map(|param| $name(db, &param.ty, arguments))
+                        .collect::<Option<_>>()?;
+                    let result = $name(db, ret, arguments)?;
+                    NativeTy::Function(Box::new(Signature { params, result }))
+                }
+                $family::Union(members) => {
+                    let mut flat = Vec::new();
+                    for member in members {
+                        let members = match $name(db, member, arguments)? {
+                            NativeTy::Unknown => return Some(NativeTy::Unknown),
+                            NativeTy::Union(members) => members,
+                            NativeTy::Optional(inner) => vec![*inner, NativeTy::Null],
+                            other => vec![other],
+                        };
+                        for member in members {
+                            if !flat.contains(&member) {
+                                flat.push(member);
+                            }
+                        }
+                    }
+                    match &flat[..] {
+                        [only] => only.clone(),
+                        // One type or `null` needs no header to tell which.
+                        [NativeTy::Null, inner] | [inner, NativeTy::Null] => {
+                            NativeTy::Optional(Box::new(inner.clone()))
+                        }
+                        _ => NativeTy::Union(flat),
                     }
                 }
-            }
-            match &flat[..] {
-                [only] => only.clone(),
-                // One type or `null` needs no header to tell which.
-                [NativeTy::Null, inner] | [inner, NativeTy::Null] => {
-                    NativeTy::Optional(Box::new(inner.clone()))
-                }
-                _ => NativeTy::Union(flat),
-            }
+                _ => return None,
+            })
         }
-        _ => return None,
-    })
+    };
+}
+
+native_type_of!(native_ty, RuntimeTy, RuntimeTy::TypeVar(parameter) => parameter.index() as usize);
+native_type_of!(template_ty, TyTemplate, TyTemplate::TypeArgRef(slot) => *slot as usize);
+
+/// Whether a type names a type parameter anywhere native code looks.
+fn names_type_parameter(ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::TypeVar(_) => true,
+        RuntimeTy::Class(_, arguments) => arguments.iter().any(names_type_parameter),
+        RuntimeTy::List(element) => names_type_parameter(element),
+        RuntimeTy::Union(members) => members.iter().any(names_type_parameter),
+        RuntimeTy::Function { params, ret, .. } => {
+            names_type_parameter(ret) || params.iter().any(|param| names_type_parameter(&param.ty))
+        }
+        _ => false,
+    }
 }
 
 /// A coarse name for a type, for grouping what blocks compilation.
@@ -195,6 +250,7 @@ pub(crate) fn type_kind(ty: &RuntimeTy) -> &'static str {
         RuntimeTy::Media(..) => "media",
         RuntimeTy::Literal(..) => "literal",
         RuntimeTy::Class(_, arguments) if arguments.is_empty() => "class",
+        RuntimeTy::Tuple(_) => "tuple",
         RuntimeTy::Class(..) => "generic class",
         RuntimeTy::Interface(..) => "interface",
         RuntimeTy::Enum(..) | RuntimeTy::EnumVariant(..) => "enum",
@@ -239,10 +295,12 @@ pub(crate) fn layout_slots(layout: &[NativeTy<'_>]) -> usize {
     layout.iter().map(NativeTy::slots).sum()
 }
 
-/// The types of the fields of a class, in declaration order.
+/// The types of the fields of a class at these type arguments, in
+/// declaration order.
 pub(crate) fn class_layout<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     class: ClassRef<'db>,
+    arguments: &[TypeArg<'db>],
 ) -> Result<Vec<NativeTy<'db>>, Blocker> {
     let head = class_head(db, class);
     let aliases = resolved_aliases_for_package(db, head.root());
@@ -250,7 +308,7 @@ pub(crate) fn class_layout<'db>(
         .iter()
         .map(|(name, ty)| {
             let ty = aliases.0.convert(ty);
-            native_ty(db, &ty).ok_or_else(|| {
+            native_ty(db, &ty, arguments).ok_or_else(|| {
                 Blocker::new(
                     format!(
                         "class field that is a {}",
@@ -276,7 +334,19 @@ pub(crate) struct Body<'a, 'db> {
     inner: &'a MirFunctionBody<'db>,
     /// What the cells a lambda captures hold, in capture order.
     captures: &'a [NativeTy<'db>],
+    /// The copy of the function being typed.
+    pub(crate) key: &'a FnKey<'db>,
+    /// The type arguments this copy of the function is compiled for.
+    pub(crate) arguments: &'a [TypeArg<'db>],
     inferred: Vec<Option<NativeTy<'db>>>,
+    /// The locals declared with a type that names a type parameter and are
+    /// not parameters. An inlined function's locals keep naming *its* type
+    /// parameters, which are not this function's, so such a declaration says
+    /// nothing: the local has the type of what is written to it, or none.
+    undeclared: Vec<bool>,
+    /// The type each local of type `type` is loaded with, when it is loaded
+    /// once.
+    type_values: Vec<Option<&'a TyTemplate>>,
     /// The locals an array loop keeps as an array and a position; see
     /// [`crate::loops`].
     loop_locals: Vec<bool>,
@@ -303,11 +373,23 @@ impl<'a, 'db> Body<'a, 'db> {
         mir: &'a MirFunction<'db>,
         body: &'a MirFunctionBody<'db>,
         captures: &'a [NativeTy<'db>],
+        key: &'a FnKey<'db>,
     ) -> Self {
+        let arguments = &key.arguments[..];
+        let type_values = loaded_types(body);
         let mut typed = Self {
             mir,
             inner: body,
             captures,
+            key,
+            arguments,
+            undeclared: body
+                .locals
+                .iter()
+                .enumerate()
+                .map(|(index, local)| index > mir.arity && names_type_parameter(&local.ty))
+                .collect(),
+            type_values,
             inferred: vec![None; body.locals.len()],
             loop_locals: vec![false; body.locals.len()],
             narrowed: Vec::new(),
@@ -353,29 +435,91 @@ impl<'a, 'db> Body<'a, 'db> {
         let mut conflicting = vec![false; body.locals.len()];
         loop {
             let mut changed = false;
-            for statement in body.blocks.iter().flat_map(|block| &block.statements) {
-                let StatementKind::Assign {
-                    destination: Place::Local(local),
-                    value,
-                } = &statement.kind
-                else {
-                    continue;
+            let assignments = body
+                .blocks
+                .iter()
+                .flat_map(|block| &block.statements)
+                .filter_map(|statement| match &statement.kind {
+                    StatementKind::Assign {
+                        destination: Place::Local(local),
+                        value,
+                    } => Some((*local, Written::Value(value))),
+                    _ => None,
+                });
+            let results = body.blocks.iter().filter_map(|block| {
+                let terminator = block.terminator.as_ref()?;
+                Some((
+                    terminator_destination(terminator)?,
+                    Written::Result(terminator),
+                ))
+            });
+            for (local, written) in assignments.chain(results) {
+                let declaration = body.local(local);
+                let undeclared = typed.undeclared[local.0];
+                let declared = if undeclared {
+                    None
+                } else {
+                    native_ty(db, &declaration.ty, arguments)
                 };
-                let declaration = body.local(*local);
-                let declared = native_ty(db, &declaration.ty);
-                let inferable =
-                    copied_only[local.0] || (declared.is_none() && computed_only[local.0]);
+                let inferable = undeclared
+                    || copied_only[local.0]
+                    || (declared.is_none() && computed_only[local.0]);
                 if declaration.is_captured || conflicting[local.0] || !inferable {
                     continue;
                 }
-                let found = match value {
-                    Rvalue::Use(operand) => operand_ty(db, &typed, operand),
-                    Rvalue::BinaryOp { op, left, right } => operand_ty(db, &typed, left)
-                        .and_then(|left| Ok((left, operand_ty(db, &typed, right)?)))
-                        .and_then(|(left, right)| binary_typing(*op, &left, &right))
-                        .map(|(_, result)| result),
-                    Rvalue::UnaryOp { op, operand } => operand_ty(db, &typed, operand)
-                        .and_then(|operand| unary_typing(*op, &operand)),
+                let found = match written {
+                    Written::Value(Rvalue::Use(operand)) => operand_ty(db, &typed, operand),
+                    Written::Value(Rvalue::BinaryOp { op, left, right }) => {
+                        operand_ty(db, &typed, left)
+                            .and_then(|left| Ok((left, operand_ty(db, &typed, right)?)))
+                            .and_then(|(left, right)| binary_typing(*op, &left, &right))
+                            .map(|(_, result)| result)
+                    }
+                    Written::Value(Rvalue::UnaryOp { op, operand }) => {
+                        operand_ty(db, &typed, operand)
+                            .and_then(|operand| unary_typing(*op, &operand))
+                    }
+                    // What is left is only ever the one write of a local an
+                    // inlined function declared.
+                    _ if !undeclared => continue,
+                    Written::Value(Rvalue::Aggregate {
+                        kind:
+                            AggregateKind::Class {
+                                class,
+                                type_arg_templates,
+                                ..
+                            },
+                        ..
+                    }) => Ok(NativeTy::Class(
+                        *class,
+                        type_arg_templates
+                            .iter()
+                            .map(|template| template_ty(db, template, arguments))
+                            .collect(),
+                    )),
+                    Written::Value(Rvalue::Array(element, _)) => {
+                        match template_ty(db, element, arguments) {
+                            Some(element) if !element.is_pair() => {
+                                Ok(NativeTy::Array(Box::new(element)))
+                            }
+                            _ => continue,
+                        }
+                    }
+                    Written::Result(Terminator::Call {
+                        callee,
+                        args,
+                        ntypeargs,
+                        ..
+                    }) => match call_target(db, &typed, callee, args, *ntypeargs) {
+                        Ok(Callee::Function(key)) => {
+                            function_signature(db, &key).map(|signature| signature.result)
+                        }
+                        Ok(Callee::Value) => match operand_ty(db, &typed, callee).map(narrowed) {
+                            Ok(NativeTy::Function(signature)) => Ok(signature.result),
+                            _ => continue,
+                        },
+                        _ => continue,
+                    },
                     _ => continue,
                 };
                 let Ok(found) = found else {
@@ -421,10 +565,58 @@ impl<'a, 'db> Body<'a, 'db> {
         self.reachable[block]
     }
 
+    /// The type a local of type `type` holds, when it is loaded once.
+    pub(crate) fn type_value(&self, operand: &Operand<'db>) -> Option<&'a TyTemplate> {
+        match operand {
+            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+                self.type_values[local.0]
+            }
+            _ => None,
+        }
+    }
+
     /// Type what follows as the code of `block`.
     pub(crate) fn enter(&self, block: usize) {
         self.at.set(Some(block));
     }
+}
+
+/// The type each local of type `type` is loaded with, when it is loaded
+/// once and written no other way.
+pub(crate) fn loaded_types<'a>(body: &'a MirFunctionBody<'_>) -> Vec<Option<&'a TyTemplate>> {
+    let mut types: Vec<Option<&'a TyTemplate>> = vec![None; body.locals.len()];
+    let mut writes = vec![0_usize; body.locals.len()];
+    for block in &body.blocks {
+        for statement in &block.statements {
+            if let StatementKind::Assign {
+                destination: Place::Local(local),
+                value,
+            } = &statement.kind
+            {
+                writes[local.0] += 1;
+                if let Rvalue::LoadType(template) = value {
+                    types[local.0] = Some(template);
+                }
+            }
+        }
+        if let Some(local) = block.terminator.as_ref().and_then(terminator_destination) {
+            writes[local.0] += 1;
+        }
+    }
+    for (loaded, writes) in types.iter_mut().zip(writes) {
+        if writes != 1 {
+            *loaded = None;
+        }
+    }
+    types
+}
+
+/// One write of a local: an assignment's value, or what a terminator
+/// leaves in its destination.
+#[derive(Clone, Copy)]
+enum Written<'a, 'db> {
+    Value(&'a Rvalue<'db>),
+    Result(&'a Terminator<'db>),
 }
 
 /// The type a local is declared with, when it is a native one. A local
@@ -433,9 +625,10 @@ pub(crate) fn declared_ty<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     body: &MirFunctionBody<'_>,
     local: Local,
+    arguments: &[TypeArg<'db>],
 ) -> Result<NativeTy<'db>, Blocker> {
     let declaration = body.local(local);
-    let ty = native_ty(db, &declaration.ty)
+    let ty = native_ty(db, &declaration.ty, arguments)
         .ok_or_else(|| unsupported_type(&declaration.ty, local.to_string()))?;
     Ok(if declaration.is_captured {
         NativeTy::Cell(Box::new(ty))
@@ -487,7 +680,11 @@ pub(crate) fn storage_ty<'db>(
     }
     match &body.inferred[local.0] {
         Some(inferred) if !body.local(local).is_captured => Ok(inferred.clone()),
-        _ => declared_ty(db, body, local),
+        _ if body.undeclared[local.0] => Err(Blocker::new(
+            "type variable value",
+            format!("{local} has no one type"),
+        )),
+        _ => declared_ty(db, body, local, body.arguments),
     }
 }
 
@@ -520,7 +717,7 @@ pub(crate) fn place_ty<'db>(
     match place {
         Place::Local(local) => local_ty(db, body, *local),
         Place::Field { base, field } => match narrowed(place_ty(db, body, base)?) {
-            NativeTy::Class(class) => class_layout(db, class)?
+            NativeTy::Class(class, arguments) => class_layout(db, class, &arguments)?
                 .into_iter()
                 .nth(*field)
                 .ok_or_else(|| Blocker::new("field outside its class layout", place.to_string())),
@@ -581,7 +778,7 @@ pub(crate) fn constant_ty<'db>(
         Constant::Bigint(_) => Err(Blocker::new("bigint value", "constant")),
         Constant::OmittedArg => Err(Blocker::new("defaulted argument", "")),
         Constant::Function(DeclRef::Source(function)) => Ok(NativeTy::Function(Box::new(
-            function_signature(db, *function)?,
+            function_signature(db, &FnKey::new(*function, Entry::Direct))?,
         ))),
         Constant::Function(DeclRef::External(_)) => {
             Err(Blocker::new("function value", "a function without source"))
@@ -620,6 +817,18 @@ pub(crate) fn assignable(expected: &NativeTy<'_>, found: &NativeTy<'_>) -> bool 
             // Flow narrowing: MIR reads an optional as its reference where
             // the checker proved it is not null.
             (expected, NativeTy::Optional(inner)) => assignable(expected, inner),
+            // A function compiled once for every reference type takes and
+            // gives an instance or an array at any of them.
+            (NativeTy::Class(expected, wanted), NativeTy::Class(found, given)) => {
+                expected == found
+                    && wanted.len() == given.len()
+                    && wanted.iter().zip(given).all(|(wanted, given)| {
+                        type_argument(wanted.clone()) == type_argument(given.clone())
+                    })
+            }
+            (NativeTy::Array(expected), NativeTy::Array(found)) => {
+                expected.is_ref() && found.is_ref()
+            }
             // The type checker has decided the two function types agree;
             // what is left to ask is that a call passes the same registers.
             (NativeTy::Function(expected), NativeTy::Function(found)) => {
@@ -731,7 +940,7 @@ pub(crate) fn describe(ty: &NativeTy<'_>) -> &'static str {
         NativeTy::Union(_) => "union",
         NativeTy::Unknown => "unknown",
         NativeTy::String => "string",
-        NativeTy::Class(_) => "class",
+        NativeTy::Class(..) => "class",
         NativeTy::Array(_) => "array",
         NativeTy::Function(_) => "function",
         NativeTy::Cell(_) => "cell",

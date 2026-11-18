@@ -5,7 +5,7 @@ use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_mir::{
     AggregateKind, BoundFrame, Constant, Local, MirFunction, MirFunctionBody, MirFunctionKind,
     Operand, OptLevel, Place, RuntimeTy, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
-    Terminator, function_display_name,
+    Terminator, TyTemplate, TypeTest, function_display_name,
 };
 
 use crate::{
@@ -14,8 +14,9 @@ use crate::{
     narrow::TestKind,
     program::{Entry, FnKey, Needed},
     types::{
-        Body, NativeTy, Signature, assignable, binary_typing, class_layout, declared_ty, describe,
-        local_ty, narrowed, operand_ty, place_local, place_ty, unary_typing,
+        Body, NativeTy, Signature, TypeArg, assignable, binary_typing, class_layout, declared_ty,
+        describe, loaded_types, local_ty, narrowed, operand_ty, place_local, place_ty, template_ty,
+        type_argument, unary_typing,
     },
 };
 
@@ -81,7 +82,8 @@ impl Intrinsic {
 
 /// What a call terminator calls.
 pub(crate) enum Callee<'db> {
-    Function(FunctionLoc<'db>),
+    /// The copy of a function compiled for the call's type arguments.
+    Function(FnKey<'db>),
     Intrinsic(Intrinsic),
     /// The function value an operand holds.
     Value,
@@ -105,30 +107,152 @@ pub(crate) fn signature<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     mir: &MirFunction<'_>,
     body: &MirFunctionBody<'_>,
+    arguments: &[TypeArg<'db>],
 ) -> Result<Signature<'db>, Blocker> {
     let rename = |blocker: Blocker, what: &str| {
         Blocker::new(format!("{what} is a {}", blocker.construct), blocker.detail)
     };
-    let result = declared_ty(db, body, Local(0)).map_err(|blocker| rename(blocker, "result"))?;
+    let result =
+        declared_ty(db, body, Local(0), arguments).map_err(|blocker| rename(blocker, "result"))?;
     let params = (1..=mir.arity)
-        .map(|index| match declared_ty(db, body, Local(index)) {
-            // A captured parameter arrives as its value; the function puts
-            // it in a cell.
-            Ok(NativeTy::Cell(content)) => Ok(*content),
-            Ok(ty) => Ok(ty),
-            Err(blocker) => Err(rename(blocker, "parameter")),
-        })
+        .map(
+            |index| match declared_ty(db, body, Local(index), arguments) {
+                // A captured parameter arrives as its value; the function puts
+                // it in a cell.
+                Ok(NativeTy::Cell(content)) => Ok(*content),
+                Ok(ty) => Ok(ty),
+                Err(blocker) => Err(rename(blocker, "parameter")),
+            },
+        )
         .collect::<Result<_, _>>()?;
     Ok(Signature { params, result })
 }
 
-/// The signature of a function declared in source.
+/// The signature of one copy of a function.
 pub(crate) fn function_signature<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
-    function: FunctionLoc<'db>,
+    key: &FnKey<'db>,
 ) -> Result<Signature<'db>, Blocker> {
-    let mir = FnKey::new(function, Entry::Direct).mir(db)?;
-    signature(db, mir, body_of(mir)?)
+    let mir = key.mir(db)?;
+    signature(db, mir, body_of(mir)?, &key.arguments)
+}
+
+/// Which of its type arguments a copy of a function must be told the type
+/// id of when it runs: those it was compiled for as "any reference" and
+/// tests a value against, itself or in a function it calls. A copy with
+/// any takes one type id for every type parameter of its frame.
+pub(crate) fn identified_arguments<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    key: &FnKey<'db>,
+) -> Vec<bool> {
+    identified(db, key, &mut Vec::new(), &mut Vec::new())
+}
+
+fn identified<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    key: &FnKey<'db>,
+    visiting: &mut Vec<FnKey<'db>>,
+    assumed: &mut Vec<(FnKey<'db>, Vec<bool>)>,
+) -> Vec<bool> {
+    let any_reference = |slot: usize| key.arguments.get(slot) == Some(&Some(NativeTy::Unknown));
+    let mut needed = vec![false; key.arguments.len()];
+    if !(0..key.arguments.len()).any(any_reference) {
+        return needed;
+    }
+    // A function that calls itself needs what it needs: start from nothing
+    // and go round until the answer stops growing.
+    if visiting.contains(key) {
+        return assumed
+            .iter()
+            .find(|(assumed, _)| assumed == key)
+            .map_or(needed, |(_, needed)| needed.clone());
+    }
+    let Ok(mir) = key.mir(db) else {
+        return needed;
+    };
+    let Ok(body) = body_of(mir) else {
+        return needed;
+    };
+    let types = loaded_types(body);
+    visiting.push(key.clone());
+    loop {
+        let before = needed.clone();
+        let mut test = |test: &TypeTest<'db>| {
+            if let TypeTest::Template(TyTemplate::TypeArgRef(slot)) = test
+                && any_reference(*slot as usize)
+            {
+                needed[*slot as usize] = true;
+            }
+        };
+        let mut calls = Vec::new();
+        for block in &body.blocks {
+            for statement in &block.statements {
+                if let StatementKind::Assign {
+                    value: Rvalue::IsType { test: asked, .. },
+                    ..
+                } = &statement.kind
+                {
+                    test(asked);
+                }
+            }
+            match &block.terminator {
+                Some(Terminator::NarrowBind { test: asked, .. }) => test(asked),
+                Some(Terminator::Call {
+                    callee: Operand::Constant(Constant::Function(DeclRef::Source(function))),
+                    args,
+                    ntypeargs,
+                    ..
+                }) if *ntypeargs != 0 => {
+                    let templates: Option<Vec<&TyTemplate>> = args[..*ntypeargs]
+                        .iter()
+                        .map(|argument| operand_local(argument).and_then(|local| types[local.0]))
+                        .collect();
+                    if let Some(templates) = templates {
+                        calls.push((*function, templates));
+                    }
+                }
+                _ => {}
+            }
+        }
+        for (function, templates) in calls {
+            let callee = FnKey::new(function, Entry::Direct).with_arguments(
+                templates
+                    .iter()
+                    .map(|template| type_argument(template_ty(db, template, &key.arguments)))
+                    .collect(),
+            );
+            let wanted = identified(db, &callee, visiting, assumed);
+            for (template, wanted) in templates.iter().zip(wanted) {
+                if wanted
+                    && let TyTemplate::TypeArgRef(slot) = template
+                    && any_reference(*slot as usize)
+                {
+                    needed[*slot as usize] = true;
+                }
+            }
+        }
+        if needed == before {
+            break;
+        }
+        assumed.retain(|(assumed, _)| assumed != key);
+        assumed.push((key.clone(), needed.clone()));
+    }
+    visiting.pop();
+    needed
+}
+
+/// The one type id of the values of a type, when they have one: what a
+/// function is passed for a type argument it must identify.
+pub(crate) fn has_type_id(ty: &NativeTy<'_>) -> bool {
+    matches!(
+        ty,
+        NativeTy::Int
+            | NativeTy::Float
+            | NativeTy::Bool
+            | NativeTy::String
+            | NativeTy::Enum(_)
+            | NativeTy::Class(..)
+    )
 }
 
 /// The signature of the function value `function` bound to a receiver is:
@@ -137,7 +261,7 @@ fn bound_signature<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     function: FunctionLoc<'db>,
 ) -> Result<(NativeTy<'db>, Signature<'db>), Blocker> {
-    let mut signature = function_signature(db, function)?;
+    let mut signature = function_signature(db, &FnKey::new(function, Entry::Direct))?;
     if signature.params.is_empty() {
         return Err(Blocker::new("bound method value", "without a receiver"));
     }
@@ -145,11 +269,25 @@ fn bound_signature<'db>(
     Ok((receiver, signature))
 }
 
-/// What a call names directly: a function written in BAML source, or a
-/// builtin native code has its own implementation of.
-pub(crate) fn direct_callee<'db>(
+/// Whether a call is of a builtin native code has its own implementation
+/// of.
+pub(crate) fn is_intrinsic_call<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     callee: &Operand<'db>,
+) -> bool {
+    matches!(callee, Operand::Constant(Constant::Function(function))
+        if Intrinsic::named(&function_display_name(db, *function)).is_some())
+}
+
+/// What a call names directly: a function written in BAML source, compiled
+/// for the call's type arguments (its first `ntypeargs` arguments), or a
+/// builtin native code has its own implementation of.
+pub(crate) fn call_target<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    body: &Body<'_, 'db>,
+    callee: &Operand<'db>,
+    args: &[Operand<'db>],
+    ntypeargs: usize,
 ) -> Result<Callee<'db>, Blocker> {
     match callee {
         Operand::Constant(Constant::Function(function)) => {
@@ -157,7 +295,24 @@ pub(crate) fn direct_callee<'db>(
                 return Ok(Callee::Intrinsic(intrinsic));
             }
             match function {
-                DeclRef::Source(function) => Ok(Callee::Function(*function)),
+                DeclRef::Source(function) => {
+                    let arguments = args
+                        .iter()
+                        .take(ntypeargs)
+                        .map(|argument| {
+                            let template = body.type_value(argument).ok_or_else(|| {
+                                Blocker::new(
+                                    "call with type arguments",
+                                    "that are not types loaded once",
+                                )
+                            })?;
+                            Ok(type_argument(template_ty(db, template, body.arguments)))
+                        })
+                        .collect::<Result<_, Blocker>>()?;
+                    Ok(Callee::Function(
+                        FnKey::new(*function, Entry::Direct).with_arguments(arguments),
+                    ))
+                }
                 DeclRef::External(_) => Err(Blocker::new(
                     "call of a function without source",
                     function_display_name(db, *function),
@@ -196,11 +351,11 @@ pub(crate) fn check_function<'db>(
     };
     match body_of(mir) {
         Ok(body) => {
-            checker.note(signature(db, mir, body).map(drop));
+            checker.note(signature(db, mir, body, &key.arguments).map(drop));
             if key.entry == Entry::Bound {
                 checker.note(bound_signature(db, key.loc).map(drop));
             }
-            let body = &Body::new(db, mir, body, captures);
+            let body = &Body::new(db, mir, body, captures, key);
             let loops = ArrayLoops::of(db, body);
             for (index, block) in body.blocks.iter().enumerate() {
                 if !body.is_reachable(index) {
@@ -317,9 +472,16 @@ impl<'db> Checker<'_, 'db> {
         loops: &ArrayLoops<'db>,
         terminator: &Terminator<'db>,
     ) {
-        if let Terminator::Call { callee, args, .. } = terminator {
-            if let Ok(Callee::Function(function)) = direct_callee(self.db, callee) {
-                self.need(FnKey::new(function, Entry::Direct), Vec::new());
+        if let Terminator::Call {
+            callee,
+            args,
+            ntypeargs,
+            ..
+        } = terminator
+        {
+            if let Ok(Callee::Function(key)) = call_target(self.db, body, callee, args, *ntypeargs)
+            {
+                self.need(key, Vec::new());
             }
             for argument in args {
                 self.operand_needs(argument);
@@ -481,13 +643,14 @@ pub(crate) fn rvalue_ty<'db>(
                 },
             fields,
         } => {
-            if !type_arg_templates.is_empty() {
-                return Err(Blocker::new("generic class instance construction", ""));
-            }
             if *finalizable {
                 return Err(Blocker::new("construction of a class with a finalizer", ""));
             }
-            let layout = class_layout(db, *class)?;
+            let arguments: Vec<_> = type_arg_templates
+                .iter()
+                .map(|template| template_ty(db, template, body.arguments))
+                .collect();
+            let layout = class_layout(db, *class, &arguments)?;
             if layout.len() != fields.len() {
                 return Err(Blocker::new(
                     "class instance construction that does not match the layout",
@@ -501,11 +664,11 @@ pub(crate) fn rvalue_ty<'db>(
                 |index| layout.get(index).cloned(),
                 "field value",
             )?;
-            Ok(NativeTy::Class(*class))
+            Ok(NativeTy::Class(*class, arguments))
         }
         Rvalue::IsType { operand, test } => {
             let operand = operand_ty(db, body, operand)?;
-            type_test_plan(db, &operand, TestKind::of(db, test), false)?;
+            type_test_plan(db, &operand, TestKind::of(db, test, body.arguments), false)?;
             Ok(NativeTy::Bool)
         }
         Rvalue::IsTypeTag { operand, tag } => {
@@ -516,10 +679,15 @@ pub(crate) fn rvalue_ty<'db>(
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
-            type_arg_templates,
+            ..
         } => {
-            if !type_arg_templates.is_empty() {
-                return Err(Blocker::new("closure that captures type arguments", ""));
+            // A lambda is compiled for its function's type arguments. What
+            // it cannot have is a type id passed to it.
+            if identified_arguments(db, &body.key.lambda(*lambda_idx))
+                .iter()
+                .any(|needed| *needed)
+            {
+                return Err(Blocker::new("closure that tests a type argument", ""));
             }
             for capture in captures {
                 if !matches!(operand_ty(db, body, capture)?, NativeTy::Cell(_)) {
@@ -533,7 +701,7 @@ pub(crate) fn rvalue_ty<'db>(
                 .ok_or_else(|| Blocker::new("closure of a lambda that does not exist", ""))?;
             // A lambda outside the subset is reported as its own blocked
             // function.
-            let signature = signature(db, lambda, body_of(lambda)?)
+            let signature = signature(db, lambda, body_of(lambda)?, body.arguments)
                 .map_err(|_| Blocker::new("closure of a lambda outside the subset", ""))?;
             Ok(NativeTy::Function(Box::new(signature)))
         }
@@ -650,10 +818,10 @@ pub(crate) fn type_test_plan<'db>(
         NativeTy::Union(_) | NativeTy::Unknown => {
             match &test {
                 TestKind::Exactly(NativeTy::Null) => return Ok(TypeTestPlan::Present(false)),
-                TestKind::Exactly(NativeTy::Class(class)) => {
-                    class_layout(db, *class)?;
+                TestKind::Exactly(NativeTy::Class(class, arguments)) => {
+                    class_layout(db, *class, arguments)?;
                 }
-                TestKind::Exactly(_) => {}
+                TestKind::Exactly(_) | TestKind::Argument(_) => {}
                 // Arrays of different element types share their type ids.
                 TestKind::AnyArray => {
                     let arrays = match operand {
@@ -669,6 +837,12 @@ pub(crate) fn type_test_plan<'db>(
                 }
             }
             TypeTestPlan::Header(test)
+        }
+        _ if matches!(test, TestKind::Argument(_)) => {
+            return Err(Blocker::new(
+                "type test",
+                "of a type argument, on a value that is not a union",
+            ));
         }
         NativeTy::Optional(inner) => {
             if test == TestKind::Exactly(NativeTy::Null) {
@@ -724,7 +898,7 @@ fn terminator_supported<'db>(
             ..
         } => {
             let source = operand_ty(db, body, source)?;
-            let plan = type_test_plan(db, &source, TestKind::of(db, test), false)?;
+            let plan = type_test_plan(db, &source, TestKind::of(db, test, body.arguments), false)?;
             let destination = local_ty(db, body, *destination)?;
             if assignable(&destination, &narrow_bound(&source, &plan)) {
                 Ok(())
@@ -741,7 +915,7 @@ fn terminator_supported<'db>(
             unwind,
             ..
         } => {
-            let called = direct_callee(db, callee)?;
+            let called = call_target(db, body, callee, args, *ntypeargs)?;
             if *has_trace {
                 return Err(Blocker::new("call with a trace attachment", ""));
             }
@@ -789,19 +963,40 @@ fn terminator_supported<'db>(
                         )),
                     }
                 }
-                Callee::Function(function) => {
-                    let name = || function_display_name(db, DeclRef::Source(function));
-                    if *ntypeargs != 0 {
-                        return Err(Blocker::new("call with type arguments", name()));
+                Callee::Function(key) => {
+                    let name = || function_display_name(db, DeclRef::Source(key.loc));
+                    // The callee is told the type id of each type argument
+                    // it tests values against.
+                    for (slot, _) in identified_arguments(db, &key)
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, needed)| **needed)
+                    {
+                        let known = match body.type_value(&args[slot]) {
+                            Some(TyTemplate::TypeArgRef(own)) => body
+                                .arguments
+                                .get(*own as usize)
+                                .is_some_and(Option::is_some),
+                            Some(template) => template_ty(db, template, body.arguments)
+                                .is_some_and(|ty| has_type_id(&ty)),
+                            None => false,
+                        };
+                        if !known {
+                            return Err(Blocker::new(
+                                "call with type arguments",
+                                format!("{}: a type without one type id", name()),
+                            ));
+                        }
                     }
                     let found = args
                         .iter()
+                        .skip(*ntypeargs)
                         .map(|argument| operand_ty(db, body, argument))
                         .collect::<Result<Vec<_>, _>>()?;
                     // A callee outside the subset is reported as its own
                     // blocked function; only a callee that will be compiled
                     // constrains the call.
-                    if let Ok(expected) = function_signature(db, function) {
+                    if let Ok(expected) = function_signature(db, &key) {
                         let fits = expected.params.len() == found.len()
                             && expected
                                 .params

@@ -30,7 +30,7 @@ use baml_type::typetag;
 use crate::{
     flow::terminator_destination,
     loops::operand_local,
-    types::{Body, NativeTy, constant_ty, storage_ty},
+    types::{Body, NativeTy, TypeArg, constant_ty, storage_ty, template_ty},
 };
 
 /// What a type test asks of a value in a box.
@@ -40,15 +40,35 @@ pub(crate) enum TestKind<'db> {
     Exactly(NativeTy<'db>),
     /// Any array, whatever its elements.
     AnyArray,
+    /// A value of the type this copy of the function was given for type
+    /// parameter `.0`: one compiled for every reference type, so only the
+    /// type id it is passed says which.
+    Argument(usize),
 }
 
 impl<'db> TestKind<'db> {
-    pub(crate) fn of(db: &'db dyn baml_compiler2_mir::Db, test: &TypeTest<'db>) -> Option<Self> {
+    pub(crate) fn of(
+        db: &'db dyn baml_compiler2_mir::Db,
+        test: &TypeTest<'db>,
+        arguments: &[TypeArg<'db>],
+    ) -> Option<Self> {
         Some(Self::Exactly(match test {
             TypeTest::Class { class, args }
-                if args.is_empty() && class_generic_params(db, *class).is_empty() =>
+                if args.len() == class_generic_params(db, *class).len() =>
             {
-                NativeTy::Class(*class)
+                let arguments: Vec<_> = args
+                    .iter()
+                    .map(|argument| template_ty(db, argument, arguments))
+                    .collect();
+                // Instantiations at different reference types share a type
+                // id: a header cannot tell them apart.
+                if arguments
+                    .iter()
+                    .any(|argument| !matches!(argument, Some(argument) if !argument.is_ref()))
+                {
+                    return None;
+                }
+                NativeTy::Class(*class, arguments)
             }
             TypeTest::Enum(enum_ref) => NativeTy::Enum(*enum_ref),
             TypeTest::Template(TyTemplate::Int) => NativeTy::Int,
@@ -57,6 +77,16 @@ impl<'db> TestKind<'db> {
             TypeTest::Template(TyTemplate::String) => NativeTy::String,
             TypeTest::Template(TyTemplate::Null) => NativeTy::Null,
             TypeTest::Template(TyTemplate::List(_)) => return Some(Self::AnyArray),
+            TypeTest::Template(TyTemplate::TypeArgRef(slot)) => {
+                match arguments.get(*slot as usize)?.clone()? {
+                    NativeTy::Unknown => return Some(Self::Argument(*slot as usize)),
+                    scalar @ (NativeTy::Int
+                    | NativeTy::Float
+                    | NativeTy::Bool
+                    | NativeTy::Enum(_)) => scalar,
+                    _ => return None,
+                }
+            }
             _ => return None,
         }))
     }
@@ -78,6 +108,8 @@ impl<'db> TestKind<'db> {
         match self {
             Self::Exactly(ty) => ty == member,
             Self::AnyArray => matches!(member, NativeTy::Array(_)),
+            // Nothing is known of it where the code is compiled.
+            Self::Argument(_) => false,
         }
     }
 }
@@ -109,6 +141,12 @@ struct Analysis<'a, 'b, 'db> {
 }
 
 impl<'db> Analysis<'_, '_, 'db> {
+    /// What a test asks, when the answer says which member a value is.
+    fn test(&self, test: &TypeTest<'db>) -> Option<TestKind<'db>> {
+        TestKind::of(self.db, test, self.body.arguments)
+            .filter(|test| !matches!(test, TestKind::Argument(_)))
+    }
+
     fn is_boxed(&self, local: usize) -> bool {
         self.boxed[local].is_some()
     }
@@ -208,7 +246,7 @@ impl<'db> Analysis<'_, '_, 'db> {
         match value {
             Rvalue::IsType { operand, test } => Some(Condition {
                 local: tested(operand)?,
-                test: TestKind::of(self.db, test)?,
+                test: self.test(test)?,
                 negated: false,
             }),
             Rvalue::IsTypeTag { operand, tag } => Some(Condition {
@@ -259,7 +297,7 @@ impl<'db> Analysis<'_, '_, 'db> {
             }
         };
         match value {
-            Rvalue::IsType { operand, test } => decided(operand, TestKind::of(self.db, test)),
+            Rvalue::IsType { operand, test } => decided(operand, self.test(test)),
             Rvalue::IsTypeTag { operand, tag } => decided(operand, TestKind::of_tag(*tag)),
             Rvalue::Use(Operand::Constant(Constant::Bool(value))) => Some(*value),
             Rvalue::Use(operand) => state.constants.get(&operand_local(operand)?.0).copied(),
@@ -336,7 +374,7 @@ impl<'db> Analysis<'_, '_, 'db> {
                 else_block,
             } => {
                 let source = operand_local(source).map(|local| local.0);
-                let test = TestKind::of(self.db, test);
+                let test = self.test(test);
                 let mut otherwise = state.clone();
                 for (state, passes) in [(&mut state, true), (&mut otherwise, false)] {
                     if let (Some(source), Some(test)) = (source, &test) {

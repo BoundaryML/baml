@@ -10,7 +10,7 @@ use baml_compiler2_mir::{MirFunction, lower_function};
 use crate::{
     Blocker,
     check::{OPT, check_function},
-    types::NativeTy,
+    types::{NativeTy, TypeArg},
 };
 
 /// How a compiled function is entered.
@@ -34,6 +34,9 @@ pub(crate) struct FnKey<'db> {
     /// from `loc`; empty for `loc` itself.
     pub(crate) lambdas: Vec<usize>,
     pub(crate) entry: Entry,
+    /// The type arguments of the function's frame this copy is compiled
+    /// for; a lambda has its parent's.
+    pub(crate) arguments: Vec<TypeArg<'db>>,
 }
 
 impl<'db> FnKey<'db> {
@@ -42,7 +45,13 @@ impl<'db> FnKey<'db> {
             loc,
             lambdas: Vec::new(),
             entry,
+            arguments: Vec::new(),
         }
+    }
+
+    pub(crate) fn with_arguments(mut self, arguments: Vec<TypeArg<'db>>) -> Self {
+        self.arguments = arguments;
+        self
     }
 
     /// Lambda `index` of this function. A lambda is only ever entered
@@ -54,6 +63,7 @@ impl<'db> FnKey<'db> {
             loc: self.loc,
             lambdas,
             entry: Entry::Value,
+            arguments: self.arguments.clone(),
         }
     }
 
@@ -125,7 +135,15 @@ pub(crate) fn collect<'db>(
             Ok(mir) => {
                 let checked = check_function(db, &key, mir, &captures);
                 queue.extend(checked.needed);
-                let name = mir.identity.display_name(db);
+                let mut name = mir.identity.display_name(db);
+                if !key.arguments.is_empty() {
+                    let arguments: Vec<&str> = key
+                        .arguments
+                        .iter()
+                        .map(|argument| argument.as_ref().map_or("_", crate::types::describe))
+                        .collect();
+                    name = format!("{name}<{}>", arguments.join(", "));
+                }
                 ProgramFunction {
                     name: match key.entry {
                         Entry::Direct => name,

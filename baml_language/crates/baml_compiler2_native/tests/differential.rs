@@ -607,6 +607,78 @@ function inlined_generic_call() -> int {
   for (let i = 0; i < count(10); i += 1) { s += generic_apply(double, i); }
   s
 }
+class Crate<T> {
+  item T
+  seen int
+}
+class Spot { x int }
+enum Tone { Low High }
+function pick_one<T>(a: T, b: T, n: int) -> T {
+  if (n <= 0) { a } else { pick_one(b, a, n - 1) }
+}
+function crate_of<T>(x: T, n: int) -> Crate<T> {
+  if (n <= 0) { Crate { item: x, seen: 0 } } else {
+    let c = crate_of(x, n - 1);
+    c.seen += 1;
+    c
+  }
+}
+function is_a<T>(u: unknown, n: int) -> bool {
+  if (n <= 0) { u is T } else { is_a<T>(u, n - 1) }
+}
+function fill<T>(xs: T[], x: T, n: int) -> T[] {
+  if (n > 0) { xs.push(x); fill(xs, x, n - 1) } else { xs }
+}
+function apply_n<T, U>(x: T, f: (T) -> U throws never, n: int) -> U {
+  if (n <= 0) { f(x) } else { apply_n(x, f, n - 1) }
+}
+function generic_per_representation() -> string {
+  let i = pick_one(1, 2, count(3));
+  let f = pick_one(1.5, 2.5, count(2));
+  let b = pick_one(true, false, count(1));
+  let s = pick_one("left", "right", count(1));
+  let p = pick_one(Spot { x: 7 }, Spot { x: 9 }, count(4));
+  let t = pick_one<Tone>(Tone.Low, Tone.High, count(1));
+  let o: int? = pick_one<int?>(null, 5, count(1));
+  let m = o ?? 0;
+  let n = if (t == Tone.High) { m + 10 } else { m };
+  `${i} ${f} ${b} ${s} ${p.x} ${n}`
+}
+function generic_class_instances() -> int {
+  let a = crate_of(40, count(3));
+  let b = crate_of("word", count(2));
+  let c = crate_of(Spot { x: 5 }, count(1));
+  let d = crate_of(2.5, count(4));
+  let whole = if (d.item > 2.0) { 1000 } else { 0 };
+  a.item + a.seen + b.item.length() * 10 + b.seen + c.item.x * 100 + c.seen + whole + d.seen
+}
+function generic_type_test() -> int {
+  let total = 0;
+  if (is_a<int>(4, count(2))) { total += 1; }
+  if (is_a<string>("x", count(2))) { total += 10; }
+  if (is_a<string>(4, count(1))) { total += 100; }
+  if (is_a<Spot>(Spot { x: 1 }, count(3))) { total += 1000; }
+  if (is_a<Spot>("spot", count(3))) { total += 10000; }
+  if (is_a<float>(1, count(1))) { total += 100000; }
+  if (is_a<Tone>(Tone.High, count(1))) { total += 1000000; }
+  total
+}
+function generic_array_fill() -> int {
+  let ints: int[] = [];
+  let strings: string[] = ["a"];
+  let a = fill(ints, 5, count(3));
+  let b = fill(strings, "bc", count(4));
+  let total = 0;
+  for (let x in a) { total += x; }
+  for (let s in b) { total += s.length(); }
+  total * 10 + b.length()
+}
+function generic_with_function_value() -> float {
+  let offset = count(2);
+  let r = apply_n(3, (v: int) -> float { v + 0.5 + offset }, count(2));
+  let s = apply_n("four", (v: string) -> int { v.length() }, count(3));
+  r + s
+}
 "#;
 
 /// How a run ended. `baml run` prints a result on stdout and exits zero, or
@@ -797,6 +869,14 @@ const CASES: &[Case] = &[
     case("union_of_scalars", Printed("211.5")),
     case("enum_result", Printed("Light")),
     case("inlined_generic_call", Printed("90")),
+    case(
+        "generic_per_representation",
+        Printed("\"2 1.5 false right 7 15\""),
+    ),
+    case("generic_class_instances", Printed("1590")),
+    case("generic_type_test", Printed("1001011")),
+    case("generic_array_fill", Printed("245")),
+    case("generic_with_function_value", Printed("9.5")),
 ];
 
 /// The text of the thrown value in an uncaught-panic report.

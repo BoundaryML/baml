@@ -28,7 +28,7 @@ use baml_compiler2_hir_ty::{
 };
 use baml_compiler2_mir::{
     AggregateKind, BinOp, BlockId, CellId, Constant, Local, MirFunction, MirFunctionBody, Operand,
-    Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey, Terminator, UnaryOp,
+    Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey, Terminator, TyTemplate, UnaryOp,
 };
 use cranelift_codegen::{
     Context,
@@ -47,8 +47,8 @@ use cranelift_object::{ObjectBuilder, ObjectModule};
 use crate::{
     CompileError, CompileOptions,
     check::{
-        Callee, Intrinsic, TypeTestPlan, body_of, direct_callee, narrow_bound, signature,
-        type_test_plan,
+        Callee, Intrinsic, TypeTestPlan, body_of, call_target, identified_arguments,
+        is_intrinsic_call, narrow_bound, signature, type_test_plan,
     },
     flow::{Flow, ProvenIndexes},
     layout,
@@ -56,9 +56,9 @@ use crate::{
     narrow::TestKind,
     program::{Entry, FnKey, Program},
     types::{
-        BinaryMode, Body, NativeTy, Signature, binary_typing, class_layout, field_slots,
+        BinaryMode, Body, NativeTy, Signature, TypeArg, binary_typing, class_layout, field_slots,
         is_comparison, layout_slots, local_ty, narrowed, operand_ty, place_local, place_ty,
-        storage_ty, unary_typing,
+        storage_ty, template_ty, type_argument, unary_typing,
     },
 };
 
@@ -100,7 +100,7 @@ fn clif_type(ty: &NativeTy<'_>) -> ir::Type {
         NativeTy::Float => types::F64,
         NativeTy::Bool | NativeTy::Null => types::I8,
         NativeTy::String
-        | NativeTy::Class(_)
+        | NativeTy::Class(..)
         | NativeTy::Array(_)
         | NativeTy::Function(_)
         | NativeTy::Cell(_)
@@ -248,8 +248,9 @@ struct Backend<'db> {
     /// The program's type table so far: the fixed types, then one entry per
     /// class met.
     types: Vec<u8>,
-    /// The type id of each class met: the offset of its entry in `types`.
-    class_types: HashMap<ClassRef<'db>, usize>,
+    /// The type id of each class met, at each tuple of type arguments it is
+    /// met at: the offset of its entry in `types`.
+    class_types: HashMap<(ClassRef<'db>, Vec<TypeArg<'db>>), usize>,
     /// The type id of closures, by which of their captured words are
     /// references.
     closure_types: HashMap<Vec<bool>, usize>,
@@ -314,8 +315,11 @@ impl<'db> Backend<'db> {
     /// edges for on every target.
     ///
     /// A function entered through a value takes the closure first; one
-    /// entered as a bound method finds its receiver there.
-    fn clif_signature(signature: &Signature<'_>, entry: Entry) -> ir::Signature {
+    /// entered as a bound method finds its receiver there. Then come
+    /// `type_ids` type ids, 32 bits each, one per type parameter of a
+    /// function that must be told its type arguments; then the declared
+    /// parameters.
+    fn clif_signature(signature: &Signature<'_>, entry: Entry, type_ids: usize) -> ir::Signature {
         let mut clif = ir::Signature::new(CallConv::Tail);
         let (closure, receiver) = match entry {
             Entry::Direct => (false, 0),
@@ -325,6 +329,7 @@ impl<'db> Backend<'db> {
         clif.params = closure
             .then(|| AbiParam::new(WORD))
             .into_iter()
+            .chain(std::iter::repeat_n(AbiParam::new(types::I32), type_ids))
             .chain(
                 signature
                     .params
@@ -384,8 +389,17 @@ impl<'db> Backend<'db> {
 
     /// The type id of a class, adding its entry to the type table the first
     /// time: what the collector needs to copy and scan an instance.
-    fn class_type(&mut self, class: ClassRef<'db>, fields: &[NativeTy<'db>]) -> usize {
-        if let Some(id) = self.class_types.get(&class) {
+    fn class_type(
+        &mut self,
+        class: ClassRef<'db>,
+        arguments: &[TypeArg<'db>],
+        fields: &[NativeTy<'db>],
+    ) -> usize {
+        let key = (
+            class,
+            arguments.iter().cloned().map(type_argument).collect(),
+        );
+        if let Some(id) = self.class_types.get(&key) {
             return *id;
         }
         let references: Vec<usize> = fields
@@ -395,7 +409,7 @@ impl<'db> Backend<'db> {
             .map(|(_, slot)| layout::field_offset(slot))
             .collect();
         let id = self.fixed_type(layout::instance_size(layout_slots(fields)), &references);
-        self.class_types.insert(class, id);
+        self.class_types.insert(key, id);
         id
     }
 
@@ -606,6 +620,9 @@ struct Declared<'db> {
     id: FuncId,
     entry: Entry,
     signature: Signature<'db>,
+    /// How many type ids the function takes before its parameters: one per
+    /// type parameter, or none.
+    type_ids: usize,
     /// Whether the function checks the stack limit on entry.
     checks_stack: bool,
 }
@@ -621,9 +638,7 @@ const UNCHECKED_LEAF_LOCALS: usize = 12;
 fn checks_stack<'db>(db: &'db dyn baml_compiler2_mir::Db, body: &MirFunctionBody<'db>) -> bool {
     body.locals.len() > UNCHECKED_LEAF_LOCALS
         || body.blocks.iter().any(|block| match &block.terminator {
-            Some(Terminator::Call { callee, .. }) => {
-                !matches!(direct_callee(db, callee), Ok(Callee::Intrinsic(_)))
-            }
+            Some(Terminator::Call { callee, .. }) => !is_intrinsic_call(db, callee),
             Some(
                 Terminator::Goto { .. }
                 | Terminator::Branch { .. }
@@ -671,13 +686,18 @@ pub(crate) fn generate<'db>(
             .mir
             .ok_or_else(|| internal(format!("`{}` has no MIR", function.name)))?;
         let body = body_of(mir).map_err(internal)?;
-        let signature = signature(db, mir, body).map_err(internal)?;
+        let signature = signature(db, mir, body, &function.key.arguments).map_err(internal)?;
+        let type_ids = if identified_arguments(db, &function.key).contains(&true) {
+            function.key.arguments.len()
+        } else {
+            0
+        };
         let id = backend
             .module
             .declare_function(
                 &symbol_name(index, &function.name),
                 Linkage::Local,
-                &Backend::clif_signature(&signature, function.key.entry),
+                &Backend::clif_signature(&signature, function.key.entry, type_ids),
             )
             .map_err(internal)?;
         declared.insert(
@@ -686,10 +706,15 @@ pub(crate) fn generate<'db>(
                 id,
                 entry: function.key.entry,
                 signature,
+                type_ids,
                 checks_stack: checks_stack(db, body),
             },
         );
-        bodies.push((function, mir, Body::new(db, mir, body, &function.captures)));
+        bodies.push((
+            function,
+            mir,
+            Body::new(db, mir, body, &function.captures, &function.key),
+        ));
     }
 
     let entry = program
@@ -716,7 +741,7 @@ pub(crate) fn generate<'db>(
         NativeTy::Enum(_)
         | NativeTy::Union(_)
         | NativeTy::Unknown
-        | NativeTy::Class(_)
+        | NativeTy::Class(..)
         | NativeTy::Array(_)
         | NativeTy::Function(_)
         | NativeTy::Cell(_)
@@ -729,7 +754,8 @@ pub(crate) fn generate<'db>(
     let mut builder_context = FunctionBuilderContext::new();
     for (function, mir, body) in bodies {
         let this = &declared[&function.key];
-        context.func.signature = Backend::clif_signature(&this.signature, this.entry);
+        context.func.signature =
+            Backend::clif_signature(&this.signature, this.entry, this.type_ids);
         Translator::new(
             db,
             &mut backend,
@@ -880,6 +906,8 @@ struct Translator<'a, 'db> {
     builder: FunctionBuilder<'a>,
     /// The closure this function was entered through, when it was.
     closure: Variable,
+    /// The type id of each type argument, when the function is passed them.
+    type_ids: Vec<Variable>,
     /// The variable of each local that carries a value; `None` for a `null`
     /// local and for a local of a type outside the subset, which a checked
     /// body never reads or writes.
@@ -971,6 +999,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             body,
             builder,
             closure,
+            type_ids: Vec::new(),
             variables,
             blocks,
             function_refs: HashMap::new(),
@@ -997,6 +1026,12 @@ impl<'a, 'db> Translator<'a, 'db> {
         if self.key.entry != Entry::Direct {
             let closure = arriving.next().expect("a closure parameter");
             self.builder.def_var(self.closure, closure);
+        }
+        for _ in 0..self.declared(self.key)?.type_ids {
+            let type_id = self.builder.declare_var(types::I32);
+            let passed = arriving.next().expect("a type id per type parameter");
+            self.builder.def_var(type_id, passed);
+            self.type_ids.push(type_id);
         }
         // A captured parameter waits in a variable of its own until its
         // cell can be allocated.
@@ -1091,11 +1126,17 @@ impl<'a, 'db> Translator<'a, 'db> {
                 .any(|(block, contents)| {
                     each.blocks[block]
                         && match &contents.terminator {
-                            Some(Terminator::Call { callee, .. }) => {
-                                match direct_callee(self.db, callee) {
-                                    Ok(Callee::Function(function)) => self
+                            Some(Terminator::Call {
+                                callee,
+                                args,
+                                ntypeargs,
+                                ..
+                            }) => {
+                                self.body.enter(block);
+                                match call_target(self.db, self.body, callee, args, *ntypeargs) {
+                                    Ok(Callee::Function(key)) => self
                                         .declared
-                                        .get(&FnKey::new(function, Entry::Direct))
+                                        .get(&key)
                                         .is_some_and(|callee| callee.checks_stack),
                                     _ => false,
                                 }
@@ -1356,10 +1397,11 @@ impl<'a, 'db> Translator<'a, 'db> {
             TestKind::Exactly(NativeTy::Enum(enum_ref)) => {
                 vec![self.backend.enum_type(self.db, *enum_ref)]
             }
-            TestKind::Exactly(NativeTy::Class(class)) => {
-                let fields = class_layout(self.db, *class).map_err(internal)?;
-                vec![self.backend.class_type(*class, &fields)]
+            TestKind::Exactly(NativeTy::Class(class, arguments)) => {
+                let fields = class_layout(self.db, *class, arguments).map_err(internal)?;
+                vec![self.backend.class_type(*class, arguments, &fields)]
             }
+            TestKind::Argument(_) => Vec::new(),
             TestKind::Exactly(_) => return Err(internal("a checked type test has a type id")),
         };
         // `null` has no header to read.
@@ -1380,6 +1422,15 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
         let header = self.builder.ins().uload32(slot_access(), value, 0);
         let mut passes = None;
+        if let TestKind::Argument(slot) = test {
+            let type_id = self
+                .type_ids
+                .get(*slot)
+                .ok_or_else(|| internal("a tested type argument has its type id"))?;
+            let type_id = self.builder.use_var(*type_id);
+            let type_id = self.builder.ins().uextend(WORD, type_id);
+            passes = Some(self.builder.ins().icmp(IntCC::Equal, header, type_id));
+        }
         for id in ids {
             let same = self.builder.ins().icmp_imm(IntCC::Equal, header, imm(id));
             passes = Some(match passes {
@@ -1406,10 +1457,10 @@ impl<'a, 'db> Translator<'a, 'db> {
     /// The type and byte offset of field `field` of the class instance a
     /// place of type `base` holds.
     fn field(&self, base: &Place, field: usize) -> Result<(NativeTy<'db>, usize), CompileError> {
-        let NativeTy::Class(class) = narrowed(self.place_ty(base)?) else {
+        let NativeTy::Class(class, arguments) = narrowed(self.place_ty(base)?) else {
             return Err(internal("a checked field access is on a class instance"));
         };
-        let layout = class_layout(self.db, class).map_err(internal)?;
+        let layout = class_layout(self.db, class, &arguments).map_err(internal)?;
         let slot = field_slots(&layout)[field];
         Ok((layout[field].clone(), layout::field_offset(slot)))
     }
@@ -1838,11 +1889,18 @@ impl<'a, 'db> Translator<'a, 'db> {
             Rvalue::Aggregate {
                 kind: AggregateKind::Class { class, .. },
                 fields,
-            } => self.instance(*class, fields)?,
+            } => {
+                let NativeTy::Class(_, arguments) = ty else {
+                    return Err(internal("a checked class literal makes an instance"));
+                };
+                self.instance(*class, arguments, fields)?
+            }
             Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
                 let operand_ty = self.operand_ty(operand)?;
                 let (test, coarse) = match value {
-                    Rvalue::IsType { test, .. } => (TestKind::of(self.db, test), false),
+                    Rvalue::IsType { test, .. } => {
+                        (TestKind::of(self.db, test, self.body.arguments), false)
+                    }
                     Rvalue::IsTypeTag { tag, .. } => (TestKind::of_tag(*tag), true),
                     _ => (None, false),
                 };
@@ -2076,9 +2134,10 @@ impl<'a, 'db> Translator<'a, 'db> {
     fn instance(
         &mut self,
         class: ClassRef<'db>,
+        arguments: &[TypeArg<'db>],
         fields: &[Operand<'db>],
     ) -> Result<ir::Value, CompileError> {
-        let layout = class_layout(self.db, class).map_err(internal)?;
+        let layout = class_layout(self.db, class, arguments).map_err(internal)?;
         // Evaluate before allocating: the fields are stored with no call in
         // between, so the collector never sees a half-built object.
         let values = fields
@@ -2086,7 +2145,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             .zip(&layout)
             .map(|(field, ty)| self.operand_as(field, ty))
             .collect::<Result<Vec<_>, _>>()?;
-        let class_type = self.backend.class_type(class, &layout);
+        let class_type = self.backend.class_type(class, arguments, &layout);
         let object = self.allocate(layout::instance_size(layout_slots(&layout)))?;
         let class_type = self.word_const(class_type);
         self.builder
@@ -2105,6 +2164,34 @@ impl<'a, 'db> Translator<'a, 'db> {
             NativeTy::Bool | NativeTy::Null => self.builder.ins().uextend(WORD, value),
             _ => value,
         }
+    }
+
+    /// The type id of the type a local of type `type` holds, as a function
+    /// that must identify its type arguments is passed it; zero for a type
+    /// whose values do not share one type id.
+    fn type_id(&mut self, loaded: &Operand<'db>) -> Result<ir::Value, CompileError> {
+        let template = self
+            .body
+            .type_value(loaded)
+            .ok_or_else(|| internal("a checked type argument is a type loaded once"))?;
+        if let TyTemplate::TypeArgRef(slot) = template
+            && let Some(passed) = self.type_ids.get(*slot as usize)
+        {
+            return Ok(self.builder.use_var(*passed));
+        }
+        let id = match template_ty(self.db, template, self.body.arguments) {
+            Some(NativeTy::Int) => layout::TYPE_BOX_INT,
+            Some(NativeTy::Float) => layout::TYPE_BOX_FLOAT,
+            Some(NativeTy::Bool) => layout::TYPE_BOX_BOOL,
+            Some(NativeTy::String) => layout::TYPE_STRING,
+            Some(NativeTy::Enum(enum_ref)) => self.backend.enum_type(self.db, enum_ref),
+            Some(NativeTy::Class(class, arguments)) => {
+                let fields = class_layout(self.db, class, &arguments).map_err(internal)?;
+                self.backend.class_type(class, &arguments, &fields)
+            }
+            _ => 0,
+        };
+        Ok(self.builder.ins().iconst(types::I32, imm(id)))
     }
 
     /// The id of the type of arrays of `element`.
@@ -2727,8 +2814,13 @@ impl<'a, 'db> Translator<'a, 'db> {
                 else_block,
             } => {
                 let source_ty = self.operand_ty(source)?;
-                let plan = type_test_plan(self.db, &source_ty, TestKind::of(self.db, test), false)
-                    .map_err(internal)?;
+                let plan = type_test_plan(
+                    self.db,
+                    &source_ty,
+                    TestKind::of(self.db, test, self.body.arguments),
+                    false,
+                )
+                .map_err(internal)?;
                 let value = self.operand(source)?;
                 let passes = self.type_test(value, &source_ty, &plan)?;
                 // Bound where the test passes: taking a value out of its
@@ -2813,7 +2905,9 @@ impl<'a, 'db> Translator<'a, 'db> {
             } => {
                 let destination = place_local(destination).map_err(internal)?;
                 let expected = self.local_ty(destination)?;
-                let (result, produced) = match direct_callee(self.db, callee).map_err(internal)? {
+                let called =
+                    call_target(self.db, self.body, callee, args, *ntypeargs).map_err(internal)?;
+                let (result, produced) = match called {
                     Callee::Intrinsic(intrinsic) => {
                         let arguments = &args[*ntypeargs..];
                         let types = arguments
@@ -2851,7 +2945,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                             closure,
                             offset(layout::CLOSURE_CODE),
                         );
-                        let clif = Backend::clif_signature(&signature, Entry::Value);
+                        let clif = Backend::clif_signature(&signature, Entry::Value, 0);
                         let clif = self.builder.import_signature(clif);
                         // The callee can collect, which moves storage.
                         self.forget_arrays();
@@ -2859,13 +2953,19 @@ impl<'a, 'db> Translator<'a, 'db> {
                         self.read_worker();
                         (self.builder.inst_results(call)[0], signature.result)
                     }
-                    Callee::Function(function) => {
-                        let callee = self.declared(&FnKey::new(function, Entry::Direct))?;
-                        let arguments = args
-                            .iter()
-                            .zip(&callee.signature.params)
-                            .map(|(argument, ty)| self.operand_as(argument, ty))
-                            .collect::<Result<Vec<_>, _>>()?;
+                    Callee::Function(key) => {
+                        let callee = self.declared(&key)?;
+                        let mut arguments = Vec::new();
+                        if callee.type_ids != 0 {
+                            for argument in &args[..*ntypeargs] {
+                                arguments.push(self.type_id(argument)?);
+                            }
+                        }
+                        for (argument, ty) in
+                            args[*ntypeargs..].iter().zip(&callee.signature.params)
+                        {
+                            arguments.push(self.operand_as(argument, ty)?);
+                        }
                         let produced = callee.signature.result.clone();
                         let callee = self.function_ref(callee.id);
                         // The callee can collect, which moves storage.
