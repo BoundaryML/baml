@@ -602,8 +602,8 @@ const STAGE: Record<string, string> = {
   Designing: 'bg-white/50',
   'In progress': 'bg-clover',
   Proposed: 'bg-white/50',
+  Prototype: 'bg-clover',
   Researching: 'border border-white/40',
-  'Weekend prototype': 'bg-clover',
 };
 
 // Furthest along first. Formal verification is still being researched, and comes last.
@@ -645,7 +645,7 @@ const FEATURES: {
     name: 'Durable execution',
     says: 'Pause a run on one machine and pick it up on another.',
     status: {
-      label: 'Weekend prototype',
+      label: 'Prototype',
       links: [
         {
           href: 'https://github.com/BoundaryML/baml/pull/4956',
@@ -695,7 +695,7 @@ const FEATURES: {
     bleed: true,
     draw: (t) => <RolloutChart t={t} />,
     ms: 5200,
-    name: 'HyperReload',
+    name: 'Feature flags',
     says: 'Roll out experiments 100x faster than CI/CD.',
     status: { label: 'Designing' },
     tile: 'sm:col-span-2 lg:col-span-5',
