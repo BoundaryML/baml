@@ -150,7 +150,7 @@ impl<'db> Generator<'_, 'db> {
                 )
             } else {
                 format!(
-                    "(if vm.direct_calls_typed({type_args}) {{ vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
+                    "(if vm.direct_calls_typed({type_args}) {{ unsafe {{ vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}(vm, fr, {values})) }} }} else {{ {framed} }})"
                 )
             };
             let code = self.call_code(block, object, &call)?;
@@ -191,7 +191,7 @@ impl<'db> Generator<'_, 'db> {
             )
         } else {
             format!(
-                "vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}_d(vm, fr{direct_args}, {callee_mask}))"
+                "unsafe {{ vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}_d(vm, fr{direct_args}, {callee_mask})) }}"
             )
         };
         let mut boxed = String::from("{ ");

@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use bex_vm_types::{FunctionKind, HeapPtr, Object, ObjectIndex, RootHaverExt, Value};
+use bex_vm_types::{FunctionKind, HeapPtr, Object, ObjectIndex, RealizedTy, RootHaverExt, Value};
 
 use super::{CompiledFn, FrameRecord};
 
@@ -405,6 +405,21 @@ fn exec_string(vm: &mut BexVm) -> String {
     }
 }
 
+/// Run `vm` to completion, collecting at every yield as a stressed engine
+/// would.
+#[cfg(not(target_arch = "wasm32"))]
+fn exec_collecting(vm: &mut BexVm) -> Value {
+    loop {
+        match vm.exec().unwrap() {
+            VmExecState::EarlyYield => {
+                collect(vm, &[]);
+            }
+            VmExecState::Complete(value) => break value,
+            other => panic!("unexpected execution state: {other:?}"),
+        }
+    }
+}
+
 // SAFETY: callers own the heap's only mutator and keep its fiber parked.
 #[allow(unsafe_code)]
 /// Collect, forward the VM's roots, and return where each of `watched` went.
@@ -450,15 +465,7 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
         Ok(live)
     }
     let mut vm = vm_with_main(body, 1, true);
-    let out = loop {
-        match vm.exec().unwrap() {
-            VmExecState::EarlyYield => {
-                collect(&mut vm, &[]);
-            }
-            VmExecState::Complete(value) => break value,
-            other => panic!("unexpected execution state: {other:?}"),
-        }
-    };
+    let out = exec_collecting(&mut vm);
     assert_eq!(vm.as_string(&out).unwrap().as_str(), "still live");
 }
 
@@ -1951,6 +1958,127 @@ fn call_safepoints_keep_yielding_under_gc_stress() {
     let mut vm = vm_with_main(main, 0, false);
     vm.early_yield =
         bex_vm_types::EarlyYieldCheck::with_interval(Arc::new(AtomicBool::new(false)), 3);
-    let yields: Vec<_> = (1..=9).filter(|_| vm.yield_at_call(true)).collect();
+    let yields: Vec<_> = (1..=9).filter(|_| vm.yield_at_call(|| true)).collect();
     assert_eq!(yields, [3, 6, 9]);
+}
+
+const TELEMETRY_LEVELS: [Option<btel_settings::mode::AutoTelemetryLevel>; 2] =
+    [None, Some(btel_settings::mode::AutoTelemetryLevel::Medium)];
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_generic_record_reads_its_type_arguments_after_a_collection() {
+    use crate::compiled_rt::Step;
+
+    static COUNT: AtomicU32 = AtomicU32::new(0);
+    fn count(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let ty = vm.frame_type_arg(fr, 0)?;
+        vm.suspend(Step::Yield)?;
+        assert_eq!(vm.frame_type_arg(fr, 0)?, ty);
+        let (x, n) = (args[0], test_int(args[1]));
+        if n == 0 {
+            return Ok(Value::bool(vm.value_is_member_of(x, &ty)));
+        }
+        let next = [x, Value::int(n - 1)];
+        let callee = object(vm, &COUNT);
+        unsafe {
+            vm.call_record_typed(
+                fr,
+                callee,
+                &[ty],
+                0,
+                |_| next,
+                |vm, fr| count(vm, fr, &next),
+            )
+        }
+    }
+    const SOURCE: &str = r#"
+        function Count<T>(x: T, n: int) -> bool { if (n == 0) { x is T } else { Count<T>(x, n - 1) } }
+        function Main() -> bool { Count<int>(1, 3) }
+    "#;
+    for level in TELEMETRY_LEVELS {
+        let program = compiled_program(SOURCE, &[("user.Count", count)], &[("user.Count", &COUNT)]);
+        let mut vm = program_vm(program, level);
+        assert_eq!(exec_collecting(&mut vm), Value::bool(true), "{level:?}");
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_closure_record_reads_captured_type_arguments_after_a_collection() {
+    use crate::compiled_rt::Step;
+
+    static CHECK: AtomicU32 = AtomicU32::new(0);
+    fn check(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let (closure, ty) = (fr.function(), vm.frame_type_arg(fr, 0)?);
+        vm.suspend(Step::Yield)?;
+        assert_ne!(fr.function(), closure, "the collection moves the closure");
+        assert_eq!(vm.frame_type_arg(fr, 0)?, ty);
+        Ok(Value::bool(vm.value_is_member_of(args[0], &ty)))
+    }
+    fn main(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> BodyResult {
+        let function = object(vm, &CHECK);
+        let closure = vm.make_closure(function, Vec::new(), Box::new([RealizedTy::Int]));
+        let callee = closure.as_object_ptr().unwrap();
+        vm.call_closure_compiled(fr, callee, check, &[Value::int(1)], 0)
+    }
+    const SOURCE: &str = r#"
+        function Check(x: int) -> bool { true }
+        function Main() -> bool { false }
+    "#;
+    for level in TELEMETRY_LEVELS {
+        let bodies = [("user.Check", check as CompiledFn), ("user.Main", main)];
+        let program = compiled_program(SOURCE, &bodies, &[("user.Check", &CHECK)]);
+        let mut vm = program_vm(program, level);
+        assert_eq!(exec_collecting(&mut vm), Value::bool(true), "{level:?}");
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_error_through_a_generic_record_traces_as_bytecode_does() {
+    static FAIL: AtomicU32 = AtomicU32::new(0);
+    fn fail(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        vm.frame_type_arg(fr, 0)?;
+        Ok(Value::int(vm.div_i64(test_int(args[1]), 0)?))
+    }
+    fn relay(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let ty = vm.frame_type_arg(fr, 0)?;
+        let callee = object(vm, &FAIL);
+        let passed = [args[0], args[1]];
+        unsafe {
+            vm.call_record_typed(
+                fr,
+                callee,
+                &[ty],
+                0,
+                |_| passed,
+                |vm, fr| fail(vm, fr, &passed),
+            )
+        }
+    }
+    const SOURCE: &str = r#"
+        function Fail<T>(x: T, n: int) -> int { n / 0 }
+        function Relay<T>(x: T, n: int) -> int { Fail<T>(x, n) }
+        function Main() -> string {
+            let out = "";
+            let r = Relay<int>(1, 1) catch (e, ctx) {
+                baml.panics.DivisionByZero => {
+                    for (let frame in ctx.stack_trace.frames) {
+                        out = out + `${frame.function_name}@${frame.line};`;
+                    }
+                    -1
+                }
+            };
+            out
+        }
+    "#;
+    let bytecode = run_with_compiled_bodies(SOURCE, &[], &[], true);
+    assert!(bytecode.contains("user.Fail@"), "{bytecode}");
+    assert_compiled_output(
+        SOURCE,
+        &[("user.Fail", fail), ("user.Relay", relay)],
+        &[("user.Fail", &FAIL)],
+        &bytecode,
+    );
 }

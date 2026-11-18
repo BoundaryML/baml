@@ -7,9 +7,7 @@ use std::{
     ptr,
 };
 
-use bex_vm_types::{
-    HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, StackIndex, Value, types::Function,
-};
+use bex_vm_types::{HeapPtr, Object, RealizedTy, RootVisitor, StackIndex, Value, types::Function};
 
 use super::CompiledFn;
 use crate::{
@@ -41,8 +39,11 @@ pub struct FrameRecord {
     /// [`BexVm::activate_manual_span`].
     pub(crate) scoped: Cell<bool>,
     pub(crate) receipt: Cell<Option<FrameTelemetry>>,
-    /// De Bruijn order; entry records use their VM frame's arguments.
-    type_args: UnsafeCell<Box<[RealizedTy]>>,
+    /// The type arguments a direct call passed, in De Bruijn order. Borrowed
+    /// from the caller, so valid only while the record is live; a zombie's is
+    /// empty. Entry records use their VM frame's arguments, and a closure its
+    /// captured ones.
+    type_args: *const [RealizedTy],
 }
 
 impl FrameRecord {
@@ -92,9 +93,12 @@ impl FrameRecord {
     /// The record's own type arguments; empty for an entry record.
     #[allow(unsafe_code)]
     pub(crate) fn own_type_args(&self) -> &[RealizedTy] {
-        // SAFETY: the vector is replaced or mutated only by collection
-        // forwarding, which runs while no body holds a borrow of it.
-        unsafe { &*self.type_args.get() }
+        // SAFETY: the record roots its callable, and a live record's
+        // `type_args` outlives it; see `call_record_typed`.
+        match unsafe { self.function().get() } {
+            Object::Closure(closure) => &closure.captured_type_args,
+            _ => unsafe { &*self.type_args },
+        }
     }
 
     #[inline]
@@ -105,10 +109,6 @@ impl FrameRecord {
     /// Hand every heap pointer the record holds to a collection's visitor.
     /// Through `&self`: a record is reached through the chain's raw links,
     /// and its pointers sit in cells.
-    #[expect(
-        unsafe_code,
-        reason = "walk the type arguments while every body is parked"
-    )]
     fn visit_roots(&self, visitor: &mut dyn RootVisitor) {
         let Self {
             prev: _,
@@ -121,7 +121,7 @@ impl FrameRecord {
             entry: _,
             scoped: _,
             receipt: _,
-            type_args,
+            type_args: _,
         } = self;
         let visit = |cell: &Cell<HeapPtr>, visitor: &mut dyn RootVisitor| {
             let mut ptr = cell.get();
@@ -133,9 +133,6 @@ impl FrameRecord {
         if !package.get().as_ptr().is_null() {
             visit(package, visitor);
         }
-        // SAFETY: collection runs while every body is parked, so nothing
-        // borrows the type arguments.
-        unsafe { &mut *type_args.get() }.visit_roots(visitor);
     }
 }
 
@@ -303,6 +300,7 @@ impl BexVm {
 
     /// Errors retain the record for unwinding. `args` runs only when telemetry records the call.
     #[allow(clippy::inline_always, reason = "measured: the call fast path")]
+    #[allow(unsafe_code)]
     #[inline(always)]
     pub fn call_record<T: RecordResult, A: AsRef<[Value]>>(
         &mut self,
@@ -312,17 +310,24 @@ impl BexVm {
         args: impl FnOnce(&mut BexVm) -> A,
         body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
-        self.call_record_typed(caller, callee, &[], pc, args, body)
+        unsafe { self.call_record_typed(caller, callee, &[], pc, args, body) }
     }
 
     /// [`Self::call_record`] for a generic callee, whose frame starts with
     /// the call's type arguments.
+    ///
+    /// # Safety
+    ///
+    /// `type_args` names only statically declared types: the record borrows
+    /// them and a collection does not visit them, so a type a collection
+    /// could move would go stale. `direct_calls_typed` checks this.
     #[allow(
         clippy::inline_always,
         reason = "also specializes the untyped call fast path"
     )]
+    #[allow(unsafe_code)]
     #[inline(always)]
-    pub fn call_record_typed<T: RecordResult, A: AsRef<[Value]>>(
+    pub unsafe fn call_record_typed<T: RecordResult, A: AsRef<[Value]>>(
         &mut self,
         caller: &FrameRecord,
         callee: HeapPtr,
@@ -331,28 +336,28 @@ impl BexVm {
         args: impl FnOnce(&mut BexVm) -> A,
         body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
+        debug_assert!(
+            type_args
+                .iter()
+                .all(crate::reachable::is_statically_declared)
+        );
         caller.note_pc(pc);
         let observe = |vm: &mut BexVm, type_args: &[RealizedTy]| {
             let function = vm.observed_callee(callee)?;
             let args = args(vm);
             vm.enter_record_receipt(caller, function, callee, &[], type_args, args.as_ref())
         };
-        self.call_record_in(
-            callee,
-            caller.package.get(),
-            type_args.to_vec().into_boxed_slice(),
-            observe,
-            body,
-        )
+        self.call_record_in(callee, caller.package.get(), type_args, observe, body)
     }
 
-    /// Dispatched closures carry their captured type arguments in the record.
+    /// A dispatched closure's record reads its captured type arguments
+    /// through the closure.
+    #[inline]
     pub(crate) fn call_record_dispatched(
         &mut self,
         caller: &FrameRecord,
         callee: HeapPtr,
         body: CompiledFn,
-        type_args: Vec<RealizedTy>,
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
@@ -362,13 +367,9 @@ impl BexVm {
             let function = vm.observed_callee(callee)?;
             vm.enter_record_receipt(caller, function, callee, carried, &[], args)
         };
-        self.call_record_in(
-            callee,
-            package,
-            type_args.into_boxed_slice(),
-            observe,
-            |vm, frame| body(vm, frame, args),
-        )
+        self.call_record_in(callee, package, &[], observe, |vm, frame| {
+            body(vm, frame, args)
+        })
     }
 
     #[allow(
@@ -382,7 +383,7 @@ impl BexVm {
         &mut self,
         callee: HeapPtr,
         package: HeapPtr,
-        type_args: Box<[RealizedTy]>,
+        type_args: &[RealizedTy],
         observe: impl FnOnce(&mut BexVm, &[RealizedTy]) -> Option<FrameTelemetry>,
         body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
@@ -405,7 +406,7 @@ impl BexVm {
             entry: false,
             scoped: Cell::new(false),
             receipt: Cell::new(None),
-            type_args: UnsafeCell::new(type_args),
+            type_args,
         };
         // The invocation is entered with the caller still innermost, as the
         // call path enters it before pushing the callee's frame. The receipt
@@ -516,7 +517,10 @@ impl BexVm {
     #[inline(never)]
     fn zombify(&mut self, linked: *const FrameRecord, record: FrameRecord) {
         let chain = &*self.compiled.records;
-        let zombie = Box::new(record);
+        let zombie = Box::new(FrameRecord {
+            type_args: &[],
+            ..record
+        });
         // The box holds the record the chain linked at `linked`.
         chain.relink(linked, &raw const *zombie);
         chain.zombies().push(zombie);
@@ -560,7 +564,7 @@ impl BexVm {
             entry: true,
             scoped: Cell::new(false),
             receipt: Cell::new(None),
-            type_args: UnsafeCell::new(Box::default()),
+            type_args: &[],
         };
         links.top.set(&raw const record);
         let pop = Pop {
