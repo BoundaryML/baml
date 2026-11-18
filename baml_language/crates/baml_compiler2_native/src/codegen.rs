@@ -337,6 +337,26 @@ impl<'db> Backend<'db> {
         clif
     }
 
+    /// A reference to a function of this program or of the runtime, for use
+    /// in `function`. Both end up in the one executable, so the reference is
+    /// colocated: a call is a direct branch, where the module's own
+    /// declaration would make every call of an imported function load its
+    /// address first.
+    fn function_ref(&self, id: FuncId, function: &mut ir::Function) -> ir::FuncRef {
+        let declaration = self.module.declarations().get_function_decl(id);
+        let signature = function.import_signature(declaration.signature.clone());
+        let name = function.declare_imported_user_function(ir::UserExternalName {
+            namespace: 0,
+            index: id.as_u32(),
+        });
+        function.import_function(ir::ExtFuncData {
+            name: ir::ExternalName::user(name),
+            signature,
+            colocated: true,
+            patchable: false,
+        })
+    }
+
     fn runtime(&mut self, function: Runtime) -> Result<FuncId, CompileError> {
         if let Some(id) = self.runtime.get(&function) {
             return Ok(*id);
@@ -827,11 +847,11 @@ fn entry_shim(
     // The pinned register belongs to the caller under the C convention.
     let saved = builder.ins().get_pinned_reg(WORD);
     builder.ins().set_pinned_reg(mutator);
-    let callee = backend.module.declare_func_in_func(entry.id, builder.func);
+    let callee = backend.function_ref(entry.id, builder.func);
     let call = builder.ins().call(callee, &[]);
     let result = builder.inst_results(call)[0];
     if let Some((print, enum_type)) = print {
-        let print = backend.module.declare_func_in_func(print, builder.func);
+        let print = backend.function_ref(print, builder.func);
         match enum_type {
             // An enum's variant is printed by name, which its type has.
             Some(enum_type) => {
@@ -1856,11 +1876,10 @@ impl<'a, 'db> Translator<'a, 'db> {
     }
 
     fn function_ref(&mut self, id: FuncId) -> ir::FuncRef {
-        *self.function_refs.entry(id).or_insert_with(|| {
-            self.backend
-                .module
-                .declare_func_in_func(id, self.builder.func)
-        })
+        *self
+            .function_refs
+            .entry(id)
+            .or_insert_with(|| self.backend.function_ref(id, self.builder.func))
     }
 
     fn runtime_ref(&mut self, function: Runtime) -> Result<ir::FuncRef, CompileError> {
