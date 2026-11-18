@@ -317,8 +317,13 @@ impl<'a, 'db> Body<'a, 'db> {
         // A local written any other way than by copying has the type it is
         // declared with.
         let mut copied_only = vec![true; body.locals.len()];
-        for parameter in copied_only.iter_mut().take(mir.arity + 1) {
-            *parameter = false;
+        // ... or, for a local declared with a type that has no
+        // representation (a type parameter of a function inlined here), by
+        // copying and by operators, whose operands say what they make.
+        let mut computed_only = vec![true; body.locals.len()];
+        for local in 0..body.locals.len().min(mir.arity + 1) {
+            copied_only[local] = false;
+            computed_only[local] = false;
         }
         for block in &body.blocks {
             for statement in &block.statements {
@@ -326,13 +331,22 @@ impl<'a, 'db> Body<'a, 'db> {
                     StatementKind::Assign {
                         destination: Place::Local(local),
                         value,
-                    } if !matches!(value, Rvalue::Use(_)) => copied_only[local.0] = false,
-                    StatementKind::FreshCell { local, .. } => copied_only[local.0] = false,
+                    } if !matches!(value, Rvalue::Use(_)) => {
+                        copied_only[local.0] = false;
+                        if !matches!(value, Rvalue::BinaryOp { .. } | Rvalue::UnaryOp { .. }) {
+                            computed_only[local.0] = false;
+                        }
+                    }
+                    StatementKind::FreshCell { local, .. } => {
+                        copied_only[local.0] = false;
+                        computed_only[local.0] = false;
+                    }
                     _ => {}
                 }
             }
             if let Some(local) = block.terminator.as_ref().and_then(terminator_destination) {
                 copied_only[local.0] = false;
+                computed_only[local.0] = false;
             }
         }
         // A local assigned values of two different types has no type.
@@ -342,22 +356,36 @@ impl<'a, 'db> Body<'a, 'db> {
             for statement in body.blocks.iter().flat_map(|block| &block.statements) {
                 let StatementKind::Assign {
                     destination: Place::Local(local),
-                    value: Rvalue::Use(operand),
+                    value,
                 } = &statement.kind
                 else {
                     continue;
                 };
                 let declaration = body.local(*local);
-                if declaration.is_captured || conflicting[local.0] || !copied_only[local.0] {
+                let declared = native_ty(db, &declaration.ty);
+                let inferable =
+                    copied_only[local.0] || (declared.is_none() && computed_only[local.0]);
+                if declaration.is_captured || conflicting[local.0] || !inferable {
                     continue;
                 }
-                let Ok(found) = operand_ty(db, &typed, operand) else {
+                let found = match value {
+                    Rvalue::Use(operand) => operand_ty(db, &typed, operand),
+                    Rvalue::BinaryOp { op, left, right } => operand_ty(db, &typed, left)
+                        .and_then(|left| Ok((left, operand_ty(db, &typed, right)?)))
+                        .and_then(|(left, right)| binary_typing(*op, &left, &right))
+                        .map(|(_, result)| result),
+                    Rvalue::UnaryOp { op, operand } => operand_ty(db, &typed, operand)
+                        .and_then(|operand| unary_typing(*op, &operand)),
+                    _ => continue,
+                };
+                let Ok(found) = found else {
                     continue;
                 };
-                // A declaration that can hold what is copied stands.
-                if native_ty(db, &declaration.ty)
-                    .is_some_and(|declared| assignable(&declared, &found))
-                {
+                // A declaration that can hold what is copied stands. One
+                // that says `unknown` would only put the value in a box.
+                if declared.is_some_and(|declared| {
+                    declared != NativeTy::Unknown && assignable(&declared, &found)
+                }) {
                     continue;
                 }
                 match &typed.inferred[local.0] {

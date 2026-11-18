@@ -600,6 +600,13 @@ function union_of_scalars() -> float {
 }
 function shade_of(n: int) -> Shade { if (n > 1) { Shade.Light } else { Shade.Dark } }
 function enum_result() -> Shade { shade_of(count(2)) }
+function generic_apply<T>(f: (T) -> T throws never, x: T) -> T { f(x) }
+function inlined_generic_call() -> int {
+  let double = (x: int) -> int { x * 2 };
+  let s = 0;
+  for (let i = 0; i < count(10); i += 1) { s += generic_apply(double, i); }
+  s
+}
 "#;
 
 /// How a run ended. `baml run` prints a result on stdout and exits zero, or
@@ -789,6 +796,7 @@ const CASES: &[Case] = &[
     case("union_in_a_field", Printed("6397")),
     case("union_of_scalars", Printed("211.5")),
     case("enum_result", Printed("Light")),
+    case("inlined_generic_call", Printed("90")),
 ];
 
 /// The text of the thrown value in an uncaught-panic report.
