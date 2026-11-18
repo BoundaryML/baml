@@ -188,3 +188,180 @@ function hook_parks_and_then_throws() -> int {
   };
   text.length()
 }
+
+// A class's own `from_json`: `baml.json` calls it wherever the type it
+// reads names the class, with the `json` in that place, and what it
+// returns is the value.
+
+class HookRange {
+  low: int
+  high: int
+  implements baml.FromJson {
+    function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
+      let text = baml.json.to<string>(j);
+      let parts = text.split("..");
+      if parts.length() != 2 {
+        throw baml.json.DecodeError { message: `not a range: ${text}`, path: "" }
+      }
+      HookRange { low: baml.Int.parse(parts[0]) catch (e) { _ => -1 }, high: baml.Int.parse(parts[1]) catch (e) { _ => -1 } }
+    }
+  }
+}
+class HookSpans {
+  name: string
+  first: HookRange
+  rest: HookRange[]
+  named: map<string, HookRange>
+  maybe: HookRange?
+  none: HookRange?
+}
+// Read by its fields: a member of a union is chosen by them, and then
+// built by its `from_json`.
+class HookTagged {
+  kind: "tagged"
+  size: int
+  implements baml.FromJson {
+    function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
+      HookTagged { kind: "tagged", size: baml.json.to<int>(baml.json.field(j, "size")) * 100 }
+    }
+  }
+}
+class HookOther {
+  kind: "other"
+  label: string
+}
+class HookEither {
+  items: (HookTagged | HookOther)[]
+}
+// Its `from_json` reads a document of its own with `baml.json`, which
+// calls another `from_json`.
+class HookEnvelope {
+  spans: HookSpans
+  implements baml.FromJson {
+    function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
+      let inner = baml.json.decode<HookSpans>(baml.json.to<string>(baml.json.field(j, "text"))) catch (e) {
+        baml.json.ParseError => { throw baml.json.DecodeError { message: e.message, path: "text" } },
+      };
+      HookEnvelope { spans: inner }
+    }
+  }
+}
+class HookSlowRead {
+  waited: int
+  implements baml.FromJson {
+    function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
+      let milliseconds = baml.json.to<int>(j);
+      baml.sys.sleep(baml.time.Duration.from_milliseconds(milliseconds));
+      HookSlowRead { waited: milliseconds + task_churn(10) * 0 }
+    }
+  }
+}
+class HookCountedRead {
+  seen: int
+  implements baml.FromJson {
+    function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
+      let tally = baml.json.to<int[]>(j);
+      HookCountedRead { seen: tally.length() }
+    }
+  }
+}
+class HookReadThenBad {
+  before: HookRange
+  bad: int
+  after: HookRange
+}
+
+function hook_spans_doc(n: int) -> string {
+  let rest: string[] = [];
+  let named: string[] = [];
+  for (let i = 0; i < n; i += 1) {
+    rest.push(`"${i}..${i * 2}"`);
+    named.push(`"k${i}": "${i * 10}..${i * 10 + 1}"`);
+  };
+  `{"name": "${rep("n", n)}", "first": "1..9", "rest": [${rest.join(", ")}], "named": {${named.join(", ")}}, "maybe": "7..8", "none": null}`
+}
+
+function hook_from_at_the_root() -> int {
+  let range = baml.json.decode<HookRange>(rep("\"", 1) + "3..40" + rep("\"", 1));
+  range.low * 1000 + range.high
+}
+function hook_from_at_the_root_of_to() -> int {
+  let range = baml.json.to<HookRange>(baml.json.from(rep("12", 1) + ".." + rep("5", 2)));
+  range.low * 1000 + range.high
+}
+function hook_from_in_arrays_maps_and_classes() -> string {
+  let spans = baml.json.decode<HookSpans>(hook_spans_doc(4));
+  let none = if spans.none == null { 1 } else { 0 };
+  let maybe = match (spans.maybe) {
+    null => -1,
+    let range: HookRange => range.high,
+  };
+  `${spans.name} ${spans.first.high} ${spans.rest.length()} ${spans.rest[3].high} ${spans.named["k2"].low} ${maybe} ${none}`
+}
+// Enough of them that each `from_json` collects, with the values still to
+// be read and the results so far held by the native.
+function hook_from_many() -> int {
+  let parts: string[] = [];
+  for (let i = 0; i < 150; i += 1) { parts.push(`"${i}..${i + 1}"`); };
+  let ranges = baml.json.decode<HookRange[]>("[" + parts.join(",") + "]");
+  let sum = 0;
+  for (let i = 0; i < ranges.length(); i += 1) { sum += ranges[i].high - ranges[i].low + ranges[i].low % 7; };
+  sum
+}
+function hook_from_in_a_union_chosen_by_fields() -> string {
+  let either = baml.json.decode<HookEither>("{\"items\": [{\"kind\": \"other\", \"label\": \"" + rep("l", 2) + "\"}, {\"kind\": \"tagged\", \"size\": 3}]}");
+  let out: string[] = [];
+  for (let i = 0; i < either.items.length(); i += 1) {
+    out.push(match (either.items[i]) {
+      let t: HookTagged => `tagged ${t.size}`,
+      let o: HookOther => `other ${o.label}`,
+    });
+  };
+  out.join(", ")
+}
+function hook_from_calls_json_again() -> string {
+  let doc = baml.json.stringify({ "text": hook_spans_doc(2) });
+  let envelope = baml.json.decode<HookEnvelope>(doc);
+  `${envelope.spans.rest[1].high} ${envelope.spans.named["k1"].low}`
+}
+function hook_from_throws_and_is_caught_by_class() -> string {
+  let ranges = baml.json.decode<HookRange[]>("[\"1..2\", \"" + rep("x", 3) + "\"]") catch (e) {
+    baml.json.ParseError => { return "parse"; },
+    baml.json.DecodeError => { return `${e.message} at <${e.path}>`; },
+  };
+  `${ranges.length()}`
+}
+function hook_from_throws_and_is_not_caught() -> int {
+  baml.json.decode<HookSpans>("{\"name\": \"n\", \"first\": \"" + rep("1", 2) + "\", \"rest\": [], \"named\": {}}").first.low
+}
+// A value that does not fit is refused where the decoder meets it: the
+// `from_json` before it has run, and the one after it has not.
+function hook_from_runs_up_to_a_misfit() -> string {
+  let read = baml.json.decode<HookReadThenBad>("{\"before\": \"1..2\", \"bad\": \"" + rep("b", 1) + "\", \"after\": \"oops\"}") catch (e) {
+    baml.json.ParseError => { return "parse"; },
+    baml.json.DecodeError => { return `${e.message} at <${e.path}>`; },
+  };
+  `${read.bad}`
+}
+function hook_from_throws_before_a_misfit() -> string {
+  let read = baml.json.decode<HookReadThenBad>("{\"before\": \"" + rep("o", 2) + "\", \"bad\": \"b\", \"after\": \"1..2\"}") catch (e) {
+    baml.json.ParseError => { return "parse"; },
+    baml.json.DecodeError => { return `${e.message} at <${e.path}>`; },
+  };
+  `${read.bad}`
+}
+function hook_from_parks() -> string {
+  let slow = spawn { baml.json.decode<HookSlowRead[]>("[" + rep("2", 2) + ", 4]") };
+  let busy = spawn { task_churn(60) + baml.json.decode<HookSpans>(hook_spans_doc(3)).rest.length() };
+  let quick = spawn { baml.json.to<HookSlowRead>(baml.json.from(task_count(1))) };
+  let n = await busy;
+  let read = await slow;
+  `${n} ${(await quick).waited} ${read[0].waited} ${read[1].waited}`
+}
+// The default `from_json` reads the class by its fields, each field by
+// its own `from_json`.
+function hook_from_under_the_default_from_json() -> string {
+  let spans = baml._from_json_structural_default<HookSpans>(baml.json.parse(hook_spans_doc(2)));
+  let tally = baml._from_json_structural_default<HookCountedRead>(baml.json.parse("{\"seen\": " + rep("4", 1) + "}"));
+  `${spans.rest[1].high} ${tally.seen}`
+}

@@ -3,9 +3,9 @@
 # A call passes the description of each type argument, and of the static
 # type of an `unknown` argument, where other natives are passed type ids.
 baml.json.parse allocates
-baml.json._decode allocates
+baml.json._decode async
 baml.json._stringify async
 baml.json._from async
-baml.json._to allocates
+baml.json._to async
 baml.json._path allocates
 baml.json.field

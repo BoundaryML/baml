@@ -20,7 +20,7 @@
     reason = "words of the heap are read as the types their descriptions say"
 )]
 
-mod decode;
+pub(super) mod decode;
 mod encode;
 mod out;
 mod text;
@@ -227,18 +227,16 @@ impl NativeBamlJson for Natives {
         scope.with_room(|scope| parse_rooted(scope, s))
     }
 
-    fn _decode<'s>(
+    async fn _decode<'s>(
         scope: &mut Scope<'s>,
         types: [TypeId; 1],
         s: Root<'s, Str>,
         aliased: bool,
     ) -> Result<usize, Thrown<'s>> {
-        scope.with_room(|scope| {
-            let json = parse_rooted(scope, s)?;
-            // SAFETY: a `json` value just built.
-            let json = unsafe { scope.elem_raw(json, TypeId(0)) };
-            decode::to(scope, types[0], json, aliased)
-        })
+        let json = scope.with_room(|scope| parse_rooted(scope, s))?;
+        // SAFETY: a `json` value just built.
+        let json = unsafe { scope.elem_raw(json, TypeId(0)) };
+        decode::to(scope, types[0], json, aliased, false).await
     }
 
     async fn _stringify<'s>(
@@ -300,13 +298,13 @@ impl NativeBamlJson for Natives {
         to_json_value(scope, value_type, value, aliased, omit_nulls).await
     }
 
-    fn _to<'s>(
+    async fn _to<'s>(
         scope: &mut Scope<'s>,
         types: [TypeId; 1],
         j: Elem<'s>,
         aliased: bool,
     ) -> Result<usize, Thrown<'s>> {
-        scope.with_room(|scope| decode::to(scope, types[0], j, aliased))
+        decode::to(scope, types[0], j, aliased, false).await
     }
 
     fn _path<'s>(
