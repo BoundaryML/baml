@@ -6,31 +6,36 @@
 //!
 //! A description is made from the type as MIR has it, so that a literal
 //! type, an alias for `json` and a field's attributes are still there to
-//! describe. What the runtime cannot yet write or read (a type with its own
-//! `to_json` or `from_json`, which it would have to call back into compiled
-//! code for; a `bigint`; a tuple) is found here, when the program is
-//! checked, and reported as a blocker.
+//! describe. What the runtime cannot yet write or read (an enum with its
+//! own `to_json` or `from_json`; a `bigint`; a tuple) is found here, when
+//! the program is checked, and reported as a blocker.
+//!
+//! A class with a `to_json` or a `from_json` of its own is described with
+//! where the runtime calls each: an entry the backend compiles for the
+//! purpose (`codegen/hooks.rs`).
 
 use std::collections::HashMap;
 
-use baml_compiler2_hir::loc::DeclRef;
+use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_hir_ty::{
     extern_loc::{ClassRef, EnumRef},
+    impls::{impl_facts, package_impl_locs, structural_interface},
     json_attrs::{is_optional, json_overrides, override_of},
     layout::{class_fields, class_head, class_ref_of, enum_head, enum_ref_of, interface_ref_of},
     render::Viewpoint,
 };
 use baml_compiler2_mir::{RuntimeTy, resolved_aliases_for_package};
-use baml_type::{HeadDisplay, Literal};
+use baml_type::{HeadDisplay, Literal, StructuralInterface};
 
 use crate::{
     Blocker,
     json_layout::{
-        DESCRIPTION, DESCRIPTION_A, FIELD_MAY_BE_ABSENT, FIELD_OMIT_NULL, FLAG_JSON,
-        FLAG_SHOWN_ONLY, JSON_BODY, JSON_VERSION, KIND_ARRAY, KIND_BOOL, KIND_BOOL_IS, KIND_CLASS,
-        KIND_ENUM, KIND_FLOAT, KIND_INT, KIND_INT_IS, KIND_MAP, KIND_NULL, KIND_OPAQUE,
-        KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, KIND_VARIANT,
-        MEMBER_SKIP, REPR_BOOL, REPR_BOXED, REPR_FLOAT, REPR_INT, REPR_NULL, REPR_PAIR, REPR_REF,
+        DESCRIPTION, DESCRIPTION_A, DESCRIPTION_FLAGS, FIELD_MAY_BE_ABSENT, FIELD_OMIT_NULL,
+        FLAG_HOOKS, FLAG_JSON, FLAG_SHOWN_ONLY, HOOK_FROM_JSON, HOOK_TO_JSON, JSON_BODY,
+        JSON_VERSION, KIND_ARRAY, KIND_BOOL, KIND_BOOL_IS, KIND_CLASS, KIND_ENUM, KIND_FLOAT,
+        KIND_INT, KIND_INT_IS, KIND_MAP, KIND_NULL, KIND_OPAQUE, KIND_OPTIONAL, KIND_STRING,
+        KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, KIND_VARIANT, MEMBER_SKIP, REPR_BOOL, REPR_BOXED,
+        REPR_FLOAT, REPR_INT, REPR_NULL, REPR_PAIR, REPR_REF,
     },
     layout,
     types::{NativeTy, class_layout, field_slots, native_ty},
@@ -53,6 +58,44 @@ pub(crate) struct Pending<'db> {
     pub(crate) listed: bool,
 }
 
+/// A class's own `to_json` and `from_json`, in that order.
+pub(crate) type Hooks<T> = [Option<T>; 2];
+
+/// The functions `class` provides for `baml.ToJson` and `baml.FromJson`,
+/// when it implements either with a body of its own.
+pub(crate) fn hook_functions<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    class: ClassRef<'db>,
+) -> Hooks<FunctionLoc<'db>> {
+    let head = class_head(db, class);
+    let mut found = [None; 2];
+    // The class's own package holds an implementation of an interface of
+    // the standard library.
+    for block in package_impl_locs(db, head.root()).iter().copied() {
+        let resolution = impl_facts(db, block);
+        let Some(facts) = resolution.resolved() else {
+            continue;
+        };
+        let (which, method) = match structural_interface(db, &facts.interface.name) {
+            Some(StructuralInterface::ToJson) => (0, "to_json"),
+            Some(StructuralInterface::FromJson) => (1, "from_json"),
+            _ => continue,
+        };
+        if !matches!(facts.for_ty_pattern.to_plain(), baml_type::Ty::Class(of, _) if of == head) {
+            continue;
+        }
+        if let Some(function) = facts.methods.iter().copied().find(|function| {
+            baml_compiler2_hir::item_data::function_data(db, *function)
+                .name
+                .as_str()
+                == method
+        }) {
+            found[which] = Some(function);
+        }
+    }
+    found
+}
+
 /// The descriptions made so far.
 pub(crate) struct JsonTypes<'db> {
     /// The section from [`JSON_BODY`] on.
@@ -67,6 +110,13 @@ pub(crate) struct JsonTypes<'db> {
     pending: Vec<Pending<'db>>,
     /// The type id of each class and enum described, with its description.
     directory: Vec<(u32, u32)>,
+    /// The entries the backend made for each class with a `to_json` or a
+    /// `from_json` of its own, as the ids it knows them by. `None` while a
+    /// program is only being checked: every such class will have them.
+    entries: Option<HashMap<ClassRef<'db>, Hooks<u32>>>,
+    /// Where the address of an entry goes: the offset in the section, and
+    /// the entry.
+    addresses: Vec<(u32, u32)>,
 }
 
 fn blocked(what: &str, ty: &RuntimeTy) -> Blocker {
@@ -154,6 +204,17 @@ impl<'db> JsonTypes<'db> {
             shown_enums: HashMap::new(),
             pending: Vec::new(),
             directory: Vec::new(),
+            entries: None,
+            addresses: Vec::new(),
+        }
+    }
+
+    /// The descriptions of a program being compiled, whose classes with a
+    /// `to_json` or a `from_json` of their own have these entries.
+    pub(crate) fn with_entries(entries: HashMap<ClassRef<'db>, Hooks<u32>>) -> Self {
+        Self {
+            entries: Some(entries),
+            ..Self::new()
         }
     }
 
@@ -463,9 +524,22 @@ impl<'db> JsonTypes<'db> {
         let name = head_name(db, &head).head_display_name();
         let blocked =
             |what: &str, detail: String| Err(Blocker::new(format!("json of a {what}"), detail));
-        if override_of(json_overrides(db, head.root()), &head).is_some() {
-            return blocked("type with its own to_json or from_json", name);
-        }
+        let entries = if override_of(json_overrides(db, head.root()), &head).is_some() {
+            match &self.entries {
+                None => Some([None; 2]),
+                Some(entries) => match entries.get(&class) {
+                    Some(entries) => Some(*entries),
+                    None => {
+                        return blocked(
+                            "class whose own to_json or from_json the program does not hold",
+                            name,
+                        );
+                    }
+                },
+            }
+        } else {
+            None
+        };
         let DeclRef::Source(class_loc) = class else {
             return blocked("class without source", name);
         };
@@ -531,6 +605,19 @@ impl<'db> JsonTypes<'db> {
             records.extend([field, word(layout::field_offset(slot)), flags]);
         }
         records.extend(full_at);
+        if let Some(entries) = entries {
+            // Two addresses, each written by the linker.
+            self.body.resize(self.body.len().next_multiple_of(8), 0);
+            let hooks = self.here();
+            self.push(&[0; 4]);
+            for (entry, offset) in entries.into_iter().zip([HOOK_TO_JSON, HOOK_FROM_JSON]) {
+                if let Some(entry) = entry {
+                    self.addresses.push((hooks + word(offset), entry));
+                }
+            }
+            records.push(hooks);
+            self.patch(at + word(DESCRIPTION_FLAGS), FLAG_HOOKS);
+        }
         let table = self.here();
         self.push(&records);
         self.patch(at + word(DESCRIPTION_A) + 4, table);
@@ -629,6 +716,12 @@ impl<'db> JsonTypes<'db> {
         self.enums.retain(|_, at| kept(at));
         self.shown_enums.retain(|_, at| kept(at));
         self.pending.retain(|pending| kept(&pending.at));
+        self.addresses.retain(|(at, _)| kept(at));
+    }
+
+    /// Where in the section the address of each entry goes.
+    pub(crate) fn addresses(&self) -> &[(u32, u32)] {
+        &self.addresses
     }
 
     /// The classes and enums described since the last call, for
@@ -672,9 +765,14 @@ impl<'db> JsonTypes<'db> {
 }
 
 /// Whether a call of `native` passes descriptions for its type arguments,
-/// where any other native is passed type ids.
+/// where any other native is passed type ids: `baml.json`, and the two
+/// defaults a `to_json` and a `from_json` fall back on.
 pub(crate) fn takes_descriptions(native: &crate::natives::Native) -> bool {
     native.path.starts_with("baml.json.")
+        || matches!(
+            native.path,
+            "baml._to_json_default" | "baml._from_json_structural_default"
+        )
 }
 
 /// The classes and enums a call of a `baml.json` native can make values of

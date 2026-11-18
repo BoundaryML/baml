@@ -8,15 +8,17 @@
 )]
 
 use crate::{
+    heap::load,
     json_layout::{
-        DESCRIBED, DESCRIPTION_A, DESCRIPTION_B, DESCRIPTION_C, DESCRIPTION_NAME, DESCRIPTION_REPR,
-        FIELD_FLAGS, FIELD_MAY_BE_ABSENT, FIELD_OFFSET, FIELD_OMIT_NULL, FIELD_RECORD, FIELD_TYPE,
-        JSON_DIRECTORY_AT, JSON_DIRECTORY_COUNT, JSON_SECTION, KIND_CLASS, KIND_ENUM,
-        KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, MEMBER_ALIASED,
-        MEMBER_DECLARED, MEMBER_SKIP, REPR_REF, VARIANT_FLAGS, VARIANT_RECORD,
+        DESCRIBED, DESCRIPTION_A, DESCRIPTION_B, DESCRIPTION_C, DESCRIPTION_FLAGS,
+        DESCRIPTION_NAME, DESCRIPTION_REPR, FIELD_FLAGS, FIELD_MAY_BE_ABSENT, FIELD_OFFSET,
+        FIELD_OMIT_NULL, FIELD_RECORD, FIELD_TYPE, FLAG_HOOKS, HOOKS, JSON_DIRECTORY_AT,
+        JSON_DIRECTORY_COUNT, JSON_SECTION, KIND_CLASS, KIND_ENUM, KIND_OPTIONAL, KIND_STRING,
+        KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, MEMBER_ALIASED, MEMBER_DECLARED, MEMBER_SKIP,
+        REPR_REF, VARIANT_FLAGS, VARIANT_RECORD,
     },
     layout::{KIND_FIXED, TYPE_DESCRIBED, TYPE_STRING},
-    native::{Scope, TypeId},
+    native::{Scope, TypeId, drive::BamlFn},
 };
 
 /// Read the `u32` at `address`.
@@ -236,6 +238,19 @@ impl Desc {
         // SAFETY: the records of an enum and of a class are followed by
         // where its full name is.
         unsafe { self.text(word(after), word(after + 4)) }
+    }
+
+    /// The entry of the class's own `to_json` or `from_json`, by where its
+    /// address is after the class's records: `None` for a class that
+    /// leaves it to the language, and for anything not a class.
+    pub(crate) fn hook(self, which: usize) -> Option<BamlFn> {
+        if !self.is_class() || self.field(DESCRIPTION_FLAGS) as u32 & FLAG_HOOKS == 0 {
+            return None;
+        }
+        let after = self.section + self.b() + self.count() * FIELD_RECORD;
+        // SAFETY: a class with the flag has, after its records, where
+        // both addresses are.
+        BamlFn::at(unsafe { load(self.section + word(after + HOOKS) + which) })
     }
 
     pub(crate) fn is_enum(self) -> bool {

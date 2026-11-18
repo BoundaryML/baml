@@ -66,6 +66,7 @@ use crate::{
 };
 
 mod classes;
+mod hooks;
 mod json;
 mod map;
 mod native_call;
@@ -390,6 +391,9 @@ struct Backend<'db> {
     /// The function a spawned task starts in, by the machine type its
     /// closure returns; see [`spawn`].
     task_shims: HashMap<ir::Type, FuncId>,
+    /// The entries natives call, and the ones `async` natives are called
+    /// through.
+    hooks: hooks::Hooks,
 }
 
 impl<'db> Backend<'db> {
@@ -443,6 +447,7 @@ impl<'db> Backend<'db> {
             functions: Vec::new(),
             unwind: unwind::Tables::default(),
             task_shims: HashMap::new(),
+            hooks: hooks::Hooks::default(),
         })
     }
 
@@ -798,9 +803,9 @@ impl<'db> Backend<'db> {
             .map_err(internal)?;
         // The method table has a row for every word of types, and is
         // already laid out: what follows them costs it nothing.
-        self.append_descriptions();
+        let description = self.append_descriptions();
         let types = std::mem::take(&mut self.types);
-        self.define_data(id, DataDescription::new(), types)
+        self.define_data(id, description, types)
     }
 
     /// A string object in the executable's data. The collector leaves
@@ -1072,6 +1077,7 @@ pub(crate) fn generate<'db>(
         );
         bodies.push((function, mir, typed));
     }
+    hooks::declare(&mut backend, program, &declared)?;
 
     let entry = program
         .functions
@@ -1177,6 +1183,13 @@ pub(crate) fn generate<'db>(
             &mut disassembly,
         )?;
     }
+    hooks::define_all(
+        &mut backend,
+        &mut context,
+        &mut builder_context,
+        &mut clif,
+        &mut disassembly,
+    )?;
     backend.define_stack_maps()?;
     backend.define_unwind()?;
     backend.define_functions()?;

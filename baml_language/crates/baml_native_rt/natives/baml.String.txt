@@ -1,42 +1,42 @@
 # Natives of `baml.String`, implemented in `src/native/string.rs`.
 # `char_count` and `length` are not here: compiled code reads the count itself.
-baml.String.byte_length leaf
-baml.String.to_lower_case reentrant
-baml.String.to_upper_case reentrant
-baml.String.trim reentrant
-baml.String.trim_start reentrant
-baml.String.trim_end reentrant
-baml.String.includes leaf
-baml.String.starts_with leaf
-baml.String.ends_with leaf
-baml.String.split reentrant
-baml.String.chars reentrant
-baml.String.lines reentrant
-baml.String.slice reentrant
-baml.String.index_of leaf
-baml.String.last_index_of leaf
-baml.String.at reentrant
-baml.String.code_point_at leaf
-baml.String.repeat reentrant
-baml.String._replace_literal reentrant
-baml.String._replace_all_literal reentrant
-baml.String.is_numeric leaf
-baml.String.is_alphabetic leaf
-baml.String.is_alphanumeric leaf
-baml.String.is_uppercase leaf
-baml.String.is_lowercase leaf
-baml.String.is_whitespace leaf
-baml.String.is_control leaf
-baml.String.is_graphic leaf
-baml.String.is_ascii leaf
-baml.String.is_ascii_numeric leaf
-baml.String.is_ascii_alphabetic leaf
-baml.String.is_ascii_alphanumeric leaf
-baml.String.is_ascii_uppercase leaf
-baml.String.is_ascii_lowercase leaf
-baml.String.is_ascii_whitespace leaf
-baml.String.is_ascii_control leaf
-baml.String.is_ascii_graphic leaf
-baml.String.is_ascii_hex leaf
-baml.String.to_code_points reentrant
-baml.String.from_code_points reentrant
+baml.String.byte_length
+baml.String.to_lower_case allocates
+baml.String.to_upper_case allocates
+baml.String.trim allocates
+baml.String.trim_start allocates
+baml.String.trim_end allocates
+baml.String.includes
+baml.String.starts_with
+baml.String.ends_with
+baml.String.split allocates
+baml.String.chars allocates
+baml.String.lines allocates
+baml.String.slice allocates
+baml.String.index_of
+baml.String.last_index_of
+baml.String.at allocates
+baml.String.code_point_at
+baml.String.repeat allocates
+baml.String._replace_literal allocates
+baml.String._replace_all_literal allocates
+baml.String.is_numeric
+baml.String.is_alphabetic
+baml.String.is_alphanumeric
+baml.String.is_uppercase
+baml.String.is_lowercase
+baml.String.is_whitespace
+baml.String.is_control
+baml.String.is_graphic
+baml.String.is_ascii
+baml.String.is_ascii_numeric
+baml.String.is_ascii_alphabetic
+baml.String.is_ascii_alphanumeric
+baml.String.is_ascii_uppercase
+baml.String.is_ascii_lowercase
+baml.String.is_ascii_whitespace
+baml.String.is_ascii_control
+baml.String.is_ascii_graphic
+baml.String.is_ascii_hex
+baml.String.to_code_points allocates
+baml.String.from_code_points allocates

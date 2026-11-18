@@ -2,12 +2,12 @@
 # `src/map.rs`.
 #
 # `index` is compiled inline: a probe, and a panic when it finds nothing.
-baml.Map.length leaf
-baml.Map.has leaf
-baml.Map.get leaf
-baml.Map.delete leaf
-baml.Map.clear leaf
-baml.Map.set reentrant
-baml.Map.get_or_insert reentrant
-baml.Map.keys reentrant
-baml.Map.values reentrant
+baml.Map.length
+baml.Map.has
+baml.Map.get
+baml.Map.delete
+baml.Map.clear
+baml.Map.set allocates
+baml.Map.get_or_insert allocates
+baml.Map.keys allocates
+baml.Map.values allocates

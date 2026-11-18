@@ -2,6 +2,13 @@
 //!
 //! The walk keeps its own stack, so a value nests as deep as memory
 //! allows, as it does in the interpreter.
+//!
+//! A value whose class has a `to_json` of its own is written as what that
+//! returns, which is a `json`. The walk calls nothing: it is told what
+//! each returned ([`Overrides::Splice`]), in the order [`overriding`] finds
+//! the values in, or only counts the ones it meets ([`Overrides::Count`]).
+//! The interpreter works the same way, and for the same reason runs every
+//! `to_json` before the walk that can refuse a value.
 
 use std::{collections::HashSet, fmt::Write as _};
 
@@ -10,8 +17,8 @@ use crate::{
     describe::{Desc, Types},
     heap::load,
     json_layout::{
-        KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_VARIANT, REPR_BOOL, REPR_FLOAT, REPR_INT, REPR_NULL,
-        REPR_PAIR,
+        HOOK_TO_JSON, KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_VARIANT, REPR_BOOL, REPR_BOXED,
+        REPR_FLOAT, REPR_INT, REPR_NULL, REPR_PAIR, REPR_REF,
     },
     layout::{
         ARRAY_DATA, ARRAY_LENGTH, BOX_VALUE, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
@@ -118,14 +125,32 @@ struct Frame {
     next: usize,
     length: usize,
     rest: Rest,
+    /// Whether the container is part of a `json` being copied: an enum
+    /// variant in it is its declared name, and what has no JSON form is
+    /// `null`.
+    json: bool,
+}
+
+/// What the walk does at a value whose class has a `to_json` of its own.
+pub(super) enum Overrides {
+    /// Write `null` and count it.
+    Count(usize),
+    /// Write what its `to_json` returned. `held` is the address of the
+    /// words of `count` such values, in the order [`overriding`] found
+    /// them, and then of what the `to_json` of each returned; `next` is
+    /// which the walk meets next. A value that is not that one is written
+    /// by its fields, as in the interpreter.
+    Splice {
+        held: usize,
+        count: usize,
+        next: usize,
+    },
 }
 
 struct Walker<'a> {
     types: &'a Types,
     options: Options,
-    /// Whether the value is a `json` being copied: an enum variant in it
-    /// is its declared name, and what has no JSON form is `null`.
-    json: bool,
+    overrides: &'a mut Overrides,
     frames: Vec<Frame>,
     /// The containers the walk is inside, once there are enough that a
     /// scan of the frames for one costs more than a set.
@@ -136,31 +161,34 @@ struct Walker<'a> {
 const OPEN_SCANNED: usize = 32;
 
 /// Write `value` to `sink`. The value is as a union holds it, and
-/// `described` is its static type when there is one.
+/// `described` is its static type when there is one. With `json` it is a
+/// `json` being copied.
 ///
 /// # Safety
 ///
-/// `value` is zero or a live object of the type described, and nothing is
-/// allocated outside reserved room during the walk.
+/// `value` is zero or a live object of the type described, nothing is
+/// allocated outside reserved room during the walk, and what `overrides`
+/// splices in is a live `json` for each value [`overriding`] finds.
 pub(super) unsafe fn walk(
     types: &Types,
     value: usize,
     described: Option<Desc>,
     options: Options,
     json: bool,
+    overrides: &mut Overrides,
     sink: &mut impl Sink,
 ) -> Result<(), Refused> {
     let mut walker = Walker {
         types,
         options,
-        json,
+        overrides,
         frames: Vec::new(),
         open: None,
     };
     // SAFETY: the caller's contract, for every value reached from it.
     unsafe {
-        let root = walker.of_reference(value, described);
-        walker.visit(root, sink)?;
+        let root = walker.of_reference(value, described, json);
+        walker.visit(root, json, sink)?;
         loop {
             let Some(frame) = walker.frames.last_mut() else {
                 return Ok(());
@@ -184,6 +212,7 @@ pub(super) unsafe fn walk(
             let index = frame.next;
             frame.next += 1;
             let first = index == 0;
+            let json = frame.json;
             // The word of the child, the one after it, and its type.
             let (word, next, described) = match &frame.rest {
                 Rest::Array { elements } => {
@@ -204,11 +233,161 @@ pub(super) unsafe fn walk(
             };
             let child = match described {
                 Some(described) => walker.of_slot(word, next, described),
-                None => walker.of_reference(word, None),
+                None => walker.of_reference(word, None, json),
             };
-            walker.visit(child, sink)?;
+            walker.visit(child, json, sink)?;
         }
     }
+}
+
+/// The fields of the instance at `object` the walk writes: for each its
+/// key, its word and the one after it, and its type. Two fields under one
+/// key are one entry, where the first sits, holding the last value.
+///
+/// # Safety
+///
+/// `object` is a live instance of the class described.
+unsafe fn written_fields(
+    object: usize,
+    described: Desc,
+    options: Options,
+) -> Vec<(&'static str, usize, usize, Desc)> {
+    let mut fields: Vec<(&'static str, usize, usize, Desc)> = Vec::new();
+    for field in described.fields() {
+        let Some(ty) = field.ty else { continue };
+        // SAFETY: the instance has the field, and the word after it when
+        // the field is two slots.
+        let (word, next) = unsafe {
+            let word = load(object + field.offset);
+            let next = if ty.repr() == REPR_PAIR {
+                load(object + field.offset + WORD)
+            } else {
+                1
+            };
+            (word, next)
+        };
+        let is_null = match ty.repr() {
+            REPR_NULL => true,
+            REPR_PAIR => next == 0,
+            REPR_INT | REPR_FLOAT | REPR_BOOL => false,
+            _ => word == 0,
+        };
+        let written =
+            field.shown(options.aliased) && !((options.omit_nulls || field.omit_null) && is_null);
+        if !written {
+            continue;
+        }
+        let key = field.key(options.aliased);
+        match fields.iter_mut().find(|(seen, ..)| *seen == key) {
+            Some(seen) => *seen = (key, word, next, ty),
+            None => fields.push((key, word, next, ty)),
+        }
+    }
+    fields
+}
+
+/// The entry of the `to_json` of the class of the instance at `object`,
+/// when the class has one of its own.
+///
+/// # Safety
+///
+/// `object` is a live object.
+pub(super) unsafe fn own_to_json(
+    types: &Types,
+    object: usize,
+) -> Option<crate::native::drive::BamlFn> {
+    // SAFETY: the caller's contract.
+    types
+        .of_type_id(unsafe { type_of(object) })
+        .and_then(|described| described.hook(HOOK_TO_JSON))
+}
+
+/// Hand `each` every value under `value` whose class has a `to_json` of
+/// its own, in the order the walk meets them. Such a value is not looked
+/// inside: its `to_json` writes all of it.
+///
+/// Unlike the walk this refuses nothing, so that every `to_json` runs
+/// before a value is refused, as in the interpreter. It looks inside what
+/// the walk looks inside (the elements of an array, the values of a map,
+/// the fields of an instance the walk writes) and only skips a container
+/// it is already inside.
+///
+/// # Safety
+///
+/// `value` is zero or a live object, and nothing is allocated outside
+/// reserved room meanwhile.
+pub(super) unsafe fn overriding(
+    types: &Types,
+    value: usize,
+    options: Options,
+    mut each: impl FnMut(usize),
+) {
+    // Each container the search is inside, with its children and the next
+    // of them to look at.
+    let mut open: Vec<(usize, Vec<usize>, usize)> = Vec::new();
+    let mut inside: HashSet<usize> = HashSet::new();
+    let mut next = Some(value);
+    loop {
+        if let Some(object) = next.take().filter(|object| *object != 0) {
+            // SAFETY: the caller's contract, for every value reached.
+            unsafe {
+                if own_to_json(types, object).is_some() {
+                    each(object);
+                } else if !inside.contains(&object) {
+                    let children = children(types, object, options);
+                    if !children.is_empty() {
+                        inside.insert(object);
+                        open.push((object, children, 0));
+                    }
+                }
+            }
+        }
+        let Some((object, children, cursor)) = open.last_mut() else {
+            return;
+        };
+        match children.get(*cursor) {
+            Some(child) => {
+                *cursor += 1;
+                next = Some(*child);
+            }
+            None => {
+                inside.remove(object);
+                open.pop();
+            }
+        }
+    }
+}
+
+/// The objects the walk goes on to from the one at `object`.
+///
+/// # Safety
+///
+/// `object` is a live object.
+unsafe fn children(types: &Types, object: usize, options: Options) -> Vec<usize> {
+    let mut children = Vec::new();
+    // SAFETY: the caller's contract: the header says what the object is.
+    unsafe {
+        match type_of(object) {
+            TYPE_ARRAY_OF_REFS => {
+                let data = load(object + ARRAY_DATA);
+                children.extend((0..load(object + ARRAY_LENGTH)).map(|i| load(data + i * WORD)));
+            }
+            TYPE_MAP if values_are_refs(object) && map::len(object) != 0 => {
+                map::for_each(object, |_, value| children.push(value));
+            }
+            other => {
+                if let Some(described) = types.of_type_id(other).filter(|found| found.is_class()) {
+                    children.extend(
+                        written_fields(object, described, options)
+                            .into_iter()
+                            .filter(|(.., ty)| matches!(ty.repr(), REPR_REF | REPR_BOXED))
+                            .map(|(_, word, ..)| word),
+                    );
+                }
+            }
+        }
+    }
+    children
 }
 
 impl Walker<'_> {
@@ -233,13 +412,13 @@ impl Walker<'_> {
             }
             repr @ (REPR_INT | REPR_FLOAT | REPR_BOOL) => scalar(repr, described, word),
             // SAFETY: the slot holds a reference, or zero.
-            _ => unsafe { self.of_reference(word, Some(described)) },
+            _ => unsafe { self.of_reference(word, Some(described), false) },
         }
     }
 
     /// What `value` refers to: what its header says, with what its static
-    /// type adds.
-    unsafe fn of_reference(&self, value: usize, described: Option<Desc>) -> Val {
+    /// type adds. With `json` it is part of a `json` being copied.
+    unsafe fn of_reference(&self, value: usize, described: Option<Desc>, json: bool) -> Val {
         if value == 0 {
             return Val::Null;
         }
@@ -276,28 +455,28 @@ impl Walker<'_> {
                     {
                         // Its elements are words only the static type
                         // could tell apart.
-                        return self.no_form();
+                        return Self::no_form(json);
                     }
                     Val::Array(value, elements)
                 }
                 TYPE_MAP => {
                     let described = member(KIND_MAP).map(|map| (map.of_a(), map.of_b()));
                     if described.is_none() && !values_are_refs(value) {
-                        return self.no_form();
+                        return Self::no_form(json);
                     }
                     Val::Map(value, described)
                 }
                 other => match self.types.of_type_id(other) {
-                    Some(found) if found.is_class() && !self.json => Val::Instance(value, found),
+                    Some(found) if found.is_class() && !json => Val::Instance(value, found),
                     Some(found) if found.is_enum() => Val::Variant(found, load(value + BOX_VALUE)),
-                    _ => self.no_form(),
+                    _ => Self::no_form(json),
                 },
             }
         }
     }
 
-    fn no_form(&self) -> Val {
-        if self.json {
+    fn no_form(json: bool) -> Val {
+        if json {
             Val::Null
         } else {
             Val::Refused("value has no json representation", "unserializable")
@@ -337,13 +516,19 @@ impl Walker<'_> {
         }
     }
 
-    fn push(&mut self, object: usize, length: usize, rest: Rest) -> Result<(), Refused> {
+    fn push(
+        &mut self,
+        object: usize,
+        length: usize,
+        rest: Rest,
+        json: bool,
+    ) -> Result<(), Refused> {
         let inside = match &self.open {
             Some(open) => open.contains(&object),
             None => self.frames.iter().any(|frame| frame.object == object),
         };
         if inside {
-            return Err(if self.json {
+            return Err(if json {
                 self.refuse("cyclic json value: the document contains itself", "cycle")
             } else {
                 self.refuse("value contains itself, so it has no JSON form", "cycle")
@@ -360,11 +545,44 @@ impl Walker<'_> {
             next: 0,
             length,
             rest,
+            json,
         });
         Ok(())
     }
 
-    unsafe fn visit<S: Sink>(&mut self, value: Val, sink: &mut S) -> Result<(), Refused> {
+    /// Write `value`, or begin it when it is a container. With `json` it
+    /// is part of a `json` being copied.
+    unsafe fn visit<S: Sink>(
+        &mut self,
+        value: Val,
+        json: bool,
+        sink: &mut S,
+    ) -> Result<(), Refused> {
+        // An instance of a class with a `to_json` of its own is written
+        // as what that returned, which is a `json`.
+        let (value, json) = match value {
+            Val::Instance(object, described) if described.hook(HOOK_TO_JSON).is_some() => {
+                match self.overrides {
+                    Overrides::Count(met) => {
+                        *met += 1;
+                        (Val::Null, json)
+                    }
+                    // SAFETY: the caller of `walk` has `count` values and
+                    // as many live `json` values there.
+                    Overrides::Splice { held, count, next }
+                        if *next < *count && unsafe { load(*held + *next * WORD) } == object =>
+                    {
+                        // SAFETY: as above.
+                        let returned = unsafe { load(*held + (*count + *next) * WORD) };
+                        *next += 1;
+                        // SAFETY: a live `json`.
+                        (unsafe { self.of_reference(returned, None, true) }, true)
+                    }
+                    Overrides::Splice { .. } => (value, json),
+                }
+            }
+            other => (other, json),
+        };
         match value {
             Val::Null => sink.null(),
             Val::Bool(value) => sink.bool(value),
@@ -380,7 +598,7 @@ impl Walker<'_> {
             Val::Str(string) => sink.string(unsafe { crate::string::text(string) }, string),
             Val::Variant(described, index) => match described.variant(index) {
                 // A `json` holding a variant reads it as its declared name.
-                Some(variant) if self.json => sink.string(variant.name, 0),
+                Some(variant) if json => sink.string(variant.name, 0),
                 Some(variant) if variant.shown(self.options.aliased) => {
                     sink.string(variant.key(self.options.aliased), 0);
                 }
@@ -399,7 +617,7 @@ impl Walker<'_> {
             Val::Array(array, elements) => {
                 // SAFETY: a live array.
                 let length = unsafe { load(array + ARRAY_LENGTH) };
-                self.push(array, length, Rest::Array { elements })?;
+                self.push(array, length, Rest::Array { elements }, json)?;
                 sink.begin_array();
             }
             Val::Map(object, described) => {
@@ -419,45 +637,13 @@ impl Walker<'_> {
                     }
                 }
                 let values = described.map(|(_, values)| values);
-                self.push(object, entries.len(), Rest::Map { entries, values })?;
+                self.push(object, entries.len(), Rest::Map { entries, values }, json)?;
                 sink.begin_object();
             }
             Val::Instance(object, described) => {
-                let aliased = self.options.aliased;
-                let mut fields: Vec<(&'static str, usize, usize, Desc)> = Vec::new();
-                for field in described.fields() {
-                    let Some(ty) = field.ty else { continue };
-                    // SAFETY: the instance has the field, and the word
-                    // after it when the field is two slots.
-                    let (word, next) = unsafe {
-                        let word = load(object + field.offset);
-                        let next = if ty.repr() == REPR_PAIR {
-                            load(object + field.offset + WORD)
-                        } else {
-                            1
-                        };
-                        (word, next)
-                    };
-                    let is_null = match ty.repr() {
-                        REPR_NULL => true,
-                        REPR_PAIR => next == 0,
-                        REPR_INT | REPR_FLOAT | REPR_BOOL => false,
-                        _ => word == 0,
-                    };
-                    let written = field.shown(aliased)
-                        && !((self.options.omit_nulls || field.omit_null) && is_null);
-                    if !written {
-                        continue;
-                    }
-                    // Two fields under one key write one entry, where the
-                    // first sits, holding the last value.
-                    let key = field.key(aliased);
-                    match fields.iter_mut().find(|(seen, ..)| *seen == key) {
-                        Some(seen) => *seen = (key, word, next, ty),
-                        None => fields.push((key, word, next, ty)),
-                    }
-                }
-                self.push(object, fields.len(), Rest::Instance { fields })?;
+                // SAFETY: a live instance of the class described.
+                let fields = unsafe { written_fields(object, described, self.options) };
+                self.push(object, fields.len(), Rest::Instance { fields }, false)?;
                 sink.begin_object();
             }
             Val::Refused(message, reason) => return Err(self.refuse(message, reason)),

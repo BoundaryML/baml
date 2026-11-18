@@ -92,7 +92,7 @@ impl NativeBamlMap for Natives {
         // SAFETY: a live map of the named types, and a key and a value of
         // them.
         locked(map, || unsafe {
-            map::set(scope.mutator, map, kind(types), is_ref, key, value)
+            map::set(scope.mutator(), map, kind(types), is_ref, key, value)
         })
     }
 
@@ -114,7 +114,7 @@ impl NativeBamlMap for Natives {
                 }
                 let hash = kind.hash(key);
                 let value = default.get(scope);
-                map::insert_new(scope.mutator, map.raw(), kind, is_ref, key, hash, value);
+                map::insert_new(scope.mutator(), map.raw(), kind, is_ref, key, hash, value);
             }
             default.get(scope)
         })

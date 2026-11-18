@@ -5,6 +5,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use baml_compiler2_hir::loc::FunctionLoc;
+use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{MirFunction, lower_function};
 
 use crate::{
@@ -131,6 +132,10 @@ pub(crate) struct Program<'db> {
     /// A row is `8 << column_shift` bytes: the columns, rounded up to a
     /// power of two.
     pub(crate) column_shift: u8,
+    /// The classes the program makes values of that have a `to_json` or a
+    /// `from_json` of their own, with those functions: what `baml.json`
+    /// calls when it writes or reads one.
+    pub(crate) hooks: Vec<(ClassRef<'db>, crate::json::Hooks<FnKey<'db>>)>,
 }
 
 /// A type as a row of the method table is for it: instantiations of a
@@ -156,6 +161,7 @@ pub(crate) fn collect<'db>(
         rows: Vec::new(),
         types: Vec::new(),
         column_shift: 0,
+        hooks: Vec::new(),
     };
     let mut queue = VecDeque::from([Needed {
         key: FnKey::new(entry, Entry::Direct),
@@ -167,6 +173,8 @@ pub(crate) fn collect<'db>(
     let mut calls: Vec<(Slot, baml_compiler2_mir::TyTemplateInterface, String)> = Vec::new();
     let mut resolved: Vec<(usize, NativeTy<'db>, Option<Target<'db>>)> = Vec::new();
     let mut unsupported = Vec::new();
+    // The classes whose own `to_json` and `from_json` have been looked for.
+    let mut hooked: Vec<ClassRef<'db>> = Vec::new();
     loop {
         visit(db, &mut program, &mut queue);
         let mut types = vec![
@@ -213,16 +221,74 @@ pub(crate) fn collect<'db>(
                 resolved.push((index, ty.clone(), target));
             }
         }
+        // A class's own `to_json` and `from_json` are functions to compile
+        // too: the runtime calls them, where no call in the program does.
+        for ty in &types {
+            let NativeTy::Class(class, arguments) = ty else {
+                continue;
+            };
+            if !arguments.is_empty() || hooked.contains(class) {
+                continue;
+            }
+            hooked.push(*class);
+            let functions = crate::json::hook_functions(db, *class)
+                .map(|function| function.map(|function| FnKey::new(function, Entry::Direct)));
+            for key in functions.iter().flatten() {
+                queue.push_back(Needed {
+                    key: key.clone(),
+                    captures: Vec::new(),
+                });
+            }
+            if functions.iter().any(Option::is_some) {
+                program.hooks.push((*class, functions));
+            }
+        }
         if queue.is_empty() {
             program.types = types;
             break;
         }
     }
     unsupported.extend(lay_out_methods(db, &mut program, &calls, &resolved));
+    unsupported.extend(check_hooks(db, &program));
     if let Some(entry) = program.functions.first_mut() {
         entry.blockers.extend(unsupported);
     }
     program
+}
+
+/// What keeps the runtime from calling a class's own `to_json` or
+/// `from_json`: it is entered with one value held as a union holds it, and
+/// returns one held the same way.
+fn check_hooks<'db>(db: &'db dyn baml_compiler2_mir::Db, program: &Program<'db>) -> Vec<Blocker> {
+    let mut blockers = Vec::new();
+    for (class, functions) in &program.hooks {
+        for (which, key) in functions.iter().enumerate() {
+            let Some(key) = key else { continue };
+            // Reported as its own blocked function.
+            let Ok(signature) = function_signature(db, key) else {
+                continue;
+            };
+            let own = NativeTy::Class(*class, Vec::new());
+            let (takes, returns) = if which == 0 {
+                (
+                    signature.params[..] == [own.clone()],
+                    signature.result.is_boxed(),
+                )
+            } else {
+                (
+                    matches!(&signature.params[..], [json] if json.is_boxed()),
+                    signature.result == own,
+                )
+            };
+            if !takes || !returns || identified_arguments(db, key).contains(&true) {
+                blockers.push(Blocker::new(
+                    "to_json or from_json with a layout the runtime cannot call",
+                    crate::types::describe(&own),
+                ));
+            }
+        }
+    }
+    blockers
 }
 
 /// Give each dispatched method its signature and its column, each type its

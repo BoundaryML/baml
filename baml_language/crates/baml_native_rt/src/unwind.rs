@@ -582,12 +582,14 @@ unsafe fn thrown_through(mutator: &Mutator, trace: usize) -> Vec<&'static str> {
 
 /// The names of the functions these return addresses are in. The last is
 /// in the function that enters compiled code, which has no name a program
-/// knows.
+/// knows. Nor has an entry the runtime calls a function of the program
+/// through, whose name is empty, and nor has the runtime itself.
 fn named(mutator: &Mutator, addresses: impl Iterator<Item = usize>) -> Vec<&'static str> {
     let mut names: Vec<&str> = addresses
         .filter_map(|address| mutator.unwind.function_name(address))
         .collect();
     names.pop();
+    names.retain(|name| !name.is_empty());
     names
 }
 

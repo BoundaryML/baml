@@ -1,2 +1,3 @@
 # Free functions of `baml`, implemented in `src/native/root.rs`.
-baml._trunc_to_int leaf
+baml._trunc_to_int
+baml._to_json_default async

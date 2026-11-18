@@ -17,6 +17,8 @@
 //! lands in a handler only for the chain to throw the error on. The chain
 //! stays in the code: a throw in the handler's own function jumps to it.
 
+use std::collections::HashMap;
+
 use baml_compiler2_mir::{
     BlockId, Local, Operand, Place, Rvalue, StatementKind, SwitchKey, Terminator,
 };
@@ -28,8 +30,6 @@ use cranelift_codegen::{
     },
 };
 use cranelift_module::{DataDescription, FuncId, Linkage, Module};
-
-use std::collections::HashMap;
 
 use super::{Backend, TRAP_AFTER_PANIC, Translator, WORD, internal};
 use crate::{
@@ -54,6 +54,19 @@ pub(super) struct Catch {
     flags: u32,
     /// The type ids it takes whatever its flags say.
     ids: Vec<u32>,
+}
+
+impl Catch {
+    /// What the handler of an entry the runtime calls takes: every error,
+    /// to hand it to the runtime, which has compiled code throw it again
+    /// further out. Whether its trace is wanted is for the handlers out
+    /// there to say.
+    pub(super) fn handing_on() -> Self {
+        Self {
+            flags: layout::HANDLER_TAKES_ALL | layout::HANDLER_MAY_RETHROW,
+            ids: Vec::new(),
+        }
+    }
 }
 
 /// A call with handlers.

@@ -308,7 +308,17 @@ impl Decoder<'_> {
         let out = std::mem::replace(&mut self.out, Out::counting());
         let mut sink = encode::JsonSink::new(out);
         // SAFETY: the caller's contract.
-        let walked = unsafe { encode::walk(self.types, json, None, options, true, &mut sink) };
+        let walked = unsafe {
+            encode::walk(
+                self.types,
+                json,
+                None,
+                options,
+                true,
+                &mut encode::Overrides::Count(0),
+                &mut sink,
+            )
+        };
         let (copied, out) = sink.finish();
         self.out = out;
         match walked {

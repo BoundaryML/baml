@@ -88,20 +88,15 @@ pub(crate) struct Signature {
     pub(crate) result: Ty,
 }
 
-/// How a native may be called. It selects the stub a call goes through.
+/// What the runtime's lists promise of a native, which is what a call of
+/// it has to allow for: see the runtime's `natives/README.md`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum Kind {
-    /// Reads its arguments and returns: it takes no worker, allocates
-    /// nothing and throws nothing.
-    Leaf,
-    /// Takes the worker first. May allocate, and so collect, and may throw.
-    Reentrant,
-    /// Reserved: holds addresses of objects across a call that may collect.
-    #[expect(dead_code, reason = "no native is listed as pinned yet")]
-    Pinned,
-    /// Reserved: may park the task that calls it.
-    #[expect(dead_code, reason = "no native is listed as async yet")]
-    Async,
+pub(crate) struct Flags {
+    /// May allocate, and so collect and throw: it takes the worker first.
+    /// Without it a native reads its arguments and returns.
+    pub(crate) allocates: bool,
+    /// May run compiled code and park the calling task before it returns.
+    pub(crate) is_async: bool,
 }
 
 /// The native `map[key]` is a call of where it is not a place.
@@ -120,7 +115,7 @@ pub(crate) struct Native {
     /// registers, instead of the bare value.
     pub(crate) throws: bool,
     /// `None` when the runtime does not implement it yet.
-    pub(crate) kind: Option<Kind>,
+    pub(crate) flags: Option<Flags>,
     /// How many type ids a call passes before the declared parameters.
     pub(crate) type_args: usize,
 }
@@ -137,18 +132,21 @@ pub(crate) fn named(name: &str) -> Option<&'static Native> {
 
 impl Native {
     /// How to call it, or why compiled code cannot yet.
-    pub(crate) fn callable(&self) -> Result<(&Signature, Kind), Blocker> {
+    pub(crate) fn callable(&self) -> Result<(&Signature, Flags), Blocker> {
         // `map[key]` is compiled as a probe and a panic, and never called:
         // the runtime has no symbol for it.
-        let inline = (self.path == MAP_INDEX).then_some(Kind::Leaf);
-        let Some(kind) = self.kind.or(inline) else {
+        let inline = (self.path == MAP_INDEX).then_some(Flags {
+            allocates: false,
+            is_async: false,
+        });
+        let Some(flags) = self.flags.or(inline) else {
             return Err(Blocker::new(
                 "standard library native that is not ported",
                 self.path,
             ));
         };
         match &self.signature {
-            Some(signature) => Ok((signature, kind)),
+            Some(signature) => Ok((signature, flags)),
             None => Err(Blocker::new(
                 "standard library native with an unsupported signature",
                 self.path,

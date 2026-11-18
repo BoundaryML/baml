@@ -293,7 +293,7 @@ const _: () = {
 /// runtime.
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
-struct Anchor {
+pub(crate) struct Anchor {
     /// The compiled function's stack pointer at the call: what its stack
     /// map offsets are relative to.
     sp: usize,
@@ -399,6 +399,27 @@ impl Mutator {
     /// in place of the task's.
     pub(crate) fn leave_task_stack(&mut self, left: bool) {
         self.on_worker_stack = left;
+    }
+
+    /// The top compiled frame as recorded last, for a runtime function
+    /// that runs compiled code and then goes on: it puts back the frame it
+    /// was itself called from.
+    pub(crate) fn anchor(&self) -> Anchor {
+        self.anchor
+    }
+
+    pub(crate) fn set_anchor(&mut self, anchor: Anchor) {
+        self.anchor = anchor;
+    }
+
+    /// The scratch word, which compiled code and the runtime hand each
+    /// other one word in around a call.
+    pub(crate) fn scratch(&self) -> usize {
+        self.scratch
+    }
+
+    pub(crate) fn set_scratch(&mut self, word: usize) {
+        self.scratch = word;
     }
 
     /// The top compiled frame: the return address into it and its frame
@@ -565,6 +586,8 @@ impl Mutator {
                     copy.forward(result);
                     copy.stack(&self.heap.stack_maps, Anchor { sp, pc, fp }, base);
                 }
+                // What the `async` natives the task is inside hold.
+                crate::native::drive::each_root(task, |slot| copy.forward(slot));
             }
             for &slot in &self.roots {
                 copy.forward(slot);

@@ -2,10 +2,10 @@
 #
 # A call passes the description of each type argument, and of the static
 # type of an `unknown` argument, where other natives are passed type ids.
-baml.json.parse reentrant
-baml.json._decode reentrant
-baml.json._stringify reentrant
-baml.json._from reentrant
-baml.json._to reentrant
-baml.json._path reentrant
-baml.json.field leaf
+baml.json.parse allocates
+baml.json._decode allocates
+baml.json._stringify async
+baml.json._from async
+baml.json._to allocates
+baml.json._path allocates
+baml.json.field

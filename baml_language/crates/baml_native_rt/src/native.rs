@@ -12,13 +12,17 @@
 //! - A [`Reservation`] is room for several objects taken at once. Nothing
 //!   collects while it is open, so objects built in it need no roots and
 //!   views read through it stay good until it is finished.
+//!
+//! A native that stops and goes on later is an `async fn`: see [`drive`].
+//! Every way it can stop takes the scope exclusively too, so no view is
+//! alive across one either.
 
 #![allow(
     clippy::cast_possible_truncation,
     reason = "a word is 64 bits wherever the runtime is built"
 )]
 
-use std::{cell::Cell, marker::PhantomData, mem::MaybeUninit};
+use std::{cell::Cell, marker::PhantomData, mem::MaybeUninit, ptr::NonNull};
 
 use crate::{
     heap::{Mutator, load, store},
@@ -418,28 +422,58 @@ impl From<Option<bool>> for OptionalScalar {
 }
 
 /// The slots behind the roots of one call of a native. It lives in the
-/// frame of the function compiled code called.
+/// frame of the function compiled code called, or for an `async` native in
+/// the block that holds its state.
 ///
 /// A slot is written when it is first handed out and not before: a call
 /// that roots two things pays for two.
-pub struct RootSlots(MaybeUninit<[Cell<usize>; ROOTS]>);
+pub struct RootSlots {
+    slots: MaybeUninit<[Cell<usize>; ROOTS]>,
+    /// How many slots are held.
+    used: Cell<usize>,
+    /// Which of them are roots, a bit each.
+    refs: Cell<u32>,
+}
+
+const _: () = assert!(ROOTS <= u32::BITS as usize);
 
 impl RootSlots {
     pub fn new() -> Self {
-        Self(MaybeUninit::uninit())
+        Self {
+            slots: MaybeUninit::uninit(),
+            used: Cell::new(0),
+            refs: Cell::new(0),
+        }
     }
 
-    /// Slot `index`, holding `word`.
-    fn hold(&self, index: usize, word: usize) -> &Cell<usize> {
+    /// The next slot, holding `word`, which is a reference if `is_ref`.
+    fn hold(&self, word: usize, is_ref: bool) -> &Cell<usize> {
+        let index = self.used.get();
         assert!(index < ROOTS, "a native holds at most {ROOTS} roots");
+        self.used.set(index + 1);
+        self.refs.set(self.refs.get() | u32::from(is_ref) << index);
         // SAFETY: the slot is inside the array, a cell may be written
         // through a shared reference, and it is written before the
         // reference to it is made.
         unsafe {
-            let slot = self.0.as_ptr().cast::<Cell<usize>>().add(index).cast_mut();
+            let slot = self
+                .slots
+                .as_ptr()
+                .cast::<Cell<usize>>()
+                .add(index)
+                .cast_mut();
             slot.write(Cell::new(word));
             &*slot
         }
+    }
+
+    /// The addresses of the slots that are roots.
+    pub(crate) fn roots(&self) -> impl Iterator<Item = usize> {
+        let refs = self.refs.get();
+        let first = self.slots.as_ptr() as usize;
+        (0..self.used.get())
+            .filter(move |index| refs >> index & 1 != 0)
+            .map(move |index| first + index * WORD)
     }
 }
 
@@ -452,6 +486,15 @@ impl Default for RootSlots {
 /// A reference the collector keeps current, for as long as the call it was
 /// made in.
 pub struct Root<'s, M>(&'s Cell<usize>, PhantomData<M>);
+
+// SAFETY: a root names a slot of its scope's, and the slot is read and
+// written only by the thread running that scope's native and by a
+// collection, which runs while that thread is stopped. A root crosses
+// threads only inside the state of an `async` native, which moves whole
+// and between polls. Nothing a native hands another thread can hold one:
+// the job of `Scope::io` and the work of `Scope::off_heap` are `'static`,
+// and a root is not.
+unsafe impl<M> Send for Root<'_, M> {}
 
 impl<M> Clone for Root<'_, M> {
     fn clone(&self) -> Self {
@@ -474,9 +517,15 @@ impl<M: Managed> Root<'_, M> {
     }
 }
 
-/// The error a native throws: the object compiled code receives, an
-/// instance of one of the standard library's error classes.
-pub struct Thrown<'s>(Root<'s, Obj>);
+/// The error a native throws: the object compiled code receives, and what
+/// it was caught with when compiled code threw it first.
+pub struct Thrown<'s> {
+    /// An instance of one of the standard library's error classes, or
+    /// whatever the BAML a native called threw, `null` included.
+    error: Elem<'s>,
+    /// The trace it was caught with, to throw it again with.
+    context: Option<Elem<'s>>,
+}
 
 /// A value of a type parameter held across allocations: a root when the
 /// type's values are references, the plain word otherwise.
@@ -485,6 +534,9 @@ pub struct Elem<'s> {
     slot: &'s Cell<usize>,
     is_ref: bool,
 }
+
+// SAFETY: as for `Root`.
+unsafe impl Send for Elem<'_> {}
 
 impl Elem<'_> {
     /// The value's word, current until the next allocation.
@@ -513,7 +565,7 @@ impl RtResult {
     pub fn thrown(thrown: &Thrown<'_>) -> Self {
         Self {
             value: 0,
-            thrown: thrown.0.raw(),
+            thrown: thrown.error.slot.get(),
         }
     }
 }
@@ -521,44 +573,63 @@ impl RtResult {
 /// One call of a native: the mutator it allocates with and the roots it
 /// holds.
 pub struct Scope<'s> {
-    mutator: &'s mut Mutator,
+    /// The worker running the native. Compiled code a native calls uses
+    /// the worker too, so the scope holds no reference to it.
+    mutator: NonNull<Mutator>,
     slots: &'s RootSlots,
-    /// How many slots are held, and how many of them are roots.
-    used: usize,
-    rooted: usize,
+    /// Where an `async` native leaves what it stops for, and finds the
+    /// answer: null for any other.
+    exchange: *mut drive::Exchange,
+    life: PhantomData<&'s mut Mutator>,
 }
 
+// SAFETY: a scope is used by one thread at a time: the one running its
+// native. It crosses threads only inside the state of an `async` native,
+// which moves whole and between polls, to the worker that polls it next.
+// It is not `Sync`, so no other thread can read a root through it.
+unsafe impl Send for Scope<'_> {}
+
 impl<'s> Scope<'s> {
+    fn mutator(&mut self) -> &mut Mutator {
+        // SAFETY: the worker outlives the call, and nothing else uses it
+        // while the native runs.
+        unsafe { self.mutator.as_mut() }
+    }
+
     /// Run `run` where it has room to recurse: on the worker's own stack
     /// when a task is running, whose stack keeps only a little for the
     /// runtime. `run` calls no compiled code.
     pub(crate) fn with_room<R>(&mut self, run: impl FnOnce(&mut Self) -> R) -> R {
-        let Some(stack) = self.mutator.worker_stack() else {
+        let Some(stack) = self.mutator().worker_stack() else {
             return run(self);
         };
-        self.mutator.leave_task_stack(true);
+        self.mutator().leave_task_stack(true);
         // SAFETY: a task is running, and the worker's stack is free below
         // where it left it.
         let result = unsafe { crate::sched::on_stack(stack, || run(self)) };
-        self.mutator.leave_task_stack(false);
+        self.mutator().leave_task_stack(false);
         result
     }
 
     /// The address of the program's type table.
     pub(crate) fn type_table(&self) -> usize {
-        self.mutator.types()
+        // SAFETY: as in `Self::mutator`.
+        unsafe { self.mutator.as_ref() }.types()
     }
 
+    /// A scope whose roots are in `slots`, for a call that returns before
+    /// its task runs anything else.
+    ///
     /// # Safety
     ///
     /// The mutator has been told the frame compiled code called
     /// ([`Mutator::enter`]).
     pub unsafe fn new(mutator: &'s mut Mutator, slots: &'s RootSlots) -> Self {
         Self {
-            mutator,
+            mutator: NonNull::from(mutator),
             slots,
-            used: 0,
-            rooted: 0,
+            exchange: std::ptr::null_mut(),
+            life: PhantomData,
         }
     }
 
@@ -568,11 +639,7 @@ impl<'s> Scope<'s> {
     ///
     /// `raw` is a live `M`.
     pub unsafe fn root_raw<M: Managed>(&mut self, raw: usize) -> Root<'s, M> {
-        let slot = self.slots.hold(self.used, raw);
-        self.mutator.root_at(slot.as_ptr() as usize);
-        self.used += 1;
-        self.rooted += 1;
-        Root(slot, PhantomData)
+        Root(self.hold(raw, true), PhantomData)
     }
 
     /// Hold `word`, a value of the type a call names by `ty`.
@@ -582,26 +649,52 @@ impl<'s> Scope<'s> {
     /// `word` is a value of that type: a live object or zero when the
     /// type's values are references.
     pub unsafe fn elem_raw(&mut self, word: usize, ty: TypeId) -> Elem<'s> {
-        let slot = self.slots.hold(self.used, word);
         let is_ref = self.is_reference(ty);
         // The slot is this value's whether or not it is a root: a native
         // can hold two values that are not references.
-        self.used += 1;
-        if is_ref {
-            self.mutator.root_at(slot.as_ptr() as usize);
-            self.rooted += 1;
+        Elem {
+            slot: self.hold(word, is_ref),
+            is_ref,
         }
-        Elem { slot, is_ref }
+    }
+
+    /// The next slot, holding `word`. The collector finds the roots of an
+    /// `async` native through its task, and any other's in the mutator's
+    /// own list.
+    fn hold(&mut self, word: usize, is_ref: bool) -> &'s Cell<usize> {
+        let slot = self.slots.hold(word, is_ref);
+        if is_ref && self.exchange.is_null() {
+            self.mutator().root_at(slot.as_ptr() as usize);
+        }
+        slot
+    }
+
+    /// Give back the last `count` slots handed out, for a native that
+    /// holds one value after another in a loop.
+    ///
+    /// # Safety
+    ///
+    /// No root or [`Elem`] of those slots is used again.
+    pub(crate) unsafe fn release_last(&mut self, count: usize) {
+        let slots = self.slots;
+        let kept = slots.used.get() - count;
+        let dropped = slots.refs.get() >> kept;
+        slots.used.set(kept);
+        slots.refs.set(slots.refs.get() & !(u32::MAX << kept));
+        if self.exchange.is_null() {
+            self.mutator().unroot(dropped.count_ones() as usize);
+        }
     }
 
     /// Whether values of the type a call names by `ty` are references.
     pub fn is_reference(&self, ty: TypeId) -> bool {
-        self.mutator.is_reference(ty.0 as usize)
+        // SAFETY: as in `Self::mutator`.
+        unsafe { self.mutator.as_ref() }.is_reference(ty.0 as usize)
     }
 
     /// A new string holding `text`. May collect.
     pub fn alloc_str(&mut self, text: &str) -> Root<'s, Str> {
-        let string = crate::string::from_str(self.mutator, text);
+        let string = crate::string::from_str(self.mutator(), text);
         // SAFETY: just made.
         unsafe { self.root_raw(string) }
     }
@@ -609,27 +702,27 @@ impl<'s> Scope<'s> {
     /// A new `bigint` holding `value`, or the `baml.panics.AllocFailure` of
     /// one past the limit. May collect.
     pub fn alloc_big(&mut self, value: &num_bigint::BigInt) -> Result<Root<'s, Big>, Thrown<'s>> {
-        match crate::bigint::checked(self.mutator, value) {
+        match crate::bigint::checked(self.mutator(), value) {
             // SAFETY: just made.
             Ok(object) => Ok(unsafe { self.root_raw(object) }),
             // SAFETY: just made.
-            Err(thrown) => Err(Thrown(unsafe { self.root_raw(thrown) })),
+            Err(thrown) => Err(unsafe { self.thrown(thrown) }),
         }
     }
 
     /// A new `bigint` holding `value`, which is known to be within the
     /// limit. May collect.
     pub fn make_big(&mut self, value: &num_bigint::BigInt) -> Root<'s, Big> {
-        let object = crate::bigint::make(self.mutator, value);
+        let object = crate::bigint::make(self.mutator(), value);
         // SAFETY: just made.
         unsafe { self.root_raw(object) }
     }
 
     /// Throw `baml.panics.AllocFailure`.
     pub fn alloc_failure(&mut self, message: &str) -> Thrown<'s> {
-        let thrown = crate::bigint::alloc_failure(self.mutator, message);
+        let thrown = crate::bigint::alloc_failure(self.mutator(), message);
         // SAFETY: just made.
-        Thrown(unsafe { self.root_raw(thrown) })
+        unsafe { self.thrown(thrown) }
     }
 
     /// A new array of `length` elements, each zero: `0`, `0.0`, `false`, or
@@ -649,7 +742,7 @@ impl<'s> Scope<'s> {
     /// may hold zero.
     pub unsafe fn alloc_instance(&mut self, type_id: usize, slots: usize) -> Root<'s, Obj> {
         let size = instance_size(slots);
-        let object = self.mutator.allocate_object(type_id, size);
+        let object = self.mutator().allocate_object(type_id, size);
         // SAFETY: the object has `slots` words after its header.
         unsafe {
             std::ptr::write_bytes((object + field_offset(0)) as *mut usize, 0, slots);
@@ -660,7 +753,7 @@ impl<'s> Scope<'s> {
     /// Room for objects of `bytes` bytes in all ([`str_size`],
     /// [`array_size`]). May collect, once, now.
     pub fn reserve(&mut self, bytes: usize) -> Reservation<'_, 's> {
-        let start = self.mutator.allocate(bytes);
+        let start = self.mutator().allocate(bytes);
         Reservation {
             scope: self,
             next: Cell::new(start),
@@ -691,15 +784,37 @@ impl<'s> Scope<'s> {
         for (text, field) in texts.iter_mut().zip(fields) {
             *text = crate::class::Init::Text(field);
         }
-        let error = crate::class::well_known(self.mutator, class, &texts[..fields.len()]);
+        let error = crate::class::well_known(self.mutator(), class, &texts[..fields.len()]);
         // SAFETY: just made.
-        Thrown(unsafe { self.root_raw(error) })
+        unsafe { self.thrown(error) }
+    }
+
+    /// The error object at `error`, to throw.
+    ///
+    /// # Safety
+    ///
+    /// `error` is a live object.
+    unsafe fn thrown(&mut self, error: usize) -> Thrown<'s> {
+        Thrown {
+            // SAFETY: the caller's contract.
+            error: unsafe { self.elem_raw(error, TypeId(0)) },
+            context: None,
+        }
+    }
+
+    /// The type id of the storage behind arrays of type `array_type`.
+    pub(crate) fn storage_type(&self, array_type: usize) -> usize {
+        // SAFETY: as in `Self::mutator`.
+        unsafe { self.mutator.as_ref() }.storage_type(array_type)
     }
 }
 
 impl Drop for Scope<'_> {
     fn drop(&mut self) {
-        self.mutator.unroot(self.rooted);
+        if self.exchange.is_null() {
+            let rooted = self.slots.refs.get().count_ones() as usize;
+            self.mutator().unroot(rooted);
+        }
     }
 }
 
@@ -875,7 +990,7 @@ impl<'s> Reservation<'_, 's> {
             } else {
                 let storage = array + ARRAY_SIZE;
                 let data = storage + STORAGE_ELEMENTS;
-                store(storage, self.scope.mutator.storage_type(array_type));
+                store(storage, self.scope.storage_type(array_type));
                 store(storage + STORAGE_CAPACITY, length);
                 std::ptr::write_bytes(data as *mut usize, 0, length);
                 store(array + ARRAY_DATA, data);
@@ -1027,6 +1142,7 @@ pub struct Natives;
 
 mod array;
 mod bigint;
+pub(crate) mod drive;
 mod float;
 mod int;
 mod json;
@@ -1038,9 +1154,11 @@ mod string;
     clippy::all,
     clippy::pedantic,
     non_snake_case,
+    async_fn_in_trait,
     reason = "generated from the standard library's declarations"
 )]
 mod generated {
+    use super::drive::drive;
     #[allow(unused_imports, reason = "what the listed natives need varies")]
     use super::{
         Arr, ArrRef, Big, BigRef, Bool, Elem, Float, Int, Map, MapRef, Natives, OptionalScalar,
