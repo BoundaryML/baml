@@ -3,9 +3,10 @@
 
 use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_mir::{
-    AggregateKind, BoundFrame, Constant, Local, MirFunction, MirFunctionBody, MirFunctionKind,
-    Operand, OptLevel, Place, RuntimeTy, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
-    Terminator, TyTemplate, TyTemplateInterface, TypeTest, function_display_name,
+    AggregateKind, BinOp, BoundFrame, Constant, Local, MirFunction, MirFunctionBody,
+    MirFunctionKind, Operand, OptLevel, Place, RuntimeTy, Rvalue, ShortCircuitKind, StatementKind,
+    SwitchKey, Terminator, TyTemplate, TyTemplateInterface, TypeTest, UnaryOp,
+    function_display_name,
 };
 
 use crate::{
@@ -38,6 +39,23 @@ pub(crate) enum Intrinsic {
     /// `==` and `!=` between two variants of an enum.
     EnumEq,
     EnumNe,
+    /// A method of `float` or `int` that is one instruction.
+    Scalar(ScalarOp),
+}
+
+/// The `float` and `int` methods compiled to one instruction each.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum ScalarOp {
+    FloatSqrt,
+    FloatAbs,
+    FloatFloor,
+    FloatCeil,
+    FloatTrunc,
+    FloatIsNan,
+    IntAbs,
+    IntLeadingZeros,
+    IntTrailingZeros,
+    IntCountOnes,
 }
 
 impl Intrinsic {
@@ -49,6 +67,16 @@ impl Intrinsic {
             "baml._to_string_default" | "baml._to_string_primitive" => Some(Self::ToString),
             "baml.ops.equals_equals" => Some(Self::EnumEq),
             "baml.ops.not_equals" => Some(Self::EnumNe),
+            "baml.Float.sqrt" => Some(Self::Scalar(ScalarOp::FloatSqrt)),
+            "baml.Float.abs" => Some(Self::Scalar(ScalarOp::FloatAbs)),
+            "baml.Float.floor" => Some(Self::Scalar(ScalarOp::FloatFloor)),
+            "baml.Float.ceil" => Some(Self::Scalar(ScalarOp::FloatCeil)),
+            "baml.Float.trunc" => Some(Self::Scalar(ScalarOp::FloatTrunc)),
+            "baml.Float.is_nan" => Some(Self::Scalar(ScalarOp::FloatIsNan)),
+            "baml.Int.abs" => Some(Self::Scalar(ScalarOp::IntAbs)),
+            "baml.Int.leading_zeros" => Some(Self::Scalar(ScalarOp::IntLeadingZeros)),
+            "baml.Int.trailing_zeros" => Some(Self::Scalar(ScalarOp::IntTrailingZeros)),
+            "baml.Int.count_ones" => Some(Self::Scalar(ScalarOp::IntCountOnes)),
             _ => None,
         }
     }
@@ -60,6 +88,26 @@ impl Intrinsic {
                 Some(NativeTy::Int)
             }
             (Self::StringCharCount, [NativeTy::String]) => Some(NativeTy::Int),
+            (Self::Scalar(ScalarOp::FloatIsNan), [NativeTy::Float]) => Some(NativeTy::Bool),
+            (
+                Self::Scalar(
+                    ScalarOp::FloatSqrt
+                    | ScalarOp::FloatAbs
+                    | ScalarOp::FloatFloor
+                    | ScalarOp::FloatCeil
+                    | ScalarOp::FloatTrunc,
+                ),
+                [NativeTy::Float],
+            ) => Some(NativeTy::Float),
+            (
+                Self::Scalar(
+                    ScalarOp::IntAbs
+                    | ScalarOp::IntLeadingZeros
+                    | ScalarOp::IntTrailingZeros
+                    | ScalarOp::IntCountOnes,
+                ),
+                [NativeTy::Int],
+            ) => Some(NativeTy::Int),
             (Self::EnumEq | Self::EnumNe, [NativeTy::Enum(left), NativeTy::Enum(right)])
                 if left == right =>
             {
@@ -337,10 +385,77 @@ pub(crate) fn call_target<'db>(
 
 /// How an interface method call finds its code.
 pub(crate) enum Virtual<'db> {
+    /// An operator of `baml.ops` on an `int`, `float` or `bool`: the
+    /// instructions the operator itself compiles to, with no call.
+    Operator(Operator),
     /// The receiver's type is known where the call is written.
     Static(Target<'db>),
     /// The receiver is some implementor: its type id picks the code.
     Dynamic(Slot),
+}
+
+/// What a method of a `baml.ops` interface computes on primitives.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Operator {
+    Binary(BinOp),
+    Unary(UnaryOp),
+}
+
+impl Operator {
+    /// The operator `method` of `interface` is on a receiver of type
+    /// `receiver`, when that is an `int`, a `float` or a `bool`.
+    fn of(
+        db: &dyn baml_compiler2_mir::Db,
+        interface: &TyTemplateInterface,
+        method: &str,
+        receiver: &NativeTy<'_>,
+    ) -> Option<Self> {
+        if !matches!(receiver, NativeTy::Int | NativeTy::Float | NativeTy::Bool) {
+            return None;
+        }
+        // `baml.ops`: the standard library's operator interfaces.
+        let name = &interface.name;
+        if name.key().kind(db) != baml_base::SourceRootKind::Stdlib
+            || !matches!(name.namespace().as_slice(), [namespace] if namespace.as_str() == "ops")
+        {
+            return None;
+        }
+        let operator = match (interface.name.name().as_str(), method) {
+            ("Add", "add") => Self::Binary(BinOp::Add),
+            ("Subtract", "sub") => Self::Binary(BinOp::Sub),
+            ("Multiply", "mul") => Self::Binary(BinOp::Mul),
+            ("Divide", "div") => Self::Binary(BinOp::Div),
+            ("Remainder", "rem") => Self::Binary(BinOp::Mod),
+            ("Negate", "neg") => Self::Unary(UnaryOp::Neg),
+            ("BitAnd", "bit_and") => Self::Binary(BinOp::BitAnd),
+            ("BitOr", "bit_or") => Self::Binary(BinOp::BitOr),
+            ("BitXor", "bit_xor") => Self::Binary(BinOp::BitXor),
+            ("ShiftLeft", "shl") => Self::Binary(BinOp::Shl),
+            ("ShiftRight", "shr") => Self::Binary(BinOp::Shr),
+            ("Equals", "eq") => Self::Binary(BinOp::Eq),
+            ("Equals", "neq") => Self::Binary(BinOp::Ne),
+            _ => return None,
+        };
+        Some(operator)
+    }
+
+    /// The type of the result on operands of these types.
+    pub(crate) fn result<'db>(self, operands: &[NativeTy<'db>]) -> Result<NativeTy<'db>, Blocker> {
+        match (self, operands) {
+            (Self::Binary(op), [left, right]) => {
+                // The other operand is a primitive too: a `bigint` is not.
+                if !matches!(right, NativeTy::Int | NativeTy::Float | NativeTy::Bool) {
+                    return Err(Blocker::new(
+                        "operator method on these operand types",
+                        format!("{op}"),
+                    ));
+                }
+                binary_typing(op, left, right).map(|(_, result)| result)
+            }
+            (Self::Unary(op), [operand]) => unary_typing(op, operand),
+            _ => Err(Blocker::new("operator method call", "with other arguments")),
+        }
+    }
 }
 
 pub(crate) fn virtual_target<'db>(
@@ -361,6 +476,11 @@ pub(crate) fn virtual_target<'db>(
         .get(self_arg)
         .ok_or_else(|| unsupported("without a receiver"))?;
     let receiver = operand_ty(db, body, receiver)?;
+    if self_arg == 0
+        && let Some(operator) = Operator::of(db, interface, method, &receiver)
+    {
+        return Ok(Virtual::Operator(operator));
+    }
     if receiver.is_boxed() {
         if self_arg != 0 {
             return Err(unsupported("dispatched on a later argument"));
@@ -1224,6 +1344,20 @@ fn terminator_supported<'db>(
             }
             let result = local_ty(db, body, place_local(destination)?)?;
             match virtual_target(db, body, iface, method, args, *ntypeargs, *self_arg)? {
+                Virtual::Operator(operator) => {
+                    let found = args
+                        .iter()
+                        .map(|argument| operand_ty(db, body, argument))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    if assignable(&result, &operator.result(&found)?) {
+                        Ok(())
+                    } else {
+                        Err(Blocker::new(
+                            "operator method call",
+                            format!("{method}: into another type"),
+                        ))
+                    }
+                }
                 Virtual::Static(Target::ToString) => {
                     let found = operand_ty(db, body, &args[*self_arg])?;
                     match Intrinsic::ToString.result(&[found]) {

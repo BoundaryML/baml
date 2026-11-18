@@ -541,6 +541,25 @@ impl<'a, 'db> Body<'a, 'db> {
                         },
                         _ => continue,
                     },
+                    // An operator method on primitives has the operator's
+                    // result.
+                    Written::Result(Terminator::VirtualCall {
+                        iface,
+                        method,
+                        args,
+                        ntypeargs,
+                        self_arg,
+                        ..
+                    }) => match crate::check::virtual_target(
+                        db, &typed, iface, method, args, *ntypeargs, *self_arg,
+                    ) {
+                        Ok(crate::check::Virtual::Operator(operator)) => args
+                            .iter()
+                            .map(|argument| operand_ty(db, &typed, argument))
+                            .collect::<Result<Vec<_>, _>>()
+                            .and_then(|operands| operator.result(&operands)),
+                        _ => continue,
+                    },
                     _ => continue,
                 };
                 let Ok(found) = found else {

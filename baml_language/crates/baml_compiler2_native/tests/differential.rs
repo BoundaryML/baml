@@ -839,6 +839,58 @@ function tuples_in_array() -> int {
   for (let p in pairs) { total += p.0 + p.1.length() * 10; }
   total
 }
+function op_sum<T extends baml.ops.Add<T, Output = T>>(a: T, b: T) -> T { a.add(b) }
+function op_same<T extends baml.ops.Equals>(a: T, b: T) -> bool { a.eq(b) }
+function operator_methods_on_int() -> int {
+  let a = count(7);
+  let b = count(3);
+  let sum = a.as<baml.ops.Add<int, Output = int>>.add(b);
+  let difference = a.as<baml.ops.Subtract<int, Output = int>>.sub(b);
+  let product = a.as<baml.ops.Multiply<int, Output = int>>.mul(b);
+  let quotient = a.as<baml.ops.Divide<int, Output = int>>.div(b);
+  let remainder = a.as<baml.ops.Remainder<int, Output = int>>.rem(b);
+  let negated = a.as<baml.ops.Negate<Output = int>>.neg();
+  let bits = a.as<baml.ops.BitAnd<int, Output = int>>.bit_and(b) * 100
+    + a.as<baml.ops.BitOr<int, Output = int>>.bit_or(b) * 10
+    + a.as<baml.ops.BitXor<int, Output = int>>.bit_xor(b);
+  let shifts = a.as<baml.ops.ShiftLeft<int, Output = int>>.shl(b) * 10
+    + a.as<baml.ops.ShiftRight<int, Output = int>>.shr(count(1));
+  sum + difference * 100 + product * 1000 + quotient * 100000 + remainder * 1000000
+    + negated * 10000000 + bits * 100000000 + shifts * 100000000000
+}
+function operator_methods_on_float() -> float {
+  let a = half(5);
+  let b = half(1);
+  let n = count(2);
+  a.as<baml.ops.Add<float, Output = float>>.add(b)
+    + a.as<baml.ops.Subtract<float, Output = float>>.sub(b) * 10.0
+    + a.as<baml.ops.Multiply<int, Output = float>>.mul(n) * 100.0
+    + n.as<baml.ops.Divide<float, Output = float>>.div(b) * 1000.0
+    + a.as<baml.ops.Remainder<float, Output = float>>.rem(b + b + b) * 10000.0
+    + a.as<baml.ops.Negate<Output = float>>.neg() * 100000.0
+}
+function operator_equals() -> int {
+  let seen = 0;
+  if count(3).eq(count(3)) { seen += 1; }
+  if count(3).neq(count(4)) { seen += 10; }
+  if half(1).eq(half(1)) { seen += 100; }
+  if (count(1) == 1).eq(count(2) == 2) { seen += 1000; }
+  if (half(0) / half(0)).eq(half(0) / half(0)) { seen += 10000; }
+  seen
+}
+function operator_methods_of_a_type_parameter() -> int {
+  let seen = op_sum(count(3), count(4));
+  if op_sum(half(3), half(4)) == 3.5 { seen += 10; }
+  if op_same(count(2), count(2)) { seen += 100; }
+  if op_same(half(2), half(3)) { seen += 1000; }
+  seen
+}
+function operator_method_divides_by_zero() -> int {
+  count(5).as<baml.ops.Divide<int, Output = int>>.div(count(0))
+}
+function operator_method_shifts_by_negative() -> int {
+  count(5).as<baml.ops.ShiftLeft<int, Output = int>>.shl(-count(1))
+}
 "#;
 
 /// How a run ended. `baml run` prints a result on stdout and exits zero, or
@@ -1059,6 +1111,18 @@ const CASES: &[Case] = &[
     case("tuple_results", Printed("1917")),
     case("tuple_of_mixed", Printed("\"end+++ 3.5 6 3\"")),
     case("tuples_in_array", Printed("46")),
+    case("operator_methods_on_int", Printed("56337331221410")),
+    case("operator_methods_on_float", Printed("-235477.0")),
+    case("operator_equals", Printed("11111")),
+    case("operator_methods_of_a_type_parameter", Printed("117")),
+    case(
+        "operator_method_divides_by_zero",
+        Panicked("baml.panics.DivisionByZero {dividend: 5}"),
+    ),
+    case(
+        "operator_method_shifts_by_negative",
+        Panicked("baml.panics.NegativeBitShift {message: \"bit shift count is negative: -1\"}"),
+    ),
 ];
 
 fn outcome(result: &Ending) -> String {

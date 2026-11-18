@@ -48,8 +48,9 @@ use cranelift_object::{ObjectBuilder, ObjectModule};
 use crate::{
     CompileError, CompileOptions,
     check::{
-        Callee, Intrinsic, TypeTestPlan, Virtual, body_of, call_target, identified_arguments,
-        is_intrinsic_call, narrow_bound, signature, type_test_plan, virtual_target,
+        Callee, Intrinsic, Operator, ScalarOp, TypeTestPlan, Virtual, body_of, call_target,
+        identified_arguments, is_intrinsic_call, narrow_bound, signature, type_test_plan,
+        virtual_target,
     },
     dispatch::{Slot, Target},
     flow::{Flow, ProvenIndexes},
@@ -2936,6 +2937,24 @@ impl<'a, 'db> Translator<'a, 'db> {
                     .ins()
                     .ushr_imm(lengths, i64::from(layout::STRING_CHAR_COUNT_SHIFT)))
             }
+            (Intrinsic::Scalar(op), [value]) => {
+                let value = self.operand(value)?;
+                let ins = self.builder.ins();
+                Ok(match op {
+                    ScalarOp::FloatSqrt => ins.sqrt(value),
+                    ScalarOp::FloatAbs => ins.fabs(value),
+                    ScalarOp::FloatFloor => ins.floor(value),
+                    ScalarOp::FloatCeil => ins.ceil(value),
+                    ScalarOp::FloatTrunc => ins.trunc(value),
+                    ScalarOp::FloatIsNan => ins.fcmp(FloatCC::Unordered, value, value),
+                    // The smallest `int` is its own absolute value: `int`
+                    // wraps.
+                    ScalarOp::IntAbs => ins.iabs(value),
+                    ScalarOp::IntLeadingZeros => ins.clz(value),
+                    ScalarOp::IntTrailingZeros => ins.ctz(value),
+                    ScalarOp::IntCountOnes => ins.popcnt(value),
+                })
+            }
             (Intrinsic::ToString, [value]) => {
                 let ty = self.operand_ty(value)?;
                 let value = self.operand(value)?;
@@ -3244,6 +3263,21 @@ impl<'a, 'db> Translator<'a, 'db> {
                 )
                 .map_err(internal)?;
                 let (result, produced) = match found {
+                    Virtual::Operator(operator) => {
+                        let types = args
+                            .iter()
+                            .map(|argument| self.operand_ty(argument))
+                            .collect::<Result<Vec<_>, _>>()?;
+                        let produced = operator.result(&types).map_err(internal)?;
+                        let result = match (operator, args.as_slice()) {
+                            (Operator::Binary(op), [left, right]) => {
+                                self.binary(op, left, right)?
+                            }
+                            (Operator::Unary(op), [operand]) => self.unary(op, operand)?,
+                            _ => return Err(internal("a checked operator has its operands")),
+                        };
+                        (result, produced)
+                    }
                     Virtual::Static(Target::ToString) => (
                         self.intrinsic(Intrinsic::ToString, &args[*self_arg..=*self_arg])?,
                         NativeTy::String,
