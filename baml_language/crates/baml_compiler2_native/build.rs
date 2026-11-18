@@ -2,8 +2,8 @@
 //! archive, and tells the crate where it is and which system libraries it
 //! needs at link time.
 //!
-//! The runtime is one dependency-free source file, so it is compiled with a
-//! direct `rustc` invocation rather than a nested `cargo`.
+//! The runtime depends on nothing but `std`, so it is compiled with a direct
+//! `rustc` invocation rather than a nested `cargo`.
 
 use std::{env, path::PathBuf, process::Command};
 
@@ -16,9 +16,9 @@ fn main() {
     let rustc = env::var_os("RUSTC").expect("set by cargo");
     let target = env::var("TARGET").expect("set by cargo");
 
-    let source = manifest_dir.join("../baml_native_rt/src/lib.rs");
+    let source_dir = manifest_dir.join("../baml_native_rt/src");
     let archive = out_dir.join("libbaml_native_rt.a");
-    println!("cargo:rerun-if-changed={}", source.display());
+    println!("cargo:rerun-if-changed={}", source_dir.display());
 
     let output = Command::new(rustc)
         .args(["--edition", "2024"])
@@ -28,10 +28,12 @@ fn main() {
         .args(["-C", "opt-level=3"])
         .args(["-C", "panic=abort"])
         .args(["-C", "codegen-units=1"])
+        // The collector walks the stack through frame records.
+        .args(["-C", "force-frame-pointers=yes"])
         .args(["--print", "native-static-libs"])
         .arg("-o")
         .arg(&archive)
-        .arg(&source)
+        .arg(source_dir.join("lib.rs"))
         .output()
         .expect("rustc runs");
     let diagnostics = String::from_utf8_lossy(&output.stderr);

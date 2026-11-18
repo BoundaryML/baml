@@ -1,0 +1,747 @@
+//! The allocator and the collector.
+//!
+//! # Objects
+//!
+//! [`crate::layout`] gives the layout of every object. Nothing in an object
+//! is tagged: the type in its header says which of its words are references,
+//! and a reference is a plain address, zero for `null`. Objects the compiler
+//! places in the executable's data (string constants) have the same layout
+//! and are never moved or freed.
+//!
+//! # Allocation
+//!
+//! A [`Mutator`] is one thread of execution's view of the heap. It owns a
+//! span of the current space and allocates from it by bumping an address;
+//! compiled code does that inline and calls [`baml_rt_alloc_slow`] only when
+//! the span is exhausted. Mutators share nothing but the [`Heap`] behind
+//! them, which is touched only while every mutator is stopped.
+//!
+//! # Collection
+//!
+//! A stop-the-world copying collector (Cheney's algorithm): live objects are
+//! copied into a fresh space and every reference to them is updated. Roots
+//! are found precisely: each compiled call site has a stack map naming the
+//! frame slots that hold references, and the runtime's own references live
+//! in slots registered with [`Mutator::root`].
+
+use std::alloc::{Layout, alloc, dealloc};
+
+use crate::layout::{
+    ARRAY_DATA, ARRAY_SIZE, KIND_ARRAY, KIND_FIXED, KIND_REFS, KIND_STRING, KIND_VALUES,
+    STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK,
+    WORD, words,
+};
+
+/// Set in the header of an object that has been copied; the rest of the
+/// header is then its new address.
+const FORWARDED: usize = 1;
+
+/// The first space of a heap. Spaces grow with the live data.
+const INITIAL_SPACE: usize = 8 << 20;
+/// The first space when every allocation collects: small, so that poisoning
+/// the abandoned space each time stays cheap.
+const INITIAL_STRESS_SPACE: usize = 64 << 10;
+/// A space is at least this many times the live data the collection before
+/// it found, so that the work of copying stays a fraction of the work of
+/// allocating.
+const SPACE_PER_LIVE: usize = 4;
+/// What an abandoned space is filled with under stress, so that a reference
+/// the collector failed to update reads as garbage.
+const POISON: u8 = 0xA5;
+
+/// What the collector needs to know about a kind of object: an entry of the
+/// program's type table. `pointer_count` field offsets, in bytes from the
+/// start of the object, follow the struct.
+#[repr(C)]
+struct TypeInfo {
+    kind: u32,
+    /// Bytes an object occupies, header included; fixed objects and arrays.
+    size: u32,
+    pointer_count: u32,
+    /// The type id of an array's storage.
+    storage: u32,
+}
+
+const _: () = assert!(size_of::<TypeInfo>() == TYPE_HEADER);
+
+/// Read the word at `address`.
+///
+/// # Safety
+///
+/// `address` is word-aligned and readable.
+pub unsafe fn load(address: usize) -> usize {
+    // SAFETY: the caller's contract.
+    unsafe { *(address as *const usize) }
+}
+
+/// Write the word at `address`.
+///
+/// # Safety
+///
+/// `address` is word-aligned and writable.
+pub unsafe fn store(address: usize, value: usize) {
+    // SAFETY: the caller's contract.
+    unsafe { *(address as *mut usize) = value }
+}
+
+/// A contiguous block objects are allocated in.
+struct Space {
+    start: usize,
+    size: usize,
+}
+
+impl Space {
+    fn new(size: usize) -> Self {
+        let layout = Layout::from_size_align(size, 2 * WORD).expect("a valid space layout");
+        // SAFETY: the layout has a non-zero size.
+        let start = unsafe { alloc(layout) } as usize;
+        assert!(
+            start != 0,
+            "out of memory: cannot reserve a {size} byte heap space"
+        );
+        Self { start, size }
+    }
+
+    fn end(&self) -> usize {
+        self.start + self.size
+    }
+
+    fn contains(&self, address: usize) -> bool {
+        address >= self.start && address < self.end()
+    }
+}
+
+impl Drop for Space {
+    fn drop(&mut self) {
+        let layout = Layout::from_size_align(self.size, 2 * WORD).expect("a valid space layout");
+        // SAFETY: allocated in `new` with this layout.
+        unsafe { dealloc(self.start as *mut u8, layout) };
+    }
+}
+
+/// The stack maps of the program: for the return address of every call in
+/// compiled code, the offsets from the caller's stack pointer of the slots
+/// that hold references across that call.
+struct StackMaps {
+    /// `(return address, first index into offsets, count)`, sorted.
+    sites: Vec<(usize, u32, u32)>,
+    offsets: Vec<u32>,
+}
+
+/// A stack map entry as the 32 bits it is stored in.
+fn narrow(entry: usize) -> u32 {
+    u32::try_from(entry).expect("stack map entries fit 32 bits")
+}
+
+impl StackMaps {
+    /// Decode the table the compiler emits: a count of functions, then for
+    /// each its address, a count of call sites, and for each site its return
+    /// address as an offset into the function, a count of slots, and the
+    /// slots. Every entry is one word.
+    ///
+    /// # Safety
+    ///
+    /// `table` is the address of a table in that format.
+    unsafe fn decode(table: usize) -> Self {
+        let mut cursor = table;
+        let mut next = || {
+            // SAFETY: the cursor stays inside the table by its own counts.
+            let word = unsafe { load(cursor) };
+            cursor += WORD;
+            word
+        };
+        let mut maps = Self {
+            sites: Vec::new(),
+            offsets: Vec::new(),
+        };
+        for _ in 0..next() {
+            let function = next();
+            for _ in 0..next() {
+                let return_address = function + next();
+                let count = next();
+                let first = maps.offsets.len();
+                for _ in 0..count {
+                    maps.offsets.push(narrow(next()));
+                }
+                maps.sites
+                    .push((return_address, narrow(first), narrow(count)));
+            }
+        }
+        maps.sites.sort_unstable();
+        maps
+    }
+
+    fn slots(&self, return_address: usize) -> &[u32] {
+        match self
+            .sites
+            .binary_search_by_key(&return_address, |site| site.0)
+        {
+            Ok(index) => {
+                let (_, first, count) = self.sites[index];
+                &self.offsets[first as usize..(first + count) as usize]
+            }
+            Err(_) => &[],
+        }
+    }
+}
+
+/// What the compiled program tells the runtime about itself.
+#[derive(Clone, Copy)]
+pub struct Program {
+    /// The address of its stack map table.
+    pub stack_maps: usize,
+    /// The address of its type table.
+    pub types: usize,
+}
+
+/// The memory every mutator allocates from. Read and written only while
+/// every mutator is stopped.
+struct Heap {
+    space: Space,
+    /// The size of the space the next collection copies into, unless more
+    /// is in use by then.
+    next_space: usize,
+    stack_maps: StackMaps,
+    types: usize,
+    /// Collect on every allocation, and poison what a collection abandons.
+    stress: bool,
+}
+
+/// One thread of execution's allocation state and roots. Compiled code holds
+/// its address in a dedicated register and reads the first two fields
+/// directly.
+#[repr(C)]
+pub struct Mutator {
+    /// Where the next object goes.
+    alloc_ptr: usize,
+    /// The end of the span compiled code may bump into without calling the
+    /// runtime. Under stress it equals `alloc_ptr`, so every allocation
+    /// calls.
+    alloc_limit: usize,
+    /// Compiled functions call the runtime on entry when the stack pointer
+    /// is below this. Zero: never.
+    stack_limit: usize,
+    /// Compiled loops call the runtime before their next iteration when
+    /// this is not zero.
+    poll: u32,
+    /// The true end of this mutator's span.
+    span_end: usize,
+    heap: Heap,
+    /// Where a collection starts walking this stack: the stack pointer, the
+    /// return address and the frame pointer of the compiled function that
+    /// last called the runtime, as they were at that call.
+    anchor: Anchor,
+    /// The frame that called into compiled code: where the walk stops.
+    base_frame: usize,
+    /// Addresses of the runtime's own slots holding references.
+    roots: Vec<usize>,
+}
+
+const _: () = {
+    assert!(std::mem::offset_of!(Mutator, alloc_ptr) == crate::layout::MUTATOR_ALLOC_PTR);
+    assert!(std::mem::offset_of!(Mutator, alloc_limit) == crate::layout::MUTATOR_ALLOC_LIMIT);
+    assert!(std::mem::offset_of!(Mutator, stack_limit) == crate::layout::MUTATOR_STACK_LIMIT);
+    assert!(std::mem::offset_of!(Mutator, poll) == crate::layout::MUTATOR_POLL);
+};
+
+/// The top compiled frame of a stack, recorded where compiled code calls the
+/// runtime.
+#[derive(Clone, Copy, Default)]
+struct Anchor {
+    /// The compiled function's stack pointer at the call: what its stack
+    /// map offsets are relative to.
+    sp: usize,
+    /// The return address of the call: what selects the stack map.
+    pc: usize,
+    /// The compiled function's frame pointer: the rest of the chain.
+    fp: usize,
+}
+
+impl Mutator {
+    /// A mutator with a heap of its own.
+    ///
+    /// # Safety
+    ///
+    /// `program` holds the addresses of the compiler's tables.
+    pub unsafe fn new(program: Program, stress: bool) -> Self {
+        let size = if stress {
+            INITIAL_STRESS_SPACE
+        } else {
+            INITIAL_SPACE
+        };
+        let space = Space::new(size);
+        let mut mutator = Self {
+            alloc_ptr: space.start,
+            alloc_limit: 0,
+            stack_limit: 0,
+            poll: 0,
+            span_end: space.end(),
+            heap: Heap {
+                space,
+                next_space: size,
+                // SAFETY: the caller's contract.
+                stack_maps: unsafe { StackMaps::decode(program.stack_maps) },
+                types: program.types,
+                stress,
+            },
+            anchor: Anchor::default(),
+            base_frame: 0,
+            roots: Vec::new(),
+        };
+        mutator.publish_limit();
+        mutator
+    }
+
+    fn publish_limit(&mut self) {
+        self.alloc_limit = if self.heap.stress {
+            self.alloc_ptr
+        } else {
+            self.span_end
+        };
+    }
+
+    /// Record where this stack's compiled frames end: at `frame`, the frame
+    /// pointer of the function about to call into compiled code.
+    #[cfg(not(test))]
+    pub fn set_base_frame(&mut self, frame: usize) {
+        self.base_frame = frame;
+    }
+
+    /// Record the top of this stack of compiled frames, given `frame`, the
+    /// frame pointer of a runtime function compiled code called directly.
+    ///
+    /// Only the frame record the platform's ABI defines is read: the
+    /// caller's frame pointer and the return address. Nothing else about
+    /// the runtime function's frame matters, so a boundary that switches
+    /// stacks can record the same three words itself.
+    pub fn enter(&mut self, frame: usize) {
+        // SAFETY: `frame` is the frame record of a function compiled code
+        // called.
+        self.anchor = unsafe {
+            Anchor {
+                sp: frame + 2 * WORD,
+                pc: load(frame + WORD),
+                fp: load(frame),
+            }
+        };
+    }
+
+    /// A loop found the poll word set. Nothing sets it yet.
+    pub fn poll(&mut self) {
+        self.poll = 0;
+    }
+
+    /// Keep the reference in `*slot` alive and current across allocations
+    /// until the matching [`Self::unroot`].
+    pub fn root(&mut self, slot: &mut usize) {
+        self.roots.push(std::ptr::from_mut(slot) as usize);
+    }
+
+    /// Like [`Self::root`], for a slot known by address.
+    pub fn root_at(&mut self, slot: usize) {
+        self.roots.push(slot);
+    }
+
+    /// Drop the last `count` roots.
+    pub fn unroot(&mut self, count: usize) {
+        self.roots.truncate(self.roots.len() - count);
+    }
+
+    /// The type id of the storage behind arrays of type `array_type`.
+    pub fn storage_type(&self, array_type: usize) -> usize {
+        // SAFETY: an array's type id is an entry of the type table.
+        unsafe { (*((self.heap.types + array_type) as *const TypeInfo)).storage as usize }
+    }
+
+    /// Allocate `size` bytes (a whole number of words) and return their
+    /// address. The memory is not initialized. May collect: every reference
+    /// the caller holds must be rooted.
+    pub fn allocate(&mut self, size: usize) -> usize {
+        debug_assert!(size.is_multiple_of(WORD));
+        if self.heap.stress || self.alloc_ptr + size > self.span_end {
+            self.collect(size);
+        }
+        let address = self.alloc_ptr;
+        self.alloc_ptr += size;
+        self.publish_limit();
+        address
+    }
+
+    /// Allocate an object of `size` bytes whose type id is `type_id`.
+    pub fn allocate_object(&mut self, type_id: usize, size: usize) -> usize {
+        let object = self.allocate(size);
+        // SAFETY: `object` is `size >= WORD` fresh bytes.
+        unsafe { store(object, type_id) };
+        object
+    }
+
+    /// Copy everything reachable into a new space with room for `needed`
+    /// more bytes, and abandon the old one.
+    fn collect(&mut self, needed: usize) {
+        let used = self.alloc_ptr - self.heap.space.start;
+        // Everything may be live, so the new space holds at least all of it.
+        let mut copy = Copy::new(
+            &self.heap.space,
+            self.heap.types,
+            self.heap.next_space.max(used + needed),
+        );
+        // SAFETY: the stack between the anchor and `base_frame` is this
+        // mutator's compiled frames, described by the stack maps, and every
+        // registered root is a live slot.
+        unsafe {
+            copy.stack(&self.heap.stack_maps, self.anchor, self.base_frame);
+            for &slot in &self.roots {
+                copy.forward(slot);
+            }
+            copy.finish();
+        }
+        let live = copy.free - copy.to.start;
+        let to = copy.to;
+        // A space mostly full of live data is collected again almost at
+        // once, so the next one is sized by what survived this time.
+        if !self.heap.stress {
+            self.heap.next_space = to.size.max((live + needed) * SPACE_PER_LIVE);
+        }
+
+        let from = std::mem::replace(&mut self.heap.space, to);
+        if self.heap.stress {
+            // SAFETY: the space is owned and no live object remains in it.
+            unsafe { std::ptr::write_bytes(from.start as *mut u8, POISON, from.size) };
+        }
+        drop(from);
+        self.alloc_ptr = self.heap.space.start + live;
+        self.span_end = self.heap.space.end();
+        self.publish_limit();
+    }
+}
+
+/// One copying pass from a space into a new one.
+struct Copy<'a> {
+    from: &'a Space,
+    to: Space,
+    types: usize,
+    /// Where the next copied object goes.
+    free: usize,
+}
+
+impl<'a> Copy<'a> {
+    fn new(from: &'a Space, types: usize, size: usize) -> Self {
+        let to = Space::new(words(size));
+        let free = to.start;
+        Self {
+            from,
+            to,
+            types,
+            free,
+        }
+    }
+
+    /// The type of an object from its header.
+    ///
+    /// # Safety
+    ///
+    /// `header` is the header of an object that has not been forwarded.
+    unsafe fn info(&self, header: usize) -> &'static TypeInfo {
+        // SAFETY: a type id is the offset of an entry of the type table,
+        // which lives in the executable's data.
+        unsafe { &*((self.types + (header & TYPE_ID_MASK)) as *const TypeInfo) }
+    }
+
+    /// How many bytes the object at `object` occupies.
+    ///
+    /// # Safety
+    ///
+    /// `object` is a live object of type `info`.
+    unsafe fn size(object: usize, info: &TypeInfo) -> usize {
+        // SAFETY: storage keeps its capacity, and a string its byte length
+        // in the low half, in its second word.
+        unsafe {
+            match info.kind {
+                KIND_FIXED | KIND_ARRAY => info.size as usize,
+                KIND_VALUES | KIND_REFS => {
+                    STORAGE_ELEMENTS + load(object + STORAGE_CAPACITY) * WORD
+                }
+                KIND_STRING => STRING_TEXT + words(load(object + STRING_LENGTHS) & 0xFFFF_FFFF),
+                kind => unreachable!("an object of unknown kind {kind}"),
+            }
+        }
+    }
+
+    /// The address of the copy of the object at `object`, copying it first
+    /// if this is the first reference to it seen. An address outside the
+    /// space being collected, null included, is returned as it is.
+    ///
+    /// # Safety
+    ///
+    /// `object` is null or the address of an object.
+    unsafe fn copied(&mut self, object: usize) -> usize {
+        if !self.from.contains(object) {
+            return object;
+        }
+        // SAFETY: every object in the space being copied from has a header
+        // that is a type id or a forwarding address.
+        unsafe {
+            let header = load(object);
+            if header & FORWARDED != 0 {
+                return header & !FORWARDED;
+            }
+            let size = Self::size(object, self.info(header));
+            let copy = self.free;
+            std::ptr::copy_nonoverlapping(object as *const u8, copy as *mut u8, size);
+            self.free += size;
+            store(object, copy | FORWARDED);
+            copy
+        }
+    }
+
+    /// Make the reference in `*slot` point at the copy of its object.
+    ///
+    /// # Safety
+    ///
+    /// `slot` is the address of a word that holds null or a reference.
+    unsafe fn forward(&mut self, slot: usize) {
+        // SAFETY: the caller's contract.
+        unsafe { store(slot, self.copied(load(slot))) };
+    }
+
+    /// Forward the references in every compiled frame between `top` and
+    /// `base`. Each frame record is the saved frame pointer of the caller
+    /// followed by the return address into it, and the caller's stack
+    /// pointer at the call is just above the record.
+    ///
+    /// # Safety
+    ///
+    /// `top` is all zero or the top compiled frame of a stack, and `base`
+    /// the frame pointer of the function that called into compiled code on
+    /// that stack.
+    unsafe fn stack(&mut self, maps: &StackMaps, top: Anchor, base: usize) {
+        let Anchor {
+            mut sp,
+            mut pc,
+            mut fp,
+        } = top;
+        while sp != 0 {
+            // SAFETY: `sp` is a compiled frame's stack pointer at the call
+            // returning to `pc`, and `fp` its frame record.
+            unsafe {
+                for &offset in maps.slots(pc) {
+                    self.forward(sp + offset as usize);
+                }
+                if fp >= base {
+                    break;
+                }
+                // A caller's stack pointer at a call is just above the
+                // callee's frame record: arguments travel in registers or
+                // in the caller's own frame, and no function here makes a
+                // tail call, which is what would move the record.
+                sp = fp + 2 * WORD;
+                pc = load(fp + WORD);
+                fp = load(fp);
+            }
+        }
+    }
+
+    /// Copy everything reachable from what has been copied so far.
+    ///
+    /// # Safety
+    ///
+    /// Every object copied so far is intact.
+    unsafe fn finish(&mut self) {
+        let mut scan = self.to.start;
+        while scan < self.free {
+            // SAFETY: `scan` is the start of a copied object.
+            unsafe {
+                let info = self.info(load(scan));
+                match info.kind {
+                    KIND_FIXED => {
+                        let offsets =
+                            (std::ptr::from_ref(info) as usize + TYPE_HEADER) as *const u32;
+                        for index in 0..info.pointer_count as usize {
+                            self.forward(scan + *offsets.add(index) as usize);
+                        }
+                    }
+                    // An array holds the address of its first element, which
+                    // is inside its storage object.
+                    KIND_ARRAY => {
+                        let data = load(scan + ARRAY_DATA);
+                        if data != 0 {
+                            let storage = self.copied(data - STORAGE_ELEMENTS);
+                            store(scan + ARRAY_DATA, storage + STORAGE_ELEMENTS);
+                        }
+                    }
+                    KIND_REFS => {
+                        for index in 0..load(scan + STORAGE_CAPACITY) {
+                            self.forward(scan + STORAGE_ELEMENTS + index * WORD);
+                        }
+                    }
+                    _ => {}
+                }
+                scan += Self::size(scan, info);
+            }
+        }
+    }
+}
+
+const _: () = assert!(ARRAY_SIZE == 3 * WORD);
+
+/// The frame pointer of the function this is inlined into.
+#[expect(
+    clippy::inline_always,
+    reason = "it reads a register of whichever function it is in"
+)]
+#[inline(always)]
+pub fn current_frame() -> usize {
+    let frame: usize;
+    // SAFETY: reads one register.
+    unsafe {
+        #[cfg(target_arch = "aarch64")]
+        std::arch::asm!("mov {}, x29", out(reg) frame, options(nomem, nostack, preserves_flags));
+        #[cfg(target_arch = "x86_64")]
+        std::arch::asm!("mov {}, rbp", out(reg) frame, options(nomem, nostack, preserves_flags));
+    }
+    frame
+}
+
+/// The slow path of allocation in compiled code: the mutator's span cannot
+/// take `size` more bytes. Returns uninitialized memory.
+///
+/// # Safety
+///
+/// Called from compiled code with its mutator.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_rt_alloc_slow(mutator: &mut Mutator, size: usize) -> usize {
+    mutator.enter(current_frame());
+    mutator.allocate(size)
+}
+
+/// A compiled loop found the poll word set.
+///
+/// # Safety
+///
+/// Called from compiled code with its mutator.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_rt_poll_slow(mutator: &mut Mutator) {
+    mutator.enter(current_frame());
+    mutator.poll();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        array::{baml_rt_array_new, baml_rt_array_push_slow},
+        layout::{
+            ARRAY_LENGTH, FIRST_CLASS_TYPE, RUNTIME_TYPES, TYPE_ARRAY_OF_REFS, field_offset,
+            instance_size,
+        },
+        string,
+    };
+
+    /// A stack map table with no functions.
+    static NO_STACK_MAPS: usize = 0;
+
+    /// The id of a class of two slots, an int and a reference to another
+    /// instance, in [`types`].
+    const LINK: usize = FIRST_CLASS_TYPE;
+
+    /// A type table holding the fixed types and `LINK`.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the sizes and offsets of a two-slot class"
+    )]
+    fn types() -> &'static [u32] {
+        let mut table = RUNTIME_TYPES.to_vec();
+        table.extend([
+            KIND_FIXED,
+            instance_size(2) as u32,
+            1,
+            0,
+            field_offset(1) as u32,
+            0,
+        ]);
+        table.leak()
+    }
+
+    fn mutator(stress: bool) -> Mutator {
+        let program = Program {
+            stack_maps: std::ptr::from_ref(&NO_STACK_MAPS) as usize,
+            types: types().as_ptr() as usize,
+        };
+        // SAFETY: both tables are in the compiler's formats.
+        unsafe { Mutator::new(program, stress) }
+    }
+
+    /// Push a link holding `value` onto the list in `*head`.
+    fn push_link(mutator: &mut Mutator, head: &mut usize, value: usize) {
+        let link = mutator.allocate_object(LINK, instance_size(2));
+        // SAFETY: `link` is a fresh instance of two slots, and `head` was
+        // kept current across the allocation.
+        unsafe {
+            store(link + field_offset(0), value);
+            store(link + field_offset(1), *head);
+        }
+        *head = link;
+    }
+
+    fn list_values(mut link: usize) -> Vec<usize> {
+        let mut values = Vec::new();
+        while link != 0 {
+            // SAFETY: `link` is a live instance of `LINK`.
+            unsafe {
+                values.push(load(link + field_offset(0)));
+                link = load(link + field_offset(1));
+            }
+        }
+        values
+    }
+
+    #[test]
+    fn a_rooted_list_survives_a_collection_per_allocation() {
+        let mut mutator = mutator(true);
+        let mut head = 0;
+        mutator.root(&mut head);
+        for value in 0..500 {
+            push_link(&mut mutator, &mut head, value);
+        }
+        mutator.unroot(1);
+        assert_eq!(list_values(head), (0..500).rev().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn the_heap_grows_past_its_first_space() {
+        let mut mutator = mutator(false);
+        let mut head = 0;
+        mutator.root(&mut head);
+        let links = 2 * INITIAL_SPACE / instance_size(2);
+        for value in 0..links {
+            push_link(&mut mutator, &mut head, value);
+        }
+        mutator.unroot(1);
+        assert_eq!(list_values(head).len(), links);
+        assert!(mutator.heap.space.size > INITIAL_SPACE);
+    }
+
+    #[test]
+    fn an_array_of_strings_grows_under_collection() {
+        let mut mutator = mutator(true);
+        // SAFETY: the calls follow the contracts of compiled code, with the
+        // array rooted here in place of a stack map.
+        unsafe {
+            let mut array = baml_rt_array_new(&mut mutator, TYPE_ARRAY_OF_REFS, 0);
+            mutator.root(&mut array);
+            for index in 0..100 {
+                let text = string::from_str(&mut mutator, &format!("item {index}"));
+                baml_rt_array_push_slow(&mut mutator, array, text);
+            }
+            mutator.unroot(1);
+            assert_eq!(load(array + ARRAY_LENGTH), 100);
+            let data = load(array + ARRAY_DATA);
+            for index in 0..100 {
+                assert_eq!(
+                    string::text(load(data + index * WORD)),
+                    format!("item {index}")
+                );
+            }
+        }
+    }
+}

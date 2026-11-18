@@ -1,20 +1,31 @@
 //! Ahead-of-time native code for BAML programs: optimized MIR in, a native
 //! object file out, through Cranelift.
 //!
-//! Only scalar code is compiled so far: `int`, `float`, `bool` and `null`
-//! locals, arithmetic and comparisons over them, branches, int switches, and
-//! direct calls between functions that are themselves scalar. [`coverage`]
-//! says, for a program, which reachable functions fall outside that and why;
-//! [`compile`] refuses a program with any.
+//! What is compiled so far: `int`, `float`, `bool`, `null` and `string`
+//! values, instances of classes without type parameters, arrays of any of
+//! these, and optional references; arithmetic and comparisons, field and
+//! index access, branches, int switches, and direct calls between functions
+//! that stay inside that subset. [`coverage`] says, for a program, which
+//! reachable functions fall outside it and why; [`compile`] refuses a
+//! program with any.
 //!
 //! The compiled object is host-only and is linked by [`link`] against the
-//! runtime in `baml_native_rt`.
+//! runtime in `baml_native_rt`, which owns the heap and its collector.
 
 mod check;
 mod codegen;
+/// Object and mutator layout, shared with the runtime by including its file.
+#[path = "../../baml_native_rt/src/layout.rs"]
+#[allow(
+    dead_code,
+    unreachable_pub,
+    reason = "the runtime's file: it exports and uses every constant, compiled code only some"
+)]
+mod layout;
 mod link;
+mod loops;
 mod program;
-mod scalar;
+mod types;
 
 use std::fmt;
 
@@ -135,6 +146,8 @@ pub enum CompileError {
     Unsupported(Coverage),
     #[error("the entry function of a native program takes no arguments")]
     EntryTakesArguments,
+    #[error("the entry function of a native program returns an int, float, bool, string or null")]
+    EntryResultNotPrintable,
     /// A failure inside the backend: never the program's fault.
     #[error("native code generation failed: {0}")]
     Codegen(String),
