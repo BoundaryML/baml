@@ -20,9 +20,7 @@ function json_caught_parse() -> string {
 function json_caught_decode() -> string {
   let x = baml.json.decode<JsonPoint[]>(rep("[", 1) + "{\"x\": 1, \"y\": \"two\"}]")[0].x catch (e) {
     baml.json.DecodeError => {
-      let message = e.message;
-      let path = e.path;
-      message.length() * 100 + path.length()
+      e.message.length() * 100 + e.path.length()
     },
   };
   `${x}`

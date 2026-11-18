@@ -264,6 +264,12 @@ pub(super) enum Called {
 /// innermost first, and the block the call returns to, which receives its
 /// result. A handler is named by the tag its edge carries; the one without
 /// a tag is the function's that enters compiled code.
+///
+/// Each edge lands in a block of its own that only jumps to the handler. An
+/// argument of the `try_call`'s own edge is read before the call, so a
+/// reference passed there would be the one from before any collection in
+/// the callee; as an argument of the jump it is read after the call, from
+/// the slot the collector updated.
 pub(super) fn try_call(
     builder: &mut cranelift_frontend::FunctionBuilder<'_>,
     called: &Called,
@@ -281,13 +287,24 @@ pub(super) fn try_call(
         .func
         .dfg
         .block_call(returned, &[BlockArg::TryCallRet(0)]);
-    let handlers: Vec<ExceptionTableItem> = handlers
+    let landed: Vec<ir::Block> = handlers
         .iter()
-        .map(|(tag, landing)| {
-            let thrown = builder.func.dfg.block_call(
-                *landing,
-                &[BlockArg::TryCallExn(0), BlockArg::TryCallExn(1)],
-            );
+        .map(|_| {
+            let landed = builder.create_block();
+            builder.append_block_param(landed, WORD);
+            builder.append_block_param(landed, WORD);
+            builder.set_cold_block(landed);
+            landed
+        })
+        .collect();
+    let edges: Vec<ExceptionTableItem> = handlers
+        .iter()
+        .zip(&landed)
+        .map(|((tag, _), landed)| {
+            let thrown = builder
+                .func
+                .dfg
+                .block_call(*landed, &[BlockArg::TryCallExn(0), BlockArg::TryCallExn(1)]);
             match tag {
                 Some(tag) => ExceptionTableItem::Tag(ExceptionTag::from_u32(*tag), thrown),
                 None => ExceptionTableItem::Default(thrown),
@@ -298,11 +315,20 @@ pub(super) fn try_call(
         .func
         .dfg
         .exception_tables
-        .push(ExceptionTableData::new(signature, normal, handlers));
+        .push(ExceptionTableData::new(signature, normal, edges));
     match called {
         Called::Direct(function) => builder.ins().try_call(*function, arguments, table),
         Called::Indirect(_, code) => builder.ins().try_call_indirect(*code, arguments, table),
     };
+    for ((_, landing), landed) in handlers.iter().zip(landed) {
+        builder.seal_block(landed);
+        builder.switch_to_block(landed);
+        let error = builder.block_params(landed)[0];
+        let context = builder.block_params(landed)[1];
+        builder
+            .ins()
+            .jump(*landing, &[error.into(), context.into()]);
+    }
     builder.seal_block(returned);
     builder.switch_to_block(returned);
     builder.block_params(returned)[0]

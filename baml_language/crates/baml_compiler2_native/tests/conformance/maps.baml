@@ -326,21 +326,18 @@ function map_missing_by_class() -> string {
   let m = map_squares(3);
   let local = m[map_key(9)] catch (e) {
     baml.panics.MapKeyNotFound => {
-      let key = e.key;
-      key.length()
+      e.key.length()
     },
   };
   let deep = map_missing_dive(3, m, map_key(9)) catch (e) {
     baml.panics.MapKeyNotFound => {
-      let key = e.key;
-      key.length() * 10
+      e.key.length() * 10
     },
   };
   let ints = map_ints(3);
   let number = ints[1] catch (e) {
     baml.panics.MapKeyNotFound => {
-      let key = e.key;
-      key.length() * 100
+      e.key.length() * 100
     },
   };
   `${local},${deep},${number},${m["k2"]}`

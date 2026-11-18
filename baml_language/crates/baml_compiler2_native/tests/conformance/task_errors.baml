@@ -41,8 +41,7 @@ function task_error_by_class() -> int {
   let f = spawn { task_fault(task_count(3)) };
   (await f) catch (e) {
     TaskFault => {
-      let detail = e.detail;
-      e.code * 10 + detail.length()
+      e.code * 10 + e.detail.length()
     },
   }
 }
@@ -173,8 +172,7 @@ function task_overflow_caught() -> int {
   let g = spawn { task_count(2) };
   let r = (await f) catch (e) {
     baml.panics.StackOverflow => {
-      let message = e.message;
-      message.length() - 13
+      e.message.length() - 13
     },
   };
   r + (await g)
@@ -298,8 +296,7 @@ function task_parent_keeps_past_a_failure() -> string {
   let between = task_churn(40);
   let code = (await f) catch (e) {
     TaskFault => {
-      let detail = e.detail;
-      e.code * 100 + detail.length()
+      e.code * 100 + e.detail.length()
     },
   };
   `${map_show(m)}|${part}|${code}|${between}`

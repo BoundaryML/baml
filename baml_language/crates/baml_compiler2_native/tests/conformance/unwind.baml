@@ -227,8 +227,7 @@ function unwind_division_dividend() -> int throws UnwindError | UnwindOther | st
 function unwind_native_error_fields() -> int throws UnwindError | UnwindOther | string {
   unwind_dive(3, 6) catch (e) {
     baml.errors.InvalidArgument => {
-      let message = e.message;
-      message.length()
+      e.message.length()
     },
   }
 }
@@ -471,8 +470,7 @@ function unwind_made_panic_passes(n: int) -> int throws baml.panics.UserPanic {
 function unwind_program_panic() -> int {
   let named = unwind_made_panic_passes(5) catch (e) {
     baml.panics.UserPanic => {
-      let message = e.message;
-      message.length()
+      e.message.length()
     },
   };
   let any = unwind_made_panic_passes(6) catch (e) {
@@ -481,3 +479,22 @@ function unwind_program_panic() -> int {
   named * 10 + any
 }
 function unwind_uncaught_program_panic() -> int { unwind_made_panic_passes(4) }
+
+// A reference assigned between two calls under one handler reaches the
+// handler as one of two values, and each must be the one the collector left
+// after the call that threw, not the one read before it.
+function unwind_handler_reads_moved() -> string {
+  let out = "";
+  for (let i = 0; i < 4; i += 1) {
+    let text = `a${unwind_count(i)}`;
+    let n = {
+      let first = unwind_dive(i % 2, 1 - i % 2);
+      text = text + `b${first}`;
+      first + unwind_dive(2, 1)
+    } catch (e) {
+      UnwindError => text.length() * 10 + e.code,
+    };
+    out = out + `${n}:${text},`;
+  }
+  out
+}
