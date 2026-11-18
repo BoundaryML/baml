@@ -30,3 +30,11 @@ license = "Apache-2.0 WITH LLVM-exception"
 #     guarantee is that the frontend never reaches it with them. Built for
 #     x86-64 but not run.
 #   No lowering on the riscv64, s390x and pulley backends.
+#
+# Wide integer constants built once:
+#   src/opts.rs: `remat` leaves an `iconst` outside -0x10000..0x10000 alone, so
+#     elaboration hoists it out of the innermost loop instead of rebuilding it
+#     in every block that uses it.
+#   src/isa/aarch64/inst.isle: `lower_icmp_32_64_const` applies only when the
+#     constant encodes as a compare immediate (`icmp_const_is_imm`); any other
+#     is compared from the register that already holds it.

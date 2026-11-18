@@ -4899,9 +4899,20 @@
 (rule lower_icmp_8_16_unsigned -2 (lower_icmp cond rn rm (fits_in_16 ty))
       (let ((rn Reg (put_in_reg_zext32 rn)))
       (flags_and_cc (cmp_extend (operand_size ty) rn rm (lower_extend_op ty (ArgumentExtension.Uext))) cond)))
+;; Only a constant the compare can take as an immediate goes this way. Any
+;; other is compared as a register, so that one already materialized (hoisted
+;; out of a loop, say) is not built again here.
 (rule lower_icmp_32_64_const -3 (lower_icmp cond rn (u64_from_iconst c) ty)
       (if (ty_int_ref_scalar_64 ty))
+      (if (icmp_const_is_imm c))
       (lower_icmp_const cond rn c ty))
+
+(decl pure partial icmp_const_is_imm (u64) Unit)
+(rule 0 (icmp_const_is_imm (imm12_from_u64 _)) (unit))
+(rule 1 (icmp_const_is_imm c)
+      (if-let true (u64_is_odd c))
+      (if-let (imm12_from_u64 _) (u64_wrapping_sub c 1))
+      (unit))
 (rule lower_icmp_32_64 -4 (lower_icmp cond rn rm ty)
       (if (ty_int_ref_scalar_64 ty))
       (flags_and_cc (cmp (operand_size ty) rn rm) cond))

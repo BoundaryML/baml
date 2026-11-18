@@ -256,6 +256,21 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     }
 
     fn remat(&mut self, value: Value) -> Value {
+        // An integer constant too wide for one move instruction on a
+        // fixed-width target is not rebuilt in every block that uses it.
+        // Left alone, elaboration computes it once and hoists it out of the
+        // innermost loop, as it does a `vconst`.
+        if let ValueDef::Result(inst, _) = self.ctx.func.dfg.value_def(value) {
+            if let InstructionData::UnaryImm {
+                opcode: Opcode::Iconst,
+                imm,
+            } = self.ctx.func.dfg.insts[inst]
+            {
+                if !(-0x1_0000..0x1_0000).contains(&imm.bits()) {
+                    return value;
+                }
+            }
+        }
         trace!("remat: {}", value);
         self.ctx.remat_values.insert(value);
         self.ctx.stats.remat += 1;
