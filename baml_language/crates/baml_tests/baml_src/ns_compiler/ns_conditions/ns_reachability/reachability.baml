@@ -79,12 +79,34 @@ test "narrowed local types identify unreachable branches" {
     )
 }
 
-test "always truthy loop conditions warn except explicit unconditional loops" {
-    let warnings = diagnostics(`function main(flag: bool) -> int { while (flag || true) { break; } 0 }`);
+// An always truthy `while` condition makes nothing dead by itself: the loop
+// is left through its body's `break`s, or not at all - and then the code
+// after it is the finding, with the condition as the reason.
+test "an always truthy loop condition is a finding only when the loop never ends" {
+    assert.equal(diagnostics(`function main(flag: bool) -> int { while (flag || true) { break; } 0 }`).length(), 0);
+    assert.equal(diagnostics(`function main() -> int { while (true) { break; } 0 }`).length(), 0);
+    let source = `function main(flag: bool) -> int { while (flag || true) {} 0 }`;
+    let warnings = diagnostics(source);
+    assert.equal(warnings.length(), 1);
+    assert.equal(warnings[0].code, "E0146");
+    let reason = warnings[0].annotations.find((annotation) -> {
+        !annotation.is_primary
+    })
+        ?? baml.sys.panic("missing never-ending loop annotation");
+    assert.equal(reason.message, "this loop never ends: its condition is always truthy and its body never breaks");
+    assert.equal(source.slice(reason.span.start, reason.span.end), "flag || true");
+}
+
+test "an always falsy loop condition leaves the body unreachable" {
+    let source = `function main() -> int { while (false) { 1; } 0 }`;
+    let warnings = diagnostics(source);
     assert.equal(warnings.length(), 1);
     assert.equal(warnings[0].code, "E0167");
-    assert.is_true(warnings[0].message.includes("always truthy"));
-    assert.equal(diagnostics(`function main() -> int { while (true) { break; } 0 }`).length(), 0)
+    let body = warnings[0].annotations.find((annotation) -> {
+        !annotation.is_primary
+    })
+        ?? baml.sys.panic("missing loop body annotation");
+    assert.equal(body.message, "this loop body is unreachable");
 }
 
 test "always truthy conditions warn even without an else branch" {

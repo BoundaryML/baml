@@ -21,6 +21,7 @@ borsh = { workspace = true }
 ena = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
+nunny = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
 sha2 = { workspace = true }

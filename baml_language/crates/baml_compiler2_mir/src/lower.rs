@@ -2396,6 +2396,99 @@ impl<'db> LoweringContext<'db> {
         Ok(())
     }
 
+    /// A `for let` over a collection typed `never`: only the collection
+    /// runs, and the checker types the loop and the code after it as dead.
+    /// The collection need not end its block with a terminator (a call typed
+    /// `never` returns to a successor), so the block ends with an
+    /// unreachable, as `let … else` does. The body is still lowered, in a
+    /// dead block, so every binding it declares gets its local (the tripwire
+    /// in [`Self::verify_bindings_recorded`]), as the code after a `return`
+    /// is; the statements after the loop follow in another dead block.
+    fn lower_dead_for_loop(
+        &mut self,
+        stmt_id: AstStmtId,
+        binding: AstPatId,
+        collection: AstExprId,
+        body: AstExprId,
+    ) -> Lowered<()> {
+        let coll_ty = self.expr_ty(collection)?;
+        let coll_local = self.builder.temp(coll_ty);
+        self.lower_expr(collection, Place::local(coll_local))?;
+        if !self.builder.is_current_terminated() {
+            self.builder.unreachable();
+        }
+
+        let bb_body = self.builder.create_block();
+        let bb_exit = self.builder.create_block();
+        let prev_loop = self.loop_context.take();
+        self.loop_context = Some(LoopContext {
+            break_target: bb_exit,
+            continue_target: bb_body,
+            defer_depth: self.defer_stack.len(),
+        });
+
+        self.builder.set_current_block(bb_body);
+        self.declare_dead_pattern_bindings(binding, binding, DefinitionSite::Statement(stmt_id))?;
+        let body_temp = self.builder.temp(self.expr_ty(body)?);
+        self.lower_expr(body, Place::local(body_temp))?;
+        if !self.builder.is_current_terminated() {
+            self.builder.unreachable();
+        }
+
+        self.loop_context = prev_loop;
+        self.builder.set_current_block(bb_exit);
+        Ok(())
+    }
+
+    /// Declares a local for every binding `pat_id` introduces without
+    /// matching the pattern: for a pattern in dead code whose scrutinee
+    /// never exists (a `for let` over `never`). HIR registered each binding
+    /// against the root pattern and [`Self::verify_bindings_recorded`]
+    /// expects a local for each, while a projection (a class field, a tuple
+    /// slot) would need a value's type that `never` does not have.
+    fn declare_dead_pattern_bindings(
+        &mut self,
+        pat_id: AstPatId,
+        root: AstPatId,
+        site: DefinitionSite,
+    ) -> Lowered<()> {
+        match self.body.patterns[pat_id].clone() {
+            AstPattern::Bind { name, subpat } => {
+                let ty = self
+                    .tir_pat_type(pat_id)
+                    .map(|ty| self.runtime().convert(ty))
+                    .unwrap_or(RuntimeTy::Never);
+                self.declare_binding(root, site, &name, ty)?;
+                if let Some(subpat) = subpat {
+                    self.declare_dead_pattern_bindings(subpat, root, site)?;
+                }
+            }
+            AstPattern::Class { fields, .. } => {
+                for field in fields {
+                    self.declare_dead_pattern_bindings(field.pat, root, site)?;
+                }
+            }
+            AstPattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ..
+            } => {
+                let rest = rest.and_then(|rest| rest.pat);
+                for element in prefix.into_iter().chain(rest).chain(suffix) {
+                    self.declare_dead_pattern_bindings(element, root, site)?;
+                }
+            }
+            AstPattern::Tuple(elements) | AstPattern::Or(elements) => {
+                for element in elements {
+                    self.declare_dead_pattern_bindings(element, root, site)?;
+                }
+            }
+            AstPattern::Wildcard | AstPattern::Type(_) => {}
+        }
+        Ok(())
+    }
+
     fn new(
         db: &'db dyn crate::Db,
         func_loc: FunctionLoc<'db>,
@@ -12403,6 +12496,9 @@ impl LoweringContext<'_> {
                 body,
             } => {
                 let coll_tir_ty = self.tir_expr_type(collection).cloned();
+                if matches!(coll_tir_ty, Some(Tir2Ty::Never)) {
+                    return self.lower_dead_for_loop(stmt_id, binding, collection, body);
+                }
                 let iterable_view = coll_tir_ty
                     .as_ref()
                     .and_then(|ty| self.iterable_view_for_tir_ty(ty));

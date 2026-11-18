@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0180
+
+  × `return` is not allowed in a parameter default — a default is an expression evaluated when the argument is omitted, not part of the function body; its value is its last expression
+    ╭─[return_outside_function_body.baml:15:72]
+ 15 │ function return_in_a_parameter_default(a: int = { if (THRESHOLD > 0) { return "str"; } 3 }) -> int {
+    ·                                                                        ─────────────
+    ╰────
+
+  [type] E0180
+
+  × `return` is not allowed in a template interpolation — the interpolation runs when the template is rendered, not as part of the enclosing function; its value is its last expression
+    ╭─[return_outside_function_body.baml:20:38]
+ 20 │     let s = sql`hi ${ { if (a > 0) { return 5; } 1 } }`;
+    ·                                      ─────────
+    ╰────
+
+  [type] E0180
+
+  × `return` is not allowed in a template interpolation — the interpolation runs when the template is rendered, not as part of the enclosing function; its value is its last expression
+    ╭─[return_outside_function_body.baml:26:42]
+ 26 │         let s = sql`hi ${ { if (a > 0) { return 5; } 1 } }`;
+    ·                                          ─────────
+    ╰────

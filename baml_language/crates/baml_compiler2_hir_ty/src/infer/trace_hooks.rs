@@ -120,10 +120,9 @@ fn checked_declaration<'db>(
     };
     let owner = BodyOwnerId::Function(function);
     let signature = function_signature(db, function);
-    let bounds = owner_declared_bounds(db, owner);
     let lower = lower_ctx_for_file(db, function.file(db))
         .with_frame(function_generic_frame(db, function))
-        .with_bounds(bounds.clone())
+        .with_bounds(owner_declared_bounds(db, owner))
         .with_self_ty(crate::lower::owner_self_ty(db, function));
     // The compiler names `trace.Options` and `trace.Settings` by identity —
     // the `trace` package's own declarations under a `PathHead::Lang` head,
@@ -151,19 +150,12 @@ fn checked_declaration<'db>(
     ));
     let mut context = InferenceContext::new(
         db,
-        baml_compiler2_hir::file_semantic_index(db, function.file(db)),
-        function.file(db),
-        baml_compiler2_hir::body::body_scope(db, owner).map(|scope| scope.file_scope_id(db)),
+        owner,
         lower,
         vec![],
         None,
-        baml_compiler2_hir::body_type_refs::body_type_refs(db, owner),
-        bounds,
+        super::ThrowsClause::Closed(Ty::never()),
     );
-    context.body_owner = Some(function);
-    context.body_owner_id = Some(owner);
-    context.declared_throws = Some(Ty::never());
-    context.throws_channels[0].expected = Some(Ty::never());
 
     // Reserve source IDs; these expressions must not accidentally acquire a
     // body-local resolution. Hook lookup is in the declaration's namespace.
@@ -250,7 +242,7 @@ fn checked_declaration<'db>(
             body.exprs.alloc(Expr::Path(baml_base::Path::bare(name))),
         ));
     }
-    context.template_params.push(inputs);
+    context.enter_frame(super::frames::FrameKind::Template { params: inputs });
     let result = context.check_call_args(&body, call, callee, &hook_ty, bound, &args);
     // Defaults have a separate inference owner and are not part of the
     // callable's body throws type. This synthetic call omits every optional

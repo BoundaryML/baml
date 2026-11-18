@@ -1,0 +1,40 @@
+// A `return` belongs to a function body. A parameter default and a tagged
+// template's interpolation are expressions - the default is evaluated when
+// the argument is omitted, the interpolation when the template is rendered -
+// so a `return` written directly in one has nothing to leave and is
+// rejected; its value would otherwise escape the function's signature. A
+// `return` inside a lambda written in either is that lambda's.
+
+//baml:tagged_string
+function sql(body: (x: int) -> baml.TaggedString) -> string {
+    "ok"
+}
+
+const THRESHOLD: int = 1;
+
+function return_in_a_parameter_default(a: int = { if (THRESHOLD > 0) { return "str"; } 3 }) -> int {
+    a
+}
+
+function return_in_a_template_interpolation(a: int) -> int {
+    let s = sql`hi ${ { if (a > 0) { return 5; } 1 } }`;
+    7
+}
+
+function return_in_a_template_inside_a_lambda(a: int) -> int {
+    let f = () -> int {
+        let s = sql`hi ${ { if (a > 0) { return 5; } 1 } }`;
+        7
+    };
+    f()
+}
+
+// Controls: a lambda's own `return`, in a default and in an interpolation.
+function lambda_in_a_default_returns_from_the_lambda(a: () -> int = () -> int { return 3; }) -> int {
+    a()
+}
+
+function lambda_in_an_interpolation_returns_from_the_lambda(a: int) -> int {
+    let s = sql`hi ${ (() -> int { return 1; })() }`;
+    7
+}

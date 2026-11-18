@@ -1,0 +1,192 @@
+// `break` and `continue` bind to the innermost loop of the body they are
+// written in; with none, there is nothing to leave, and a loop is left from
+// its body only, never from its header. A `continue` on a `for let`'s last
+// iteration is an exit edge. These are the shapes that must stay errors (and
+// the dead-code warnings a loop that never ends produces); the types the
+// accepted shapes get are in the type fixture `loop_exit_edges`, and their
+// run-time behavior in the corpus namespace `ns_loop_narrowing`.
+
+class Tag {}
+
+//baml:tagged_string
+function sql(body: (x: int) -> baml.TaggedString) -> string {
+    "ok"
+}
+
+// A `continue` on the last iteration leaves the loop with the body's write.
+function for_in_continue_is_an_exit(a: int, xs: int[]) -> int {
+    let x: int | Tag = a;
+    x = a;
+    for let v in xs {
+        if (v > 0) {
+            x = Tag {};
+            continue;
+        }
+        x = a;
+    }
+    let u: int = x;
+    u
+}
+
+// A loop is left from its body: no jump in a `while` condition, a
+// `while let` scrutinee or a `for` update expression (rustc's E0590 rule).
+function break_in_a_while_condition(a: int) -> int {
+    let n = 0;
+    while ({ n += 1; if (n > a) { break; } true }) {}
+    n
+}
+
+function break_in_a_while_let_scrutinee(a: int) -> int {
+    let n = 0;
+    while let v: int = { if (n > a) { break; } n } {
+        n += 1;
+    }
+    n
+}
+
+function break_in_the_update_expression(a: int) -> int {
+    let i = 0;
+    for (let j = 0; i < 3; i = { if (a > 0) { break; } i + 1 }) {}
+    i
+}
+
+function continue_in_the_update_expression(a: int) -> int {
+    let i = 0;
+    for (let j = 0; i < 3; i = {
+        if (a > 0) {
+            continue;
+        }
+        i + 1
+    }) {}
+    i
+}
+
+function break_outside_any_loop(a: int) -> int {
+    if (a > 0) {
+        break;
+    }
+    1
+}
+
+function break_inside_a_lambda(a: int) -> int {
+    let n = 0;
+    while (n < 1) {
+        n += 1;
+        let f = () -> int {
+            if (a > 0) {
+                break;
+            }
+            1
+        };
+    }
+    n
+}
+
+function break_inside_a_template_interpolation(a: int) -> int {
+    let n = 0;
+    while (n < 1) {
+        n += 1;
+        let s = sql`hi ${ { if (a > 0) { break; } 1 } }`;
+    }
+    n
+}
+
+// The template is the nearer barrier, so it names the error, not the defer.
+function break_inside_a_template_inside_a_defer(a: int) -> int {
+    let n = 0;
+    while (n < 1) {
+        n += 1;
+        defer {
+            let s = sql`hi ${ { if (a > 0) { break; } 1 } }`;
+        }
+    }
+    n
+}
+
+// A `break` after a `return` is dead, so it is no exit: the loop never
+// completes and the function needs no tail.
+function dead_break_is_no_exit() -> int {
+    while (true) {
+        return 1;
+        break;
+    }
+}
+
+// A rejected jump does not end the flow: no unreachable-code cascade.
+function continue_outside_any_loop(a: int) -> int {
+    if (a > 0) {
+        continue;
+        a = 2;
+    }
+    a
+}
+
+// With no loop anywhere, a lambda body is not what stands in the way.
+function break_inside_a_lambda_with_no_loop(a: int) -> int {
+    let f = () -> int {
+        break;
+        1
+    };
+    a
+}
+
+function break_inside_a_defer_with_no_loop(a: int) -> int {
+    defer {
+        break;
+    }
+    a
+}
+
+function break_in_a_parameter_default(a: int = { break; 1 }) -> int {
+    a
+}
+
+const break_in_a_global_initializer: int = { break; 1 };
+
+// A collection that never produces a value leaves the loop and everything
+// after it dead.
+function for_over_a_diverging_collection() -> int {
+    for let v in ({ return 2; }) {}
+    5
+}
+
+// A loop whose condition is always truthy and whose body never breaks never
+// ends: the code after it is dead, and the condition is the reason. The loop
+// itself is no dead-code finding; a non-boolean condition still gets the
+// truthiness-coercion warning any `if (t)` gets.
+function never_ending_loop_spelled_true(a: int) -> int {
+    let n = 0;
+    while (true) {
+        n += a;
+    }
+    n
+}
+
+function never_ending_loop_by_type(a: int, t: Tag) -> int {
+    let n = 0;
+    while (t) {
+        n += a;
+    }
+    n
+}
+
+// With a `break` in the body nothing is dead: only the coercion warning.
+function always_truthy_condition_with_a_break(a: int, t: Tag) -> int {
+    let n = 0;
+    while (t) {
+        n += 1;
+        if (n > a) {
+            break;
+        }
+    }
+    n
+}
+
+// An always-falsy condition leaves the body dead.
+function always_falsy_condition(a: int) -> int {
+    let n = 0;
+    while (false) {
+        n += a;
+    }
+    n
+}

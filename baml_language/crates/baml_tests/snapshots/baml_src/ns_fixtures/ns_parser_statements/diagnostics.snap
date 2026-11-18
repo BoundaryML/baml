@@ -5,6 +5,11 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
+    ╭─[break_continue.baml:11:10]
+ 11 │   while (true) {
+    ·          ──┬─
+    ·            ╰── this loop never ends: its condition is always truthy and its body never breaks
+    ╰────
     ╭─[break_continue.baml:14:3]
  14 │   return 0;
     ·   ─────────
@@ -29,6 +34,11 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
+    ╭─[break_continue.baml:58:10]
+ 58 │   while (true) {
+    ·          ──┬─
+    ·            ╰── this loop never ends: its condition is always truthy and its body never breaks
+    ╰────
     ╭─[break_continue.baml:65:3]
  65 │   return 5;
     ·   ─────────

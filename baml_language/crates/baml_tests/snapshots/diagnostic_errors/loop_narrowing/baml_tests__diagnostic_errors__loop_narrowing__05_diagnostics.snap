@@ -1,0 +1,66 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[loop_narrowing.baml:22:18]
+ 22 │     let u: int = x;
+    ·                  ┬
+    ·                  ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[loop_narrowing.baml:34:18]
+ 34 │     let u: int = x;
+    ·                  ┬
+    ·                  ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[loop_narrowing.baml:45:22]
+ 45 │         let u: int = x;
+    ·                      ┬
+    ·                      ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[loop_narrowing.baml:58:18]
+ 58 │     let u: int = x;
+    ·                  ┬
+    ·                  ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[loop_narrowing.baml:67:32]
+ 67 │     for (let i = 0; i < n; y = x) {
+    ·                                ┬
+    ·                                ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[loop_narrowing.baml:86:22]
+ 86 │         let u: int = x;
+    ·                      ┬
+    ·                      ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[loop_narrowing.baml:106:18]
+ 106 │     let u: int = x;
+     ·                  ┬
+     ·                  ╰── expected `int`, found `int | Tag`
+     ╰────

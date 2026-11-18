@@ -1,0 +1,93 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[divergence_scoping.baml:24:18]
+ 24 │     let u: int = x;
+    ·                  ┬
+    ·                  ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[divergence_scoping.baml:36:18]
+ 36 │     let u: int = x;
+    ·                  ┬
+    ·                  ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[divergence_scoping.baml:48:18]
+ 48 │     let u: int = x;
+    ·                  ┬
+    ·                  ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[divergence_scoping.baml:60:18]
+ 60 │     let u: int = x;
+    ·                  ┬
+    ·                  ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0029
+
+  × missing value
+    ╭─[divergence_scoping.baml:65:67]
+ 65 │ ╭─▶ function null_coalesce_fallback_is_not_the_return(o: int?) -> int {
+ 66 │ │       let v = o ?? { return 1; };
+ 67 │ ├─▶ }
+    · ╰──── expected `int`, but this block ends without a value
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[divergence_scoping.baml:81:18]
+ 81 │     let u: int = x;
+    ·                  ┬
+    ·                  ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[divergence_scoping.baml:91:18]
+ 91 │     let u: int = x;
+    ·                  ┬
+    ·                  ╰── expected `int`, found `int | Tag`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[divergence_scoping.baml:100:18]
+ 100 │     let u: int = x;
+     ·                  ┬
+     ·                  ╰── expected `int`, found `int | Tag`
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[divergence_scoping.baml:112:18]
+ 112 │     let u: int = x;
+     ·                  ┬
+     ·                  ╰── expected `int`, found `int | Tag`
+     ╰────
+
+  [type] E0113
+
+  × `let … else` requires a diverging else block (`return`, `throw`, `break`, or `continue`); got `null`
+     ╭─[divergence_scoping.baml:118:25]
+ 118 │     let v: int = p else { b?.m({ return 1; }); };
+     ·                         ────────────────────────
+     ╰────
