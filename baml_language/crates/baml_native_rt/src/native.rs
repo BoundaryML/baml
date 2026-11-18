@@ -285,6 +285,15 @@ impl From<Option<f64>> for OptionalScalar {
     }
 }
 
+impl From<Option<bool>> for OptionalScalar {
+    fn from(value: Option<bool>) -> Self {
+        Self {
+            payload: u64::from(value.unwrap_or_default()),
+            present: u64::from(value.is_some()),
+        }
+    }
+}
+
 /// The slots behind the roots of one call of a native. It lives in the
 /// frame of the function compiled code called.
 pub struct RootSlots([Cell<usize>; ROOTS]);
@@ -611,8 +620,8 @@ mod string;
 mod generated {
     #[allow(unused_imports, reason = "what the listed natives need varies")]
     use super::{
-        Arr, ArrRef, Bool, Float, Int, Natives, Root, RootSlots, RtResult, Scope, Str, StrRef,
-        Thrown, View,
+        Arr, ArrRef, Bool, Float, Int, Natives, OptionalScalar, Root, RootSlots, RtResult, Scope,
+        Str, StrRef, Thrown, View,
     };
     use crate::heap::{Mutator, current_frame};
 

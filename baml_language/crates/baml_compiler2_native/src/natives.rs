@@ -17,6 +17,19 @@ pub(crate) enum Ty {
     Null,
     String,
     Array(&'static Ty),
+    /// A type or `null`.
+    Optional(&'static Ty),
+}
+
+impl Ty {
+    /// Whether a value is an optional `int`, `float` or `bool`: two words,
+    /// its bits and whether there is a value.
+    pub(crate) fn is_pair(&self) -> bool {
+        matches!(
+            self,
+            Self::Optional(Self::Int | Self::Float | Self::Bool | Self::Null)
+        )
+    }
 }
 
 impl Ty {
@@ -28,6 +41,7 @@ impl Ty {
             Self::Null => NativeTy::Null,
             Self::String => NativeTy::String,
             Self::Array(element) => NativeTy::Array(Box::new(element.native())),
+            Self::Optional(inner) => NativeTy::Optional(Box::new(inner.native())),
         }
     }
 }
