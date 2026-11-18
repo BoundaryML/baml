@@ -17,7 +17,7 @@ fn abi_param(ty: &Ty) -> Option<AbiParam> {
     match ty {
         // An optional scalar is two words, which its user passes one by
         // one; any other optional is a reference.
-        Ty::Int | Ty::String | Ty::Array(_) | Ty::Optional(_) | Ty::Elem(_) => {
+        Ty::Int | Ty::String | Ty::Array(_) | Ty::Map | Ty::Optional(_) | Ty::Elem(_) => {
             Some(AbiParam::new(WORD))
         }
         Ty::Float => Some(AbiParam::new(types::F64)),
@@ -29,7 +29,7 @@ fn abi_param(ty: &Ty) -> Option<AbiParam> {
 }
 
 impl<'db> Translator<'_, 'db> {
-    fn import(
+    pub(super) fn import(
         &mut self,
         symbol: &str,
         params: Vec<AbiParam>,
@@ -58,6 +58,9 @@ impl<'db> Translator<'_, 'db> {
     ) -> Result<(ir::Value, NativeTy<'db>), CompileError> {
         if native.path == super::string_slice::STRING_SLICE {
             return self.inline_string_slice(native, arguments, ntypeargs);
+        }
+        if let Some(result) = self.inline_map_native(native, arguments, ntypeargs)? {
+            return Ok(result);
         }
         self.native_call_out_of_line(native, arguments, ntypeargs)
     }
@@ -88,6 +91,14 @@ impl<'db> Translator<'_, 'db> {
         for argument in type_arguments {
             params.push(AbiParam::new(types::I32));
             values.push(self.type_id(argument)?);
+        }
+        if type_arguments.is_empty() {
+            // A method of `Map`: the types are its receiver's.
+            for ty in types.iter().take(native.type_args) {
+                let id = self.backend.type_id(self.db, ty)?.unwrap_or(0);
+                params.push(AbiParam::new(types::I32));
+                values.push(self.builder.ins().iconst(types::I32, super::imm(id)));
+            }
         }
         for (argument, ty) in arguments.iter().zip(signature.params) {
             let expected = ty.native(&types);
@@ -150,7 +161,7 @@ impl<'db> Translator<'_, 'db> {
                 Ty::Bool => self.builder.ins().ireduce(types::I8, bits),
                 Ty::Null => self.builder.ins().iconst(types::I8, 0),
                 Ty::Elem(_) => self.slot_as(bits, &produced),
-                Ty::Int | Ty::String | Ty::Array(_) | Ty::Optional(_) => bits,
+                Ty::Int | Ty::String | Ty::Array(_) | Ty::Map | Ty::Optional(_) => bits,
             }
         } else {
             match (&signature.result, results.as_slice()) {

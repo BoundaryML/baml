@@ -36,7 +36,8 @@ pub(crate) enum Intrinsic {
     /// The text of an `int`, `float`, `bool`, `null` or `string`: what a
     /// template hole and `to_string()` produce for them.
     ToString,
-    /// `==` and `!=` between two variants of an enum.
+    /// `==` and `!=` between two variants of an enum, or two maps of
+    /// string keys whose values the runtime compares.
     EnumEq,
     EnumNe,
     /// A method of `float` or `int` that is one instruction.
@@ -110,6 +111,17 @@ impl Intrinsic {
             ) => Some(NativeTy::Int),
             (Self::EnumEq | Self::EnumNe, [NativeTy::Enum(left), NativeTy::Enum(right)])
                 if left == right =>
+            {
+                Some(NativeTy::Bool)
+            }
+            // Two maps the runtime compares itself.
+            (
+                Self::EnumEq | Self::EnumNe,
+                [left @ NativeTy::Map(..), right @ NativeTy::Map(..)],
+            ) if matches!(
+                crate::types::binary_typing(BinOp::Eq, left, right),
+                Ok((crate::types::BinaryMode::Map, _))
+            ) =>
             {
                 Some(NativeTy::Bool)
             }
@@ -406,6 +418,21 @@ pub(crate) fn native_type_arguments<'db>(
             format!("{}: {detail}", native.path),
         )
     };
+    // A method of `Map` is called with no type arguments: its key and
+    // value types are those of its receiver.
+    if ntypeargs == 0 && native.type_args == 2 && native.path.starts_with("baml.Map.") {
+        return match args
+            .first()
+            .map(|map| operand_ty(db, body, map))
+            .transpose()?
+        {
+            Some(map) => match narrowed(map) {
+                NativeTy::Map(key, value) => Ok(vec![*key, *value]),
+                other => Err(unsupported(&format!("on {}", describe(&other)))),
+            },
+            None => Err(unsupported("called with no receiver")),
+        };
+    }
     if ntypeargs != native.type_args || args.len() < ntypeargs {
         return Err(unsupported("called with other type arguments"));
     }
@@ -703,6 +730,12 @@ impl<'db> Checker<'_, 'db> {
         };
         match value {
             Rvalue::Use(operand) => self.operand_needs(operand),
+            Rvalue::Map(_, _, entries) => {
+                for (key, value) in entries {
+                    self.operand_needs(key);
+                    self.operand_needs(value);
+                }
+            }
             Rvalue::Array(_, operands)
             | Rvalue::Aggregate {
                 fields: operands, ..
@@ -949,12 +982,28 @@ pub(crate) fn rvalue_ty<'db>(
             )),
         },
         Rvalue::Len(place) => match narrowed(place_ty(db, body, place)?) {
-            NativeTy::Array(_) => Ok(NativeTy::Int),
+            NativeTy::Array(_) | NativeTy::Map(..) => Ok(NativeTy::Int),
             other => Err(Blocker::new(
                 "length of a non-array value",
                 describe(&other),
             )),
         },
+        Rvalue::Map(_, _, entries) => {
+            let map = match expected {
+                NativeTy::Optional(inner) => inner,
+                other => other,
+            };
+            let NativeTy::Map(key, value) = map else {
+                return Err(Blocker::new(
+                    "map construction where no map is expected",
+                    describe(expected),
+                ));
+            };
+            let (keys, values): (Vec<_>, Vec<_>) = entries.iter().cloned().unzip();
+            all_assignable(db, body, &keys, |_| Some((**key).clone()), "map key")?;
+            all_assignable(db, body, &values, |_| Some((**value).clone()), "map value")?;
+            Ok(map.clone())
+        }
         Rvalue::Array(_, elements)
         | Rvalue::Aggregate {
             kind: AggregateKind::Array,

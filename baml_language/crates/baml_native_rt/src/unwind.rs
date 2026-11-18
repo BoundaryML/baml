@@ -42,7 +42,8 @@ use crate::{
         HANDLER_TAKES_ALL, HANDLER_TAKES_NULL, HANDLER_TAKES_OTHERS, HANDLER_TAKES_PANICS,
         HEADER_PANIC, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_TYPES_END, TYPE_ARRAY_OF_VALUES,
         TYPE_ID_MASK, TYPE_STRING, TYPE_VALUES, WELL_KNOWN_CONTEXT, WELL_KNOWN_DIVISION_BY_ZERO,
-        WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_NEGATIVE_BIT_SHIFT, WORD,
+        WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_MAP_KEY_NOT_FOUND,
+        WELL_KNOWN_NEGATIVE_BIT_SHIFT, WORD,
     },
 };
 
@@ -406,6 +407,17 @@ fn index_out_of_bounds(mutator: &mut Mutator, index: i64, length: i64) -> usize 
     )
 }
 
+/// A `baml.panics.MapKeyNotFound`. Its key is a string whatever the map's
+/// keys are, and the interpreter does not say which key it was: the text
+/// is the one it gives. May collect.
+fn map_key_not_found(mutator: &mut Mutator) -> usize {
+    class::well_known(
+        mutator,
+        WELL_KNOWN_MAP_KEY_NOT_FOUND,
+        &[Init::Text("(unknown)")],
+    )
+}
+
 /// `throw`: `frame` is the frame record of the stub compiled code called.
 pub(crate) extern "C" fn throw(
     error: usize,
@@ -464,6 +476,26 @@ pub(crate) extern "C" fn panic_index_out_of_bounds(
     mutator.enter(frame);
     let error = index_out_of_bounds(mutator, index, length);
     unwind(mutator, error, 0, resume);
+}
+
+pub(crate) extern "C" fn panic_map_key_not_found(
+    _unused: usize,
+    _also_unused: usize,
+    mutator: &mut Mutator,
+    frame: usize,
+    resume: &mut Resume,
+) {
+    mutator.enter(frame);
+    let error = map_key_not_found(mutator);
+    unwind(mutator, error, 0, resume);
+}
+
+/// The `baml.panics.MapKeyNotFound` a handler in the indexing function
+/// lands with.
+#[unsafe(no_mangle)]
+pub extern "C" fn baml_rt_error_map_key_not_found(mutator: &mut Mutator) -> usize {
+    mutator.enter(current_frame());
+    map_key_not_found(mutator)
 }
 
 /// The `baml.panics.DivisionByZero` a handler in the dividing function

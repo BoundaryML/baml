@@ -22,6 +22,7 @@ pub mod array;
 mod class;
 pub mod heap;
 pub mod layout;
+pub mod map;
 pub mod native;
 pub mod string;
 pub mod stubs;
@@ -68,6 +69,7 @@ pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
             unwind: &raw const baml_native_unwind as usize,
             functions: &raw const baml_native_functions as usize,
         };
+        map::randomize_seed();
         let mut mutator = Mutator::new(program, stress);
         mutator.set_base_frame(current_frame());
         baml_native_entry((&raw mut mutator).cast());

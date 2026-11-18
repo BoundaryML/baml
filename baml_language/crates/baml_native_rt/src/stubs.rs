@@ -309,3 +309,9 @@ throwing_stub! {
     /// length.
     baml_rt_panic_index_out_of_bounds => unwind::panic_index_out_of_bounds
 }
+
+throwing_stub! {
+    /// Throw `baml.panics.MapKeyNotFound`: takes two words it does not
+    /// read.
+    baml_rt_panic_map_key_not_found => unwind::panic_map_key_not_found
+}

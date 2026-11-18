@@ -35,9 +35,10 @@
 use std::alloc::{Layout, alloc, dealloc};
 
 use crate::layout::{
-    ARRAY_DATA, ARRAY_SIZE, KIND_ARRAY, KIND_FIXED, KIND_REFS, KIND_SLICE, KIND_STRING,
-    KIND_VALUES, SLICE_OFFSET, SLICE_PARENT, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS,
-    STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK, TYPE_STRING, WORD, words,
+    ARRAY_DATA, ARRAY_SIZE, ENTRIES_CAPACITY, ENTRIES_RECORDS, KIND_ARRAY, KIND_ENTRIES,
+    KIND_FIXED, KIND_REFS, KIND_SLICE, KIND_STRING, KIND_VALUES, SLICE_OFFSET, SLICE_PARENT,
+    STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK,
+    TYPE_STRING, WORD, words,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
@@ -248,6 +249,8 @@ pub struct Mutator {
     poll: u32,
     /// What the allocation slow path is asked for and what it answers.
     scratch: usize,
+    /// The seed of this process's hashes: see [`crate::map`].
+    hash_seed: u64,
     /// The true end of this mutator's span.
     span_end: usize,
     heap: Heap,
@@ -269,6 +272,7 @@ const _: () = {
     assert!(std::mem::offset_of!(Mutator, stack_limit) == crate::layout::MUTATOR_STACK_LIMIT);
     assert!(std::mem::offset_of!(Mutator, poll) == crate::layout::MUTATOR_POLL);
     assert!(std::mem::offset_of!(Mutator, scratch) == crate::layout::MUTATOR_SCRATCH);
+    assert!(std::mem::offset_of!(Mutator, hash_seed) == crate::layout::MUTATOR_HASH_SEED);
 };
 
 /// The top compiled frame of a stack, recorded where compiled code calls the
@@ -303,6 +307,7 @@ impl Mutator {
             stack_limit: 0,
             poll: 0,
             scratch: 0,
+            hash_seed: crate::map::seed(),
             span_end: space.end(),
             heap: Heap {
                 space,
@@ -574,6 +579,7 @@ impl<'a> Copy<'a> {
                     STORAGE_ELEMENTS + load(object + STORAGE_CAPACITY) * WORD
                 }
                 KIND_STRING => STRING_TEXT + words(load(object + STRING_LENGTHS) & 0xFFFF_FFFF),
+                KIND_ENTRIES => crate::layout::entries_size(load(object + ENTRIES_CAPACITY)),
                 kind => unreachable!("an object of unknown kind {kind}"),
             }
         }
@@ -839,6 +845,23 @@ impl<'a> Copy<'a> {
                     KIND_REFS => {
                         for index in 0..load(scan + STORAGE_CAPACITY) {
                             self.forward(scan + STORAGE_ELEMENTS + index * WORD);
+                        }
+                    }
+                    // A map's entries: the references of each record, at
+                    // the same offsets in every one. A record not in use
+                    // is zero.
+                    KIND_ENTRIES => {
+                        let offsets =
+                            (std::ptr::from_ref(info) as usize + TYPE_HEADER) as *const u32;
+                        let stride = info.size as usize;
+                        for record in 0..load(scan + ENTRIES_CAPACITY) {
+                            for index in 0..info.pointer_count as usize {
+                                self.forward(
+                                    scan + ENTRIES_RECORDS
+                                        + record * stride
+                                        + *offsets.add(index) as usize,
+                                );
+                            }
                         }
                     }
                     _ => {}
@@ -1144,5 +1167,85 @@ mod tests {
         }
         let live = mutator.alloc_ptr - mutator.heap.space.start;
         assert_eq!(live, 3 * (STRING_TEXT + words(40)) + WORD);
+    }
+
+    /// What a string's header caches is nothing or the hash of its text,
+    /// and its flags are clear.
+    #[expect(clippy::cast_possible_truncation, reason = "the high half of a header")]
+    fn assert_hash_is_sound(string: usize) {
+        use crate::{
+            layout::{HEADER_FLAGS, STRING_HASH_MASK},
+            map::{str_hash, text_hash},
+        };
+        // SAFETY: `string` is a live string.
+        unsafe {
+            let expected = text_hash(string::text(string).as_bytes());
+            let header = load(string);
+            assert_eq!(header & HEADER_FLAGS, 0);
+            let cached = (header >> 32) as u32 & STRING_HASH_MASK;
+            assert!(cached == 0 || cached == expected, "a stale cached hash");
+            assert_eq!(str_hash(string), expected);
+            assert_eq!((load(string) >> 32) as u32, expected);
+        }
+    }
+
+    #[test]
+    fn a_cached_hash_is_kept_or_dropped_but_never_wrong() {
+        use crate::map::str_hash;
+
+        // The string reached before its slices, after them, and not at all
+        // with slices that keep it (60 bytes each) and that leave it
+        // behind (40 of 496).
+        for (rooted, repeats, length) in [
+            (Some(true), 2, 60),
+            (Some(false), 2, 60),
+            (None, 2, 60),
+            (None, 8, 40),
+        ] {
+            let mut mutator = mutator(true);
+            let text = LETTERS.repeat(repeats);
+            let mut parent = string::from_str(&mut mutator, &text);
+            let mut parts = [0; 3];
+            for (index, part) in parts.iter_mut().enumerate() {
+                *part = slice(&mut mutator, &mut parent, index * 20, index * 20 + length);
+                mutator.root(part);
+            }
+            // SAFETY: live strings; every one caches its hash.
+            unsafe {
+                str_hash(parent);
+                for &part in &parts {
+                    str_hash(part);
+                    assert_ne!(load(part) >> 32, 0);
+                }
+            }
+            let mut early = if rooted == Some(true) { parent } else { 0 };
+            let mut late = if rooted == Some(false) { parent } else { 0 };
+            mutator.root_at(std::ptr::from_mut(&mut early) as usize);
+            mutator.roots.rotate_right(1);
+            mutator.root(&mut late);
+            mutator.allocate(WORD);
+            mutator.unroot(5);
+            for (index, &part) in parts.iter().enumerate() {
+                // SAFETY: the parts were kept current.
+                unsafe {
+                    assert_eq!(string::text(part), &text[index * 20..index * 20 + length]);
+                    assert_eq!(is_slice(part), length == 60);
+                    if is_slice(part) {
+                        // Kept with the slice.
+                        assert_ne!(load(part) >> 32, 0);
+                        assert_hash_is_sound(load(part + SLICE_PARENT));
+                    }
+                }
+                assert_hash_is_sound(part);
+            }
+            for kept in [early, late] {
+                if kept != 0 {
+                    // SAFETY: kept current; a string copied as it is keeps
+                    // its hash.
+                    unsafe { assert_ne!(load(kept) >> 32, 0) };
+                    assert_hash_is_sound(kept);
+                }
+            }
+        }
     }
 }
