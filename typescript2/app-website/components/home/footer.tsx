@@ -54,7 +54,7 @@ export default function Footer() {
           >
             {COLUMNS.map((c) => (
               <div
-                className="tap-list flex flex-col gap-3 min-w-[120px] whitespace-nowrap"
+                className="tap-list flex flex-col gap-3 min-w-[120px] whitespace-nowrap max-[359px]:whitespace-normal"
                 key={c.title}
               >
                 <p className="text-footer-muted">{c.title}</p>

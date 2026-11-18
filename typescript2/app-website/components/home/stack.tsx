@@ -836,7 +836,7 @@ export function Cheap() {
         <label className="block w-full sm:max-w-[22rem]">
           <span className="flex items-baseline justify-between gap-3 text-[14px] text-ink-2">
             OpenTelemetry sampling
-            <span className="font-display text-[20px] font-medium tabular-nums text-head">
+            <span className="whitespace-nowrap font-display text-[20px] font-medium tabular-nums text-head">
               keeps {Math.round(rate * 100)}%
             </span>
           </span>

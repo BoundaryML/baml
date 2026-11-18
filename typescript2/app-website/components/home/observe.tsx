@@ -140,23 +140,28 @@ function Flow() {
     <div>
       <div className="flex flex-wrap items-center gap-2">
         <span className={`${node} border-rule text-ink-2`}>support_agent</span>
-        <ArrowRight aria-hidden className="size-4 shrink-0 text-muted" />
-        <span className={`${node} border-rule text-ink-2`}>http.get</span>
-        <ArrowRight
-          aria-hidden
-          className="size-4 shrink-0"
-          style={{ color: RED }}
-        />
-        <span
-          className={node}
-          style={{
-            background: 'rgb(229 72 77 / 0.1)',
-            borderColor: 'rgb(229 72 77 / 0.6)',
-            color: RED,
-          }}
-        >
-          <ShieldAlert aria-hidden className="size-4 shrink-0" />
-          pastebin.com
+        {/* Each arrow stays with the step it points to, so a wrapped row never ends on one. */}
+        <span className="flex min-w-0 items-center gap-2">
+          <ArrowRight aria-hidden className="size-4 shrink-0 text-muted" />
+          <span className={`${node} border-rule text-ink-2`}>http.get</span>
+        </span>
+        <span className="flex min-w-0 items-center gap-2">
+          <ArrowRight
+            aria-hidden
+            className="size-4 shrink-0"
+            style={{ color: RED }}
+          />
+          <span
+            className={node}
+            style={{
+              background: 'rgb(229 72 77 / 0.1)',
+              borderColor: 'rgb(229 72 77 / 0.6)',
+              color: RED,
+            }}
+          >
+            <ShieldAlert aria-hidden className="size-4 shrink-0" />
+            pastebin.com
+          </span>
         </span>
       </div>
       <div className="mt-4 grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-5 gap-y-1.5 font-mono text-[12px]">
@@ -194,12 +199,18 @@ const SLOWEST: [name: string, seconds: number, input: string][] = [
 /** The slowest calls as bars to one scale, each with the input that caused it. */
 function Slowest() {
   return (
-    <ul className="grid gap-2.5 font-mono text-[12px]">
+    <ul className="grid grid-cols-1 gap-2.5 font-mono text-[12px]">
       {SLOWEST.map(([name, seconds, input], i) => (
-        <li key={name}>
+        <li className="min-w-0" key={name}>
           <p className="flex items-baseline justify-between gap-3">
-            <span className={i === 0 ? 'text-head' : 'text-ink-2'}>{name}</span>
-            <span className="truncate text-muted">{input}</span>
+            <span
+              className={`shrink-0 ${i === 0 ? 'text-head' : 'text-ink-2'}`}
+            >
+              {name}
+            </span>
+            {/* The input is the part that gives way: it shortens to an ellipsis on a narrow
+                phone, where the row would otherwise push the page wider than the screen. */}
+            <span className="min-w-0 truncate text-muted">{input}</span>
           </p>
           <p className="mt-1 flex items-center gap-2.5">
             <span className="h-2 flex-1 rounded-full bg-white/[0.07]">
@@ -476,16 +487,20 @@ function Detail({ q }: { q: Query }) {
     <>
       <div className="flex items-center gap-3">
         <Mark q={q} />
-        <h3 className="font-display text-[20px] font-medium leading-snug tracking-[-0.02em] text-head">
-          {q.title}
-        </h3>
-        <span
-          className="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] uppercase tracking-wider"
-          style={{ color: tone.color }}
-        >
-          <span className="size-1.5 rounded-full bg-current" />
-          {tone.label}
-        </span>
+        {/* On a phone the status sits under the title: side by side, the title broke onto three
+            lines and the status ran past the card's padding. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+          <h3 className="font-display text-[20px] font-medium leading-snug tracking-[-0.02em] text-head">
+            {q.title}
+          </h3>
+          <span
+            className="inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] uppercase tracking-wider sm:ml-auto"
+            style={{ color: tone.color }}
+          >
+            <span className="size-1.5 rounded-full bg-current" />
+            {tone.label}
+          </span>
+        </div>
       </div>
       <p className="mt-5 flex flex-wrap items-baseline gap-x-2.5">
         <span className="font-display text-[36px] font-medium leading-none tracking-[-0.03em] text-head">
@@ -494,9 +509,9 @@ function Detail({ q }: { q: Query }) {
         <span className="text-[16px] text-ink-2">{q.counts}</span>
       </p>
       <p className="mt-2 text-[16px] leading-snug text-ink-2">{q.finding}</p>
-      <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)]">
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)]">
         <div className="min-w-0 self-center">{q.chart}</div>
-        <pre className="code-pane self-start rounded-lg border border-rule bg-black/40 p-4 font-mono text-[12px] leading-[1.7] text-clover/90">
+        <pre className="code-pane min-w-0 self-start rounded-lg border border-rule bg-black/40 p-4 font-mono text-[12px] leading-[1.7] text-clover/90">
           {q.sql}
         </pre>
       </div>
@@ -587,7 +602,8 @@ export default function Observe() {
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         <h2 className="v4-h2 text-head max-w-[22em]" id="observe">
-          Turn your traces to a queryable data-lake, with zero setup.
+          Turn your traces to a queryable{' '}
+          <span className="whitespace-nowrap">data-lake</span>, with zero setup.
         </h2>
         <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
           Query your program traces and profiles to generate any custom

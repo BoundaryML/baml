@@ -1509,18 +1509,25 @@ function Timeline({
 
 /** Time to a decision: minutes on the right, and on the left, the days it's been waiting. */
 function Decided({ day, lit }: { day: number; lit: boolean }) {
-  const value = lit
-    ? '3 minutes'
-    : day >= THREAD_DAYS - 0.4
-      ? `${dayNumber(day)} days`
-      : `still waiting, day ${dayNumber(day)}`;
+  const waiting = !lit && day < THREAD_DAYS - 0.4;
   return (
     <p className="text-right leading-tight">
       <span className="block text-[12px] text-muted">Time to a decision</span>
+      {/* One line at every width, so the chats below don't move as the days pass: the type is
+          smaller on a phone, and the narrowest phones drop "still". */}
       <span
-        className={`font-mono text-[18px] tabular-nums ${lit ? 'text-clover' : 'text-head'}`}
+        className={`whitespace-nowrap font-mono text-[15px] tabular-nums sm:text-[18px] ${lit ? 'text-clover' : 'text-head'}`}
       >
-        {value}
+        {lit ? (
+          '3 minutes'
+        ) : waiting ? (
+          <>
+            <span className="max-[399px]:hidden">still </span>waiting, day{' '}
+            {dayNumber(day)}
+          </>
+        ) : (
+          `${dayNumber(day)} days`
+        )}
       </span>
     </p>
   );

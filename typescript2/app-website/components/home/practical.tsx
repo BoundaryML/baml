@@ -9,12 +9,14 @@ import { Cheap } from './stack';
 // machine named under them.
 
 /** Overhead of observing one function, in nanoseconds. */
-const OVERHEAD: { lit?: boolean; name: string; ns: number; note: string }[] = [
-  { lit: true, name: 'Boundary', note: 'baseline', ns: 32 },
-  { name: 'OTel + Rust', note: '5.8× slower', ns: 186 },
-  { name: 'OTel + TypeScript', note: '22× slower', ns: 702 },
-  { name: 'OTel + Python', note: '290× slower', ns: 9288 },
-];
+// `times` is how many times slower than Boundary; Boundary's own row has none.
+const OVERHEAD: { lit?: boolean; name: string; ns: number; times?: string }[] =
+  [
+    { lit: true, name: 'Boundary', ns: 32 },
+    { name: 'OTel + Rust', ns: 186, times: '5.8×' },
+    { name: 'OTel + TypeScript', ns: 702, times: '22×' },
+    { name: 'OTel + Python', ns: 9288, times: '290×' },
+  ];
 // Bars are drawn to scale against the TypeScript row. Python is 13 times that, so its bar runs the
 // full width with a break in it instead.
 const SCALE = 702;
@@ -113,11 +115,23 @@ export default function Practical() {
               {OVERHEAD.map((r) => (
                 <li key={r.name}>
                   <p className="flex items-baseline justify-between gap-3 text-[14px]">
-                    <span className={r.lit ? 'text-head' : 'text-ink-2'}>
+                    <span
+                      className={`whitespace-nowrap ${r.lit ? 'text-head' : 'text-ink-2'}`}
+                    >
                       {r.name}
                     </span>
+                    {/* The narrowest phones drop the word "slower", so the name and its number
+                        stay on one line. */}
                     <span className="whitespace-nowrap font-mono text-[12px] text-muted">
-                      {r.ns.toLocaleString('en-US')} ns · {r.note}
+                      {r.ns.toLocaleString('en-US')} ns ·{' '}
+                      {r.times ? (
+                        <>
+                          {r.times}
+                          <span className="max-[359px]:hidden"> slower</span>
+                        </>
+                      ) : (
+                        'baseline'
+                      )}
                     </span>
                   </p>
                   <span className="mt-1.5 block">
