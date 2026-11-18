@@ -173,6 +173,7 @@ pub(crate) fn terminator_destination(terminator: &Terminator<'_>) -> Option<Loca
         | Terminator::Await { destination, .. }
         | Terminator::AwaitAny { destination, .. }
         | Terminator::ShortCircuit { destination, .. } => destination,
+        Terminator::Spawn { future, .. } => future,
         _ => return None,
     };
     match place {

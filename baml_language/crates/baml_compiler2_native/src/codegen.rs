@@ -66,6 +66,7 @@ use crate::{
 };
 
 mod native_call;
+mod spawn;
 mod string_slice;
 mod unwind;
 
@@ -119,6 +120,7 @@ fn clif_type(ty: &NativeTy<'_>) -> ir::Type {
         | NativeTy::Array(_)
         | NativeTy::Function(_)
         | NativeTy::Cell(_)
+        | NativeTy::Future(_)
         | NativeTy::Union(_)
         | NativeTy::Unknown
         | NativeTy::Optional(_) => WORD,
@@ -189,6 +191,13 @@ enum Runtime {
     StringFromInt,
     StringFromFloat,
     StringFromAny,
+    Spawn,
+    SpawnUnsupported,
+    Await,
+    AwaitError,
+    TaskStart,
+    TaskFinish,
+    TaskFail,
 }
 
 impl Runtime {
@@ -221,6 +230,13 @@ impl Runtime {
             Self::StringFromInt => "baml_rt_string_from_int",
             Self::StringFromFloat => "baml_rt_string_from_float",
             Self::StringFromAny => "baml_rt_string_from_any",
+            Self::Spawn => "baml_rt_spawn",
+            Self::SpawnUnsupported => "baml_rt_spawn_unsupported",
+            Self::Await => "baml_rt_await",
+            Self::AwaitError => "baml_rt_await_error",
+            Self::TaskStart => "baml_rt_task_start",
+            Self::TaskFinish => "baml_rt_task_finish",
+            Self::TaskFail => "baml_rt_task_fail",
         }
     }
 
@@ -233,7 +249,15 @@ impl Runtime {
         let (params, returns) = match self {
             Self::PrintInt | Self::PrintString => (vec![word], vec![]),
             Self::PanicDivisionByZero | Self::PanicNegativeShift => (vec![word, word], vec![]),
-            Self::StackSlow | Self::PollSlow | Self::AllocSlow => (vec![], vec![]),
+            Self::StackSlow | Self::PollSlow | Self::AllocSlow | Self::SpawnUnsupported => {
+                (vec![], vec![])
+            }
+            Self::Await => (vec![word], vec![]),
+            Self::TaskStart => (vec![word], vec![word]),
+            Self::TaskFinish => (vec![word, word], vec![]),
+            Self::TaskFail => (vec![word, word, word], vec![]),
+            Self::Spawn => (vec![word, word, word], vec![word]),
+            Self::AwaitError => (vec![word, word], vec![word]),
             Self::PrintFloat => (vec![float], vec![]),
             Self::PrintBool => (vec![byte], vec![]),
             Self::PanicIndexOutOfBounds | Self::Throw | Self::Rethrow => (vec![word, word], vec![]),
@@ -314,6 +338,9 @@ struct Backend<'db> {
     functions: Vec<(FuncId, u32)>,
     /// What the unwinder is told about them.
     unwind: unwind::Tables,
+    /// The function a spawned task starts in, by the machine type its
+    /// closure returns; see [`spawn`].
+    task_shims: HashMap<ir::Type, FuncId>,
 }
 
 impl<'db> Backend<'db> {
@@ -363,6 +390,7 @@ impl<'db> Backend<'db> {
             stack_maps: Vec::new(),
             functions: Vec::new(),
             unwind: unwind::Tables::default(),
+            task_shims: HashMap::new(),
         })
     }
 
@@ -984,6 +1012,7 @@ pub(crate) fn generate<'db>(
         | NativeTy::Array(_)
         | NativeTy::Function(_)
         | NativeTy::Cell(_)
+        | NativeTy::Future(_)
         | NativeTy::Optional(_) => {
             return Err(CompileError::EntryResultNotPrintable);
         }
@@ -1037,6 +1066,25 @@ pub(crate) fn generate<'db>(
         &mut clif,
         &mut disassembly,
     )?;
+    for (result, id) in backend.declared_task_shims() {
+        let mut shim_signature = ir::Signature::new(backend.call_conv());
+        shim_signature.params.push(AbiParam::new(WORD));
+        context.func.signature = shim_signature;
+        spawn::task_shim(
+            &mut backend,
+            result,
+            &mut context.func,
+            &mut builder_context,
+        )?;
+        define(
+            &mut backend,
+            &mut context,
+            id,
+            &format!("baml_task_shim_{result}"),
+            &mut clif,
+            &mut disassembly,
+        )?;
+    }
     backend.define_stack_maps()?;
     backend.define_unwind()?;
     backend.define_functions()?;
@@ -3503,6 +3551,17 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let target = self.block(*target);
                 self.builder.ins().jump(target, &[]);
             }
+            Terminator::Spawn {
+                plan,
+                future,
+                resume,
+            } => self.spawn(plan, future, *resume)?,
+            Terminator::Await {
+                future,
+                destination,
+                target,
+                ..
+            } => self.await_future(future, destination, *target)?,
             Terminator::Throw { value } => self.throw(value)?,
             Terminator::Rethrow { value, context } => self.rethrow(value, context)?,
             _ => return Err(internal("a checked terminator is supported")),

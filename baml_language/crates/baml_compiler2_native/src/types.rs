@@ -87,6 +87,9 @@ pub(crate) enum NativeTy<'db> {
     /// with zero for `null`. For an `int`, `float` or `bool` it is a pair of
     /// words: the value's bits, and whether there is a value at all.
     Optional(Box<NativeTy<'db>>),
+    /// A reference to the future of a task that returns a value of this
+    /// type, which takes one slot.
+    Future(Box<NativeTy<'db>>),
 }
 
 impl NativeTy<'_> {
@@ -99,6 +102,7 @@ impl NativeTy<'_> {
             | Self::Array(_)
             | Self::Function(_)
             | Self::Cell(_)
+            | Self::Future(_)
             | Self::Union(_)
             | Self::Unknown => true,
             Self::Optional(inner) => inner.is_ref(),
@@ -221,6 +225,15 @@ macro_rules! native_type_of {
                         return None;
                     }
                     NativeTy::Array(Box::new(element))
+                }
+                // What the task throws is no part of how its future is
+                // held.
+                $family::Future(value, _) => {
+                    let value = $name(db, value, arguments)?;
+                    if value.is_pair() {
+                        return None;
+                    }
+                    NativeTy::Future(Box::new(value))
                 }
                 $family::Function { params, ret, .. } => {
                     let params = params
@@ -359,6 +372,36 @@ pub(crate) fn class_layout<'db>(
             })
         })
         .collect()
+}
+
+/// The fields of `baml.spawn.Plan` a `spawn` reads, by position.
+pub(crate) const PLAN_BODY: usize = 0;
+pub(crate) const PLAN_SEMAPHORES: usize = 2;
+pub(crate) const PLAN_CANCEL_TOKENS: usize = 3;
+
+/// What a `spawn` of a plan of this type runs: the signature of the plan's
+/// body, when the type is laid out as `baml.spawn.Plan` is.
+pub(crate) fn plan_body<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    plan: &NativeTy<'db>,
+) -> Option<(Vec<NativeTy<'db>>, Signature<'db>)> {
+    let NativeTy::Class(class, arguments) = plan else {
+        return None;
+    };
+    let fields = class_layout(db, *class, arguments).ok()?;
+    match (
+        fields.get(PLAN_BODY),
+        fields.get(PLAN_SEMAPHORES),
+        fields.get(PLAN_CANCEL_TOKENS),
+    ) {
+        (Some(NativeTy::Function(body)), Some(NativeTy::Array(_)), Some(NativeTy::Array(_)))
+            if body.params.is_empty() && !body.result.is_pair() =>
+        {
+            let body = (**body).clone();
+            Some((fields, body))
+        }
+        _ => None,
+    }
 }
 
 /// A function body together with the types of the locals whose declarations
@@ -514,7 +557,11 @@ impl<'a, 'db> Body<'a, 'db> {
                 } else {
                     native_ty(db, &declaration.ty, arguments)
                 };
+                // The temporary an `await spawn { .. }` keeps the future in
+                // is declared `null`: it has the type of what is spawned.
+                let spawned = matches!(written, Written::Result(Terminator::Spawn { .. }));
                 let inferable = undeclared
+                    || spawned
                     || copied_only[local.0]
                     || (declared.is_none() && computed_only[local.0]);
                 if declaration.is_captured || conflicting[local.0] || !inferable {
@@ -531,6 +578,15 @@ impl<'a, 'db> Body<'a, 'db> {
                     Written::Value(Rvalue::UnaryOp { op, operand }) => {
                         operand_ty(db, &typed, operand)
                             .and_then(|operand| unary_typing(*op, &operand))
+                    }
+                    Written::Result(Terminator::Spawn { plan, .. }) => {
+                        match operand_ty(db, &typed, plan)
+                            .ok()
+                            .and_then(|plan| plan_body(db, &narrowed(plan)))
+                        {
+                            Some((_, body)) => Ok(NativeTy::Future(Box::new(body.result))),
+                            None => continue,
+                        }
                     }
                     // What is left is only ever the one write of a local an
                     // inlined function declared.
@@ -971,6 +1027,11 @@ pub(crate) fn assignable(expected: &NativeTy<'_>, found: &NativeTy<'_>) -> bool 
             (NativeTy::Array(expected), NativeTy::Array(found)) => {
                 expected.is_ref() && found.is_ref()
             }
+            // As for a class at its type arguments: a future's slot holds
+            // any reference the same way.
+            (NativeTy::Future(expected), NativeTy::Future(found)) => {
+                type_argument(Some((**expected).clone())) == type_argument(Some((**found).clone()))
+            }
             // The type checker has decided the two function types agree;
             // what is left to ask is that a call passes the same registers.
             (NativeTy::Function(expected), NativeTy::Function(found)) => {
@@ -1088,6 +1149,7 @@ pub(crate) fn describe(ty: &NativeTy<'_>) -> &'static str {
         NativeTy::Function(_) => "function",
         NativeTy::Cell(_) => "cell",
         NativeTy::Optional(_) => "optional",
+        NativeTy::Future(_) => "future",
     }
 }
 
