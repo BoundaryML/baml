@@ -1590,6 +1590,99 @@ mod tests {
         assert!(drops.iter().all(|counter| *counter == 1));
     }
 
+    /// Storage is scanned to its capacity, not to its array's length, and
+    /// a map's entries to theirs. So whatever shortens an array or a map
+    /// of references clears what it gives up: each object here is dropped
+    /// by the collection after the one operation that let go of it, and
+    /// the ones still held are not.
+    #[test]
+    fn what_an_array_or_a_map_gives_up_is_collected() {
+        use crate::{
+            map::{self, KeyKind},
+            native::{
+                Arr, ArrRef, NativeBamlArray as _, Natives, RootSlots, Scope, Slot, TypeId, View,
+            },
+        };
+
+        let mut mutator = mutator(true);
+        let drops = counters(8);
+        let dropped = |mutator: &mut Mutator| -> Vec<usize> {
+            mutator.allocate(WORD);
+            (0..drops.len())
+                .filter(|index| drops[*index] == 1)
+                .collect()
+        };
+        let types = [TypeId(0)];
+        // SAFETY: the calls follow the contracts of compiled code, with the
+        // array and the map rooted here in place of a stack map.
+        unsafe {
+            let mut array = array_new(&mut mutator, TYPE_ARRAY_OF_REFS, 0);
+            mutator.root(&mut array);
+            for counter in drops {
+                let mut object =
+                    mutator.allocate_owned(std::ptr::from_ref(counter) as usize, &COUNTED);
+                // The object is held by nothing until it is in the array.
+                mutator.root(&mut object);
+                array_push_slow(&mut mutator, array, object);
+                mutator.unroot(1);
+            }
+            assert!(dropped(&mut mutator).is_empty());
+
+            Natives::pop(types, ArrRef::<Slot>::from_raw(array));
+            assert_eq!(dropped(&mut mutator), [7]);
+            Natives::shift(types, ArrRef::<Slot>::from_raw(array));
+            assert_eq!(dropped(&mut mutator), [0, 7]);
+            // Of 1 to 6, the second: 2.
+            Natives::remove_at(types, ArrRef::<Slot>::from_raw(array), 1);
+            assert_eq!(dropped(&mut mutator), [0, 2, 7]);
+            {
+                // Of 1, 3, 4, 5, 6, the two from the second on: 3 and 4.
+                let slots = RootSlots::new();
+                let mut scope = Scope::new(&mut mutator, &slots);
+                let held = scope.root_raw::<Arr<Slot>>(array);
+                let nothing = scope.alloc_array::<Slot>(0);
+                assert!(Natives::splice(&mut scope, types, held, 1, 2, nothing).is_ok());
+            }
+            assert_eq!(dropped(&mut mutator), [0, 2, 3, 4, 7]);
+            // Of 1, 5, 6, all but the first.
+            Natives::_truncate(types, ArrRef::<Slot>::from_raw(array), 1);
+            assert_eq!(dropped(&mut mutator), [0, 2, 3, 4, 5, 6, 7]);
+            Natives::clear(types, ArrRef::<Slot>::from_raw(array));
+            assert_eq!(dropped(&mut mutator), [0, 1, 2, 3, 4, 5, 6, 7]);
+            mutator.unroot(1);
+
+            // A map from strings to objects: one key deleted, then all.
+            let drops = counters(3);
+            let mut held = map::new(&mut mutator, true, true, 0);
+            mutator.root(&mut held);
+            let mut keys = [0; 3];
+            for key in &mut keys {
+                mutator.root(key);
+            }
+            for (index, counter) in drops.iter().enumerate() {
+                keys[index] = string::from_str(&mut mutator, &format!("key {index}"));
+                let mut object =
+                    mutator.allocate_owned(std::ptr::from_ref(counter) as usize, &COUNTED);
+                mutator.root(&mut object);
+                map::set(&mut mutator, held, KeyKind::Str, true, keys[index], object);
+                mutator.unroot(1);
+            }
+            let dropped = |mutator: &mut Mutator| -> Vec<usize> {
+                mutator.allocate(WORD);
+                (0..drops.len())
+                    .filter(|index| drops[*index] == 1)
+                    .collect()
+            };
+            assert!(dropped(&mut mutator).is_empty());
+            map::delete(held, KeyKind::Str, keys[1]);
+            assert_eq!(dropped(&mut mutator), [1]);
+            map::clear(held);
+            assert_eq!(dropped(&mut mutator), [0, 1, 2]);
+            mutator.unroot(4);
+        }
+        mutator.drop_owned();
+    }
+
     #[test]
     fn owned_values_alone_bring_on_a_collection() {
         let mut mutator = mutator(false);
