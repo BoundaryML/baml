@@ -10,9 +10,10 @@ description = "Runtime linked into natively compiled BAML programs"
 
 [lib]
 # `baml_compiler2_native` builds this package into the archive it links
-# programs against, with a nested `cargo` and its own profile.
-crate-type = [ "staticlib" ]
-doctest = false
+# programs against, with a nested `cargo` and its own profile. The `rlib`
+# is for the documentation tests, which are how the crate checks that what
+# must not compile does not.
+crate-type = [ "staticlib", "rlib" ]
 
 [features]
 default = [ "aws-crypto" ]

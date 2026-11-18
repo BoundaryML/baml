@@ -505,15 +505,15 @@ impl<M> Copy for Root<'_, M> {}
 
 impl<'s, M: Managed> Root<'s, Arr<M>> {
     /// Put `value`, or `null`, at `index` of the array.
-    pub fn set(self, _scope: &mut Scope<'s>, index: usize, value: Option<Root<'s, M>>) {
-        let array = self.0.get();
+    pub fn set(self, scope: &mut Scope<'s>, index: usize, value: Option<Root<'s, M>>) {
+        let array = self.raw(scope);
         // SAFETY: a root holds a live array, which has storage for its
         // length, checked here.
         unsafe {
             assert!(index < load(array + ARRAY_LENGTH), "past the array's end");
             store(
                 load(array + ARRAY_DATA) + index * WORD,
-                value.map_or(0, Root::raw),
+                value.map_or(0, |value| value.raw(scope)),
             );
         }
     }
@@ -527,8 +527,34 @@ impl<M: Managed> Root<'_, M> {
         unsafe { M::View::from_raw(self.0.get()) }
     }
 
-    /// The address to hand back to compiled code.
-    pub fn raw(self) -> usize {
+    /// The object's address, to hand back to compiled code: good until
+    /// `scope` allocates or stops, like a view.
+    ///
+    /// It takes the scope so that the root is read only when nothing else
+    /// holds the scope. A stop holds it, so no address is read during one:
+    ///
+    /// ```compile_fail,E0502
+    /// use baml_native_rt::native::{Root, Scope, Str};
+    ///
+    /// async fn read_during_a_stop<'s>(scope: &mut Scope<'s>, text: Root<'s, Str>) -> usize {
+    ///     let waiting = scope.io(async {});
+    ///     let address = text.raw(scope);
+    ///     waiting.await;
+    ///     address
+    /// }
+    /// ```
+    ///
+    /// Read once the stop is over, it is the address the object has then:
+    ///
+    /// ```no_run
+    /// use baml_native_rt::native::{Root, Scope, Str};
+    ///
+    /// async fn read_after_a_stop<'s>(scope: &mut Scope<'s>, text: Root<'s, Str>) -> usize {
+    ///     scope.io(async {}).await;
+    ///     text.raw(scope)
+    /// }
+    /// ```
+    pub fn raw(self, _scope: &Scope<'_>) -> usize {
         self.0.get()
     }
 }
@@ -817,8 +843,9 @@ impl<'s> Scope<'s> {
 
     /// Throw `error`, an instance a native built.
     pub fn throw(&mut self, error: Root<'s, Obj>) -> Thrown<'s> {
+        let error = error.raw(self);
         // SAFETY: a root holds a live object.
-        unsafe { self.thrown(error.raw()) }
+        unsafe { self.thrown(error) }
     }
 
     /// A new map of string keys to objects, with room for `count` keys.
@@ -837,7 +864,8 @@ impl<'s> Scope<'s> {
         key: Root<'s, Str>,
         value: Option<Root<'s, M>>,
     ) {
-        let (map, key, value) = (map.raw(), key.raw(), value.map_or(0, Root::raw));
+        let (map, key) = (map.raw(self), key.raw(self));
+        let value = value.map_or(0, |value| value.raw(self));
         // SAFETY: a live map of string keys whose values are references,
         // a string and an object or zero.
         unsafe {
@@ -928,7 +956,7 @@ impl<'s> Reservation<'_, 's> {
     /// The object behind `root`, good until the reservation is finished.
     pub fn get<M: Managed>(&self, root: Root<'s, M>) -> M::View<'_> {
         // SAFETY: nothing moves while the reservation is open.
-        unsafe { M::View::from_raw(root.raw()) }
+        unsafe { M::View::from_raw(root.raw(self.scope)) }
     }
 
     /// A new string holding `text`.

@@ -164,6 +164,7 @@ where
     F: Future<Output = RtResult> + Send,
     S: FnOnce(&'static mut Scope<'static>) -> F,
 {
+    name_native_in_panics();
     let worker = std::ptr::from_mut(mutator);
     let block = Box::into_raw(Box::<Block<F>>::new_uninit()).cast::<Block<F>>();
     // SAFETY: the block is this function's until it is on the task's list,
@@ -267,7 +268,6 @@ pub(crate) unsafe extern "C" fn baml_rt_native_poll(
     word: usize,
     threw: usize,
 ) -> Step {
-    name_native_in_panics();
     // SAFETY: the caller's contract. The worker is reached through its
     // address: the native reaches it through its scope meanwhile.
     unsafe {
@@ -625,7 +625,7 @@ mod tests {
                 let text = scope.alloc_str(TEXT);
                 scope.io(std::future::pending::<()>()).await;
                 drop(held);
-                RtResult::ok(text.raw() as u64)
+                RtResult::ok(text.raw(scope) as u64)
             });
             assert!(((*head).poll)(head).is_pending());
 

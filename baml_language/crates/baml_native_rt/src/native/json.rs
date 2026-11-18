@@ -280,7 +280,8 @@ impl NativeBamlJson for Natives {
         if !(written.is_ok() && matches!(met, encode::Overrides::Count(0)))
             && let Some(held) = to_json_of_each(scope, value, options).await?
         {
-            written = write(scope, &mut held.splice());
+            let mut spliced = held.splice(scope);
+            written = write(scope, &mut spliced);
         }
         match written {
             Ok(text) => Ok(scope.alloc_str(&text)),
@@ -345,10 +346,10 @@ struct Held<'s> {
 impl Held<'_> {
     /// How the walk writes the value now. The addresses are good until
     /// the next allocation.
-    fn splice(&self) -> encode::Overrides {
+    fn splice(&self, scope: &Scope<'_>) -> encode::Overrides {
         encode::Overrides::Splice {
             // SAFETY: a live array of `2 * count` elements.
-            held: unsafe { load(self.array.raw() + ARRAY_DATA) },
+            held: unsafe { load(self.array.raw(scope) + ARRAY_DATA) },
             count: self.count,
             next: 0,
         }
@@ -396,7 +397,7 @@ async fn to_json_of_each<'s>(
         // SAFETY: the array has `2 * count` elements, each a reference,
         // and neither slot is used again.
         unsafe {
-            let data = load(array.raw() + ARRAY_DATA);
+            let data = load(array.raw(scope) + ARRAY_DATA);
             store(
                 data + (count + index) * crate::layout::WORD,
                 returned.get(scope),
@@ -444,7 +445,8 @@ pub(super) async fn to_json_value<'s>(
     if !(counted.is_ok() && matches!(met, encode::Overrides::Count(0))) {
         held = to_json_of_each(scope, value, options).await?;
         if let Some(held) = &held {
-            counted = build(scope, Out::counting(), &mut held.splice());
+            let mut spliced = held.splice(scope);
+            counted = build(scope, Out::counting(), &mut spliced);
         }
     }
     match counted {
@@ -453,9 +455,9 @@ pub(super) async fn to_json_value<'s>(
             let reservation = scope.reserve(bytes);
             let base = reservation.take(bytes);
             // The values may have moved when the room was made.
-            let mut overrides = held
-                .as_ref()
-                .map_or(encode::Overrides::Count(0), Held::splice);
+            let mut overrides = held.as_ref().map_or(encode::Overrides::Count(0), |held| {
+                held.splice(reservation.scope)
+            });
             let built: Result<_, Refused> = build(
                 reservation.scope,
                 Out::building(base, bytes),

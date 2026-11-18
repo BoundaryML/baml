@@ -115,7 +115,7 @@ fn ensure_capacity<'s>(scope: &mut Scope<'s>, array: Root<'s, Arr<Slot>>, needed
     // SAFETY: the root is of a live array; its storage, when it has one,
     // has its capacity in the word before its elements.
     unsafe {
-        let data = load(array.raw() + ARRAY_DATA);
+        let data = load(array.raw(scope) + ARRAY_DATA);
         let capacity = if data == 0 { 0 } else { load(data - WORD) };
         if needed <= capacity {
             return;
@@ -124,7 +124,7 @@ fn ensure_capacity<'s>(scope: &mut Scope<'s>, array: Root<'s, Arr<Slot>>, needed
         let reservation = scope.reserve(STORAGE_ELEMENTS + capacity * WORD);
         let storage = reservation.take(STORAGE_ELEMENTS + capacity * WORD);
         // Read after the reservation: the array may have moved.
-        let array = array.raw();
+        let array = array.raw(reservation.scope);
         let array_type = load(array) & TYPE_ID_MASK;
         store(storage, reservation.scope.storage_type(array_type));
         store(storage + STORAGE_CAPACITY, capacity);
@@ -178,7 +178,7 @@ fn insert<'s>(
     ensure_capacity(scope, array, length + 1);
     // SAFETY: the array has room for one more, and nothing allocates
     // between reading the item and storing it.
-    unsafe { replace(array.raw(), index, index, &[item.get(scope)]) };
+    unsafe { replace(array.raw(scope), index, index, &[item.get(scope)]) };
     i64::try_from(length + 1).unwrap_or(i64::MAX)
 }
 
@@ -340,7 +340,7 @@ impl NativeBamlArray for Natives {
         let replacement: Vec<usize> = replace.get(scope).iter().collect();
         // SAFETY: the array has room, the bounds are in range, and nothing
         // allocates after the replacement is read.
-        unsafe { self::replace(array.raw(), start, end, &replacement) };
+        unsafe { self::replace(array.raw(scope), start, end, &replacement) };
         Ok(())
     }
 

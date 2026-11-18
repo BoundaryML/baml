@@ -29,14 +29,16 @@ fn column<'s>(
     values: bool,
 ) -> Root<'s, Arr<Slot>> {
     // SAFETY: a live map.
-    let length = unsafe { map::len(map.raw()) };
+    let length = unsafe { map::len(map.raw(scope)) };
     let reservation = scope.reserve(array_size(length));
     let array = reservation.slots(length, holds_refs);
     let mut next = 0;
-    locked(map.raw(), || {
+    // Read after the reservation: the map may have moved.
+    let map = map.raw(reservation.scope);
+    locked(map, || {
         // SAFETY: a live map, and nothing allocates inside a reservation.
         unsafe {
-            map::for_each(map.raw(), |key, value| {
+            map::for_each(map, |key, value| {
                 array.set(next, if values { value } else { key });
                 next += 1;
             });
@@ -87,8 +89,12 @@ impl NativeBamlMap for Natives {
         key: Elem<'s>,
         value: Elem<'s>,
     ) -> Option<usize> {
-        let (map, key, is_ref, value) =
-            (map.raw(), key.get(scope), value.is_ref(), value.get(scope));
+        let (map, key, is_ref, value) = (
+            map.raw(scope),
+            key.get(scope),
+            value.is_ref(),
+            value.get(scope),
+        );
         // SAFETY: a live map of the named types, and a key and a value of
         // them.
         locked(map, || unsafe {
@@ -105,16 +111,16 @@ impl NativeBamlMap for Natives {
     ) -> usize {
         let (kind, is_ref) = (kind(types), default.is_ref());
         let key = kind.canonical(key.get(scope));
-        locked(map.raw(), || {
+        locked(map.raw(scope), || {
             // SAFETY: a live map of the named types, and a key and a value
             // of them.
             unsafe {
-                if let Some(slot) = map::get(map.raw(), kind, key) {
+                if let Some(slot) = map::get(map.raw(scope), kind, key) {
                     return crate::heap::load(slot);
                 }
                 let hash = kind.hash(key);
-                let value = default.get(scope);
-                map::insert_new(scope.mutator(), map.raw(), kind, is_ref, key, hash, value);
+                let (map, value) = (map.raw(scope), default.get(scope));
+                map::insert_new(scope.mutator(), map, kind, is_ref, key, hash, value);
             }
             default.get(scope)
         })

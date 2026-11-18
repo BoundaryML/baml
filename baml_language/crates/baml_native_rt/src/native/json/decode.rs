@@ -206,7 +206,7 @@ pub(in crate::native) async fn to<'s>(
             // fills it, which notes the same values in the same order and
             // ends as the first did.
             // SAFETY: a live array of `2 * count` elements.
-            let into = unsafe { load(array.raw() + ARRAY_DATA) };
+            let into = unsafe { load(array.raw(scope) + ARRAY_DATA) };
             drop(run(scope, asked, Out::counting(), Vec::new(), note(into)));
             array
         });
@@ -214,10 +214,10 @@ pub(in crate::native) async fn to<'s>(
             // SAFETY: the array's elements are `json` values and what was
             // returned for them, and neither slot is used again.
             unsafe {
-                let read = load(load(array.raw() + ARRAY_DATA) + index * WORD);
+                let read = load(load(array.raw(scope) + ARRAY_DATA) + index * WORD);
                 let read = scope.elem_raw(read, TypeId(0));
                 let made = scope.call_baml(from_json, &[read]).await?;
-                let data = load(array.raw() + ARRAY_DATA);
+                let data = load(array.raw(scope) + ARRAY_DATA);
                 store(data + (count + index) * WORD, made.get(scope));
                 scope.release_last(2);
             }
@@ -232,7 +232,7 @@ pub(in crate::native) async fn to<'s>(
             // SAFETY: a live array of `2 * count` elements, which may have
             // moved when the room was made.
             let made = held.map_or(0, |(array, count)| unsafe {
-                load(array.raw() + ARRAY_DATA) + count * WORD
+                load(array.raw(reservation.scope) + ARRAY_DATA) + count * WORD
             });
             let (built, _) = run(
                 reservation.scope,

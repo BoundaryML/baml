@@ -325,7 +325,7 @@ impl<'s> Build<'s> {
         });
         // SAFETY: the description says where the field is and how its
         // slot holds the value, which was checked to be one of its type.
-        unsafe { put(self.object.raw(), offset, ty.repr(), placed) };
+        unsafe { put(self.object.raw(scope), offset, ty.repr(), placed) };
         self.set |= 1 << field;
     }
 

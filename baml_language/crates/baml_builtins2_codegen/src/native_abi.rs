@@ -408,13 +408,13 @@ impl AbiTy {
             | Self::Map
             | Self::Class(..)
             | Self::Rust => {
-                format!("{value}.raw() as u64")
+                format!("{value}.raw(&scope) as u64")
             }
             Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_) => {
                 format!("{value} as u64")
             }
             // An optional scalar has no fallible form: see `listed`.
-            Self::Optional(_) => format!("{value}.map_or(0, |value| value.raw() as u64)"),
+            Self::Optional(_) => format!("{value}.map_or(0, |value| value.raw(&scope) as u64)"),
         }
     }
 
@@ -435,9 +435,9 @@ impl AbiTy {
             | Self::Array(_)
             | Self::Map
             | Self::Class(..)
-            | Self::Rust => format!("{value}.raw()"),
+            | Self::Rust => format!("{value}.raw(&scope)"),
             Self::Optional(inner) if inner.is_ref() => {
-                format!("{value}.map_or(0, |value| value.raw())")
+                format!("{value}.map_or(0, |value| value.raw(&scope))")
             }
             Self::Optional(_) => format!("OptionalScalar::from({value})"),
         }
