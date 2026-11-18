@@ -746,6 +746,80 @@ impl<'a> Elaborator<'a> {
         }
     }
 
+    /// The order in which to elaborate the operands of a skeleton
+    /// instruction: for all but `jump` and `brif`, the order they come in.
+    ///
+    /// The pure instructions a branch needs are inserted in the order its
+    /// operands ask for them, and that order decides which values overlap.
+    /// When a block argument is computed from the very parameter it replaces
+    /// (`i + 1` passed for `i`), it can take over the parameter's register
+    /// only if nothing later still reads the parameter. Otherwise the new
+    /// value lands elsewhere and is moved on the edge, which also costs the
+    /// edge a block and a jump. So such an argument is elaborated after every
+    /// other operand that reads the parameter directly, and the fixed
+    /// operands (a condition, usually computed from the arguments) go last.
+    fn operand_order(&self, inst: Inst, values: &[Value]) -> SmallVec<[usize; 8]> {
+        let identity = || (0..values.len()).collect();
+        let dfg = &self.func.dfg;
+        if !matches!(
+            dfg.insts[inst].opcode(),
+            crate::ir::Opcode::Jump | crate::ir::Opcode::Brif
+        ) || values.len() < 2
+        {
+            return identity();
+        }
+        let best = |value: Value| self.value_to_best_value[value].1;
+        let reads = |value: Value, param: Value| match dfg.value_def(best(value)) {
+            ValueDef::Result(def, _) => dfg.inst_values(def).any(|operand| best(operand) == param),
+            _ => false,
+        };
+
+        // For each block argument computed from the parameter it replaces:
+        // that parameter.
+        let mut replaces: SmallVec<[Option<Value>; 8]> = smallvec![None; values.len()];
+        let destinations =
+            dfg.insts[inst].branch_destination(&dfg.jump_tables, &dfg.exception_tables);
+        let passed: usize = destinations
+            .iter()
+            .map(|call| call.args(&dfg.value_lists).len())
+            .sum();
+        let Some(fixed) = values.len().checked_sub(passed) else {
+            return identity();
+        };
+        let mut index = fixed;
+        for call in destinations {
+            let params = dfg.block_params(call.block(&dfg.value_lists));
+            for position in 0..call.args(&dfg.value_lists).len() {
+                if let Some(&param) = params.get(position) {
+                    if reads(values[index], param) {
+                        replaces[index] = Some(param);
+                    }
+                }
+                index += 1;
+            }
+        }
+        if replaces.iter().all(Option::is_none) {
+            return identity();
+        }
+
+        let mut pending: SmallVec<[usize; 8]> = (fixed..values.len())
+            .filter(|&index| replaces[index].is_none())
+            .chain((fixed..values.len()).filter(|&index| replaces[index].is_some()))
+            .chain(0..fixed)
+            .collect();
+        let mut order = SmallVec::new();
+        while !pending.is_empty() {
+            let ready = pending.iter().position(|&index| match replaces[index] {
+                None => true,
+                Some(param) => !pending
+                    .iter()
+                    .any(|&other| values[other] != values[index] && reads(values[other], param)),
+            });
+            order.push(pending.remove(ready.unwrap_or(0)));
+        }
+        order
+    }
+
     fn elaborate_block(&mut self, elab_values: &mut Vec<Value>, idom: Option<Block>, block: Block) {
         trace!("elaborate_block: block {}", block);
         self.start_block(idom, block);
@@ -775,7 +849,8 @@ impl<'a> Elaborator<'a> {
             trace!(" -> inserting before {}", before);
 
             elab_values.extend(self.func.dfg.inst_values(inst));
-            for arg in elab_values.iter_mut() {
+            for index in self.operand_order(inst, elab_values) {
+                let arg = &mut elab_values[index];
                 trace!(" -> arg {}", *arg);
                 // Elaborate the arg, placing any newly-inserted insts
                 // before `before`. Get the updated value, which may

@@ -38,3 +38,9 @@ license = "Apache-2.0 WITH LLVM-exception"
 #   src/isa/aarch64/inst.isle: `lower_icmp_32_64_const` applies only when the
 #     constant encodes as a compare immediate (`icmp_const_is_imm`); any other
 #     is compared from the register that already holds it.
+#
+# Elaboration order of branch operands:
+#   src/egraph/elaborate.rs: for `jump` and `brif`, `operand_order` elaborates
+#     a block argument computed from the parameter it replaces after the other
+#     operands that read that parameter, and the fixed operands last, so the
+#     update can reuse the parameter's register with no move on the edge.
