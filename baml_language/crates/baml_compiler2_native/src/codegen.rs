@@ -1767,9 +1767,7 @@ impl<'a, 'db> Translator<'a, 'db> {
     /// or counted back from the end when negative. Panics when that is not
     /// an element.
     fn position(&mut self, index: ir::Value, length: ir::Value) -> Result<ir::Value, CompileError> {
-        // Add the length to a negative index without a branch: the sign,
-        // spread over the word, selects the length or zero. An index known
-        // not to be negative is its own position.
+        // An index known not to be negative is its own position.
         let known =
             self.builder
                 .func
@@ -1785,20 +1783,43 @@ impl<'a, 'db> Translator<'a, 'db> {
                         _ => None,
                     },
                 );
-        let position = if known.is_some_and(|index| index >= 0) {
-            index
-        } else {
-            let sign = self.builder.ins().sshr_imm(index, INT_BITS - 1);
-            let from_end = self.builder.ins().band(sign, length);
-            self.builder.ins().iadd(index, from_end)
-        };
-        // One unsigned comparison also rejects a position still negative.
+        if known.is_some_and(|index| index >= 0) {
+            let outside = self
+                .builder
+                .ins()
+                .icmp(IntCC::UnsignedGreaterThanOrEqual, index, length);
+            self.panic_if(outside, Panic::IndexOutOfBounds(index, length))?;
+            return Ok(index);
+        }
+        // One unsigned comparison passes every index that names an element
+        // from the front. The rest, out of line, are counted back from the
+        // end when negative: the length added to an index that is out of
+        // range either way leaves it out of range, unsigned.
+        let inside = self
+            .builder
+            .ins()
+            .icmp(IntCC::UnsignedLessThan, index, length);
+        let rare = self.builder.create_block();
+        let done = self.builder.create_block();
+        self.builder.append_block_param(done, types::I64);
+        self.builder.set_cold_block(rare);
+        self.builder
+            .ins()
+            .brif(inside, done, &[index.into()], rare, &[]);
+        self.builder.seal_block(rare);
+
+        self.builder.switch_to_block(rare);
+        let from_end = self.builder.ins().iadd(index, length);
         let outside = self
             .builder
             .ins()
-            .icmp(IntCC::UnsignedGreaterThanOrEqual, position, length);
+            .icmp(IntCC::UnsignedGreaterThanOrEqual, from_end, length);
         self.panic_if(outside, Panic::IndexOutOfBounds(index, length))?;
-        Ok(position)
+        self.builder.ins().jump(done, &[from_end.into()]);
+        self.builder.seal_block(done);
+
+        self.builder.switch_to_block(done);
+        Ok(self.builder.block_params(done)[0])
     }
 
     /// The address of element `index` of `array`, after checking the index.
