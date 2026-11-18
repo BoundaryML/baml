@@ -24,7 +24,7 @@ use crate::coords::{
 };
 
 pub(crate) struct ProgramIndex<'p> {
-    program: &'p Program,
+    pub(crate) program: &'p Program,
     names: Vec<(String, String)>,
     /// Package ordinals derived from the linked dependency edges.
     packages: HashMap<SourceRoot, u32>,

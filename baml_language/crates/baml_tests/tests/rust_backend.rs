@@ -828,3 +828,261 @@ function Boundary() -> int { let map = { "present": 1 }; map["missing"] }
         }
     }
 }
+
+/// Escape to stack: the module of `source` at `-O2`, checked to parse.
+fn stack_module(source: &str) -> RustModule {
+    let db = baml_test_support::setup_test_db(source);
+    let program = lower(&db, OptLevel::Two);
+    let module = render(&db, &program, OptLevel::Two, None);
+    syn::parse_file(&module.source).expect("generated Rust parses");
+    module
+}
+
+/// `function`'s allocation sites in order: `None` for a stack object, else
+/// the start of the reason it stays on the heap.
+#[track_caller]
+fn assert_sites(module: &RustModule, function: &str, expected: &[Option<&str>]) {
+    let report = module
+        .stack
+        .iter()
+        .find(|report| report.function == function)
+        .unwrap_or_else(|| panic!("no allocation sites reported for {function}"));
+    let actual: Vec<Option<&str>> = report
+        .sites
+        .iter()
+        .map(|site| site.heap_because.as_deref())
+        .collect();
+    assert_eq!(actual.len(), expected.len(), "{function}: {actual:?}");
+    for (actual, expected) in actual.iter().zip(expected) {
+        match (actual, expected) {
+            (None, None) => {}
+            (Some(actual), Some(expected)) if actual.starts_with(expected) => {}
+            _ => panic!("{function}: sites {actual:?}, expected {expected:?}"),
+        }
+    }
+}
+
+const STACK_VEC: &str = r#"
+class Vec {
+  x: int
+  y: int
+  function norm2(self) -> int { self.x * self.x + self.y * self.y }
+}
+"#;
+
+fn symbol_of<'a>(module: &'a RustModule, name: &str) -> &'a str {
+    &module
+        .functions
+        .iter()
+        .find(|f| f.display == name)
+        .unwrap_or_else(|| panic!("{name} should compile: {:?}", module.rejected))
+        .symbol
+}
+
+#[test]
+fn scalar_objects_in_a_loop_become_stack_structs() {
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function dot(a: Vec, b: Vec) -> int {{ a.x * b.x + a.y * b.y }}
+function main() -> int {{
+  let acc = 0;
+  for (let i = 0; i < 100; i += 1) {{
+    let v = Vec {{ x: i, y: i + 1 }};
+    let w = Vec {{ x: 3, y: i }};
+    acc += v.x + v.y + v.norm2() + dot(v, w);
+  }}
+  acc
+}}"
+    ));
+    assert_sites(&module, "user.main", &[None, None]);
+    assert!(module.source.contains("struct user_Vec_stack_"));
+    let main = body_of(&module, "user.main");
+    assert!(
+        !main.contains("vm.new_plain_instance(") && !main.contains("vm.new_instance("),
+        "{main}"
+    );
+    assert!(main.contains("let mut s0: user_Vec_stack_"), "{main}");
+    assert!(main.contains("s0.f0"), "{main}");
+    let norm2 = symbol_of(&module, "user.Vec.norm2");
+    let variant = format!(
+        "pub fn {norm2}_stack1(vm: &mut BexVm, fr: &FrameRecord, arg0: &mut user_Vec_stack_"
+    );
+    assert!(
+        module.source.contains(&variant),
+        "no stack variant of norm2"
+    );
+    assert!(
+        main.contains(&format!("{norm2}_stack1(vm, fr, &mut s0, ")),
+        "{main}"
+    );
+    assert!(
+        main.contains("s0.heap(vm, fr)") && main.contains("s0.reload(vm, "),
+        "{main}"
+    );
+    let dot = symbol_of(&module, "user.dot");
+    assert!(module.source.contains(&format!("pub fn {dot}_stack3(")));
+    assert!(
+        main.contains(&format!("{dot}_stack3(vm, fr, &mut s0, &mut s1, ")),
+        "{main}"
+    );
+}
+
+#[test]
+fn objects_that_escape_stay_on_the_heap() {
+    let cases: &[(&str, &str, &[Option<&str>])] = &[
+        (
+            "function main() -> int {
+  let kept: Vec[] = [];
+  let v = Vec { x: 1, y: 2 };
+  kept.push(v);
+  let w = Vec { x: 3, y: 4 };
+  let all = [w];
+  kept.length() + all.length()
+}",
+            "user.main",
+            &[
+                Some("passed to baml.Array.push"),
+                Some("stored into a container"),
+            ],
+        ),
+        (
+            "function make(x: int) -> Vec { let v = Vec { x: x, y: x }; v.y = 2; v }
+function main() -> int { make(3).x }",
+            "user.make",
+            &[Some("returned")],
+        ),
+        (
+            "function main() -> bool {
+  let a = Vec { x: 1, y: 2 };
+  let b = Vec { x: 1, y: 2 };
+  let c = Vec { x: 1, y: 2 };
+  let d = Vec { x: 1, y: 2 };
+  a == b && [c].includes(d) && c != null
+}",
+            "user.main",
+            &[
+                Some("passed to baml.ops.equals_equals"),
+                Some("passed to baml.ops.equals_equals"),
+                Some("stored into a container"),
+                Some("passed to generic baml.Array.includes"),
+            ],
+        ),
+        (
+            "class Res {
+  n: int
+  function cleanup(self) -> void { }
+}
+function main() -> int { let r = Res { n: 1 }; r.n += 1; r.n }",
+            "user.main",
+            &[Some("`user.Res` has a cleanup finalizer")],
+        ),
+        (
+            "function keep(v: Vec, into: Vec[]) -> int { into.push(v); into.length() }
+function main() -> int { let into: Vec[] = []; let v = Vec { x: 1, y: 2 }; keep(v, into) }",
+            "user.main",
+            &[Some("passed to user.keep, whose parameter 1 escapes")],
+        ),
+    ];
+    for (program, function, sites) in cases {
+        let module = stack_module(&format!("{STACK_VEC}\n{program}"));
+        assert_sites(&module, function, sites);
+    }
+}
+
+#[test]
+fn heap_fields_of_a_stack_object_are_spilled_across_an_await() {
+    let module = stack_module(
+        r#"
+class Tagged {
+  name: string
+  n: int
+}
+function work(n: int) -> int { n + 1 }
+function main() -> string {
+  let t = Tagged { name: "start", n: 1 };
+  let child = spawn { work(2) };
+  t.n = await child;
+  `${t.name}:${t.n}`
+}"#,
+    );
+    assert_sites(&module, "user.main", &[None]);
+    let main = body_of(&module, "user.main");
+    assert!(
+        main.contains("vm.set_slot(fr, ") && main.contains(", s0.f0); "),
+        "{main}"
+    );
+    assert!(main.contains("s0.f0 = vm.slot(fr, "), "{main}");
+    assert!(!main.contains("s0.f1 = vm.slot("), "{main}");
+}
+
+#[test]
+fn a_function_gets_a_bounded_number_of_stack_variants() {
+    let calls: String = (1..16u32)
+        .map(|mask| {
+            let args: Vec<String> = (0..4)
+                .map(|i| {
+                    if mask & (1 << i) == 0 {
+                        "h".to_string()
+                    } else {
+                        format!("Vec {{ x: {i}, y: {mask} }}")
+                    }
+                })
+                .collect();
+            format!("  t += f({});\n", args.join(", "))
+        })
+        .collect();
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function f(a: Vec, b: Vec, c: Vec, d: Vec) -> int {{ a.x + b.x + c.x + d.x }}
+function main() -> int {{
+  let kept: Vec[] = [];
+  let h = Vec {{ x: 0, y: 0 }};
+  kept.push(h);
+  let t = 0;
+{calls}  t
+}}"
+    ));
+    let f = symbol_of(&module, "user.f");
+    let variants = module.source.matches(&format!("pub fn {f}_stack")).count();
+    assert_eq!(variants, 8, "{}", body_of(&module, "user.main"));
+    let report = module
+        .stack
+        .iter()
+        .find(|report| report.function == "user.main")
+        .expect("main's sites");
+    assert!(
+        report.sites.iter().any(|site| site
+            .heap_because
+            .as_deref()
+            .is_some_and(|why| why.ends_with("which has its 8 stack variants"))),
+        "{:?}",
+        report
+            .sites
+            .iter()
+            .map(|site| &site.heap_because)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn objects_past_the_64th_parameter_stay_on_the_heap() {
+    let ints: String = (1..64).map(|i| format!("a{i}: int, ")).collect();
+    let zeros = "0, ".repeat(63);
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function big(first: Vec, {ints}last: Vec) -> int {{ first.x + last.y }}
+function main() -> int {{
+  let a = Vec {{ x: 1, y: 2 }};
+  let b = Vec {{ x: 3, y: 4 }};
+  big(a, {zeros}b)
+}}"
+    ));
+    assert_sites(
+        &module,
+        "user.main",
+        &[
+            None,
+            Some("passed to user.big beyond its first 64 parameters"),
+        ],
+    );
+}

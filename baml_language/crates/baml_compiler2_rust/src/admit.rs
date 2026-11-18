@@ -19,6 +19,7 @@ use crate::{
     index::ProgramIndex,
     reach::{reachable, references},
     render::render_module,
+    stack::StackReport,
 };
 
 /// Why a function stays bytecode.
@@ -82,6 +83,9 @@ pub struct RustModule {
     pub functions: Vec<CompiledFunction>,
     /// Functions of any package it does not compile, with the reason.
     pub rejected: Vec<(String, Rejection)>,
+    /// Per compiled function with class allocations, which became stack
+    /// objects and why the others did not (`stack` module).
+    pub stack: Vec<StackReport>,
 }
 
 /// Compile the reachable supported functions in the linked program.
@@ -125,7 +129,7 @@ pub fn compile_program(
         }
         retain_reachable(&index, &mut lowered);
     }
-    let (mut bodies, mut functions) =
+    let (mut bodies, mut functions, stack) =
         admission_fixpoint(db, &index, &mut lowered.units, &mut lowered.rejected);
     crate::init::compile_chainers(
         program,
@@ -140,6 +144,7 @@ pub fn compile_program(
         source,
         functions,
         rejected: lowered.rejected,
+        stack,
     })
 }
 
@@ -278,7 +283,7 @@ fn admission_fixpoint(
     index: &ProgramIndex,
     units: &mut BTreeMap<usize, Unit<'_>>,
     rejected: &mut Vec<(String, Rejection)>,
-) -> (String, Vec<CompiledFunction>) {
+) -> (String, Vec<CompiledFunction>, Vec<StackReport>) {
     // Every failed round removes at least one unit.
     loop {
         let graph: BTreeMap<usize, BTreeSet<usize>> = units
@@ -330,6 +335,16 @@ fn admission_fixpoint(
             .keys()
             .map(|&object| (object, symbol_for(index.display(object), object)))
             .collect();
+        let stack = crate::stack::plan(
+            db,
+            index,
+            units,
+            &crate::stack::Inputs {
+                pausing: &pausing,
+                framed: &framed,
+                signatures: &signatures,
+            },
+        );
         let mut bodies = String::new();
         let mut functions = Vec::new();
         let mut failed = Vec::new();
@@ -343,10 +358,26 @@ fn admission_fixpoint(
                 frameless: &frameless,
                 signatures: &signatures,
                 masks: &masks,
+                stack: &stack,
             };
-            let mut generator = Generator::new(&program, object, unit);
+            let variants: Result<String, Rejection> = stack
+                .bodies
+                .range((object, 1)..=(object, u64::MAX))
+                .map(|(&(_, params), _)| {
+                    Generator::new(&program, object, unit, params).function(&symbols[&object])
+                })
+                .collect();
+            let variants = match variants {
+                Ok(variants) => variants,
+                Err(rejection) => {
+                    failed.push((object, rejection));
+                    continue;
+                }
+            };
+            let mut generator = Generator::new(&program, object, unit, 0);
             match generator.function(&symbols[&object]) {
                 Ok(code) => {
+                    bodies.push_str(&variants);
                     let Ok(slots) = u32::try_from(generator.slots) else {
                         failed.push((
                             object,
@@ -372,7 +403,19 @@ fn admission_fixpoint(
             }
         }
         if failed.is_empty() {
-            break (bodies, functions);
+            for class in stack.classes.values() {
+                bodies.push_str(&crate::render::stack_struct(class));
+            }
+            let reports = stack
+                .reports
+                .into_iter()
+                .filter(|(_, sites)| !sites.is_empty())
+                .map(|(object, sites)| StackReport {
+                    function: index.display(object).to_owned(),
+                    sites,
+                })
+                .collect();
+            break (bodies, functions, reports);
         }
         for (object, rejection) in failed {
             units.remove(&object);

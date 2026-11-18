@@ -925,7 +925,7 @@ fn immutable_value(ty: &RuntimeTy) -> bool {
     }
 }
 
-fn immutable_ty(ty: &baml_type::Ty) -> bool {
+pub fn immutable_ty(ty: &baml_type::Ty) -> bool {
     use baml_type::Ty;
     match ty {
         Ty::Int

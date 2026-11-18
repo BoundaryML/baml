@@ -771,6 +771,32 @@ pub(crate) fn operand_ty(body: &MirFunctionBody<'_>, operand: &Operand<'_>) -> O
     }
 }
 
+/// For `x == null` (a call of the `==` builtin `native_key` with no type
+/// arguments and one side typed `null`), the other side. The `==` driver
+/// answers such a pair by kind alone: `null` equals only `null`, and no user
+/// `Equals.eq` can run.
+pub(crate) fn null_compared<'a, 'db>(
+    body: &MirFunctionBody<'db>,
+    native_key: Option<&str>,
+    ntypeargs: usize,
+    args: &'a [Operand<'db>],
+) -> Option<&'a Operand<'db>> {
+    if native_key != Some(EQUALS_EQUALS) || ntypeargs != 0 {
+        return None;
+    }
+    let [lhs, rhs] = args else {
+        return None;
+    };
+    let is_null = |arg: &Operand<'db>| operand_ty(body, arg).is_some_and(|ty| ty.is_null());
+    if is_null(rhs) {
+        Some(lhs)
+    } else if is_null(lhs) {
+        Some(rhs)
+    } else {
+        None
+    }
+}
+
 /// Equality can call user code only for a class or enum pair; an operand
 /// containing neither rules out callbacks, including in nested containers.
 pub(crate) fn equality_is_primitive(ty: &RuntimeTy) -> bool {

@@ -8,9 +8,10 @@ use bex_vm_types::{FunctionKind, types::Function};
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     admit::Rejection,
-    analysis::{EQUALS_EQUALS, Repr, builtin_is_callable, call_shape, operand_ty},
+    analysis::{Repr, builtin_is_callable, call_shape, null_compared},
     index::DispatchArm,
     render::coerce,
+    stack::takes_param,
 };
 
 /// Beyond this many implementations a site is megamorphic: each arm inlines
@@ -37,6 +38,17 @@ impl<'db> Generator<'_, 'db> {
         };
         if let Some(test) = self.null_test(block, info, ntypeargs, args)? {
             return Ok(test);
+        }
+        if let Some(&(callee, params)) = self.plan.and_then(|plan| plan.calls.get(&block.0)) {
+            if callee != object
+                || ntypeargs != 0
+                || layout.is_some_and(|layout| layout.0.iter().any(Option::is_some))
+            {
+                return Err(Rejection::Invalid(
+                    "stack call planned for another call".into(),
+                ));
+            }
+            return self.stack_call(block, object, params, args);
         }
         let shape = call_shape(self.body, args, ntypeargs, &self.analysis.static_types);
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
@@ -279,9 +291,7 @@ impl<'db> Generator<'_, 'db> {
         layout_args(name, info, layout, exprs)
     }
 
-    /// `x == null` as a bit test. The `==` driver answers a pair with a
-    /// `null` side by kind alone: `null` equals only `null`, and no user
-    /// `Equals.eq` can run.
+    /// `x == null` as a bit test (`analysis::null_compared`).
     fn null_test(
         &mut self,
         block: BlockId,
@@ -289,24 +299,108 @@ impl<'db> Generator<'_, 'db> {
         ntypeargs: usize,
         args: &[Operand<'db>],
     ) -> Gen<Option<Expr>> {
-        if info.native_key.as_deref() != Some(EQUALS_EQUALS) || ntypeargs != 0 {
+        let Some(other) = null_compared(self.body, info.native_key.as_deref(), ntypeargs, args)
+        else {
             return Ok(None);
+        };
+        if self.stack_operand(other).is_some() {
+            return Ok(Some(Expr::new("false", Repr::Bool)));
         }
-        let [lhs, rhs] = args else {
-            return Ok(None);
-        };
-        let is_null =
-            |arg: &Operand<'db>| operand_ty(self.body, arg).is_some_and(|ty| ty.is_null());
-        let other = if is_null(rhs) {
-            lhs
-        } else if is_null(lhs) {
-            rhs
-        } else {
-            return Ok(None);
-        };
         let other = self.operand(block, other)?;
         let value = self.value_arg(&other);
         Ok(Some(Expr::new(format!("{value}.is_null()"), Repr::Bool)))
+    }
+
+    /// A call passing stack objects: the callee's stack variant in a frame
+    /// record, or, when the VM requires a VM frame, its boxed entry with the
+    /// objects materialized and their fields copied back after.
+    fn stack_call(
+        &mut self,
+        block: BlockId,
+        object: usize,
+        params: u64,
+        args: &[Operand<'db>],
+    ) -> Gen<Expr> {
+        let Some(symbol) = self.symbols.get(&object) else {
+            return Err(Rejection::Invalid(
+                "stack call to an uncompiled callee".into(),
+            ));
+        };
+        let Some(signature) = self.signatures.get(&object) else {
+            return Err(Rejection::Invalid(
+                "stack call to a callee without a direct entry".into(),
+            ));
+        };
+        if signature.params.len() != args.len() {
+            return Err(Rejection::Invalid("stack call arity mismatch".into()));
+        }
+        let site = self.site_pc(block);
+        let callee = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
+        let mut direct = String::new();
+        let mut observed = Vec::with_capacity(args.len());
+        let mut boxed = String::from("{ ");
+        let mut boxed_values = Vec::with_capacity(args.len());
+        let mut reloads = Vec::new();
+        for (i, (arg, repr)) in args.iter().zip(&signature.params).enumerate() {
+            if takes_param(params, i) {
+                let Some(group) = self.stack_operand(arg) else {
+                    return Err(Rejection::Invalid(
+                        "stack argument is not a stack object".into(),
+                    ));
+                };
+                let storage = group.storage.clone();
+                let snapshot = format!("o{}", self.temps);
+                self.temps += 1;
+                self.pending.push(format!("let {snapshot} = {storage};"));
+                let _ = write!(direct, ", &mut {storage}");
+                observed.push(format!("{snapshot}.heap(vm, fr)"));
+                let _ = write!(boxed, "let v{i} = {storage}.heap(vm, fr); ");
+                boxed_values.push(format!("v{i}"));
+                reloads.push(format!("{storage}.reload(vm, v{i})"));
+            } else {
+                let expr = self.operand(block, arg)?;
+                let code = coerce(&expr.code, expr.repr, *repr);
+                let temp = format!("a{}", self.temps);
+                self.temps += 1;
+                self.pending
+                    .push(format!("let {temp}: {} = {code};", repr.rust_type()));
+                let _ = write!(direct, ", {temp}");
+                observed.push(coerce(&temp, *repr, Repr::Value));
+                let _ = write!(boxed, "let v{i} = {}; ", coerce(&temp, *repr, Repr::Value));
+                boxed_values.push(format!("v{i}"));
+            }
+        }
+        let callee_mask = self.callee_mask(block);
+        let observed = format!(
+            "|vm: &mut BexVm| -> [Value; {}] {{ [{}] }}",
+            observed.len(),
+            observed.join(", ")
+        );
+        let direct_args = direct;
+        let direct = format!(
+            "vm.call_record(fr, {callee}, {site}, {observed}, |vm, fr| {symbol}_stack{params:x}(vm, fr{direct_args}, {callee_mask}))"
+        );
+        let unbox = match signature.ret {
+            Repr::Int => "bex_vm::compiled_rt::expect_int(v)",
+            Repr::Bool => "bex_vm::compiled_rt::expect_bool(v)",
+            Repr::Float => "bex_vm::compiled_rt::expect_f64(v)",
+            Repr::Value => "Ok(v)",
+        };
+        let reload = reloads.iter().fold(String::new(), |mut out, reload| {
+            let _ = write!(out, "{reload}?; ");
+            out
+        });
+        let _ = write!(
+            boxed,
+            "let r = vm.call_compiled(fr, {callee}, {symbol}, &[], &[{}], {site}); \
+             (|| -> R<()> {{ {reload}Ok(()) }})().and(match r {{ Ok(v) => {unbox}, Err(e) => Err(e) }}) }}",
+            boxed_values.join(", ")
+        );
+        let body = format!("{symbol}_stack{params:x}(vm, fr{direct_args}, {callee_mask})");
+        let recorded = format!("if vm.direct_calls() {{ {direct} }} else {{ {boxed} }}");
+        let call = self.frameless_or(object, &site, &body, None, "vm.direct_calls()", &recorded);
+        let code = self.fallible(block, &call)?;
+        Ok(Expr::new(code, signature.ret))
     }
 
     pub(super) fn callee_ptr(
