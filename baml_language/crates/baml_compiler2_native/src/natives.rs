@@ -33,6 +33,24 @@ pub(crate) enum Ty {
     /// The type a call names for the type parameter at this position, as a
     /// union holds it: what `baml.json` returns a value it decoded as.
     BoxedElem(usize),
+    /// An instance of a class of the standard library that takes no type
+    /// arguments.
+    Class(ClassPath),
+    /// A `$rust_type` value: a reference to the object holding Rust state.
+    Rust,
+}
+
+/// A class of the standard library: its namespace under `baml`, and its
+/// name.
+pub(crate) type ClassPath = (&'static [&'static str], &'static str);
+
+/// The class at `path`, which the standard library the table was made
+/// from declares.
+pub(crate) fn class_at(
+    db: &dyn baml_compiler2_mir::Db,
+    (namespace, name): ClassPath,
+) -> Option<baml_compiler2_hir_ty::extern_loc::ClassRef<'_>> {
+    baml_compiler2_hir_ty::layout::lang_class(db, baml_base::LangPackage::Baml, namespace, name)
 }
 
 impl Ty {
@@ -55,10 +73,19 @@ impl Ty {
 
 impl Ty {
     /// The type at the type arguments `types` of a call.
-    pub(crate) fn native<'db>(&self, types: &[NativeTy<'db>]) -> NativeTy<'db> {
+    pub(crate) fn native<'db>(
+        &self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        types: &[NativeTy<'db>],
+    ) -> NativeTy<'db> {
         match self {
             Self::Elem(index) | Self::BoxedElem(index) => types[*index].clone(),
-            Self::Any | Self::Typed => NativeTy::Unknown,
+            // Rust state is held as any value is: its object's header says
+            // what it is.
+            Self::Any | Self::Typed | Self::Rust => NativeTy::Unknown,
+            Self::Class(path) => class_at(db, *path).map_or(NativeTy::Unknown, |class| {
+                NativeTy::Class(class, Vec::new())
+            }),
             // `null` is already one of the values of these.
             Self::Optional(Self::Elem(index))
                 if matches!(
@@ -74,9 +101,9 @@ impl Ty {
             Self::Null => NativeTy::Null,
             Self::String => NativeTy::String,
             Self::Bigint => NativeTy::Bigint,
-            Self::Array(element) => NativeTy::Array(Box::new(element.native(types))),
+            Self::Array(element) => NativeTy::Array(Box::new(element.native(db, types))),
             Self::Map => NativeTy::Map(Box::new(types[0].clone()), Box::new(types[1].clone())),
-            Self::Optional(inner) => NativeTy::Optional(Box::new(inner.native(types))),
+            Self::Optional(inner) => NativeTy::Optional(Box::new(inner.native(db, types))),
         }
     }
 }
@@ -118,7 +145,19 @@ pub(crate) struct Native {
     pub(crate) flags: Option<Flags>,
     /// How many type ids a call passes before the declared parameters.
     pub(crate) type_args: usize,
+    /// The classes its declaration names in what it takes, returns and
+    /// throws: what it can be passed or make an instance of, each of which
+    /// a program that calls it describes to the runtime.
+    pub(crate) classes: &'static [ClassPath],
 }
+
+/// A native is the one at its path.
+impl PartialEq for Native {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
+}
+impl Eq for Native {}
 
 include!(concat!(env!("OUT_DIR"), "/native_table.rs"));
 
@@ -128,6 +167,27 @@ pub(crate) fn named(name: &str) -> Option<&'static Native> {
         .binary_search_by(|native| native.path.cmp(name))
         .ok()
         .map(|index| &NATIVES[index])
+}
+
+/// The Rust-declared builtin `function` is. A method of an `implements`
+/// block is listed under the key the standard library's build gives it,
+/// which is not the name it is displayed by.
+pub(crate) fn of<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    function: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
+) -> Option<&'static Native> {
+    use baml_compiler2_hir::body::{FunctionBody, function_body};
+    named(&baml_compiler2_mir::function_display_name(db, function)).or_else(|| match function {
+        baml_compiler2_hir::loc::DeclRef::Source(declared)
+            if matches!(
+                function_body(db, declared).as_ref(),
+                FunctionBody::Builtin(_)
+            ) =>
+        {
+            named(&baml_compiler2_mir::native_key_for(db, declared))
+        }
+        _ => None,
+    })
 }
 
 impl Native {

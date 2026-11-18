@@ -62,6 +62,49 @@ is a plain call. With several, a collection needs every worker stopped, and
 for the work to end. That is why there is no `long_running` flag: the
 native marks the part that runs long, not the whole call.
 
+## Classes with Rust state
+
+A class of the standard library with a `$rust_type` field keeps Rust state.
+The field refers to a heap object of one of two forms, and the native that
+makes the instance chooses which:
+
+- **Plain**, `scope.alloc_plain(value)` for a `T: Copy + 'static`. The
+  value's bytes are in the heap object, which the collector copies like any
+  object without references. Nothing is dropped. A native reads and writes
+  it in place through `view.plain::<T>()`, a `&Cell<T>` that borrows the
+  view, so it cannot outlive an allocation. `baml.hash.DefaultHasher` is
+  one.
+- **Owned**, `scope.alloc_owned(Arc<T>)` for a `T: Send + Sync + 'static`.
+  The heap object holds the `Arc` and the address of what the runtime knows
+  of `T`, which is also how a read checks the type: one compare. A native
+  borrows `&T` with `view.owned::<T>()`, and one that allocates or stops
+  takes its own `Arc` with `view.share::<T>()`. The heap lists these
+  objects. The collection that finds one dead drops its `Arc`, and what is
+  left when the program ends is dropped then. Making 128 of them, or twice
+  as many as the last collection found alive, brings on a collection, since
+  the values are outside the heap and would otherwise never fill it.
+  `baml.regex.Regex` is one.
+
+A native takes an instance of a standard library class as `ObjRef` or
+`Root<Obj>` and reads the field with `instance.field::<Opaque>(index)`.
+
+## Making an instance of a class
+
+`scope.build(class)` starts an instance of any class, `set(scope, index,
+value)` or `set_named` gives a field its value, and `finish()` returns it.
+The runtime writes each field the way the class's layout holds it, and ends
+the program if a value does not fit its field or a field that cannot be
+`null` was left unset. `baml.json` writes the instances it decodes with the
+same two functions.
+
+A `Class` is one class at its type arguments, as the program describes it.
+A native gets one from the type a call names (`scope.class_from`), from an
+object (`scope.class_of`), from the type of a field (`class.field_class`),
+or by position in `layout::NAMED` (`scope.named_class`). A program
+describes the classes of `NAMED` that the declarations of the natives it
+calls name, in what they take, return and throw. Asking for one that no
+such declaration names ends the program.
+
 ## These files are temporary
 
 The same facts belong on the BAML declarations, as annotations. Today the

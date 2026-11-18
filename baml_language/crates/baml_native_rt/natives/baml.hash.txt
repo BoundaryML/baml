@@ -1,0 +1,4 @@
+# Natives of `baml.hash`, implemented in `src/native/hash.rs`. A
+# `DefaultHasher` holds its state as plain data in the heap.
+baml.hash.DefaultHasher.new allocates
+baml.hash.Hasher$for$DefaultHasher.finish

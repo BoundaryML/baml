@@ -17,7 +17,7 @@ use crate::{
         KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, MEMBER_ALIASED, MEMBER_DECLARED, MEMBER_SKIP,
         REPR_REF, VARIANT_FLAGS, VARIANT_RECORD,
     },
-    layout::{KIND_FIXED, TYPE_DESCRIBED, TYPE_STRING},
+    layout::{KIND_FIXED, TYPE_DESCRIBED, TYPE_STRING, WELL_KNOWN, WELL_KNOWN_PANICS},
     native::{Scope, TypeId, drive::BamlFn},
 };
 
@@ -168,6 +168,28 @@ impl Types {
                 section: self.section,
                 at: self.section + (described & !(TYPE_DESCRIBED as usize)),
             })
+    }
+
+    /// The list of types the runtime knows by position, which the table's
+    /// first word locates: a count, then the type id of each.
+    fn listed(&self, position: usize) -> Option<usize> {
+        // SAFETY: the type table starts with where the list is.
+        unsafe {
+            let list = self.table + word(self.table);
+            (word(self.table) != 0 && position < word(list)).then(|| word(list + 4 + position * 4))
+        }
+    }
+
+    /// The type id of the class at `index` of [`crate::layout::NAMED`],
+    /// when the program describes it.
+    pub(crate) fn named(&self, index: usize) -> Option<usize> {
+        self.listed(WELL_KNOWN.len() + index).filter(|id| *id != 0)
+    }
+
+    /// Whether `type_id` is the type of a panic: one of the first of
+    /// [`WELL_KNOWN`].
+    pub(crate) fn is_panic(&self, type_id: usize) -> bool {
+        (0..WELL_KNOWN_PANICS).any(|class| self.listed(class) == Some(type_id))
     }
 
     /// The size in bytes of an instance of the class whose type id is
@@ -342,6 +364,22 @@ impl Desc {
     pub(crate) fn fields(self) -> impl Iterator<Item = Member> {
         (0..self.count())
             .map(move |index| self.member(self.section + self.b() + index * FIELD_RECORD, true))
+    }
+
+    /// Where field `index` of a class is in an instance, and its type:
+    /// two words of its record, read without its names.
+    pub(crate) fn field_place(self, index: usize) -> Option<(usize, Self)> {
+        if index >= self.count() {
+            return None;
+        }
+        let record = self.section + self.b() + index * FIELD_RECORD;
+        // SAFETY: the record is one of this class's.
+        unsafe {
+            Some((
+                word(record + FIELD_OFFSET),
+                self.at(word(record + FIELD_TYPE)),
+            ))
+        }
     }
 
     /// Whether a map with keys of this type is a JSON object: `string`, or

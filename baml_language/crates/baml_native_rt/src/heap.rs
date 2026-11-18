@@ -37,9 +37,10 @@ use std::alloc::{Layout, alloc, dealloc};
 use crate::layout::{
     ARRAY_DATA, ARRAY_SIZE, ENTRIES_CAPACITY, ENTRIES_RECORDS, FUTURE_ERROR, FUTURE_FLAGS,
     FUTURE_READY, FUTURE_SETTLED, FUTURE_STATE, FUTURE_TRACE, FUTURE_VALUE, FUTURE_VALUE_IS_REF,
-    KIND_ARRAY, KIND_ENTRIES, KIND_FIXED, KIND_FUTURE, KIND_REFS, KIND_SLICE, KIND_STRING,
-    KIND_VALUES, SLICE_OFFSET, SLICE_PARENT, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS,
-    STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK, TYPE_STRING, WORD, words,
+    KIND_ARRAY, KIND_ENTRIES, KIND_FIXED, KIND_FUTURE, KIND_OWNED, KIND_REFS, KIND_SLICE,
+    KIND_STRING, KIND_VALUES, OWNED_KIND, OWNED_SIZE, OWNED_VALUE, SLICE_OFFSET, SLICE_PARENT,
+    STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK,
+    TYPE_OWNED, TYPE_STRING, WORD, words,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
@@ -62,6 +63,30 @@ const INITIAL_STRESS_SPACE: usize = 64 << 10;
 /// it found, so that the work of copying stays a fraction of the work of
 /// allocating.
 const SPACE_PER_LIVE: usize = 4;
+/// The fewest owned Rust values made since a collection that bring on the
+/// next one. An owned value is dropped only by the collection that finds
+/// its object dead, and what it holds is outside the heap, so a program
+/// that makes many and little else would never fill a space and never drop
+/// one. A value can be an open file or socket, and a process may by
+/// default have 256 of those open, so the floor is half that.
+const OWNED_FLOOR: usize = 128;
+/// Past the floor, owned values bring on a collection once this many times
+/// the ones the last collection found alive have been made since: the work
+/// of collecting stays in proportion to what is made, as for a space.
+const OWNED_PER_LIVE: usize = 2;
+
+/// What the runtime knows of the type of a Rust value in the heap: how to
+/// drop one the heap owns, and which type it is, for a native that expects
+/// another to say so. A value's object holds the address of one of these.
+#[repr(C)]
+pub struct RustKind {
+    /// Give up the heap's hold on the value at this address. Plain data
+    /// has nothing to drop, and its kind's is never called.
+    pub(crate) drop: unsafe fn(usize),
+    pub(crate) id: fn() -> std::any::TypeId,
+    pub(crate) name: fn() -> &'static str,
+}
+
 /// What an abandoned space is filled with under stress, so that a reference
 /// the collector failed to update reads as garbage.
 const POISON: u8 = 0xA5;
@@ -229,6 +254,13 @@ struct Heap {
     types: usize,
     /// Collect on every allocation, and poison what a collection abandons.
     stress: bool,
+    /// Every object that owns a Rust value, dead ones included until the
+    /// next collection drops their values.
+    owned: Vec<usize>,
+    /// How many of them were made since the last collection, and how many
+    /// bring on the next.
+    owned_since: usize,
+    owned_trigger: usize,
 }
 
 /// One thread of execution's allocation state and roots. Compiled code holds
@@ -336,6 +368,9 @@ impl Mutator {
                 stack_maps: unsafe { StackMaps::decode(program.stack_maps) },
                 types: program.types,
                 stress,
+                owned: Vec::new(),
+                owned_since: 0,
+                owned_trigger: OWNED_FLOOR,
             },
             sched: crate::sched::Sched::new(),
             roots: Vec::new(),
@@ -535,6 +570,41 @@ impl Mutator {
         object
     }
 
+    /// A new object that owns the Rust value at `value`, of the kind at
+    /// `kind`: its `drop` is called with `value` once, by the collection
+    /// that finds the object dead or when the program ends. May collect.
+    pub(crate) fn allocate_owned(&mut self, value: usize, kind: &'static RustKind) -> usize {
+        if self.heap.owned_since >= self.heap.owned_trigger {
+            self.collect(OWNED_SIZE);
+        }
+        let object = self.allocate_object(TYPE_OWNED, OWNED_SIZE);
+        // SAFETY: the object has two words after its header.
+        unsafe {
+            store(object + OWNED_VALUE, value);
+            store(object + OWNED_KIND, std::ptr::from_ref(kind) as usize);
+        }
+        self.heap.owned.push(object);
+        self.heap.owned_since += 1;
+        object
+    }
+
+    /// Drop every Rust value the heap owns: the program is over, and no
+    /// object is used again.
+    pub fn drop_owned(&mut self) {
+        for object in std::mem::take(&mut self.heap.owned) {
+            // SAFETY: the list is of objects that own a value not yet
+            // dropped, wherever a collection left them.
+            unsafe { drop_value(object) };
+        }
+    }
+
+    /// How many Rust values the heap owns, dead ones not yet dropped
+    /// included.
+    #[cfg(test)]
+    pub(crate) fn owned(&self) -> usize {
+        self.heap.owned.len()
+    }
+
     /// Copy everything reachable into another space, leaving room for
     /// `needed` more bytes, and abandon the old one.
     fn collect(&mut self, needed: usize) {
@@ -594,6 +664,24 @@ impl Mutator {
             }
             copy.finish();
         }
+        // An owned value whose object was not copied is dropped, and one
+        // whose object was is followed to where it is now. The space the
+        // objects were in is still whole but for their headers.
+        self.heap.owned.retain_mut(|object| {
+            // SAFETY: an object in the space copied from, whose header is
+            // its type id or where it was copied to.
+            unsafe {
+                let header = load(*object);
+                if header & FORWARDED == 0 {
+                    drop_value(*object);
+                    return false;
+                }
+                *object = header & !FORWARDED;
+                true
+            }
+        });
+        self.heap.owned_since = 0;
+        self.heap.owned_trigger = OWNED_FLOOR.max(self.heap.owned.len() * OWNED_PER_LIVE);
         let live = copy.free - copy.to.start;
         debug_assert!(copy.free <= copy.to.end());
         let to = copy.to;
@@ -607,6 +695,21 @@ impl Mutator {
         self.alloc_ptr = self.heap.space.start + live;
         self.span_end = self.heap.space.end();
         self.publish_limit();
+    }
+}
+
+/// Give up the heap's hold on the Rust value the object at `object` owns.
+///
+/// # Safety
+///
+/// `object` is an owned value's object, whole but for its header, whose
+/// value has not been dropped.
+unsafe fn drop_value(object: usize) {
+    // SAFETY: the caller's contract: the second word is the address of the
+    // value's kind, which lives in the executable's data.
+    unsafe {
+        let kind = &*(load(object + OWNED_KIND) as *const RustKind);
+        (kind.drop)(load(object + OWNED_VALUE));
     }
 }
 
@@ -655,7 +758,9 @@ impl<'a> Copy<'a> {
         // in the low half, in its second word.
         unsafe {
             match info.kind {
-                KIND_FIXED | KIND_ARRAY | KIND_SLICE | KIND_FUTURE => info.size as usize,
+                KIND_FIXED | KIND_ARRAY | KIND_SLICE | KIND_FUTURE | KIND_OWNED => {
+                    info.size as usize
+                }
                 KIND_VALUES | KIND_REFS => {
                     STORAGE_ELEMENTS + load(object + STORAGE_CAPACITY) * WORD
                 }
@@ -973,6 +1078,12 @@ impl<'a> Copy<'a> {
 const _: () = assert!(ARRAY_SIZE == 3 * WORD);
 
 /// The frame pointer of the function this is inlined into.
+///
+/// The read is said to overwrite a register the function must preserve.
+/// The function then saves that register before the read, and it saves it
+/// where it makes its frame, so the frame pointer read is its own. Without
+/// that, a function whose common path needs no frame makes one only on
+/// its rare path, and the read finds its caller's.
 #[expect(
     clippy::inline_always,
     reason = "it reads a register of whichever function it is in"
@@ -983,9 +1094,19 @@ pub fn current_frame() -> usize {
     // SAFETY: reads one register.
     unsafe {
         #[cfg(target_arch = "aarch64")]
-        std::arch::asm!("mov {}, x29", out(reg) frame, options(nomem, nostack, preserves_flags));
+        std::arch::asm!(
+            "mov {}, x29",
+            out(reg) frame,
+            out("x20") _,
+            options(nomem, nostack, preserves_flags)
+        );
         #[cfg(target_arch = "x86_64")]
-        std::arch::asm!("mov {}, rbp", out(reg) frame, options(nomem, nostack, preserves_flags));
+        std::arch::asm!(
+            "mov {}, rbp",
+            out(reg) frame,
+            out("r12") _,
+            options(nomem, nostack, preserves_flags)
+        );
     }
     frame
 }
@@ -1343,5 +1464,74 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A kind whose values are counters of how often they were dropped.
+    static COUNTED: RustKind = RustKind {
+        drop: count_drop,
+        id: std::any::TypeId::of::<usize>,
+        name: std::any::type_name::<usize>,
+    };
+
+    unsafe fn count_drop(value: usize) {
+        // SAFETY: the tests give the heap addresses of leaked counters.
+        unsafe { *(value as *mut usize) += 1 };
+    }
+
+    fn counters(count: usize) -> &'static [usize] {
+        vec![0; count].leak()
+    }
+
+    #[test]
+    fn an_owned_value_is_dropped_once_when_its_object_is_dead() {
+        let mut mutator = mutator(true);
+        let drops = counters(100);
+        let mut kept = [0; 10];
+        for slot in &mut kept {
+            mutator.root(slot);
+        }
+        for (index, counter) in drops.iter().enumerate() {
+            let object = mutator.allocate_owned(std::ptr::from_ref(counter) as usize, &COUNTED);
+            if index % 10 == 0 {
+                kept[index / 10] = object;
+            }
+        }
+        // Several collections more: nothing is dropped twice, and nothing
+        // alive is dropped.
+        for _ in 0..3 {
+            mutator.allocate(WORD);
+        }
+        assert_eq!(mutator.owned(), 10);
+        for (index, counter) in drops.iter().enumerate() {
+            assert_eq!(*counter, usize::from(index % 10 != 0), "value {index}");
+        }
+        for (index, object) in kept.iter().enumerate() {
+            // SAFETY: kept current across the collections.
+            let value = unsafe { load(object + OWNED_VALUE) };
+            assert_eq!(value, std::ptr::from_ref(&drops[index * 10]) as usize);
+        }
+        mutator.unroot(10);
+        // The program ends: what is left is dropped, once.
+        mutator.drop_owned();
+        mutator.drop_owned();
+        assert!(drops.iter().all(|counter| *counter == 1));
+    }
+
+    #[test]
+    fn owned_values_alone_bring_on_a_collection() {
+        let mut mutator = mutator(false);
+        let drops = counters(10 * OWNED_FLOOR);
+        let space = mutator.heap.space.start;
+        for counter in drops {
+            mutator.allocate_owned(std::ptr::from_ref(counter) as usize, &COUNTED);
+            assert!(mutator.owned() <= OWNED_FLOOR);
+        }
+        // The objects were far too few to fill the space.
+        assert!(drops.len() * OWNED_SIZE < INITIAL_SPACE / 8);
+        assert_ne!(mutator.heap.space.start, space);
+        let dropped = drops.iter().filter(|counter| **counter == 1).count();
+        assert_eq!(dropped + mutator.owned(), drops.len());
+        mutator.drop_owned();
+        assert!(drops.iter().all(|counter| *counter == 1));
     }
 }

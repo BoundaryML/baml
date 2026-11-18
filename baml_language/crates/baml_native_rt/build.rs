@@ -11,9 +11,9 @@ fn main() {
 
     let implemented =
         baml_builtins2_codegen::read_native_lists(&lists).unwrap_or_else(|error| panic!("{error}"));
-    let (vm, io, _) =
+    let (vm, io, classes) =
         baml_builtins2_codegen::extract_native_builtins().unwrap_or_else(|error| panic!("{error}"));
-    let shims = baml_builtins2_codegen::generate_native_shims(&vm, &io, &implemented)
+    let shims = baml_builtins2_codegen::generate_native_shims(&vm, &io, &classes, &implemented)
         .unwrap_or_else(|error| panic!("{error}"));
     std::fs::write(out_dir.join("natives_generated.rs"), shims)
         .expect("the output directory is writable");

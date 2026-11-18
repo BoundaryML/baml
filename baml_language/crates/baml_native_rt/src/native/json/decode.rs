@@ -32,25 +32,16 @@ use crate::{
     json_layout::{
         HOOK_FROM_JSON, KIND_ARRAY, KIND_BOOL, KIND_BOOL_IS, KIND_CLASS, KIND_ENUM, KIND_FLOAT,
         KIND_INT, KIND_INT_IS, KIND_MAP, KIND_NULL, KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS,
-        KIND_UNION, KIND_VARIANT, REPR_BOXED, REPR_PAIR, REPR_REF,
+        KIND_UNION, KIND_VARIANT, REPR_BOXED, REPR_REF,
     },
-    layout::{ARRAY_DATA, ARRAY_LENGTH, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, WORD},
+    layout::{ARRAY_DATA, ARRAY_LENGTH, WORD},
     map,
-    native::{Elem, Scope, Thrown, TypeId, array_size, drive::BamlFn},
+    native::{
+        Elem, Scope, Thrown, TypeId, array_size,
+        build::{Got, place, put},
+        drive::BamlFn,
+    },
 };
-
-/// A decoded value, before it is put in the form its place holds it in.
-#[derive(Clone, Copy)]
-enum Got {
-    Null,
-    Bool(bool),
-    Int(i64),
-    Float(f64),
-    /// A variant of the enum whose boxes have this type id.
-    Variant(usize, usize),
-    /// A reference to an object.
-    Ref(usize),
-}
 
 /// Why a value does not fit.
 struct Misfit {
@@ -295,27 +286,10 @@ impl Decoder<'_> {
         result
     }
 
-    /// The words a place of representation `repr` holds `got` as: the
-    /// slot, and for an optional scalar whether there is a value.
+    /// The words a place of representation `repr` holds `got` as, with a
+    /// box made where this run builds.
     fn place(&mut self, got: Got, repr: u32) -> (usize, usize) {
-        let bits = match got {
-            Got::Null => return (0, 0),
-            Got::Bool(value) => usize::from(value),
-            Got::Int(value) => value as usize,
-            Got::Float(value) => value.to_bits() as usize,
-            Got::Variant(_, index) => index,
-            Got::Ref(object) => return (object, 1),
-        };
-        if repr != REPR_BOXED {
-            return (bits, 1);
-        }
-        let type_id = match got {
-            Got::Bool(_) => TYPE_BOX_BOOL,
-            Got::Float(_) => TYPE_BOX_FLOAT,
-            Got::Variant(type_id, _) => type_id,
-            _ => TYPE_BOX_INT,
-        };
-        (self.out.boxed(type_id, bits), 1)
+        place(got, repr, |type_id, bits| self.out.boxed(type_id, bits))
     }
 
     /// Whether elements or values of the type described are references.
@@ -634,11 +608,8 @@ impl Decoder<'_> {
                 .out
                 .instance(type_id, self.types.instance_size(type_id));
             if instance != 0 {
-                for (offset, repr, (word, present)) in slots {
-                    store(instance + offset, word);
-                    if repr == REPR_PAIR {
-                        store(instance + offset + WORD, present);
-                    }
+                for (offset, repr, placed) in slots {
+                    put(instance, offset, repr, placed);
                 }
             }
             Ok(Got::Ref(instance))

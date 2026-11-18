@@ -115,6 +115,9 @@ pub const KIND_ENTRIES: u32 = 6;
 /// or with a value its flags say is one, and its trace slot when it settled
 /// with an error.
 pub const KIND_FUTURE: u32 = 7;
+/// A Rust value the object owns: see [`OWNED_VALUE`]. It holds no
+/// reference, and the collector drops the value of one it does not copy.
+pub const KIND_OWNED: u32 = 8;
 
 /// Set in the fourth `u32` of a class's type; the other bits are the
 /// offset of the class's description in the section of descriptions that
@@ -178,8 +181,31 @@ pub const TYPE_FUTURE: usize = 320;
 /// array's storage of values: a count of words and that many words, none a
 /// reference.
 pub const TYPE_BIGINT: usize = 336;
+/// A Rust value owned by the heap: what a `$rust_type` field refers to
+/// when the value has a destructor. See [`OWNED_VALUE`].
+pub const TYPE_OWNED: usize = 352;
+/// Plain Rust data kept in the heap: what a `$rust_type` field refers to
+/// when the value is `Copy`. See [`PLAIN_KIND`]. The collector copies it
+/// as it does an array's storage of values.
+pub const TYPE_PLAIN: usize = 368;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 352;
+pub const FIRST_CLASS_TYPE: usize = 384;
+
+/// An owned Rust value is a header and two words: the address of the
+/// value, which is the raw form of an `Arc`, and the address of what the
+/// runtime knows of the value's type, its destructor first. The second
+/// word is also how a native checks that the value is of the type it
+/// expects.
+pub const OWNED_VALUE: usize = field_offset(0);
+pub const OWNED_KIND: usize = field_offset(1);
+pub const OWNED_SIZE: usize = instance_size(2);
+
+/// Plain Rust data is a header, the number of words that follow, the
+/// address of what the runtime knows of the value's type, and the value's
+/// own bytes, in whole words.
+pub const PLAIN_WORDS: usize = STORAGE_CAPACITY;
+pub const PLAIN_KIND: usize = STORAGE_ELEMENTS;
+pub const PLAIN_VALUE: usize = STORAGE_ELEMENTS + WORD;
 
 /// What `baml_rt_array_sort` orders the elements of an array as.
 pub const SORT_INTS: usize = 0;
@@ -342,6 +368,14 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     0,
     0,
     0,
+    KIND_OWNED,
+    OWNED_SIZE as u32,
+    0,
+    0,
+    KIND_VALUES,
+    0,
+    0,
+    0,
 ];
 
 const _: () = {
@@ -365,7 +399,11 @@ const _: () = {
     assert!(RUNTIME_TYPES[TYPE_FUTURE / 4 + 1] == FUTURE_SIZE as u32);
     assert!(TYPE_FUTURE + TYPE_HEADER == TYPE_BIGINT);
     assert!(RUNTIME_TYPES[TYPE_BIGINT / 4] == KIND_VALUES);
-    assert!(TYPE_BIGINT + TYPE_HEADER == FIRST_CLASS_TYPE);
+    assert!(TYPE_BIGINT + TYPE_HEADER == TYPE_OWNED);
+    assert!(RUNTIME_TYPES[TYPE_OWNED / 4] == KIND_OWNED);
+    assert!(RUNTIME_TYPES[TYPE_OWNED / 4 + 1] == OWNED_SIZE as u32);
+    assert!(RUNTIME_TYPES[TYPE_PLAIN / 4] == KIND_VALUES);
+    assert!(TYPE_PLAIN + TYPE_HEADER == FIRST_CLASS_TYPE);
     // A string's cached hash is in the bits every object has free, below
     // the flags.
     assert!((STRING_HASH_MASK as usize) << 32 & (HEADER_FLAGS | TYPE_ID_MASK | 7) == 0);
@@ -407,12 +445,36 @@ pub const WELL_KNOWN: [(&str, &str); 26] = [
     ("json", "PathError"),
     ("errors", "Io"),
 ];
+/// The classes of the standard library a native builds an instance of and
+/// has no other way to name: not a type argument of the call, not the
+/// class of an object it was passed, not the type of a field of a class it
+/// already has. Each is the namespace under `baml` and the class's name.
+///
+/// The compiler writes the type id of each after those of [`WELL_KNOWN`],
+/// in this order, and writes zero for a class no native the program calls
+/// names in its declaration, which is then not described either.
+pub const NAMED: [(&str, &str); 6] = [
+    ("regex", "Regex"),
+    ("regex", "Match"),
+    ("regex", "Error"),
+    ("hash", "DefaultHasher"),
+    ("http", "Response"),
+    ("errors", "Timeout"),
+];
+pub const NAMED_REGEX: usize = 0;
+pub const NAMED_REGEX_MATCH: usize = 1;
+pub const NAMED_REGEX_ERROR: usize = 2;
+pub const NAMED_DEFAULT_HASHER: usize = 3;
+pub const NAMED_HTTP_RESPONSE: usize = 4;
+pub const NAMED_TIMEOUT: usize = 5;
+
 /// How many of [`WELL_KNOWN`], from the first, are panics.
 pub const WELL_KNOWN_PANICS: usize = 16;
 pub const WELL_KNOWN_DIVISION_BY_ZERO: usize = 0;
 pub const WELL_KNOWN_INDEX_OUT_OF_BOUNDS: usize = 1;
 pub const WELL_KNOWN_MAP_KEY_NOT_FOUND: usize = 3;
 pub const WELL_KNOWN_STACK_OVERFLOW: usize = 4;
+pub const WELL_KNOWN_USER_PANIC: usize = 8;
 pub const WELL_KNOWN_ALLOC_FAILURE: usize = 10;
 pub const WELL_KNOWN_NEGATIVE_BIT_SHIFT: usize = 12;
 pub const WELL_KNOWN_INVALID_ARGUMENT: usize = 16;

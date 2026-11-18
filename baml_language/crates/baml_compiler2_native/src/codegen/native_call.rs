@@ -26,7 +26,9 @@ fn abi_param(ty: &Ty) -> Option<AbiParam> {
         | Ty::Elem(_)
         | Ty::Any
         | Ty::Typed
-        | Ty::BoxedElem(_) => Some(AbiParam::new(WORD)),
+        | Ty::BoxedElem(_)
+        | Ty::Class(_)
+        | Ty::Rust => Some(AbiParam::new(WORD)),
         Ty::Float => Some(AbiParam::new(types::F64)),
         // The C ABI has the caller extend an argument narrower than a
         // register.
@@ -86,6 +88,7 @@ impl<'db> Translator<'_, 'db> {
         let types = native_type_arguments(self.db, self.body, native, arguments, ntypeargs)
             .map_err(internal)?;
         let (type_arguments, arguments) = arguments.split_at(ntypeargs);
+        self.backend.name_classes(self.db, native)?;
 
         let mut params = Vec::new();
         let mut values = Vec::new();
@@ -113,7 +116,7 @@ impl<'db> Translator<'_, 'db> {
             }
         }
         for (argument, ty) in arguments.iter().zip(signature.params) {
-            let expected = ty.native(&types);
+            let expected = ty.native(self.db, &types);
             if matches!(ty, Ty::Typed) {
                 // What the value is, as far as its static type says.
                 let found = self.operand_ty(argument)?;
@@ -153,7 +156,7 @@ impl<'db> Translator<'_, 'db> {
                 ty => abi_param(ty).into_iter().collect(),
             }
         };
-        let produced = signature.result.native(&types);
+        let produced = signature.result.native(self.db, &types);
         if takes_worker {
             // The native can collect, which moves storage.
             self.forget_arrays();
@@ -207,7 +210,9 @@ impl<'db> Translator<'_, 'db> {
                 | Ty::Map
                 | Ty::Optional(_)
                 | Ty::Any
-                | Ty::Typed => bits,
+                | Ty::Typed
+                | Ty::Class(_)
+                | Ty::Rust => bits,
             }
         } else {
             match (&signature.result, results.as_slice()) {

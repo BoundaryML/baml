@@ -3930,6 +3930,9 @@ impl<'a, 'db> Translator<'a, 'db> {
                     Virtual::Static(Target::Function(key)) => {
                         self.call_function(&key, &[], args)?
                     }
+                    Virtual::Static(Target::Native(native)) => {
+                        self.native_call_out_of_line(native, args, 0)?
+                    }
                     Virtual::Dynamic(slot) => self.dispatch(&slot, args)?,
                 };
                 let result = self.track(result, &produced);

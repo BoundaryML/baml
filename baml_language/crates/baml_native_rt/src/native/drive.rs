@@ -624,6 +624,57 @@ mod tests {
         }
     }
 
+    #[test]
+    fn rust_state_moves_with_its_object_and_an_owned_value_is_dropped_once() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        static DROPS: AtomicUsize = AtomicUsize::new(0);
+        struct Counted(u64);
+        impl Drop for Counted {
+            fn drop(&mut self) {
+                DROPS.fetch_add(1, Ordering::AcqRel);
+            }
+        }
+
+        let (mut worker, task) = worker_on_a_task(true);
+        // SAFETY: the block is polled and dropped as the driver would, on
+        // the worker it was made for.
+        unsafe {
+            let head = block(&raw mut *worker, "test.owns", |scope| async move {
+                let owned = scope.alloc_owned(Arc::new(Counted(7)));
+                let plain = scope.alloc_plain([1_u64, 2, 3]);
+                let dead = scope.alloc_owned(Arc::new(Counted(9)));
+                assert_eq!(dead.get(scope).owned::<Counted>().0, 9);
+                // The root just made is not used again.
+                scope.release_last(1);
+                // Every allocation collects: the value of the dead object
+                // goes, and the others are found where their objects are.
+                scope.alloc_str("moves everything");
+                assert_eq!(DROPS.load(Ordering::Acquire), 1);
+                plain.get(scope).plain::<[u64; 3]>().set([4, 5, 6]);
+                let shared = owned.get(scope).share::<Counted>();
+                scope.alloc_str("again");
+                assert_eq!(plain.get(scope).plain::<[u64; 3]>().get(), [4, 5, 6]);
+                assert_eq!(owned.get(scope).owned::<Counted>().0, 7);
+                assert_eq!(Arc::strong_count(&shared), 2);
+                drop(shared);
+                assert_eq!(DROPS.load(Ordering::Acquire), 1);
+                RtResult::ok(0)
+            });
+            (*task).natives = head;
+            assert!(((*head).poll)(head).is_ready());
+            drop_all(task);
+            // Nothing holds the object now.
+            worker.allocate(crate::layout::WORD);
+            assert_eq!(DROPS.load(Ordering::Acquire), 2);
+            worker.drop_owned();
+            assert_eq!(DROPS.load(Ordering::Acquire), 2);
+        }
+    }
+
     /// Run the ignored test `name` of this module in a process of its own,
     /// which it does not survive, and return what it wrote to stderr.
     fn in_a_process_of_its_own(name: &str) -> String {

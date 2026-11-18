@@ -279,7 +279,7 @@ impl<'db> Translator<'_, 'db> {
         let (signature, _) = native.callable().map_err(internal)?;
         let types = native_type_arguments(self.db, self.body, native, arguments, ntypeargs)
             .map_err(internal)?;
-        let produced = signature.result.native(&types);
+        let produced = signature.result.native(self.db, &types);
         let map_ty = NativeTy::Map(Box::new(types[0].clone()), Box::new(types[1].clone()));
         let map = self.operand_as(&arguments[ntypeargs], &map_ty)?;
         if native.path == "baml.Map.length" {

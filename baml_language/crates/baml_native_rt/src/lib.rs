@@ -76,7 +76,9 @@ pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
         map::randomize_seed();
         let mut mutator = Mutator::new(program, stress);
         // The entry function runs as a task, like everything it spawns.
-        sched::run(&raw mut mutator, baml_native_entry as *const () as usize)
+        let status = sched::run(&raw mut mutator, baml_native_entry as *const () as usize);
+        mutator.drop_owned();
+        status
     }
 }
 

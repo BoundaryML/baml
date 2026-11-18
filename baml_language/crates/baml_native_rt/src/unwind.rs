@@ -676,9 +676,10 @@ pub(crate) unsafe fn report(mutator: &Mutator, what: &str, error: usize, trace: 
 /// with.
 #[unsafe(no_mangle)]
 #[expect(clippy::exit, reason = "an uncaught throw ends the program")]
-pub unsafe extern "C" fn baml_rt_uncaught(mutator: &Mutator, error: usize, trace: usize) -> ! {
+pub unsafe extern "C" fn baml_rt_uncaught(mutator: &mut Mutator, error: usize, trace: usize) -> ! {
     // SAFETY: the caller's contract.
     unsafe { report(mutator, "", error, trace) };
     crate::sched::report_unhandled(mutator);
+    mutator.drop_owned();
     std::process::exit(crate::UNCAUGHT_EXIT_STATUS)
 }

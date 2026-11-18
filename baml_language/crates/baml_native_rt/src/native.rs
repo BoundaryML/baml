@@ -503,6 +503,22 @@ impl<M> Clone for Root<'_, M> {
 }
 impl<M> Copy for Root<'_, M> {}
 
+impl<'s, M: Managed> Root<'s, Arr<M>> {
+    /// Put `value`, or `null`, at `index` of the array.
+    pub fn set(self, _scope: &mut Scope<'s>, index: usize, value: Option<Root<'s, M>>) {
+        let array = self.0.get();
+        // SAFETY: a root holds a live array, which has storage for its
+        // length, checked here.
+        unsafe {
+            assert!(index < load(array + ARRAY_LENGTH), "past the array's end");
+            store(
+                load(array + ARRAY_DATA) + index * WORD,
+                value.map_or(0, Root::raw),
+            );
+        }
+    }
+}
+
 impl<M: Managed> Root<'_, M> {
     /// The object, for as long as `scope` allocates nothing.
     pub fn get<'a>(self, _scope: &'a Scope<'_>) -> M::View<'a> {
@@ -792,6 +808,48 @@ impl<'s> Scope<'s> {
         let error = crate::class::well_known(self.mutator(), class, &texts[..fields.len()]);
         // SAFETY: just made.
         unsafe { self.thrown(error) }
+    }
+
+    /// Throw `baml.panics.UserPanic`.
+    pub fn user_panic(&mut self, message: &str) -> Thrown<'s> {
+        self.error(crate::layout::WELL_KNOWN_USER_PANIC, message)
+    }
+
+    /// Throw `error`, an instance a native built.
+    pub fn throw(&mut self, error: Root<'s, Obj>) -> Thrown<'s> {
+        // SAFETY: a root holds a live object.
+        unsafe { self.thrown(error.raw()) }
+    }
+
+    /// A new map of string keys to objects, with room for `count` keys.
+    /// May collect.
+    pub fn alloc_str_map(&mut self, count: usize) -> Root<'s, Map> {
+        let map = crate::map::new(self.mutator(), true, true, count);
+        // SAFETY: just made.
+        unsafe { self.root_raw(map) }
+    }
+
+    /// Set `key` to `value`, or to `null`, in a map of string keys to
+    /// objects. May collect.
+    pub fn str_map_set<M: Managed>(
+        &mut self,
+        map: Root<'s, Map>,
+        key: Root<'s, Str>,
+        value: Option<Root<'s, M>>,
+    ) {
+        let (map, key, value) = (map.raw(), key.raw(), value.map_or(0, Root::raw));
+        // SAFETY: a live map of string keys whose values are references,
+        // a string and an object or zero.
+        unsafe {
+            crate::map::set(
+                self.mutator(),
+                map,
+                crate::map::KeyKind::Str,
+                true,
+                key,
+                value,
+            );
+        }
     }
 
     /// The error object at `error`, to throw.
@@ -1147,15 +1205,22 @@ pub struct Natives;
 
 mod array;
 mod bigint;
+pub(crate) mod build;
 pub(crate) mod drive;
 mod env;
 mod float;
 mod fs;
+mod hash;
 mod int;
 mod json;
 mod map;
+mod regex;
 mod root;
+mod state;
 mod string;
+
+pub use build::{Build, Class, Value};
+pub use state::{Opaque, OpaqueRef};
 
 #[allow(
     clippy::all,
@@ -1168,8 +1233,9 @@ mod generated {
     use super::drive::drive;
     #[allow(unused_imports, reason = "what the listed natives need varies")]
     use super::{
-        Arr, ArrRef, Big, BigRef, Bool, Elem, Float, Int, Map, MapRef, Natives, OptionalScalar,
-        Root, RootSlots, RtResult, Scope, Slot, Str, StrRef, Thrown, TypeId, View,
+        Arr, ArrRef, Big, BigRef, Bool, Elem, Float, Int, Map, MapRef, Natives, Obj, ObjRef,
+        Opaque, OpaqueRef, OptionalScalar, Root, RootSlots, RtResult, Scope, Slot, Str, StrRef,
+        Thrown, TypeId, View,
     };
     use crate::heap::{Mutator, current_frame};
 

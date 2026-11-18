@@ -319,6 +319,13 @@ fn lay_out_methods<'db>(
                     blockers.push(unsupported("of an array only known when it runs"));
                     continue;
                 }
+                // A native is not called as the table's functions are.
+                Some(Target::Native(_)) => {
+                    blockers.push(unsupported(
+                        "implemented in Rust for a type only known when it runs",
+                    ));
+                    continue;
+                }
                 None => continue,
             };
             // The receiver arrives as the reference the interface value is.

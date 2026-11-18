@@ -656,8 +656,14 @@ impl<'db> JsonTypes<'db> {
         );
         let mut records = Vec::new();
         let declared = class_fields(db, class);
-        for (((own, _), ty), slot) in declared.iter().zip(fields).zip(field_slots(fields)) {
-            let field = self.shown(db, ty);
+        for (((own, declared), ty), slot) in declared.iter().zip(fields).zip(field_slots(fields)) {
+            let field = if matches!(declared, baml_type::Ty::RustType) {
+                // Rust state: nothing writes it, and a native that builds
+                // the class must give it.
+                self.description(KIND_OPAQUE, REPR_REF, [0; 3], "", 0)
+            } else {
+                self.shown(db, ty)
+            };
             let own = self.text(own.as_str());
             for _ in 0..3 {
                 records.extend(own);

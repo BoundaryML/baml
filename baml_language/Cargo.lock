@@ -880,6 +880,7 @@ dependencies = [
  "num-bigint",
  "serde",
  "serde_json",
+ "sys_regex",
  "tokio",
  "zmij",
 ]
