@@ -459,3 +459,25 @@ function unwind_context_line() -> int {
     _ => context.stack_trace.frames[0].line,
   }
 }
+
+// A panic a program makes itself is one like any the runtime makes.
+function unwind_made_panic(n: int) -> int throws baml.panics.UserPanic {
+  if unwind_count(n) > 3 { throw baml.panics.UserPanic { message: "made" } }
+  n
+}
+function unwind_made_panic_passes(n: int) -> int throws baml.panics.UserPanic {
+  unwind_made_panic(n) catch (e) { _ => -1 }
+}
+function unwind_program_panic() -> int {
+  let named = unwind_made_panic_passes(5) catch (e) {
+    baml.panics.UserPanic => {
+      let message = e.message;
+      message.length()
+    },
+  };
+  let any = unwind_made_panic_passes(6) catch (e) {
+    baml.panics.Panic => 7,
+  };
+  named * 10 + any
+}
+function unwind_uncaught_program_panic() -> int { unwind_made_panic_passes(4) }

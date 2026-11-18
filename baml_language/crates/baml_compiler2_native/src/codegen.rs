@@ -2674,7 +2674,11 @@ impl<'a, 'db> Translator<'a, 'db> {
         let class_type = self.backend.class_type(self.db, class, arguments, &layout);
         let header = Backend::class_header(self.db, class, class_type);
         let object = self.allocate(layout::instance_size(layout_slots(&layout)))?;
-        let class_type = self.word_const(header);
+        // The flags are the top bits of the word, so it is no size.
+        let class_type = self
+            .builder
+            .ins()
+            .iconst(WORD, i64::from_ne_bytes(header.to_ne_bytes()));
         self.builder
             .ins()
             .store(slot_access(), class_type, object, 0);
