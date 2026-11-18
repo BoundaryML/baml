@@ -514,6 +514,30 @@ impl<'s> Reservation<'_, 's> {
         }
     }
 
+    /// A new string of `bytes` bytes of text and `chars` characters, its
+    /// text to be written front to back.
+    pub fn new_str(&self, bytes: usize, chars: usize) -> NewStr<'_> {
+        assert!(
+            u32::try_from(bytes).is_ok(),
+            "a string cannot be longer than 4 GiB"
+        );
+        let string = self.take(str_size(bytes));
+        // SAFETY: the string has room for its two words.
+        unsafe {
+            store(string, TYPE_STRING);
+            store(
+                string + STRING_LENGTHS,
+                bytes | (chars << STRING_CHAR_COUNT_SHIFT),
+            );
+        }
+        NewStr {
+            string,
+            written: 0,
+            bytes,
+            reservation: PhantomData,
+        }
+    }
+
     /// A new array of `length` elements, each zero.
     pub fn array<E: Element>(&self, length: usize) -> NewArray<'_, E> {
         let array = self.take(array_size(length));
@@ -554,6 +578,72 @@ impl<'s> Reservation<'_, 's> {
 /// An object built in a reservation, on its way to being rooted when the
 /// reservation is finished.
 pub struct Built<M>(usize, PhantomData<M>);
+
+/// A string being written, inside a reservation: its length and character
+/// count are set, and its text is appended piece by piece.
+pub struct NewStr<'a> {
+    string: usize,
+    written: usize,
+    bytes: usize,
+    reservation: PhantomData<&'a ()>,
+}
+
+impl<'a> NewStr<'a> {
+    /// Append `text`.
+    pub fn push(&mut self, text: &str) {
+        assert!(
+            text.len() <= self.bytes - self.written,
+            "past the string's end"
+        );
+        // SAFETY: the string has room for `bytes` bytes of text, checked
+        // here.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                text.as_ptr(),
+                (self.string + STRING_TEXT + self.written) as *mut u8,
+                text.len(),
+            );
+        }
+        self.written += text.len();
+    }
+
+    /// Append one character.
+    pub fn push_char(&mut self, character: char) {
+        self.push(character.encode_utf8(&mut [0; 4]));
+    }
+
+    /// What has been written so far.
+    fn text(&mut self) -> &mut [u8] {
+        // SAFETY: that many bytes have been written, and nothing else
+        // refers to a string still being built.
+        unsafe {
+            std::slice::from_raw_parts_mut((self.string + STRING_TEXT) as *mut u8, self.written)
+        }
+    }
+
+    /// Lowercase the ASCII letters written so far, in place.
+    pub fn make_ascii_lowercase(&mut self) {
+        self.text().make_ascii_lowercase();
+    }
+
+    /// Uppercase the ASCII letters written so far, in place.
+    pub fn make_ascii_uppercase(&mut self) {
+        self.text().make_ascii_uppercase();
+    }
+
+    /// The string, which must have been written in full.
+    pub fn finish(self) -> StrRef<'a> {
+        assert!(
+            self.written == self.bytes,
+            "a string is not written in full"
+        );
+        // SAFETY: a string in a reservation does not move until the
+        // reservation is finished.
+        let string = unsafe { StrRef::from_raw(self.string) };
+        debug_assert_eq!(string.as_str().chars().count(), string.char_count());
+        string
+    }
+}
 
 /// An array being filled in, inside a reservation.
 pub struct NewArray<'a, E>(usize, PhantomData<(&'a (), E)>);
