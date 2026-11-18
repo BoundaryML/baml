@@ -89,10 +89,13 @@ fn inline_body<'db>(
     opt: OptLevel,
 ) -> bool {
     let mut growth = 0;
+    let mut rewritten = false;
     let mut index = 0;
     while index < body.blocks.len() {
         let site = BlockId(index);
         read_known_fields(db, body, arity, site, &mut growth);
+        rewritten |= name_known_functions(db, &mut body.blocks[index]);
+        rewritten |= pass_literal_defaults(db, &mut body.blocks[index]);
         // An interface call on a receiver of a known class is tried as the
         // direct call of what that class provides, and put back if the
         // callee turns out to keep its call.
@@ -112,7 +115,7 @@ fn inline_body<'db>(
         }
         index += 1;
     }
-    growth > 0
+    growth > 0 || rewritten
 }
 
 /// Replace the interface call ending `site` with a direct call of the
@@ -163,6 +166,83 @@ fn resolve_dispatch<'db>(
         target,
         unwind,
     })
+}
+
+/// Turn each interface method taken as a value from a type that is known
+/// where the code is written into the function that type provides.
+fn name_known_functions<'db>(db: &'db dyn crate::Db, block: &mut BasicBlock<'db>) -> bool {
+    let mut named = false;
+    for statement in &mut block.statements {
+        if let StatementKind::Assign { value, .. } = &mut statement.kind
+            && let Rvalue::MakeVirtualFunction {
+                self_ty,
+                iface,
+                method,
+                type_args,
+            } = value
+            && type_args.is_empty()
+            && let Some(function) = devirtualize::provided(db, self_ty, iface, method)
+        {
+            *value = Rvalue::Use(Operand::Constant(Constant::Function(DeclRef::Source(
+                function,
+            ))));
+            named = true;
+        }
+    }
+    named
+}
+
+/// Where the call ending `block` names its callee and leaves a parameter to
+/// a default that is an `int` or `float` literal, pass the literal. The
+/// callee's entry puts the same value there when it finds the parameter
+/// omitted, and no word of an `int` or a `float` is free to say "omitted"
+/// in a register.
+fn pass_literal_defaults<'db>(db: &'db dyn crate::Db, block: &mut BasicBlock<'db>) -> bool {
+    let Some(Terminator::Call {
+        callee: Operand::Constant(Constant::Function(DeclRef::Source(function))),
+        args,
+        ntypeargs,
+        ..
+    }) = &mut block.terminator
+    else {
+        return false;
+    };
+    let defaults = baml_compiler2_hir::signature::function_parameter_defaults(db, *function);
+    let mut passed = false;
+    for (parameter, argument) in args[*ntypeargs..].iter_mut().enumerate() {
+        if !matches!(argument, Operand::Constant(Constant::OmittedArg)) {
+            continue;
+        }
+        let Some(default) = defaults.param_default(parameter) else {
+            continue;
+        };
+        let exprs = &defaults.defaults.exprs.exprs;
+        let (negated, written) = match &exprs[default.expr.expr()] {
+            baml_compiler2_ast::Expr::Unary {
+                op: baml_compiler2_ast::UnaryOp::Neg,
+                expr,
+            } => (true, &exprs[*expr]),
+            written => (false, written),
+        };
+        let literal = match written {
+            baml_compiler2_ast::Expr::Literal(baml_base::Literal::Int(value)) if negated => {
+                value.checked_neg().map(Constant::Int)
+            }
+            baml_compiler2_ast::Expr::Literal(baml_base::Literal::Int(value)) => {
+                Some(Constant::Int(*value))
+            }
+            baml_compiler2_ast::Expr::Literal(baml_base::Literal::Float(text)) => text
+                .parse::<f64>()
+                .ok()
+                .map(|value| Constant::Float(if negated { -value } else { value })),
+            _ => None,
+        };
+        if let Some(literal) = literal {
+            *argument = Operand::Constant(literal);
+            passed = true;
+        }
+    }
+    passed
 }
 
 /// Turn each interface field read in `site` whose receiver's class is known
