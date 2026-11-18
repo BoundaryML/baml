@@ -1249,9 +1249,12 @@ fn define(
     Ok(())
 }
 
-/// The exported function the runtime calls with the thread's mutator: put it
-/// in the pinned register, run the entry function, then print what it
-/// returned.
+/// The exported function the program's first task starts in: run the entry
+/// function, then print what it returned. The runtime's boot code calls it
+/// with the worker in the pinned register, as it calls a task shim, and
+/// reads the register again when it returns: the task may have stopped
+/// since and gone on under another worker, so the worker it was passed is
+/// not used.
 fn entry_shim(
     backend: &mut Backend<'_>,
     entry: &Declared<'_>,
@@ -1266,10 +1269,6 @@ fn entry_shim(
     let block = builder.create_block();
     builder.append_block_params_for_function_params(block);
     builder.switch_to_block(block);
-    let mutator = builder.block_params(block)[0];
-    // The pinned register belongs to the caller under the C convention.
-    let saved = builder.ins().get_pinned_reg(WORD);
-    builder.ins().set_pinned_reg(mutator);
     let callee = backend.function_ref(entry.id, builder.func);
     // Nothing caught what arrives here: the runtime reports it and ends the
     // process.
@@ -1288,15 +1287,15 @@ fn entry_shim(
         match enum_type {
             // An enum's variant is printed by name, which its type has.
             Some(enum_type) => {
+                let worker = builder.ins().get_pinned_reg(WORD);
                 let enum_type = builder.ins().iconst(WORD, imm(enum_type));
-                builder.ins().call(print, &[mutator, enum_type, result]);
+                builder.ins().call(print, &[worker, enum_type, result]);
             }
             None => {
                 builder.ins().call(print, &[result]);
             }
         }
     }
-    builder.ins().set_pinned_reg(saved);
     builder.ins().return_(&[]);
 
     builder.switch_to_block(uncaught);
@@ -1304,9 +1303,10 @@ fn entry_shim(
         let arriving = builder.block_params(uncaught);
         (arriving[0], arriving[1])
     };
+    let worker = builder.ins().get_pinned_reg(WORD);
     let report = backend.runtime(Runtime::Uncaught)?;
     let report = backend.function_ref(report, builder.func);
-    builder.ins().call(report, &[mutator, error, trace]);
+    builder.ins().call(report, &[worker, error, trace]);
     builder.ins().trap(TRAP_AFTER_PANIC);
     builder.seal_all_blocks();
     builder.finalize();
