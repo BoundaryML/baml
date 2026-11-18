@@ -827,6 +827,30 @@ pub(crate) fn rvalue_ty<'db>(
             )?;
             Ok(NativeTy::Class(*class, arguments))
         }
+        Rvalue::Aggregate {
+            kind: AggregateKind::Tuple { element_templates },
+            fields,
+        } => {
+            let elements = element_templates
+                .iter()
+                .map(|template| template_ty(db, template, body.arguments))
+                .collect::<Option<Vec<_>>>()
+                .ok_or_else(|| Blocker::new("tuple construction", "of an unsupported element"))?;
+            if elements.len() != fields.len() {
+                return Err(Blocker::new(
+                    "tuple construction",
+                    "that does not match its type",
+                ));
+            }
+            all_assignable(
+                db,
+                body,
+                fields,
+                |index| elements.get(index).cloned(),
+                "tuple element",
+            )?;
+            Ok(NativeTy::Tuple(elements))
+        }
         Rvalue::IsType { operand, test } => {
             let operand = operand_ty(db, body, operand)?;
             type_test_plan(db, &operand, TestKind::of(db, test, body.arguments), false)?;

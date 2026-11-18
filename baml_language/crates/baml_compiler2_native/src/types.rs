@@ -65,6 +65,10 @@ pub(crate) enum NativeTy<'db> {
     /// Instantiations whose arguments are the same under [`type_argument`]
     /// are laid out alike and share a type id.
     Class(ClassRef<'db>, Vec<TypeArg<'db>>),
+    /// A reference to a tuple of these element types: an object with one
+    /// slot per element, two for an optional scalar, as a class instance
+    /// has for its fields.
+    Tuple(Vec<NativeTy<'db>>),
     /// A reference to a growable array of the element type.
     Array(Box<NativeTy<'db>>),
     /// A reference to a closure: a function value. Calling it passes the
@@ -91,6 +95,7 @@ impl NativeTy<'_> {
         match self {
             Self::String
             | Self::Class(..)
+            | Self::Tuple(_)
             | Self::Array(_)
             | Self::Function(_)
             | Self::Cell(_)
@@ -184,6 +189,12 @@ macro_rules! native_type_of {
                             .collect(),
                     )
                 }
+                $family::Tuple(elements) => NativeTy::Tuple(
+                    elements
+                        .iter()
+                        .map(|element| $name(db, element, arguments))
+                        .collect::<Option<_>>()?,
+                ),
                 $family::List(element) => {
                     let element = $name(db, element, arguments)?;
                     // Elements are one slot each so far.
@@ -239,6 +250,7 @@ fn names_type_parameter(ty: &RuntimeTy) -> bool {
         RuntimeTy::TypeVar(_) => true,
         RuntimeTy::Class(_, arguments) => arguments.iter().any(names_type_parameter),
         RuntimeTy::List(element) => names_type_parameter(element),
+        RuntimeTy::Tuple(elements) => elements.iter().any(names_type_parameter),
         RuntimeTy::Union(members) => members.iter().any(names_type_parameter),
         RuntimeTy::Function { params, ret, .. } => {
             names_type_parameter(ret) || params.iter().any(|param| names_type_parameter(&param.ty))
@@ -759,9 +771,20 @@ pub(crate) fn place_ty<'db>(
             ..
         } => Err(Blocker::new("map index access", place.to_string())),
         Place::Index {
+            base,
+            index,
             kind: IndexKind::Tuple,
-            ..
-        } => Err(Blocker::new("tuple index access", place.to_string())),
+        } => match narrowed(place_ty(db, body, base)?) {
+            NativeTy::Tuple(elements) => tuple_element(body, *index)
+                .and_then(|element| elements.into_iter().nth(element))
+                .ok_or_else(|| {
+                    Blocker::new("tuple index that is not a constant", place.to_string())
+                }),
+            _ => Err(Blocker::new(
+                "tuple index access on a non-tuple value",
+                place.to_string(),
+            )),
+        },
         Place::Capture(index) => body
             .captures
             .get(*index)
@@ -772,6 +795,37 @@ pub(crate) fn place_ty<'db>(
             cell_content(place_ty(db, body, &Place::Capture(*index))?, place)
         }
     }
+}
+
+/// Which element of a tuple the local `index` names: the local is declared
+/// with the literal type of the one value it holds, or is written once,
+/// with a constant.
+pub(crate) fn tuple_element(body: &MirFunctionBody<'_>, index: Local) -> Option<usize> {
+    if let RuntimeTy::Literal(Literal::Int(element), _) = &body.local(index).ty {
+        return usize::try_from(*element).ok();
+    }
+    let mut element = None;
+    for block in &body.blocks {
+        for statement in &block.statements {
+            if let StatementKind::Assign {
+                destination: Place::Local(local),
+                value,
+            } = &statement.kind
+                && *local == index
+            {
+                match value {
+                    Rvalue::Use(Operand::Constant(Constant::Int(value))) if element.is_none() => {
+                        element = Some(usize::try_from(*value).ok()?);
+                    }
+                    _ => return None,
+                }
+            }
+        }
+        if block.terminator.as_ref().and_then(terminator_destination) == Some(index) {
+            return None;
+        }
+    }
+    element
 }
 
 pub(crate) fn constant_ty<'db>(
@@ -826,6 +880,14 @@ pub(crate) fn assignable(expected: &NativeTy<'_>, found: &NativeTy<'_>) -> bool 
             // Flow narrowing: MIR reads an optional as its reference where
             // the checker proved it is not null.
             (expected, NativeTy::Optional(inner)) => assignable(expected, inner),
+            // The same slots, holding what the type checker let through.
+            (NativeTy::Tuple(expected), NativeTy::Tuple(found)) => {
+                expected.len() == found.len()
+                    && expected.iter().zip(found).all(|(expected, found)| {
+                        expected == found
+                            || (expected.is_ref() && found.is_ref() && assignable(expected, found))
+                    })
+            }
             // A function compiled once for every reference type takes and
             // gives an instance or an array at any of them.
             (NativeTy::Class(expected, wanted), NativeTy::Class(found, given)) => {
@@ -950,6 +1012,7 @@ pub(crate) fn describe(ty: &NativeTy<'_>) -> &'static str {
         NativeTy::Unknown => "unknown",
         NativeTy::String => "string",
         NativeTy::Class(..) => "class",
+        NativeTy::Tuple(_) => "tuple",
         NativeTy::Array(_) => "array",
         NativeTy::Function(_) => "function",
         NativeTy::Cell(_) => "cell",

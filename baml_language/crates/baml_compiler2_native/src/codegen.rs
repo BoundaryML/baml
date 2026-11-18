@@ -27,8 +27,9 @@ use baml_compiler2_hir_ty::{
     layout::enum_variants,
 };
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, CellId, Constant, Local, MirFunction, MirFunctionBody, Operand,
-    Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey, Terminator, TyTemplate, UnaryOp,
+    AggregateKind, BinOp, BlockId, CellId, Constant, IndexKind, Local, MirFunction,
+    MirFunctionBody, Operand, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
+    Terminator, TyTemplate, UnaryOp,
 };
 use cranelift_codegen::{
     Context,
@@ -59,7 +60,7 @@ use crate::{
     types::{
         BinaryMode, Body, NativeTy, Signature, TypeArg, binary_typing, class_layout, field_slots,
         is_comparison, layout_slots, local_ty, narrowed, operand_ty, place_local, place_ty,
-        storage_ty, template_ty, type_argument, unary_typing,
+        storage_ty, template_ty, tuple_element, type_argument, unary_typing,
     },
 };
 
@@ -109,6 +110,7 @@ fn clif_type(ty: &NativeTy<'_>) -> ir::Type {
         NativeTy::Bool | NativeTy::Null => types::I8,
         NativeTy::String
         | NativeTy::Class(..)
+        | NativeTy::Tuple(_)
         | NativeTy::Array(_)
         | NativeTy::Function(_)
         | NativeTy::Cell(_)
@@ -266,6 +268,8 @@ struct Backend<'db> {
     /// The type id of closures, by which of their captured words are
     /// references.
     closure_types: HashMap<Vec<bool>, usize>,
+    /// The type id of tuples, by which of their slots are references.
+    tuple_types: HashMap<Vec<bool>, usize>,
     /// The closure standing for each function used as a value without
     /// capturing anything.
     function_values: HashMap<FuncId, DataId>,
@@ -314,6 +318,7 @@ impl<'db> Backend<'db> {
                 .collect(),
             class_types: HashMap::new(),
             closure_types: HashMap::new(),
+            tuple_types: HashMap::new(),
             function_values: HashMap::new(),
             enum_types: HashMap::new(),
             enum_boxes: HashMap::new(),
@@ -472,6 +477,27 @@ impl<'db> Backend<'db> {
         // Entries start on a word, so that an id leaves the low header bits
         // to the collector.
         self.types.resize(layout::words(self.types.len()), 0);
+        id
+    }
+
+    /// The type id of tuples of these element types. Tuples whose slots
+    /// are references in the same places share one.
+    fn tuple_type(&mut self, elements: &[NativeTy<'db>]) -> usize {
+        let references: Vec<bool> = elements
+            .iter()
+            .flat_map(|element| std::iter::repeat_n(element.is_ref(), element.slots()))
+            .collect();
+        if let Some(id) = self.tuple_types.get(&references) {
+            return *id;
+        }
+        let offsets: Vec<usize> = references
+            .iter()
+            .enumerate()
+            .filter(|(_, is_ref)| **is_ref)
+            .map(|(slot, _)| layout::field_offset(slot))
+            .collect();
+        let id = self.fixed_type(layout::instance_size(references.len()), &offsets);
+        self.tuple_types.insert(references, id);
         id
     }
 
@@ -887,6 +913,7 @@ pub(crate) fn generate<'db>(
         | NativeTy::Union(_)
         | NativeTy::Unknown
         | NativeTy::Class(..)
+        | NativeTy::Tuple(_)
         | NativeTy::Array(_)
         | NativeTy::Function(_)
         | NativeTy::Cell(_)
@@ -1647,6 +1674,47 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok((layout[field].clone(), layout::field_offset(slot)))
     }
 
+    /// The type and byte offset of the element the local `index` names of
+    /// the tuple a place of type `base` holds.
+    fn tuple_slot(
+        &self,
+        base: &Place,
+        index: Local,
+    ) -> Result<(NativeTy<'db>, usize), CompileError> {
+        let NativeTy::Tuple(elements) = narrowed(self.place_ty(base)?) else {
+            return Err(internal("a checked tuple index is on a tuple"));
+        };
+        let element = tuple_element(self.body, index)
+            .filter(|element| *element < elements.len())
+            .ok_or_else(|| internal("a checked tuple index is a constant"))?;
+        let slot = field_slots(&elements)[element];
+        Ok((elements[element].clone(), layout::field_offset(slot)))
+    }
+
+    /// A new tuple of these element types holding these values.
+    fn tuple(
+        &mut self,
+        elements: &[NativeTy<'db>],
+        fields: &[Operand<'db>],
+    ) -> Result<ir::Value, CompileError> {
+        // Evaluated before allocating, as an instance's fields are.
+        let values = fields
+            .iter()
+            .zip(elements)
+            .map(|(field, ty)| self.operand_as(field, ty))
+            .collect::<Result<Vec<_>, _>>()?;
+        let tuple_type = self.backend.tuple_type(elements);
+        let object = self.allocate(layout::instance_size(layout_slots(elements)))?;
+        let tuple_type = self.word_const(tuple_type);
+        self.builder
+            .ins()
+            .store(slot_access(), tuple_type, object, 0);
+        for ((ty, value), slot) in elements.iter().zip(values).zip(field_slots(elements)) {
+            self.store_slot(ty, value, object, layout::field_offset(slot));
+        }
+        Ok(object)
+    }
+
     fn read_local(&mut self, local: Local) -> ir::Value {
         match self.variables[local.0] {
             Some(variable) => self.builder.use_var(variable),
@@ -1805,6 +1873,15 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let object = self.read_place(base)?;
                 Ok(self.load_slot(&ty, object, bytes))
             }
+            Place::Index {
+                base,
+                index,
+                kind: IndexKind::Tuple,
+            } => {
+                let (ty, bytes) = self.tuple_slot(base, *index)?;
+                let tuple = self.read_place(base)?;
+                Ok(self.load_slot(&ty, tuple, bytes))
+            }
             Place::Index { base, index, .. } => {
                 let ty = self.place_ty(place)?;
                 let array = self.read_place(base)?;
@@ -1914,6 +1991,15 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let (ty, bytes) = self.field(base, *field)?;
                 let object = self.read_place(base)?;
                 self.store_slot(&ty, value, object, bytes);
+            }
+            Place::Index {
+                base,
+                index,
+                kind: IndexKind::Tuple,
+            } => {
+                let (ty, bytes) = self.tuple_slot(base, *index)?;
+                let tuple = self.read_place(base)?;
+                self.store_slot(&ty, value, tuple, bytes);
             }
             Place::Index { base, index, .. } => {
                 let ty = self.place_ty(place)?;
@@ -2076,6 +2162,15 @@ impl<'a, 'db> Translator<'a, 'db> {
                     return Err(internal("a checked class literal makes an instance"));
                 };
                 self.instance(*class, arguments, fields)?
+            }
+            Rvalue::Aggregate {
+                kind: AggregateKind::Tuple { .. },
+                fields,
+            } => {
+                let NativeTy::Tuple(elements) = ty else {
+                    return Err(internal("a checked tuple literal makes a tuple"));
+                };
+                self.tuple(elements, fields)?
             }
             Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
                 let operand_ty = self.operand_ty(operand)?;

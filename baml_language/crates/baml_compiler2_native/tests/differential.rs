@@ -813,6 +813,38 @@ function type_test_in_match() -> int {
   for (let x in xs) { total = total * 10 + sort_out(x); }
   total
 }
+class Marker { id int }
+function min_max(xs: int[], n: int) -> (int, int) {
+  if (n >= xs.length()) { return (xs[0], xs[0]); }
+  let rest = min_max(xs, n + 1);
+  let lo = if (xs[n] < rest.0) { xs[n] } else { rest.0 };
+  let hi = if (xs[n] > rest.1) { xs[n] } else { rest.1 };
+  (lo, hi)
+}
+function tagged(n: int) -> (string, float, Marker, int?) {
+  if (n <= 0) { ("end", 0.5, Marker { id: 0 }, null) } else {
+    let t = tagged(n - 1);
+    (t.0 + "+", t.1 + 1.0, Marker { id: t.2.id + n }, n)
+  }
+}
+function tuple_results() -> int {
+  let xs = [count(5), 3, 9, 1, 7];
+  let all = min_max(xs, 0);
+  let pair = min_max(xs, 3);
+  all.0 * 1000 + all.1 * 100 + pair.0 * 10 + pair.1
+}
+function tuple_of_mixed() -> string {
+  let t = tagged(count(3));
+  let last = t.3 ?? -1;
+  `${t.0} ${t.1} ${t.2.id} ${last}`
+}
+function tuples_in_array() -> int {
+  let pairs: (int, string)[] = [];
+  for (let i = 0; i < count(4); i += 1) { pairs.push((i, "x")); }
+  let total = 0;
+  for (let p in pairs) { total += p.0 + p.1.length() * 10; }
+  total
+}
 "#;
 
 /// How a run ended. `baml run` prints a result on stdout and exits zero, or
@@ -1030,6 +1062,9 @@ const CASES: &[Case] = &[
     ),
     case("type_test_sets", Printed("11223344")),
     case("type_test_in_match", Printed("32112243")),
+    case("tuple_results", Printed("1917")),
+    case("tuple_of_mixed", Printed("\"end+++ 3.5 6 3\"")),
+    case("tuples_in_array", Printed("46")),
 ];
 
 /// The text of the thrown value in an uncaught-panic report.
