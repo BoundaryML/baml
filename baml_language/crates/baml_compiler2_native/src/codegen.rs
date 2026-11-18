@@ -3091,7 +3091,11 @@ impl<'a, 'db> Translator<'a, 'db> {
     ) -> Result<ir::Value, CompileError> {
         let left_ty = self.operand_ty(left)?;
         if crate::types::is_omitted(right) {
-            // Whether a parameter was left to its default.
+            // Whether a parameter was left to its default. An `int` or a
+            // `float` never is: no checked call omits one.
+            if matches!(left_ty, NativeTy::Int | NativeTy::Float) {
+                return Ok(self.bool_const(false));
+            }
             let held = self.operand(left)?;
             let omitted = self.omitted(&left_ty);
             return Ok(self.builder.ins().icmp(IntCC::Equal, held, omitted));
@@ -3832,6 +3836,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 self.builder.ins().trap(TRAP_UNREACHABLE);
             }
             Terminator::Call {
+                has_trace,
                 callee,
                 args,
                 ntypeargs,
@@ -3839,11 +3844,16 @@ impl<'a, 'db> Translator<'a, 'db> {
                 target,
                 ..
             } => {
+                let args = crate::types::passed(args, *has_trace);
                 let destination = place_local(destination).map_err(internal)?;
                 let expected = self.local_ty(destination)?;
                 let called =
                     call_target(self.db, self.body, callee, args, *ntypeargs).map_err(internal)?;
                 let (result, produced) = match called {
+                    // Nothing reads them: no reference at all.
+                    Callee::Intrinsic(Intrinsic::TraceOptions) => {
+                        (self.builder.ins().iconst(WORD, 0), expected.clone())
+                    }
                     Callee::Intrinsic(intrinsic) => {
                         let arguments = &args[*ntypeargs..];
                         let types = arguments
@@ -3900,6 +3910,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 self.builder.ins().jump(target, &[]);
             }
             Terminator::VirtualCall {
+                has_trace,
                 iface,
                 method,
                 args,
@@ -3909,6 +3920,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 target,
                 ..
             } => {
+                let args = crate::types::passed(args, *has_trace);
                 let destination = place_local(destination).map_err(internal)?;
                 let expected = self.local_ty(destination)?;
                 let found = virtual_target(

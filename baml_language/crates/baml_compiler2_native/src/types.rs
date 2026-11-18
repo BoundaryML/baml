@@ -694,6 +694,7 @@ impl<'a, 'db> Body<'a, 'db> {
                     }
                     Written::Result(
                         Terminator::Call {
+                            has_trace,
                             callee,
                             args,
                             ntypeargs,
@@ -716,7 +717,7 @@ impl<'a, 'db> Body<'a, 'db> {
                                 .map(|types| signature.result.native(&types))
                             })
                         }
-                        Ok(Callee::Intrinsic(intrinsic)) => args[*ntypeargs..]
+                        Ok(Callee::Intrinsic(intrinsic)) => passed(args, *has_trace)[*ntypeargs..]
                             .iter()
                             .map(|argument| operand_ty(db, &typed, argument))
                             .collect::<Result<Vec<_>, _>>()
@@ -731,6 +732,7 @@ impl<'a, 'db> Body<'a, 'db> {
                     // result.
                     Written::Result(
                         Terminator::VirtualCall {
+                            has_trace,
                             iface,
                             method,
                             args,
@@ -742,7 +744,7 @@ impl<'a, 'db> Body<'a, 'db> {
                     ) => match crate::check::virtual_target(
                         db, &typed, iface, method, args, *ntypeargs, *self_arg,
                     ) {
-                        Ok(crate::check::Virtual::Operator(operator)) => args
+                        Ok(crate::check::Virtual::Operator(operator)) => passed(args, *has_trace)
                             .iter()
                             .map(|argument| operand_ty(db, &typed, argument))
                             .collect::<Result<Vec<_>, _>>()
@@ -1099,6 +1101,12 @@ pub(crate) fn operand_ty<'db>(
         Operand::Copy(place) | Operand::Move(place) => place_ty(db, body, place),
         Operand::Constant(constant) => constant_ty(db, constant),
     }
+}
+
+/// What a call passes: every operand but its trace attachment, the last
+/// one, which says how the call shows in a trace. Native code records none.
+pub(crate) fn passed<'a, 'db>(args: &'a [Operand<'db>], has_trace: bool) -> &'a [Operand<'db>] {
+    &args[..args.len() - usize::from(has_trace && !args.is_empty())]
 }
 
 /// Whether `operand` stands for an argument a call leaves to its default.

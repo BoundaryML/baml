@@ -17,8 +17,8 @@ use crate::{
     program::{Entry, FnKey, Needed},
     types::{
         Body, NativeTy, Signature, TypeArg, assignable, binary_typing, class_layout, declared_ty,
-        describe, loaded_types, local_ty, narrowed, operand_ty, place_local, place_ty, template_ty,
-        type_argument, unary_typing,
+        describe, loaded_types, local_ty, narrowed, operand_ty, passed, place_local, place_ty,
+        template_ty, type_argument, unary_typing,
     },
 };
 
@@ -42,6 +42,11 @@ pub(crate) enum Intrinsic {
     EnumNe,
     /// A method of `float` or `int` that is one instruction.
     Scalar(ScalarOp),
+    /// A maker of `trace.Options`: how a call shows in a trace. Native code
+    /// records no trace, so the options are nothing, and may only go where
+    /// nothing reads them: to a call as its trace attachment, or to
+    /// another of these.
+    TraceOptions,
 }
 
 /// The `float` and `int` methods compiled to one instruction each.
@@ -78,6 +83,12 @@ impl Intrinsic {
             "baml.Int.leading_zeros" => Some(Self::Scalar(ScalarOp::IntLeadingZeros)),
             "baml.Int.trailing_zeros" => Some(Self::Scalar(ScalarOp::IntTrailingZeros)),
             "baml.Int.count_ones" => Some(Self::Scalar(ScalarOp::IntCountOnes)),
+            "trace.hidden"
+            | "trace.timing"
+            | "trace._span"
+            | "trace._options"
+            | "trace.Options._span"
+            | "trace.Options.mode" => Some(Self::TraceOptions),
             _ => None,
         }
     }
@@ -888,12 +899,14 @@ impl<'db> Checker<'_, 'db> {
         terminator: &Terminator<'db>,
     ) {
         if let Terminator::Call {
+            has_trace,
             callee,
             args,
             ntypeargs,
             ..
         } = terminator
         {
+            let args = passed(args, *has_trace);
             match call_target(self.db, body, callee, args, *ntypeargs) {
                 Ok(Callee::Function(key)) => self.need(key, Vec::new()),
                 // What `baml.json` decodes is made by the runtime.
@@ -916,6 +929,7 @@ impl<'db> Checker<'_, 'db> {
         }
         let in_loop = loops.start(terminator).is_some() || loops.step(terminator).is_some();
         if let Terminator::VirtualCall {
+            has_trace,
             iface,
             method,
             args,
@@ -926,6 +940,7 @@ impl<'db> Checker<'_, 'db> {
         } = terminator
             && !in_loop
         {
+            let args = passed(args, *has_trace);
             match virtual_target(self.db, body, iface, method, args, *ntypeargs, *self_arg) {
                 Ok(Virtual::Static(Target::Function(key))) => self.need(key, Vec::new()),
                 Ok(Virtual::Dynamic(slot, interface, type_arguments)) => {
@@ -1057,10 +1072,12 @@ pub(crate) fn rvalue_ty<'db>(
             left,
             right,
         } if crate::types::is_omitted(right) => {
-            if crate::types::has_omitted_form(&operand_ty(db, body, left)?) {
-                Ok(NativeTy::Bool)
-            } else {
-                Err(Blocker::new("defaulted argument", "of an int or float"))
+            match operand_ty(db, body, left)? {
+                ty if crate::types::has_omitted_form(&ty) => Ok(NativeTy::Bool),
+                // Every word is an `int` or a `float`, so every call passes
+                // one: a call that would leave it out is refused.
+                NativeTy::Int | NativeTy::Float => Ok(NativeTy::Bool),
+                _ => Err(Blocker::new("defaulted argument", "of an optional scalar")),
             }
         }
         Rvalue::BinaryOp { op, left, right } => {
@@ -1416,6 +1433,78 @@ pub(crate) fn type_test_plan<'db>(
     })
 }
 
+/// Whether every mention of `options` is the call that makes it, a call's
+/// trace attachment, an argument of another maker of trace options, or a
+/// copy to or from a local that is itself only mentioned so: the places
+/// where nothing reads what it holds. `copies` is how many copies led here.
+fn only_attached<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    body: &Body<'_, 'db>,
+    options: Local,
+    copies: usize,
+) -> bool {
+    use std::fmt::Write as _;
+
+    /// More copies than any chain lowering makes of one value.
+    const MAX_COPIES: usize = 8;
+    if copies > MAX_COPIES {
+        return false;
+    }
+    let is = |operand: &Operand<'db>| crate::loops::operand_local(operand) == Some(options);
+    let name = format!("{options:?}");
+    let mut mentions = 0;
+    let mut explained = 0;
+    let mut code = String::new();
+    for block in &body.blocks {
+        code.clear();
+        for statement in &block.statements {
+            let _ = write!(code, "{:?};", statement.kind);
+            if let StatementKind::Assign {
+                destination: Place::Local(copy),
+                value: Rvalue::Use(source),
+            } = &statement.kind
+                && let Some(source) = crate::loops::operand_local(source)
+                && (*copy == options
+                    || (source == options && only_attached(db, body, *copy, copies + 1)))
+            {
+                explained += 1;
+            }
+        }
+        if let Some(terminator) = &block.terminator {
+            let _ = write!(code, "{terminator:?}");
+            match terminator {
+                Terminator::Call {
+                    callee,
+                    args,
+                    destination,
+                    ..
+                } if is_trace_options(db, callee) => {
+                    explained += args.iter().filter(|argument| is(argument)).count()
+                        + usize::from(*destination == Place::Local(options));
+                }
+                Terminator::Call {
+                    has_trace: true,
+                    args,
+                    ..
+                }
+                | Terminator::VirtualCall {
+                    has_trace: true,
+                    args,
+                    ..
+                } => explained += usize::from(args.last().is_some_and(is)),
+                _ => {}
+            }
+        }
+        mentions += code.matches(&name).count();
+    }
+    mentions == explained
+}
+
+fn is_trace_options<'db>(db: &'db dyn baml_compiler2_mir::Db, callee: &Operand<'db>) -> bool {
+    matches!(callee, Operand::Constant(Constant::Function(function))
+        if Intrinsic::named(&function_display_name(db, *function)) == Some(Intrinsic::TraceOptions))
+}
+
 /// The type of the value a narrowing bind stores where its test passes.
 pub(crate) fn narrow_bound<'db>(source: &NativeTy<'db>, plan: &TypeTestPlan<'db>) -> NativeTy<'db> {
     match (source, plan) {
@@ -1488,10 +1577,8 @@ fn terminator_supported<'db>(
             destination,
             ..
         } => {
+            let args = passed(args, *has_trace);
             let called = call_target(db, body, callee, args, *ntypeargs)?;
-            if *has_trace {
-                return Err(Blocker::new("call with a trace attachment", ""));
-            }
             let result = local_ty(db, body, place_local(destination)?)?;
             match called {
                 Callee::Value => {
@@ -1517,6 +1604,13 @@ fn terminator_supported<'db>(
                         |index| expected.params.get(index).cloned(),
                         "argument",
                     )
+                }
+                Callee::Intrinsic(Intrinsic::TraceOptions) => {
+                    if only_attached(db, body, place_local(destination)?, 0) {
+                        Ok(())
+                    } else {
+                        Err(Blocker::new("trace options", "held as a value"))
+                    }
                 }
                 Callee::Intrinsic(intrinsic) => {
                     // Leading type arguments carry nothing native code needs.
@@ -1606,9 +1700,7 @@ fn terminator_supported<'db>(
             destination,
             ..
         } => {
-            if *has_trace {
-                return Err(Blocker::new("call with a trace attachment", ""));
-            }
+            let args = passed(args, *has_trace);
             let result = local_ty(db, body, place_local(destination)?)?;
             let found = virtual_target(db, body, iface, method, args, *ntypeargs, *self_arg)?;
             let args = &args[*ntypeargs..];
