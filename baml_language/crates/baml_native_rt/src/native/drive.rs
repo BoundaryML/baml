@@ -138,6 +138,22 @@ where
     S: FnOnce(&'static mut Scope<'static>) -> F,
 {
     let worker = std::ptr::from_mut(mutator);
+    // SAFETY: the caller's contract.
+    unsafe { run(worker, block(worker, name, start)) }
+}
+
+/// The state of a native that has not been polled yet: its future, made by
+/// `start`, and the scope the future uses.
+///
+/// # Safety
+///
+/// `worker` is the worker the native is to run on, and the roots `start`
+/// makes are of live objects.
+unsafe fn block<F, S>(worker: *mut Mutator, name: &'static str, start: S) -> *mut Head
+where
+    F: Future<Output = RtResult> + Send,
+    S: FnOnce(&'static mut Scope<'static>) -> F,
+{
     let block = Box::into_raw(Box::<Block<F>>::new_uninit()).cast::<Block<F>>();
     // SAFETY: the block is this function's until it is on the task's list,
     // and each part is written before it is read. The scope and the future
@@ -160,7 +176,7 @@ where
             life: PhantomData,
         });
         (&raw mut (*block).future).write(ManuallyDrop::new(start(scope)));
-        run(worker, head)
+        head
     }
 }
 
@@ -486,6 +502,133 @@ impl<'s> Scope<'s> {
         RtResult {
             value: thrown.error.slot.get() as u64,
             thrown: 1,
+        }
+    }
+}
+
+#[cfg(all(test, target_arch = "aarch64"))]
+mod tests {
+    use std::{
+        process::Command,
+        sync::atomic::{AtomicBool, Ordering},
+        time::Duration,
+    };
+
+    use super::*;
+    use crate::{
+        heap::{Program, load},
+        layout::RUNTIME_TYPES,
+    };
+
+    /// A stack map table with no functions.
+    static NO_STACK_MAPS: usize = 0;
+
+    /// A worker of a program with no compiled code, running a task: where
+    /// a native runs. With `stress` every allocation collects.
+    fn worker_on_a_task(stress: bool) -> (Box<Mutator>, *mut Task) {
+        let program = Program {
+            stack_maps: std::ptr::from_ref(&NO_STACK_MAPS) as usize,
+            types: RUNTIME_TYPES.to_vec().leak().as_ptr() as usize,
+            unwind: 0,
+            functions: 0,
+        };
+        // SAFETY: both tables are in the compiler's formats.
+        let mut worker = Box::new(unsafe { Mutator::new(program, stress) });
+        let task = crate::sched::task_for_tests(&mut worker);
+        (worker, task)
+    }
+
+    struct SetWhenDropped(&'static AtomicBool);
+
+    impl Drop for SetWhenDropped {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Release);
+        }
+    }
+
+    #[test]
+    fn a_stopped_native_keeps_its_roots_current_and_is_dropped_whole() {
+        static DROPPED: AtomicBool = AtomicBool::new(false);
+        const TEXT: &str = "held across the stop";
+        let (mut worker, task) = worker_on_a_task(true);
+        // SAFETY: the block is polled and dropped as the driver would, on
+        // the worker it was made for, and its one root is a live string.
+        unsafe {
+            let head = block(&raw mut *worker, "test.stops", |scope| async move {
+                let held = SetWhenDropped(&DROPPED);
+                let text = scope.alloc_str(TEXT);
+                scope.io(std::future::pending::<()>()).await;
+                drop(held);
+                RtResult::ok(text.raw() as u64)
+            });
+            (*task).natives = head;
+            assert!(((*head).poll)(head).is_pending());
+
+            let mut roots = Vec::new();
+            each_root(task, |slot| roots.push(slot));
+            let [root] = roots[..] else {
+                panic!("the native holds one root, not {}", roots.len());
+            };
+            let before = load(root);
+            worker.allocate(crate::layout::WORD);
+            assert_ne!(load(root), before, "a collection moves the string");
+            assert_eq!(crate::string::text(load(root)), TEXT);
+
+            drop_all(task);
+            assert!(DROPPED.load(Ordering::Acquire), "its destructors ran");
+            each_root(task, |_| panic!("a dropped native holds no root"));
+        }
+    }
+
+    /// Run the ignored test `name` of this module in a process of its own,
+    /// which it does not survive, and return what it wrote to stderr.
+    fn in_a_process_of_its_own(name: &str) -> String {
+        let output = Command::new(std::env::current_exe().expect("the test binary"))
+            .args(["--exact", &format!("native::drive::tests::{name}")])
+            .args(["--ignored", "--nocapture"])
+            .output()
+            .expect("the test binary starts");
+        assert!(!output.status.success(), "`{name}` ends its process");
+        String::from_utf8_lossy(&output.stderr).into_owned()
+    }
+
+    #[test]
+    fn a_native_that_awaits_anything_else_is_named_when_the_program_ends() {
+        let stderr = in_a_process_of_its_own("stops_for_nothing");
+        assert!(
+            stderr.contains("the native `test.stops_for_nothing` stopped without asking"),
+            "{stderr}"
+        );
+        let stderr = in_a_process_of_its_own("awaits_a_tokio_timer");
+        assert!(
+            stderr.contains("the native `test.awaits_a_tokio_timer` panicked while it was polled"),
+            "{stderr}"
+        );
+    }
+
+    #[test]
+    #[ignore = "ends its process: run by the test above"]
+    fn stops_for_nothing() {
+        let (mut worker, _) = worker_on_a_task(false);
+        // SAFETY: on a worker that runs a task, with no compiled caller.
+        unsafe {
+            drive(&mut worker, "test.stops_for_nothing", |_| async {
+                std::future::pending::<()>().await;
+                RtResult::ok(0)
+            });
+        }
+    }
+
+    #[test]
+    #[ignore = "ends its process: run by the test above"]
+    fn awaits_a_tokio_timer() {
+        let (mut worker, _) = worker_on_a_task(false);
+        // SAFETY: as above.
+        unsafe {
+            drive(&mut worker, "test.awaits_a_tokio_timer", |_| async {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+                RtResult::ok(0)
+            });
         }
     }
 }

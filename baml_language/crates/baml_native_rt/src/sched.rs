@@ -470,6 +470,15 @@ impl Sched {
     }
 }
 
+/// A task `worker` is running, for a test of what runs on one. It has a
+/// stack, which the test does not switch to.
+#[cfg(test)]
+pub(crate) fn task_for_tests(worker: &mut Mutator) -> *mut Task {
+    let task = worker.sched.new_task(TASK_STACK, 0);
+    worker.cur_task = task;
+    task
+}
+
 /// What the collector reads of a task.
 pub(crate) struct TaskRoots {
     /// The addresses of the task's own references.
