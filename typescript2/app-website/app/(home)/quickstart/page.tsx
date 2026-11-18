@@ -20,10 +20,10 @@ export const metadata = createMetadata({
   title: 'Quickstart',
 });
 
-// The install page, in the homepage's BAML lane. It isn't linked from the nav or the footer. It
-// offers one prompt to hand to a coding agent, then the same setup as numbered steps for anyone who
-// would rather run the commands, then where to go once BAML is running: Boundary's cloud for
-// production, Discord, and a few links.
+// The install page, in the homepage's BAML lane, linked from the nav's bar and Platform menu and from
+// the footer. It offers one prompt to hand to a coding agent, then the same setup as numbered steps
+// for anyone who would rather run the commands, then what to write in BAML first, then where to go
+// once BAML is running: Boundary's cloud for production, Discord, and a few links.
 
 type Step = {
   after?: { body: ReactNode; commands: Command[] };
@@ -193,6 +193,34 @@ export default function QuickstartPage() {
               </li>
             ))}
           </ol>
+        </div>
+      </section>
+
+      <section
+        {...section('quickstart_first')}
+        aria-labelledby="first"
+        className={`${PAGE_WRAP} pb-12 md:pb-16`}
+      >
+        <div className="max-w-[45rem] flex flex-col gap-4">
+          <h2 className={H2} id="first">
+            What should I write with BAML first?
+          </h2>
+          <p className={BODY}>
+            We recommend your AI workflows or agents. Write the prompts, the
+            tools, and the steps between them as BAML functions, and leave the
+            rest of your app in the language it is in.
+          </p>
+          <p className={BODY}>
+            BAML generates a typed SDK for most languages, so your existing code
+            calls those functions like its own.{' '}
+            <a
+              className="underline underline-offset-4 hover:text-ink"
+              href="/adopt#incremental"
+            >
+              See the three ways to adopt BAML
+            </a>
+            .
+          </p>
         </div>
       </section>
 
