@@ -16,6 +16,10 @@ doctest = false
 
 [features]
 default = [ "aws-crypto" ]
+# What a test build of a program links: migration stress, and the checks of
+# a parking task's stack and of a frame without a stack map. A build with
+# debug assertions has them too. See `build.rs`.
+checks = [  ]
 # `baml.http`. The compiler builds the runtime with it and without, and
 # links the one without into a program that calls no native of `baml.http`:
 # see `natives/README.md`.

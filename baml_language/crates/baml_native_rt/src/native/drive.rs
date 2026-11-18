@@ -567,9 +567,9 @@ mod tests {
     /// A stack map table with no functions.
     static NO_STACK_MAPS: usize = 0;
 
-    /// A worker of a program with no compiled code, running a task: where
-    /// a native runs. With `stress` every allocation collects.
-    fn worker_on_a_task(stress: bool) -> (Box<Mutator>, *mut Task) {
+    /// A worker of a program with no compiled code. With `stress` every
+    /// allocation collects.
+    fn worker(stress: bool) -> Box<Mutator> {
         let program = Program {
             stack_maps: std::ptr::from_ref(&NO_STACK_MAPS) as usize,
             types: RUNTIME_TYPES.to_vec().leak().as_ptr() as usize,
@@ -577,7 +577,12 @@ mod tests {
             functions: 0,
         };
         // SAFETY: both tables are in the compiler's formats.
-        let mut worker = Box::new(unsafe { Mutator::new(program, stress) });
+        Box::new(unsafe { Mutator::new(program, stress) })
+    }
+
+    /// A worker running a task: where a native runs.
+    fn worker_on_a_task(stress: bool) -> (Box<Mutator>, *mut Task) {
+        let mut worker = worker(stress);
         let task = crate::sched::task_for_tests(&mut worker);
         (worker, task)
     }
@@ -672,6 +677,65 @@ mod tests {
             assert_eq!(DROPS.load(Ordering::Acquire), 2);
             worker.drop_owned();
             assert_eq!(DROPS.load(Ordering::Acquire), 2);
+        }
+    }
+
+    /// What compiled code a native calls would be: it sleeps, and returns
+    /// nothing thrown.
+    #[unsafe(naked)]
+    unsafe extern "C" fn sleeps() {
+        core::arch::naked_asm!(
+            "stp x29, x30, [sp, #-16]!",
+            "mov x29, sp",
+            "mov x0, #16960",
+            "movk x0, #15, lsl #16",
+            "bl {sleep}",
+            "mov x0, #0",
+            "mov x1, #0",
+            "ldp x29, x30, [sp], #16",
+            "ret",
+            sleep = sym crate::sched::switch::baml_rt_sleep,
+        )
+    }
+
+    /// Whether the native below found itself on the thread it started on,
+    /// and the worker it ended under.
+    static SAME_THREAD: AtomicBool = AtomicBool::new(false);
+    static ENDED_UNDER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    /// Runs a native that does what no native may: it keeps something of
+    /// its thread, here the thread's id, across `scope.call_baml`.
+    unsafe extern "C" fn keeps_its_thread(worker: *mut Mutator) -> *mut Mutator {
+        // SAFETY: on a task of `worker`, with no compiled caller.
+        unsafe {
+            drive(&mut *worker, "test.keeps_its_thread", |scope| async move {
+                let thread = std::thread::current().id();
+                let called = scope.call_baml(BamlFn(sleeps as *const () as usize), &[]);
+                let slept = called.await.is_ok();
+                SAME_THREAD.store(
+                    slept && std::thread::current().id() == thread,
+                    Ordering::Release,
+                );
+                ENDED_UNDER.store(scope.mutator.as_ptr() as usize, Ordering::Release);
+                RtResult::ok(0)
+            });
+        }
+        ENDED_UNDER.load(Ordering::Acquire) as *mut Mutator
+    }
+    crate::sched::tests::task_function!(keeps_its_thread_task => keeps_its_thread);
+
+    /// Migration stress finds a native that holds on to its thread across
+    /// a stop: without it the native never notices.
+    #[test]
+    fn migration_stress_catches_a_native_that_keeps_its_thread() {
+        for migrate in [false, true] {
+            let mut worker = worker(false);
+            let entry = keeps_its_thread_task as *const () as usize;
+            // SAFETY: the worker is this test's, and the entry a task
+            // function.
+            let status = unsafe { crate::sched::run(&raw mut *worker, entry, migrate) };
+            assert_eq!(status, 0);
+            assert_eq!(SAME_THREAD.load(Ordering::Acquire), !migrate);
         }
     }
 

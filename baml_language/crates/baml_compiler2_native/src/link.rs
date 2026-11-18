@@ -7,21 +7,52 @@ use std::{
     process::Command,
 };
 
-/// The runtime archive this build of the compiler was built with, and the
-/// system libraries the archive needs, as linker arguments.
-const RUNTIME: (&str, &str) = (
-    env!("BAML_NATIVE_RT_ARCHIVE"),
-    env!("BAML_NATIVE_RT_LINK_LIBS"),
-);
-/// The same runtime built with `baml.http`. A TLS library sets itself up
-/// when a program that links it starts, and brings system frameworks to
-/// load, whether or not a request is ever sent, and the linker cannot drop
-/// either. So only a program that calls a native of `baml.http` is linked
-/// against this one.
-const RUNTIME_WITH_HTTP: (&str, &str) = (
-    env!("BAML_NATIVE_RT_HTTP_ARCHIVE"),
-    env!("BAML_NATIVE_RT_HTTP_LINK_LIBS"),
-);
+/// The runtime archives this build of the compiler was built with, each
+/// with the system libraries it needs as linker arguments: without
+/// `baml.http` and with it, for [`RuntimeBuild::Lean`] and then for
+/// [`RuntimeBuild::Checked`].
+///
+/// A TLS library sets itself up when a program that links it starts, and
+/// brings system frameworks to load, whether or not a request is ever sent,
+/// and the linker cannot drop either. So only a program that calls a native
+/// of `baml.http` is linked against a runtime that has it.
+const RUNTIMES: [[(&str, &str); 2]; 2] = [
+    [
+        (
+            env!("BAML_NATIVE_RT_ARCHIVE"),
+            env!("BAML_NATIVE_RT_LINK_LIBS"),
+        ),
+        (
+            env!("BAML_NATIVE_RT_HTTP_ARCHIVE"),
+            env!("BAML_NATIVE_RT_HTTP_LINK_LIBS"),
+        ),
+    ],
+    [
+        (
+            env!("BAML_NATIVE_RT_CHECKED_ARCHIVE"),
+            env!("BAML_NATIVE_RT_CHECKED_LINK_LIBS"),
+        ),
+        (
+            env!("BAML_NATIVE_RT_HTTP_CHECKED_ARCHIVE"),
+            env!("BAML_NATIVE_RT_HTTP_CHECKED_LINK_LIBS"),
+        ),
+    ],
+];
+
+/// Which build of the runtime a program is linked against.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum RuntimeBuild {
+    /// What a program ships with.
+    #[default]
+    Lean,
+    /// What a test links: it can run under migration stress
+    /// (`BAML_MIGRATE_STRESS`), and it ends the program when a parking
+    /// task's stack holds a frame that is not compiled code or when a
+    /// compiled frame has no stack map. The second thread of migration
+    /// stress costs every start about 0.6 M instructions.
+    Checked,
+}
+
 /// How the symbol of every native of `baml.http` starts.
 const HTTP_NATIVE: &[u8] = b"baml_rt_baml_http_";
 
@@ -44,9 +75,9 @@ pub enum LinkError {
     },
 }
 
-/// Write `object` beside `output` and link it into the executable `output`.
-/// The linker driver is `$CC`, or `cc`.
-pub fn link(object: &[u8], output: &Path) -> Result<(), LinkError> {
+/// Write `object` beside `output` and link it into the executable `output`
+/// against `runtime`. The linker driver is `$CC`, or `cc`.
+pub fn link(object: &[u8], output: &Path, runtime: RuntimeBuild) -> Result<(), LinkError> {
     let mut object_path = output.as_os_str().to_owned();
     object_path.push(".o");
     let object_path = PathBuf::from(object_path);
@@ -59,11 +90,8 @@ pub fn link(object: &[u8], output: &Path) -> Result<(), LinkError> {
     let calls_http = object
         .windows(HTTP_NATIVE.len())
         .any(|window| window == HTTP_NATIVE);
-    let (archive, libs) = if calls_http {
-        RUNTIME_WITH_HTTP
-    } else {
-        RUNTIME
-    };
+    let (archive, libs) =
+        RUNTIMES[usize::from(runtime == RuntimeBuild::Checked)][usize::from(calls_http)];
     let driver = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
     let mut command = Command::new(&driver);
     command.arg(&object_path).arg(archive);

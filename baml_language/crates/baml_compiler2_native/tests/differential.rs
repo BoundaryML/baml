@@ -1,7 +1,7 @@
 //! Every case runs on the interpreter and as a native executable, and the two
 //! must end the same way: the same printed result, or the same uncaught
-//! panic. The native executable then runs again collecting on every
-//! allocation, which must change nothing.
+//! panic. The native executable runs every way of `common::WAYS`, which must
+//! change nothing.
 //!
 //! Operands come out of loops (`count`, `half`, `pow2`) so that the
 //! optimizer cannot fold a case into a constant and the generated arithmetic
@@ -10,7 +10,7 @@
 use baml_db::testing::{assert_no_diagnostic_errors, setup_test_db};
 
 mod common;
-use common::{Ending, build, engine, interpret, run};
+use common::{Ending, WAYS, build, engine, interpret, listed, run};
 
 const SOURCE: &str = r#"
 function count(n: int) -> int {
@@ -1190,25 +1190,30 @@ async fn native_code_ends_as_the_interpreter_does() {
     let mut failures = Vec::new();
     for case in CASES {
         let expected = format!("{:?}", case.expected);
-        let executable = build(&db, case.function, directory.path())
+        let built = build(&db, case.function, directory.path())
             .unwrap_or_else(|error| panic!("`{}` {error}", case.function));
-        let native = outcome(&run(&executable, false));
-        let stressed = if case.stressed {
-            outcome(&run(&executable, true))
-        } else {
-            expected.clone()
-        };
+        let native: Vec<(&str, String)> = WAYS
+            .iter()
+            .filter(|way| case.stressed || !way.variables.contains(&"BAML_GC_STRESS"))
+            .map(|way| (way.name, outcome(&run(&built, way))))
+            .collect();
         let interpreted = outcome(&interpret(&engine, case.function).await);
         // A case marked as diverging that the interpreter starts agreeing on
         // fails too, so that the mark is removed when it stops being true.
-        if native != expected
-            || stressed != expected
+        if native.iter().any(|(_, ending)| *ending != expected)
             || (interpreted == expected) != case.interpreter_agrees
         {
             failures.push(format!(
-                "{}:\n  expected          {expected}\n  native            {native}\n  collecting always {stressed}\n  interpreter       {interpreted}{}",
+                "{}:\n  {:<24} {expected}{}\n  {:<24} {interpreted}{}",
                 case.function,
-                if case.interpreter_agrees { "" } else { " (expected to differ)" },
+                "expected",
+                listed(&native),
+                "interpreter",
+                if case.interpreter_agrees {
+                    ""
+                } else {
+                    " (expected to differ)"
+                },
             ));
         }
     }

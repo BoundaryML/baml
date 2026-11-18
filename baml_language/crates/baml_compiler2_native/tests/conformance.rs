@@ -1,8 +1,8 @@
 //! Conformance of the standard library's natives: each file under
 //! `tests/conformance` holds the cases of one native, as functions taking no
-//! arguments. Every case runs on the interpreter, as a native executable,
-//! and as that executable collecting on every allocation, and all three must
-//! end the same way: the same printed result or the same uncaught throw.
+//! arguments. Every case runs on the interpreter and as a native executable
+//! every way of `common::WAYS`, and all must end the same way: the same
+//! printed result or the same uncaught throw.
 //!
 //! Native `int` is 64 bits wide and wraps, and the interpreter's is still 63
 //! bits wide and panics on overflow. A case whose answer depends on that says
@@ -19,7 +19,29 @@ use std::path::{Path, PathBuf};
 use baml_db::testing::{assert_no_diagnostic_errors, setup_test_db};
 
 mod common;
-use common::{Ending, build, engine, interpret, run};
+use common::{Built, Ending, WAYS, build, engine, interpret, listed, output, run};
+
+/// Run a program every way of `WAYS`, or report why there is none.
+fn run_every_way(built: &Result<Built, String>) -> Vec<(&'static str, Ending)> {
+    WAYS.iter()
+        .map(|way| {
+            let ending = match built {
+                Ok(built) => run(built, way),
+                Err(error) => Ok(error.clone()),
+            };
+            (way.name, ending)
+        })
+        .collect()
+}
+
+/// A line for each way of `endings`, for the report of a case that failed.
+fn report(endings: &[(&'static str, Ending)]) -> String {
+    let endings: Vec<(&str, String)> = endings
+        .iter()
+        .map(|(way, ending)| (*way, format!("{ending:?}")))
+        .collect();
+    listed(&endings)
+}
 
 /// Every `.baml` file under `directory`, in a stable order.
 fn sources(directory: &Path, found: &mut Vec<PathBuf>) {
@@ -89,20 +111,20 @@ async fn natives_end_as_the_interpreter_does() {
         for (case, diverging) in cases(text) {
             ran += 1;
             let interpreted = interpret(&engine, case).await;
-            let (native, stressed) = match build(&db, case, directory.path()) {
-                Ok(executable) => (run(&executable, false), run(&executable, true)),
-                Err(error) => (Ok(error.clone()), Ok(error)),
-            };
+            let native = run_every_way(&build(&db, case, directory.path()));
             let agrees = diverging.is_none();
             let expected = diverging.as_ref().unwrap_or(&interpreted);
-            if native != *expected || stressed != *expected || (interpreted == *expected) != agrees
+            if native.iter().any(|(_, ending)| ending != expected)
+                || (interpreted == *expected) != agrees
             {
                 failures.push(format!(
-                    "{file}: {case}:\n  interpreter       {interpreted:?}{}\n  native            {native:?}\n  collecting always {stressed:?}",
+                    "{file}: {case}:\n  {:<24} {interpreted:?}{}{}",
+                    "interpreter",
                     match &diverging {
-                        Some(expected) => format!("\n  native expected   {expected:?}"),
+                        Some(expected) => format!("\n  {:<24} {expected:?}", "native expected"),
                         None => String::new(),
                     },
+                    report(&native),
                 ));
             }
         }
@@ -184,35 +206,31 @@ async fn http_requests_end_as_the_interpreter_does() {
     let mut failures = Vec::new();
     for (case, _) in cases(&source) {
         let interpreted = interpret(&engine, case).await;
-        let (native, stressed) = match build(&db, case, directory.path()) {
-            Ok(executable) => (run(&executable, false), run(&executable, true)),
-            Err(error) => (Ok(error.clone()), Ok(error)),
-        };
-        if native != interpreted || stressed != interpreted {
+        let native = run_every_way(&build(&db, case, directory.path()));
+        if native.iter().any(|(_, ending)| *ending != interpreted) {
             failures.push(format!(
-                "{case}:\n  interpreter       {interpreted:?}\n  native            {native:?}\n  collecting always {stressed:?}",
+                "{case}:\n  {:<24} {interpreted:?}{}",
+                "interpreter",
+                report(&native),
             ));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// Build `SOURCE`'s `main` and run it both ways: what it prints, what it
+/// Build `source`'s `main` and run it every way: what it prints, what it
 /// reports and the status it exits with.
 fn ends(source: &str, stdout: &str, stderr: &str) {
     let db = setup_test_db(source);
     assert_no_diagnostic_errors(&db);
     let directory = tempfile::tempdir().expect("a temporary directory");
-    let executable = build(&db, "main", directory.path()).expect("the program compiles");
-    for stress in [false, true] {
-        let mut command = std::process::Command::new(&executable);
-        if stress {
-            command.env("BAML_GC_STRESS", "1");
-        }
-        let output = command.output().expect("the program starts");
-        assert_eq!(output.status.code(), Some(1));
-        assert_eq!(String::from_utf8_lossy(&output.stdout), stdout);
-        assert_eq!(String::from_utf8_lossy(&output.stderr), stderr);
+    let built = build(&db, "main", directory.path()).expect("the program compiles");
+    for way in &WAYS {
+        let output = output(&built, way);
+        let way = way.name;
+        assert_eq!(output.status.code(), Some(1), "{way}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), stdout, "{way}");
+        assert_eq!(String::from_utf8_lossy(&output.stderr), stderr, "{way}");
     }
 }
 
@@ -293,15 +311,15 @@ function main() -> int throws Failure {{
     );
 }
 
-/// Whether the executable built from `source` names `symbol`: an import
-/// is by name, and so is every function of an executable that is not
-/// stripped.
+/// Whether the executable built from `source`, as it ships, names
+/// `symbol`: an import is by name, and so is every function of an
+/// executable that is not stripped.
 fn names(source: &str, symbol: &[u8]) -> bool {
     let db = setup_test_db(source);
     assert_no_diagnostic_errors(&db);
     let directory = tempfile::tempdir().expect("a temporary directory");
-    let executable = build(&db, "main", directory.path()).expect("the program compiles");
-    let bytes = std::fs::read(executable).expect("a readable executable");
+    let built = build(&db, "main", directory.path()).expect("the program compiles");
+    let bytes = std::fs::read(built.lean).expect("a readable executable");
     bytes.windows(symbol.len()).any(|window| window == symbol)
 }
 

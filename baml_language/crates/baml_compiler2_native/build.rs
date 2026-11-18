@@ -32,14 +32,17 @@ const PROFILE_SETTINGS: [&str; 9] = [
     "overflow-checks=false",
 ];
 
-/// Set by an enclosing `cargo` for its own compiler invocations; the nested
-/// build must not inherit them.
-const OUTER_ONLY: [&str; 5] = [
+/// Set by an enclosing `cargo` for its own compiler invocations and for
+/// this script; the nested build must not inherit them. The last says the
+/// compiler is built with debug assertions, which the runtime's own build
+/// script would read as the runtime being built with them.
+const OUTER_ONLY: [&str; 6] = [
     "CARGO_ENCODED_RUSTFLAGS",
     "RUSTC_WORKSPACE_WRAPPER",
     "RUSTC_WRAPPER",
     "CLIPPY_ARGS",
     "CARGO_TARGET_DIR",
+    "CARGO_CFG_DEBUG_ASSERTIONS",
 ];
 
 fn main() {
@@ -58,10 +61,16 @@ fn main() {
         manifest_dir.join("../baml_builtins2/baml_std").display()
     );
 
-    // The runtime is built twice: without `baml.http` for the programs
-    // that call none of it, and with it for the others.
-    for (variant, with_http) in [("", false), ("_HTTP", true)] {
-        let (archive, native_libs) = build_runtime(&runtime_dir, &out_dir, with_http);
+    // The runtime is built four times: without `baml.http` for the
+    // programs that call none of it and with it for the others, and each
+    // of those again with the checks a test build links.
+    for (variant, with_http, checked) in [
+        ("", false, false),
+        ("_HTTP", true, false),
+        ("_CHECKED", false, true),
+        ("_HTTP_CHECKED", true, true),
+    ] {
+        let (archive, native_libs) = build_runtime(&runtime_dir, &out_dir, with_http, checked);
         println!(
             "cargo:rustc-env=BAML_NATIVE_RT{variant}_ARCHIVE={}",
             archive.display()
@@ -92,9 +101,15 @@ fn runtime_target_dir(out_dir: &Path) -> PathBuf {
         .map_or_else(|| out_dir.join("native-rt"), |dir| dir.join("native-rt"))
 }
 
-/// Build the runtime archive, with `baml.http` or without, and return it
-/// with the system libraries it needs as linker arguments.
-fn build_runtime(runtime_dir: &Path, out_dir: &Path, with_http: bool) -> (PathBuf, String) {
+/// Build the runtime archive, with `baml.http` or without and with its
+/// checks or without, and return it with the system libraries it needs as
+/// linker arguments.
+fn build_runtime(
+    runtime_dir: &Path,
+    out_dir: &Path,
+    with_http: bool,
+    checked: bool,
+) -> (PathBuf, String) {
     let cargo = env::var_os("CARGO").expect("set by cargo");
     let target = env::var("TARGET").expect("set by cargo");
     let host = env::var("HOST").expect("set by cargo");
@@ -113,6 +128,9 @@ fn build_runtime(runtime_dir: &Path, out_dir: &Path, with_http: bool) -> (PathBu
         .arg(&target_dir);
     if !with_http {
         command.arg("--no-default-features");
+    }
+    if checked {
+        command.args(["--features", "checks"]);
     }
     let mut artifact_dir = target_dir;
     if target != host {
@@ -133,7 +151,7 @@ fn build_runtime(runtime_dir: &Path, out_dir: &Path, with_http: bool) -> (PathBu
         "building the native runtime failed:\n{diagnostics}"
     );
 
-    // Both builds leave their archive under one name, so each is kept
+    // Every build leaves its archive under one name, so each is kept
     // under a name of its own.
     let built = artifact_dir.join(PROFILE).join("libbaml_native_rt.a");
     assert!(
@@ -141,10 +159,11 @@ fn build_runtime(runtime_dir: &Path, out_dir: &Path, with_http: bool) -> (PathBu
         "the nested build left no archive at `{}`",
         built.display()
     );
-    let archive = built.with_file_name(if with_http {
-        "libbaml_native_rt_http.a"
-    } else {
-        "libbaml_native_rt_plain.a"
+    let archive = built.with_file_name(match (with_http, checked) {
+        (false, false) => "libbaml_native_rt_plain.a",
+        (true, false) => "libbaml_native_rt_http.a",
+        (false, true) => "libbaml_native_rt_plain_checked.a",
+        (true, true) => "libbaml_native_rt_http_checked.a",
     });
     std::fs::copy(&built, &archive).expect("the target directory is writable");
     // `rustc` names the libraries only when it compiles the archive, so they

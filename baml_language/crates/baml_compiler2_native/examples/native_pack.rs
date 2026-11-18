@@ -4,6 +4,7 @@
 //! native_pack <file.baml> <function> <out>   compile and link an executable
 //!     [--emit-clif]                          also write <out>.clif
 //!     [--emit-asm]                           also write <out>.s
+//!     [--checked]                            link the runtime tests link
 //! native_pack --coverage <file.baml> <function>
 //!                                            report what blocks compilation
 //! native_pack --mir <file.baml> <function>   print the optimized MIR of every
@@ -21,7 +22,7 @@ use std::{
     time::Instant,
 };
 
-use baml_compiler2_native::{CompileOptions, compile, coverage, link};
+use baml_compiler2_native::{CompileOptions, RuntimeBuild, compile, coverage, link};
 use baml_db::{
     ProjectDatabase, SourceRootKind, SourceRootSpec,
     baml_compiler_diagnostics::Severity,
@@ -45,6 +46,7 @@ struct Arguments {
     mode: Mode,
     emit_clif: bool,
     emit_asm: bool,
+    runtime: RuntimeBuild,
     positional: Vec<String>,
 }
 
@@ -53,6 +55,7 @@ fn parse_arguments() -> Arguments {
         mode: Mode::Pack,
         emit_clif: false,
         emit_asm: false,
+        runtime: RuntimeBuild::Lean,
         positional: Vec::new(),
     };
     for argument in std::env::args().skip(1) {
@@ -61,6 +64,7 @@ fn parse_arguments() -> Arguments {
             "--mir" => arguments.mode = Mode::Mir,
             "--emit-clif" => arguments.emit_clif = true,
             "--emit-asm" => arguments.emit_asm = true,
+            "--checked" => arguments.runtime = RuntimeBuild::Checked,
             _ => arguments.positional.push(argument),
         }
     }
@@ -109,7 +113,7 @@ fn run(arguments: &Arguments, out: &mut impl Write) -> Result<(), String> {
         [path, function, _] if arguments.mode == Mode::Pack => (path, function),
         _ => {
             return Err(
-                "usage: native_pack <file.baml> <function> <out> [--emit-clif] [--emit-asm]\n       native_pack --coverage <file.baml> <function>"
+                "usage: native_pack <file.baml> <function> <out> [--emit-clif] [--emit-asm] [--checked]\n       native_pack --coverage <file.baml> <function>"
                     .to_owned(),
             );
         }
@@ -169,7 +173,7 @@ fn run(arguments: &Arguments, out: &mut impl Write) -> Result<(), String> {
         }
     }
     let started = Instant::now();
-    link(&compiled.object, &output).map_err(|error| error.to_string())?;
+    link(&compiled.object, &output, arguments.runtime).map_err(|error| error.to_string())?;
     let linked_in = started.elapsed();
     let _ = writeln!(
         out,

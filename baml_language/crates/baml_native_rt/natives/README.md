@@ -122,6 +122,27 @@ whose path starts with `baml.http.`. A native of another namespace that
 needs TLS has to be named beside it, in the runtime's `build.rs` and in
 the compiler's `link.rs`.
 
+## The runtime tests link, and migration stress
+
+The compiler builds each runtime a second time with the `checks` feature,
+and a test links that one (`RuntimeBuild::Checked`, or `native_pack
+--checked`). A program ships with the other.
+
+With `BAML_MIGRATE_STRESS` set, the runtime with checks serves as its one
+worker on two threads in turns: every task that stops (an `await`, a sleep,
+I/O, a `spawn`) goes on on the other thread, and under a worker that has
+moved to another address, the one it left made unreadable. A native that
+keeps anything of its thread or of its worker across a stop then fails at
+once, where with one thread it would never notice. It finds what is held
+across a stop. It does not find a race between two workers running at the
+same time: only one thread runs at any moment.
+
+The second thread is why the mode is not in the runtime a program ships
+with: importing what starts a thread costs every start about 0.6 M
+instructions, whether or not a thread is ever started.
+
+`BAML_GC_STRESS`, which collects on every allocation, works in both.
+
 ## These files are temporary
 
 The same facts belong on the BAML declarations, as annotations. Today the

@@ -119,6 +119,11 @@ const DEAD: u32 = 6;
 const TASK_MAIN: u32 = 1;
 /// Set in a task's flags when it ended by throwing.
 const TASK_FAILED: u32 = 2;
+/// Where a task's flags say which thread it last stopped on, under
+/// migration stress: zero for a task that has not run, and otherwise one
+/// more than the thread.
+const TASK_STOPPED_ON_SHIFT: u32 = 2;
+const TASK_STOPPED_ON: u32 = 3 << TASK_STOPPED_ON_SHIFT;
 
 /// A task. Never freed and never moved, so that a stale address of one is
 /// still the address of a task: only reused.
@@ -216,6 +221,9 @@ pub(crate) struct Sched {
     inbox: Arc<Inbox>,
     /// How many tasks are parked on I/O, each to arrive in the inbox.
     on_io: usize,
+    /// Under migration stress, which of the two threads serves as the
+    /// worker now: see `serve_in_turns`.
+    migrate: Option<u32>,
 }
 
 impl Sched {
@@ -236,7 +244,37 @@ impl Sched {
                 arrived: Condvar::new(),
             }),
             on_io: 0,
+            migrate: None,
         }
+    }
+
+    /// Under migration stress, note that `task` stops running on the
+    /// thread serving now: it goes on on the other one.
+    ///
+    /// # Safety
+    ///
+    /// `task` is a task in use that this worker is running.
+    unsafe fn stops_here(&self, task: *mut Task) {
+        if let Some(thread) = self.migrate {
+            // SAFETY: the caller's contract. Only the thread serving as
+            // the worker reads or writes a task's flags.
+            unsafe {
+                (*task).flags =
+                    ((*task).flags & !TASK_STOPPED_ON) | ((1 + thread) << TASK_STOPPED_ON_SHIFT);
+            }
+        }
+    }
+
+    /// Whether `task` last stopped on the thread serving now, which under
+    /// migration stress may not be the one it goes on on.
+    ///
+    /// # Safety
+    ///
+    /// `task` is a task in use.
+    unsafe fn stopped_here(&self, task: *mut Task) -> bool {
+        // SAFETY: the caller's contract.
+        let stopped_on = unsafe { (*task).flags & TASK_STOPPED_ON } >> TASK_STOPPED_ON_SHIFT;
+        self.migrate.is_some_and(|thread| stopped_on == 1 + thread)
     }
 
     fn now(&self) -> u64 {
@@ -615,6 +653,7 @@ pub(crate) unsafe extern "C" fn spawn_prepare(
         store(frame + SWITCH_FRAME_RESULT, future);
         let parent = worker.cur_task;
         (*parent).sp = frame;
+        worker.sched.stops_here(parent);
         (*parent).state.store(RUNNABLE, Ordering::Release);
         worker.sched.pending = parent;
         (*child).state.store(RUNNING, Ordering::Release);
@@ -773,6 +812,12 @@ pub(crate) unsafe extern "C" fn exit_pick(worker: &mut Mutator) -> *mut Task {
         sched.take_woken();
         sched.fire_timers();
         match sched.queue.pop_back() {
+            // Under migration stress a task that stopped on this thread
+            // is left for the worker's loop to hand to the other one.
+            Some(next) if sched.stopped_here(next) => {
+                sched.queue.push_back(next);
+                std::ptr::null_mut()
+            }
             Some(next) => {
                 (*next).state.store(RUNNING, Ordering::Release);
                 next
@@ -930,12 +975,17 @@ pub extern "C" fn baml_rt_spawn_unsupported() -> ! {
 
 /// Run the program: `entry` on a task of its own, and every task it spawns,
 /// until none is left that can run. Returns the exit status of the process.
+/// With `migrate`, every task that stops goes on on another thread and
+/// under a worker at another address: see `serve_in_turns`. Only the
+/// runtime a test build links can, since a second thread costs every start
+/// of a program about 0.6 M instructions for the system symbols it imports,
+/// whether or not it is ever started.
 ///
 /// # Safety
 ///
 /// Called once, on the thread `worker` belongs to, with the address of the
 /// compiled program's entry function.
-pub unsafe fn run(worker: *mut Mutator, entry: usize) -> i32 {
+pub unsafe fn run(worker: *mut Mutator, entry: usize, migrate: bool) -> i32 {
     // SAFETY: the caller's contract. The worker is reached through its
     // address here because tasks reach it through their pinned register in
     // between.
@@ -943,17 +993,50 @@ pub unsafe fn run(worker: *mut Mutator, entry: usize) -> i32 {
         let main = (*worker).sched.new_task(MAIN_STACK, entry);
         (*main).flags = TASK_MAIN;
         (*worker).sched.queue.push_back(main);
+        if migrate {
+            #[cfg(checks)]
+            serve_in_turns(worker);
+            #[cfg(not(checks))]
+            fatal("migration stress is in the runtime a test build links, and this is not one");
+        } else {
+            serve(worker);
+        }
+        if !(*worker).sched.main_done {
+            fatal("deadlock: every task waits for another");
+        }
+        // Every task has ended or waits for good. An error no `await` took
+        // is reported now, as `baml run` does after the program's result.
+        i32::from(report_unhandled(&*worker))
+    }
+}
+
+/// Serve as `worker` on this thread: run every task that can run. Returns
+/// false once none is left. Under migration stress it returns true when
+/// the task to run next last stopped on this thread: the task is back on
+/// the queue, for the other thread to take.
+///
+/// # Safety
+///
+/// Called on the stack of the thread that serves as `worker`.
+unsafe fn serve(worker: *mut Mutator) -> bool {
+    // SAFETY: the caller's contract.
+    unsafe {
         loop {
             let sched = &mut (*worker).sched;
             sched.settle_last_switch();
             sched.take_woken();
             sched.fire_timers();
             if let Some(task) = sched.queue.pop_back() {
+                if sched.stopped_here(task) {
+                    sched.queue.push_back(task);
+                    return true;
+                }
                 (*task).state.store(RUNNING, Ordering::Release);
                 baml_rt_resume(worker, task);
                 // Back on the worker's own stack: the task that left it is
                 // off its stack now.
                 let left = std::mem::replace(&mut (*worker).cur_task, std::ptr::null_mut());
+                (*worker).sched.stops_here(left);
                 if (*left).state.compare_exchange(
                     PARKING,
                     PARKED,
@@ -967,20 +1050,123 @@ pub unsafe fn run(worker: *mut Mutator, entry: usize) -> i32 {
                 continue;
             }
             if !sched.sleep() {
-                break;
+                return false;
             }
         }
-        if !(*worker).sched.main_done {
-            fatal("deadlock: every task waits for another");
+    }
+}
+
+/// What the two threads of migration stress hand each other.
+#[cfg(checks)]
+struct Baton {
+    /// Which of the two serves as the worker.
+    holder: u32,
+    /// Where the worker is.
+    worker: usize,
+    /// No task is left that can run.
+    over: bool,
+}
+
+/// Migration stress: serve as the worker at `home` on two threads in
+/// turns, so that every task that stops goes on on the other thread than
+/// the one it stopped on, and under a worker at another address.
+///
+/// A task may be resumed by any worker once there are several. Whatever a
+/// stopped task still holds of the thread or the worker it stopped on is
+/// then stale, and here it is stale every time: the thread is another, and
+/// the worker has moved to the other of two places, the one it left
+/// unreadable. Only one thread runs at a time, so this finds what is held
+/// across a stop and nothing that needs two workers running at once.
+///
+/// # Safety
+///
+/// As [`serve`], with nothing holding the address of the worker but the
+/// caller, which finds the worker at `home` again afterwards.
+#[cfg(checks)]
+unsafe fn serve_in_turns(home: *mut Mutator) {
+    const PLACE: usize = STACK_GUARD;
+    const _: () = assert!(size_of::<Mutator>() <= PLACE);
+    /// Move the worker from `from` to `to`, which is readable.
+    unsafe fn move_worker(from: *mut Mutator, to: *mut Mutator, thread: u32) {
+        // SAFETY: both are places for a worker, and the one at `from` is
+        // not used again until one is moved there.
+        unsafe {
+            std::ptr::copy_nonoverlapping(from, to, 1);
+            (*to).sched.migrate = Some(thread);
         }
-        // Every task has ended or waits for good. An error no `await` took
-        // is reported now, as `baml run` does after the program's result.
-        i32::from(report_unhandled(&*worker))
+    }
+    let protect = |place: usize, protection: i32| {
+        // SAFETY: a mapping of this function's own.
+        let changed = unsafe { mprotect(place as *mut u8, PLACE, protection) };
+        assert!(changed == 0, "cannot protect a place for the worker");
+    };
+    // `map_stack` leaves a guard below what it maps, which is not needed
+    // here and costs nothing.
+    let places = [map_stack(PLACE), map_stack(PLACE)];
+    // SAFETY: the caller's contract.
+    unsafe { move_worker(home, places[0] as *mut Mutator, 0) };
+    protect(places[1], PROT_NONE);
+    let baton = Mutex::new(Baton {
+        holder: 0,
+        worker: places[0],
+        over: false,
+    });
+    let passed = Condvar::new();
+    let take_turns = |me: u32| {
+        loop {
+            let worker = {
+                let mut baton = baton.lock().expect("no thread panics holding it");
+                while baton.holder != me && !baton.over {
+                    baton = passed.wait(baton).expect("no thread panics holding it");
+                }
+                if baton.over {
+                    return;
+                }
+                baton.worker as *mut Mutator
+            };
+            // SAFETY: this thread holds the baton, so it alone serves as
+            // the worker, which is where the baton says.
+            let more = unsafe { serve(worker) };
+            let mut baton = baton.lock().expect("no thread panics holding it");
+            if more {
+                let other = 1 - me;
+                let (from, to) = (places[me as usize], places[other as usize]);
+                protect(to, PROT_READ_WRITE);
+                // SAFETY: the worker runs nothing, and nothing but this
+                // thread knows where it is.
+                unsafe { move_worker(worker, to as *mut Mutator, other) };
+                protect(from, PROT_NONE);
+                *baton = Baton {
+                    holder: other,
+                    worker: to,
+                    over: false,
+                };
+            } else {
+                baton.over = true;
+            }
+            drop(baton);
+            passed.notify_all();
+        }
+    };
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .name("baml-worker-2".to_owned())
+            .stack_size(MAIN_STACK)
+            .spawn_scoped(scope, || take_turns(1))
+            .expect("a second thread starts");
+        take_turns(0);
+    });
+    let worker = baton.lock().expect("no thread panics holding it").worker;
+    // SAFETY: both threads are done, and the worker is where the baton
+    // says.
+    unsafe {
+        std::ptr::copy_nonoverlapping(worker as *const Mutator, home, 1);
+        (*home).sched.migrate = None;
     }
 }
 
 #[cfg(all(test, target_arch = "aarch64"))]
-mod tests {
+pub(crate) mod tests {
     use std::sync::Mutex;
 
     use super::*;
@@ -1048,6 +1234,68 @@ mod tests {
 
     unsafe extern "C" fn returns_at_once(_worker: *mut Mutator) {}
 
+    /// A function a task starts in, named `$name`, that runs `$body` as
+    /// compiled code would: `$body` takes the worker and returns the one
+    /// its task went on under, which is in the pinned register when the
+    /// function returns. A Rust function alone cannot be one under
+    /// migration stress: it gives its caller back the register it was
+    /// called with.
+    macro_rules! task_function {
+        ($name:ident => $body:path) => {
+            #[unsafe(naked)]
+            unsafe extern "C" fn $name() {
+                core::arch::naked_asm!(
+                    "stp x29, x30, [sp, #-16]!",
+                    "mov x29, sp",
+                    "mov x0, x21",
+                    "bl {body}",
+                    "mov x21, x0",
+                    "ldp x29, x30, [sp], #16",
+                    "ret",
+                    body = sym $body,
+                )
+            }
+        };
+    }
+    pub(crate) use task_function;
+
+    /// Whether a task that slept went on on another thread, and under a
+    /// worker at another address.
+    static MOVED: Mutex<Vec<(bool, bool)>> = Mutex::new(Vec::new());
+
+    unsafe extern "C" fn sleeps_and_looks(worker: *mut Mutator) -> *mut Mutator {
+        let thread = std::thread::current().id();
+        // SAFETY: called on a task of `worker`.
+        let resumed = unsafe { park(switch::baml_rt_sleep, 1_000_000, worker) };
+        MOVED
+            .lock()
+            .expect("no test panicked")
+            .push((std::thread::current().id() != thread, resumed != worker));
+        resumed
+    }
+    task_function!(sleeps_and_looks_task => sleeps_and_looks);
+
+    #[test]
+    fn under_migration_stress_a_task_goes_on_elsewhere() {
+        for migrate in [false, true] {
+            let program = Program {
+                stack_maps: std::ptr::from_ref(&NO_STACK_MAPS) as usize,
+                types: RUNTIME_TYPES.to_vec().leak().as_ptr() as usize,
+                unwind: 0,
+                functions: 0,
+            };
+            // SAFETY: both tables are in the compiler's formats.
+            let status = unsafe {
+                let mut worker = Mutator::new(program, false);
+                let entry = sleeps_and_looks_task as *const () as usize;
+                run(&raw mut worker, entry, migrate)
+            };
+            assert_eq!(status, 0);
+            let moved = std::mem::take(&mut *MOVED.lock().expect("no test panicked"));
+            assert_eq!(moved, [(migrate, migrate)]);
+        }
+    }
+
     #[test]
     fn tasks_park_and_wake() {
         const MILLISECOND: usize = 1_000_000;
@@ -1090,7 +1338,11 @@ mod tests {
             worker.sched.queue.push_back(waiting);
             // The entry task ends at once: the others still run to their
             // ends.
-            run(&raw mut worker, returns_at_once as *const () as usize)
+            run(
+                &raw mut worker,
+                returns_at_once as *const () as usize,
+                false,
+            )
         };
         assert_eq!(status, 0);
         assert_eq!(

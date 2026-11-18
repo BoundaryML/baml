@@ -2,12 +2,13 @@
 //! as a native executable.
 
 use std::{
+    fmt::Write as _,
     path::{Path, PathBuf},
     process::Command,
     sync::Arc,
 };
 
-use baml_compiler2_native::{CompileOptions, compile, link};
+use baml_compiler2_native::{CompileOptions, RuntimeBuild, compile, link};
 use baml_db::{
     CheckedWorld, ProjectDatabase,
     baml_compiler2_hir::item_data::{file_functions, function_data},
@@ -57,12 +58,19 @@ pub(crate) async fn interpret(engine: &Arc<BexEngine>, function: &str) -> Ending
         .map_err(|error| thrown(&error.to_string()).to_owned())
 }
 
-/// Compile and link `function` as the entry of an executable.
+/// One function as the entry of an executable, linked against the runtime
+/// a program ships with and against the one with checks.
+pub(crate) struct Built {
+    pub(crate) lean: PathBuf,
+    checked: PathBuf,
+}
+
+/// Compile `function` as the entry of an executable and link it both ways.
 pub(crate) fn build(
     db: &ProjectDatabase,
     function: &str,
     directory: &Path,
-) -> Result<PathBuf, String> {
+) -> Result<Built, String> {
     let entry = db
         .workspace_files()
         .into_iter()
@@ -71,20 +79,74 @@ pub(crate) fn build(
         .ok_or_else(|| format!("no function `{function}`"))?;
     let compiled = compile(db, entry, CompileOptions::default())
         .map_err(|error| format!("does not compile: {error}"))?;
-    let executable = directory.join(function);
-    link(&compiled.object, &executable).map_err(|error| format!("does not link: {error}"))?;
-    Ok(executable)
+    let built = Built {
+        lean: directory.join(function),
+        checked: directory.join(format!("{function}.checked")),
+    };
+    for (executable, runtime) in [
+        (&built.lean, RuntimeBuild::Lean),
+        (&built.checked, RuntimeBuild::Checked),
+    ] {
+        link(&compiled.object, executable, runtime)
+            .map_err(|error| format!("does not link: {error}"))?;
+    }
+    Ok(built)
 }
 
-/// Run an executable, collecting on every allocation if `stress`.
-pub(crate) fn run(executable: &Path, stress: bool) -> Ending {
+/// A way a native executable runs: which runtime it is linked against, and
+/// the variables set in its environment.
+pub(crate) struct Way {
+    pub(crate) name: &'static str,
+    checked: bool,
+    pub(crate) variables: &'static [&'static str],
+}
+
+/// As a program ships. Then, on the runtime with checks: collecting on
+/// every allocation, with every task that stops going on on another thread
+/// and under a worker at another address, and both.
+pub(crate) const WAYS: [Way; 4] = [
+    Way {
+        name: "native",
+        checked: false,
+        variables: &[],
+    },
+    Way {
+        name: "collecting always",
+        checked: true,
+        variables: &["BAML_GC_STRESS"],
+    },
+    Way {
+        name: "migrating always",
+        checked: true,
+        variables: &["BAML_MIGRATE_STRESS"],
+    },
+    Way {
+        name: "collecting and migrating",
+        checked: true,
+        variables: &["BAML_GC_STRESS", "BAML_MIGRATE_STRESS"],
+    },
+];
+
+/// Run a program one way: what it prints, what it reports and how it
+/// exits.
+pub(crate) fn output(built: &Built, way: &Way) -> std::process::Output {
+    let executable = if way.checked {
+        &built.checked
+    } else {
+        &built.lean
+    };
     let mut command = Command::new(executable);
-    if stress {
-        command.env("BAML_GC_STRESS", "1");
+    for variable in way.variables {
+        command.env(variable, "1");
     }
-    let output = command
+    command
         .output()
-        .unwrap_or_else(|error| panic!("`{}` does not start: {error}", executable.display()));
+        .unwrap_or_else(|error| panic!("`{}` does not start: {error}", executable.display()))
+}
+
+/// Run a program one way and say how it ended.
+pub(crate) fn run(built: &Built, way: &Way) -> Ending {
+    let output = output(built, way);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     match output.status.code() {
@@ -97,4 +159,14 @@ pub(crate) fn run(executable: &Path, stress: bool) -> Ending {
             output.status
         )),
     }
+}
+
+/// A line for each way a case ran and how it ended, for the report of a
+/// case that failed.
+pub(crate) fn listed(endings: &[(&str, String)]) -> String {
+    let mut lines = String::new();
+    for (way, ending) in endings {
+        let _ = write!(lines, "\n  {way:<24} {ending}");
+    }
+    lines
 }

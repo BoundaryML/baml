@@ -9,6 +9,15 @@ fn main() {
     let lists = manifest_dir.join("natives");
     println!("cargo:rerun-if-changed={}", lists.display());
 
+    // `cfg(checks)`: the runtime of a test build, and of any build with
+    // debug assertions.
+    println!("cargo::rustc-check-cfg=cfg(checks)");
+    if env::var_os("CARGO_FEATURE_CHECKS").is_some()
+        || env::var_os("CARGO_CFG_DEBUG_ASSERTIONS").is_some()
+    {
+        println!("cargo::rustc-cfg=checks");
+    }
+
     let mut implemented =
         baml_builtins2_codegen::read_native_lists(&lists).unwrap_or_else(|error| panic!("{error}"));
     // A runtime built without `baml.http` has none of its natives.

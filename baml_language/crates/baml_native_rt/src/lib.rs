@@ -45,10 +45,16 @@ const UNCAUGHT_EXIT_STATUS: i32 = 1;
 #[cfg(not(test))]
 const GC_STRESS_VARIABLE: &str = "BAML_GC_STRESS";
 
+/// Set in the environment to have every task that stops go on on another
+/// thread and under a worker at another address: see
+/// `sched::serve_in_turns`. Only the runtime a test build links can.
+#[cfg(not(test))]
+const MIGRATE_STRESS_VARIABLE: &str = "BAML_MIGRATE_STRESS";
+
 #[cfg(not(test))]
 unsafe extern "C" {
-    /// Defined by the compiled program: calls the entry function with the
-    /// mutator in its dedicated register and prints the result.
+    /// Defined by the compiled program: what its first task starts in. It
+    /// runs the entry function and prints the result.
     fn baml_native_entry(mutator: *mut std::ffi::c_void);
     /// Defined by the compiled program: the first word of its stack maps.
     static baml_native_stack_maps: usize;
@@ -65,6 +71,7 @@ unsafe extern "C" {
 #[unsafe(no_mangle)]
 pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
     let stress = std::env::var_os(GC_STRESS_VARIABLE).is_some();
+    let migrate = std::env::var_os(MIGRATE_STRESS_VARIABLE).is_some();
     // SAFETY: the linked program defines both symbols as declared.
     unsafe {
         let program = Program {
@@ -76,7 +83,11 @@ pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
         map::randomize_seed();
         let mut mutator = Mutator::new(program, stress);
         // The entry function runs as a task, like everything it spawns.
-        let status = sched::run(&raw mut mutator, baml_native_entry as *const () as usize);
+        let status = sched::run(
+            &raw mut mutator,
+            baml_native_entry as *const () as usize,
+            migrate,
+        );
         mutator.drop_owned();
         status
     }

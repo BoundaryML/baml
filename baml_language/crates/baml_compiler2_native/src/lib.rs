@@ -46,7 +46,7 @@ use std::fmt;
 
 use baml_compiler2_hir::loc::FunctionLoc;
 
-pub use crate::link::{LinkError, link};
+pub use crate::link::{LinkError, RuntimeBuild, link};
 
 /// A MIR construct native code is not generated for yet.
 #[derive(Clone, Debug, PartialEq, Eq)]
