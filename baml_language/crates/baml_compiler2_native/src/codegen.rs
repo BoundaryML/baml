@@ -585,7 +585,7 @@ impl<'db> Backend<'db> {
             .collect();
         let id = self.fixed_type(layout::instance_size(layout_slots(fields)), &references);
         self.class_types.insert(key, id);
-        self.describe_class(db, id, class, !arguments.is_empty(), fields);
+        self.describe_class(db, id, class, arguments, fields);
         id
     }
 

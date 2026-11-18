@@ -16,13 +16,17 @@ use super::{
     Big, Map, NativeBamlHttp, NativeBamlHttpResponse, Natives, Obj, Opaque, Root, Scope, Str,
     Thrown,
 };
-use crate::layout::{NAMED_DURATION, NAMED_HTTP_RESPONSE, NAMED_TIMEOUT};
+use crate::layout::{NAMED_HTTP_RESPONSE, NAMED_TIMEOUT};
 
 /// The fields of `baml.http.Response`, by position.
 const RESPONSE_STATUS: usize = 0;
 const RESPONSE_HEADERS: usize = 1;
 const RESPONSE_URL: usize = 2;
 const RESPONSE_BODY: usize = 3;
+
+/// The field of `baml.errors.Timeout` that holds the limit that passed, a
+/// `baml.time.Duration` or `null`, by position.
+const TIMEOUT_LIMIT: usize = 1;
 
 /// The limits one request runs under: `total` from connecting to the end
 /// of the body, and `connect` for connecting alone. `None` is no limit.
@@ -104,7 +108,9 @@ impl Failure {
         let message = scope.alloc_str(&message);
         let which = scope.alloc_str(which);
         let limit = limit.map(|limit| {
-            let duration = scope.named_class(NAMED_DURATION);
+            let duration = class
+                .field_class(TIMEOUT_LIMIT)
+                .expect("a timeout's limit is of a class");
             let nanos = scope.make_big(&BigInt::from(limit.as_nanos()));
             let mut built = scope.build(duration);
             built.set(scope, 0, nanos);
@@ -112,7 +118,7 @@ impl Failure {
         });
         let mut thrown = scope.build(class);
         thrown.set(scope, 0, message);
-        thrown.set(scope, 1, limit);
+        thrown.set(scope, TIMEOUT_LIMIT, limit);
         thrown.set(scope, 2, which);
         let thrown = thrown.finish();
         scope.throw(thrown)

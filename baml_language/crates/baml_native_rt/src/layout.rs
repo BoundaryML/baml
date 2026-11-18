@@ -452,16 +452,14 @@ pub const WELL_KNOWN: [(&str, &str); 26] = [
 ///
 /// The compiler writes the type id of each after those of [`WELL_KNOWN`],
 /// in this order, and writes zero for a class that no native the program
-/// calls names in its declaration, nor holds in a field of one it names,
-/// which is then not described either.
-pub const NAMED: [(&str, &str); 7] = [
+/// calls names in its declaration, which is then not described either.
+pub const NAMED: [(&str, &str); 6] = [
     ("regex", "Regex"),
     ("regex", "Match"),
     ("regex", "Error"),
     ("hash", "DefaultHasher"),
     ("http", "Response"),
     ("errors", "Timeout"),
-    ("time", "Duration"),
 ];
 pub const NAMED_REGEX: usize = 0;
 pub const NAMED_REGEX_MATCH: usize = 1;
@@ -469,7 +467,6 @@ pub const NAMED_REGEX_ERROR: usize = 2;
 pub const NAMED_DEFAULT_HASHER: usize = 3;
 pub const NAMED_HTTP_RESPONSE: usize = 4;
 pub const NAMED_TIMEOUT: usize = 5;
-pub const NAMED_DURATION: usize = 6;
 
 /// How many of [`WELL_KNOWN`], from the first, are panics.
 pub const WELL_KNOWN_PANICS: usize = 16;

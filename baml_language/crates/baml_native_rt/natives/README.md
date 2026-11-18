@@ -142,7 +142,10 @@ same two functions.
 A `Class` is one class at its type arguments, as the program describes it.
 A native gets one from the type a call names (`scope.class_from`), from an
 object (`scope.class_of`), from the type of a field (`class.field_class`),
-or by position in `layout::NAMED` (`scope.named_class`). A program
+or by position in `layout::NAMED` (`scope.named_class`). A field that holds
+instances of one class says which, whether or not `baml.json` can read the
+class: a native that builds a `Timeout` finds the `Duration` of its limit
+in the field, though a `Duration` holds a `bigint`. A program
 describes the classes of `NAMED` that the declarations of the natives it
 calls name, in what they take, return and throw. Asking for one that no
 such declaration names ends the program.

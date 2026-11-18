@@ -16,7 +16,7 @@ use super::{Backend, Translator, internal, table_word};
 use crate::{
     CompileError, layout,
     narrow::TestKind,
-    types::{NativeTy, class_layout},
+    types::{NativeTy, TypeArg, class_layout},
 };
 
 /// The classes the runtime knows by position.
@@ -66,10 +66,10 @@ impl<'db> Backend<'db> {
         db: &'db dyn baml_compiler2_mir::Db,
         type_id: usize,
         class: ClassRef<'db>,
-        generic: bool,
+        arguments: &[TypeArg<'db>],
         fields: &[NativeTy<'db>],
     ) {
-        let at = self.json.class_type(db, class, generic, type_id, fields);
+        let at = self.json.class_type(db, class, arguments, type_id, fields);
         let described = layout::TYPE_DESCRIBED | at;
         self.types[type_id + 12..type_id + 16].copy_from_slice(&described.to_ne_bytes());
         self.identify_described(db);
@@ -119,24 +119,17 @@ impl<'db> Backend<'db> {
     /// Give every class the declaration of `native` names a type and a
     /// description, for the native to be passed an instance or to build
     /// one, and note the type id of each the runtime finds by position.
-    /// The classes their fields hold are named with them: a native that
-    /// builds a `Timeout` builds the `Duration` in it.
+    /// A class one of them holds in a field is described with it, and the
+    /// native finds it there: one that builds a `Timeout` builds the
+    /// `Duration` its field says.
     pub(super) fn name_classes(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
         native: &crate::natives::Native,
     ) -> Result<(), CompileError> {
-        let mut found = Vec::new();
         for path in native.classes {
-            found.push(
-                crate::natives::class_at(db, *path).ok_or_else(|| {
-                    internal(format!("the standard library declares `{}`", path.1))
-                })?,
-            );
-        }
-        let mut named = 0;
-        while let Some(&class) = found.get(named) {
-            named += 1;
+            let class = crate::natives::class_at(db, *path)
+                .ok_or_else(|| internal(format!("the standard library declares `{}`", path.1)))?;
             let fields = class_layout(db, class, &[]).map_err(internal)?;
             let id = self.class_type(db, class, &[], &fields);
             let listed = layout::NAMED.iter().position(|(namespace, name)| {
@@ -146,18 +139,6 @@ impl<'db> Backend<'db> {
                 self.well_known(db)?;
                 if let Some(known) = &mut self.well_known {
                     known.named[position] = id;
-                }
-            }
-            for field in &fields {
-                let held = match field {
-                    NativeTy::Optional(inner) => inner,
-                    held => held,
-                };
-                if let NativeTy::Class(held, arguments) = held
-                    && arguments.is_empty()
-                    && !found.contains(held)
-                {
-                    found.push(*held);
                 }
             }
         }

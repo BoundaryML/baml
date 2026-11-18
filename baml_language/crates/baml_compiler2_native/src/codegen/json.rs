@@ -25,7 +25,9 @@ impl<'db> Backend<'db> {
     pub(super) fn identify_described(&mut self, db: &'db dyn baml_compiler2_mir::Db) {
         for pending in self.json.take_pending() {
             let id = match pending.what {
-                Described::Class(class) => self.class_type(db, class, &[], &pending.layout),
+                Described::Class(class) => {
+                    self.class_type(db, class, &pending.arguments, &pending.layout)
+                }
                 Described::Enum(enum_ref) => self.enum_type(db, enum_ref),
             };
             self.json.identify(pending.at, id, pending.listed);
