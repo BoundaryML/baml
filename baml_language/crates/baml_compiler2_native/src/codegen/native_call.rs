@@ -18,7 +18,9 @@ const THROW_UNCAUGHT: &str = "baml_rt_throw_uncaught";
 
 fn abi_param(ty: &Ty) -> Option<AbiParam> {
     match ty {
-        Ty::Int | Ty::String | Ty::Array(_) => Some(AbiParam::new(WORD)),
+        // An optional scalar is two words, which its user passes one by
+        // one; any other optional is a reference.
+        Ty::Int | Ty::String | Ty::Array(_) | Ty::Optional(_) => Some(AbiParam::new(WORD)),
         Ty::Float => Some(AbiParam::new(types::F64)),
         // The C ABI has the caller extend an argument narrower than a
         // register.
@@ -64,14 +66,28 @@ impl<'db> Translator<'_, 'db> {
             values.push(self.mutator());
         }
         for (argument, ty) in arguments.iter().zip(signature.params) {
-            params.push(abi_param(ty).ok_or_else(|| internal("a native takes no `null`"))?);
-            values.push(self.operand_as(argument, &ty.native())?);
+            let value = self.operand_as(argument, &ty.native())?;
+            if ty.is_pair() {
+                // Its bits, then whether it is present.
+                let (bits, present) = self.builder.ins().isplit(value);
+                params.extend([AbiParam::new(types::I64); 2]);
+                values.extend([bits, present]);
+            } else {
+                params.push(abi_param(ty).ok_or_else(|| internal("a native takes no `null`"))?);
+                values.push(value);
+            }
         }
         let returns = if native.throws {
+            if signature.result.is_pair() {
+                return Err(internal("a native that throws returns no optional scalar"));
+            }
             vec![AbiParam::new(types::I64), AbiParam::new(WORD)]
         } else {
             match &signature.result {
                 Ty::Bool => vec![AbiParam::new(types::I8)],
+                // Two words in two registers: its bits, then whether it
+                // is present.
+                ty if ty.is_pair() => vec![AbiParam::new(types::I64); 2],
                 ty => abi_param(ty).into_iter().collect(),
             }
         };
@@ -107,12 +123,13 @@ impl<'db> Translator<'_, 'db> {
                     .bitcast(types::F64, ir::MemFlags::new(), bits),
                 Ty::Bool => self.builder.ins().ireduce(types::I8, bits),
                 Ty::Null => self.builder.ins().iconst(types::I8, 0),
-                Ty::Int | Ty::String | Ty::Array(_) => bits,
+                Ty::Int | Ty::String | Ty::Array(_) | Ty::Optional(_) => bits,
             }
         } else {
-            match results.first() {
-                Some(value) => *value,
-                None => self.builder.ins().iconst(types::I8, 0),
+            match results.as_slice() {
+                [bits, present] => self.builder.ins().iconcat(*bits, *present),
+                [value] => *value,
+                _ => self.builder.ins().iconst(types::I8, 0),
             }
         };
         Ok((result, signature.result.native()))

@@ -98,6 +98,10 @@ enum AbiTy {
     Null,
     String,
     Array(Box<AbiTy>),
+    /// A type or `null`: a reference that may be zero, or for an `int`,
+    /// `float` or `bool` a pair of words, the value's bits and whether
+    /// there is a value.
+    Optional(Box<AbiTy>),
 }
 
 impl AbiTy {
@@ -109,15 +113,28 @@ impl AbiTy {
             BamlType::Null => Some(Self::Null),
             BamlType::String => Some(Self::String),
             BamlType::List(element) => match Self::of(element)? {
-                Self::Null => None,
+                Self::Null | Self::Optional(_) => None,
                 element => Some(Self::Array(Box::new(element))),
+            },
+            BamlType::Optional(inner) => match Self::of(inner)? {
+                Self::Null | Self::Optional(_) => None,
+                inner => Some(Self::Optional(Box::new(inner))),
             },
             _ => None,
         }
     }
 
     fn is_ref(&self) -> bool {
-        matches!(self, Self::String | Self::Array(_))
+        match self {
+            Self::String | Self::Array(_) => true,
+            Self::Optional(inner) => inner.is_ref(),
+            _ => false,
+        }
+    }
+
+    /// Whether a value is an optional `int`, `float` or `bool`: two words.
+    fn is_pair(&self) -> bool {
+        matches!(self, Self::Optional(inner) if !inner.is_ref())
     }
 
     /// The compiler's description of the type.
@@ -129,17 +146,29 @@ impl AbiTy {
             Self::Null => "Ty::Null".to_owned(),
             Self::String => "Ty::String".to_owned(),
             Self::Array(element) => format!("Ty::Array(&{})", element.table()),
+            Self::Optional(inner) => format!("Ty::Optional(&{})", inner.table()),
         }
     }
 
-    /// The type as the symbol takes or returns it.
+    /// The type as the symbol returns it.
     fn c(&self) -> &'static str {
         match self {
             Self::Int => "i64",
             Self::Float => "f64",
             Self::Bool => "u8",
             Self::Null => "()",
-            Self::String | Self::Array(_) => "usize",
+            Self::Optional(inner) if !inner.is_ref() => "OptionalScalar",
+            Self::String | Self::Array(_) | Self::Optional(_) => "usize",
+        }
+    }
+
+    /// The symbol's parameters for a parameter `name` of this type: one,
+    /// or for an optional scalar its bits and then whether it is present.
+    fn c_parameters(&self, name: &str) -> Vec<String> {
+        if self.is_pair() {
+            vec![format!("r#{name}: u64"), format!("{name}_present: u64")]
+        } else {
+            vec![format!("r#{name}: {}", self.c())]
         }
     }
 
@@ -152,12 +181,14 @@ impl AbiTy {
             Self::Null => "()".to_owned(),
             Self::String => "Str".to_owned(),
             Self::Array(element) => format!("Arr<{}>", element.marker()),
+            Self::Optional(inner) => inner.marker(),
         }
     }
 
     /// The type as a trait method takes it.
     fn parameter(&self, kind: NativeKind) -> String {
         match (self, kind) {
+            (Self::Optional(inner), _) => format!("Option<{}>", inner.parameter(kind)),
             (Self::Int, _) => "i64".to_owned(),
             (Self::Float, _) => "f64".to_owned(),
             (Self::Bool, _) => "bool".to_owned(),
@@ -177,6 +208,18 @@ impl AbiTy {
             (Self::Int | Self::Float, _) => name.to_owned(),
             (Self::Bool, _) => format!("{name} != 0"),
             (Self::Null, _) => "()".to_owned(),
+            (Self::Optional(inner), _) if inner.is_ref() => {
+                format!("({name} != 0).then(|| {})", inner.argument(name, kind))
+            }
+            (Self::Optional(inner), _) => {
+                let present = format!("{}_present", name.trim_start_matches("r#"));
+                let value = match **inner {
+                    Self::Float => format!("f64::from_bits({name})"),
+                    Self::Bool => format!("{name} != 0"),
+                    _ => format!("{name}.cast_signed()"),
+                };
+                format!("({present} != 0).then_some({value})")
+            }
             (_, NativeKind::Leaf) => format!("unsafe {{ View::from_raw({name}) }}"),
             (_, NativeKind::Reentrant) => format!("unsafe {{ scope.root_raw({name}) }}"),
         }
@@ -191,6 +234,8 @@ impl AbiTy {
             Self::Bool => format!("u64::from({value})"),
             Self::Null => "0".to_owned(),
             Self::String | Self::Array(_) => format!("{value}.raw() as u64"),
+            // An optional scalar has no fallible form: see `listed`.
+            Self::Optional(_) => format!("{value}.map_or(0, |value| value.raw() as u64)"),
         }
     }
 
@@ -201,6 +246,10 @@ impl AbiTy {
             Self::Int | Self::Float | Self::Null => value.to_owned(),
             Self::Bool => format!("u8::from({value})"),
             Self::String | Self::Array(_) => format!("{value}.raw()"),
+            Self::Optional(inner) if inner.is_ref() => {
+                format!("{value}.map_or(0, |value| value.raw())")
+            }
+            Self::Optional(_) => format!("OptionalScalar::from({value})"),
         }
     }
 }
@@ -320,6 +369,13 @@ fn listed<'a>(
                 entry.path
             ));
         }
+        if is_fallible(builtin) && abi_of(builtin).is_some_and(|abi| abi.result.is_pair()) {
+            return Err(format!(
+                "`{}` is listed as a native but it throws and returns an optional scalar, which \
+                 takes three registers",
+                entry.path
+            ));
+        }
         if entry.kind == NativeKind::Leaf
             && (is_fallible(builtin) || abi_of(builtin).is_some_and(|abi| abi.result.is_ref()))
         {
@@ -396,7 +452,7 @@ pub fn generate_native_shims(
             parameters.push(format!("r#{name}: {}", ty.parameter(kind)));
         }
         let value = match (&abi.result, reentrant) {
-            (ty, true) if ty.is_ref() => format!("Root<'s, {}>", ty.marker()),
+            (ty, true) if ty.is_ref() => ty.parameter(NativeKind::Reentrant),
             (ty, _) => ty.parameter(NativeKind::Leaf),
         };
         let returned = if fallible {
@@ -417,7 +473,7 @@ pub fn generate_native_shims(
             c_parameters.push("mutator: &mut Mutator".to_owned());
         }
         for (name, ty) in &abi.params {
-            c_parameters.push(format!("r#{name}: {}", ty.c()));
+            c_parameters.extend(ty.c_parameters(name));
         }
         let mut arguments: Vec<String> = Vec::new();
         if reentrant {
