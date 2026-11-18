@@ -198,6 +198,9 @@ pub struct Program {
 /// every mutator is stopped.
 struct Heap {
     space: Space,
+    /// The space the collection before last abandoned, kept to copy into
+    /// again: memory already touched costs no page faults.
+    spare: Option<Space>,
     /// The size of the space the next collection copies into, unless more
     /// is in use by then.
     next_space: usize,
@@ -282,6 +285,7 @@ impl Mutator {
             span_end: space.end(),
             heap: Heap {
                 space,
+                spare: None,
                 next_space: size,
                 // SAFETY: the caller's contract.
                 stack_maps: unsafe { StackMaps::decode(program.stack_maps) },
@@ -417,16 +421,41 @@ impl Mutator {
         object
     }
 
-    /// Copy everything reachable into a new space with room for `needed`
-    /// more bytes, and abandon the old one.
+    /// Copy everything reachable into another space, leaving room for
+    /// `needed` more bytes, and abandon the old one.
     fn collect(&mut self, needed: usize) {
         let used = self.alloc_ptr - self.heap.space.start;
-        // Everything may be live, so the new space holds at least all of it.
-        let mut copy = Copy::new(
-            &self.heap.space,
-            self.heap.types,
-            self.heap.next_space.max(used + needed),
-        );
+        if self.heap.stress {
+            self.copy_into(used + needed);
+            return;
+        }
+        // Everything may be live, so the other space holds at least all of
+        // it. When that is the size the spaces already have, the one
+        // abandoned last time is the one copied into now.
+        self.copy_into(used);
+        let live = self.alloc_ptr - self.heap.space.start;
+        // A space mostly full of live data is collected again almost at
+        // once, so the next one is sized by what survived this time.
+        self.heap.next_space = self.heap.space.size.max((live + needed) * SPACE_PER_LIVE);
+        if live + needed > self.heap.space.size {
+            // What survived leaves no room for what was asked for: move
+            // again, into a space sized for it.
+            self.copy_into(live + needed);
+        }
+        if (self.heap.spare.as_ref()).is_some_and(|spare| spare.size < self.heap.next_space) {
+            self.heap.spare = None;
+        }
+    }
+
+    /// Copy everything reachable into a space of at least `least` bytes and
+    /// of the size the next space is to have, and allocate from there.
+    fn copy_into(&mut self, least: usize) {
+        let size = words(self.heap.next_space.max(least));
+        let to = match self.heap.spare.take() {
+            Some(spare) if spare.size >= size => spare,
+            _ => Space::new(size),
+        };
+        let mut copy = Copy::new(&self.heap.space, to, self.heap.types);
         // SAFETY: the stack between the anchor and `base_frame` is this
         // mutator's compiled frames, described by the stack maps, and every
         // registered root is a live slot.
@@ -439,18 +468,13 @@ impl Mutator {
         }
         let live = copy.free - copy.to.start;
         let to = copy.to;
-        // A space mostly full of live data is collected again almost at
-        // once, so the next one is sized by what survived this time.
-        if !self.heap.stress {
-            self.heap.next_space = to.size.max((live + needed) * SPACE_PER_LIVE);
-        }
-
         let from = std::mem::replace(&mut self.heap.space, to);
         if self.heap.stress {
             // SAFETY: the space is owned and no live object remains in it.
             unsafe { std::ptr::write_bytes(from.start as *mut u8, POISON, from.size) };
+        } else {
+            self.heap.spare = Some(from);
         }
-        drop(from);
         self.alloc_ptr = self.heap.space.start + live;
         self.span_end = self.heap.space.end();
         self.publish_limit();
@@ -467,8 +491,7 @@ struct Copy<'a> {
 }
 
 impl<'a> Copy<'a> {
-    fn new(from: &'a Space, types: usize, size: usize) -> Self {
-        let to = Space::new(words(size));
+    fn new(from: &'a Space, to: Space, types: usize) -> Self {
         let free = to.start;
         Self {
             from,
