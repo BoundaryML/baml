@@ -616,6 +616,7 @@ dependencies = [
  "cranelift-module",
  "cranelift-native",
  "cranelift-object",
+ "num-bigint",
  "sys_native",
  "sys_ops",
  "sys_types",
@@ -876,6 +877,7 @@ name = "baml_native_rt"
 version = "0.0.0-beta"
 dependencies = [
  "baml_builtins2_codegen",
+ "num-bigint",
  "serde",
  "serde_json",
  "zmij",

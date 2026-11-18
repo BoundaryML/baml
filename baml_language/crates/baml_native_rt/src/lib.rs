@@ -19,6 +19,7 @@
 )]
 
 pub mod array;
+pub mod bigint;
 mod class;
 mod describe;
 pub mod heap;

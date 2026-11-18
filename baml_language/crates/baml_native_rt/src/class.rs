@@ -148,6 +148,9 @@ pub(crate) unsafe fn write_value(
             TYPE_BOX_INT => {
                 let _ = write!(out, "{}", load(value + BOX_VALUE).cast_signed());
             }
+            crate::layout::TYPE_BIGINT => {
+                let _ = write!(out, "{}", crate::bigint::value(value));
+            }
             TYPE_BOX_FLOAT => {
                 out.push_str(&float_text(f64::from_bits(load(value + BOX_VALUE) as u64)));
             }
@@ -239,6 +242,8 @@ pub(crate) enum Init<'a> {
     BoxedInt(i64),
     /// A `string` field.
     Text(&'a str),
+    /// A field that holds any of several types, given a `bigint`.
+    Big(&'a num_bigint::BigInt),
 }
 
 /// The most fields any class the runtime makes an instance of has.
@@ -298,6 +303,7 @@ pub(crate) fn well_known(mutator: &mut Mutator, class: usize, fields: &[Init<'_>
                 boxed
             }
             Init::Text(text) => string::from_str(mutator, text),
+            Init::Big(value) => crate::bigint::make(mutator, value),
         };
         // SAFETY: `index` is within `made`, which outlives the roots.
         unsafe {
@@ -312,7 +318,7 @@ pub(crate) fn well_known(mutator: &mut Mutator, class: usize, fields: &[Init<'_>
         for (index, field) in fields.iter().enumerate() {
             let value = match field {
                 Init::Int(value) => usize::from_ne_bytes(value.to_ne_bytes()),
-                Init::BoxedInt(_) | Init::Text(_) => slots.add(index).read(),
+                Init::BoxedInt(_) | Init::Text(_) | Init::Big(_) => slots.add(index).read(),
             };
             store(object + field_at(description, index), value);
         }

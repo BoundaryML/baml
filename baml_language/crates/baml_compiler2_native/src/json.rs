@@ -392,6 +392,7 @@ impl<'db> JsonTypes<'db> {
                 self.union(&members, repr, "")
             }
             NativeTy::Tuple(_) => return Err(unsupported("tuple")),
+            NativeTy::Bigint => return Err(unsupported("bigint")),
             NativeTy::Function(_) | NativeTy::Cell(_) => return Err(unsupported("function")),
             NativeTy::Future(_) => return Err(unsupported("future")),
         })

@@ -172,3 +172,50 @@ function task_awaited_at_once() -> int {
   };
   s
 }
+
+// Sleeping tasks wake in the order of their timers, whatever order they
+// were spawned in.
+function task_nap(order: int[], id: int, milliseconds: int) -> int {
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(milliseconds));
+  order.push(id);
+  id
+}
+function task_sleep_order() -> string {
+  let order: int[] = [];
+  let naps = [90, 30, 60, 150, 120, 10];
+  let futures: baml.future.Future<int, never>[] = [];
+  for (let i = 0; i < naps.length(); i += 1) {
+    let id = task_count(i);
+    let nap = naps[i];
+    futures.push(spawn { task_nap(order, id, nap) });
+  }
+  let sum = 0;
+  for (let f in futures) { sum += await f; }
+  let out = `${sum}:`;
+  for (let id in order) { out = out + `${id}`; }
+  out
+}
+// A sleep for no time, or for less, returns.
+function task_sleep_no_wait() -> string {
+  let order: int[] = [];
+  let sum = task_nap(order, 1, task_count(0)) + task_nap(order, 2, 0 - task_count(5));
+  `${sum}:${order.length()}`
+}
+// A sleep is a place other tasks run: the count goes on while the timer
+// waits, and the sleeper wakes while a long run of tasks hand over to one
+// another, not only once they are all done.
+function task_spin(order: int[], rounds: int) -> int {
+  let total = 0;
+  for (let i = 0; i < rounds; i += 1) {
+    let f = spawn { task_count(200) };
+    total += await f;
+    if (order.length() > 0 && order[0] == 7) { return total - total + i - i + 1; }
+  }
+  0
+}
+function task_timer_during_handoffs() -> int {
+  let order: int[] = [];
+  let sleeper = spawn { task_nap(order, 7, 2) };
+  let woke_during = task_spin(order, 5000000);
+  (await sleeper) * 10 + woke_during
+}

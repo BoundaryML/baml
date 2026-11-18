@@ -75,6 +75,7 @@ fn plain(db: &dyn baml_compiler2_mir::Db, ty: &NativeTy<'_>) -> Option<baml_type
         NativeTy::Float => baml_type::Ty::Float,
         NativeTy::Bool => baml_type::Ty::Bool,
         NativeTy::String => baml_type::Ty::String,
+        NativeTy::Bigint => baml_type::Ty::Bigint,
         NativeTy::Unknown => baml_type::Ty::Unknown,
         NativeTy::Enum(enum_ref) => baml_type::Ty::Enum(layout::enum_head(db, *enum_ref)),
         NativeTy::Class(class, arguments) => baml_type::Ty::Class(

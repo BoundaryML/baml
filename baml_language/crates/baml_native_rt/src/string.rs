@@ -276,6 +276,11 @@ pub unsafe extern "C" fn baml_rt_string_from_any(mutator: &mut Mutator, value: u
             int_digits(held.cast_signed() as i64, &mut [0; INT_DIGITS]),
         ),
         TYPE_BOX_FLOAT => from_str(mutator, &float_text(f64::from_bits(held as u64))),
+        // SAFETY: the header says it is one.
+        crate::layout::TYPE_BIGINT => {
+            let text = unsafe { crate::bigint::value(value) }.to_string();
+            from_str(mutator, &text)
+        }
         TYPE_BOX_BOOL => from_str(mutator, if held & 0xFF != 0 { "true" } else { "false" }),
         enum_type if !mutator.is_reference(enum_type) => {
             let name = mutator.variant_name(enum_type, held);

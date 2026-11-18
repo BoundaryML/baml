@@ -133,7 +133,8 @@ impl Intrinsic {
                     | NativeTy::Bool
                     | NativeTy::Null
                     | NativeTy::Enum(_)
-                    | NativeTy::String,
+                    | NativeTy::String
+                    | NativeTy::Bigint,
                 ],
             ) => Some(NativeTy::String),
             _ => None,
@@ -576,6 +577,10 @@ impl Operator {
         }
     }
 }
+
+/// The standard library's sleep: its one argument is a `bigint` count of
+/// nanoseconds.
+const SLEEP: &str = "baml.sys._sleep";
 
 pub(crate) fn virtual_target<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
@@ -1592,15 +1597,30 @@ fn terminator_supported<'db>(
                     .try_for_each(|argument| operand_ty(db, body, argument).map(drop)),
             }
         }
-        Terminator::SysOp { callee, .. } => Err(Blocker::new(
-            "system operation",
-            match callee {
+        Terminator::SysOp {
+            callee,
+            args,
+            destination,
+            ..
+        } => {
+            let name = match callee {
                 Operand::Constant(Constant::Function(function)) => {
                     function_display_name(db, *function)
                 }
                 _ => String::new(),
-            },
-        )),
+            };
+            // The one system operation native code runs: a sleep, which
+            // parks the task on the worker's timers.
+            if name == SLEEP
+                && let [delay] = args.as_slice()
+                && operand_ty(db, body, delay)? == NativeTy::Bigint
+                && assignable(&place_ty(db, body, destination)?, &NativeTy::Null)
+            {
+                Ok(())
+            } else {
+                Err(Blocker::new("system operation", name))
+            }
+        }
         Terminator::Spawn { plan, future, .. } => {
             let plan = narrowed(operand_ty(db, body, plan)?);
             let Some((_, started)) = crate::types::plan_body(db, &plan) else {

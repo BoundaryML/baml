@@ -16,6 +16,7 @@ pub(crate) enum Ty {
     Bool,
     Null,
     String,
+    Bigint,
     Array(&'static Ty),
     /// A map from the builtin's first type parameter to its second.
     Map,
@@ -72,6 +73,7 @@ impl Ty {
             Self::Bool => NativeTy::Bool,
             Self::Null => NativeTy::Null,
             Self::String => NativeTy::String,
+            Self::Bigint => NativeTy::Bigint,
             Self::Array(element) => NativeTy::Array(Box::new(element.native(types))),
             Self::Map => NativeTy::Map(Box::new(types[0].clone()), Box::new(types[1].clone())),
             Self::Optional(inner) => NativeTy::Optional(Box::new(inner.native(types))),

@@ -61,6 +61,9 @@ pub(crate) enum NativeTy<'db> {
     Enum(EnumRef<'db>),
     /// A reference to an immutable string object.
     String,
+    /// A reference to an immutable `bigint` object, whose header says that
+    /// it is one: a union holds it as it is.
+    Bigint,
     /// A reference to an instance of a class at these type arguments.
     /// Instantiations whose arguments are the same under [`type_argument`]
     /// are laid out alike and share a type id.
@@ -101,6 +104,7 @@ impl NativeTy<'_> {
     pub(crate) fn is_ref(&self) -> bool {
         match self {
             Self::String
+            | Self::Bigint
             | Self::Class(..)
             | Self::Tuple(_)
             | Self::Array(_)
@@ -190,6 +194,7 @@ macro_rules! native_type_of {
                     NativeTy::Unknown
                 }
                 $family::String | $family::Literal(Literal::String(_), _) => NativeTy::String,
+                $family::Bigint | $family::Literal(Literal::Bigint(_), _) => NativeTy::Bigint,
                 $parameter => arguments.get($slot)?.clone()?,
                 // `self` in an interface's default body is declared with
                 // the interface's own name: any implementor.
@@ -270,23 +275,22 @@ macro_rules! native_type_of {
                     NativeTy::Function(Box::new(Signature { params, result }))
                 }
                 $family::Union(members) => {
-                    // A `bigint` has no native representation yet, so no
-                    // value of the union is one; the others are held as
-                    // any value is, which is what they will be when one
-                    // can be.
+                    // `json`, written out one level: any value, as the
+                    // alias itself is. Native code makes no `bigint` out
+                    // of JSON text.
                     if members
                         .iter()
                         .any(|member| matches!(member, $family::Bigint))
+                        && members.iter().any(|member| {
+                            matches!(member, $family::List(element)
+                                if matches!(&**element, $family::TypeAlias(head)
+                                    if crate::json::is_json_alias(db, head)))
+                        })
                     {
                         return Some(NativeTy::Unknown);
                     }
                     let mut flat = Vec::new();
                     for member in members {
-                        // Native code makes no `bigint`, so no value of
-                        // the union is one: a `json` is every other arm.
-                        if matches!(member, $family::Bigint) {
-                            continue;
-                        }
                         let members = match $name(db, member, arguments)? {
                             NativeTy::Unknown => return Some(NativeTy::Unknown),
                             NativeTy::Union(members) => members,
@@ -1045,7 +1049,7 @@ pub(crate) fn constant_ty<'db>(
         Constant::Bool(_) => Ok(NativeTy::Bool),
         Constant::Null => Ok(NativeTy::Null),
         Constant::String(_) => Ok(NativeTy::String),
-        Constant::Bigint(_) => Err(Blocker::new("bigint value", "constant")),
+        Constant::Bigint(_) => Ok(NativeTy::Bigint),
         Constant::OmittedArg => Err(Blocker::new("defaulted argument", "")),
         Constant::Function(DeclRef::Source(function)) => Ok(NativeTy::Function(Box::new(
             function_signature(db, &FnKey::new(*function, Entry::Direct))?,
@@ -1165,6 +1169,9 @@ pub(crate) enum BinaryMode {
     NullTest { optional_on_left: bool },
     /// Two maps of string keys, compared key by key in whatever order.
     Map,
+    /// At least one `bigint`, the other one too or an `int`: the runtime's
+    /// arithmetic, which gives a `bigint`.
+    Bigint,
 }
 
 pub(crate) fn is_comparison(op: BinOp) -> bool {
@@ -1198,6 +1205,8 @@ pub(crate) fn binary_typing<'db>(
             }
             BinaryMode::Float
         }
+        (NativeTy::Bigint, NativeTy::Bigint | NativeTy::Int)
+        | (NativeTy::Int, NativeTy::Bigint) => BinaryMode::Bigint,
         (NativeTy::Bool, NativeTy::Bool) if equality => BinaryMode::Bool,
         (NativeTy::Null, NativeTy::Null) if equality => BinaryMode::Null,
         (NativeTy::String, NativeTy::String) if is_comparison(op) || op == BinOp::Add => {
@@ -1236,6 +1245,7 @@ pub(crate) fn binary_typing<'db>(
             BinaryMode::Int => NativeTy::Int,
             BinaryMode::Float => NativeTy::Float,
             BinaryMode::String => NativeTy::String,
+            BinaryMode::Bigint => NativeTy::Bigint,
             BinaryMode::Bool | BinaryMode::Null | BinaryMode::NullTest { .. } | BinaryMode::Map => {
                 return Err(unsupported());
             }
@@ -1255,6 +1265,7 @@ pub(crate) fn describe(ty: &NativeTy<'_>) -> &'static str {
         NativeTy::Union(_) => "union",
         NativeTy::Unknown => "unknown",
         NativeTy::String => "string",
+        NativeTy::Bigint => "bigint",
         NativeTy::Class(..) => "class",
         NativeTy::Tuple(_) => "tuple",
         NativeTy::Array(_) => "array",
@@ -1284,6 +1295,7 @@ pub(crate) fn unary_typing<'db>(
         ) => Ok(NativeTy::Bool),
         (UnaryOp::Neg, NativeTy::Int) => Ok(NativeTy::Int),
         (UnaryOp::Neg, NativeTy::Float) => Ok(NativeTy::Float),
+        (UnaryOp::Neg, NativeTy::Bigint) => Ok(NativeTy::Bigint),
         _ => Err(unsupported()),
     }
 }

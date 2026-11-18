@@ -332,8 +332,16 @@ impl Sched {
         }
     }
 
-    /// Wake every task whose timer has fired, the soonest to run first.
+    /// Wake every task whose timer has fired: they run next, the soonest
+    /// first, ahead of what was already queued. The queue is served from
+    /// its back, where a task that spawns and one that ends keep handing
+    /// over to each other, so a woken task put at its front would wait for
+    /// as long as they do.
     fn fire_timers(&mut self) {
+        // The clock is read only when a task waits on it.
+        if self.timers.is_empty() {
+            return;
+        }
         let now = self.now();
         let mut fired = Vec::new();
         while let Some(Reverse((when, _, task))) = self.timers.peek().copied() {
@@ -343,11 +351,9 @@ impl Sched {
             self.timers.pop();
             fired.push(task as *mut Task);
         }
-        // Each goes behind the one before it, and all of them behind what
-        // was already queued.
-        for task in fired {
+        for task in fired.into_iter().rev() {
             // SAFETY: a task with a timer parked on it.
-            unsafe { self.wake(task, false) };
+            unsafe { self.wake(task, true) };
         }
     }
 
@@ -653,6 +659,10 @@ pub(crate) unsafe extern "C" fn exit_pick(worker: &mut Mutator) -> *mut Task {
         }
         (*task).state.store(DEAD, Ordering::Release);
         sched.dead = task;
+        // A run of tasks that each end by handing over to the next never
+        // returns to the worker's loop, so the timers are looked at here
+        // too: a sleeper is not kept waiting until the run is over.
+        sched.fire_timers();
         match sched.queue.pop_back() {
             Some(next) => {
                 (*next).state.store(RUNNING, Ordering::Release);

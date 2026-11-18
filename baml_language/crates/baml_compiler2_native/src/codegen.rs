@@ -118,6 +118,7 @@ fn clif_type(ty: &NativeTy<'_>) -> ir::Type {
         NativeTy::Float => types::F64,
         NativeTy::Bool | NativeTy::Null => types::I8,
         NativeTy::String
+        | NativeTy::Bigint
         | NativeTy::Class(..)
         | NativeTy::Tuple(_)
         | NativeTy::Array(_)
@@ -198,6 +199,13 @@ enum Runtime {
     StringFromInt,
     StringFromFloat,
     StringFromAny,
+    StringFromBigint,
+    PrintBigint,
+    BigintBinary,
+    BigintCmp,
+    BigintNeg,
+    BigintToNanos,
+    Sleep,
     Spawn,
     SpawnUnsupported,
     Await,
@@ -240,6 +248,13 @@ impl Runtime {
             Self::StringFromInt => "baml_rt_string_from_int",
             Self::StringFromFloat => "baml_rt_string_from_float",
             Self::StringFromAny => "baml_rt_string_from_any",
+            Self::StringFromBigint => "baml_rt_string_from_bigint",
+            Self::PrintBigint => "baml_rt_print_bigint",
+            Self::BigintBinary => "baml_rt_bigint_binary",
+            Self::BigintCmp => "baml_rt_bigint_cmp",
+            Self::BigintNeg => "baml_rt_bigint_neg",
+            Self::BigintToNanos => "baml_rt_bigint_to_nanos",
+            Self::Sleep => "baml_rt_sleep",
             Self::Spawn => "baml_rt_spawn",
             Self::SpawnUnsupported => "baml_rt_spawn_unsupported",
             Self::Await => "baml_rt_await",
@@ -257,7 +272,12 @@ impl Runtime {
         // register.
         let byte = AbiParam::new(types::I8).uext();
         let (params, returns) = match self {
-            Self::PrintInt | Self::PrintString => (vec![word], vec![]),
+            Self::PrintInt | Self::PrintString | Self::PrintBigint | Self::Sleep => {
+                (vec![word], vec![])
+            }
+            Self::BigintBinary => (vec![word, word, word, word], vec![word, word]),
+            Self::BigintNeg => (vec![word, word], vec![word, word]),
+            Self::BigintCmp => (vec![word, word, word], vec![word]),
             Self::PanicDivisionByZero | Self::PanicNegativeShift | Self::PanicStackOverflow => {
                 (vec![word, word], vec![])
             }
@@ -274,14 +294,16 @@ impl Runtime {
             | Self::PanicMapKeyNotFound
             | Self::Throw
             | Self::Rethrow => (vec![word, word], vec![]),
-            Self::ErrorMapKeyNotFound => (vec![word], vec![word]),
+            Self::ErrorMapKeyNotFound | Self::BigintToNanos => (vec![word], vec![word]),
             Self::ErrorDivisionByZero | Self::ErrorNegativeShift => (vec![word, word], vec![word]),
             Self::ErrorIndexOutOfBounds | Self::ErrorContext => {
                 (vec![word, word, word], vec![word])
             }
             Self::Uncaught => (vec![word, word, word], vec![]),
             Self::FloatRem => (vec![float, float], vec![float]),
-            Self::StringFromInt | Self::StringFromAny => (vec![word, word], vec![word]),
+            Self::StringFromInt | Self::StringFromAny | Self::StringFromBigint => {
+                (vec![word, word], vec![word])
+            }
             Self::StringFromFloat => (vec![word, float], vec![word]),
             Self::ArrayNew | Self::StringConcat | Self::StringFromEnum => {
                 (vec![word, word, word], vec![word])
@@ -354,6 +376,8 @@ struct Backend<'db> {
     /// The method table, once a call dispatches through it.
     methods: Option<DataId>,
     strings: HashMap<String, DataId>,
+    /// The `bigint` constants emitted so far.
+    bigints: HashMap<num_bigint::BigInt, DataId>,
     stack_maps: Vec<(FuncId, FunctionStackMaps)>,
     /// Every function defined, in the order of their code, with its size
     /// in bytes.
@@ -411,6 +435,7 @@ impl<'db> Backend<'db> {
             bool_boxes: None,
             methods: None,
             strings: HashMap::new(),
+            bigints: HashMap::new(),
             stack_maps: Vec::new(),
             functions: Vec::new(),
             unwind: unwind::Tables::default(),
@@ -511,6 +536,7 @@ impl<'db> Backend<'db> {
             NativeTy::Float => layout::TYPE_BOX_FLOAT,
             NativeTy::Bool => layout::TYPE_BOX_BOOL,
             NativeTy::String => layout::TYPE_STRING,
+            NativeTy::Bigint => layout::TYPE_BIGINT,
             NativeTy::Enum(enum_ref) => self.enum_type(db, *enum_ref),
             NativeTy::Class(class, arguments) => {
                 let fields = class_layout(db, *class, arguments).map_err(internal)?;
@@ -799,6 +825,33 @@ impl<'db> Backend<'db> {
         Ok(id)
     }
 
+    /// A `bigint` object in the executable's data: see
+    /// [`layout::BIGINT_LIMBS`].
+    fn bigint_constant(&mut self, value: &num_bigint::BigInt) -> Result<DataId, CompileError> {
+        if let Some(id) = self.bigints.get(value) {
+            return Ok(*id);
+        }
+        let digits = value.to_signed_bytes_le();
+        let limbs = digits.len().div_ceil(layout::WORD).max(1);
+        let sign = if value.sign() == num_bigint::Sign::Minus {
+            0xFF
+        } else {
+            0
+        };
+        let mut bytes = vec![sign; layout::BIGINT_LIMBS + limbs * layout::WORD];
+        bytes[..layout::HEADER].copy_from_slice(&layout::TYPE_BIGINT.to_ne_bytes());
+        bytes[layout::BIGINT_LIMB_COUNT..layout::BIGINT_LIMBS]
+            .copy_from_slice(&limbs.to_ne_bytes());
+        bytes[layout::BIGINT_LIMBS..layout::BIGINT_LIMBS + digits.len()].copy_from_slice(&digits);
+        let id = self
+            .module
+            .declare_anonymous_data(false, false)
+            .map_err(internal)?;
+        self.define_data(id, DataDescription::new(), bytes)?;
+        self.bigints.insert(value.clone(), id);
+        Ok(id)
+    }
+
     /// Emit the function table. Every field is little-endian and the table
     /// is aligned to 8 bytes:
     ///
@@ -1037,6 +1090,7 @@ pub(crate) fn generate<'db>(
         NativeTy::Float => Some((Runtime::PrintFloat, None)),
         NativeTy::Bool => Some((Runtime::PrintBool, None)),
         NativeTy::String => Some((Runtime::PrintString, None)),
+        NativeTy::Bigint => Some((Runtime::PrintBigint, None)),
         NativeTy::Null => None,
         NativeTy::Enum(_)
         | NativeTy::Union(_)
@@ -2340,6 +2394,10 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let string = self.backend.string_constant(text)?;
                 Ok(self.data_address(string))
             }
+            Operand::Constant(Constant::Bigint(value)) => {
+                let bigint = self.backend.bigint_constant(value)?;
+                Ok(self.data_address(bigint))
+            }
             Operand::Constant(Constant::Function(DeclRef::Source(function))) => {
                 let code = self.declared(&FnKey::new(*function, Entry::Value))?.id;
                 let closure = self.backend.function_value(code)?;
@@ -2566,6 +2624,33 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.forget_arrays();
         let result = self.emit_runtime_call(function, arguments)?;
         Ok(result)
+    }
+
+    /// Call a runtime function that returns a reference and what it threw
+    /// instead, if anything: the reference, with the throw raised where it
+    /// happened.
+    fn fallible_runtime(
+        &mut self,
+        function: Runtime,
+        arguments: &[ir::Value],
+    ) -> Result<ir::Value, CompileError> {
+        self.forget_arrays();
+        let function = self.runtime_ref(function)?;
+        let call = self.builder.ins().call(function, arguments);
+        let results = self.builder.inst_results(call).to_vec();
+        let (value, thrown) = (results[0], results[1]);
+        let raise = self.builder.create_block();
+        let resume = self.builder.create_block();
+        self.builder.set_cold_block(raise);
+        self.builder.ins().brif(thrown, raise, &[], resume, &[]);
+        self.builder.seal_block(raise);
+        self.builder.seal_block(resume);
+        self.builder.switch_to_block(raise);
+        self.builder.declare_value_needs_stack_map(thrown);
+        self.raise(thrown, None)?;
+        self.builder.switch_to_block(resume);
+        self.builder.declare_value_needs_stack_map(value);
+        Ok(value)
     }
 
     /// The one place a call into the runtime is emitted, whatever it takes
@@ -3053,6 +3138,41 @@ impl<'a, 'db> Translator<'a, 'db> {
                     self.builder.ins().bxor_imm(equal, 1)
                 })
             }
+            BinaryMode::Bigint => {
+                let mut flags = 0;
+                if left_ty == NativeTy::Int {
+                    flags |= layout::BIGINT_LEFT_IS_INT;
+                }
+                if right_ty == NativeTy::Int {
+                    flags |= layout::BIGINT_RIGHT_IS_INT;
+                }
+                if is_comparison(op) {
+                    let flags = self.word_const(flags);
+                    let order = self
+                        .call_runtime(Runtime::BigintCmp, &[flags, left_value, right_value])?
+                        .ok_or_else(|| internal("bigint comparison returns an order"))?;
+                    return Ok(self.builder.ins().icmp_imm(int_condition, order, 0));
+                }
+                let op = match op {
+                    BinOp::Add => layout::BIGINT_OP_ADD,
+                    BinOp::Sub => layout::BIGINT_OP_SUB,
+                    BinOp::Mul => layout::BIGINT_OP_MUL,
+                    BinOp::Div => layout::BIGINT_OP_DIV,
+                    BinOp::Mod => layout::BIGINT_OP_REM,
+                    BinOp::BitAnd => layout::BIGINT_OP_AND,
+                    BinOp::BitOr => layout::BIGINT_OP_OR,
+                    BinOp::BitXor => layout::BIGINT_OP_XOR,
+                    BinOp::Shl => layout::BIGINT_OP_SHL,
+                    BinOp::Shr => layout::BIGINT_OP_SHR,
+                    _ => return Err(internal("a checked bigint operator is one of these")),
+                };
+                let mutator = self.mutator();
+                let op = self.word_const(op | flags);
+                self.fallible_runtime(
+                    Runtime::BigintBinary,
+                    &[mutator, op, left_value, right_value],
+                )
+            }
             BinaryMode::String if op == BinOp::Add => self.concat(&[left_value, right_value]),
             BinaryMode::String if matches!(op, BinOp::Eq | BinOp::Ne) => {
                 let equal = self
@@ -3359,6 +3479,10 @@ impl<'a, 'db> Translator<'a, 'db> {
         let value = self.operand(operand)?;
         Ok(match (op, &ty) {
             (UnaryOp::Neg, NativeTy::Float) => self.builder.ins().fneg(value),
+            (UnaryOp::Neg, NativeTy::Bigint) => {
+                let mutator = self.mutator();
+                self.fallible_runtime(Runtime::BigintNeg, &[mutator, value])?
+            }
             (UnaryOp::Neg, _) => self.builder.ins().ineg(value),
             // False, null, zero and 0.0 are the falsy scalars; NaN is truthy.
             (UnaryOp::Truthy, NativeTy::Bool) => value,
@@ -3453,6 +3577,9 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let mutator = self.mutator();
                 match ty {
                     NativeTy::String => Ok(value),
+                    NativeTy::Bigint => self
+                        .call_runtime(Runtime::StringFromBigint, &[mutator, value])?
+                        .ok_or_else(|| internal("bigint to string returns a string")),
                     NativeTy::Int => self
                         .call_runtime(Runtime::StringFromInt, &[mutator, value])?
                         .ok_or_else(|| internal("int to string returns a string")),
@@ -3799,9 +3926,30 @@ impl<'a, 'db> Translator<'a, 'db> {
                 target,
                 ..
             } => self.await_future(future, destination, *target)?,
+            // A checked system operation is the sleep.
+            Terminator::SysOp {
+                args,
+                destination,
+                target,
+                ..
+            } => {
+                let delay = self.operand(&args[0])?;
+                let nanos = self
+                    .call_runtime(Runtime::BigintToNanos, &[delay])?
+                    .ok_or_else(|| internal("a count of nanoseconds is an int"))?;
+                self.call_runtime(Runtime::Sleep, &[nanos])?;
+                let null = self.null();
+                let expected = self.place_ty(destination)?;
+                let null = self.coerce(null, &NativeTy::Null, &expected)?;
+                self.write_place(destination, null)?;
+                let target = self.block(*target);
+                self.builder.ins().jump(target, &[]);
+            }
             Terminator::Throw { value } => self.throw(value)?,
             Terminator::Rethrow { value, context } => self.rethrow(value, context)?,
-            _ => return Err(internal("a checked terminator is supported")),
+            Terminator::AwaitAny { .. } => {
+                return Err(internal("a checked terminator is supported"));
+            }
         }
         Ok(())
     }

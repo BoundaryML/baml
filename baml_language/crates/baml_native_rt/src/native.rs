@@ -64,6 +64,8 @@ pub trait Element {
 
 /// A string.
 pub struct Str;
+/// A `bigint`.
+pub struct Big;
 /// An array of `E`.
 pub struct Arr<E>(PhantomData<E>);
 /// A class instance.
@@ -88,6 +90,9 @@ pub struct TypeId(pub u32);
 
 impl Managed for Str {
     type View<'a> = StrRef<'a>;
+}
+impl Managed for Big {
+    type View<'a> = BigRef<'a>;
 }
 impl<E: Element> Managed for Arr<E> {
     type View<'a> = ArrRef<'a, E>;
@@ -133,6 +138,27 @@ impl<M: Managed> Element for M {
     unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
         // SAFETY: the caller's contract.
         unsafe { M::View::from_raw(word) }
+    }
+}
+
+/// A view of a `bigint`.
+#[derive(Clone, Copy)]
+pub struct BigRef<'a>(usize, PhantomData<&'a ()>);
+
+impl<'a> View<'a> for BigRef<'a> {
+    unsafe fn from_raw(raw: usize) -> Self {
+        Self(raw, PhantomData)
+    }
+    fn raw(self) -> usize {
+        self.0
+    }
+}
+
+impl BigRef<'_> {
+    /// The value, read out of the object.
+    pub fn value(self) -> num_bigint::BigInt {
+        // SAFETY: a view is of a live object of its type.
+        unsafe { crate::bigint::value(self.0) }
     }
 }
 
@@ -580,6 +606,32 @@ impl<'s> Scope<'s> {
         unsafe { self.root_raw(string) }
     }
 
+    /// A new `bigint` holding `value`, or the `baml.panics.AllocFailure` of
+    /// one past the limit. May collect.
+    pub fn alloc_big(&mut self, value: &num_bigint::BigInt) -> Result<Root<'s, Big>, Thrown<'s>> {
+        match crate::bigint::checked(self.mutator, value) {
+            // SAFETY: just made.
+            Ok(object) => Ok(unsafe { self.root_raw(object) }),
+            // SAFETY: just made.
+            Err(thrown) => Err(Thrown(unsafe { self.root_raw(thrown) })),
+        }
+    }
+
+    /// A new `bigint` holding `value`, which is known to be within the
+    /// limit. May collect.
+    pub fn make_big(&mut self, value: &num_bigint::BigInt) -> Root<'s, Big> {
+        let object = crate::bigint::make(self.mutator, value);
+        // SAFETY: just made.
+        unsafe { self.root_raw(object) }
+    }
+
+    /// Throw `baml.panics.AllocFailure`.
+    pub fn alloc_failure(&mut self, message: &str) -> Thrown<'s> {
+        let thrown = crate::bigint::alloc_failure(self.mutator, message);
+        // SAFETY: just made.
+        Thrown(unsafe { self.root_raw(thrown) })
+    }
+
     /// A new array of `length` elements, each zero: `0`, `0.0`, `false`, or
     /// no object. May collect.
     pub fn alloc_array<E: Element>(&mut self, length: usize) -> Root<'s, Arr<E>> {
@@ -974,6 +1026,7 @@ impl NewArray<'_, Bool> {
 pub struct Natives;
 
 mod array;
+mod bigint;
 mod float;
 mod int;
 mod json;
@@ -990,8 +1043,8 @@ mod string;
 mod generated {
     #[allow(unused_imports, reason = "what the listed natives need varies")]
     use super::{
-        Arr, ArrRef, Bool, Elem, Float, Int, Map, MapRef, Natives, OptionalScalar, Root, RootSlots,
-        RtResult, Scope, Slot, Str, StrRef, Thrown, TypeId, View,
+        Arr, ArrRef, Big, BigRef, Bool, Elem, Float, Int, Map, MapRef, Natives, OptionalScalar,
+        Root, RootSlots, RtResult, Scope, Slot, Str, StrRef, Thrown, TypeId, View,
     };
     use crate::heap::{Mutator, current_frame};
 

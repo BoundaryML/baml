@@ -1,0 +1,7 @@
+# Natives of `baml.Bigint`, implemented in `src/native/bigint.rs`.
+baml.Bigint.abs reentrant
+baml.Bigint.isqrt reentrant
+baml.Bigint.pow reentrant
+baml.Bigint.ilog reentrant
+baml.Bigint.to_int reentrant
+baml.Bigint.parse reentrant

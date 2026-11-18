@@ -19,6 +19,7 @@ fn abi_param(ty: &Ty) -> Option<AbiParam> {
         // one; any other optional is a reference.
         Ty::Int
         | Ty::String
+        | Ty::Bigint
         | Ty::Array(_)
         | Ty::Map
         | Ty::Optional(_)
@@ -186,6 +187,7 @@ impl<'db> Translator<'_, 'db> {
                 Ty::BoxedElem(_) => self.unboxed_result(bits, &produced),
                 Ty::Int
                 | Ty::String
+                | Ty::Bigint
                 | Ty::Array(_)
                 | Ty::Map
                 | Ty::Optional(_)

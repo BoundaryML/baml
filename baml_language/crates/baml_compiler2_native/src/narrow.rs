@@ -103,6 +103,7 @@ impl<'db> TestKind<'db> {
             TyTemplate::Float => NativeTy::Float,
             TyTemplate::Bool => NativeTy::Bool,
             TyTemplate::String => NativeTy::String,
+            TyTemplate::Bigint => NativeTy::Bigint,
             TyTemplate::Null => NativeTy::Null,
             TyTemplate::List(_) => return Some(Self::AnyArray),
             TyTemplate::TypeArgRef(slot) => match arguments.get(*slot as usize)?.clone()? {
@@ -162,6 +163,7 @@ impl<'db> TestKind<'db> {
             typetag::FLOAT => Self::Exactly(NativeTy::Float),
             typetag::BOOL => Self::Exactly(NativeTy::Bool),
             typetag::STRING => Self::Exactly(NativeTy::String),
+            typetag::BIGINT => Self::Exactly(NativeTy::Bigint),
             typetag::NULL => Self::Exactly(NativeTy::Null),
             typetag::LIST => Self::AnyArray,
             typetag::PANIC => Self::Panic,
@@ -199,6 +201,10 @@ struct State<'db> {
     constants: HashMap<usize, bool>,
     /// Locals holding the type tag just read of another local.
     tags: HashMap<usize, usize>,
+    /// Boxed locals holding the value another boxed local holds: assigned
+    /// from it, with neither assigned since. A `match` that binds tests the
+    /// copy and reads the original in the arm the test leaves.
+    copies: HashMap<usize, usize>,
 }
 
 struct Analysis<'a, 'b, 'db> {
@@ -248,6 +254,16 @@ impl<'db> Analysis<'_, '_, 'db> {
         if !self.is_boxed(local) {
             return;
         }
+        // What is learnt of a copy is learnt of what it copies.
+        if let Some(original) = state.copies.get(&local).copied()
+            && original != local
+        {
+            self.refine_one(state, original, test, passes);
+        }
+        self.refine_one(state, local, test, passes);
+    }
+
+    fn refine_one(&self, state: &mut State<'db>, local: usize, test: &TestKind<'db>, passes: bool) {
         match (self.fact(state, local), test) {
             (Some(mut members), _) => {
                 members.retain(|member| test.matches(member) == passes);
@@ -281,6 +297,8 @@ impl<'db> Analysis<'_, '_, 'db> {
             .retain(|_, condition| condition.local != local);
         state.tags.remove(&local);
         state.tags.retain(|_, read| *read != local);
+        state.copies.remove(&local);
+        state.copies.retain(|_, original| *original != local);
     }
 
     /// The members an operand's value can be.
@@ -397,6 +415,15 @@ impl<'db> Analysis<'_, '_, 'db> {
         Self::kill(state, destination.0);
         if let Rvalue::TypeTag(Place::Local(read)) = value {
             state.tags.insert(destination.0, read.0);
+        }
+        if let Rvalue::Use(Operand::Copy(Place::Local(original))) = value
+            && original != destination
+            && self.is_boxed(destination.0)
+            && self.is_boxed(original.0)
+        {
+            // A copy of a copy is a copy of the first.
+            let original = state.copies.get(&original.0).copied().unwrap_or(original.0);
+            state.copies.insert(destination.0, original);
         }
         if let Some(constant) = constant {
             state.constants.insert(destination.0, constant);

@@ -174,8 +174,36 @@ pub const TYPE_ENTRIES_VALUE_REF: usize = 272;
 pub const TYPE_ENTRIES_REFS: usize = 296;
 /// What a `spawn` returns and an `await` waits on: see [`FUTURE_STATE`].
 pub const TYPE_FUTURE: usize = 320;
+/// A `bigint`: see [`BIGINT_LIMBS`]. The collector copies it as it does an
+/// array's storage of values: a count of words and that many words, none a
+/// reference.
+pub const TYPE_BIGINT: usize = 336;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 336;
+pub const FIRST_CLASS_TYPE: usize = 352;
+
+/// A `bigint` is a header, the number of its limbs and the limbs: 64-bit
+/// words, least significant first, in two's complement, as few as hold the
+/// value with its sign and never none. Two that are equal are the same
+/// words.
+pub const BIGINT_LIMB_COUNT: usize = STORAGE_CAPACITY;
+pub const BIGINT_LIMBS: usize = STORAGE_ELEMENTS;
+
+/// The operators of `baml_rt_bigint_binary`, in the low byte of its
+/// `op`.
+pub const BIGINT_OP_ADD: usize = 0;
+pub const BIGINT_OP_SUB: usize = 1;
+pub const BIGINT_OP_MUL: usize = 2;
+pub const BIGINT_OP_DIV: usize = 3;
+pub const BIGINT_OP_REM: usize = 4;
+pub const BIGINT_OP_AND: usize = 5;
+pub const BIGINT_OP_OR: usize = 6;
+pub const BIGINT_OP_XOR: usize = 7;
+pub const BIGINT_OP_SHL: usize = 8;
+pub const BIGINT_OP_SHR: usize = 9;
+/// Set in an `op` whose left operand is an `int`, not a `bigint` object.
+pub const BIGINT_LEFT_IS_INT: usize = 1 << 8;
+/// Set in an `op` whose right operand is an `int`.
+pub const BIGINT_RIGHT_IS_INT: usize = 1 << 9;
 
 /// A map is a header, whose high half is kept for a lock word, and four
 /// words: the number of keys it has and of records used, dead ones
@@ -304,6 +332,10 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     FUTURE_SIZE as u32,
     0,
     0,
+    KIND_VALUES,
+    0,
+    0,
+    0,
 ];
 
 const _: () = {
@@ -325,7 +357,9 @@ const _: () = {
     assert!(TYPE_ENTRIES_REFS + TYPE_HEADER + 2 * 4 == TYPE_FUTURE);
     assert!(RUNTIME_TYPES[TYPE_FUTURE / 4] == KIND_FUTURE);
     assert!(RUNTIME_TYPES[TYPE_FUTURE / 4 + 1] == FUTURE_SIZE as u32);
-    assert!(TYPE_FUTURE + TYPE_HEADER == FIRST_CLASS_TYPE);
+    assert!(TYPE_FUTURE + TYPE_HEADER == TYPE_BIGINT);
+    assert!(RUNTIME_TYPES[TYPE_BIGINT / 4] == KIND_VALUES);
+    assert!(TYPE_BIGINT + TYPE_HEADER == FIRST_CLASS_TYPE);
     // A string's cached hash is in the bits every object has free, below
     // the flags.
     assert!((STRING_HASH_MASK as usize) << 32 & (HEADER_FLAGS | TYPE_ID_MASK | 7) == 0);
@@ -372,6 +406,7 @@ pub const WELL_KNOWN_DIVISION_BY_ZERO: usize = 0;
 pub const WELL_KNOWN_INDEX_OUT_OF_BOUNDS: usize = 1;
 pub const WELL_KNOWN_MAP_KEY_NOT_FOUND: usize = 3;
 pub const WELL_KNOWN_STACK_OVERFLOW: usize = 4;
+pub const WELL_KNOWN_ALLOC_FAILURE: usize = 10;
 pub const WELL_KNOWN_NEGATIVE_BIT_SHIFT: usize = 12;
 pub const WELL_KNOWN_INVALID_ARGUMENT: usize = 16;
 pub const WELL_KNOWN_PARSE_ERROR: usize = 17;
