@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import unittest
 import zipfile
 
@@ -20,7 +21,7 @@ from scripts.baml_release_platforms import (
 
 
 ROOT = Path(__file__).resolve().parents[2]
-VERSION = "9.8.7"
+VERSION = tomllib.loads((ROOT / "baml_language/wrapper/baml.toml").read_text())["package"]["version"]
 
 
 class WrapperReleasePackingTests(unittest.TestCase):
@@ -53,7 +54,7 @@ class WrapperReleasePackingTests(unittest.TestCase):
             "target = args[args.index('--target') + 1]\n"
             "host = pathlib.Path(args[args.index('--host-binary') + 1])\n"
             "assert host.read_text() == target\n"
-            "payload = dict(target=target, project=manifest['boundary']['project'],\n"
+            "payload = dict(target=target, version=manifest['package']['version'], project=manifest['boundary']['project'],\n"
             "    environment=manifest['pack']['build']['embed_telemetry_env'],\n"
             "    key_variable=manifest['pack']['build']['embed_telemetry_api_key_from_env_var'],\n"
             "    source=(project / 'baml_src/build.baml').read_text())\n"
@@ -61,10 +62,10 @@ class WrapperReleasePackingTests(unittest.TestCase):
         )
         cli.chmod(0o755)
 
-    def pack(self, *, check=True):
+    def pack(self, *, check=True, version=VERSION):
         return subprocess.run(
             [sys.executable, ROOT / "scripts/baml-pack-wrapper-release",
-             "--toolchains", self.toolchains, "--out", self.output, "--version", VERSION],
+             "--toolchains", self.toolchains, "--out", self.output, "--version", version],
             env=self.environment, capture_output=True, text=True, check=check,
         )
 
@@ -95,10 +96,33 @@ class WrapperReleasePackingTests(unittest.TestCase):
                     self.assertEqual(payload["project"], "test-org/wrapper")
                     self.assertEqual(payload["environment"], "Test")
                     self.assertEqual(payload["key_variable"], "BAML_WRAPPER_BOUNDARY_API_KEY")
-                    self.assertIn(f'"{VERSION}"', payload["source"])
+                    self.assertEqual(payload["version"], VERSION)
+                    self.assertNotIn("wrapper_version", payload["source"])
                     enabled = "true" if variant == "self-update" else "false"
                     self.assertIn(f"function self_update_enabled() -> bool {{\n    {enabled}\n}}", payload["source"])
                     self.assertEqual(license_text, (ROOT / "LICENSE").read_bytes())
+
+    def test_version_tool_updates_only_the_manifest_package_version(self):
+        scripts = self.root / "scripts"
+        scripts.mkdir()
+        tool = scripts / "baml-wrapper-version"
+        tool.write_bytes((ROOT / "scripts/baml-wrapper-version").read_bytes())
+        wrapper = self.root / "baml_language/wrapper"
+        wrapper.mkdir(parents=True)
+        manifest = wrapper / "baml.toml"
+        original = '[package]\nname = "wrapper"\nversion = "1.2.3"\n[boundary]\nproject = "org/wrapper"\n'
+        manifest.write_text(original)
+        release = wrapper / "release.toml"
+        release.write_text('[posthog]\nhost = "https://example.invalid"\n')
+        subprocess.run([sys.executable, tool, "bump", "--patch"], check=True)
+        self.assertEqual(manifest.read_text(), original.replace('"1.2.3"', '"1.2.4"'))
+        self.assertEqual(release.read_text(), '[posthog]\nhost = "https://example.invalid"\n')
+
+    def test_mismatched_release_version_fails_before_packing(self):
+        result = self.pack(check=False, version="99.98.97")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("release version must match wrapper/baml.toml package.version", result.stderr)
+        self.assertFalse(self.output.exists())
 
     def test_missing_host_fails_before_producing_any_archives(self):
         host = next(self.toolchains.rglob("baml-pack-host.exe"))

@@ -276,7 +276,7 @@ jobs:
           wrapper_version="$(python3 - <<'PY'
           import tomllib
           from pathlib import Path
-          print(tomllib.loads(Path("baml_language/wrapper/release.toml").read_text())["package"]["version"])
+          print(tomllib.loads(Path("baml_language/wrapper/baml.toml").read_text())["package"]["version"])
           PY
           )"
           latest=""

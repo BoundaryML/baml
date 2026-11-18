@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import tarfile
 import tempfile
+import tomllib
 import zipfile
 
 from baml_release_platforms import load_wrapper_targets, verify_wrapper_artifacts
@@ -21,6 +22,9 @@ def main():
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--version", required=True)
     args = parser.parse_args()
+    manifest = tomllib.loads((ROOT / "baml_language/wrapper/baml.toml").read_text())
+    if args.version != manifest["package"]["version"]:
+        parser.error("release version must match wrapper/baml.toml package.version")
 
     for setting in ("BAML_WRAPPER_BOUNDARY_API_KEY", "BAML_WRAPPER_BCS_PROJECT", "BAML_WRAPPER_BCS_ENVIRONMENT"):
         if not os.environ.get(setting, "").strip():
@@ -55,8 +59,6 @@ def main():
                     str(hosts[target.triple]),
                     "--target",
                     target.triple,
-                    "--version",
-                    args.version,
                     "--output",
                     str(binary),
                     "--embed-telemetry",

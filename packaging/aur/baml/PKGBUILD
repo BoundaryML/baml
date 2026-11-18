@@ -31,7 +31,6 @@ build() {
     python wrapper/build \
         --cli target/release/baml-cli \
         --pack-host target/release/baml-pack-host \
-        --version __VERSION_ORIG__ \
         --no-self-update \
         --output target/release/baml
 }

@@ -292,7 +292,7 @@ class WrapperInvocation {
     }
 
     function print_version(self, flag: string) -> null {
-        baml.io.println(`baml wrapper ${wrapper_version()}`);
+        baml.io.println(`baml wrapper ${trace.current_context().metadata["baml.ctx.app_version"]}`);
         let exit_code = self.run_cli_version(
             flag,
             $trace = trace.span(inputs = false, output = false, error = false),

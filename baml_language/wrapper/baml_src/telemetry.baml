@@ -129,7 +129,7 @@ class WrapperTelemetry {
             "$process_person_profile": false,
             "$session_id": self.session_id,
             "project_id": self.project_id,
-            "wrapper_version": wrapper_version(),
+            "wrapper_version": trace.current_context().metadata["baml.ctx.app_version"],
             "client": "baml-in-baml",
             "command": self.command_name,
             "system_platform": self.host.platform,

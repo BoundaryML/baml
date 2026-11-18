@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WRAPPER_RELEASE_TOML = ROOT / "baml_language" / "wrapper" / "release.toml"
+WRAPPER_MANIFEST = ROOT / "baml_language" / "wrapper" / "baml.toml"
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
@@ -47,13 +47,13 @@ def fail(message: str) -> None:
 
 
 def read_version() -> Version:
-    text = WRAPPER_RELEASE_TOML.read_text(encoding="utf-8")
+    text = WRAPPER_MANIFEST.read_text(encoding="utf-8")
     section = re.search(r"(?ms)^\[package\]\s*(.*?)(?:^\[|\Z)", text)
     if not section:
-        fail("wrapper release.toml must contain a [package] table")
+        fail("wrapper baml.toml must contain a [package] table")
     match = re.search(r'^version = "([^"]+)"$', section.group(1), flags=re.MULTILINE)
     if not match:
-        fail("wrapper release.toml must contain literal [package].version")
+        fail("wrapper baml.toml must contain literal [package].version")
     try:
         return Version.parse(match.group(1))
     except ValueError as exc:
@@ -61,7 +61,7 @@ def read_version() -> Version:
 
 
 def write_version(version: Version) -> None:
-    text = WRAPPER_RELEASE_TOML.read_text(encoding="utf-8")
+    text = WRAPPER_MANIFEST.read_text(encoding="utf-8")
     new_text, count = re.subn(
         r'^version = "[^"]+"$',
         f'version = "{version}"',
@@ -71,7 +71,7 @@ def write_version(version: Version) -> None:
     )
     if count != 1:
         fail("failed to update wrapper version")
-    WRAPPER_RELEASE_TOML.write_text(new_text, encoding="utf-8")
+    WRAPPER_MANIFEST.write_text(new_text, encoding="utf-8")
 
 
 def check() -> None:

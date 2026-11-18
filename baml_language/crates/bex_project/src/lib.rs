@@ -223,7 +223,8 @@ pub fn prepare(
                 name: format!("root path: {error}"),
             })?;
     let is_manifest = |path: &crate::fs::FsPath| {
-        path.as_path() == std::path::Path::new("baml.toml")
+        let relative = path.as_path().strip_prefix(".").unwrap_or(path.as_path());
+        relative == std::path::Path::new("baml.toml")
             || path.as_path() == std::path::Path::new(manifest_path.as_str())
     };
     let mut manifests = files.iter().filter(|(path, _)| is_manifest(path));
@@ -332,7 +333,7 @@ mod bytecode_artifact_tests {
         let root = vfs::VfsPath::new(vfs::MemoryFS::new())
             .join("project")
             .unwrap();
-        for path in ["baml.toml", "/project/baml.toml"] {
+        for path in ["baml.toml", "./baml.toml", "/project/baml.toml"] {
             let mut files = HashMap::from([
                 (
                     FsPath::from_str("main.baml".to_owned()),
@@ -363,17 +364,16 @@ mod bytecode_artifact_tests {
                 Err(RuntimeError::InvalidArgument { .. })
             ));
         }
-        let files = HashMap::from([
-            (FsPath::from_str("baml.toml".to_owned()), String::new()),
-            (
-                FsPath::from_str("/project/baml.toml".to_owned()),
-                String::new(),
-            ),
-        ]);
-        assert!(matches!(
-            prepare(root, sys_ops::SysOps::native(), files),
-            Err(RuntimeError::InvalidArgument { .. })
-        ));
+        for path in ["./baml.toml", "/project/baml.toml"] {
+            let files = HashMap::from([
+                (FsPath::from_str("baml.toml".to_owned()), String::new()),
+                (FsPath::from_str(path.to_owned()), String::new()),
+            ]);
+            assert!(matches!(
+                prepare(root.clone(), sys_ops::SysOps::native(), files),
+                Err(RuntimeError::InvalidArgument { .. })
+            ));
+        }
         let prepared = prepare(
             vfs::VfsPath::new(vfs::MemoryFS::new()),
             sys_ops::SysOps::native(),

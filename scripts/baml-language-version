@@ -46,7 +46,7 @@ RUBY_BRIDGE_VERSION = (
     / "bridge"
     / "version.rb"
 )
-WRAPPER_RELEASE_TOML = ROOT / "baml_language" / "wrapper" / "release.toml"
+WRAPPER_MANIFEST = ROOT / "baml_language" / "wrapper" / "baml.toml"
 CSHARP_PROJECT = (
     ROOT
     / "baml_language"
@@ -1068,7 +1068,7 @@ def check_release() -> None:
         if allowed:
             mismatches.append("deprecated version plumbing:\n" + "\n".join(allowed))
 
-    wrapper_toml = WRAPPER_RELEASE_TOML.read_text(encoding="utf-8")
+    wrapper_toml = WRAPPER_MANIFEST.read_text(encoding="utf-8")
     if not re.search(r'^version = "(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"$', wrapper_toml, flags=re.MULTILINE):
         mismatches.append("wrapper version must be literal MAJOR.MINOR.PATCH SemVer")
 
