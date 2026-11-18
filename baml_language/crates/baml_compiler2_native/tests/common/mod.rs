@@ -101,9 +101,11 @@ pub(crate) struct Way {
     pub(crate) variables: &'static [&'static str],
 }
 
-/// As a program ships. Then, on the runtime with checks: collecting on
-/// every allocation, with every task that stops going on on another thread
-/// and under a worker at another address, and both.
+/// As a program ships, and so collecting on every allocation. Then, on
+/// the runtime with checks: with every task that stops going on on another
+/// thread and under a worker at another address, and that while collecting
+/// on every allocation, where every collection also checks that each
+/// compiled frame has a stack map.
 pub(crate) const WAYS: [Way; 4] = [
     Way {
         name: "native",
@@ -112,7 +114,7 @@ pub(crate) const WAYS: [Way; 4] = [
     },
     Way {
         name: "collecting always",
-        checked: true,
+        checked: false,
         variables: &["BAML_GC_STRESS"],
     },
     Way {

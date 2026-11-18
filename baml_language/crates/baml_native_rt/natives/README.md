@@ -169,9 +169,11 @@ the compiler's `link.rs`.
 
 ## The runtime tests link, and migration stress
 
-The compiler builds each runtime a second time with the `checks` feature,
-and a test links that one (`RuntimeBuild::Checked`, or `native_pack
---checked`). A program ships with the other.
+The compiler builds each runtime a second time with the `checks` feature
+(`RuntimeBuild::Checked`, or `native_pack --checked`). A program ships with
+the other. The conformance suites run every case on both: as it ships,
+plain and collecting on every allocation, and on the one with checks,
+migrating and migrating while collecting on every allocation.
 
 With `BAML_MIGRATE_STRESS` set, the runtime with checks serves as its one
 worker on two threads in turns: every task that stops (an `await`, a sleep,
