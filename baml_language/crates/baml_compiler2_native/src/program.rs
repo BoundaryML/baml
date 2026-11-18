@@ -9,8 +9,9 @@ use baml_compiler2_mir::{MirFunction, lower_function};
 
 use crate::{
     Blocker,
-    check::{OPT, check_function},
-    types::{NativeTy, TypeArg},
+    check::{Dispatched, OPT, check_function, function_signature, identified_arguments},
+    dispatch::{self, Slot, Target},
+    types::{NativeTy, Signature, TypeArg, assignable, type_argument},
 };
 
 /// How a compiled function is entered.
@@ -98,12 +99,47 @@ pub(crate) struct ProgramFunction<'db> {
     /// What the cells a lambda captures hold, in capture order.
     pub(crate) captures: Vec<NativeTy<'db>>,
     pub(crate) blockers: Vec<Blocker>,
+    dispatched: Vec<Dispatched<'db>>,
+    constructed: Vec<NativeTy<'db>>,
+}
+
+/// One interface method that some call dispatches when it runs.
+pub(crate) struct SlotInfo<'db> {
+    pub(crate) slot: Slot,
+    /// Its column in the method table. Methods no one type has both of
+    /// share a column.
+    pub(crate) column: usize,
+    /// The parameters after the receiver, and the result, of every
+    /// implementation.
+    pub(crate) signature: Signature<'db>,
+    /// Whether some type leaves the method to the language's own
+    /// `to_string`, for which its row holds no code.
+    pub(crate) falls_back: bool,
 }
 
 /// Reachable functions in breadth-first order; the entry is first.
 pub(crate) struct Program<'db> {
     pub(crate) functions: Vec<ProgramFunction<'db>>,
     pub(crate) index: HashMap<FnKey<'db>, usize>,
+    pub(crate) slots: Vec<SlotInfo<'db>>,
+    /// The method table's rows: for a type, the function behind each slot
+    /// (by position in `slots`) it implements in source.
+    pub(crate) rows: Vec<(NativeTy<'db>, Vec<(usize, FnKey<'db>)>)>,
+    /// A row is `8 << column_shift` bytes: the columns, rounded up to a
+    /// power of two.
+    pub(crate) column_shift: u8,
+}
+
+/// A type as a row of the method table is for it: instantiations of a
+/// class that share a type id are one.
+fn row_type<'db>(ty: &NativeTy<'db>) -> NativeTy<'db> {
+    match ty {
+        NativeTy::Class(class, arguments) => NativeTy::Class(
+            *class,
+            arguments.iter().cloned().map(type_argument).collect(),
+        ),
+        other => other.clone(),
+    }
 }
 
 pub(crate) fn collect<'db>(
@@ -113,11 +149,194 @@ pub(crate) fn collect<'db>(
     let mut program = Program {
         functions: Vec::new(),
         index: HashMap::new(),
+        slots: Vec::new(),
+        rows: Vec::new(),
+        column_shift: 0,
     };
     let mut queue = VecDeque::from([Needed {
         key: FnKey::new(entry, Entry::Direct),
         captures: Vec::new(),
     }]);
+    // Each dispatched method, and what it runs on each type an interface
+    // value can hold. An implementation is itself a function to compile,
+    // which can make more types and dispatch more methods.
+    let mut calls: Vec<(Slot, baml_compiler2_mir::TyTemplateInterface, String)> = Vec::new();
+    let mut resolved: Vec<(usize, NativeTy<'db>, Option<Target<'db>>)> = Vec::new();
+    let mut unsupported = Vec::new();
+    loop {
+        visit(db, &mut program, &mut queue);
+        let mut types = vec![
+            NativeTy::String,
+            NativeTy::Int,
+            NativeTy::Float,
+            NativeTy::Bool,
+        ];
+        for function in &program.functions {
+            for ty in function.constructed.iter().map(row_type) {
+                if !types.contains(&ty) {
+                    types.push(ty);
+                }
+            }
+            for call in &function.dispatched {
+                if !calls.iter().any(|(slot, ..)| *slot == call.slot) {
+                    calls.push((
+                        call.slot.clone(),
+                        call.interface.clone(),
+                        call.method.clone(),
+                    ));
+                }
+            }
+        }
+        for (index, (_, interface, method)) in calls.iter().enumerate() {
+            for ty in &types {
+                if resolved
+                    .iter()
+                    .any(|(slot, known, _)| *slot == index && known == ty)
+                {
+                    continue;
+                }
+                let target =
+                    dispatch::resolve(db, ty, interface, method, &[]).unwrap_or_else(|blocker| {
+                        unsupported.push(blocker);
+                        None
+                    });
+                if let Some(Target::Function(key)) = &target {
+                    queue.push_back(Needed {
+                        key: key.clone(),
+                        captures: Vec::new(),
+                    });
+                }
+                resolved.push((index, ty.clone(), target));
+            }
+        }
+        if queue.is_empty() {
+            break;
+        }
+    }
+    unsupported.extend(lay_out_methods(db, &mut program, &calls, &resolved));
+    if let Some(entry) = program.functions.first_mut() {
+        entry.blockers.extend(unsupported);
+    }
+    program
+}
+
+/// Give each dispatched method its signature and its column, each type its
+/// row, and check every dispatching call against the signature.
+fn lay_out_methods<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    program: &mut Program<'db>,
+    calls: &[(Slot, baml_compiler2_mir::TyTemplateInterface, String)],
+    resolved: &[(usize, NativeTy<'db>, Option<Target<'db>>)],
+) -> Vec<Blocker> {
+    let mut blockers = Vec::new();
+    let mut implementors: Vec<Vec<&NativeTy<'db>>> = Vec::new();
+    for (index, (slot, _, method)) in calls.iter().enumerate() {
+        let unsupported =
+            |detail: &str| Blocker::new("interface method call", format!("{method}: {detail}"));
+        let mut signature = None;
+        let mut falls_back = false;
+        let mut with_code = Vec::new();
+        for (_, ty, target) in resolved.iter().filter(|(slot, ..)| *slot == index) {
+            let key = match target {
+                Some(Target::Function(key)) => key,
+                Some(Target::ToString) => {
+                    falls_back = true;
+                    continue;
+                }
+                None => continue,
+            };
+            // The receiver arrives as the reference the interface value is.
+            if !ty.is_ref() {
+                blockers.push(unsupported(
+                    "implemented in source for a type kept in a box",
+                ));
+                continue;
+            }
+            if identified_arguments(db, key).contains(&true) {
+                blockers.push(unsupported("a default body that tests its type argument"));
+                continue;
+            }
+            let Ok(mut found) = function_signature(db, key) else {
+                // Reported as its own blocked function.
+                continue;
+            };
+            if found.params.is_empty() {
+                blockers.push(unsupported("without a receiver"));
+                continue;
+            }
+            found.params.remove(0);
+            match &signature {
+                None => signature = Some(found),
+                Some(known) if *known != found => {
+                    blockers.push(unsupported("implementations with different layouts"));
+                    continue;
+                }
+                Some(_) => {}
+            }
+            with_code.push(ty);
+            match program.rows.iter_mut().find(|(row, _)| row == ty) {
+                Some((_, methods)) => methods.push((index, key.clone())),
+                None => program.rows.push((ty.clone(), vec![(index, key.clone())])),
+            }
+        }
+        let to_string = Slot::to_string_signature();
+        if falls_back && signature.as_ref().is_some_and(|known| *known != to_string) {
+            blockers.push(unsupported("implementations with different layouts"));
+        }
+        // Methods share a column when no type has code for both.
+        let column = (0..=program.slots.len())
+            .find(|column| {
+                !program
+                    .slots
+                    .iter()
+                    .zip(&implementors)
+                    .any(|(other, theirs)| {
+                        other.column == *column && theirs.iter().any(|ty| with_code.contains(ty))
+                    })
+            })
+            .unwrap_or(0);
+        implementors.push(with_code);
+        program.slots.push(SlotInfo {
+            slot: slot.clone(),
+            column,
+            signature: signature.unwrap_or(to_string),
+            falls_back,
+        });
+    }
+    let columns = program.slots.iter().map(|slot| slot.column + 1).max();
+    program.column_shift = columns.map_or(0, |columns| {
+        u8::try_from(columns.next_power_of_two().trailing_zeros()).unwrap_or(u8::MAX)
+    });
+    for function in &mut program.functions {
+        for call in &function.dispatched {
+            let Some(slot) = program.slots.iter().find(|slot| slot.slot == call.slot) else {
+                continue;
+            };
+            let fits = slot.signature.params.len() == call.arguments.len()
+                && slot
+                    .signature
+                    .params
+                    .iter()
+                    .zip(&call.arguments)
+                    .all(|(expected, found)| assignable(expected, found))
+                && assignable(&call.result, &slot.signature.result);
+            if !fits {
+                function.blockers.push(Blocker::new(
+                    "call that does not match its callee's layout",
+                    call.method.clone(),
+                ));
+            }
+        }
+    }
+    blockers
+}
+
+/// Check and record every function waiting in `queue`, and those they need.
+fn visit<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    program: &mut Program<'db>,
+    queue: &mut VecDeque<Needed<'db>>,
+) {
     while let Some(Needed { key, captures }) = queue.pop_front() {
         if let Some(&known) = program.index.get(&key) {
             // Every closure of one lambda captures the same cells.
@@ -155,6 +374,8 @@ pub(crate) fn collect<'db>(
                     mir: Some(mir),
                     captures,
                     blockers: checked.blockers,
+                    dispatched: checked.dispatched,
+                    constructed: checked.constructed,
                 }
             }
             Err(blocker) => ProgramFunction {
@@ -166,9 +387,10 @@ pub(crate) fn collect<'db>(
                 mir: None,
                 captures,
                 blockers: vec![blocker],
+                dispatched: Vec::new(),
+                constructed: Vec::new(),
             },
         };
         program.functions.push(function);
     }
-    program
 }

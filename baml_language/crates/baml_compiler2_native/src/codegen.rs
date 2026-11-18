@@ -47,9 +47,10 @@ use cranelift_object::{ObjectBuilder, ObjectModule};
 use crate::{
     CompileError, CompileOptions,
     check::{
-        Callee, Intrinsic, TypeTestPlan, body_of, call_target, identified_arguments,
-        is_intrinsic_call, narrow_bound, signature, type_test_plan,
+        Callee, Intrinsic, TypeTestPlan, Virtual, body_of, call_target, identified_arguments,
+        is_intrinsic_call, narrow_bound, signature, type_test_plan, virtual_target,
     },
+    dispatch::{Slot, Target},
     flow::{Flow, ProvenIndexes},
     layout,
     loops::{ArrayLoops, operand_local},
@@ -66,6 +67,8 @@ use crate::{
 pub(crate) const ENTRY_SYMBOL: &str = "baml_native_entry";
 /// The symbol of the table of stack maps the collector reads.
 pub(crate) const STACK_MAPS_SYMBOL: &str = "baml_native_stack_maps";
+/// The symbol of the table interface method calls load their code from.
+const METHODS_SYMBOL: &str = "baml_native_methods";
 /// The symbol of the table of types the collector reads.
 pub(crate) const TYPES_SYMBOL: &str = "baml_native_types";
 
@@ -167,6 +170,7 @@ enum Runtime {
     StringCmp,
     StringFromInt,
     StringFromFloat,
+    StringFromAny,
 }
 
 impl Runtime {
@@ -192,6 +196,7 @@ impl Runtime {
             Self::StringCmp => "baml_rt_string_cmp",
             Self::StringFromInt => "baml_rt_string_from_int",
             Self::StringFromFloat => "baml_rt_string_from_float",
+            Self::StringFromAny => "baml_rt_string_from_any",
         }
     }
 
@@ -212,7 +217,9 @@ impl Runtime {
             Self::PrintBool => (vec![byte], vec![]),
             Self::PanicIndexOutOfBounds => (vec![word, word], vec![]),
             Self::FloatRem => (vec![float, float], vec![float]),
-            Self::AllocSlow | Self::StringFromInt => (vec![word, word], vec![word]),
+            Self::AllocSlow | Self::StringFromInt | Self::StringFromAny => {
+                (vec![word, word], vec![word])
+            }
             Self::StringFromFloat => (vec![word, float], vec![word]),
             Self::ArrayNew | Self::StringConcat | Self::StringFromEnum => {
                 (vec![word, word, word], vec![word])
@@ -261,6 +268,8 @@ struct Backend<'db> {
     enum_types: HashMap<EnumRef<'db>, usize>,
     enum_boxes: HashMap<EnumRef<'db>, DataId>,
     bool_boxes: Option<DataId>,
+    /// The method table, once a call dispatches through it.
+    methods: Option<DataId>,
     strings: HashMap<String, DataId>,
     stack_maps: Vec<(FuncId, FunctionStackMaps)>,
 }
@@ -301,6 +310,7 @@ impl<'db> Backend<'db> {
             enum_types: HashMap::new(),
             enum_boxes: HashMap::new(),
             bool_boxes: None,
+            methods: None,
             strings: HashMap::new(),
             stack_maps: Vec::new(),
         })
@@ -546,6 +556,61 @@ impl<'db> Backend<'db> {
         Ok(id)
     }
 
+    fn methods(&mut self) -> Result<DataId, CompileError> {
+        if let Some(id) = self.methods {
+            return Ok(id);
+        }
+        let id = self
+            .module
+            .declare_data(METHODS_SYMBOL, Linkage::Local, false, false)
+            .map_err(internal)?;
+        self.methods = Some(id);
+        Ok(id)
+    }
+
+    /// Emit the method table: one row per `8` bytes of the type table, so
+    /// that a type id shifted by the program's column shift is the offset
+    /// of its type's row; a row is one code address per column, zero where
+    /// the type has no code for a method.
+    fn define_methods(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        program: &Program<'db>,
+        declared: &HashMap<FnKey<'db>, Declared<'db>>,
+    ) -> Result<(), CompileError> {
+        let Some(id) = self.methods else {
+            return Ok(());
+        };
+        let mut entries = Vec::new();
+        for (ty, methods) in &program.rows {
+            let type_id = match ty {
+                NativeTy::String => layout::TYPE_STRING,
+                NativeTy::Class(class, arguments) => {
+                    let fields = class_layout(db, *class, arguments).map_err(internal)?;
+                    self.class_type(*class, arguments, &fields)
+                }
+                _ => return Err(internal("a method table row is for a reference type")),
+            };
+            for (slot, key) in methods {
+                let function = declared
+                    .get(key)
+                    .ok_or_else(|| internal("an implementation is part of the program"))?;
+                let column = program.slots[*slot].column;
+                entries.push((
+                    (type_id << program.column_shift) + column * layout::WORD,
+                    function.id,
+                ));
+            }
+        }
+        let mut description = DataDescription::new();
+        for (offset, function) in entries {
+            let function = self.module.declare_func_in_data(function, &mut description);
+            description.write_function_addr(table_word(offset), function);
+        }
+        let bytes = vec![0; self.types.len() << program.column_shift];
+        self.define_data(id, description, bytes)
+    }
+
     /// Emit the type table.
     fn define_types(&mut self) -> Result<(), CompileError> {
         let id = self
@@ -635,18 +700,26 @@ const UNCHECKED_LEAF_LOCALS: usize = 12;
 
 /// Whether a function must check the stack limit on entry: it calls
 /// another compiled function, or its frame may not be small.
-fn checks_stack<'db>(db: &'db dyn baml_compiler2_mir::Db, body: &MirFunctionBody<'db>) -> bool {
+fn checks_stack<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    body: &MirFunctionBody<'db>,
+    loops: &ArrayLoops<'db>,
+) -> bool {
     body.locals.len() > UNCHECKED_LEAF_LOCALS
         || body.blocks.iter().any(|block| match &block.terminator {
             Some(Terminator::Call { callee, .. }) => !is_intrinsic_call(db, callee),
+            // An interface method call, unless it is a step of a loop over
+            // an array, which is compiled in place.
+            Some(terminator @ Terminator::VirtualCall { .. }) => {
+                loops.start(terminator).is_none() && loops.step(terminator).is_none()
+            }
             Some(
                 Terminator::Goto { .. }
                 | Terminator::Branch { .. }
                 | Terminator::Switch { .. }
                 | Terminator::Return
                 | Terminator::Unreachable
-                | Terminator::ShortCircuit { .. }
-                | Terminator::VirtualCall { .. },
+                | Terminator::ShortCircuit { .. },
             )
             | None => false,
             Some(_) => true,
@@ -700,6 +773,7 @@ pub(crate) fn generate<'db>(
                 &Backend::clif_signature(&signature, function.key.entry, type_ids),
             )
             .map_err(internal)?;
+        let typed = Body::new(db, mir, body, &function.captures, &function.key);
         declared.insert(
             function.key.clone(),
             Declared {
@@ -707,14 +781,10 @@ pub(crate) fn generate<'db>(
                 entry: function.key.entry,
                 signature,
                 type_ids,
-                checks_stack: checks_stack(db, body),
+                checks_stack: checks_stack(db, body, &ArrayLoops::of(db, &typed)),
             },
         );
-        bodies.push((
-            function,
-            mir,
-            Body::new(db, mir, body, &function.captures, &function.key),
-        ));
+        bodies.push((function, mir, typed));
     }
 
     let entry = program
@@ -759,8 +829,8 @@ pub(crate) fn generate<'db>(
         Translator::new(
             db,
             &mut backend,
+            program,
             &declared,
-            &function.key,
             &body,
             &mut context.func,
             &mut builder_context,
@@ -799,6 +869,7 @@ pub(crate) fn generate<'db>(
         &mut disassembly,
     )?;
     backend.define_stack_maps()?;
+    backend.define_methods(db, program, &declared)?;
     backend.define_types()?;
 
     let object = backend.module.finish().emit().map_err(internal)?;
@@ -900,6 +971,7 @@ fn entry_shim(
 struct Translator<'a, 'db> {
     db: &'db dyn baml_compiler2_mir::Db,
     backend: &'a mut Backend<'db>,
+    program: &'a Program<'db>,
     declared: &'a HashMap<FnKey<'db>, Declared<'db>>,
     key: &'a FnKey<'db>,
     body: &'a Body<'a, 'db>,
@@ -946,8 +1018,8 @@ impl<'a, 'db> Translator<'a, 'db> {
     fn new(
         db: &'db dyn baml_compiler2_mir::Db,
         backend: &'a mut Backend<'db>,
+        program: &'a Program<'db>,
         declared: &'a HashMap<FnKey<'db>, Declared<'db>>,
-        key: &'a FnKey<'db>,
         body: &'a Body<'a, 'db>,
         function: &'a mut ir::Function,
         builder_context: &'a mut FunctionBuilderContext,
@@ -994,8 +1066,9 @@ impl<'a, 'db> Translator<'a, 'db> {
         Self {
             db,
             backend,
+            program,
             declared,
-            key,
+            key: body.key,
             body,
             builder,
             closure,
@@ -2954,26 +3027,40 @@ impl<'a, 'db> Translator<'a, 'db> {
                         (self.builder.inst_results(call)[0], signature.result)
                     }
                     Callee::Function(key) => {
-                        let callee = self.declared(&key)?;
-                        let mut arguments = Vec::new();
-                        if callee.type_ids != 0 {
-                            for argument in &args[..*ntypeargs] {
-                                arguments.push(self.type_id(argument)?);
-                            }
-                        }
-                        for (argument, ty) in
-                            args[*ntypeargs..].iter().zip(&callee.signature.params)
-                        {
-                            arguments.push(self.operand_as(argument, ty)?);
-                        }
-                        let produced = callee.signature.result.clone();
-                        let callee = self.function_ref(callee.id);
-                        // The callee can collect, which moves storage.
-                        self.forget_arrays();
-                        let call = self.builder.ins().call(callee, &arguments);
-                        self.read_worker();
-                        (self.builder.inst_results(call)[0], produced)
+                        self.call_function(&key, &args[..*ntypeargs], &args[*ntypeargs..])?
                     }
+                };
+                let result = self.track(result, &produced);
+                let result = self.coerce(result, &produced, &expected)?;
+                self.write_local(destination, result);
+                let target = self.block(*target);
+                self.builder.ins().jump(target, &[]);
+            }
+            Terminator::VirtualCall {
+                iface,
+                method,
+                args,
+                ntypeargs,
+                self_arg,
+                destination,
+                target,
+                ..
+            } => {
+                let destination = place_local(destination).map_err(internal)?;
+                let expected = self.local_ty(destination)?;
+                let found = virtual_target(
+                    self.db, self.body, iface, method, args, *ntypeargs, *self_arg,
+                )
+                .map_err(internal)?;
+                let (result, produced) = match found {
+                    Virtual::Static(Target::ToString) => (
+                        self.intrinsic(Intrinsic::ToString, &args[*self_arg..=*self_arg])?,
+                        NativeTy::String,
+                    ),
+                    Virtual::Static(Target::Function(key)) => {
+                        self.call_function(&key, &[], args)?
+                    }
+                    Virtual::Dynamic(slot) => self.dispatch(&slot, args)?,
                 };
                 let result = self.track(result, &produced);
                 let result = self.coerce(result, &produced, &expected)?;
@@ -2984,6 +3071,113 @@ impl<'a, 'db> Translator<'a, 'db> {
             _ => return Err(internal("a checked terminator is supported")),
         }
         Ok(())
+    }
+
+    /// Call one copy of a function with these type and value arguments.
+    fn call_function(
+        &mut self,
+        key: &FnKey<'db>,
+        types: &[Operand<'db>],
+        args: &[Operand<'db>],
+    ) -> Result<(ir::Value, NativeTy<'db>), CompileError> {
+        let callee = self.declared(key)?;
+        let mut arguments = Vec::new();
+        if callee.type_ids != 0 {
+            for argument in types {
+                arguments.push(self.type_id(argument)?);
+            }
+        }
+        for (argument, ty) in args.iter().zip(&callee.signature.params) {
+            arguments.push(self.operand_as(argument, ty)?);
+        }
+        let produced = callee.signature.result.clone();
+        let callee = self.function_ref(callee.id);
+        // The callee can collect, which moves storage.
+        self.forget_arrays();
+        let call = self.builder.ins().call(callee, &arguments);
+        self.read_worker();
+        Ok((self.builder.inst_results(call)[0], produced))
+    }
+
+    /// Call the code the receiver's type has for an interface method: its
+    /// type id picks a row of the method table, the method a column.
+    fn dispatch(
+        &mut self,
+        slot: &Slot,
+        args: &[Operand<'db>],
+    ) -> Result<(ir::Value, NativeTy<'db>), CompileError> {
+        let program = self.program;
+        let slot = program
+            .slots
+            .iter()
+            .find(|known| known.slot == *slot)
+            .ok_or_else(|| internal("a dispatched method has a slot"))?;
+        let receiver = self.operand_as(&args[0], &NativeTy::Unknown)?;
+        let mut arguments = vec![receiver];
+        for (argument, ty) in args[1..].iter().zip(&slot.signature.params) {
+            arguments.push(self.operand_as(argument, ty)?);
+        }
+        let type_id = self.builder.ins().uload32(slot_access(), receiver, 0);
+        let methods = self.backend.methods()?;
+        let methods = self.data_address(methods);
+        let row = self
+            .builder
+            .ins()
+            .ishl_imm(type_id, i64::from(program.column_shift));
+        let row = self.builder.ins().iadd(methods, row);
+        let code = self.builder.ins().load(
+            WORD,
+            MemFlags::trusted().with_readonly(),
+            row,
+            offset(slot.column * layout::WORD),
+        );
+        let mut signature = slot.signature.clone();
+        signature.params.insert(0, NativeTy::Unknown);
+        let signature = Backend::clif_signature(&signature, Entry::Direct, 0);
+        let signature = self.builder.import_signature(signature);
+        // The callee can collect, which moves storage.
+        self.forget_arrays();
+        if !slot.falls_back {
+            let call = self
+                .builder
+                .ins()
+                .call_indirect(signature, code, &arguments);
+            self.read_worker();
+            return Ok((
+                self.builder.inst_results(call)[0],
+                slot.signature.result.clone(),
+            ));
+        }
+        // A type that declares no `to_string` has no code in its row: the
+        // runtime writes it out.
+        let own = self.builder.create_block();
+        let default = self.builder.create_block();
+        let done = self.builder.create_block();
+        self.builder.append_block_param(done, WORD);
+        self.builder.set_cold_block(default);
+        self.builder.ins().brif(code, own, &[], default, &[]);
+        self.builder.seal_block(own);
+        self.builder.seal_block(default);
+
+        self.builder.switch_to_block(own);
+        let call = self
+            .builder
+            .ins()
+            .call_indirect(signature, code, &arguments);
+        let text = self.builder.inst_results(call)[0];
+        self.read_worker();
+        self.builder.ins().jump(done, &[text.into()]);
+
+        self.builder.switch_to_block(default);
+        let mutator = self.mutator();
+        let text = self
+            .call_runtime(Runtime::StringFromAny, &[mutator, receiver])?
+            .ok_or_else(|| internal("to string returns a string"))?;
+        self.builder.ins().jump(done, &[text.into()]);
+
+        self.builder.seal_block(done);
+        self.builder.switch_to_block(done);
+        Ok((self.builder.block_params(done)[0], NativeTy::String))
     }
 }
 

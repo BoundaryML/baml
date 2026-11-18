@@ -5,11 +5,12 @@ use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_mir::{
     AggregateKind, BoundFrame, Constant, Local, MirFunction, MirFunctionBody, MirFunctionKind,
     Operand, OptLevel, Place, RuntimeTy, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
-    Terminator, TyTemplate, TypeTest, function_display_name,
+    Terminator, TyTemplate, TyTemplateInterface, TypeTest, function_display_name,
 };
 
 use crate::{
     Blocker,
+    dispatch::{self, Slot, Target},
     loops::{ArrayLoops, is_done_test, operand_local},
     narrow::TestKind,
     program::{Entry, FnKey, Needed},
@@ -328,9 +329,95 @@ pub(crate) fn call_target<'db>(
     }
 }
 
+/// How an interface method call finds its code.
+pub(crate) enum Virtual<'db> {
+    /// The receiver's type is known where the call is written.
+    Static(Target<'db>),
+    /// The receiver is some implementor: its type id picks the code.
+    Dynamic(Slot),
+}
+
+pub(crate) fn virtual_target<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    body: &Body<'_, 'db>,
+    interface: &TyTemplateInterface,
+    method: &str,
+    args: &[Operand<'db>],
+    ntypeargs: usize,
+    self_arg: usize,
+) -> Result<Virtual<'db>, Blocker> {
+    let unsupported =
+        |detail: &str| Blocker::new("interface method call", format!("{method}: {detail}"));
+    if ntypeargs != 0 {
+        return Err(unsupported("with type arguments"));
+    }
+    let receiver = args
+        .get(self_arg)
+        .ok_or_else(|| unsupported("without a receiver"))?;
+    let receiver = operand_ty(db, body, receiver)?;
+    if receiver.is_boxed() {
+        if self_arg != 0 {
+            return Err(unsupported("dispatched on a later argument"));
+        }
+        return Ok(Virtual::Dynamic(Slot::new(interface, method)));
+    }
+    match dispatch::resolve(db, &receiver, interface, method, body.arguments)? {
+        Some(target) => Ok(Virtual::Static(target)),
+        None => Err(unsupported("on a type with no implementation found")),
+    }
+}
+
+/// An interface method call whose receiver is only known when it runs.
+pub(crate) struct Dispatched<'db> {
+    pub(crate) slot: Slot,
+    pub(crate) interface: TyTemplateInterface,
+    pub(crate) method: String,
+    /// The types of the arguments after the receiver, and of the place the
+    /// result goes.
+    pub(crate) arguments: Vec<NativeTy<'db>>,
+    pub(crate) result: NativeTy<'db>,
+}
+
+/// Whether a call with these value arguments, storing a `result`, matches
+/// the layout of the copy of the function it calls.
+fn call_fits<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    body: &Body<'_, 'db>,
+    key: &FnKey<'db>,
+    args: &[Operand<'db>],
+    result: &NativeTy<'db>,
+) -> Result<(), Blocker> {
+    let found = args
+        .iter()
+        .map(|argument| operand_ty(db, body, argument))
+        .collect::<Result<Vec<_>, _>>()?;
+    // A callee outside the subset is reported as its own blocked function;
+    // only a callee that will be compiled constrains the call.
+    if let Ok(expected) = function_signature(db, key) {
+        let fits = expected.params.len() == found.len()
+            && expected
+                .params
+                .iter()
+                .zip(&found)
+                .all(|(expected, found)| assignable(expected, found))
+            && assignable(result, &expected.result);
+        if !fits {
+            return Err(Blocker::new(
+                "call that does not match its callee's layout",
+                function_display_name(db, DeclRef::Source(key.loc)),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// What a function needs from the rest of the program, and what keeps it
 /// from being compiled.
 pub(crate) struct Checked<'db> {
+    /// The interface method calls it dispatches when it runs.
+    pub(crate) dispatched: Vec<Dispatched<'db>>,
+    /// The types it makes values of that an interface value can hold.
+    pub(crate) constructed: Vec<NativeTy<'db>>,
     /// Every unsupported construct, in block order, without repeats.
     pub(crate) blockers: Vec<Blocker>,
     /// The functions it calls directly or makes values of.
@@ -348,6 +435,8 @@ pub(crate) fn check_function<'db>(
         key,
         blockers: Vec::new(),
         needed: Vec::new(),
+        dispatched: Vec::new(),
+        constructed: Vec::new(),
     };
     match body_of(mir) {
         Ok(body) => {
@@ -386,6 +475,8 @@ pub(crate) fn check_function<'db>(
     Checked {
         blockers: checker.blockers,
         needed: checker.needed,
+        dispatched: checker.dispatched,
+        constructed: checker.constructed,
     }
 }
 
@@ -394,9 +485,17 @@ struct Checker<'a, 'db> {
     key: &'a FnKey<'db>,
     blockers: Vec<Blocker>,
     needed: Vec<Needed<'db>>,
+    dispatched: Vec<Dispatched<'db>>,
+    constructed: Vec<NativeTy<'db>>,
 }
 
 impl<'db> Checker<'_, 'db> {
+    fn construct(&mut self, ty: NativeTy<'db>) {
+        if !self.constructed.contains(&ty) {
+            self.constructed.push(ty);
+        }
+    }
+
     fn need(&mut self, key: FnKey<'db>, captures: Vec<NativeTy<'db>>) {
         if !self
             .needed
@@ -409,8 +508,14 @@ impl<'db> Checker<'_, 'db> {
 
     /// A function named where a value is expected is needed as one.
     fn operand_needs(&mut self, operand: &Operand<'db>) {
-        if let Operand::Constant(Constant::Function(DeclRef::Source(function))) = operand {
-            self.need(FnKey::new(*function, Entry::Value), Vec::new());
+        match operand {
+            Operand::Constant(Constant::Function(DeclRef::Source(function))) => {
+                self.need(FnKey::new(*function, Entry::Value), Vec::new());
+            }
+            Operand::Constant(Constant::EnumVariant { enum_ref, .. }) => {
+                self.construct(NativeTy::Enum(*enum_ref));
+            }
+            _ => {}
         }
     }
 
@@ -427,6 +532,24 @@ impl<'db> Checker<'_, 'db> {
             } => {
                 for operand in operands {
                     self.operand_needs(operand);
+                }
+                if let Rvalue::Aggregate {
+                    kind:
+                        AggregateKind::Class {
+                            class,
+                            type_arg_templates,
+                            ..
+                        },
+                    ..
+                } = value
+                {
+                    self.construct(NativeTy::Class(
+                        *class,
+                        type_arg_templates
+                            .iter()
+                            .map(|template| template_ty(self.db, template, body.arguments))
+                            .collect(),
+                    ));
                 }
             }
             Rvalue::MakeClosure {
@@ -487,7 +610,45 @@ impl<'db> Checker<'_, 'db> {
                 self.operand_needs(argument);
             }
         }
-        let outcome = if loops.start(terminator).is_some() || loops.step(terminator).is_some() {
+        let in_loop = loops.start(terminator).is_some() || loops.step(terminator).is_some();
+        if let Terminator::VirtualCall {
+            iface,
+            method,
+            args,
+            ntypeargs,
+            self_arg,
+            destination,
+            ..
+        } = terminator
+            && !in_loop
+        {
+            match virtual_target(self.db, body, iface, method, args, *ntypeargs, *self_arg) {
+                Ok(Virtual::Static(Target::Function(key))) => self.need(key, Vec::new()),
+                Ok(Virtual::Dynamic(slot)) => {
+                    let arguments = args
+                        .iter()
+                        .skip(1)
+                        .map(|argument| operand_ty(self.db, body, argument))
+                        .collect::<Result<Vec<_>, _>>();
+                    let result =
+                        place_local(destination).and_then(|local| local_ty(self.db, body, local));
+                    if let (Ok(arguments), Ok(result)) = (arguments, result) {
+                        self.dispatched.push(Dispatched {
+                            slot,
+                            interface: iface.clone(),
+                            method: method.clone(),
+                            arguments,
+                            result,
+                        });
+                    }
+                }
+                _ => {}
+            }
+            for argument in args {
+                self.operand_needs(argument);
+            }
+        }
+        let outcome = if in_loop {
             Ok(())
         } else {
             terminator_supported(self.db, body, terminator)
@@ -988,35 +1149,54 @@ fn terminator_supported<'db>(
                             ));
                         }
                     }
-                    let found = args
-                        .iter()
-                        .skip(*ntypeargs)
-                        .map(|argument| operand_ty(db, body, argument))
-                        .collect::<Result<Vec<_>, _>>()?;
-                    // A callee outside the subset is reported as its own
-                    // blocked function; only a callee that will be compiled
-                    // constrains the call.
-                    if let Ok(expected) = function_signature(db, &key) {
-                        let fits = expected.params.len() == found.len()
-                            && expected
-                                .params
-                                .iter()
-                                .zip(&found)
-                                .all(|(expected, found)| assignable(expected, found))
-                            && assignable(&result, &expected.result);
-                        if !fits {
-                            return Err(Blocker::new(
-                                "call that does not match its callee's layout",
-                                name(),
-                            ));
-                        }
-                    }
-                    Ok(())
+                    call_fits(db, body, &key, &args[*ntypeargs..], &result)
                 }
             }
         }
-        Terminator::VirtualCall { method, .. } => {
-            Err(Blocker::new("interface method call", method.clone()))
+        Terminator::VirtualCall {
+            has_trace,
+            iface,
+            method,
+            args,
+            ntypeargs,
+            self_arg,
+            destination,
+            unwind,
+            ..
+        } => {
+            if *has_trace {
+                return Err(Blocker::new("call with a trace attachment", ""));
+            }
+            if unwind.is_some() {
+                return Err(Blocker::new("catch or defer handler", "call"));
+            }
+            let result = local_ty(db, body, place_local(destination)?)?;
+            match virtual_target(db, body, iface, method, args, *ntypeargs, *self_arg)? {
+                Virtual::Static(Target::ToString) => {
+                    let found = operand_ty(db, body, &args[*self_arg])?;
+                    match Intrinsic::ToString.result(&[found]) {
+                        Some(produced) if assignable(&result, &produced) => Ok(()),
+                        _ => Err(Blocker::new(
+                            "builtin call on these argument types",
+                            "ToString",
+                        )),
+                    }
+                }
+                Virtual::Static(Target::Function(key)) => {
+                    if identified_arguments(db, &key).contains(&true) {
+                        return Err(Blocker::new(
+                            "interface method call",
+                            format!("{method}: a default body that tests its type argument"),
+                        ));
+                    }
+                    call_fits(db, body, &key, args, &result)
+                }
+                // Checked against every implementation once the whole
+                // program is known.
+                Virtual::Dynamic(_) => args
+                    .iter()
+                    .try_for_each(|argument| operand_ty(db, body, argument).map(drop)),
+            }
         }
         Terminator::SysOp { callee, .. } => Err(Blocker::new(
             "system operation",

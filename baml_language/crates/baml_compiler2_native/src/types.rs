@@ -9,7 +9,9 @@ use std::cell::Cell;
 use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::{
     extern_loc::{ClassRef, EnumRef},
-    layout::{class_fields, class_generic_params, class_head, class_ref_of, enum_ref_of},
+    layout::{
+        class_fields, class_generic_params, class_head, class_ref_of, enum_ref_of, interface_ref_of,
+    },
 };
 use baml_compiler2_mir::{
     AggregateKind, BinOp, CellId, Constant, IndexKind, Local, MirFunction, MirFunctionBody,
@@ -157,9 +159,16 @@ macro_rules! native_type_of {
                 $family::Enum(head) | $family::EnumVariant(head, _) => {
                     NativeTy::Enum(enum_ref_of(db, head)?)
                 }
-                $family::Unknown => NativeTy::Unknown,
+                // A value of an interface type is any implementor: a
+                // reference whose header says which.
+                $family::Unknown | $family::Interface(..) => NativeTy::Unknown,
                 $family::String | $family::Literal(Literal::String(_), _) => NativeTy::String,
                 $parameter => arguments.get($slot)?.clone()?,
+                // `self` in an interface's default body is declared with
+                // the interface's own name: any implementor.
+                $family::Class(head, _) if interface_ref_of(db, head).is_some() => {
+                    NativeTy::Unknown
+                }
                 $family::Class(head, class_arguments) => {
                     let class = class_ref_of(db, head)?;
                     // Every type parameter has its argument, or there is no

@@ -679,6 +679,101 @@ function generic_with_function_value() -> float {
   let s = apply_n("four", (v: string) -> int { v.length() }, count(3));
   r + s
 }
+interface Shape {
+  function area(self) -> int throws never
+  function scaled(self, by: int) -> int throws never
+  function twice(self) -> int throws never { self.area() * 2 }
+}
+interface Named {
+  function label(self) -> string throws never
+}
+class Square {
+  side int
+  implements Shape {
+    function area(self) -> int throws never { self.side * self.side }
+    function scaled(self, by: int) -> int throws never { self.side * by }
+  }
+  implements Named {
+    function label(self) -> string throws never { "square" }
+  }
+}
+class Strip {
+  width int
+  height int
+  implements Shape {
+    function area(self) -> int throws never { self.width * self.height }
+    function scaled(self, by: int) -> int throws never { self.width * by + self.height }
+    function twice(self) -> int throws never { 7 }
+  }
+}
+class Price {
+  cents int
+  implements baml.ToString {
+    function to_string(self) -> string throws never {
+      "$" + (self.cents / 100).to_string() + "." + (self.cents % 100).to_string()
+    }
+  }
+}
+enum Level { Quiet Loud }
+function shape_of(n: int) -> Shape {
+  if (n % 2 == 0) { Square { side: n } } else { Strip { width: n, height: 3 } }
+}
+function interface_static_call() -> int {
+  let s = Square { side: count(4) };
+  let t = Strip { width: count(2), height: count(5) };
+  s.area() + t.area() * 100 + s.twice() * 10000 + t.twice() * 1000000
+}
+function interface_dispatch() -> int {
+  let total = 0;
+  for (let i = 0; i < count(10); i += 1) {
+    let shape = shape_of(i);
+    total += shape.area() + shape.scaled(2) * 1000 + shape.twice() * 1000000;
+  }
+  total
+}
+function interface_values_in_array() -> int {
+  let shapes: Shape[] = [];
+  for (let i = 1; i <= count(6); i += 1) { shapes.push(shape_of(i)); }
+  let total = 0;
+  for (let shape in shapes) { total = total * 3 + shape.area(); }
+  total
+}
+function describe_it(n: Named) -> string { n.label() }
+function interface_two_tables() -> string {
+  let s = Square { side: 3 };
+  let shape: Shape = s;
+  describe_it(s) + shape.area().to_string()
+}
+function to_string_of_values() -> string {
+  let level = if (count(1) > 0) { Level.Loud } else { Level.Quiet };
+  let p = Price { cents: count(1234) };
+  level.to_string() + " " + p.to_string() + " " + count(5).to_string() + ` ${p} ${level} ${count(2) > 1} ${1.5 * count(3)}`
+}
+function show(x: baml.ToString) -> string { x.to_string() }
+function to_string_dispatch() -> string {
+  let level = if (count(1) > 0) { Level.Loud } else { Level.Quiet };
+  show(Price { cents: count(250) }) + "|" + show(count(7)) + "|" + show("text") + "|" + show(level) + "|" + show(2.5 * count(1)) + "|" + show(count(1) == 1)
+}
+function to_string_of_mixed() -> string {
+  let level = if (count(1) > 0) { Level.Loud } else { Level.Quiet };
+  let xs: baml.ToString[] = [Price { cents: count(250) }, count(7), "text", level, 2.5 * count(1), count(1) == 1];
+  let out = "";
+  for (let x in xs) { out = out + x.to_string() + "|"; }
+  out
+}
+class Dot {
+  implements Named {
+    function label(self) -> string throws never { "dot" }
+  }
+}
+function interface_columns() -> string {
+  let shapes: Shape[] = [Square { side: count(2) }, Strip { width: 1, height: count(9) }];
+  let named: Named[] = [Dot {}, Square { side: 1 }];
+  let out = "";
+  for (let n in named) { out = out + n.label() + ":"; }
+  for (let s in shapes) { out = out + s.twice().to_string() + "," + s.scaled(count(3)).to_string() + ";"; }
+  out
+}
 "#;
 
 /// How a run ended. `baml run` prints a result on stdout and exits zero, or
@@ -877,6 +972,23 @@ const CASES: &[Case] = &[
     case("generic_type_test", Printed("1001011")),
     case("generic_array_fill", Printed("245")),
     case("generic_with_function_value", Printed("9.5")),
+    case("interface_static_call", Printed("7321016")),
+    case("interface_dispatch", Printed("275105195")),
+    case("interface_values_in_array", Printed("1521")),
+    case("interface_two_tables", Printed("\"square9\"")),
+    case("interface_columns", Printed("\"dot:square:8,6;7,12;\"")),
+    case(
+        "to_string_of_values",
+        Printed("\"Loud $12.34 5 $12.34 Loud true 4.5\""),
+    ),
+    case(
+        "to_string_dispatch",
+        Printed("\"$2.50|7|text|Loud|2.5|true\""),
+    ),
+    case(
+        "to_string_of_mixed",
+        Printed("\"$2.50|7|text|Loud|2.5|true|\""),
+    ),
 ];
 
 /// The text of the thrown value in an uncaught-panic report.

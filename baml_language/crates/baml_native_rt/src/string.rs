@@ -3,7 +3,10 @@
 
 use crate::{
     heap::{Mutator, current_frame, load, store},
-    layout::{STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT, TYPE_STRING, WORD, words},
+    layout::{
+        BOX_VALUE, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT, TYPE_BOX_BOOL,
+        TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ID_MASK, TYPE_STRING, WORD, words,
+    },
 };
 
 /// The text of the string object at `string`.
@@ -173,4 +176,29 @@ pub unsafe extern "C" fn baml_rt_string_from_enum(
     mutator.enter(current_frame());
     let name = mutator.variant_name(enum_type, index);
     from_str(mutator, name)
+}
+
+/// The text of a value held as a reference whose type declares no
+/// `to_string` of its own: a string is itself, and a box is the text of
+/// the `int`, `float`, `bool` or enum variant in it.
+///
+/// # Safety
+///
+/// Called from compiled code with its mutator; `value` is a live string or
+/// box.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_rt_string_from_any(mutator: &mut Mutator, value: usize) -> usize {
+    mutator.enter(current_frame());
+    // SAFETY: the caller's contract: a box is a header and one value.
+    let (type_id, held) = unsafe { (load(value) & TYPE_ID_MASK, load(value + BOX_VALUE)) };
+    match type_id {
+        TYPE_STRING => value,
+        TYPE_BOX_INT => from_str(mutator, &held.cast_signed().to_string()),
+        TYPE_BOX_FLOAT => from_str(mutator, &float_text(f64::from_bits(held as u64))),
+        TYPE_BOX_BOOL => from_str(mutator, if held & 0xFF != 0 { "true" } else { "false" }),
+        enum_type => {
+            let name = mutator.variant_name(enum_type, held);
+            from_str(mutator, name)
+        }
+    }
 }
