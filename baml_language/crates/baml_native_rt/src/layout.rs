@@ -117,8 +117,16 @@ pub const TYPE_CELL_PAIR: usize = 144;
 pub const TYPE_BOX_INT: usize = 160;
 pub const TYPE_BOX_FLOAT: usize = 176;
 pub const TYPE_BOX_BOOL: usize = 192;
+/// An error of the standard library, thrown by the runtime: one reference
+/// to the text the error is written as. No type a program names is this
+/// one, so only a handler that takes every error catches it.
+pub const TYPE_ERROR: usize = 208;
+/// A panic raised by the runtime or by compiled code's own checks, laid out
+/// like [`TYPE_ERROR`]. A handler that takes every error does not take a
+/// panic, so the two are told apart.
+pub const TYPE_PANIC: usize = 232;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 208;
+pub const FIRST_CLASS_TYPE: usize = 256;
 
 /// The start of every type table, as `u32`s: eight bytes no type lives at,
 /// so that no id is zero, then the fixed types.
@@ -177,6 +185,18 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     BOX_SIZE as u32,
     0,
     0,
+    KIND_FIXED,
+    BOX_SIZE as u32,
+    1,
+    0,
+    BOX_VALUE as u32,
+    0,
+    KIND_FIXED,
+    BOX_SIZE as u32,
+    1,
+    0,
+    BOX_VALUE as u32,
+    0,
 ];
 
 const _: () = {
@@ -187,6 +207,8 @@ const _: () = {
     assert!(RUNTIME_TYPES[TYPE_ARRAY_OF_REFS / 4 + 3] == TYPE_REFS as u32);
     assert!(RUNTIME_TYPES[TYPE_CELL_REF / 4 + 2] == 1);
     assert!(RUNTIME_TYPES[TYPE_BOX_BOOL / 4 + 1] == BOX_SIZE as u32);
+    assert!(RUNTIME_TYPES[TYPE_ERROR / 4 + 4] == BOX_VALUE as u32);
+    assert!(RUNTIME_TYPES[TYPE_PANIC / 4 + 4] == BOX_VALUE as u32);
 };
 
 /// Where the mutator keeps the address of the next object and the address

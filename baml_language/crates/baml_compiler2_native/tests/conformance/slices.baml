@@ -251,3 +251,28 @@ function slice_built_in_a_loop() -> string {
   };
   `${out.length()}|${out[3]}|${out[0].slice(1, 40)}`
 }
+
+// Thrown, caught, and live across a throw.
+
+function slice_thrown_from(depth: int, part: string) -> int throws string {
+  if depth > 0 { return slice_thrown_from(depth - 1, part) + 1; }
+  let junk = rep("t", 3);
+  if junk.length() == 3 { throw part.slice(1, 39) }
+  0
+}
+function slice_caught_as_a_string() -> string {
+  let part = slice_kept(4);
+  let found = "";
+  let depth = slice_thrown_from(4, part) catch (e) {
+    string => { found = e + rep("!", 2); -1 },
+  };
+  `${found}|${depth}|${part}`
+}
+function slice_live_into_a_handler() -> string {
+  let part = slice_kept(4);
+  let depth = slice_thrown_from(4, rep("u", 50)) catch (e) {
+    _ => { let junk = rep("h", 6); part.length() + junk.length() },
+  };
+  `${part}|${depth}`
+}
+function slice_thrown_and_not_caught() -> int throws string { slice_thrown_from(3, slice_text(2)) }

@@ -248,6 +248,8 @@ pub unsafe extern "C" fn baml_rt_string_from_any(mutator: &mut Mutator, value: u
     let (type_id, held) = unsafe { (load(value) & TYPE_ID_MASK, load(value + BOX_VALUE)) };
     match type_id {
         string if string < STRING_TYPES_END => value,
+        // An error of the standard library holds the text it is written as.
+        crate::layout::TYPE_ERROR | crate::layout::TYPE_PANIC => held,
         TYPE_BOX_INT => from_ascii(
             mutator,
             int_digits(held.cast_signed() as i64, &mut [0; INT_DIGITS]),

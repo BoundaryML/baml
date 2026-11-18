@@ -44,3 +44,9 @@ license = "Apache-2.0 WITH LLVM-exception"
 #     a block argument computed from the parameter it replaces after the other
 #     operands that read that parameter, and the fixed operands last, so the
 #     update can reuse the parameter's register with no move on the edge.
+#
+# Stack map of a `try_call` (backport of upstream 0.131.0):
+#   src/machinst/lower.rs: `lower` forwards the user stack map of a block's
+#     terminating branch to its safepoint instruction, as `lower_clif_block`
+#     does for every other call. Without it a reference live into an exception
+#     handler is spilled but missing from the call site's stack map.

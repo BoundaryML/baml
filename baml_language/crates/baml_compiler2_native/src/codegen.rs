@@ -66,6 +66,7 @@ use crate::{
 };
 
 mod native_call;
+mod unwind;
 
 /// The symbol the runtime's process entry calls.
 pub(crate) const ENTRY_SYMBOL: &str = "baml_native_entry";
@@ -75,7 +76,7 @@ pub(crate) const STACK_MAPS_SYMBOL: &str = "baml_native_stack_maps";
 /// where its shield ranges and telemetry slots are listed.
 pub(crate) const FUNCTIONS_SYMBOL: &str = "baml_native_functions";
 /// The version of the function table's format.
-const FUNCTIONS_VERSION: u32 = 1;
+const FUNCTIONS_VERSION: u32 = 2;
 /// The symbol of the table interface method calls load their code from.
 const METHODS_SYMBOL: &str = "baml_native_methods";
 /// The symbol of the table of types the collector reads.
@@ -169,6 +170,12 @@ enum Runtime {
     PanicDivisionByZero,
     PanicNegativeShift,
     PanicIndexOutOfBounds,
+    ErrorDivisionByZero,
+    ErrorNegativeShift,
+    ErrorIndexOutOfBounds,
+    Throw,
+    Rethrow,
+    Uncaught,
     FloatRem,
     StackSlow,
     PollSlow,
@@ -195,6 +202,12 @@ impl Runtime {
             Self::PanicDivisionByZero => "baml_rt_panic_division_by_zero",
             Self::PanicNegativeShift => "baml_rt_panic_negative_shift",
             Self::PanicIndexOutOfBounds => "baml_rt_panic_index_out_of_bounds",
+            Self::ErrorDivisionByZero => "baml_rt_error_division_by_zero",
+            Self::ErrorNegativeShift => "baml_rt_error_negative_shift",
+            Self::ErrorIndexOutOfBounds => "baml_rt_error_index_out_of_bounds",
+            Self::Throw => "baml_rt_throw",
+            Self::Rethrow => "baml_rt_rethrow",
+            Self::Uncaught => "baml_rt_uncaught",
             Self::FloatRem => "baml_rt_float_rem",
             Self::StackSlow => "baml_rt_stack_slow",
             Self::PollSlow => "baml_rt_poll_slow",
@@ -217,14 +230,15 @@ impl Runtime {
         // register.
         let byte = AbiParam::new(types::I8).uext();
         let (params, returns) = match self {
-            Self::PrintInt
-            | Self::PrintString
-            | Self::PanicDivisionByZero
-            | Self::PanicNegativeShift => (vec![word], vec![]),
+            Self::PrintInt | Self::PrintString => (vec![word], vec![]),
+            Self::PanicDivisionByZero | Self::PanicNegativeShift => (vec![word, word], vec![]),
             Self::StackSlow | Self::PollSlow | Self::AllocSlow => (vec![], vec![]),
             Self::PrintFloat => (vec![float], vec![]),
             Self::PrintBool => (vec![byte], vec![]),
-            Self::PanicIndexOutOfBounds => (vec![word, word], vec![]),
+            Self::PanicIndexOutOfBounds | Self::Throw | Self::Rethrow => (vec![word, word], vec![]),
+            Self::ErrorDivisionByZero | Self::ErrorNegativeShift => (vec![word, word], vec![word]),
+            Self::ErrorIndexOutOfBounds => (vec![word, word, word], vec![word]),
+            Self::Uncaught => (vec![word, word, word], vec![]),
             Self::FloatRem => (vec![float, float], vec![float]),
             Self::StringFromInt | Self::StringFromAny => (vec![word, word], vec![word]),
             Self::StringFromFloat => (vec![word, float], vec![word]),
@@ -297,6 +311,8 @@ struct Backend<'db> {
     /// Every function defined, in the order of their code, with its size
     /// in bytes.
     functions: Vec<(FuncId, u32)>,
+    /// What the unwinder is told about them.
+    unwind: unwind::Tables,
 }
 
 impl<'db> Backend<'db> {
@@ -345,6 +361,7 @@ impl<'db> Backend<'db> {
             strings: HashMap::new(),
             stack_maps: Vec::new(),
             functions: Vec::new(),
+            unwind: unwind::Tables::default(),
         })
     }
 
@@ -723,7 +740,7 @@ impl<'db> Backend<'db> {
     /// is aligned to 8 bytes:
     ///
     /// ```text
-    /// +0   u32  format version (1)
+    /// +0   u32  format version (2)
     /// +4   u32  F, the number of functions
     /// +8   u32  S, the number of shield ranges
     /// +12  u32  T, the number of telemetry slots
@@ -732,7 +749,7 @@ impl<'db> Backend<'db> {
     ///        +8   u32  size of its code in bytes
     ///        +12  u32  index of its first shield range
     ///        +16  u32  index of its first telemetry slot
-    ///        +20  u32  zero
+    ///        +20  u32  offset in the table of the function's name
     ///      a function's ranges and slots end where the next function's
     ///      begin, the last function's at S and T
     /// then S shield ranges of 8 bytes, ascending within a function:
@@ -741,26 +758,50 @@ impl<'db> Backend<'db> {
     /// then T telemetry slots of 8 bytes, ascending within a function:
     ///        +0   u32  offset in the function of a call's return address
     ///        +4   u32  offset from the stack pointer of the slot there
+    /// then each function's name: a u32 length and that many bytes of
+    /// UTF-8, padded to 4 bytes
     /// ```
     ///
-    /// No function has a shield range or a telemetry slot yet: S and T are
-    /// zero.
+    /// A shield range is code of a `defer` body: the instructions generated
+    /// for it, so a body is several ranges where moves and branches the
+    /// register allocator placed fall between them. A call belongs to the
+    /// range that holds the byte before its return address. No function has
+    /// a telemetry slot yet: T is zero.
     fn define_functions(&mut self) -> Result<(), CompileError> {
+        const RECORD: usize = 24;
         let functions = std::mem::take(&mut self.functions);
+        let described = std::mem::take(&mut self.unwind.described);
         let mut description = DataDescription::new();
         let mut bytes: Vec<u8> = Vec::new();
         let count = u32::try_from(functions.len()).map_err(internal)?;
-        for word in [FUNCTIONS_VERSION, count, 0, 0] {
+        let shields: usize = described.iter().map(|(ranges, _)| ranges.len()).sum();
+        let shields = u32::try_from(shields).map_err(internal)?;
+        for word in [FUNCTIONS_VERSION, count, shields, 0] {
             bytes.extend_from_slice(&word.to_le_bytes());
         }
-        for (function, size) in functions {
+        let mut name_offset = bytes.len() + RECORD * functions.len() + 8 * shields as usize;
+        let mut first_shield = 0;
+        for ((function, size), (ranges, name)) in functions.into_iter().zip(&described) {
             let function = self.module.declare_func_in_data(function, &mut description);
             description
                 .write_function_addr(u32::try_from(bytes.len()).map_err(internal)?, function);
             bytes.extend_from_slice(&0_u64.to_le_bytes());
-            for word in [size, 0, 0, 0] {
+            let name_at = u32::try_from(name_offset).map_err(internal)?;
+            for word in [size, first_shield, 0, name_at] {
                 bytes.extend_from_slice(&word.to_le_bytes());
             }
+            first_shield += u32::try_from(ranges.len()).map_err(internal)?;
+            name_offset += 4 + name.len().next_multiple_of(4);
+        }
+        for (start, end) in described.iter().flat_map(|(ranges, _)| ranges) {
+            bytes.extend_from_slice(&start.to_le_bytes());
+            bytes.extend_from_slice(&end.to_le_bytes());
+        }
+        for (_, name) in &described {
+            let length = u32::try_from(name.len()).map_err(internal)?;
+            bytes.extend_from_slice(&length.to_le_bytes());
+            bytes.extend_from_slice(name.as_bytes());
+            bytes.resize(bytes.len().next_multiple_of(4), 0);
         }
         let id = self
             .module
@@ -996,6 +1037,7 @@ pub(crate) fn generate<'db>(
         &mut disassembly,
     )?;
     backend.define_stack_maps()?;
+    backend.define_unwind()?;
     backend.define_functions()?;
     backend.define_methods(db, program, &declared)?;
     backend.define_types()?;
@@ -1047,6 +1089,7 @@ fn define(
         .filter(|(_, slots)| !slots.is_empty())
         .collect();
     backend.stack_maps.push((id, sites));
+    backend.unwind.record(id, name, code)?;
     backend.functions.push((id, code.buffer.total_size()));
     backend.module.clear_context(context);
     Ok(())
@@ -1074,8 +1117,19 @@ fn entry_shim(
     let saved = builder.ins().get_pinned_reg(WORD);
     builder.ins().set_pinned_reg(mutator);
     let callee = backend.function_ref(entry.id, builder.func);
-    let call = builder.ins().call(callee, &[]);
-    let result = builder.inst_results(call)[0];
+    // Nothing caught what arrives here: the runtime reports it and ends the
+    // process.
+    let uncaught = builder.create_block();
+    builder.append_block_param(uncaught, WORD);
+    builder.append_block_param(uncaught, WORD);
+    builder.set_cold_block(uncaught);
+    let result = unwind::try_call(
+        &mut builder,
+        &unwind::Called::Direct(callee),
+        &[],
+        uncaught,
+        true,
+    );
     if let Some((print, enum_type)) = print {
         let print = backend.function_ref(print, builder.func);
         match enum_type {
@@ -1091,6 +1145,16 @@ fn entry_shim(
     }
     builder.ins().set_pinned_reg(saved);
     builder.ins().return_(&[]);
+
+    builder.switch_to_block(uncaught);
+    let (error, trace) = {
+        let arriving = builder.block_params(uncaught);
+        (arriving[0], arriving[1])
+    };
+    let report = backend.runtime(Runtime::Uncaught)?;
+    let report = backend.function_ref(report, builder.func);
+    builder.ins().call(report, &[mutator, error, trace]);
+    builder.ins().trap(TRAP_AFTER_PANIC);
     builder.seal_all_blocks();
     builder.finalize();
     Ok(())
@@ -1132,6 +1196,9 @@ struct Translator<'a, 'db> {
     /// The end-of-iteration flag and the element behind each local holding
     /// what `next()` answered. The element has no variable when it is `null`.
     item_variables: HashMap<Local, (Variable, Option<Variable>)>,
+    /// The block a throw to each handler of this function jumps to, by the
+    /// handler's MIR block; see [`unwind`].
+    landings: HashMap<usize, ir::Block>,
 }
 
 /// A size, offset or count as the 32 bits the type table stores it in.
@@ -1208,6 +1275,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             checked_indexes: HashMap::new(),
             iterator_variables,
             item_variables,
+            landings: HashMap::new(),
         }
     }
 
@@ -1289,6 +1357,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             self.body.enter(index);
             self.forget_arrays();
+            self.shield(block.shielded);
             for statement in &block.statements {
                 self.statement(&statement.kind)?;
             }
@@ -1301,6 +1370,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             self.terminator(terminator)?;
         }
+        self.finish_landings();
         self.builder.seal_all_blocks();
         self.builder.finalize();
         Ok(())
@@ -1637,6 +1707,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             ),
             // Compared with the type id the function was passed.
             TestKind::Argument(_) => {}
+            TestKind::Panic => ids.push(layout::TYPE_PANIC),
             TestKind::AnyOf(tests) => {
                 let mut null_passes = false;
                 for test in tests {
@@ -2358,17 +2429,39 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.seal_block(resume);
 
         self.builder.switch_to_block(raise);
-        let (function, arguments) = match panic {
-            Panic::DivisionByZero(dividend) => (Runtime::PanicDivisionByZero, vec![dividend]),
-            Panic::NegativeShift(count) => (Runtime::PanicNegativeShift, vec![count]),
-            Panic::IndexOutOfBounds(index, length) => {
-                (Runtime::PanicIndexOutOfBounds, vec![index, length])
-            }
-        };
         // Not through `call_runtime`: this path does not come back, so what
         // is known about arrays still holds on the one that continues.
-        self.emit_runtime_call(function, &arguments)?;
-        self.builder.ins().trap(TRAP_AFTER_PANIC);
+        if self.body.blocks[self.current].unwind.is_some() {
+            // The handler is in this function: make the error and jump.
+            let mutator = self.mutator();
+            let (function, arguments) = match panic {
+                Panic::DivisionByZero(dividend) => {
+                    (Runtime::ErrorDivisionByZero, vec![mutator, dividend])
+                }
+                Panic::NegativeShift(count) => (Runtime::ErrorNegativeShift, vec![mutator, count]),
+                Panic::IndexOutOfBounds(index, length) => {
+                    (Runtime::ErrorIndexOutOfBounds, vec![mutator, index, length])
+                }
+            };
+            let error = self
+                .emit_runtime_call(function, &arguments)?
+                .ok_or_else(|| internal("the runtime returns the error it makes"))?;
+            self.builder.declare_value_needs_stack_map(error);
+            self.raise(error, None)?;
+        } else {
+            let zero = self.builder.ins().iconst(WORD, 0);
+            let (function, arguments) = match panic {
+                Panic::DivisionByZero(dividend) => {
+                    (Runtime::PanicDivisionByZero, vec![dividend, zero])
+                }
+                Panic::NegativeShift(count) => (Runtime::PanicNegativeShift, vec![count, zero]),
+                Panic::IndexOutOfBounds(index, length) => {
+                    (Runtime::PanicIndexOutOfBounds, vec![index, length])
+                }
+            };
+            self.emit_runtime_call(function, &arguments)?;
+            self.builder.ins().trap(TRAP_AFTER_PANIC);
+        }
 
         self.builder.switch_to_block(resume);
         Ok(())
@@ -3349,8 +3442,8 @@ impl<'a, 'db> Translator<'a, 'db> {
                         let clif = self.builder.import_signature(clif);
                         // The callee can collect, which moves storage.
                         self.forget_arrays();
-                        let call = self.builder.ins().call_indirect(clif, code, &arguments);
-                        (self.builder.inst_results(call)[0], signature.result)
+                        let called = unwind::Called::Indirect(clif, code);
+                        (self.baml_call(&called, &arguments), signature.result)
                     }
                     Callee::Function(key) => {
                         self.call_function(&key, &args[..*ntypeargs], &args[*ntypeargs..])?
@@ -3409,6 +3502,8 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let target = self.block(*target);
                 self.builder.ins().jump(target, &[]);
             }
+            Terminator::Throw { value } => self.throw(value)?,
+            Terminator::Rethrow { value, context } => self.rethrow(value, context)?,
             _ => return Err(internal("a checked terminator is supported")),
         }
         Ok(())
@@ -3435,8 +3530,8 @@ impl<'a, 'db> Translator<'a, 'db> {
         let callee = self.function_ref(callee.id);
         // The callee can collect, which moves storage.
         self.forget_arrays();
-        let call = self.builder.ins().call(callee, &arguments);
-        Ok((self.builder.inst_results(call)[0], produced))
+        let result = self.baml_call(&unwind::Called::Direct(callee), &arguments);
+        Ok((result, produced))
     }
 
     /// Call the code the receiver's type has for an interface method: its
@@ -3477,15 +3572,10 @@ impl<'a, 'db> Translator<'a, 'db> {
         let signature = self.builder.import_signature(signature);
         // The callee can collect, which moves storage.
         self.forget_arrays();
+        let called = unwind::Called::Indirect(signature, code);
         if !slot.falls_back {
-            let call = self
-                .builder
-                .ins()
-                .call_indirect(signature, code, &arguments);
-            return Ok((
-                self.builder.inst_results(call)[0],
-                slot.signature.result.clone(),
-            ));
+            let result = self.baml_call(&called, &arguments);
+            return Ok((result, slot.signature.result.clone()));
         }
         // A type that declares no `to_string` has no code in its row: the
         // runtime writes it out.
@@ -3499,11 +3589,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.seal_block(default);
 
         self.builder.switch_to_block(own);
-        let call = self
-            .builder
-            .ins()
-            .call_indirect(signature, code, &arguments);
-        let text = self.builder.inst_results(call)[0];
+        let text = self.baml_call(&called, &arguments);
         self.builder.ins().jump(done, &[text.into()]);
 
         self.builder.switch_to_block(default);

@@ -51,6 +51,9 @@ pub(crate) enum TestKind<'db> {
     AnyOf(Vec<TestKind<'db>>),
     /// A value of any type that implements this interface.
     Implements(TyTemplateInterface),
+    /// A panic. The ones the runtime raises share one type; see
+    /// [`crate::layout::TYPE_PANIC`].
+    Panic,
 }
 
 impl<'db> TestKind<'db> {
@@ -147,7 +150,7 @@ impl<'db> TestKind<'db> {
     pub(crate) fn is_static(&self) -> bool {
         match self {
             Self::Exactly(_) | Self::AnyArray => true,
-            Self::Argument(_) | Self::Implements(_) => false,
+            Self::Argument(_) | Self::Implements(_) | Self::Panic => false,
             Self::AnyOf(tests) => tests.iter().all(Self::is_static),
         }
     }
@@ -161,6 +164,7 @@ impl<'db> TestKind<'db> {
             typetag::STRING => Self::Exactly(NativeTy::String),
             typetag::NULL => Self::Exactly(NativeTy::Null),
             typetag::LIST => Self::AnyArray,
+            typetag::PANIC => Self::Panic,
             _ => return None,
         })
     }
@@ -170,7 +174,7 @@ impl<'db> TestKind<'db> {
             Self::Exactly(ty) => ty == member,
             Self::AnyArray => matches!(member, NativeTy::Array(_)),
             // Nothing is known of it where the code is compiled.
-            Self::Argument(_) | Self::Implements(_) => false,
+            Self::Argument(_) | Self::Implements(_) | Self::Panic => false,
             Self::AnyOf(tests) => tests.iter().any(|test| test.matches(member)),
         }
     }
@@ -589,7 +593,13 @@ pub(crate) fn block_types<'db>(
         let Some(terminator) = &contents.terminator else {
             continue;
         };
-        for (successor, arriving) in analysis.edges(state, terminator) {
+        let mut edges = analysis.edges(state, terminator);
+        // A throw anywhere in the block reaches its handler, with whatever
+        // held at that point: nothing is known there.
+        if let Some(handler) = contents.unwind {
+            edges.push((handler.0, State::default()));
+        }
+        for (successor, arriving) in edges {
             let joined = match &entry_states[successor] {
                 Some(known) => analysis.join(known, &arriving),
                 None => arriving,

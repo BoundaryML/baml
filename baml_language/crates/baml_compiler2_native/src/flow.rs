@@ -43,11 +43,18 @@ impl Flow {
             .blocks
             .iter()
             .map(|block| {
-                block
+                let mut successors: Vec<usize> = block
                     .terminator
                     .as_ref()
                     .map(|terminator| terminator.successors().iter().map(|id| id.0).collect())
-                    .unwrap_or_default()
+                    .unwrap_or_default();
+                // A throw anywhere in the block goes to its handler.
+                if let Some(handler) = block.unwind
+                    && !successors.contains(&handler.0)
+                {
+                    successors.push(handler.0);
+                }
+                successors
             })
             .collect();
         let mut predecessors = vec![Vec::new(); count];

@@ -207,6 +207,10 @@ pub struct Program {
     pub stack_maps: usize,
     /// The address of its type table.
     pub types: usize,
+    /// The address of its table of calls with a handler.
+    pub unwind: usize,
+    /// The address of its function table.
+    pub functions: usize,
 }
 
 /// The memory every mutator allocates from. Read and written only while
@@ -255,6 +259,8 @@ pub struct Mutator {
     base_frame: usize,
     /// Addresses of the runtime's own slots holding references.
     roots: Vec<usize>,
+    /// Where a throw finds its handler.
+    pub(crate) unwind: crate::unwind::Unwinder,
 }
 
 const _: () = {
@@ -310,6 +316,7 @@ impl Mutator {
             anchor: Anchor::default(),
             base_frame: 0,
             roots: Vec::new(),
+            unwind: crate::unwind::Unwinder::new(program.unwind, program.functions),
         };
         mutator.publish_limit();
         mutator
@@ -347,6 +354,17 @@ impl Mutator {
                 fp: load(frame),
             }
         };
+    }
+
+    /// The top compiled frame: the return address into it and its frame
+    /// pointer, as [`Self::enter`] recorded them.
+    pub(crate) fn top_frame(&self) -> (usize, usize) {
+        (self.anchor.pc, self.anchor.fp)
+    }
+
+    /// The frame pointer of the function that called into compiled code.
+    pub(crate) fn base_frame(&self) -> usize {
+        self.base_frame
     }
 
     /// A loop found the poll word set. Nothing sets it yet.
@@ -908,6 +926,8 @@ mod tests {
         let program = Program {
             stack_maps: std::ptr::from_ref(&NO_STACK_MAPS) as usize,
             types: types().as_ptr() as usize,
+            unwind: 0,
+            functions: 0,
         };
         // SAFETY: both tables are in the compiler's formats.
         unsafe { Mutator::new(program, stress) }
