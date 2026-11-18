@@ -1,7 +1,8 @@
 //! `baml.String`.
 
 use super::{
-    Arr, Int, NativeBamlString, Natives, Root, Scope, Str, StrRef, Thrown, array_size, str_size,
+    Arr, Int, NativeBamlString, Natives, Root, Scope, Str, StrRef, Thrown, array_size, part_size,
+    str_size,
 };
 
 /// The position a `slice` bound names in a sequence of `length`: counted
@@ -114,8 +115,8 @@ fn before_trailing_space(text: &str) -> usize {
 }
 
 /// Bytes `from..to` of `string` as a string: the string itself when that
-/// is all of it, and otherwise a copy. `chars` is how many characters the
-/// range has, when the caller knows.
+/// is all of it, and otherwise a copy when short and a slice when not.
+/// `chars` is how many characters the range has, when the caller knows.
 fn substring<'s>(
     scope: &mut Scope<'s>,
     string: Root<'s, Str>,
@@ -124,25 +125,28 @@ fn substring<'s>(
     chars: Option<usize>,
 ) -> Root<'s, Str> {
     let view = string.get(scope);
-    if from == 0 && to == view.as_str().len() {
+    let text = view.as_str();
+    if from == 0 && to == text.len() {
         return string;
     }
-    let ascii = view.is_ascii();
-    let reservation = scope.reserve(str_size(to - from));
-    let part = &reservation.get(string).as_str()[from..to];
     let chars = match chars {
         Some(chars) => chars,
-        None if ascii => part.len(),
-        None => part.chars().count(),
+        None if view.is_ascii() => to - from,
+        // Counted in what is left out, which is the shorter for a trim.
+        None => view.char_count() - text[..from].chars().count() - text[to..].chars().count(),
     };
-    let mut copy = reservation.new_str(part.len(), chars);
-    copy.push(part);
-    let copy = copy.finish().keep();
-    reservation.finish(copy)
+    let reservation = scope.reserve(part_size(to - from));
+    // SAFETY: the callers pass a range between characters, and its count
+    // of them when they pass one.
+    let whole = reservation.get(string).whole();
+    let part = unsafe { reservation.part(whole, from, to - from, chars) }.keep();
+    reservation.finish(part)
 }
 
 /// A way to cut a string into parts.
 trait Parts {
+    /// Whether a part is worth a slice: a character is not.
+    const SLICES: bool;
     fn of(text: &str) -> impl Iterator<Item = &str>;
 }
 
@@ -152,6 +156,7 @@ struct Characters;
 struct Lines;
 
 impl Parts for Characters {
+    const SLICES: bool = false;
     fn of(text: &str) -> impl Iterator<Item = &str> {
         text.char_indices()
             .map(|(start, character)| &text[start..start + character.len_utf8()])
@@ -159,31 +164,46 @@ impl Parts for Characters {
 }
 
 impl Parts for Lines {
+    const SLICES: bool = true;
     fn of(text: &str) -> impl Iterator<Item = &str> {
         text.lines()
     }
 }
 
-/// An array of the parts of `string`, each a copy.
+/// An array of the parts of `string`.
 fn pieces<'s, P: Parts>(scope: &mut Scope<'s>, string: Root<'s, Str>) -> Root<'s, Arr<Str>> {
     // Measure, reserve once, then build: nothing moves in between, so the
-    // parts are copied straight out of the string.
+    // parts are taken straight out of the string.
     let view = string.get(scope);
     let ascii = view.is_ascii();
     let (count, bytes) = P::of(view.as_str()).fold((0, 0), |(count, bytes), part| {
-        (count + 1, bytes + str_size(part.len()))
+        let size = if P::SLICES {
+            part_size(part.len())
+        } else {
+            str_size(part.len())
+        };
+        (count + 1, bytes + size)
     });
     let reservation = scope.reserve(array_size(count) + bytes);
     let array = reservation.array::<Str>(count);
-    for (index, part) in P::of(reservation.get(string).as_str()).enumerate() {
+    let whole = reservation.get(string).whole();
+    let text = whole.as_str();
+    for (index, part) in P::of(text).enumerate() {
         let chars = if ascii {
             part.len()
         } else {
             part.chars().count()
         };
-        let mut copy = reservation.new_str(part.len(), chars);
-        copy.push(part);
-        array.set(index, copy.finish());
+        array.set(
+            index,
+            if P::SLICES {
+                let from = part.as_ptr() as usize - text.as_ptr() as usize;
+                // SAFETY: `part` is that range of `text`.
+                unsafe { reservation.part(whole, from, part.len(), chars) }
+            } else {
+                reservation.counted_str(part, chars)
+            },
+        );
     }
     let array = array.keep();
     reservation.finish(array)
@@ -290,41 +310,41 @@ fn each_occurrence(text: &[u8], delimiter: &[u8], mut found: impl FnMut(usize)) 
 }
 
 /// An array of what lies between the occurrences of `delimiter`, which is
-/// not empty, in `string`: each part a copy.
+/// not empty, in `string`.
 fn between<'s>(
     scope: &mut Scope<'s>,
     string: Root<'s, Str>,
     delimiter: Root<'s, Str>,
 ) -> Root<'s, Arr<Str>> {
     // Measure, reserve once, then build: nothing moves in between, so the
-    // parts are copied straight out of the string.
+    // parts are taken straight out of the string.
     let view = string.get(scope);
     let ascii = view.is_ascii();
     let (text, by) = (view.as_str(), delimiter.get(scope).as_str());
     let (mut count, mut bytes, mut from) = (1, 0, 0);
     each_occurrence(text.as_bytes(), by.as_bytes(), |at| {
         count += 1;
-        bytes += str_size(at - from);
+        bytes += part_size(at - from);
         from = at + by.len();
     });
-    bytes += str_size(text.len() - from);
+    bytes += part_size(text.len() - from);
     let reservation = scope.reserve(array_size(count) + bytes);
     let array = reservation.array::<Str>(count);
-    let (text, by) = (
-        reservation.get(string).as_str(),
-        reservation.get(delimiter).as_str(),
-    );
+    let whole = reservation.get(string).whole();
+    let (text, by) = (whole.as_str(), reservation.get(delimiter).as_str());
     let (mut index, mut from) = (0, 0);
     let mut part = |from: usize, to: usize| {
         // SAFETY: an occurrence of a string in another starts and ends
         // between characters, and so does what lies between two.
-        let part = unsafe { text.get_unchecked(from..to) };
-        let chars = if ascii {
-            part.len()
-        } else {
-            part.chars().count()
+        let part = unsafe {
+            let chars = if ascii {
+                to - from
+            } else {
+                text.get_unchecked(from..to).chars().count()
+            };
+            reservation.part(whole, from, to - from, chars)
         };
-        array.set(index, reservation.counted_str(part, chars));
+        array.set(index, part);
         index += 1;
     };
     each_occurrence(text.as_bytes(), by.as_bytes(), |at| {
@@ -392,7 +412,7 @@ fn replace<'s>(
     limit: usize,
 ) -> Root<'s, Str> {
     let (text, from, to) = (string.get(scope), search.get(scope), replacement.get(scope));
-    let count = if from.as_str().is_empty() {
+    let count = if from.byte_len() == 0 {
         text.char_count() + 1
     } else if limit == 1 {
         usize::from(text.as_str().contains(from.as_str()))
@@ -404,8 +424,8 @@ fn replace<'s>(
         return string;
     }
     // Each occurrence is `search` out and `replacement` in.
-    let bytes = (text.as_str().len() - count * from.as_str().len())
-        .saturating_add(count.saturating_mul(to.as_str().len()));
+    let bytes = (text.byte_len() - count * from.byte_len())
+        .saturating_add(count.saturating_mul(to.byte_len()));
     let chars = (text.char_count() - count * from.char_count())
         .saturating_add(count.saturating_mul(to.char_count()));
     let reservation = scope.reserve(text_size(bytes));
@@ -428,7 +448,7 @@ fn replace<'s>(
 
 impl NativeBamlString for Natives {
     fn byte_length(string: StrRef<'_>) -> i64 {
-        int(string.as_str().len())
+        int(string.byte_len())
     }
 
     fn to_lower_case<'s>(scope: &mut Scope<'s>, string: Root<'s, Str>) -> Root<'s, Str> {
@@ -504,7 +524,7 @@ impl NativeBamlString for Natives {
     fn repeat<'s>(scope: &mut Scope<'s>, string: Root<'s, Str>, count: i64) -> Root<'s, Str> {
         let count = usize::try_from(count).unwrap_or(0);
         let view = string.get(scope);
-        let (length, chars) = (view.as_str().len(), view.char_count());
+        let (length, chars) = (view.byte_len(), view.char_count());
         if count == 1 || (length == 0 && count != 0) {
             return string;
         }
@@ -675,7 +695,7 @@ impl NativeBamlString for Natives {
         string: Root<'s, Str>,
         delimiter: Root<'s, Str>,
     ) -> Root<'s, Arr<Str>> {
-        if delimiter.get(scope).as_str().is_empty() {
+        if delimiter.get(scope).byte_len() == 0 {
             pieces::<Characters>(scope, string)
         } else {
             between(scope, string, delimiter)

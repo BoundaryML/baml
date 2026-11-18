@@ -355,7 +355,7 @@ impl NativeBamlArray for Natives {
         let kind = types[0].0 as usize;
         let (view, by) = (array.get(scope), separator.get(scope));
         let gaps = view.len().saturating_sub(1);
-        let mut bytes = gaps.saturating_mul(by.as_str().len());
+        let mut bytes = gaps.saturating_mul(by.byte_len());
         let mut chars = gaps.saturating_mul(by.char_count());
         let mut digits = [0; INT_DIGITS];
         for word in view.iter() {
@@ -364,7 +364,7 @@ impl NativeBamlArray for Natives {
                     // SAFETY: the compiler passes this id for an array of
                     // strings only.
                     let part = unsafe { StrRef::from_raw(word) };
-                    (part.as_str().len(), part.char_count())
+                    (part.byte_len(), part.char_count())
                 }
                 TYPE_BOX_INT => {
                     let length = int_digits(word.cast_signed() as i64, &mut digits).len();

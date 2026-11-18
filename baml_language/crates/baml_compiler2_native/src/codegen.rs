@@ -669,6 +669,13 @@ impl<'db> Backend<'db> {
                     (type_id << program.column_shift) + column * layout::WORD,
                     function.id,
                 ));
+                if type_id == layout::TYPE_STRING {
+                    // A slice is a string: its row is the same.
+                    entries.push((
+                        (layout::TYPE_STRING_SLICE << program.column_shift) + column * layout::WORD,
+                        function.id,
+                    ));
+                }
             }
         }
         let mut description = DataDescription::new();
@@ -1575,10 +1582,18 @@ impl<'a, 'db> Translator<'a, 'db> {
                 .ok_or_else(|| internal("a tested type argument has its type id"))?;
             let type_id = self.builder.use_var(*type_id);
             let type_id = self.builder.ins().uextend(WORD, type_id);
+            // The id passed for `string` is that of one holding its text.
+            let is_string = self.is_string_id(header);
+            let flat = self.word_const(layout::TYPE_STRING);
+            let header = self.builder.ins().select(is_string, flat, header);
             passes = Some(self.builder.ins().icmp(IntCC::Equal, header, type_id));
         }
         for id in ids {
-            let same = self.builder.ins().icmp_imm(IntCC::Equal, header, imm(id));
+            let same = if id == layout::TYPE_STRING {
+                self.is_string_id(header)
+            } else {
+                self.builder.ins().icmp_imm(IntCC::Equal, header, imm(id))
+            };
             passes = Some(match passes {
                 Some(passes) => self.builder.ins().bor(passes, same),
                 None => same,
@@ -1593,6 +1608,14 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.seal_block(done);
         self.builder.switch_to_block(done);
         Ok(self.builder.block_params(done)[0])
+    }
+
+    /// Whether the type id `id`, read from a header, is a string's: the
+    /// two kinds of string have the lowest ids there are.
+    fn is_string_id(&mut self, id: ir::Value) -> ir::Value {
+        self.builder
+            .ins()
+            .icmp_imm(IntCC::UnsignedLessThan, id, imm(layout::STRING_TYPES_END))
     }
 
     /// Add to `ids` the type id of every type whose values pass `test`, and

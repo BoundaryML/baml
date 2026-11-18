@@ -45,10 +45,20 @@ pub const STORAGE_ELEMENTS: usize = HEADER + WORD;
 pub const DATA_CAPACITY: i32 = -(WORD as i32);
 
 /// A string is a header, one word holding the byte length (low half) and the
-/// character count (high half), and the UTF-8 text.
+/// character count (high half), and then either its UTF-8 text or, for a
+/// slice, where its text is: the string it is a part of and the byte of
+/// that string's text it starts at. The lengths are a slice's own. What a
+/// slice is a part of is never itself a slice.
 pub const STRING_LENGTHS: usize = HEADER;
 pub const STRING_TEXT: usize = HEADER + WORD;
 pub const STRING_CHAR_COUNT_SHIFT: u32 = 32;
+pub const SLICE_PARENT: usize = HEADER + WORD;
+pub const SLICE_OFFSET: usize = HEADER + 2 * WORD;
+pub const SLICE_SIZE: usize = HEADER + 3 * WORD;
+/// The fewest bytes of text a slice is made for: a shorter part of a string
+/// is copied, which takes no more room than a slice and keeps nothing else
+/// alive.
+pub const SLICE_MIN_BYTES: usize = 32;
 
 /// A cell holds a local that a closure captures: a header and the value, one
 /// slot, or two for an optional scalar.
@@ -71,6 +81,7 @@ pub const KIND_VALUES: u32 = 1;
 pub const KIND_REFS: u32 = 2;
 pub const KIND_STRING: u32 = 3;
 pub const KIND_ARRAY: u32 = 4;
+pub const KIND_SLICE: u32 = 5;
 
 /// A type is four `u32`s: its kind; the size in bytes of an object, for a
 /// fixed one; the number of reference fields; and, for an array, the type id
@@ -84,22 +95,30 @@ pub const KIND_ARRAY: u32 = 4;
 pub const TYPE_HEADER: usize = 16;
 
 /// The types every program has, at fixed ids at the start of its type table.
+///
+/// A string that holds its text and one that is a slice of another come
+/// first and next to each other, so that whether an object is a string is
+/// one comparison of its type id with [`STRING_TYPES_END`]: no type has a
+/// lower id than the first of the two.
 pub const TYPE_STRING: usize = 8;
-pub const TYPE_VALUES: usize = 24;
-pub const TYPE_REFS: usize = 40;
-pub const TYPE_ARRAY_OF_VALUES: usize = 56;
-pub const TYPE_ARRAY_OF_REFS: usize = 72;
+pub const TYPE_STRING_SLICE: usize = 24;
+/// Every type id below this is a string's.
+pub const STRING_TYPES_END: usize = 40;
+pub const TYPE_VALUES: usize = 40;
+pub const TYPE_REFS: usize = 56;
+pub const TYPE_ARRAY_OF_VALUES: usize = 72;
+pub const TYPE_ARRAY_OF_REFS: usize = 88;
 /// Cells holding one slot that is not a reference, one that is, and two
 /// that are not.
-pub const TYPE_CELL_VALUE: usize = 88;
-pub const TYPE_CELL_REF: usize = 104;
-pub const TYPE_CELL_PAIR: usize = 128;
+pub const TYPE_CELL_VALUE: usize = 104;
+pub const TYPE_CELL_REF: usize = 120;
+pub const TYPE_CELL_PAIR: usize = 144;
 /// The boxes of an `int`, a `float` and a `bool`.
-pub const TYPE_BOX_INT: usize = 144;
-pub const TYPE_BOX_FLOAT: usize = 160;
-pub const TYPE_BOX_BOOL: usize = 176;
+pub const TYPE_BOX_INT: usize = 160;
+pub const TYPE_BOX_FLOAT: usize = 176;
+pub const TYPE_BOX_BOOL: usize = 192;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 192;
+pub const FIRST_CLASS_TYPE: usize = 208;
 
 /// The start of every type table, as `u32`s: eight bytes no type lives at,
 /// so that no id is zero, then the fixed types.
@@ -108,6 +127,12 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     0,
     KIND_STRING,
     0,
+    0,
+    0,
+    // The collector follows a slice's one reference by its own rule, so it
+    // is not listed.
+    KIND_SLICE,
+    SLICE_SIZE as u32,
     0,
     0,
     KIND_VALUES,
@@ -153,6 +178,16 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     0,
     0,
 ];
+
+const _: () = {
+    assert!(RUNTIME_TYPES[TYPE_STRING / 4] == KIND_STRING);
+    assert!(RUNTIME_TYPES[TYPE_STRING_SLICE / 4] == KIND_SLICE);
+    assert!(RUNTIME_TYPES[TYPE_VALUES / 4] == KIND_VALUES);
+    assert!(RUNTIME_TYPES[TYPE_REFS / 4] == KIND_REFS);
+    assert!(RUNTIME_TYPES[TYPE_ARRAY_OF_REFS / 4 + 3] == TYPE_REFS as u32);
+    assert!(RUNTIME_TYPES[TYPE_CELL_REF / 4 + 2] == 1);
+    assert!(RUNTIME_TYPES[TYPE_BOX_BOOL / 4 + 1] == BOX_SIZE as u32);
+};
 
 /// Where the mutator keeps the address of the next object and the address
 /// its inline allocations must not pass.

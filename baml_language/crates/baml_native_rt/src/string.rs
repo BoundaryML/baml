@@ -4,37 +4,34 @@
 use crate::{
     heap::{Mutator, current_frame, load, store},
     layout::{
-        BOX_VALUE, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT, TYPE_BOX_BOOL,
-        TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ID_MASK, TYPE_STRING, WORD, words,
+        BOX_VALUE, SLICE_OFFSET, SLICE_PARENT, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS,
+        STRING_TEXT, STRING_TYPES_END, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ID_MASK,
+        TYPE_STRING, WORD, words,
     },
 };
 
-/// The text of the string object at `string`.
+/// The text of the string object at `string`: the one place that tells a
+/// string holding its text from a slice of another.
 ///
 /// # Safety
 ///
 /// `string` is a live string object, and the result is not used after the
 /// next allocation.
+#[inline]
 pub unsafe fn text<'a>(string: usize) -> &'a str {
-    // SAFETY: a string object holds its byte length and then that many
-    // bytes of UTF-8.
+    // SAFETY: a string object holds its byte length and then either that
+    // many bytes of UTF-8 or where they are in another string, which holds
+    // its own. An empty string that holds its text ends at its lengths, so
+    // a slice's words are read of a slice only.
     unsafe {
         let length = load(string + STRING_LENGTHS) & 0xFFFF_FFFF;
-        std::str::from_utf8_unchecked(std::slice::from_raw_parts(
-            (string + STRING_TEXT) as *const u8,
-            length,
-        ))
+        let start = if load(string) & TYPE_ID_MASK == TYPE_STRING {
+            string + STRING_TEXT
+        } else {
+            load(string + SLICE_PARENT) + STRING_TEXT + load(string + SLICE_OFFSET)
+        };
+        std::str::from_utf8_unchecked(std::slice::from_raw_parts(start as *const u8, length))
     }
-}
-
-/// How many characters the string object at `string` has.
-///
-/// # Safety
-///
-/// `string` is a live string object.
-unsafe fn char_count(string: usize) -> usize {
-    // SAFETY: the count is the high half of the second word.
-    unsafe { load(string + STRING_LENGTHS) >> STRING_CHAR_COUNT_SHIFT }
 }
 
 /// Allocate a string of `bytes` bytes and `chars` characters with its text
@@ -136,9 +133,9 @@ pub unsafe extern "C" fn baml_rt_string_concat(
     for index in 0..count {
         // SAFETY: the caller's contract.
         unsafe {
-            let part = load(parts + index * WORD);
-            bytes += text(part).len();
-            chars += char_count(part);
+            let lengths = load(load(parts + index * WORD) + STRING_LENGTHS);
+            bytes += lengths & 0xFFFF_FFFF;
+            chars += lengths >> STRING_CHAR_COUNT_SHIFT;
         }
         // The allocation below can move the parts.
         mutator.root_at(parts + index * WORD);
@@ -166,7 +163,15 @@ pub unsafe extern "C" fn baml_rt_string_concat(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_rt_string_eq(left: usize, right: usize) -> u8 {
     // SAFETY: the caller's contract.
-    u8::from(left == right || unsafe { text(left) == text(right) })
+    // Strings whose lengths differ are told apart without finding the text
+    // of either.
+    u8::from(
+        left == right
+            || unsafe {
+                load(left + STRING_LENGTHS) == load(right + STRING_LENGTHS)
+                    && text(left) == text(right)
+            },
+    )
 }
 
 /// Order two strings by their bytes: negative, zero or positive.
@@ -242,7 +247,7 @@ pub unsafe extern "C" fn baml_rt_string_from_any(mutator: &mut Mutator, value: u
     // SAFETY: the caller's contract: a box is a header and one value.
     let (type_id, held) = unsafe { (load(value) & TYPE_ID_MASK, load(value + BOX_VALUE)) };
     match type_id {
-        TYPE_STRING => value,
+        string if string < STRING_TYPES_END => value,
         TYPE_BOX_INT => from_ascii(
             mutator,
             int_digits(held.cast_signed() as i64, &mut [0; INT_DIGITS]),

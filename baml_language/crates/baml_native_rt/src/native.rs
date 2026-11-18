@@ -23,9 +23,10 @@ use std::{cell::Cell, marker::PhantomData};
 use crate::{
     heap::{Mutator, load, store},
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, STORAGE_CAPACITY, STORAGE_ELEMENTS,
-        STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT, TYPE_ARRAY_OF_REFS,
-        TYPE_ARRAY_OF_VALUES, TYPE_ID_MASK, TYPE_STRING, WORD, field_offset, instance_size, words,
+        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, SLICE_MIN_BYTES, SLICE_OFFSET, SLICE_PARENT,
+        SLICE_SIZE, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS,
+        STRING_TEXT, TYPE_ARRAY_OF_REFS, TYPE_ARRAY_OF_VALUES, TYPE_ID_MASK, TYPE_STRING,
+        TYPE_STRING_SLICE, WORD, field_offset, instance_size, words,
     },
 };
 
@@ -149,6 +150,31 @@ impl<'a> StrRef<'a> {
         unsafe { crate::string::text(self.0) }
     }
 
+    /// How many bytes of text the string has, which it keeps: no need to
+    /// find the text for it.
+    pub fn byte_len(self) -> usize {
+        // SAFETY: the length is the low half of a string's second word.
+        unsafe { load(self.0 + STRING_LENGTHS) & 0xFFFF_FFFF }
+    }
+
+    /// The string as what parts are taken of: its text found once.
+    pub fn whole(self) -> Whole<'a> {
+        // SAFETY: a view is of a live string, and a slice is of a string
+        // that holds its text.
+        let (holder, start) = unsafe {
+            if load(self.0) & TYPE_ID_MASK == TYPE_STRING {
+                (self.0, 0)
+            } else {
+                (load(self.0 + SLICE_PARENT), load(self.0 + SLICE_OFFSET))
+            }
+        };
+        Whole {
+            text: self.as_str(),
+            holder,
+            start,
+        }
+    }
+
     /// How many characters the string has, which it keeps.
     pub fn char_count(self) -> usize {
         // SAFETY: the count is the high half of a string's second word.
@@ -163,7 +189,25 @@ impl<'a> StrRef<'a> {
     /// Whether every character is one byte, so that a character's position
     /// is its byte's.
     pub fn is_ascii(self) -> bool {
-        self.char_count() == self.as_str().len()
+        // SAFETY: the byte length and the character count are the halves
+        // of a string's second word.
+        let lengths = unsafe { load(self.0 + STRING_LENGTHS) };
+        lengths & 0xFFFF_FFFF == lengths >> STRING_CHAR_COUNT_SHIFT
+    }
+}
+
+/// A string whose parts are being taken: its text, the string that holds
+/// that text, and the byte of the holder's text it starts at.
+#[derive(Clone, Copy)]
+pub struct Whole<'a> {
+    text: &'a str,
+    holder: usize,
+    start: usize,
+}
+
+impl<'a> Whole<'a> {
+    pub fn as_str(self) -> &'a str {
+        self.text
     }
 }
 
@@ -540,6 +584,22 @@ pub const fn str_size(bytes: usize) -> usize {
     STRING_TEXT + words(bytes)
 }
 
+/// The most bytes [`Reservation::part`] takes for a part of `bytes` bytes
+/// of text: exact for most lengths and never short, so a reservation sized
+/// by it has room, and what it leaves over goes back.
+pub const fn part_size(bytes: usize) -> usize {
+    const MOST: usize = {
+        let copied = str_size(SLICE_MIN_BYTES - 1);
+        if copied > SLICE_SIZE {
+            copied
+        } else {
+            SLICE_SIZE
+        }
+    };
+    let copied = str_size(bytes);
+    if copied < MOST { copied } else { MOST }
+}
+
 /// The bytes an array of `length` elements takes, storage included.
 pub const fn array_size(length: usize) -> usize {
     if length == 0 {
@@ -599,6 +659,43 @@ impl<'s> Reservation<'_, 's> {
                 text.len(),
             );
             StrRef::from_raw(string)
+        }
+    }
+
+    /// Bytes `from..from + bytes` of `whole`, which are `chars` whole
+    /// characters, as a string: a copy when short, and otherwise a slice of
+    /// the string that holds the text.
+    ///
+    /// # Safety
+    ///
+    /// The range is inside the text and starts and ends between
+    /// characters, of which it has `chars`.
+    #[inline]
+    pub unsafe fn part(
+        &self,
+        whole: Whole<'_>,
+        from: usize,
+        bytes: usize,
+        chars: usize,
+    ) -> StrRef<'_> {
+        if bytes < SLICE_MIN_BYTES {
+            // SAFETY: the caller's contract.
+            let text = unsafe { whole.text.get_unchecked(from..from + bytes) };
+            return self.counted_str(text, chars);
+        }
+        debug_assert!(whole.text.is_char_boundary(from));
+        debug_assert_eq!(whole.text[from..from + bytes].chars().count(), chars);
+        let slice = self.take(SLICE_SIZE);
+        // SAFETY: the slice has room for its four words.
+        unsafe {
+            store(slice, TYPE_STRING_SLICE);
+            store(
+                slice + STRING_LENGTHS,
+                bytes | (chars << STRING_CHAR_COUNT_SHIFT),
+            );
+            store(slice + SLICE_PARENT, whole.holder);
+            store(slice + SLICE_OFFSET, whole.start + from);
+            StrRef::from_raw(slice)
         }
     }
 
@@ -667,6 +764,11 @@ impl<'s> Reservation<'_, 's> {
         reason = "the object is handed over: it is good for one reservation"
     )]
     pub fn finish<M: Managed>(self, object: Built<M>) -> Root<'s, M> {
+        let unused = self.end - self.next.get();
+        if unused != 0 {
+            // Nothing has been allocated since the reservation.
+            self.scope.mutator.give_back(unused);
+        }
         // SAFETY: built in this reservation, as an `M`.
         unsafe { self.scope.root_raw(object.0) }
     }

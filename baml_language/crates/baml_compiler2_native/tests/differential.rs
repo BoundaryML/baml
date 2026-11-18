@@ -824,6 +824,28 @@ function type_test_in_match() -> int {
   for (let x in xs) { total = total * 10 + sort_out(x); }
   total
 }
+function long_part() -> string {
+  let whole = "";
+  for (let i = 0; i < count(8); i += 1) { whole = whole + "0123456789"; }
+  whole.slice(count(3), count(63))
+}
+function slice_passes_string_tests() -> string {
+  let part = long_part();
+  let total = 0;
+  if (is_a<string>(part, count(2))) { total += 1; }
+  if (is_a<int>(part, count(2))) { total += 10; }
+  if (is_a<Spot>(part, count(1))) { total += 100; }
+  let us: unknown[] = [part, count(1)];
+  let hs = [Holder { value: part }, Holder { value: null }];
+  let u = us[count(0)];
+  `${total}|${unknown_kind(u, 1)}|${union_exits(hs[count(0)].value, 1)}|${classify(u)}|${sort_out(u)}`
+}
+function slice_to_string_dispatch() -> string {
+  let xs: baml.ToString[] = [long_part(), count(7), "text"];
+  let out = show(long_part()) + "|";
+  for (let x in xs) { out = out + x.to_string() + "|"; }
+  out
+}
 class Marker { id int }
 function min_max(xs: int[], n: int) -> (int, int) {
   if (n >= xs.length()) { return (xs[0], xs[0]); }
@@ -1127,6 +1149,13 @@ const CASES: &[Case] = &[
     ),
     case("type_test_sets", Printed("11223344")),
     case("type_test_in_match", Printed("32112243")),
+    case("slice_passes_string_tests", Printed("\"1|61|60|2|1\"")),
+    case(
+        "slice_to_string_dispatch",
+        Printed(
+            "\"345678901234567890123456789012345678901234567890123456789012|345678901234567890123456789012345678901234567890123456789012|7|text|\"",
+        ),
+    ),
     case("tuple_results", Printed("1917")),
     case("tuple_of_mixed", Printed("\"end+++ 3.5 6 3\"")),
     case("tuples_in_array", Printed("46")),

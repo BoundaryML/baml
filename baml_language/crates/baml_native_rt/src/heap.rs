@@ -23,18 +23,33 @@
 //! are found precisely: each compiled call site has a stack map naming the
 //! frame slots that hold references, and the runtime's own references live
 //! in slots registered with [`Mutator::root`].
+//!
+//! A slice of a string does not keep the string alive. A reference to a
+//! slice whose string has not been reached is set aside, and once
+//! everything else has been copied each is settled: a slice of a string
+//! something else reached is copied and points at the string's copy, and a
+//! slice of a string nothing else reached becomes a string holding just its
+//! own text. The exception is a string whose slices would together take as
+//! much room as it does, which is kept for them to share.
 
 use std::alloc::{Layout, alloc, dealloc};
 
 use crate::layout::{
-    ARRAY_DATA, ARRAY_SIZE, KIND_ARRAY, KIND_FIXED, KIND_REFS, KIND_STRING, KIND_VALUES,
-    STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK,
-    WORD, words,
+    ARRAY_DATA, ARRAY_SIZE, KIND_ARRAY, KIND_FIXED, KIND_REFS, KIND_SLICE, KIND_STRING,
+    KIND_VALUES, SLICE_OFFSET, SLICE_PARENT, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS,
+    STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK, TYPE_STRING, WORD, words,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
 /// header is then its new address.
 const FORWARDED: usize = 1;
+/// Set, while slices are settled, in the header of a slice whose text has
+/// been counted and of a string whose header's high half is that count.
+const COUNTED: usize = 2;
+/// The low half of a header: the type id and the collector's bits.
+const HEADER_LOW: usize = 0xFFFF_FFFF;
+/// Where the count of a string's slices' text is in its header.
+const COUNT_SHIFT: u32 = 32;
 
 /// The first space of a heap. Spaces grow with the live data.
 const INITIAL_SPACE: usize = 8 << 20;
@@ -413,6 +428,14 @@ impl Mutator {
         address
     }
 
+    /// Take back the last `bytes` bytes of the allocation just made, which
+    /// its caller did not use.
+    pub fn give_back(&mut self, bytes: usize) {
+        debug_assert!(bytes.is_multiple_of(WORD));
+        self.alloc_ptr -= bytes;
+        self.publish_limit();
+    }
+
     /// Allocate an object of `size` bytes whose type id is `type_id`.
     pub fn allocate_object(&mut self, type_id: usize, size: usize) -> usize {
         let object = self.allocate(size);
@@ -467,6 +490,7 @@ impl Mutator {
             copy.finish();
         }
         let live = copy.free - copy.to.start;
+        debug_assert!(copy.free <= copy.to.end());
         let to = copy.to;
         let from = std::mem::replace(&mut self.heap.space, to);
         if self.heap.stress {
@@ -488,6 +512,9 @@ struct Copy<'a> {
     types: usize,
     /// Where the next copied object goes.
     free: usize,
+    /// The slots found holding a reference to a slice of a string that had
+    /// not been reached.
+    parked: Vec<usize>,
 }
 
 impl<'a> Copy<'a> {
@@ -498,6 +525,7 @@ impl<'a> Copy<'a> {
             to,
             types,
             free,
+            parked: Vec::new(),
         }
     }
 
@@ -522,7 +550,7 @@ impl<'a> Copy<'a> {
         // in the low half, in its second word.
         unsafe {
             match info.kind {
-                KIND_FIXED | KIND_ARRAY => info.size as usize,
+                KIND_FIXED | KIND_ARRAY | KIND_SLICE => info.size as usize,
                 KIND_VALUES | KIND_REFS => {
                     STORAGE_ELEMENTS + load(object + STORAGE_CAPACITY) * WORD
                 }
@@ -532,13 +560,33 @@ impl<'a> Copy<'a> {
         }
     }
 
-    /// The address of the copy of the object at `object`, copying it first
-    /// if this is the first reference to it seen. An address outside the
-    /// space being collected, null included, is returned as it is.
+    /// Copy the `size` bytes of the object at `object`, which has not been
+    /// copied, and leave the copy's address in its place.
     ///
     /// # Safety
     ///
-    /// `object` is null or the address of an object.
+    /// `object` is an object of `size` bytes in the space being copied
+    /// from.
+    unsafe fn copy_out(&mut self, object: usize, size: usize) -> usize {
+        let copy = self.free;
+        // SAFETY: the caller's contract, and the space being copied into
+        // has room for everything in the one being copied from.
+        unsafe {
+            std::ptr::copy_nonoverlapping(object as *const u8, copy as *mut u8, size);
+            store(object, copy | FORWARDED);
+        }
+        self.free += size;
+        copy
+    }
+
+    /// The address of the copy of the object at `object`, which is not a
+    /// slice, copying it first if this is the first reference to it seen.
+    /// An address outside the space being collected, null included, is
+    /// returned as it is.
+    ///
+    /// # Safety
+    ///
+    /// `object` is null or the address of an object that is not a slice.
     unsafe fn copied(&mut self, object: usize) -> usize {
         if !self.from.contains(object) {
             return object;
@@ -551,22 +599,157 @@ impl<'a> Copy<'a> {
                 return header & !FORWARDED;
             }
             let size = Self::size(object, self.info(header));
-            let copy = self.free;
-            std::ptr::copy_nonoverlapping(object as *const u8, copy as *mut u8, size);
-            self.free += size;
-            store(object, copy | FORWARDED);
-            copy
+            self.copy_out(object, size)
         }
     }
 
-    /// Make the reference in `*slot` point at the copy of its object.
+    /// Make the reference in `*slot` point at the copy of its object. A
+    /// reference to a slice of a string not reached yet is left as it is
+    /// until [`Self::settle_slices`].
     ///
     /// # Safety
     ///
-    /// `slot` is the address of a word that holds null or a reference.
+    /// `slot` is the address of a word that holds null or a reference, and
+    /// stays where it is until the collection ends.
     unsafe fn forward(&mut self, slot: usize) {
-        // SAFETY: the caller's contract.
-        unsafe { store(slot, self.copied(load(slot))) };
+        // SAFETY: the caller's contract, and every object in the space
+        // being copied from has a header that is a type id or a forwarding
+        // address.
+        unsafe {
+            let object = load(slot);
+            if !self.from.contains(object) {
+                return;
+            }
+            let header = load(object);
+            if header & FORWARDED != 0 {
+                store(slot, header & !FORWARDED);
+                return;
+            }
+            let info = self.info(header);
+            if info.kind == KIND_SLICE {
+                let parent = load(object + SLICE_PARENT);
+                if self.from.contains(parent) {
+                    let reached = load(parent);
+                    if reached & FORWARDED == 0 {
+                        self.parked.push(slot);
+                        return;
+                    }
+                    store(object + SLICE_PARENT, reached & !FORWARDED);
+                }
+            }
+            let size = Self::size(object, info);
+            store(slot, self.copy_out(object, size));
+        }
+    }
+
+    /// Settle every reference set aside: by now whatever is going to reach
+    /// a string directly has.
+    ///
+    /// Nothing here needs scanning afterwards: a string holds no
+    /// reference, and a slice copied here already points at a copy.
+    ///
+    /// # Safety
+    ///
+    /// Everything reachable other than through the slots set aside has
+    /// been copied.
+    unsafe fn settle_slices(&mut self) {
+        let parked = std::mem::take(&mut self.parked);
+        // SAFETY: each slot holds a reference to a slice in the space being
+        // copied from; a slice's string holds its text, and the headers
+        // written here are of objects that space is abandoned with.
+        unsafe {
+            // How much room the text of each unreached string's slices
+            // would take as strings of their own, each slice counted once.
+            for &slot in &parked {
+                let slice = load(slot);
+                let header = load(slice);
+                if header & (FORWARDED | COUNTED) != 0 {
+                    continue;
+                }
+                let parent = load(slice + SLICE_PARENT);
+                let mut counted = load(parent);
+                if counted & FORWARDED != 0 {
+                    continue;
+                }
+                if counted & COUNTED == 0 {
+                    counted = (counted & HEADER_LOW) | COUNTED;
+                }
+                let count = (counted >> COUNT_SHIFT) + Self::text_size(slice);
+                store(slice, header | COUNTED);
+                store(
+                    parent,
+                    (counted & HEADER_LOW) | (count.min(HEADER_LOW) << COUNT_SHIFT),
+                );
+            }
+            for &slot in &parked {
+                let slice = load(slot);
+                let header = load(slice);
+                if header & FORWARDED != 0 {
+                    store(slot, header & !FORWARDED);
+                    continue;
+                }
+                let parent = load(slice + SLICE_PARENT);
+                let mut reached = load(parent);
+                if reached & FORWARDED == 0 {
+                    let (count, size) = (reached >> COUNT_SHIFT, Self::text_size(parent));
+                    if count < size && count < HEADER_LOW {
+                        store(slot, self.flatten(slice));
+                        continue;
+                    }
+                    // Its slices are no smaller than it is. The count goes,
+                    // and so would a hash kept where it was.
+                    store(parent, TYPE_STRING);
+                    reached = self.copy_out(parent, size) | FORWARDED;
+                }
+                store(slice, header & !COUNTED);
+                store(slice + SLICE_PARENT, reached & !FORWARDED);
+                let size = Self::size(slice, self.info(header));
+                store(slot, self.copy_out(slice, size));
+            }
+        }
+    }
+
+    /// The bytes a string holding the text of the string at `string` takes.
+    ///
+    /// # Safety
+    ///
+    /// `string` is a string or a slice.
+    unsafe fn text_size(string: usize) -> usize {
+        // SAFETY: both keep their byte length in the low half of their
+        // second word.
+        unsafe { STRING_TEXT + words(load(string + STRING_LENGTHS) & HEADER_LOW) }
+    }
+
+    /// Copy the text of the slice at `slice`, whose string is not copied,
+    /// into a new string, which every later reference to the slice finds in
+    /// its place.
+    ///
+    /// # Safety
+    ///
+    /// `slice` is a slice in the space being copied from that has not been
+    /// copied, of a string in that space.
+    unsafe fn flatten(&mut self, slice: usize) -> usize {
+        let flat = self.free;
+        // SAFETY: the caller's contract. The strings made here of one
+        // string's slices take less room than that string, which is not
+        // copied, so the space being copied into has room.
+        unsafe {
+            let lengths = load(slice + STRING_LENGTHS);
+            let size = Self::text_size(slice);
+            let text = load(slice + SLICE_PARENT) + STRING_TEXT + load(slice + SLICE_OFFSET);
+            store(flat, TYPE_STRING);
+            // The last word first, for the zeros after the text.
+            store(flat + size - WORD, 0);
+            store(flat + STRING_LENGTHS, lengths);
+            std::ptr::copy_nonoverlapping(
+                text as *const u8,
+                (flat + STRING_TEXT) as *mut u8,
+                lengths & HEADER_LOW,
+            );
+            store(slice, flat | FORWARDED);
+            self.free += size;
+        }
+        flat
     }
 
     /// Forward the references in every compiled frame between `top` and
@@ -644,6 +827,8 @@ impl<'a> Copy<'a> {
                 scan += Self::size(scan, info);
             }
         }
+        // SAFETY: the scan is done.
+        unsafe { self.settle_slices() };
     }
 }
 
@@ -688,8 +873,8 @@ mod tests {
     use crate::{
         array::{baml_rt_array_new, baml_rt_array_push_slow},
         layout::{
-            ARRAY_LENGTH, FIRST_CLASS_TYPE, RUNTIME_TYPES, TYPE_ARRAY_OF_REFS, field_offset,
-            instance_size,
+            ARRAY_LENGTH, FIRST_CLASS_TYPE, RUNTIME_TYPES, SLICE_SIZE, TYPE_ARRAY_OF_REFS,
+            TYPE_STRING_SLICE, field_offset, instance_size,
         },
         string,
     };
@@ -800,5 +985,119 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A slice of bytes `from..to` of the string in `*parent`, which is all
+    /// ASCII.
+    fn slice(mutator: &mut Mutator, parent: &mut usize, from: usize, to: usize) -> usize {
+        mutator.root(parent);
+        let slice = mutator.allocate_object(TYPE_STRING_SLICE, SLICE_SIZE);
+        mutator.unroot(1);
+        let length = to - from;
+        // SAFETY: a fresh slice of four words.
+        unsafe {
+            store(slice + STRING_LENGTHS, length | (length << 32));
+            store(slice + SLICE_PARENT, *parent);
+            store(slice + SLICE_OFFSET, from);
+        }
+        slice
+    }
+
+    fn is_slice(string: usize) -> bool {
+        // SAFETY: `string` is a live string.
+        unsafe { load(string) & TYPE_ID_MASK == TYPE_STRING_SLICE }
+    }
+
+    const LETTERS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+    #[test]
+    fn a_slice_alone_becomes_a_string_of_its_own_text() {
+        let mut mutator = mutator(true);
+        let mut parent = string::from_str(&mut mutator, &LETTERS.repeat(4));
+        let mut part = slice(&mut mutator, &mut parent, 5, 45);
+        let mut again = part;
+        mutator.root(&mut part);
+        mutator.root(&mut again);
+        mutator.allocate(WORD);
+        mutator.unroot(2);
+        assert!(!is_slice(part));
+        assert_eq!(part, again);
+        // SAFETY: `part` was kept current.
+        assert_eq!(unsafe { string::text(part) }, &LETTERS.repeat(4)[5..45]);
+        let live = mutator.alloc_ptr - mutator.heap.space.start;
+        assert_eq!(live, STRING_TEXT + words(40) + WORD);
+    }
+
+    #[test]
+    fn a_slice_follows_a_string_reached_before_or_after_it() {
+        for string_first in [false, true] {
+            let mut mutator = mutator(true);
+            let mut parent = string::from_str(&mut mutator, &LETTERS.repeat(4));
+            let mut part = slice(&mut mutator, &mut parent, 5, 45);
+            if string_first {
+                mutator.root(&mut parent);
+                mutator.root(&mut part);
+            } else {
+                mutator.root(&mut part);
+                mutator.root(&mut parent);
+            }
+            mutator.allocate(WORD);
+            mutator.unroot(2);
+            assert!(is_slice(part));
+            // SAFETY: both were kept current.
+            unsafe {
+                assert_eq!(load(part + SLICE_PARENT), parent);
+                assert_eq!(string::text(part), &LETTERS.repeat(4)[5..45]);
+            }
+        }
+    }
+
+    #[test]
+    fn slices_as_large_as_their_string_share_it() {
+        let mut mutator = mutator(true);
+        let text = LETTERS.repeat(2);
+        let mut parent = string::from_str(&mut mutator, &text);
+        let mut parts = [0; 3];
+        for (index, part) in parts.iter_mut().enumerate() {
+            *part = slice(&mut mutator, &mut parent, index, index + 60);
+            mutator.root(part);
+        }
+        mutator.allocate(WORD);
+        mutator.unroot(3);
+        // SAFETY: the parts were kept current.
+        unsafe {
+            let shared = load(parts[0] + SLICE_PARENT);
+            assert_eq!(string::text(shared), text);
+            assert_eq!(load(shared), TYPE_STRING);
+            for (index, &part) in parts.iter().enumerate() {
+                assert!(is_slice(part));
+                assert_eq!(load(part + SLICE_PARENT), shared);
+                assert_eq!(string::text(part), &text[index..index + 60]);
+            }
+        }
+    }
+
+    #[test]
+    fn slices_smaller_than_their_string_leave_it_behind() {
+        let mut mutator = mutator(true);
+        let text = LETTERS.repeat(8);
+        let mut parent = string::from_str(&mut mutator, &text);
+        let mut parts = [0; 3];
+        for (index, part) in parts.iter_mut().enumerate() {
+            *part = slice(&mut mutator, &mut parent, index * 100, index * 100 + 40);
+            mutator.root(part);
+        }
+        mutator.allocate(WORD);
+        mutator.unroot(3);
+        for (index, &part) in parts.iter().enumerate() {
+            assert!(!is_slice(part));
+            // SAFETY: the parts were kept current.
+            assert_eq!(
+                unsafe { string::text(part) },
+                &text[index * 100..index * 100 + 40]
+            );
+        }
+        let live = mutator.alloc_ptr - mutator.heap.space.start;
+        assert_eq!(live, 3 * (STRING_TEXT + words(40)) + WORD);
     }
 }
