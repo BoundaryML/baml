@@ -1,0 +1,4 @@
+edition = "2024"
+style_edition = "2024"
+# Preserve upstream source formatting and keep the vendored patch isolated.
+disable_all_formatting = true

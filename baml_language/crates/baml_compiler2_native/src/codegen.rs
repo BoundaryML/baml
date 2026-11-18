@@ -297,6 +297,11 @@ impl<'db> Backend<'db> {
         flags.set("is_pic", "true").map_err(internal)?;
         // The mutator's address lives in the pinned register.
         flags.set("enable_pinned_reg", "true").map_err(internal)?;
+        // Every read of it wants the worker this code is running on now, so
+        // an address off it can use the register itself.
+        flags
+            .set("fold_pinned_reg_reads", "true")
+            .map_err(internal)?;
         // The collector walks the chain of frame records.
         flags
             .set("preserve_frame_pointers", "true")
@@ -2314,9 +2319,11 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.ins().symbol_value(WORD, global)
     }
 
-    /// The address of the worker this code is running on.
+    /// The address of the worker this code is running on: the pinned
+    /// register, read where it is used so that an access to the worker
+    /// addresses off the register itself.
     fn mutator(&mut self) -> ir::Value {
-        self.builder.use_var(self.worker)
+        self.builder.ins().get_pinned_reg(WORD)
     }
 
     /// Read the worker's address from the pinned register: on entry, and
@@ -2693,7 +2700,13 @@ impl<'a, 'db> Translator<'a, 'db> {
             // defined not to trap there.
             BinOp::Mod => {
                 self.require_nonzero_divisor(left, right, right_constant)?;
-                Ok(self.builder.ins().srem(left, right))
+                Ok(match right_constant {
+                    // A constant divisor is left to the optimizer.
+                    Some(_) => self.builder.ins().srem(left, right),
+                    // Zero went the other way just above, so the
+                    // instruction need not look for it again.
+                    None => self.builder.ins().srem_unchecked(left, right),
+                })
             }
             BinOp::BitAnd => Ok(self.builder.ins().band(left, right)),
             BinOp::BitOr => Ok(self.builder.ins().bor(left, right)),
@@ -2755,7 +2768,9 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.ins().jump(done, &[negated.into()]);
 
         self.builder.switch_to_block(divide);
-        let quotient = self.builder.ins().sdiv(left, right);
+        // Neither divisor the instruction could not divide by gets here, so
+        // it is the bare divide, with no checks of its own.
+        let quotient = self.builder.ins().sdiv_unchecked(left, right);
         self.builder.ins().jump(done, &[quotient.into()]);
         self.builder.seal_block(done);
 

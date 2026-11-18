@@ -36,6 +36,13 @@ allow = [
     "Unlicense",
     "Zlib",
 ]
+# Cranelift is vendored and patched in `vendor/`; its licence is Apache-2.0 with
+# the LLVM exception, accepted for these crates only.
+exceptions = [
+    { allow = ["Apache-2.0 WITH LLVM-exception"], crate = "cranelift-codegen" },
+    { allow = ["Apache-2.0 WITH LLVM-exception"], crate = "cranelift-codegen-meta" },
+    { allow = ["Apache-2.0 WITH LLVM-exception"], crate = "cranelift-frontend" },
+]
 # Confidence threshold for license detection (0.0 to 1.0)
 confidence-threshold = 0.8
 # Allow licenses that have not been identified
