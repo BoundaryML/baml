@@ -2810,6 +2810,13 @@ impl<'a, 'db> Translator<'a, 'db> {
             Some(divisor) if divisor != 0 => return Ok(self.builder.ins().sdiv(left, right)),
             _ => {}
         }
+        if cfg!(target_arch = "aarch64") {
+            // The arm64 instruction does not trap, and what it gives for the
+            // smallest int over -1 is the smallest int, as wrapping does:
+            // only zero is looked for.
+            self.require_nonzero_divisor(left, right, None)?;
+            return Ok(self.builder.ins().sdiv_unchecked(left, right));
+        }
         // One comparison finds both divisors that are not divided by: plus
         // one, they are the only values at most one, unsigned.
         let shifted = self.builder.ins().iadd_imm(right, 1);
