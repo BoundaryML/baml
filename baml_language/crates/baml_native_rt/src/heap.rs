@@ -306,6 +306,9 @@ pub struct Mutator {
     pub(crate) unwind: crate::unwind::Unwinder,
     /// Whether a runtime function has moved to the worker's own stack.
     on_worker_stack: bool,
+    /// The `async` native this worker is polling, for a panic inside it
+    /// to name.
+    pub(crate) polling: Option<&'static str>,
 }
 
 const _: () = {
@@ -376,6 +379,7 @@ impl Mutator {
             roots: Vec::new(),
             unwind: crate::unwind::Unwinder::new(program.unwind, program.functions),
             on_worker_stack: false,
+            polling: None,
         };
         mutator.publish_limit();
         mutator

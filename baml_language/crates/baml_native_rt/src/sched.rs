@@ -73,7 +73,7 @@ use std::{
     io::Write,
     sync::{
         Arc, Condvar, Mutex,
-        atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -102,6 +102,11 @@ const STACK_GUARD: usize = 16 << 10;
 /// calls and to the functions that do not check: the entry check of a
 /// compiled function fails below this.
 const RUNTIME_STACK: usize = 16 << 10;
+
+/// The worker of this process, for what is handed no worker and cannot
+/// find one through a register: a panic hook. Null until the program runs.
+/// With several workers this becomes the list of them.
+pub(crate) static WORKER: AtomicPtr<Mutator> = AtomicPtr::new(std::ptr::null_mut());
 
 /// Not in use.
 const FREE: u32 = 0;
@@ -990,6 +995,7 @@ pub unsafe fn run(worker: *mut Mutator, entry: usize, migrate: bool) -> i32 {
     // address here because tasks reach it through their pinned register in
     // between.
     unsafe {
+        WORKER.store(worker, Ordering::Release);
         let main = (*worker).sched.new_task(MAIN_STACK, entry);
         (*main).flags = TASK_MAIN;
         (*worker).sched.queue.push_back(main);
@@ -1094,6 +1100,7 @@ unsafe fn serve_in_turns(home: *mut Mutator) {
             std::ptr::copy_nonoverlapping(from, to, 1);
             (*to).sched.migrate = Some(thread);
         }
+        WORKER.store(to, Ordering::Release);
     }
     let protect = |place: usize, protection: i32| {
         // SAFETY: a mapping of this function's own.
@@ -1163,6 +1170,7 @@ unsafe fn serve_in_turns(home: *mut Mutator) {
         std::ptr::copy_nonoverlapping(worker as *const Mutator, home, 1);
         (*home).sched.migrate = None;
     }
+    WORKER.store(home, Ordering::Release);
 }
 
 #[cfg(all(test, target_arch = "aarch64"))]

@@ -25,14 +25,13 @@
 //! for as long as the native has not returned.
 
 use std::{
-    cell::Cell,
     future::Future,
     io::Write,
     marker::PhantomData,
     mem::{ManuallyDrop, MaybeUninit},
     pin::Pin,
     ptr::NonNull,
-    sync::{Arc, Mutex, Once, OnceLock},
+    sync::{Arc, Mutex, Once, OnceLock, atomic::Ordering},
     task::{Context, Poll, Waker},
 };
 
@@ -194,11 +193,6 @@ where
     }
 }
 
-thread_local! {
-    /// The native this thread is polling, for a panic inside it to name.
-    static POLLING: Cell<Option<&'static str>> = const { Cell::new(None) };
-}
-
 /// What a native may await, for the two messages that say it awaited
 /// something else.
 const MAY_AWAIT: &str = "A native may await only `scope.call_baml` and `scope.io`. Async Rust \
@@ -208,12 +202,21 @@ const MAY_AWAIT: &str = "A native may await only `scope.call_baml` and `scope.io
 /// Say which native it was when a panic comes out of a poll. A Tokio type
 /// used outside the job of `scope.io` panics for want of a runtime, and
 /// that message alone does not say where to look.
+///
+/// The name is in the worker, not in a thread-local: a function that is on
+/// a task's stack while the task stops may go on on another thread, and
+/// the compiler is free to keep the address of a thread-local it has
+/// found once.
 fn name_native_in_panics() {
     static HOOKED: Once = Once::new();
     HOOKED.call_once(|| {
         let earlier = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |panic| {
-            if let Some(name) = POLLING.get() {
+            let worker = crate::sched::WORKER.load(Ordering::Acquire);
+            // SAFETY: null or the worker, which is polling on this thread
+            // when a native panics.
+            let polling = unsafe { worker.as_ref() }.and_then(|worker| worker.polling);
+            if let Some(name) = polling {
                 let _ = writeln!(
                     std::io::stderr().lock(),
                     "fatal: the native `{name}` panicked while it was polled. {MAY_AWAIT}"
@@ -243,9 +246,9 @@ unsafe fn run(mut worker: *mut Mutator, head: *mut Head) -> RtResult {
         (*head).outer = (*task).natives;
         (*task).natives = head;
         let result = loop {
-            POLLING.set(Some((*head).name));
+            (*worker).polling = Some((*head).name);
             let polled = ((*head).poll)(head);
-            POLLING.set(None);
+            (*worker).polling = None;
             if let Poll::Ready(result) = polled {
                 break result;
             }
@@ -577,7 +580,10 @@ mod tests {
             functions: 0,
         };
         // SAFETY: both tables are in the compiler's formats.
-        Box::new(unsafe { Mutator::new(program, stress) })
+        let mut worker = Box::new(unsafe { Mutator::new(program, stress) });
+        // For a test that drives a native without running the scheduler.
+        crate::sched::WORKER.store(&raw mut *worker, Ordering::Release);
+        worker
     }
 
     /// A worker running a task: where a native runs.
@@ -737,6 +743,44 @@ mod tests {
             assert_eq!(status, 0);
             assert_eq!(SAME_THREAD.load(Ordering::Acquire), !migrate);
         }
+    }
+
+    /// Runs a native that panics once it has stopped and gone on.
+    unsafe extern "C" fn panics_after_a_stop(worker: *mut Mutator) -> *mut Mutator {
+        // SAFETY: on a task of `worker`, with no compiled caller.
+        unsafe {
+            drive(
+                &mut *worker,
+                "test.panics_after_a_stop",
+                |scope| async move {
+                    let called = scope.call_baml(BamlFn(sleeps as *const () as usize), &[]);
+                    let _ = called.await;
+                    panic!("after the stop")
+                },
+            );
+        }
+        worker
+    }
+    crate::sched::tests::task_function!(panics_after_a_stop_task => panics_after_a_stop);
+
+    #[test]
+    #[ignore = "ends its process: run by the test below"]
+    fn panics_after_it_moved() {
+        let mut worker = worker(false);
+        let entry = panics_after_a_stop_task as *const () as usize;
+        // SAFETY: the worker is this test's, and the entry a task function.
+        unsafe { crate::sched::run(&raw mut *worker, entry, true) };
+    }
+
+    /// The panic of a native is named whichever thread it is polled on: it
+    /// stopped on one and went on on another.
+    #[test]
+    fn a_native_that_panics_after_it_moved_is_named() {
+        let stderr = in_a_process_of_its_own("panics_after_it_moved");
+        assert!(
+            stderr.contains("the native `test.panics_after_a_stop` panicked while it was polled"),
+            "{stderr}"
+        );
     }
 
     /// Run the ignored test `name` of this module in a process of its own,
