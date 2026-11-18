@@ -7982,12 +7982,18 @@ impl BexVm {
         thrown: VmThrown,
         entry: RaiseEntry,
     ) -> Result<(), VmError> {
+        self.with_telemetry_unwind(|vm| {
+            vm.unwind_exception_frames(frame_idx, function, thrown, entry)
+        })
+    }
+
+    fn with_telemetry_unwind<T>(&mut self, unwind: impl FnOnce(&mut Self) -> T) -> T {
         // Only the innermost span the error escapes records it by default.
         let enclosing = self
             .telemetry
             .as_mut()
             .and_then(crate::telemetry::TelemetryState::begin_unwind);
-        let result = self.unwind_exception_frames(frame_idx, function, thrown, entry);
+        let result = unwind(self);
         if let Some(state) = self.telemetry.as_mut() {
             state.end_unwind(enclosing);
         }
