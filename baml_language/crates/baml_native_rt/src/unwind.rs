@@ -9,11 +9,23 @@
 //! is abandoned, and nothing unwinds through Rust.
 //!
 //! The search has two phases. The first pops nothing: it walks the frame
-//! records from the throw outwards, looks each return address up in the
-//! table of calls that have a handler, and stops at the first one found.
-//! Whatever the handler needs made (the trace of the throw, when it reads
-//! the error's context) is allocated then, with every frame still in place
-//! and described by its stack map, so a collection there is like any other.
+//! records from the throw outwards and looks each return address up in the
+//! table of calls that have handlers. The table says what each handler
+//! takes, so a handler that would only pass the error on is not landed in:
+//! the walk goes by it. The first handler that takes the error is where the
+//! throw resumes.
+//!
+//! The same walk decides whether the trace of the throw is made, by going
+//! on past that handler for as long as the answer is open. A handler that
+//! takes the error and reads its context wants the trace. One that takes
+//! it and cannot throw it again ends its flight: nothing will read a
+//! trace. One that takes it and may throw it again (a `defer`, always)
+//! leaves the question to the handlers after it, as does one that does not
+//! take it. The function that enters compiled code takes everything and
+//! reads the context, to report it. A trace that is wanted is allocated
+//! then, with every frame still in place and described by its stack map,
+//! so a collection there is like any other, and travels with the error
+//! through every landing and rethrow; one that is not wanted costs nothing.
 //! The second phase allocates nothing: it only says where to resume.
 //!
 //! Only the frame records are read, through the chain of frame pointers:
@@ -23,22 +35,19 @@
 use std::{cell::OnceCell, io::Write};
 
 use crate::{
-    division_by_zero_text, float_text,
+    class::{self, Init},
     heap::{Mutator, current_frame, load, store},
-    index_out_of_bounds_text,
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, BOX_SIZE, BOX_VALUE, STORAGE_CAPACITY,
-        STORAGE_ELEMENTS, STRING_TYPES_END, TYPE_ARRAY_OF_VALUES, TYPE_BOX_BOOL, TYPE_BOX_FLOAT,
-        TYPE_BOX_INT, TYPE_ERROR, TYPE_ID_MASK, TYPE_PANIC, TYPE_VALUES, WORD,
+        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, HANDLER_BINDS_CONTEXT, HANDLER_MAY_RETHROW,
+        HANDLER_TAKES_ALL, HANDLER_TAKES_NULL, HANDLER_TAKES_OTHERS, HANDLER_TAKES_PANICS,
+        HEADER_PANIC, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_TYPES_END, TYPE_ARRAY_OF_VALUES,
+        TYPE_ID_MASK, TYPE_STRING, TYPE_VALUES, WELL_KNOWN_DIVISION_BY_ZERO,
+        WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_NEGATIVE_BIT_SHIFT, WORD,
     },
-    negative_shift_text, string,
 };
 
-/// Set in a site's flags when its handler reads the context it lands with.
-const SITE_WANTS_CONTEXT: usize = 1;
-
 /// The versions of the compiler's tables this reads.
-const UNWIND_VERSION: usize = 1;
+const UNWIND_VERSION: usize = 2;
 const FUNCTIONS_VERSION: usize = 2;
 
 /// Where compiled code goes on after a throw, as the stub reads it.
@@ -50,30 +59,107 @@ pub struct Resume {
     fp: usize,
     /// The handler's first instruction.
     pc: usize,
-    /// What the handler lands with: the error and its context.
+    /// What the handler lands with: the error and its trace, or zero for
+    /// a trace nothing will read.
     error: usize,
     context: usize,
     /// The worker the handler runs on.
     worker: usize,
 }
 
-/// A call with a handler.
+/// A call with handlers: the handlers of the blocks it is in, innermost
+/// first.
 #[derive(Clone, Copy)]
 struct Site {
     return_address: usize,
-    handler: usize,
     /// The frame pointer minus the stack pointer at the call.
     frame_offset: usize,
-    flags: usize,
+    /// Its handlers, in [`Tables::handlers`].
+    first: usize,
+    count: usize,
 }
 
-/// The program's table of calls with a handler, decoded when first thrown
+/// A handler and what it takes.
+#[derive(Clone, Copy)]
+struct Handler {
+    /// Its first instruction.
+    address: usize,
+    flags: u32,
+    /// The type ids it takes whatever its flags say: the address of the
+    /// first, and how many.
+    ids: usize,
+    count: usize,
+}
+
+/// What a handler asks of an error to say whether it takes it.
+#[derive(Clone, Copy)]
+struct Thrown {
+    is_null: bool,
+    is_panic: bool,
+    /// Its type id; a string's is that of one holding its text.
+    type_id: usize,
+}
+
+impl Thrown {
+    /// # Safety
+    ///
+    /// `error` is zero or a live object.
+    unsafe fn of(error: usize) -> Self {
+        if error == 0 {
+            return Self {
+                is_null: true,
+                is_panic: false,
+                type_id: 0,
+            };
+        }
+        // SAFETY: the caller's contract.
+        let header = unsafe { load(error) };
+        let type_id = header & TYPE_ID_MASK;
+        Self {
+            is_null: false,
+            is_panic: header & HEADER_PANIC != 0,
+            type_id: if type_id < STRING_TYPES_END {
+                TYPE_STRING
+            } else {
+                type_id
+            },
+        }
+    }
+}
+
+impl Handler {
+    fn takes(&self, thrown: Thrown) -> bool {
+        let by_flags = if thrown.is_null {
+            HANDLER_TAKES_ALL | HANDLER_TAKES_OTHERS | HANDLER_TAKES_NULL
+        } else if thrown.is_panic {
+            HANDLER_TAKES_ALL | HANDLER_TAKES_PANICS
+        } else {
+            HANDLER_TAKES_ALL | HANDLER_TAKES_OTHERS
+        };
+        if self.flags & by_flags != 0 {
+            return true;
+        }
+        // SAFETY: the table holds `count` ids at `ids`.
+        !thrown.is_null
+            && (0..self.count).any(|index| unsafe { word(self.ids + index * 4) } == thrown.type_id)
+    }
+}
+
+/// The compiler's table, decoded.
+#[derive(Default)]
+struct Tables {
+    /// Sorted by return address.
+    sites: Vec<Site>,
+    handlers: Vec<Handler>,
+}
+
+/// The program's table of calls with handlers, decoded when first thrown
 /// through.
 pub(crate) struct Unwinder {
     table: usize,
     functions: usize,
-    sites: OnceCell<Vec<Site>>,
-    /// The return addresses of the last trace taken, kept for its room.
+    tables: OnceCell<Tables>,
+    /// The return addresses of the last walk, kept for its room.
     trace: Vec<usize>,
 }
 
@@ -92,46 +178,65 @@ impl Unwinder {
         Self {
             table,
             functions,
-            sites: OnceCell::new(),
+            tables: OnceCell::new(),
             trace: Vec::new(),
         }
     }
 
-    /// The sites of the table, sorted by return address. The format is the
-    /// compiler's, described where it emits the table.
-    fn sites(&self) -> &[Site] {
-        self.sites.get_or_init(|| {
-            let mut sites = Vec::new();
+    /// The table, decoded. The format is the compiler's, described where it
+    /// emits the table.
+    fn tables(&self) -> &Tables {
+        self.tables.get_or_init(|| {
+            let mut tables = Tables::default();
             // SAFETY: `table` is the address of the compiler's table.
             unsafe {
                 assert!(word(self.table) == UNWIND_VERSION, "an unwind table");
                 let mut cursor = self.table + 8;
                 for _ in 0..word(self.table + 4) {
                     let function = load(cursor);
-                    let count = word(cursor + 8);
+                    let (sites, handlers) = (word(cursor + 8), word(cursor + 12));
                     cursor += 16;
-                    for _ in 0..count {
-                        sites.push(Site {
+                    let first = tables.handlers.len();
+                    for _ in 0..sites {
+                        tables.sites.push(Site {
                             return_address: function + word(cursor),
-                            handler: function + word(cursor + 4),
-                            frame_offset: word(cursor + 8),
-                            flags: word(cursor + 12),
+                            frame_offset: word(cursor + 4),
+                            first: first + word(cursor + 8),
+                            count: word(cursor + 12),
+                        });
+                        cursor += 16;
+                    }
+                    for _ in 0..handlers {
+                        tables.handlers.push(Handler {
+                            address: function + word(cursor),
+                            flags: ((cursor + 4) as *const u32).read_unaligned(),
+                            ids: self.table + word(cursor + 8),
+                            count: word(cursor + 12),
                         });
                         cursor += 16;
                     }
                 }
             }
-            sites.sort_unstable_by_key(|site| site.return_address);
-            sites
+            tables
+                .sites
+                .sort_unstable_by_key(|site| site.return_address);
+            tables
         })
     }
 
-    fn handler(&self, return_address: usize) -> Option<Site> {
-        let sites = self.sites();
-        sites
+    /// The handlers of the call that returns to `return_address`,
+    /// innermost first, with the call's frame offset.
+    fn handlers(&self, return_address: usize) -> Option<(&[Handler], usize)> {
+        let tables = self.tables();
+        let index = tables
+            .sites
             .binary_search_by_key(&return_address, |site| site.return_address)
-            .ok()
-            .map(|index| sites[index])
+            .ok()?;
+        let site = tables.sites[index];
+        Some((
+            &tables.handlers[site.first..site.first + site.count],
+            site.frame_offset,
+        ))
     }
 
     /// The name of the function whose code holds `address`.
@@ -204,32 +309,52 @@ fn int_array(mutator: &mut Mutator, addresses: &[usize]) -> usize {
 }
 
 /// Find the handler of `error`, thrown by the compiled frame that last
-/// called the runtime, and say where to resume. `context` is zero for a new
-/// throw.
+/// called the runtime, and say where to resume. `context` is the trace the
+/// error was caught with, or zero when it has none: a new throw, or one
+/// whose trace nothing was going to read.
 fn unwind(mutator: &mut Mutator, mut error: usize, mut context: usize, resume: &mut Resume) {
-    // The first phase: nothing is popped. One walk finds the handler and,
-    // when the handler reads a context that is yet to be made, goes on to
-    // the outermost frame for the trace: the return address into every
-    // compiled frame, innermost first.
+    // SAFETY: compiled code throws null or a live object.
+    let thrown = unsafe { Thrown::of(error) };
+    // The first phase: nothing is popped. One walk finds the handler to
+    // land in and whether the trace is wanted, and when it is, goes on to
+    // the outermost frame for it: the return address into every compiled
+    // frame, innermost first.
     let mut trace = std::mem::take(&mut mutator.unwind.trace);
     trace.clear();
     let mut found = None;
-    for (pc, fp) in frames(mutator) {
-        if found.is_none()
-            && let Some(site) = mutator.unwind.handler(pc)
+    // An error that has its trace needs none made.
+    let mut wanted = (context != 0).then_some(false);
+    'frames: for (pc, fp) in frames(mutator) {
+        if wanted != Some(true)
+            && let Some((handlers, frame_offset)) = mutator.unwind.handlers(pc)
         {
-            found = Some((site, fp));
-            if context != 0 || site.flags & SITE_WANTS_CONTEXT == 0 {
-                break;
+            for handler in handlers {
+                if !handler.takes(thrown) {
+                    continue;
+                }
+                if found.is_none() {
+                    found = Some((handler.address, fp - frame_offset, fp));
+                }
+                if wanted.is_some() {
+                    break 'frames;
+                }
+                if handler.flags & HANDLER_BINDS_CONTEXT != 0 {
+                    wanted = Some(true);
+                    break;
+                }
+                if handler.flags & HANDLER_MAY_RETHROW == 0 {
+                    wanted = Some(false);
+                    break 'frames;
+                }
             }
         }
         trace.push(pc);
     }
-    let Some((site, fp)) = found else {
-        // The function that enters compiled code catches everything.
+    let Some((pc, sp, fp)) = found else {
+        // The function that enters compiled code takes everything.
         fatal("a throw found no handler");
     };
-    if context == 0 && site.flags & SITE_WANTS_CONTEXT != 0 {
+    if wanted == Some(true) {
         mutator.root(&mut error);
         context = int_array(mutator, &trace);
         mutator.unroot(1);
@@ -238,9 +363,9 @@ fn unwind(mutator: &mut Mutator, mut error: usize, mut context: usize, resume: &
     // The second phase: nothing allocates. A popped frame's telemetry slot
     // would be completed here, with how the frame ended.
     *resume = Resume {
-        sp: fp - site.frame_offset,
+        sp,
         fp,
-        pc: site.handler,
+        pc,
         error,
         context,
         worker: std::ptr::from_mut(mutator) as usize,
@@ -253,15 +378,32 @@ fn fatal(message: &str) -> ! {
     std::process::exit(70)
 }
 
-/// A panic that is written as `text`. May collect.
-fn panic_object(mutator: &mut Mutator, text: &str) -> usize {
-    let mut text = string::from_str(mutator, text);
-    mutator.root(&mut text);
-    let object = mutator.allocate_object(TYPE_PANIC, BOX_SIZE);
-    mutator.unroot(1);
-    // SAFETY: the object is a header and one slot.
-    unsafe { store(object + BOX_VALUE, text) };
-    object
+/// A `baml.panics.DivisionByZero`. Its dividend is an `int` or a `bigint`,
+/// so the `int` is in a box. May collect.
+fn division_by_zero(mutator: &mut Mutator, dividend: i64) -> usize {
+    class::well_known(
+        mutator,
+        WELL_KNOWN_DIVISION_BY_ZERO,
+        &[Init::BoxedInt(dividend)],
+    )
+}
+
+/// A `baml.panics.NegativeBitShift`. May collect.
+fn negative_shift(mutator: &mut Mutator, count: i64) -> usize {
+    class::well_known(
+        mutator,
+        WELL_KNOWN_NEGATIVE_BIT_SHIFT,
+        &[Init::Text(&format!("bit shift count is negative: {count}"))],
+    )
+}
+
+/// A `baml.panics.IndexOutOfBounds`. May collect.
+fn index_out_of_bounds(mutator: &mut Mutator, index: i64, length: i64) -> usize {
+    class::well_known(
+        mutator,
+        WELL_KNOWN_INDEX_OUT_OF_BOUNDS,
+        &[Init::Int(index), Init::Int(length)],
+    )
 }
 
 /// `throw`: `frame` is the frame record of the stub compiled code called.
@@ -296,7 +438,7 @@ pub(crate) extern "C" fn panic_division_by_zero(
     resume: &mut Resume,
 ) {
     mutator.enter(frame);
-    let error = panic_object(mutator, &division_by_zero_text(dividend));
+    let error = division_by_zero(mutator, dividend);
     unwind(mutator, error, 0, resume);
 }
 
@@ -308,7 +450,7 @@ pub(crate) extern "C" fn panic_negative_shift(
     resume: &mut Resume,
 ) {
     mutator.enter(frame);
-    let error = panic_object(mutator, &negative_shift_text(count));
+    let error = negative_shift(mutator, count);
     unwind(mutator, error, 0, resume);
 }
 
@@ -320,7 +462,7 @@ pub(crate) extern "C" fn panic_index_out_of_bounds(
     resume: &mut Resume,
 ) {
     mutator.enter(frame);
-    let error = panic_object(mutator, &index_out_of_bounds_text(index, length));
+    let error = index_out_of_bounds(mutator, index, length);
     unwind(mutator, error, 0, resume);
 }
 
@@ -329,7 +471,7 @@ pub(crate) extern "C" fn panic_index_out_of_bounds(
 #[unsafe(no_mangle)]
 pub extern "C" fn baml_rt_error_division_by_zero(mutator: &mut Mutator, dividend: i64) -> usize {
     mutator.enter(current_frame());
-    panic_object(mutator, &division_by_zero_text(dividend))
+    division_by_zero(mutator, dividend)
 }
 
 /// The `baml.panics.NegativeBitShift` a handler in the shifting function
@@ -337,7 +479,7 @@ pub extern "C" fn baml_rt_error_division_by_zero(mutator: &mut Mutator, dividend
 #[unsafe(no_mangle)]
 pub extern "C" fn baml_rt_error_negative_shift(mutator: &mut Mutator, count: i64) -> usize {
     mutator.enter(current_frame());
-    panic_object(mutator, &negative_shift_text(count))
+    negative_shift(mutator, count)
 }
 
 /// The `baml.panics.IndexOutOfBounds` a handler in the indexing function
@@ -349,35 +491,7 @@ pub extern "C" fn baml_rt_error_index_out_of_bounds(
     length: i64,
 ) -> usize {
     mutator.enter(current_frame());
-    panic_object(mutator, &index_out_of_bounds_text(index, length))
-}
-
-/// A thrown value as an uncaught throw of it is reported.
-///
-/// # Safety
-///
-/// `error` is zero or a live object.
-unsafe fn error_text(mutator: &Mutator, error: usize) -> String {
-    if error == 0 {
-        return "null".to_owned();
-    }
-    // SAFETY: the caller's contract: a box is a header and one value.
-    unsafe {
-        let (type_id, held) = (load(error) & TYPE_ID_MASK, load(error + BOX_VALUE));
-        match type_id {
-            string if string < STRING_TYPES_END => format!("{:?}", string::text(error)),
-            TYPE_ERROR | TYPE_PANIC => string::text(held).to_owned(),
-            TYPE_BOX_INT => held.cast_signed().to_string(),
-            TYPE_BOX_FLOAT => float_text(f64::from_bits(held as u64)),
-            TYPE_BOX_BOOL => (held & 0xFF != 0).to_string(),
-            enum_type if !mutator.is_reference(enum_type) => {
-                mutator.variant_name(enum_type, held).to_owned()
-            }
-            // The type table does not yet say how a class instance, an
-            // array or a function is written.
-            _ => "<object>".to_owned(),
-        }
-    }
+    index_out_of_bounds(mutator, index, length)
 }
 
 /// Nothing caught `error`: report it as `baml run` does, after the
@@ -418,6 +532,8 @@ pub unsafe extern "C" fn baml_rt_uncaught(mutator: &Mutator, error: usize, trace
     }
     let _ = std::io::stdout().flush();
     let _ = write!(std::io::stderr().lock(), "{report}");
+    let mut text = String::new();
     // SAFETY: the caller's contract.
-    crate::uncaught(&unsafe { error_text(mutator, error) })
+    unsafe { class::write_value(mutator, &mut text, error) };
+    crate::uncaught(&text)
 }

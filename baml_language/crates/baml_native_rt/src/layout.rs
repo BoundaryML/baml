@@ -13,12 +13,34 @@
 /// Size of every slot, and the alignment of every object.
 pub const WORD: usize = 8;
 
-/// Every object starts with one header word. Its low half is the object's
-/// type id, the byte offset of the type in the program's type table; bit 0
-/// is the collector's. Its high half belongs to the type: zero today.
+/// Every object starts with one header word:
+///
+/// ```text
+/// bits  0..=2   the collector's: bit 0 says the rest is the address the
+///               object was copied to, bit 1 is a mark it keeps only while
+///               it collects
+/// bits  3..=31  with the three below read as zeros, the type id: the byte
+///               offset of the object's type in the program's type table
+/// bits 32..=59  free in every object: an identity hash or a lock word
+///               later, a string's cached hash. The collector counts in a
+///               string's while it collects and leaves them zero
+/// bits 60..=63  flags, in every object; bit 63 is [`HEADER_PANIC`]
+/// ```
+///
+/// Whoever makes an object writes the whole word: compiled code as one
+/// constant, the runtime from the type id and the flags. Compiled code
+/// reads a type id as the 32-bit word at the object's address and tests a
+/// flag in the 64-bit one, so neither masks the other out. The collector
+/// copies the word with the object.
 pub const HEADER: usize = WORD;
 /// The bits of a header that are the type id.
 pub const TYPE_ID_MASK: usize = 0xFFFF_FFF8;
+/// Set in the header of an instance of a class of `baml.panics`: what a
+/// handler that takes every error lets pass. A string never has it.
+pub const HEADER_PANIC: usize = 1 << HEADER_PANIC_BIT;
+pub const HEADER_PANIC_BIT: u32 = 63;
+/// The flags of a header.
+pub const HEADER_FLAGS: usize = 0xF << 60;
 
 /// Offset of slot `index` of a class instance.
 pub const fn field_offset(index: usize) -> usize {
@@ -87,15 +109,52 @@ pub const KIND_STRING: u32 = 3;
 pub const KIND_ARRAY: u32 = 4;
 pub const KIND_SLICE: u32 = 5;
 
+/// Set in the fourth `u32` of a type that has a description; the other
+/// bits are the description's offset in the type table.
+pub const TYPE_DESCRIBED: u32 = 1 << 31;
+/// The size of a description before its field records, and of one record.
+pub const DESCRIPTION_HEADER: usize = 12;
+pub const DESCRIPTION_FIELD: usize = 20;
+
+/// What a field of a described class holds: an `int`, a `float`, a `bool`,
+/// a variant of an enum, or a reference (zero for `null`) to an object
+/// whose header says what it is. The optional scalars take two slots: the
+/// value's bits, then whether there is one. Anything else is opaque.
+pub const FIELD_INT: u32 = 0;
+pub const FIELD_FLOAT: u32 = 1;
+pub const FIELD_BOOL: u32 = 2;
+pub const FIELD_ENUM: u32 = 3;
+pub const FIELD_REF: u32 = 4;
+/// Added to the kind of a scalar for the optional of it.
+pub const FIELD_OPTIONAL: u32 = 8;
+pub const FIELD_OPAQUE: u32 = 16;
+
 /// A type is four `u32`s: its kind; the size in bytes of an object, for a
-/// fixed one; the number of reference fields; and, for an array, the type id
-/// of its storage. The byte offset of each reference field follows, a `u32`
-/// each.
+/// fixed one; the number of reference fields; and one more that depends on
+/// the type. The byte offset of each reference field follows, a `u32` each.
+///
+/// The fourth `u32` of an array's type is the type id of its storage.
 ///
 /// The type of an enum's boxes has no reference fields, and its fourth
 /// `u32` is the offset in the table of the enum's variant names: a `u32`
 /// count, then for each variant the offset in the table and the length in
 /// bytes of its name, a `u32` each.
+///
+/// The fourth `u32` of a class's type is [`TYPE_DESCRIBED`] and the offset
+/// in the table of the class's description, which is past every type:
+///
+/// ```text
+/// +0   u32  offset in the table of the class's name, as an uncaught throw
+///           of an instance writes it
+/// +4   u32  length in bytes of the name
+/// +8   u32  N, the number of fields
+/// +12  N field records of 20 bytes, in declaration order:
+///        +0   u32  offset in the table of the field's name
+///        +4   u32  length in bytes of the name
+///        +8   u32  byte offset of the field in an instance
+///        +12  u32  what the field holds, one of the `FIELD_` constants
+///        +16  u32  for an enum, the type id of the enum's boxes
+/// ```
 pub const TYPE_HEADER: usize = 16;
 
 /// The types every program has, at fixed ids at the start of its type table.
@@ -121,16 +180,8 @@ pub const TYPE_CELL_PAIR: usize = 144;
 pub const TYPE_BOX_INT: usize = 160;
 pub const TYPE_BOX_FLOAT: usize = 176;
 pub const TYPE_BOX_BOOL: usize = 192;
-/// An error of the standard library, thrown by the runtime: one reference
-/// to the text the error is written as. No type a program names is this
-/// one, so only a handler that takes every error catches it.
-pub const TYPE_ERROR: usize = 208;
-/// A panic raised by the runtime or by compiled code's own checks, laid out
-/// like [`TYPE_ERROR`]. A handler that takes every error does not take a
-/// panic, so the two are told apart.
-pub const TYPE_PANIC: usize = 232;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 256;
+pub const FIRST_CLASS_TYPE: usize = 208;
 
 /// The start of every type table, as `u32`s: eight bytes no type lives at,
 /// so that no id is zero, then the fixed types.
@@ -189,18 +240,6 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     BOX_SIZE as u32,
     0,
     0,
-    KIND_FIXED,
-    BOX_SIZE as u32,
-    1,
-    0,
-    BOX_VALUE as u32,
-    0,
-    KIND_FIXED,
-    BOX_SIZE as u32,
-    1,
-    0,
-    BOX_VALUE as u32,
-    0,
 ];
 
 const _: () = {
@@ -211,9 +250,57 @@ const _: () = {
     assert!(RUNTIME_TYPES[TYPE_ARRAY_OF_REFS / 4 + 3] == TYPE_REFS as u32);
     assert!(RUNTIME_TYPES[TYPE_CELL_REF / 4 + 2] == 1);
     assert!(RUNTIME_TYPES[TYPE_BOX_BOOL / 4 + 1] == BOX_SIZE as u32);
-    assert!(RUNTIME_TYPES[TYPE_ERROR / 4 + 4] == BOX_VALUE as u32);
-    assert!(RUNTIME_TYPES[TYPE_PANIC / 4 + 4] == BOX_VALUE as u32);
+    assert!(RUNTIME_TYPES[TYPE_BOX_INT / 4 + 1] == BOX_SIZE as u32);
+    assert!(TYPE_BOX_BOOL + TYPE_HEADER == FIRST_CLASS_TYPE);
 };
+
+/// The classes of the standard library the runtime makes instances of: the
+/// panics, which are every class of `baml.panics` in declaration order, and
+/// then the errors its natives throw. Each is the namespace under `baml`
+/// and the class's name. The compiler emits the type id of each, in this
+/// order, as the `u32`s of its well-known table, after a `u32` count; the
+/// description of the type says where the fields are.
+pub const WELL_KNOWN: [(&str, &str); 18] = [
+    ("panics", "DivisionByZero"),
+    ("panics", "IndexOutOfBounds"),
+    ("panics", "InvalidFieldAccess"),
+    ("panics", "MapKeyNotFound"),
+    ("panics", "StackOverflow"),
+    ("panics", "AssertionFailed"),
+    ("panics", "Unreachable"),
+    ("panics", "Cancelled"),
+    ("panics", "UserPanic"),
+    ("panics", "Exit"),
+    ("panics", "AllocFailure"),
+    ("panics", "HostUnavailable"),
+    ("panics", "NegativeBitShift"),
+    ("panics", "SdkPanic"),
+    ("panics", "HostContractViolation"),
+    ("panics", "IntegerOverflow"),
+    ("errors", "InvalidArgument"),
+    ("errors", "ParseError"),
+];
+/// How many of [`WELL_KNOWN`], from the first, are panics.
+pub const WELL_KNOWN_PANICS: usize = 16;
+pub const WELL_KNOWN_DIVISION_BY_ZERO: usize = 0;
+pub const WELL_KNOWN_INDEX_OUT_OF_BOUNDS: usize = 1;
+pub const WELL_KNOWN_NEGATIVE_BIT_SHIFT: usize = 12;
+pub const WELL_KNOWN_INVALID_ARGUMENT: usize = 16;
+pub const WELL_KNOWN_PARSE_ERROR: usize = 17;
+
+/// What a handler of the unwind table takes, and what it does with what it
+/// takes. A handler lands with an error when it takes every error, when it
+/// takes every panic and the error is one, when it takes every error that
+/// is not a panic and the error is not one, when it takes `null` and the
+/// error is that, or when the error's type id is in its list.
+pub const HANDLER_TAKES_ALL: u32 = 1;
+pub const HANDLER_TAKES_PANICS: u32 = 2;
+pub const HANDLER_TAKES_OTHERS: u32 = 4;
+pub const HANDLER_TAKES_NULL: u32 = 8;
+/// The handler reads the context it lands with.
+pub const HANDLER_BINDS_CONTEXT: u32 = 16;
+/// The handler can throw what it landed with again, with its context.
+pub const HANDLER_MAY_RETHROW: u32 = 32;
 
 /// Where the mutator keeps the address of the next object and the address
 /// its inline allocations must not pass.

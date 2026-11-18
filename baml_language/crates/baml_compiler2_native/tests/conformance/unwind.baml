@@ -207,3 +207,143 @@ function unwind_loop() -> int {
   };
   total
 }
+
+// A panic is an instance of its class in `baml.panics`, and an error a
+// native throws one of its class in `baml.errors`: a handler names the
+// class and reads the fields.
+function unwind_index_fields() -> int throws UnwindError | UnwindOther | string | baml.errors.InvalidArgument {
+  unwind_dive(3, 5) catch (e) {
+    baml.panics.IndexOutOfBounds => e.index * 100 + e.length,
+  }
+}
+function unwind_division_dividend() -> int throws UnwindError | UnwindOther | string | baml.errors.InvalidArgument {
+  unwind_dive(3, 4) catch (e) {
+    baml.panics.DivisionByZero => match (e.dividend) {
+      let dividend: int => dividend,
+      _ => -1,
+    },
+  }
+}
+function unwind_native_error_fields() -> int throws UnwindError | UnwindOther | string {
+  unwind_dive(3, 6) catch (e) {
+    baml.errors.InvalidArgument => {
+      let message = e.message;
+      message.length()
+    },
+  }
+}
+function unwind_local_panic_class() -> int {
+  (10 / unwind_count(0)) catch (e) {
+    baml.panics.DivisionByZero => 4,
+  }
+}
+
+function unwind_any_panic(kind: int) -> int throws UnwindError | UnwindOther | string | baml.errors.InvalidArgument {
+  unwind_dive(2, kind) catch (e) {
+    baml.panics.Panic => 9,
+  }
+}
+function unwind_panic_alias() -> int {
+  let caught = unwind_any_panic(4) + unwind_any_panic(5) * 10 + unwind_any_panic(0);
+  let passed = unwind_any_panic(1) catch (e) {
+    UnwindError => e.code,
+    _ => -1,
+  };
+  caught * 10 + passed
+}
+
+// A handler with no arm for a panic's class lets it by, as one that takes
+// every error does.
+function unwind_other_panic(kind: int) -> int throws UnwindError | UnwindOther | string | baml.errors.InvalidArgument {
+  unwind_dive(2, kind) catch (e) {
+    baml.panics.DivisionByZero => 1,
+  }
+}
+function unwind_panic_class_mismatch() -> int {
+  unwind_other_panic(5) catch (e) {
+    baml.panics.DivisionByZero => 2,
+    baml.panics.IndexOutOfBounds => 3,
+    _ => -1,
+  }
+}
+
+// The handlers an error passes run nothing, the defers between them all
+// run, innermost first, and the first handler with an arm for it takes it.
+function unwind_passing(log: int[], kind: int) -> int throws UnwindError | UnwindOther | string | baml.errors.InvalidArgument {
+  defer { log.push(4); }
+  let r = unwind_deferring(log, 2, kind) catch (e) {
+    UnwindOther => { log.push(7); e.weight },
+  };
+  log.push(8);
+  r
+}
+function unwind_passing_outer(log: int[], kind: int) -> int throws UnwindError | UnwindOther | string {
+  defer { log.push(5); }
+  unwind_passing(log, kind) catch (e) {
+    baml.errors.InvalidArgument => { log.push(6); -6 },
+  }
+}
+function unwind_skips(kind: int) -> int {
+  let log = [9];
+  let r = unwind_passing_outer(log, kind) catch (e) {
+    UnwindError => e.code,
+    baml.panics.Panic => -2,
+    _ => -1,
+  };
+  unwind_digits(log) * 100 + r
+}
+function unwind_mismatch_skipped() -> int { unwind_skips(1) }
+function unwind_match_in_the_middle() -> int { unwind_skips(3) }
+function unwind_native_error_skips() -> int { unwind_skips(6) }
+function unwind_panic_through_defers() -> int { unwind_skips(4) }
+
+// Handlers one inside another in one function: what the inner one does not
+// take is the outer one's, with the `defer` between them run.
+function unwind_nested(log: int[], kind: int) -> int throws string {
+  {
+    defer { log.push(3); }
+    unwind_dive(2, kind) catch (e) {
+      UnwindOther => e.weight,
+    }
+  } catch (e) {
+    UnwindError => e.code,
+    baml.errors.InvalidArgument => -6,
+    baml.panics.Panic => -2,
+  }
+}
+function unwind_nested_handlers() -> int {
+  let log = [9];
+  let r = unwind_nested(log, 1) * 1000 + unwind_nested(log, 3) * 100 + unwind_nested(log, 4) + unwind_nested(log, 0);
+  let s = unwind_nested(log, 2) catch (e) { string => e.length(), _ => -1 };
+  unwind_digits(log) * 100000 + r * 10 + s
+}
+
+enum UnwindColor { Red Green }
+class UnwindReport {
+  cause: UnwindError
+  label: string
+  ratio: float
+  final: bool
+  color: UnwindColor
+  retries: int?
+  after: int?
+  next: UnwindError?
+}
+function unwind_report() -> int throws UnwindReport {
+  if unwind_count(1) == 1 {
+    throw UnwindReport {
+      cause: UnwindError { code: unwind_count(4) },
+      label: "a \"label\"",
+      ratio: 1.5,
+      final: true,
+      color: UnwindColor.Green,
+      retries: unwind_count(2),
+      after: null,
+      next: null,
+    }
+  }
+  0
+}
+function unwind_uncaught_class() -> int { unwind_dive(3, 1) }
+function unwind_uncaught_nested_class() -> int { unwind_report() }
+function unwind_uncaught_shift() -> int { 1 << (0 - unwind_count(3)) }

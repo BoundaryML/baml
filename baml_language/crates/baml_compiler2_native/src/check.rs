@@ -634,6 +634,7 @@ pub(crate) fn check_function<'db>(
                 }
                 body.enter(index);
                 checker.note(context_unread(body, block));
+                checker.note(type_tags_switched(body, index));
                 for statement in &block.statements {
                     checker.statement_needs(body, &statement.kind);
                     checker.note(statement_supported(db, body, &loops, &statement.kind));
@@ -941,6 +942,13 @@ pub(crate) fn rvalue_ty<'db>(
                 describe(&other),
             )),
         },
+        Rvalue::TypeTag(place) => match place_ty(db, body, place)? {
+            boxed if boxed.is_boxed() => Ok(NativeTy::Int),
+            other => Err(Blocker::new(
+                "type tag read",
+                format!("of {}", describe(&other)),
+            )),
+        },
         Rvalue::Len(place) => match narrowed(place_ty(db, body, place)?) {
             NativeTy::Array(_) => Ok(NativeTy::Int),
             other => Err(Blocker::new(
@@ -1181,12 +1189,6 @@ pub(crate) fn type_test_plan<'db>(
             match &test {
                 TestKind::Exactly(NativeTy::Null) => return Ok(TypeTestPlan::Present(false)),
                 TestKind::Exactly(NativeTy::Class(class, arguments)) => {
-                    if is_runtime_error(db, *class) {
-                        return Err(Blocker::new(
-                            "type test",
-                            "of an error class the runtime throws",
-                        ));
-                    }
                     class_layout(db, *class, arguments)?;
                 }
                 TestKind::AnyOf(tests) => {
@@ -1258,11 +1260,26 @@ fn terminator_supported<'db>(
             if operand_ty(db, body, discriminant)? != NativeTy::Int {
                 return Err(Blocker::new("switch on a non-int value", ""));
             }
-            if arms
-                .iter()
-                .any(|(key, _)| matches!(key, SwitchKey::Class(_)))
-            {
-                return Err(Blocker::new("switch on a class tag", ""));
+            let on_tag = body
+                .current()
+                .is_some_and(|block| switched_tag(body, block).is_some());
+            for (key, _) in arms {
+                match key {
+                    SwitchKey::Int(_) if !on_tag => {}
+                    // A class's tag is the type id of its instances, which
+                    // a class with type parameters has several of.
+                    SwitchKey::Class(class)
+                        if on_tag
+                            && baml_compiler2_hir_ty::layout::class_generic_params(db, *class)
+                                .is_empty() =>
+                    {
+                        class_layout(db, *class, &[])?;
+                    }
+                    SwitchKey::Int(tag)
+                        if TestKind::of_tag(*tag)
+                            .is_some_and(|test| test.is_static() || test == TestKind::Panic) => {}
+                    _ => return Err(Blocker::new("switch on a class tag", "")),
+                }
             }
             Ok(())
         }
@@ -1507,22 +1524,72 @@ fn context_unread(body: &Body<'_, '_>, block: &BasicBlock<'_>) -> Result<(), Blo
     }
 }
 
-/// Whether `class` is one the runtime throws: a panic or an error of the
-/// standard library. The runtime's own are not instances of the class yet
-/// (see [`crate::layout::TYPE_ERROR`]), so a test for it cannot be decided.
-fn is_runtime_error<'db>(
-    db: &'db dyn baml_compiler2_mir::Db,
-    class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
-) -> bool {
-    match class {
-        // Decided by the namespace alone: a program's own `panics` or
-        // `errors` namespace is taken for the standard library's.
-        baml_compiler2_hir::loc::DeclRef::Source(class) => {
-            baml_compiler2_hir::file_package::file_package(db, class.file(db))
-                .namespace_path
-                .first()
-                .is_some_and(|namespace| matches!(namespace.as_str(), "panics" | "errors"))
+/// The local the block `block` reads a type tag into and then switches on,
+/// when that is how it ends: the one use of a type tag native code has an
+/// answer for. The tag is the header itself, which only such a switch
+/// knows how to read.
+pub(crate) fn switched_tag(body: &Body<'_, '_>, block: usize) -> Option<Local> {
+    let block = &body.blocks[block];
+    let Some(Terminator::Switch {
+        discriminant: Operand::Copy(Place::Local(read)) | Operand::Move(Place::Local(read)),
+        ..
+    }) = &block.terminator
+    else {
+        return None;
+    };
+    match &block.statements.last()?.kind {
+        StatementKind::Assign {
+            destination: Place::Local(tag),
+            value: Rvalue::TypeTag(_),
+        } if tag == read => Some(*tag),
+        _ => None,
+    }
+}
+
+/// A type tag is read only to be switched on where it is read; see
+/// [`switched_tag`].
+fn type_tags_switched(body: &Body<'_, '_>, index: usize) -> Result<(), Blocker> {
+    use std::fmt::Write as _;
+
+    let block = &body.blocks[index];
+    let reads = block
+        .statements
+        .iter()
+        .filter(|statement| {
+            matches!(
+                &statement.kind,
+                StatementKind::Assign {
+                    value: Rvalue::TypeTag(_),
+                    ..
+                }
+            )
+        })
+        .count();
+    if reads == 0 {
+        return Ok(());
+    }
+    let Some(tag) = switched_tag(body, index).filter(|_| reads == 1) else {
+        return Err(Blocker::new("type tag read", "not switched on at once"));
+    };
+    // Nothing else names the local: it is written here and read by the
+    // switch.
+    let name = format!("{tag:?}");
+    let mut uses = 0;
+    for block in &body.blocks {
+        let mut code = String::new();
+        for statement in &block.statements {
+            let _ = write!(code, "{:?};", statement.kind);
         }
-        baml_compiler2_hir::loc::DeclRef::External(_) => true,
+        if let Some(Terminator::Switch { discriminant, .. }) = &block.terminator {
+            let _ = write!(code, "{discriminant:?}");
+        } else if let Some(terminator) = &block.terminator {
+            let _ = write!(code, "{terminator:?}");
+        }
+        uses += code.matches(&name).count();
+    }
+    if uses == 2 {
+        Ok(())
+    } else {
+        Err(Blocker::new("type tag read", "used as a value"))
     }
 }

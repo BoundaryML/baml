@@ -430,10 +430,8 @@ impl<M: Managed> Root<'_, M> {
     }
 }
 
-/// The error a native throws: the object compiled code receives. Until the
-/// type table names the standard library's error classes, that object is
-/// one of [`crate::layout::TYPE_ERROR`], holding the text an uncaught throw
-/// of the error prints.
+/// The error a native throws: the object compiled code receives, an
+/// instance of one of the standard library's error classes.
 pub struct Thrown<'s>(Root<'s, Obj>);
 
 /// A value of a type parameter held across allocations: a root when the
@@ -575,25 +573,21 @@ impl<'s> Scope<'s> {
 
     /// Throw `baml.errors.InvalidArgument`.
     pub fn invalid_argument(&mut self, message: &str) -> Thrown<'s> {
-        self.error(&format!(
-            "baml.errors.InvalidArgument {{message: {message:?}}}"
-        ))
+        self.error(crate::layout::WELL_KNOWN_INVALID_ARGUMENT, message)
     }
 
     /// Throw `baml.errors.ParseError`.
     pub fn parse_error(&mut self, message: &str) -> Thrown<'s> {
-        self.error(&format!("baml.errors.ParseError {{message: {message:?}}}"))
+        self.error(crate::layout::WELL_KNOWN_PARSE_ERROR, message)
     }
 
-    /// An error of the standard library that is written as `text`.
-    fn error(&mut self, text: &str) -> Thrown<'s> {
-        let text = self.alloc_str(text);
-        // SAFETY: the type of such an error has one slot, a reference.
-        unsafe {
-            let error = self.alloc_instance(crate::layout::TYPE_ERROR, 1);
-            crate::heap::store(error.raw() + field_offset(0), text.raw());
-            Thrown(error)
-        }
+    /// An instance of the well-known error class `class`, whose one field
+    /// is its message.
+    fn error(&mut self, class: usize, message: &str) -> Thrown<'s> {
+        let error =
+            crate::class::well_known(self.mutator, class, &[crate::class::Init::Text(message)]);
+        // SAFETY: just made.
+        Thrown(unsafe { self.root_raw(error) })
     }
 }
 

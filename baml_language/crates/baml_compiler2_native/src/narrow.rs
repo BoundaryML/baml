@@ -25,8 +25,8 @@ use baml_compiler2_hir_ty::{
     layout::{class_generic_params, class_ref_of, enum_ref_of},
 };
 use baml_compiler2_mir::{
-    BinOp, Constant, Local, Operand, Place, Rvalue, ShortCircuitKind, StatementKind, Terminator,
-    TyTemplate, TyTemplateInterface, TypeTest, UnaryOp,
+    BinOp, Constant, Local, Operand, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
+    Terminator, TyTemplate, TyTemplateInterface, TypeTest, UnaryOp,
 };
 use baml_type::typetag;
 
@@ -51,8 +51,8 @@ pub(crate) enum TestKind<'db> {
     AnyOf(Vec<TestKind<'db>>),
     /// A value of any type that implements this interface.
     Implements(TyTemplateInterface),
-    /// A panic. The ones the runtime raises share one type; see
-    /// [`crate::layout::TYPE_PANIC`].
+    /// A panic: an instance of any class of `baml.panics`, which its
+    /// header's flag says; see [`crate::layout::HEADER_PANIC`].
     Panic,
 }
 
@@ -197,6 +197,8 @@ struct State<'db> {
     conditions: HashMap<usize, Condition<'db>>,
     /// Bools with the one value they can have.
     constants: HashMap<usize, bool>,
+    /// Locals holding the type tag just read of another local.
+    tags: HashMap<usize, usize>,
 }
 
 struct Analysis<'a, 'b, 'db> {
@@ -277,6 +279,8 @@ impl<'db> Analysis<'_, '_, 'db> {
         state
             .conditions
             .retain(|_, condition| condition.local != local);
+        state.tags.remove(&local);
+        state.tags.retain(|_, read| *read != local);
     }
 
     /// The members an operand's value can be.
@@ -391,6 +395,9 @@ impl<'db> Analysis<'_, '_, 'db> {
         let condition = self.condition_of(state, value);
         let constant = self.constant_of(state, value);
         Self::kill(state, destination.0);
+        if let Rvalue::TypeTag(Place::Local(read)) = value {
+            state.tags.insert(destination.0, read.0);
+        }
         if let Some(constant) = constant {
             state.constants.insert(destination.0, constant);
         }
@@ -491,6 +498,34 @@ impl<'db> Analysis<'_, '_, 'db> {
                     ShortCircuitKind::Coalesce => {}
                 }
                 vec![(eval_rhs.0, state), (join.0, skipped)]
+            }
+            // A switch on the type tag of a local: an arm that one class
+            // alone leads to has an instance of it.
+            Terminator::Switch {
+                discriminant,
+                arms,
+                otherwise,
+                ..
+            } if operand_local(discriminant).is_some_and(|tag| state.tags.contains_key(&tag.0)) => {
+                let read =
+                    operand_local(discriminant).and_then(|tag| state.tags.get(&tag.0).copied());
+                let mut edges = vec![(otherwise.0, state.clone())];
+                for (key, target) in arms {
+                    if edges.iter().any(|(seen, _)| *seen == target.0) {
+                        continue;
+                    }
+                    let mut arriving = state.clone();
+                    let alone = *target != *otherwise
+                        && arms.iter().filter(|(_, other)| other == target).count() == 1;
+                    if let (true, Some(read), SwitchKey::Class(class)) = (alone, read, key)
+                        && class_generic_params(self.db, *class).is_empty()
+                    {
+                        let test = TestKind::Exactly(NativeTy::Class(*class, Vec::new()));
+                        self.refine(&mut arriving, read, &test, true);
+                    }
+                    edges.push((target.0, arriving));
+                }
+                edges
             }
             other => {
                 if let Some(destination) = terminator_destination(other) {

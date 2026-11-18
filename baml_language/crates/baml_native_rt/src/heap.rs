@@ -418,12 +418,21 @@ impl Mutator {
             | crate::layout::TYPE_BOX_FLOAT
             | crate::layout::TYPE_BOX_BOOL => false,
             // SAFETY: any other id is an entry of the type table. An enum's
-            // boxes hold no reference and locate the enum's names.
+            // boxes hold no reference and locate the enum's names; a class
+            // locates its description, and says that it is one.
             _ => unsafe {
                 let info = &*((self.heap.types + type_id) as *const TypeInfo);
-                !(info.kind == KIND_FIXED && info.pointer_count == 0 && info.storage != 0)
+                !(info.kind == KIND_FIXED
+                    && info.pointer_count == 0
+                    && info.storage != 0
+                    && info.storage & crate::layout::TYPE_DESCRIBED == 0)
             },
         }
+    }
+
+    /// The address of the program's type table.
+    pub(crate) fn types(&self) -> usize {
+        self.heap.types
     }
 
     /// The type id of the storage behind arrays of type `array_type`.

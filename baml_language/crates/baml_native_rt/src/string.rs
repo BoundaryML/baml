@@ -248,17 +248,22 @@ pub unsafe extern "C" fn baml_rt_string_from_any(mutator: &mut Mutator, value: u
     let (type_id, held) = unsafe { (load(value) & TYPE_ID_MASK, load(value + BOX_VALUE)) };
     match type_id {
         string if string < STRING_TYPES_END => value,
-        // An error of the standard library holds the text it is written as.
-        crate::layout::TYPE_ERROR | crate::layout::TYPE_PANIC => held,
         TYPE_BOX_INT => from_ascii(
             mutator,
             int_digits(held.cast_signed() as i64, &mut [0; INT_DIGITS]),
         ),
         TYPE_BOX_FLOAT => from_str(mutator, &float_text(f64::from_bits(held as u64))),
         TYPE_BOX_BOOL => from_str(mutator, if held & 0xFF != 0 { "true" } else { "false" }),
-        enum_type => {
+        enum_type if !mutator.is_reference(enum_type) => {
             let name = mutator.variant_name(enum_type, held);
             from_str(mutator, name)
+        }
+        // Anything else is written as an uncaught throw of it is.
+        _ => {
+            let mut text = String::new();
+            // SAFETY: the caller's contract.
+            unsafe { crate::class::write_value(mutator, &mut text, value) };
+            from_str(mutator, &text)
         }
     }
 }

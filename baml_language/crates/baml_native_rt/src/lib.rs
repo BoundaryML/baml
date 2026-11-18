@@ -19,6 +19,7 @@
 )]
 
 pub mod array;
+mod class;
 pub mod heap;
 pub mod layout;
 pub mod native;
@@ -89,21 +90,6 @@ pub fn float_text(value: f64) -> String {
     } else {
         format!("{text}.0")
     }
-}
-
-/// The text of an uncaught `baml.panics.DivisionByZero`.
-pub fn division_by_zero_text(dividend: i64) -> String {
-    format!("baml.panics.DivisionByZero {{dividend: {dividend}}}")
-}
-
-/// The text of an uncaught `baml.panics.NegativeBitShift`.
-pub fn negative_shift_text(count: i64) -> String {
-    format!("baml.panics.NegativeBitShift {{message: \"bit shift count is negative: {count}\"}}")
-}
-
-/// The text of an uncaught `baml.panics.IndexOutOfBounds`.
-pub fn index_out_of_bounds_text(index: i64, length: i64) -> String {
-    format!("baml.panics.IndexOutOfBounds {{index: {index}, length: {length}}}")
 }
 
 fn print_line(text: &str) {

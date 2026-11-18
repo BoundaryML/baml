@@ -231,6 +231,16 @@ macro_rules! native_type_of {
                     NativeTy::Function(Box::new(Signature { params, result }))
                 }
                 $family::Union(members) => {
+                    // A `bigint` has no native representation yet, so no
+                    // value of the union is one; the others are held as
+                    // any value is, which is what they will be when one
+                    // can be.
+                    if members
+                        .iter()
+                        .any(|member| matches!(member, $family::Bigint))
+                    {
+                        return Some(NativeTy::Unknown);
+                    }
                     let mut flat = Vec::new();
                     for member in members {
                         let members = match $name(db, member, arguments)? {
@@ -665,6 +675,11 @@ impl<'a, 'db> Body<'a, 'db> {
     }
 
     /// Type what follows as the code of `block`.
+    /// The block whose code is being typed, if any is.
+    pub(crate) fn current(&self) -> Option<usize> {
+        self.at.get()
+    }
+
     pub(crate) fn enter(&self, block: usize) {
         self.at.set(Some(block));
     }

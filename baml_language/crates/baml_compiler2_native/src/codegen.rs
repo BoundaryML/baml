@@ -65,6 +65,7 @@ use crate::{
     },
 };
 
+mod classes;
 mod native_call;
 mod string_slice;
 mod unwind;
@@ -293,6 +294,10 @@ struct Backend<'db> {
     /// The type id of each class met, at each tuple of type arguments it is
     /// met at: the offset of its entry in `types`.
     class_types: HashMap<(ClassRef<'db>, Vec<TypeArg<'db>>), usize>,
+    /// What each class type is described as; written after the last type.
+    descriptions: Vec<classes::Description>,
+    /// The classes the runtime makes instances of, once they are needed.
+    well_known: Option<classes::WellKnown>,
     /// The type id of closures, by which of their captured words are
     /// references.
     closure_types: HashMap<Vec<bool>, usize>,
@@ -352,6 +357,8 @@ impl<'db> Backend<'db> {
                 .flat_map(|word| word.to_ne_bytes())
                 .collect(),
             class_types: HashMap::new(),
+            descriptions: Vec::new(),
+            well_known: None,
             closure_types: HashMap::new(),
             tuple_types: HashMap::new(),
             function_values: HashMap::new(),
@@ -462,16 +469,18 @@ impl<'db> Backend<'db> {
             NativeTy::Enum(enum_ref) => self.enum_type(db, *enum_ref),
             NativeTy::Class(class, arguments) => {
                 let fields = class_layout(db, *class, arguments).map_err(internal)?;
-                self.class_type(*class, arguments, &fields)
+                self.class_type(db, *class, arguments, &fields)
             }
             _ => return Ok(None),
         }))
     }
 
     /// The type id of a class, adding its entry to the type table the first
-    /// time: what the collector needs to copy and scan an instance.
+    /// time: what the collector needs to copy and scan an instance, and
+    /// what the runtime needs to write one.
     fn class_type(
         &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
         class: ClassRef<'db>,
         arguments: &[TypeArg<'db>],
         fields: &[NativeTy<'db>],
@@ -491,6 +500,7 @@ impl<'db> Backend<'db> {
             .collect();
         let id = self.fixed_type(layout::instance_size(layout_slots(fields)), &references);
         self.class_types.insert(key, id);
+        self.describe_class(db, id, class, fields);
         id
     }
 
@@ -706,7 +716,8 @@ impl<'db> Backend<'db> {
     }
 
     /// Emit the type table.
-    fn define_types(&mut self) -> Result<(), CompileError> {
+    fn define_types(&mut self, db: &'db dyn baml_compiler2_mir::Db) -> Result<(), CompileError> {
+        self.finish_types(db)?;
         let id = self
             .module
             .declare_data(TYPES_SYMBOL, Linkage::Export, false, false)
@@ -1041,7 +1052,7 @@ pub(crate) fn generate<'db>(
     backend.define_unwind()?;
     backend.define_functions()?;
     backend.define_methods(db, program, &declared)?;
-    backend.define_types()?;
+    backend.define_types(db)?;
 
     let object = backend.module.finish().emit().map_err(internal)?;
     Ok(Output {
@@ -1128,8 +1139,7 @@ fn entry_shim(
         &mut builder,
         &unwind::Called::Direct(callee),
         &[],
-        uncaught,
-        true,
+        &[(None, uncaught)],
     );
     if let Some((print, enum_type)) = print {
         let print = backend.function_ref(print, builder.func);
@@ -1200,6 +1210,9 @@ struct Translator<'a, 'db> {
     /// The block a throw to each handler of this function jumps to, by the
     /// handler's MIR block; see [`unwind`].
     landings: HashMap<usize, ir::Block>,
+    /// For each handler a call has an exception edge to, the handler
+    /// around it in this function.
+    chains: HashMap<usize, Option<BlockId>>,
 }
 
 /// A size, offset or count as the 32 bits the type table stores it in.
@@ -1277,6 +1290,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             iterator_variables,
             item_variables,
             landings: HashMap::new(),
+            chains: HashMap::new(),
         }
     }
 
@@ -1626,8 +1640,11 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             TypeTestPlan::Header(test) => test,
         };
-        let mut ids = Vec::new();
-        let null_passes = self.passing_ids(test, &mut ids)?;
+        let classes::Passing {
+            ids,
+            panics,
+            null: null_passes,
+        } = self.passing(test)?;
         // `null` has no header to read.
         let may_be_null = match ty {
             NativeTy::Union(members) => members.contains(&NativeTy::Null),
@@ -1644,8 +1661,17 @@ impl<'a, 'db> Translator<'a, 'db> {
             self.builder.seal_block(read);
             self.builder.switch_to_block(read);
         }
+        // Every panic passes: the flag is the top bit of the whole header.
+        let mut passes = panics.then(|| {
+            let whole = self.builder.ins().load(WORD, slot_access(), value, 0);
+            let flag = self
+                .builder
+                .ins()
+                .ushr_imm(whole, i64::from(layout::HEADER_PANIC_BIT));
+            self.builder.ins().ireduce(types::I8, flag)
+        });
+        // Not kept when nothing below compares it.
         let header = self.builder.ins().uload32(slot_access(), value, 0);
-        let mut passes = None;
         if let TestKind::Argument(slot) = test {
             let type_id = self
                 .type_ids
@@ -1657,7 +1683,11 @@ impl<'a, 'db> Translator<'a, 'db> {
             let is_string = self.is_string_id(header);
             let flat = self.word_const(layout::TYPE_STRING);
             let header = self.builder.ins().select(is_string, flat, header);
-            passes = Some(self.builder.ins().icmp(IntCC::Equal, header, type_id));
+            let same = self.builder.ins().icmp(IntCC::Equal, header, type_id);
+            passes = Some(match passes {
+                Some(passes) => self.builder.ins().bor(passes, same),
+                None => same,
+            });
         }
         for id in ids {
             let same = if id == layout::TYPE_STRING {
@@ -1679,6 +1709,77 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.seal_block(done);
         self.builder.switch_to_block(done);
         Ok(self.builder.block_params(done)[0])
+    }
+
+    /// Branch on the header a type tag read gave, or zero for `null`: to
+    /// the first arm whose key is the header's type. Arms that between
+    /// them take every panic class are one test of the header's flag.
+    fn switch_on_tag(
+        &mut self,
+        header: ir::Value,
+        arms: &[(SwitchKey<'db>, BlockId)],
+        otherwise: BlockId,
+    ) -> Result<(), CompileError> {
+        // The type ids each arm takes, first arm first.
+        let mut taken: Vec<(usize, BlockId)> = Vec::new();
+        let mut panics: Vec<(usize, BlockId)> = Vec::new();
+        for (key, target) in arms {
+            let ids = match key {
+                SwitchKey::Class(class) => {
+                    let (id, is_panic) = self.plain_class(*class)?;
+                    if is_panic {
+                        panics.push((id, *target));
+                    }
+                    vec![id]
+                }
+                SwitchKey::Int(tag) => {
+                    let test = TestKind::of_tag(*tag)
+                        .ok_or_else(|| internal("a checked type tag names a type"))?;
+                    let mut ids = Vec::new();
+                    if self.passing_ids(&test, &mut ids)? {
+                        ids.push(0);
+                    }
+                    if ids.contains(&layout::TYPE_STRING) {
+                        ids.push(layout::TYPE_STRING_SLICE);
+                    }
+                    ids
+                }
+            };
+            for id in ids {
+                if !taken.iter().any(|(seen, _)| *seen == id) {
+                    taken.push((id, *target));
+                }
+            }
+        }
+        // Every panic class to one block: the flag decides, and no id of a
+        // panic is left to compare.
+        let to_one = panics.first().map(|(_, target)| *target).filter(|target| {
+            panics.len() == layout::WELL_KNOWN_PANICS
+                && panics.iter().all(|(_, other)| other == target)
+        });
+        if let Some(target) = to_one {
+            for (id, _) in &panics {
+                taken.retain(|(seen, _)| seen != id);
+            }
+            // A branch on one bit of the header.
+            let is_panic = self
+                .builder
+                .ins()
+                .band_imm(header, layout::HEADER_PANIC.cast_signed() as i64);
+            let rest = self.builder.create_block();
+            let target = self.block(target);
+            self.builder.ins().brif(is_panic, target, &[], rest, &[]);
+            self.builder.seal_block(rest);
+            self.builder.switch_to_block(rest);
+        }
+        let type_id = self.builder.ins().ireduce(types::I32, header);
+        let mut switch = Switch::new();
+        for (id, target) in taken {
+            switch.set_entry(id as u128, self.block(target));
+        }
+        let otherwise = self.block(otherwise);
+        switch.emit(&mut self.builder, type_id, otherwise);
+        Ok(())
     }
 
     /// Whether the type id `id`, read from a header, is a string's: the
@@ -1708,7 +1809,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             ),
             // Compared with the type id the function was passed.
             TestKind::Argument(_) => {}
-            TestKind::Panic => ids.push(layout::TYPE_PANIC),
+            TestKind::Panic => ids.push(classes::ANY_PANIC),
             TestKind::AnyOf(tests) => {
                 let mut null_passes = false;
                 for test in tests {
@@ -2239,6 +2340,24 @@ impl<'a, 'db> Translator<'a, 'db> {
                 self.concat(&parts)?
             }
             Rvalue::Discriminant(place) => self.read_place(place)?,
+            // What a switch on the tag reads: the whole header, or zero
+            // for `null`, which has none.
+            Rvalue::TypeTag(place) => {
+                let value = self.read_place(place)?;
+                let read = self.builder.create_block();
+                let done = self.builder.create_block();
+                self.builder.append_block_param(done, WORD);
+                self.builder
+                    .ins()
+                    .brif(value, read, &[], done, &[value.into()]);
+                self.builder.seal_block(read);
+                self.builder.switch_to_block(read);
+                let header = self.builder.ins().load(WORD, slot_access(), value, 0);
+                self.builder.ins().jump(done, &[header.into()]);
+                self.builder.seal_block(done);
+                self.builder.switch_to_block(done);
+                self.builder.block_params(done)[0]
+            }
             Rvalue::Len(place) => {
                 let array = self.read_place(place)?;
                 self.array_view(array).0
@@ -2548,9 +2667,10 @@ impl<'a, 'db> Translator<'a, 'db> {
             .zip(&layout)
             .map(|(field, ty)| self.operand_as(field, ty))
             .collect::<Result<Vec<_>, _>>()?;
-        let class_type = self.backend.class_type(class, arguments, &layout);
+        let class_type = self.backend.class_type(self.db, class, arguments, &layout);
+        let header = Backend::class_header(self.db, class, class_type);
         let object = self.allocate(layout::instance_size(layout_slots(&layout)))?;
-        let class_type = self.word_const(class_type);
+        let class_type = self.word_const(header);
         self.builder
             .ins()
             .store(slot_access(), class_type, object, 0);
@@ -3366,6 +3486,9 @@ impl<'a, 'db> Translator<'a, 'db> {
                 ..
             } => {
                 let value = self.operand(discriminant)?;
+                if crate::check::switched_tag(self.body, self.current).is_some() {
+                    return self.switch_on_tag(value, arms, *otherwise);
+                }
                 let mut switch = Switch::new();
                 let mut seen = Vec::with_capacity(arms.len());
                 for (key, target) in arms {
@@ -3444,7 +3567,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                         // The callee can collect, which moves storage.
                         self.forget_arrays();
                         let called = unwind::Called::Indirect(clif, code);
-                        (self.baml_call(&called, &arguments), signature.result)
+                        (self.baml_call(&called, &arguments)?, signature.result)
                     }
                     Callee::Function(key) => {
                         self.call_function(&key, &args[..*ntypeargs], &args[*ntypeargs..])?
@@ -3531,7 +3654,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         let callee = self.function_ref(callee.id);
         // The callee can collect, which moves storage.
         self.forget_arrays();
-        let result = self.baml_call(&unwind::Called::Direct(callee), &arguments);
+        let result = self.baml_call(&unwind::Called::Direct(callee), &arguments)?;
         Ok((result, produced))
     }
 
@@ -3575,7 +3698,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.forget_arrays();
         let called = unwind::Called::Indirect(signature, code);
         if !slot.falls_back {
-            let result = self.baml_call(&called, &arguments);
+            let result = self.baml_call(&called, &arguments)?;
             return Ok((result, slot.signature.result.clone()));
         }
         // A type that declares no `to_string` has no code in its row: the
@@ -3590,7 +3713,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.seal_block(default);
 
         self.builder.switch_to_block(own);
-        let text = self.baml_call(&called, &arguments);
+        let text = self.baml_call(&called, &arguments)?;
         self.builder.ins().jump(done, &[text.into()]);
 
         self.builder.switch_to_block(default);
