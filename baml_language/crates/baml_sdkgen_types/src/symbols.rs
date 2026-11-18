@@ -164,7 +164,8 @@ impl Symbol {
 ///
 /// This is the authoritative alias-aware check: it follows canonical alias
 /// declaration targets by fully-qualified name, rejects missing or cyclic
-/// targets, and accepts only the string-denoting types supported by BAML.
+/// targets, and accepts string-denoting keys. Generic declaration parameters
+/// remain open; their actual key values are checked at the host boundary.
 pub fn validate_symbol_pool_map_keys(pool: &SymbolPool) -> Result<(), CodegenTypeError> {
     for symbol in pool.values() {
         match symbol {
@@ -366,6 +367,9 @@ fn map_key_resolves_to_string(
 ) -> bool {
     match key {
         Ty::String | Ty::Literal(baml_base::Literal::String(_), ..) => true,
+        // A generic declaration such as `Map<K, V>.from_entries` has no
+        // concrete key type yet. Do not reject its entire containing pool.
+        Ty::TypeVar(_) => true,
         Ty::Never => true,
         Ty::Union(members) => members
             .iter()
@@ -446,6 +450,26 @@ mod tests {
         pool.insert(name("Holder"), map_with_key(Ty::TypeAlias(key_chain)));
 
         assert_eq!(validate_symbol_pool_map_keys(&pool), Ok(()));
+    }
+
+    #[test]
+    fn map_key_validation_defers_generic_keys_but_rejects_concrete_non_string_keys() {
+        let key_name = BaseName::new("K");
+        let Symbol::Class(mut holder) =
+            map_with_key(Ty::TypeVar(crate::ParamTy::new(0, key_name.clone())))
+        else {
+            unreachable!();
+        };
+        holder.generic_params.push(key_name);
+        let mut pool = SymbolPool::new();
+        pool.insert(name("Holder"), Symbol::Class(holder));
+        assert_eq!(validate_symbol_pool_map_keys(&pool), Ok(()));
+
+        pool.insert(name("Holder"), map_with_key(Ty::Int));
+        assert!(matches!(
+            validate_symbol_pool_map_keys(&pool),
+            Err(CodegenTypeError::InvalidMapKey(_))
+        ));
     }
 
     #[test]

@@ -277,8 +277,7 @@ function _gm_strip_nulls(value: baml.json.json, opaque: bool) -> baml.json.json 
     match (value) {
         let object: map<string, baml.json.json> => {
             let out: map<string, baml.json.json> = {};
-            for (let key in object.keys()) {
-                let entry = object.get(key);
+            for (let (let key, let entry) in object.entries()) {
                 match (entry) {
                     null => null,
                     _ => {
@@ -321,14 +320,13 @@ function _gm_encode_query(value: string) -> string {
 function _gm_apply_query(url: string, params: map<string, string>?) -> string {
     if let items: map<string, string> = params {
         let out = url;
-        for (let name in items.keys()) {
+        for (let (let name, let entry_value) in items.entries()) {
             let separator = if (out.includes("?")) {
                 "&"
             } else {
                 "?"
             };
-            out
-                = `${out}${separator}${_gm_encode_query(name)}=${_gm_encode_query(items.get(name) ?? "")}`;
+            out = `${out}${separator}${_gm_encode_query(name)}=${_gm_encode_query(entry_value)}`;
         }
         out
     } else {
@@ -344,8 +342,8 @@ function _gm_apply_headers(
     extra: map<string, string>?,
 ) -> map<string, string> {
     if let items: map<string, string> = extra {
-        for (let name in items.keys()) {
-            let _ = headers.set(name.to_lower_case(), items.get(name) ?? "");
+        for (let (let name, let entry_value) in items.entries()) {
+            let _ = headers.set(name.to_lower_case(), entry_value);
         }
         headers
     } else {

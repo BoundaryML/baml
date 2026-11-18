@@ -29,10 +29,7 @@ function _vertex_scope() -> string {
 /// Application Default Credentials), and a note naming the `env.NAME` options
 /// skipped on the way to it (see `ai.wire.unset_credentials_note`), for the
 /// error when it cannot be used.
-class VertexCredentials {
-    document: string?,
-    skipped: string,
-}
+type VertexCredentials = (string?, string);
 
 /// (internal) The credential to authenticate with, in the client's order:
 /// `credentials_json`, the file `credentials_file` names, the
@@ -44,7 +41,7 @@ class VertexCredentials {
 /// blank is not configured (see `ai.wire.resolve_credential`).
 function _vertex_credentials(c: root.VertexClient) -> VertexCredentials {
     if let document: string = ai.wire.resolve_credential(c.credentials_json, null) {
-        return VertexCredentials { document: document, skipped: "" };
+        return (document, "");
     }
     let past_json = ai.wire.unset_credentials_note({ "credentials_json": c.credentials_json });
     if let path: string = ai.wire.resolve_credential(c.credentials_file, null) {
@@ -62,24 +59,24 @@ function _vertex_credentials(c: root.VertexClient) -> VertexCredentials {
                 }
             },
         };
-        return VertexCredentials { document: contents, skipped: past_json };
+        return (contents, past_json);
     }
     let skipped = ai.wire.unset_credentials_note(
         { "credentials_json": c.credentials_json, "credentials_file": c.credentials_file },
     );
     if let from_env: string = baml.env.get("GOOGLE_APPLICATION_CREDENTIALS_CONTENT") {
         if (from_env.trim() != "") {
-            return VertexCredentials { document: from_env, skipped: skipped };
+            return (from_env, skipped);
         }
     }
-    VertexCredentials { document: null, skipped: skipped }
+    (null, skipped)
 }
 
 /// (internal) The failure for a credential that could not be used, from the
 /// project lookup or the token mint alike.
 function _vertex_auth_failure(
     error: baml.errors.Io | baml.errors.AccessError,
-    credentials: VertexCredentials,
+    skipped: string,
 ) -> ai.errors.InvalidRequest {
     let message = match (error) {
         let io: baml.errors.Io => io.message,
@@ -88,7 +85,7 @@ function _vertex_auth_failure(
     ai.errors.InvalidRequest {
         provider: "vertex",
         status_code: null,
-        detail: `Vertex AI authentication failed: ${message}${credentials.skipped}`,
+        detail: `Vertex AI authentication failed: ${message}${skipped}`,
         raw_body: null,
     }
 }
@@ -183,9 +180,9 @@ function vertex_project_id(c: root.VertexClient, preview: bool = false) -> strin
         // Do not enter the ADC/credential-file chain during a request preview.
         "preview-project"
     } else {
-        let credentials = _vertex_credentials(c);
-        root.internal.gcp_project_id(credentials.document) catch_all (e) {
-            _ => throw _vertex_auth_failure(e, credentials),
+        let (let document, let skipped) = _vertex_credentials(c);
+        root.internal.gcp_project_id(document) catch_all (e) {
+            _ => throw _vertex_auth_failure(e, skipped),
         }
     }
 }
@@ -364,15 +361,15 @@ function _vertex_request(
                 let _ = with_user.set("authorization", "Bearer <PREVIEW>");
             }
         } else {
-            let credentials = _vertex_credentials(c);
-            let token = root.internal.gcp_access_token(credentials.document, _vertex_scope()) catch_all (e) {
-                _ => throw _vertex_auth_failure(e, credentials),
+            let (let document, let skipped) = _vertex_credentials(c);
+            let token = root.internal.gcp_access_token(document, _vertex_scope()) catch_all (e) {
+                _ => throw _vertex_auth_failure(e, skipped),
             };
             let _ = with_user.set("authorization", `Bearer ${token}`);
             // google-auth parity (`Credentials.apply`): bill quota to the
             // configured project, unless the caller set the header themselves.
             if (with_user.get("x-goog-user-project") == null) {
-                if let quota: string = root.internal.gcp_quota_project_id(credentials.document) {
+                if let quota: string = root.internal.gcp_quota_project_id(document) {
                     let _ = with_user.set("x-goog-user-project", quota);
                 }
             }

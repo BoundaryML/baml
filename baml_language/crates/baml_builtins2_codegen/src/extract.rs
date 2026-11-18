@@ -848,6 +848,9 @@ fn type_expr_to_baml_type_with_self(
         }
         TypeExprKind::Optional { inner, .. } => BamlType::Optional(Box::new(recurse(inner))),
         TypeExprKind::List { inner, .. } => BamlType::List(Box::new(recurse(inner))),
+        TypeExprKind::Tuple { elements, .. } => {
+            BamlType::Tuple(elements.iter().map(recurse).collect())
+        }
         TypeExprKind::Map { key, value, .. } => {
             BamlType::Map(Box::new(recurse(key)), Box::new(recurse(value)))
         }
@@ -1054,7 +1057,12 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         }
         TypeExprKind::Literal { .. } => BamlType::Named("literal".to_string()),
         TypeExprKind::Function { .. } => BamlType::Named("function".to_string()),
-        TypeExprKind::Tuple { .. } => BamlType::Named("tuple".to_string()),
+        TypeExprKind::Tuple { elements, .. } => BamlType::Tuple(
+            elements
+                .iter()
+                .map(|ty| type_expr_to_baml_type(ty, generics))
+                .collect(),
+        ),
         TypeExprKind::AssociatedTypeProjection { .. }
         | TypeExprKind::Unknown
         | TypeExprKind::Missing

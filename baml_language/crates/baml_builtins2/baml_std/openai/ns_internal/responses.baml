@@ -236,8 +236,7 @@ function _prune_nulls(value: baml.json.json) -> baml.json.json {
     match (value) {
         let object: map<string, baml.json.json> => {
             let out: map<string, baml.json.json> = {};
-            for (let key in object.keys()) {
-                let entry = object.get(key);
+            for (let (let key, let entry) in object.entries()) {
                 match (entry) {
                     null => null,
                     _ => {
@@ -272,8 +271,7 @@ function _restore_tool_schemas(body: baml.json.json, tools: OaTool[]?) -> baml.j
         let object: map<string, baml.json.json> => {
             match (object.get("tools")) {
                 let wire: baml.json.json[] => {
-                    let index = 0;
-                    for (let tool in list) {
+                    for (let (let index, let tool) in list.enumerate()) {
                         match (tool) {
                             let fn: OaFunctionTool => {
                                 match (wire.at(index)) {
@@ -287,7 +285,6 @@ function _restore_tool_schemas(body: baml.json.json, tools: OaTool[]?) -> baml.j
                             },
                             _ => null,
                         };
-                        index += 1;
                     }
                     null
                 },
@@ -799,8 +796,8 @@ function _structured_output(
 function _headers(c: root.ResponsesClient, preview: bool = false) -> map<string, string> {
     let headers: map<string, string> = { "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
-        for (let name in extra.keys()) {
-            let _ = headers.set(name.to_lower_case(), extra.get(name) ?? "");
+        for (let (let name, let entry_value) in extra.entries()) {
+            let _ = headers.set(name.to_lower_case(), entry_value);
         }
     };
     if (!preview) {
@@ -819,8 +816,8 @@ function _url(c: root.ResponsesClient) -> string {
     let url = `${trimmed}/responses`;
     if let params: map<string, string> = c.query_params {
         let pairs: string[] = [];
-        for (let key in params.keys()) {
-            pairs.push(`${_percent_encode(key)}=${_percent_encode(params.get(key) ?? "")}`);
+        for (let (let key, let entry_value) in params.entries()) {
+            pairs.push(`${_percent_encode(key)}=${_percent_encode(entry_value)}`);
         }
         if (pairs.length() > 0) {
             return `${url}?${pairs.join("&")}`;

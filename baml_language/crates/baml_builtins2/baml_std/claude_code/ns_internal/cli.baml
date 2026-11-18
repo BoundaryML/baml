@@ -429,8 +429,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
         let outcome = baml.json.path_or<json>(result, ".structured_output.outcome", structured);
         let calls = baml.json.path_or<json[]?>(outcome, ".calls", null);
         if let call_list: json[] = calls {
-            let i = 0;
-            for (let raw_call in call_list) {
+            for (let (let i, let raw_call) in call_list.enumerate()) {
                 let id = baml.json.path_or<string>(
                     raw_call,
                     ".id",
@@ -444,7 +443,6 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
                     },
                 };
                 content.push(ai.content.ToolUse { id: id, name: name, args: call_args });
-                i = i + 1;
             }
             stop = ai.content.StopReason.ToolUse;
         } else {

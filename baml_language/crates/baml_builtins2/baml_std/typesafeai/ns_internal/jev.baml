@@ -292,8 +292,8 @@ function request(
     // The caller's headers override everything, authorization included.
     let extra: map<string, string> = {};
     if let items: map<string, string> = c.headers {
-        for (let name in items.keys()) {
-            let _ = extra.set(name.to_lower_case(), items.get(name) ?? "");
+        for (let (let name, let entry_value) in items.entries()) {
+            let _ = extra.set(name.to_lower_case(), entry_value);
         }
     }
     if (!preview && !extra.has("authorization")) {
@@ -302,8 +302,8 @@ function request(
         };
         let _ = headers.set("authorization", `Bearer ${key}`);
     }
-    for (let name in extra.keys()) {
-        let _ = headers.set(name, extra.get(name) ?? "");
+    for (let (let name, let entry_value) in extra.entries()) {
+        let _ = headers.set(name, entry_value);
     }
     let base = ai.wire.resolve_credential(c.base_url, null) ?? "https://api.typesafe.ai/v1";
     baml.http.Request {

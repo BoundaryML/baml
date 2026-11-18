@@ -892,8 +892,8 @@ function _in_context<T, E>(body: () -> T throws E) -> T throws E {
 /// stream does for a step keeps the context that step was called in.
 function _context_patch(caller: trace.Context) -> trace.Options throws never {
     let metadata: map<string, string | int | float | bool | null> = {};
-    for (let key in caller.metadata.keys()) {
-        metadata[key] = caller.metadata[key];
+    for (let (let key, let entry_value) in caller.metadata.entries()) {
+        metadata[key] = entry_value;
     }
     trace.context(metadata = metadata, distinct_id = caller.distinct_id)
 }
@@ -930,8 +930,8 @@ function from_spec<T>(
     };
     let inputs: map<string, unknown> = {};
     let arguments = spec.arguments();
-    for (let key in arguments.keys()) {
-        inputs[key] = arguments[key];
+    for (let (let key, let entry_value) in arguments.entries()) {
+        inputs[key] = entry_value;
     }
     inputs["client"] = selected;
     inputs["on_event"] = on_event;

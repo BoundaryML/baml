@@ -96,6 +96,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             }
         }
         Ty::Map { key, value, .. } => {
+            let key_ty = key;
             let key = translate_ty(key, ctx);
             let value = translate_ty(value, ctx);
             let mut imports = key.imports;
@@ -104,13 +105,9 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType {
             // `Record` (itself a mapped-type alias) does NOT defer recursion,
             // so a recursive alias like `type Json = … | Map<string, Json>`
             // is rejected by tsc (TS2456). An inline `{ [key: string]: V }`
-            // does defer. Map keys are always `string` or an enum (validated
-            // upstream); enum keys become a partial mapped type.
-            let expr = if key.expr == "string" {
-                format!("{{ [key: string]: {} }}", value.expr)
-            } else {
-                format!("{{ [key in {}]?: {} }}", key.expr, value.expr)
-            };
+            // does defer. Generic stdlib methods can also return maps whose
+            // key is an unconstrained host type parameter.
+            let expr = map_expr(key_ty, &key.expr, &value.expr);
             TranslatedType { expr, imports }
         }
         Ty::Tuple(items) => {
@@ -395,15 +392,12 @@ pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType
             result
         }
         Ty::Map { key, value, .. } => {
+            let key_ty = key;
             let key = translate_ty(key, ctx);
             let value = translate_return_ty(value, ctx);
             let mut imports = key.imports;
             imports.extend(value.imports);
-            let expr = if key.expr == "string" {
-                format!("{{ [key: string]: {} }}", value.expr)
-            } else {
-                format!("{{ [key in {}]?: {} }}", key.expr, value.expr)
-            };
+            let expr = map_expr(key_ty, &key.expr, &value.expr);
             TranslatedType { expr, imports }
         }
         Ty::Tuple(items) => {
@@ -437,6 +431,18 @@ pub(crate) fn translate_return_ty(ty: &Ty, ctx: &TranslateCtx) -> TranslatedType
             }
         }
         _ => translate_ty(ty, ctx),
+    }
+}
+
+/// Host maps have string keys. A generic BAML key parameter does not carry
+/// that constraint into TypeScript, so intersect it before using a mapped type.
+fn map_expr(key: &Ty, key_expr: &str, value_expr: &str) -> String {
+    if key_expr == "string" {
+        format!("{{ [key: string]: {value_expr} }}")
+    } else if matches!(key, Ty::TypeVar(_)) {
+        format!("{{ [key in {key_expr} & string]?: {value_expr} }}")
+    } else {
+        format!("{{ [key in {key_expr}]?: {value_expr} }}")
     }
 }
 
@@ -631,6 +637,26 @@ mod tests {
         let translated = translate_return_ty(&ty, &ctx(&[]));
         assert!(translated.expr.contains("]?: { ("));
         assert!(translated.expr.contains("callSync("));
+    }
+
+    #[test]
+    fn generic_map_returns_constrain_keys_in_both_value_and_callable_types() {
+        let key = type_var(BaseName::new("K"));
+        let values = Ty::Map {
+            key: Box::new(key.clone()),
+            value: Box::new(Ty::Int),
+        };
+        assert_eq!(
+            translate_ty(&values, &ctx(&[])).expr,
+            "{ [key in K & string]?: number }"
+        );
+        let callbacks = Ty::Map {
+            key: Box::new(key),
+            value: Box::new(callable(Vec::new(), boxed(Ty::Int))),
+        };
+        let returned = translate_return_ty(&callbacks, &ctx(&[])).expr;
+        assert!(returned.starts_with("{ [key in K & string]?: { ("));
+        assert!(returned.contains("callSync("));
     }
 
     #[test]

@@ -283,7 +283,9 @@ fn owned_rust_type(
             }
         }
         BamlType::Uint8Array => quote! { Vec<u8> },
-        BamlType::Generic(_) | BamlType::Media(_) => quote! { BexExternalValue },
+        BamlType::Tuple(_) | BamlType::Generic(_) | BamlType::Media(_) => {
+            quote! { BexExternalValue }
+        }
     }
 }
 
@@ -560,6 +562,10 @@ fn runtime_ty_tokens(ty: &BamlType) -> TokenStream {
         // would both drop generics and fabricate a class for the placeholder
         // names, so this static-`BamlType` path cannot recover a named type — the
         // complete type lives only on the runtime value's stored `element_ty`.
+        BamlType::Tuple(slots) => {
+            let slots = slots.iter().map(runtime_ty_tokens);
+            quote! { baml_type::RealizedTy::Tuple(vec![#(#slots),*].into_boxed_slice()) }
+        }
         BamlType::Named(_) | BamlType::Generic(_) => {
             quote! { baml_type::RealizedTy::unknown() }
         }
@@ -671,7 +677,9 @@ fn clean_rust_type(
             }
         }
         BamlType::Uint8Array => quote! { Vec<u8> },
-        BamlType::Generic(_) | BamlType::Media(_) => quote! { BexExternalValue },
+        BamlType::Tuple(_) | BamlType::Generic(_) | BamlType::Media(_) => {
+            quote! { BexExternalValue }
+        }
     }
 }
 

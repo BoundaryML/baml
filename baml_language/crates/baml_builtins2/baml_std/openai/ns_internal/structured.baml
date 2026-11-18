@@ -94,9 +94,9 @@ function structured_output(output_type: reflect.Type, provider: string) -> Struc
     let wrapped = !_is_object_schema(top);
     let schema: baml.json.json = if (wrapped) {
         let inner: map<string, baml.json.json> = {};
-        for (let key in top.keys()) {
+        for (let (let key, let entry_value) in top.entries()) {
             if (key != "$defs") {
-                let _ = inner.set(key, top.get(key));
+                let _ = inner.set(key, entry_value);
             }
         }
         let properties: map<string, baml.json.json> = { "value": inner };
@@ -151,16 +151,15 @@ function _strict(schema: baml.json.json, type_name: string, provider: string) ->
         return schema;
     };
     let out: map<string, baml.json.json> = {};
-    for (let key in object.keys()) {
-        let value = object.get(key);
+    for (let (let key, let value) in object.entries()) {
         let rewritten: baml.json.json = match (key) {
             "properties" | "$defs" => {
                 let members: map<string, baml.json.json> = value else {
                     throw _reject(provider, `structured outputs cannot describe \`${type_name}\`: \`${key}\` is not an object`)
                 };
                 let walked: map<string, baml.json.json> = {};
-                for (let name in members.keys()) {
-                    let _ = walked.set(name, _strict(members.get(name), type_name, provider));
+                for (let (let name, let entry_value) in members.entries()) {
+                    let _ = walked.set(name, _strict(entry_value, type_name, provider));
                 }
                 walked
             },
@@ -214,9 +213,9 @@ function _strict(schema: baml.json.json, type_name: string, provider: string) ->
     if (out.has("$ref") && out.length() > 1) {
         let reference: map<string, baml.json.json> = { "$ref": out.get("$ref") };
         let wrapped: map<string, baml.json.json> = { "anyOf": [reference] };
-        for (let key in out.keys()) {
+        for (let (let key, let entry_value) in out.entries()) {
             if (key != "$ref") {
-                let _ = wrapped.set(key, out.get(key));
+                let _ = wrapped.set(key, entry_value);
             }
         }
         return wrapped;

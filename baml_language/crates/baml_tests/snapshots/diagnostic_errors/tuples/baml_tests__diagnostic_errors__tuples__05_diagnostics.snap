@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0001
 
-  × cannot replace a tuple slot: tuple slots are immutable; build a new tuple instead (mutable children can still be changed)
+  × cannot assign to a tuple field: tuples are immutable; build a new tuple instead
    ╭─[immutable.baml:1:46]
  1 │ function replace(t: (int, string)) -> null { t.0 = 2; }
    ·                                              ───
@@ -12,7 +12,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × cannot replace a tuple slot: tuple slots are immutable; build a new tuple instead (mutable children can still be changed)
+  × cannot assign to a tuple field: tuples are immutable; build a new tuple instead
    ╭─[immutable.baml:2:47]
  2 │ function compound(t: (int, string)) -> null { t.0 += 2; }
    ·                                               ───
@@ -20,7 +20,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × cannot replace a tuple slot: tuple slots are immutable; build a new tuple instead (mutable children can still be changed)
+  × cannot assign to a tuple field: tuples are immutable; build a new tuple instead
    ╭─[immutable.baml:3:48]
  3 │ function nested(t: ((int,), string)) -> null { t.0.0 = 2; }
    ·                                                ─────
@@ -28,7 +28,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0001
 
-  × cannot replace a tuple slot: tuple slots are immutable; build a new tuple instead (mutable children can still be changed)
+  × cannot assign to a tuple field: tuples are immutable; build a new tuple instead
    ╭─[immutable.baml:4:48]
  4 │ function optional(t: (int, string)?) -> null { t?.0 = 2; }
    ·                                                ────

@@ -92,8 +92,7 @@ function _oai_images_drop_nulls(value: baml.json.json) -> baml.json.json {
     match (value) {
         let object: map<string, baml.json.json> => {
             let out: map<string, baml.json.json> = {};
-            for (let key in object.keys()) {
-                let entry = object.get(key);
+            for (let (let key, let entry) in object.entries()) {
                 match (entry) {
                     null => null,
                     _ => {
@@ -212,10 +211,8 @@ function _oai_images_escape_query(raw: string) -> string {
 function _oai_images_with_query(url: string, params: map<string, string>?) -> string {
     let pairs: string[] = [];
     if let configured: map<string, string> = params {
-        for (let key in configured.keys()) {
-            pairs.push(
-                `${_oai_images_escape_query(key)}=${_oai_images_escape_query(configured.get(key) ?? "")}`,
-            );
+        for (let (let key, let entry_value) in configured.entries()) {
+            pairs.push(`${_oai_images_escape_query(key)}=${_oai_images_escape_query(entry_value)}`);
         }
     }
     if (pairs.length() == 0) {
@@ -235,8 +232,8 @@ function _oai_images_with_query(url: string, params: map<string, string>?) -> st
 function _oai_images_headers(c: root.ImageClient, preview: bool = false) -> map<string, string> {
     let headers: map<string, string> = { "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
-        for (let name in extra.keys()) {
-            let _ = headers.set(name.to_lower_case(), extra.get(name) ?? "");
+        for (let (let name, let entry_value) in extra.entries()) {
+            let _ = headers.set(name.to_lower_case(), entry_value);
         }
     }
     if (!preview) {

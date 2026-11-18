@@ -98,10 +98,8 @@ function sse_failure(provider: string, error: baml.errors.Io) -> root.errors.Fai
 /// carry auth headers. Names are kept.
 function redact_request_headers(headers: map<string, string>) -> map<string, string> {
     let out: map<string, string> = {};
-    for (let name in headers.keys()) {
-        if let value: string = headers.get(name) {
-            let _ = out.set(name, root.internal._sanitize_request_header(name, value));
-        }
+    for (let (let name, let value) in headers.entries()) {
+        let _ = out.set(name, root.internal._sanitize_request_header(name, value));
     }
     out
 }
@@ -138,8 +136,8 @@ function credential_sources(cred: root.Credential?, canonical_env: string?) -> s
 /// variable names are included, never values.
 function unset_credentials_note(options: map<string, root.Credential?>) -> string {
     let unset: string[] = [];
-    for (let option in options.keys()) {
-        if let named: baml.env.Ref = options.get(option) {
+    for (let (let option, let entry_value) in options.entries()) {
+        if let named: baml.env.Ref = entry_value {
             if (resolve_credential(named, null) == null) {
                 unset.push(`${option} (env.${named.name})`);
             }

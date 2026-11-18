@@ -219,8 +219,7 @@ function _anth_drop_nulls(j: baml.json.json) -> baml.json.json {
     match (j) {
         let obj: map<string, baml.json.json> => {
             let out: map<string, baml.json.json> = {};
-            for (let key in obj.keys()) {
-                let value = obj.get(key);
+            for (let (let key, let value) in obj.entries()) {
                 match (value) {
                     null => null,
                     _ => {
@@ -822,8 +821,8 @@ function _query_suffix(query_params: map<string, string>?) -> string {
         null => "",
         let params: map<string, string> => {
             let pairs: string[] = [];
-            for (let key in params.keys()) {
-                pairs.push(`${key}=${params.get(key) ?? ""}`);
+            for (let (let key, let entry_value) in params.entries()) {
+                pairs.push(`${key}=${entry_value}`);
             }
             if (pairs.length() > 0) {
                 `?${pairs.join("&")}`
@@ -841,8 +840,8 @@ function _query_suffix(query_params: map<string, string>?) -> string {
 function _headers(c: root.Client, preview: bool = false) -> map<string, string> {
     let headers: map<string, string> = { "anthropic-version": "2023-06-01", "content-type": "application/json" };
     if let extra: map<string, string> = c.headers {
-        for (let key in extra.keys()) {
-            let _ = headers.set(key.to_lower_case(), extra.get(key) ?? "");
+        for (let (let key, let entry_value) in extra.entries()) {
+            let _ = headers.set(key.to_lower_case(), entry_value);
         }
     }
     if (!preview) {

@@ -28,10 +28,7 @@ class _Delivered {
 /// (internal) A turn `Agent._attempt_turn` accepted. When parsing its terminal
 /// text is what accepted it, `text_output` holds that parse, so `Agent.run`
 /// does not parse the same text a second time.
-class _AcceptedTurn {
-    turn: ModelTurn,
-    text_output: ParsedOutput?,
-}
+type _AcceptedTurn = (ModelTurn, ParsedOutput?);
 
 /// The default runner. A spec-mode LLM function's direct call runs
 /// `Agent.new(client = client).run(Fn@spec(...)).value`; construct it
@@ -328,7 +325,7 @@ class Agent {
                 },
                 _ => null,
             };
-            _AcceptedTurn { turn: turn, text_output: text_output }
+            (turn, text_output)
         } else if (attempts_left > 1) {
             batch.push(
                 root.events.UserMessage.new(
@@ -377,8 +374,7 @@ class Agent {
         while (steps < self.max_steps) {
             // Repair re-asks happen inside the step and share this total
             // schema-attempt budget.
-            let accepted = self._attempt_turn<Out>(selected, spec, j, total, schema_attempts);
-            let turn = accepted.turn;
+            let (let turn, let text_output) = self._attempt_turn<Out>(selected, spec, j, total, schema_attempts);
             steps = steps + 1;
             self._deliver(j, delivered);
             let calls = turn.tool_uses();
@@ -425,7 +421,7 @@ class Agent {
                 // produced no media for went through the text parse, which is
                 // how absence is expressed (`_fits_without_text`).
                 let provider = turn.resolved_model?.provider ?? "unknown";
-                let value = if let parsed: ParsedOutput = turn.parsed_output ?? accepted.text_output {
+                let value = if let parsed: ParsedOutput = turn.parsed_output ?? text_output {
                     let typed: Out = parsed.value else {
                         throw root.errors.ParseFailed { provider: provider, raw_output: candidate }
                     };
@@ -464,8 +460,8 @@ class Agent {
             let selected = self.client ?? spec.default_client;
             let inputs: map<string, unknown> = {};
             let arguments = spec.arguments();
-            for (let key in arguments.keys()) {
-                inputs[key] = arguments[key];
+            for (let (let key, let entry_value) in arguments.entries()) {
+                inputs[key] = entry_value;
             }
             inputs["client"] = selected;
             inputs["on_event"] = self.on_event;

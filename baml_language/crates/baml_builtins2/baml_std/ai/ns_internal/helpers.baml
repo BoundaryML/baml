@@ -30,8 +30,8 @@ function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unkn
         let lowered = _scope_schema_refs(baml.json.schema(accepted, naming = baml.json.Naming.Aliased), prefix);
         let property = baml.json.to<map<string, unknown>>(lowered);
         let reached = baml.json.path_or<map<string, unknown>>(lowered, ".$defs", {});
-        for (let name in reached.keys()) {
-            let _ = definitions.set(prefix + name, reached.get(name));
+        for (let (let name, let entry_value) in reached.entries()) {
+            let _ = definitions.set(prefix + name, entry_value);
         }
         let _ = property.delete("$defs");
         let _ = props.set(a.name, property);
@@ -51,8 +51,7 @@ function _scope_schema_refs(schema: json, prefix: string) -> json {
     match (schema) {
         let object: map<string, json> => {
             let scoped: map<string, json> = {};
-            for (let key in object.keys()) {
-                let value = object.get(key);
+            for (let (let key, let value) in object.entries()) {
                 if let reference: string = value {
                     if (key == "$ref" && reference.starts_with("#/$defs/")) {
                         let escaped = prefix.replace_all("~", "~0").replace_all("/", "~1");
@@ -127,12 +126,11 @@ function assemble_llm_prompt(parts: string[], values: unknown[]) -> root.Prompt 
     // substantive prelude. Any earlier interpolation is content, even when
     // its eventual string representation is not known here.
     let first_role = -1;
-    let i = 0;
-    while (i < values.length()) {
-        if (first_role < 0 && values[i] is root.Role) {
+    for (let (let i, let value) in values.enumerate()) {
+        if (value is root.Role) {
             first_role = i;
+            break;
         }
-        i += 1;
     }
     let needs_system = if (first_role < 0) {
         true

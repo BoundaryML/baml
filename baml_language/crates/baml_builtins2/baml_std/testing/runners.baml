@@ -136,7 +136,7 @@ function _run_children_sequential(children: TestSetChild[], fail_fast: bool) -> 
     let named_results: _NamedChildReport[] = [];
     for (let child in children) {
         let report = (child.run)();
-        named_results.push(_NamedChildReport { name: child.name, report: report });
+        named_results.push((child.name, report));
         let outcome = match (report) {
             let r: TestReport => r.outcome,
             let r: TestSetReport => r.outcome,

@@ -314,6 +314,17 @@ impl BamlClassMap for PackageBamlImpl {
         map.values().copied().collect()
     }
 
+    fn entries(vm: &mut BexVm, map: MapView<'_>) -> Vec<Value> {
+        let slots = [map.key_ty.clone(), map.value_ty.clone()];
+        map.entries()
+            .map(|(_, entry)| {
+                let tuple = bex_vm_types::Tuple::new(slots.clone(), [entry.key, entry.value])
+                    .expect("a map entry has two slots");
+                Value::object(vm.tlab.alloc_tuple(tuple))
+            })
+            .collect()
+    }
+
     fn __glue_has(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
         MapDriver::start(vm, args, Operation::Has, false)
     }
