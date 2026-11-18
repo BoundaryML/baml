@@ -12,7 +12,7 @@
 //!
 //! A [`Mutator`] is one thread of execution's view of the heap. It owns a
 //! span of the current space and allocates from it by bumping an address;
-//! compiled code does that inline and calls [`baml_rt_alloc_slow`] only when
+//! compiled code does that inline and calls [`crate::stubs::baml_rt_alloc_slow`] only when
 //! the span is exhausted. Mutators share nothing but the [`Heap`] behind
 //! them, which is touched only while every mutator is stopped.
 //!
@@ -224,6 +224,8 @@ pub struct Mutator {
     /// Compiled loops call the runtime before their next iteration when
     /// this is not zero.
     poll: u32,
+    /// What the allocation slow path is asked for and what it answers.
+    scratch: usize,
     /// The true end of this mutator's span.
     span_end: usize,
     heap: Heap,
@@ -242,6 +244,7 @@ const _: () = {
     assert!(std::mem::offset_of!(Mutator, alloc_limit) == crate::layout::MUTATOR_ALLOC_LIMIT);
     assert!(std::mem::offset_of!(Mutator, stack_limit) == crate::layout::MUTATOR_STACK_LIMIT);
     assert!(std::mem::offset_of!(Mutator, poll) == crate::layout::MUTATOR_POLL);
+    assert!(std::mem::offset_of!(Mutator, scratch) == crate::layout::MUTATOR_SCRATCH);
 };
 
 /// The top compiled frame of a stack, recorded where compiled code calls the
@@ -275,6 +278,7 @@ impl Mutator {
             alloc_limit: 0,
             stack_limit: 0,
             poll: 0,
+            scratch: 0,
             span_end: space.end(),
             heap: Heap {
                 space,
@@ -622,25 +626,17 @@ pub fn current_frame() -> usize {
 }
 
 /// The slow path of allocation in compiled code: the mutator's span cannot
-/// take `size` more bytes. Returns uninitialized memory.
-///
-/// # Safety
-///
-/// Called from compiled code with its mutator.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_alloc_slow(mutator: &mut Mutator, size: usize) -> usize {
-    mutator.enter(current_frame());
-    mutator.allocate(size)
+/// take the bytes asked for in its scratch word, which is left holding the
+/// address of that much uninitialized memory. `frame` is the frame record
+/// of the stub compiled code called.
+pub(crate) extern "C" fn alloc_slow(mutator: &mut Mutator, frame: usize) {
+    mutator.enter(frame);
+    mutator.scratch = mutator.allocate(mutator.scratch);
 }
 
 /// A compiled loop found the poll word set.
-///
-/// # Safety
-///
-/// Called from compiled code with its mutator.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_poll_slow(mutator: &mut Mutator) {
-    mutator.enter(current_frame());
+pub(crate) extern "C" fn poll_slow(mutator: &mut Mutator, frame: usize) {
+    mutator.enter(frame);
     mutator.poll();
 }
 

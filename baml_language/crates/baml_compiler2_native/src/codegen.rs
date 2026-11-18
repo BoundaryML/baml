@@ -219,16 +219,13 @@ impl Runtime {
             Self::PrintInt
             | Self::PrintString
             | Self::PanicDivisionByZero
-            | Self::PollSlow
             | Self::PanicNegativeShift => (vec![word], vec![]),
-            Self::StackSlow => (vec![], vec![]),
+            Self::StackSlow | Self::PollSlow | Self::AllocSlow => (vec![], vec![]),
             Self::PrintFloat => (vec![float], vec![]),
             Self::PrintBool => (vec![byte], vec![]),
             Self::PanicIndexOutOfBounds => (vec![word, word], vec![]),
             Self::FloatRem => (vec![float, float], vec![float]),
-            Self::AllocSlow | Self::StringFromInt | Self::StringFromAny => {
-                (vec![word, word], vec![word])
-            }
+            Self::StringFromInt | Self::StringFromAny => (vec![word, word], vec![word]),
             Self::StringFromFloat => (vec![word, float], vec![word]),
             Self::ArrayNew | Self::StringConcat | Self::StringFromEnum => {
                 (vec![word, word, word], vec![word])
@@ -238,10 +235,23 @@ impl Runtime {
             Self::StringEq => (vec![word, word], vec![AbiParam::new(types::I8)]),
             Self::StringCmp => (vec![word, word], vec![word]),
         };
+        // A slow path is a stub that preserves every register, so that
+        // the call constrains nothing on the fast path around it. Such a
+        // call returns nothing, and these take nothing either: an argument
+        // register is one more the fast path would have to leave free.
+        let call_conv = if self.preserves_registers() {
+            CallConv::PreserveAll
+        } else {
+            call_conv
+        };
         let mut signature = ir::Signature::new(call_conv);
         signature.params = params;
         signature.returns = returns;
         signature
+    }
+
+    fn preserves_registers(self) -> bool {
+        matches!(self, Self::StackSlow | Self::PollSlow | Self::AllocSlow)
     }
 }
 
@@ -2264,8 +2274,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.seal_block(slow);
 
         self.builder.switch_to_block(slow);
-        let mutator = self.mutator();
-        self.call_runtime(Runtime::PollSlow, &[mutator])?;
+        self.call_runtime(Runtime::PollSlow, &[])?;
         self.builder.ins().jump(resume, &[]);
         self.builder.seal_block(resume);
 
@@ -2360,11 +2369,23 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.ins().jump(done, &[object.into()]);
 
         self.builder.switch_to_block(slow);
+        // The size goes in and the address comes out through the mutator.
         let size = self.word_const(size);
         let mutator = self.mutator();
-        let object = self
-            .call_runtime(Runtime::AllocSlow, &[mutator, size])?
-            .ok_or_else(|| internal("allocation returns an address"))?;
+        self.builder.ins().store(
+            mutator_access(),
+            size,
+            mutator,
+            offset(layout::MUTATOR_SCRATCH),
+        );
+        self.call_runtime(Runtime::AllocSlow, &[])?;
+        let mutator = self.mutator();
+        let object = self.builder.ins().load(
+            WORD,
+            mutator_access(),
+            mutator,
+            offset(layout::MUTATOR_SCRATCH),
+        );
         self.builder.ins().jump(done, &[object.into()]);
 
         self.builder.switch_to_block(done);

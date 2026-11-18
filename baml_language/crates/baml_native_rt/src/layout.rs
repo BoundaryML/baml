@@ -164,6 +164,10 @@ pub const MUTATOR_STACK_LIMIT: usize = 2 * WORD;
 /// Nonzero (32 bits) when a loop must call the runtime before its next
 /// iteration.
 pub const MUTATOR_POLL: usize = 3 * WORD;
+/// One word passed each way through a slow path that takes and returns
+/// nothing in registers: the size asked of the allocation slow path going
+/// in, the address of the memory coming out.
+pub const MUTATOR_SCRATCH: usize = 4 * WORD;
 
 /// Round a byte count up to whole words.
 pub const fn words(bytes: usize) -> usize {

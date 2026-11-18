@@ -1,7 +1,8 @@
 //! The runtime a natively compiled BAML program links against.
 //!
 //! Compiled code reaches it only through the `baml_rt_*` symbols, all with
-//! the C calling convention. The compiled object defines two symbols in the
+//! the C calling convention but the slow paths in [`stubs`], which preserve
+//! every register. The compiled object defines two symbols in the
 //! other direction: `baml_native_entry`, which runs the program's entry
 //! function and hands its result to one of the `baml_rt_print_*` functions,
 //! and the two tables the collector reads: `baml_native_stack_maps`, where
@@ -21,6 +22,7 @@ pub mod heap;
 pub mod layout;
 pub mod native;
 pub mod string;
+pub mod stubs;
 
 use std::io::Write;
 
@@ -177,8 +179,7 @@ pub unsafe extern "C" fn baml_rt_throw_uncaught(thrown: usize) -> ! {
 
 /// A compiled function was entered with its stack pointer below the limit.
 /// Stacks do not grow yet, so this is the end of the program.
-#[unsafe(no_mangle)]
-pub extern "C" fn baml_rt_stack_slow() -> ! {
+pub(crate) extern "C" fn stack_slow(_mutator: &mut heap::Mutator, _frame: usize) {
     uncaught("stack overflow")
 }
 
