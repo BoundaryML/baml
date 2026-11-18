@@ -346,10 +346,18 @@ pub(crate) fn call_target<'db>(
             if let Some(intrinsic) = Intrinsic::named(&name) {
                 return Ok(Callee::Intrinsic(intrinsic));
             }
+            // A method written in Rust that takes a closure has a loop form
+            // written in BAML, which is what native code runs.
+            let function = match function {
+                DeclRef::Source(function) => baml_compiler2_mir::loop_form(db, *function)
+                    .map_or(DeclRef::Source(*function), DeclRef::Source),
+                DeclRef::External(_) => *function,
+            };
+            let name = function_display_name(db, function);
             if let Some(native) = crate::natives::named(&name) {
                 return native.callable().map(|_| Callee::Native(native));
             }
-            match function {
+            match &function {
                 DeclRef::Source(function) => {
                     let arguments = args
                         .iter()
@@ -370,7 +378,7 @@ pub(crate) fn call_target<'db>(
                 }
                 DeclRef::External(_) => Err(Blocker::new(
                     "call of a function without source",
-                    function_display_name(db, *function),
+                    function_display_name(db, function),
                 )),
             }
         }
@@ -381,6 +389,54 @@ pub(crate) fn call_target<'db>(
         Operand::Constant(_) => Err(Blocker::new("call of a non-function constant", "")),
         Operand::Copy(_) | Operand::Move(_) => Ok(Callee::Value),
     }
+}
+
+/// The types a call of `native` names for its type parameters: the call's
+/// first `ntypeargs` arguments.
+pub(crate) fn native_type_arguments<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    body: &Body<'_, 'db>,
+    native: &crate::natives::Native,
+    args: &[Operand<'db>],
+    ntypeargs: usize,
+) -> Result<Vec<NativeTy<'db>>, Blocker> {
+    let unsupported = |detail: &str| {
+        Blocker::new(
+            "generic standard library native",
+            format!("{}: {detail}", native.path),
+        )
+    };
+    if ntypeargs != native.type_args || args.len() < ntypeargs {
+        return Err(unsupported("called with other type arguments"));
+    }
+    let types = args[..ntypeargs]
+        .iter()
+        .map(|argument| {
+            let template = body
+                .type_value(argument)
+                .ok_or_else(|| unsupported("a type argument that is not a type loaded once"))?;
+            match template_ty(db, template, body.arguments) {
+                // A native moves a value of a type parameter as one word.
+                Some(ty) if ty != NativeTy::Null && !ty.is_pair() => Ok(ty),
+                Some(ty) => Err(unsupported(&format!("at {}", describe(&ty)))),
+                None => Err(unsupported("at a type with no native representation")),
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    // The elements' own `to_string` would be a call back into compiled
+    // code, which the runtime does not make.
+    if native.path == "baml.Array.join"
+        && !matches!(
+            types.as_slice(),
+            [NativeTy::String | NativeTy::Int | NativeTy::Float | NativeTy::Bool]
+        )
+    {
+        return Err(Blocker::new(
+            "Array.join of elements with their own to_string",
+            types.first().map(describe).unwrap_or_default(),
+        ));
+    }
+    Ok(types)
 }
 
 /// How an interface method call finds its code.
@@ -1280,8 +1336,10 @@ fn terminator_supported<'db>(
                 }
                 Callee::Native(native) => {
                     let (signature, _) = native.callable()?;
-                    if args.len() != signature.params.len()
-                        || !assignable(&result, &signature.result.native())
+                    let types = native_type_arguments(db, body, native, args, *ntypeargs)?;
+                    let values = &args[*ntypeargs..];
+                    if values.len() != signature.params.len()
+                        || !assignable(&result, &signature.result.native(&types))
                     {
                         return Err(Blocker::new(
                             "call that does not match its callee's layout",
@@ -1291,8 +1349,8 @@ fn terminator_supported<'db>(
                     all_assignable(
                         db,
                         body,
-                        args,
-                        |index| signature.params.get(index).map(crate::natives::Ty::native),
+                        values,
+                        |index| signature.params.get(index).map(|ty| ty.native(&types)),
                         "argument",
                     )
                 }

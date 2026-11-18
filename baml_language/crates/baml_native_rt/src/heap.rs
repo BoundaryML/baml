@@ -370,6 +370,25 @@ impl Mutator {
         }
     }
 
+    /// Whether values of the type a call names by `type_id` are references:
+    /// every type but `int`, `float`, `bool` and the enums, whose ids are
+    /// those of their boxes. Zero names a type whose values share no one
+    /// id, all of which are references.
+    pub fn is_reference(&self, type_id: usize) -> bool {
+        match type_id {
+            0 => true,
+            crate::layout::TYPE_BOX_INT
+            | crate::layout::TYPE_BOX_FLOAT
+            | crate::layout::TYPE_BOX_BOOL => false,
+            // SAFETY: any other id is an entry of the type table. An enum's
+            // boxes hold no reference and locate the enum's names.
+            _ => unsafe {
+                let info = &*((self.heap.types + type_id) as *const TypeInfo);
+                !(info.kind == KIND_FIXED && info.pointer_count == 0 && info.storage != 0)
+            },
+        }
+    }
+
     /// The type id of the storage behind arrays of type `array_type`.
     pub fn storage_type(&self, array_type: usize) -> usize {
         // SAFETY: an array's type id is an entry of the type table.

@@ -8,6 +8,7 @@ use cranelift_module::{Linkage, Module};
 use super::{TRAP_AFTER_PANIC, Translator, WORD, internal};
 use crate::{
     CompileError,
+    check::native_type_arguments,
     natives::{Kind, Native, Ty},
     types::NativeTy,
 };
@@ -20,7 +21,9 @@ fn abi_param(ty: &Ty) -> Option<AbiParam> {
     match ty {
         // An optional scalar is two words, which its user passes one by
         // one; any other optional is a reference.
-        Ty::Int | Ty::String | Ty::Array(_) | Ty::Optional(_) => Some(AbiParam::new(WORD)),
+        Ty::Int | Ty::String | Ty::Array(_) | Ty::Optional(_) | Ty::Elem(_) => {
+            Some(AbiParam::new(WORD))
+        }
         Ty::Float => Some(AbiParam::new(types::F64)),
         // The C ABI has the caller extend an argument narrower than a
         // register.
@@ -55,9 +58,13 @@ impl<'db> Translator<'_, 'db> {
         &mut self,
         native: &'static Native,
         arguments: &[Operand<'db>],
+        ntypeargs: usize,
     ) -> Result<(ir::Value, NativeTy<'db>), CompileError> {
         let (signature, kind) = native.callable().map_err(internal)?;
         let takes_worker = kind != Kind::Leaf;
+        let types = native_type_arguments(self.db, self.body, native, arguments, ntypeargs)
+            .map_err(internal)?;
+        let (type_arguments, arguments) = arguments.split_at(ntypeargs);
 
         let mut params = Vec::new();
         let mut values = Vec::new();
@@ -65,9 +72,19 @@ impl<'db> Translator<'_, 'db> {
             params.push(AbiParam::new(WORD));
             values.push(self.mutator());
         }
+        // The type id of each type argument, as a generic function is
+        // passed them: after the worker and before the values.
+        for argument in type_arguments {
+            params.push(AbiParam::new(types::I32));
+            values.push(self.type_id(argument)?);
+        }
         for (argument, ty) in arguments.iter().zip(signature.params) {
-            let value = self.operand_as(argument, &ty.native())?;
-            if ty.is_pair() {
+            let expected = ty.native(&types);
+            let value = self.operand_as(argument, &expected)?;
+            if matches!(ty, Ty::Elem(_)) {
+                params.push(AbiParam::new(WORD));
+                values.push(self.as_slot(value, &expected));
+            } else if ty.is_pair() {
                 // Its bits, then whether it is present.
                 let (bits, present) = self.builder.ins().isplit(value);
                 params.extend([AbiParam::new(types::I64); 2]);
@@ -78,7 +95,7 @@ impl<'db> Translator<'_, 'db> {
             }
         }
         let returns = if native.throws {
-            if signature.result.is_pair() {
+            if signature.result.is_pair() || signature.result.is_optional_elem() {
                 return Err(internal("a native that throws returns no optional scalar"));
             }
             vec![AbiParam::new(types::I64), AbiParam::new(WORD)]
@@ -87,10 +104,11 @@ impl<'db> Translator<'_, 'db> {
                 Ty::Bool => vec![AbiParam::new(types::I8)],
                 // Two words in two registers: its bits, then whether it
                 // is present.
-                ty if ty.is_pair() => vec![AbiParam::new(types::I64); 2],
+                ty if ty.is_pair() || ty.is_optional_elem() => vec![AbiParam::new(types::I64); 2],
                 ty => abi_param(ty).into_iter().collect(),
             }
         };
+        let produced = signature.result.native(&types);
         let callee = self.import(native.symbol, params, returns)?;
 
         if takes_worker {
@@ -122,15 +140,19 @@ impl<'db> Translator<'_, 'db> {
                     .bitcast(types::F64, ir::MemFlags::new(), bits),
                 Ty::Bool => self.builder.ins().ireduce(types::I8, bits),
                 Ty::Null => self.builder.ins().iconst(types::I8, 0),
+                Ty::Elem(_) => self.slot_as(bits, &produced),
                 Ty::Int | Ty::String | Ty::Array(_) | Ty::Optional(_) => bits,
             }
         } else {
-            match results.as_slice() {
-                [bits, present] => self.builder.ins().iconcat(*bits, *present),
-                [value] => *value,
+            match (&signature.result, results.as_slice()) {
+                (Ty::Elem(_), [bits]) => self.slot_as(*bits, &produced),
+                // An absent reference is the zero its word already is.
+                (_, [bits, _]) if produced.is_ref() => *bits,
+                (_, [bits, present]) => self.builder.ins().iconcat(*bits, *present),
+                (_, [value]) => *value,
                 _ => self.builder.ins().iconst(types::I8, 0),
             }
         };
-        Ok((result, signature.result.native()))
+        Ok((result, produced))
     }
 }

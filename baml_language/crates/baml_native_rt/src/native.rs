@@ -25,7 +25,7 @@ use crate::{
     layout::{
         ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, STORAGE_CAPACITY, STORAGE_ELEMENTS,
         STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT, TYPE_ARRAY_OF_REFS,
-        TYPE_ARRAY_OF_VALUES, TYPE_STRING, WORD, field_offset, instance_size, words,
+        TYPE_ARRAY_OF_VALUES, TYPE_ID_MASK, TYPE_STRING, WORD, field_offset, instance_size, words,
     },
 };
 
@@ -73,6 +73,15 @@ pub struct Int;
 pub struct Float;
 /// A `bool` array element.
 pub struct Bool;
+/// Marks an array as holding values of a type parameter: whatever a call
+/// names, each as the one word it is stored in. Whether the words are
+/// references is the array's own type, so build one with
+/// [`Reservation::slots`], not [`Reservation::array`].
+pub struct Slot;
+
+/// The type id a call passes for one of a builtin's type parameters.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct TypeId(pub u32);
 
 impl Managed for Str {
     type View<'a> = StrRef<'a>;
@@ -103,6 +112,13 @@ impl Element for Bool {
     const IS_REF: bool = false;
     unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
         word != 0
+    }
+}
+impl Element for Slot {
+    type Value<'a> = usize;
+    const IS_REF: bool = false;
+    unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
+        word
     }
 }
 impl<M: Managed> Element for M {
@@ -206,6 +222,14 @@ impl<'a, E: Element> ArrRef<'a, E> {
     }
 }
 
+impl ArrRef<'_, Slot> {
+    /// Whether the elements are references.
+    pub fn holds_refs(self) -> bool {
+        // SAFETY: a view is of a live array.
+        unsafe { load(self.0) & TYPE_ID_MASK == TYPE_ARRAY_OF_REFS }
+    }
+}
+
 impl<'a> ArrRef<'a, Int> {
     pub fn as_slice(self) -> &'a [i64] {
         let words = self.words();
@@ -285,6 +309,17 @@ impl From<Option<f64>> for OptionalScalar {
     }
 }
 
+/// An optional value of a type parameter: its word, and whether there is
+/// one. The word of an absent reference is zero.
+impl From<Option<usize>> for OptionalScalar {
+    fn from(value: Option<usize>) -> Self {
+        Self {
+            payload: value.unwrap_or_default() as u64,
+            present: u64::from(value.is_some()),
+        }
+    }
+}
+
 impl From<Option<bool>> for OptionalScalar {
     fn from(value: Option<bool>) -> Self {
         Self {
@@ -340,6 +375,25 @@ impl<M: Managed> Root<'_, M> {
 /// the text an uncaught throw of the error prints.
 pub struct Thrown<'s>(Root<'s, Str>);
 
+/// A value of a type parameter held across allocations: a root when the
+/// type's values are references, the plain word otherwise.
+#[derive(Clone, Copy)]
+pub struct Elem<'s> {
+    slot: &'s Cell<usize>,
+    is_ref: bool,
+}
+
+impl Elem<'_> {
+    /// The value's word, current until the next allocation.
+    pub fn get(self, _scope: &Scope<'_>) -> usize {
+        self.slot.get()
+    }
+
+    pub fn is_ref(self) -> bool {
+        self.is_ref
+    }
+}
+
 /// What a native that can throw returns to compiled code, in two registers:
 /// the value's bits, and the thrown object or zero.
 #[repr(C)]
@@ -394,6 +448,29 @@ impl<'s> Scope<'s> {
         self.mutator.root_at(slot.as_ptr() as usize);
         self.used += 1;
         Root(slot, PhantomData)
+    }
+
+    /// Hold `word`, a value of the type a call names by `ty`.
+    ///
+    /// # Safety
+    ///
+    /// `word` is a value of that type: a live object or zero when the
+    /// type's values are references.
+    pub unsafe fn elem_raw(&mut self, word: usize, ty: TypeId) -> Elem<'s> {
+        assert!(self.used < ROOTS, "a native holds at most {ROOTS} roots");
+        let slot = &self.slots.0[self.used];
+        slot.set(word);
+        let is_ref = self.is_reference(ty);
+        if is_ref {
+            self.mutator.root_at(slot.as_ptr() as usize);
+            self.used += 1;
+        }
+        Elem { slot, is_ref }
+    }
+
+    /// Whether values of the type a call names by `ty` are references.
+    pub fn is_reference(&self, ty: TypeId) -> bool {
+        self.mutator.is_reference(ty.0 as usize)
     }
 
     /// A new string holding `text`. May collect.
@@ -545,8 +622,17 @@ impl<'s> Reservation<'_, 's> {
 
     /// A new array of `length` elements, each zero.
     pub fn array<E: Element>(&self, length: usize) -> NewArray<'_, E> {
+        self.array_of(length, E::IS_REF)
+    }
+
+    /// A new array of `length` values of a type parameter, each zero.
+    pub fn slots(&self, length: usize, holds_refs: bool) -> NewArray<'_, Slot> {
+        self.array_of(length, holds_refs)
+    }
+
+    fn array_of<E: Element>(&self, length: usize, holds_refs: bool) -> NewArray<'_, E> {
         let array = self.take(array_size(length));
-        let array_type = if E::IS_REF {
+        let array_type = if holds_refs {
             TYPE_ARRAY_OF_REFS
         } else {
             TYPE_ARRAY_OF_VALUES
@@ -681,6 +767,13 @@ impl<'a, M: Managed> NewArray<'a, M> {
     }
 }
 
+impl NewArray<'_, Slot> {
+    /// Store the word of a value of the array's element type.
+    pub fn set(self, index: usize, word: usize) {
+        self.put(index, word);
+    }
+}
+
 impl NewArray<'_, Int> {
     pub fn set(self, index: usize, value: i64) {
         self.put(index, value.cast_unsigned() as usize);
@@ -703,6 +796,7 @@ impl NewArray<'_, Bool> {
 /// implemented for this type, in the module named after the class.
 pub struct Natives;
 
+mod array;
 mod float;
 mod int;
 mod root;
@@ -717,8 +811,8 @@ mod string;
 mod generated {
     #[allow(unused_imports, reason = "what the listed natives need varies")]
     use super::{
-        Arr, ArrRef, Bool, Float, Int, Natives, OptionalScalar, Root, RootSlots, RtResult, Scope,
-        Str, StrRef, Thrown, View,
+        Arr, ArrRef, Bool, Elem, Float, Int, Natives, OptionalScalar, Root, RootSlots, RtResult,
+        Scope, Slot, Str, StrRef, Thrown, TypeId, View,
     };
     use crate::heap::{Mutator, current_frame};
 

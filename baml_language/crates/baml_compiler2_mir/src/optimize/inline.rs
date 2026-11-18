@@ -449,7 +449,7 @@ fn named_callee<'db>(
 /// of the same class named `_inlined_` and then its name. It takes the same
 /// parameters and type parameters, and does exactly what the method does.
 #[salsa::tracked(returns(clone))]
-pub(crate) fn loop_form<'db>(
+pub fn loop_form<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
 ) -> Option<FunctionLoc<'db>> {

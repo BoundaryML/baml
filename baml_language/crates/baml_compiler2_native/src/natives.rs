@@ -19,6 +19,9 @@ pub(crate) enum Ty {
     Array(&'static Ty),
     /// A type or `null`.
     Optional(&'static Ty),
+    /// The type a call names for the builtin's type parameter at this
+    /// position: passed and returned as the one word an array holds it in.
+    Elem(usize),
 }
 
 impl Ty {
@@ -30,18 +33,36 @@ impl Ty {
             Self::Optional(Self::Int | Self::Float | Self::Bool | Self::Null)
         )
     }
+
+    /// Whether a value is an optional value of a type parameter, which a
+    /// native returns as two words whatever the type: the value's word, and
+    /// whether there is a value.
+    pub(crate) fn is_optional_elem(&self) -> bool {
+        matches!(self, Self::Optional(Self::Elem(_)))
+    }
 }
 
 impl Ty {
-    pub(crate) fn native<'db>(&self) -> NativeTy<'db> {
+    /// The type at the type arguments `types` of a call.
+    pub(crate) fn native<'db>(&self, types: &[NativeTy<'db>]) -> NativeTy<'db> {
         match self {
+            Self::Elem(index) => types[*index].clone(),
+            // `null` is already one of the values of these.
+            Self::Optional(Self::Elem(index))
+                if matches!(
+                    types[*index],
+                    NativeTy::Optional(_) | NativeTy::Union(_) | NativeTy::Unknown
+                ) =>
+            {
+                types[*index].clone()
+            }
             Self::Int => NativeTy::Int,
             Self::Float => NativeTy::Float,
             Self::Bool => NativeTy::Bool,
             Self::Null => NativeTy::Null,
             Self::String => NativeTy::String,
-            Self::Array(element) => NativeTy::Array(Box::new(element.native())),
-            Self::Optional(inner) => NativeTy::Optional(Box::new(inner.native())),
+            Self::Array(element) => NativeTy::Array(Box::new(element.native(types))),
+            Self::Optional(inner) => NativeTy::Optional(Box::new(inner.native(types))),
         }
     }
 }
@@ -106,9 +127,6 @@ impl Native {
                 self.path,
             ));
         };
-        if self.type_args != 0 {
-            return Err(Blocker::new("generic standard library native", self.path));
-        }
         match &self.signature {
             Some(signature) => Ok((signature, kind)),
             None => Err(Blocker::new(

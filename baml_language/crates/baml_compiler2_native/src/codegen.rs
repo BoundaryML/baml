@@ -3202,7 +3202,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                             .ok_or_else(|| internal("a checked builtin call has a result"))?;
                         (self.intrinsic(intrinsic, arguments)?, produced)
                     }
-                    Callee::Native(native) => self.native_call(native, args)?,
+                    Callee::Native(native) => self.native_call(native, args, *ntypeargs)?,
                     Callee::Value => {
                         let NativeTy::Function(signature) = narrowed(self.operand_ty(callee)?)
                         else {

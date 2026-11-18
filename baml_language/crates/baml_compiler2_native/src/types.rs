@@ -174,6 +174,25 @@ macro_rules! native_type_of {
                 $family::Class(head, _) if interface_ref_of(db, head).is_some() => {
                     NativeTy::Unknown
                 }
+                // `self` in a method of the standard library's `Array` is
+                // declared with the class's name: the array itself, whose
+                // element type is the method's first type parameter where
+                // the declaration does not say.
+                $family::Class(head, class_arguments)
+                    if class_arguments.len() <= 1
+                        && head.name().as_str() == "Array"
+                        && head.namespace().is_empty()
+                        && head.key().kind(db) == baml_base::SourceRootKind::Stdlib =>
+                {
+                    let element = match class_arguments.first() {
+                        Some(element) => $name(db, element, arguments)?,
+                        None => arguments.first()?.clone()?,
+                    };
+                    if element.is_pair() {
+                        return None;
+                    }
+                    NativeTy::Array(Box::new(element))
+                }
                 $family::Class(head, class_arguments) => {
                     let class = class_ref_of(db, head)?;
                     // Every type parameter has its argument, or there is no
@@ -539,6 +558,23 @@ impl<'a, 'db> Body<'a, 'db> {
                             Ok(NativeTy::Function(signature)) => Ok(signature.result),
                             _ => continue,
                         },
+                        Ok(Callee::Native(native)) => {
+                            native.callable().and_then(|(signature, _)| {
+                                crate::check::native_type_arguments(
+                                    db, &typed, native, args, *ntypeargs,
+                                )
+                                .map(|types| signature.result.native(&types))
+                            })
+                        }
+                        Ok(Callee::Intrinsic(intrinsic)) => args[*ntypeargs..]
+                            .iter()
+                            .map(|argument| operand_ty(db, &typed, argument))
+                            .collect::<Result<Vec<_>, _>>()
+                            .and_then(|found| {
+                                intrinsic.result(&found).ok_or_else(|| {
+                                    Blocker::new("builtin call on these argument types", "")
+                                })
+                            }),
                         _ => continue,
                     },
                     // An operator method on primitives has the operator's
