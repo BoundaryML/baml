@@ -135,6 +135,18 @@ pub unsafe extern "C" fn baml_rt_print_string(value: usize) {
     print_line(&format!("{:?}", unsafe { string::text(value) }));
 }
 
+/// Print an enum result as `baml run` does: the variant's name.
+///
+/// # Safety
+///
+/// Called from compiled code with its mutator, the type of the enum's boxes
+/// and a variant of that enum.
+#[cfg(not(test))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_rt_print_enum(mutator: &Mutator, enum_type: usize, index: usize) {
+    print_line(mutator.variant_name(enum_type, index));
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn baml_rt_panic_division_by_zero(dividend: i64) -> ! {
     uncaught(&division_by_zero_text(dividend))

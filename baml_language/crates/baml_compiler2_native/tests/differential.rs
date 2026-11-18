@@ -505,6 +505,101 @@ function closure_of_floats() -> float {
   let fs = [(x: float, n: int) -> float { x * scale + n }];
   fs[count(0)](2.0, 1)
 }
+class Dog { name: string }
+class Cat { lives: int }
+enum Shade { Dark Mid Light }
+function union_make(i: int) -> int | string | Dog | Cat | Shade | float | bool | null {
+  match (i % 8) {
+    0 => i,
+    1 => "s",
+    2 => Dog { name: "rex" },
+    3 => Cat { lives: 9 },
+    4 => Shade.Mid,
+    5 => 1.5,
+    6 => true,
+    _ => null
+  }
+}
+function union_score(v: int | string | Dog | Cat | Shade | float | bool | null) -> int {
+  match (v) {
+    let n: int => n,
+    let s: string => s.length(),
+    let d: Dog => d.name.length() + 100,
+    let c: Cat => c.lives,
+    let k: Shade => match (k) { Shade.Dark => 6, Shade.Mid => 7, Shade.Light => 8 },
+    let f: float => if (f > 1.0) { 2 } else { 0 },
+    let b: bool => if (b) { 3 } else { 0 },
+    null => -1
+  }
+}
+function union_match() -> int {
+  let s = 0;
+  for (let i = 0; i < count(16); i += 1) { s += union_score(union_make(i)); }
+  s
+}
+function union_step(v: int | string, depth: int) -> int {
+  if (depth > 0) { return union_step(v, depth - 1); }
+  if (v is int) { v + 1 } else { v.length() }
+}
+function union_narrows_by_test() -> int {
+  let xs: (int | string)[] = [count(5), "abc"];
+  let s = 0;
+  for (let x in xs) { s = s * 10 + union_step(x, 1); }
+  s
+}
+function union_exits(v: int | string | null, depth: int) -> int {
+  if (depth > 0) { return union_exits(v, depth - 1); }
+  if (v == null) { return -1; }
+  if (v is string) { return v.length(); }
+  v * 2
+}
+function union_narrows_by_early_return() -> int {
+  union_exits(count(4), 1) * 100 + union_exits("abcde", 1) * 10 + union_exits(null, 1)
+}
+function union_both(v: int | string, depth: int) -> bool {
+  if (depth > 0) { return union_both(v, depth - 1); }
+  v is int && v > 3
+}
+function union_narrows_in_and() -> bool {
+  union_both(count(5), 1) && !union_both(count(2), 1) && !union_both("x", 1)
+}
+function unknown_kind(v: unknown, depth: int) -> int {
+  if (depth > 0) { return unknown_kind(v, depth - 1); }
+  if (v is string) { return 1 + v.length(); }
+  if (v is Dog) { return 20; }
+  if (v is int) { return 300 + v; }
+  if (v == null) { return 4000; }
+  50000
+}
+function unknown_values() -> int {
+  unknown_kind("ab", 1) + unknown_kind(Dog { name: "a" }, 1) + unknown_kind(count(7), 1)
+    + unknown_kind(null, 1) + unknown_kind(half(3), 1)
+}
+class Holder { value: int | string | null }
+function union_in_a_field() -> int {
+  let hs = [Holder { value: count(3) }, Holder { value: "four" }, Holder { value: null }];
+  let s = 0;
+  for (let h in hs) {
+    let v = h.value;
+    s = s * 10 + union_exits(v, 0);
+  }
+  hs[0].value = "seven77";
+  s * 10 + union_exits(hs[0].value, 0)
+}
+function union_of_scalars() -> float {
+  let xs: (float | bool | int)[] = [half(3), true, count(2), false];
+  let s = 0.0;
+  for (let x in xs) {
+    match (x) {
+      let f: float => { s += f; },
+      let b: bool => { if (b) { s += 10.0; } },
+      let n: int => { s += n * 100; }
+    }
+  }
+  s
+}
+function shade_of(n: int) -> Shade { if (n > 1) { Shade.Light } else { Shade.Dark } }
+function enum_result() -> Shade { shade_of(count(2)) }
 "#;
 
 /// How a run ended. `baml run` prints a result on stdout and exits zero, or
@@ -686,6 +781,14 @@ const CASES: &[Case] = &[
     case("nested_closures", Printed("1415")),
     case("closure_over_optional", Printed("-92")),
     case("closure_of_floats", Printed("4.0")),
+    case("union_match", Printed("256")),
+    case("union_narrows_by_test", Printed("63")),
+    case("union_narrows_by_early_return", Printed("849")),
+    case("union_narrows_in_and", Printed("true")),
+    case("unknown_values", Printed("54330")),
+    case("union_in_a_field", Printed("6397")),
+    case("union_of_scalars", Printed("211.5")),
+    case("enum_result", Printed("Light")),
 ];
 
 /// The text of the thrown value in an uncaught-panic report.

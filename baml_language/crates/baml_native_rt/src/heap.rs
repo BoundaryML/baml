@@ -347,6 +347,25 @@ impl Mutator {
         self.roots.truncate(self.roots.len() - count);
     }
 
+    /// The name of variant `index` of the enum whose boxes have the type
+    /// `enum_type`.
+    pub fn variant_name(&self, enum_type: usize, index: usize) -> &'static str {
+        let types = self.heap.types;
+        // SAFETY: an enum's type id is an entry of the type table whose
+        // fourth word locates its names, which live in the executable's
+        // data.
+        unsafe {
+            let names = types + (*((types + enum_type) as *const TypeInfo)).storage as usize;
+            let word = |position: usize| *((names + position * 4) as *const u32) as usize;
+            assert!(index < word(0), "an enum value names one of its variants");
+            let (start, length) = (word(1 + 2 * index), word(2 + 2 * index));
+            std::str::from_utf8_unchecked(std::slice::from_raw_parts(
+                (types + start) as *const u8,
+                length,
+            ))
+        }
+    }
+
     /// The type id of the storage behind arrays of type `array_type`.
     pub fn storage_type(&self, array_type: usize) -> usize {
         // SAFETY: an array's type id is an entry of the type table.

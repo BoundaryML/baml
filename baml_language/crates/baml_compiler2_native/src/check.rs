@@ -5,12 +5,13 @@ use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_mir::{
     AggregateKind, BoundFrame, Constant, Local, MirFunction, MirFunctionBody, MirFunctionKind,
     Operand, OptLevel, Place, RuntimeTy, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
-    Terminator, TypeTest, function_display_name,
+    Terminator, function_display_name,
 };
 
 use crate::{
     Blocker,
     loops::{ArrayLoops, is_done_test, operand_local},
+    narrow::TestKind,
     program::{Entry, FnKey, Needed},
     types::{
         Body, NativeTy, Signature, assignable, binary_typing, class_layout, declared_ty, describe,
@@ -57,7 +58,11 @@ impl Intrinsic {
                 Some(NativeTy::Int)
             }
             (Self::StringCharCount, [NativeTy::String]) => Some(NativeTy::Int),
-            (Self::EnumEq | Self::EnumNe, [NativeTy::Enum, NativeTy::Enum]) => Some(NativeTy::Bool),
+            (Self::EnumEq | Self::EnumNe, [NativeTy::Enum(left), NativeTy::Enum(right)])
+                if left == right =>
+            {
+                Some(NativeTy::Bool)
+            }
             (
                 Self::ToString,
                 [
@@ -65,6 +70,7 @@ impl Intrinsic {
                     | NativeTy::Float
                     | NativeTy::Bool
                     | NativeTy::Null
+                    | NativeTy::Enum(_)
                     | NativeTy::String,
                 ],
             ) => Some(NativeTy::String),
@@ -196,7 +202,11 @@ pub(crate) fn check_function<'db>(
             }
             let body = &Body::new(db, mir, body, captures);
             let loops = ArrayLoops::of(db, body);
-            for block in &body.blocks {
+            for (index, block) in body.blocks.iter().enumerate() {
+                if !body.is_reachable(index) {
+                    continue;
+                }
+                body.enter(index);
                 if block.unwind.is_some() || block.landing.is_some() {
                     checker.note(Err(Blocker::new(
                         "catch or defer handler",
@@ -425,7 +435,7 @@ pub(crate) fn rvalue_ty<'db>(
         }
         // An enum value is its variant's position already.
         Rvalue::Discriminant(place) => match narrowed(place_ty(db, body, place)?) {
-            NativeTy::Enum => Ok(NativeTy::Int),
+            NativeTy::Enum(_) => Ok(NativeTy::Int),
             other => Err(Blocker::new(
                 "discriminant of a non-enum value",
                 describe(&other),
@@ -492,6 +502,16 @@ pub(crate) fn rvalue_ty<'db>(
                 "field value",
             )?;
             Ok(NativeTy::Class(*class))
+        }
+        Rvalue::IsType { operand, test } => {
+            let operand = operand_ty(db, body, operand)?;
+            type_test_plan(db, &operand, TestKind::of(db, test), false)?;
+            Ok(NativeTy::Bool)
+        }
+        Rvalue::IsTypeTag { operand, tag } => {
+            let operand = operand_ty(db, body, operand)?;
+            type_test_plan(db, &operand, TestKind::of_tag(*tag), true)?;
+            Ok(NativeTy::Bool)
         }
         Rvalue::MakeClosure {
             lambda_idx,
@@ -605,27 +625,71 @@ fn expect_bool(found: &NativeTy<'_>, what: &str) -> Result<(), Blocker> {
     }
 }
 
-/// Whether a narrowing test of an optional reference asks for the reference
-/// (`true`) or for `null` (`false`).
-pub(crate) fn narrow_test_wants_reference(
-    source: &NativeTy<'_>,
-    test: &TypeTest<'_>,
-) -> Result<bool, Blocker> {
-    let NativeTy::Optional(inner) = source else {
-        return Err(Blocker::new("type test", describe(source)));
-    };
-    match (test, &**inner) {
-        (TypeTest::Class { class, args }, NativeTy::Class(expected))
-            if args.is_empty() && class == expected =>
-        {
-            Ok(true)
+/// How a type test of a value of a known static type is decided.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) enum TypeTestPlan<'db> {
+    /// By the static type alone.
+    Always(bool),
+    /// By whether an optional holds a value (`true`) or `null` (`false`).
+    Present(bool),
+    /// By the type id in the header of the object a union's reference
+    /// names; `null` fails.
+    Header(TestKind<'db>),
+}
+
+/// How `test` is decided for an operand of type `operand`. `coarse` says the
+/// test asks for any array rather than an array of one element type.
+pub(crate) fn type_test_plan<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    operand: &NativeTy<'db>,
+    test: Option<TestKind<'db>>,
+    coarse: bool,
+) -> Result<TypeTestPlan<'db>, Blocker> {
+    let test = test.ok_or_else(|| Blocker::new("type test", "of a type without one type id"))?;
+    Ok(match operand {
+        NativeTy::Union(_) | NativeTy::Unknown => {
+            match &test {
+                TestKind::Exactly(NativeTy::Null) => return Ok(TypeTestPlan::Present(false)),
+                TestKind::Exactly(NativeTy::Class(class)) => {
+                    class_layout(db, *class)?;
+                }
+                TestKind::Exactly(_) => {}
+                // Arrays of different element types share their type ids.
+                TestKind::AnyArray => {
+                    let arrays = match operand {
+                        NativeTy::Union(members) => members
+                            .iter()
+                            .filter(|member| matches!(member, NativeTy::Array(_)))
+                            .count(),
+                        _ => usize::MAX,
+                    };
+                    if !coarse && arrays > 1 {
+                        return Err(Blocker::new("type test", "between array types"));
+                    }
+                }
+            }
+            TypeTestPlan::Header(test)
         }
-        (TypeTest::Template(baml_compiler2_mir::TyTemplate::Null), _) => Ok(false),
-        (TypeTest::Template(baml_compiler2_mir::TyTemplate::String), NativeTy::String) => Ok(true),
-        (TypeTest::Template(baml_compiler2_mir::TyTemplate::List(_)), NativeTy::Array(_)) => {
-            Ok(true)
+        NativeTy::Optional(inner) => {
+            if test == TestKind::Exactly(NativeTy::Null) {
+                TypeTestPlan::Present(false)
+            } else if test.matches(inner) {
+                TypeTestPlan::Present(true)
+            } else {
+                TypeTestPlan::Always(false)
+            }
         }
-        _ => Err(Blocker::new("type test", "narrowing bind")),
+        other => TypeTestPlan::Always(test.matches(other)),
+    })
+}
+
+/// The type of the value a narrowing bind stores where its test passes.
+pub(crate) fn narrow_bound<'db>(source: &NativeTy<'db>, plan: &TypeTestPlan<'db>) -> NativeTy<'db> {
+    match (source, plan) {
+        (NativeTy::Optional(inner), TypeTestPlan::Present(true)) => (**inner).clone(),
+        (_, TypeTestPlan::Present(false)) => NativeTy::Null,
+        (_, TypeTestPlan::Header(TestKind::Exactly(ty))) => ty.clone(),
+        _ => source.clone(),
     }
 }
 
@@ -660,13 +724,9 @@ fn terminator_supported<'db>(
             ..
         } => {
             let source = operand_ty(db, body, source)?;
-            let wants_reference = narrow_test_wants_reference(&source, test)?;
+            let plan = type_test_plan(db, &source, TestKind::of(db, test), false)?;
             let destination = local_ty(db, body, *destination)?;
-            let bound = match (&source, wants_reference) {
-                (NativeTy::Optional(inner), true) => (**inner).clone(),
-                _ => NativeTy::Null,
-            };
-            if assignable(&destination, &bound) {
+            if assignable(&destination, &narrow_bound(&source, &plan)) {
                 Ok(())
             } else {
                 Err(Blocker::new("type test", "narrowing bind to another type"))

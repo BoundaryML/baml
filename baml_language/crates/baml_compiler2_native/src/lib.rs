@@ -26,6 +26,7 @@ mod flow;
 mod layout;
 mod link;
 mod loops;
+mod narrow;
 mod program;
 mod types;
 

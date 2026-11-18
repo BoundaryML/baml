@@ -157,3 +157,20 @@ pub unsafe extern "C" fn baml_rt_string_from_float(mutator: &mut Mutator, value:
     mutator.enter(current_frame());
     from_str(mutator, &float_text(value))
 }
+
+/// The name of variant `index` of the enum whose boxes have the type
+/// `enum_type`, as a string.
+///
+/// # Safety
+///
+/// Called from compiled code with its mutator.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_rt_string_from_enum(
+    mutator: &mut Mutator,
+    enum_type: usize,
+    index: usize,
+) -> usize {
+    mutator.enter(current_frame());
+    let name = mutator.variant_name(enum_type, index);
+    from_str(mutator, name)
+}

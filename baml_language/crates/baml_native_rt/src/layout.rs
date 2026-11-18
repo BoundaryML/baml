@@ -60,6 +60,11 @@ pub const CELL_VALUE: usize = field_offset(0);
 pub const CLOSURE_CODE: usize = field_offset(0);
 pub const CLOSURE_CAPTURES: usize = field_offset(1);
 
+/// Where a union or `unknown` is expected, an `int`, `float`, `bool` or enum
+/// variant is a box: a header whose type says which, and the value.
+pub const BOX_VALUE: usize = field_offset(0);
+pub const BOX_SIZE: usize = instance_size(1);
+
 /// The kinds of object a type describes to the collector.
 pub const KIND_FIXED: u32 = 0;
 pub const KIND_VALUES: u32 = 1;
@@ -71,6 +76,11 @@ pub const KIND_ARRAY: u32 = 4;
 /// fixed one; the number of reference fields; and, for an array, the type id
 /// of its storage. The byte offset of each reference field follows, a `u32`
 /// each.
+///
+/// The type of an enum's boxes has no reference fields, and its fourth
+/// `u32` is the offset in the table of the enum's variant names: a `u32`
+/// count, then for each variant the offset in the table and the length in
+/// bytes of its name, a `u32` each.
 pub const TYPE_HEADER: usize = 16;
 
 /// The types every program has, at fixed ids at the start of its type table.
@@ -84,8 +94,12 @@ pub const TYPE_ARRAY_OF_REFS: usize = 72;
 pub const TYPE_CELL_VALUE: usize = 88;
 pub const TYPE_CELL_REF: usize = 104;
 pub const TYPE_CELL_PAIR: usize = 128;
+/// The boxes of an `int`, a `float` and a `bool`.
+pub const TYPE_BOX_INT: usize = 144;
+pub const TYPE_BOX_FLOAT: usize = 160;
+pub const TYPE_BOX_BOOL: usize = 176;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 144;
+pub const FIRST_CLASS_TYPE: usize = 192;
 
 /// The start of every type table, as `u32`s: eight bytes no type lives at,
 /// so that no id is zero, then the fixed types.
@@ -124,6 +138,18 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     0,
     KIND_FIXED,
     instance_size(2) as u32,
+    0,
+    0,
+    KIND_FIXED,
+    BOX_SIZE as u32,
+    0,
+    0,
+    KIND_FIXED,
+    BOX_SIZE as u32,
+    0,
+    0,
+    KIND_FIXED,
+    BOX_SIZE as u32,
     0,
     0,
 ];

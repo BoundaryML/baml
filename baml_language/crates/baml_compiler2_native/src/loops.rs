@@ -8,14 +8,14 @@
 //!
 //! This module finds the locals of a body that are such iterators and
 //! answers. Any use of one that the loop shape does not explain is rejected
-//! by the ordinary checks, because neither local has a native type.
+//! by the ordinary checks, because neither local has a type to them.
 
 use std::collections::HashMap;
 
 use baml_compiler2_hir_ty::layout::lang_class;
 use baml_compiler2_mir::{Local, Operand, Place, Terminator, TypeTest};
 
-use crate::types::{Body, NativeTy, local_ty, operand_ty};
+use crate::types::{Body, NativeTy, operand_ty};
 
 const ITER_METHOD: &str = "iter";
 const NEXT_METHOD: &str = "next";
@@ -62,7 +62,6 @@ fn receiver_call<'a, 'db>(
 impl<'db> ArrayLoops<'db> {
     pub(crate) fn of(db: &'db dyn baml_compiler2_mir::Db, body: &Body<'_, 'db>) -> Self {
         let mut loops = Self::default();
-        let untyped = |local: Local| local_ty(db, body, local).is_err();
         // A local defined twice with different element types is not a loop
         // local of either.
         let mut conflicting = Vec::new();
@@ -80,7 +79,6 @@ impl<'db> ArrayLoops<'db> {
         };
         for terminator in terminators() {
             if let Some((receiver, iterator)) = receiver_call(terminator, ITER_METHOD)
-                && untyped(iterator)
                 && let Ok(NativeTy::Array(element)) = operand_ty(db, body, receiver)
             {
                 record(&mut loops.iterators, iterator, *element);
@@ -88,7 +86,6 @@ impl<'db> ArrayLoops<'db> {
         }
         for terminator in terminators() {
             if let Some((receiver, item)) = receiver_call(terminator, NEXT_METHOD)
-                && untyped(item)
                 && let Some(element) =
                     operand_local(receiver).and_then(|it| loops.iterators.get(&it))
             {

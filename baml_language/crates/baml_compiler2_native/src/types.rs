@@ -4,10 +4,12 @@
 //! Both the support check and code generation go through these functions, so
 //! a construct is accepted exactly when code can be generated for it.
 
+use std::cell::Cell;
+
 use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::{
-    extern_loc::ClassRef,
-    layout::{class_fields, class_generic_params, class_head, class_ref_of},
+    extern_loc::{ClassRef, EnumRef},
+    layout::{class_fields, class_generic_params, class_head, class_ref_of, enum_ref_of},
 };
 use baml_compiler2_mir::{
     BinOp, CellId, Constant, IndexKind, Local, MirFunction, MirFunctionBody, Operand, Place,
@@ -15,7 +17,7 @@ use baml_compiler2_mir::{
 };
 use baml_type::Literal;
 
-use crate::{Blocker, check::function_signature, flow::terminator_destination};
+use crate::{Blocker, check::function_signature, flow::terminator_destination, loops::ArrayLoops};
 
 /// Parameter and result types of a function with a native calling convention.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -46,10 +48,8 @@ pub(crate) enum NativeTy<'db> {
     /// The one value of the unit type. It carries no information, so it is
     /// never kept in a variable.
     Null,
-    /// A variant of an enum: its position in the declaration, as an int.
-    /// Which enum is the type checker's business; the representation is the
-    /// same for all of them.
-    Enum,
+    /// A variant of this enum: its position in the declaration, as an int.
+    Enum(EnumRef<'db>),
     /// A reference to an immutable string object.
     String,
     /// A reference to an instance of a class without type parameters.
@@ -62,6 +62,12 @@ pub(crate) enum NativeTy<'db> {
     /// A reference to the cell holding a local that a closure captures.
     /// Never the type of a source value: only of the local itself.
     Cell(Box<NativeTy<'db>>),
+    /// One of these types, none of them a union and at most one `null`: a
+    /// reference, zero for `null`, whose object's header says which. An
+    /// `int`, `float`, `bool` or enum variant is in a box.
+    Union(Vec<NativeTy<'db>>),
+    /// Any value at all, in the representation of a union.
+    Unknown,
     /// A type or `null`. For a reference type it is the same reference,
     /// with zero for `null`. For an `int`, `float` or `bool` it is a pair of
     /// words: the value's bits, and whether there is a value at all.
@@ -72,12 +78,22 @@ impl NativeTy<'_> {
     /// Whether a value is a pointer the collector must know about.
     pub(crate) fn is_ref(&self) -> bool {
         match self {
-            Self::String | Self::Class(_) | Self::Array(_) | Self::Function(_) | Self::Cell(_) => {
-                true
-            }
+            Self::String
+            | Self::Class(_)
+            | Self::Array(_)
+            | Self::Function(_)
+            | Self::Cell(_)
+            | Self::Union(_)
+            | Self::Unknown => true,
             Self::Optional(inner) => inner.is_ref(),
-            Self::Int | Self::Float | Self::Bool | Self::Null | Self::Enum => false,
+            Self::Int | Self::Float | Self::Bool | Self::Null | Self::Enum(_) => false,
         }
+    }
+
+    /// Whether a value says what it is in its object's header: a union or
+    /// `unknown`.
+    pub(crate) fn is_boxed(&self) -> bool {
+        matches!(self, Self::Union(_) | Self::Unknown)
     }
 
     /// Whether a value is an optional scalar: a pair of words.
@@ -87,7 +103,7 @@ impl NativeTy<'_> {
 
     pub(crate) fn repr(&self) -> Repr {
         match self {
-            Self::Int | Self::Enum => Repr::Int,
+            Self::Int | Self::Enum(_) => Repr::Int,
             Self::Float => Repr::Float,
             Self::Bool | Self::Null => Repr::Byte,
             _ if self.is_pair() => Repr::Pair,
@@ -110,7 +126,10 @@ pub(crate) fn native_ty<'db>(
         RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _) => NativeTy::Float,
         RuntimeTy::Bool | RuntimeTy::Literal(Literal::Bool(_), _) => NativeTy::Bool,
         RuntimeTy::Null => NativeTy::Null,
-        RuntimeTy::Enum(..) | RuntimeTy::EnumVariant(..) => NativeTy::Enum,
+        RuntimeTy::Enum(head) | RuntimeTy::EnumVariant(head, _) => {
+            NativeTy::Enum(enum_ref_of(db, head)?)
+        }
+        RuntimeTy::Unknown => NativeTy::Unknown,
         RuntimeTy::String | RuntimeTy::Literal(Literal::String(_), _) => NativeTy::String,
         RuntimeTy::Class(head, arguments) if arguments.is_empty() => {
             let class = class_ref_of(db, head)?;
@@ -137,17 +156,28 @@ pub(crate) fn native_ty<'db>(
             NativeTy::Function(Box::new(Signature { params, result }))
         }
         RuntimeTy::Union(members) => {
-            let [first, second] = &members[..] else {
-                return None;
-            };
-            let inner = match (first, second) {
-                (RuntimeTy::Null, other) | (other, RuntimeTy::Null) => native_ty(db, other)?,
-                _ => return None,
-            };
-            if matches!(inner, NativeTy::Optional(_) | NativeTy::Null) {
-                return None;
+            let mut flat = Vec::new();
+            for member in members {
+                let members = match native_ty(db, member)? {
+                    NativeTy::Unknown => return Some(NativeTy::Unknown),
+                    NativeTy::Union(members) => members,
+                    NativeTy::Optional(inner) => vec![*inner, NativeTy::Null],
+                    other => vec![other],
+                };
+                for member in members {
+                    if !flat.contains(&member) {
+                        flat.push(member);
+                    }
+                }
             }
-            NativeTy::Optional(Box::new(inner))
+            match &flat[..] {
+                [only] => only.clone(),
+                // One type or `null` needs no header to tell which.
+                [NativeTy::Null, inner] | [inner, NativeTy::Null] => {
+                    NativeTy::Optional(Box::new(inner.clone()))
+                }
+                _ => NativeTy::Union(flat),
+            }
         }
         _ => return None,
     })
@@ -247,6 +277,16 @@ pub(crate) struct Body<'a, 'db> {
     /// What the cells a lambda captures hold, in capture order.
     captures: &'a [NativeTy<'db>],
     inferred: Vec<Option<NativeTy<'db>>>,
+    /// The locals an array loop keeps as an array and a position; see
+    /// [`crate::loops`].
+    loop_locals: Vec<bool>,
+    /// For each block, the member each local of a union type is known to
+    /// hold throughout it; see [`crate::narrow`].
+    narrowed: Vec<Vec<Option<NativeTy<'db>>>>,
+    /// Whether any run reaches each block.
+    reachable: Vec<bool>,
+    /// The block whose code is being typed, if any is.
+    at: Cell<Option<usize>>,
 }
 
 impl<'db> std::ops::Deref for Body<'_, 'db> {
@@ -269,6 +309,10 @@ impl<'a, 'db> Body<'a, 'db> {
             inner: body,
             captures,
             inferred: vec![None; body.locals.len()],
+            loop_locals: vec![false; body.locals.len()],
+            narrowed: Vec::new(),
+            reachable: vec![true; body.blocks.len()],
+            at: Cell::new(None),
         };
         // A local written any other way than by copying has the type it is
         // declared with.
@@ -330,9 +374,28 @@ impl<'a, 'db> Body<'a, 'db> {
                 }
             }
             if !changed {
-                return typed;
+                break;
             }
         }
+        let loops = ArrayLoops::of(db, &typed);
+        for (local, is_loop_local) in typed.loop_locals.iter_mut().enumerate() {
+            *is_loop_local =
+                loops.iterator(Local(local)).is_some() || loops.item(Local(local)).is_some();
+        }
+        let found = crate::narrow::block_types(db, &typed);
+        typed.narrowed = found.narrowed;
+        typed.reachable = found.reachable;
+        typed
+    }
+
+    /// Whether any run reaches `block`. One that none does is not compiled.
+    pub(crate) fn is_reachable(&self, block: usize) -> bool {
+        self.reachable[block]
+    }
+
+    /// Type what follows as the code of `block`.
+    pub(crate) fn enter(&self, block: usize) {
+        self.at.set(Some(block));
     }
 }
 
@@ -364,11 +427,36 @@ fn cell_content<'db>(ty: NativeTy<'db>, place: &Place) -> Result<NativeTy<'db>, 
     }
 }
 
+/// The type of the value a local holds in the block being typed: for a local
+/// of a union type, the member it is known to hold there, if one is.
 pub(crate) fn local_ty<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     body: &Body<'_, 'db>,
     local: Local,
 ) -> Result<NativeTy<'db>, Blocker> {
+    if let Some(block) = body.at.get()
+        && let Some(Some(narrowed)) = body
+            .narrowed
+            .get(block)
+            .map(|locals| locals[local.0].as_ref())
+    {
+        return Ok(narrowed.clone());
+    }
+    storage_ty(db, body, local)
+}
+
+/// The type of the variable a local is kept in.
+pub(crate) fn storage_ty<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    body: &Body<'_, 'db>,
+    local: Local,
+) -> Result<NativeTy<'db>, Blocker> {
+    if body.loop_locals[local.0] {
+        return Err(Blocker::new(
+            "array loop local used outside its loop",
+            local.to_string(),
+        ));
+    }
     match &body.inferred[local.0] {
         Some(inferred) if !body.local(local).is_captured => Ok(inferred.clone()),
         _ => declared_ty(db, body, local),
@@ -472,7 +560,7 @@ pub(crate) fn constant_ty<'db>(
         }
         Constant::GenericFunction { .. } => Err(Blocker::new("function value", "generic")),
         Constant::GlobalItem(_) => Err(Blocker::new("global read", "")),
-        Constant::EnumVariant { .. } => Ok(NativeTy::Enum),
+        Constant::EnumVariant { enum_ref, .. } => Ok(NativeTy::Enum(*enum_ref)),
     }
 }
 
@@ -493,6 +581,11 @@ pub(crate) fn operand_ty<'db>(
 pub(crate) fn assignable(expected: &NativeTy<'_>, found: &NativeTy<'_>) -> bool {
     expected == found
         || match (expected, found) {
+            // A union takes whatever the type checker let through, and
+            // gives it back where flow analysis proved what it holds.
+            (expected, found) if expected.is_boxed() || found.is_boxed() => {
+                !matches!(expected, NativeTy::Cell(_)) && !matches!(found, NativeTy::Cell(_))
+            }
             (NativeTy::Optional(inner), found) => {
                 *found == NativeTy::Null || assignable(inner, found)
             }
@@ -568,12 +661,20 @@ pub(crate) fn binary_typing<'db>(
         (NativeTy::String, NativeTy::String) if is_comparison(op) || op == BinOp::Add => {
             BinaryMode::String
         }
-        (NativeTy::Optional(_), NativeTy::Null) if equality => BinaryMode::NullTest {
-            optional_on_left: true,
-        },
-        (NativeTy::Null, NativeTy::Optional(_)) if equality => BinaryMode::NullTest {
-            optional_on_left: false,
-        },
+        (NativeTy::Optional(_) | NativeTy::Union(_) | NativeTy::Unknown, NativeTy::Null)
+            if equality =>
+        {
+            BinaryMode::NullTest {
+                optional_on_left: true,
+            }
+        }
+        (NativeTy::Null, NativeTy::Optional(_) | NativeTy::Union(_) | NativeTy::Unknown)
+            if equality =>
+        {
+            BinaryMode::NullTest {
+                optional_on_left: false,
+            }
+        }
         _ => return Err(unsupported()),
     };
     let result = if is_comparison(op) {
@@ -598,7 +699,9 @@ pub(crate) fn describe(ty: &NativeTy<'_>) -> &'static str {
         NativeTy::Float => "float",
         NativeTy::Bool => "bool",
         NativeTy::Null => "null",
-        NativeTy::Enum => "enum",
+        NativeTy::Enum(_) => "enum",
+        NativeTy::Union(_) => "union",
+        NativeTy::Unknown => "unknown",
         NativeTy::String => "string",
         NativeTy::Class(_) => "class",
         NativeTy::Array(_) => "array",
