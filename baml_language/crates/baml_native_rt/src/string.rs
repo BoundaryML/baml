@@ -2,7 +2,7 @@
 //! `length()` is a load.
 
 use crate::{
-    heap::{Mutator, current_frame, load, store},
+    heap::{Mutator, load, store},
     layout::{
         BOX_VALUE, SLICE_OFFSET, SLICE_PARENT, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS,
         STRING_TEXT, STRING_TYPES_END, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ID_MASK,
@@ -139,19 +139,18 @@ pub fn int_digits(value: i64, buffer: &mut [u8; INT_DIGITS]) -> &str {
     unsafe { std::str::from_utf8_unchecked(&buffer[at..]) }
 }
 
+crate::stubs::anchored! {
+    /// The symbol of [`string_concat`].
+    baml_rt_string_concat => string_concat
+}
+
 /// Join the `count` strings whose references are the words at `parts`.
 ///
 /// # Safety
 ///
 /// Called from compiled code with its mutator; `parts` is the address of
 /// `count` string references in the caller's frame.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_string_concat(
-    mutator: &mut Mutator,
-    parts: usize,
-    count: usize,
-) -> usize {
-    mutator.enter(current_frame());
+unsafe extern "C" fn string_concat(mutator: &mut Mutator, parts: usize, count: usize) -> usize {
     let (mut bytes, mut chars) = (0, 0);
     for index in 0..count {
         // SAFETY: the caller's contract.
@@ -208,14 +207,17 @@ pub unsafe extern "C" fn baml_rt_string_cmp(left: usize, right: usize) -> i64 {
     unsafe { text(left).cmp(text(right)) as i64 }
 }
 
+crate::stubs::anchored! {
+    /// The symbol of [`string_from_int`].
+    baml_rt_string_from_int => string_from_int
+}
+
 /// The decimal text of an `int`.
 ///
 /// # Safety
 ///
 /// Called from compiled code with its mutator.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_string_from_int(mutator: &mut Mutator, value: i64) -> usize {
-    mutator.enter(current_frame());
+unsafe extern "C" fn string_from_int(mutator: &mut Mutator, value: i64) -> usize {
     from_ascii(mutator, int_digits(value, &mut [0; INT_DIGITS]))
 }
 
@@ -228,15 +230,23 @@ pub fn float_text(value: f64) -> String {
     crate::float_text(value)
 }
 
+crate::stubs::anchored! {
+    /// The symbol of [`string_from_float`].
+    baml_rt_string_from_float => string_from_float
+}
+
 /// The text of a `float`.
 ///
 /// # Safety
 ///
 /// Called from compiled code with its mutator.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_string_from_float(mutator: &mut Mutator, value: f64) -> usize {
-    mutator.enter(current_frame());
+unsafe extern "C" fn string_from_float(mutator: &mut Mutator, value: f64) -> usize {
     from_str(mutator, &float_text(value))
+}
+
+crate::stubs::anchored! {
+    /// The symbol of [`string_from_enum`].
+    baml_rt_string_from_enum => string_from_enum
 }
 
 /// The name of variant `index` of the enum whose boxes have the type
@@ -245,15 +255,18 @@ pub unsafe extern "C" fn baml_rt_string_from_float(mutator: &mut Mutator, value:
 /// # Safety
 ///
 /// Called from compiled code with its mutator.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_string_from_enum(
+unsafe extern "C" fn string_from_enum(
     mutator: &mut Mutator,
     enum_type: usize,
     index: usize,
 ) -> usize {
-    mutator.enter(current_frame());
     let name = mutator.variant_name(enum_type, index);
     from_str(mutator, name)
+}
+
+crate::stubs::anchored! {
+    /// The symbol of [`string_from_any`].
+    baml_rt_string_from_any => string_from_any
 }
 
 /// The text of a value held as a reference whose type declares no
@@ -264,9 +277,7 @@ pub unsafe extern "C" fn baml_rt_string_from_enum(
 ///
 /// Called from compiled code with its mutator; `value` is a live string or
 /// box.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_string_from_any(mutator: &mut Mutator, value: usize) -> usize {
-    mutator.enter(current_frame());
+unsafe extern "C" fn string_from_any(mutator: &mut Mutator, value: usize) -> usize {
     // SAFETY: the caller's contract: a box is a header and one value.
     let (type_id, held) = unsafe { (load(value) & TYPE_ID_MASK, load(value + BOX_VALUE)) };
     match type_id {

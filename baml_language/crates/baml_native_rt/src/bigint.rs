@@ -15,7 +15,7 @@ use num_bigint::{BigInt, Sign};
 
 use crate::{
     class::{self, Init},
-    heap::{Mutator, current_frame, load, store},
+    heap::{Mutator, load, store},
     layout::{
         BIGINT_LEFT_IS_INT as LEFT_IS_INT, BIGINT_LIMB_COUNT, BIGINT_LIMBS,
         BIGINT_OP_ADD as OP_ADD, BIGINT_OP_AND as OP_AND, BIGINT_OP_DIV as OP_DIV,
@@ -208,6 +208,11 @@ fn binary(op: usize, left: &Operand, right: &Operand) -> Result<BigInt, Failure>
     })
 }
 
+crate::stubs::anchored! {
+    /// The symbol of [`bigint_binary`].
+    baml_rt_bigint_binary => bigint_binary
+}
+
 /// `left op right` where at least one operand is a `bigint`: the result, a
 /// new `bigint`, or what the operator throws.
 ///
@@ -216,14 +221,12 @@ fn binary(op: usize, left: &Operand, right: &Operand) -> Result<BigInt, Failure>
 /// Called from compiled code with its mutator. `op` is one of the `OP_*`
 /// with [`LEFT_IS_INT`] and [`RIGHT_IS_INT`] saying which operands are the
 /// bits of an `int`; the others are live `bigint`s.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_bigint_binary(
+unsafe extern "C" fn bigint_binary(
     mutator: &mut Mutator,
     op: usize,
     left: usize,
     right: usize,
 ) -> RtResult {
-    mutator.enter(current_frame());
     // SAFETY: the caller's contract. Both are read before anything is
     // allocated, so neither needs to be kept.
     let (left, right) = unsafe {
@@ -289,14 +292,17 @@ pub unsafe extern "C" fn baml_rt_bigint_to_nanos(value: usize) -> i64 {
     }
 }
 
+crate::stubs::anchored! {
+    /// The symbol of [`bigint_neg`].
+    baml_rt_bigint_neg => bigint_neg
+}
+
 /// `-value`.
 ///
 /// # Safety
 ///
 /// Called from compiled code with its mutator and a live `bigint`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_bigint_neg(mutator: &mut Mutator, value: usize) -> RtResult {
-    mutator.enter(current_frame());
+unsafe extern "C" fn bigint_neg(mutator: &mut Mutator, value: usize) -> RtResult {
     // SAFETY: the caller's contract.
     let negated = -unsafe { self::value(value) };
     match checked(mutator, &negated) {
@@ -305,14 +311,17 @@ pub unsafe extern "C" fn baml_rt_bigint_neg(mutator: &mut Mutator, value: usize)
     }
 }
 
+crate::stubs::anchored! {
+    /// The symbol of [`string_from_bigint`].
+    baml_rt_string_from_bigint => string_from_bigint
+}
+
 /// The decimal text of a `bigint`, as a string object.
 ///
 /// # Safety
 ///
 /// Called from compiled code with its mutator and a live `bigint`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_string_from_bigint(mutator: &mut Mutator, value: usize) -> usize {
-    mutator.enter(current_frame());
+unsafe extern "C" fn string_from_bigint(mutator: &mut Mutator, value: usize) -> usize {
     // SAFETY: the caller's contract.
     let text = unsafe { self::value(value) }.to_string();
     crate::string::from_str(mutator, &text)

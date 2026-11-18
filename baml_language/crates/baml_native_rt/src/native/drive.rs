@@ -3,7 +3,7 @@
 //! Only the compiler's transform of an `async fn` into a state machine is
 //! used. The state is one block on the Rust heap, made by the native's
 //! symbol ([`start`]) and polled with a waker that does nothing
-//! ([`baml_rt_native_poll`]). A native stops in one of two ways, both
+//! ([`native_poll`]). A native stops in one of two ways, both
 //! methods of its [`Scope`]:
 //!
 //! - [`Scope::call_baml`] runs a compiled function, which may park the
@@ -52,7 +52,7 @@ use std::{
 
 use super::{Elem, RootSlots, RtResult, Scope, Thrown, TypeId};
 use crate::{
-    heap::{Mutator, current_frame},
+    heap::Mutator,
     layout::{NATIVE_CALL_ARGS, NATIVE_STATE_ARGS, STEP_CALL, STEP_DONE, STEP_THREW, STEP_WAIT},
     sched::{IoWait, Job, Task, Wake},
 };
@@ -101,7 +101,7 @@ pub(crate) struct Exchange {
 /// The state of one `async` native: what its stub, the poll and the
 /// collector read of it. The future follows, in the same block.
 #[repr(C)]
-pub struct Head {
+pub(crate) struct Head {
     /// What the stub passes the compiled function the native asked for.
     /// First, where the stub reads them.
     args: [usize; CALL_ARGS],
@@ -234,6 +234,12 @@ fn name_native_in_panics() {
     });
 }
 
+crate::stubs::anchored! {
+    /// The symbol of [`native_poll`]. What a collection during the poll
+    /// walks from is the frame of the stub that drives the native.
+    baml_rt_native_poll => native_poll
+}
+
 /// What the stub that drives a native does next: one of the `STEP_*` of
 /// [`crate::layout`], and the word that goes with it.
 #[repr(C)]
@@ -261,8 +267,7 @@ const _: () = assert!(STEP_DONE == 0 && STEP_THREW == 1);
 ///
 /// Called by the stub of an `async` native, on its task, with the worker
 /// running the task and the state the native's symbol returned.
-#[unsafe(no_mangle)]
-pub(crate) unsafe extern "C" fn baml_rt_native_poll(
+pub(crate) unsafe extern "C" fn native_poll(
     worker: *mut Mutator,
     head: *mut Head,
     word: usize,
@@ -271,8 +276,6 @@ pub(crate) unsafe extern "C" fn baml_rt_native_poll(
     // SAFETY: the caller's contract. The worker is reached through its
     // address: the native reaches it through its scope meanwhile.
     unsafe {
-        // What a collection during the poll walks from: the stub's frame.
-        (*worker).enter(current_frame());
         let exchange = &raw mut (*head).exchange;
         (*exchange).word = word;
         (*exchange).threw = threw != 0;
@@ -581,7 +584,7 @@ mod tests {
             let head = start(&mut *worker, name, make);
             let (mut word, mut threw) = (0, 0);
             loop {
-                let step = baml_rt_native_poll(worker, head, word, threw);
+                let step = native_poll(worker, head, word, threw);
                 if step.kind != STEP_CALL {
                     return (worker, step);
                 }

@@ -36,7 +36,7 @@ use std::{cell::OnceCell, io::Write};
 
 use crate::{
     class::{self, Init},
-    heap::{Mutator, current_frame, load, store},
+    heap::{Mutator, load, store},
     layout::{
         ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, HANDLER_BINDS_CONTEXT, HANDLER_MAY_RETHROW,
         HANDLER_TAKES_ALL, HANDLER_TAKES_NULL, HANDLER_TAKES_OTHERS, HANDLER_TAKES_PANICS,
@@ -529,39 +529,47 @@ pub(crate) extern "C" fn panic_stack_overflow(
     unwind(mutator, error, 0, resume);
 }
 
+crate::stubs::anchored! {
+    /// The symbol of [`error_map_key_not_found`].
+    baml_rt_error_map_key_not_found => error_map_key_not_found
+}
+
 /// The `baml.panics.MapKeyNotFound` a handler in the indexing function
 /// lands with.
-#[unsafe(no_mangle)]
-pub extern "C" fn baml_rt_error_map_key_not_found(mutator: &mut Mutator) -> usize {
-    mutator.enter(current_frame());
+extern "C" fn error_map_key_not_found(mutator: &mut Mutator) -> usize {
     map_key_not_found(mutator)
+}
+
+crate::stubs::anchored! {
+    /// The symbol of [`error_division_by_zero`].
+    baml_rt_error_division_by_zero => error_division_by_zero
 }
 
 /// The `baml.panics.DivisionByZero` a handler in the dividing function
 /// lands with.
-#[unsafe(no_mangle)]
-pub extern "C" fn baml_rt_error_division_by_zero(mutator: &mut Mutator, dividend: i64) -> usize {
-    mutator.enter(current_frame());
+extern "C" fn error_division_by_zero(mutator: &mut Mutator, dividend: i64) -> usize {
     division_by_zero(mutator, dividend)
+}
+
+crate::stubs::anchored! {
+    /// The symbol of [`error_negative_shift`].
+    baml_rt_error_negative_shift => error_negative_shift
 }
 
 /// The `baml.panics.NegativeBitShift` a handler in the shifting function
 /// lands with.
-#[unsafe(no_mangle)]
-pub extern "C" fn baml_rt_error_negative_shift(mutator: &mut Mutator, count: i64) -> usize {
-    mutator.enter(current_frame());
+extern "C" fn error_negative_shift(mutator: &mut Mutator, count: i64) -> usize {
     negative_shift(mutator, count)
+}
+
+crate::stubs::anchored! {
+    /// The symbol of [`error_index_out_of_bounds`].
+    baml_rt_error_index_out_of_bounds => error_index_out_of_bounds
 }
 
 /// The `baml.panics.IndexOutOfBounds` a handler in the indexing function
 /// lands with.
-#[unsafe(no_mangle)]
-pub extern "C" fn baml_rt_error_index_out_of_bounds(
-    mutator: &mut Mutator,
-    index: i64,
-    length: i64,
-) -> usize {
-    mutator.enter(current_frame());
+extern "C" fn error_index_out_of_bounds(mutator: &mut Mutator, index: i64, length: i64) -> usize {
     index_out_of_bounds(mutator, index, length)
 }
 
@@ -610,6 +618,11 @@ unsafe fn is_context(mutator: &Mutator, trace: usize) -> bool {
     unsafe { load(trace) & TYPE_ID_MASK == class::well_known_type(mutator, WELL_KNOWN_CONTEXT) }
 }
 
+crate::stubs::anchored! {
+    /// The symbol of [`error_context`].
+    baml_rt_error_context => error_context
+}
+
 /// The `baml.errors.Context` a handler that reads its context lands with:
 /// made of the trace the error travelled with, or the one an earlier
 /// handler made, which is the same error still in flight. A throw in the
@@ -620,13 +633,7 @@ unsafe fn is_context(mutator: &Mutator, trace: usize) -> bool {
 ///
 /// Called from compiled code with its mutator, an error and what the
 /// handler landed with.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_error_context(
-    mutator: &mut Mutator,
-    error: usize,
-    trace: usize,
-) -> usize {
-    mutator.enter(current_frame());
+unsafe extern "C" fn error_context(mutator: &mut Mutator, error: usize, trace: usize) -> usize {
     // SAFETY: the caller's contract.
     let functions = unsafe {
         if trace == 0 {

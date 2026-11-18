@@ -436,12 +436,12 @@ impl Mutator {
     }
 
     /// Record the top of this stack of compiled frames, given `frame`, the
-    /// frame pointer of a runtime function compiled code called directly.
-    ///
-    /// Only the frame record the platform's ABI defines is read: the
-    /// caller's frame pointer and the return address. Nothing else about
-    /// the runtime function's frame matters, so a boundary that switches
-    /// stacks can record the same three words itself.
+    /// frame record a stub made when compiled code called it: the caller's
+    /// frame pointer and the return address, with the caller's stack
+    /// pointer just above them. Only a stub written in assembly knows that
+    /// of its own frame. A Rust function compiled code calls is reached
+    /// through a stub that records the same three words before any Rust
+    /// runs: see [`crate::stubs`].
     pub fn enter(&mut self, frame: usize) {
         // SAFETY: `frame` is the frame record of a function compiled code
         // called.
@@ -1112,40 +1112,6 @@ impl<'a> Copy<'a> {
 
 const _: () = assert!(ARRAY_SIZE == 3 * WORD);
 
-/// The frame pointer of the function this is inlined into.
-///
-/// The read is said to overwrite a register the function must preserve.
-/// The function then saves that register before the read, and it saves it
-/// where it makes its frame, so the frame pointer read is its own. Without
-/// that, a function whose common path needs no frame makes one only on
-/// its rare path, and the read finds its caller's.
-#[expect(
-    clippy::inline_always,
-    reason = "it reads a register of whichever function it is in"
-)]
-#[inline(always)]
-pub fn current_frame() -> usize {
-    let frame: usize;
-    // SAFETY: reads one register.
-    unsafe {
-        #[cfg(target_arch = "aarch64")]
-        std::arch::asm!(
-            "mov {}, x29",
-            out(reg) frame,
-            out("x20") _,
-            options(nomem, nostack, preserves_flags)
-        );
-        #[cfg(target_arch = "x86_64")]
-        std::arch::asm!(
-            "mov {}, rbp",
-            out(reg) frame,
-            out("r12") _,
-            options(nomem, nostack, preserves_flags)
-        );
-    }
-    frame
-}
-
 /// The slow path of allocation in compiled code: the mutator's span cannot
 /// take the bytes asked for in its scratch word, which is left holding the
 /// address of that much uninitialized memory. `frame` is the frame record
@@ -1165,7 +1131,7 @@ pub(crate) extern "C" fn poll_slow(mutator: &mut Mutator, frame: usize) {
 mod tests {
     use super::*;
     use crate::{
-        array::{baml_rt_array_new, baml_rt_array_push_slow},
+        array::{array_new, array_push_slow},
         layout::{
             ARRAY_LENGTH, FIRST_CLASS_TYPE, RUNTIME_TYPES, SLICE_SIZE, TYPE_ARRAY_OF_REFS,
             TYPE_STRING_SLICE, field_offset, instance_size,
@@ -1286,11 +1252,11 @@ mod tests {
         // SAFETY: the calls follow the contracts of compiled code, with the
         // array rooted here in place of a stack map.
         unsafe {
-            let mut array = baml_rt_array_new(&mut mutator, TYPE_ARRAY_OF_REFS, 0);
+            let mut array = array_new(&mut mutator, TYPE_ARRAY_OF_REFS, 0);
             mutator.root(&mut array);
             for index in 0..100 {
                 let text = string::from_str(&mut mutator, &format!("item {index}"));
-                baml_rt_array_push_slow(&mut mutator, array, text);
+                array_push_slow(&mut mutator, array, text);
             }
             mutator.unroot(1);
             assert_eq!(load(array + ARRAY_LENGTH), 100);

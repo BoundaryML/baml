@@ -30,7 +30,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::{
-    heap::{Mutator, current_frame, load, store},
+    heap::{Mutator, load, store},
     layout::{
         ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_SIZE, ENTRY_VALUE, HASH_SET, MAP_ENTRIES,
         MAP_EPOCH, MAP_INDEX, MAP_LEN, MAP_MASK, MAP_SIZE, MAP_USED, SMALL_ENTRIES,
@@ -750,22 +750,30 @@ pub unsafe fn for_each(map: usize, mut each: impl FnMut(usize, usize)) {
     }
 }
 
+crate::stubs::anchored! {
+    /// The symbol of [`map_new`].
+    baml_rt_map_new => map_new
+}
+
 /// A new map of keys of the type `key_type` with room for `count`.
 ///
 /// # Safety
 ///
 /// Called from compiled code with its mutator.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_map_new(
+unsafe extern "C" fn map_new(
     mutator: &mut Mutator,
     key_type: u32,
     value_type: u32,
     count: usize,
 ) -> usize {
-    mutator.enter(current_frame());
     let value_is_ref = mutator.is_reference(value_type as usize);
     let key_is_ref = KeyKind::of(key_type as usize) == KeyKind::Str;
     new(mutator, key_is_ref, value_is_ref, count)
+}
+
+crate::stubs::anchored! {
+    /// The symbol of [`map_set`].
+    baml_rt_map_set => map_set
 }
 
 /// `map[key] = value`, when the key may be there already.
@@ -774,8 +782,7 @@ pub unsafe extern "C" fn baml_rt_map_new(
 ///
 /// Called from compiled code with its mutator, a live map of the named
 /// types, and a key and a value of them.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_map_set(
+unsafe extern "C" fn map_set(
     mutator: &mut Mutator,
     key_type: u32,
     value_type: u32,
@@ -783,11 +790,15 @@ pub unsafe extern "C" fn baml_rt_map_set(
     key: usize,
     value: usize,
 ) {
-    mutator.enter(current_frame());
     let value_is_ref = mutator.is_reference(value_type as usize);
     let kind = KeyKind::of(key_type as usize);
     // SAFETY: the caller's contract.
     unsafe { set(mutator, map, kind, value_is_ref, key, value) };
+}
+
+crate::stubs::anchored! {
+    /// The symbol of [`map_insert_new`].
+    baml_rt_map_insert_new => map_insert_new
 }
 
 /// `map[key] = value`, after a probe did not find the key.
@@ -795,8 +806,7 @@ pub unsafe extern "C" fn baml_rt_map_set(
 /// # Safety
 ///
 /// As [`baml_rt_map_set`], and the map does not have the key.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_map_insert_new(
+unsafe extern "C" fn map_insert_new(
     mutator: &mut Mutator,
     key_type: u32,
     value_type: u32,
@@ -804,7 +814,6 @@ pub unsafe extern "C" fn baml_rt_map_insert_new(
     key: usize,
     value: usize,
 ) {
-    mutator.enter(current_frame());
     let value_is_ref = mutator.is_reference(value_type as usize);
     let kind = KeyKind::of(key_type as usize);
     let key = kind.canonical(key);

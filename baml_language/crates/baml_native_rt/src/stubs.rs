@@ -193,6 +193,79 @@ macro_rules! preserving_stub {
     };
 }
 
+/// A stub named `$name` for a function of the runtime that may collect, or
+/// that reads the stack of the task it is called on. Compiled code calls
+/// the stub, which records in the worker where it was called from and goes
+/// on in `$function`: that gets the stub's arguments as they came and
+/// returns to the stub's caller.
+///
+/// What is recorded is the worker's anchor: the caller's stack pointer,
+/// the return address into it and its frame pointer, as they are on entry
+/// to the stub, before any Rust has run. So what a collection walks from
+/// does not depend on how the compiler lays out the Rust function's frame,
+/// or on whether it gives it one: a function whose call the compiler made
+/// a jump, or that made a frame only on a rare path, used to be read as
+/// its caller.
+///
+/// The worker is the pinned register, not the first argument. On arm64
+/// the stub is four instructions and uses x16, which a call may change.
+/// The stub is its symbol: nothing in the runtime calls it by name.
+#[cfg(target_arch = "aarch64")]
+macro_rules! anchored {
+    ($(#[$attribute:meta])* $name:ident => $function:path) => {
+        $(#[$attribute])*
+        ///
+        /// # Safety
+        ///
+        /// Called from compiled code only, with the worker in x21 and the
+        /// arguments the function it goes on in takes.
+        #[unsafe(naked)]
+        #[unsafe(no_mangle)]
+        unsafe extern "C" fn $name() {
+            core::arch::naked_asm!(
+                "mov x16, sp",
+                "stp x16, x30, [x21, #{anchor}]",
+                "str x29, [x21, #{anchor} + 16]",
+                "b {function}",
+                anchor = const $crate::layout::MUTATOR_ANCHOR,
+                function = sym $function,
+            )
+        }
+    };
+}
+
+/// On x86-64 the return address is on the stack and the caller's stack
+/// pointer just above it. The stub uses rax, which carries no argument.
+///
+/// Not built or run: written on an arm64 host.
+#[cfg(all(target_arch = "x86_64", not(target_os = "windows")))]
+macro_rules! anchored {
+    ($(#[$attribute:meta])* $name:ident => $function:path) => {
+        $(#[$attribute])*
+        ///
+        /// # Safety
+        ///
+        /// Called from compiled code only, with the worker in r15 and the
+        /// arguments the function it goes on in takes.
+        #[unsafe(naked)]
+        #[unsafe(no_mangle)]
+        unsafe extern "C" fn $name() {
+            core::arch::naked_asm!(
+                "lea rax, [rsp + 8]",
+                "mov [r15 + {anchor}], rax",
+                "mov rax, [rsp]",
+                "mov [r15 + {anchor} + 8], rax",
+                "mov [r15 + {anchor} + 16], rbp",
+                "jmp {function}",
+                anchor = const $crate::layout::MUTATOR_ANCHOR,
+                function = sym $function,
+            )
+        }
+    };
+}
+
+pub(crate) use anchored;
+
 preserving_stub! {
     /// The mutator's span cannot take the bytes its scratch word asks for.
     /// On return the scratch word holds the address of that much

@@ -777,9 +777,6 @@ pub fn generate_native_shims(
             arguments.push("types".to_owned());
         }
         let mut body = String::new();
-        if allocates {
-            body.push_str("    mutator.enter(current_frame());\n");
-        }
         if allocates && !flags.is_async {
             body.push_str(
                 "    let slots = RootSlots::new();\n    // SAFETY: `slots` outlives the scope, and \
@@ -849,14 +846,29 @@ pub fn generate_native_shims(
             );
             abi.result.c()
         };
-        let _ = writeln!(
-            shims,
-            "/// `{path}`\n///\n/// # Safety\n///\n/// Called from compiled code, with live \
-             objects of the declared types.\n#[unsafe(no_mangle)]\npub unsafe extern \"C\" fn \
-             {}({}) -> {c_result} {{\n{body}}}\n",
-            symbol(builtin),
-            c_parameters.join(", "),
-        );
+        // A native that can collect is reached through a stub that
+        // records where compiled code called it from: the symbol is the
+        // stub, and the function is what the stub goes on in.
+        let symbol = symbol(builtin);
+        if allocates {
+            let _ = writeln!(
+                shims,
+                "anchored! {{\n    /// The symbol of `{path}`.\n    {symbol} => {name}\n}}\n\n/// \
+                 `{path}`\n///\n/// # Safety\n///\n/// Called from compiled code through its \
+                 symbol, with live objects of the declared types.\nunsafe extern \"C\" fn \
+                 {name}({}) -> {c_result} {{\n{body}}}\n",
+                c_parameters.join(", "),
+                name = builtin.fn_name,
+            );
+        } else {
+            let _ = writeln!(
+                shims,
+                "/// `{path}`\n///\n/// # Safety\n///\n/// Called from compiled code, with live \
+                 objects of the declared types.\n#[unsafe(no_mangle)]\npub unsafe extern \"C\" fn \
+                 {symbol}({}) -> {c_result} {{\n{body}}}\n",
+                c_parameters.join(", "),
+            );
+        }
     }
 
     let mut out = String::new();

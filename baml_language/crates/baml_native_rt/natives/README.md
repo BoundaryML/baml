@@ -32,6 +32,14 @@ held across an allocation. The call passes the worker first, the caller
 treats the call as a point where objects move, and a native whose
 declaration can throw returns the thrown object beside its value.
 
+The symbol of such a native is a stub of four instructions that records in
+the worker where compiled code called from (its stack pointer, the return
+address, its frame pointer) and goes on in the native. A collection walks
+the stack from there. Recording it before any Rust runs is what keeps it
+from depending on how the Rust compiler lays the native's frame out. A
+native with no flag has no stub: it cannot collect, so nothing is recorded
+and its call costs what a C call costs.
+
 A native holds as many roots as it makes: the first sixteen are in the
 call's own frame, and more spill to chunks on the Rust heap that the
 collector also walks. A loop that makes a few roots each time around runs

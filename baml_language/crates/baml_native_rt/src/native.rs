@@ -1423,7 +1423,7 @@ mod generated {
         Opaque, OpaqueRef, OptionalScalar, Root, RootSlots, RtResult, Scope, Slot, Str, StrRef,
         Thrown, TypeId, View,
     };
-    use crate::heap::{Mutator, current_frame};
+    use crate::{heap::Mutator, stubs::anchored};
 
     include!(concat!(env!("OUT_DIR"), "/natives_generated.rs"));
 }
