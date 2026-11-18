@@ -396,64 +396,35 @@ pub(crate) unsafe fn drop_all(task: *mut Task) {
     }
 }
 
-/// A call of compiled code in flight: see [`Scope::call_baml`].
-pub struct CallBaml<'a, 's> {
-    scope: &'a mut Scope<'s>,
-    /// The call, until the driver has been asked for it.
-    ask: Option<(usize, [usize; CALL_ARGS])>,
+/// One stop of a native: the driver is asked for something, and then the
+/// native has its scope again, under the worker its task went on under.
+///
+/// Every way a native stops is made of this one future, so no stop leaves
+/// a scope with the worker the task stopped on.
+struct Stop<'a, 's> {
+    /// The scope, until the native has gone on.
+    scope: Option<&'a mut Scope<'s>>,
+    /// What the driver is asked for, until it has been.
+    request: Option<Request>,
 }
 
-impl<'s> Future for CallBaml<'_, 's> {
-    type Output = Result<Elem<'s>, Thrown<'s>>;
+impl<'a, 's> Future for Stop<'a, 's> {
+    type Output = &'a mut Scope<'s>;
 
     fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
-        let exchange = self.scope.exchange;
+        let scope = self.scope.take().expect("a stop is over once it is ready");
         // SAFETY: the scope is an `async` native's, so the exchange is its
-        // block's, and the driver answers a call before it polls again:
-        // with what compiled code returned or threw, and its trace.
+        // block's, and the driver answers a request before it polls again,
+        // having left there the worker the task went on under.
         unsafe {
-            if let Some((code, args)) = self.ask.take() {
-                (*exchange).request = Some(Request::Call { code, args });
+            if let Some(request) = self.request.take() {
+                (*scope.exchange).request = Some(request);
+                self.scope = Some(scope);
                 return Poll::Pending;
             }
-            self.scope.resumed();
-            let value = self.scope.elem_raw((*exchange).word, TypeId(0));
-            Poll::Ready(if (*exchange).threw {
-                let context = self.scope.elem_raw((*exchange).context, TypeId(0));
-                Err(Thrown {
-                    error: value,
-                    context: Some(context),
-                })
-            } else {
-                Ok(value)
-            })
+            scope.mutator = NonNull::new_unchecked((*scope.exchange).worker);
         }
-    }
-}
-
-/// A job on the I/O runtime in flight: see [`Scope::io`].
-pub struct Io<'a, 's, T> {
-    scope: &'a mut Scope<'s>,
-    /// The job and what starts it, until the driver has been asked to.
-    wait: Option<IoWait>,
-    /// Where the job leaves what it made.
-    made: Arc<Mutex<Option<T>>>,
-}
-
-impl<T> Future for Io<'_, '_, T> {
-    type Output = T;
-
-    fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<T> {
-        if let Some(wait) = self.wait.take() {
-            // SAFETY: the scope is an `async` native's, so the exchange is
-            // its block's.
-            unsafe { (*self.scope.exchange).request = Some(Request::Io(wait)) };
-            return Poll::Pending;
-        }
-        // SAFETY: the driver answered the request before it polled again.
-        unsafe { self.scope.resumed() };
-        let made = self.made.lock().expect("the job did not panic").take();
-        Poll::Ready(made.expect("the driver polls again once the job has ended"))
+        Poll::Ready(scope)
     }
 }
 
@@ -471,7 +442,11 @@ impl<'s> Scope<'s> {
     ///
     /// The call runs between two polls of the native: it may run for as
     /// long as any BAML, park, and collect.
-    pub fn call_baml<'a>(&'a mut self, function: BamlFn, args: &[Elem<'s>]) -> CallBaml<'a, 's> {
+    pub fn call_baml<'a>(
+        &'a mut self,
+        function: BamlFn,
+        args: &[Elem<'s>],
+    ) -> impl Future<Output = Result<Elem<'s>, Thrown<'s>>> + Send + use<'a, 's> {
         self.stops("scope.call_baml");
         assert!(
             args.len() <= CALL_ARGS,
@@ -481,9 +456,30 @@ impl<'s> Scope<'s> {
         for (word, arg) in words.iter_mut().zip(args) {
             *word = arg.get(self);
         }
-        CallBaml {
-            scope: self,
-            ask: Some((function.0, words)),
+        let stop = Stop {
+            scope: Some(self),
+            request: Some(Request::Call {
+                code: function.0,
+                args: words,
+            }),
+        };
+        async move {
+            let scope = stop.await;
+            // SAFETY: the driver answered the call before it polled again:
+            // with what compiled code returned or threw, and its trace.
+            unsafe {
+                let exchange = scope.exchange;
+                let value = scope.elem_raw((*exchange).word, TypeId(0));
+                if (*exchange).threw {
+                    let context = scope.elem_raw((*exchange).context, TypeId(0));
+                    Err(Thrown {
+                        error: value,
+                        context: Some(context),
+                    })
+                } else {
+                    Ok(value)
+                }
+            }
         }
     }
 
@@ -494,37 +490,30 @@ impl<'s> Scope<'s> {
     /// The job is `'static` and `Send`: it can hold no root and no view,
     /// so it never touches the BAML heap. What it returns is plain Rust,
     /// which the native makes objects of once it is running again.
-    pub fn io<'a, T, J>(&'a mut self, job: J) -> Io<'a, 's, T>
+    pub fn io<'a, T, J>(&'a mut self, job: J) -> impl Future<Output = T> + Send + use<'a, 's, T, J>
     where
         T: Send + 'static,
         J: Future<Output = T> + Send + 'static,
     {
         self.stops("scope.io");
+        // Where the job leaves what it made.
         let made = Arc::new(Mutex::new(None));
         let slot = Arc::clone(&made);
-        Io {
-            scope: self,
-            wait: Some(IoWait {
+        let stop = Stop {
+            scope: Some(self),
+            request: Some(Request::Io(IoWait {
                 job: Box::pin(async move {
                     let value = job.await;
                     *slot.lock().expect("no thread panics holding it") = Some(value);
                 }),
                 start: start_on_tokio,
-            }),
-            made,
+            })),
+        };
+        async move {
+            stop.await;
+            let made = made.lock().expect("the job did not panic").take();
+            made.expect("the driver polls again once the job has ended")
         }
-    }
-
-    /// Go on under the worker the task was resumed by.
-    ///
-    /// # Safety
-    ///
-    /// The scope is an `async` native's, and the driver has answered a
-    /// request of it.
-    unsafe fn resumed(&mut self) {
-        // SAFETY: the caller's contract: the exchange is the block's, and
-        // the driver left there the worker it went on under.
-        self.mutator = unsafe { NonNull::new_unchecked((*self.exchange).worker) };
     }
 
     /// Run `work`, which is long and touches no heap object, and return
@@ -742,6 +731,56 @@ mod tests {
             let status = unsafe { crate::sched::run(&raw mut *worker, entry, migrate) };
             assert_eq!(status, 0);
             assert_eq!(SAME_THREAD.load(Ordering::Acquire), !migrate);
+        }
+    }
+
+    /// Whether the native below found what it held and what it made, and
+    /// the worker it ended under.
+    static INTACT: AtomicBool = AtomicBool::new(false);
+    static ALLOCATED_UNDER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    /// Runs a native that allocates once it has stopped and gone on.
+    unsafe extern "C" fn allocates_after_a_stop(worker: *mut Mutator) -> *mut Mutator {
+        const HELD: &str = "held across the stop";
+        const MADE: &str = "made after it";
+        // SAFETY: on a task of `worker`, with no compiled caller.
+        unsafe {
+            drive(
+                &mut *worker,
+                "test.allocates_after_a_stop",
+                |scope| async move {
+                    let held = scope.alloc_str(HELD);
+                    let called = scope.call_baml(BamlFn(sleeps as *const () as usize), &[]);
+                    let slept = called.await.is_ok();
+                    let made = scope.alloc_str(MADE);
+                    INTACT.store(
+                        slept
+                            && held.get(scope).as_str() == HELD
+                            && made.get(scope).as_str() == MADE,
+                        Ordering::Release,
+                    );
+                    ALLOCATED_UNDER.store(scope.mutator.as_ptr() as usize, Ordering::Release);
+                    RtResult::ok(0)
+                },
+            );
+        }
+        ALLOCATED_UNDER.load(Ordering::Acquire) as *mut Mutator
+    }
+    crate::sched::tests::task_function!(allocates_after_a_stop_task => allocates_after_a_stop);
+
+    /// A native allocates with the worker its task went on under, which
+    /// under migration stress is at another address than the one it
+    /// stopped on. Every allocation collects.
+    #[test]
+    fn a_native_allocates_after_it_stopped_and_moved() {
+        for migrate in [false, true] {
+            let mut worker = worker(true);
+            let entry = allocates_after_a_stop_task as *const () as usize;
+            // SAFETY: the worker is this test's, and the entry a task
+            // function.
+            let status = unsafe { crate::sched::run(&raw mut *worker, entry, migrate) };
+            assert_eq!(status, 0);
+            assert!(INTACT.swap(false, Ordering::AcqRel), "migrating: {migrate}");
         }
     }
 

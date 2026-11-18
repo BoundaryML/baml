@@ -178,6 +178,14 @@ function hook_parks() -> string {
   let n = await busy;
   `${n} ${await quick} ${(await slow).length()}`
 }
+// Each `to_json` waits, and the native makes more objects every time it
+// goes on, holding what the earlier ones returned: the text is of all of
+// them, whichever worker each part was made under.
+function hook_allocates_after_each_wait() -> string {
+  let slow: HookSlow[] = [];
+  for (let i = 0; i < 6; i += 1) { slow.push(HookSlow { milliseconds: task_count(6 - i) }); };
+  baml.json.stringify({ "first": slow, "again": [slow[5], slow[0]] })
+}
 function hook_parks_and_then_throws() -> int {
   let f = spawn {
     baml.json.stringify([baml.json.from(HookSlow { milliseconds: task_count(10) }), baml.json.from(HookFails { code: task_count(6) })])
