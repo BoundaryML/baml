@@ -439,7 +439,7 @@ ORDER BY errors DESC`,
     finding: 'classify crossed its 2% threshold five hours ago.',
     Icon: TrendingUp,
     number: '6.2%',
-    sql: `SELECT date_trunc('hour', start_time) AS hour,
+    sql: `SELECT strftime('%Y-%m-%d %H:00', start_time) AS hour,
        avg(output_value = 'other') AS share
 FROM spans
 WHERE span_name = 'classify'
