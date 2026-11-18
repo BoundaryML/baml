@@ -13,6 +13,7 @@ import {
 import { type ReactNode, useState } from 'react';
 import { section } from './analytics';
 import { RED } from './story';
+import { Cmd } from './ui';
 
 // What you do with the data: a board of saved queries. Each one is something a team wants flagged
 // (spend, a security issue, slow calls, errors, drifting output, a side effect that ran twice). The
@@ -589,8 +590,9 @@ export default function Observe() {
           Turn your traces to a queryable data-lake, with zero setup.
         </h2>
         <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-          The traces that answered that incident are a SQL table. Dashboards,
-          alerts, and the questions you get asked are queries over it.
+          Query your program traces and profiles to generate any custom
+          dashboard using <Cmd>baml query</Cmd>, or create alerts with{' '}
+          <Cmd>baml alerts</Cmd> to keep track of critical metrics.
         </p>
         <div className="mt-10 md:mt-12">
           <Board />
