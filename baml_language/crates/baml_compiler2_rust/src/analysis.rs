@@ -769,8 +769,12 @@ fn is_primitive_key(ty: &RuntimeTy) -> bool {
 /// Keep aligned with `bex_vm::package_baml::VM_NATIVE_PACKAGES`.
 const VM_PACKAGES: &[&str] = &["baml", "testing", "ai", "reflect", "trace"];
 
-fn builtin_metadata() -> Result<&'static HashMap<String, bool>, &'static str> {
-    static TABLE: OnceLock<Result<HashMap<String, bool>, String>> = OnceLock::new();
+/// Each VM builtin's generated entry point, keyed by its BAML path, from the
+/// stdlib source the VM's own dispatch is generated from.
+fn builtin_entries()
+-> Result<&'static HashMap<String, baml_builtins2_codegen::NativeEntry>, &'static str> {
+    static TABLE: OnceLock<Result<HashMap<String, baml_builtins2_codegen::NativeEntry>, String>> =
+        OnceLock::new();
     TABLE
         .get_or_init(|| {
             let mut table = HashMap::new();
@@ -780,7 +784,8 @@ fn builtin_metadata() -> Result<&'static HashMap<String, bool>, &'static str> {
                         format!("the stdlib's `{package}` builtins do not extract: {error}")
                     })?;
                 for builtin in builtins {
-                    table.insert(builtin.path, builtin.may_yield);
+                    let entry = baml_builtins2_codegen::NativeEntry::of(&builtin, package);
+                    table.insert(builtin.path, entry);
                 }
             }
             Ok(table)
@@ -790,11 +795,16 @@ fn builtin_metadata() -> Result<&'static HashMap<String, bool>, &'static str> {
 }
 
 pub(crate) fn validate_builtin_metadata() -> Result<(), String> {
-    builtin_metadata().map(|_| ()).map_err(str::to_owned)
+    builtin_entries().map(|_| ()).map_err(str::to_owned)
 }
 
 fn builtin_may_yield(key: &str) -> Option<bool> {
-    builtin_metadata().ok()?.get(key).copied()
+    builtin_entry(key).map(|entry| entry.may_yield)
+}
+
+/// The generated entry point compiled code calls for builtin `key`.
+pub(crate) fn builtin_entry(key: &str) -> Option<&'static baml_builtins2_codegen::NativeEntry> {
+    builtin_entries().ok()?.get(key)
 }
 
 // Primitive values cannot override `to_string`.

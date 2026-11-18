@@ -83,6 +83,55 @@ function TupleAccess() -> void {
     );
 }
 
+function MissingKey(m: map<string, int>, key: string) -> string {
+    let found = m[key] catch (e) {
+        _ => -1,
+    } catch (e, ctx) {
+        baml.panics.MapKeyNotFound => -2,
+    };
+    `${found}`
+}
+
+function StoreAt(xs: int[], i: int) -> int {
+    xs[i] = 7;
+    i
+}
+
+function OutOfBounds(xs: int[], i: int) -> string {
+    let found = xs[i] catch (e) {
+        _ => -1,
+    } catch (e, ctx) {
+        baml.panics.IndexOutOfBounds => -2,
+    };
+    let stored = StoreAt(xs, i) catch (e) {
+        _ => -1,
+    } catch (e, ctx) {
+        baml.panics.IndexOutOfBounds => -2,
+    };
+    `${found}/${stored}`
+}
+
+// Builtin container calls compiled code makes directly, and the list store's
+// fast path, on hits, misses and errors.
+function DirectContainerOps() -> void {
+    let xs: int[] = [];
+    let n = 0;
+    for (let i = 0; i < 5; i += 1) {
+        n = xs.push(i * i);
+    }
+    xs[-1] = xs[1] + xs[-2];
+    let m: map<string, int> = {};
+    let fresh = m.set("a", 1);
+    let replaced = m.set("a", 2);
+    m["b"] = 3;
+    m["b"] += 4;
+    let bytes = baml.Uint8Array.from_array([1, 2]);
+    bytes[0] = 9;
+    baml.io.println(
+        `${n}:${xs}:${fresh ?? -1}:${replaced ?? -1}:${m.get("a") ?? -1}:${m.get("z") ?? -1}:${m.has("b")}:${m.has("z")}:${m}:${bytes[0]}:${MissingKey(m, "z")}:${OutOfBounds(xs, 5)}:${OutOfBounds(xs, -6)}`,
+    );
+}
+
 enum Color {
     Red,
     Blue,

@@ -8,7 +8,7 @@ mod stmt;
 pub(crate) mod types;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap},
     fmt::Write as _,
 };
 
@@ -88,7 +88,7 @@ pub(crate) struct Generator<'a, 'db> {
     /// keeps live heap values in frame slots across every suspension.
     pub(crate) pauses: bool,
     pub(crate) recursive: bool,
-    pub(crate) builtins: &'a mut BTreeMap<String, usize>,
+
     pub(crate) body: &'a MirFunctionBody<'db>,
     pub(crate) lambdas: &'a [MirFunction<'db>],
     pub(crate) analysis: &'a Analysis,
@@ -119,7 +119,6 @@ type Gen<T> = Result<T, Rejection>;
 impl<'a, 'db> Generator<'a, 'db> {
     pub(crate) fn new(
         program: &ProgramContext<'a, 'db>,
-        builtins: &'a mut BTreeMap<String, usize>,
         object: usize,
         unit: &'a crate::admit::Unit<'db>,
     ) -> Self {
@@ -136,7 +135,6 @@ impl<'a, 'db> Generator<'a, 'db> {
             spill_base: 0,
             pauses: program.pausing.contains(&object),
             recursive: unit.recursive,
-            builtins,
             body: &unit.body,
             lambdas: &unit.lambdas,
             analysis: &unit.analysis,

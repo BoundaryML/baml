@@ -3331,6 +3331,12 @@ impl BexVm {
     /// Returns an empty slice for calls with `ntypeargs == 0` and from outside
     /// any call dispatch context.
     pub fn current_call_type_args(&self) -> &[bex_vm_types::RealizedTy] {
+        if let Some(lent) = self.compiled.lent_type_args {
+            // SAFETY: set only while `with_call_type_args` runs a builtin
+            // with the lender's array borrowed for it.
+            #[allow(unsafe_code)]
+            return unsafe { lent.0.as_ref() };
+        }
         &self.pending_call_type_args
     }
 
@@ -4873,6 +4879,7 @@ impl BexVm {
     }
 
     /// Helper method to get `HeapPtr` from a Value, with type checking.
+    #[inline]
     fn as_object_ptr(
         &self,
         value: Value,
@@ -4927,6 +4934,7 @@ impl BexVm {
     }
 
     /// Get string from a Value.
+    #[inline]
     pub fn as_string(&self, value: &Value) -> Result<&bex_vm_types::BexStr, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::String)?;
         self.get_object(ptr).as_string()
@@ -5862,6 +5870,7 @@ impl BexVm {
 
     /// Get array from a Value. Acquires the container's mutex; the
     /// returned guard derefs to `&[Value]` and releases the lock on drop.
+    #[inline]
     pub fn as_array(
         &self,
         value: &Value,
@@ -5873,6 +5882,7 @@ impl BexVm {
     /// Get mutable array from a Value. Acquires the container's mutex;
     /// the returned guard derefs to `&mut Vec<Value>` and releases the
     /// lock on drop, serializing concurrent mutators under `spawn`.
+    #[inline]
     pub fn as_array_mut(
         &mut self,
         value: &Value,
@@ -5888,6 +5898,7 @@ impl BexVm {
     ///
     /// No other thread may reach the array while the guard lives; escape
     /// analysis proves this at the call sites that select a `$local` builtin.
+    #[inline]
     pub unsafe fn as_array_local(
         &self,
         value: &Value,
@@ -5902,6 +5913,7 @@ impl BexVm {
     /// # Safety
     ///
     /// As for [`Self::as_array_local`].
+    #[inline]
     pub unsafe fn as_array_mut_local(
         &mut self,
         value: &Value,
@@ -5911,6 +5923,7 @@ impl BexVm {
     }
 
     /// Get map from a Value. Acquires the container's mutex.
+    #[inline]
     pub fn as_map(&self, value: &Value) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
         // SAFETY: the locked specialization needs no locality proof.
         unsafe { self.as_map_in::<false>(*value) }
@@ -5928,6 +5941,7 @@ impl BexVm {
     }
 
     /// Get mutable map from a Value. Acquires the container's mutex.
+    #[inline]
     pub fn as_map_mut(
         &mut self,
         value: &Value,
@@ -5942,6 +5956,7 @@ impl BexVm {
     /// # Safety
     ///
     /// As for [`Self::as_array_local`].
+    #[inline]
     pub unsafe fn as_map_local(
         &self,
         value: &Value,
@@ -5956,6 +5971,7 @@ impl BexVm {
     /// # Safety
     ///
     /// As for [`Self::as_array_local`].
+    #[inline]
     pub unsafe fn as_map_mut_local(
         &mut self,
         value: &Value,
