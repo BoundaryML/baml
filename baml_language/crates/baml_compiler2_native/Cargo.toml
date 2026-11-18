@@ -30,6 +30,9 @@ cranelift-native = { workspace = true }
 cranelift-object = { workspace = true }
 thiserror = { workspace = true }
 
+[build-dependencies]
+baml_builtins2_codegen = { workspace = true }
+
 [dev-dependencies]
 baml_db = { workspace = true }
 bex_engine = { workspace = true }

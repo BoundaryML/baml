@@ -8,8 +8,8 @@
 //! compiled frames keep their references, and `baml_native_types`, what
 //! each type of object holds.
 //!
-//! The crate has no dependencies beyond `std`, so that `rustc` alone can
-//! compile it into the archive programs are linked against.
+//! The standard library's natives are in [`native`]: their symbols are
+//! generated from the standard library's own declarations.
 
 #![expect(
     unsafe_code,
@@ -19,6 +19,7 @@
 pub mod array;
 pub mod heap;
 pub mod layout;
+pub mod native;
 pub mod string;
 
 use std::io::Write;
@@ -160,6 +161,18 @@ pub extern "C" fn baml_rt_panic_negative_shift(count: i64) -> ! {
 #[unsafe(no_mangle)]
 pub extern "C" fn baml_rt_panic_index_out_of_bounds(index: i64, length: i64) -> ! {
     uncaught(&index_out_of_bounds_text(index, length))
+}
+
+/// A native threw and nothing catches it: `thrown` is the object of
+/// [`native::RtResult`].
+///
+/// # Safety
+///
+/// `thrown` is what a native returned as thrown.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_rt_throw_uncaught(thrown: usize) -> ! {
+    // SAFETY: the caller's contract.
+    uncaught(unsafe { string::text(thrown) })
 }
 
 /// A compiled function was entered with its stack pointer below the limit.

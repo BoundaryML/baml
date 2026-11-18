@@ -62,6 +62,8 @@ use crate::{
     },
 };
 
+mod native_call;
+
 /// The symbol the runtime's process entry calls.
 pub(crate) const ENTRY_SYMBOL: &str = "baml_native_entry";
 /// The symbol of the table of stack maps the collector reads.
@@ -2806,6 +2808,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                             .ok_or_else(|| internal("a checked builtin call has a result"))?;
                         (self.intrinsic(intrinsic, arguments)?, produced)
                     }
+                    Callee::Native(native) => self.native_call(native, args)?,
                     Callee::Value => {
                         let NativeTy::Function(signature) = narrowed(self.operand_ty(callee)?)
                         else {

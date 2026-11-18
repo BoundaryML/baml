@@ -1,0 +1,3 @@
+# Natives of `baml.Float`, implemented in `src/native/float.rs`.
+baml.Float.sqrt leaf
+baml.Float.itrunc reentrant

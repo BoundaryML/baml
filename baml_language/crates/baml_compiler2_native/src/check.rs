@@ -83,6 +83,8 @@ impl Intrinsic {
 pub(crate) enum Callee<'db> {
     Function(FunctionLoc<'db>),
     Intrinsic(Intrinsic),
+    /// A standard library builtin the native runtime implements in Rust.
+    Native(&'static crate::natives::Native),
     /// The function value an operand holds.
     Value,
 }
@@ -153,8 +155,12 @@ pub(crate) fn direct_callee<'db>(
 ) -> Result<Callee<'db>, Blocker> {
     match callee {
         Operand::Constant(Constant::Function(function)) => {
-            if let Some(intrinsic) = Intrinsic::named(&function_display_name(db, *function)) {
+            let name = function_display_name(db, *function);
+            if let Some(intrinsic) = Intrinsic::named(&name) {
                 return Ok(Callee::Intrinsic(intrinsic));
+            }
+            if let Some(native) = crate::natives::named(&name) {
+                return native.callable().map(|_| Callee::Native(native));
             }
             match function {
                 DeclRef::Source(function) => Ok(Callee::Function(*function)),
@@ -788,6 +794,24 @@ fn terminator_supported<'db>(
                             format!("{intrinsic:?}"),
                         )),
                     }
+                }
+                Callee::Native(native) => {
+                    let (signature, _) = native.callable()?;
+                    if args.len() != signature.params.len()
+                        || !assignable(&result, &signature.result.native())
+                    {
+                        return Err(Blocker::new(
+                            "call that does not match its callee's layout",
+                            native.path,
+                        ));
+                    }
+                    all_assignable(
+                        db,
+                        body,
+                        args,
+                        |index| signature.params.get(index).map(crate::natives::Ty::native),
+                        "argument",
+                    )
                 }
                 Callee::Function(function) => {
                     let name = || function_display_name(db, DeclRef::Source(function));

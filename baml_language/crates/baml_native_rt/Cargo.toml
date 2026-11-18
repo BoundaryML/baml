@@ -9,11 +9,13 @@ license = { workspace = true }
 description = "Runtime linked into natively compiled BAML programs"
 
 [lib]
-# `baml_compiler2_native` compiles `src/lib.rs` into the archive it links
-# programs against; the workspace builds the same source as a static library so
-# it is checked, linted and tested with everything else.
+# `baml_compiler2_native` builds this package into the archive it links
+# programs against, with a nested `cargo` and its own profile.
 crate-type = [ "staticlib" ]
 doctest = false
+
+[build-dependencies]
+baml_builtins2_codegen = { workspace = true }
 
 [lints]
 workspace = true

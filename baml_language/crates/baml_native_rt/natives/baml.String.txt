@@ -1,0 +1,6 @@
+# Natives of `baml.String`, implemented in `src/native/string.rs`.
+baml.String.includes leaf
+baml.String.split reentrant
+baml.String.slice reentrant
+baml.String.trim reentrant
+baml.String.to_code_points reentrant
