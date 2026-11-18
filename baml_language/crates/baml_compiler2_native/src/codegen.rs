@@ -67,6 +67,11 @@ use crate::{
 pub(crate) const ENTRY_SYMBOL: &str = "baml_native_entry";
 /// The symbol of the table of stack maps the collector reads.
 pub(crate) const STACK_MAPS_SYMBOL: &str = "baml_native_stack_maps";
+/// The symbol of the table of functions: where each one's code is, and
+/// where its shield ranges and telemetry slots are listed.
+pub(crate) const FUNCTIONS_SYMBOL: &str = "baml_native_functions";
+/// The version of the function table's format.
+const FUNCTIONS_VERSION: u32 = 1;
 /// The symbol of the table interface method calls load their code from.
 const METHODS_SYMBOL: &str = "baml_native_methods";
 /// The symbol of the table of types the collector reads.
@@ -272,6 +277,9 @@ struct Backend<'db> {
     methods: Option<DataId>,
     strings: HashMap<String, DataId>,
     stack_maps: Vec<(FuncId, FunctionStackMaps)>,
+    /// Every function defined, in the order of their code, with its size
+    /// in bytes.
+    functions: Vec<(FuncId, u32)>,
 }
 
 impl<'db> Backend<'db> {
@@ -313,6 +321,7 @@ impl<'db> Backend<'db> {
             methods: None,
             strings: HashMap::new(),
             stack_maps: Vec::new(),
+            functions: Vec::new(),
         })
     }
 
@@ -659,6 +668,56 @@ impl<'db> Backend<'db> {
         Ok(id)
     }
 
+    /// Emit the function table. Every field is little-endian and the table
+    /// is aligned to 8 bytes:
+    ///
+    /// ```text
+    /// +0   u32  format version (1)
+    /// +4   u32  F, the number of functions
+    /// +8   u32  S, the number of shield ranges
+    /// +12  u32  T, the number of telemetry slots
+    /// +16  F function records of 24 bytes, in ascending address order:
+    ///        +0   u64  address of the function's first instruction
+    ///        +8   u32  size of its code in bytes
+    ///        +12  u32  index of its first shield range
+    ///        +16  u32  index of its first telemetry slot
+    ///        +20  u32  zero
+    ///      a function's ranges and slots end where the next function's
+    ///      begin, the last function's at S and T
+    /// then S shield ranges of 8 bytes, ascending within a function:
+    ///        +0   u32  offset in the function of the range's first byte
+    ///        +4   u32  offset in the function one past its last byte
+    /// then T telemetry slots of 8 bytes, ascending within a function:
+    ///        +0   u32  offset in the function of a call's return address
+    ///        +4   u32  offset from the stack pointer of the slot there
+    /// ```
+    ///
+    /// No function has a shield range or a telemetry slot yet: S and T are
+    /// zero.
+    fn define_functions(&mut self) -> Result<(), CompileError> {
+        let functions = std::mem::take(&mut self.functions);
+        let mut description = DataDescription::new();
+        let mut bytes: Vec<u8> = Vec::new();
+        let count = u32::try_from(functions.len()).map_err(internal)?;
+        for word in [FUNCTIONS_VERSION, count, 0, 0] {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+        for (function, size) in functions {
+            let function = self.module.declare_func_in_data(function, &mut description);
+            description
+                .write_function_addr(u32::try_from(bytes.len()).map_err(internal)?, function);
+            bytes.extend_from_slice(&0_u64.to_le_bytes());
+            for word in [size, 0, 0, 0] {
+                bytes.extend_from_slice(&word.to_le_bytes());
+            }
+        }
+        let id = self
+            .module
+            .declare_data(FUNCTIONS_SYMBOL, Linkage::Export, false, false)
+            .map_err(internal)?;
+        self.define_data(id, description, bytes)
+    }
+
     /// Emit the table of every function's stack maps, in the format the
     /// runtime decodes: a count of functions, then for each its address, a
     /// count of call sites, and for each site its return address as an
@@ -885,6 +944,7 @@ pub(crate) fn generate<'db>(
         &mut disassembly,
     )?;
     backend.define_stack_maps()?;
+    backend.define_functions()?;
     backend.define_methods(db, program, &declared)?;
     backend.define_types()?;
 
@@ -935,6 +995,7 @@ fn define(
         .filter(|(_, slots)| !slots.is_empty())
         .collect();
     backend.stack_maps.push((id, sites));
+    backend.functions.push((id, code.buffer.total_size()));
     backend.module.clear_context(context);
     Ok(())
 }
