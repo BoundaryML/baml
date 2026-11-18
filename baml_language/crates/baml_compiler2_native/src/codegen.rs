@@ -91,7 +91,7 @@ fn clif_type(ty: &NativeTy<'_>) -> ir::Type {
         return types::I128;
     }
     match ty {
-        NativeTy::Int => types::I64,
+        NativeTy::Int | NativeTy::Enum => types::I64,
         NativeTy::Float => types::F64,
         NativeTy::Bool | NativeTy::Null => types::I8,
         NativeTy::String | NativeTy::Class(_) | NativeTy::Array(_) | NativeTy::Optional(_) => WORD,
@@ -509,7 +509,7 @@ pub(crate) fn generate<'db>(
         NativeTy::Bool => Some(Runtime::PrintBool),
         NativeTy::String => Some(Runtime::PrintString),
         NativeTy::Null => None,
-        NativeTy::Class(_) | NativeTy::Array(_) | NativeTy::Optional(_) => {
+        NativeTy::Enum | NativeTy::Class(_) | NativeTy::Array(_) | NativeTy::Optional(_) => {
             return Err(CompileError::EntryResultNotPrintable);
         }
     };
@@ -1138,6 +1138,9 @@ impl<'a, 'db> Translator<'a, 'db> {
             Operand::Constant(Constant::Int(value)) => {
                 Ok(self.builder.ins().iconst(types::I64, *value))
             }
+            Operand::Constant(Constant::EnumVariant { index, .. }) => {
+                Ok(self.builder.ins().iconst(types::I64, i64::from(*index)))
+            }
             Operand::Constant(Constant::Float(value)) => Ok(self.builder.ins().f64const(*value)),
             Operand::Constant(Constant::Bool(value)) => Ok(self.bool_const(*value)),
             Operand::Constant(Constant::Null) => Ok(self.null()),
@@ -1216,6 +1219,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                     .collect::<Result<Vec<_>, _>>()?;
                 self.concat(&parts)?
             }
+            Rvalue::Discriminant(place) => self.read_place(place)?,
             Rvalue::Len(place) => {
                 let array = self.read_place(place)?;
                 self.array_view(array).0
@@ -1926,6 +1930,15 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let array = self.operand(array)?;
                 let item = self.operand_as(item, &element)?;
                 self.array_push(array, item, &element)
+            }
+            (Intrinsic::EnumEq | Intrinsic::EnumNe, [left, right]) => {
+                let (left, right) = (self.operand(left)?, self.operand(right)?);
+                let condition = if intrinsic == Intrinsic::EnumEq {
+                    IntCC::Equal
+                } else {
+                    IntCC::NotEqual
+                };
+                Ok(self.builder.ins().icmp(condition, left, right))
             }
             (Intrinsic::StringCharCount, [string]) => {
                 let string = self.operand(string)?;

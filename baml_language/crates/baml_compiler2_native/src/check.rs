@@ -38,6 +38,9 @@ pub(crate) enum Intrinsic {
     /// The text of an `int`, `float`, `bool`, `null` or `string`: what a
     /// template hole and `to_string()` produce for them.
     ToString,
+    /// `==` and `!=` between two variants of an enum.
+    EnumEq,
+    EnumNe,
 }
 
 impl Intrinsic {
@@ -47,6 +50,8 @@ impl Intrinsic {
             // `length` is declared as `char_count`.
             "baml.String.char_count" | "baml.String.length" => Some(Self::StringCharCount),
             "baml._to_string_default" | "baml._to_string_primitive" => Some(Self::ToString),
+            "baml.ops.equals_equals" => Some(Self::EnumEq),
+            "baml.ops.not_equals" => Some(Self::EnumNe),
             _ => None,
         }
     }
@@ -58,6 +63,7 @@ impl Intrinsic {
                 Some(NativeTy::Int)
             }
             (Self::StringCharCount, [NativeTy::String]) => Some(NativeTy::Int),
+            (Self::EnumEq | Self::EnumNe, [NativeTy::Enum, NativeTy::Enum]) => Some(NativeTy::Bool),
             (
                 Self::ToString,
                 [
@@ -328,6 +334,14 @@ pub(crate) fn rvalue_ty<'db>(
             all_assignable(db, body, parts, |_| Some(NativeTy::String), "string part")?;
             Ok(NativeTy::String)
         }
+        // An enum value is its variant's position already.
+        Rvalue::Discriminant(place) => match narrowed(place_ty(db, body, place)?) {
+            NativeTy::Enum => Ok(NativeTy::Int),
+            other => Err(Blocker::new(
+                "discriminant of a non-enum value",
+                describe(&other),
+            )),
+        },
         Rvalue::Len(place) => match narrowed(place_ty(db, body, place)?) {
             NativeTy::Array(_) => Ok(NativeTy::Int),
             other => Err(Blocker::new(

@@ -27,6 +27,10 @@ pub(crate) enum NativeTy<'db> {
     /// The one value of the unit type. It carries no information, so it is
     /// never kept in a variable.
     Null,
+    /// A variant of an enum: its position in the declaration, as an int.
+    /// Which enum is the type checker's business; the representation is the
+    /// same for all of them.
+    Enum,
     /// A reference to an immutable string object.
     String,
     /// A reference to an instance of a class without type parameters.
@@ -45,7 +49,7 @@ impl NativeTy<'_> {
         match self {
             Self::String | Self::Class(_) | Self::Array(_) => true,
             Self::Optional(inner) => inner.is_ref(),
-            Self::Int | Self::Float | Self::Bool | Self::Null => false,
+            Self::Int | Self::Float | Self::Bool | Self::Null | Self::Enum => false,
         }
     }
 
@@ -69,6 +73,7 @@ pub(crate) fn native_ty<'db>(
         RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _) => NativeTy::Float,
         RuntimeTy::Bool | RuntimeTy::Literal(Literal::Bool(_), _) => NativeTy::Bool,
         RuntimeTy::Null => NativeTy::Null,
+        RuntimeTy::Enum(..) | RuntimeTy::EnumVariant(..) => NativeTy::Enum,
         RuntimeTy::String | RuntimeTy::Literal(Literal::String(_), _) => NativeTy::String,
         RuntimeTy::Class(head, arguments) if arguments.is_empty() => {
             let class = class_ref_of(db, head)?;
@@ -360,7 +365,7 @@ pub(crate) fn constant_ty<'db>(constant: &Constant<'_>) -> Result<NativeTy<'db>,
             Err(Blocker::new("function value", "constant"))
         }
         Constant::GlobalItem(_) => Err(Blocker::new("global read", "")),
-        Constant::EnumVariant { .. } => Err(Blocker::new("enum value", "constant")),
+        Constant::EnumVariant { .. } => Ok(NativeTy::Enum),
     }
 }
 
@@ -473,6 +478,7 @@ pub(crate) fn describe(ty: &NativeTy<'_>) -> &'static str {
         NativeTy::Float => "float",
         NativeTy::Bool => "bool",
         NativeTy::Null => "null",
+        NativeTy::Enum => "enum",
         NativeTy::String => "string",
         NativeTy::Class(_) => "class",
         NativeTy::Array(_) => "array",

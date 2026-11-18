@@ -106,6 +106,48 @@ class Line {
   to: Point
   label: string
 }
+enum Color { Red Green Blue }
+class Pixel {
+  color: Color
+  weight: int
+  next: Color?
+}
+function score(c: Color) -> int {
+  match (c) {
+    Color.Red => 1,
+    Color.Green => 2,
+    Color.Blue => 3,
+  }
+}
+function colour(n: int) -> Color {
+  if count(n) % 3 == 0 { Color.Red } else if n % 3 == 1 { Color.Green } else { Color.Blue }
+}
+function enum_match() -> int {
+  let total = 0;
+  for (let i = 0; i < 10; i += 1) {
+    let c = colour(i);
+    if c == Color.Green { total += 100; };
+    if c != Color.Red { total += 1000; };
+    total += score(c);
+  };
+  total
+}
+function enum_fields() -> int {
+  let p = Pixel { color: colour(2), weight: 2, next: null };
+  let q = Pixel { color: Color.Red, weight: 5, next: colour(1) };
+  p.color = q.color;
+  let seen = 0;
+  if p.next == null { seen += 10; };
+  if q.next != null { seen += 100; };
+  score(p.color) * p.weight + score(q.next ?? Color.Blue) * q.weight + seen
+}
+function enum_array() -> int {
+  let colors: Color[] = [];
+  for (let i = 0; i < 40; i += 1) { colors.push(colour(i)); };
+  let total = 0;
+  for (let c in colors) { total += score(c); };
+  total
+}
 class Node {
   value: int
   next: Node?
@@ -500,6 +542,9 @@ const CASES: &[Case] = &[
     case("field_writes", Printed("57")),
     case("nested_fields", Printed("2521")),
     case("fields_of_every_kind", Printed("11.5")),
+    case("enum_match", Printed("6319")),
+    case("enum_fields", Printed("122")),
+    case("enum_array", Printed("79")),
     case("linked_list", Printed("4950")),
     case("small_trees", Printed("620")),
     // More arguments than registers: the collector finds a caller's frame
