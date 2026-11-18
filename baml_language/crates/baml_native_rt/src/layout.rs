@@ -86,6 +86,9 @@ pub const KIND_REFS: u32 = 2;
 pub const KIND_STRING: u32 = 3;
 pub const KIND_ARRAY: u32 = 4;
 pub const KIND_SLICE: u32 = 5;
+/// A future: its value slot holds a reference when it settled with an error,
+/// or with a value its flags say is one.
+pub const KIND_FUTURE: u32 = 6;
 
 /// A type is four `u32`s: its kind; the size in bytes of an object, for a
 /// fixed one; the number of reference fields; and, for an array, the type id
@@ -129,8 +132,10 @@ pub const TYPE_ERROR: usize = 208;
 /// like [`TYPE_ERROR`]. A handler that takes every error does not take a
 /// panic, so the two are told apart.
 pub const TYPE_PANIC: usize = 232;
+/// What a `spawn` returns and an `await` waits on: see [`FUTURE_STATE`].
+pub const TYPE_FUTURE: usize = 256;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 256;
+pub const FIRST_CLASS_TYPE: usize = 272;
 
 /// The start of every type table, as `u32`s: eight bytes no type lives at,
 /// so that no id is zero, then the fixed types.
@@ -201,6 +206,10 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     0,
     BOX_VALUE as u32,
     0,
+    KIND_FUTURE,
+    FUTURE_SIZE as u32,
+    0,
+    0,
 ];
 
 const _: () = {
@@ -213,6 +222,7 @@ const _: () = {
     assert!(RUNTIME_TYPES[TYPE_BOX_BOOL / 4 + 1] == BOX_SIZE as u32);
     assert!(RUNTIME_TYPES[TYPE_ERROR / 4 + 4] == BOX_VALUE as u32);
     assert!(RUNTIME_TYPES[TYPE_PANIC / 4 + 4] == BOX_VALUE as u32);
+    assert!(RUNTIME_TYPES[TYPE_FUTURE / 4] == KIND_FUTURE);
 };
 
 /// Where the mutator keeps the address of the next object and the address
@@ -229,6 +239,38 @@ pub const MUTATOR_POLL: usize = 3 * WORD;
 /// nothing in registers: the size asked of the allocation slow path going
 /// in, the address of the memory coming out.
 pub const MUTATOR_SCRATCH: usize = 4 * WORD;
+
+/// The task the worker is running, or zero on the worker's own stack.
+pub const MUTATOR_CUR_TASK: usize = 5 * WORD;
+/// Reserved for the telemetry node of the running task.
+pub const MUTATOR_TELE_NODE: usize = 6 * WORD;
+/// Where the worker's own stack resumes: the address of the switch frame it
+/// left when it last switched to a task.
+pub const MUTATOR_G0_SP: usize = 7 * WORD;
+/// The top compiled frame at the runtime boundary: the stack pointer, the
+/// return address and the frame pointer, a word each.
+pub const MUTATOR_ANCHOR: usize = 8 * WORD;
+
+/// A future is a header and four words. The state is zero or the address of
+/// the first task waiting (tasks are aligned, so its low bits are clear)
+/// while the task has not finished, then [`FUTURE_READY`] or
+/// [`FUTURE_ERROR`], written once with the value already in place: a reader
+/// loads the state first, with acquire ordering, and the value after.
+pub const FUTURE_STATE: usize = field_offset(0);
+/// What the task returned, as the bits of one slot, or what it threw.
+pub const FUTURE_VALUE: usize = field_offset(1);
+/// The task settling it, which is not a heap object, or zero.
+pub const FUTURE_TASK: usize = field_offset(2);
+pub const FUTURE_FLAGS: usize = field_offset(3);
+pub const FUTURE_SIZE: usize = instance_size(4);
+pub const FUTURE_READY: usize = 1;
+pub const FUTURE_ERROR: usize = 2;
+/// The bits of the state that say it is settled.
+pub const FUTURE_SETTLED: usize = 3;
+/// Set in a future's flags when the value its task returns is a reference.
+pub const FUTURE_VALUE_IS_REF: usize = 1;
+/// Set in a future's flags once an `await` has thrown its error.
+pub const FUTURE_OBSERVED: usize = 2;
 
 /// Round a byte count up to whole words.
 pub const fn words(bytes: usize) -> usize {

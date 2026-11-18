@@ -35,9 +35,10 @@
 use std::alloc::{Layout, alloc, dealloc};
 
 use crate::layout::{
-    ARRAY_DATA, ARRAY_SIZE, KIND_ARRAY, KIND_FIXED, KIND_REFS, KIND_SLICE, KIND_STRING,
-    KIND_VALUES, SLICE_OFFSET, SLICE_PARENT, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS,
-    STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK, TYPE_STRING, WORD, words,
+    ARRAY_DATA, ARRAY_SIZE, FUTURE_ERROR, FUTURE_FLAGS, FUTURE_READY, FUTURE_SETTLED, FUTURE_STATE,
+    FUTURE_VALUE, FUTURE_VALUE_IS_REF, KIND_ARRAY, KIND_FIXED, KIND_FUTURE, KIND_REFS, KIND_SLICE,
+    KIND_STRING, KIND_VALUES, SLICE_OFFSET, SLICE_PARENT, STORAGE_CAPACITY, STORAGE_ELEMENTS,
+    STRING_LENGTHS, STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK, TYPE_STRING, WORD, words,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
@@ -248,15 +249,22 @@ pub struct Mutator {
     poll: u32,
     /// What the allocation slow path is asked for and what it answers.
     scratch: usize,
+    /// The task this worker is running, or null on the worker's own stack.
+    pub(crate) cur_task: *mut crate::sched::Task,
+    /// Reserved for the telemetry node of the running task.
+    tele_node: usize,
+    /// Where the worker's own stack resumes when a task leaves for it.
+    g0_sp: usize,
+    /// Where a collection starts walking the running task's stack: the
+    /// stack pointer, the return address and the frame pointer of the
+    /// compiled function that last called the runtime, as they were at that
+    /// call.
+    anchor: Anchor,
     /// The true end of this mutator's span.
     span_end: usize,
     heap: Heap,
-    /// Where a collection starts walking this stack: the stack pointer, the
-    /// return address and the frame pointer of the compiled function that
-    /// last called the runtime, as they were at that call.
-    anchor: Anchor,
-    /// The frame that called into compiled code: where the walk stops.
-    base_frame: usize,
+    /// The tasks, and what runs them.
+    pub(crate) sched: crate::sched::Sched,
     /// Addresses of the runtime's own slots holding references.
     roots: Vec<usize>,
     /// Where a throw finds its handler.
@@ -269,10 +277,15 @@ const _: () = {
     assert!(std::mem::offset_of!(Mutator, stack_limit) == crate::layout::MUTATOR_STACK_LIMIT);
     assert!(std::mem::offset_of!(Mutator, poll) == crate::layout::MUTATOR_POLL);
     assert!(std::mem::offset_of!(Mutator, scratch) == crate::layout::MUTATOR_SCRATCH);
+    assert!(std::mem::offset_of!(Mutator, cur_task) == crate::layout::MUTATOR_CUR_TASK);
+    assert!(std::mem::offset_of!(Mutator, tele_node) == crate::layout::MUTATOR_TELE_NODE);
+    assert!(std::mem::offset_of!(Mutator, g0_sp) == crate::layout::MUTATOR_G0_SP);
+    assert!(std::mem::offset_of!(Mutator, anchor) == crate::layout::MUTATOR_ANCHOR);
 };
 
 /// The top compiled frame of a stack, recorded where compiled code calls the
 /// runtime.
+#[repr(C)]
 #[derive(Clone, Copy, Default)]
 struct Anchor {
     /// The compiled function's stack pointer at the call: what its stack
@@ -303,6 +316,10 @@ impl Mutator {
             stack_limit: 0,
             poll: 0,
             scratch: 0,
+            cur_task: std::ptr::null_mut(),
+            tele_node: 0,
+            g0_sp: 0,
+            anchor: Anchor::default(),
             span_end: space.end(),
             heap: Heap {
                 space,
@@ -313,8 +330,7 @@ impl Mutator {
                 types: program.types,
                 stress,
             },
-            anchor: Anchor::default(),
-            base_frame: 0,
+            sched: crate::sched::Sched::new(),
             roots: Vec::new(),
             unwind: crate::unwind::Unwinder::new(program.unwind, program.functions),
         };
@@ -328,13 +344,6 @@ impl Mutator {
         } else {
             self.span_end
         };
-    }
-
-    /// Record where this stack's compiled frames end: at `frame`, the frame
-    /// pointer of the function about to call into compiled code.
-    #[cfg(not(test))]
-    pub fn set_base_frame(&mut self, frame: usize) {
-        self.base_frame = frame;
     }
 
     /// Record the top of this stack of compiled frames, given `frame`, the
@@ -356,15 +365,34 @@ impl Mutator {
         };
     }
 
+    /// Record the top of the running task's compiled frames, given the
+    /// switch frame a stub built when compiled code called it: the frame
+    /// record is inside it and the caller's stack pointer just above it.
+    pub(crate) fn enter_switch_frame(&mut self, frame: usize) {
+        use crate::sched::switch::{SWITCH_FRAME, SWITCH_FRAME_RECORD};
+        // SAFETY: `frame` is a switch frame on the running task's stack.
+        self.anchor = unsafe {
+            Anchor {
+                sp: frame + SWITCH_FRAME,
+                pc: load(frame + SWITCH_FRAME_RECORD + WORD),
+                fp: load(frame + SWITCH_FRAME_RECORD),
+            }
+        };
+    }
+
     /// The top compiled frame: the return address into it and its frame
     /// pointer, as [`Self::enter`] recorded them.
     pub(crate) fn top_frame(&self) -> (usize, usize) {
         (self.anchor.pc, self.anchor.fp)
     }
 
-    /// The frame pointer of the function that called into compiled code.
+    /// Where the running task's chain of compiled frames ends.
     pub(crate) fn base_frame(&self) -> usize {
-        self.base_frame
+        if self.cur_task.is_null() {
+            return 0;
+        }
+        // SAFETY: the current task is a task in use.
+        unsafe { crate::sched::stack_base(self.cur_task) }
     }
 
     /// A loop found the poll word set. Nothing sets it yet.
@@ -488,12 +516,24 @@ impl Mutator {
             Some(spare) if spare.size >= size => spare,
             _ => Space::new(size),
         };
+        let base = self.base_frame();
         let mut copy = Copy::new(&self.heap.space, to, self.heap.types);
-        // SAFETY: the stack between the anchor and `base_frame` is this
-        // mutator's compiled frames, described by the stack maps, and every
+        // SAFETY: the stack between the anchor and `base` is the running
+        // task's compiled frames, described by the stack maps; a task that
+        // is not running has its top frame in its switch frame; and every
         // registered root is a live slot.
         unsafe {
-            copy.stack(&self.heap.stack_maps, self.anchor, self.base_frame);
+            copy.stack(&self.heap.stack_maps, self.anchor, base);
+            for task in self.sched.tasks() {
+                let roots = crate::sched::task_roots(task, self.cur_task);
+                for slot in roots.slots {
+                    copy.forward(slot);
+                }
+                if let Some((result, [sp, pc, fp], base)) = roots.stack {
+                    copy.forward(result);
+                    copy.stack(&self.heap.stack_maps, Anchor { sp, pc, fp }, base);
+                }
+            }
             for &slot in &self.roots {
                 copy.forward(slot);
             }
@@ -560,7 +600,7 @@ impl<'a> Copy<'a> {
         // in the low half, in its second word.
         unsafe {
             match info.kind {
-                KIND_FIXED | KIND_ARRAY | KIND_SLICE => info.size as usize,
+                KIND_FIXED | KIND_ARRAY | KIND_SLICE | KIND_FUTURE => info.size as usize,
                 KIND_VALUES | KIND_REFS => {
                     STORAGE_ELEMENTS + load(object + STORAGE_CAPACITY) * WORD
                 }
@@ -830,6 +870,18 @@ impl<'a> Copy<'a> {
                     KIND_REFS => {
                         for index in 0..load(scan + STORAGE_CAPACITY) {
                             self.forward(scan + STORAGE_ELEMENTS + index * WORD);
+                        }
+                    }
+                    // What a task threw is a reference; what it returned is
+                    // one when the future's flags say so. Until it settles
+                    // the word is zero.
+                    KIND_FUTURE => {
+                        let settled = load(scan + FUTURE_STATE) & FUTURE_SETTLED;
+                        if settled == FUTURE_ERROR
+                            || (settled == FUTURE_READY
+                                && load(scan + FUTURE_FLAGS) & FUTURE_VALUE_IS_REF != 0)
+                        {
+                            self.forward(scan + FUTURE_VALUE);
                         }
                     }
                     _ => {}

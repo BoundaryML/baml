@@ -357,7 +357,7 @@ pub extern "C" fn baml_rt_error_index_out_of_bounds(
 /// # Safety
 ///
 /// `error` is zero or a live object.
-unsafe fn error_text(mutator: &Mutator, error: usize) -> String {
+pub(crate) unsafe fn error_text(mutator: &Mutator, error: usize) -> String {
     if error == 0 {
         return "null".to_owned();
     }

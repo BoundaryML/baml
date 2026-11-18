@@ -22,6 +22,7 @@ pub mod array;
 pub mod heap;
 pub mod layout;
 pub mod native;
+pub mod sched;
 pub mod string;
 pub mod stubs;
 pub mod unwind;
@@ -29,7 +30,7 @@ pub mod unwind;
 use std::io::Write;
 
 #[cfg(not(test))]
-use heap::{Mutator, Program, current_frame};
+use heap::{Mutator, Program};
 
 /// The exit status of a program that ended in an uncaught panic, matching
 /// what `baml run` exits with.
@@ -68,10 +69,9 @@ pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
             functions: &raw const baml_native_functions as usize,
         };
         let mut mutator = Mutator::new(program, stress);
-        mutator.set_base_frame(current_frame());
-        baml_native_entry((&raw mut mutator).cast());
+        // The entry function runs as a task, like everything it spawns.
+        sched::run(&raw mut mutator, baml_native_entry as *const () as usize)
     }
-    0
 }
 
 /// An `int` result, as `baml run` prints it.
@@ -158,8 +158,8 @@ pub unsafe extern "C" fn baml_rt_print_enum(mutator: &Mutator, enum_type: usize,
     print_line(mutator.variant_name(enum_type, index));
 }
 
-/// A compiled function was entered with its stack pointer below the limit.
-/// Stacks do not grow yet, so this is the end of the program.
+/// A compiled function was entered with its stack pointer below its task's
+/// limit. Stacks do not grow yet, so this is the end of the program.
 pub(crate) extern "C" fn stack_slow(_mutator: &mut heap::Mutator, _frame: usize) {
     uncaught("stack overflow")
 }
