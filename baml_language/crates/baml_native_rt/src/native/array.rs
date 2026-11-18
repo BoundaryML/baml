@@ -6,8 +6,8 @@
 //! the call's type argument.
 
 use super::{
-    Arr, ArrRef, Elem, NativeBamlArray, Natives, Root, Scope, Slot, Str, Thrown, TypeId, View,
-    array_size,
+    Arr, ArrRef, Elem, NativeBamlArray, Natives, Root, Scope, Slot, Str, StrRef, Thrown, TypeId,
+    View, array_size, string::text_size,
 };
 use crate::{
     heap::{load, store},
@@ -15,6 +15,7 @@ use crate::{
         ARRAY_DATA, ARRAY_LENGTH, STORAGE_CAPACITY, STORAGE_ELEMENTS, TYPE_BOX_BOOL,
         TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ID_MASK, TYPE_STRING, WORD,
     },
+    string::{INT_DIGITS, int_digits},
 };
 
 /// The smallest storage an array grows into.
@@ -349,22 +350,55 @@ impl NativeBamlArray for Natives {
         array: Root<'s, Arr<Slot>>,
         separator: Root<'s, Str>,
     ) -> Root<'s, Str> {
-        let separator = separator.get(scope).as_str();
-        let mut text = String::new();
-        for (index, word) in array.get(scope).iter().enumerate() {
-            if index != 0 {
-                text.push_str(separator);
-            }
-            match types[0].0 as usize {
-                // SAFETY: the compiler passes this id for an array of
-                // strings only.
-                TYPE_STRING => text.push_str(unsafe { super::StrRef::from_raw(word) }.as_str()),
-                TYPE_BOX_INT => text.push_str(&crate::int_text(word.cast_signed() as i64)),
-                TYPE_BOX_FLOAT => text.push_str(&crate::float_text(f64::from_bits(word as u64))),
-                TYPE_BOX_BOOL => text.push_str(if word == 0 { "false" } else { "true" }),
+        // Measure, reserve once, then write: the text is never anywhere but
+        // in the string.
+        let kind = types[0].0 as usize;
+        let (view, by) = (array.get(scope), separator.get(scope));
+        let gaps = view.len().saturating_sub(1);
+        let mut bytes = gaps.saturating_mul(by.as_str().len());
+        let mut chars = gaps.saturating_mul(by.char_count());
+        let mut digits = [0; INT_DIGITS];
+        for word in view.iter() {
+            let (more_bytes, more_chars) = match kind {
+                TYPE_STRING => {
+                    // SAFETY: the compiler passes this id for an array of
+                    // strings only.
+                    let part = unsafe { StrRef::from_raw(word) };
+                    (part.as_str().len(), part.char_count())
+                }
+                TYPE_BOX_INT => {
+                    let length = int_digits(word.cast_signed() as i64, &mut digits).len();
+                    (length, length)
+                }
+                TYPE_BOX_FLOAT => {
+                    let length = crate::float_text(f64::from_bits(word as u64)).len();
+                    (length, length)
+                }
+                TYPE_BOX_BOOL => {
+                    let length = if word == 0 { 5 } else { 4 };
+                    (length, length)
+                }
                 other => unreachable!("join is compiled for no element type with id {other}"),
+            };
+            bytes = bytes.saturating_add(more_bytes);
+            chars += more_chars;
+        }
+        let reservation = scope.reserve(text_size(bytes));
+        let mut joined = reservation.new_str(bytes, chars);
+        let by = reservation.get(separator).as_str();
+        for (index, word) in reservation.get(array).iter().enumerate() {
+            if index != 0 {
+                joined.push(by);
+            }
+            match kind {
+                // SAFETY: as above.
+                TYPE_STRING => joined.push(unsafe { StrRef::from_raw(word) }.as_str()),
+                TYPE_BOX_INT => joined.push(int_digits(word.cast_signed() as i64, &mut digits)),
+                TYPE_BOX_FLOAT => joined.push(&crate::float_text(f64::from_bits(word as u64))),
+                _ => joined.push(if word == 0 { "false" } else { "true" }),
             }
         }
-        scope.alloc_str(&text)
+        let joined = joined.finish().keep();
+        reservation.finish(joined)
     }
 }

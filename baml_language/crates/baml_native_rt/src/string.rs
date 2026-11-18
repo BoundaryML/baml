@@ -69,6 +69,56 @@ pub fn from_str(mutator: &mut Mutator, value: &str) -> usize {
     string
 }
 
+/// A new string object holding `value`, every character of which is one
+/// byte. May collect.
+fn from_ascii(mutator: &mut Mutator, value: &str) -> usize {
+    debug_assert!(value.is_ascii());
+    let string = allocate(mutator, value.len(), value.len());
+    // SAFETY: the object has room for `value.len()` bytes of text.
+    unsafe {
+        std::ptr::copy_nonoverlapping(
+            value.as_ptr(),
+            (string + STRING_TEXT) as *mut u8,
+            value.len(),
+        );
+    }
+    string
+}
+
+/// The most characters the decimal text of an `int` has.
+pub const INT_DIGITS: usize = 20;
+
+/// The decimal text of `value`, written at the end of `buffer`.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "what is narrowed is under a hundred"
+)]
+pub fn int_digits(value: i64, buffer: &mut [u8; INT_DIGITS]) -> &str {
+    const PAIRS: &[u8; 200] = b"00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+    let mut rest = value.unsigned_abs();
+    let mut at = INT_DIGITS;
+    while rest >= 100 {
+        let pair = (rest % 100) as usize * 2;
+        rest /= 100;
+        at -= 2;
+        buffer[at..at + 2].copy_from_slice(&PAIRS[pair..pair + 2]);
+    }
+    if rest >= 10 {
+        let pair = rest as usize * 2;
+        at -= 2;
+        buffer[at..at + 2].copy_from_slice(&PAIRS[pair..pair + 2]);
+    } else {
+        at -= 1;
+        buffer[at] = b'0' + rest as u8;
+    }
+    if value < 0 {
+        at -= 1;
+        buffer[at] = b'-';
+    }
+    // SAFETY: only ASCII was written.
+    unsafe { std::str::from_utf8_unchecked(&buffer[at..]) }
+}
+
 /// Join the `count` strings whose references are the words at `parts`.
 ///
 /// # Safety
@@ -138,7 +188,7 @@ pub unsafe extern "C" fn baml_rt_string_cmp(left: usize, right: usize) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_rt_string_from_int(mutator: &mut Mutator, value: i64) -> usize {
     mutator.enter(current_frame());
-    from_str(mutator, &value.to_string())
+    from_ascii(mutator, int_digits(value, &mut [0; INT_DIGITS]))
 }
 
 /// The text of a `float` inside a string: as a result prints, except that
@@ -193,7 +243,10 @@ pub unsafe extern "C" fn baml_rt_string_from_any(mutator: &mut Mutator, value: u
     let (type_id, held) = unsafe { (load(value) & TYPE_ID_MASK, load(value + BOX_VALUE)) };
     match type_id {
         TYPE_STRING => value,
-        TYPE_BOX_INT => from_str(mutator, &held.cast_signed().to_string()),
+        TYPE_BOX_INT => from_ascii(
+            mutator,
+            int_digits(held.cast_signed() as i64, &mut [0; INT_DIGITS]),
+        ),
         TYPE_BOX_FLOAT => from_str(mutator, &float_text(f64::from_bits(held as u64))),
         TYPE_BOX_BOOL => from_str(mutator, if held & 0xFF != 0 { "true" } else { "false" }),
         enum_type => {

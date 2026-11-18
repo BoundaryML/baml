@@ -81,6 +81,38 @@ fn all_bytes(string: StrRef<'_>, test: impl Fn(&u8) -> bool) -> bool {
     string.as_str().as_bytes().iter().all(test)
 }
 
+/// Whether `byte` is one of the white space characters that are one byte.
+fn is_space(byte: u8) -> bool {
+    byte == b' ' || (b'\t'..=b'\r').contains(&byte)
+}
+
+/// How many bytes of white space `text` starts with.
+fn leading_space(text: &str) -> usize {
+    let bytes = text.as_bytes();
+    let mut from = 0;
+    while from < bytes.len() && is_space(bytes[from]) {
+        from += 1;
+    }
+    if bytes.get(from).is_some_and(|byte| !byte.is_ascii()) {
+        // White space past ASCII is left to the tables.
+        from = text.len() - text[from..].trim_start().len();
+    }
+    from
+}
+
+/// How many bytes of `text` come before the white space it ends with.
+fn before_trailing_space(text: &str) -> usize {
+    let bytes = text.as_bytes();
+    let mut to = bytes.len();
+    while to > 0 && is_space(bytes[to - 1]) {
+        to -= 1;
+    }
+    if to > 0 && !bytes[to - 1].is_ascii() {
+        to = text[..to].trim_end().len();
+    }
+    to
+}
+
 /// Bytes `from..to` of `string` as a string: the string itself when that
 /// is all of it, and otherwise a copy. `chars` is how many characters the
 /// range has, when the caller knows.
@@ -306,7 +338,7 @@ fn between<'s>(
 
 /// The size of a string of `bytes` bytes of text, which is refused here,
 /// before room for it is asked for, when it is longer than a string can be.
-fn text_size(bytes: usize) -> usize {
+pub(super) fn text_size(bytes: usize) -> usize {
     assert!(
         u32::try_from(bytes).is_ok(),
         "a string cannot be longer than 4 GiB"
@@ -515,12 +547,12 @@ impl NativeBamlString for Natives {
 
     fn trim_start<'s>(scope: &mut Scope<'s>, string: Root<'s, Str>) -> Root<'s, Str> {
         let text = string.get(scope).as_str();
-        let (from, to) = (text.len() - text.trim_start().len(), text.len());
+        let (from, to) = (leading_space(text), text.len());
         substring(scope, string, from, to, None)
     }
 
     fn trim_end<'s>(scope: &mut Scope<'s>, string: Root<'s, Str>) -> Root<'s, Str> {
-        let to = string.get(scope).as_str().trim_end().len();
+        let to = before_trailing_space(string.get(scope).as_str());
         substring(scope, string, 0, to, None)
     }
 
@@ -672,8 +704,8 @@ impl NativeBamlString for Natives {
 
     fn trim<'s>(scope: &mut Scope<'s>, string: Root<'s, Str>) -> Root<'s, Str> {
         let text = string.get(scope).as_str();
-        let from = text.len() - text.trim_start().len();
-        let to = text.trim_end().len().max(from);
+        let from = leading_space(text);
+        let to = before_trailing_space(text).max(from);
         substring(scope, string, from, to, None)
     }
 
