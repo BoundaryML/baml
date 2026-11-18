@@ -181,6 +181,12 @@ pub const TYPE_BIGINT: usize = 336;
 /// Where the types of a program's classes begin.
 pub const FIRST_CLASS_TYPE: usize = 352;
 
+/// What `baml_rt_array_sort` orders the elements of an array as.
+pub const SORT_INTS: usize = 0;
+pub const SORT_FLOATS: usize = 1;
+pub const SORT_STRINGS: usize = 2;
+pub const SORT_BIGINTS: usize = 3;
+
 /// A `bigint` is a header, the number of its limbs and the limbs: 64-bit
 /// words, least significant first, in two's complement, as few as hold the
 /// value with its sign and never none. Two that are equal are the same

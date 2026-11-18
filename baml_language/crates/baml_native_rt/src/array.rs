@@ -93,3 +93,41 @@ pub unsafe extern "C" fn baml_rt_array_push_slow(
         store(array + ARRAY_LENGTH, length + 1);
     }
 }
+
+/// Sort the elements of `array` in place by their natural order, as the
+/// standard library's `sort` does for the element types it orders in Rust:
+/// `kind` is one of [`crate::layout::SORT_INTS`] and the kinds after it. The
+/// sort is stable. A float orders as the language's total order has it:
+/// every NaN above every number, equal to each other. Allocates nothing on
+/// the heap.
+///
+/// # Safety
+///
+/// `array` is a live array of elements of that kind.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_rt_array_sort(array: usize, kind: usize) {
+    use crate::layout::{SORT_BIGINTS, SORT_FLOATS, SORT_INTS, SORT_STRINGS};
+    // SAFETY: the caller's contract: the array's storage holds its length
+    // in elements, and nothing else reads it meanwhile.
+    let elements = unsafe {
+        std::slice::from_raw_parts_mut(
+            load(array + ARRAY_DATA) as *mut usize,
+            load(array + ARRAY_LENGTH),
+        )
+    };
+    match kind {
+        SORT_INTS => elements.sort_by_key(|word| word.cast_signed()),
+        SORT_FLOATS => elements.sort_by(|left, right| {
+            let (left, right) = (f64::from_bits(*left as u64), f64::from_bits(*right as u64));
+            left.partial_cmp(&right)
+                .unwrap_or_else(|| left.is_nan().cmp(&right.is_nan()))
+        }),
+        // SAFETY: the caller's contract: each element is a live string.
+        SORT_STRINGS => elements.sort_by(|left, right| unsafe {
+            crate::string::text(*left).cmp(crate::string::text(*right))
+        }),
+        // SAFETY: the caller's contract: each element is a live `bigint`.
+        SORT_BIGINTS => elements.sort_by_cached_key(|word| unsafe { crate::bigint::value(*word) }),
+        _ => {}
+    }
+}

@@ -453,6 +453,30 @@ pub fn loop_form<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
 ) -> Option<FunctionLoc<'db>> {
+    sibling(db, function, "_inlined_")
+}
+
+/// The driver of a standard library method written in Rust that calls a
+/// closure: the method of the same class named `_driver_` and then its
+/// name, which does exactly what the method does. It is for a backend that
+/// cannot call a closure from Rust. The inliner does not use it: a method
+/// has a driver and no loop form where the loop is no faster in the
+/// interpreter than the Rust function.
+#[salsa::tracked(returns(clone))]
+pub fn driver_form<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Option<FunctionLoc<'db>> {
+    sibling(db, function, "_driver_")
+}
+
+/// The method of a standard library method's class named `prefix` and then
+/// the method's name.
+fn sibling<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+    prefix: &str,
+) -> Option<FunctionLoc<'db>> {
     use baml_compiler2_hir::item_data::{MethodOwner, class_data, method_owner};
     if function.file(db).source_root(db).kind(db) != baml_base::SourceRootKind::Stdlib {
         return None;
@@ -460,7 +484,7 @@ pub fn loop_form<'db>(
     let MethodOwner::Class(class) = method_owner(db, function)? else {
         return None;
     };
-    let name = format!("_inlined_{}", function_data(db, function).name);
+    let name = format!("{prefix}{}", function_data(db, function).name);
     class_data(db, class)
         .methods
         .iter()

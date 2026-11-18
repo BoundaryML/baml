@@ -193,6 +193,7 @@ enum Runtime {
     AllocSlow,
     ArrayNew,
     ArrayPushSlow,
+    ArraySort,
     StringConcat,
     StringEq,
     StringCmp,
@@ -242,6 +243,7 @@ impl Runtime {
             Self::AllocSlow => "baml_rt_alloc_slow",
             Self::ArrayNew => "baml_rt_array_new",
             Self::ArrayPushSlow => "baml_rt_array_push_slow",
+            Self::ArraySort => "baml_rt_array_sort",
             Self::StringConcat => "baml_rt_string_concat",
             Self::StringEq => "baml_rt_string_eq",
             Self::StringCmp => "baml_rt_string_cmp",
@@ -291,6 +293,7 @@ impl Runtime {
             Self::PrintFloat => (vec![float], vec![]),
             Self::PrintBool => (vec![byte], vec![]),
             Self::PanicIndexOutOfBounds
+            | Self::ArraySort
             | Self::PanicMapKeyNotFound
             | Self::Throw
             | Self::Rethrow => (vec![word, word], vec![]),
@@ -3904,6 +3907,13 @@ impl<'a, 'db> Translator<'a, 'db> {
                         self.intrinsic(Intrinsic::ToString, &args[*self_arg..=*self_arg])?,
                         NativeTy::String,
                     ),
+                    Virtual::Static(Target::Sort(kind)) => {
+                        let ty = self.operand_ty(&args[*self_arg])?;
+                        let array = self.operand(&args[*self_arg])?;
+                        let kind = self.word_const(kind);
+                        self.call_runtime(Runtime::ArraySort, &[array, kind])?;
+                        (array, ty)
+                    }
                     Virtual::Static(Target::Function(key)) => {
                         self.call_function(&key, &[], args)?
                     }

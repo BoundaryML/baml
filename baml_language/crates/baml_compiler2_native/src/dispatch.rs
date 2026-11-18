@@ -39,6 +39,11 @@ pub(crate) enum Target<'db> {
     Function(FnKey<'db>),
     /// The language's own `to_string` of a type that declares none.
     ToString,
+    /// The standard library's `sort` of an array whose elements the runtime
+    /// orders itself, one of [`crate::layout::SORT_INTS`] and the kinds
+    /// after it: the standard library's own implementation sorts these in
+    /// Rust too.
+    Sort(usize),
 }
 
 /// One method of one interface: what a column of the method table is for.
@@ -137,6 +142,20 @@ pub(crate) fn resolve<'db>(
 ) -> Result<Option<Target<'db>>, Blocker> {
     let unsupported =
         |detail: &str| Blocker::new("interface method call", format!("{method}: {detail}"));
+    if let NativeTy::Array(element) = receiver
+        && method == "sort"
+        && interface.name.name().as_str() == "Sortable"
+        && interface.name.namespace().is_empty()
+        && interface.name.key().kind(db) == baml_base::SourceRootKind::Stdlib
+    {
+        return match **element {
+            NativeTy::Int => Ok(Some(Target::Sort(crate::layout::SORT_INTS))),
+            NativeTy::Float => Ok(Some(Target::Sort(crate::layout::SORT_FLOATS))),
+            NativeTy::String => Ok(Some(Target::Sort(crate::layout::SORT_STRINGS))),
+            NativeTy::Bigint => Ok(Some(Target::Sort(crate::layout::SORT_BIGINTS))),
+            _ => Err(unsupported("of elements with a compare of their own")),
+        };
+    }
     let goal = goal(interface).ok_or_else(|| unsupported("on an interface of type parameters"))?;
     let Some(concrete) = plain(db, receiver) else {
         return Ok(None);

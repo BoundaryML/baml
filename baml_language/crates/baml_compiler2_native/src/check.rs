@@ -391,9 +391,10 @@ pub(crate) fn call_target<'db>(
                 return Ok(Callee::Intrinsic(intrinsic));
             }
             // A method written in Rust that takes a closure has a loop form
-            // written in BAML, which is what native code runs.
+            // or a driver written in BAML, which is what native code runs.
             let function = match function {
                 DeclRef::Source(function) => baml_compiler2_mir::loop_form(db, *function)
+                    .or_else(|| baml_compiler2_mir::driver_form(db, *function))
                     .map_or(DeclRef::Source(*function), DeclRef::Source),
                 DeclRef::External(_) => *function,
             };
@@ -1579,6 +1580,18 @@ fn terminator_supported<'db>(
                             "builtin call on these argument types",
                             "ToString",
                         )),
+                    }
+                }
+                // The array itself, sorted in place.
+                Virtual::Static(Target::Sort(_)) => {
+                    let found = operand_ty(db, body, &args[*self_arg])?;
+                    if assignable(&result, &found) {
+                        Ok(())
+                    } else {
+                        Err(Blocker::new(
+                            "interface method call",
+                            format!("{method}: into another type"),
+                        ))
                     }
                 }
                 Virtual::Static(Target::Function(key)) => {

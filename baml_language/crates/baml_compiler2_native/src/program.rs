@@ -248,6 +248,11 @@ fn lay_out_methods<'db>(
                     falls_back = true;
                     continue;
                 }
+                // An array's header does not say what its elements are.
+                Some(Target::Sort(_)) => {
+                    blockers.push(unsupported("of an array only known when it runs"));
+                    continue;
+                }
                 None => continue,
             };
             // The receiver arrives as the reference the interface value is.
