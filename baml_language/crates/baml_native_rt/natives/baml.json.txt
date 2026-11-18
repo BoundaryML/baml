@@ -1,0 +1,11 @@
+# Natives of `baml.json`, implemented in `src/native/json.rs`.
+#
+# A call passes the description of each type argument, and of the static
+# type of an `unknown` argument, where other natives are passed type ids.
+baml.json.parse reentrant
+baml.json._decode reentrant
+baml.json._stringify reentrant
+baml.json._from reentrant
+baml.json._to reentrant
+baml.json._path reentrant
+baml.json.field leaf

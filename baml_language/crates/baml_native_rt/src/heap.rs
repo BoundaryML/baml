@@ -393,6 +393,11 @@ impl Mutator {
         self.roots.truncate(self.roots.len() - count);
     }
 
+    /// The address of the program's type table.
+    pub fn types(&self) -> usize {
+        self.heap.types
+    }
+
     /// The name of variant `index` of the enum whose boxes have the type
     /// `enum_type`.
     pub fn variant_name(&self, enum_type: usize, index: usize) -> &'static str {
@@ -419,6 +424,8 @@ impl Mutator {
     pub fn is_reference(&self, type_id: usize) -> bool {
         match type_id {
             0 => true,
+            // The description of a type with no one type id.
+            described if described & crate::json_layout::DESCRIBED as usize != 0 => true,
             crate::layout::TYPE_BOX_INT
             | crate::layout::TYPE_BOX_FLOAT
             | crate::layout::TYPE_BOX_BOOL => false,

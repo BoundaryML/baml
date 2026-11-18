@@ -24,6 +24,14 @@ pub(crate) enum Ty {
     /// The type a call names for the builtin's type parameter at this
     /// position: passed and returned as the one word an array holds it in.
     Elem(usize),
+    /// A value of any type, as a union holds it: a `json`.
+    Any,
+    /// An `unknown` parameter of `baml.json`: the id of the description
+    /// of the argument's static type, then the value as a union holds it.
+    Typed,
+    /// The type a call names for the type parameter at this position, as a
+    /// union holds it: what `baml.json` returns a value it decoded as.
+    BoxedElem(usize),
 }
 
 impl Ty {
@@ -48,7 +56,8 @@ impl Ty {
     /// The type at the type arguments `types` of a call.
     pub(crate) fn native<'db>(&self, types: &[NativeTy<'db>]) -> NativeTy<'db> {
         match self {
-            Self::Elem(index) => types[*index].clone(),
+            Self::Elem(index) | Self::BoxedElem(index) => types[*index].clone(),
+            Self::Any | Self::Typed => NativeTy::Unknown,
             // `null` is already one of the values of these.
             Self::Optional(Self::Elem(index))
                 if matches!(

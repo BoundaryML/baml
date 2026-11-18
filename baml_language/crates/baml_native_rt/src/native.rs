@@ -611,7 +611,7 @@ impl<'s> Scope<'s> {
     }
 
     /// An error of the standard library that is written as `text`.
-    fn error(&mut self, text: &str) -> Thrown<'s> {
+    pub(crate) fn error(&mut self, text: &str) -> Thrown<'s> {
         let text = self.alloc_str(text);
         // SAFETY: the type of such an error has one slot, a reference.
         unsafe {
@@ -953,6 +953,7 @@ pub struct Natives;
 mod array;
 mod float;
 mod int;
+mod json;
 mod map;
 mod root;
 mod string;

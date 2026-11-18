@@ -17,9 +17,15 @@ fn abi_param(ty: &Ty) -> Option<AbiParam> {
     match ty {
         // An optional scalar is two words, which its user passes one by
         // one; any other optional is a reference.
-        Ty::Int | Ty::String | Ty::Array(_) | Ty::Map | Ty::Optional(_) | Ty::Elem(_) => {
-            Some(AbiParam::new(WORD))
-        }
+        Ty::Int
+        | Ty::String
+        | Ty::Array(_)
+        | Ty::Map
+        | Ty::Optional(_)
+        | Ty::Elem(_)
+        | Ty::Any
+        | Ty::Typed
+        | Ty::BoxedElem(_) => Some(AbiParam::new(WORD)),
         Ty::Float => Some(AbiParam::new(types::F64)),
         // The C ABI has the caller extend an argument narrower than a
         // register.
@@ -88,9 +94,14 @@ impl<'db> Translator<'_, 'db> {
         }
         // The type id of each type argument, as a generic function is
         // passed them: after the worker and before the values.
+        let described = super::json::takes_descriptions(native);
         for argument in type_arguments {
             params.push(AbiParam::new(types::I32));
-            values.push(self.type_id(argument)?);
+            values.push(if described {
+                self.described_type(argument)?
+            } else {
+                self.type_id(argument)?
+            });
         }
         if type_arguments.is_empty() {
             // A method of `Map`: the types are its receiver's.
@@ -102,6 +113,17 @@ impl<'db> Translator<'_, 'db> {
         }
         for (argument, ty) in arguments.iter().zip(signature.params) {
             let expected = ty.native(&types);
+            if matches!(ty, Ty::Typed) {
+                // What the value is, as far as its static type says.
+                let found = self.operand_ty(argument)?;
+                if found.is_boxed() {
+                    // Only its header will say what the value is.
+                    self.describe_program_types()?;
+                }
+                let id = self.backend.describe_native(self.db, &found)?;
+                params.push(AbiParam::new(types::I32));
+                values.push(self.builder.ins().iconst(types::I32, super::imm(id)));
+            }
             let value = self.operand_as(argument, &expected)?;
             if matches!(ty, Ty::Elem(_)) {
                 params.push(AbiParam::new(WORD));
@@ -161,11 +183,19 @@ impl<'db> Translator<'_, 'db> {
                 Ty::Bool => self.builder.ins().ireduce(types::I8, bits),
                 Ty::Null => self.builder.ins().iconst(types::I8, 0),
                 Ty::Elem(_) => self.slot_as(bits, &produced),
-                Ty::Int | Ty::String | Ty::Array(_) | Ty::Map | Ty::Optional(_) => bits,
+                Ty::BoxedElem(_) => self.unboxed_result(bits, &produced),
+                Ty::Int
+                | Ty::String
+                | Ty::Array(_)
+                | Ty::Map
+                | Ty::Optional(_)
+                | Ty::Any
+                | Ty::Typed => bits,
             }
         } else {
             match (&signature.result, results.as_slice()) {
                 (Ty::Elem(_), [bits]) => self.slot_as(*bits, &produced),
+                (Ty::BoxedElem(_), [bits]) => self.unboxed_result(*bits, &produced),
                 // An absent reference is the zero its word already is.
                 (_, [bits, _]) if produced.is_ref() => *bits,
                 (_, [bits, present]) => self.builder.ins().iconcat(*bits, *present),

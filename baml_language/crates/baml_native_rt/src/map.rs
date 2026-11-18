@@ -339,6 +339,82 @@ pub fn new(mutator: &mut Mutator, key_is_ref: bool, value_is_ref: bool, count: u
     map
 }
 
+/// The bytes of a map with room for `count` keys, as [`new_at`] makes it.
+pub fn size_for(count: usize) -> usize {
+    if count == 0 {
+        MAP_SIZE
+    } else {
+        let capacity = capacity_for(count);
+        MAP_SIZE + entries_size(capacity) + index_size(capacity)
+    }
+}
+
+/// Make the `size_for(count)` bytes at `map` an empty map with room for
+/// `count` keys. Allocates nothing: for a native that builds a tree in
+/// room it reserved.
+///
+/// # Safety
+///
+/// `map` is `size_for(count)` fresh bytes.
+pub unsafe fn new_at(map: usize, key_is_ref: bool, value_is_ref: bool, count: usize) -> usize {
+    // SAFETY: the caller's contract.
+    unsafe {
+        store(map, TYPE_MAP);
+        if count == 0 {
+            store(map + MAP_ENTRIES, empty_entries());
+            store(map + MAP_INDEX, 0);
+        } else {
+            let entries = map + MAP_SIZE;
+            let index = format(
+                entries,
+                entries_type(key_is_ref, value_is_ref),
+                capacity_for(count),
+            );
+            store(map + MAP_ENTRIES, entries);
+            store(map + MAP_INDEX, index);
+        }
+        store(map + MAP_LEN, 0);
+        let capacity = load(load(map + MAP_ENTRIES) + ENTRIES_CAPACITY);
+        store(map + MAP_MASK, (2 * capacity).wrapping_sub(1) & 0xFFFF_FFFF);
+    }
+    map
+}
+
+/// Set `key` to `value` in the map at `map`, which has room for the key.
+/// Allocates nothing. A key already there keeps its place and takes the
+/// value.
+///
+/// # Safety
+///
+/// `map` is a live map of string keys with an unused record, `key` a
+/// string that holds its own text, and `value` a value of the map's value
+/// type.
+pub unsafe fn set_in_place(map: usize, key: usize, value: usize) {
+    // SAFETY: the caller's contract.
+    unsafe {
+        debug_assert_eq!(load(key) & TYPE_ID_MASK, TYPE_STRING);
+        let hash = KeyKind::Str.hash(key);
+        if let Some(found) = find(map, KeyKind::Str, key, hash) {
+            store_value(
+                record(load(map + MAP_ENTRIES), found.number) + ENTRY_VALUE,
+                value,
+            );
+            return;
+        }
+        let (number, entries) = used(map);
+        let capacity = load(entries + ENTRIES_CAPACITY);
+        assert!(number < capacity, "a map built in place has room");
+        store_record(record(entries, number), key, value);
+        write32(hash_slot(entries, capacity, number), hash);
+        let index = load(map + MAP_INDEX);
+        if index != 0 {
+            index_insert(index, read32(map + MAP_MASK) as usize, hash, number);
+        }
+        write32(map + MAP_USED, number as u32 + 1);
+        write32(map + MAP_LEN, read32(map + MAP_LEN) + 1);
+    }
+}
+
 /// How many keys the map at `map` has.
 ///
 /// # Safety

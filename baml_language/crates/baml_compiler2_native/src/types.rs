@@ -181,6 +181,10 @@ macro_rules! native_type_of {
                 // A value of an interface type is any implementor: a
                 // reference whose header says which.
                 $family::Unknown | $family::Interface(..) => NativeTy::Unknown,
+                // A `json` is any of its arms, as a union holds them.
+                $family::TypeAlias(head) if crate::json::is_json_alias(db, head) => {
+                    NativeTy::Unknown
+                }
                 $family::String | $family::Literal(Literal::String(_), _) => NativeTy::String,
                 $parameter => arguments.get($slot)?.clone()?,
                 // `self` in an interface's default body is declared with
@@ -255,6 +259,11 @@ macro_rules! native_type_of {
                 $family::Union(members) => {
                     let mut flat = Vec::new();
                     for member in members {
+                        // Native code makes no `bigint`, so no value of
+                        // the union is one: a `json` is every other arm.
+                        if matches!(member, $family::Bigint) {
+                            continue;
+                        }
                         let members = match $name(db, member, arguments)? {
                             NativeTy::Unknown => return Some(NativeTy::Unknown),
                             NativeTy::Union(members) => members,
@@ -964,6 +973,23 @@ pub(crate) fn operand_ty<'db>(
     match operand {
         Operand::Copy(place) | Operand::Move(place) => place_ty(db, body, place),
         Operand::Constant(constant) => constant_ty(db, constant),
+    }
+}
+
+/// Whether `operand` stands for an argument a call leaves to its default.
+pub(crate) fn is_omitted(operand: &Operand<'_>) -> bool {
+    matches!(operand, Operand::Constant(Constant::OmittedArg))
+}
+
+/// Whether a parameter of type `ty` can be passed as left to its default:
+/// there is a word no value of the type is. An enum has a position no
+/// variant is at, a `bool` a byte that is neither, and a reference an
+/// address no object is at. Every word is an `int` or a `float`.
+pub(crate) fn has_omitted_form(ty: &NativeTy<'_>) -> bool {
+    match ty {
+        NativeTy::Enum(_) | NativeTy::Bool => true,
+        NativeTy::Cell(_) => false,
+        other => other.is_ref(),
     }
 }
 
