@@ -541,22 +541,9 @@ test "operator_mixed_primitive_union_add" {
     assert.equal(ops_mixed_union_add(-1), 3.5)
 }
 
-// Panic parity (B-266): the driver natives must throw the same catchable
-// panics the opcodes do — not wrap, not return IEEE infinities for int-like
+// Parity: the driver natives wrap exactly as the opcodes do, and throw the
+// same catchable panics for a zero divisor — not IEEE infinities for int-like
 // failures.
-
-function drv_catch_add_overflow() -> int {
-    drv_int_add(baml.Int.max_value(), 1) catch (e) { baml.panics.IntegerOverflow => -1 }
-}
-function drv_catch_mul_overflow() -> int {
-    drv_int_mul(baml.Int.max_value(), 2) catch (e) { baml.panics.IntegerOverflow => -1 }
-}
-function drv_catch_neg_overflow() -> int {
-    drv_int_neg(baml.Int.min_value()) catch (e) { baml.panics.IntegerOverflow => -1 }
-}
-function drv_catch_div_min_by_minus_one() -> int {
-    drv_int_div(baml.Int.min_value(), -1) catch (e) { baml.panics.IntegerOverflow => -1 }
-}
 function drv_catch_int_div_zero() -> int {
     drv_int_div(1, 0) catch (e) { baml.panics.DivisionByZero => -1 }
 }
@@ -578,10 +565,10 @@ function drv_catch_bigint_div_zero() -> bigint {
 }
 
 test "driver_panics_match_opcodes" {
-    assert.equal(drv_catch_add_overflow(), -1)
-    assert.equal(drv_catch_mul_overflow(), -1)
-    assert.equal(drv_catch_neg_overflow(), -1)
-    assert.equal(drv_catch_div_min_by_minus_one(), -1)
+    assert.equal(drv_int_add(baml.Int.max_value(), 1), baml.Int.min_value())
+    assert.equal(drv_int_mul(baml.Int.max_value(), 2), -2)
+    assert.equal(drv_int_neg(baml.Int.min_value()), baml.Int.min_value())
+    assert.equal(drv_int_div(baml.Int.min_value(), -1), baml.Int.min_value())
     assert.equal(drv_catch_int_div_zero(), -1)
     assert.equal(drv_catch_int_rem_zero(), -1)
     assert.is_true(drv_float_div_zero_is_infinite())

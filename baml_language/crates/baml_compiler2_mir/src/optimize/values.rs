@@ -138,7 +138,7 @@ fn fold<'db>(value: &Rvalue<'db>) -> Option<Constant<'db>> {
             operand: Operand::Constant(arg),
         } => match (op, arg) {
             (UnaryOp::Not, Constant::Bool(value)) => Some(Constant::Bool(!value)),
-            (UnaryOp::Neg, Constant::Int(value)) => int(value.checked_neg()?),
+            (UnaryOp::Neg, Constant::Int(value)) => int(value.wrapping_neg()),
             (UnaryOp::Neg, Constant::Float(value)) if value.is_finite() => {
                 Some(Constant::Float(-value))
             }
@@ -158,11 +158,14 @@ fn fold<'db>(value: &Rvalue<'db>) -> Option<Constant<'db>> {
             right: Operand::Constant(right),
         } => match (left, right) {
             (Constant::Int(a), Constant::Int(b)) => match op {
-                BinOp::Add => int(a.checked_add(*b)?),
-                BinOp::Sub => int(a.checked_sub(*b)?),
-                BinOp::Mul => int(a.checked_mul(*b)?),
-                BinOp::Div => int(a.checked_div(*b)?),
-                BinOp::Mod => int(a.checked_rem(*b)?),
+                // Int arithmetic wraps; only a zero divisor stays unfolded, so
+                // the runtime raises `DivisionByZero`.
+                BinOp::Add => int(a.wrapping_add(*b)),
+                BinOp::Sub => int(a.wrapping_sub(*b)),
+                BinOp::Mul => int(a.wrapping_mul(*b)),
+                BinOp::Div if *b != 0 => int(a.wrapping_div(*b)),
+                BinOp::Mod if *b != 0 => int(a.wrapping_rem(*b)),
+                BinOp::Div | BinOp::Mod => None,
                 BinOp::BitAnd => int(a & b),
                 BinOp::BitOr => int(a | b),
                 BinOp::BitXor => int(a ^ b),
@@ -640,30 +643,37 @@ mod tests {
     }
 
     #[test]
-    fn integer_folding_preserves_overflow_and_zero_divisor_panics() {
+    fn integer_folding_wraps_and_preserves_zero_divisor_panics() {
         let min = baml_type::int::MIN;
         let max = baml_type::int::MAX;
-        for (op, left, right) in [
-            (BinOp::Div, 1, 0),
-            (BinOp::Mod, 1, 0),
-            (BinOp::Add, max, 1),
-            (BinOp::Add, i64::MAX, 1),
-            (BinOp::Sub, min, 1),
-            (BinOp::Mul, max, 2),
-            (BinOp::Div, min, -1),
+        for (op, left) in [(BinOp::Div, 1), (BinOp::Mod, 1)] {
+            assert!(
+                fold(&binary(op, Constant::Int(left), Constant::Int(0))).is_none(),
+                "{left} {op:?} 0"
+            );
+        }
+        for (op, left, right, expected) in [
+            (BinOp::Add, max, 1, min),
+            (BinOp::Sub, min, 1, max),
+            (BinOp::Mul, max, 2, -2),
+            (BinOp::Div, min, -1, min),
+            (BinOp::Mod, min, -1, 0),
         ] {
             assert!(
-                fold(&binary(op, Constant::Int(left), Constant::Int(right))).is_none(),
+                matches!(
+                    fold(&binary(op, Constant::Int(left), Constant::Int(right))),
+                    Some(Constant::Int(value)) if value == expected
+                ),
                 "{left} {op:?} {right}"
             );
         }
-        assert!(
+        assert!(matches!(
             fold(&Rvalue::UnaryOp {
                 op: UnaryOp::Neg,
                 operand: Operand::Constant(Constant::Int(min)),
-            })
-            .is_none()
-        );
+            }),
+            Some(Constant::Int(value)) if value == min
+        ));
         for (op, expected) in [
             (BinOp::Add, 8),
             (BinOp::Sub, 4),

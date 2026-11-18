@@ -25,13 +25,6 @@ pub enum VmPanic {
     #[error("division by zero: {left:?} / {right:?}")]
     DivisionByZero { left: Value, right: Value },
 
-    /// An `int` arithmetic operation overflowed the representable range
-    /// `[INT_MIN, INT_MAX]`. Carries a human-readable description of the
-    /// operation (e.g. `"9223372036854775807 + 1"`); built only on the
-    /// cold overflow path, so the `String` alloc never touches hot code.
-    #[error("integer overflow: {message}")]
-    IntegerOverflow { message: String },
-
     // Raised by array and byte-array subscripting, so the message stays generic
     // ("index", not "array index").
     #[error("index out of bounds: {index} of {length}")]

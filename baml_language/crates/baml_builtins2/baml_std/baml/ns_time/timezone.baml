@@ -70,15 +70,13 @@ class TimeZoneOffset {
     ///
     /// - `baml.errors.InvalidArgument` if the signs differ, or the result
     ///   exceeds ±24 hours.
-    ///
-    /// # Panics
-    ///
-    /// - `baml.panics.IntegerOverflow` if `hours` or `minutes` is so large that
-    ///   converting it to nanoseconds overflows `int`. The range check happens
-    ///   after that conversion, so it never sees these.
     function new(hours: int, minutes: int) -> TimeZoneOffset throws root.errors.InvalidArgument {
         if ((hours > 0 && minutes < 0) || (hours < 0 && minutes > 0)) {
             throw root.errors.InvalidArgument { message: "TimeZoneOffset.new: hours and minutes must carry the same sign" };
+        }
+        // Checked before the conversion below, whose `*` would wrap.
+        if (hours > 24 || hours < -24 || minutes > 1440 || minutes < -1440) {
+            throw root.errors.InvalidArgument { message: "TimeZoneOffset out of range: must be within ±24 hours" };
         }
         let nanoseconds = (hours * 60 + minutes) * 60 * 1000000000;
         if (nanoseconds > 86400000000000 || nanoseconds < -86400000000000) {

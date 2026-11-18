@@ -80,7 +80,7 @@ fn loops_fuse_increments_tests_and_field_loads() {
 }
 
 #[test]
-fn fused_increment_raises_the_addition_overflow() {
+fn fused_increment_wraps_like_the_addition() {
     assert_eq!(
         run(r#"
             function bump(x: int, k: int) -> int {
@@ -88,21 +88,15 @@ fn fused_increment_raises_the_addition_overflow() {
                 if (k > 0) { y += 1; } else { y = y + -1; }
                 y
             }
-            function check(x: int, k: int, expected: string) -> int {
-                let r = bump(x, k) catch (e) {
-                    let err: baml.panics.IntegerOverflow => {
-                        if (err.message == expected) { -1 } else { -2 }
-                    }
-                };
-                r
-            }
             function main() -> int {
-                check(9223372036854775807, 1, "9223372036854775807 + 1 overflows int")
-                    + 10 * check(-9223372036854775808, -1, "-9223372036854775808 + -1 overflows int")
-                    + 100 * check(41, 1, "")
+                let a = 0;
+                if (bump(9223372036854775807, 1) == -9223372036854775808) { a = 1; }
+                let b = 0;
+                if (bump(-9223372036854775808, -1) == 9223372036854775807) { b = 10; }
+                a + b + 100 * bump(41, 1)
             }
         "#),
-        -1 - 10 + 100 * 42,
+        1 + 10 + 100 * 42,
     );
 }
 

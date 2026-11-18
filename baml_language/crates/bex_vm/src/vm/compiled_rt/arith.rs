@@ -82,58 +82,35 @@ impl BexVm {
         Box::new(self.division_by_zero(l, r))
     }
 
-    /// The `IntegerOverflow` throw for `l op r`, boxed. Kept out of line so
-    /// the checked helpers below are a few instructions and inline into
-    /// compiled bodies: formatting the message and boxing the error would
-    /// otherwise spill the operands and set up a frame on the hot path.
-    #[allow(
-        clippy::unnecessary_box_returns,
-        reason = "boxing out of line keeps the allocation off the inlined fast path"
-    )]
-    #[cold]
-    #[inline(never)]
-    fn int_overflow(&mut self, l: i64, op: char, r: i64) -> Box<VmError> {
-        Box::new(self.integer_overflow(format!("{l} {op} {r} overflows int")))
-    }
+    // Int arithmetic wraps (two's complement). The add, sub, mul and neg
+    // helpers keep the fallible signature every compiled binary op shares.
 
-    /// `l + r` on raw ints, overflow-checked into the int range.
+    /// `l + r` on raw ints, wrapping.
     #[inline]
     pub fn add_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        match l.checked_add(r) {
-            Some(v) => Ok(v),
-            None => Err(self.int_overflow(l, '+', r)),
-        }
+        Ok(l.wrapping_add(r))
     }
 
-    /// `l - r` on raw ints, overflow-checked into the int range.
+    /// `l - r` on raw ints, wrapping.
     #[inline]
     pub fn sub_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        match l.checked_sub(r) {
-            Some(v) => Ok(v),
-            None => Err(self.int_overflow(l, '-', r)),
-        }
+        Ok(l.wrapping_sub(r))
     }
 
-    /// `l * r` on raw ints, overflow-checked.
+    /// `l * r` on raw ints, wrapping.
     #[inline]
     pub fn mul_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        match l.checked_mul(r) {
-            Some(v) => Ok(v),
-            None => Err(self.int_overflow(l, '*', r)),
-        }
+        Ok(l.wrapping_mul(r))
     }
 
-    /// `l / r` on raw ints: `DivisionByZero` for a zero divisor,
-    /// `IntegerOverflow` for `MIN / -1`.
+    /// `l / r` on raw ints: `DivisionByZero` for a zero divisor; `MIN / -1`
+    /// wraps to `MIN`.
     #[inline]
     pub fn div_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         if r == 0 {
             return Err(self.division_by_zero_boxed(l, r));
         }
-        match l.checked_div(r) {
-            Some(v) => Ok(v),
-            None => Err(self.int_overflow(l, '/', r)),
-        }
+        Ok(l.wrapping_div(r))
     }
 
     /// `l % r` on raw ints: `DivisionByZero` for a zero divisor; `MIN % -1`
@@ -160,23 +137,10 @@ impl BexVm {
             .map_err(|IntShiftError::NegativeCount(count)| Box::new(self.negative_bit_shift(count)))
     }
 
-    #[allow(
-        clippy::unnecessary_box_returns,
-        reason = "boxing out of line keeps the allocation off the inlined fast path"
-    )]
-    #[cold]
-    #[inline(never)]
-    fn neg_overflow(&mut self, n: i64) -> Box<VmError> {
-        Box::new(self.integer_overflow(format!("-({n}) overflows int")))
-    }
-
-    /// `-n` on a raw int: `IntegerOverflow` for `MIN`.
+    /// `-n` on a raw int, wrapping: `-MIN` is `MIN`.
     #[inline]
     pub fn neg_i64(&mut self, n: i64) -> Result<i64, Box<VmError>> {
-        match n.checked_neg() {
-            Some(v) => Ok(v),
-            None => Err(self.neg_overflow(n)),
-        }
+        Ok(n.wrapping_neg())
     }
 
     /// `!value` with BAML truthiness.

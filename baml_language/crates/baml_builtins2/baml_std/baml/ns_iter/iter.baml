@@ -611,8 +611,8 @@ class ArrayIterator<T> {
 /// The end test is always `i < max`, so with `min < max` a non-positive `step`
 /// never terminates — see `new` — and there is no descending range.
 ///
-/// Advancing past `int.max_value()` raises `baml.panics.IntegerOverflow`, as
-/// the underlying `+` would.
+/// A positive `step` that would carry the next value past `int.max_value()`
+/// ends the range instead of wrapping around to negative values.
 class Range {
     /// The next value to yield.
     i: int,
@@ -658,7 +658,12 @@ class Range {
         function next(self) -> int | Done throws never {
             if (self.i < self.max) {
                 let cur = self.i;
-                self.i += self.step;
+                // `+` wraps; a step past `int.max_value()` ends the range.
+                if (self.step > 0 && cur > int.max_value() - self.step) {
+                    self.i = self.max;
+                } else {
+                    self.i = cur + self.step;
+                }
                 cur
             } else {
                 Done {}

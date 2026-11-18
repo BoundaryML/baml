@@ -1,5 +1,5 @@
 use super::{BamlClassInt, PackageBamlImpl};
-use crate::errors::{VmBamlError, VmPanic, VmRustFnError};
+use crate::errors::{VmBamlError, VmRustFnError};
 
 /// Smallest draw of `Rng.random_int`, which draws 63 random bits so that the
 /// value always has an inline encoding: `[-2^62, 2^62)`.
@@ -10,14 +10,9 @@ const DRAW_SPAN: u128 = 1 << 63;
 impl BamlClassInt for PackageBamlImpl {
     // ── Magnitude ─────────────────────────────────────────────────────────────
 
-    fn abs(int: i64) -> Result<i64, VmRustFnError> {
-        // The absolute value of the smallest int is one past the largest.
-        int.checked_abs().ok_or_else(|| {
-            VmPanic::IntegerOverflow {
-                message: format!("abs({int}) overflows int"),
-            }
-            .into()
-        })
+    fn abs(int: i64) -> i64 {
+        // Wraps: the absolute value of the smallest int is itself.
+        int.wrapping_abs()
     }
 
     // No `min` / `max` / `clamp` here: `int` gets them from

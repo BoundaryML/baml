@@ -152,7 +152,10 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 ///
 /// Version 35: `int` is 64-bit. An int constant may lie outside the 63-bit
 /// inline range of a runtime `Value`; an older runtime would truncate it.
-pub const FORMAT_VERSION: u32 = 35;
+///
+/// Version 36: `int` arithmetic wraps instead of throwing on overflow, so
+/// folded constants and compiled bodies change meaning.
+pub const FORMAT_VERSION: u32 = 36;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

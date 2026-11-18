@@ -63,36 +63,34 @@ fn int_arithmetic_and_comparisons_in_loops() {
 }
 
 #[test]
-fn overflow_in_a_hot_loop_raises_and_preserves_the_caller() {
-    // Each loop runs in the fast path until the overflowing step, which the
-    // full dispatch must raise as a catchable `IntegerOverflow`.
+fn overflow_in_a_hot_loop_wraps() {
+    // Each loop runs in the fast path until its values leave the inline range
+    // or wrap, which the full dispatch must compute with wrapping arithmetic.
     assert_eq!(
         run(r#"
             function grow_mul(seed: int) -> int {
                 let x = seed;
-                let steps = 0;
-                while (true) { x = x * 3; steps += 1; }
-                steps
+                for (let i = 0; i < 100; i += 1) { x = x * 3; }
+                x
             }
             function grow_add(seed: int) -> int {
                 let x = seed;
-                while (true) { x = x + 4611686018427387; }
+                for (let i = 0; i < 3000; i += 1) { x = x + 4611686018427387; }
                 x
             }
             function shrink_sub(seed: int) -> int {
                 let x = seed;
-                while (true) { x = x - 4611686018427387; }
+                for (let i = 0; i < 2000; i += 1) { x = x - 4611686018427387; }
                 x
             }
             function main() -> int {
-                let kept = 1000;
-                let a = grow_mul(1) catch (e) { baml.panics.IntegerOverflow => 1 };
-                let b = grow_add(0) catch (e) { baml.panics.IntegerOverflow => 20 };
-                let c = shrink_sub(0) catch (e) { baml.panics.IntegerOverflow => 300 };
-                kept + a + b + c
+                grow_mul(1) + grow_add(0) + shrink_sub(0)
             }
         "#),
-        1321,
+        3_i64
+            .wrapping_pow(100)
+            .wrapping_add(4_611_686_018_427_387_i64.wrapping_mul(3000))
+            .wrapping_sub(4_611_686_018_427_387_i64.wrapping_mul(2000)),
     );
 }
 

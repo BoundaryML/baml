@@ -241,7 +241,10 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 32: `int` is 64-bit. An int constant may lie outside the 63-bit
 /// inline range of a runtime `Value`; an older runtime would truncate it.
-pub const FORMAT_VERSION: u32 = 32;
+///
+/// Version 33: `int` arithmetic wraps instead of throwing on overflow, so
+/// folded constants and compiled bodies change meaning.
+pub const FORMAT_VERSION: u32 = 33;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

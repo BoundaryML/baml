@@ -6829,10 +6829,6 @@ impl BexVm {
     pub fn panic_to_exception_value(&mut self, panic: VmPanic) -> Value {
         let (class, fields) = match panic {
             VmPanic::DivisionByZero { left, .. } => (PanicClass::DivisionByZero, vec![left]),
-            VmPanic::IntegerOverflow { message } => {
-                let msg = Value::object(self.alloc_string(message));
-                (PanicClass::IntegerOverflow, vec![msg])
-            }
             VmPanic::IndexOutOfBounds { index, length } =>
             {
                 #[allow(clippy::cast_possible_wrap)]
@@ -7012,92 +7008,39 @@ impl BexVm {
         })
     }
 
-    /// The `Value` of a *checked* `int` result `l op r`, or an
-    /// `IntegerOverflow` throw when `checked` is `None` (the operation
-    /// overflowed). The `l`/`op`/`r` context is formatted only on the cold
-    /// overflow path.
-    #[inline]
-    fn int_arith_result(
-        &mut self,
-        checked: Option<i64>,
-        l: i64,
-        op: char,
-        r: i64,
-    ) -> Result<Value, VmError> {
-        match checked {
-            Some(v) => Ok(self.int_value(v)),
-            None => Err(self.integer_overflow(format!("{l} {op} {r} overflows int"))),
-        }
-    }
-
     /// `l + r` or `l - r` (`op`) on two ints when the tagged fast path
     /// declined: an operand is boxed, or the result is outside the inline
-    /// range. Throws `IntegerOverflow` when the result leaves the int range.
+    /// range. Int arithmetic wraps (two's complement).
     #[cold]
     #[inline(never)]
-    fn int_add_sub_slow(&mut self, l: Value, op: char, r: Value) -> Result<Value, VmError> {
-        let (l, r, checked) = Self::int_add_sub(l, op, r);
-        self.int_arith_result(checked, l, op, r)
-    }
-
-    /// [`Self::int_add_sub_slow`] for the `AddInt` / `SubInt` opcodes, whose
-    /// operands are still the top two stack slots: on an overflow they are
-    /// popped before the throw is built, as the opcode consumes them.
-    #[cold]
-    #[inline(never)]
-    fn int_add_sub_slow_on_stack(
-        &mut self,
-        l: Value,
-        op: char,
-        r: Value,
-    ) -> Result<Value, VmError> {
-        let (l, r, checked) = Self::int_add_sub(l, op, r);
-        match checked {
-            Some(v) => Ok(self.int_value(v)),
-            None => {
-                // SAFETY: the opcode's two operands are the top stack slots.
-                unsafe { self.stack.truncate_suffix(2) };
-                Err(self.integer_overflow(format!("{l} {op} {r} overflows int")))
-            }
-        }
+    fn int_add_sub_slow(&mut self, l: Value, op: char, r: Value) -> Value {
+        let (Some(l), Some(r)) = (l.as_int(), r.as_int()) else {
+            verifier_unreachable!()
+        };
+        self.int_value(if op == '+' {
+            l.wrapping_add(r)
+        } else {
+            l.wrapping_sub(r)
+        })
     }
 
     /// `l * r`, `l / r` or `l % r` (`op`) on two ints when the inline path
-    /// declined: a boxed operand, a zero divisor, or a result that overflows
-    /// or needs a box. `MIN / -1` overflows; `MIN % -1` is `0`.
+    /// declined: a boxed operand, a zero divisor, or a product that needs a
+    /// box. Arithmetic wraps, so `MIN / -1` is `MIN` and `MIN % -1` is `0`;
+    /// only a zero divisor throws.
     #[cold]
     #[inline(never)]
     fn int_mul_div_rem_slow(&mut self, l: Value, op: char, r: Value) -> Result<Value, VmError> {
         let (Some(l), Some(r)) = (l.as_int(), r.as_int()) else {
             verifier_unreachable!()
         };
-        let checked = match op {
-            '*' => l.checked_mul(r),
+        let v = match op {
+            '*' => l.wrapping_mul(r),
             _ if r == 0 => return Err(self.division_by_zero(l, r)),
-            '/' => l.checked_div(r),
-            _ => Some(l.wrapping_rem(r)),
+            '/' => l.wrapping_div(r),
+            _ => l.wrapping_rem(r),
         };
-        self.int_arith_result(checked, l, op, r)
-    }
-
-    /// The operands of an int `+` / `-` and the checked result.
-    fn int_add_sub(l: Value, op: char, r: Value) -> (i64, i64, Option<i64>) {
-        let (Some(l), Some(r)) = (l.as_int(), r.as_int()) else {
-            verifier_unreachable!()
-        };
-        let checked = if op == '+' {
-            l.checked_add(r)
-        } else {
-            l.checked_sub(r)
-        };
-        (l, r, checked)
-    }
-
-    /// Build a catchable `baml.panics.IntegerOverflow` throw. Cold path only.
-    #[cold]
-    #[inline(never)]
-    fn integer_overflow(&mut self, message: String) -> VmError {
-        VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::IntegerOverflow { message }))
+        Ok(self.int_value(v))
     }
 
     /// Build a catchable `baml.panics.NegativeBitShift` throw. Cold path only.
@@ -10070,16 +10013,14 @@ impl BexVm {
                 BinOp::Div | BinOp::Mod if r == 0 => {
                     return Err(self.division_by_zero(l, r));
                 }
-                // Arithmetic is checked: overflow throws IntegerOverflow rather
-                // than wrapping or raw-Rust-panicking. `MIN / -1` overflows;
-                // `MIN % -1` is `0`. And/Or/Xor of two ints stay in range, and
-                // `<<` truncates back into it (see `int_shl`); both shifts still
-                // reject a negative count.
-                BinOp::Add => self.int_arith_result(l.checked_add(r), l, '+', r)?,
-                BinOp::Sub => self.int_arith_result(l.checked_sub(r), l, '-', r)?,
-                BinOp::Mul => self.int_arith_result(l.checked_mul(r), l, '*', r)?,
-                BinOp::Div => self.int_arith_result(l.checked_div(r), l, '/', r)?,
-                BinOp::Mod => self.int_arith_result(Some(l.wrapping_rem(r)), l, '%', r)?,
+                // Arithmetic wraps (two's complement): `MIN / -1` is `MIN`,
+                // `MIN % -1` is `0`. `<<` truncates (see `int_shl`); both
+                // shifts still reject a negative count.
+                BinOp::Add => self.int_value(l.wrapping_add(r)),
+                BinOp::Sub => self.int_value(l.wrapping_sub(r)),
+                BinOp::Mul => self.int_value(l.wrapping_mul(r)),
+                BinOp::Div => self.int_value(l.wrapping_div(r)),
+                BinOp::Mod => self.int_value(l.wrapping_rem(r)),
                 BinOp::BitAnd => self.int_value(l & r),
                 BinOp::BitOr => self.int_value(l | r),
                 BinOp::BitXor => self.int_value(l ^ r),
@@ -10369,7 +10310,7 @@ impl BexVm {
     }
 
     /// `MulInt` of two inline ints, or `None` when the product is not
-    /// inline (it overflowed, or it needs a box): the caller's slow path
+    /// inline (it wrapped, or it needs a box): the caller's slow path
     /// decides.
     #[allow(clippy::inline_always)]
     #[inline(always)]
@@ -11329,8 +11270,7 @@ impl BexVm {
 
                     // ── Local-operand superinstructions ───────────────────────────
                     // AddLocalSmall(dst, src, k) == `LoadVar(src); LoadIntSmall(k);
-                    // AddInt; StoreVar(dst)`, overflow included: that sequence
-                    // also leaves the stack as it found it when it raises.
+                    // AddInt; StoreVar(dst)`, wrapping included.
                     OpCode::AddLocalSmall => {
                         let dst = { read_u32_unchecked(code, pc) as usize };
                         let src = { read_u32_unchecked(code, pc) as usize };
@@ -11338,7 +11278,7 @@ impl BexVm {
                         let l = self.stack.get_at(Self::local_at(locals_base, src));
                         let sum = match Value::tagged_int_add_checked(l, r) {
                             Some(sum) => sum,
-                            None => self.int_add_sub_slow(l, '+', r)?,
+                            None => self.int_add_sub_slow(l, '+', r),
                         };
                         self.store_local_value(Self::local_at(locals_base, dst), sum);
                     }
@@ -13465,18 +13405,16 @@ impl BexVm {
                     // ── Specialized int arithmetic (skip type dispatch) ───────────
                     //
                     // Operands are statically known to be `int`, inline or
-                    // boxed. Every op is checked: a result outside the int range
-                    // throws a catchable `baml.panics.IntegerOverflow` (via
-                    // `int_arith_result`) rather than silently wrapping or
-                    // raw-Rust-panicking. Add and sub first try the tagged fast
-                    // path, which declines (one predicted-not-taken branch) for a
-                    // boxed operand, a result that needs a box, or an overflow.
+                    // boxed. Arithmetic wraps (two's complement). Add and sub
+                    // first try the tagged fast path, which declines (one
+                    // predicted-not-taken branch) for a boxed operand or a result
+                    // outside the inline range, wrapped or not.
                     OpCode::AddInt => {
                         let r = self.stack.get_at(self.stack.ensure_slot_from_top(0));
                         let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
                         let v = match Value::tagged_int_add_checked(l, r) {
                             Some(v) => v,
-                            None => self.int_add_sub_slow_on_stack(l, '+', r)?,
+                            None => self.int_add_sub_slow(l, '+', r),
                         };
                         // SAFETY: the encoder validates two arithmetic operands.
                         self.stack.replace_top_n::<2>(v);
@@ -13486,14 +13424,14 @@ impl BexVm {
                         let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
                         let v = match Value::tagged_int_sub_checked(l, r) {
                             Some(v) => v,
-                            None => self.int_add_sub_slow_on_stack(l, '-', r)?,
+                            None => self.int_add_sub_slow(l, '-', r),
                         };
                         // SAFETY: the encoder validates two arithmetic operands.
                         self.stack.replace_top_n::<2>(v);
                     }
                     // Mul, Div and Mod first test both tags; two inline
                     // operands take the short path, anything else the cold
-                    // `int_mul_div_rem_slow`.
+                    // `int_mul_div_rem_slow`. Int arithmetic wraps.
                     OpCode::MulInt => {
                         let r = self.stack.ensure_pop();
                         let l = self.stack.ensure_pop();
@@ -13770,18 +13708,9 @@ impl BexVm {
                     OpCode::Neg => {
                         let val = self.stack.ensure_pop();
                         if let Some(n) = val.as_int() {
-                            // Negating the smallest int overflows.
-                            match n.checked_neg() {
-                                Some(v) => {
-                                    let v = self.int_value(v);
-                                    self.push_stack(v)?;
-                                }
-                                None => {
-                                    return Err(
-                                        self.integer_overflow(format!("-({n}) overflows int"))
-                                    );
-                                }
-                            }
+                            // Wraps: `-MIN` is `MIN`.
+                            let v = self.int_value(n.wrapping_neg());
+                            self.push_stack(v)?;
                         } else if let Some(n) = val.as_float() {
                             let v = self.float_value(-n);
                             self.push_stack(v)?;

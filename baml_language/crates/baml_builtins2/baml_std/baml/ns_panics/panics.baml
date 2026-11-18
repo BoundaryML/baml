@@ -176,20 +176,6 @@ class HostContractViolation {
     language: string?,
 }
 
-/// Raised when an `int` arithmetic operation (`+`, `-`, `*`, `/`, unary `-`)
-/// overflows the representable range. `int` is a 64-bit signed integer
-/// (`[-2^63, 2^63 - 1]`); operations that would fall outside it throw this
-/// rather than silently wrapping. Use `bigint` for unbounded integers.
-///
-/// # Examples
-///
-/// ```baml
-/// let result = int.max_value() + 1; // panics
-/// ```
-class IntegerOverflow {
-    message: string,
-}
-
 type Panic = DivisionByZero
     | IndexOutOfBounds
     | InvalidFieldAccess
@@ -204,5 +190,4 @@ type Panic = DivisionByZero
     | HostUnavailable
     | NegativeBitShift
     | SdkPanic
-    | HostContractViolation
-    | IntegerOverflow;
+    | HostContractViolation;

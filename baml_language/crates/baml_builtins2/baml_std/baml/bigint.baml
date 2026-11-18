@@ -1,5 +1,5 @@
 /// An arbitrary-precision signed integer, like Python's `int` or JavaScript's
-/// `BigInt`. Where `int` panics on overflow, `bigint` grows.
+/// `BigInt`. Where `int` wraps on overflow, `bigint` grows.
 ///
 /// Literals carry a trailing `n` and may be decimal (`42n`), hex (`0xFFn`),
 /// octal (`0o755n`), or binary (`0b1010n`), with `_` digit separators allowed

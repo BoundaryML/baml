@@ -12,10 +12,9 @@
 //! opcodes exactly, panics included; all panics are orthogonal to the `throws`
 //! contract, so the signatures stay `throws never` (panics surface via
 //! `//baml:fallible` glue):
-//! - a result outside the `int` range (`baml_type::int`) throws the catchable
-//!   [`VmPanic::IntegerOverflow`], exactly like the checked
-//!   `AddInt` / `SubInt` / `MulInt` / `DivInt` / `Neg` opcodes; this includes
-//!   `MIN / -1` and `-MIN`. `MIN % -1` is `0`.
+//! - `int` arithmetic wraps (two's complement), exactly like the
+//!   `AddInt` / `SubInt` / `MulInt` / `DivInt` / `Neg` opcodes: `-MIN` and
+//!   `MIN / -1` are `MIN`, and `MIN % -1` is `0`.
 //! - `float` `+` `-` `*` `/` `%` follow IEEE-754 throughout: `%` by zero yields
 //!   `NaN`, and `/` by zero yields `±inf` (or `NaN` for `0.0 / 0.0`), like
 //!   `DivFloat` and the generic mixed int/float path. Nothing panics.
@@ -55,19 +54,6 @@ use super::{
 use crate::{BexVm, errors::VmRustFnError};
 
 // ── shared helpers ──────────────────────────────────────────────────────────
-
-/// A checked `int` result, or the catchable `baml.panics.IntegerOverflow` the
-/// int opcodes throw. `checked` is `None` on overflow. Mirrors
-/// `BexVm::int_arith_result`, message included.
-fn checked_int(checked: Option<i64>, l: i64, op: char, r: i64) -> Result<i64, VmRustFnError> {
-    match checked {
-        Some(v) => Ok(v),
-        None => Err(VmPanic::IntegerOverflow {
-            message: format!("{l} {op} {r} overflows int"),
-        }
-        .into()),
-    }
-}
 
 /// Widen a BAML `int` to `f64` for mixed `int`/`float` arithmetic. Values
 /// past 2^53 lose precision — the same widening the `AddFloat`-family bytecode
@@ -109,8 +95,8 @@ fn checked_bigint_mul(a: &BigInt, b: &BigInt) -> Result<Arc<BigInt>, VmRustFnErr
 // ── Add ─────────────────────────────────────────────────────────────────────
 
 impl BamlClassOpsAdd_int__for_int for PackageBamlImpl {
-    fn add(int: i64, rhs: i64) -> Result<i64, VmRustFnError> {
-        checked_int(int.checked_add(rhs), int, '+', rhs)
+    fn add(int: i64, rhs: i64) -> i64 {
+        int.wrapping_add(rhs)
     }
 }
 
@@ -157,8 +143,8 @@ impl BamlClassOpsAdd_bigint__for_int for PackageBamlImpl {
 // ── Subtract ────────────────────────────────────────────────────────────────
 
 impl BamlClassOpsSubtract_int__for_int for PackageBamlImpl {
-    fn sub(int: i64, rhs: i64) -> Result<i64, VmRustFnError> {
-        checked_int(int.checked_sub(rhs), int, '-', rhs)
+    fn sub(int: i64, rhs: i64) -> i64 {
+        int.wrapping_sub(rhs)
     }
 }
 
@@ -205,8 +191,8 @@ impl BamlClassOpsSubtract_bigint__for_int for PackageBamlImpl {
 // ── Multiply ────────────────────────────────────────────────────────────────
 
 impl BamlClassOpsMultiply_int__for_int for PackageBamlImpl {
-    fn mul(int: i64, rhs: i64) -> Result<i64, VmRustFnError> {
-        checked_int(int.checked_mul(rhs), int, '*', rhs)
+    fn mul(int: i64, rhs: i64) -> i64 {
+        int.wrapping_mul(rhs)
     }
 }
 
@@ -260,8 +246,8 @@ impl BamlClassOpsDivide_int__for_int for PackageBamlImpl {
         if rhs == 0 {
             return Err(division_by_zero(vm.int_value(int), Value::int(rhs)));
         }
-        // `MIN / -1` throws IntegerOverflow like `DivInt`.
-        checked_int(int.checked_div(rhs), int, '/', rhs)
+        // `MIN / -1` wraps to `MIN`, like `DivInt`.
+        Ok(int.wrapping_div(rhs))
     }
 }
 
@@ -398,15 +384,9 @@ impl BamlClassOpsRemainder_bigint__for_int for PackageBamlImpl {
 // ── Negate ──────────────────────────────────────────────────────────────────
 
 impl BamlClassOpsNegate_for_int for PackageBamlImpl {
-    // `-MIN` throws IntegerOverflow with the `Neg` opcode's message.
-    fn neg(int: i64) -> Result<i64, VmRustFnError> {
-        match int.checked_neg() {
-            Some(v) => Ok(v),
-            None => Err(VmPanic::IntegerOverflow {
-                message: format!("-({int}) overflows int"),
-            }
-            .into()),
-        }
+    // Wraps like the `Neg` opcode: `-MIN` is `MIN`.
+    fn neg(int: i64) -> i64 {
+        int.wrapping_neg()
     }
 }
 

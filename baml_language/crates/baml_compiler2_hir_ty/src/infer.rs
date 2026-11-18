@@ -76,10 +76,8 @@ use crate::{
 
 /// Negate a numeric literal into the negative literal TYPE (ruling 2:
 /// `-1` is a type, TS parity). Freshness carries through. `None` skips
-/// the fold: non-numeric literals, and an int result outside BAML's 64-bit
-/// value range (`-int.min_value()` = 2^63) - the unfolded dispatch result stands
-/// and the VM raises the catchable overflow, identical to the
-/// through-a-variable path (TIR's `fold_int` rule).
+/// the fold for non-numeric literals. Int negation wraps as the VM's does:
+/// `-int.min_value()` is `int.min_value()`.
 /// Where a type-qualified reference's OWN generic args come from -
 /// r-a's `substs_from_path` split: the call site's turbofish channel,
 /// or fresh variables for a value-position reference.
@@ -101,7 +99,7 @@ struct WrittenQualifier<'a> {
 
 fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
     let negated = match lit {
-        Literal::Int(n) => Literal::Int(n.checked_neg()?),
+        Literal::Int(n) => Literal::Int(n.wrapping_neg()),
         Literal::Bigint(n) => Literal::Bigint(-n.clone()),
         // The float's WRITTEN digits are preserved exactly: negation is a
         // sign-prefix toggle, never a parse/format round trip.
@@ -121,8 +119,8 @@ fn negate_literal(lit: &Literal, freshness: Freshness) -> Option<Ty> {
 /// Freshness merges - fresh operands make a fresh result, so bindings
 /// still widen (`let x = 1n + 2n` is `bigint`; only checked positions
 /// see `3n`). `None` skips the fold: non-literal operands, mixed
-/// bases, and any result the VM could not materialize (int overflow,
-/// the bigint allocation cap, division by zero, non-finite floats) -
+/// bases, and any result the VM could not materialize (the bigint
+/// allocation cap, division by zero, non-finite floats) -
 /// the unfolded dispatch result stands and the runtime raises the
 /// same catchable error the through-a-variable path gets.
 fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Option<Ty> {
@@ -142,11 +140,12 @@ fn const_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Op
         (Literal::Int(a), Literal::Int(b)) => {
             let (a, b) = (*a, *b);
             match op {
-                BinaryOp::Add => int(a.checked_add(b)?),
-                BinaryOp::Sub => int(a.checked_sub(b)?),
-                BinaryOp::Mul => int(a.checked_mul(b)?),
-                BinaryOp::Div => int(a.checked_div(b)?),
-                BinaryOp::Mod => int(a.checked_rem(b)?),
+                // Int arithmetic wraps, as the VM's does.
+                BinaryOp::Add => int(a.wrapping_add(b)),
+                BinaryOp::Sub => int(a.wrapping_sub(b)),
+                BinaryOp::Mul => int(a.wrapping_mul(b)),
+                BinaryOp::Div if b != 0 => int(a.wrapping_div(b)),
+                BinaryOp::Mod if b != 0 => int(a.wrapping_rem(b)),
                 BinaryOp::BitAnd => Some(lit(Literal::Int(a & b))),
                 BinaryOp::BitOr => Some(lit(Literal::Int(a | b))),
                 BinaryOp::BitXor => Some(lit(Literal::Int(a ^ b))),
@@ -5694,9 +5693,7 @@ impl<'db> InferenceContext<'db> {
                 // discipline): dispatch through `Negate` is the semantic
                 // gate above; a literal operand then constant-FOLDS to
                 // the negated literal, preserving freshness, so `-1` has
-                // type `-1`. An overflow (`-MIN`) skips the fold and keeps
-                // the dispatch result - the VM throws the same catchable
-                // IntegerOverflow either way.
+                // type `-1`.
                 let resolved = self.table.resolve_completely(&ty);
                 if let InferTy::Literal(lit, freshness) = resolved.kind()
                     && !dispatched.has_error()

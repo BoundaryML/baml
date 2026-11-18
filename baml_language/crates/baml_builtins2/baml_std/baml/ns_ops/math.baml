@@ -19,9 +19,9 @@
 //!
 //! Behaviour the `throws never` signatures do not capture — panics are orthogonal
 //! to the `throws` contract (see `bigint.baml`), so these stay `throws never`:
-//!   - `int` arithmetic is checked, never wrapping: a result outside the `int`
-//!     range raises the catchable `baml.panics.IntegerOverflow`, including
-//!     `int.min_value() / -1` and `-int.min_value()`.
+//!   - `int` arithmetic wraps (two's complement, like a 64-bit integer in most
+//!     languages): `int.max_value() + 1` is `int.min_value()`, and both
+//!     `int.min_value() / -1` and `-int.min_value()` are `int.min_value()`.
 //!   - integer (`int` / `bigint`) `/` and `%` by zero raise
 //!     `baml.panics.DivisionByZero`.
 //!   - a `bigint` result beyond the workspace size cap raises
@@ -38,8 +38,8 @@
 /// `Add<bigint>`. This is the shape of Rust's
 /// [`ops::Add`](https://doc.rust-lang.org/std/ops/trait.Add.html).
 ///
-/// An implementation may panic for reasons of its own — the `int` impl panics
-/// on overflow, for instance. Panics are orthogonal to the `throws` contract,
+/// An implementation may panic for reasons of its own — a `bigint` impl panics
+/// past the allocation cap, for instance. Panics are orthogonal to the `throws` contract,
 /// which is why `add` is `throws never`: a caller reaching the operator through
 /// a bound like `T extends baml.ops.Add<int>` cannot enumerate what the
 /// implementation it gets might raise, and must be ready for a panic it cannot
@@ -155,7 +155,6 @@ interface Negate requires root.Concrete {
 // ==== int ====
 implement Add<int> for int {
     type Output = int;
-    //baml:fallible
     function add(self, rhs: int) -> int throws never {
         $rust_function
     }
@@ -163,7 +162,6 @@ implement Add<int> for int {
 
 implement Subtract<int> for int {
     type Output = int;
-    //baml:fallible
     function sub(self, rhs: int) -> int throws never {
         $rust_function
     }
@@ -171,7 +169,6 @@ implement Subtract<int> for int {
 
 implement Multiply<int> for int {
     type Output = int;
-    //baml:fallible
     function mul(self, rhs: int) -> int throws never {
         $rust_function
     }
@@ -197,7 +194,6 @@ implement Remainder<int> for int {
 
 implement Negate for int {
     type Output = int;
-    //baml:fallible
     function neg(self) -> int throws never {
         $rust_function
     }
@@ -476,8 +472,8 @@ implement Remainder<bigint> for int {
 ///
 /// # Panics
 ///
-/// - Whatever the resolved `add` raises — for an `int` pair, for instance,
-///   `baml.panics.IntegerOverflow`.
+/// - Whatever the resolved `add` raises — for a `bigint` pair, for instance,
+///   `baml.panics.AllocFailure`.
 //baml:mut_vm
 //baml:may_yield
 function __union_add(a: unknown, b: unknown) -> unknown throws never {

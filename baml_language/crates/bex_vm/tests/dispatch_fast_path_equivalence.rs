@@ -199,26 +199,28 @@ const PROGRAMS: &[(&str, &str)] = &[
         r#"
         function grow(seed: int) -> int {
             let x = seed;
-            while (true) { x = x * 3; }
+            for (let i = 0; i < 100; i += 1) { x = x * 3; }
             x
         }
         function inc(seed: int) -> int {
             let x = seed;
-            while (true) { x = x + 4611686018427387; }
+            for (let i = 0; i < 3000; i += 1) { x = x + 4611686018427387; }
             x
         }
         function dec(seed: int) -> int {
             let x = seed;
-            while (true) { x = x - 4611686018427387; }
+            for (let i = 0; i < 2000; i += 1) { x = x - 4611686018427387; }
             x
         }
         function recurse(n: int) -> int { recurse(n + 1) }
+        function quotient(n: int) -> int { 100 / n }
         function main() -> int {
-            let a = grow(1) catch (e) { baml.panics.IntegerOverflow => 1 };
-            let b = inc(0) catch (e) { baml.panics.IntegerOverflow => 20 };
-            let c = dec(0) catch (e) { baml.panics.IntegerOverflow => 300 };
+            let a = grow(1) % 1000;
+            let b = inc(0) % 1000;
+            let c = dec(0) % 1000;
             let d = recurse(0) catch (e) { baml.panics.StackOverflow => 4000 };
-            a + b + c + d
+            let q = quotient(0) catch (e) { baml.panics.DivisionByZero => 50000 };
+            a + b + c + d + q
         }
         "#,
     ),

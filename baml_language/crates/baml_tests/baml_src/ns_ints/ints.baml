@@ -28,14 +28,9 @@ test "int_abs_zero" {
     assert.equal((0).abs(), 0)
 }
 
-// int.min_value() is -2^63; its abs() is 2^63 which exceeds int.max_value().
-test "int_abs_min_value_panics" {
-    {
-        int.min_value().abs();
-        baml.sys.panic("expected int.min_value().abs() to panic")
-    } catch (e) {
-        baml.panics.IntegerOverflow => null
-    }
+// int.min_value() is -2^63; its abs(), 2^63, wraps back to int.min_value().
+test "int_abs_min_value_wraps" {
+    assert.equal(int.min_value().abs(), int.min_value())
 }
 
 test "int_abs_near_min_value_succeeds" {
@@ -663,11 +658,9 @@ test "int_count_zeros_plus_count_ones_equals_64" {
 
 // ─── Operator overflow & boundary arithmetic ────────────────────────────────
 //
-// `+`, `-`, `*` and unary `-` throw a catchable `baml.panics.IntegerOverflow`
-// when the result leaves the 64-bit range (catch tests live in ns_exceptions).
-// Valid arithmetic right up to the boundary must NOT spuriously throw. Helpers
-// take runtime args so the ops aren't constant-folded — they run through the
-// VM's checked AddInt/SubInt/MulInt opcodes.
+// `+`, `-`, `*`, `/` and unary `-` wrap (two's complement) when the result
+// leaves the 64-bit range. Helpers take runtime args so the ops aren't
+// constant-folded — they run through the VM's AddInt/SubInt/MulInt opcodes.
 function int_add_(a: int, b: int) -> int {
     a + b
 }
@@ -723,53 +716,53 @@ function int_shr_(a: int, b: int) -> int {
     a >> b
 }
 
-test "int_max_plus_one_overflows" {
-    {
-        int_add_(int.max_value(), 1);
-        baml.sys.panic("expected int.max_value() + 1 to overflow")
-    } catch (e) {
-        baml.panics.IntegerOverflow => null
-    }
+test "int_max_plus_one_wraps" {
+    assert.equal(int_add_(int.max_value(), 1), int.min_value());
+    assert.equal(int.max_value() + 1, int.min_value())
 }
 
-test "int_min_minus_one_overflows" {
-    {
-        int_sub_(int.min_value(), 1);
-        baml.sys.panic("expected int.min_value() - 1 to overflow")
-    } catch (e) {
-        baml.panics.IntegerOverflow => null
-    }
+test "int_min_minus_one_wraps" {
+    assert.equal(int_sub_(int.min_value(), 1), int.max_value());
+    assert.equal(int.min_value() - 1, int.max_value())
 }
 
-test "int_min_times_minus_one_overflows" {
-    {
-        int_mul_(int.min_value(), -1);
-        baml.sys.panic("expected int.min_value() * -1 to overflow")
-    } catch (e) {
-        baml.panics.IntegerOverflow => null
-    }
+test "int_mul_wraps" {
+    assert.equal(int_mul_(int.min_value(), -1), int.min_value());
+    assert.equal(int_mul_(int.max_value(), 2), -2);
+    assert.equal(int_mul_(4611686018427387904, 4), 0);
+    assert.equal(int.max_value() * 2, -2)
 }
 
-test "int_min_div_minus_one_overflows" {
-    {
-        int_div_(int.min_value(), -1);
-        baml.sys.panic("expected int.min_value() / -1 to overflow")
-    } catch (e) {
-        baml.panics.IntegerOverflow => null
-    }
+test "int_min_div_minus_one_is_min" {
+    assert.equal(int_div_(int.min_value(), -1), int.min_value());
+    assert.equal(int.min_value() / -1, int.min_value())
 }
 
 test "int_min_rem_minus_one_is_zero" {
     assert.equal(int_rem_(int.min_value(), -1), 0)
 }
 
-test "int_neg_min_overflows" {
+test "int_neg_min_is_min" {
+    assert.equal(int_neg_(int.min_value()), int.min_value());
+    assert.equal(-int.min_value(), int.min_value())
+}
+
+test "int_bitnot_min_is_max" {
+    assert.equal(~int.min_value(), int.max_value());
+    assert.equal(~int_add_(int.min_value(), 0), int.max_value())
+}
+
+test "int_division_by_zero_still_panics" {
     {
-        int_neg_(int.min_value());
-        baml.sys.panic("expected -int.min_value() to overflow")
+        int_div_(int.max_value(), 0);
+        baml.sys.panic("expected division by zero to panic")
     } catch (e) {
-        baml.panics.IntegerOverflow => null
+        baml.panics.DivisionByZero => null
     }
+}
+
+test "int_sum_wraps" {
+    assert.equal([int.max_value(), 1].sum(), int.min_value())
 }
 
 test "int_shifts_at_64_bits" {

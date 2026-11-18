@@ -10,42 +10,40 @@
 /// Bit operations such as `leading_zeros` and `count_ones` read `self` as a
 /// 64-bit two's-complement word: `(1).leading_zeros()` is `63`.
 ///
+/// Arithmetic wraps (two's complement), as 64-bit integers do in most
+/// languages: `int.max_value() + 1` is `int.min_value()`, and both
+/// `-int.min_value()` and `int.min_value() / -1` are `int.min_value()`.
+/// `int.min_value() % -1` is `0`.
+///
+/// `<<` discards whatever is shifted past the 64-bit width: `1 << 63` is
+/// `int.min_value()` (bit 63 is the sign bit) and `1 << 64` is `0`. A `>>`
+/// count of 64 or more saturates to the sign, giving `0` for a non-negative
+/// `self` and `-1` for a negative one.
+///
 /// # Panics
 ///
-/// Arithmetic panics rather than wrapping. These panics are catchable, but are
-/// not declared in `throws` clauses.
+/// These panics are catchable, but are not declared in `throws` clauses.
 ///
-/// - `baml.panics.IntegerOverflow` if `+`, `-`, `*`, `/`, or unary `-` leaves
-///   the `int` range.
 /// - `baml.panics.DivisionByZero` if the right operand of `/` or `%` is zero.
 /// - `baml.panics.NegativeBitShift` if the count given to `<<` or `>>` is
 ///   negative.
-///
-/// `<<` is the exception to the overflow rule: it truncates, discarding
-/// whatever is shifted past the 64-bit width. `1 << 63` is `int.min_value()`
-/// (bit 63 is the sign bit) and `1 << 64` is `0`. `>>` cannot overflow either;
-/// a count of 64 or more saturates to the sign, giving `0` for a non-negative
-/// `self` and `-1` for a negative one. `int.min_value() / -1` overflows;
-/// `int.min_value() % -1` is `0`.
 
 class Int {
     // ─── Magnitude ────────────────────────────────────────────────────────────
 
     /// Returns the absolute value of `self`.
     ///
-    /// # Panics
-    ///
-    /// - `baml.panics.IntegerOverflow` for `int.min_value()`, whose absolute
-    ///   value `2^63` is one past `int.max_value()`.
+    /// The absolute value of `int.min_value()`, `2^63`, is one past
+    /// `int.max_value()`, so it wraps to `int.min_value()` itself, as in most
+    /// languages with 64-bit integers.
     ///
     /// # Examples
     ///
     /// ```baml
     /// (-7).abs()             // 7
     /// (3).abs()              // 3
-    /// int.min_value().abs()  // panics
+    /// int.min_value().abs()  // int.min_value()
     /// ```
-    //baml:fallible
     function abs(self) -> int throws never {
         $rust_function
     }
@@ -81,7 +79,7 @@ class Int {
         $rust_function
     }
 
-    /// Returns `self ** exp`, saturating instead of panicking on overflow:
+    /// Returns `self ** exp`, saturating instead of wrapping on overflow:
     /// `int.max_value()` for positive overflow, `int.min_value()` for negative.
     ///
     /// `0 ** 0` is `1`, by convention. A negative `exp` gives `0`, because the

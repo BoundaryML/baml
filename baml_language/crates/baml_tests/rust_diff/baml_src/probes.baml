@@ -27,9 +27,7 @@ function Int64Op(a: int, b: int, op: string) -> int {
 }
 
 function Int64Overflows(a: int, b: int, op: string) -> string {
-    `${Int64Op(a, b, op)}` catch (e) {
-        baml.panics.IntegerOverflow => "overflow",
-    }
+    `${Int64Op(a, b, op)}`
 }
 
 // `int` is 64-bit; values of magnitude 2^62 and above are heap-boxed in the
