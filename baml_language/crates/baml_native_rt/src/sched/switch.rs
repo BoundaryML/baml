@@ -464,8 +464,8 @@ parking_stub! {
 }
 
 parking_stub! {
-    /// Waiting for I/O: takes the job to run on the I/O runtime and
-    /// returns once it has ended. The one parking stub Rust calls, as
+    /// Waiting for I/O: takes a job and what starts it, and returns once
+    /// the job has ended. The one parking stub Rust calls, as
     /// compiled code would: with the worker in the pinned register.
     baml_rt_io_wait => io_park
 }

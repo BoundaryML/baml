@@ -41,7 +41,12 @@ of its scope:
   it threw comes back as an `Err` to hand on with `?`.
 - `scope.io(job).await` runs async Rust on the runtime's own Tokio threads
   and parks the task meanwhile. The job is `'static + Send`, so it can
-  hold no root and no view.
+  hold no root and no view. The request the native leaves for its driver
+  carries the function that starts the job, so the driver names no Tokio:
+  a program links it only when one of the natives it calls uses
+  `scope.io`. Keep it that way, since linking Tokio costs every start of
+  the program about 0.8 M instructions in the dynamic linker, for the
+  system symbols Tokio imports, whether or not a job ever runs.
 
 Both borrow the scope exclusively, so no view survives a stop, and the
 future must be `Send`, so nothing bound to a thread (a `MutexGuard`, an

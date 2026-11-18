@@ -39,7 +39,7 @@ use std::{
 use super::{Elem, RootSlots, RtResult, Scope, Thrown, TypeId};
 use crate::{
     heap::Mutator,
-    sched::{Job, Task},
+    sched::{IoWait, Job, Task, Wake},
 };
 
 /// The most arguments a native passes a compiled function.
@@ -64,14 +64,13 @@ enum Request {
         code: usize,
         args: [usize; CALL_ARGS],
     },
-    /// Run the job on the I/O runtime, and go on when it has ended.
-    Io(Job),
+    /// Start the job where it says, and go on when it has ended.
+    Io(IoWait),
 }
 
 /// Where a native and its driver leave each other what a stop is for and
 /// how it ended. It is outside the scope, which the native's future holds
 /// exclusively for as long as it lives.
-#[derive(Default)]
 pub(crate) struct Exchange {
     request: Option<Request>,
     /// What the compiled function returned, or what it threw.
@@ -79,6 +78,21 @@ pub(crate) struct Exchange {
     threw: bool,
     /// The trace it threw that with.
     context: usize,
+    /// The worker the task went on under after its last stop: a task that
+    /// parks may be woken by another. Null until the native has stopped.
+    worker: *mut Mutator,
+}
+
+impl Default for Exchange {
+    fn default() -> Self {
+        Self {
+            request: None,
+            word: 0,
+            threw: false,
+            context: 0,
+            worker: std::ptr::null_mut(),
+        }
+    }
 }
 
 /// The state of one `async` native: what the driver and the collector read
@@ -245,7 +259,7 @@ unsafe fn run(mut worker: *mut Mutator, head: *mut Head) -> RtResult {
                     // the scratch word.
                     (*head).exchange.context = (*worker).scratch();
                 }
-                Some(Request::Io(job)) => worker = wait_for_io(worker, job),
+                Some(Request::Io(wait)) => worker = wait_for_io(worker, wait),
                 None => {
                     let _ = writeln!(
                         std::io::stderr().lock(),
@@ -255,6 +269,7 @@ unsafe fn run(mut worker: *mut Mutator, head: *mut Head) -> RtResult {
                     std::process::abort();
                 }
             }
+            (*head).exchange.worker = worker;
             (*worker).set_anchor(caller);
         };
         (*task).natives = (*head).outer;
@@ -295,23 +310,25 @@ unsafe fn call_compiled(
     (word, threw, resumed)
 }
 
-/// Park the task until `job` has ended on the I/O runtime. Returns the
-/// worker the task went on under.
+/// Park the task until the job of `wait` has ended. Returns the worker the
+/// task went on under.
 ///
 /// # Safety
 ///
 /// Called on a task of `worker`.
 #[cfg(target_arch = "aarch64")]
-unsafe fn wait_for_io(worker: *mut Mutator, job: Job) -> *mut Mutator {
-    let job = Box::into_raw(Box::new(job));
+unsafe fn wait_for_io(worker: *mut Mutator, wait: IoWait) -> *mut Mutator {
+    // The stub's Rust half takes the job out of this frame before the task
+    // leaves its stack.
+    let mut wait = ManuallyDrop::new(wait);
     let resumed;
     // SAFETY: the stub keeps every register the C convention has a callee
-    // keep, but the pinned one, and takes the job.
+    // keep, but the pinned one, and takes what is at the address once.
     unsafe {
         std::arch::asm!(
             "bl {wait}",
             wait = sym crate::sched::switch::baml_rt_io_wait,
-            inout("x0") job => _,
+            inout("x0") &raw mut wait => _,
             inout("x21") worker => resumed,
             clobber_abi("C"),
         );
@@ -319,18 +336,27 @@ unsafe fn wait_for_io(worker: *mut Mutator, job: Job) -> *mut Mutator {
     resumed
 }
 
-/// The runtime that runs the jobs of [`Scope::io`], on a thread of its own.
-/// Made when the first job is.
-pub(crate) fn io_runtime() -> &'static tokio::runtime::Runtime {
+/// Start `job` on the runtime that runs the jobs of [`Scope::io`]: Tokio,
+/// on a thread of its own, made when the first job is. `wake` is used when
+/// the job has ended.
+///
+/// Only [`Scope::io`] names this function, and the driver calls it through
+/// the request, so a program none of whose natives calls `scope.io` links
+/// no Tokio.
+fn start_on_tokio(job: Job, wake: Wake) {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| {
+    let runtime = RUNTIME.get_or_init(|| {
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .thread_name("baml-io")
             .enable_all()
             .build()
             .expect("the I/O runtime starts")
-    })
+    });
+    runtime.spawn(async move {
+        job.await;
+        wake.wake();
+    });
 }
 
 /// Hand `each` the address of every root the `async` natives `task` is
@@ -387,6 +413,7 @@ impl<'s> Future for CallBaml<'_, 's> {
                 (*exchange).request = Some(Request::Call { code, args });
                 return Poll::Pending;
             }
+            self.scope.resumed();
             let value = self.scope.elem_raw((*exchange).word, TypeId(0));
             Poll::Ready(if (*exchange).threw {
                 let context = self.scope.elem_raw((*exchange).context, TypeId(0));
@@ -404,8 +431,8 @@ impl<'s> Future for CallBaml<'_, 's> {
 /// A job on the I/O runtime in flight: see [`Scope::io`].
 pub struct Io<'a, 's, T> {
     scope: &'a mut Scope<'s>,
-    /// The job, until the driver has been asked to run it.
-    job: Option<Job>,
+    /// The job and what starts it, until the driver has been asked to.
+    wait: Option<IoWait>,
     /// Where the job leaves what it made.
     made: Arc<Mutex<Option<T>>>,
 }
@@ -414,12 +441,14 @@ impl<T> Future for Io<'_, '_, T> {
     type Output = T;
 
     fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<T> {
-        if let Some(job) = self.job.take() {
+        if let Some(wait) = self.wait.take() {
             // SAFETY: the scope is an `async` native's, so the exchange is
             // its block's.
-            unsafe { (*self.scope.exchange).request = Some(Request::Io(job)) };
+            unsafe { (*self.scope.exchange).request = Some(Request::Io(wait)) };
             return Poll::Pending;
         }
+        // SAFETY: the driver answered the request before it polled again.
+        unsafe { self.scope.resumed() };
         let made = self.made.lock().expect("the job did not panic").take();
         Poll::Ready(made.expect("the driver polls again once the job has ended"))
     }
@@ -472,12 +501,27 @@ impl<'s> Scope<'s> {
         let slot = Arc::clone(&made);
         Io {
             scope: self,
-            job: Some(Box::pin(async move {
-                let value = job.await;
-                *slot.lock().expect("no thread panics holding it") = Some(value);
-            })),
+            wait: Some(IoWait {
+                job: Box::pin(async move {
+                    let value = job.await;
+                    *slot.lock().expect("no thread panics holding it") = Some(value);
+                }),
+                start: start_on_tokio,
+            }),
             made,
         }
+    }
+
+    /// Go on under the worker the task was resumed by.
+    ///
+    /// # Safety
+    ///
+    /// The scope is an `async` native's, and the driver has answered a
+    /// request of it.
+    unsafe fn resumed(&mut self) {
+        // SAFETY: the caller's contract: the exchange is the block's, and
+        // the driver left there the worker it went on under.
+        self.mutator = unsafe { NonNull::new_unchecked((*self.exchange).worker) };
     }
 
     /// Run `work`, which is long and touches no heap object, and return

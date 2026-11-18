@@ -206,3 +206,39 @@ function main() -> int throws Failure {{
          baml.panics.DivisionByZero {dividend: 10}\n",
     );
 }
+
+/// Whether the executable built from `source` imports what starts a
+/// thread, which the runtime itself never does: only Tokio, for the jobs of
+/// `scope.io`. An import is by name, so the name is there to find.
+fn can_start_a_thread(source: &str) -> bool {
+    const IMPORT: &[u8] = b"_pthread_create";
+    let db = setup_test_db(source);
+    assert_no_diagnostic_errors(&db);
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let executable = build(&db, "main", directory.path()).expect("the program compiles");
+    let bytes = std::fs::read(executable).expect("a readable executable");
+    bytes.windows(IMPORT.len()).any(|window| window == IMPORT)
+}
+
+/// Only a native that calls `scope.io` names Tokio, so a program with
+/// `async` natives and no I/O links none of it: the linker has nothing to
+/// keep it for. Linking it costs every start of the program the binding of
+/// the system symbols it imports, whether or not a job ever runs.
+#[test]
+fn a_program_without_io_links_no_tokio() {
+    assert!(!can_start_a_thread(
+        "class Temp {
+  celsius: float
+  implements baml.ToJson {
+    function to_json(self) -> baml.json.json throws baml.json.SerializationError {
+      { \"c\": baml.json.from(self.celsius) }
+    }
+  }
+}
+function main() -> string { baml.json.stringify(Temp { celsius: 21.5 }) }
+"
+    ));
+    assert!(can_start_a_thread(
+        "function main() -> string { baml.fs.read(\"no such file\") }\n"
+    ));
+}

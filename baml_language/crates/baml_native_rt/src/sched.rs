@@ -184,7 +184,7 @@ pub(crate) struct Inbox {
 impl Inbox {
     /// Hand `task` to a worker. Called from any thread, once for each time
     /// the task parked on I/O.
-    pub(crate) fn wake(&self, task: usize) {
+    fn wake(&self, task: usize) {
         let mut woken = self.woken.lock().expect("no thread panics holding it");
         woken.push(task);
         self.filled.store(true, Ordering::Release);
@@ -873,30 +873,52 @@ pub(crate) unsafe extern "C" fn sleep_park(
 /// left its result where the task will look.
 pub(crate) type Job = std::pin::Pin<Box<dyn Future<Output = ()> + Send>>;
 
+/// A job, and what starts it somewhere other than on a worker. The worker
+/// names no runtime of its own for that: whoever makes the job says where
+/// it runs.
+pub(crate) struct IoWait {
+    pub(crate) job: Job,
+    pub(crate) start: fn(Job, Wake),
+}
+
+/// What hands a task parked on I/O back to a worker, once.
+pub(crate) struct Wake {
+    inbox: Arc<Inbox>,
+    task: usize,
+}
+
+impl Wake {
+    /// Called from any thread, when the job has ended.
+    pub(crate) fn wake(self) {
+        self.inbox.wake(self.task);
+    }
+}
+
 /// The Rust half of [`switch::baml_rt_io_wait`], on the waiting task's
-/// stack: start the job at `job` on the I/O runtime and leave the task
+/// stack: start the job of the [`IoWait`] at `wait` and leave the task
 /// parking until the job has ended.
 ///
 /// The job starts only once the task is parking, so that whichever worker
 /// finds it in the inbox finds it in a state a waker knows.
-pub(crate) unsafe extern "C" fn io_park(job: usize, worker: &mut Mutator, frame: usize) -> usize {
+pub(crate) unsafe extern "C" fn io_park(wait: usize, worker: &mut Mutator, frame: usize) -> usize {
     let sched = &mut worker.sched;
     sched.settle_last_switch();
     let task = worker.cur_task;
-    // SAFETY: called on a task with the stub's frame, and with a job the
-    // caller boxed for this.
-    let job = unsafe {
+    // SAFETY: called on a task with the stub's frame, and with a wait the
+    // caller gives up here.
+    let IoWait { job, start } = unsafe {
         (*task).sp = frame;
         (*task).state.store(PARKING, Ordering::Release);
-        *Box::from_raw(job as *mut Job)
+        (wait as *mut IoWait).read()
     };
     sched.on_io += 1;
-    let inbox = Arc::clone(&sched.inbox);
-    let task = task as usize;
-    crate::native::drive::io_runtime().spawn(async move {
-        job.await;
-        inbox.wake(task);
-    });
+    start(
+        job,
+        Wake {
+            inbox: Arc::clone(&sched.inbox),
+            task: task as usize,
+        },
+    );
     1
 }
 
