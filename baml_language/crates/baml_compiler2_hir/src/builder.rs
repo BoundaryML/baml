@@ -721,12 +721,31 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Expr::Object {
                 fields, spreads, ..
             } => {
-                // BUG: a class literal that names a field twice
-                // (`Pair { a: null, a: 1 }`) compiles without a diagnostic and
-                // the last value wins. It needs the check `ast::Pattern::Class`
-                // makes with `DuplicatePatternField`.
+                // A field named twice explicitly is an error. A field that also
+                // comes from a `...spread` is not: explicit fields override
+                // whatever the spread supplies.
+                let mut seen_fields: FxHashMap<&Name, usize> = FxHashMap::default();
+                let mut sites_by_field: Vec<(&Name, Vec<TextRange>)> = Vec::new();
                 for field in fields {
+                    let site = source_map.object_field_name_span(expr_id, field.value);
+                    match seen_fields.entry(&field.name) {
+                        std::collections::hash_map::Entry::Occupied(slot) => {
+                            sites_by_field[*slot.get()].1.push(site);
+                        }
+                        std::collections::hash_map::Entry::Vacant(slot) => {
+                            slot.insert(sites_by_field.len());
+                            sites_by_field.push((&field.name, vec![site]));
+                        }
+                    }
                     self.walk_expr(field.value, body, source_map, true);
+                }
+                for (name, sites) in sites_by_field {
+                    if sites.len() > 1 {
+                        self.diagnostics.push(Hir2Diagnostic::DuplicateObjectField {
+                            name: name.clone(),
+                            sites,
+                        });
+                    }
                 }
                 for spread in spreads {
                     self.walk_expr(spread.expr, body, source_map, true);
