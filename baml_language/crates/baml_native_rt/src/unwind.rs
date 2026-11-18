@@ -73,6 +73,8 @@ pub(crate) struct Unwinder {
     table: usize,
     functions: usize,
     sites: OnceCell<Vec<Site>>,
+    /// The return addresses of the last trace taken, kept for its room.
+    trace: Vec<usize>,
 }
 
 /// Read the 32-bit word at `address`.
@@ -91,6 +93,7 @@ impl Unwinder {
             table,
             functions,
             sites: OnceCell::new(),
+            trace: Vec::new(),
         }
     }
 
@@ -182,10 +185,8 @@ fn frames(mutator: &Mutator) -> impl Iterator<Item = (usize, usize)> {
     })
 }
 
-/// The trace of a throw: an `int[]` of the return address into every
-/// compiled frame, innermost first. May collect.
-fn trace(mutator: &mut Mutator) -> usize {
-    let addresses: Vec<usize> = frames(mutator).map(|(pc, _)| pc).collect();
+/// An `int[]` of `addresses`. May collect.
+fn int_array(mutator: &mut Mutator, addresses: &[usize]) -> usize {
     let length = addresses.len();
     let array = mutator.allocate(ARRAY_SIZE + STORAGE_ELEMENTS + length * WORD);
     // SAFETY: the array and its storage are the bytes just allocated.
@@ -206,17 +207,34 @@ fn trace(mutator: &mut Mutator) -> usize {
 /// called the runtime, and say where to resume. `context` is zero for a new
 /// throw.
 fn unwind(mutator: &mut Mutator, mut error: usize, mut context: usize, resume: &mut Resume) {
-    // The first phase: nothing is popped.
-    let found = frames(mutator).find_map(|(pc, fp)| Some((mutator.unwind.handler(pc)?, fp)));
+    // The first phase: nothing is popped. One walk finds the handler and,
+    // when the handler reads a context that is yet to be made, goes on to
+    // the outermost frame for the trace: the return address into every
+    // compiled frame, innermost first.
+    let mut trace = std::mem::take(&mut mutator.unwind.trace);
+    trace.clear();
+    let mut found = None;
+    for (pc, fp) in frames(mutator) {
+        if found.is_none()
+            && let Some(site) = mutator.unwind.handler(pc)
+        {
+            found = Some((site, fp));
+            if context != 0 || site.flags & SITE_WANTS_CONTEXT == 0 {
+                break;
+            }
+        }
+        trace.push(pc);
+    }
     let Some((site, fp)) = found else {
         // The function that enters compiled code catches everything.
         fatal("a throw found no handler");
     };
     if context == 0 && site.flags & SITE_WANTS_CONTEXT != 0 {
         mutator.root(&mut error);
-        context = trace(mutator);
+        context = int_array(mutator, &trace);
         mutator.unroot(1);
     }
+    mutator.unwind.trace = trace;
     // The second phase: nothing allocates. A popped frame's telemetry slot
     // would be completed here, with how the frame ended.
     *resume = Resume {

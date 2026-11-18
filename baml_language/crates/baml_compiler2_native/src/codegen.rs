@@ -755,8 +755,11 @@ impl<'db> Backend<'db> {
     /// UTF-8, padded to 4 bytes
     /// ```
     ///
-    /// A shield range is code of a `defer` body. No function has a
-    /// telemetry slot yet: T is zero.
+    /// A shield range is code of a `defer` body: the instructions generated
+    /// for it, so a body is several ranges where moves and branches the
+    /// register allocator placed fall between them. A call belongs to the
+    /// range that holds the byte before its return address. No function has
+    /// a telemetry slot yet: T is zero.
     fn define_functions(&mut self) -> Result<(), CompileError> {
         const RECORD: usize = 24;
         let functions = std::mem::take(&mut self.functions);
