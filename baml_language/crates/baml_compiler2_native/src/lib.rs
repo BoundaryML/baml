@@ -28,6 +28,7 @@ mod layout;
 mod link;
 mod loops;
 mod narrow;
+mod natives;
 mod program;
 mod types;
 
