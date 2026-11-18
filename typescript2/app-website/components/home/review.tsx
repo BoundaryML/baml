@@ -15,7 +15,6 @@ import { PostDrawing } from '@/app/(home)/blog/_lib/art';
 import { section } from '@/components/home/analytics';
 import { BAML_LOGO, LAMB_PATHS } from '@/components/home/lamb';
 import {
-  Hyper,
   leftVertically,
   sweep,
   useInView,
@@ -338,7 +337,7 @@ function CompilerName({ name }: { name: string }) {
   );
 }
 
-function Speed() {
+export function Speed() {
   const [at, setAt] = useState(0);
   const { times } = KINDS[at];
   // BAML first, then the same order on every tab, so nothing jumps around.
@@ -518,7 +517,7 @@ function Run() {
   const cur = RUNS[at];
   return (
     <Box title="Every function is a CLI">
-      <p className="mt-2 text-[18px] text-white/70">
+      <p className="mt-2 text-[16px] text-white/70">
         The fastest way to understand a function is to call it.
         <br />
         For AI functions, it's the only way.
@@ -575,7 +574,7 @@ function Run() {
                 className={`px-4 py-2.5 ${i ? 'sm:border-l border-white/10' : ''}`}
                 key={win.big}
               >
-                <p className="font-display text-[21px] font-medium text-clover">
+                <p className="font-display text-[20px] font-medium text-clover">
                   {win.big}
                 </p>
                 <p className="text-[14px] leading-[1.3] text-white/70">
@@ -1203,7 +1202,7 @@ export default function Review() {
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         <h2 className="v4-h2 text-head max-w-[22em]" id="review">
-          Can agents write high-quality <Hyper>BAML</Hyper>?
+          Built for agents.
         </h2>
         <Research />
         <div className="mt-16">
@@ -1214,9 +1213,6 @@ export default function Review() {
         </div>
         <div className="mt-16">
           <Story />
-        </div>
-        <div className="mt-16">
-          <Speed />
         </div>
       </div>
     </section>

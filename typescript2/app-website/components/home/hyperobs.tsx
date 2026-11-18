@@ -1601,53 +1601,11 @@ function Threads() {
   );
 }
 
-// ---------- the heading ----------
-
-// What observability slows down. Both sentences say the same word.
-const SLOWED = ['decisions', 'on-call', 'fixes'];
-const ROTATE_MS = 2600;
-
-/** "Observability makes X slow. Hyperobservability makes X fast.", with X rotating in both, one
- *  sentence a line. Under reduced motion it stays on the first. */
-function Rotating() {
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const id = setInterval(() => setN((k) => k + 1), ROTATE_MS);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <>
-      {/* Every option, for screen readers, which would otherwise hear it change. */}
-      <span className="sr-only">
-        Observability makes {SLOWED.join(', ')} slow. Hyperobservability makes
-        them fast.
-      </span>
-      {/* On a phone each sentence holds two lines' height, so a shorter word doesn't pull the page
-          up when it rotates in. */}
-      <span aria-hidden>
-        <span className="block max-sm:min-h-[2.4em] sm:whitespace-nowrap">
-          Observability makes{' '}
-          <span className="heading-swap" key={n}>
-            {SLOWED[n % SLOWED.length]}
-          </span>{' '}
-          slow.
-        </span>
-        <span className="block max-sm:min-h-[2.4em] sm:whitespace-nowrap">
-          <Hyper>Hyperobservability</Hyper> makes{' '}
-          <span className="heading-swap" key={n}>
-            {SLOWED[n % SLOWED.length]}
-          </span>{' '}
-          fast.
-        </span>
-      </span>
-    </>
-  );
-}
-
 // ---------- the section ----------
 
-export default function Hyperobs({ children }: { children: ReactNode }) {
+/** What hyperobservability is: the definition, what the runtime does, and the same function written
+ *  both ways with what each records. */
+export default function Hyperobs() {
   return (
     <section
       {...section('hyperobservability')}
@@ -1659,20 +1617,45 @@ export default function Hyperobs({ children }: { children: ReactNode }) {
           <Hyper>Hyperobservability</Hyper> is observability that is always on,
           by default, for everything.
         </h2>
+        <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
+          BAML's toolchain helps agents at compile time, and after deployment.
+          The runtime records your program as it runs and sends it to Boundary
+          Cloud, or stores it locally in SQLite if you don't use the cloud.
+          There's no SDK to install and no collector to run.
+        </p>
 
         <div className="mt-10 md:mt-12">
           <SideBySide />
         </div>
+      </div>
+    </section>
+  );
+}
 
-        <div className="mt-20 md:mt-28">
-          <h3 className="v4-h2 v4-sub text-head max-w-[24em]">
-            <Rotating />
-          </h3>
-        </div>
+/** Why it matters now: code is written faster than a team can find out what it did, so a decision
+ *  waits on data. The double-refund story under it is the same incident with and without the data. */
+export function WhyNow() {
+  return (
+    <section
+      {...section('why-now')}
+      aria-labelledby="why-now"
+      className="border-t border-rule"
+    >
+      <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
+        <h2 className="v4-h2 text-head max-w-[22em]" id="why-now">
+          Make decisions faster, with less CI time.
+        </h2>
+        <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
+          BAML enables you to observe{' '}
+          <span className="text-clover">everything</span> at a fraction of the
+          cost, allowing you to have more complete information.
+        </p>
+
+        {/* The two chats carry the comparison themselves: each column is titled with its side and
+            its time to a decision. */}
         <div className="mt-10 md:mt-12">
           <Threads />
         </div>
-        {children}
       </div>
     </section>
   );

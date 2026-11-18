@@ -27,55 +27,38 @@ type Fill = 'all' | 'some' | 'none';
 
 const WAYS: {
   body: string;
-  // One note per card, always in the same place. Recommended is a badge with no text.
-  callout: { label: string; text?: string; tone: 'go' | 'ready' | 'warn' };
   // The button beside the title.
   cta: string;
   fill: Fill;
   href: string;
+  // Only incremental adoption is recommended: its card carries the badge, shows its button without
+  // a hover, and comes first on a phone.
+  recommended?: boolean;
   title: string;
 }[] = [
   {
     body: 'Everything you write gets hyperobservability.',
-    callout: {
-      label: 'Heads up',
-      text: 'Not recommended yet. BAML’s ecosystem is still young, and a rewrite trades working code for risk.',
-      tone: 'warn',
-    },
     cta: 'Start today',
     fill: 'all',
     href: '/adopt#rewrite',
     title: 'Rewrite your stack in BAML',
   },
   {
-    body: 'BAML generates a typed SDK for most languages.',
-    callout: { label: 'Recommended', tone: 'go' },
+    body: 'Move one function at a time. BAML generates a typed SDK your existing code calls.',
     cta: 'Start today',
     fill: 'some',
     href: '/adopt#incremental',
+    recommended: true,
     title: 'Adopt BAML incrementally',
   },
   {
     body: 'Keep your code. Send the traces you already have.',
-    callout: { label: 'Get ready', tone: 'ready' },
     cta: 'Learn more',
     fill: 'none',
     href: '/adopt#otel',
     title: 'Send OTel to Boundary Cloud',
   },
 ];
-
-const CALLOUT = {
-  go: { box: 'border-clover/50 bg-clover/[0.08]', label: 'text-clover' },
-  ready: {
-    box: 'border-[#79c0ff]/40 bg-[#79c0ff]/[0.06]',
-    label: 'text-[#79c0ff]',
-  },
-  warn: {
-    box: 'border-[#f5c451]/40 bg-[#f5c451]/[0.06]',
-    label: 'text-[#f5c451]',
-  },
-};
 
 /** The codebase, filled as far as this way into BAML takes it. */
 function Mini({ fill }: { fill: Fill }) {
@@ -104,8 +87,7 @@ function AdoptCards() {
   return (
     <div className="grid gap-3 md:grid-cols-3">
       {WAYS.map((w) => {
-        const go = w.callout.tone === 'go';
-        const c = CALLOUT[w.callout.tone];
+        const go = w.recommended === true;
         return (
           <a
             className={`focus-ring group flex flex-col overflow-hidden rounded-2xl border bg-raised transition-[border-color,translate,box-shadow] duration-300 hover:-translate-y-1 focus-visible:-translate-y-1 motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${go ? 'max-md:order-first border-clover/60 hover:border-clover hover:shadow-[0_16px_48px_-16px_rgb(from_var(--color-clover)_r_g_b/0.55)]' : 'border-rule hover:border-white/35 hover:shadow-[0_16px_48px_-16px_rgb(255_255_255/0.18)]'}`}
@@ -142,19 +124,6 @@ function AdoptCards() {
                 </span>
               </div>
               <p className="mt-3 v4-body text-ink-2">{w.body}</p>
-              {w.callout.text && (
-                <p
-                  className={`mt-4 rounded-lg border px-3 py-2.5 text-[14px] leading-snug text-ink-2 ${c.box}`}
-                >
-                  <span
-                    className={`font-mono text-[11px] uppercase tracking-wider ${c.label}`}
-                  >
-                    {w.callout.label}
-                  </span>
-                  <br />
-                  {w.callout.text}
-                </p>
-              )}
             </div>
           </a>
         );
@@ -187,7 +156,8 @@ export default function Adopt() {
       </div>
       <div className="relative v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         <h2 className="v4-h2 max-w-[22em]" id="adopt">
-          Use Boundary where feedback loops matter most.
+          Start where feedback loops matter most, and keep the rest of your
+          code.
         </h2>
         <div className="mt-10 md:mt-12">
           <AdoptCards />

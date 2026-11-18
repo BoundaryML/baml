@@ -19,13 +19,7 @@ import { BoundaryLogo, BoundaryMark } from '@/components/home/boundary-logo';
 import { LAMB_PATHS } from '@/components/home/lamb';
 import { MarkTile } from '@/components/home/mark';
 import { MARKS } from '@/components/home/marks';
-import {
-  Hyper,
-  Looped,
-  Played,
-  Scrubbed,
-  sweep,
-} from '@/components/home/pinned';
+import { Hyper, Scrubbed, sweep } from '@/components/home/pinned';
 import { ramp } from '@/components/home/scroll';
 
 // The stack, then what it costs to see every function. BAML times every function, which measured
@@ -528,14 +522,23 @@ function Meter({
 
 const STRIP = 120;
 
-/** One function in every box. Lit boxes are the ones that were recorded. */
-function CallStrip({ lit, rate }: { lit?: boolean; rate: number }) {
+/** One function in every box. Lit boxes are the ones that were recorded. `boxes` is how many to
+ *  draw: thirty is one row. */
+function CallStrip({
+  boxes = STRIP,
+  lit,
+  rate,
+}: {
+  boxes?: number;
+  lit?: boolean;
+  rate: number;
+}) {
   return (
     <div
       className="grid gap-[3px]"
       style={{ gridTemplateColumns: 'repeat(30, minmax(0, 1fr))' }}
     >
-      {Array.from({ length: STRIP }, (_, i) => {
+      {Array.from({ length: boxes }, (_, i) => {
         const kept = noise(i) < rate;
         const error = noise(i + 999) < 0.12;
         return (
@@ -612,7 +615,7 @@ function OtelName() {
     return () => clearInterval(timer);
   }, []);
   return (
-    <p className="flex items-center gap-2 whitespace-nowrap font-display text-[16px] sm:text-[20px] md:text-[22px] font-medium text-head">
+    <p className="flex items-center gap-2 whitespace-nowrap font-display text-[16px] sm:text-[20px] md:text-[16px] lg:text-[20px] font-medium text-head">
       <SiOpentelemetry aria-hidden="true" className="shrink-0" />
       OpenTelemetry
       <span className="text-white/50">+</span>
@@ -759,11 +762,11 @@ function Shrink({ n, rates }: { n: number; rates: Rates }) {
         ))}
       </div>
       <div className="md:text-right">
-        <p className="font-display text-[64px] font-semibold leading-none tabular-nums text-clover md:text-[96px]">
+        <p className="font-display text-[48px] font-medium leading-none tracking-[-0.03em] tabular-nums text-clover md:text-[64px]">
           {times(smaller ? otel / baml : baml / otel)}
         </p>
-        <p className="mt-2 text-[18px] text-head">
-          {smaller ? 'smaller' : 'larger'}
+        <p className="mt-2 text-[16px] text-head">
+          {smaller ? 'less' : 'more'} storage for agent traces
         </p>
         {/* Follows the sliders, so it always says what the meters show. */}
         <p className="mt-1 max-w-[18rem] text-[14px] text-white/60 tabular-nums md:ml-auto">
@@ -774,14 +777,14 @@ function Shrink({ n, rates }: { n: number; rates: Rates }) {
   );
 }
 
-function Billion({ p }: { p: number }) {
+export function Billion({ p }: { p: number }) {
   const [rates, setRates] = useState<Rates>({ baml: 1, otel: 0.2 });
   const n = Math.round(CALLS ** Math.max(0.5, sweep(p)));
-  // One box, like the speed chart's: the title, then both sides as columns.
+  // One box: the word, the two stores on one axis, then both sides as columns with their sliders.
   return (
-    <div className="rounded-xl border border-rule bg-raised p-5">
-      {/* The pair to the speed box's "We made observability fast." */}
-      <p className="v4-h3 text-head">We made observability tiny.</p>
+    <div className="rounded-xl border border-rule bg-raised p-5 md:p-6">
+      {/* Unmounted: the homepage's Cheap box is the simpler one below. */}
+      <h3 className="v4-caption text-clover">Cheap</h3>
       <Shrink n={n} rates={rates} />
       <div className="mt-6 grid md:grid-cols-2 gap-3">
         <Side
@@ -795,6 +798,123 @@ function Billion({ p }: { p: number }) {
           rates={rates}
           setRate={(baml) => setRates({ ...rates, baml })}
         />
+      </div>
+    </div>
+  );
+}
+
+/** The section's "Cheap" box: one comparison and one slider. The slider sets how much OpenTelemetry
+ *  samples, which is the choice its cost forces; Boundary keeps every call. Each side is one row:
+ *  its storage on a shared axis, thirty calls with the recorded ones filled in, and the share of
+ *  errors that sampling threw away. The headline follows the slider. Billion, above, is the larger
+ *  figure this replaced, with a slider and four meters a side. */
+export function Cheap() {
+  const [rate, setRate] = useState(0.2);
+  const otel = otelBytes(CALLS, rate);
+  const baml = bamlBytes(CALLS, 1);
+  const top = Math.max(otel, baml);
+  const smaller = baml <= otel;
+  const rows = [
+    { bytes: otel, kept: rate, lit: false, name: 'OpenTelemetry' },
+    { bytes: baml, kept: 1, lit: true, name: 'Boundary' },
+  ];
+  const label = 'text-[13px] text-muted';
+  return (
+    <div className="rounded-xl border border-rule bg-raised p-5 md:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
+        <div>
+          <h3 className="v4-caption text-clover">Cheap</h3>
+          <p className="mt-4 flex flex-wrap items-baseline gap-x-2.5">
+            <span className="font-display text-[36px] font-medium leading-none tracking-[-0.03em] tabular-nums text-head">
+              {times(smaller ? otel / baml : baml / otel)}
+            </span>
+            <span className="text-[16px] text-ink-2">
+              {smaller ? 'less' : 'more'} storage for agent traces
+            </span>
+          </p>
+        </div>
+        <label className="block w-full sm:max-w-[22rem]">
+          <span className="flex items-baseline justify-between gap-3 text-[14px] text-ink-2">
+            OpenTelemetry sampling
+            <span className="font-display text-[20px] font-medium tabular-nums text-head">
+              keeps {Math.round(rate * 100)}%
+            </span>
+          </span>
+          <input
+            // On a touch screen the slider is 40px tall to the thumb, pulled back by its margins so
+            // the rows around it don't move.
+            className="mt-2 block h-4 w-full accent-[#caaaf2] pointer-coarse:h-10 pointer-coarse:-my-1"
+            max={100}
+            min={1}
+            onChange={(e) => setRate(Number(e.target.value) / 100)}
+            type="range"
+            value={Math.round(rate * 100)}
+          />
+          {/* Readers took the slider for a gauge, so it says it moves. */}
+          <span className="mt-1.5 block text-[13px] text-white/45">
+            Drag to change the sampling
+          </span>
+        </label>
+      </div>
+
+      <div className="mt-6 grid gap-y-6 border-t border-rule pt-5 lg:gap-y-4">
+        {/* The columns' names, once, where the rows sit side by side. */}
+        <div
+          aria-hidden
+          className={`hidden lg:grid lg:grid-cols-[9.5rem_minmax(0,1fr)_minmax(0,1fr)_9.5rem] lg:gap-x-8 ${label}`}
+        >
+          <span />
+          <span>Storage</span>
+          <span>Calls recorded</span>
+          <span className="text-right">Errors lost to sampling</span>
+        </div>
+        {rows.map((r) => {
+          const lost = Math.round((1 - r.kept) * 100);
+          return (
+            <div
+              className="grid items-center gap-x-8 gap-y-3 lg:grid-cols-[9.5rem_minmax(0,1fr)_minmax(0,1fr)_9.5rem]"
+              key={r.name}
+            >
+              <p
+                className={`flex items-center gap-2 text-[16px] font-medium ${r.lit ? 'text-clover' : 'text-head'}`}
+              >
+                {r.lit && <BoundaryMark className="h-[16px] w-auto" />}
+                {r.name}
+              </p>
+              <div>
+                <p className={`mb-1.5 lg:hidden ${label}`}>Storage</p>
+                <div className="flex items-center gap-3">
+                  <span className="h-3 flex-1 overflow-hidden rounded-full bg-white/[0.07]">
+                    <span
+                      className={`block h-full rounded-full transition-[width] duration-200 ${r.lit ? 'bg-clover' : 'bg-white/45'}`}
+                      style={{
+                        minWidth: 4,
+                        width: `${(r.bytes / top) * 100}%`,
+                      }}
+                    />
+                  </span>
+                  <span className="w-[4.5rem] shrink-0 text-right font-display text-[20px] font-medium tabular-nums text-head">
+                    {data(r.bytes)}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <p className={`mb-1.5 lg:hidden ${label}`}>Calls recorded</p>
+                <CallStrip boxes={30} lit={r.lit} rate={r.kept} />
+              </div>
+              <p className="lg:text-right">
+                <span
+                  className={`font-display text-[20px] font-medium tabular-nums ${lost > 0 ? 'text-[#e5484d]' : 'text-clover'}`}
+                >
+                  {lost}%
+                </span>
+                <span className={`ml-2 lg:hidden ${label}`}>
+                  of errors lost to sampling
+                </span>
+              </p>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -1044,9 +1164,8 @@ const FEATURES: {
     title: 'Recursive deduping',
   },
   {
-    body: 'Withhold a value, and the trace records why.',
+    body: 'Keep PII data private. Withhold a value, and the trace records why.',
     icon: EyeOff,
-    soon: true,
     title: 'Redaction',
   },
   {
@@ -1069,7 +1188,7 @@ const MORE = 'var(--more)';
 // Animated pieces get their own layer, and only opacity and transform change.
 const GPU = 'will-change-[opacity,transform]';
 
-function Media({
+export function Media({
   p,
   pick,
   still,
@@ -1211,7 +1330,7 @@ function Media({
             }}
           >
             <Cloud aria-hidden="true" className="size-4 shrink-0 text-clover" />
-            Runs on your laptop. Runs in the cloud.
+            Runs locally or in the cloud.
           </p>
           <div className="absolute inset-x-0 top-[30px] grid grid-cols-5 gap-3 px-3">
             {U_TILES.map((t, i) => {
@@ -1445,7 +1564,7 @@ function CostRow({
   );
 }
 
-function Speed({ p }: { p: number }) {
+export function Speed({ p }: { p: number }) {
   const s = sweep(p);
   return (
     <div className="mt-4 md:mt-6 rounded-xl border border-rule bg-raised p-5">
@@ -1502,7 +1621,18 @@ function Speed({ p }: { p: number }) {
 
 // ---------- the section ----------
 
-/** Why BAML is a language: the stack it takes, then what seeing every function costs. */
+// What vertical integration took: each part, and what it is for.
+const PARTS: [what: string, why: string][] = [
+  ['A virtual machine', 'that runs anywhere.'],
+  ['A profiler', 'on every function, at barely any cost.'],
+  ['A compiler', 'that knows about your errors in production.'],
+  ['A data lake', 'for profiles, spans, logs, traces, and blobs.'],
+];
+
+/** Why BAML is a language: the costs in the section above only work when the runtime does the
+ *  recording, so the page says so and then draws the stack that follows from it, layer by layer. The
+ *  Cheap box above is mounted by ./practical.tsx. The larger speed, storage and storage-engine
+ *  figures (Speed, Billion, Media) are exported and unmounted; that section carries their numbers. */
 export default function Stack() {
   return (
     <section
@@ -1511,43 +1641,27 @@ export default function Stack() {
       className="border-t border-rule overflow-x-clip"
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
-        {/* The worry, asked out loud, then answered in the order it's asked: fast, then small
-            (storage, then the multimodal store). */}
-        {/* Given room on both sides, so it reads as a new beat, not a caption on the figure. */}
         <h2 className="v4-h2 text-head max-w-[22em]" id="stack">
-          Is <Hyper /> practical?
+          We didn't want to build a programming language.
         </h2>
-        {/* The worry, stated before anything answers it. */}
         <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-          Recording every function means overhead on every call and far more
-          data to store.
+          But we wanted to build the most efficient vertically integrated
+          toolchain, so we built BAML with:
         </p>
+        <ul className="mt-5 grid max-w-[40rem] gap-2.5 v4-body text-ink-2">
+          {PARTS.map(([what, why]) => (
+            <li className="flex gap-3" key={what}>
+              <span
+                aria-hidden
+                className="mt-[0.6em] size-1.5 shrink-0 rounded-full bg-clover"
+              />
+              <span>
+                <span className="text-head">{what}</span> {why}
+              </span>
+            </li>
+          ))}
+        </ul>
         <div className="mt-14 md:mt-20">
-          <Played ms={2600}>{(p) => <Speed p={p} />}</Played>
-        </div>
-        <div className="mt-20 md:mt-28">
-          {/* Shown already filled in, so the reader can go straight to the sliders. */}
-          <Billion p={1} />
-        </div>
-        <div className="mt-20 md:mt-28">
-          <Looped>
-            {(p, pick, wait) => (
-              <div className="hidden md:block">
-                <Media p={p} pick={pick} wait={wait} />
-              </div>
-            )}
-          </Looped>
-          {/* Phones show both sides, one under the other, without the animation. */}
-          <div className="md:hidden">
-            <Media p={0} pick={() => {}} still="first" wait={null} />
-            <Media p={1} pick={() => {}} still="second" wait={null} />
-          </div>
-        </div>
-        <h2 className="mt-32 md:mt-48 v4-h2 text-head max-w-[22em]">
-          But to make <Hyper /> possible, we had to build a programming
-          language.
-        </h2>
-        <div className="mt-12 md:mt-16">
           <Scrubbed>{(p) => <Layers p={p} />}</Scrubbed>
         </div>
       </div>

@@ -477,6 +477,10 @@ export default function Agents() {
         <h2 className="v4-h2 text-head max-w-[22em]" id="agents">
           No person could read this much data. Agents can, and they need to.
         </h2>
+        <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
+          A query answers the question you thought to ask. An agent can read
+          everything else.
+        </p>
         <div className="mt-10 md:mt-12">
           <Played line={0.45} linear ms={10000}>
             {(p) => <DataWall p={p} />}

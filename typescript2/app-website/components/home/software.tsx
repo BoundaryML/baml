@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { section } from '@/components/home/analytics';
+import { ASKS } from '@/components/home/asks';
 import { BoundaryMark } from '@/components/home/boundary-logo';
 import { MarkTile } from '@/components/home/mark';
 import { MARKS, type Mark } from '@/components/home/marks';
@@ -145,15 +146,6 @@ const phase = (after: number) => ({
   cloud: clamp(after / 0.28),
   file: (f: (typeof FILES)[number]) => clamp((after - f.at) / 0.16),
 });
-
-/** What you want to know, and what it takes in the traditional stack. */
-const ASKS = [
-  { ask: 'Evals on real traffic', today: 'export, then join by hand' },
-  { ask: 'Accuracy over time', today: 'only runs someone labeled' },
-  { ask: 'Exactly what happened', today: 'sampled, across 3 tools' },
-  { ask: 'Record and replay', today: 'only if you built it in ahead of time' },
-  { ask: 'Cost per feature', today: 'prompts and users live apart' },
-];
 
 const RED = 'text-[#f85149]';
 const STACK = 'col-start-1 row-start-1';
