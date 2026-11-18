@@ -2323,7 +2323,13 @@ impl<'a, 'db> Translator<'a, 'db> {
             // defined not to trap there.
             BinOp::Mod => {
                 self.require_nonzero_divisor(left, right, right_constant)?;
-                Ok(self.builder.ins().srem(left, right))
+                Ok(match right_constant {
+                    // A constant divisor is left to the optimizer.
+                    Some(_) => self.builder.ins().srem(left, right),
+                    // Zero went the other way just above, so the
+                    // instruction need not look for it again.
+                    None => self.builder.ins().srem_unchecked(left, right),
+                })
             }
             BinOp::BitAnd => Ok(self.builder.ins().band(left, right)),
             BinOp::BitOr => Ok(self.builder.ins().bor(left, right)),
@@ -2385,7 +2391,9 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.ins().jump(done, &[negated.into()]);
 
         self.builder.switch_to_block(divide);
-        let quotient = self.builder.ins().sdiv(left, right);
+        // Neither divisor the instruction could not divide by gets here, so
+        // it is the bare divide, with no checks of its own.
+        let quotient = self.builder.ins().sdiv_unchecked(left, right);
         self.builder.ins().jump(done, &[quotient.into()]);
         self.builder.seal_block(done);
 

@@ -4457,6 +4457,22 @@
         )
         val))
 
+;; Rules for `sdiv_unchecked` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `idiv` with no test of the divisor before it. The instruction faults in
+;; hardware on a zero divisor and on overflow, so this relies on the
+;; frontend's guarantee that neither reaches it; the trap code attached to the
+;; instruction only labels a fault that guarantee rules out.
+
+(rule 2 (lower (sdiv_unchecked a @ (value_type $I8) b))
+        (x64_idivb_m (x64_cbtw_zo a) (put_in_gpr b) (TrapCode.INTEGER_OVERFLOW)))
+
+(rule 1 (lower (sdiv_unchecked a @ (value_type (fits_in_64 ty)) b))
+  (let ((a Gpr a))
+    (value_regs_get
+      (x64_idiv ty a (repeat_sign_bit ty a) (put_in_gpr b) (TrapCode.INTEGER_OVERFLOW))
+      0)))
+
 ;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; The remainder is in AH, so take the result of the division and right-shift
@@ -4504,6 +4520,25 @@
   (x64_shrq_mi (x64_checked_srem_seq8 (x64_cbtw_zo a) b) 8))
 
 (rule (lower (srem a @ (value_type ty) b))
+      (let (
+          (a Gpr a)
+          (size OperandSize (raw_operand_size_of_type ty))
+          (hi Gpr (repeat_sign_bit ty a))
+          (tmp ValueRegs (x64_checked_srem_seq size a hi b))
+        )
+        (value_regs_get tmp 1)))
+
+;; Rules for `srem_unchecked` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The same sequences as `srem`, which never tested for a zero divisor here
+;; (the hardware fault is its trap) and whose check for -1 is what gives the
+;; defined result there. A zero divisor faults in hardware; the frontend
+;; guarantees none arrives.
+
+(rule 1 (lower (srem_unchecked a @ (value_type $I8) b))
+  (x64_shrq_mi (x64_checked_srem_seq8 (x64_cbtw_zo a) b) 8))
+
+(rule (lower (srem_unchecked a @ (value_type ty) b))
       (let (
           (a Gpr a)
           (size OperandSize (raw_operand_size_of_type ty))

@@ -20,3 +20,13 @@ license = "Apache-2.0 WITH LLVM-exception"
 #     on the left emits `subs xzr, sp, y, uxtx`.
 #   src/isa/x64/inst.isle: `emit_cmp` with `get_stack_pointer` on the left
 #     compares rsp. Not built or run.
+#
+# `sdiv_unchecked` and `srem_unchecked` (defined in cranelift-codegen-meta):
+#   src/isa/aarch64/lower.isle: the bare `sdiv` (and `msub`), with none of the
+#     zero and overflow checks `sdiv`/`srem` emit.
+#   src/isa/x64/lower.isle: `sdiv_unchecked` is `idiv` without the zero test
+#     in front; `srem_unchecked` is the `srem` sequence (which keeps its -1
+#     fix-up). `idiv` faults in hardware on the excluded divisors, so here the
+#     guarantee is that the frontend never reaches it with them. Built for
+#     x86-64 but not run.
+#   No lowering on the riscv64, s390x and pulley backends.

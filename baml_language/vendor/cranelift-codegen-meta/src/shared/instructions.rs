@@ -2002,6 +2002,51 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "sdiv_unchecked",
+            r#"
+        Signed integer division rounded toward zero, with no checks.
+
+        The caller guarantees that the divisor is not zero and that the
+        division does not overflow (`x = -2^{B-1}, y = -1`). If either
+        happens the behavior is undefined: depending on the target the result
+        is an arbitrary value or the instruction faults in hardware, with no
+        trap recorded. For every other input the result is that of `sdiv`.
+
+        Backends emit the bare divide. The instruction is not speculated or
+        moved, since on some targets executing it with an excluded divisor
+        faults.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+        .operands_out(vec![Operand::new("a", iB)])
+        .can_trap()
+        .side_effects_idempotent(),
+    );
+
+    ig.push(
+        Inst::new(
+            "srem_unchecked",
+            r#"
+        Signed integer remainder, with no check for a zero divisor. The result
+        has the sign of the dividend.
+
+        The caller guarantees that the divisor is not zero. If it is, the
+        behavior is undefined: depending on the target the result is an
+        arbitrary value or the instruction faults in hardware, with no trap
+        recorded. For every other input, `x = -2^{B-1}, y = -1` included
+        (zero), the result is that of `srem`.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![Operand::new("x", iB), Operand::new("y", iB)])
+        .operands_out(vec![Operand::new("a", iB)])
+        .can_trap()
+        .side_effects_idempotent(),
+    );
+
+    ig.push(
+        Inst::new(
             "iadd_imm",
             r#"
         Add immediate integer.

@@ -1150,6 +1150,31 @@
             (result Reg (msub ty div y64 x64)))
         result))
 
+;;;; Rules for `sdiv_unchecked` and `srem_unchecked` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The frontend has excluded the divisors `sdiv` and `srem` check for, and the
+;; divide instruction itself never traps, so these are the bare instructions.
+;; (The remainder of the smallest value by -1 comes out as zero with no help:
+;; the quotient wraps to the dividend, and `msub` subtracts it from itself.)
+
+(rule (lower (has_type $I64 (sdiv_unchecked x y)))
+      (a64_sdiv $I64 (put_in_reg_sext64 x) (put_in_reg_sext64 y)))
+
+(rule -1 (lower (has_type (fits_in_32 ty) (sdiv_unchecked x y)))
+      (a64_sdiv ty (put_in_reg_sext32 x) (put_in_reg_sext32 y)))
+
+(rule (lower (has_type $I64 (srem_unchecked x y)))
+      (let ((x64 Reg (put_in_reg_sext64 x))
+            (y64 Reg (put_in_reg_sext64 y))
+            (div Reg (a64_sdiv $I64 x64 y64)))
+        (msub $I64 div y64 x64)))
+
+(rule -1 (lower (has_type (fits_in_32 ty) (srem_unchecked x y)))
+      (let ((x32 Reg (put_in_reg_sext32 x))
+            (y32 Reg (put_in_reg_sext32 y))
+            (div Reg (a64_sdiv ty x32 y32)))
+        (msub ty div y32 x32)))
+
 ;;; Rules for integer min/max: umin, smin, umax, smax ;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i64` and smaller.

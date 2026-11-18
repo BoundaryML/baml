@@ -11,3 +11,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 # src/shared/settings.rs: new shared setting `fold_pinned_reg_reads` (default
 #   off). The frontend promises that reading the pinned register at a use of a
 #   `get_pinned_reg` result is equivalent to reading it at the instruction.
+#
+# src/shared/instructions.rs: new opcodes `sdiv_unchecked` (undefined for a
+#   zero divisor and for the smallest value over -1) and `srem_unchecked`
+#   (undefined for a zero divisor). Side-effecting, so never speculated.
