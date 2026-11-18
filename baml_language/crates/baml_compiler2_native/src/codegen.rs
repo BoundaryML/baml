@@ -24,8 +24,8 @@ use std::{collections::HashMap, fmt::Write as _};
 use baml_compiler2_hir::loc::FunctionLoc;
 use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, Constant, Local, MirFunction, Operand, Place, Rvalue,
-    ShortCircuitKind, StatementKind, SwitchKey, Terminator, UnaryOp,
+    AggregateKind, BinOp, BlockId, Constant, Local, MirFunction, MirFunctionBody, Operand, Place,
+    Rvalue, ShortCircuitKind, StatementKind, SwitchKey, Terminator, UnaryOp,
 };
 use cranelift_codegen::{
     Context,
@@ -47,6 +47,7 @@ use crate::{
         Callee, Intrinsic, Signature, body_of, direct_callee, narrow_test_wants_reference,
         signature,
     },
+    flow::{Flow, ProvenIndexes},
     layout,
     loops::{ArrayLoops, operand_local},
     program::Program,
@@ -409,6 +410,36 @@ impl<'db> Backend<'db> {
 struct Declared<'db> {
     id: FuncId,
     signature: Signature<'db>,
+    /// Whether the function checks the stack limit on entry.
+    checks_stack: bool,
+}
+
+/// The most locals a function that calls no other may have and still skip
+/// the stack check. Its frame then holds the frame record, saved registers
+/// and at most this many spilled values, well inside the space the limit
+/// leaves below it.
+const UNCHECKED_LEAF_LOCALS: usize = 12;
+
+/// Whether a function must check the stack limit on entry: it calls
+/// another compiled function, or its frame may not be small.
+fn checks_stack<'db>(db: &'db dyn baml_compiler2_mir::Db, body: &MirFunctionBody<'db>) -> bool {
+    body.locals.len() > UNCHECKED_LEAF_LOCALS
+        || body.blocks.iter().any(|block| match &block.terminator {
+            Some(Terminator::Call { callee, .. }) => {
+                !matches!(direct_callee(db, callee), Ok(Callee::Intrinsic(_)))
+            }
+            Some(
+                Terminator::Goto { .. }
+                | Terminator::Branch { .. }
+                | Terminator::Switch { .. }
+                | Terminator::Return
+                | Terminator::Unreachable
+                | Terminator::ShortCircuit { .. }
+                | Terminator::VirtualCall { .. },
+            )
+            | None => false,
+            Some(_) => true,
+        })
 }
 
 /// A symbol name that shows the function's display name in a profile or
@@ -453,7 +484,14 @@ pub(crate) fn generate<'db>(
                 &Backend::clif_signature(&signature),
             )
             .map_err(internal)?;
-        declared.insert(function.loc, Declared { id, signature });
+        declared.insert(
+            function.loc,
+            Declared {
+                id,
+                signature,
+                checks_stack: checks_stack(db, body),
+            },
+        );
         bodies.push((function, mir, Body::new(db, body)));
     }
 
@@ -489,7 +527,7 @@ pub(crate) fn generate<'db>(
             &mut context.func,
             &mut builder_context,
         )
-        .function(mir)?;
+        .function(mir, this.checks_stack)?;
         define(
             &mut backend,
             &mut context,
@@ -624,6 +662,14 @@ struct Translator<'a, 'db> {
     function_refs: HashMap<FuncId, ir::FuncRef>,
     data_refs: HashMap<DataId, ir::GlobalValue>,
     loops: ArrayLoops<'db>,
+    /// The array accesses a counted loop proves in range.
+    proven: ProvenIndexes,
+    /// The MIR block being translated.
+    current: usize,
+    /// The address of the worker this code runs on: what the pinned register
+    /// held on entry and after the latest call. A call can come back on
+    /// another worker, so nothing read before one is used after it.
+    worker: Variable,
     /// The length and data address already read from each array value in the
     /// code being generated; see [`Self::array_view`].
     array_views: HashMap<ir::Value, (ir::Value, ir::Value)>,
@@ -666,6 +712,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             .collect();
         let blocks = body.blocks.iter().map(|_| builder.create_block()).collect();
         let loops = ArrayLoops::of(db, body);
+        let worker = builder.declare_var(WORD);
         let mut iterator_variables = HashMap::new();
         let mut item_variables = HashMap::new();
         for index in 0..body.locals.len() {
@@ -698,6 +745,9 @@ impl<'a, 'db> Translator<'a, 'db> {
             function_refs: HashMap::new(),
             data_refs: HashMap::new(),
             loops,
+            proven: ProvenIndexes::default(),
+            current: 0,
+            worker,
             array_views: HashMap::new(),
             checked_indexes: HashMap::new(),
             iterator_variables,
@@ -705,7 +755,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
     }
 
-    fn function(mut self, mir: &MirFunction<'db>) -> Result<(), CompileError> {
+    fn function(mut self, mir: &MirFunction<'db>, checks_stack: bool) -> Result<(), CompileError> {
         // The MIR entry block can be a loop header, and a Cranelift entry
         // block cannot have predecessors, so parameters land in a block of
         // their own.
@@ -716,13 +766,19 @@ impl<'a, 'db> Translator<'a, 'db> {
             let value = self.builder.block_params(entry)[index - 1];
             self.write_local(Local(index), value);
         }
-        self.check_stack()?;
+        self.read_worker();
+        if checks_stack {
+            self.check_stack()?;
+        }
         let first = self.block(self.body.entry);
         self.builder.ins().jump(first, &[]);
 
-        let closes_loop = self.loop_ends();
+        let flow = Flow::of(self.body);
+        self.proven = ProvenIndexes::of(self.body, mir.arity, &flow);
+        let closes_loop = self.polled_blocks(&flow);
         for (index, block) in self.body.blocks.iter().enumerate() {
             self.builder.switch_to_block(self.blocks[index]);
+            self.current = index;
             self.forget_arrays();
             for statement in &block.statements {
                 self.statement(&statement.kind)?;
@@ -742,42 +798,39 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(())
     }
 
-    /// For each block, whether one of its successors is a block it is
-    /// reached from: the blocks that end an iteration of a loop.
-    fn loop_ends(&self) -> Vec<bool> {
-        enum Visit {
-            Enter(usize),
-            Leave(usize),
-        }
-        let count = self.body.blocks.len();
-        let mut closes = vec![false; count];
-        let mut entered = vec![false; count];
-        let mut open = vec![false; count];
-        let mut pending = vec![Visit::Enter(self.body.entry.0)];
-        while let Some(visit) = pending.pop() {
-            match visit {
-                Visit::Leave(block) => open[block] = false,
-                Visit::Enter(block) if entered[block] => {}
-                Visit::Enter(block) => {
-                    entered[block] = true;
-                    open[block] = true;
-                    pending.push(Visit::Leave(block));
-                    let successors = self.body.blocks[block]
-                        .terminator
-                        .as_ref()
-                        .map(Terminator::successors)
-                        .unwrap_or_default();
-                    for successor in successors {
-                        if open[successor.0] {
-                            closes[block] = true;
-                        } else if !entered[successor.0] {
-                            pending.push(Visit::Enter(successor.0));
+    /// The blocks that end an iteration of a loop which must ask whether to
+    /// stop: one with no call to a function that checks the stack on entry,
+    /// which asks the same question.
+    fn polled_blocks(&self, flow: &Flow) -> Vec<bool> {
+        let mut polled = vec![false; self.body.blocks.len()];
+        for each in &flow.loops {
+            let asks = self
+                .body
+                .blocks
+                .iter()
+                .enumerate()
+                .any(|(block, contents)| {
+                    each.blocks[block]
+                        && match &contents.terminator {
+                            Some(Terminator::Call { callee, .. }) => {
+                                match direct_callee(self.db, callee) {
+                                    Ok(Callee::Function(function)) => self
+                                        .declared
+                                        .get(&function)
+                                        .is_some_and(|callee| callee.checks_stack),
+                                    _ => false,
+                                }
+                            }
+                            _ => false,
                         }
-                    }
+                });
+            if !asks {
+                for &latch in &each.latches {
+                    polled[latch] = true;
                 }
             }
         }
-        closes
+        polled
     }
 
     /// Replace every use of a value alias by the value it stands for.
@@ -1020,6 +1073,26 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(self.builder.ins().iadd(data, scaled))
     }
 
+    /// The address of the element of `array`, read from `base`, that the
+    /// local `index` names.
+    fn indexed(
+        &mut self,
+        base: &Place,
+        array: ir::Value,
+        index: Local,
+    ) -> Result<ir::Value, CompileError> {
+        let position = self.read_local(index);
+        if let Place::Local(base) = base
+            && self.proven.holds(self.current, *base, index)
+        {
+            // A counted loop over this array: the index names an element.
+            let (_, data) = self.array_view(array);
+            let scaled = self.builder.ins().ishl_imm(position, 3);
+            return Ok(self.builder.ins().iadd(data, scaled));
+        }
+        self.element(array, position)
+    }
+
     fn read_place(&mut self, place: &Place) -> Result<ir::Value, CompileError> {
         match place {
             Place::Local(local) => Ok(self.read_local(*local)),
@@ -1031,8 +1104,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             Place::Index { base, index, .. } => {
                 let ty = self.place_ty(place)?;
                 let array = self.read_place(base)?;
-                let index = self.read_local(*index);
-                let element = self.element(array, index)?;
+                let element = self.indexed(base, array, *index)?;
                 Ok(self.load_slot(&ty, element, 0))
             }
             Place::Capture(_) | Place::Deref(_) => Err(internal("a checked place is not a cell")),
@@ -1050,8 +1122,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             Place::Index { base, index, .. } => {
                 let ty = self.place_ty(place)?;
                 let array = self.read_place(base)?;
-                let index = self.read_local(*index);
-                let element = self.element(array, index)?;
+                let element = self.indexed(base, array, *index)?;
                 self.store_slot(&ty, value, element, 0);
             }
             Place::Capture(_) | Place::Deref(_) => {
@@ -1188,7 +1259,9 @@ impl<'a, 'db> Translator<'a, 'db> {
     ) -> Result<Option<ir::Value>, CompileError> {
         // The runtime can collect, which moves storage.
         self.forget_arrays();
-        self.emit_runtime_call(function, arguments)
+        let result = self.emit_runtime_call(function, arguments)?;
+        self.read_worker();
+        Ok(result)
     }
 
     /// The one place a call into the runtime is emitted, whatever it takes
@@ -1238,12 +1311,10 @@ impl<'a, 'db> Translator<'a, 'db> {
     /// asks for it.
     fn poll(&mut self) -> Result<(), CompileError> {
         let mutator = self.mutator();
-        let requested = self.builder.ins().load(
-            types::I32,
-            mutator_access(),
-            mutator,
-            offset(layout::MUTATOR_POLL),
-        );
+        let requested =
+            self.builder
+                .ins()
+                .uload32(mutator_access(), mutator, offset(layout::MUTATOR_POLL));
         let slow = self.builder.create_block();
         let resume = self.builder.create_block();
         self.builder.set_cold_block(slow);
@@ -1270,9 +1341,16 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.ins().symbol_value(WORD, global)
     }
 
-    /// The address of this thread's mutator.
+    /// The address of the worker this code is running on.
     fn mutator(&mut self) -> ir::Value {
-        self.builder.ins().get_pinned_reg(WORD)
+        self.builder.use_var(self.worker)
+    }
+
+    /// Read the worker's address from the pinned register: on entry, and
+    /// after every call that comes back.
+    fn read_worker(&mut self) {
+        let worker = self.builder.ins().get_pinned_reg(WORD);
+        self.builder.def_var(self.worker, worker);
     }
 
     /// Branch to a cold block that raises `panic` when `condition` is true,
@@ -1615,10 +1693,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             BinOp::Add => Ok(self.builder.ins().iadd(left, right)),
             BinOp::Sub => Ok(self.builder.ins().isub(left, right)),
             BinOp::Mul => Ok(self.builder.ins().imul(left, right)),
-            BinOp::Div => {
-                self.require_nonzero_divisor(left, right, right_constant)?;
-                Ok(self.wrapping_divide(left, right, right_constant))
-            }
+            BinOp::Div => self.divide(left, right, right_constant),
             // The remainder of the smallest int by -1 is zero, which is what
             // the instruction gives on every target: unlike division it is
             // defined not to trap there.
@@ -1648,40 +1723,50 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
     }
 
-    /// `left / right` for a divisor known not to be zero. The smallest int
-    /// divided by -1 wraps to itself; the division instruction traps there
-    /// instead (as the x86-64 one does in hardware), so a divisor of -1 is
-    /// a negation and never reaches it.
-    fn wrapping_divide(
+    /// `left / right`. A zero divisor panics. The smallest int divided by
+    /// -1 wraps to itself; the division instruction traps there instead (as
+    /// the x86-64 one does in hardware), so a divisor of -1 is a negation
+    /// and never reaches it.
+    fn divide(
         &mut self,
         left: ir::Value,
         right: ir::Value,
         right_constant: Option<i64>,
-    ) -> ir::Value {
+    ) -> Result<ir::Value, CompileError> {
         match right_constant {
-            Some(-1) => return self.builder.ins().ineg(left),
-            Some(_) => return self.builder.ins().sdiv(left, right),
-            None => {}
+            Some(-1) => return Ok(self.builder.ins().ineg(left)),
+            Some(divisor) if divisor != 0 => return Ok(self.builder.ins().sdiv(left, right)),
+            _ => {}
         }
-        let negate = self.builder.create_block();
+        // One comparison finds both divisors that are not divided by: plus
+        // one, they are the only values at most one, unsigned.
+        let shifted = self.builder.ins().iadd_imm(right, 1);
+        let special = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::UnsignedLessThanOrEqual, shifted, 1);
+        let rare = self.builder.create_block();
         let divide = self.builder.create_block();
         let done = self.builder.create_block();
         self.builder.append_block_param(done, types::I64);
-        let by_minus_one = self.builder.ins().icmp_imm(IntCC::Equal, right, -1);
-        self.builder
-            .ins()
-            .brif(by_minus_one, negate, &[], divide, &[]);
+        self.builder.set_cold_block(rare);
+        self.builder.ins().brif(special, rare, &[], divide, &[]);
+        self.builder.seal_block(rare);
+        self.builder.seal_block(divide);
 
-        self.builder.switch_to_block(negate);
+        self.builder.switch_to_block(rare);
+        let is_zero = self.builder.ins().icmp_imm(IntCC::Equal, right, 0);
+        self.panic_if(is_zero, Panic::DivisionByZero(left))?;
         let negated = self.builder.ins().ineg(left);
         self.builder.ins().jump(done, &[negated.into()]);
 
         self.builder.switch_to_block(divide);
         let quotient = self.builder.ins().sdiv(left, right);
         self.builder.ins().jump(done, &[quotient.into()]);
+        self.builder.seal_block(done);
 
         self.builder.switch_to_block(done);
-        self.builder.block_params(done)[0]
+        Ok(self.builder.block_params(done)[0])
     }
 
     fn require_nonzero_divisor(
@@ -2103,6 +2188,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                         // The callee can collect, which moves storage.
                         self.forget_arrays();
                         let call = self.builder.ins().call(callee, &arguments);
+                        self.read_worker();
                         (self.builder.inst_results(call)[0], produced)
                     }
                 };

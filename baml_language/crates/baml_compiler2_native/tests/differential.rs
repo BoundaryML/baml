@@ -291,6 +291,34 @@ function index_from_end_written() -> int {
   a[-count(1)] = 7;
   a[2]
 }
+function counted_neighbours() -> int {
+  let a = [5, 1, 4, 2, 3];
+  for (let i = 0; i < a.length(); i += 1) {
+    for (let j = 0; j < a.length() - i - 1; j += 1) {
+      if a[j] > a[j + 1] {
+        let tmp = a[j];
+        a[j] = a[j + 1];
+        a[j + 1] = tmp;
+      };
+    };
+  };
+  a[0] * 10000 + a[1] * 1000 + a[2] * 100 + a[3] * 10 + a[4]
+}
+function counted_one_too_far() -> int {
+  let a = [1, 2, 3];
+  let total = 0;
+  for (let i = 0; i < a.length(); i += 1) { total += a[i + 1]; };
+  total
+}
+function counted_while_growing() -> int {
+  let a = [1, 2, 3];
+  let total = 0;
+  for (let i = 0; i < a.length(); i += 2) {
+    total += a[i];
+    if a.length() < 6 { a.push(10); };
+  };
+  total
+}
 function index_of_empty() -> int { let a: int[] = []; a[count(0)] }
 
 function string_concat_loop() -> int {
@@ -504,6 +532,12 @@ const CASES: &[Case] = &[
         Panicked("baml.panics.IndexOutOfBounds {index: -4, length: 3}"),
     ),
     case("index_from_end_written", Printed("7")),
+    case("counted_neighbours", Printed("12345")),
+    case(
+        "counted_one_too_far",
+        Panicked("baml.panics.IndexOutOfBounds {index: 3, length: 3}"),
+    ),
+    case("counted_while_growing", Printed("14")),
     case(
         "index_of_empty",
         Panicked("baml.panics.IndexOutOfBounds {index: 0, length: 0}"),

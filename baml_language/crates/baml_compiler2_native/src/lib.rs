@@ -14,6 +14,7 @@
 
 mod check;
 mod codegen;
+mod flow;
 /// Object and mutator layout, shared with the runtime by including its file.
 #[path = "../../baml_native_rt/src/layout.rs"]
 #[allow(
