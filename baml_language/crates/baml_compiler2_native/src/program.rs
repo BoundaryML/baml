@@ -133,6 +133,15 @@ pub(crate) struct Program<'db> {
     pub(crate) column_shift: u8,
 }
 
+/// One interface method some call dispatches when it runs, at one set of
+/// the method's own type arguments.
+struct DispatchedMethod<'db> {
+    slot: Slot,
+    interface: baml_compiler2_mir::TyTemplateInterface,
+    method: String,
+    type_arguments: Vec<TypeArg<'db>>,
+}
+
 /// A type as a row of the method table is for it: instantiations of a
 /// class that share a type id are one.
 fn row_type<'db>(ty: &NativeTy<'db>) -> NativeTy<'db> {
@@ -164,7 +173,7 @@ pub(crate) fn collect<'db>(
     // Each dispatched method, and what it runs on each type an interface
     // value can hold. An implementation is itself a function to compile,
     // which can make more types and dispatch more methods.
-    let mut calls: Vec<(Slot, baml_compiler2_mir::TyTemplateInterface, String)> = Vec::new();
+    let mut calls: Vec<DispatchedMethod<'db>> = Vec::new();
     let mut resolved: Vec<(usize, NativeTy<'db>, Option<Target<'db>>)> = Vec::new();
     let mut unsupported = Vec::new();
     loop {
@@ -182,16 +191,17 @@ pub(crate) fn collect<'db>(
                 }
             }
             for call in &function.dispatched {
-                if !calls.iter().any(|(slot, ..)| *slot == call.slot) {
-                    calls.push((
-                        call.slot.clone(),
-                        call.interface.clone(),
-                        call.method.clone(),
-                    ));
+                if !calls.iter().any(|known| known.slot == call.slot) {
+                    calls.push(DispatchedMethod {
+                        slot: call.slot.clone(),
+                        interface: call.interface.clone(),
+                        method: call.method.clone(),
+                        type_arguments: call.type_arguments.clone(),
+                    });
                 }
             }
         }
-        for (index, (_, interface, method)) in calls.iter().enumerate() {
+        for (index, call) in calls.iter().enumerate() {
             for ty in &types {
                 if resolved
                     .iter()
@@ -199,11 +209,18 @@ pub(crate) fn collect<'db>(
                 {
                     continue;
                 }
-                let target =
-                    dispatch::resolve(db, ty, interface, method, &[]).unwrap_or_else(|blocker| {
-                        unsupported.push(blocker);
-                        None
-                    });
+                let target = dispatch::resolve(
+                    db,
+                    ty,
+                    &call.interface,
+                    &call.method,
+                    &[],
+                    &call.type_arguments,
+                )
+                .unwrap_or_else(|blocker| {
+                    unsupported.push(blocker);
+                    None
+                });
                 if let Some(Target::Function(key)) = &target {
                     queue.push_back(Needed {
                         key: key.clone(),
@@ -230,12 +247,12 @@ pub(crate) fn collect<'db>(
 fn lay_out_methods<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     program: &mut Program<'db>,
-    calls: &[(Slot, baml_compiler2_mir::TyTemplateInterface, String)],
+    calls: &[DispatchedMethod<'db>],
     resolved: &[(usize, NativeTy<'db>, Option<Target<'db>>)],
 ) -> Vec<Blocker> {
     let mut blockers = Vec::new();
     let mut implementors: Vec<Vec<&NativeTy<'db>>> = Vec::new();
-    for (index, (slot, _, method)) in calls.iter().enumerate() {
+    for (index, DispatchedMethod { slot, method, .. }) in calls.iter().enumerate() {
         let unsupported =
             |detail: &str| Blocker::new("interface method call", format!("{method}: {detail}"));
         let mut signature = None;
@@ -277,7 +294,7 @@ fn lay_out_methods<'db>(
             found.params.remove(0);
             match &signature {
                 None => signature = Some(found),
-                Some(known) if *known != found => {
+                Some(known) if !same_registers(known, &found) => {
                     blockers.push(unsupported("implementations with different layouts"));
                     continue;
                 }
@@ -339,6 +356,23 @@ fn lay_out_methods<'db>(
         }
     }
     blockers
+}
+
+/// Whether a call laid out for one signature can enter code compiled for
+/// the other: each argument and the result is the same type, or a
+/// reference either way, which the type checker has let through.
+fn same_registers(left: &Signature<'_>, right: &Signature<'_>) -> bool {
+    let alike = |left: &NativeTy<'_>, right: &NativeTy<'_>| {
+        let reference = |ty: &NativeTy<'_>| ty.is_ref() && !matches!(ty, NativeTy::Cell(_));
+        left == right || (reference(left) && reference(right))
+    };
+    left.params.len() == right.params.len()
+        && left
+            .params
+            .iter()
+            .zip(&right.params)
+            .all(|(left, right)| alike(left, right))
+        && alike(&left.result, &right.result)
 }
 
 /// Check and record every function waiting in `queue`, and those they need.

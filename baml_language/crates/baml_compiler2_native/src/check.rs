@@ -3,7 +3,7 @@
 
 use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BoundFrame, Constant, Local, MirFunction, MirFunctionBody,
+    AggregateKind, BinOp, BoundFrame, Constant, IntrinsicOp, Local, MirFunction, MirFunctionBody,
     MirFunctionKind, Operand, OptLevel, Place, RuntimeTy, Rvalue, ShortCircuitKind, StatementKind,
     SwitchKey, Terminator, TyTemplate, TyTemplateInterface, TypeTest, UnaryOp,
     function_display_name,
@@ -511,8 +511,10 @@ pub(crate) enum Virtual<'db> {
     Operator(Operator),
     /// The receiver's type is known where the call is written.
     Static(Target<'db>),
-    /// The receiver is some implementor: its type id picks the code.
-    Dynamic(Slot),
+    /// The receiver is some implementor of this interface: its type id
+    /// picks the code, of the copy for these type arguments of the
+    /// method's own.
+    Dynamic(Slot, TyTemplateInterface, Vec<TypeArg<'db>>),
 }
 
 /// What a method of a `baml.ops` interface computes on primitives.
@@ -594,14 +596,24 @@ pub(crate) fn virtual_target<'db>(
 ) -> Result<Virtual<'db>, Blocker> {
     let unsupported =
         |detail: &str| Blocker::new("interface method call", format!("{method}: {detail}"));
-    if ntypeargs != 0 {
-        return Err(unsupported("with type arguments"));
-    }
+    let interface = &dispatch::in_frame(db, interface, body.arguments)
+        .ok_or_else(|| unsupported("on an interface of a type parameter with no one type"))?;
+    let method_arguments = args
+        .iter()
+        .take(ntypeargs)
+        .map(|argument| {
+            let template = body
+                .type_value(argument)
+                .ok_or_else(|| unsupported("with type arguments that are not types loaded once"))?;
+            Ok(type_argument(template_ty(db, template, body.arguments)))
+        })
+        .collect::<Result<Vec<_>, Blocker>>()?;
     let receiver = args
-        .get(self_arg)
+        .get(ntypeargs + self_arg)
         .ok_or_else(|| unsupported("without a receiver"))?;
     let receiver = operand_ty(db, body, receiver)?;
     if self_arg == 0
+        && ntypeargs == 0
         && let Some(operator) = Operator::of(db, interface, method, &receiver)
     {
         return Ok(Virtual::Operator(operator));
@@ -610,9 +622,20 @@ pub(crate) fn virtual_target<'db>(
         if self_arg != 0 {
             return Err(unsupported("dispatched on a later argument"));
         }
-        return Ok(Virtual::Dynamic(Slot::new(interface, method)));
+        return Ok(Virtual::Dynamic(
+            Slot::new(interface, method, &method_arguments),
+            interface.clone(),
+            method_arguments,
+        ));
     }
-    match dispatch::resolve(db, &receiver, interface, method, body.arguments)? {
+    match dispatch::resolve(
+        db,
+        &receiver,
+        interface,
+        method,
+        body.arguments,
+        &method_arguments,
+    )? {
         Some(target) => Ok(Virtual::Static(target)),
         None => Err(unsupported("on a type with no implementation found")),
     }
@@ -623,6 +646,8 @@ pub(crate) struct Dispatched<'db> {
     pub(crate) slot: Slot,
     pub(crate) interface: TyTemplateInterface,
     pub(crate) method: String,
+    /// The method's own type arguments.
+    pub(crate) type_arguments: Vec<TypeArg<'db>>,
     /// The types of the arguments after the receiver, and of the place the
     /// result goes.
     pub(crate) arguments: Vec<NativeTy<'db>>,
@@ -903,10 +928,10 @@ impl<'db> Checker<'_, 'db> {
         {
             match virtual_target(self.db, body, iface, method, args, *ntypeargs, *self_arg) {
                 Ok(Virtual::Static(Target::Function(key))) => self.need(key, Vec::new()),
-                Ok(Virtual::Dynamic(slot)) => {
+                Ok(Virtual::Dynamic(slot, interface, type_arguments)) => {
                     let arguments = args
                         .iter()
-                        .skip(1)
+                        .skip(*ntypeargs + 1)
                         .map(|argument| operand_ty(self.db, body, argument))
                         .collect::<Result<Vec<_>, _>>();
                     let result =
@@ -914,8 +939,9 @@ impl<'db> Checker<'_, 'db> {
                     if let (Ok(arguments), Ok(result)) = (arguments, result) {
                         self.dispatched.push(Dispatched {
                             slot,
-                            interface: iface.clone(),
+                            interface,
                             method: method.clone(),
+                            type_arguments,
                             arguments,
                             result,
                         });
@@ -1274,6 +1300,11 @@ fn statement_supported<'db>(
             NativeTy::Cell(_) => Ok(()),
             _ => Err(Blocker::new("fresh cell for a local that has none", "")),
         },
+        // How a function shows in a trace: native code records none.
+        StatementKind::Intrinsic {
+            op: IntrinsicOp::BuiltinTraceHook(_),
+            ..
+        } => Ok(()),
         StatementKind::Intrinsic { op, .. } => {
             Err(Blocker::new("compiler intrinsic", format!("{op:?}")))
         }
@@ -1579,7 +1610,9 @@ fn terminator_supported<'db>(
                 return Err(Blocker::new("call with a trace attachment", ""));
             }
             let result = local_ty(db, body, place_local(destination)?)?;
-            match virtual_target(db, body, iface, method, args, *ntypeargs, *self_arg)? {
+            let found = virtual_target(db, body, iface, method, args, *ntypeargs, *self_arg)?;
+            let args = &args[*ntypeargs..];
+            match found {
                 Virtual::Operator(operator) => {
                     let found = args
                         .iter()
@@ -1627,7 +1660,7 @@ fn terminator_supported<'db>(
                 }
                 // Checked against every implementation once the whole
                 // program is known.
-                Virtual::Dynamic(_) => args
+                Virtual::Dynamic(..) => args
                     .iter()
                     .try_for_each(|argument| operand_ty(db, body, argument).map(drop)),
             }

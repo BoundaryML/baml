@@ -79,6 +79,7 @@ impl<'db> ArrayLoops<'db> {
         };
         for terminator in terminators() {
             if let Some((receiver, iterator)) = receiver_call(terminator, ITER_METHOD)
+                && only_stepped(body, iterator)
                 && let Ok(NativeTy::Array(element)) = operand_ty(db, body, receiver)
             {
                 record(&mut loops.iterators, iterator, *element);
@@ -126,6 +127,33 @@ impl<'db> ArrayLoops<'db> {
         (self.iterators.contains_key(&iterator) && self.items.contains_key(&item))
             .then_some((iterator, item))
     }
+}
+
+/// Whether every mention of `iterator` is the `iter()` that makes it or a
+/// `next()` on it. One that goes anywhere else is an iterator object.
+fn only_stepped(body: &Body<'_, '_>, iterator: Local) -> bool {
+    use std::fmt::Write as _;
+
+    let name = format!("{iterator:?}");
+    let mut mentions = 0;
+    let mut explained = 0;
+    let mut code = String::new();
+    for block in &body.blocks {
+        code.clear();
+        for statement in &block.statements {
+            let _ = write!(code, "{:?};", statement.kind);
+        }
+        if let Some(terminator) = &block.terminator {
+            let _ = write!(code, "{terminator:?}");
+            let made = receiver_call(terminator, ITER_METHOD)
+                .is_some_and(|(_, destination)| destination == iterator);
+            let stepped = receiver_call(terminator, NEXT_METHOD)
+                .is_some_and(|(receiver, _)| operand_local(receiver) == Some(iterator));
+            explained += usize::from(made) + usize::from(stepped);
+        }
+        mentions += code.matches(&name).count();
+    }
+    mentions == explained
 }
 
 /// Whether a type test asks "is this the end of the iteration".

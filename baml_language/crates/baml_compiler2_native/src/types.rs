@@ -196,6 +196,16 @@ macro_rules! native_type_of {
                 $family::String | $family::Literal(Literal::String(_), _) => NativeTy::String,
                 $family::Bigint | $family::Literal(Literal::Bigint(_), _) => NativeTy::Bigint,
                 $parameter => arguments.get($slot)?.clone()?,
+                // What the type `Self` is, where the function is compiled
+                // for one, binds the associated type to.
+                $family::AssociatedTypeProjection {
+                    base,
+                    interface,
+                    member,
+                } if interface.generics.is_empty() && interface.associated_types.is_empty() => {
+                    let base = $name(db, base, arguments)?;
+                    crate::dispatch::associated(db, &base, &interface.name, member)?
+                }
                 // `self` in an interface's default body is declared with
                 // the interface's own name: any implementor.
                 $family::Class(head, _) if interface_ref_of(db, head).is_some() => {
@@ -614,7 +624,7 @@ impl<'a, 'db> Body<'a, 'db> {
                 let terminator = block.terminator.as_ref()?;
                 Some((
                     terminator_destination(terminator)?,
-                    Written::Result(terminator),
+                    Written::Result(terminator, block.inline.is_none()),
                 ))
             });
             for (local, written) in assignments.chain(results) {
@@ -627,7 +637,7 @@ impl<'a, 'db> Body<'a, 'db> {
                 };
                 // The temporary an `await spawn { .. }` keeps the future in
                 // is declared `null`: it has the type of what is spawned.
-                let spawned = matches!(written, Written::Result(Terminator::Spawn { .. }));
+                let spawned = matches!(written, Written::Result(Terminator::Spawn { .. }, _));
                 let inferable = undeclared
                     || spawned
                     || copied_only[local.0]
@@ -647,7 +657,7 @@ impl<'a, 'db> Body<'a, 'db> {
                         operand_ty(db, &typed, operand)
                             .and_then(|operand| unary_typing(*op, &operand))
                     }
-                    Written::Result(Terminator::Spawn { plan, .. }) => {
+                    Written::Result(Terminator::Spawn { plan, .. }, _) => {
                         match operand_ty(db, &typed, plan)
                             .ok()
                             .and_then(|plan| plan_body(db, &narrowed(plan)))
@@ -682,12 +692,15 @@ impl<'a, 'db> Body<'a, 'db> {
                             _ => continue,
                         }
                     }
-                    Written::Result(Terminator::Call {
-                        callee,
-                        args,
-                        ntypeargs,
-                        ..
-                    }) => match call_target(db, &typed, callee, args, *ntypeargs) {
+                    Written::Result(
+                        Terminator::Call {
+                            callee,
+                            args,
+                            ntypeargs,
+                            ..
+                        },
+                        _,
+                    ) => match call_target(db, &typed, callee, args, *ntypeargs) {
                         Ok(Callee::Function(key)) => {
                             function_signature(db, &key).map(|signature| signature.result)
                         }
@@ -716,14 +729,17 @@ impl<'a, 'db> Body<'a, 'db> {
                     },
                     // An operator method on primitives has the operator's
                     // result.
-                    Written::Result(Terminator::VirtualCall {
-                        iface,
-                        method,
-                        args,
-                        ntypeargs,
-                        self_arg,
-                        ..
-                    }) => match crate::check::virtual_target(
+                    Written::Result(
+                        Terminator::VirtualCall {
+                            iface,
+                            method,
+                            args,
+                            ntypeargs,
+                            self_arg,
+                            ..
+                        },
+                        own,
+                    ) => match crate::check::virtual_target(
                         db, &typed, iface, method, args, *ntypeargs, *self_arg,
                     ) {
                         Ok(crate::check::Virtual::Operator(operator)) => args
@@ -731,6 +747,15 @@ impl<'a, 'db> Body<'a, 'db> {
                             .map(|argument| operand_ty(db, &typed, argument))
                             .collect::<Result<Vec<_>, _>>()
                             .and_then(|operands| operator.result(&operands)),
+                        // A call in the function's own code stores into a
+                        // local of the function's own, whose declaration
+                        // names this frame's type parameters.
+                        Ok(crate::check::Virtual::Dynamic(..)) if own => {
+                            match native_ty(db, &declaration.ty, arguments) {
+                                Some(declared) => Ok(declared),
+                                None => continue,
+                            }
+                        }
                         _ => continue,
                     },
                     _ => continue,
@@ -834,7 +859,9 @@ pub(crate) fn loaded_types<'a>(body: &'a MirFunctionBody<'_>) -> Vec<Option<&'a 
 #[derive(Clone, Copy)]
 enum Written<'a, 'db> {
     Value(&'a Rvalue<'db>),
-    Result(&'a Terminator<'db>),
+    /// With whether the terminator is the function's own code, not that
+    /// of a function inlined into it.
+    Result(&'a Terminator<'db>, bool),
 }
 
 /// The type a local is declared with, when it is a native one. A local

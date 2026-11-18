@@ -27,7 +27,7 @@ use baml_compiler2_hir_ty::{
     layout::enum_variants,
 };
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, CellId, Constant, IndexKind, Local, MirFunction,
+    AggregateKind, BinOp, BlockId, CellId, Constant, IndexKind, IntrinsicOp, Local, MirFunction,
     MirFunctionBody, Operand, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
     Terminator, TyTemplate, UnaryOp,
 };
@@ -2457,7 +2457,12 @@ impl<'a, 'db> Translator<'a, 'db> {
 
     fn statement(&mut self, statement: &StatementKind<'db>) -> Result<(), CompileError> {
         match statement {
-            StatementKind::Nop | StatementKind::Drop(_) => Ok(()),
+            StatementKind::Nop
+            | StatementKind::Drop(_)
+            | StatementKind::Intrinsic {
+                op: IntrinsicOp::BuiltinTraceHook(_),
+                ..
+            } => Ok(()),
             // A type argument: nothing at run time.
             StatementKind::Assign {
                 value: Rvalue::LoadType(_),
@@ -3910,6 +3915,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                     self.db, self.body, iface, method, args, *ntypeargs, *self_arg,
                 )
                 .map_err(internal)?;
+                let args = &args[*ntypeargs..];
                 let (result, produced) = match found {
                     Virtual::Operator(operator) => {
                         let types = args
@@ -3917,7 +3923,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                             .map(|argument| self.operand_ty(argument))
                             .collect::<Result<Vec<_>, _>>()?;
                         let produced = operator.result(&types).map_err(internal)?;
-                        let result = match (operator, args.as_slice()) {
+                        let result = match (operator, args) {
                             (Operator::Binary(op), [left, right]) => {
                                 self.binary(op, left, right)?
                             }
@@ -3940,7 +3946,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                     Virtual::Static(Target::Function(key)) => {
                         self.call_function(&key, &[], args)?
                     }
-                    Virtual::Dynamic(slot) => self.dispatch(&slot, args)?,
+                    Virtual::Dynamic(slot, ..) => self.dispatch(&slot, args)?,
                 };
                 let result = self.track(result, &produced);
                 let result = self.coerce(result, &produced, &expected)?;
