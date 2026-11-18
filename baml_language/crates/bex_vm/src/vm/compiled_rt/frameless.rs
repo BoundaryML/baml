@@ -135,6 +135,9 @@ impl BexVm {
         if result.is_ok() {
             self.stack.truncate(base);
             drop(unlink);
+            if record.scoped.get() {
+                self.end_record_activation(&raw const record);
+            }
         } else {
             std::mem::forget(unlink);
             self.materialize(&record);
