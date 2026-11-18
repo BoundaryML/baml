@@ -354,7 +354,7 @@ enum Panic {
 
 /// The stack maps of one function: for each call, the offset of its return
 /// address in the function and the offsets from the stack pointer of the
-/// slots holding references across it.
+/// slots holding references across it, which may be none.
 type FunctionStackMaps = Vec<(u32, Vec<u32>)>;
 
 struct Backend<'db> {
@@ -945,28 +945,46 @@ impl<'db> Backend<'db> {
     /// count of call sites, and for each site its return address as an
     /// offset into the function, a count of slots, and the slots. Every
     /// entry is one word.
+    ///
+    /// Those are the calls across which a slot holds a reference. The
+    /// others follow, for a runtime that checks that no compiled frame is
+    /// without a map: a count of functions, then for each its address, a
+    /// count of such calls, and the return address of each as an offset
+    /// into the function. A runtime that does not check stops reading
+    /// before them, so they cost a program's start nothing.
     fn define_stack_maps(&mut self) -> Result<(), CompileError> {
         let mut description = DataDescription::new();
         let mut bytes: Vec<u8> = Vec::new();
         let word = |bytes: &mut Vec<u8>, value: usize| {
             bytes.extend_from_slice(&value.to_ne_bytes());
         };
-        let functions: Vec<_> = std::mem::take(&mut self.stack_maps)
-            .into_iter()
-            .filter(|(_, sites)| !sites.is_empty())
-            .collect();
-        word(&mut bytes, functions.len());
-        for (function, sites) in functions {
-            let function = self.module.declare_func_in_data(function, &mut description);
-            description
-                .write_function_addr(u32::try_from(bytes.len()).map_err(internal)?, function);
-            word(&mut bytes, 0);
-            word(&mut bytes, sites.len());
-            for (return_offset, slots) in sites {
-                word(&mut bytes, return_offset as usize);
-                word(&mut bytes, slots.len());
-                for slot in slots {
-                    word(&mut bytes, slot as usize);
+        let functions = std::mem::take(&mut self.stack_maps);
+        for holding in [true, false] {
+            let listed: Vec<_> = functions
+                .iter()
+                .filter_map(|(function, sites)| {
+                    let sites: Vec<_> = sites
+                        .iter()
+                        .filter(|(_, slots)| slots.is_empty() != holding)
+                        .collect();
+                    (!sites.is_empty()).then_some((*function, sites))
+                })
+                .collect();
+            word(&mut bytes, listed.len());
+            for (function, sites) in listed {
+                let function = self.module.declare_func_in_data(function, &mut description);
+                description
+                    .write_function_addr(u32::try_from(bytes.len()).map_err(internal)?, function);
+                word(&mut bytes, 0);
+                word(&mut bytes, sites.len());
+                for (return_offset, slots) in sites {
+                    word(&mut bytes, *return_offset as usize);
+                    if holding {
+                        word(&mut bytes, slots.len());
+                        for slot in slots {
+                            word(&mut bytes, *slot as usize);
+                        }
+                    }
                 }
             }
         }
@@ -1236,18 +1254,31 @@ fn define(
     {
         let _ = writeln!(text, "; {name}\n{listing}");
     }
-    let sites = code
+    // Every call has an entry: the slots its stack map names, or none.
+    // The maps are sorted by the offset of the return address.
+    let maps = code.buffer.user_stack_maps();
+    let mut mapped = 0;
+    let sites: FunctionStackMaps = code
         .buffer
-        .user_stack_maps()
-        .iter()
-        .map(|(return_offset, _, map)| {
-            (
-                *return_offset,
-                map.entries().map(|(_, slot)| slot).collect::<Vec<_>>(),
-            )
+        .call_sites()
+        .map(|site| {
+            let slots = maps
+                .binary_search_by_key(&site.ret_addr, |(return_offset, _, _)| *return_offset)
+                .map_or_else(
+                    |_| Vec::new(),
+                    |index| {
+                        mapped += 1;
+                        maps[index].2.entries().map(|(_, slot)| slot).collect()
+                    },
+                );
+            (site.ret_addr, slots)
         })
-        .filter(|(_, slots)| !slots.is_empty())
         .collect();
+    if mapped != maps.len() {
+        return Err(internal(format!(
+            "compiling `{name}`: a stack map is not of a call"
+        )));
+    }
     backend.stack_maps.push((id, sites));
     backend.unwind.record(id, name, code)?;
     backend.functions.push((id, code.buffer.total_size()));

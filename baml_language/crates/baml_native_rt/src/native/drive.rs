@@ -528,7 +528,6 @@ impl<'s> Scope<'s> {
 #[cfg(all(test, target_arch = "aarch64"))]
 mod tests {
     use std::{
-        process::Command,
         sync::atomic::{AtomicBool, Ordering},
         time::Duration,
     };
@@ -539,14 +538,11 @@ mod tests {
         layout::RUNTIME_TYPES,
     };
 
-    /// A stack map table with no functions.
-    static NO_STACK_MAPS: usize = 0;
-
     /// A worker of a program with no compiled code. With `stress` every
     /// allocation collects.
     fn worker(stress: bool) -> Box<Mutator> {
         let program = Program {
-            stack_maps: std::ptr::from_ref(&NO_STACK_MAPS) as usize,
+            stack_maps: crate::tests::NO_STACK_MAPS.as_ptr() as usize,
             types: RUNTIME_TYPES.to_vec().leak().as_ptr() as usize,
             unwind: 0,
             functions: 0,
@@ -878,13 +874,7 @@ mod tests {
     /// Run the ignored test `name` of this module in a process of its own,
     /// which it does not survive, and return what it wrote to stderr.
     fn in_a_process_of_its_own(name: &str) -> String {
-        let output = Command::new(std::env::current_exe().expect("the test binary"))
-            .args(["--exact", &format!("native::drive::tests::{name}")])
-            .args(["--ignored", "--nocapture"])
-            .output()
-            .expect("the test binary starts");
-        assert!(!output.status.success(), "`{name}` ends its process");
-        String::from_utf8_lossy(&output.stderr).into_owned()
+        crate::tests::in_a_process_of_its_own(&format!("native::drive::tests::{name}"))
     }
 
     #[test]

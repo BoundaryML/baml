@@ -6,11 +6,9 @@ use crate::{
     },
 };
 
-static NO_STACK_MAPS: usize = 0;
-
 fn mutator(stress: bool) -> Mutator {
     let program = Program {
-        stack_maps: std::ptr::from_ref(&NO_STACK_MAPS) as usize,
+        stack_maps: crate::tests::NO_STACK_MAPS.as_ptr() as usize,
         types: RUNTIME_TYPES.as_ptr() as usize,
         unwind: 0,
         functions: 0,

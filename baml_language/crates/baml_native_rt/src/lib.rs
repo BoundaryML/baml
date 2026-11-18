@@ -169,8 +169,23 @@ pub extern "C" fn baml_rt_float_rem(left: f64, right: f64) -> f64 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// A stack map table of a program with no compiled code: no call holds
+    /// a reference, and no call holds none.
+    pub(crate) static NO_STACK_MAPS: [usize; 2] = [0; 2];
+
+    /// Run the ignored test at `path` in a process of its own, which it
+    /// does not survive, and return what it wrote to stderr.
+    pub(crate) fn in_a_process_of_its_own(path: &str) -> String {
+        let output = std::process::Command::new(std::env::current_exe().expect("the test binary"))
+            .args(["--exact", path, "--ignored", "--nocapture"])
+            .output()
+            .expect("the test binary starts");
+        assert!(!output.status.success(), "`{path}` ends its process");
+        String::from_utf8_lossy(&output.stderr).into_owned()
+    }
 
     #[test]
     fn floats_print_as_baml_run_prints_them() {

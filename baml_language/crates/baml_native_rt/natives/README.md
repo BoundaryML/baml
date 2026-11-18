@@ -177,6 +177,15 @@ instructions, whether or not a thread is ever started.
 
 `BAML_GC_STRESS`, which collects on every allocation, works in both.
 
+The runtime with checks also holds the compiler to its stack maps. The
+compiler lists every call in compiled code: those across which a frame slot
+holds a reference, with the slots, and then those across which none does.
+Only the runtime with checks reads the second list, so it costs the start
+of a program that ships nothing. With it, a return address into compiled
+code that has no entry is a map the compiler lost, and the collection that
+meets one ends the program naming the function. Without the check such a
+frame reads as one that holds no roots, and its objects are lost quietly.
+
 ## These files are temporary
 
 The same facts belong on the BAML declarations, as annotations. Today the

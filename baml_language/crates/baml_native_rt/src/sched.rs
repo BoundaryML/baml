@@ -661,6 +661,12 @@ unsafe fn only_compiled_code_stops(worker: &Mutator, frame: usize) {
         fn dladdr(address: *const c_void, symbol: *mut Symbol) -> i32;
     }
 
+    // A worker of a program with no compiled code is a test's, whose
+    // tasks are Rust functions.
+    let functions = worker.unwind.functions;
+    if functions == 0 {
+        return;
+    }
     let stubs = stubs_under_a_stopped_task();
     // SAFETY: the caller's contract: frame records chain from the switch
     // frame to the task's first frame, each the frame pointer of the
@@ -670,11 +676,7 @@ unsafe fn only_compiled_code_stops(worker: &Mutator, frame: usize) {
         let mut record = frame + SWITCH_FRAME_RECORD;
         loop {
             let (caller, returns_to) = (load(record), load(record + WORD));
-            // A worker of a program with no compiled code is a test's,
-            // whose tasks are Rust functions.
-            let Some(compiled) = worker.unwind.is_compiled(returns_to) else {
-                return;
-            };
+            let compiled = crate::unwind::function_name(functions, returns_to).is_some();
             if !compiled && !stubs.iter().any(|(_, address)| *address == returns_to) {
                 let mut symbol = std::mem::zeroed::<Symbol>();
                 let name = if dladdr(returns_to as *const c_void, &raw mut symbol) != 0
@@ -700,8 +702,8 @@ unsafe fn only_compiled_code_stops(worker: &Mutator, frame: usize) {
     }
 }
 
-#[expect(clippy::exit, reason = "the scheduler cannot go on")]
-fn fatal(message: &str) -> ! {
+#[expect(clippy::exit, reason = "the program cannot go on")]
+pub(crate) fn fatal(message: &str) -> ! {
     let _ = std::io::stdout().flush();
     let _ = writeln!(std::io::stderr().lock(), "fatal: {message}");
     std::process::exit(70)
@@ -1279,9 +1281,6 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::{heap::Program, layout::RUNTIME_TYPES};
-
-    /// A stack map table with no functions.
-    static NO_STACK_MAPS: usize = 0;
     /// What the tasks of the test did, in the order they did it.
     static EVENTS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
 
@@ -1387,7 +1386,7 @@ pub(crate) mod tests {
     fn under_migration_stress_a_task_goes_on_elsewhere() {
         for migrate in [false, true] {
             let program = Program {
-                stack_maps: std::ptr::from_ref(&NO_STACK_MAPS) as usize,
+                stack_maps: crate::tests::NO_STACK_MAPS.as_ptr() as usize,
                 types: RUNTIME_TYPES.to_vec().leak().as_ptr() as usize,
                 unwind: 0,
                 functions: 0,
@@ -1408,7 +1407,7 @@ pub(crate) mod tests {
     fn tasks_park_and_wake() {
         const MILLISECOND: usize = 1_000_000;
         let program = Program {
-            stack_maps: std::ptr::from_ref(&NO_STACK_MAPS) as usize,
+            stack_maps: crate::tests::NO_STACK_MAPS.as_ptr() as usize,
             types: RUNTIME_TYPES.to_vec().leak().as_ptr() as usize,
             unwind: 0,
             functions: 0,

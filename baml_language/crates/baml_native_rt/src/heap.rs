@@ -165,14 +165,21 @@ impl Drop for Space {
 /// compiled code, the offsets from the caller's stack pointer of the slots
 /// that hold references across that call.
 struct StackMaps {
-    /// `(return address, first index into offsets, count)`, sorted.
+    /// `(return address, first index into offsets, count)`, sorted. A
+    /// call across which no slot holds a reference is here only in a build
+    /// with checks, with a count of zero.
     sites: Vec<(usize, u32, u32)>,
     offsets: Vec<u32>,
+    /// The address of the program's function table, which says where
+    /// compiled code is.
+    #[cfg(checks)]
+    functions: usize,
 }
 
-/// A stack map entry as the 32 bits it is stored in.
+/// An entry of one of the compiler's tables as the 32 bits it is stored
+/// in.
 fn narrow(entry: usize) -> u32 {
-    u32::try_from(entry).expect("stack map entries fit 32 bits")
+    u32::try_from(entry).expect("table entries fit 32 bits")
 }
 
 impl StackMaps {
@@ -181,10 +188,18 @@ impl StackMaps {
     /// address as an offset into the function, a count of slots, and the
     /// slots. Every entry is one word.
     ///
+    /// The calls across which no slot holds a reference follow, and only a
+    /// build with checks reads them: a count of functions, then for each
+    /// its address, a count of such calls, and the return address of each
+    /// as an offset into the function. With them every call in compiled
+    /// code has an entry, so a return address into compiled code that has
+    /// none is a map the compiler lost, and not a frame without roots.
+    ///
     /// # Safety
     ///
-    /// `table` is the address of a table in that format.
-    unsafe fn decode(table: usize) -> Self {
+    /// `program` holds the addresses of tables in the compiler's formats.
+    unsafe fn decode(program: Program) -> Self {
+        let table = program.stack_maps;
         let mut cursor = table;
         let mut next = || {
             // SAFETY: the cursor stays inside the table by its own counts.
@@ -195,6 +210,8 @@ impl StackMaps {
         let mut maps = Self {
             sites: Vec::new(),
             offsets: Vec::new(),
+            #[cfg(checks)]
+            functions: program.functions,
         };
         for _ in 0..next() {
             let function = next();
@@ -209,10 +226,24 @@ impl StackMaps {
                     .push((return_address, narrow(first), narrow(count)));
             }
         }
+        #[cfg(checks)]
+        for _ in 0..next() {
+            let function = next();
+            for _ in 0..next() {
+                maps.sites.push((function + next(), 0, 0));
+            }
+        }
         maps.sites.sort_unstable();
         maps
     }
 
+    /// The slots of the frame that a call returning to `return_address`
+    /// was made from. None for a frame of the runtime, which holds its
+    /// references in registered roots.
+    ///
+    /// A build with checks has an entry for every call in compiled code,
+    /// and ends the program at a return address into compiled code that
+    /// has none: the compiler lost the map, and with it the frame's roots.
     fn slots(&self, return_address: usize) -> &[u32] {
         match self
             .sites
@@ -222,7 +253,18 @@ impl StackMaps {
                 let (_, first, count) = self.sites[index];
                 &self.offsets[first as usize..(first + count) as usize]
             }
-            Err(_) => &[],
+            Err(_) => {
+                #[cfg(checks)]
+                if let Some(function) = crate::unwind::function_name(self.functions, return_address)
+                {
+                    crate::sched::fatal(&format!(
+                        "a compiled frame has no stack map: the call that returns to \
+                         {return_address:#x}, in `{function}`. The collector cannot tell which \
+                         of the frame's slots hold references."
+                    ));
+                }
+                &[]
+            }
         }
     }
 }
@@ -368,7 +410,7 @@ impl Mutator {
                 spare: None,
                 next_space: size,
                 // SAFETY: the caller's contract.
-                stack_maps: unsafe { StackMaps::decode(program.stack_maps) },
+                stack_maps: unsafe { StackMaps::decode(program) },
                 types: program.types,
                 stress,
                 owned: Vec::new(),
@@ -1131,9 +1173,6 @@ mod tests {
         string,
     };
 
-    /// A stack map table with no functions.
-    static NO_STACK_MAPS: usize = 0;
-
     /// The id of a class of two slots, an int and a reference to another
     /// instance, in [`types`].
     const LINK: usize = FIRST_CLASS_TYPE;
@@ -1158,7 +1197,7 @@ mod tests {
 
     fn mutator(stress: bool) -> Mutator {
         let program = Program {
-            stack_maps: std::ptr::from_ref(&NO_STACK_MAPS) as usize,
+            stack_maps: crate::tests::NO_STACK_MAPS.as_ptr() as usize,
             types: types().as_ptr() as usize,
             unwind: 0,
             functions: 0,
@@ -1457,6 +1496,81 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// A stand-in for a compiled function: the bytes are never run, only
+    /// their addresses are looked up.
+    static CODE: [u8; 64] = [0; 64];
+
+    /// A mutator of a program whose one compiled function is [`CODE`],
+    /// about to collect with one frame on its stack: one that called the
+    /// runtime from `offset` bytes into `CODE` and holds no reference.
+    /// The call is in the stack maps, with no slots, if `listed`.
+    fn with_a_frame_returning_into_code(offset: usize, listed: bool) -> Mutator {
+        const NAME: &[u8] = b"test.code";
+        let code = CODE.as_ptr() as usize;
+        // The function table: its header, one record, and the name.
+        let mut functions: Vec<u8> = Vec::new();
+        for word in [2_u32, 1, 0, 0] {
+            functions.extend_from_slice(&word.to_le_bytes());
+        }
+        functions.extend_from_slice(&(code as u64).to_le_bytes());
+        for word in [narrow(CODE.len()), 0, 0, 16 + 24] {
+            functions.extend_from_slice(&word.to_le_bytes());
+        }
+        functions.extend_from_slice(&narrow(NAME.len()).to_le_bytes());
+        functions.extend_from_slice(NAME);
+        // The stack maps: no call holds a reference, and then the calls
+        // that hold none.
+        let stack_maps: Vec<usize> = if listed {
+            vec![0, 1, code, 1, offset]
+        } else {
+            vec![0, 0]
+        };
+        let program = Program {
+            stack_maps: stack_maps.leak().as_ptr() as usize,
+            types: types().as_ptr() as usize,
+            unwind: 0,
+            functions: functions.leak().as_ptr() as usize,
+        };
+        // SAFETY: the tables are in the compiler's formats.
+        let mut mutator = unsafe { Mutator::new(program, true) };
+        // No task is running, so the walk ends at this one frame.
+        let frame: &'static mut [usize; 2] = Box::leak(Box::new([0; 2]));
+        mutator.anchor = Anchor {
+            sp: frame.as_ptr() as usize,
+            pc: code + offset,
+            fp: usize::MAX,
+        };
+        mutator
+    }
+
+    #[test]
+    fn a_frame_whose_call_holds_no_reference_or_is_the_runtimes_has_no_roots() {
+        // A call of compiled code that is listed as holding nothing.
+        with_a_frame_returning_into_code(8, true).allocate(WORD);
+        // A return address outside compiled code: a frame of the runtime.
+        with_a_frame_returning_into_code(CODE.len() + 64, false).allocate(WORD);
+    }
+
+    #[test]
+    #[ignore = "ends its process: run by the test below"]
+    fn collects_with_a_compiled_frame_that_has_no_stack_map() {
+        with_a_frame_returning_into_code(8, false).allocate(WORD);
+    }
+
+    /// A return address into compiled code with no stack map is a map the
+    /// compiler lost: reading it as a frame without roots would lose the
+    /// frame's roots too.
+    #[test]
+    fn a_compiled_frame_without_a_stack_map_ends_the_program() {
+        let stderr = crate::tests::in_a_process_of_its_own(
+            "heap::tests::collects_with_a_compiled_frame_that_has_no_stack_map",
+        );
+        assert!(
+            stderr.contains("has no stack map") && stderr.contains("test.code"),
+            "{stderr}"
+        );
     }
 
     /// A kind whose values are counters of how often they were dropped.

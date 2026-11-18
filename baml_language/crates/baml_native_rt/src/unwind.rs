@@ -158,7 +158,8 @@ struct Tables {
 /// through.
 pub(crate) struct Unwinder {
     table: usize,
-    functions: usize,
+    /// The address of the program's function table, or zero.
+    pub(crate) functions: usize,
     tables: OnceCell<Tables>,
     /// The return addresses of the last walk, kept for its room.
     trace: Vec<usize>,
@@ -239,47 +240,46 @@ impl Unwinder {
             site.frame_offset,
         ))
     }
+}
 
-    /// Whether `address` is in compiled code, or `None` for a worker of a
-    /// program with none, which only a test has.
-    #[cfg(checks)]
-    pub(crate) fn is_compiled(&self, address: usize) -> Option<bool> {
-        (self.functions != 0).then(|| self.function_name(address).is_some())
+/// The name of the compiled function whose code holds `address`, from the
+/// function table at `functions`. `None` for an address outside compiled
+/// code, and for any address when there is no table, as in a test of the
+/// runtime alone.
+pub(crate) fn function_name(functions: usize, address: usize) -> Option<&'static str> {
+    const RECORD: usize = 24;
+    if functions == 0 {
+        return None;
     }
-
-    /// The name of the function whose code holds `address`.
-    fn function_name(&self, address: usize) -> Option<&'static str> {
-        const RECORD: usize = 24;
-        // SAFETY: `functions` is the address of the compiler's function
-        // table, whose records are in ascending address order and whose
-        // names are in the executable's data.
-        unsafe {
-            if word(self.functions) != FUNCTIONS_VERSION {
-                return None;
-            }
-            let records = self.functions + 16;
-            let (mut low, mut high) = (0, word(self.functions + 4));
-            while low < high {
-                let middle = usize::midpoint(low, high);
-                let record = records + middle * RECORD;
-                let start = load(record);
-                if address < start {
-                    high = middle;
-                } else if address - start > word(record + 8) {
-                    // A return address can be one past a function's last
-                    // instruction, so the end is inside.
-                    low = middle + 1;
-                } else {
-                    let name = self.functions + word(record + 20);
-                    return Some(std::str::from_utf8_unchecked(std::slice::from_raw_parts(
-                        (name + 4) as *const u8,
-                        word(name),
-                    )));
-                }
+    // SAFETY: `functions` is the address of the compiler's function
+    // table, whose records are in ascending address order and whose
+    // names are in the executable's data.
+    unsafe {
+        if word(functions) != FUNCTIONS_VERSION {
+            return None;
+        }
+        let records = functions + 16;
+        let (mut low, mut high) = (0, word(functions + 4));
+        while low < high {
+            let middle = usize::midpoint(low, high);
+            let record = records + middle * RECORD;
+            let start = load(record);
+            if address < start {
+                high = middle;
+            } else if address - start > word(record + 8) {
+                // A return address can be one past a function's last
+                // instruction, so the end is inside.
+                low = middle + 1;
+            } else {
+                let name = functions + word(record + 20);
+                return Some(std::str::from_utf8_unchecked(std::slice::from_raw_parts(
+                    (name + 4) as *const u8,
+                    word(name),
+                )));
             }
         }
-        None
     }
+    None
 }
 
 /// The return address into each compiled frame and that frame's frame
@@ -593,7 +593,7 @@ unsafe fn thrown_through(mutator: &Mutator, trace: usize) -> Vec<&'static str> {
 /// through, whose name is empty, and nor has the runtime itself.
 fn named(mutator: &Mutator, addresses: impl Iterator<Item = usize>) -> Vec<&'static str> {
     let mut names: Vec<&str> = addresses
-        .filter_map(|address| mutator.unwind.function_name(address))
+        .filter_map(|address| function_name(mutator.unwind.functions, address))
         .collect();
     names.pop();
     names.retain(|name| !name.is_empty());
