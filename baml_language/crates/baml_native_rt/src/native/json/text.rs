@@ -7,7 +7,8 @@
 //! message is `serde_json`'s, found by reading the text again, as the
 //! interpreter finds it.
 
-use super::{MAX_DEPTH, Node, describe::Types, object_get, out::Out, string_keyed};
+use super::{MAX_DEPTH, Node, object_get, out::Out, string_keyed};
+use crate::describe::Types;
 use crate::{
     heap::load,
     layout::{ARRAY_DATA, ARRAY_LENGTH, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, WORD},

@@ -503,6 +503,26 @@ pub struct Scope<'s> {
 }
 
 impl<'s> Scope<'s> {
+    /// Run `run` where it has room to recurse: on the worker's own stack
+    /// when a task is running, whose stack keeps only a little for the
+    /// runtime. `run` calls no compiled code.
+    pub(crate) fn with_room<R>(&mut self, run: impl FnOnce(&mut Self) -> R) -> R {
+        let Some(stack) = self.mutator.worker_stack() else {
+            return run(self);
+        };
+        self.mutator.leave_task_stack(true);
+        // SAFETY: a task is running, and the worker's stack is free below
+        // where it left it.
+        let result = unsafe { crate::sched::on_stack(stack, || run(self)) };
+        self.mutator.leave_task_stack(false);
+        result
+    }
+
+    /// The address of the program's type table.
+    pub(crate) fn type_table(&self) -> usize {
+        self.mutator.types()
+    }
+
     /// # Safety
     ///
     /// The mutator has been told the frame compiled code called

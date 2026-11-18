@@ -564,6 +564,42 @@ pub extern "C" fn baml_rt_task_fail(worker: &mut Mutator, error: usize, trace: u
     settle(worker, error, trace, FUTURE_ERROR);
 }
 
+/// Run `run` on the worker's own stack, whose top free address is `stack`,
+/// and return what it returns: for a runtime function that recurses past
+/// what a task's stack keeps for the runtime ([`RUNTIME_STACK`]). `run`
+/// calls no compiled code and switches to no task. A collection inside it
+/// finds the task's frames as it does from any runtime function: from the
+/// compiled frame that called the runtime.
+///
+/// # Safety
+///
+/// A task is running, and `stack` is where the worker left its own stack
+/// for it.
+pub(crate) unsafe fn on_stack<F: FnOnce() -> R, R>(stack: usize, run: F) -> R {
+    struct Call<F, R> {
+        run: Option<F>,
+        result: Option<R>,
+    }
+    unsafe extern "C" fn enter<F: FnOnce() -> R, R>(data: *mut u8) {
+        // SAFETY: `data` is the `Call` below, which nothing else reads
+        // until this returns.
+        let call = unsafe { &mut *data.cast::<Call<F, R>>() };
+        if let Some(run) = call.run.take() {
+            call.result = Some(run());
+        }
+    }
+    let mut call = Call {
+        run: Some(run),
+        result: None,
+    };
+    // Below the frame the worker left, and aligned as a call needs.
+    let stack = (stack - 256) & !15;
+    // SAFETY: the caller's contract: the worker's stack is not in use
+    // below the frame it left while one of its tasks runs.
+    unsafe { switch::call_on(std::ptr::from_mut(&mut call).cast(), enter::<F, R>, stack) };
+    call.result.expect("the call ran")
+}
+
 /// Whether a throw can be raised with `sp` the lowest address of the
 /// running task's stack in use: whether most of the part of the stack kept
 /// for the runtime is still below it.

@@ -409,9 +409,8 @@ function map_literal_value_panics() -> string {
   map_show(m)
 }
 
-// An uncaught instance of a class that holds a map. A map does not say
-// what its keys and values are, so the runtime cannot write one.
-// native throws: user.MapHolder {name: "h", counts: <object>}
+// An uncaught instance of a class that holds a map: the class's
+// description says what the map's keys and values are.
 function map_uncaught_holder() -> int throws MapHolder {
   let counts = map_squares(2);
   if counts.length() == 2 { throw MapHolder { name: "h", counts: counts } }

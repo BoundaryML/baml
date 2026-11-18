@@ -658,7 +658,7 @@ pub(crate) unsafe fn report(mutator: &Mutator, what: &str, error: usize, trace: 
     report.push_str(what);
     report.push_str("uncaught throw: ");
     // SAFETY: the caller's contract.
-    unsafe { class::write_value(mutator, &mut report, error) };
+    unsafe { class::write_value(mutator, &mut report, error, None) };
     report.push('\n');
     let _ = std::io::stdout().flush();
     let _ = write!(std::io::stderr().lock(), "{report}");

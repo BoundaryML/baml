@@ -4,13 +4,11 @@
 use std::fmt::Write as _;
 
 use super::{
-    MAX_DEPTH, Node, Refused, STRING_MAP_REQUIRED, decode_error,
-    describe::{Desc, Types},
-    encode, object_get,
-    out::Out,
+    MAX_DEPTH, Node, Refused, STRING_MAP_REQUIRED, decode_error, encode, object_get, out::Out,
     string_keyed,
 };
 use crate::{
+    describe::{Desc, Types},
     heap::{load, store},
     json_layout::{
         KIND_ARRAY, KIND_BOOL, KIND_BOOL_IS, KIND_CLASS, KIND_ENUM, KIND_FLOAT, KIND_INT,

@@ -116,25 +116,10 @@ pub const KIND_ENTRIES: u32 = 6;
 /// with an error.
 pub const KIND_FUTURE: u32 = 7;
 
-/// Set in the fourth `u32` of a type that has a description; the other
-/// bits are the description's offset in the type table.
+/// Set in the fourth `u32` of a class's type; the other bits are the
+/// offset of the class's description in the section of descriptions that
+/// ends the type table (see `json_layout.rs`).
 pub const TYPE_DESCRIBED: u32 = 1 << 31;
-/// The size of a description before its field records, and of one record.
-pub const DESCRIPTION_HEADER: usize = 12;
-pub const DESCRIPTION_FIELD: usize = 20;
-
-/// What a field of a described class holds: an `int`, a `float`, a `bool`,
-/// a variant of an enum, or a reference (zero for `null`) to an object
-/// whose header says what it is. The optional scalars take two slots: the
-/// value's bits, then whether there is one. Anything else is opaque.
-pub const FIELD_INT: u32 = 0;
-pub const FIELD_FLOAT: u32 = 1;
-pub const FIELD_BOOL: u32 = 2;
-pub const FIELD_ENUM: u32 = 3;
-pub const FIELD_REF: u32 = 4;
-/// Added to the kind of a scalar for the optional of it.
-pub const FIELD_OPTIONAL: u32 = 8;
-pub const FIELD_OPAQUE: u32 = 16;
 
 /// A type is four `u32`s: its kind; the size in bytes of an object, for a
 /// fixed one; the number of reference fields; and one more that depends on
@@ -148,20 +133,11 @@ pub const FIELD_OPAQUE: u32 = 16;
 /// bytes of its name, a `u32` each.
 ///
 /// The fourth `u32` of a class's type is [`TYPE_DESCRIBED`] and the offset
-/// in the table of the class's description, which is past every type:
-///
-/// ```text
-/// +0   u32  offset in the table of the class's name, as an uncaught throw
-///           of an instance writes it
-/// +4   u32  length in bytes of the name
-/// +8   u32  N, the number of fields
-/// +12  N field records of 20 bytes, in declaration order:
-///        +0   u32  offset in the table of the field's name
-///        +4   u32  length in bytes of the name
-///        +8   u32  byte offset of the field in an instance
-///        +12  u32  what the field holds, one of the `FIELD_` constants
-///        +16  u32  for an enum, the type id of the enum's boxes
-/// ```
+/// of the class's description in the section of descriptions: its name,
+/// and the name, the place and the type of each of its fields. An uncaught
+/// throw of an instance is written from it, the runtime finds the fields
+/// of the instances it makes in it, and `baml.json` writes and reads
+/// instances by it.
 pub const TYPE_HEADER: usize = 16;
 
 /// The types every program has, at fixed ids at the start of its type table.

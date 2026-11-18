@@ -21,16 +21,15 @@
 )]
 
 mod decode;
-mod describe;
 mod encode;
 mod out;
 mod text;
 
-use describe::Types;
 use out::Out;
 
 use super::{Elem, NativeBamlJson, Natives, Root, Scope, Str, StrRef, Thrown, TypeId};
 use crate::{
+    describe::Types,
     heap::load,
     layout::{
         ARRAY_LENGTH, BOX_VALUE, MAP_ENTRIES, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
@@ -220,8 +219,10 @@ unsafe fn object_get_keyed(map: usize, key: usize) -> Option<usize> {
 }
 
 impl NativeBamlJson for Natives {
+    // Reading text and decoding recurse as deep as the value nests, which
+    // is more than a task's stack keeps for the runtime.
     fn parse<'s>(scope: &mut Scope<'s>, s: Root<'s, Str>) -> Result<usize, Thrown<'s>> {
-        parse_rooted(scope, s)
+        scope.with_room(|scope| parse_rooted(scope, s))
     }
 
     fn _decode<'s>(
@@ -230,10 +231,12 @@ impl NativeBamlJson for Natives {
         s: Root<'s, Str>,
         aliased: bool,
     ) -> Result<usize, Thrown<'s>> {
-        let json = parse_rooted(scope, s)?;
-        // SAFETY: a `json` value just built.
-        let json = unsafe { scope.elem_raw(json, TypeId(0)) };
-        decode::to(scope, types[0], json, aliased)
+        scope.with_room(|scope| {
+            let json = parse_rooted(scope, s)?;
+            // SAFETY: a `json` value just built.
+            let json = unsafe { scope.elem_raw(json, TypeId(0)) };
+            decode::to(scope, types[0], json, aliased)
+        })
     }
 
     fn _stringify<'s>(
@@ -317,7 +320,7 @@ impl NativeBamlJson for Natives {
         j: Elem<'s>,
         aliased: bool,
     ) -> Result<usize, Thrown<'s>> {
-        decode::to(scope, types[0], j, aliased)
+        scope.with_room(|scope| decode::to(scope, types[0], j, aliased))
     }
 
     fn _path<'s>(

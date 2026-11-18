@@ -272,6 +272,8 @@ pub struct Mutator {
     roots: Vec<usize>,
     /// Where a throw finds its handler.
     pub(crate) unwind: crate::unwind::Unwinder,
+    /// Whether a runtime function has moved to the worker's own stack.
+    on_worker_stack: bool,
 }
 
 const _: () = {
@@ -338,6 +340,7 @@ impl Mutator {
             sched: crate::sched::Sched::new(),
             roots: Vec::new(),
             unwind: crate::unwind::Unwinder::new(program.unwind, program.functions),
+            on_worker_stack: false,
         };
         mutator.publish_limit();
         mutator
@@ -383,6 +386,19 @@ impl Mutator {
                 fp: load(frame + SWITCH_FRAME_RECORD),
             }
         };
+    }
+
+    /// Where the worker's own stack is free from, when a task is running
+    /// and no runtime function has moved there: see
+    /// [`Self::leave_task_stack`].
+    pub(crate) fn worker_stack(&self) -> Option<usize> {
+        (!self.cur_task.is_null() && !self.on_worker_stack).then_some(self.g0_sp)
+    }
+
+    /// Say whether a runtime function is running on the worker's own stack
+    /// in place of the task's.
+    pub(crate) fn leave_task_stack(&mut self, left: bool) {
+        self.on_worker_stack = left;
     }
 
     /// The top compiled frame: the return address into it and its frame

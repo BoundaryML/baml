@@ -239,6 +239,55 @@ pub(crate) unsafe extern "C" fn baml_rt_task_boot() {
     )
 }
 
+/// Call `run(data)` with the stack pointer at `stack`, which is aligned as
+/// a call needs, and return on the stack this was called on. The frame
+/// pointer keeps the caller's stack pointer through the call.
+///
+/// # Safety
+///
+/// Nothing else uses the memory below `stack` until this returns, and
+/// there is enough of it for `run`.
+#[cfg(target_arch = "aarch64")]
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn call_on(
+    data: *mut u8,
+    run: unsafe extern "C" fn(*mut u8),
+    stack: usize,
+) {
+    core::arch::naked_asm!(
+        "stp x29, x30, [sp, #-16]!",
+        "mov x29, sp",
+        "mov sp, x2",
+        "blr x1",
+        "mov sp, x29",
+        "ldp x29, x30, [sp], #16",
+        "ret",
+    )
+}
+
+/// See the arm64 [`call_on`].
+///
+/// # Safety
+///
+/// As there.
+#[cfg(all(target_arch = "x86_64", not(target_os = "windows")))]
+#[unsafe(naked)]
+pub(crate) unsafe extern "C" fn call_on(
+    data: *mut u8,
+    run: unsafe extern "C" fn(*mut u8),
+    stack: usize,
+) {
+    core::arch::naked_asm!(
+        "push rbp",
+        "mov rbp, rsp",
+        "mov rsp, rdx",
+        "call rsi",
+        "mov rsp, rbp",
+        "pop rbp",
+        "ret",
+    )
+}
+
 // x86-64, System V. Not built or run: written on an arm64 host.
 //
 // The frame, from the saved stack pointer up: a pad word, the result word,

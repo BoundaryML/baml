@@ -5,13 +5,9 @@
 
 use std::{collections::HashSet, fmt::Write as _};
 
-use super::{
-    Refused, STRING_MAP_REQUIRED,
-    describe::{Desc, Types},
-    out::Out,
-    string_keyed, type_of, values_are_refs,
-};
+use super::{Refused, STRING_MAP_REQUIRED, out::Out, string_keyed, type_of, values_are_refs};
 use crate::{
+    describe::{Desc, Types},
     heap::load,
     json_layout::{
         KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_VARIANT, REPR_BOOL, REPR_FLOAT, REPR_INT, REPR_NULL,

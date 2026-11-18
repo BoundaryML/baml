@@ -287,7 +287,7 @@ pub unsafe extern "C" fn baml_rt_string_from_any(mutator: &mut Mutator, value: u
             let text = unsafe {
                 crate::class::context_text(mutator, value).unwrap_or_else(|| {
                     let mut text = String::new();
-                    crate::class::write_value(mutator, &mut text, value);
+                    crate::class::write_value(mutator, &mut text, value, None);
                     text
                 })
             };

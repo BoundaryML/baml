@@ -1,4 +1,6 @@
-//! How the compiler describes types to `baml.json`, as plain constants.
+//! How the compiler describes types to the runtime, as plain constants:
+//! to `baml.json`, which writes and reads values by their descriptions,
+//! and to what writes an instance that is thrown and not caught.
 //!
 //! The compiler includes this file by path, as it does `layout.rs`.
 //!
@@ -18,9 +20,15 @@
 //!        +4  u32  the offset of its description
 //! ```
 //!
-//! The directory is how a value whose static type says nothing (an
-//! `unknown`, a member of a union) is described: by the type id in its
-//! header. It holds the classes and enums some description names.
+//! The directory is how `baml.json` describes a value whose static type
+//! says nothing (an `unknown`, a member of a union): by the type id in its
+//! header. It holds the classes and enums `baml.json` can write and read.
+//!
+//! Every class has a description, which the fourth `u32` of its type
+//! locates (`TYPE_DESCRIBED` of `layout.rs`). One with [`FLAG_SHOWN_ONLY`]
+//! says only how an instance is written when it is thrown: `baml.json`
+//! has no form for the class, or it is a generic class at some type
+//! arguments, and the directory leaves it out.
 //!
 //! A description is [`DESCRIPTION`] bytes:
 //!
@@ -48,8 +56,11 @@
 //! | `INT_IS`      | low half           | high half         |          |
 //! | `BOOL_IS`     | 0 or 1             |                   |          |
 //! | `VARIANT`     | the enum           | variant index     |          |
+//! | `OPAQUE`      |                    |                   |          |
 //!
-//! `UNKNOWN` with [`FLAG_JSON`] is the `json` alias. A member list is one
+//! `UNKNOWN` with [`FLAG_JSON`] is the `json` alias. `OPAQUE` is a field
+//! of a class shown only that nothing says how to write. An enum shown
+//! only has its type id and no records. A member list is one
 //! `u32` description offset per member. `OPTIONAL` is a union of `null`
 //! and one other type; a `UNION` is any other, its members as declared.
 //! Text is UTF-8, padded to four bytes.
@@ -60,10 +71,26 @@
 //! an enum's records come the offset and length of its name with its
 //! package (`user.Color`), which one message of the interpreter writes.
 //!
-//! A field record is [`FIELD_RECORD`] bytes: the same three names, then
-//! the offset of the field type's description, the byte offset of the
-//! field in an instance, and flags ([`MEMBER_SKIP`], [`FIELD_OMIT_NULL`],
-//! [`FIELD_MAY_BE_ABSENT`]).
+//! A field record is [`FIELD_RECORD`] bytes, the fields in declaration
+//! order:
+//!
+//! ```text
+//! +0   u32  offset of the field's name
+//! +4   u32  its length
+//! +8   u32  offset of the name it is written under with declared names
+//! +12  u32  its length
+//! +16  u32  offset of the name with aliased names
+//! +20  u32  its length
+//! +24  u32  offset of the description of the field's type
+//! +28  u32  byte offset of the field in an instance
+//! +32  u32  flags ([`MEMBER_SKIP`], [`FIELD_OMIT_NULL`],
+//!           [`FIELD_MAY_BE_ABSENT`])
+//! ```
+//!
+//! After a class's records come the offset and length of its name with
+//! its package (`user.Point`), as an uncaught throw of an instance writes
+//! it. Names that are the same text are the same bytes: the three of a
+//! field with no alias, and a class's name where it ends its full one.
 
 /// Where in the type table the offset of the JSON section is: the second
 /// half of the eight bytes no type lives at.
@@ -101,6 +128,7 @@ pub const KIND_STRING_IS: u32 = 12;
 pub const KIND_INT_IS: u32 = 13;
 pub const KIND_BOOL_IS: u32 = 14;
 pub const KIND_VARIANT: u32 = 15;
+pub const KIND_OPAQUE: u32 = 16;
 
 /// An `int`, or the position of an enum's variant: the slot's word.
 pub const REPR_INT: u32 = 0;
@@ -121,6 +149,9 @@ pub const REPR_NULL: u32 = 6;
 
 /// The description is of the `json` alias.
 pub const FLAG_JSON: u32 = 1;
+/// The description of a class or an enum says only how a value is written
+/// when it is thrown: `baml.json` neither writes nor reads one by it.
+pub const FLAG_SHOWN_ONLY: u32 = 2;
 
 pub const VARIANT_RECORD: usize = 28;
 pub const FIELD_RECORD: usize = 36;

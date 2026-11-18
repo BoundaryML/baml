@@ -11,7 +11,7 @@ use crate::{
     json_layout::{DESCRIBED, JSON_SECTION},
     layout,
     natives::Native,
-    types::{NativeTy, class_layout},
+    types::NativeTy,
 };
 
 pub(super) fn takes_descriptions(native: &Native) -> bool {
@@ -21,21 +21,14 @@ pub(super) fn takes_descriptions(native: &Native) -> bool {
 impl<'db> Backend<'db> {
     /// Write the type id of every class and enum described since the last
     /// call into its description.
-    fn identify_described(
-        &mut self,
-        db: &'db dyn baml_compiler2_mir::Db,
-    ) -> Result<(), CompileError> {
-        for (at, described) in self.json.take_pending() {
-            let id = match described {
-                Described::Class(class) => {
-                    let fields = class_layout(db, class, &[]).map_err(internal)?;
-                    self.class_type(db, class, &[], &fields)
-                }
+    pub(super) fn identify_described(&mut self, db: &'db dyn baml_compiler2_mir::Db) {
+        for pending in self.json.take_pending() {
+            let id = match pending.what {
+                Described::Class(class) => self.class_type(db, class, &[], &pending.layout),
                 Described::Enum(enum_ref) => self.enum_type(db, enum_ref),
             };
-            self.json.identify(at, id);
+            self.json.identify(pending.at, id, pending.listed);
         }
-        Ok(())
     }
 
     /// What a `baml.json` native is passed for the type `ty`.
@@ -45,7 +38,7 @@ impl<'db> Backend<'db> {
         ty: &baml_compiler2_mir::RuntimeTy,
     ) -> Result<usize, CompileError> {
         let at = self.json.describe(db, ty).map_err(internal)?;
-        self.identify_described(db)?;
+        self.identify_described(db);
         Ok((DESCRIBED | at) as usize)
     }
 
@@ -57,7 +50,7 @@ impl<'db> Backend<'db> {
         ty: &NativeTy<'db>,
     ) -> Result<usize, CompileError> {
         let at = self.json.describe_native(db, ty).map_err(internal)?;
-        self.identify_described(db)?;
+        self.identify_described(db);
         Ok(if at == 0 {
             0
         } else {
@@ -67,9 +60,6 @@ impl<'db> Backend<'db> {
 
     /// End the type table with the descriptions, and say where they start.
     pub(super) fn append_descriptions(&mut self) {
-        if self.json.is_empty() {
-            return;
-        }
         let json = std::mem::replace(&mut self.json, crate::json::JsonTypes::new());
         self.types.resize(layout::words(self.types.len()), 0);
         let start = super::table_word(self.types.len());
@@ -129,7 +119,7 @@ impl<'db> Translator<'_, 'db> {
                 .is_ok()
         {
             // A type id not yet in the table is added by this.
-            let _ = self.backend.identify_described(self.db);
+            self.backend.identify_described(self.db);
         }
     }
 
@@ -137,7 +127,7 @@ impl<'db> Translator<'_, 'db> {
     /// value written by its header alone can be. One the runtime cannot
     /// write is left out, and writing a value of it is refused when the
     /// program runs.
-    pub(super) fn describe_program_types(&mut self) -> Result<(), CompileError> {
+    pub(super) fn describe_program_types(&mut self) {
         let program = self.program;
         for ty in &program.types {
             let described = match ty {
@@ -149,7 +139,7 @@ impl<'db> Translator<'_, 'db> {
                 let _ = self.backend.json.describe_native(self.db, ty);
             }
         }
-        self.backend.identify_described(self.db)
+        self.backend.identify_described(self.db);
     }
 
     /// The value a `baml.json` native returned as a union holds it, as a

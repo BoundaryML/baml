@@ -20,6 +20,7 @@
 
 pub mod array;
 mod class;
+mod describe;
 pub mod heap;
 pub mod json_layout;
 pub mod layout;

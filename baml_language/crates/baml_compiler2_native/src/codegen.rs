@@ -331,14 +331,12 @@ struct Backend<'db> {
     /// The program's type table so far: the fixed types, then one entry per
     /// class met.
     types: Vec<u8>,
-    /// What `baml.json` is told about the types calls of it name: the last
-    /// section of the type table.
+    /// The descriptions of the program's classes, and of the types calls
+    /// of `baml.json` name: the last section of the type table.
     json: crate::json::JsonTypes<'db>,
     /// The type id of each class met, at each tuple of type arguments it is
     /// met at: the offset of its entry in `types`.
     class_types: HashMap<(ClassRef<'db>, Vec<TypeArg<'db>>), usize>,
-    /// What each class type is described as; written after the last type.
-    descriptions: Vec<classes::Description>,
     /// The classes the runtime makes instances of, once they are needed.
     well_known: Option<classes::WellKnown>,
     /// The type id of closures, by which of their captured words are
@@ -404,7 +402,6 @@ impl<'db> Backend<'db> {
                 .collect(),
             json: crate::json::JsonTypes::new(),
             class_types: HashMap::new(),
-            descriptions: Vec::new(),
             well_known: None,
             closure_types: HashMap::new(),
             tuple_types: HashMap::new(),
@@ -548,7 +545,7 @@ impl<'db> Backend<'db> {
             .collect();
         let id = self.fixed_type(layout::instance_size(layout_slots(fields)), &references);
         self.class_types.insert(key, id);
-        self.describe_class(db, id, class, fields);
+        self.describe_class(db, id, class, !arguments.is_empty(), fields);
         id
     }
 

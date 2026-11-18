@@ -118,7 +118,7 @@ impl<'db> Translator<'_, 'db> {
                 let found = self.operand_ty(argument)?;
                 if found.is_boxed() {
                     // Only its header will say what the value is.
-                    self.describe_program_types()?;
+                    self.describe_program_types();
                 }
                 let id = self.backend.describe_native(self.db, &found)?;
                 params.push(AbiParam::new(types::I32));

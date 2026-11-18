@@ -1,5 +1,8 @@
-//! What `baml.json` is told about the types it writes and reads: the
-//! section of the type table laid out in the runtime's `json_layout.rs`.
+//! What the runtime is told about types: the section of the type table
+//! laid out in the runtime's `json_layout.rs`. `baml.json` writes and
+//! reads values by it, and every class is described in it once, for
+//! `baml.json` and for what writes an instance that is thrown and not
+//! caught.
 //!
 //! A description is made from the type as MIR has it, so that a literal
 //! type, an alias for `json` and a field's attributes are still there to
@@ -14,7 +17,8 @@ use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::{
     extern_loc::{ClassRef, EnumRef},
     json_attrs::{is_optional, json_overrides, override_of},
-    layout::{class_head, class_ref_of, enum_head, enum_ref_of, interface_ref_of},
+    layout::{class_fields, class_head, class_ref_of, enum_head, enum_ref_of, interface_ref_of},
+    render::Viewpoint,
 };
 use baml_compiler2_mir::{RuntimeTy, resolved_aliases_for_package};
 use baml_type::{HeadDisplay, Literal};
@@ -22,11 +26,11 @@ use baml_type::{HeadDisplay, Literal};
 use crate::{
     Blocker,
     json_layout::{
-        DESCRIPTION, DESCRIPTION_A, FIELD_MAY_BE_ABSENT, FIELD_OMIT_NULL, FLAG_JSON, JSON_BODY,
-        JSON_VERSION, KIND_ARRAY, KIND_BOOL, KIND_BOOL_IS, KIND_CLASS, KIND_ENUM, KIND_FLOAT,
-        KIND_INT, KIND_INT_IS, KIND_MAP, KIND_NULL, KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS,
-        KIND_UNION, KIND_UNKNOWN, KIND_VARIANT, MEMBER_SKIP, REPR_BOOL, REPR_BOXED, REPR_FLOAT,
-        REPR_INT, REPR_NULL, REPR_PAIR, REPR_REF,
+        DESCRIPTION, DESCRIPTION_A, FIELD_MAY_BE_ABSENT, FIELD_OMIT_NULL, FLAG_JSON,
+        FLAG_SHOWN_ONLY, JSON_BODY, JSON_VERSION, KIND_ARRAY, KIND_BOOL, KIND_BOOL_IS, KIND_CLASS,
+        KIND_ENUM, KIND_FLOAT, KIND_INT, KIND_INT_IS, KIND_MAP, KIND_NULL, KIND_OPAQUE,
+        KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, KIND_VARIANT,
+        MEMBER_SKIP, REPR_BOOL, REPR_BOXED, REPR_FLOAT, REPR_INT, REPR_NULL, REPR_PAIR, REPR_REF,
     },
     layout,
     types::{NativeTy, class_layout, field_slots, native_ty},
@@ -39,14 +43,28 @@ pub(crate) enum Described<'db> {
     Enum(EnumRef<'db>),
 }
 
+/// A description whose type id is not yet written.
+pub(crate) struct Pending<'db> {
+    pub(crate) at: u32,
+    pub(crate) what: Described<'db>,
+    /// The layout of a class.
+    pub(crate) layout: Vec<NativeTy<'db>>,
+    /// Whether `baml.json` finds the description by the type id.
+    pub(crate) listed: bool,
+}
+
 /// The descriptions made so far.
 pub(crate) struct JsonTypes<'db> {
     /// The section from [`JSON_BODY`] on.
     body: Vec<u8>,
+    /// The classes and enums `baml.json` writes and reads.
     classes: HashMap<ClassRef<'db>, u32>,
     enums: HashMap<EnumRef<'db>, u32>,
+    /// The enums it does not, described for a thrown instance to be
+    /// written.
+    shown_enums: HashMap<EnumRef<'db>, u32>,
     /// The descriptions whose type id is not yet written.
-    pending: Vec<(u32, Described<'db>)>,
+    pending: Vec<Pending<'db>>,
     /// The type id of each class and enum described, with its description.
     directory: Vec<(u32, u32)>,
 }
@@ -66,6 +84,21 @@ fn head_name(db: &dyn baml_compiler2_mir::Db, head: &baml_type::DeclName) -> bam
     } else {
         Viewpoint::user_facing(db, head.root()).wire_head(head)
     }
+}
+
+/// The name an uncaught throw of an instance of `class` is written with.
+fn full_class_name<'db>(db: &'db dyn baml_compiler2_mir::Db, class: ClassRef<'db>) -> String {
+    let head = class_head(db, class);
+    let mut name = Viewpoint::canonical(db)
+        .display_label(head.root())
+        .to_string();
+    for part in head.namespace() {
+        name.push('.');
+        name.push_str(part.as_str());
+    }
+    name.push('.');
+    name.push_str(head.name().as_str());
+    name
 }
 
 /// The name of a type as an error message of the interpreter writes it.
@@ -118,13 +151,10 @@ impl<'db> JsonTypes<'db> {
             body: Vec::new(),
             classes: HashMap::new(),
             enums: HashMap::new(),
+            shown_enums: HashMap::new(),
             pending: Vec::new(),
             directory: Vec::new(),
         }
-    }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.body.is_empty()
     }
 
     fn here(&self) -> u32 {
@@ -152,11 +182,50 @@ impl<'db> JsonTypes<'db> {
 
     /// A description, its name written first.
     fn description(&mut self, kind: u32, repr: u32, abc: [u32; 3], name: &str, flags: u32) -> u32 {
-        let [name, length] = self.text(name);
+        let name = self.text(name);
+        self.description_named(kind, repr, abc, name, flags)
+    }
+
+    /// A description whose name is text already written.
+    fn description_named(
+        &mut self,
+        kind: u32,
+        repr: u32,
+        abc: [u32; 3],
+        [name, length]: [u32; 2],
+        flags: u32,
+    ) -> u32 {
         let at = self.here();
         self.push(&[kind, repr, abc[0], abc[1], abc[2], name, length, flags]);
         debug_assert_eq!(self.here() - at, word(DESCRIPTION));
         at
+    }
+
+    /// The three names of a member: its own, and the ones it is written
+    /// under with declared and with aliased names. The same text is
+    /// written once.
+    fn member_names(&mut self, own: &str, declared: &str, aliased: &str) -> [u32; 6] {
+        let own_at = self.text(own);
+        let declared_at = if declared == own {
+            own_at
+        } else {
+            self.text(declared)
+        };
+        let aliased_at = if aliased == own {
+            own_at
+        } else if aliased == declared {
+            declared_at
+        } else {
+            self.text(aliased)
+        };
+        [
+            own_at[0],
+            own_at[1],
+            declared_at[0],
+            declared_at[1],
+            aliased_at[0],
+            aliased_at[1],
+        ]
     }
 
     /// The description of `ty`, or what keeps the runtime from writing or
@@ -354,9 +423,7 @@ impl<'db> JsonTypes<'db> {
             let rename = variant.attrs.json_rename.as_deref();
             let declared = rename.unwrap_or(own);
             let aliased = rename.unwrap_or(variant.attrs.schema.alias.as_deref().unwrap_or(own));
-            records.extend(self.text(own));
-            records.extend(self.text(declared));
-            records.extend(self.text(aliased));
+            records.extend(self.member_names(own, declared, aliased));
             records.push(if variant.attrs.skip { MEMBER_SKIP } else { 0 });
         }
         // The enum's name with its package follows its records.
@@ -374,7 +441,12 @@ impl<'db> JsonTypes<'db> {
             0,
         );
         self.enums.insert(enum_ref, at);
-        self.pending.push((at, Described::Enum(enum_ref)));
+        self.pending.push(Pending {
+            at,
+            what: Described::Enum(enum_ref),
+            layout: Vec::new(),
+            listed: true,
+        });
         Ok(at)
     }
 
@@ -414,7 +486,16 @@ impl<'db> JsonTypes<'db> {
         // The description goes in first, for a field that holds the class
         // again to refer to.
         let mark = self.body.len();
-        let at = self.description(KIND_CLASS, REPR_REF, [0; 3], &name, 0);
+        // The name with its package is written once, and the name without
+        // is its end when it is that.
+        let full = full_class_name(db, class);
+        let full_at = self.text(&full);
+        let short_at = if full.ends_with(name.as_str()) {
+            [full_at[0] + word(full.len() - name.len()), word(name.len())]
+        } else {
+            self.text(&name)
+        };
+        let at = self.description_named(KIND_CLASS, REPR_REF, [0; 3], short_at, 0);
         self.classes.insert(class, at);
         let aliases = resolved_aliases_for_package(db, head.root());
         let mut records = Vec::new();
@@ -445,17 +526,96 @@ impl<'db> JsonTypes<'db> {
             if admits_null(db, &runtime) {
                 flags |= FIELD_MAY_BE_ABSENT;
             }
-            records.extend(self.text(own));
-            records.extend(self.text(declared));
-            records.extend(self.text(aliased));
+            records.extend(self.member_names(own, declared, aliased));
             records.extend([field, word(layout::field_offset(slot)), flags]);
         }
+        records.extend(full_at);
         let table = self.here();
         self.push(&records);
         self.patch(at + word(DESCRIPTION_A) + 4, table);
         self.patch(at + word(DESCRIPTION_A) + 8, word(fields.len()));
-        self.pending.push((at, Described::Class(class)));
+        self.pending.push(Pending {
+            at,
+            what: Described::Class(class),
+            layout,
+            listed: true,
+        });
         Ok(at)
+    }
+
+    /// The description of the class `class` at the type arguments its type
+    /// `type_id` is for, whose layout is `fields`: the one `baml.json`
+    /// writes and reads its instances by when there is one, and otherwise
+    /// one that says only how a thrown instance is written.
+    pub(crate) fn class_type(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        class: ClassRef<'db>,
+        generic: bool,
+        type_id: usize,
+        fields: &[NativeTy<'db>],
+    ) -> u32 {
+        if !generic && let Ok(at) = self.class(db, class) {
+            return at;
+        }
+        let name = self.text(&full_class_name(db, class));
+        let at = self.description_named(
+            KIND_CLASS,
+            REPR_REF,
+            [word(type_id), 0, 0],
+            name,
+            FLAG_SHOWN_ONLY,
+        );
+        let mut records = Vec::new();
+        let declared = class_fields(db, class);
+        for (((own, _), ty), slot) in declared.iter().zip(fields).zip(field_slots(fields)) {
+            let field = self.shown(db, ty);
+            let own = self.text(own.as_str());
+            for _ in 0..3 {
+                records.extend(own);
+            }
+            records.extend([field, word(layout::field_offset(slot)), 0]);
+        }
+        records.extend(name);
+        let table = self.here();
+        self.push(&records);
+        self.patch(at + word(DESCRIPTION_A) + 4, table);
+        self.patch(at + word(DESCRIPTION_A) + 8, word(fields.len()));
+        at
+    }
+
+    /// The description of the type of a field of a class that is shown
+    /// only: the one `baml.json` has when it has one, and otherwise what
+    /// writing the field takes.
+    fn shown(&mut self, db: &'db dyn baml_compiler2_mir::Db, ty: &NativeTy<'db>) -> u32 {
+        let mark = self.body.len();
+        if let Ok(at) = self.describe_held(db, ty) {
+            return at;
+        }
+        self.forget(mark);
+        match ty {
+            NativeTy::Enum(enum_ref) => {
+                if let Some(known) = self.shown_enums.get(enum_ref) {
+                    return *known;
+                }
+                let at = self.description(KIND_ENUM, REPR_INT, [0; 3], "", FLAG_SHOWN_ONLY);
+                self.shown_enums.insert(*enum_ref, at);
+                self.pending.push(Pending {
+                    at,
+                    what: Described::Enum(*enum_ref),
+                    layout: Vec::new(),
+                    listed: false,
+                });
+                at
+            }
+            NativeTy::Optional(inner) if !inner.is_ref() => {
+                let inner = self.shown(db, inner);
+                self.description(KIND_OPTIONAL, REPR_PAIR, [inner, 0, 0], "", 0)
+            }
+            // Its header says what it is.
+            ty if ty.is_ref() => self.description(KIND_UNKNOWN, repr(ty), [0; 3], "", 0),
+            _ => self.description(KIND_OPAQUE, REPR_INT, [0; 3], "", 0),
+        }
     }
 
     /// Take back everything described since the body was `mark` bytes: a
@@ -466,19 +626,23 @@ impl<'db> JsonTypes<'db> {
         self.body.truncate(mark);
         self.classes.retain(|_, at| kept(at));
         self.enums.retain(|_, at| kept(at));
-        self.pending.retain(|(at, _)| kept(at));
+        self.shown_enums.retain(|_, at| kept(at));
+        self.pending.retain(|pending| kept(&pending.at));
     }
 
     /// The classes and enums described since the last call, for
     /// [`Self::identify`] to be told the type id of each.
-    pub(crate) fn take_pending(&mut self) -> Vec<(u32, Described<'db>)> {
+    pub(crate) fn take_pending(&mut self) -> Vec<Pending<'db>> {
         std::mem::take(&mut self.pending)
     }
 
-    /// Give the description at `at` the type id of what it describes.
-    pub(crate) fn identify(&mut self, at: u32, type_id: usize) {
+    /// Give the description at `at` the type id of what it describes,
+    /// and list it for `baml.json` to find by that when `listed`.
+    pub(crate) fn identify(&mut self, at: u32, type_id: usize, listed: bool) {
         self.patch(at + word(DESCRIPTION_A), word(type_id));
-        self.directory.push((word(type_id), at));
+        if listed {
+            self.directory.push((word(type_id), at));
+        }
     }
 
     /// The classes and enums described so far.

@@ -1,4 +1,11 @@
-//! Reading the descriptions the compiler leaves in the type table.
+//! Reading the descriptions the compiler leaves in the type table: what
+//! `baml.json` writes and reads values by, and what an uncaught throw of
+//! an instance is written from. See [`crate::json_layout`].
+
+#![allow(
+    clippy::cast_possible_truncation,
+    reason = "every word read here is a `u32` of the type table"
+)]
 
 use crate::{
     json_layout::{
@@ -8,7 +15,7 @@ use crate::{
         KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, MEMBER_ALIASED,
         MEMBER_DECLARED, MEMBER_SKIP, REPR_REF, VARIANT_FLAGS, VARIANT_RECORD,
     },
-    layout::TYPE_STRING,
+    layout::{KIND_FIXED, TYPE_DESCRIBED, TYPE_STRING},
     native::{Scope, TypeId},
 };
 
@@ -39,7 +46,7 @@ static STRING: [u32; 10] = [
 
 /// The descriptions of a program.
 #[derive(Clone, Copy)]
-pub(super) struct Types {
+pub(crate) struct Types {
     /// The type table.
     table: usize,
     /// The section of descriptions, zero when the program has none.
@@ -48,39 +55,43 @@ pub(super) struct Types {
 
 /// One description.
 #[derive(Clone, Copy)]
-pub(super) struct Desc {
+pub(crate) struct Desc {
     section: usize,
     at: usize,
 }
 
 /// A variant of a described enum, or a field of a described class.
-pub(super) struct Member {
-    pub(super) name: &'static str,
+pub(crate) struct Member {
+    pub(crate) name: &'static str,
     declared: &'static str,
     aliased: &'static str,
-    pub(super) skip: bool,
+    pub(crate) skip: bool,
     /// A field's type, where it is in an instance, and its other flags.
-    pub(super) ty: Option<Desc>,
-    pub(super) offset: usize,
-    pub(super) omit_null: bool,
-    pub(super) may_be_absent: bool,
+    pub(crate) ty: Option<Desc>,
+    pub(crate) offset: usize,
+    pub(crate) omit_null: bool,
+    pub(crate) may_be_absent: bool,
 }
 
 impl Member {
     /// The name it is written under.
-    pub(super) fn key(&self, aliased: bool) -> &'static str {
+    pub(crate) fn key(&self, aliased: bool) -> &'static str {
         if aliased { self.aliased } else { self.declared }
     }
 
     /// Whether it has a name at all.
-    pub(super) fn shown(&self, aliased: bool) -> bool {
+    pub(crate) fn shown(&self, aliased: bool) -> bool {
         !(aliased && self.skip)
     }
 }
 
 impl Types {
-    pub(super) fn of(scope: &Scope<'_>) -> Self {
-        let table = scope.mutator.types();
+    pub(crate) fn of(scope: &Scope<'_>) -> Self {
+        Self::of_table(scope.type_table())
+    }
+
+    /// The descriptions of the program whose type table is at `table`.
+    pub(crate) fn of_table(table: usize) -> Self {
         // SAFETY: the table starts with eight bytes no type lives at, the
         // last four of which locate the section.
         let section = unsafe { word(table + JSON_SECTION) };
@@ -92,7 +103,7 @@ impl Types {
 
     /// What a call passed for a type: a description, the type id of a
     /// class, an enum or `string`, or nothing.
-    pub(super) fn described(&self, id: TypeId) -> Option<Desc> {
+    pub(crate) fn described(&self, id: TypeId) -> Option<Desc> {
         let id = id.0;
         if id & DESCRIBED != 0 && self.section != 0 {
             return Some(Desc {
@@ -112,7 +123,7 @@ impl Types {
 
     /// The description of the class or enum whose instances or boxes have
     /// the type id `type_id`.
-    pub(super) fn of_type_id(&self, type_id: usize) -> Option<Desc> {
+    pub(crate) fn of_type_id(&self, type_id: usize) -> Option<Desc> {
         if self.section == 0 {
             return None;
         }
@@ -140,9 +151,26 @@ impl Types {
         None
     }
 
+    /// The description of the class whose instances have the type id
+    /// `type_id`, which the class's type locates: every class has one,
+    /// whether or not `baml.json` can write its instances.
+    pub(crate) fn of_class(&self, type_id: usize) -> Option<Desc> {
+        // SAFETY: a type is four words: the first its kind, and the last
+        // of a class's where its description is.
+        let (kind, described) =
+            unsafe { (word(self.table + type_id), word(self.table + type_id + 12)) };
+        (self.section != 0
+            && kind == KIND_FIXED as usize
+            && described & TYPE_DESCRIBED as usize != 0)
+            .then(|| Desc {
+                section: self.section,
+                at: self.section + (described & !(TYPE_DESCRIBED as usize)),
+            })
+    }
+
     /// The size in bytes of an instance of the class whose type id is
     /// `type_id`.
-    pub(super) fn instance_size(&self, type_id: usize) -> usize {
+    pub(crate) fn instance_size(&self, type_id: usize) -> usize {
         // SAFETY: a class's type is four words, the second its size.
         unsafe { word(self.table + type_id + 4) }
     }
@@ -172,69 +200,75 @@ impl Desc {
         }
     }
 
-    pub(super) fn kind(self) -> u32 {
+    pub(crate) fn kind(self) -> u32 {
         self.field(0) as u32
     }
 
-    pub(super) fn repr(self) -> u32 {
+    pub(crate) fn repr(self) -> u32 {
         self.field(DESCRIPTION_REPR) as u32
     }
 
-    pub(super) fn a(self) -> usize {
+    pub(crate) fn a(self) -> usize {
         self.field(DESCRIPTION_A)
     }
 
-    pub(super) fn b(self) -> usize {
+    pub(crate) fn b(self) -> usize {
         self.field(DESCRIPTION_B)
     }
 
     /// The type's name, as an error message writes it.
-    pub(super) fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         self.text(
             self.field(DESCRIPTION_NAME),
             self.field(DESCRIPTION_NAME + 4),
         )
     }
 
-    /// An enum's name with its package, which one message writes.
-    pub(super) fn full_name(self) -> &'static str {
-        let after = self.section + self.b() + self.count() * VARIANT_RECORD;
-        // SAFETY: an enum's variant records are followed by where its
-        // full name is.
+    /// The name of an enum or a class with its package: what one message
+    /// writes of an enum, and an uncaught throw of an instance.
+    pub(crate) fn full_name(self) -> &'static str {
+        let record = if self.is_class() {
+            FIELD_RECORD
+        } else {
+            VARIANT_RECORD
+        };
+        let after = self.section + self.b() + self.count() * record;
+        // SAFETY: the records of an enum and of a class are followed by
+        // where its full name is.
         unsafe { self.text(word(after), word(after + 4)) }
     }
 
-    pub(super) fn is_enum(self) -> bool {
+    pub(crate) fn is_enum(self) -> bool {
         self.kind() == KIND_ENUM
     }
 
-    pub(super) fn is_class(self) -> bool {
+    pub(crate) fn is_class(self) -> bool {
         self.kind() == KIND_CLASS
     }
 
     /// Whether the type is `json` or `unknown`: any value at all.
-    pub(super) fn is_any(self) -> bool {
+    pub(crate) fn is_any(self) -> bool {
         self.kind() == KIND_UNKNOWN
     }
 
     /// The description `a` or `b` names: an array's elements, a map's
     /// keys or values, what an optional is of, a variant's enum.
-    pub(super) fn of_a(self) -> Self {
+    pub(crate) fn of_a(self) -> Self {
         self.at(self.a())
     }
 
-    pub(super) fn of_b(self) -> Self {
+    pub(crate) fn of_b(self) -> Self {
         self.at(self.b())
     }
 
     /// The text of a string literal type.
-    pub(super) fn literal(self) -> &'static str {
+    pub(crate) fn literal(self) -> &'static str {
         self.text(self.a(), self.b())
     }
 
     /// The members of a union, in declaration order, with the members of
     /// a union among them in its place.
-    pub(super) fn members(self, into: &mut Vec<Self>) {
+    pub(crate) fn members(self, into: &mut Vec<Self>) {
         match self.kind() {
             KIND_UNION => {
                 for index in 0..self.b() {
@@ -248,7 +282,7 @@ impl Desc {
     }
 
     /// How many variants an enum has, or fields a class.
-    pub(super) fn count(self) -> usize {
+    pub(crate) fn count(self) -> usize {
         self.field(DESCRIPTION_C)
     }
 
@@ -279,25 +313,25 @@ impl Desc {
     }
 
     /// Variant `index` of an enum, when it has that many.
-    pub(super) fn variant(self, index: usize) -> Option<Member> {
+    pub(crate) fn variant(self, index: usize) -> Option<Member> {
         (index < self.count())
             .then(|| self.member(self.section + self.b() + index * VARIANT_RECORD, false))
     }
 
     /// The variants of an enum.
-    pub(super) fn variants(self) -> impl Iterator<Item = Member> {
+    pub(crate) fn variants(self) -> impl Iterator<Item = Member> {
         (0..self.count()).filter_map(move |index| self.variant(index))
     }
 
     /// The fields of a class, in declaration order.
-    pub(super) fn fields(self) -> impl Iterator<Item = Member> {
+    pub(crate) fn fields(self) -> impl Iterator<Item = Member> {
         (0..self.count())
             .map(move |index| self.member(self.section + self.b() + index * FIELD_RECORD, true))
     }
 
     /// Whether a map with keys of this type is a JSON object: `string`, or
     /// string literals.
-    pub(super) fn is_string_key(self) -> bool {
+    pub(crate) fn is_string_key(self) -> bool {
         match self.kind() {
             KIND_STRING | KIND_STRING_IS => true,
             KIND_UNION => {
@@ -310,7 +344,7 @@ impl Desc {
     }
 
     /// The type with `null` taken out, when it is an optional.
-    pub(super) fn not_null(self) -> Self {
+    pub(crate) fn not_null(self) -> Self {
         if self.kind() == KIND_OPTIONAL {
             self.of_a()
         } else {
