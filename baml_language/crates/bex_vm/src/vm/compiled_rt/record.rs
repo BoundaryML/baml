@@ -18,23 +18,25 @@ use crate::{
 };
 
 pub struct FrameRecord {
-    prev: Cell<*const FrameRecord>,
+    pub(super) prev: Cell<*const FrameRecord>,
     /// The callable the body runs: a function, or a closure.
-    function: Cell<HeapPtr>,
+    pub(super) function: Cell<HeapPtr>,
     /// The runtime package the body's object indices resolve in; null for
     /// the compile-time heap.
     pub(crate) package: Cell<HeapPtr>,
     /// The instruction index the body last reported: its call site while a
     /// callee runs, or where it raised or suspended.
-    pc: Cell<u32>,
+    pub(super) pc: Cell<u32>,
     /// `vm.frames.len()` when the record was pushed: it sits above
     /// `vm.frames[anchor - 1]`, which an entry record belongs to.
-    anchor: u32,
+    pub(super) anchor: u32,
     /// Where the body's slots start on the VM stack.
-    base: u32,
-    /// The record's level; an entry record has its VM frame's.
-    level: u32,
-    entry: bool,
+    pub(super) base: u32,
+    /// The record's level; an entry record has its VM frame's. A zombie's
+    /// rises when a frameless body's record is linked below it. A pending
+    /// record (`frameless::PENDING`) has none until it is materialized.
+    pub(super) level: Cell<u32>,
+    pub(super) entry: bool,
     /// Whether a manual span activation is scoped to this record; see
     /// [`BexVm::activate_manual_span`].
     pub(crate) scoped: Cell<bool>,
@@ -43,7 +45,7 @@ pub struct FrameRecord {
     /// from the caller, so valid only while the record is live; a zombie's is
     /// empty. Entry records use their VM frame's arguments, and a closure its
     /// captured ones.
-    type_args: *const [RealizedTy],
+    pub(super) type_args: *const [RealizedTy],
 }
 
 impl FrameRecord {
@@ -77,7 +79,7 @@ impl FrameRecord {
 
     #[inline]
     pub(crate) fn level(&self) -> usize {
-        self.level as usize
+        self.level.get() as usize
     }
 
     /// Whether the record holds a receipt, reading only its tag.
@@ -102,7 +104,7 @@ impl FrameRecord {
     }
 
     #[inline]
-    fn prev(&self) -> *const FrameRecord {
+    pub(super) fn prev(&self) -> *const FrameRecord {
         self.prev.get()
     }
 
@@ -143,10 +145,10 @@ impl FrameRecord {
 /// dropped while parked pops through it during the forced unwind, which may
 /// happen after the VM has moved.
 pub(crate) struct RecordChain {
-    top: Cell<*const FrameRecord>,
+    pub(super) top: Cell<*const FrameRecord>,
     /// Records that are frames of their own: every record but entry records,
     /// zombies included.
-    count: Cell<u32>,
+    pub(super) count: Cell<u32>,
     /// Records of bodies that returned an error, kept until unwound.
     #[allow(clippy::vec_box, reason = "the chain links zombies by address")]
     zombies: UnsafeCell<Vec<Box<FrameRecord>>>,
@@ -163,7 +165,7 @@ impl Default for RecordChain {
 }
 
 impl RecordChain {
-    fn iter(&self) -> impl Iterator<Item = &FrameRecord> {
+    pub(super) fn iter(&self) -> impl Iterator<Item = &FrameRecord> {
         let mut next = self.top.get();
         std::iter::from_fn(move || {
             // SAFETY: a linked record is alive: a live one is pinned in a
@@ -182,7 +184,7 @@ impl RecordChain {
         clippy::vec_box,
         reason = "the chain links zombies by address"
     )]
-    fn zombies(&self) -> &mut Vec<Box<FrameRecord>> {
+    pub(super) fn zombies(&self) -> &mut Vec<Box<FrameRecord>> {
         // SAFETY: the zombie list is only touched by the VM's thread, through
         // these short-lived borrows that never overlap.
         unsafe { &mut *self.zombies.get() }
@@ -341,6 +343,7 @@ impl BexVm {
                 .iter()
                 .all(crate::reachable::is_statically_declared)
         );
+        self.materialize(caller);
         caller.note_pc(pc);
         let observe = |vm: &mut BexVm, type_args: &[RealizedTy]| {
             let function = vm.observed_callee(callee)?;
@@ -361,6 +364,7 @@ impl BexVm {
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
+        self.materialize(caller);
         caller.note_pc(pc);
         let package = self.frame_package(callee);
         let observe = |vm: &mut BexVm, carried: &[RealizedTy]| {
@@ -402,7 +406,7 @@ impl BexVm {
             pc: Cell::new(0),
             anchor: self.frames.len() as u32,
             base: base as u32,
-            level: level as u32,
+            level: Cell::new(level as u32),
             entry: false,
             scoped: Cell::new(false),
             receipt: Cell::new(None),
@@ -515,7 +519,7 @@ impl BexVm {
 
     #[cold]
     #[inline(never)]
-    fn zombify(&mut self, linked: *const FrameRecord, record: FrameRecord) {
+    pub(super) fn zombify(&mut self, linked: *const FrameRecord, record: FrameRecord) {
         let chain = &*self.compiled.records;
         let zombie = Box::new(FrameRecord {
             type_args: &[],
@@ -560,7 +564,7 @@ impl BexVm {
             pc: Cell::new(0),
             anchor: self.frames.len() as u32,
             base: base as u32,
-            level: (idx + links.count.get() as usize) as u32,
+            level: Cell::new((idx + links.count.get() as usize) as u32),
             entry: true,
             scoped: Cell::new(false),
             receipt: Cell::new(None),

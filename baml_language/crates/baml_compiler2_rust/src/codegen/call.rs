@@ -214,8 +214,42 @@ impl<'db> Generator<'_, 'db> {
         } else {
             format!("vm.direct_calls_typed({type_args})")
         };
-        let call = format!("(if {allowed} {{ {direct} }} else {boxed})");
+        let body = format!("{symbol}_d(vm, fr{direct_args}, {callee_mask})");
+        let recorded = format!("if {allowed} {{ {direct} }} else {{ {boxed} }}");
+        let typed = (!types.is_empty()).then_some(type_args.as_str());
+        let call = self.frameless_or(object, &site, &body, typed, &allowed, &recorded);
         Ok((call, signature.ret))
+    }
+
+    /// A call to `object` that runs `body` without linking a record when the
+    /// callee is frameless and `allowed`: on the caller's record when the
+    /// callee cannot pause, else on a pending record of its own (with the
+    /// call's `typed` arguments). Otherwise `recorded`.
+    fn frameless_or(
+        &self,
+        object: usize,
+        site: &str,
+        body: &str,
+        typed: Option<&str>,
+        allowed: &str,
+        recorded: &str,
+    ) -> String {
+        if !self.frameless.contains(&object) {
+            return format!("({recorded})");
+        }
+        let callee = format!("ObjectIndex::from_raw({object})");
+        let frameless = if typed.is_none() && !self.pausing.contains(&object) {
+            format!("vm.call_frameless(fr, {callee}, {site}, |vm| {body})")
+        } else {
+            let function = if typed.is_none() && object == self.object {
+                format!("vm.own_callable(fr, {callee})")
+            } else {
+                format!("vm.record_object(fr, {callee})")
+            };
+            let type_args = typed.unwrap_or("&[]");
+            format!("vm.call_pending(fr, {function}, {type_args}, {site}, |vm, fr| {body})")
+        };
+        format!("(if {allowed} && vm.frameless_calls() {{ {frameless} }} else {recorded})")
     }
 
     /// Route a compiled call's error, rooting the caller's live values when
@@ -392,7 +426,7 @@ impl<'db> Generator<'_, 'db> {
             .block_pcs
             .get(block.0)
             .and_then(|pcs| pcs.terminator)
-            .map_or_else(|| "None".to_string(), |pc| format!("Some({pc})"));
+            .map_or_else(|| "None".to_string(), |pc| format!("Some((fr, {pc}))"));
         let resolve = format!(
             "let callee = vm.virtual_target({receiver}, {iface_ptr}, {iface_args}, {method:?}, &[{}], {cache_site})?;",
             types.join(", ")
@@ -400,7 +434,7 @@ impl<'db> Generator<'_, 'db> {
         let site = self.site_pc(block);
         let values = values.join(", ");
         let suspend = if traced {
-            let call = self.attach_trace("vm.suspend(Step::Call { callee, argc })");
+            let call = self.attach_trace("vm.suspend_from(fr, Step::Call { callee, argc })");
             format!(
                 "match vm.push_virtual_args(callee, {layout}, &[{values}]) {{ \
                  Ok(argc) => {{ fr.note_pc({site}); {call} }}, Err(e) => Err(e) }}"
@@ -408,7 +442,7 @@ impl<'db> Generator<'_, 'db> {
         } else {
             format!(
                 "{{ let argc = vm.push_virtual_args(callee, {layout}, &[{values}])?; \
-                 fr.note_pc({site}); vm.suspend(Step::Call {{ callee, argc }}) }}"
+                 fr.note_pc({site}); vm.suspend_from(fr, Step::Call {{ callee, argc }}) }}"
             )
         };
         // The VM must apply trace attachments, so traced calls cannot run inline.

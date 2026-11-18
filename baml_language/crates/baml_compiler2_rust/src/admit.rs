@@ -314,6 +314,13 @@ fn admission_fixpoint(
             })
             .map(|(&object, _)| object)
             .collect();
+        let frameless: BTreeSet<usize> = units
+            .iter()
+            .filter(|&(&object, unit)| {
+                !framed.contains(&object) && crate::analysis::frameless_body(db, index, &unit.body)
+            })
+            .map(|(&object, _)| object)
+            .collect();
         let signatures: HashMap<usize, Signature> = units
             .iter()
             .map(|(&object, unit)| (object, unit.analysis.signature(&unit.body)))
@@ -333,6 +340,7 @@ fn admission_fixpoint(
                 symbols: &symbols,
                 pausing: &pausing,
                 framed: &framed,
+                frameless: &frameless,
                 signatures: &signatures,
                 masks: &masks,
             };

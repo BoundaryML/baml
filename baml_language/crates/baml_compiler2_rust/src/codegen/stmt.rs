@@ -128,7 +128,7 @@ impl<'db> Generator<'_, 'db> {
         }
         let live = self.header_locals(id.0);
         let at = pc_arg(pc);
-        let request = format!("{{ fr.note_pc({at}); vm.suspend(Step::Yield) }}");
+        let request = format!("{{ fr.note_pc({at}); vm.suspend_from(fr, Step::Yield) }}");
         let call = self.rooted(&live, &request);
         let code = self.fallible(id, &call)?;
         self.emit_line("iterations = iterations.wrapping_add(1);");
