@@ -111,53 +111,39 @@ fn substring<'s>(
 
 /// A way to cut a string into parts.
 trait Parts {
-    fn of<'a>(text: &'a str, delimiter: &'a str) -> impl Iterator<Item = &'a str>;
+    fn of(text: &str) -> impl Iterator<Item = &str>;
 }
 
 /// Every character.
 struct Characters;
 /// Every line, without its ending.
 struct Lines;
-/// What lies between the occurrences of a delimiter that is not empty.
-struct Between;
 
 impl Parts for Characters {
-    fn of<'a>(text: &'a str, _: &'a str) -> impl Iterator<Item = &'a str> {
+    fn of(text: &str) -> impl Iterator<Item = &str> {
         text.char_indices()
             .map(|(start, character)| &text[start..start + character.len_utf8()])
     }
 }
 
 impl Parts for Lines {
-    fn of<'a>(text: &'a str, _: &'a str) -> impl Iterator<Item = &'a str> {
+    fn of(text: &str) -> impl Iterator<Item = &str> {
         text.lines()
     }
 }
 
-impl Parts for Between {
-    fn of<'a>(text: &'a str, delimiter: &'a str) -> impl Iterator<Item = &'a str> {
-        text.split(delimiter)
-    }
-}
-
 /// An array of the parts of `string`, each a copy.
-fn pieces<'s, P: Parts>(
-    scope: &mut Scope<'s>,
-    string: Root<'s, Str>,
-    delimiter: Option<Root<'s, Str>>,
-) -> Root<'s, Arr<Str>> {
+fn pieces<'s, P: Parts>(scope: &mut Scope<'s>, string: Root<'s, Str>) -> Root<'s, Arr<Str>> {
     // Measure, reserve once, then build: nothing moves in between, so the
     // parts are copied straight out of the string.
     let view = string.get(scope);
     let ascii = view.is_ascii();
-    let by = delimiter.map_or("", |delimiter| delimiter.get(scope).as_str());
-    let (count, bytes) = P::of(view.as_str(), by).fold((0, 0), |(count, bytes), part| {
+    let (count, bytes) = P::of(view.as_str()).fold((0, 0), |(count, bytes), part| {
         (count + 1, bytes + str_size(part.len()))
     });
     let reservation = scope.reserve(array_size(count) + bytes);
     let array = reservation.array::<Str>(count);
-    let by = delimiter.map_or("", |delimiter| reservation.get(delimiter).as_str());
-    for (index, part) in P::of(reservation.get(string).as_str(), by).enumerate() {
+    for (index, part) in P::of(reservation.get(string).as_str()).enumerate() {
         let chars = if ascii {
             part.len()
         } else {
@@ -167,6 +153,153 @@ fn pieces<'s, P: Parts>(
         copy.push(part);
         array.set(index, copy.finish());
     }
+    let array = array.keep();
+    reservation.finish(array)
+}
+
+/// How many bits of an [`equal_bytes`] mask stand for one byte.
+#[cfg(target_arch = "aarch64")]
+const BITS_PER_BYTE: u32 = 4;
+#[cfg(target_arch = "x86_64")]
+const BITS_PER_BYTE: u32 = 1;
+
+/// Which of the sixteen bytes at `block` are `byte`: the lowest of the
+/// [`BITS_PER_BYTE`] bits of byte `i` is set when it is.
+///
+/// # Safety
+///
+/// Sixteen bytes can be read at `block`.
+#[cfg(target_arch = "aarch64")]
+#[inline]
+unsafe fn equal_bytes(block: *const u8, byte: u8) -> u64 {
+    use std::arch::aarch64::{
+        vceqq_u8, vdupq_n_u8, vget_lane_u64, vld1q_u8, vreinterpret_u64_u8, vreinterpretq_u16_u8,
+        vshrn_n_u16,
+    };
+    // SAFETY: the caller's contract, and every aarch64 has these
+    // instructions.
+    unsafe {
+        let equal = vceqq_u8(vld1q_u8(block), vdupq_n_u8(byte));
+        // Each byte's eight bits narrowed to four.
+        let narrowed = vshrn_n_u16::<4>(vreinterpretq_u16_u8(equal));
+        vget_lane_u64::<0>(vreinterpret_u64_u8(narrowed)) & 0x1111_1111_1111_1111
+    }
+}
+
+/// Which of the sixteen bytes at `block` are `byte`: bit `i` is set when
+/// byte `i` is.
+///
+/// # Safety
+///
+/// Sixteen bytes can be read at `block`.
+#[cfg(target_arch = "x86_64")]
+#[inline]
+unsafe fn equal_bytes(block: *const u8, byte: u8) -> u64 {
+    use std::arch::x86_64::{
+        __m128i, _mm_cmpeq_epi8, _mm_loadu_si128, _mm_movemask_epi8, _mm_set1_epi8,
+    };
+    // SAFETY: the caller's contract, and every x86-64 has these
+    // instructions.
+    let equal = unsafe {
+        let block = _mm_loadu_si128(block.cast::<__m128i>());
+        _mm_movemask_epi8(_mm_cmpeq_epi8(block, _mm_set1_epi8(byte.cast_signed())))
+    };
+    u64::from(equal.cast_unsigned())
+}
+
+/// Call `found` with the position of every byte of `text` that is `byte`,
+/// front to back, sixteen bytes at a time where the machine can.
+#[inline]
+fn each_byte(text: &[u8], byte: u8, mut found: impl FnMut(usize)) {
+    #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+    if text.len() >= 16 {
+        let mut at = 0;
+        while at + 16 <= text.len() {
+            // SAFETY: `at + 16` is inside `text`.
+            let mut equal = unsafe { equal_bytes(text.as_ptr().add(at), byte) };
+            while equal != 0 {
+                found(at + (equal.trailing_zeros() / BITS_PER_BYTE) as usize);
+                equal &= equal - 1;
+            }
+            at += 16;
+        }
+        if at < text.len() {
+            // The last sixteen bytes, less the ones already looked at.
+            let last = text.len() - 16;
+            let seen = (at - last) as u32 * BITS_PER_BYTE;
+            // SAFETY: `last + 16` is the end of `text`.
+            let mut equal = unsafe { equal_bytes(text.as_ptr().add(last), byte) } >> seen << seen;
+            while equal != 0 {
+                found(last + (equal.trailing_zeros() / BITS_PER_BYTE) as usize);
+                equal &= equal - 1;
+            }
+        }
+        return;
+    }
+    for (at, &other) in text.iter().enumerate() {
+        if other == byte {
+            found(at);
+        }
+    }
+}
+
+/// Call `found` with the position of every occurrence of `delimiter`, which
+/// is not empty, in `text`: front to back, none overlapping the one before.
+#[inline]
+fn each_occurrence(text: &[u8], delimiter: &[u8], mut found: impl FnMut(usize)) {
+    let (first, rest) = (delimiter[0], &delimiter[1..]);
+    let mut free = 0;
+    each_byte(text, first, |at| {
+        if at >= free && (rest.is_empty() || text[at + 1..].starts_with(rest)) {
+            found(at);
+            free = at + delimiter.len();
+        }
+    });
+}
+
+/// An array of what lies between the occurrences of `delimiter`, which is
+/// not empty, in `string`: each part a copy.
+fn between<'s>(
+    scope: &mut Scope<'s>,
+    string: Root<'s, Str>,
+    delimiter: Root<'s, Str>,
+) -> Root<'s, Arr<Str>> {
+    // Measure, reserve once, then build: nothing moves in between, so the
+    // parts are copied straight out of the string.
+    let view = string.get(scope);
+    let ascii = view.is_ascii();
+    let (text, by) = (view.as_str(), delimiter.get(scope).as_str());
+    let (mut count, mut bytes, mut from) = (1, 0, 0);
+    each_occurrence(text.as_bytes(), by.as_bytes(), |at| {
+        count += 1;
+        bytes += str_size(at - from);
+        from = at + by.len();
+    });
+    bytes += str_size(text.len() - from);
+    let reservation = scope.reserve(array_size(count) + bytes);
+    let array = reservation.array::<Str>(count);
+    let (text, by) = (
+        reservation.get(string).as_str(),
+        reservation.get(delimiter).as_str(),
+    );
+    let (mut index, mut from) = (0, 0);
+    let mut part = |from: usize, to: usize| {
+        // SAFETY: an occurrence of a string in another starts and ends
+        // between characters, and so does what lies between two.
+        let part = unsafe { text.get_unchecked(from..to) };
+        let chars = if ascii {
+            part.len()
+        } else {
+            part.chars().count()
+        };
+        array.set(index, reservation.counted_str(part, chars));
+        index += 1;
+    };
+    each_occurrence(text.as_bytes(), by.as_bytes(), |at| {
+        part(from, at);
+        from = at + by.len();
+    });
+    part(from, text.len());
     let array = array.keep();
     reservation.finish(array)
 }
@@ -373,11 +506,11 @@ impl NativeBamlString for Natives {
     }
 
     fn chars<'s>(scope: &mut Scope<'s>, string: Root<'s, Str>) -> Root<'s, Arr<Str>> {
-        pieces::<Characters>(scope, string, None)
+        pieces::<Characters>(scope, string)
     }
 
     fn lines<'s>(scope: &mut Scope<'s>, string: Root<'s, Str>) -> Root<'s, Arr<Str>> {
-        pieces::<Lines>(scope, string, None)
+        pieces::<Lines>(scope, string)
     }
 
     fn trim_start<'s>(scope: &mut Scope<'s>, string: Root<'s, Str>) -> Root<'s, Str> {
@@ -511,9 +644,9 @@ impl NativeBamlString for Natives {
         delimiter: Root<'s, Str>,
     ) -> Root<'s, Arr<Str>> {
         if delimiter.get(scope).as_str().is_empty() {
-            pieces::<Characters>(scope, string, None)
+            pieces::<Characters>(scope, string)
         } else {
-            pieces::<Between>(scope, string, Some(delimiter))
+            between(scope, string, delimiter)
         }
     }
 

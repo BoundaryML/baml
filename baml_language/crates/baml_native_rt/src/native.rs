@@ -575,17 +575,23 @@ impl<'s> Reservation<'_, 's> {
 
     /// A new string holding `text`.
     pub fn str(&self, text: &str) -> StrRef<'_> {
+        self.counted_str(text, text.chars().count())
+    }
+
+    /// A new string holding `text`, which has `chars` characters.
+    pub fn counted_str(&self, text: &str, chars: usize) -> StrRef<'_> {
         assert!(
             u32::try_from(text.len()).is_ok(),
             "a string cannot be longer than 4 GiB"
         );
+        debug_assert_eq!(text.chars().count(), chars);
         let string = self.take(str_size(text.len()));
         // SAFETY: the string has room for its two words and the text.
         unsafe {
             store(string, TYPE_STRING);
             store(
                 string + STRING_LENGTHS,
-                text.len() | (text.chars().count() << STRING_CHAR_COUNT_SHIFT),
+                text.len() | (chars << STRING_CHAR_COUNT_SHIFT),
             );
             std::ptr::copy_nonoverlapping(
                 text.as_ptr(),
