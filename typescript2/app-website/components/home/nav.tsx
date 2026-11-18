@@ -59,17 +59,23 @@ function NavBar({ children }: { children: ReactNode }) {
           </Link>
           <div className="flex items-center gap-4 sm:gap-6">
             <PlatformMenu />
-            <Link
-              className="tap whitespace-nowrap text-body hover:text-ink transition-colors"
-              href="/adopt"
-            >
-              Adopt
-            </Link>
+            {/* Adopt is in the Platform menu. The bar keeps the two links a visitor acts on. */}
             <Link
               className="tap whitespace-nowrap text-body hover:text-ink transition-colors"
               href="/pricing"
             >
               Pricing
+            </Link>
+            <Link
+              className="tap whitespace-nowrap text-body hover:text-ink transition-colors"
+              href="/quickstart"
+            >
+              {/* "BAML" shows where the bar has room for it: not on the narrowest phones, and not
+                  between sm and md, where the wordmark and the counts come in beside it. */}
+              <span className="hidden min-[360px]:inline sm:hidden md:inline">
+                BAML{' '}
+              </span>
+              Quickstart
             </Link>
           </div>
         </div>

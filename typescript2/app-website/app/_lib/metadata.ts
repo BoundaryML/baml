@@ -117,10 +117,10 @@ export function createMetadata({
 export const OG_SITE = {
   images: [
     {
-      alt: 'Boundary: the hyperobservable software stack',
+      alt: 'Boundary: the hyper-observable programming language',
       height: 630,
       type: 'image/png',
-      url: ogImagePath({ title: 'The hyperobservable software stack' }),
+      url: ogImagePath({ title: 'The hyper-observable programming language' }),
       width: 1200,
     },
   ],
