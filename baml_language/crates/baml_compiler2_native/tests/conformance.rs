@@ -110,3 +110,43 @@ async fn natives_end_as_the_interpreter_does() {
     assert!(ran > 0, "no conformance cases under `{}`", root.display());
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// A program whose spawned task fails with nothing awaiting it: `baml run`
+/// prints the entry function's result, waits for every task, reports the
+/// error no `await` took and exits with a failure, and so does native code.
+/// The interpreter as this suite runs it only logs such an error, so this
+/// cannot be one of the cases above.
+#[test]
+fn an_error_no_await_took_fails_the_program_after_its_result() {
+    const SOURCE: &str = r"
+function count(n: int) -> int {
+  let x = 0;
+  for (let i = 0; i < n; i += 1) { x += 1; };
+  x
+}
+
+function main() -> int {
+  let ignored = spawn { 10 / count(0) };
+  let awaited = spawn { count(7) };
+  await awaited
+}
+";
+    let db = setup_test_db(SOURCE);
+    assert_no_diagnostic_errors(&db);
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let executable = build(&db, "main", directory.path()).expect("the program compiles");
+    for stress in [false, true] {
+        let mut command = std::process::Command::new(&executable);
+        if stress {
+            command.env("BAML_GC_STRESS", "1");
+        }
+        let output = command.output().expect("the program starts");
+        assert_eq!(output.status.code(), Some(1));
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stderr),
+            "error: unhandled spawned task failed: uncaught throw: \
+             baml.panics.DivisionByZero {dividend: 10}\n"
+        );
+    }
+}
