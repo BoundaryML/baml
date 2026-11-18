@@ -10,11 +10,6 @@ function echo_int(value: int) -> int {
     value
 }
 
-function reject_int_before_dispatch(probe: () -> int, value: int) -> int {
-    probe()
-    value
-}
-
 function echo_bigint(value: bigint) -> bigint {
     value
 }

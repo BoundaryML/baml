@@ -1175,10 +1175,7 @@ fn to_heap(
             let value_ty = declarations.realize(&map_ty.value.to_baml_ty())?;
             let mut entries = IndexMap::with_capacity(map.value.len());
             for (k, v) in &map.value {
-                entries.insert(
-                    BexStr::from(k.as_ref()),
-                    to_heap(vm, v, declarations)?,
-                );
+                entries.insert(BexStr::from(k.as_ref()), to_heap(vm, v, declarations)?);
             }
             Value::object(vm.alloc_map(key, value_ty, entries))
         }

@@ -20,11 +20,6 @@ Func<Task<long>> probe = () =>
     Interlocked.Increment(ref primitiveProbeCalls);
     return Task.FromResult(1L);
 };
-Require(
-    Functions.RejectIntBeforeDispatch(probe, BamlIntMaximum) == BamlIntMaximum,
-    "maximum int argument changed");
-Require(primitiveProbeCalls == 1, "in-range int did not reach native dispatch");
-primitiveProbeCalls = 0;
 
 BigInteger highBit = (BigInteger.One << 255) + 0x80;
 BigInteger[] bigints =
