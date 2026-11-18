@@ -18,7 +18,7 @@ doctest = false
 num-bigint = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = [ "rt-multi-thread", "time" ] }
+tokio = { workspace = true, features = [ "fs", "rt-multi-thread", "time" ] }
 zmij = { workspace = true }
 
 [build-dependencies]

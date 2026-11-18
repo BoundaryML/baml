@@ -766,6 +766,11 @@ impl<'s> Scope<'s> {
         self.error(crate::layout::WELL_KNOWN_INVALID_ARGUMENT, message)
     }
 
+    /// Throw `baml.errors.Io`.
+    pub fn io_error(&mut self, message: &str) -> Thrown<'s> {
+        self.error(crate::layout::WELL_KNOWN_IO, message)
+    }
+
     /// Throw `baml.errors.ParseError`.
     pub fn parse_error(&mut self, message: &str) -> Thrown<'s> {
         self.error(crate::layout::WELL_KNOWN_PARSE_ERROR, message)
@@ -1143,7 +1148,9 @@ pub struct Natives;
 mod array;
 mod bigint;
 pub(crate) mod drive;
+mod env;
 mod float;
+mod fs;
 mod int;
 mod json;
 mod map;

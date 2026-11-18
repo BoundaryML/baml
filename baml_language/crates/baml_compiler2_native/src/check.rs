@@ -1630,6 +1630,27 @@ fn terminator_supported<'db>(
                 && assignable(&place_ty(db, body, destination)?, &NativeTy::Null)
             {
                 Ok(())
+            } else if let Some(native) =
+                crate::natives::named(&name).filter(|native| native.flags.is_some())
+            {
+                // One the runtime implements is called as any native is.
+                let (signature, _) = native.callable()?;
+                let result = place_ty(db, body, destination)?;
+                if args.len() != signature.params.len()
+                    || !assignable(&result, &signature.result.native(&[]))
+                {
+                    return Err(Blocker::new(
+                        "call that does not match its callee's layout",
+                        native.path,
+                    ));
+                }
+                all_assignable(
+                    db,
+                    body,
+                    args,
+                    |index| signature.params.get(index).map(|ty| ty.native(&[])),
+                    "argument",
+                )
             } else {
                 Err(Blocker::new("system operation", name))
             }

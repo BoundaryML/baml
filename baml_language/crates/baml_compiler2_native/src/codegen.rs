@@ -3950,6 +3950,25 @@ impl<'a, 'db> Translator<'a, 'db> {
                 ..
             } => self.await_future(future, destination, *target)?,
             // A checked system operation is the sleep.
+            // A system operation the runtime implements as a native.
+            Terminator::SysOp {
+                callee: Operand::Constant(Constant::Function(function)),
+                args,
+                destination,
+                target,
+                ..
+            } if let Some(native) = crate::natives::named(
+                &baml_compiler2_mir::function_display_name(self.db, *function),
+            )
+            .filter(|native| native.flags.is_some()) =>
+            {
+                let (value, produced) = self.native_call_out_of_line(native, args, 0)?;
+                let expected = self.place_ty(destination)?;
+                let value = self.coerce(value, &produced, &expected)?;
+                self.write_place(destination, value)?;
+                let target = self.block(*target);
+                self.builder.ins().jump(target, &[]);
+            }
             Terminator::SysOp {
                 args,
                 destination,
