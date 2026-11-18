@@ -1,0 +1,24 @@
+class Pair {
+    a: int?
+    b: int
+}
+
+// A field named twice in a class literal is an error.
+function twice() -> Pair {
+    Pair { a: null, a: 1, b: 2 }
+}
+
+// Shorthand and explicit spellings of the same field collide too.
+function shorthand(a: int) -> Pair {
+    Pair { a, b: 2, a: 3 }
+}
+
+// Every repeat is reported against the first site.
+function thrice() -> Pair {
+    Pair { a: 1, b: 2, a: 3, a: 4 }
+}
+
+// An explicit field that overrides a spread is not a duplicate.
+function override_spread(p: Pair) -> Pair {
+    Pair { a: 1, ...p }
+}

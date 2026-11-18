@@ -1,0 +1,34 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0012
+
+  × duplicate field `a` in class literal
+   ╭─[duplicate_object_field.baml:8:21]
+ 8 │     Pair { a: null, a: 1, b: 2 }
+   ·            ┬        ┬
+   ·            │        ╰── field `a` set again here
+   ·            ╰── field `a` first set here
+   ╰────
+
+  [hir] E0012
+
+  × duplicate field `a` in class literal
+    ╭─[duplicate_object_field.baml:13:21]
+ 13 │     Pair { a, b: 2, a: 3 }
+    ·            ┬        ┬
+    ·            │        ╰── field `a` set again here
+    ·            ╰── field `a` first set here
+    ╰────
+
+  [hir] E0012
+
+  × duplicate field `a` in class literal
+    ╭─[duplicate_object_field.baml:18:24]
+ 18 │     Pair { a: 1, b: 2, a: 3, a: 4 }
+    ·            ┬           ┬     ┬
+    ·            │           │     ╰── field `a` set again here
+    ·            │           ╰── field `a` set again here
+    ·            ╰── field `a` first set here
+    ╰────
