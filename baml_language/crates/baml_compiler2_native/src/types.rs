@@ -390,6 +390,11 @@ pub(crate) struct Body<'a, 'db> {
     /// The locals an array loop keeps as an array and a position; see
     /// [`crate::loops`].
     loop_locals: Vec<bool>,
+    /// The locals a handler lands with: the error and its context. A
+    /// handler catches whatever is thrown, so the error is held as an
+    /// `unknown` whatever type the local is declared with, and tested
+    /// before it is used as anything narrower.
+    landed: Vec<bool>,
     /// For each block, the member each local of a union type is known to
     /// hold throughout it; see [`crate::narrow`].
     narrowed: Vec<Vec<Option<NativeTy<'db>>>>,
@@ -432,6 +437,14 @@ impl<'a, 'db> Body<'a, 'db> {
             type_values,
             inferred: vec![None; body.locals.len()],
             loop_locals: vec![false; body.locals.len()],
+            landed: {
+                let mut landed = vec![false; body.locals.len()];
+                for (_, landing) in body.handlers() {
+                    landed[landing.error_local.0] = true;
+                    landed[landing.context_local.0] = true;
+                }
+                landed
+            },
             narrowed: Vec::new(),
             reachable: vec![true; body.blocks.len()],
             at: Cell::new(None),
@@ -753,6 +766,9 @@ pub(crate) fn storage_ty<'db>(
             "array loop local used outside its loop",
             local.to_string(),
         ));
+    }
+    if body.landed[local.0] {
+        return Ok(NativeTy::Unknown);
     }
     match &body.inferred[local.0] {
         Some(inferred) if !body.local(local).is_captured => Ok(inferred.clone()),

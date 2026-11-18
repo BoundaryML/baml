@@ -99,7 +99,15 @@ pub const TYPE_BOX_INT: usize = 144;
 pub const TYPE_BOX_FLOAT: usize = 160;
 pub const TYPE_BOX_BOOL: usize = 176;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 192;
+/// An error of the standard library, thrown by the runtime: one reference
+/// to the text the error is written as. No type a program names is this
+/// one, so only a handler that takes every error catches it.
+pub const TYPE_ERROR: usize = 192;
+/// A panic raised by the runtime or by compiled code's own checks, laid out
+/// like [`TYPE_ERROR`]. A handler that takes every error does not take a
+/// panic, so the two are told apart.
+pub const TYPE_PANIC: usize = 216;
+pub const FIRST_CLASS_TYPE: usize = 240;
 
 /// The start of every type table, as `u32`s: eight bytes no type lives at,
 /// so that no id is zero, then the fixed types.
@@ -151,6 +159,18 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     KIND_FIXED,
     BOX_SIZE as u32,
     0,
+    0,
+    KIND_FIXED,
+    BOX_SIZE as u32,
+    1,
+    0,
+    BOX_VALUE as u32,
+    0,
+    KIND_FIXED,
+    BOX_SIZE as u32,
+    1,
+    0,
+    BOX_VALUE as u32,
     0,
 ];
 

@@ -3,7 +3,7 @@
 
 use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BoundFrame, Constant, Local, MirFunction, MirFunctionBody,
+    AggregateKind, BasicBlock, BinOp, BoundFrame, Constant, Local, MirFunction, MirFunctionBody,
     MirFunctionKind, Operand, OptLevel, Place, RuntimeTy, Rvalue, ShortCircuitKind, StatementKind,
     SwitchKey, Terminator, TyTemplate, TyTemplateInterface, TypeTest, UnaryOp,
     function_display_name,
@@ -633,12 +633,7 @@ pub(crate) fn check_function<'db>(
                     continue;
                 }
                 body.enter(index);
-                if block.unwind.is_some() || block.landing.is_some() {
-                    checker.note(Err(Blocker::new(
-                        "catch or defer handler",
-                        block.id.to_string(),
-                    )));
-                }
+                checker.note(context_unread(body, block));
                 for statement in &block.statements {
                     checker.statement_needs(body, &statement.kind);
                     checker.note(statement_supported(db, body, &loops, &statement.kind));
@@ -1186,6 +1181,12 @@ pub(crate) fn type_test_plan<'db>(
             match &test {
                 TestKind::Exactly(NativeTy::Null) => return Ok(TypeTestPlan::Present(false)),
                 TestKind::Exactly(NativeTy::Class(class, arguments)) => {
+                    if is_runtime_error(db, *class) {
+                        return Err(Blocker::new(
+                            "type test",
+                            "of an error class the runtime throws",
+                        ));
+                    }
                     class_layout(db, *class, arguments)?;
                 }
                 TestKind::AnyOf(tests) => {
@@ -1195,7 +1196,10 @@ pub(crate) fn type_test_plan<'db>(
                         }
                     }
                 }
-                TestKind::Exactly(_) | TestKind::Argument(_) | TestKind::Implements(_) => {}
+                TestKind::Exactly(_)
+                | TestKind::Argument(_)
+                | TestKind::Implements(_)
+                | TestKind::Panic => {}
                 // Arrays of different element types share their type ids.
                 TestKind::AnyArray => {
                     let arrays = match operand {
@@ -1283,15 +1287,11 @@ fn terminator_supported<'db>(
             args,
             ntypeargs,
             destination,
-            unwind,
             ..
         } => {
             let called = call_target(db, body, callee, args, *ntypeargs)?;
             if *has_trace {
                 return Err(Blocker::new("call with a trace attachment", ""));
-            }
-            if unwind.is_some() {
-                return Err(Blocker::new("catch or defer handler", "call"));
             }
             let result = local_ty(db, body, place_local(destination)?)?;
             match called {
@@ -1391,14 +1391,10 @@ fn terminator_supported<'db>(
             ntypeargs,
             self_arg,
             destination,
-            unwind,
             ..
         } => {
             if *has_trace {
                 return Err(Blocker::new("call with a trace attachment", ""));
-            }
-            if unwind.is_some() {
-                return Err(Blocker::new("catch or defer handler", "call"));
             }
             let result = local_ty(db, body, place_local(destination)?)?;
             match virtual_target(db, body, iface, method, args, *ntypeargs, *self_arg)? {
@@ -1453,7 +1449,11 @@ fn terminator_supported<'db>(
         )),
         Terminator::Spawn { .. } => Err(Blocker::new("spawn", "")),
         Terminator::Await { .. } | Terminator::AwaitAny { .. } => Err(Blocker::new("await", "")),
-        Terminator::Throw { .. } | Terminator::Rethrow { .. } => Err(Blocker::new("throw", "")),
+        Terminator::Throw { value } => operand_ty(db, body, value).map(drop),
+        Terminator::Rethrow { value, context } => {
+            operand_ty(db, body, value)?;
+            operand_ty(db, body, context).map(drop)
+        }
         Terminator::ShortCircuit {
             operand,
             kind,
@@ -1475,5 +1475,54 @@ fn terminator_supported<'db>(
             expect_bool(&operand_ty(db, body, operand)?, "short-circuit operand")?;
             expect_bool(&place_ty(db, body, destination)?, "short-circuit result")
         }
+    }
+}
+
+/// A handler's context local holds the trace of the throw, not yet the
+/// `baml.errors.Context` a program reads: only a rethrow may name it, which
+/// passes it on.
+fn context_unread(body: &Body<'_, '_>, block: &BasicBlock<'_>) -> Result<(), Blocker> {
+    use std::fmt::Write as _;
+
+    let contexts: Vec<String> = body
+        .handlers()
+        .map(|(_, landing)| format!("{:?}", landing.context_local))
+        .collect();
+    if contexts.is_empty() {
+        return Ok(());
+    }
+    let mut code = String::new();
+    for statement in &block.statements {
+        let _ = write!(code, "{:?};", statement.kind);
+    }
+    let _ = match &block.terminator {
+        Some(Terminator::Rethrow { value, .. }) => write!(code, "{value:?}"),
+        Some(terminator) => write!(code, "{terminator:?}"),
+        None => Ok(()),
+    };
+    if contexts.iter().any(|context| code.contains(context)) {
+        Err(Blocker::new("error context", block.id.to_string()))
+    } else {
+        Ok(())
+    }
+}
+
+/// Whether `class` is one the runtime throws: a panic or an error of the
+/// standard library. The runtime's own are not instances of the class yet
+/// (see [`crate::layout::TYPE_ERROR`]), so a test for it cannot be decided.
+fn is_runtime_error<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
+) -> bool {
+    match class {
+        // Decided by the namespace alone: a program's own `panics` or
+        // `errors` namespace is taken for the standard library's.
+        baml_compiler2_hir::loc::DeclRef::Source(class) => {
+            baml_compiler2_hir::file_package::file_package(db, class.file(db))
+                .namespace_path
+                .first()
+                .is_some_and(|namespace| matches!(namespace.as_str(), "panics" | "errors"))
+        }
+        baml_compiler2_hir::loc::DeclRef::External(_) => true,
     }
 }

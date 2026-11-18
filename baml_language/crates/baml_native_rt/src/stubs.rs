@@ -19,7 +19,7 @@
 
 use crate::{
     heap::{alloc_slow, poll_slow},
-    stack_slow,
+    stack_slow, unwind,
 };
 
 #[cfg(not(any(
@@ -209,4 +209,103 @@ preserving_stub! {
     /// A compiled function was entered with its stack pointer below the
     /// limit.
     baml_rt_stack_slow => stack_slow
+}
+
+/// A stub named `$name` that never returns to its caller: it calls
+/// `$throw` with its two arguments, the mutator, its own frame record and
+/// room for an [`unwind::Resume`], and then goes on where that says: in the
+/// handler's frame, with the error and its context in the two registers an
+/// exception edge reads them from, on the worker named.
+///
+/// On arm64 a handler lands with x0 and x1, on x86-64 with rax and rdx.
+#[cfg(target_arch = "aarch64")]
+macro_rules! throwing_stub {
+    ($(#[$attribute:meta])* $name:ident => $throw:path) => {
+        $(#[$attribute])*
+        ///
+        /// # Safety
+        ///
+        /// Called from compiled code only, with the mutator in x21.
+        #[unsafe(naked)]
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $name() {
+            core::arch::naked_asm!(
+                "stp x29, x30, [sp, #-16]!",
+                "mov x29, sp",
+                "sub sp, sp, #48",
+                "mov x2, x21",
+                "mov x3, x29",
+                "mov x4, sp",
+                "bl {throw}",
+                "ldp x2, x3, [sp, #0]",
+                "ldp x4, x0, [sp, #16]",
+                "ldp x1, x21, [sp, #32]",
+                "mov sp, x2",
+                "mov x29, x3",
+                "br x4",
+                throw = sym $throw,
+            )
+        }
+    };
+}
+
+/// Not built or run: written on an arm64 host.
+#[cfg(all(target_arch = "x86_64", not(target_os = "windows")))]
+macro_rules! throwing_stub {
+    ($(#[$attribute:meta])* $name:ident => $throw:path) => {
+        $(#[$attribute])*
+        ///
+        /// # Safety
+        ///
+        /// Called from compiled code only, with the mutator in r15.
+        #[unsafe(naked)]
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $name() {
+            core::arch::naked_asm!(
+                "push rbp",
+                "mov rbp, rsp",
+                "sub rsp, 48",
+                "mov rdx, r15",
+                "mov rcx, rbp",
+                "mov r8, rsp",
+                "call {throw}",
+                "mov rax, [rsp + 24]",
+                "mov rdx, [rsp + 32]",
+                "mov r15, [rsp + 40]",
+                "mov rcx, [rsp + 16]",
+                "mov rbp, [rsp + 8]",
+                "mov rsp, [rsp]",
+                "jmp rcx",
+                throw = sym $throw,
+            )
+        }
+    };
+}
+
+throwing_stub! {
+    /// `throw`: takes the error and the context it was thrown during the
+    /// handling of, or zero.
+    baml_rt_throw => unwind::throw
+}
+
+throwing_stub! {
+    /// Throw a caught error again: takes the error and the context it was
+    /// caught with.
+    baml_rt_rethrow => unwind::rethrow
+}
+
+throwing_stub! {
+    /// Throw `baml.panics.DivisionByZero`: takes the dividend.
+    baml_rt_panic_division_by_zero => unwind::panic_division_by_zero
+}
+
+throwing_stub! {
+    /// Throw `baml.panics.NegativeBitShift`: takes the shift count.
+    baml_rt_panic_negative_shift => unwind::panic_negative_shift
+}
+
+throwing_stub! {
+    /// Throw `baml.panics.IndexOutOfBounds`: takes the index and the
+    /// length.
+    baml_rt_panic_index_out_of_bounds => unwind::panic_index_out_of_bounds
 }

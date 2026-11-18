@@ -7,7 +7,8 @@
 //! function and hands its result to one of the `baml_rt_print_*` functions,
 //! and the two tables the collector reads: `baml_native_stack_maps`, where
 //! compiled frames keep their references, and `baml_native_types`, what
-//! each type of object holds.
+//! each type of object holds. A throw reads two more, `baml_native_unwind`
+//! and `baml_native_functions`: see [`unwind`].
 //!
 //! The standard library's natives are in [`native`]: their symbols are
 //! generated from the standard library's own declarations.
@@ -23,6 +24,7 @@ pub mod layout;
 pub mod native;
 pub mod string;
 pub mod stubs;
+pub mod unwind;
 
 use std::io::Write;
 
@@ -46,6 +48,10 @@ unsafe extern "C" {
     static baml_native_stack_maps: usize;
     /// Defined by the compiled program: the first word of its type table.
     static baml_native_types: usize;
+    /// Defined by the compiled program: its table of calls with a handler.
+    static baml_native_unwind: usize;
+    /// Defined by the compiled program: its function table.
+    static baml_native_functions: usize;
 }
 
 /// Process entry point.
@@ -58,6 +64,8 @@ pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
         let program = Program {
             stack_maps: &raw const baml_native_stack_maps as usize,
             types: &raw const baml_native_types as usize,
+            unwind: &raw const baml_native_unwind as usize,
+            functions: &raw const baml_native_functions as usize,
         };
         let mut mutator = Mutator::new(program, stress);
         mutator.set_base_frame(current_frame());
@@ -104,7 +112,7 @@ fn print_line(text: &str) {
     let _ = writeln!(out, "{text}");
 }
 
-/// Report an uncaught panic on stderr and end the process.
+/// Report an uncaught throw on stderr and end the process.
 #[expect(clippy::exit, reason = "an uncaught panic ends the program")]
 fn uncaught(thrown: &str) -> ! {
     let _ = std::io::stdout().flush();
@@ -148,33 +156,6 @@ pub unsafe extern "C" fn baml_rt_print_string(value: usize) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_rt_print_enum(mutator: &Mutator, enum_type: usize, index: usize) {
     print_line(mutator.variant_name(enum_type, index));
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn baml_rt_panic_division_by_zero(dividend: i64) -> ! {
-    uncaught(&division_by_zero_text(dividend))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn baml_rt_panic_negative_shift(count: i64) -> ! {
-    uncaught(&negative_shift_text(count))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn baml_rt_panic_index_out_of_bounds(index: i64, length: i64) -> ! {
-    uncaught(&index_out_of_bounds_text(index, length))
-}
-
-/// A native threw and nothing catches it: `thrown` is the object of
-/// [`native::RtResult`].
-///
-/// # Safety
-///
-/// `thrown` is what a native returned as thrown.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_throw_uncaught(thrown: usize) -> ! {
-    // SAFETY: the caller's contract.
-    uncaught(unsafe { string::text(thrown) })
 }
 
 /// A compiled function was entered with its stack pointer below the limit.

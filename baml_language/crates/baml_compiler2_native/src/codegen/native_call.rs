@@ -5,17 +5,13 @@ use baml_compiler2_mir::Operand;
 use cranelift_codegen::ir::{self, AbiParam, InstBuilder, types};
 use cranelift_module::{Linkage, Module};
 
-use super::{TRAP_AFTER_PANIC, Translator, WORD, internal};
+use super::{Translator, WORD, internal};
 use crate::{
     CompileError,
     check::native_type_arguments,
     natives::{Kind, Native, Ty},
     types::NativeTy,
 };
-
-/// Called with the thrown object when a native throws and nothing catches
-/// it. Does not return.
-const THROW_UNCAUGHT: &str = "baml_rt_throw_uncaught";
 
 fn abi_param(ty: &Ty) -> Option<AbiParam> {
     match ty {
@@ -53,7 +49,8 @@ impl<'db> Translator<'_, 'db> {
     }
 
     /// Call `native` with `arguments` and return its result and the type it
-    /// has. A native that throws ends the program: nothing catches yet.
+    /// has. What a native throws goes to the handler of the calling block
+    /// when it has one, and unwinds from here otherwise.
     pub(super) fn native_call(
         &mut self,
         native: &'static Native,
@@ -128,9 +125,7 @@ impl<'db> Translator<'_, 'db> {
             self.builder.seal_block(resume);
 
             self.builder.switch_to_block(raise);
-            let uncaught = self.import(THROW_UNCAUGHT, vec![AbiParam::new(WORD)], Vec::new())?;
-            self.builder.ins().call(uncaught, &[thrown]);
-            self.builder.ins().trap(TRAP_AFTER_PANIC);
+            self.raise(thrown, None)?;
 
             self.builder.switch_to_block(resume);
             match &signature.result {
