@@ -20,10 +20,13 @@
 
 use std::collections::HashMap;
 
-use baml_compiler2_hir_ty::layout::class_generic_params;
+use baml_compiler2_hir_ty::{
+    extern_loc::ClassRef,
+    layout::{class_generic_params, class_ref_of, enum_ref_of},
+};
 use baml_compiler2_mir::{
     BinOp, Constant, Local, Operand, Place, Rvalue, ShortCircuitKind, StatementKind, Terminator,
-    TyTemplate, TypeTest, UnaryOp,
+    TyTemplate, TyTemplateInterface, TypeTest, UnaryOp,
 };
 use baml_type::typetag;
 
@@ -44,6 +47,10 @@ pub(crate) enum TestKind<'db> {
     /// parameter `.0`: one compiled for every reference type, so only the
     /// type id it is passed says which.
     Argument(usize),
+    /// A value that passes any of these tests: a union's members.
+    AnyOf(Vec<TestKind<'db>>),
+    /// A value of any type that implements this interface.
+    Implements(TyTemplateInterface),
 }
 
 impl<'db> TestKind<'db> {
@@ -52,43 +59,97 @@ impl<'db> TestKind<'db> {
         test: &TypeTest<'db>,
         arguments: &[TypeArg<'db>],
     ) -> Option<Self> {
-        Some(Self::Exactly(match test {
-            TypeTest::Class { class, args }
-                if args.len() == class_generic_params(db, *class).len() =>
-            {
-                let arguments: Vec<_> = args
-                    .iter()
-                    .map(|argument| template_ty(db, argument, arguments))
-                    .collect();
-                // Instantiations at different reference types share a type
-                // id: a header cannot tell them apart.
-                if arguments
-                    .iter()
-                    .any(|argument| !matches!(argument, Some(argument) if !argument.is_ref()))
-                {
-                    return None;
+        match test {
+            TypeTest::Class { class, args } => Self::of_class(db, *class, args, arguments),
+            TypeTest::Enum(enum_ref) => Some(Self::Exactly(NativeTy::Enum(*enum_ref))),
+            TypeTest::Template(template) => Self::of_template(db, template, arguments),
+        }
+    }
+
+    fn of_class(
+        db: &'db dyn baml_compiler2_mir::Db,
+        class: ClassRef<'db>,
+        args: &[TyTemplate],
+        arguments: &[TypeArg<'db>],
+    ) -> Option<Self> {
+        if args.len() != class_generic_params(db, class).len() {
+            return None;
+        }
+        let arguments: Vec<_> = args
+            .iter()
+            .map(|argument| template_ty(db, argument, arguments))
+            .collect();
+        // Instantiations at different reference types share a type id: a
+        // header cannot tell them apart.
+        if arguments
+            .iter()
+            .any(|argument| !matches!(argument, Some(argument) if !argument.is_ref()))
+        {
+            return None;
+        }
+        Some(Self::Exactly(NativeTy::Class(class, arguments)))
+    }
+
+    fn of_template(
+        db: &'db dyn baml_compiler2_mir::Db,
+        template: &TyTemplate,
+        arguments: &[TypeArg<'db>],
+    ) -> Option<Self> {
+        Some(Self::Exactly(match template {
+            TyTemplate::Int => NativeTy::Int,
+            TyTemplate::Float => NativeTy::Float,
+            TyTemplate::Bool => NativeTy::Bool,
+            TyTemplate::String => NativeTy::String,
+            TyTemplate::Null => NativeTy::Null,
+            TyTemplate::List(_) => return Some(Self::AnyArray),
+            TyTemplate::TypeArgRef(slot) => match arguments.get(*slot as usize)?.clone()? {
+                NativeTy::Unknown => return Some(Self::Argument(*slot as usize)),
+                scalar @ (NativeTy::Int | NativeTy::Float | NativeTy::Bool | NativeTy::Enum(_)) => {
+                    scalar
                 }
-                NativeTy::Class(*class, arguments)
+                _ => return None,
+            },
+            TyTemplate::Enum(head) => NativeTy::Enum(enum_ref_of(db, head)?),
+            TyTemplate::Class(head, args) => {
+                return Self::of_class(db, class_ref_of(db, head)?, args, arguments);
             }
-            TypeTest::Enum(enum_ref) => NativeTy::Enum(*enum_ref),
-            TypeTest::Template(TyTemplate::Int) => NativeTy::Int,
-            TypeTest::Template(TyTemplate::Float) => NativeTy::Float,
-            TypeTest::Template(TyTemplate::Bool) => NativeTy::Bool,
-            TypeTest::Template(TyTemplate::String) => NativeTy::String,
-            TypeTest::Template(TyTemplate::Null) => NativeTy::Null,
-            TypeTest::Template(TyTemplate::List(_)) => return Some(Self::AnyArray),
-            TypeTest::Template(TyTemplate::TypeArgRef(slot)) => {
-                match arguments.get(*slot as usize)?.clone()? {
-                    NativeTy::Unknown => return Some(Self::Argument(*slot as usize)),
-                    scalar @ (NativeTy::Int
-                    | NativeTy::Float
-                    | NativeTy::Bool
-                    | NativeTy::Enum(_)) => scalar,
-                    _ => return None,
+            TyTemplate::Interface(name, generics, associated_types) => {
+                let whole = generics.iter().all(TyTemplate::is_fully_concrete)
+                    && associated_types
+                        .iter()
+                        .all(|(_, binding)| binding.is_fully_concrete());
+                return whole.then(|| {
+                    Self::Implements(TyTemplateInterface {
+                        name: name.clone(),
+                        generics: generics.clone(),
+                        associated_types: associated_types.clone(),
+                    })
+                });
+            }
+            TyTemplate::Union(members) => {
+                let mut tests = Vec::new();
+                for member in members {
+                    match Self::of_template(db, member, arguments)? {
+                        Self::AnyOf(inner) => tests.extend(inner),
+                        // Decided by a type id passed in: not one of a
+                        // fixed set.
+                        Self::Argument(_) => return None,
+                        test => tests.push(test),
+                    }
                 }
+                return Some(Self::AnyOf(tests));
             }
             _ => return None,
         }))
+    }
+
+    /// Whether the types that pass are known from the test alone.
+    pub(crate) fn is_static(&self) -> bool {
+        match self {
+            Self::Exactly(_) | Self::AnyArray => true,
+            Self::Argument(_) | Self::Implements(_) => false,
+            Self::AnyOf(tests) => tests.iter().all(Self::is_static),
+        }
     }
 
     /// What a coarse tag test asks.
@@ -109,7 +170,8 @@ impl<'db> TestKind<'db> {
             Self::Exactly(ty) => ty == member,
             Self::AnyArray => matches!(member, NativeTy::Array(_)),
             // Nothing is known of it where the code is compiled.
-            Self::Argument(_) => false,
+            Self::Argument(_) | Self::Implements(_) => false,
+            Self::AnyOf(tests) => tests.iter().any(|test| test.matches(member)),
         }
     }
 }
@@ -143,8 +205,7 @@ struct Analysis<'a, 'b, 'db> {
 impl<'db> Analysis<'_, '_, 'db> {
     /// What a test asks, when the answer says which member a value is.
     fn test(&self, test: &TypeTest<'db>) -> Option<TestKind<'db>> {
-        TestKind::of(self.db, test, self.body.arguments)
-            .filter(|test| !matches!(test, TestKind::Argument(_)))
+        TestKind::of(self.db, test, self.body.arguments).filter(TestKind::is_static)
     }
 
     fn is_boxed(&self, local: usize) -> bool {

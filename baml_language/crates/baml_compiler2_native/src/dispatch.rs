@@ -110,6 +110,20 @@ fn goal(interface: &TyTemplateInterface) -> Option<InferInterface> {
     ))
 }
 
+/// Whether values of type `ty` are values of the interface type.
+pub(crate) fn implements(
+    db: &dyn baml_compiler2_mir::Db,
+    ty: &NativeTy<'_>,
+    interface: &TyTemplateInterface,
+) -> bool {
+    match (goal(interface), plain(db, ty)) {
+        (Some(goal), Some(concrete)) => {
+            resolve_implementation(db, &Ty::from_plain(&concrete), &goal).is_some()
+        }
+        _ => false,
+    }
+}
+
 /// What `interface`'s `method` runs on a receiver of type `receiver`:
 /// `None` when the type does not implement the interface, a blocker when it
 /// does in a way native code is not generated for.

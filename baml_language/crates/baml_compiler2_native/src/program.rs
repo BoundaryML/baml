@@ -125,6 +125,9 @@ pub(crate) struct Program<'db> {
     /// The method table's rows: for a type, the function behind each slot
     /// (by position in `slots`) it implements in source.
     pub(crate) rows: Vec<(NativeTy<'db>, Vec<(usize, FnKey<'db>)>)>,
+    /// Every type an interface value can hold: strings, the boxed scalars,
+    /// and each enum and class instantiation the program makes values of.
+    pub(crate) types: Vec<NativeTy<'db>>,
     /// A row is `8 << column_shift` bytes: the columns, rounded up to a
     /// power of two.
     pub(crate) column_shift: u8,
@@ -151,6 +154,7 @@ pub(crate) fn collect<'db>(
         index: HashMap::new(),
         slots: Vec::new(),
         rows: Vec::new(),
+        types: Vec::new(),
         column_shift: 0,
     };
     let mut queue = VecDeque::from([Needed {
@@ -210,6 +214,7 @@ pub(crate) fn collect<'db>(
             }
         }
         if queue.is_empty() {
+            program.types = types;
             break;
         }
     }

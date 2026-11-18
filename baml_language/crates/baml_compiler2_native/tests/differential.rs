@@ -774,6 +774,45 @@ function interface_columns() -> string {
   for (let s in shapes) { out = out + s.twice().to_string() + "," + s.scaled(count(3)).to_string() + ";"; }
   out
 }
+interface Kind {
+  function rank(self) -> int throws never
+}
+class Ace {
+  implements Kind {
+    function rank(self) -> int throws never { 14 }
+  }
+}
+class Pip {
+  n int
+  implements Kind {
+    function rank(self) -> int throws never { self.n }
+  }
+}
+class Joker { wild bool }
+function classify(u: unknown) -> int {
+  if (u is Kind) { 1 } else if (u is int | string) { 2 } else if (u is Joker | null) { 3 } else { 4 }
+}
+function type_test_sets() -> int {
+  let xs: unknown[] = [Ace {}, Pip { n: count(3) }, count(5), "s", Joker { wild: true }, null, 2.5, true];
+  let total = 0;
+  for (let x in xs) { total = total * 10 + classify(x); }
+  total
+}
+type Texty = string | Joker
+function sort_out(u: unknown) -> int {
+  match (u) {
+    let t: Texty => 1
+    let n: int | float | null => 2
+    let k: Kind => 3
+    _ => 4
+  }
+}
+function type_test_in_match() -> int {
+  let xs: unknown[] = [Ace {}, count(5), "s", Joker { wild: true }, null, 2.5, true, Pip { n: 2 }];
+  let total = 0;
+  for (let x in xs) { total = total * 10 + sort_out(x); }
+  total
+}
 "#;
 
 /// How a run ended. `baml run` prints a result on stdout and exits zero, or
@@ -989,6 +1028,8 @@ const CASES: &[Case] = &[
         "to_string_of_mixed",
         Printed("\"$2.50|7|text|Loud|2.5|true|\""),
     ),
+    case("type_test_sets", Printed("11223344")),
+    case("type_test_in_match", Printed("32112243")),
 ];
 
 /// The text of the thrown value in an uncaught-panic report.

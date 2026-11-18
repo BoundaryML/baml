@@ -982,7 +982,14 @@ pub(crate) fn type_test_plan<'db>(
                 TestKind::Exactly(NativeTy::Class(class, arguments)) => {
                     class_layout(db, *class, arguments)?;
                 }
-                TestKind::Exactly(_) | TestKind::Argument(_) => {}
+                TestKind::AnyOf(tests) => {
+                    for test in tests {
+                        if !matches!(test, TestKind::Exactly(NativeTy::Null)) {
+                            type_test_plan(db, operand, Some(test.clone()), coarse)?;
+                        }
+                    }
+                }
+                TestKind::Exactly(_) | TestKind::Argument(_) | TestKind::Implements(_) => {}
                 // Arrays of different element types share their type ids.
                 TestKind::AnyArray => {
                     let arrays = match operand {
@@ -999,21 +1006,18 @@ pub(crate) fn type_test_plan<'db>(
             }
             TypeTestPlan::Header(test)
         }
-        _ if matches!(test, TestKind::Argument(_)) => {
+        _ if !test.is_static() => {
             return Err(Blocker::new(
                 "type test",
-                "of a type argument, on a value that is not a union",
+                "of a type argument or an interface, on a value that is not a union",
             ));
         }
-        NativeTy::Optional(inner) => {
-            if test == TestKind::Exactly(NativeTy::Null) {
-                TypeTestPlan::Present(false)
-            } else if test.matches(inner) {
-                TypeTestPlan::Present(true)
-            } else {
-                TypeTestPlan::Always(false)
-            }
-        }
+        NativeTy::Optional(inner) => match (test.matches(&NativeTy::Null), test.matches(inner)) {
+            (true, true) => TypeTestPlan::Always(true),
+            (true, false) => TypeTestPlan::Present(false),
+            (false, true) => TypeTestPlan::Present(true),
+            (false, false) => TypeTestPlan::Always(false),
+        },
         other => TypeTestPlan::Always(test.matches(other)),
     })
 }

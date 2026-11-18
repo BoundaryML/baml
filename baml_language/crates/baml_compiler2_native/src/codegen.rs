@@ -397,6 +397,27 @@ impl<'db> Backend<'db> {
         self.module.define_data(id, &description).map_err(internal)
     }
 
+    /// The type id in the header of a value of type `ty` held as a
+    /// reference, when every such value has the same one.
+    fn type_id(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        ty: &NativeTy<'db>,
+    ) -> Result<Option<usize>, CompileError> {
+        Ok(Some(match ty {
+            NativeTy::Int => layout::TYPE_BOX_INT,
+            NativeTy::Float => layout::TYPE_BOX_FLOAT,
+            NativeTy::Bool => layout::TYPE_BOX_BOOL,
+            NativeTy::String => layout::TYPE_STRING,
+            NativeTy::Enum(enum_ref) => self.enum_type(db, *enum_ref),
+            NativeTy::Class(class, arguments) => {
+                let fields = class_layout(db, *class, arguments).map_err(internal)?;
+                self.class_type(*class, arguments, &fields)
+            }
+            _ => return Ok(None),
+        }))
+    }
+
     /// The type id of a class, adding its entry to the type table the first
     /// time: what the collector needs to copy and scan an instance.
     fn class_type(
@@ -583,14 +604,9 @@ impl<'db> Backend<'db> {
         };
         let mut entries = Vec::new();
         for (ty, methods) in &program.rows {
-            let type_id = match ty {
-                NativeTy::String => layout::TYPE_STRING,
-                NativeTy::Class(class, arguments) => {
-                    let fields = class_layout(db, *class, arguments).map_err(internal)?;
-                    self.class_type(*class, arguments, &fields)
-                }
-                _ => return Err(internal("a method table row is for a reference type")),
-            };
+            let type_id = self
+                .type_id(db, ty)?
+                .ok_or_else(|| internal("a method table row is for a type with a type id"))?;
             for (slot, key) in methods {
                 let function = declared
                     .get(key)
@@ -1461,22 +1477,8 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             TypeTestPlan::Header(test) => test,
         };
-        let ids = match test {
-            TestKind::AnyArray => vec![layout::TYPE_ARRAY_OF_VALUES, layout::TYPE_ARRAY_OF_REFS],
-            TestKind::Exactly(NativeTy::Int) => vec![layout::TYPE_BOX_INT],
-            TestKind::Exactly(NativeTy::Float) => vec![layout::TYPE_BOX_FLOAT],
-            TestKind::Exactly(NativeTy::Bool) => vec![layout::TYPE_BOX_BOOL],
-            TestKind::Exactly(NativeTy::String) => vec![layout::TYPE_STRING],
-            TestKind::Exactly(NativeTy::Enum(enum_ref)) => {
-                vec![self.backend.enum_type(self.db, *enum_ref)]
-            }
-            TestKind::Exactly(NativeTy::Class(class, arguments)) => {
-                let fields = class_layout(self.db, *class, arguments).map_err(internal)?;
-                vec![self.backend.class_type(*class, arguments, &fields)]
-            }
-            TestKind::Argument(_) => Vec::new(),
-            TestKind::Exactly(_) => return Err(internal("a checked type test has a type id")),
-        };
+        let mut ids = Vec::new();
+        let null_passes = self.passing_ids(test, &mut ids)?;
         // `null` has no header to read.
         let may_be_null = match ty {
             NativeTy::Union(members) => members.contains(&NativeTy::Null),
@@ -1486,7 +1488,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.append_block_param(done, types::I8);
         if may_be_null {
             let read = self.builder.create_block();
-            let fails = self.bool_const(false);
+            let fails = self.bool_const(null_passes);
             self.builder
                 .ins()
                 .brif(value, read, &[], done, &[fails.into()]);
@@ -1511,11 +1513,57 @@ impl<'a, 'db> Translator<'a, 'db> {
                 None => same,
             });
         }
-        let passes = passes.expect("a type test has a type id");
+        let passes = match passes {
+            Some(passes) => passes,
+            // No type in the program passes.
+            None => self.bool_const(false),
+        };
         self.builder.ins().jump(done, &[passes.into()]);
         self.builder.seal_block(done);
         self.builder.switch_to_block(done);
         Ok(self.builder.block_params(done)[0])
+    }
+
+    /// Add to `ids` the type id of every type whose values pass `test`, and
+    /// say whether `null` passes.
+    fn passing_ids(
+        &mut self,
+        test: &TestKind<'db>,
+        ids: &mut Vec<usize>,
+    ) -> Result<bool, CompileError> {
+        match test {
+            TestKind::Exactly(NativeTy::Null) => return Ok(true),
+            TestKind::AnyArray => {
+                ids.extend([layout::TYPE_ARRAY_OF_VALUES, layout::TYPE_ARRAY_OF_REFS]);
+            }
+            TestKind::Exactly(ty) => ids.push(
+                self.backend
+                    .type_id(self.db, ty)?
+                    .ok_or_else(|| internal("a checked type test has a type id"))?,
+            ),
+            // Compared with the type id the function was passed.
+            TestKind::Argument(_) => {}
+            TestKind::AnyOf(tests) => {
+                let mut null_passes = false;
+                for test in tests {
+                    null_passes |= self.passing_ids(test, ids)?;
+                }
+                return Ok(null_passes);
+            }
+            // The program is whole: the implementors are the types it makes
+            // values of.
+            TestKind::Implements(interface) => {
+                let program = self.program;
+                for ty in &program.types {
+                    if crate::dispatch::implements(self.db, ty, interface)
+                        && let Some(id) = self.backend.type_id(self.db, ty)?
+                    {
+                        ids.push(id);
+                    }
+                }
+            }
+        }
+        Ok(false)
     }
 
     /// Whether an optional holds a value, as a word that is zero for `null`.
@@ -2253,16 +2301,8 @@ impl<'a, 'db> Translator<'a, 'db> {
             return Ok(self.builder.use_var(*passed));
         }
         let id = match template_ty(self.db, template, self.body.arguments) {
-            Some(NativeTy::Int) => layout::TYPE_BOX_INT,
-            Some(NativeTy::Float) => layout::TYPE_BOX_FLOAT,
-            Some(NativeTy::Bool) => layout::TYPE_BOX_BOOL,
-            Some(NativeTy::String) => layout::TYPE_STRING,
-            Some(NativeTy::Enum(enum_ref)) => self.backend.enum_type(self.db, enum_ref),
-            Some(NativeTy::Class(class, arguments)) => {
-                let fields = class_layout(self.db, class, &arguments).map_err(internal)?;
-                self.backend.class_type(class, &arguments, &fields)
-            }
-            _ => 0,
+            Some(ty) => self.backend.type_id(self.db, &ty)?.unwrap_or(0),
+            None => 0,
         };
         Ok(self.builder.ins().iconst(types::I32, imm(id)))
     }
