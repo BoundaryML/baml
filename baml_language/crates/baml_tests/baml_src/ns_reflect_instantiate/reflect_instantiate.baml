@@ -533,3 +533,14 @@ test "value_of rejects a type that is not an enum" {
         "reflect.Enum.value_of expects an enum type, got `reflect_instantiate.Team.Technical`",
     )
 }
+
+class Spot {
+    x: int,
+    y: float,
+}
+
+test "get_field reads a float field" {
+    let spot = Spot { x: 1, y: 2.5 };
+    assert.equal(reflect.Class.get_field<int>(spot, "x"), 1);
+    assert.equal(reflect.Class.get_field<float>(spot, "y"), 2.5)
+}

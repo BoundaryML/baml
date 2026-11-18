@@ -61,7 +61,7 @@
 #![warn(clippy::disallowed_methods)]
 
 mod accessor;
-mod chunked_vec;
+mod cell_space;
 mod functions;
 mod gc;
 pub mod gc_policy;
@@ -76,13 +76,11 @@ mod tlab;
 pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass};
 pub use bex_external_types::{BexExternalValue, Handle, WeakHeapRef};
 pub use bex_vm_types::PermitProof;
-pub use gc::GcStats;
+pub use gc::{Forwarding, GcStats};
 #[cfg(feature = "gc_profiling")]
 pub use gc_profile::GcHeapSnapshot;
 pub use gc_profile::{GcCycleProfiler, GcProfile};
-pub use heap::{
-    BexHeap, DEFAULT_TLAB_SIZE, Finalizable, Generation, HeapStats, UnhandledSpawnError,
-};
+pub use heap::{BexHeap, Finalizable, Generation, HeapStats, UnhandledSpawnError};
 pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
 pub use heap_guard::{
     ActiveHeapPermit, HeapGuard, HeapPermit, HeapPermitManager, InactiveHeapPermit,

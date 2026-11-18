@@ -190,7 +190,7 @@ pub struct RuntimeImplRule {
     /// function of the impl block, stable under interface evolution.
     pub methods: IndexMap<baml_type::Name, MethodImpl>,
     /// Interface field index → the implementor's physical slot in
-    /// [`Instance::fields`](super::Instance::fields). Indexed by position in the
+    /// an instance's fields, as [`InstanceRef`](crate::InstanceRef) reads them. Indexed by position in the
     /// implemented [`InterfaceDef::fields`], so a virtual field access carries only
     /// that index — no name on the operand stack, no lookup at dispatch.
     ///

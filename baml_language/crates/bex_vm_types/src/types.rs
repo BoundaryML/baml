@@ -6,6 +6,7 @@
 //! argument; the unsafe code here is intentional and necessary.
 
 #![allow(unsafe_code)]
+mod cell;
 mod class;
 mod const_value;
 mod containers;
@@ -13,6 +14,7 @@ mod decl_path;
 mod enums;
 mod function;
 mod future;
+mod instance;
 mod interface;
 mod object;
 mod owner;
@@ -27,6 +29,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 /// runtime spells it unqualified everywhere it builds a declaration.
 pub use baml_type::DeclarationName;
 use borsh::{BorshDeserialize, BorshSerialize};
+pub use cell::*;
 pub use class::*;
 pub use const_value::*;
 pub use containers::*;
@@ -35,6 +38,7 @@ pub use enums::*;
 pub use function::*;
 pub use future::*;
 use indexmap::IndexMap;
+pub use instance::*;
 pub use interface::*;
 pub use object::*;
 pub use owner::*;
@@ -1017,7 +1021,7 @@ impl Type {
 
 #[cfg(test)]
 mod tests {
-    use super::{ConstValue, HeapPtr, Instance, Program, Type, Value, format_float};
+    use super::{ConstValue, Program, Type, Value, format_float};
 
     #[test]
     fn compiled_head_names_require_a_matching_named_declaration() {
@@ -1143,31 +1147,5 @@ mod tests {
             Type::OmittedArg
         );
         assert_eq!(value.to_string(), "<omitted>");
-    }
-
-    #[test]
-    fn instance_field_helpers_load_and_store_checked_slots() {
-        let instance = Instance::new(
-            HeapPtr::null(),
-            Box::new([]),
-            vec![Value::int(10), Value::int(20)],
-        );
-
-        assert_eq!(instance.field_len(), 2);
-        assert_eq!(instance.try_load_field(0), Some(Value::int(10)));
-        assert_eq!(instance.try_load_field(2), None);
-        assert_eq!(instance.load_field(1), Value::int(20));
-
-        assert_eq!(instance.try_store_field(1, Value::int(99)), Ok(()));
-        assert_eq!(instance.try_load_field(1), Some(Value::int(99)));
-        assert_eq!(instance.try_store_field(2, Value::int(123)), Err(2));
-    }
-
-    #[test]
-    #[should_panic(expected = "index out of bounds")]
-    fn instance_load_field_panics_for_invalid_slot() {
-        let instance = Instance::new(HeapPtr::null(), Box::new([]), vec![Value::int(10)]);
-
-        let _ = instance.load_field(1);
     }
 }

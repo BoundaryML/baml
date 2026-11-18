@@ -32,10 +32,10 @@ mod enabled {
     /// Storage counts, not payload bytes or a measurement of reachability.
     #[derive(Clone, Debug, Default)]
     pub struct GcHeapSnapshot {
-        /// Reserved/occupied slots in Gen0 and Gen2 respectively.
-        pub generation_slots: [usize; 2],
-        /// Backing capacity in Gen0, Gen2, scratch respectively.
-        pub capacity_slots: [usize; 3],
+        /// Words carved in Gen0 and Gen2 respectively.
+        pub generation_words: [usize; 2],
+        /// Backing capacity in words in Gen0, Gen2, scratch respectively.
+        pub capacity_words: [usize; 3],
         /// Actual TLAB allocations since the previous collection (excludes holes).
         pub new_objects: usize,
     }
@@ -44,10 +44,10 @@ mod enabled {
         /// Caller must hold exclusive GC access; generations can move otherwise.
         pub(crate) unsafe fn capture(heap: &BexHeap) -> Self {
             // SAFETY: caller holds exclusive GC access.
-            let spaces = unsafe { [heap.gen0_ref(), heap.gen2_ref(), heap.inactive_ref()] };
+            let spaces = unsafe { [&*heap.gen0.get(), &*heap.gen2.get(), &*heap.inactive.get()] };
             Self {
-                generation_slots: [spaces[0].len(), spaces[1].len()],
-                capacity_slots: spaces.map(|space| space.capacity()),
+                generation_words: [spaces[0].used_words(), spaces[1].used_words()],
+                capacity_words: spaces.map(|space| space.capacity_words()),
                 new_objects: heap.allocs_since_gc(),
             }
         }
@@ -177,18 +177,20 @@ mod enabled {
         use crate::Tlab;
 
         #[test]
-        fn reports_allocations_separately_from_reserved_slots() {
-            let heap = BexHeap::with_tlab_size(vec![], 16);
+        fn reports_allocations_separately_from_reserved_words() {
+            let heap = BexHeap::new(vec![]);
             let mut tlab = Tlab::new(heap.clone());
             let live = tlab.alloc_string("live");
             tlab.alloc_string("dead");
             // SAFETY: this standalone heap has no concurrent holders.
             let (first, roots, _) = unsafe { heap.collect_garbage(&[live]) };
-            assert_eq!(first.profile.before.generation_slots, [16, 0]);
+            let block = crate::tlab::FIRST_BLOCK_WORDS;
+            let object = bex_vm_types::OBJECT_CELL_WORDS;
+            assert_eq!(first.profile.before.generation_words, [block, 0]);
             assert_eq!(first.profile.before.new_objects, 2);
-            assert_eq!(first.profile.after.generation_slots, [0, 1]);
+            assert_eq!(first.profile.after.generation_words, [0, object]);
             assert_eq!(first.profile.after.new_objects, 0);
-            assert_eq!(first.collected_count, 15); // 1 dead object + 14 holes.
+            assert_eq!(first.collected_count, 1);
             assert_eq!(first.profile.roots, 1);
             let p = &first.profile;
             assert!(
@@ -197,8 +199,8 @@ mod enabled {
             );
             // SAFETY: roots were forwarded by the preceding collection; no mutator.
             let (second, _, _) = unsafe { heap.collect_garbage(&roots) };
-            assert_eq!(second.profile.before.generation_slots, [0, 1]);
-            assert_eq!(second.profile.after.generation_slots, [0, 1]);
+            assert_eq!(second.profile.before.generation_words, [0, object]);
+            assert_eq!(second.profile.after.generation_words, [0, object]);
         }
     }
 }

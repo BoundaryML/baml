@@ -3517,7 +3517,7 @@ impl BexEngine {
         #[cfg(feature = "heap_debug")]
         for &ptr in &all_roots {
             assert!(
-                forwarding.contains_key(&ptr),
+                forwarding.get(ptr).is_some(),
                 "heap_debug: post-GC integrity sweep — root {ptr:?} was not \
                  reached by the GC BFS (collect_roots produced it but it is \
                  not in the forwarding map)"
@@ -3543,7 +3543,7 @@ impl BexEngine {
             heap_guard.collect_roots(&mut roots_after);
             for &ptr in &roots_after {
                 assert!(
-                    !self.heap.debug_ptr_in_inactive(ptr),
+                    !forwarding.in_from_space(ptr),
                     "heap_debug: post-forward_roots — root {ptr:?} still points \
                      into the inactive space (forward_roots missed it)"
                 );
@@ -3551,6 +3551,7 @@ impl BexEngine {
         }
 
         self.heap.verify_quick();
+        drop(forwarding);
 
         // Roots are forwarded; a panic past this point leaves a readable heap.
         drop(abort_on_unwind);
@@ -7880,8 +7881,9 @@ impl BexEngine {
             };
             let package_ptr = match vm.get_object(wrapper_ptr) {
                 Object::Package(_) => wrapper_ptr,
-                Object::Instance(wrapper) => {
-                    wrapper.load_field(0).as_object_ptr().ok_or_else(|| {
+                Object::Instance => {
+                    let wrapper = vm.get_instance(wrapper_ptr).expect("an instance pointer");
+                    wrapper.load_value(0).as_object_ptr().ok_or_else(|| {
                         EngineError::TypeMismatch {
                             message: format!(
                                 "Package.compile dependency `{alias}` is not initialized"
@@ -7949,8 +7951,10 @@ impl BexEngine {
             .ok_or_else(|| invalid("Session.eval receiver is not an instance".to_string()))?;
         let package_ptr = match vm.get_object(wrapper_ptr) {
             Object::Package(_) => wrapper_ptr,
-            Object::Instance(wrapper) => wrapper
-                .load_field(0)
+            Object::Instance => vm
+                .get_instance(wrapper_ptr)
+                .expect("an instance pointer")
+                .load_value(0)
                 .as_object_ptr()
                 .ok_or_else(|| invalid("Session is not initialized".to_string()))?,
             _ => {

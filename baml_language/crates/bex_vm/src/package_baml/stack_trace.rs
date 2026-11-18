@@ -8,16 +8,16 @@ impl BamlClassErrorsStackTrace for PackageBamlImpl {
     fn _to_string_impl(vm: &BexVm, stacktrace: &view::errors::StackTrace<'_>) -> bex_str::BexStr {
         let frames = stacktrace.frames(vm);
 
-        let frame_views: Vec<_> = frames
+        let frame_instances: Vec<_> = frames
             .iter()
             .map(|frame_value| {
-                let frame_instance = vm
-                    .as_instance(frame_value)
-                    .expect("StackFrame: expected Instance");
-                view::errors::StackFrame {
-                    instance: frame_instance,
-                }
+                vm.as_instance(frame_value)
+                    .expect("StackFrame: expected Instance")
             })
+            .collect();
+        let frame_views: Vec<_> = frame_instances
+            .iter()
+            .map(|instance| view::errors::StackFrame { instance })
             .collect();
 
         let out = format_traceback(frame_views.iter().map(|frame| {

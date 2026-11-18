@@ -245,6 +245,21 @@ impl Drop for Pop {
     }
 }
 
+/// The compile-time objects a body of the program reads by index; empty for
+/// a runtime package's body. Only [`BexVm::static_objects`] builds one.
+#[derive(Clone, Copy)]
+#[cfg_attr(
+    feature = "heap_debug",
+    allow(
+        dead_code,
+        reason = "heap_debug resolves every class through the record"
+    )
+)]
+pub struct StaticObjects {
+    base: *const Object,
+    len: usize,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FrameAt {
     Vm(usize),
@@ -588,6 +603,59 @@ impl BexVm {
             return self.heap.compile_time_ptr(idx.into_raw());
         }
         self.package_object(package, idx)
+    }
+
+    /// The program's compile-time objects when `record` runs a body of the
+    /// program itself, else none. Those objects never move, so a body reads
+    /// them once and [`Self::class_at`] finds each class by offset instead of
+    /// resolving it through the record on every access.
+    #[inline]
+    #[must_use]
+    pub fn static_objects(&self, record: &FrameRecord) -> StaticObjects {
+        if record.package.get().as_ptr().is_null() {
+            StaticObjects {
+                base: self.heap.compile_time_base(),
+                len: self.heap.compile_time_len(),
+            }
+        } else {
+            StaticObjects {
+                base: ptr::null(),
+                len: 0,
+            }
+        }
+    }
+
+    /// [`Self::record_object`] for a body that read `statics` from
+    /// [`Self::static_objects`] at entry.
+    #[allow(
+        clippy::inline_always,
+        reason = "names the class on every compiled field access"
+    )]
+    #[inline(always)]
+    #[must_use]
+    pub fn class_at(
+        &self,
+        statics: StaticObjects,
+        record: &FrameRecord,
+        idx: bex_vm_types::ObjectIndex,
+    ) -> HeapPtr {
+        let idx_raw = idx.into_raw();
+        #[cfg(not(feature = "heap_debug"))]
+        if idx_raw < statics.len {
+            // SAFETY: `statics` covers the never-resized compile-time array,
+            // and `idx_raw` is in bounds.
+            return unsafe { HeapPtr::from_ptr(statics.base.add(idx_raw).cast_mut()) };
+        }
+        let _ = (statics, idx_raw);
+        self.class_at_slow(record, idx)
+    }
+
+    /// [`Self::class_at`] for a runtime package's body, kept out of line so a
+    /// field access in the program's own code inlines only its fast path.
+    #[cold]
+    #[inline(never)]
+    fn class_at_slow(&self, record: &FrameRecord, idx: bex_vm_types::ObjectIndex) -> HeapPtr {
+        self.record_object(record, idx)
     }
 
     #[inline]
