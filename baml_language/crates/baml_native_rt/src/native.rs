@@ -1232,7 +1232,7 @@ pub use state::{Opaque, OpaqueRef};
     reason = "generated from the standard library's declarations"
 )]
 mod generated {
-    use super::drive::drive;
+    use super::drive::{Head, start};
     #[allow(unused_imports, reason = "what the listed natives need varies")]
     use super::{
         Arr, ArrRef, Big, BigRef, Bool, Elem, Float, Int, Map, MapRef, Natives, Obj, ObjRef,

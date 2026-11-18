@@ -1,20 +1,35 @@
-//! Natives that stop and go on later: an `async fn`, and the loop that
-//! drives it.
+//! Natives that stop and go on later: an `async fn`, and what drives it.
 //!
 //! Only the compiler's transform of an `async fn` into a state machine is
 //! used. The state is one block on the Rust heap, made by the native's
-//! symbol and polled by [`run`] with a waker that does nothing. A native
-//! stops in one of two ways, both methods of its [`Scope`]:
+//! symbol ([`start`]) and polled with a waker that does nothing
+//! ([`baml_rt_native_poll`]). A native stops in one of two ways, both
+//! methods of its [`Scope`]:
 //!
-//! - [`Scope::call_baml`] runs a compiled function. The driver calls it as
-//!   an ordinary call on the task's stack, between two polls, so no frame
-//!   of the native is on the stack while compiled code runs: the call may
-//!   park the task or throw like any other. A throw comes back to the
-//!   native as an error.
+//! - [`Scope::call_baml`] runs a compiled function, which may park the
+//!   task or throw like any other. A throw comes back to the native as an
+//!   error.
 //! - [`Scope::io`] runs async Rust on the I/O runtime's own threads, and
 //!   parks the task until it is done.
 //!
-//! A poll that returns pending has left one of those two requests in the
+//! # The driver is compiled code
+//!
+//! Compiled code calls an `async` native through a stub the compiler makes
+//! for it. The stub calls the native's symbol, which makes the state and
+//! returns it. Then it loops: it calls the poll, which polls the native
+//! once and says what to do next, and does that itself, in compiled code:
+//! return, throw, call the compiled function the native asked for, or wait
+//! for I/O. Every Rust function returns before anything that can stop the
+//! task.
+//!
+//! So no Rust frame is on a task's stack while the task is stopped or while
+//! compiled code runs: nothing the Rust compiler keeps in a register or a
+//! stack slot is carried to the thread and the worker the task goes on
+//! under. The stub reads the worker from its pinned register for every
+//! call, and the poll tells the native's scope. A stop checks the stack
+//! for this in a build with checks.
+//!
+//! A poll that returns pending has left one of the two requests in the
 //! block. One that has not is a native awaiting something else, which
 //! nothing here would ever wake: the program ends saying so.
 //!
@@ -37,12 +52,13 @@ use std::{
 
 use super::{Elem, RootSlots, RtResult, Scope, Thrown, TypeId};
 use crate::{
-    heap::Mutator,
+    heap::{Mutator, current_frame},
+    layout::{NATIVE_CALL_ARGS, NATIVE_STATE_ARGS, STEP_CALL, STEP_DONE, STEP_THREW, STEP_WAIT},
     sched::{IoWait, Job, Task, Wake},
 };
 
 /// The most arguments a native passes a compiled function.
-const CALL_ARGS: usize = 4;
+const CALL_ARGS: usize = NATIVE_CALL_ARGS;
 
 /// A compiled function a native can call: an entry the compiler makes for
 /// the purpose, which takes and returns every value as a union holds it.
@@ -77,26 +93,18 @@ pub(crate) struct Exchange {
     threw: bool,
     /// The trace it threw that with.
     context: usize,
-    /// The worker the task went on under after its last stop: a task that
-    /// parks may be woken by another. Null until the native has stopped.
+    /// The worker the native is polled under: after a stop, the one the
+    /// task went on under.
     worker: *mut Mutator,
 }
 
-impl Default for Exchange {
-    fn default() -> Self {
-        Self {
-            request: None,
-            word: 0,
-            threw: false,
-            context: 0,
-            worker: std::ptr::null_mut(),
-        }
-    }
-}
-
-/// The state of one `async` native: what the driver and the collector read
-/// of it. The future follows, in the same block.
-pub(crate) struct Head {
+/// The state of one `async` native: what its stub, the poll and the
+/// collector read of it. The future follows, in the same block.
+#[repr(C)]
+pub struct Head {
+    /// What the stub passes the compiled function the native asked for.
+    /// First, where the stub reads them.
+    args: [usize; CALL_ARGS],
     /// The native the task was inside already, which called the compiled
     /// code that called this one.
     outer: *mut Head,
@@ -105,10 +113,15 @@ pub(crate) struct Head {
     /// The builtin's path, for a message about it.
     name: &'static str,
     exchange: Exchange,
+    /// The I/O the native asked to wait for, until the stub's wait has
+    /// taken it.
+    waits_for: Option<IoWait>,
     slots: RootSlots,
     /// Borrowed by the future from when it is made.
     scope: MaybeUninit<Scope<'static>>,
 }
+
+const _: () = assert!(std::mem::offset_of!(Head, args) == NATIVE_STATE_ARGS);
 
 #[repr(C)]
 struct Block<F> {
@@ -126,7 +139,7 @@ unsafe fn poll_block<F: Future<Output = RtResult>>(head: *mut Head) -> Poll<RtRe
 }
 
 unsafe fn drop_block<F>(head: *mut Head) {
-    // SAFETY: `head` starts a `Block<F>` made by `drive`, which nothing
+    // SAFETY: `head` starts a `Block<F>` made by `start`, which nothing
     // refers to any more. The future goes first: it borrows the head.
     unsafe {
         let block = head.cast::<Block<F>>();
@@ -135,50 +148,44 @@ unsafe fn drop_block<F>(head: *mut Head) {
     }
 }
 
-/// Run an `async` native to its end: `start` makes its future from the
-/// scope it is to use, having rooted its arguments there and allocated
-/// nothing.
+/// Make the state of an `async` native compiled code has just called, and
+/// put it first among those its task is inside: `make` makes the native's
+/// future from the scope it is to use, having rooted its arguments there
+/// and allocated nothing. The native has not run yet. Its stub polls it
+/// next.
 ///
 /// # Safety
 ///
-/// Called on a task, from the symbol compiled code called, after the
-/// mutator was told that function's frame ([`Mutator::enter`]). The roots
-/// `start` makes are of live objects.
-pub(crate) unsafe fn drive<F, S>(mutator: &mut Mutator, name: &'static str, start: S) -> RtResult
+/// Called on a task of `mutator`, from the symbol the native's stub
+/// called. The roots `make` makes are of live objects.
+pub(crate) unsafe fn start<F, S>(mutator: &mut Mutator, name: &'static str, make: S) -> *mut Head
 where
     // `Send`: a native may hold nothing bound to a thread across a stop.
     F: Future<Output = RtResult> + Send,
     S: FnOnce(&'static mut Scope<'static>) -> F,
 {
     let worker = std::ptr::from_mut(mutator);
-    // SAFETY: the caller's contract.
-    unsafe { run(worker, block(worker, name, start)) }
-}
-
-/// The state of a native that has not been polled yet: its future, made by
-/// `start`, and the scope the future uses.
-///
-/// # Safety
-///
-/// `worker` is the worker the native is to run on, and the roots `start`
-/// makes are of live objects.
-unsafe fn block<F, S>(worker: *mut Mutator, name: &'static str, start: S) -> *mut Head
-where
-    F: Future<Output = RtResult> + Send,
-    S: FnOnce(&'static mut Scope<'static>) -> F,
-{
     let block = Box::into_raw(Box::<Block<F>>::new_uninit()).cast::<Block<F>>();
     // SAFETY: the block is this function's until it is on the task's list,
     // and each part is written before it is read. The scope and the future
     // refer into the block, which stays where it is until it is dropped.
     unsafe {
+        let task = (*worker).cur_task;
         let head = &raw mut (*block).head;
         head.write(Head {
-            outer: std::ptr::null_mut(),
+            args: [0; CALL_ARGS],
+            outer: (*task).natives,
             poll: poll_block::<F>,
             drop: drop_block::<F>,
             name,
-            exchange: Exchange::default(),
+            exchange: Exchange {
+                request: None,
+                word: 0,
+                threw: false,
+                context: 0,
+                worker,
+            },
+            waits_for: None,
             slots: RootSlots::new(),
             scope: MaybeUninit::uninit(),
         });
@@ -188,7 +195,8 @@ where
             exchange: &raw mut (*head).exchange,
             life: PhantomData,
         });
-        (&raw mut (*block).future).write(ManuallyDrop::new(start(scope)));
+        (&raw mut (*block).future).write(ManuallyDrop::new(make(scope)));
+        (*task).natives = head;
         head
     }
 }
@@ -203,10 +211,8 @@ const MAY_AWAIT: &str = "A native may await only `scope.call_baml` and `scope.io
 /// used outside the job of `scope.io` panics for want of a runtime, and
 /// that message alone does not say where to look.
 ///
-/// The name is in the worker, not in a thread-local: a function that is on
-/// a task's stack while the task stops may go on on another thread, and
-/// the compiler is free to keep the address of a thread-local it has
-/// found once.
+/// The name is in the worker, not in a thread-local: the hook finds the
+/// worker through its one process-wide address.
 fn name_native_in_panics() {
     static HOOKED: Once = Once::new();
     HOOKED.call_once(|| {
@@ -227,123 +233,100 @@ fn name_native_in_panics() {
     });
 }
 
-/// Poll the native at `head` until it is done, doing between polls what
-/// it stopped for.
+/// What the stub that drives a native does next: one of the `STEP_*` of
+/// [`crate::layout`], and the word that goes with it.
+#[repr(C)]
+pub(crate) struct Step {
+    kind: usize,
+    word: usize,
+}
+
+// The two ways a native ends are what its result says of a throw.
+const _: () = assert!(STEP_DONE == 0 && STEP_THREW == 1);
+
+/// Poll the native at `head` once, and say what the stub that drives it
+/// does next. `word` and `threw` are what the compiled function the native
+/// asked for last returned, and whether that was thrown, with its trace in
+/// the worker's scratch word. Both are zero for the first poll and after a
+/// wait.
+///
+/// `worker` is the stub's pinned register as it calls: after a stop, the
+/// worker the task went on under. The native's scope is told here.
+///
+/// This returns before the task can stop. What the native stopped for is
+/// done by the stub, in compiled code, between two calls.
 ///
 /// # Safety
 ///
-/// As [`drive`], with a block it made.
-unsafe fn run(mut worker: *mut Mutator, head: *mut Head) -> RtResult {
+/// Called by the stub of an `async` native, on its task, with the worker
+/// running the task and the state the native's symbol returned.
+#[unsafe(no_mangle)]
+pub(crate) unsafe extern "C" fn baml_rt_native_poll(
+    worker: *mut Mutator,
+    head: *mut Head,
+    word: usize,
+    threw: usize,
+) -> Step {
     name_native_in_panics();
     // SAFETY: the caller's contract. The worker is reached through its
-    // address: compiled code this calls reaches it through its register.
+    // address: the native reaches it through its scope meanwhile.
     unsafe {
-        let task = (*worker).cur_task;
-        // The frame of the compiled function that called the native: what a
-        // collection during a poll walks from. Compiled code the native
-        // calls records frames of its own.
-        let caller = (*worker).anchor();
-        (*head).outer = (*task).natives;
-        (*task).natives = head;
-        let result = loop {
-            (*worker).polling = Some((*head).name);
-            let polled = ((*head).poll)(head);
-            (*worker).polling = None;
-            if let Poll::Ready(result) = polled {
-                break result;
-            }
-            match (*head).exchange.request.take() {
-                Some(Request::Call { code, args }) => {
-                    let (word, threw);
-                    (word, threw, worker) = call_compiled(worker, code, args);
-                    (*head).exchange.word = word;
-                    (*head).exchange.threw = threw != 0;
-                    // The function's entry leaves the trace of a throw in
-                    // the scratch word.
-                    (*head).exchange.context = (*worker).scratch();
-                }
-                Some(Request::Io(wait)) => worker = wait_for_io(worker, wait),
-                None => {
-                    let _ = writeln!(
-                        std::io::stderr().lock(),
-                        "fatal: the native `{}` stopped without asking for anything. {MAY_AWAIT}",
-                        (*head).name
-                    );
-                    std::process::abort();
+        // What a collection during the poll walks from: the stub's frame.
+        (*worker).enter(current_frame());
+        let exchange = &raw mut (*head).exchange;
+        (*exchange).word = word;
+        (*exchange).threw = threw != 0;
+        (*exchange).context = (*worker).scratch();
+        (*exchange).worker = worker;
+        (*worker).polling = Some((*head).name);
+        let polled = ((*head).poll)(head);
+        (*worker).polling = None;
+        if let Poll::Ready(result) = polled {
+            let task = (*worker).cur_task;
+            debug_assert!(
+                std::ptr::eq((*task).natives, head),
+                "natives end innermost first"
+            );
+            (*task).natives = (*head).outer;
+            ((*head).drop)(head);
+            return Step {
+                kind: result.thrown,
+                word: result.value as usize,
+            };
+        }
+        match (*exchange).request.take() {
+            Some(Request::Call { code, args }) => {
+                (*head).args = args;
+                Step {
+                    kind: STEP_CALL,
+                    word: code,
                 }
             }
-            (*head).exchange.worker = worker;
-            (*worker).set_anchor(caller);
-        };
-        (*task).natives = (*head).outer;
-        ((*head).drop)(head);
-        result
+            Some(Request::Io(wait)) => {
+                let waits_for = &raw mut (*head).waits_for;
+                *waits_for = Some(wait);
+                Step {
+                    kind: STEP_WAIT,
+                    word: waits_for as usize,
+                }
+            }
+            None => {
+                let _ = writeln!(
+                    std::io::stderr().lock(),
+                    "fatal: the native `{}` stopped without asking for anything. {MAY_AWAIT}",
+                    (*head).name
+                );
+                std::process::abort();
+            }
+        }
     }
-}
-
-/// Call the compiled entry at `code` as compiled code calls a function:
-/// with the worker in the pinned register. Returns its two results and the
-/// worker the task went on under.
-///
-/// # Safety
-///
-/// Called on a task of `worker`, with an entry the compiler made for
-/// natives to call and arguments of its types.
-#[cfg(target_arch = "aarch64")]
-unsafe fn call_compiled(
-    worker: *mut Mutator,
-    code: usize,
-    args: [usize; CALL_ARGS],
-) -> (usize, usize, *mut Mutator) {
-    let (word, threw, resumed);
-    // SAFETY: the caller's contract. The entry keeps every register the C
-    // convention has a callee keep, but the pinned one.
-    unsafe {
-        std::arch::asm!(
-            "blr {code}",
-            code = in(reg) code,
-            inout("x0") args[0] => word,
-            inout("x1") args[1] => threw,
-            inout("x2") args[2] => _,
-            inout("x3") args[3] => _,
-            inout("x21") worker => resumed,
-            clobber_abi("C"),
-        );
-    }
-    (word, threw, resumed)
-}
-
-/// Park the task until the job of `wait` has ended. Returns the worker the
-/// task went on under.
-///
-/// # Safety
-///
-/// Called on a task of `worker`.
-#[cfg(target_arch = "aarch64")]
-unsafe fn wait_for_io(worker: *mut Mutator, wait: IoWait) -> *mut Mutator {
-    // The stub's Rust half takes the job out of this frame before the task
-    // leaves its stack.
-    let mut wait = ManuallyDrop::new(wait);
-    let resumed;
-    // SAFETY: the stub keeps every register the C convention has a callee
-    // keep, but the pinned one, and takes what is at the address once.
-    unsafe {
-        std::arch::asm!(
-            "bl {wait}",
-            wait = sym crate::sched::switch::baml_rt_io_wait,
-            inout("x0") &raw mut wait => _,
-            inout("x21") worker => resumed,
-            clobber_abi("C"),
-        );
-    }
-    resumed
 }
 
 /// Start `job` on the runtime that runs the jobs of [`Scope::io`]: Tokio,
 /// on a thread of its own, made when the first job is. `wake` is used when
 /// the job has ended.
 ///
-/// Only [`Scope::io`] names this function, and the driver calls it through
+/// Only [`Scope::io`] names this function, and the wait calls it through
 /// the request, so a program none of whose natives calls `scope.io` links
 /// no Tokio.
 fn start_on_tokio(job: Job, wake: Wake) {
@@ -386,7 +369,7 @@ pub(crate) unsafe fn each_root(task: *mut Task, mut each: impl FnMut(usize)) {
 ///
 /// `task` is a task whose stack nothing will run on again.
 pub(crate) unsafe fn drop_all(task: *mut Task) {
-    // SAFETY: the caller's contract: no driver will poll these again.
+    // SAFETY: the caller's contract: no stub will poll these again.
     unsafe {
         while !(*task).natives.is_null() {
             let head = (*task).natives;
@@ -582,6 +565,45 @@ mod tests {
         (worker, task)
     }
 
+    /// What the compiled stub of a native does, for a native that asks
+    /// only for calls: poll, call what was asked for with the worker in
+    /// the pinned register, and poll again under the worker the task went
+    /// on under. Returns that worker and how the native ended.
+    unsafe fn drive<F, S>(
+        mut worker: *mut Mutator,
+        name: &'static str,
+        make: S,
+    ) -> (*mut Mutator, Step)
+    where
+        F: Future<Output = RtResult> + Send,
+        S: FnOnce(&'static mut Scope<'static>) -> F,
+    {
+        // SAFETY: the caller is on a task of `worker`, and what the native
+        // calls keeps every register the C convention has a callee keep,
+        // but the pinned one.
+        unsafe {
+            let head = start(&mut *worker, name, make);
+            let (mut word, mut threw) = (0, 0);
+            loop {
+                let step = baml_rt_native_poll(worker, head, word, threw);
+                if step.kind != STEP_CALL {
+                    return (worker, step);
+                }
+                let args = (*head).args;
+                std::arch::asm!(
+                    "blr {code}",
+                    code = in(reg) step.word,
+                    inout("x0") args[0] => word,
+                    inout("x1") args[1] => threw,
+                    inout("x2") args[2] => _,
+                    inout("x3") args[3] => _,
+                    inout("x21") worker,
+                    clobber_abi("C"),
+                );
+            }
+        }
+    }
+
     struct SetWhenDropped(&'static AtomicBool);
 
     impl Drop for SetWhenDropped {
@@ -595,17 +617,16 @@ mod tests {
         static DROPPED: AtomicBool = AtomicBool::new(false);
         const TEXT: &str = "held across the stop";
         let (mut worker, task) = worker_on_a_task(true);
-        // SAFETY: the block is polled and dropped as the driver would, on
-        // the worker it was made for, and its one root is a live string.
+        // SAFETY: the native is polled and dropped on the worker it was
+        // made for, and its one root is a live string.
         unsafe {
-            let head = block(&raw mut *worker, "test.stops", |scope| async move {
+            let head = start(&mut worker, "test.stops", |scope| async move {
                 let held = SetWhenDropped(&DROPPED);
                 let text = scope.alloc_str(TEXT);
                 scope.io(std::future::pending::<()>()).await;
                 drop(held);
                 RtResult::ok(text.raw() as u64)
             });
-            (*task).natives = head;
             assert!(((*head).poll)(head).is_pending());
 
             let mut roots = Vec::new();
@@ -640,10 +661,10 @@ mod tests {
         }
 
         let (mut worker, task) = worker_on_a_task(true);
-        // SAFETY: the block is polled and dropped as the driver would, on
-        // the worker it was made for.
+        // SAFETY: the native is polled and dropped on the worker it was
+        // made for.
         unsafe {
-            let head = block(&raw mut *worker, "test.owns", |scope| async move {
+            let head = start(&mut worker, "test.owns", |scope| async move {
                 let owned = scope.alloc_owned(Arc::new(Counted(7)));
                 let plain = scope.alloc_plain([1_u64, 2, 3]);
                 let dead = scope.alloc_owned(Arc::new(Counted(9)));
@@ -664,7 +685,6 @@ mod tests {
                 assert_eq!(DROPS.load(Ordering::Acquire), 1);
                 RtResult::ok(0)
             });
-            (*task).natives = head;
             assert!(((*head).poll)(head).is_ready());
             drop_all(task);
             // Nothing holds the object now.
@@ -693,17 +713,15 @@ mod tests {
         )
     }
 
-    /// Whether the native below found itself on the thread it started on,
-    /// and the worker it ended under.
+    /// Whether the native below found itself on the thread it started on.
     static SAME_THREAD: AtomicBool = AtomicBool::new(false);
-    static ENDED_UNDER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
     /// Runs a native that does what no native may: it keeps something of
     /// its thread, here the thread's id, across `scope.call_baml`.
     unsafe extern "C" fn keeps_its_thread(worker: *mut Mutator) -> *mut Mutator {
-        // SAFETY: on a task of `worker`, with no compiled caller.
-        unsafe {
-            drive(&mut *worker, "test.keeps_its_thread", |scope| async move {
+        // SAFETY: on a task of `worker`.
+        let (worker, _) = unsafe {
+            drive(worker, "test.keeps_its_thread", |scope| async move {
                 let thread = std::thread::current().id();
                 let called = scope.call_baml(BamlFn(sleeps as *const () as usize), &[]);
                 let slept = called.await.is_ok();
@@ -711,11 +729,10 @@ mod tests {
                     slept && std::thread::current().id() == thread,
                     Ordering::Release,
                 );
-                ENDED_UNDER.store(scope.mutator.as_ptr() as usize, Ordering::Release);
                 RtResult::ok(0)
-            });
-        }
-        ENDED_UNDER.load(Ordering::Acquire) as *mut Mutator
+            })
+        };
+        worker
     }
     crate::sched::tests::task_function!(keeps_its_thread_task => keeps_its_thread);
 
@@ -734,37 +751,28 @@ mod tests {
         }
     }
 
-    /// Whether the native below found what it held and what it made, and
-    /// the worker it ended under.
+    /// Whether the native below found what it held and what it made.
     static INTACT: AtomicBool = AtomicBool::new(false);
-    static ALLOCATED_UNDER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
     /// Runs a native that allocates once it has stopped and gone on.
     unsafe extern "C" fn allocates_after_a_stop(worker: *mut Mutator) -> *mut Mutator {
         const HELD: &str = "held across the stop";
         const MADE: &str = "made after it";
-        // SAFETY: on a task of `worker`, with no compiled caller.
-        unsafe {
-            drive(
-                &mut *worker,
-                "test.allocates_after_a_stop",
-                |scope| async move {
-                    let held = scope.alloc_str(HELD);
-                    let called = scope.call_baml(BamlFn(sleeps as *const () as usize), &[]);
-                    let slept = called.await.is_ok();
-                    let made = scope.alloc_str(MADE);
-                    INTACT.store(
-                        slept
-                            && held.get(scope).as_str() == HELD
-                            && made.get(scope).as_str() == MADE,
-                        Ordering::Release,
-                    );
-                    ALLOCATED_UNDER.store(scope.mutator.as_ptr() as usize, Ordering::Release);
-                    RtResult::ok(0)
-                },
-            );
-        }
-        ALLOCATED_UNDER.load(Ordering::Acquire) as *mut Mutator
+        // SAFETY: on a task of `worker`.
+        let (worker, _) = unsafe {
+            drive(worker, "test.allocates_after_a_stop", |scope| async move {
+                let held = scope.alloc_str(HELD);
+                let called = scope.call_baml(BamlFn(sleeps as *const () as usize), &[]);
+                let slept = called.await.is_ok();
+                let made = scope.alloc_str(MADE);
+                INTACT.store(
+                    slept && held.get(scope).as_str() == HELD && made.get(scope).as_str() == MADE,
+                    Ordering::Release,
+                );
+                RtResult::ok(0)
+            })
+        };
+        worker
     }
     crate::sched::tests::task_function!(allocates_after_a_stop_task => allocates_after_a_stop);
 
@@ -786,18 +794,14 @@ mod tests {
 
     /// Runs a native that panics once it has stopped and gone on.
     unsafe extern "C" fn panics_after_a_stop(worker: *mut Mutator) -> *mut Mutator {
-        // SAFETY: on a task of `worker`, with no compiled caller.
-        unsafe {
-            drive(
-                &mut *worker,
-                "test.panics_after_a_stop",
-                |scope| async move {
-                    let called = scope.call_baml(BamlFn(sleeps as *const () as usize), &[]);
-                    let _ = called.await;
-                    panic!("after the stop")
-                },
-            );
-        }
+        // SAFETY: on a task of `worker`.
+        let (worker, _) = unsafe {
+            drive(worker, "test.panics_after_a_stop", |scope| async move {
+                let called = scope.call_baml(BamlFn(sleeps as *const () as usize), &[]);
+                let _ = called.await;
+                panic!("after the stop")
+            })
+        };
         worker
     }
     crate::sched::tests::task_function!(panics_after_a_stop_task => panics_after_a_stop);
@@ -852,9 +856,9 @@ mod tests {
     #[ignore = "ends its process: run by the test above"]
     fn stops_for_nothing() {
         let (mut worker, _) = worker_on_a_task(false);
-        // SAFETY: on a worker that runs a task, with no compiled caller.
+        // SAFETY: on a worker that runs a task.
         unsafe {
-            drive(&mut worker, "test.stops_for_nothing", |_| async {
+            drive(&raw mut *worker, "test.stops_for_nothing", |_| async {
                 std::future::pending::<()>().await;
                 RtResult::ok(0)
             });
@@ -867,7 +871,7 @@ mod tests {
         let (mut worker, _) = worker_on_a_task(false);
         // SAFETY: as above.
         unsafe {
-            drive(&mut worker, "test.awaits_a_tokio_timer", |_| async {
+            drive(&raw mut *worker, "test.awaits_a_tokio_timer", |_| async {
                 tokio::time::sleep(Duration::from_millis(1)).await;
                 RtResult::ok(0)
             });

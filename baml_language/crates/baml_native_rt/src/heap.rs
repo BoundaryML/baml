@@ -440,17 +440,6 @@ impl Mutator {
         self.on_worker_stack = left;
     }
 
-    /// The top compiled frame as recorded last, for a runtime function
-    /// that runs compiled code and then goes on: it puts back the frame it
-    /// was itself called from.
-    pub(crate) fn anchor(&self) -> Anchor {
-        self.anchor
-    }
-
-    pub(crate) fn set_anchor(&mut self, anchor: Anchor) {
-        self.anchor = anchor;
-    }
-
     /// The scratch word, which compiled code and the runtime hand each
     /// other one word in around a call.
     pub(crate) fn scratch(&self) -> usize {

@@ -215,6 +215,8 @@ enum Runtime {
     TaskStart,
     TaskFinish,
     TaskFail,
+    NativePoll,
+    IoWait,
 }
 
 impl Runtime {
@@ -265,6 +267,8 @@ impl Runtime {
             Self::TaskStart => "baml_rt_task_start",
             Self::TaskFinish => "baml_rt_task_finish",
             Self::TaskFail => "baml_rt_task_fail",
+            Self::NativePoll => "baml_rt_native_poll",
+            Self::IoWait => "baml_rt_io_wait",
         }
     }
 
@@ -275,10 +279,12 @@ impl Runtime {
         // register.
         let byte = AbiParam::new(types::I8).uext();
         let (params, returns) = match self {
-            Self::PrintInt | Self::PrintString | Self::PrintBigint | Self::Sleep => {
+            Self::PrintInt | Self::PrintString | Self::PrintBigint | Self::Sleep | Self::IoWait => {
                 (vec![word], vec![])
             }
-            Self::BigintBinary => (vec![word, word, word, word], vec![word, word]),
+            Self::BigintBinary | Self::NativePoll => {
+                (vec![word, word, word, word], vec![word, word])
+            }
             Self::BigintNeg => (vec![word, word], vec![word, word]),
             Self::BigintCmp => (vec![word, word, word], vec![word]),
             Self::PanicDivisionByZero | Self::PanicNegativeShift | Self::PanicStackOverflow => {

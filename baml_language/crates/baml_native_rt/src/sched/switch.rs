@@ -48,6 +48,13 @@ pub(crate) const SWITCH_FRAME_RESULT: usize = 8;
 #[cfg(target_arch = "x86_64")]
 pub(crate) const SWITCH_FRAME_BOOT: usize = 40;
 
+/// Where in [`baml_rt_task_boot`] the function a task starts in returns
+/// to: after the two instructions that call it.
+#[cfg(all(checks, target_arch = "aarch64"))]
+pub(crate) const TASK_BOOT_RETURN: usize = 8;
+#[cfg(all(checks, target_arch = "x86_64"))]
+pub(crate) const TASK_BOOT_RETURN: usize = 5;
+
 const TASK_SP: usize = std::mem::offset_of!(Task, sp);
 const TASK_STACK_LIMIT: usize = std::mem::offset_of!(Task, stack_limit);
 
@@ -464,8 +471,8 @@ parking_stub! {
 }
 
 parking_stub! {
-    /// Waiting for I/O: takes a job and what starts it, and returns once
-    /// the job has ended. The one parking stub Rust calls, as
-    /// compiled code would: with the worker in the pinned register.
+    /// Waiting for I/O: takes the address of a job and what starts it, and
+    /// returns once the job has ended. The stub that drives an `async`
+    /// native calls it.
     baml_rt_io_wait => io_park
 }

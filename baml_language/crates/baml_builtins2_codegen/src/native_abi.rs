@@ -707,8 +707,8 @@ pub fn generate_native_table(
 ///
 /// A native that `allocates` is called with a scope whose roots are in the
 /// symbol's own frame. One that is `async` is an `async fn`: its symbol
-/// makes the future in a block of its own and hands it to the runtime's
-/// driver, which polls it until it is done.
+/// makes the future in a block of its own and returns the block, for the
+/// stub that called it to poll until the native is done.
 pub fn generate_native_shims(
     vm: &[NativeBuiltin],
     io: &[NativeBuiltin],
@@ -823,14 +823,14 @@ pub fn generate_native_shims(
         let c_result = if flags.is_async {
             let _ = writeln!(
                 body,
-                "    let start = move |scope: &'static mut Scope<'static>| {{\n{rooting}    async \
+                "    let make = move |scope: &'static mut Scope<'static>| {{\n{rooting}    async \
                  move {{\n        match {call}.await {{\n            Ok(value) => \
                  RtResult::ok({}),\n            Err(thrown) => scope.throw_again(&thrown),\n        \
-                 }}\n    }}\n    }};\n    // SAFETY: called on a task, by compiled code whose \
-                 frame the mutator was just told.\n    unsafe {{ drive(mutator, {path:?}, start) }}",
+                 }}\n    }}\n    }};\n    // SAFETY: called on a task, by the stub compiled code \
+                 calls the native through.\n    unsafe {{ start(mutator, {path:?}, make) }}",
                 abi.result.bits("value")
             );
-            "RtResult"
+            "*mut Head"
         } else if fallible {
             body.push_str(&rooting);
             let _ = writeln!(

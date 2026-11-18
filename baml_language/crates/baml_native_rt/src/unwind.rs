@@ -240,6 +240,13 @@ impl Unwinder {
         ))
     }
 
+    /// Whether `address` is in compiled code, or `None` for a worker of a
+    /// program with none, which only a test has.
+    #[cfg(checks)]
+    pub(crate) fn is_compiled(&self, address: usize) -> Option<bool> {
+        (self.functions != 0).then(|| self.function_name(address).is_some())
+    }
+
     /// The name of the function whose code holds `address`.
     fn function_name(&self, address: usize) -> Option<&'static str> {
         const RECORD: usize = 24;

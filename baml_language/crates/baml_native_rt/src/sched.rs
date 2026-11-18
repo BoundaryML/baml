@@ -618,6 +618,88 @@ fn map_stack(size: usize) -> usize {
     }
 }
 
+/// What a task may have a return address into when it stops, beside
+/// compiled code: each stub by name, and the address in it.
+#[cfg(checks)]
+fn stubs_under_a_stopped_task() -> [(&'static str, usize); 1] {
+    [(
+        "baml_rt_task_boot",
+        baml_rt_task_boot as *const () as usize + switch::TASK_BOOT_RETURN,
+    )]
+}
+
+/// Check, where the task running on `worker` stops, that nothing but
+/// compiled code is on its stack: every return address, from the one into
+/// the function that called the stub whose switch frame is at `frame` to
+/// the one the task's first function returns to, is in compiled code or is
+/// one of [`stubs_under_a_stopped_task`].
+///
+/// A task that stops may go on on another thread and under another worker.
+/// A Rust function still on its stack then goes on with whatever the
+/// compiler chose to keep of the thread and the worker it stopped on, in a
+/// register or a stack slot, which no reading of the source can rule out.
+/// So no Rust frame is there at all: every function of the runtime returns
+/// before its task can stop, and the stubs that switch stacks are the only
+/// code that is not compiled BAML between a task's first frame and its
+/// last.
+///
+/// # Safety
+///
+/// `frame` is a switch frame on the stack of the task `worker` is running.
+#[cfg(checks)]
+unsafe fn only_compiled_code_stops(worker: &Mutator, frame: usize) {
+    use std::ffi::{CStr, c_char, c_void};
+
+    #[repr(C)]
+    struct Symbol {
+        file: *const c_char,
+        base: *mut c_void,
+        name: *const c_char,
+        address: *mut c_void,
+    }
+    unsafe extern "C" {
+        fn dladdr(address: *const c_void, symbol: *mut Symbol) -> i32;
+    }
+
+    let stubs = stubs_under_a_stopped_task();
+    // SAFETY: the caller's contract: frame records chain from the switch
+    // frame to the task's first frame, each the frame pointer of the
+    // caller and then the address the function returns to.
+    unsafe {
+        let base = stack_base(worker.cur_task);
+        let mut record = frame + SWITCH_FRAME_RECORD;
+        loop {
+            let (caller, returns_to) = (load(record), load(record + WORD));
+            // A worker of a program with no compiled code is a test's,
+            // whose tasks are Rust functions.
+            let Some(compiled) = worker.unwind.is_compiled(returns_to) else {
+                return;
+            };
+            if !compiled && !stubs.iter().any(|(_, address)| *address == returns_to) {
+                let mut symbol = std::mem::zeroed::<Symbol>();
+                let name = if dladdr(returns_to as *const c_void, &raw mut symbol) != 0
+                    && !symbol.name.is_null()
+                {
+                    CStr::from_ptr(symbol.name).to_string_lossy().into_owned()
+                } else {
+                    "a function with no name".to_owned()
+                };
+                let allowed: Vec<&str> = stubs.iter().map(|(name, _)| *name).collect();
+                fatal(&format!(
+                    "a task stops with a frame on its stack that is not compiled code: it \
+                     returns to {returns_to:#x}, in `{name}`. A function of the runtime returns \
+                     before its task can stop; the only stubs a stopped task returns into are: {}",
+                    allowed.join(", ")
+                ));
+            }
+            if caller >= base {
+                return;
+            }
+            record = caller;
+        }
+    }
+}
+
 #[expect(clippy::exit, reason = "the scheduler cannot go on")]
 fn fatal(message: &str) -> ! {
     let _ = std::io::stdout().flush();
@@ -640,6 +722,11 @@ pub(crate) unsafe extern "C" fn spawn_prepare(
     frame: usize,
 ) -> *mut Task {
     worker.sched.settle_last_switch();
+    // SAFETY: the stub's frame, on the spawning task's stack.
+    #[cfg(checks)]
+    unsafe {
+        only_compiled_code_stops(worker, frame);
+    }
     worker.enter_switch_frame(frame);
     let child = worker.sched.new_task(TASK_STACK, shim);
     worker.root(&mut closure);
@@ -850,6 +937,8 @@ pub(crate) unsafe extern "C" fn await_park(
         if seen & FUTURE_SETTLED != 0 {
             return 0;
         }
+        #[cfg(checks)]
+        only_compiled_code_stops(worker, frame);
         (*task).sp = frame;
         (*task).state.store(PARKING, Ordering::Release);
         loop {
@@ -900,11 +989,16 @@ pub(crate) unsafe extern "C" fn sleep_park(
     worker: &mut Mutator,
     frame: usize,
 ) -> usize {
-    let sched = &mut worker.sched;
-    sched.settle_last_switch();
+    worker.sched.settle_last_switch();
     if nanos <= 0 {
         return 0;
     }
+    // SAFETY: the stub's frame, on the sleeping task's stack.
+    #[cfg(checks)]
+    unsafe {
+        only_compiled_code_stops(worker, frame);
+    }
+    let sched = &mut worker.sched;
     let task = worker.cur_task;
     let when = sched.now().saturating_add(nanos.cast_unsigned());
     // SAFETY: called on a task with the stub's frame.
@@ -945,22 +1039,28 @@ impl Wake {
 }
 
 /// The Rust half of [`switch::baml_rt_io_wait`], on the waiting task's
-/// stack: start the job of the [`IoWait`] at `wait` and leave the task
-/// parking until the job has ended.
+/// stack: start the job `wait` is the address of, taking it from there,
+/// and leave the task parking until the job has ended.
 ///
 /// The job starts only once the task is parking, so that whichever worker
 /// finds it in the inbox finds it in a state a waker knows.
 pub(crate) unsafe extern "C" fn io_park(wait: usize, worker: &mut Mutator, frame: usize) -> usize {
+    worker.sched.settle_last_switch();
+    // SAFETY: the stub's frame, on the waiting task's stack.
+    #[cfg(checks)]
+    unsafe {
+        only_compiled_code_stops(worker, frame);
+    }
     let sched = &mut worker.sched;
-    sched.settle_last_switch();
     let task = worker.cur_task;
-    // SAFETY: called on a task with the stub's frame, and with a wait the
-    // caller gives up here.
-    let IoWait { job, start } = unsafe {
+    // SAFETY: called on a task with the stub's frame, and with the address
+    // of the wait its native asked for.
+    let waits_for = unsafe {
         (*task).sp = frame;
         (*task).state.store(PARKING, Ordering::Release);
-        (wait as *mut IoWait).read()
+        (*(wait as *mut Option<IoWait>)).take()
     };
+    let IoWait { job, start } = waits_for.expect("a wait is for what a native asked for, once");
     sched.on_io += 1;
     start(
         job,

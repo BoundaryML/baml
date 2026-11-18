@@ -11,17 +11,23 @@
 //! whether the trace is made is still decided by the handlers further out.
 //!
 //! Compiled code calls an `async` native through a stub made here: a
-//! function with the convention of a BAML function, which calls the native
-//! and throws again what the native says compiled code threw. The native
-//! runs BAML and so ends the ways BAML does, and through the stub its
-//! caller sees exactly that: a call that returns or unwinds, with the
-//! caller's handlers on record at its return address.
+//! function with the convention of a BAML function, which drives the
+//! native. It calls the native's symbol, which makes the native's state,
+//! and then the runtime's poll, again and again, doing between two polls
+//! what the native stopped for: calling the entry the native asked for, or
+//! waiting for its I/O. Both are done here, in compiled code, so that no
+//! frame of the runtime is on the stack while the task is stopped or runs
+//! BAML: every call into the runtime returns first. When the poll says the
+//! native is done the stub returns its value, or throws again what the
+//! native says compiled code threw. Through the stub the native's caller
+//! sees a call that returns or unwinds, with the caller's handlers on
+//! record at its return address.
 
 use std::collections::HashMap;
 
 use cranelift_codegen::{
     Context,
-    ir::{self, AbiParam, InstBuilder, types},
+    ir::{self, AbiParam, InstBuilder, MemFlags, condcodes::IntCC, types},
     isa::CallConv,
 };
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
@@ -37,6 +43,9 @@ use crate::{
     natives::Native,
     program::{FnKey, Program},
 };
+
+// A stub tests for a native that is done by testing for zero.
+const _: () = assert!(layout::STEP_DONE == 0);
 
 /// The tag of the one handler an entry has.
 const ENTRY_HANDLER: u32 = 0;
@@ -95,9 +104,10 @@ impl Backend<'_> {
         if let Some((stub, _)) = self.hooks.stubs.get(native.path) {
             return Ok(*stub);
         }
+        // The symbol makes the native's state and returns its address.
         let mut imported = ir::Signature::new(self.call_conv());
         imported.params = params.to_vec();
-        imported.returns = vec![AbiParam::new(types::I64), AbiParam::new(WORD)];
+        imported.returns = vec![AbiParam::new(WORD)];
         let symbol = self
             .module
             .declare_function(native.symbol, Linkage::Import, &imported)
@@ -207,9 +217,13 @@ fn entry_body(
     builder.finalize();
 }
 
-/// The body of a stub: call `native` with the worker and the stub's own
-/// arguments, and return what it returned, or throw again what it says
-/// compiled code threw, with the trace it left in the scratch word.
+/// The body of a stub: start `native` with the worker and the stub's own
+/// arguments, and poll it until it is done, doing here what it stops for.
+///
+/// The worker is read from the pinned register for every call: after a
+/// stop it is the one the task went on under. What the stub keeps across a
+/// stop is the address of the native's state, which is no heap object, so
+/// its frame holds no root.
 fn stub_body(
     backend: &mut Backend<'_>,
     native: FuncId,
@@ -217,26 +231,61 @@ fn stub_body(
     builder_context: &mut FunctionBuilderContext,
 ) -> Result<(), CompileError> {
     let rethrow = backend.runtime(Runtime::Rethrow)?;
+    let poll = backend.runtime(Runtime::NativePoll)?;
+    let wait = backend.runtime(Runtime::IoWait)?;
+    // An entry a native calls, with as many arguments as a native passes.
+    let mut entry = ir::Signature::new(backend.call_conv());
+    entry.params = vec![AbiParam::new(WORD); layout::NATIVE_CALL_ARGS];
+    entry.returns = vec![AbiParam::new(WORD); 2];
+
     let mut builder = FunctionBuilder::new(function, builder_context);
-    let block = builder.create_block();
-    builder.append_block_params_for_function_params(block);
-    builder.switch_to_block(block);
+    let start = builder.create_block();
+    builder.append_block_params_for_function_params(start);
+    // What the entry called last returned and whether it threw that: both
+    // zero before the first poll and after a wait.
+    let polling = builder.create_block();
+    builder.append_block_param(polling, WORD);
+    builder.append_block_param(polling, WORD);
+    let done = builder.create_block();
+    let stopped = builder.create_block();
+    let raise = builder.create_block();
+    let asked = builder.create_block();
+    let call = builder.create_block();
+    let waiting = builder.create_block();
+    builder.set_cold_block(raise);
+
+    builder.switch_to_block(start);
     let worker = builder.ins().get_pinned_reg(WORD);
     let mut arguments = vec![worker];
-    arguments.extend_from_slice(builder.block_params(block));
+    arguments.extend_from_slice(builder.block_params(start));
     let native = backend.function_ref(native, builder.func);
-    let call = builder.ins().call(native, &arguments);
-    let (bits, threw) = {
-        let results = builder.inst_results(call);
+    let started = builder.ins().call(native, &arguments);
+    let state = builder.inst_results(started)[0];
+    let zero = builder.ins().iconst(WORD, 0);
+    builder.ins().jump(polling, &[zero.into(), zero.into()]);
+
+    builder.switch_to_block(polling);
+    let (returned, threw) = {
+        let last = builder.block_params(polling);
+        (last[0], last[1])
+    };
+    let worker = builder.ins().get_pinned_reg(WORD);
+    let poll = backend.function_ref(poll, builder.func);
+    let polled = builder.ins().call(poll, &[worker, state, returned, threw]);
+    let (step, word) = {
+        let results = builder.inst_results(polled);
         (results[0], results[1])
     };
-    let raise = builder.create_block();
-    let done = builder.create_block();
-    builder.set_cold_block(raise);
-    builder.ins().brif(threw, raise, &[], done, &[]);
+    builder.ins().brif(step, stopped, &[], done, &[]);
 
     builder.switch_to_block(done);
-    builder.ins().return_(&[bits]);
+    builder.ins().return_(&[word]);
+
+    builder.switch_to_block(stopped);
+    let is_throw = builder
+        .ins()
+        .icmp_imm(IntCC::Equal, step, super::imm(layout::STEP_THREW));
+    builder.ins().brif(is_throw, raise, &[], asked, &[]);
 
     builder.switch_to_block(raise);
     let worker = builder.ins().get_pinned_reg(WORD);
@@ -247,8 +296,45 @@ fn stub_body(
         offset(layout::MUTATOR_SCRATCH),
     );
     let rethrow = backend.function_ref(rethrow, builder.func);
-    builder.ins().call(rethrow, &[bits, trace]);
+    builder.ins().call(rethrow, &[word, trace]);
     builder.ins().trap(TRAP_AFTER_PANIC);
+
+    builder.switch_to_block(asked);
+    let is_call = builder
+        .ins()
+        .icmp_imm(IntCC::Equal, step, super::imm(layout::STEP_CALL));
+    builder.ins().brif(is_call, call, &[], waiting, &[]);
+
+    // The entry may run for as long as any BAML, park and collect. What
+    // it returns is rooted by the poll it is handed to, before anything
+    // allocates.
+    builder.switch_to_block(call);
+    let passed: Vec<ir::Value> = (0..layout::NATIVE_CALL_ARGS)
+        .map(|index| {
+            builder.ins().load(
+                WORD,
+                MemFlags::trusted(),
+                state,
+                offset(layout::NATIVE_STATE_ARGS + index * layout::WORD),
+            )
+        })
+        .collect();
+    let entry = builder.import_signature(entry);
+    let called = builder.ins().call_indirect(entry, word, &passed);
+    let (returned, threw) = {
+        let results = builder.inst_results(called);
+        (results[0], results[1])
+    };
+    builder
+        .ins()
+        .jump(polling, &[returned.into(), threw.into()]);
+
+    // Whatever is none of the others is a wait.
+    builder.switch_to_block(waiting);
+    let wait = backend.function_ref(wait, builder.func);
+    builder.ins().call(wait, &[word]);
+    builder.ins().jump(polling, &[zero.into(), zero.into()]);
+
     builder.seal_all_blocks();
     builder.finalize();
     Ok(())

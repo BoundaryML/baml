@@ -555,6 +555,19 @@ const _: () = {
     }
 };
 
+/// What the poll of an `async` native tells the compiled stub that drives
+/// it to do next, beside one word: return the word, throw the word with
+/// the trace in the worker's scratch word, call the compiled entry at the
+/// word, or wait for the I/O the word is the address of.
+pub const STEP_DONE: usize = 0;
+pub const STEP_THREW: usize = 1;
+pub const STEP_CALL: usize = 2;
+pub const STEP_WAIT: usize = 3;
+/// How many arguments a native passes the compiled entry it calls, and
+/// where the stub finds them in the native's state.
+pub const NATIVE_CALL_ARGS: usize = 4;
+pub const NATIVE_STATE_ARGS: usize = 0;
+
 /// A future is a header and five words. The state is zero or the address of
 /// the first task waiting (tasks are aligned, so its low bits are clear)
 /// while the task has not finished, then [`FUTURE_READY`] or

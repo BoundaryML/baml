@@ -41,10 +41,9 @@ of its scope:
   it threw comes back as an `Err` to hand on with `?`.
 - `scope.io(job).await` runs async Rust on the runtime's own Tokio threads
   and parks the task meanwhile. The job is `'static + Send`, so it can
-  hold no root and no view. The request the native leaves for its driver
-  carries the function that starts the job, so the driver names no Tokio:
-  a program links it only when one of the natives it calls uses
-  `scope.io`. Keep it that way, since linking Tokio costs every start of
+  hold no root and no view. The request the native leaves carries the
+  function that starts the job, so what waits for it names no Tokio: a
+  program links it only when one of the natives it calls uses `scope.io`. Keep it that way, since linking Tokio costs every start of
   the program about 0.8 M instructions in the dynamic linker, for the
   system symbols Tokio imports, whether or not a job ever runs.
 
@@ -54,6 +53,34 @@ future must be `Send`, so nothing bound to a thread (a `MutexGuard`, an
 that names the native. Compiled code calls an `async` native as it calls a
 BAML function: the call can park the task, and what it throws arrives by
 unwinding.
+
+### What drives an `async` native
+
+Compiled code. The compiler makes a stub for each `async` native a program
+calls, with the convention of a BAML function. The stub calls the native's
+symbol, which makes the native's state and returns. Then it loops: it calls
+`baml_rt_native_poll`, which polls the native once and says what to do
+next, and does that itself: return the value, throw the error again, call
+the compiled function the native asked for, or wait for its I/O
+(`baml_rt_io_wait`).
+
+Every call into the runtime returns before anything that can stop the
+task. So while a task is stopped, or runs BAML a native called, no frame of
+the runtime is on its stack: the frames are compiled BAML, the stubs
+between, and the stub the task booted in. A task that stops can go on on
+another thread and under another worker, and a Rust frame would go on with
+whatever the Rust compiler chose to keep, in a register or a stack slot, of
+the thread and the worker it stopped on. No reading of the source rules
+that out, so the frames are not there. The stub reads the worker from its
+pinned register for every call, and the poll tells the native's scope.
+
+The runtime with checks holds every stop to this (`await`, sleep, I/O,
+`spawn`): it walks the stopping task's stack from its last frame to its
+first and ends the program, naming the function, if a return address is
+neither in compiled code nor one of a short list of stubs.
+
+A native's own state is held to it by the compiler: its future must be
+`Send`, and a stop takes the scope exclusively.
 
 Long work that touches no heap object goes inside
 `scope.off_heap(move || ...)` in an `allocates` native. With one worker that
