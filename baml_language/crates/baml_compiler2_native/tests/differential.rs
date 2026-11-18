@@ -1,6 +1,6 @@
-//! Every case runs twice, on the interpreter and as a native executable, and
-//! the two must end the same way: the same printed result, or the same
-//! uncaught panic.
+//! Every case runs on the interpreter and as a native executable, and the two
+//! must end the same way: the same printed result, or the same uncaught
+//! panic.
 //!
 //! Operands come out of loops (`count`, `half`, `pow2`) so that the
 //! optimizer cannot fold a case into a constant and the generated arithmetic
@@ -33,7 +33,7 @@ function pow2(n: int) -> int {
   for (let i = 0; i < n; i += 1) { x = x * 2; };
   x
 }
-function int_max() -> int { let p = pow2(61); (p - 1) + p }
+function int_max() -> int { let p = pow2(62); (p - 1) + p }
 function int_min() -> int { -int_max() - 1 }
 function fib(n: int) -> int { if n <= 1 { n } else { fib(n - 1) + fib(n - 2) } }
 function pick(x: int) -> int {
@@ -48,28 +48,33 @@ function sum_of_squares() -> int {
 }
 function recursion() -> int { fib(20) }
 function division_truncates() -> int { -count(7) / count(2) }
+function division_by_minus_one() -> int { count(7) / -count(1) }
 function remainder_takes_dividend_sign() -> int { -count(7) % count(3) }
 function bit_operators() -> int { (count(12) & count(10)) | (count(1) ^ count(3)) }
-function int_extremes() -> int { int_max() + int_min() }
-function largest_product() -> int { pow2(31) * pow2(30) }
-function shift_left_into_sign() -> int { count(1) << count(62) }
-function shift_left_past_width() -> int { count(1) << count(63) }
+function product() -> int { pow2(31) * pow2(30) }
+function shift_left() -> int { count(3) << count(4) }
+function shift_left_past_width() -> int { count(1) << count(64) }
 function shift_right_past_width() -> int { -count(8) >> count(70) }
 function shift_right() -> int { -count(9) >> count(1) }
 function match_on_int() -> int {
   pick(count(0)) + pick(count(1)) * 100 + pick(count(7)) * 10000 + pick(count(9)) * 1000000
 }
 function mixed_arguments() -> float { mix(count(3), half(1), count(1) == 1) }
-
-function add_overflows() -> int { int_max() + count(1) }
-function subtract_overflows() -> int { int_min() - count(1) }
-function multiply_overflows_63_bits() -> int { pow2(31) * pow2(31) }
-function multiply_overflows_64_bits() -> int { pow2(40) * pow2(40) }
-function negate_overflows() -> int { -int_min() }
-function divide_overflows() -> int { int_min() / -count(1) }
 function divide_by_zero() -> int { count(5) / count(0) }
 function remainder_by_zero() -> int { count(5) % count(0) }
 function negative_shift() -> int { count(1) << -count(1) }
+
+function largest_int() -> int { int_max() }
+function int_extremes() -> int { int_max() + int_min() }
+function shift_into_sign() -> int { count(1) << count(63) }
+function add_wraps() -> int { int_max() + count(1) }
+function increment_wraps() -> int { int_max() + 1 }
+function subtract_wraps() -> int { int_min() - count(1) }
+function multiply_wraps() -> int { pow2(32) * pow2(31) }
+function multiply_wraps_to_zero() -> int { pow2(40) * pow2(40) }
+function negate_wraps() -> int { -int_min() }
+function smallest_divided_by_minus_one() -> int { int_min() / -count(1) }
+function smallest_remainder_by_minus_one() -> int { int_min() % -count(1) }
 
 function int_times_float() -> float { count(3) * 1.5 + 2 }
 function float_shortest_digits() -> float { half(1) / 5.0 + half(1) / 2.5 }
@@ -92,95 +97,6 @@ function not_of_bool() -> bool { !(count(1) == count(1)) }
 function returns_null() -> null { let ignored = count(3); null }
 ";
 
-/// Each case's entry function and how it must end on both sides.
-const CASES: &[(&str, Outcome<'static>)] = &[
-    ("sum_of_squares", Outcome::Printed("332833500")),
-    ("recursion", Outcome::Printed("6765")),
-    ("division_truncates", Outcome::Printed("-3")),
-    ("remainder_takes_dividend_sign", Outcome::Printed("-1")),
-    ("bit_operators", Outcome::Printed("10")),
-    ("int_extremes", Outcome::Printed("-1")),
-    ("largest_product", Outcome::Printed("2305843009213693952")),
-    (
-        "shift_left_into_sign",
-        Outcome::Printed("-4611686018427387904"),
-    ),
-    ("shift_left_past_width", Outcome::Printed("0")),
-    ("shift_right_past_width", Outcome::Printed("-1")),
-    ("shift_right", Outcome::Printed("-5")),
-    ("match_on_int", Outcome::Printed("40302010")),
-    ("mixed_arguments", Outcome::Printed("3.5")),
-    (
-        "add_overflows",
-        Outcome::Panicked(
-            "baml.panics.IntegerOverflow {message: \"4611686018427387903 + 1 overflows int\"}",
-        ),
-    ),
-    (
-        "subtract_overflows",
-        Outcome::Panicked(
-            "baml.panics.IntegerOverflow {message: \"-4611686018427387904 - 1 overflows int\"}",
-        ),
-    ),
-    (
-        "multiply_overflows_63_bits",
-        Outcome::Panicked(
-            "baml.panics.IntegerOverflow {message: \"2147483648 * 2147483648 overflows int\"}",
-        ),
-    ),
-    (
-        "multiply_overflows_64_bits",
-        Outcome::Panicked(
-            "baml.panics.IntegerOverflow {message: \"1099511627776 * 1099511627776 overflows int\"}",
-        ),
-    ),
-    (
-        "negate_overflows",
-        Outcome::Panicked(
-            "baml.panics.IntegerOverflow {message: \"-(-4611686018427387904) overflows int\"}",
-        ),
-    ),
-    (
-        "divide_overflows",
-        Outcome::Panicked(
-            "baml.panics.IntegerOverflow {message: \"-4611686018427387904 / -1 overflows int\"}",
-        ),
-    ),
-    (
-        "divide_by_zero",
-        Outcome::Panicked("baml.panics.DivisionByZero {dividend: 5}"),
-    ),
-    (
-        "remainder_by_zero",
-        Outcome::Panicked("baml.panics.DivisionByZero {dividend: 5}"),
-    ),
-    (
-        "negative_shift",
-        Outcome::Panicked(
-            "baml.panics.NegativeBitShift {message: \"bit shift count is negative: -1\"}",
-        ),
-    ),
-    ("int_times_float", Outcome::Printed("6.5")),
-    (
-        "float_shortest_digits",
-        Outcome::Printed("0.30000000000000004"),
-    ),
-    (
-        "float_without_exponent",
-        Outcome::Printed("10000000000000000000000.0"),
-    ),
-    ("float_small", Outcome::Printed("0.00000003333333333333333")),
-    ("float_divide_by_zero", Outcome::Printed("-inf")),
-    ("float_nan", Outcome::Printed("NaN")),
-    ("float_remainder", Outcome::Printed("-1.5")),
-    ("nan_orders_above_numbers", Outcome::Printed("true")),
-    ("negative_zero_equals_zero", Outcome::Printed("true")),
-    ("or_skips_right_side", Outcome::Printed("true")),
-    ("and_skips_right_side", Outcome::Printed("false")),
-    ("not_of_bool", Outcome::Printed("false")),
-    ("returns_null", Outcome::Printed("")),
-];
-
 /// How a run ended. `baml run` prints a result on stdout and exits zero, or
 /// reports an uncaught panic on stderr and exits one.
 #[derive(Debug, PartialEq, Eq)]
@@ -188,6 +104,93 @@ enum Outcome<'a> {
     Printed(&'a str),
     Panicked(&'a str),
 }
+use Outcome::{Panicked, Printed};
+
+struct Case {
+    function: &'static str,
+    /// How native code must end.
+    expected: Outcome<'static>,
+    /// Whether the interpreter must end the same way. It does not where the
+    /// answer depends on `int` being 64 bits wide and wrapping: the
+    /// interpreter's `int` is still 63 bits wide and panics on overflow.
+    interpreter_agrees: bool,
+}
+
+const fn case(function: &'static str, expected: Outcome<'static>) -> Case {
+    Case {
+        function,
+        expected,
+        interpreter_agrees: true,
+    }
+}
+
+/// A case the interpreter is expected to diverge on until its `int` wraps
+/// at 64 bits too.
+const fn wide(function: &'static str, expected: Outcome<'static>) -> Case {
+    Case {
+        function,
+        expected,
+        interpreter_agrees: false,
+    }
+}
+
+const CASES: &[Case] = &[
+    case("sum_of_squares", Printed("332833500")),
+    case("recursion", Printed("6765")),
+    case("division_truncates", Printed("-3")),
+    case("division_by_minus_one", Printed("-7")),
+    case("remainder_takes_dividend_sign", Printed("-1")),
+    case("bit_operators", Printed("10")),
+    case("product", Printed("2305843009213693952")),
+    case("shift_left", Printed("48")),
+    case("shift_left_past_width", Printed("0")),
+    case("shift_right_past_width", Printed("-1")),
+    case("shift_right", Printed("-5")),
+    case("match_on_int", Printed("40302010")),
+    case("mixed_arguments", Printed("3.5")),
+    case(
+        "divide_by_zero",
+        Panicked("baml.panics.DivisionByZero {dividend: 5}"),
+    ),
+    case(
+        "remainder_by_zero",
+        Panicked("baml.panics.DivisionByZero {dividend: 5}"),
+    ),
+    case(
+        "negative_shift",
+        Panicked("baml.panics.NegativeBitShift {message: \"bit shift count is negative: -1\"}"),
+    ),
+    wide("largest_int", Printed("9223372036854775807")),
+    wide("int_extremes", Printed("-1")),
+    wide("shift_into_sign", Printed("-9223372036854775808")),
+    wide("add_wraps", Printed("-9223372036854775808")),
+    wide("increment_wraps", Printed("-9223372036854775808")),
+    wide("subtract_wraps", Printed("9223372036854775807")),
+    wide("multiply_wraps", Printed("-9223372036854775808")),
+    wide("multiply_wraps_to_zero", Printed("0")),
+    wide("negate_wraps", Printed("-9223372036854775808")),
+    wide(
+        "smallest_divided_by_minus_one",
+        Printed("-9223372036854775808"),
+    ),
+    wide("smallest_remainder_by_minus_one", Printed("0")),
+    case("int_times_float", Printed("6.5")),
+    case("float_shortest_digits", Printed("0.30000000000000004")),
+    case(
+        "float_without_exponent",
+        Printed("10000000000000000000000.0"),
+    ),
+    case("float_small", Printed("0.00000003333333333333333")),
+    case("float_divide_by_zero", Printed("-inf")),
+    case("float_nan", Printed("NaN")),
+    case("float_remainder", Printed("-1.5")),
+    case("nan_orders_above_numbers", Printed("true")),
+    case("negative_zero_equals_zero", Printed("true")),
+    case("or_skips_right_side", Printed("true")),
+    case("and_skips_right_side", Printed("false")),
+    case("not_of_bool", Printed("false")),
+    case("returns_null", Printed("")),
+];
 
 /// The text of the thrown value in an uncaught-panic report.
 fn thrown(report: &str) -> &str {
@@ -249,6 +252,13 @@ fn run_native(
     }
 }
 
+fn outcome(result: &Result<String, String>) -> String {
+    match result {
+        Ok(text) => format!("{:?}", Printed(text)),
+        Err(text) => format!("{:?}", Panicked(text)),
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn native_code_ends_as_the_interpreter_does() {
     let db = setup_test_db(SOURCE);
@@ -264,18 +274,17 @@ async fn native_code_ends_as_the_interpreter_does() {
     let directory = tempfile::tempdir().expect("a temporary directory");
 
     let mut failures = Vec::new();
-    for (function, expected) in CASES {
-        let interpreted = interpret(&engine, function).await;
-        let native = run_native(&db, function, directory.path());
-        let as_outcome = |result: &'_ Result<String, String>| match result {
-            Ok(text) => format!("{:?}", Outcome::Printed(text)),
-            Err(text) => format!("{:?}", Outcome::Panicked(text)),
-        };
-        let expected = format!("{expected:?}");
-        let (interpreted, native) = (as_outcome(&interpreted), as_outcome(&native));
-        if interpreted != expected || native != expected {
+    for case in CASES {
+        let expected = format!("{:?}", case.expected);
+        let native = outcome(&run_native(&db, case.function, directory.path()));
+        let interpreted = outcome(&interpret(&engine, case.function).await);
+        // A case marked as diverging that the interpreter starts agreeing on
+        // fails too, so that the mark is removed when it stops being true.
+        if native != expected || (interpreted == expected) != case.interpreter_agrees {
             failures.push(format!(
-                "{function}:\n  expected    {expected}\n  interpreter {interpreted}\n  native      {native}"
+                "{}:\n  expected    {expected}\n  native      {native}\n  interpreter {interpreted}{}",
+                case.function,
+                if case.interpreter_agrees { "" } else { " (expected to differ)" },
             ));
         }
     }

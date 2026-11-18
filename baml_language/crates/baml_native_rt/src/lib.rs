@@ -51,17 +51,6 @@ pub fn float_text(value: f64) -> String {
     }
 }
 
-/// The text of an uncaught `baml.panics.IntegerOverflow` from `left op right`.
-pub fn int_overflow_text(left: i64, op: char, right: i64) -> String {
-    format!("baml.panics.IntegerOverflow {{message: \"{left} {op} {right} overflows int\"}}")
-}
-
-/// The text of an uncaught `baml.panics.IntegerOverflow` from negating
-/// `value`.
-pub fn neg_overflow_text(value: i64) -> String {
-    format!("baml.panics.IntegerOverflow {{message: \"-({value}) overflows int\"}}")
-}
-
 /// The text of an uncaught `baml.panics.DivisionByZero`.
 pub fn division_by_zero_text(dividend: i64) -> String {
     format!("baml.panics.DivisionByZero {{dividend: {dividend}}}")
@@ -104,19 +93,6 @@ pub extern "C" fn baml_rt_print_bool(value: u8) {
     print_line(if value == 0 { "false" } else { "true" });
 }
 
-/// `op` is the operator's ASCII character.
-#[unsafe(no_mangle)]
-#[expect(unsafe_code)]
-pub extern "C" fn baml_rt_panic_int_overflow(left: i64, op: u8, right: i64) -> ! {
-    uncaught(&int_overflow_text(left, char::from(op), right))
-}
-
-#[unsafe(no_mangle)]
-#[expect(unsafe_code)]
-pub extern "C" fn baml_rt_panic_neg_overflow(value: i64) -> ! {
-    uncaught(&neg_overflow_text(value))
-}
-
 #[unsafe(no_mangle)]
 #[expect(unsafe_code)]
 pub extern "C" fn baml_rt_panic_division_by_zero(dividend: i64) -> ! {
@@ -155,14 +131,6 @@ mod tests {
 
     #[test]
     fn panics_render_as_the_interpreter_renders_them() {
-        assert_eq!(
-            int_overflow_text(4_611_686_018_427_387_903, '+', 1),
-            "baml.panics.IntegerOverflow {message: \"4611686018427387903 + 1 overflows int\"}"
-        );
-        assert_eq!(
-            neg_overflow_text(-4_611_686_018_427_387_904),
-            "baml.panics.IntegerOverflow {message: \"-(-4611686018427387904) overflows int\"}"
-        );
         assert_eq!(
             division_by_zero_text(1),
             "baml.panics.DivisionByZero {dividend: 1}"

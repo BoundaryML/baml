@@ -1,13 +1,13 @@
 //! MIR to Cranelift IR to a native object file.
 //!
 //! Every function of the program becomes one object-local function with the
-//! platform's C calling convention: an `int` is an `i64` holding a
-//! sign-extended 63-bit value, a `float` an `f64`, and a `bool` or `null` an
-//! `i8`. The object exports one symbol, [`ENTRY_SYMBOL`], which calls the
-//! entry function and prints its result through the runtime.
+//! platform's C calling convention: an `int` is an `i64`, a `float` an `f64`,
+//! and a `bool` or `null` an `i8`. The object exports one symbol,
+//! [`ENTRY_SYMBOL`], which calls the entry function and prints its result
+//! through the runtime.
 //!
-//! Integer arithmetic keeps the interpreter's range: a result outside
-//! `-2^62..2^62` panics rather than wraps.
+//! Integer arithmetic wraps in two's complement. Division and remainder by
+//! zero panic, and so does a shift by a negative count.
 
 use std::{collections::HashMap, fmt::Write as _};
 
@@ -48,8 +48,8 @@ const TRAP_AFTER_PANIC: TrapCode = TrapCode::unwrap_user(1);
 const TRAP_UNREACHABLE: TrapCode = TrapCode::unwrap_user(2);
 
 /// Shift counts at or above this give a result that no longer depends on the
-/// count: `int` is 63 bits wide.
-const INT_BITS: i64 = 63;
+/// count: `int` is 64 bits wide.
+const INT_BITS: i64 = 64;
 
 pub(crate) struct Output {
     pub(crate) object: Vec<u8>,
@@ -75,8 +75,6 @@ enum Runtime {
     PrintInt,
     PrintFloat,
     PrintBool,
-    PanicIntOverflow,
-    PanicNegOverflow,
     PanicDivisionByZero,
     PanicNegativeShift,
     FloatRem,
@@ -88,8 +86,6 @@ impl Runtime {
             Self::PrintInt => "baml_rt_print_int",
             Self::PrintFloat => "baml_rt_print_float",
             Self::PrintBool => "baml_rt_print_bool",
-            Self::PanicIntOverflow => "baml_rt_panic_int_overflow",
-            Self::PanicNegOverflow => "baml_rt_panic_neg_overflow",
             Self::PanicDivisionByZero => "baml_rt_panic_division_by_zero",
             Self::PanicNegativeShift => "baml_rt_panic_negative_shift",
             Self::FloatRem => "baml_rt_float_rem",
@@ -103,13 +99,11 @@ impl Runtime {
         // register.
         let byte = AbiParam::new(types::I8).uext();
         let (params, returns) = match self {
-            Self::PrintInt
-            | Self::PanicNegOverflow
-            | Self::PanicDivisionByZero
-            | Self::PanicNegativeShift => (vec![int], vec![]),
+            Self::PrintInt | Self::PanicDivisionByZero | Self::PanicNegativeShift => {
+                (vec![int], vec![])
+            }
             Self::PrintFloat => (vec![float], vec![]),
             Self::PrintBool => (vec![byte], vec![]),
-            Self::PanicIntOverflow => (vec![int, byte, int], vec![]),
             Self::FloatRem => (vec![float, float], vec![float]),
         };
         let mut signature = ir::Signature::new(call_conv);
@@ -122,8 +116,6 @@ impl Runtime {
 /// A runtime panic and the values its message is built from.
 #[derive(Clone, Copy)]
 enum Panic {
-    IntOverflow(ir::Value, char, ir::Value),
-    NegOverflow(ir::Value),
     DivisionByZero(ir::Value),
     NegativeShift(ir::Value),
 }
@@ -523,14 +515,6 @@ impl<'a, 'db> Translator<'a, 'db> {
 
         self.builder.switch_to_block(raise);
         let (function, arguments) = match panic {
-            Panic::IntOverflow(left, op, right) => {
-                let op = self
-                    .builder
-                    .ins()
-                    .iconst(types::I8, i64::from(u32::from(op)));
-                (Runtime::PanicIntOverflow, vec![left, op, right])
-            }
-            Panic::NegOverflow(value) => (Runtime::PanicNegOverflow, vec![value]),
             Panic::DivisionByZero(dividend) => (Runtime::PanicDivisionByZero, vec![dividend]),
             Panic::NegativeShift(count) => (Runtime::PanicNegativeShift, vec![count]),
         };
@@ -540,16 +524,6 @@ impl<'a, 'db> Translator<'a, 'db> {
 
         self.builder.switch_to_block(resume);
         Ok(())
-    }
-
-    /// Raise `panic` unless `value` is a 63-bit integer: its top two bits
-    /// agree exactly when it is.
-    fn require_int_range(&mut self, value: ir::Value, panic: Panic) -> Result<(), CompileError> {
-        let doubled = self.builder.ins().ishl_imm(value, 1);
-        let top_bits_differ = self.builder.ins().bxor(value, doubled);
-        // A single-bit mask as the branch condition is one test-bit branch.
-        let out_of_range = self.builder.ins().band_imm(top_bits_differ, i64::MIN);
-        self.panic_if(out_of_range, panic)
     }
 
     fn binary(
@@ -622,42 +596,16 @@ impl<'a, 'db> Translator<'a, 'db> {
         right_constant: Option<i64>,
     ) -> Result<ir::Value, CompileError> {
         match op {
-            // Two 63-bit operands cannot overflow 64 bits under `+` or `-`,
-            // so only the 63-bit range needs checking.
-            BinOp::Add => {
-                let sum = self.builder.ins().iadd(left, right);
-                self.require_int_range(sum, Panic::IntOverflow(left, '+', right))?;
-                Ok(sum)
-            }
-            BinOp::Sub => {
-                let difference = self.builder.ins().isub(left, right);
-                self.require_int_range(difference, Panic::IntOverflow(left, '-', right))?;
-                Ok(difference)
-            }
-            // `2 * left` is exact in 64 bits, and `(2 * left) * right`
-            // overflows 64 bits exactly when `left * right` leaves 63.
-            BinOp::Mul => {
-                // The 128-bit product fits 64 bits when its high half is the
-                // sign extension of its low half; comparing the two feeds the
-                // branch directly.
-                let doubled = self.builder.ins().ishl_imm(left, 1);
-                let low = self.builder.ins().imul(doubled, right);
-                let high = self.builder.ins().smulhi(doubled, right);
-                let sign = self.builder.ins().sshr_imm(low, 63);
-                let overflow = self.builder.ins().icmp(IntCC::NotEqual, high, sign);
-                self.panic_if(overflow, Panic::IntOverflow(left, '*', right))?;
-                Ok(self.builder.ins().sshr_imm(low, 1))
-            }
+            BinOp::Add => Ok(self.builder.ins().iadd(left, right)),
+            BinOp::Sub => Ok(self.builder.ins().isub(left, right)),
+            BinOp::Mul => Ok(self.builder.ins().imul(left, right)),
             BinOp::Div => {
                 self.require_nonzero_divisor(left, right, right_constant)?;
-                let quotient = self.builder.ins().sdiv(left, right);
-                // Only the smallest int divided by -1 leaves the range.
-                if right_constant.is_none_or(|divisor| divisor == -1) {
-                    self.require_int_range(quotient, Panic::IntOverflow(left, '/', right))?;
-                }
-                Ok(quotient)
+                Ok(self.wrapping_divide(left, right, right_constant))
             }
-            // A remainder is smaller in magnitude than its divisor.
+            // The remainder of the smallest int by -1 is zero, which is what
+            // the instruction gives on every target: unlike division it is
+            // defined not to trap there.
             BinOp::Mod => {
                 self.require_nonzero_divisor(left, right, right_constant)?;
                 Ok(self.builder.ins().srem(left, right))
@@ -667,19 +615,15 @@ impl<'a, 'db> Translator<'a, 'db> {
             BinOp::BitXor => Ok(self.builder.ins().bxor(left, right)),
             BinOp::Shl => {
                 let past_width = self.require_shift_count(right)?;
-                // Keep the low 63 bits of the shifted value and sign-extend
-                // them.
                 let shifted = self.builder.ins().ishl(left, right);
-                let truncated = self.builder.ins().ishl_imm(shifted, 1);
-                let in_range = self.builder.ins().sshr_imm(truncated, 1);
                 let zero = self.builder.ins().iconst(types::I64, 0);
-                Ok(self.builder.ins().select(past_width, zero, in_range))
+                Ok(self.builder.ins().select(past_width, zero, shifted))
             }
             BinOp::Shr => {
                 let past_width = self.require_shift_count(right)?;
-                // Shifting by the full width leaves only the sign.
-                let width = self.builder.ins().iconst(types::I64, INT_BITS);
-                let count = self.builder.ins().select(past_width, width, right);
+                // Shifting by the full width or more leaves only the sign.
+                let most = self.builder.ins().iconst(types::I64, INT_BITS - 1);
+                let count = self.builder.ins().select(past_width, most, right);
                 Ok(self.builder.ins().sshr(left, count))
             }
             BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
@@ -699,6 +643,42 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
         let is_zero = self.builder.ins().icmp_imm(IntCC::Equal, divisor, 0);
         self.panic_if(is_zero, Panic::DivisionByZero(dividend))
+    }
+
+    /// `left / right` for a divisor known not to be zero. The smallest int
+    /// divided by -1 wraps to itself; the division instruction traps there
+    /// instead (as the x86-64 one does in hardware), so a divisor of -1 is
+    /// a negation and never reaches it.
+    fn wrapping_divide(
+        &mut self,
+        left: ir::Value,
+        right: ir::Value,
+        right_constant: Option<i64>,
+    ) -> ir::Value {
+        match right_constant {
+            Some(-1) => return self.builder.ins().ineg(left),
+            Some(_) => return self.builder.ins().sdiv(left, right),
+            None => {}
+        }
+        let negate = self.builder.create_block();
+        let divide = self.builder.create_block();
+        let done = self.builder.create_block();
+        self.builder.append_block_param(done, types::I64);
+        let by_minus_one = self.builder.ins().icmp_imm(IntCC::Equal, right, -1);
+        self.builder
+            .ins()
+            .brif(by_minus_one, negate, &[], divide, &[]);
+
+        self.builder.switch_to_block(negate);
+        let negated = self.builder.ins().ineg(left);
+        self.builder.ins().jump(done, &[negated.into()]);
+
+        self.builder.switch_to_block(divide);
+        let quotient = self.builder.ins().sdiv(left, right);
+        self.builder.ins().jump(done, &[quotient.into()]);
+
+        self.builder.switch_to_block(done);
+        self.builder.block_params(done)[0]
     }
 
     /// Panic on a negative shift count; the result is whether the count is
@@ -811,12 +791,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         unary_typing(op, kind).map_err(internal)?;
         Ok(match (op, kind) {
             (UnaryOp::Neg, Scalar::Float) => self.builder.ins().fneg(value),
-            // Negating the smallest int leaves the range.
-            (UnaryOp::Neg, _) => {
-                let negated = self.builder.ins().ineg(value);
-                self.require_int_range(negated, Panic::NegOverflow(value))?;
-                negated
-            }
+            (UnaryOp::Neg, _) => self.builder.ins().ineg(value),
             // False, null, zero and 0.0 are the falsy scalars; NaN is truthy.
             (UnaryOp::Truthy, Scalar::Bool) => value,
             (UnaryOp::Truthy, Scalar::Int) => {

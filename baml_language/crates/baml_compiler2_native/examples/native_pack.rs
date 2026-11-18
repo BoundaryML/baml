@@ -6,6 +6,8 @@
 //!     [--emit-asm]                           also write <out>.s
 //! native_pack --coverage <file.baml> <function>
 //!                                            report what blocks compilation
+//! native_pack --mir <file.baml> <function>   print the optimized MIR of every
+//!                                            function in the file
 //! ```
 //!
 //! `--coverage` prints one tab-separated line per blocker
@@ -27,11 +29,20 @@ use baml_db::{
         item_data::{file_functions, function_data},
         loc::FunctionLoc,
     },
+    baml_compiler2_mir::{OptLevel, lower_function, pretty::display_function},
     collect_diagnostics,
 };
 
+/// What the invocation asks for.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Pack,
+    Coverage,
+    Mir,
+}
+
 struct Arguments {
-    coverage: bool,
+    mode: Mode,
     emit_clif: bool,
     emit_asm: bool,
     positional: Vec<String>,
@@ -39,14 +50,15 @@ struct Arguments {
 
 fn parse_arguments() -> Arguments {
     let mut arguments = Arguments {
-        coverage: false,
+        mode: Mode::Pack,
         emit_clif: false,
         emit_asm: false,
         positional: Vec::new(),
     };
     for argument in std::env::args().skip(1) {
         match argument.as_str() {
-            "--coverage" => arguments.coverage = true,
+            "--coverage" => arguments.mode = Mode::Coverage,
+            "--mir" => arguments.mode = Mode::Mir,
             "--emit-clif" => arguments.emit_clif = true,
             "--emit-asm" => arguments.emit_asm = true,
             _ => arguments.positional.push(argument),
@@ -93,8 +105,8 @@ fn find_function<'db>(db: &'db ProjectDatabase, name: &str) -> Result<FunctionLo
 
 fn run(arguments: &Arguments, out: &mut impl Write) -> Result<(), String> {
     let (path, function) = match arguments.positional.as_slice() {
-        [path, function] if arguments.coverage => (path, function),
-        [path, function, _] if !arguments.coverage => (path, function),
+        [path, function] if arguments.mode != Mode::Pack => (path, function),
+        [path, function, _] if arguments.mode == Mode::Pack => (path, function),
         _ => {
             return Err(
                 "usage: native_pack <file.baml> <function> <out> [--emit-clif] [--emit-asm]\n       native_pack --coverage <file.baml> <function>"
@@ -107,7 +119,23 @@ fn run(arguments: &Arguments, out: &mut impl Write) -> Result<(), String> {
     let entry = find_function(&db, function)?;
     let checked = started.elapsed();
 
-    if arguments.coverage {
+    if arguments.mode == Mode::Mir {
+        for file in db.workspace_files() {
+            for function in file_functions(&db, file) {
+                match lower_function(&db, *function, OptLevel::Two) {
+                    Ok(mir) => {
+                        let _ = writeln!(out, "{}", display_function(&db, mir));
+                    }
+                    Err(error) => {
+                        let _ = writeln!(out, "lowering failed: {error}");
+                    }
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    if arguments.mode == Mode::Coverage {
         let coverage = coverage(&db, entry);
         if coverage.is_supported() {
             let _ = writeln!(out, "ok\t{}", coverage.reachable);
