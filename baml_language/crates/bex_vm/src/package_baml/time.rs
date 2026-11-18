@@ -498,7 +498,7 @@ impl BamlClassTimeZonedDateTime for PackageBamlImpl {
             // timezone database.
             Some(iana) => (Value::NULL, Value::object(vm.alloc_string(iana))),
             None => (
-                Value::try_int(offset_ns).expect("offset fits in BAML int"),
+                Value::try_inline_int(offset_ns).expect("offset fits in BAML int"),
                 Value::NULL,
             ),
         };

@@ -146,7 +146,8 @@ pub enum DiagnosticId {
     // Type literal errors (E0033)
     UnsupportedFloatLiteral,
 
-    // Integer literal out of `int` (i63) range (E0139)
+    // Integer literal out of `int` range (E0150). No longer emitted: every
+    // `int` literal that parses is in range. The code stays reserved.
     IntegerLiteralOutOfRange,
 
     // Map type errors (E0039)

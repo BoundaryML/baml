@@ -1,7 +1,7 @@
 /// An untyped JSON value.
 ///
 /// JSON's one number type splits into three arms here. `parse` reads an integral
-/// number as `int` when it fits BAML's 63-bit `int`, as `bigint` otherwise, and
+/// number as `int` when it fits BAML's 64-bit `int`, as `bigint` otherwise, and
 /// reads a number with a fraction or exponent as `float`. Decoding into a
 /// declared `int` (`to<int>`, `decode<int>`) is strict and rejects values
 /// outside the `int` range instead.
@@ -268,7 +268,7 @@ function _from(value: unknown, aliased: bool, omit_nulls: bool) -> json throws S
 /// package is honored.
 ///
 /// The walk is a shape check rather than a coercion. A JSON string does not
-/// become an `int`, and a number outside BAML's 63-bit `int` is rejected
+/// become an `int`, and a number outside BAML's 64-bit `int` is rejected
 /// rather than widened to `float`. A `bigint` decodes from an integral JSON
 /// number, or from a JSON string holding an optional sign and ASCII decimal
 /// digits; leading zeroes and negative zero are normalized, and fractions,

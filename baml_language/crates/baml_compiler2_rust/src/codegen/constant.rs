@@ -6,13 +6,13 @@ use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     admit::Rejection,
     analysis::Repr,
-    render::{float_literal, object_value},
+    render::{float_literal, int_literal, object_value},
 };
 
 impl<'db> Generator<'_, 'db> {
     pub(super) fn constant(&mut self, block: BlockId, constant: &Constant<'db>) -> Gen<Expr> {
         let code = match constant {
-            Constant::Int(n) => return Ok(Expr::atom(format!("{n}i64"), Repr::Int)),
+            Constant::Int(n) => return Ok(Expr::atom(int_literal(*n), Repr::Int)),
             Constant::Float(f) => return Ok(Expr::atom(float_literal(*f), Repr::Float)),
             Constant::Bool(b) => return Ok(Expr::atom(format!("{b}"), Repr::Bool)),
             Constant::Null => return Ok(Expr::atom("Value::NULL", Repr::Value)),

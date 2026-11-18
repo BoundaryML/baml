@@ -2564,12 +2564,12 @@ pub struct CompactJumpTable {
 impl CompactJumpTable {
     /// Lookup the byte offset for a discriminant value.
     /// Returns `None` if value is out of range or is a hole (use default).
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn lookup(&self, value: i64) -> Option<i32> {
         if value < self.min {
             return None;
         }
-        let index = (value - self.min) as usize;
+        // `abs_diff`: `value - min` can exceed `i64::MAX`.
+        let index = usize::try_from(value.abs_diff(self.min)).ok()?;
         self.offsets.get(index).copied().flatten()
     }
 }

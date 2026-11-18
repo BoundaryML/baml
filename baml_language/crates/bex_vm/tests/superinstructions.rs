@@ -80,7 +80,7 @@ fn loops_fuse_increments_tests_and_field_loads() {
 }
 
 #[test]
-fn fused_increment_raises_the_addition_overflow() {
+fn fused_increment_wraps_like_the_addition() {
     assert_eq!(
         run(r#"
             function bump(x: int, k: int) -> int {
@@ -88,21 +88,15 @@ fn fused_increment_raises_the_addition_overflow() {
                 if (k > 0) { y += 1; } else { y = y + -1; }
                 y
             }
-            function check(x: int, k: int, expected: string) -> int {
-                let r = bump(x, k) catch (e) {
-                    let err: baml.panics.IntegerOverflow => {
-                        if (err.message == expected) { -1 } else { -2 }
-                    }
-                };
-                r
-            }
             function main() -> int {
-                check(4611686018427387903, 1, "4611686018427387903 + 1 overflows int")
-                    + 10 * check(-4611686018427387904, -1, "-4611686018427387904 + -1 overflows int")
-                    + 100 * check(41, 1, "")
+                let a = 0;
+                if (bump(9223372036854775807, 1) == -9223372036854775808) { a = 1; }
+                let b = 0;
+                if (bump(-9223372036854775808, -1) == 9223372036854775807) { b = 10; }
+                a + b + 100 * bump(41, 1)
             }
         "#),
-        -1 - 10 + 100 * 42,
+        1 + 10 + 100 * 42,
     );
 }
 
@@ -179,5 +173,38 @@ fn fused_branches_keep_every_comparison_and_polarity() {
             }
             total
         },
+    );
+}
+
+#[test]
+fn fused_operations_accept_boxed_ints() {
+    // Ints of magnitude 2^62 and above are heap-boxed. The loop counter starts
+    // inline and crosses into boxed values, so the fused increment, the fused
+    // comparison against a boxed constant and the plain int opcodes all see
+    // both forms; the fast path must leave for full dispatch, not misread a
+    // pointer as an int.
+    assert_eq!(
+        run(r#"
+            function main() -> int {
+                let x = 4611686018427387900;
+                let n = 0;
+                while (x < 4611686018427387910) {
+                    x += 1;
+                    n += 1;
+                }
+                let y = x - 4611686018427387905;
+                let big = 9223372036854775800;
+                let steps = 0;
+                for (let i = big; i < 9223372036854775806; i += 2) {
+                    steps += 1;
+                }
+                if (x == 4611686018427387910 && y * 2 == 10 && big > x) {
+                    n * 100 + steps
+                } else {
+                    -1
+                }
+            }
+        "#),
+        10 * 100 + 3,
     );
 }

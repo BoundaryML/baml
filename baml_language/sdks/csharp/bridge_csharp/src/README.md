@@ -78,8 +78,8 @@ string asyncResult = await Functions.BasicCallsAsync(
 Generated classes are sealed partial classes with required init-only
 properties. Generated enums use explicit stable `long` values while their
 wire names remain independent. Lists and maps decode to owned read-only
-snapshots. BAML `int` is `long` and is checked against the BAML range
-`[-2^62, 2^62-1]`; `bigint` is `System.Numerics.BigInteger`, and
+snapshots. BAML `int` is `long` (both are signed 64-bit); `bigint` is
+`System.Numerics.BigInteger`, and
 `uint8array` is `ReadOnlyMemory<byte>`.
 
 Static and instance BAML methods project to static and instance C# methods.

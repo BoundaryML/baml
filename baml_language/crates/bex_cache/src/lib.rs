@@ -238,7 +238,13 @@ use sha2::{Digest, Sha256};
 /// `LoadVarField`, `LoadVarFieldLocal`, `JumpIfLocalsCmp` and
 /// `JumpIfLocalConstCmp`. Versions 29 and 30 are skipped: unreleased builds
 /// wrote other layouts under them.
-pub const FORMAT_VERSION: u32 = 31;
+///
+/// Version 32: `int` is 64-bit. An int constant may lie outside the 63-bit
+/// inline range of a runtime `Value`; an older runtime would truncate it.
+///
+/// Version 33: `int` arithmetic wraps instead of throwing on overflow, so
+/// folded constants and compiled bodies change meaning.
+pub const FORMAT_VERSION: u32 = 33;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

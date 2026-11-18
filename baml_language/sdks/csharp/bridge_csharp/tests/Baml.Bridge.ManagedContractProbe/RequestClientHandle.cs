@@ -411,17 +411,12 @@ internal static class NativeReferenceTable
 
 internal static class BamlInteger
 {
-    internal const long Min = -4_611_686_018_427_387_904;
-    internal const long Max = 4_611_686_018_427_387_903;
+    internal const long Min = long.MinValue;
+    internal const long Max = long.MaxValue;
 
+    // A BAML int is 64-bit, so every long is in its domain.
     internal static void Require(long value, string parameterName)
     {
-        if (value is < Min or > Max)
-        {
-            throw new ArgumentOutOfRangeException(
-                parameterName,
-                value,
-                "value is outside the BAML integer domain");
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(parameterName);
     }
 }

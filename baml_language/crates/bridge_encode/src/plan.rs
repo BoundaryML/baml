@@ -985,7 +985,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             Answer::No => return Err(mismatch(tree, slot)),
         };
         let equal = match (literal, &scalar) {
-            (Literal::Int(expected), Scalar::Int(found)) => *expected == found.get(),
+            (Literal::Int(expected), Scalar::Int(found)) => expected == found,
             (Literal::Bigint(expected), Scalar::BigInt(found)) => expected == found,
             (Literal::Bool(expected), Scalar::Bool(found)) => expected == found,
             (Literal::String(expected), Scalar::String) => {

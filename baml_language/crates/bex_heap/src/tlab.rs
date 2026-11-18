@@ -167,6 +167,10 @@ impl Tlab {
             !matches!(obj, Object::Float(f) if Value::try_inline_float(f).is_some()),
             "a float with an inline encoding must not be boxed; use float_value"
         );
+        debug_assert!(
+            !matches!(obj, Object::Int(i) if Value::fits_inline(i)),
+            "an int with an inline encoding must not be boxed; use int_value"
+        );
         self.charge(&mut obj);
 
         if self.alloc_ptr >= self.alloc_limit {
@@ -288,6 +292,24 @@ impl Tlab {
     #[inline(never)]
     fn box_float(&mut self, f: f64) -> Value {
         Value::object(self.alloc(Object::Float(f)))
+    }
+
+    /// The `Value` of an int: inline when it fits the inline range, otherwise
+    /// a fresh `Object::Int` box. The one way to build an int of arbitrary
+    /// magnitude, which keeps the representation canonical — see [`Value`].
+    #[inline(always)]
+    #[allow(clippy::inline_always)]
+    pub fn int_value(&mut self, i: i64) -> Value {
+        match Value::try_inline_int(i) {
+            Some(v) => v,
+            None => self.box_int(i),
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn box_int(&mut self, i: i64) -> Value {
+        Value::object(self.alloc(Object::Int(i)))
     }
 
     /// Allocate a string object.
@@ -524,6 +546,11 @@ pub trait TlabHolder {
     /// See [`Tlab::float_value`].
     fn float_value(&mut self, f: f64) -> Value {
         self.tlab_mut().float_value(f)
+    }
+
+    /// See [`Tlab::int_value`].
+    fn int_value(&mut self, i: i64) -> Value {
+        self.tlab_mut().int_value(i)
     }
 
     fn alloc_string(&mut self, s: impl Into<bex_str::BexStr>) -> HeapPtr {

@@ -58,12 +58,7 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
 fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmRustFnError> {
     match value {
         toml::Value::String(s) => Ok(Value::object(vm.alloc_string(s))),
-        toml::Value::Integer(i) => Value::try_int(i).ok_or_else(|| {
-            VmRustFnError::thrown_fresh(make_toml_parse_error(
-                vm,
-                "BAML `int` is 63 bits. It is unable to parse 64-bit TOML integers.".to_string(),
-            ))
-        }),
+        toml::Value::Integer(i) => Ok(vm.int_value(i)),
         toml::Value::Float(f) => Ok(vm.float_value(f)),
         toml::Value::Boolean(b) => Ok(Value::bool(b)),
         toml::Value::Datetime(datetime) => convert_toml_datetime(vm, datetime),
@@ -150,7 +145,7 @@ fn convert_toml_datetime(
             let epoch = civil - i128::from(offset_ns);
             let zoned = super::copy::time::ZonedDateTime {
                 _nanoseconds: Arc::new(num_bigint::BigInt::from(epoch)),
-                _offset_ns: Value::try_int(offset_ns).expect("offset fits in BAML int"),
+                _offset_ns: Value::try_inline_int(offset_ns).expect("offset fits in BAML int"),
                 _iana: Value::NULL,
             };
             Ok(zoned.to_value(vm))
@@ -229,6 +224,7 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
     let result = match vm.get_object(ptr) {
         Object::String(s) => Ok(Node::Scalar(s.as_str().into())),
         Object::Float(f) => Ok(Node::Scalar((*f).into())),
+        Object::Int(i) => Ok(Node::Scalar((*i).into())),
         Object::Array(values) => values
             .to_vec()
             .into_iter()

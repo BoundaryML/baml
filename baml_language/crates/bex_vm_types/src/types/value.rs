@@ -1,6 +1,5 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use baml_type::Int63;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{HeapPtr, Object};
@@ -20,7 +19,7 @@ use crate::{HeapPtr, Object};
 /// | `0x0000_0000_0000_0002`                | `Bool(false)` sentinel                           |
 /// | `0x0000_0000_0000_0004`                | `Bool(true)` sentinel                            |
 /// | `0x0000_0000_0000_0006`                | `OmittedArg` sentinel                            |
-/// | `xxxxx...xxx1` (low bit set)           | `Int(i63)` — sign-extend via `(v as i64) >> 1`   |
+/// | `xxxxx...xxx1` (low bit set)           | inline `Int` — sign-extend via `(v as i64) >> 1` |
 /// | `0xxxxx...xxx0` (low 3 bits zero, ≠0)  | `Object(HeapPtr)` — heap pointer (8-byte align)  |
 /// | `xxxxx...xx10` (other than 2 and 6)    | `Float` — inline, biased exponent `[768, 1279]`  |
 /// | `xxxxx...x100` (other than 4)          | `Float` — inline, biased exponent `[0, 255]`     |
@@ -54,11 +53,17 @@ use crate::{HeapPtr, Object};
 /// [`Value::as_float`]. [`ValueKind::Float`] is the inline form; a boxed
 /// float reaches a `kind()` match as [`ValueKind::Object`].
 ///
-/// # On range loss
+/// # On `Int`
 ///
-/// Integers shrink from i64 to i63 (max ~4.6e18). Holds nanosecond
-/// timestamps until year ~2200 with margin. For larger integers,
-/// callers must allocate a heap-boxed integer (not yet implemented).
+/// An int is inline exactly when it lies in
+/// `[INLINE_INT_MIN, INLINE_INT_MAX]` (63 bits: the low bit is the tag). Any
+/// other int is heap-boxed as `Object::Int(i64)` behind the pointer arm. Like
+/// floats, the representation is canonical: build ints of arbitrary magnitude
+/// only through the heap's `int_value` (inline, else boxed), and read them
+/// through [`Value::as_int`], which accepts both forms. [`ValueKind::Int`] is
+/// the inline form; a boxed int reaches a `kind()` match as
+/// [`ValueKind::Object`]. A boxed int never equals an inline one by bits, and
+/// two boxed ints are equal only by content.
 ///
 /// # `PartialEq` / `Hash`
 ///
@@ -79,6 +84,9 @@ pub struct Value(u64);
 pub enum ValueKind {
     Null,
     OmittedArg,
+    /// An inline int. Boxed ints (outside the inline range) are
+    /// [`ValueKind::Object`]s holding an `Object::Int`; [`Value::as_int`]
+    /// reads either.
     Int(i64),
     Bool(bool),
     /// An inline float. Boxed floats (NaN, `±inf`, extreme magnitudes) are
@@ -99,7 +107,7 @@ const FLOAT_LO_FLIP: u64 = 1;
 // The tagged-pointer encoding *is* a hot path: every Value access
 // goes through `as_int`/`as_object_ptr`/`kind`, and the encoding round-trips
 // between `u64` and signed `i64` by design (shift-left/right with sign
-// extension is what gives us i63 ints in a u64). The explicit `bits & 0b111`
+// extension is what gives us 63-bit inline ints in a u64). The explicit `bits & 0b111`
 // checks for "low 3 bits clear" are more idiomatic for tagged pointers than
 // the suggested `.trailing_zeros() >= 3`.
 #[allow(
@@ -115,14 +123,28 @@ impl Value {
     pub const TRUE: Value = Value(4);
     pub const OMITTED_ARG: Value = Value(6);
 
-    /// Largest representable BAML integer (`2^62 - 1 = 4_611_686_018_427_387_903`).
-    ///
-    /// Integers in BAML are i63 (low bit reserved for the tag). Values
-    /// outside `[INT_MIN, INT_MAX]` cannot round-trip through `Value::int`.
-    pub const INT_MAX: i64 = Int63::MAX.get();
+    /// Largest BAML `int`.
+    pub const INT_MAX: i64 = baml_type::int::MAX;
 
-    /// Smallest representable BAML integer (`-2^62 = -4_611_686_018_427_387_904`).
-    pub const INT_MIN: i64 = Int63::MIN.get();
+    /// Smallest BAML `int`.
+    pub const INT_MIN: i64 = baml_type::int::MIN;
+
+    /// Largest int with an inline encoding (`2^62 - 1`): the low bit is the
+    /// tag, so an inline int has 63 bits.
+    #[cfg(not(baml_narrow_inline_int))]
+    pub const INLINE_INT_MAX: i64 = (1 << 62) - 1;
+
+    /// Smallest int with an inline encoding (`-2^62`).
+    #[cfg(not(baml_narrow_inline_int))]
+    pub const INLINE_INT_MIN: i64 = -(1 << 62);
+
+    /// The test-only narrow inline range, so ordinary programs box ints.
+    #[cfg(baml_narrow_inline_int)]
+    pub const INLINE_INT_MAX: i64 = (1 << 20) - 1;
+
+    /// The test-only narrow inline range, so ordinary programs box ints.
+    #[cfg(baml_narrow_inline_int)]
+    pub const INLINE_INT_MIN: i64 = -(1 << 20);
 
     // ── Tagged-int fast-path arithmetic ───────────────────────────────────
     //
@@ -134,76 +156,84 @@ impl Value {
     // Add: (ra<<1|1) + (rb<<1|1) - 1 = ((ra+rb)<<1) | 1
     // Sub: (ra<<1|1) - (rb<<1|1) + 1 = ((ra-rb)<<1) | 1
     //
-    // Wrapping is correct: i63 ranges produce results that fit in i63
-    // (modulo wrap, same as the previous `l + r` on i64s).
-    //
     // For comparison, `(ra<<1)|1` < `(rb<<1)|1` iff `ra < rb` (shift-left
     // preserves signed ordering; the tag bit is the same in both so it
     // doesn't affect the comparison). Bits interpreted as i64 yield the
-    // signed ordering of the underlying i63 values.
+    // signed ordering of the underlying inline ints.
+    //
+    // All of this holds only when both operands are inline; a boxed int is a
+    // pointer, so every helper here checks the tags first.
 
-    /// Sum of two `Int`-tagged Values, or `None` on i63 overflow — computed
-    /// without untagging.
+    /// Sum of two ints when both are inline and the sum is inline, computed
+    /// without untagging; `None` otherwise (a boxed operand, or a sum outside
+    /// the inline range), for the caller's slow path to decide.
     ///
-    /// When present, the result is the exact tagged sum. The overflow test is
-    /// exact and nearly free: in the tag encoding a value `x`
-    /// is stored as `(x << 1) | 1`, so `a + (b - 1)` (the tagged sum, as a
-    /// *signed* i64) overflows i64 precisely when `x + y` leaves the i63 range
-    /// `[INT_MIN, INT_MAX]`. So the hardware signed-overflow flag of one add is
-    /// the i63 range check — no shift-out/range-compare/re-encode needed.
+    /// The overflow test is exact and nearly free: in the tag encoding a value
+    /// `x` is stored as `(x << 1) | 1`, so `a + (b - 1)` (the tagged sum, as a
+    /// *signed* i64) overflows i64 precisely when `x + y` leaves the inline
+    /// range. So the hardware signed-overflow flag of one add is the range
+    /// check; the tag test of both operands is one `and`.
     ///
-    /// Both inputs must be `Int`-tagged; debug builds assert this contract.
+    /// Both inputs must be ints, inline or boxed.
     #[inline(always)]
     pub const fn tagged_int_add_checked(a: Value, b: Value) -> Option<Value> {
-        debug_assert!(
-            a.is_int() && b.is_int(),
-            "tagged_int_add_checked: both inputs must be Int"
-        );
         let (t, overflow) = (a.0 as i64).overflowing_add((b.0 as i64).wrapping_sub(1));
-        if overflow {
-            None
-        } else {
-            Some(Value(t as u64))
-        }
+        Self::tagged_int_result(a, b, t, overflow)
     }
 
-    /// Difference of two `Int`-tagged Values, or `None` on i63 overflow.
-    ///
-    /// See [`Value::tagged_int_add_checked`] for the encoding and overflow
-    /// details. When present, the result is the exact tagged difference.
+    /// Difference of two ints when both are inline and the difference is
+    /// inline; `None` otherwise. See [`Value::tagged_int_add_checked`].
     #[inline(always)]
     pub const fn tagged_int_sub_checked(a: Value, b: Value) -> Option<Value> {
-        debug_assert!(
-            a.is_int() && b.is_int(),
-            "tagged_int_sub_checked: both inputs must be Int"
-        );
         let (t, overflow) = (a.0 as i64).overflowing_sub((b.0 as i64).wrapping_sub(1));
-        if overflow {
-            None
-        } else {
-            Some(Value(t as u64))
-        }
+        Self::tagged_int_result(a, b, t, overflow)
     }
 
-    // The OpCode::CmpInt* path does signed comparison directly on the
-    // tagged bits (`(l.bits() as i64) < (r.bits() as i64)`); we don't
-    // need a separate `tagged_int_cmp` helper.
+    #[inline(always)]
+    const fn tagged_int_result(a: Value, b: Value, t: i64, overflow: bool) -> Option<Value> {
+        // Non-short-circuit `|`: one branch for both rare cases.
+        if overflow | !Self::both_inline_ints(a, b) {
+            return None;
+        }
+        // The narrow test range is smaller than what the overflow flag checks.
+        if cfg!(baml_narrow_inline_int) && !Self::fits_inline(t >> 1) {
+            return None;
+        }
+        Some(Value(t as u64))
+    }
+
+    /// True iff both values are inline ints: one `and` and a test. Two inline
+    /// ints compare like their tagged words read as signed `i64`s.
+    #[inline(always)]
+    pub const fn both_inline_ints(a: Value, b: Value) -> bool {
+        a.0 & b.0 & 1 != 0
+    }
+
+    /// Whether `i` has an inline encoding.
+    #[inline(always)]
+    pub const fn fits_inline(i: i64) -> bool {
+        i >= Self::INLINE_INT_MIN && i <= Self::INLINE_INT_MAX
+    }
 
     // ── Constructors ──────────────────────────────────────────────────────
 
-    /// Build a `Value` carrying an `i63` integer.
+    /// Build an inline `Value` carrying an integer.
     ///
-    /// Debug-asserts that `i` is in `[INT_MIN, INT_MAX]`. Values outside
-    /// that range are truncated by the encoding shift, so passing one
-    /// here is a caller bug. Code that ingests integers from outside the
-    /// VM (deserializers, JSON decoders, etc.) should range-check first
-    /// or use [`Value::try_int`].
+    /// Asserts, in debug builds and in the `baml_narrow_inline_int` test mode,
+    /// that `i` is in `[INLINE_INT_MIN, INLINE_INT_MAX]`. Values outside that
+    /// range are truncated by the encoding shift, so passing one here is a
+    /// caller bug: an int of arbitrary magnitude goes through the heap's
+    /// `int_value`. Code that ingests integers from
+    /// outside the VM (deserializers, JSON decoders, etc.) should range-check
+    /// first or use [`Value::try_inline_int`].
     #[inline(always)]
     pub const fn int(i: i64) -> Self {
-        debug_assert!(
-            i >= Self::INT_MIN && i <= Self::INT_MAX,
-            "Value::int called with i64 outside the i63 range; use Value::try_int at boundaries"
-        );
+        if cfg!(any(debug_assertions, baml_narrow_inline_int)) {
+            assert!(
+                Self::fits_inline(i),
+                "Value::int called with an i64 outside the inline int range"
+            );
+        }
         // Cast is well-defined: `(i as u64) << 1` may technically
         // overflow at the i64 boundary but the result is still a valid
         // u64 bit pattern that decodes back via `as_int`'s arithmetic
@@ -211,12 +241,11 @@ impl Value {
         Value(((i as u64) << 1) | 1)
     }
 
-    /// Build a `Value` carrying an `i63` integer, or `None` if `i` is
-    /// outside the i63 range. Use this at boundaries that accept
-    /// arbitrary `i64`s (JSON decoders, `Deserialize`, FFI).
+    /// The inline encoding of `i`, or `None` if `i` is outside
+    /// `[INLINE_INT_MIN, INLINE_INT_MAX]`.
     #[inline(always)]
-    pub const fn try_int(i: i64) -> Option<Self> {
-        if i >= Self::INT_MIN && i <= Self::INT_MAX {
+    pub const fn try_inline_int(i: i64) -> Option<Self> {
+        if Self::fits_inline(i) {
             Some(Value(((i as u64) << 1) | 1))
         } else {
             None
@@ -289,8 +318,10 @@ impl Value {
         self.0 == Self::OMITTED_ARG.0
     }
 
+    /// True iff `self` is an inline int. A boxed int is an object; use
+    /// [`Value::as_int`] to accept both.
     #[inline(always)]
-    pub const fn is_int(self) -> bool {
+    pub const fn is_inline_int(self) -> bool {
         self.0 & 1 != 0
     }
 
@@ -311,15 +342,46 @@ impl Value {
 
     // ── Typed accessors (return None on tag mismatch) ─────────────────────
 
-    /// Extract an `i64` if this is an `Int`. Sign-extends from the i63
-    /// stored encoding.
+    /// Extract an `i64` if this is an inline int. Sign-extends from the
+    /// 63-bit stored encoding.
     #[inline(always)]
-    pub const fn as_int(&self) -> Option<i64> {
-        if self.is_int() {
+    pub const fn as_inline_int(&self) -> Option<i64> {
+        if self.is_inline_int() {
             // Arithmetic shift right preserves sign.
             Some((self.0 as i64) >> 1)
         } else {
             None
+        }
+    }
+
+    /// The int of a value the caller checked is inline (see
+    /// [`Value::both_inline_ints`]); meaningless for any other value.
+    #[inline(always)]
+    pub const fn inline_int_unchecked(self) -> i64 {
+        (self.0 as i64) >> 1
+    }
+
+    /// Extract an `i64` if this is an int, inline or heap-boxed: the one
+    /// accessor for reading an int out of a `Value`.
+    #[inline(always)]
+    pub fn as_int(&self) -> Option<i64> {
+        if let Some(i) = self.as_inline_int() {
+            return Some(i);
+        }
+        self.as_boxed_int()
+    }
+
+    /// The boxed half of [`Value::as_int`]: `Some` iff `self` points at an
+    /// `Object::Int`. Out of line, so the inline case stays a shift and a test.
+    #[cold]
+    #[inline(never)]
+    fn as_boxed_int(self) -> Option<i64> {
+        let ptr = self.as_object_ptr()?;
+        // SAFETY: a heap pointer held in a live `Value` is valid for reads;
+        // its GC liveness is the caller's concern, as for every pointer read.
+        match unsafe { ptr.get() } {
+            Object::Int(i) => Some(*i),
+            _ => None,
         }
     }
 
@@ -414,7 +476,7 @@ impl Value {
     /// only care about one variant.
     #[inline]
     pub fn kind(&self) -> ValueKind {
-        if self.is_int() {
+        if self.is_inline_int() {
             return ValueKind::Int((self.0 as i64) >> 1);
         }
         match self.0 {
@@ -671,14 +733,13 @@ impl BorshDeserialize for Value {
         Ok(match proxy {
             ValueWire::Null => Value::NULL,
             ValueWire::OmittedArg => Value::OMITTED_ARG,
-            ValueWire::Int(i) => Value::try_int(i).ok_or_else(|| {
+            ValueWire::Int(i) => Value::try_inline_int(i).ok_or_else(|| {
                 std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     format!(
-                        "Value::Int payload {i} is outside the i63 range [{}, {}]; \
-                         pre-tagged-pointer payloads with |value| >= 2^62 cannot be loaded",
-                        Value::INT_MIN,
-                        Value::INT_MAX,
+                        "Value::Int payload {i} is outside the inline int range [{}, {}]",
+                        Value::INLINE_INT_MIN,
+                        Value::INLINE_INT_MAX,
                     ),
                 )
             })?,
@@ -744,7 +805,7 @@ mod float_encoding_tests {
         let Some(v) = encoded else { return };
         assert!(v.is_inline_float(), "0x{bits:016x}");
         assert!(
-            !v.is_int() && !v.is_object() && !v.is_null(),
+            !v.is_inline_int() && !v.is_object() && !v.is_null(),
             "0x{bits:016x}"
         );
         assert!(
@@ -887,7 +948,7 @@ mod float_encoding_tests {
             assert!(!v.is_inline_float());
             assert_eq!(v.as_inline_float(), None);
         }
-        for i in [0, 1, -1, Value::INT_MAX, Value::INT_MIN, 42] {
+        for i in [0, 1, -1, Value::INLINE_INT_MAX, Value::INLINE_INT_MIN, 42] {
             let v = Value::int(i);
             assert!(!v.is_inline_float());
             assert_eq!(v.as_int(), Some(i));
@@ -912,5 +973,68 @@ mod float_encoding_tests {
             let back: Value = borsh::from_slice(&bytes).unwrap();
             assert_eq!(back, v);
         }
+    }
+}
+
+#[cfg(all(test, not(feature = "heap_debug")))]
+mod int_encoding_tests {
+    use super::{Value, ValueKind};
+    use crate::{HeapPtr, Object};
+
+    /// A `Value` pointing at a boxed int kept alive by `object`.
+    fn boxed(object: &mut Object) -> Value {
+        // SAFETY: the caller keeps `object` alive while the value is read.
+        Value::object(unsafe { HeapPtr::from_ptr(std::ptr::from_mut(object)) })
+    }
+
+    #[test]
+    fn inline_range_round_trips_and_rejects_beyond() {
+        for i in [0, 1, -1, Value::INLINE_INT_MAX, Value::INLINE_INT_MIN] {
+            let v = Value::try_inline_int(i).expect("inline");
+            assert_eq!(v.as_inline_int(), Some(i));
+            assert_eq!(v.as_int(), Some(i));
+            assert!(matches!(v.kind(), ValueKind::Int(j) if j == i));
+        }
+        for i in [
+            Value::INLINE_INT_MAX + 1,
+            Value::INLINE_INT_MIN - 1,
+            i64::MAX,
+            i64::MIN,
+        ] {
+            assert_eq!(Value::try_inline_int(i), None);
+            assert!(!Value::fits_inline(i));
+        }
+    }
+
+    #[test]
+    fn boxed_int_reads_through_as_int() {
+        for i in [i64::MAX, i64::MIN, Value::INLINE_INT_MAX + 1] {
+            let mut object = Box::new(Object::Int(i));
+            let v = boxed(&mut object);
+            assert_eq!(v.as_int(), Some(i));
+            assert_eq!(v.as_inline_int(), None);
+            assert_eq!(v.as_float(), None);
+            assert!(matches!(v.kind(), ValueKind::Object(_)));
+        }
+    }
+
+    #[test]
+    fn tagged_arithmetic_declines_boxed_operands_and_inline_overflow() {
+        let one = Value::int(1);
+        assert_eq!(Value::tagged_int_add_checked(one, one), Some(Value::int(2)));
+        assert_eq!(
+            Value::tagged_int_add_checked(Value::int(Value::INLINE_INT_MAX), one),
+            None
+        );
+        assert_eq!(
+            Value::tagged_int_sub_checked(Value::int(Value::INLINE_INT_MIN), one),
+            None
+        );
+        let mut object = Box::new(Object::Int(i64::MAX));
+        let big = boxed(&mut object);
+        assert_eq!(Value::tagged_int_add_checked(big, one), None);
+        assert_eq!(Value::tagged_int_sub_checked(one, big), None);
+        assert!(!Value::both_inline_ints(big, one));
+        assert!(Value::both_inline_ints(one, one));
     }
 }

@@ -16,10 +16,10 @@ use crate::{
 /// BAML's `baml.json.json`, the recursive stdlib alias
 /// `null | bool | int | bigint | float | string | json[] | map<string, json>`.
 ///
-/// - Integers: BAML `int` is 63-bit (the VM keeps a tag bit), so an integer
-///   outside `[-2^62, 2^62)` crosses as a BAML `bigint`, as
-///   `baml.json.parse` reads such a token, and a BAML `bigint` decodes when
-///   it fits `i64` or `u64`. Every `i64` and `u64` round-trips.
+/// - Integers: BAML `int` is 64-bit, so every `i64` crosses as an `int`; a
+///   wider integer crosses as a BAML `bigint`, as `baml.json.parse` reads
+///   such a token, and a BAML `bigint` decodes when it fits `i64` or `u64`.
+///   Every `i64` and `u64` round-trips.
 /// - Floats: finite `f64`. An integral float stays a float.
 /// - Objects keep the key order `serde_json::Map` gives them: sorted,
 ///   unless the build enables `serde_json`'s `preserve_order` feature.
@@ -49,11 +49,6 @@ use crate::{
 ///
 /// Either way, decoding a BAML `bigint` outside `i64`/`u64` fails.
 pub type Json = Value;
-
-/// Smallest BAML `int`.
-const BAML_INT_MIN: i64 = -(1 << 62);
-/// Largest BAML `int`.
-const BAML_INT_MAX: i64 = (1 << 62) - 1;
 
 /// A JSON value on the wire. A scalar's arm implies its type; a list or an
 /// object states the `json[]` or `map<string, json>` it is, as every
@@ -100,10 +95,7 @@ fn encode(value: &Json, encoder: &mut Encoder) -> Result<wire::InboundValue, Enc
 }
 
 fn encode_number(number: &Number) -> In {
-    if let Some(int) = number
-        .as_i64()
-        .filter(|int| (BAML_INT_MIN..=BAML_INT_MAX).contains(int))
-    {
+    if let Some(int) = number.as_i64() {
         return In::IntValue(int);
     }
     // `as_f64` also rounds integers, so ask what the number *is*.
@@ -256,14 +248,11 @@ mod tests {
 
     #[test]
     fn integers_outside_baml_int_cross_as_bigint_and_round_trip() {
-        for int in [0, BAML_INT_MIN, BAML_INT_MAX] {
+        for int in [0, 1 << 62, -(1 << 62) - 1, i64::MIN, i64::MAX] {
             assert_eq!(encoded(&json!(int)).value, Some(In::IntValue(int)));
         }
         for (value, hex) in [
-            (json!(BAML_INT_MAX + 1), "4000000000000000"),
-            (json!(BAML_INT_MIN - 1), "-4000000000000001"),
-            (json!(i64::MAX), "7fffffffffffffff"),
-            (json!(i64::MIN), "-8000000000000000"),
+            (json!(1_u64 << 63), "8000000000000000"),
             (json!(u64::MAX), "ffffffffffffffff"),
         ] {
             assert_eq!(

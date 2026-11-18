@@ -137,6 +137,8 @@ function classify_sparse_with_vacant_slots(x: int) -> int {
 test "match_sparse_int_extremes_select_no_arm" {
     assert.equal(classify_sparse_with_vacant_slots(-4611686018427387904), 999)
     assert.equal(classify_sparse_with_vacant_slots(4611686018427387903), 999)
+    assert.equal(classify_sparse_with_vacant_slots(int.min_value()), 999)
+    assert.equal(classify_sparse_with_vacant_slots(int.max_value()), 999)
     assert.equal(classify_sparse_with_vacant_slots(0), 999)
     assert.equal(classify_sparse_with_vacant_slots(4), 999)
     assert.equal(classify_sparse_with_vacant_slots(1), 101)

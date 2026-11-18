@@ -27,18 +27,32 @@ test "nullable array index is rejected before runtime" {
     )
 }
 
-test "integer literals outside the i63 range are rejected" {
+test "integer literals in the 64-bit range are accepted" {
+    root.compiler.AssertCompiles(
+        {
+            "edges.baml": `
+                function above_inline() -> int { 4611686018427387904 }
+                function max() -> int { 9223372036854775807 }
+                function min() -> int { -9223372036854775808 }
+                function below_inline() -> int { -5000000000000000000 }
+                function parenthesized() -> int { -(4611686018427387904) }
+            `,
+        },
+    )
+}
+
+test "integer literals outside the 64-bit range are rejected" {
     root.compiler.AssertHasCode(
-        { "above_max.baml": `function main() -> int { 4611686018427387904 }` },
-        "E0150",
+        { "above_max.baml": `function main() -> int { 9223372036854775808 }` },
+        "E0152",
     );
     root.compiler.AssertHasCode(
-        { "below_min.baml": `function main() -> int { -5000000000000000000 }` },
-        "E0150",
+        { "below_min.baml": `function main() -> int { -9223372036854775809 }` },
+        "E0152",
     );
     root.compiler.AssertHasCode(
-        { "parenthesized.baml": `function main() -> int { -(4611686018427387904) }` },
-        "E0150",
+        { "parenthesized.baml": `function main() -> int { -(9223372036854775808) }` },
+        "E0152",
     )
 }
 

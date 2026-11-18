@@ -26,7 +26,7 @@ fn canonical_json_fixture() -> Json {
         "null": null,
         "bool": true,
         "int": 42,
-        "int_bounds": [4_611_686_018_427_387_903_i64, -4_611_686_018_427_387_904_i64],
+        "int_bounds": [4_611_686_018_427_387_904_i64, -4_611_686_018_427_387_905_i64],
         "wide_ints": [i64::MAX, i64::MIN, u64::MAX],
         "float": 1.5,
         "integral_float": 2.0,

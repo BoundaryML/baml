@@ -50,8 +50,8 @@ test "shift_left" {
     assert.equal(10 << 3, 80)
 }
 
-// `<<` discards the bits pushed past the 63-bit width instead of overflowing,
-// so bit 62 lands on the sign and anything above it falls off entirely.
+// `<<` discards the bits pushed past the 64-bit width instead of overflowing,
+// so bit 63 lands on the sign and anything above it falls off entirely.
 // `ops_shl` takes its operands at runtime so the VM's shift opcode is
 // exercised; the literal forms next to it go through the constant folder, and
 // the two must agree.
@@ -61,13 +61,16 @@ test "shift_left_truncates" {
     assert.equal(ops_shl(1, 61), 2305843009213693952)
     assert.equal(1 << 61, 2305843009213693952)
 
-    // Bit 62 is the i63 sign bit, so `1 << 62` is `int.min_value()`.
-    assert.equal(ops_shl(1, 62), int.min_value())
-    assert.equal(1 << 62, int.min_value())
+    assert.equal(ops_shl(1, 62), 4611686018427387904)
+    assert.equal(1 << 62, 4611686018427387904)
 
-    // Every bit is gone at 63 and beyond, whatever the left operand.
-    assert.equal(ops_shl(1, 63), 0)
-    assert.equal(1 << 63, 0)
+    // Bit 63 is the sign bit, so `1 << 63` is `int.min_value()`.
+    assert.equal(ops_shl(1, 63), int.min_value())
+    assert.equal(1 << 63, int.min_value())
+
+    // Every bit is gone at 64 and beyond, whatever the left operand.
+    assert.equal(ops_shl(1, 64), 0)
+    assert.equal(1 << 64, 0)
     assert.equal(ops_shl(-1, 100), 0)
     assert.equal((-1) << 100, 0)
 
@@ -82,19 +85,21 @@ test "shift_right" {
 }
 
 // `>>` is arithmetic: it propagates the sign rather than feeding in zeros, so a
-// count at or past the 63-bit width saturates to the sign bit: 0 for a
+// count at or past the 64-bit width saturates to the sign bit: 0 for a
 // non-negative operand, -1 for a negative one. Regression for a VM arm that
 // returned 0 for both, which disagreed with the constant folder.
 function ops_shr(x: int, n: int) -> int { x >> n }
 
 test "shift_right_saturates_to_sign" {
-    assert.equal(ops_shr(-1, 63), -1)
-    assert.equal((-1) >> 63, -1)
+    assert.equal(ops_shr(-1, 64), -1)
+    assert.equal((-1) >> 64, -1)
     assert.equal(ops_shr(-1, 200), -1)
     assert.equal((-1) >> 200, -1)
 
-    assert.equal(ops_shr(1, 63), 0)
-    assert.equal(1 >> 63, 0)
+    assert.equal(ops_shr(1, 64), 0)
+    assert.equal(1 >> 64, 0)
+    assert.equal(ops_shr(int.max_value(), 62), 1)
+    assert.equal(int.max_value() >> 62, 1)
     assert.equal(ops_shr(1, 200), 0)
     assert.equal(1 >> 200, 0)
 
@@ -536,22 +541,9 @@ test "operator_mixed_primitive_union_add" {
     assert.equal(ops_mixed_union_add(-1), 3.5)
 }
 
-// Panic parity (B-266): the driver natives must throw the same catchable
-// panics the opcodes do — not wrap, not return IEEE infinities for int-like
+// Parity: the driver natives wrap exactly as the opcodes do, and throw the
+// same catchable panics for a zero divisor — not IEEE infinities for int-like
 // failures.
-
-function drv_catch_add_overflow() -> int {
-    drv_int_add(baml.Int.max_value(), 1) catch (e) { baml.panics.IntegerOverflow => -1 }
-}
-function drv_catch_mul_overflow() -> int {
-    drv_int_mul(baml.Int.max_value(), 2) catch (e) { baml.panics.IntegerOverflow => -1 }
-}
-function drv_catch_neg_overflow() -> int {
-    drv_int_neg(baml.Int.min_value()) catch (e) { baml.panics.IntegerOverflow => -1 }
-}
-function drv_catch_div_min_by_minus_one() -> int {
-    drv_int_div(baml.Int.min_value(), -1) catch (e) { baml.panics.IntegerOverflow => -1 }
-}
 function drv_catch_int_div_zero() -> int {
     drv_int_div(1, 0) catch (e) { baml.panics.DivisionByZero => -1 }
 }
@@ -573,10 +565,10 @@ function drv_catch_bigint_div_zero() -> bigint {
 }
 
 test "driver_panics_match_opcodes" {
-    assert.equal(drv_catch_add_overflow(), -1)
-    assert.equal(drv_catch_mul_overflow(), -1)
-    assert.equal(drv_catch_neg_overflow(), -1)
-    assert.equal(drv_catch_div_min_by_minus_one(), -1)
+    assert.equal(drv_int_add(baml.Int.max_value(), 1), baml.Int.min_value())
+    assert.equal(drv_int_mul(baml.Int.max_value(), 2), -2)
+    assert.equal(drv_int_neg(baml.Int.min_value()), baml.Int.min_value())
+    assert.equal(drv_int_div(baml.Int.min_value(), -1), baml.Int.min_value())
     assert.equal(drv_catch_int_div_zero(), -1)
     assert.equal(drv_catch_int_rem_zero(), -1)
     assert.is_true(drv_float_div_zero_is_infinite())

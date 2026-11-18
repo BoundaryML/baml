@@ -48,7 +48,7 @@ function json_kind(x: json) -> string {
 }
 
 function parsed(x: string) -> json throws baml.json.ParseError { baml.json.parse(x) }
-function int_max() -> json { 4611686018427387903 }
+function int_max() -> json { 9223372036854775807 }
 function bigint_u64_max() -> json { (2n).pow(64n) - 1n }
 function bigint_top_level() -> json { (2n).pow(70n) }
 function bigint_nested() -> json { { "ok": [1, 2], "big": [(2n).pow(70n)] } }
@@ -314,9 +314,10 @@ fn host_supplied_json_narrows_like_baml_json() {
         (json!([1]), "array"),
         (json!("s"), "string"),
         (json!(3), "int"),
-        // BAML `int` is 63-bit: wider integers arrive as `bigint`, as
+        // BAML `int` is 64-bit: wider integers arrive as `bigint`, as
         // `baml.json.parse` reads them.
-        (json!(4_611_686_018_427_387_904_i64), "bigint"),
+        (json!(4_611_686_018_427_387_904_i64), "int"),
+        (json!(i64::MIN), "int"),
         (json!(u64::MAX), "bigint"),
         (json!(0.5), "float"),
         (json!(null), "other"),
@@ -335,7 +336,7 @@ fn baml_parsed_json_decodes() {
     .expect("parsed succeeds");
     assert_eq!(out, json!({ "b": [1, 2.5, "x", null], "a": {} }));
     let out: Json = call_with("user.int_max", |_| Ok(())).expect("int_max succeeds");
-    assert_eq!(out, json!(4_611_686_018_427_387_903_i64));
+    assert_eq!(out, json!(i64::MAX));
 }
 
 #[test]

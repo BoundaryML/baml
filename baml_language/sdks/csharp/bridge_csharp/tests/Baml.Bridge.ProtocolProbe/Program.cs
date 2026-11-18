@@ -2,8 +2,8 @@ using BamlBridge.Cffi.V1;
 
 internal static class Program
 {
-    private const long BamlIntMin = -4_611_686_018_427_387_904L;
-    private const long BamlIntMax = 4_611_686_018_427_387_903L;
+    private const long BamlIntMin = long.MinValue;
+    private const long BamlIntMax = long.MaxValue;
     private const string ExactCrLfEnvelopeHex =
         "6a2622143a120a0642040a026c660a0842060a0463726c662a062263726c662232061a0463726c66";
 
@@ -83,23 +83,6 @@ internal static class Program
             Require(decoded == value, $"outbound int changed {value}");
         }
 
-        long[] invalid =
-        [
-            long.MinValue,
-            BamlIntMin - 1,
-            BamlIntMax + 1,
-            long.MaxValue,
-        ];
-        foreach (long value in invalid)
-        {
-            Expect<ArgumentOutOfRangeException>(
-                () => _ = EncodeBamlInt(value, "$.argument"));
-            Expect<InvalidDataException>(
-                () => _ = DecodeBamlInt(
-                    new BamlOutboundValue { IntValue = value },
-                    "$.result"));
-        }
-
         Require(
             DecodeBamlIntLiteral(
                 new BamlOutboundValue { IntValue = BamlIntMax },
@@ -134,35 +117,12 @@ internal static class Program
             decodedList.AsSpan().SequenceEqual(
                 [BamlIntMin, 0, BamlIntMax]),
             "decoded int list changed values");
-
-        Expect<ArgumentOutOfRangeException>(
-            () => _ = EncodeBamlIntList([0, BamlIntMax + 1], "$.items"));
-        Expect<InvalidDataException>(
-            () => _ = DecodeBamlIntList(
-                new BamlOutboundValue
-                {
-                    ListValue = new BamlValueList
-                    {
-                        Items =
-                        {
-                            new BamlOutboundValue { IntValue = 0 },
-                            new BamlOutboundValue { IntValue = BamlIntMin - 1 },
-                        },
-                    },
-                },
-                "$.items"));
     }
 
+    // A BAML int is 64-bit, so every long is one; `path` names the slot.
     private static InboundValue EncodeBamlInt(long value, string path)
     {
-        if (value is < BamlIntMin or > BamlIntMax)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(value),
-                value,
-                $"{path} is outside the BAML int domain [{BamlIntMin}, {BamlIntMax}].");
-        }
-
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
         return new InboundValue { IntValue = value };
     }
 
@@ -175,14 +135,7 @@ internal static class Program
                 $"{path} expected a BAML int, received {value.ValueCase}.");
         }
 
-        long decoded = value.IntValue;
-        if (decoded is < BamlIntMin or > BamlIntMax)
-        {
-            throw new InvalidDataException(
-                $"{path} contains out-of-domain BAML int carrier value {decoded}.");
-        }
-
-        return decoded;
+        return value.IntValue;
     }
 
     private static long DecodeBamlIntLiteral(

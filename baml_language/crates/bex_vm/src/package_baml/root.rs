@@ -18,7 +18,7 @@ use super::{
     make_to_string_callee,
 };
 use crate::{
-    BexVm, VmPanic,
+    BexVm,
     errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
 
@@ -175,26 +175,14 @@ impl BamlPackageBaml for PackageBamlImpl {
 
     /// `baml._sum_int(values)` — native backing for `int[].sum()`.
     ///
-    /// Accumulates left-to-right from `0`, checking the running total against
-    /// the `int` range at each step so overflow raises `IntegerOverflow` exactly
-    /// like repeated `+` would. Both `acc` and each element are already in range,
-    /// so the intermediate i64 add never wraps; the tighter range check is the
-    /// meaningful bound. The empty array sums to `0`.
-    fn _sum_int(values: &[Value]) -> Result<i64, VmRustFnError> {
+    /// Accumulates left-to-right from `0`, wrapping exactly like repeated `+`.
+    /// The empty array sums to `0`.
+    fn _sum_int(values: &[Value]) -> i64 {
         let mut acc: i64 = 0;
         for (index, value) in values.iter().enumerate() {
-            let x = expect_int(*value, "_sum_int", index);
-            match acc.checked_add(x) {
-                Some(v) if (Value::INT_MIN..=Value::INT_MAX).contains(&v) => acc = v,
-                _ => {
-                    return Err(VmPanic::IntegerOverflow {
-                        message: format!("{acc} + {x} overflows int"),
-                    }
-                    .into());
-                }
-            }
+            acc = acc.wrapping_add(expect_int(*value, "_sum_int", index));
         }
-        Ok(acc)
+        acc
     }
 
     /// `baml._sum_float(values)` — native backing for `float[].sum()`.
@@ -665,16 +653,20 @@ fn primitive_text(vm: &BexVm, value: Value) -> Option<String> {
         ValueKind::Float(f) => Some(bex_vm_types::format_float(f)),
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::Float(f) => Some(bex_vm_types::format_float(*f)),
+            Object::Int(i) => Some(i.to_string()),
             _ => None,
         },
         ValueKind::OmittedArg => None,
     }
 }
 
-/// Whether `ptr` is a string or a float, which no package can give a
+/// Whether `ptr` is a string, a float or an int, which no package can give a
 /// `baml.ToString` override (E0139).
 fn is_primitive_object(vm: &BexVm, ptr: HeapPtr) -> bool {
-    matches!(vm.get_object(ptr), Object::String(_) | Object::Float(_))
+    matches!(
+        vm.get_object(ptr),
+        Object::String(_) | Object::Float(_) | Object::Int(_)
+    )
 }
 
 /// Human-readable rendering used by `string.from` / the `baml.ToString` default.
@@ -986,6 +978,7 @@ fn deep_copy_value_recursive(
 
             let new_ptr = match object {
                 Object::Float(f) => vm.tlab.alloc(Object::Float(f)),
+                Object::Int(i) => vm.tlab.alloc(Object::Int(i)),
                 Object::String(s) => vm.tlab.alloc(Object::String(s)),
                 Object::Uint8Array(bytes) => vm.tlab.alloc(Object::Uint8Array(bytes)),
 

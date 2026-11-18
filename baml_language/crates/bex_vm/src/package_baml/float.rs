@@ -1,15 +1,13 @@
 use super::{BamlClassFloat, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmRustFnError};
 
-// BAML int is i63 (the runtime reserves one bit for the tagged-pointer
-// Value tag). Range: `[-2^62, 2^62 - 1]`. `-2^62` and `2^62` are both
-// powers of two, exactly representable in f64 (as integers with
-// magnitudes far past f64's 53-bit mantissa but with no fractional part).
-// So the in-range predicate is `MIN_F <= r < MAX_PLUS_ONE_F` — note the
-// strict upper bound. NaN fails this check via the usual NaN-comparison
-// rules.
-const MIN_F: f64 = -4_611_686_018_427_387_904.0; // -2^62
-const MAX_PLUS_ONE_F: f64 = 4_611_686_018_427_387_904.0; // 2^62
+// BAML int is i64. Range: `[-2^63, 2^63 - 1]`. `-2^63` and `2^63` are both
+// powers of two, exactly representable in f64. So the in-range predicate is
+// `MIN_F <= r < MAX_PLUS_ONE_F` — note the strict upper bound: `as i64`
+// saturates, so `2^63` itself would read back as `i64::MAX`. NaN fails this
+// check via the usual NaN-comparison rules.
+const MIN_F: f64 = -9_223_372_036_854_775_808.0; // -2^63
+const MAX_PLUS_ONE_F: f64 = 9_223_372_036_854_775_808.0; // 2^63
 
 #[allow(clippy::cast_possible_truncation)]
 fn float_to_int(value: f64, op: &str) -> Result<i64, VmRustFnError> {
@@ -212,7 +210,8 @@ impl BamlClassFloat for PackageBamlImpl {
         reason = "bits <= 2^53 - 1 fits f64's mantissa exactly"
     )]
     fn _unit_from_draw(draw: i64) -> f64 {
-        // Bit 63 only repeats the i63 sign bit, so use bits 10..=62.
+        // A `random_int` draw is 63 bits, sign-extended: bit 63 only repeats
+        // bit 62, so use bits 10..=62.
         let bits = (draw.cast_unsigned() >> 10) & ((1u64 << 53) - 1); // <= 2^53 - 1
         bits as f64 * (1.0 / (1u64 << 53) as f64)
     }
