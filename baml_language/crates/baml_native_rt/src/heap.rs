@@ -446,14 +446,6 @@ impl Mutator {
         address
     }
 
-    /// Take back the last `bytes` bytes of the allocation just made, which
-    /// its caller did not use.
-    pub fn give_back(&mut self, bytes: usize) {
-        debug_assert!(bytes.is_multiple_of(WORD));
-        self.alloc_ptr -= bytes;
-        self.publish_limit();
-    }
-
     /// Allocate an object of `size` bytes whose type id is `type_id`.
     pub fn allocate_object(&mut self, type_id: usize, size: usize) -> usize {
         let object = self.allocate(size);

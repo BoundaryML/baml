@@ -30,7 +30,7 @@ function slice_long_out_of_range() -> string {
 }
 function slice_around_shortest() -> string {
   let s = slice_text(3);
-  `${s.slice(1, 32)}|${s.slice(1, 33)}|${s.slice(1, 34)}|${s.slice(1, 32).length()}`
+  `${s.slice(1, 16)}|${s.slice(1, 17)}|${s.slice(1, 18)}|${s.slice(1, 19)}|${s.slice(1, 17).length()}|${s.slice(2, 19).slice(0, 16)}`
 }
 function slice_empty_ones() -> string {
   let s = slice_text(4).slice(2, 100);
@@ -148,6 +148,38 @@ function slice_trim_wide() -> string {
 function slice_trim_of_slice() -> string {
   let s = `${slice_text(1)}${rep(" ", 6)}${slice_text(2)}${rep(" ", 6)}${slice_text(1)}`.slice(36, 120);
   `[${s.trim()}|${s.trim_start().length()}|${s.trim_end().length()}]`
+}
+
+// Bounds known only when the program runs.
+
+function slice_count(n: int) -> int {
+  rep("a", n).length()
+}
+function slice_computed_bounds() -> string {
+  let s = slice_text(3);
+  let a = slice_count(5);
+  `${s.slice(a, a + 40)}|${s.slice(a, a + 16)}|${s.slice(a, a + 17)}|${s.slice(a - 5, a + 103)}|${s.slice(a - 5, a + 102)}`
+}
+function slice_computed_bounds_refused() -> string {
+  let s = slice_text(3);
+  let a = slice_count(5);
+  `[${s.slice(-a - 40, -a)}|${s.slice(a, a)}|${s.slice(a + 50, a)}|${s.slice(a, a + 1000)}|${s.slice(-a, a + 100)}|${s.slice(a + 200, a + 300)}]`
+}
+function slice_computed_bounds_of_slice() -> string {
+  let a = slice_count(5);
+  let s = slice_text(4).slice(a, a + 100);
+  let junk = rep("k", 2);
+  `${s.slice(a, a + 30)}|${s.slice(a, a + 30).slice(a - 4, a + 20)}|${junk}`
+}
+function slice_computed_bounds_wide() -> string {
+  let a = slice_count(5);
+  let s = slice_wide(20);
+  `${s.slice(a, a + 40)}|${s.slice(a, a + 40).length()}|${`${rep("é", 2)}${slice_text(2)}`.slice(a - 3, a + 40).slice(a - 4, a + 20)}`
+}
+function slice_computed_bounds_of_short() -> string {
+  let a = slice_count(5);
+  let s = rep("abcdefgh", 2);
+  `[${s.slice(a - 5, a + 11)}|${s.slice(a - 4, a + 11)}|${s.slice(a - 5, a + 30)}|${rep("", 1).slice(a - 5, a + 30)}]`
 }
 
 // The collector.

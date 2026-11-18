@@ -66,6 +66,7 @@ use crate::{
 };
 
 mod native_call;
+mod string_slice;
 mod unwind;
 
 /// The symbol the runtime's process entry calls.

@@ -18,7 +18,7 @@
     reason = "a word is 64 bits wherever the runtime is built"
 )]
 
-use std::{cell::Cell, marker::PhantomData};
+use std::{cell::Cell, marker::PhantomData, mem::MaybeUninit};
 
 use crate::{
     heap::{Mutator, load, store},
@@ -375,11 +375,27 @@ impl From<Option<bool>> for OptionalScalar {
 
 /// The slots behind the roots of one call of a native. It lives in the
 /// frame of the function compiled code called.
-pub struct RootSlots([Cell<usize>; ROOTS]);
+///
+/// A slot is written when it is first handed out and not before: a call
+/// that roots two things pays for two.
+pub struct RootSlots(MaybeUninit<[Cell<usize>; ROOTS]>);
 
 impl RootSlots {
     pub fn new() -> Self {
-        Self([const { Cell::new(0) }; ROOTS])
+        Self(MaybeUninit::uninit())
+    }
+
+    /// Slot `index`, holding `word`.
+    fn hold(&self, index: usize, word: usize) -> &Cell<usize> {
+        assert!(index < ROOTS, "a native holds at most {ROOTS} roots");
+        // SAFETY: the slot is inside the array, a cell may be written
+        // through a shared reference, and it is written before the
+        // reference to it is made.
+        unsafe {
+            let slot = self.0.as_ptr().cast::<Cell<usize>>().add(index).cast_mut();
+            slot.write(Cell::new(word));
+            &*slot
+        }
     }
 }
 
@@ -487,9 +503,7 @@ impl<'s> Scope<'s> {
     ///
     /// `raw` is a live `M`.
     pub unsafe fn root_raw<M: Managed>(&mut self, raw: usize) -> Root<'s, M> {
-        assert!(self.used < ROOTS, "a native holds at most {ROOTS} roots");
-        let slot = &self.slots.0[self.used];
-        slot.set(raw);
+        let slot = self.slots.hold(self.used, raw);
         self.mutator.root_at(slot.as_ptr() as usize);
         self.used += 1;
         Root(slot, PhantomData)
@@ -502,9 +516,7 @@ impl<'s> Scope<'s> {
     /// `word` is a value of that type: a live object or zero when the
     /// type's values are references.
     pub unsafe fn elem_raw(&mut self, word: usize, ty: TypeId) -> Elem<'s> {
-        assert!(self.used < ROOTS, "a native holds at most {ROOTS} roots");
-        let slot = &self.slots.0[self.used];
-        slot.set(word);
+        let slot = self.slots.hold(self.used, word);
         let is_ref = self.is_reference(ty);
         if is_ref {
             self.mutator.root_at(slot.as_ptr() as usize);
@@ -596,20 +608,16 @@ pub const fn str_size(bytes: usize) -> usize {
     STRING_TEXT + words(bytes)
 }
 
-/// The most bytes [`Reservation::part`] takes for a part of `bytes` bytes
-/// of text: exact for most lengths and never short, so a reservation sized
-/// by it has room, and what it leaves over goes back.
+/// The bytes [`Reservation::part`] takes for a part of `bytes` bytes of
+/// text: a copy is never larger than a slice, so it is the smaller of the
+/// two, with no test of which the part will be.
 pub const fn part_size(bytes: usize) -> usize {
-    const MOST: usize = {
-        let copied = str_size(SLICE_MIN_BYTES - 1);
-        if copied > SLICE_SIZE {
-            copied
-        } else {
-            SLICE_SIZE
-        }
-    };
     let copied = str_size(bytes);
-    if copied < MOST { copied } else { MOST }
+    if copied < SLICE_SIZE {
+        copied
+    } else {
+        SLICE_SIZE
+    }
 }
 
 /// The bytes an array of `length` elements takes, storage included.
@@ -776,11 +784,6 @@ impl<'s> Reservation<'_, 's> {
         reason = "the object is handed over: it is good for one reservation"
     )]
     pub fn finish<M: Managed>(self, object: Built<M>) -> Root<'s, M> {
-        let unused = self.end - self.next.get();
-        if unused != 0 {
-            // Nothing has been allocated since the reservation.
-            self.scope.mutator.give_back(unused);
-        }
         // SAFETY: built in this reservation, as an `M`.
         unsafe { self.scope.root_raw(object.0) }
     }

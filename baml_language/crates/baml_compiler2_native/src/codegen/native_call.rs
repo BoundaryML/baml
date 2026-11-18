@@ -49,9 +49,23 @@ impl<'db> Translator<'_, 'db> {
     }
 
     /// Call `native` with `arguments` and return its result and the type it
+    /// has, or do without the call what the native would.
+    pub(super) fn native_call(
+        &mut self,
+        native: &'static Native,
+        arguments: &[Operand<'db>],
+        ntypeargs: usize,
+    ) -> Result<(ir::Value, NativeTy<'db>), CompileError> {
+        if native.path == super::string_slice::STRING_SLICE {
+            return self.inline_string_slice(native, arguments, ntypeargs);
+        }
+        self.native_call_out_of_line(native, arguments, ntypeargs)
+    }
+
+    /// Call `native` with `arguments` and return its result and the type it
     /// has. What a native throws goes to the handler of the calling block
     /// when it has one, and unwinds from here otherwise.
-    pub(super) fn native_call(
+    pub(super) fn native_call_out_of_line(
         &mut self,
         native: &'static Native,
         arguments: &[Operand<'db>],

@@ -56,9 +56,13 @@ pub const SLICE_PARENT: usize = HEADER + WORD;
 pub const SLICE_OFFSET: usize = HEADER + 2 * WORD;
 pub const SLICE_SIZE: usize = HEADER + 3 * WORD;
 /// The fewest bytes of text a slice is made for: a shorter part of a string
-/// is copied, which takes no more room than a slice and keeps nothing else
-/// alive.
-pub const SLICE_MIN_BYTES: usize = 32;
+/// is copied, which takes no more room than a slice. A string with this
+/// much text is itself at least as large as a slice, which is what lets
+/// compiled code read a slice's words of a string it has not yet told from
+/// one.
+pub const SLICE_MIN_BYTES: usize = 2 * WORD + 1;
+const _: () = assert!(STRING_TEXT + words(SLICE_MIN_BYTES - 1) <= SLICE_SIZE);
+const _: () = assert!(STRING_TEXT + words(SLICE_MIN_BYTES) >= SLICE_SIZE);
 
 /// A cell holds a local that a closure captures: a header and the value, one
 /// slot, or two for an optional scalar.
