@@ -347,3 +347,34 @@ function unwind_report() -> int throws UnwindReport {
 function unwind_uncaught_class() -> int { unwind_dive(3, 1) }
 function unwind_uncaught_nested_class() -> int { unwind_report() }
 function unwind_uncaught_shift() -> int { 1 << (0 - unwind_count(3)) }
+
+// An arm for an interface takes every class that implements it.
+interface UnwindCoded {
+  function coded(self) -> int throws never
+}
+class UnwindCodedA {
+  a: int
+  implements UnwindCoded {
+    function coded(self) -> int throws never { self.a }
+  }
+}
+class UnwindCodedB {
+  b: int
+  implements UnwindCoded {
+    function coded(self) -> int throws never { self.b * 2 }
+  }
+}
+function unwind_coded(kind: int) -> int throws UnwindCodedA | UnwindCodedB | string {
+  if unwind_count(kind) == 1 { throw UnwindCodedA { a: 3 } }
+  if unwind_count(kind) == 2 { throw UnwindCodedB { b: 4 } }
+  throw "neither"
+}
+function unwind_coded_arm(kind: int) -> int throws string {
+  unwind_coded(kind) catch (e) {
+    UnwindCoded => e.coded(),
+  }
+}
+function unwind_interface_arm() -> int {
+  let passed = unwind_coded_arm(3) catch (e) { string => e.length(), _ => -1 };
+  unwind_coded_arm(1) * 100 + unwind_coded_arm(2) * 10 + passed
+}

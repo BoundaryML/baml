@@ -971,6 +971,30 @@ mod tests {
     }
 
     #[test]
+    fn a_copied_object_keeps_the_flags_of_its_header() {
+        use crate::layout::{HEADER_PANIC, TYPE_ID_MASK};
+
+        let mut mutator = mutator(true);
+        let mut flagged = mutator.allocate_object(LINK | HEADER_PANIC, instance_size(2));
+        // SAFETY: `flagged` is a fresh instance of two slots.
+        unsafe {
+            store(flagged + field_offset(0), 7);
+            store(flagged + field_offset(1), 0);
+        }
+        mutator.root(&mut flagged);
+        let before = flagged;
+        let mut head = 0;
+        mutator.root(&mut head);
+        push_link(&mut mutator, &mut head, 1);
+        mutator.unroot(2);
+        assert_ne!(flagged, before, "every allocation collects");
+        // SAFETY: `flagged` was kept current across the collection.
+        let header = unsafe { load(flagged) };
+        assert_eq!(header & TYPE_ID_MASK, LINK);
+        assert_eq!(header & !TYPE_ID_MASK, HEADER_PANIC);
+    }
+
+    #[test]
     fn the_heap_grows_past_its_first_space() {
         let mut mutator = mutator(false);
         let mut head = 0;

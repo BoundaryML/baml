@@ -441,8 +441,12 @@ impl<'db> Translator<'_, 'db> {
                             }
                             _ => None,
                         };
-                        test.filter(|test| test.is_static() || *test == TestKind::Panic)
-                            .map(|test| (test, Some(*then_block), *else_block))
+                        // An interface's implementors are a list of types too.
+                        test.filter(|test| {
+                            test.is_static()
+                                || matches!(test, TestKind::Panic | TestKind::Implements(_))
+                        })
+                        .map(|test| (test, Some(*then_block), *else_block))
                     }
                     _ => None,
                 },
