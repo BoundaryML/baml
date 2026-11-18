@@ -39,6 +39,7 @@ baml test
 baml run
   --context <SOURCE> [env: BAML_CONTEXT]
   --file <PATH>
+  --hot [default: false]
   --include-generated [default: false]
   --list [default: false]
   --log <LEVEL> [default: info] [env: BAML_LOG]
