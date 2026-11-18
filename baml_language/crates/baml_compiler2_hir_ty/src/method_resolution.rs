@@ -680,8 +680,11 @@ fn lookup_impl_member<'db>(
         }
     }
     if providers.is_empty() && !receiver.has_error() {
-        for interface in crate::impls::applicable_structural_interface_roots(db, facts, receiver) {
+        // Member first: proving a conditional root (`Hash`) can walk the
+        // receiver's whole type graph, and most names are not on it.
+        for interface in crate::impls::structural_interface_candidates(db) {
             if let Some(member) = member_on_interface(db, facts, &interface, receiver, name, false)
+                && crate::impls::structural_root_applies(db, facts, receiver, &interface)
             {
                 providers.push((interface, member));
             }
@@ -1790,7 +1793,7 @@ pub fn lookup_union_member<'db>(
 ) -> UnionMemberLookup<'db> {
     let mut shared: Option<Vec<InferInterface>> = None;
     for arm in members {
-        let arm_ifaces = union_arm_interfaces(db, viewer, facts, arm, 4);
+        let arm_ifaces = union_arm_interfaces(db, viewer, facts, arm, name, 4);
         shared = Some(match shared {
             None => arm_ifaces,
             Some(mut current) => {
@@ -2008,11 +2011,13 @@ fn agreed(facts: &Facts<'_>, per_arm: &[Ty]) -> Option<Ty> {
 /// existential contributes itself plus its `requires` closure; a bounded
 /// type variable contributes each conjunct's contribution; a concrete arm
 /// contributes its matched impls' realized interfaces.
+/// Structural roots are included only when they declare `name`.
 fn union_arm_interfaces<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     facts: &Facts<'db>,
     arm: &Ty,
+    name: &Name,
     fuel: u32,
 ) -> Vec<InferInterface> {
     if fuel == 0 {
@@ -2058,8 +2063,13 @@ fn union_arm_interfaces<'db>(
             out
         }
     };
-    for interface in crate::impls::applicable_structural_interface_roots(db, facts, arm) {
-        if !interfaces.contains(&interface) {
+    // Only structural roots declaring `name` can matter to the caller, and
+    // proving a conditional one (`Hash`) can walk the arm's whole type graph.
+    for interface in crate::impls::structural_interface_candidates(db) {
+        if !interfaces.contains(&interface)
+            && interface_declares_member(db, &interface, name).is_some()
+            && crate::impls::structural_root_applies(db, facts, arm, &interface)
+        {
             interfaces.push(interface);
         }
     }

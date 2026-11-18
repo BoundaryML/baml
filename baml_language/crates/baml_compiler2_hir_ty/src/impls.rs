@@ -990,10 +990,15 @@ fn assoc_realization_env<'db>(
 /// exit through the closed boundary (declaration-realized values over a
 /// closed receiver are closed; rigid type variables are not inference
 /// variables).
+///
+/// `structural` selects the structural roots worth proving: deciding `Hash`
+/// walks the receiver's whole type graph, so a caller after one interface or
+/// member should reject roots that cannot lead to it.
 pub fn impl_views_for_type(
     db: &dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     concrete: &baml_type::Ty,
+    structural: impl Fn(&DeclName) -> bool,
 ) -> Vec<baml_type::Interface> {
     // Enumeration takes the plain goal directly; the interned form is only
     // needed as the subject `implemented_view` realizes against (and its
@@ -1009,9 +1014,13 @@ pub fn impl_views_for_type(
                 .unwrap_or_else(|_| unreachable!("realized view of a closed receiver is closed"))
         })
         .collect();
-    for interface in
-        applicable_structural_interface_roots(db, &crate::facts::Facts::new(db), &interned)
-    {
+    let facts = crate::facts::Facts::new(db);
+    for interface in structural_interface_candidates(db) {
+        if !structural(&interface.name)
+            || !structural_root_applies(db, &facts, &interned, &interface)
+        {
+            continue;
+        }
         let view =
             baml_type::Interface::try_from(&interface).expect("structural interface is closed");
         if !views.contains(&view) {
@@ -1459,18 +1468,41 @@ pub(crate) fn applicable_structural_interface_roots(
     facts: &crate::facts::Facts<'_>,
     receiver: &Ty,
 ) -> Vec<InferInterface> {
+    structural_interface_candidates(db)
+        .into_iter()
+        .filter(|interface| structural_root_applies(db, facts, receiver, interface))
+        .collect()
+}
+
+/// Every structural interface root a receiver may implement, in the order
+/// [`applicable_structural_interface_roots`] reports them: unconditional
+/// roots first, then the conditional `Hash` and `Compare`.
+pub(crate) fn structural_interface_candidates(
+    db: &dyn baml_compiler2_hir::Db,
+) -> Vec<InferInterface> {
     let mut roots = structural_interface_roots(db);
-    if let Some(hash) = hash_interface_root(db)
-        && hash_eligible(db, facts, receiver, &hash)
-    {
-        roots.push(hash);
-    }
-    if let Some(compare) = compare_interface_root(db)
-        && derived_tuple_compare(db, facts, receiver, &compare) == Some(true)
-    {
-        roots.push(compare);
-    }
+    roots.extend(hash_interface_root(db));
+    roots.extend(compare_interface_root(db));
     roots
+}
+
+/// Whether `receiver` implements a root from [`structural_interface_candidates`].
+///
+/// Deciding `Hash` walks the receiver's whole type graph, so a caller that
+/// only needs roots declaring some member should filter on the member first.
+pub(crate) fn structural_root_applies(
+    db: &dyn baml_compiler2_hir::Db,
+    facts: &crate::facts::Facts<'_>,
+    receiver: &Ty,
+    interface: &InferInterface,
+) -> bool {
+    match structural_interface(db, &interface.name) {
+        Some(baml_type::StructuralInterface::Hash) => hash_eligible(db, facts, receiver, interface),
+        Some(baml_type::StructuralInterface::Compare) => {
+            derived_tuple_compare(db, facts, receiver, interface) == Some(true)
+        }
+        _ => true,
+    }
 }
 
 pub(crate) fn compare_interface_root(db: &dyn baml_compiler2_hir::Db) -> Option<InferInterface> {

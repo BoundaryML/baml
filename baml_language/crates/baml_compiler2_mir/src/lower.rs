@@ -2239,7 +2239,7 @@ impl<'db> LoweringContext<'db> {
                 .into_iter()
                 .find(|(tn, _, _)| tn == target_tn);
         }
-        for (name, generics, associated) in self.l1_impl_views_for_recv(actual_ty) {
+        for (name, generics, associated) in self.l1_impl_views_for_recv(actual_ty, target_tn) {
             let Some(views) = self.interface_closure_type_name_views(&name, &generics, &associated)
             else {
                 continue;
@@ -4209,8 +4209,13 @@ impl<'db> LoweringContext<'db> {
     /// Every impl block applying to `recv` — a concrete-headed receiver, possibly
     /// carrying the enclosing function's rigid type variables — enumerated through
     /// the canonical L1 substrate, with each impl's generic bounds discharged by
-    /// the canonical algebra against this scope's bounds.
-    fn l1_impl_views_for_recv(&self, recv: &Tir2Ty) -> Vec<InterfaceTypeView> {
+    /// the canonical algebra against this scope's bounds. Structural roots
+    /// are kept only when their `requires` closure reaches `target_tn`.
+    fn l1_impl_views_for_recv(
+        &self,
+        recv: &Tir2Ty,
+        target_tn: &DeclName,
+    ) -> Vec<InterfaceTypeView> {
         // hir_ty's substrate: alias transparency and impl-bound discharge
         // are internal to it (its own facts). Dispatch is by BASE type
         // (hir_ty's operand-dispatch discipline) - a literal-typed
@@ -4222,6 +4227,12 @@ impl<'db> LoweringContext<'db> {
             self.db,
             baml_compiler2_hir::file_package::file_package(self.db, self.file).root,
             &recv,
+            // Structural roots are bare names; keep those whose closure
+            // reaches the target.
+            |name| {
+                self.interface_closure_type_name_views(name, &[], &[])
+                    .is_some_and(|views| views.iter().any(|(tn, _, _)| tn == target_tn))
+            },
         )
         .into_iter()
         .map(|view| {
