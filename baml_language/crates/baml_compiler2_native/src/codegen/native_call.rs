@@ -98,7 +98,6 @@ impl<'db> Translator<'_, 'db> {
             self.forget_arrays();
         }
         let call = self.builder.ins().call(callee, &values);
-        self.read_worker();
         let results = self.builder.inst_results(call).to_vec();
 
         let result = if native.throws {

@@ -1103,10 +1103,6 @@ struct Translator<'a, 'db> {
     proven: ProvenIndexes,
     /// The MIR block being translated.
     current: usize,
-    /// The address of the worker this code runs on: what the pinned register
-    /// held on entry and after the latest call. A call can come back on
-    /// another worker, so nothing read before one is used after it.
-    worker: Variable,
     /// The length and data address already read from each array value in the
     /// code being generated; see [`Self::array_view`].
     array_views: HashMap<ir::Value, (ir::Value, ir::Value)>,
@@ -1150,7 +1146,6 @@ impl<'a, 'db> Translator<'a, 'db> {
             .collect();
         let blocks = body.blocks.iter().map(|_| builder.create_block()).collect();
         let loops = ArrayLoops::of(db, body);
-        let worker = builder.declare_var(WORD);
         let closure = builder.declare_var(WORD);
         builder.declare_var_needs_stack_map(closure);
         let mut iterator_variables = HashMap::new();
@@ -1191,7 +1186,6 @@ impl<'a, 'db> Translator<'a, 'db> {
             loops,
             proven: ProvenIndexes::default(),
             current: 0,
-            worker,
             array_views: HashMap::new(),
             checked_indexes: HashMap::new(),
             iterator_variables,
@@ -1254,7 +1248,6 @@ impl<'a, 'db> Translator<'a, 'db> {
                 self.write_local(local, value);
             }
         }
-        self.read_worker();
         if checks_stack {
             self.check_stack()?;
         }
@@ -1291,7 +1284,6 @@ impl<'a, 'db> Translator<'a, 'db> {
             self.terminator(terminator)?;
         }
         self.builder.seal_all_blocks();
-        self.resolve_aliases();
         self.builder.finalize();
         Ok(())
     }
@@ -1335,33 +1327,6 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
         }
         polled
-    }
-
-    /// Replace every use of a value alias by the value it stands for.
-    ///
-    /// Building SSA form leaves aliases behind, mostly as branch arguments.
-    /// The pass that spills references around calls (run by `finalize`)
-    /// decides what is live with aliases resolved but reloads only uses that
-    /// name the value itself, so a use through an alias would keep reading
-    /// the register the collector did not update.
-    fn resolve_aliases(&mut self) {
-        let function = &mut *self.builder.func;
-        let blocks: Vec<_> = function.layout.blocks().collect();
-        let mut values = Vec::new();
-        for block in blocks {
-            let instructions: Vec<_> = function.layout.block_insts(block).collect();
-            for instruction in instructions {
-                values.extend(
-                    function
-                        .dfg
-                        .inst_values(instruction)
-                        .map(|value| function.dfg.resolve_aliases(value)),
-                );
-                function
-                    .dfg
-                    .overwrite_inst_values(instruction, values.drain(..));
-            }
-        }
     }
 
     fn block(&self, id: BlockId) -> ir::Block {
@@ -2238,7 +2203,6 @@ impl<'a, 'db> Translator<'a, 'db> {
         // The runtime can collect, which moves storage.
         self.forget_arrays();
         let result = self.emit_runtime_call(function, arguments)?;
-        self.read_worker();
         Ok(result)
     }
 
@@ -2324,13 +2288,6 @@ impl<'a, 'db> Translator<'a, 'db> {
     /// addresses off the register itself.
     fn mutator(&mut self) -> ir::Value {
         self.builder.ins().get_pinned_reg(WORD)
-    }
-
-    /// Read the worker's address from the pinned register: on entry, and
-    /// after every call that comes back.
-    fn read_worker(&mut self) {
-        let worker = self.builder.ins().get_pinned_reg(WORD);
-        self.builder.def_var(self.worker, worker);
     }
 
     /// Branch to a cold block that raises `panic` when `condition` is true,
@@ -3237,7 +3194,6 @@ impl<'a, 'db> Translator<'a, 'db> {
                         // The callee can collect, which moves storage.
                         self.forget_arrays();
                         let call = self.builder.ins().call_indirect(clif, code, &arguments);
-                        self.read_worker();
                         (self.builder.inst_results(call)[0], signature.result)
                     }
                     Callee::Function(key) => {
@@ -3309,7 +3265,6 @@ impl<'a, 'db> Translator<'a, 'db> {
         // The callee can collect, which moves storage.
         self.forget_arrays();
         let call = self.builder.ins().call(callee, &arguments);
-        self.read_worker();
         Ok((self.builder.inst_results(call)[0], produced))
     }
 
@@ -3356,7 +3311,6 @@ impl<'a, 'db> Translator<'a, 'db> {
                 .builder
                 .ins()
                 .call_indirect(signature, code, &arguments);
-            self.read_worker();
             return Ok((
                 self.builder.inst_results(call)[0],
                 slot.signature.result.clone(),
@@ -3379,7 +3333,6 @@ impl<'a, 'db> Translator<'a, 'db> {
             .ins()
             .call_indirect(signature, code, &arguments);
         let text = self.builder.inst_results(call)[0];
-        self.read_worker();
         self.builder.ins().jump(done, &[text.into()]);
 
         self.builder.switch_to_block(default);

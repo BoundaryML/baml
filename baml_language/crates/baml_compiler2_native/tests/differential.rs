@@ -7,16 +7,10 @@
 //! optimizer cannot fold a case into a constant and the generated arithmetic
 //! is what runs.
 
-use std::{process::Command, sync::Arc};
+use baml_db::testing::{assert_no_diagnostic_errors, setup_test_db};
 
-use baml_compiler2_native::{CompileOptions, compile, link};
-use baml_db::{
-    CheckedWorld, ProjectDatabase,
-    baml_compiler2_hir::item_data::{file_functions, function_data},
-    testing::{OptLevel, assert_no_diagnostic_errors, setup_test_db},
-};
-use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
-use sys_native::SysOpsExt;
+mod common;
+use common::{Ending, build, engine, interpret, run};
 
 const SOURCE: &str = r#"
 function count(n: int) -> int {
@@ -1067,72 +1061,7 @@ const CASES: &[Case] = &[
     case("tuples_in_array", Printed("46")),
 ];
 
-/// The text of the thrown value in an uncaught-panic report.
-fn thrown(report: &str) -> &str {
-    let marker = "uncaught throw: ";
-    let start = report
-        .find(marker)
-        .unwrap_or_else(|| panic!("no uncaught throw in: {report}"));
-    report[start + marker.len()..].lines().next().unwrap_or("")
-}
-
-async fn interpret(engine: &Arc<BexEngine>, function: &str) -> Result<String, String> {
-    engine
-        .call_function_bound_args(
-            &format!("user.{function}"),
-            Vec::new(),
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .map(|value| match value {
-            // `baml run` prints nothing for a null result.
-            BexExternalValue::Null => String::new(),
-            other => other.render_readable(),
-        })
-        .map_err(|error| thrown(&error.to_string()).to_owned())
-}
-
-/// Compile and link `function` as the entry of an executable.
-fn build(db: &ProjectDatabase, function: &str, directory: &std::path::Path) -> std::path::PathBuf {
-    let entry = db
-        .workspace_files()
-        .into_iter()
-        .flat_map(|file| file_functions(db, file).iter().copied())
-        .find(|candidate| function_data(db, *candidate).name.as_str() == function)
-        .unwrap_or_else(|| panic!("no function `{function}`"));
-    let compiled = compile(db, entry, CompileOptions::default())
-        .unwrap_or_else(|error| panic!("`{function}` does not compile: {error}"));
-    let executable = directory.join(function);
-    link(&compiled.object, &executable)
-        .unwrap_or_else(|error| panic!("`{function}` does not link: {error}"));
-    executable
-}
-
-/// Run an executable, collecting on every allocation if `stress`.
-fn run(executable: &std::path::Path, stress: bool) -> Result<String, String> {
-    let mut command = Command::new(executable);
-    if stress {
-        command.env("BAML_GC_STRESS", "1");
-    }
-    let output = command
-        .output()
-        .unwrap_or_else(|error| panic!("`{}` does not start: {error}", executable.display()));
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    match output.status.code() {
-        Some(0) if stderr.is_empty() => Ok(stdout.trim_end_matches('\n').to_owned()),
-        Some(1) if stdout.is_empty() => Err(thrown(&stderr).to_owned()),
-        // Anything else is a failure of the executable itself; report it as
-        // an outcome no case expects.
-        _ => Ok(format!(
-            "ended with {}; stdout: {stdout}; stderr: {stderr}",
-            output.status
-        )),
-    }
-}
-
-fn outcome(result: &Result<String, String>) -> String {
+fn outcome(result: &Ending) -> String {
     match result {
         Ok(text) => format!("{:?}", Printed(text)),
         Err(text) => format!("{:?}", Panicked(text)),
@@ -1143,20 +1072,14 @@ fn outcome(result: &Result<String, String>) -> String {
 async fn native_code_ends_as_the_interpreter_does() {
     let db = setup_test_db(SOURCE);
     assert_no_diagnostic_errors(&db);
-    let program = CheckedWorld::collect(&db, db.workspace_root().expect("a workspace root"))
-        .expect("the program checks")
-        .compile(OptLevel::Two)
-        .expect("the program compiles to bytecode");
-    let engine = Arc::new(
-        BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
-            .expect("the engine starts"),
-    );
+    let engine = engine(&db);
     let directory = tempfile::tempdir().expect("a temporary directory");
 
     let mut failures = Vec::new();
     for case in CASES {
         let expected = format!("{:?}", case.expected);
-        let executable = build(&db, case.function, directory.path());
+        let executable = build(&db, case.function, directory.path())
+            .unwrap_or_else(|error| panic!("`{}` {error}", case.function));
         let native = outcome(&run(&executable, false));
         let stressed = if case.stressed {
             outcome(&run(&executable, true))
