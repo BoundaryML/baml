@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { section } from '@/components/home/analytics';
+import { ASKS } from '@/components/home/asks';
 import { BoundaryMark } from '@/components/home/boundary-logo';
 import { MarkTile } from '@/components/home/mark';
 import { MARKS, type Mark } from '@/components/home/marks';
@@ -145,15 +146,6 @@ const phase = (after: number) => ({
   cloud: clamp(after / 0.28),
   file: (f: (typeof FILES)[number]) => clamp((after - f.at) / 0.16),
 });
-
-/** What you want to know, and what it takes in the traditional stack. */
-const ASKS = [
-  { ask: 'Evals on real traffic', today: 'export, then join by hand' },
-  { ask: 'Accuracy over time', today: 'only runs someone labeled' },
-  { ask: 'Exactly what happened', today: 'sampled, across 3 tools' },
-  { ask: 'Record and replay', today: 'only if you built it in ahead of time' },
-  { ask: 'Cost per feature', today: 'prompts and users live apart' },
-];
 
 const RED = 'text-[#f85149]';
 const STACK = 'col-start-1 row-start-1';
@@ -594,8 +586,7 @@ export default function Software() {
           Boundary gives them great defaults.
         </h2>
         <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-          With BAML it takes zero config. Every team's data lands in one place,
-          so anyone can ask any question, or hand it to their agent.
+          With BAML it takes zero config.
         </p>
         <div className="mt-10 md:mt-12">
           <Looped hold={2400} move={5200}>

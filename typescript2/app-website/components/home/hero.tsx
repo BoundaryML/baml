@@ -30,18 +30,26 @@ export default function Hero() {
             className="whitespace-nowrap text-clover"
             style={{ fontFamily: 'var(--font-geist-pixel)' }}
           >
-            hyperobservable
+            hyper-observable
           </span>{' '}
-          software stack
+          programming language
         </h1>
         <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6 mt-5 md:mt-7">
           <p className="grow basis-[26rem] max-w-[36rem] v4-body text-ink-2">
-            Replace 10+ disjoint tools with one unified toolchain that helps
-            agents through your entire software development lifecycle.
-            Incrementally adoptable.
+            BAML is a programming language with built-in telemetry. Replace 10+
+            separate tools with one toolchain that helps agents test, trace,
+            query data, build alerts, and more.
           </p>
+          {/* A new language raises the rewrite question on the first screen, so the second button
+              goes straight to the three ways to adopt. */}
           <div className="flex flex-wrap gap-2.5">
             <Button href={SIGNUP}>Get early access</Button>
+            <Button href="#adopt" variant="secondary">
+              Start in your existing codebase
+              <span aria-hidden className="ml-2">
+                →
+              </span>
+            </Button>
           </div>
         </div>
 

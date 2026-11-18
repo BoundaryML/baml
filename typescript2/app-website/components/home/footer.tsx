@@ -9,6 +9,7 @@ const COLUMNS: { title: string; links: [string, string][] }[] = [
   {
     links: [
       ['Overview', '/'],
+      ['BAML Quickstart', '/quickstart'],
       ['Adopt', '/adopt'],
       ['How BAML works', '/how-baml-works'],
       ['Pricing', '/pricing'],
@@ -53,7 +54,7 @@ export default function Footer() {
           >
             {COLUMNS.map((c) => (
               <div
-                className="tap-list flex flex-col gap-3 min-w-[120px] whitespace-nowrap"
+                className="tap-list flex flex-col gap-3 min-w-[120px] whitespace-nowrap max-[359px]:whitespace-normal"
                 key={c.title}
               >
                 <p className="text-footer-muted">{c.title}</p>
@@ -85,7 +86,7 @@ export default function Footer() {
             </a>
           </div>
           <span className="text-[15px] font-medium leading-[18px] tracking-[-0.01em] text-footer-accent">
-            The unified software stack for agents.
+            The hyper-observable programming language.
           </span>
         </div>
       </div>

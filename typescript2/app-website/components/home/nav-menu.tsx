@@ -15,6 +15,7 @@ const COLUMNS: {
   {
     links: [
       ['Overview', '/'],
+      ['BAML Quickstart', '/quickstart'],
       ['Adopt', '/adopt'],
       ['How BAML works', '/how-baml-works'],
     ],

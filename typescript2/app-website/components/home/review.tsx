@@ -15,7 +15,6 @@ import { PostDrawing } from '@/app/(home)/blog/_lib/art';
 import { section } from '@/components/home/analytics';
 import { BAML_LOGO, LAMB_PATHS } from '@/components/home/lamb';
 import {
-  Hyper,
   leftVertically,
   sweep,
   useInView,
@@ -29,15 +28,12 @@ import { ramp } from '@/components/home/scroll';
 // steps from baml-action, and the comment follows the action's render.baml. The metrics are
 // `baml codequality` on three versions of one example function.
 
-// The titles inside this section are set in the pixel font, like the BAML lamb.
-const PIXEL = { fontFamily: 'var(--font-geist-pixel)' };
-
+// A box's title is set like the stack section's ("We made observability fast."), in the display
+// face. The pixel font is kept for captions and the word "hyperobservability".
 function Box({ children, title }: { children: ReactNode; title: string }) {
   return (
     <div className="mt-4 md:mt-6 rounded-xl border border-rule bg-raised p-5">
-      <p className="v4-h3 text-head" style={PIXEL}>
-        {title}
-      </p>
+      <p className="v4-h3 text-head">{title}</p>
       {children}
     </div>
   );
@@ -341,7 +337,7 @@ function CompilerName({ name }: { name: string }) {
   );
 }
 
-function Speed() {
+export function Speed() {
   const [at, setAt] = useState(0);
   const { times } = KINDS[at];
   // BAML first, then the same order on every tab, so nothing jumps around.
@@ -352,7 +348,7 @@ function Speed() {
   const most = Math.max(...times);
   const base = times[BAML_ROW];
   return (
-    <Box title="Honest compile times">
+    <Box title="Our (honest) compile times">
       <div className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-black/40">
         <div className="flex flex-wrap items-center border-b border-white/10 px-2">
           {KINDS.map((kind, i) => (
@@ -521,7 +517,7 @@ function Run() {
   const cur = RUNS[at];
   return (
     <Box title="Every function is a CLI">
-      <p className="mt-2 text-[18px] text-white/70">
+      <p className="mt-2 text-[16px] text-white/70">
         The fastest way to understand a function is to call it.
         <br />
         For AI functions, it's the only way.
@@ -578,7 +574,7 @@ function Run() {
                 className={`px-4 py-2.5 ${i ? 'sm:border-l border-white/10' : ''}`}
                 key={win.big}
               >
-                <p className="font-display text-[21px] font-medium text-clover">
+                <p className="font-display text-[20px] font-medium text-clover">
                   {win.big}
                 </p>
                 <p className="text-[14px] leading-[1.3] text-white/70">
@@ -617,10 +613,11 @@ function Run() {
 const POST = {
   href: '/blog/teaching-agents-to-write-maintainable-code',
   slug: 'teaching-agents-to-write-maintainable-code',
+  title: 'Teaching Agents to Write Maintainable Code',
 };
 
-/** The section's closing claim, with the post that backs it: its before-and-after drawing, then the
- *  claim and a link to the post. */
+/** The post behind the section's answer, under the question: its before-and-after drawing, its title,
+ *  and a link to the post. */
 function Research() {
   return (
     <a
@@ -633,18 +630,13 @@ function Research() {
         slug={POST.slug}
       />
       <div className="px-3 pb-3 md:px-2 md:pb-0">
-        <p className="v4-body text-ink">
-          There's no bad BAML in the training data to learn from. And we make
-          sure the only BAML that gets checked in is great BAML.
-        </p>
-        <p className="mt-5 text-[15px] text-clover">
-          <span className="text-muted">Blog:</span> Teaching Agents to Write
-          Maintainable Code{' '}
+        <p className="v4-h3 text-head">{POST.title}</p>
+        <p className="mt-3 v4-body text-clover">
+          Read the blog{' '}
           <span className="inline-block transition-transform group-hover:translate-x-1">
             →
           </span>
         </p>
-        <p className="mt-1 text-[14px] text-muted">Avery Townsend</p>
       </div>
     </a>
   );
@@ -880,38 +872,11 @@ function Swatch({ color, label }: { color: string; label: string }) {
 
 // The PR story's stages, as points along `Comment`'s progress. It steps through them on its own once
 // in view; clicking a stage goes straight to it and stops the stepping.
-// Each step sets the comment animation, the time it stays on screen, and its caption.
-const STAGES: {
-  at: number;
-  label: string;
-  ms: number;
-  says: ReactNode;
-}[] = [
-  {
-    at: 0.31,
-    label: 'Bad code is flagged',
-    ms: 4500,
-    says: (
-      <>
-        Removing features should leave simpler code.{' '}
-        <span style={{ color: '#f85149' }}>This code got worse.</span>
-      </>
-    ),
-  },
-  {
-    at: 0.6,
-    label: 'Your agent pushes a fix',
-    ms: 4200,
-    says: 'Your agent reads the comment and rewrites the code.',
-  },
-  {
-    at: 1,
-    label: 'Good code is merged',
-    ms: 4500,
-    says: (
-      <span className="text-clover">The code is now simpler than main.</span>
-    ),
-  },
+// Each step sets the comment animation and the time it stays on screen.
+const STAGES: { at: number; label: string; ms: number }[] = [
+  { at: 0.31, label: 'Bad code is flagged', ms: 4500 },
+  { at: 0.6, label: 'Your agent pushes a fix', ms: 4200 },
+  { at: 1, label: 'Good code is merged', ms: 4500 },
 ];
 
 function Story() {
@@ -1013,19 +978,6 @@ function Story() {
           <span className="absolute left-0 top-0 size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-clover" />
         </span>
       </div>
-      {/* What the step means, right above the pull request. */}
-      <div className="mt-4 grid text-[17px] leading-snug text-white md:text-[20px]">
-        {STAGES.map((st, i) => (
-          <p
-            aria-hidden={i !== stage}
-            className="[grid-area:1/1] transition-opacity duration-300"
-            key={st.label}
-            style={{ opacity: i === stage ? 1 : 0 }}
-          >
-            {st.says}
-          </p>
-        ))}
-      </div>
     </div>
   );
   return (
@@ -1069,19 +1021,13 @@ function Comment({
   return (
     // A box like the others in this section, so the story reads as one of them.
     <div className="mt-4 md:mt-6 rounded-xl border border-rule bg-raised p-5">
-      <p className="v4-h3 text-head" style={PIXEL}>
-        Our GitHub Action measures code quality on every pull request.
-      </p>
-      <p className="mt-2 text-[18px] text-white/70">
-        No model in the loop, so the token bill is $0.
-      </p>
+      <p className="v4-h3 text-head">Code quality, on every pull request.</p>
       {/* CI/CD by default: the action that posts the comment, in one line. */}
       <p className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[14px]">
         <span className="rounded-md bg-black/50 px-2.5 py-1 text-white">
           <span className="text-white/50">- uses: </span>
           <span className="text-clover">BoundaryML/baml-action@v1</span>
         </span>
-        <span className="text-white/50">check, fmt, test and codequality</span>
       </p>
       {steps}
       <div
@@ -1256,14 +1202,10 @@ export default function Review() {
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         <h2 className="v4-h2 text-head max-w-[22em]" id="review">
-          Can agents write high-quality <Hyper>BAML</Hyper>?
+          Built for agents.
         </h2>
-        <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-          BAML isn't even close to a mainstream language, so we overcompensate
-          by building amazing <span className="text-clover">backpressure</span>{' '}
-          into the toolchain.
-        </p>
-        <div className="mt-10">
+        <Research />
+        <div className="mt-16">
           <Errors />
         </div>
         <div className="mt-16">
@@ -1272,16 +1214,6 @@ export default function Review() {
         <div className="mt-16">
           <Story />
         </div>
-        <div className="mt-16">
-          <Speed />
-        </div>
-        <div className="mt-16 md:mt-20">
-          <p className="v4-h2 text-head max-w-[22em]">
-            So yes, agents can write high-quality <Hyper>BAML</Hyper>. By
-            design.
-          </p>
-        </div>
-        <Research />
       </div>
     </section>
   );

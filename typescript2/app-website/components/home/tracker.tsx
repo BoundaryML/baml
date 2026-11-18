@@ -236,10 +236,12 @@ const BAML = [
 // then does BAML's row pop in and fill.
 // Kept for the runner, which no longer runs: how long the old fill took.
 const FILL_MS = 5000;
-const PROD_AT = 500;
-const UNTIL_AT = PROD_AT + 1600;
-const BAML_AT = UNTIL_AT + 700;
-const BAML_MS = 1800;
+// The beats are close together: "Until now." lands a second in and BAML's row right after it. With
+// longer gaps the answer to the claim arrived after a reader had already moved on.
+const PROD_AT = 300;
+const UNTIL_AT = PROD_AT + 700;
+const BAML_AT = UNTIL_AT + 350;
+const BAML_MS = 1400;
 const FULL_AT = BAML_AT + BAML_MS;
 // It plays once. Once the Improve line has drawn, the story is done and a Replay button shows.
 const DONE_AT = FULL_AT + 1700;

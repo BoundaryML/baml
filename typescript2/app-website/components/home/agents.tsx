@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { section } from '@/components/home/analytics';
-import { Hyper, Pinned } from '@/components/home/pinned';
+import { Played } from '@/components/home/pinned';
 import { ramp } from '@/components/home/scroll';
 import { RED } from '@/components/home/story';
 
@@ -310,7 +310,7 @@ function startWall(
   };
 }
 
-/** The finished wall for browsers without WebGL2. It's drawn once, and scrolling doesn't change it. */
+/** The finished wall for browsers without WebGL2. It's drawn once, and playing doesn't change it. */
 function FlatWall({
   colors,
   cols,
@@ -478,13 +478,13 @@ export default function Agents() {
           No person could read this much data. Agents can, and they need to.
         </h2>
         <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-          Automated systems are only as good as their data. Give an agent gaps
-          and it fills them with assumptions. With <Hyper />, there are no gaps.
+          A query answers the question you thought to ask. An agent can read
+          everything else.
         </p>
         <div className="mt-10 md:mt-12">
-          <Pinned length="240vh" phone>
+          <Played line={0.45} linear ms={10000}>
             {(p) => <DataWall p={p} />}
-          </Pinned>
+          </Played>
         </div>
       </div>
     </section>

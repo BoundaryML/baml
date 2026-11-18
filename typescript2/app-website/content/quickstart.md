@@ -132,6 +132,12 @@ If you do not want editor integration, launch the playground:
 baml playground
 ```
 
+## What to write in BAML first
+
+We recommend your AI workflows or agents. Write the prompts, the tools, and the steps between them as BAML functions, and leave the rest of your app in the language it is in.
+
+BAML generates a typed SDK for most languages, so your existing code calls those functions like its own. The three ways to adopt BAML are described at https://boundaryml.com/adopt#incremental.
+
 ## 6. Install the BAML code quality action
 
 `BoundaryML/baml-action` checks, format-checks, and tests the project on each pull request, then comments with how its code quality (cognitive complexity, cyclomatic complexity, NPath, nesting, and exits) compares to the base branch.

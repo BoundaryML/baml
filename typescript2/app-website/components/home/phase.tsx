@@ -18,7 +18,8 @@ export function Phase({
   id: string;
   // A section whose heading and visual say enough leaves it out.
   intro?: ReactNode;
-  name: string;
+  // The phase's name over the heading. Left out, only the "Coming soon" badge shows, if there is one.
+  name?: string;
   // Marks a phase whose features haven't shipped yet.
   soon?: boolean;
 }) {
@@ -29,18 +30,26 @@ export function Phase({
       className="border-t border-rule"
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
-        <p className="v4-caption flex items-center gap-2.5 text-ink-2">
-          <span
-            aria-hidden
-            className="size-[11px] rounded-full border border-clover bg-clover"
-          />
-          {name}
-          {soon && (
-            <span className="ml-1 rounded-full border border-clover/40 px-2.5 py-1 text-clover">
-              Coming soon
-            </span>
-          )}
-        </p>
+        {(name || soon) && (
+          <p className="v4-caption flex items-center gap-2.5 text-ink-2">
+            {name && (
+              <>
+                <span
+                  aria-hidden
+                  className="size-[11px] rounded-full border border-clover bg-clover"
+                />
+                {name}
+              </>
+            )}
+            {soon && (
+              <span
+                className={`rounded-full border border-clover/40 px-2.5 py-1 text-clover ${name ? 'ml-1' : ''}`}
+              >
+                Coming soon
+              </span>
+            )}
+          </p>
+        )}
         <h2 className="v4-h2 mt-4 max-w-[22em]" id={id}>
           {heading}
         </h2>

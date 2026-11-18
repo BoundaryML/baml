@@ -13,7 +13,7 @@ import { section } from '@/components/home/analytics';
 import { Highlight } from '@/components/home/code';
 import { LAMB_PATHS } from '@/components/home/lamb';
 import { Panel } from '@/components/home/phase';
-import { Hyper, Pinned } from '@/components/home/pinned';
+import { Hyper, Played } from '@/components/home/pinned';
 import { ramp } from '@/components/home/scroll';
 
 // ---------- the code and the traces ----------
@@ -106,7 +106,7 @@ type Span = {
   auto?: boolean;
   // Instead of a duration, for something that isn't a span.
   kind?: string;
-  // The step of the scroll build that adds it.
+  // The step of the build that adds it.
   step?: number;
 };
 
@@ -200,7 +200,7 @@ const BAML_GROUPS = [
   'draft_reply',
 ];
 
-// What the TypeScript records, built up as you scroll: each row arrives with the step that adds it.
+// What the TypeScript records, built up step by step: each row arrives with the step that adds it.
 // The HTTP span is there from the start, from OpenTelemetry's auto-instrumentation.
 const BUILT: Span[] = [
   { depth: 0, ms: 1842, name: 'draftReply', start: 0, step: 1 },
@@ -268,7 +268,12 @@ function TsCode({ level }: { level: number }) {
     // rather than cutting them off; the inner block is as wide as the longest line, so every
     // row's tint runs the whole way across.
     <div className="code-pane py-3 font-mono text-[12.5px] text-[#BDBDC4]">
-      <div className="w-max min-w-full">
+      {/* Where the two sides stack, the listing holds its finished height from the start, so the
+          lines it gains while playing don't push the rest of the page down. */}
+      <div
+        className="w-max min-w-full max-md:min-h-[calc(var(--r)_*_var(--rows))]"
+        style={{ '--rows': TS.length } as CSSProperties}
+      >
         {TS.map((l, i) => {
           const shown = l.at === 0 ? 1 : ramp(level, l.at - 1, l.at);
           const indent = level > 0.5 ? l.d : (l.d0 ?? l.d);
@@ -390,13 +395,13 @@ function Waterfall({
   );
 }
 
-// ---------- the code, side by side, the left side building as you scroll ----------
+// ---------- the code, side by side, the left side building as it plays ----------
 
 const STEP_GAP = 0.28;
 const STEP_LEN = 0.18;
 
-/** How many of the four tracing steps are done at scroll progress `p`, holding still between them.
- *  The first, a span around the function, is in from the start; scrolling adds the other three. */
+/** How many of the four tracing steps are done at progress `p`, holding still between them. The
+ *  first, a span around the function, is in from the start; playing adds the other three. */
 function stepsDone(p: number) {
   return [0, 1, 2].reduce(
     (sum, i) =>
@@ -435,7 +440,7 @@ function FilePanel({
 const SIDE_ROWS = TS.length + BUILT.length;
 if (BAML.length + DEEP.length !== SIDE_ROWS) {
   throw new Error(
-    'The two sides of the scroll build must have the same number of rows.',
+    'The two sides of the build must have the same number of rows.',
   );
 }
 
@@ -481,10 +486,10 @@ function HyperSide() {
 
 function SideBySide() {
   return (
-    <Pinned length="240vh">
+    <Played line={0.45} linear ms={6500}>
       {(p) => {
         const steps = stepsDone(p);
-        // The TypeScript starts with a span around its logic and piles on more tracing as you scroll; the BAML
+        // The TypeScript starts with a span around its logic and piles on more tracing as it plays; the BAML
         // side has every span from the start.
         const lines = Math.round(
           TS.reduce(
@@ -524,14 +529,21 @@ function SideBySide() {
                 <TsCode level={steps} />
               </FilePanel>
               <Panel className="mt-3" title="what you get">
-                <Waterfall rows={BUILT} steps={steps} />
+                {/* Holds its finished height where the sides stack, like the listing above: the
+                    rows plus the waterfall's own padding. */}
+                <div
+                  className="max-md:min-h-[calc(var(--r)_*_var(--rows)_+_1.5rem)]"
+                  style={{ '--rows': BUILT.length } as CSSProperties}
+                >
+                  <Waterfall rows={BUILT} steps={steps} />
+                </div>
               </Panel>
             </div>
             <HyperSide />
           </div>
         );
       }}
-    </Pinned>
+    </Played>
   );
 }
 
@@ -1497,18 +1509,25 @@ function Timeline({
 
 /** Time to a decision: minutes on the right, and on the left, the days it's been waiting. */
 function Decided({ day, lit }: { day: number; lit: boolean }) {
-  const value = lit
-    ? '3 minutes'
-    : day >= THREAD_DAYS - 0.4
-      ? `${dayNumber(day)} days`
-      : `still waiting, day ${dayNumber(day)}`;
+  const waiting = !lit && day < THREAD_DAYS - 0.4;
   return (
     <p className="text-right leading-tight">
       <span className="block text-[12px] text-muted">Time to a decision</span>
+      {/* One line at every width, so the chats below don't move as the days pass: the type is
+          smaller on a phone, and the narrowest phones drop "still". */}
       <span
-        className={`font-mono text-[18px] tabular-nums ${lit ? 'text-clover' : 'text-head'}`}
+        className={`whitespace-nowrap font-mono text-[15px] tabular-nums sm:text-[18px] ${lit ? 'text-clover' : 'text-head'}`}
       >
-        {value}
+        {lit ? (
+          '3 minutes'
+        ) : waiting ? (
+          <>
+            <span className="max-[399px]:hidden">still </span>waiting, day{' '}
+            {dayNumber(day)}
+          </>
+        ) : (
+          `${dayNumber(day)} days`
+        )}
       </span>
     </p>
   );
@@ -1589,51 +1608,11 @@ function Threads() {
   );
 }
 
-// ---------- the heading ----------
-
-// What observability slows down. Both sentences say the same word.
-const SLOWED = ['decisions', 'on-call', 'fixes'];
-const ROTATE_MS = 2600;
-
-/** "Observability makes X slow. Hyperobservability makes X fast.", with X rotating in both, one
- *  sentence a line. Under reduced motion it stays on the first. */
-function Rotating() {
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const id = setInterval(() => setN((k) => k + 1), ROTATE_MS);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <>
-      {/* Every option, for screen readers, which would otherwise hear it change. */}
-      <span className="sr-only">
-        Observability makes {SLOWED.join(', ')} slow. Hyperobservability makes
-        them fast.
-      </span>
-      <span aria-hidden>
-        <span className="block sm:whitespace-nowrap">
-          Observability makes{' '}
-          <span className="heading-swap" key={n}>
-            {SLOWED[n % SLOWED.length]}
-          </span>{' '}
-          slow.
-        </span>
-        <span className="block sm:whitespace-nowrap">
-          <Hyper>Hyperobservability</Hyper> makes{' '}
-          <span className="heading-swap" key={n}>
-            {SLOWED[n % SLOWED.length]}
-          </span>{' '}
-          fast.
-        </span>
-      </span>
-    </>
-  );
-}
-
 // ---------- the section ----------
 
-export default function Hyperobs({ children }: { children: ReactNode }) {
+/** What hyperobservability is: the definition, what the runtime does, and the same function written
+ *  both ways with what each records. */
+export default function Hyperobs() {
   return (
     <section
       {...section('hyperobservability')}
@@ -1645,24 +1624,45 @@ export default function Hyperobs({ children }: { children: ReactNode }) {
           <Hyper>Hyperobservability</Hyper> is observability that is always on,
           by default, for everything.
         </h2>
+        <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
+          BAML's toolchain helps agents at compile time, and after deployment.
+          The runtime records your program as it runs and sends it to Boundary
+          Cloud, or stores it locally in SQLite if you don't use the cloud.
+          There's no SDK to install and no collector to run.
+        </p>
 
         <div className="mt-10 md:mt-12">
           <SideBySide />
         </div>
+      </div>
+    </section>
+  );
+}
 
-        <div className="mt-20 md:mt-28">
-          <h3 className="v4-h2 text-head max-w-[24em]">
-            <Rotating />
-          </h3>
-          <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-            Observability only answers the questions you thought of before you
-            shipped. <Hyper>Hyperobservability</Hyper> answers all of them.
-          </p>
-        </div>
+/** Why it matters now: code is written faster than a team can find out what it did, so a decision
+ *  waits on data. The double-refund story under it is the same incident with and without the data. */
+export function WhyNow() {
+  return (
+    <section
+      {...section('why-now')}
+      aria-labelledby="why-now"
+      className="border-t border-rule"
+    >
+      <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
+        <h2 className="v4-h2 text-head max-w-[22em]" id="why-now">
+          Make decisions faster, with less CI time.
+        </h2>
+        <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
+          BAML enables you to observe{' '}
+          <span className="text-clover">everything</span> at a fraction of the
+          cost, allowing you to have more complete information.
+        </p>
+
+        {/* The two chats carry the comparison themselves: each column is titled with its side and
+            its time to a decision. */}
         <div className="mt-10 md:mt-12">
           <Threads />
         </div>
-        {children}
       </div>
     </section>
   );
