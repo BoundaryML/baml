@@ -1512,8 +1512,34 @@ fn terminator_supported<'db>(
                 _ => String::new(),
             },
         )),
-        Terminator::Spawn { .. } => Err(Blocker::new("spawn", "")),
-        Terminator::Await { .. } | Terminator::AwaitAny { .. } => Err(Blocker::new("await", "")),
+        Terminator::Spawn { plan, future, .. } => {
+            let plan = narrowed(operand_ty(db, body, plan)?);
+            let Some((_, started)) = crate::types::plan_body(db, &plan) else {
+                return Err(Blocker::new("spawn", "of a plan with another layout"));
+            };
+            let expected = NativeTy::Future(Box::new(started.result));
+            if assignable(&place_ty(db, body, future)?, &expected) {
+                Ok(())
+            } else {
+                Err(Blocker::new("spawn", "into a future of another type"))
+            }
+        }
+        Terminator::Await {
+            future,
+            destination,
+            ..
+        } => {
+            let NativeTy::Future(value) = narrowed(place_ty(db, body, future)?) else {
+                return Err(Blocker::new("await", "of a value that is not a future"));
+            };
+            let result = local_ty(db, body, place_local(destination)?)?;
+            if assignable(&result, &value) {
+                Ok(())
+            } else {
+                Err(Blocker::new("await", "into another type"))
+            }
+        }
+        Terminator::AwaitAny { .. } => Err(Blocker::new("await of the first of several", "")),
         Terminator::Throw { value } => operand_ty(db, body, value).map(drop),
         Terminator::Rethrow { value, context } => {
             operand_ty(db, body, value)?;

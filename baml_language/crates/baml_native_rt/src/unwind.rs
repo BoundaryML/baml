@@ -43,7 +43,7 @@ use crate::{
         HEADER_PANIC, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_TYPES_END, TYPE_ARRAY_OF_VALUES,
         TYPE_ID_MASK, TYPE_STRING, TYPE_VALUES, WELL_KNOWN_CONTEXT, WELL_KNOWN_DIVISION_BY_ZERO,
         WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_MAP_KEY_NOT_FOUND,
-        WELL_KNOWN_NEGATIVE_BIT_SHIFT, WORD,
+        WELL_KNOWN_NEGATIVE_BIT_SHIFT, WELL_KNOWN_STACK_OVERFLOW, WORD,
     },
 };
 
@@ -490,6 +490,38 @@ pub(crate) extern "C" fn panic_map_key_not_found(
     unwind(mutator, error, 0, resume);
 }
 
+/// What `baml.panics.StackOverflow` says, as the interpreter has it.
+const STACK_OVERFLOW: &str = "stack overflow";
+
+/// A compiled function was entered with its stack pointer below its task's
+/// limit: `baml.panics.StackOverflow`, thrown from that function's caller
+/// on, since the function has done nothing yet.
+///
+/// The limit leaves part of the stack to the runtime, and this runs in it,
+/// below a frame the limit did not allow for. The panic is made and thrown
+/// when most of that part is still free; a function whose own frame took
+/// more ends the program here, with what the uncaught panic would say.
+pub(crate) extern "C" fn panic_stack_overflow(
+    _unused: usize,
+    _also_unused: usize,
+    mutator: &mut Mutator,
+    frame: usize,
+    resume: &mut Resume,
+) {
+    if !crate::sched::has_room_to_throw(mutator, frame) {
+        crate::uncaught(&format!(
+            "baml.panics.StackOverflow {{message: {STACK_OVERFLOW:?}}}"
+        ));
+    }
+    mutator.enter(frame);
+    let error = class::well_known(
+        mutator,
+        WELL_KNOWN_STACK_OVERFLOW,
+        &[Init::Text(STACK_OVERFLOW)],
+    );
+    unwind(mutator, error, 0, resume);
+}
+
 /// The `baml.panics.MapKeyNotFound` a handler in the indexing function
 /// lands with.
 #[unsafe(no_mangle)]
@@ -601,15 +633,14 @@ pub unsafe extern "C" fn baml_rt_error_context(
 }
 
 /// Nothing caught `error`: report it as `baml run` does, after the
-/// functions it was thrown through, and end the process. `trace` is zero or
-/// the trace of the throw.
+/// functions it was thrown through. `what` says whose error it was, when
+/// not the program's own; `trace` is zero or what the error travelled with.
 ///
 /// # Safety
 ///
-/// Called from the compiled entry function's handler with what it landed
-/// with.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_uncaught(mutator: &Mutator, error: usize, trace: usize) -> ! {
+/// `error` is zero or a live object, and `trace` zero, a live trace or a
+/// live `baml.errors.Context`.
+pub(crate) unsafe fn report(mutator: &Mutator, what: &str, error: usize, trace: usize) {
     let mut report = String::new();
     if trace != 0 {
         // SAFETY: the caller's contract.
@@ -623,10 +654,29 @@ pub unsafe extern "C" fn baml_rt_uncaught(mutator: &Mutator, error: usize, trace
             }
         }
     }
+    report.push_str("error: ");
+    report.push_str(what);
+    report.push_str("uncaught throw: ");
+    // SAFETY: the caller's contract.
+    unsafe { class::write_value(mutator, &mut report, error) };
+    report.push('\n');
     let _ = std::io::stdout().flush();
     let _ = write!(std::io::stderr().lock(), "{report}");
-    let mut text = String::new();
+}
+
+/// Nothing in the program's entry task caught `error`: report it, then the
+/// errors of tasks no `await` took, and end the process. `trace` is zero or
+/// what the error travelled with.
+///
+/// # Safety
+///
+/// Called from the compiled entry function's handler with what it landed
+/// with.
+#[unsafe(no_mangle)]
+#[expect(clippy::exit, reason = "an uncaught throw ends the program")]
+pub unsafe extern "C" fn baml_rt_uncaught(mutator: &Mutator, error: usize, trace: usize) -> ! {
     // SAFETY: the caller's contract.
-    unsafe { class::write_value(mutator, &mut text, error) };
-    crate::uncaught(&text)
+    unsafe { report(mutator, "", error, trace) };
+    crate::sched::report_unhandled(mutator);
+    std::process::exit(crate::UNCAUGHT_EXIT_STATUS)
 }

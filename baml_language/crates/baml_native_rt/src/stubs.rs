@@ -1,6 +1,6 @@
 //! The slow paths compiled code branches to from its fast paths: the
-//! allocation that does not fit, the loop poll that is set, the function
-//! entered with too little stack.
+//! allocation that does not fit and the loop poll that is set. The stubs
+//! that throw are here too.
 //!
 //! Each is called with a convention under which the callee preserves every
 //! register, so the call costs the fast path nothing: no value around it has
@@ -19,7 +19,7 @@
 
 use crate::{
     heap::{alloc_slow, poll_slow},
-    stack_slow, unwind,
+    unwind,
 };
 
 #[cfg(not(any(
@@ -205,12 +205,6 @@ preserving_stub! {
     baml_rt_poll_slow => poll_slow
 }
 
-preserving_stub! {
-    /// A compiled function was entered with its stack pointer below the
-    /// limit.
-    baml_rt_stack_slow => stack_slow
-}
-
 /// A stub named `$name` that never returns to its caller: it calls
 /// `$throw` with its two arguments, the mutator, its own frame record and
 /// room for an [`unwind::Resume`], and then goes on where that says: in the
@@ -308,6 +302,13 @@ throwing_stub! {
     /// Throw `baml.panics.IndexOutOfBounds`: takes the index and the
     /// length.
     baml_rt_panic_index_out_of_bounds => unwind::panic_index_out_of_bounds
+}
+
+throwing_stub! {
+    /// Throw `baml.panics.StackOverflow`: a compiled function was entered
+    /// with its stack pointer below the limit. Takes two words it does not
+    /// read.
+    baml_rt_panic_stack_overflow => unwind::panic_stack_overflow
 }
 
 throwing_stub! {

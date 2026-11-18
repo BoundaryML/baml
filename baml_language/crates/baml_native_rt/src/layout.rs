@@ -111,6 +111,10 @@ pub const KIND_STRING: u32 = 3;
 pub const KIND_ARRAY: u32 = 4;
 pub const KIND_SLICE: u32 = 5;
 pub const KIND_ENTRIES: u32 = 6;
+/// A future: its value slot holds a reference when it settled with an error,
+/// or with a value its flags say is one, and its trace slot when it settled
+/// with an error.
+pub const KIND_FUTURE: u32 = 7;
 
 /// Set in the fourth `u32` of a type that has a description; the other
 /// bits are the description's offset in the type table.
@@ -192,8 +196,10 @@ pub const TYPE_ENTRIES: usize = 232;
 pub const TYPE_ENTRIES_KEY_REF: usize = 248;
 pub const TYPE_ENTRIES_VALUE_REF: usize = 272;
 pub const TYPE_ENTRIES_REFS: usize = 296;
+/// What a `spawn` returns and an `await` waits on: see [`FUTURE_STATE`].
+pub const TYPE_FUTURE: usize = 320;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 320;
+pub const FIRST_CLASS_TYPE: usize = 336;
 
 /// A map is a header, whose high half is kept for a lock word, and four
 /// words: the number of keys it has and of records used, dead ones
@@ -318,6 +324,10 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     0,
     0,
     ENTRY_VALUE as u32,
+    KIND_FUTURE,
+    FUTURE_SIZE as u32,
+    0,
+    0,
 ];
 
 const _: () = {
@@ -336,7 +346,10 @@ const _: () = {
     assert!(RUNTIME_TYPES[TYPE_ENTRIES_KEY_REF / 4 + 2] == 1);
     assert!(RUNTIME_TYPES[TYPE_ENTRIES_VALUE_REF / 4 + 4] == ENTRY_VALUE as u32);
     assert!(RUNTIME_TYPES[TYPE_ENTRIES_REFS / 4 + 5] == ENTRY_VALUE as u32);
-    assert!(TYPE_ENTRIES_REFS + TYPE_HEADER + 2 * 4 == FIRST_CLASS_TYPE);
+    assert!(TYPE_ENTRIES_REFS + TYPE_HEADER + 2 * 4 == TYPE_FUTURE);
+    assert!(RUNTIME_TYPES[TYPE_FUTURE / 4] == KIND_FUTURE);
+    assert!(RUNTIME_TYPES[TYPE_FUTURE / 4 + 1] == FUTURE_SIZE as u32);
+    assert!(TYPE_FUTURE + TYPE_HEADER == FIRST_CLASS_TYPE);
     // A string's cached hash is in the bits every object has free, below
     // the flags.
     assert!((STRING_HASH_MASK as usize) << 32 & (HEADER_FLAGS | TYPE_ID_MASK | 7) == 0);
@@ -377,6 +390,7 @@ pub const WELL_KNOWN_PANICS: usize = 16;
 pub const WELL_KNOWN_DIVISION_BY_ZERO: usize = 0;
 pub const WELL_KNOWN_INDEX_OUT_OF_BOUNDS: usize = 1;
 pub const WELL_KNOWN_MAP_KEY_NOT_FOUND: usize = 3;
+pub const WELL_KNOWN_STACK_OVERFLOW: usize = 4;
 pub const WELL_KNOWN_NEGATIVE_BIT_SHIFT: usize = 12;
 pub const WELL_KNOWN_INVALID_ARGUMENT: usize = 16;
 pub const WELL_KNOWN_PARSE_ERROR: usize = 17;
@@ -414,6 +428,64 @@ pub const MUTATOR_POLL: usize = 3 * WORD;
 pub const MUTATOR_SCRATCH: usize = 4 * WORD;
 /// What this process's hashes are mixed with, where a map probe reads it.
 pub const MUTATOR_HASH_SEED: usize = 5 * WORD;
+
+/// The task the worker is running, or zero on the worker's own stack.
+pub const MUTATOR_CUR_TASK: usize = 6 * WORD;
+/// Reserved for the telemetry node of the running task.
+pub const MUTATOR_TELE_NODE: usize = 7 * WORD;
+/// Where the worker's own stack resumes: the address of the switch frame it
+/// left when it last switched to a task.
+pub const MUTATOR_G0_SP: usize = 8 * WORD;
+/// The top compiled frame at the runtime boundary: the stack pointer, the
+/// return address and the frame pointer, a word each.
+pub const MUTATOR_ANCHOR: usize = 9 * WORD;
+
+// The fields compiled code and the assembly stubs reach through the pinned
+// register are a word each, one after the other, and none shares its word.
+const _: () = {
+    let fields = [
+        MUTATOR_ALLOC_PTR,
+        MUTATOR_ALLOC_LIMIT,
+        MUTATOR_STACK_LIMIT,
+        MUTATOR_POLL,
+        MUTATOR_SCRATCH,
+        MUTATOR_HASH_SEED,
+        MUTATOR_CUR_TASK,
+        MUTATOR_TELE_NODE,
+        MUTATOR_G0_SP,
+        MUTATOR_ANCHOR,
+    ];
+    let mut index = 0;
+    while index < fields.len() {
+        assert!(fields[index] == index * WORD);
+        index += 1;
+    }
+};
+
+/// A future is a header and five words. The state is zero or the address of
+/// the first task waiting (tasks are aligned, so its low bits are clear)
+/// while the task has not finished, then [`FUTURE_READY`] or
+/// [`FUTURE_ERROR`], written once with the value already in place: a reader
+/// loads the state first, with acquire ordering, and the value after.
+pub const FUTURE_STATE: usize = field_offset(0);
+/// What the task returned, as the bits of one slot, or what it threw.
+pub const FUTURE_VALUE: usize = field_offset(1);
+/// The task settling it, which is not a heap object, or zero.
+pub const FUTURE_TASK: usize = field_offset(2);
+pub const FUTURE_FLAGS: usize = field_offset(3);
+/// What the error it settled with travels with, for the `await` that throws
+/// it again: the trace of the task's throw, or the context a handler in the
+/// task made of that. Zero until then.
+pub const FUTURE_TRACE: usize = field_offset(4);
+pub const FUTURE_SIZE: usize = instance_size(5);
+pub const FUTURE_READY: usize = 1;
+pub const FUTURE_ERROR: usize = 2;
+/// The bits of the state that say it is settled.
+pub const FUTURE_SETTLED: usize = 3;
+/// Set in a future's flags when the value its task returns is a reference.
+pub const FUTURE_VALUE_IS_REF: usize = 1;
+/// Set in a future's flags once an `await` has thrown its error.
+pub const FUTURE_OBSERVED: usize = 2;
 
 /// Round a byte count up to whole words.
 pub const fn words(bytes: usize) -> usize {

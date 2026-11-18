@@ -110,3 +110,99 @@ async fn natives_end_as_the_interpreter_does() {
     assert!(ran > 0, "no conformance cases under `{}`", root.display());
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// Build `SOURCE`'s `main` and run it both ways: what it prints, what it
+/// reports and the status it exits with.
+fn ends(source: &str, stdout: &str, stderr: &str) {
+    let db = setup_test_db(source);
+    assert_no_diagnostic_errors(&db);
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let executable = build(&db, "main", directory.path()).expect("the program compiles");
+    for stress in [false, true] {
+        let mut command = std::process::Command::new(&executable);
+        if stress {
+            command.env("BAML_GC_STRESS", "1");
+        }
+        let output = command.output().expect("the program starts");
+        assert_eq!(output.status.code(), Some(1));
+        assert_eq!(String::from_utf8_lossy(&output.stdout), stdout);
+        assert_eq!(String::from_utf8_lossy(&output.stderr), stderr);
+    }
+}
+
+/// What the two programs below share.
+const FAILING: &str = r"
+class Failure { code: int }
+
+function count(n: int) -> int {
+  let x = 0;
+  for (let i = 0; i < n; i += 1) { x += 1; };
+  x
+}
+
+function fail(depth: int, code: int) -> int throws Failure {
+  if depth > 0 {
+    return fail(depth - 1, code) + 1;
+  }
+  if code > 0 { throw Failure { code: code } }
+  0
+}
+";
+
+/// A program whose spawned task fails with nothing awaiting it: `baml run`
+/// prints the entry function's result, waits for every task, reports the
+/// error no `await` took and exits with a failure, and so does native code.
+/// The interpreter as this suite runs it only logs such an error, so this
+/// cannot be one of the cases above. The report is `baml run`'s but for the
+/// lines of the traceback, which name no file and line here, and for where
+/// they are: before the error, as for the entry function's own. Tasks are
+/// reported in the order they were spawned in.
+#[test]
+fn an_error_no_await_took_fails_the_program_after_its_result() {
+    let source = format!(
+        "{FAILING}
+function main() -> int {{
+  let ignored = spawn {{ 10 / count(0) }};
+  let thrown = spawn {{ fail(count(1), 4) }};
+  let awaited = spawn {{ count(7) }};
+  await awaited
+}}
+"
+    );
+    ends(
+        &source,
+        "7\n",
+        "Traceback (most recent call last):\n  in .<lambda(main, 0)>\n\
+         error: unhandled spawned task failed: uncaught throw: \
+         baml.panics.DivisionByZero {dividend: 10}\n\
+         Traceback (most recent call last):\n  in .<lambda(main, 1)>\n  in user.fail\n  \
+         in user.fail\nerror: unhandled spawned task failed: uncaught throw: \
+         user.Failure {code: 4}\n",
+    );
+}
+
+/// A program whose entry function ends with an error it awaited, while
+/// another task's error was never awaited: the entry function's error is
+/// reported first, with the functions the task that threw it was in, then
+/// the error no `await` took, and nothing is printed.
+#[test]
+fn an_uncaught_error_of_the_entry_function_is_reported_before_one_no_await_took() {
+    let source = format!(
+        "{FAILING}
+function main() -> int throws Failure {{
+  let ignored = spawn {{ 10 / count(0) }};
+  let awaited = spawn {{ fail(count(2), 3) }};
+  await awaited
+}}
+"
+    );
+    ends(
+        &source,
+        "",
+        "Traceback (most recent call last):\n  in .<lambda(main, 1)>\n  in user.fail\n  \
+         in user.fail\n  in user.fail\nerror: uncaught throw: user.Failure {code: 3}\n\
+         Traceback (most recent call last):\n  in .<lambda(main, 0)>\n\
+         error: unhandled spawned task failed: uncaught throw: \
+         baml.panics.DivisionByZero {dividend: 10}\n",
+    );
+}
