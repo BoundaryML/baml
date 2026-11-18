@@ -209,3 +209,8 @@ baml_language/sdks/typescript/bridge_typescript/dist/*.node
 !/baml_language/vendor/
 /baml_language/vendor/*
 !/baml_language/vendor/quanta/
+
+# Patched Cranelift code generator for the native backend.
+!/baml_language/vendor/cranelift-codegen/
+!/baml_language/vendor/cranelift-codegen-meta/
+!/baml_language/vendor/cranelift-frontend/

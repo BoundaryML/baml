@@ -2400,8 +2400,6 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen"
 version = "0.130.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d73d1e372730b5f64ed1a2bd9f01fe4686c8ec14a28034e3084e530c8d951878"
 dependencies = [
  "bumpalo",
  "cranelift-assembler-x64",
@@ -2427,8 +2425,6 @@ dependencies = [
 [[package]]
 name = "cranelift-codegen-meta"
 version = "0.130.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0319c18165e93dc1ebf78946a8da0b1c341c95b4a39729a69574671639bdb5f"
 dependencies = [
  "cranelift-assembler-x64-meta",
  "cranelift-codegen-shared",
@@ -2464,8 +2460,6 @@ dependencies = [
 [[package]]
 name = "cranelift-frontend"
 version = "0.130.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cbd294abe236e23cc3d907b0936226b6a8342db7636daa9c7c72be1e323420e"
 dependencies = [
  "cranelift-codegen",
  "log",

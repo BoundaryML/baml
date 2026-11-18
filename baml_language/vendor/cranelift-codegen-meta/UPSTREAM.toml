@@ -1,0 +1,10 @@
+repository = "https://github.com/bytecodealliance/wasmtime"
+revision = "f8557c1ad85b8fc123b715d15db7b52483eade96"
+path = "cranelift/codegen/meta"
+version = "0.130.2"
+license = "Apache-2.0 WITH LLVM-exception"
+# Source, manifest and LICENSE are the crates.io package of cranelift-codegen-meta 0.130.2,
+# unchanged. Packaging omits Cargo.lock and Cargo.toml.orig.
+#
+# Changes from upstream, one entry per patch:
+# (none)
