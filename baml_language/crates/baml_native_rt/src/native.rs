@@ -436,6 +436,11 @@ impl<'s> Scope<'s> {
             "baml.errors.InvalidArgument {{message: {message:?}}}"
         )))
     }
+
+    /// Throw `baml.errors.ParseError`.
+    pub fn parse_error(&mut self, message: &str) -> Thrown<'s> {
+        Thrown(self.alloc_str(&format!("baml.errors.ParseError {{message: {message:?}}}")))
+    }
 }
 
 impl Drop for Scope<'_> {
@@ -600,6 +605,7 @@ impl NewArray<'_, Bool> {
 pub struct Natives;
 
 mod float;
+mod root;
 mod string;
 
 #[allow(

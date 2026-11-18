@@ -4,6 +4,13 @@
 //! and as that executable collecting on every allocation, and all three must
 //! end the same way: the same printed result or the same uncaught throw.
 //!
+//! Native `int` is 64 bits wide and wraps, and the interpreter's is still 63
+//! bits wide and panics on overflow. A case whose answer depends on that says
+//! how native code ends in a comment on the line before it, `// native
+//! prints: <text>` or `// native throws: <text>`, and the interpreter must
+//! then end some other way, so that the comment goes when it stops being
+//! true.
+//!
 //! `support.baml` holds what the cases share. Values come out of loops there
 //! so that they are built at run time, on the heap.
 
@@ -108,13 +115,25 @@ fn sources(directory: &Path, found: &mut Vec<PathBuf>) {
     }
 }
 
-/// The functions `source` declares without parameters: its cases.
-fn cases(source: &str) -> Vec<&str> {
-    source
-        .lines()
-        .filter_map(|line| line.strip_prefix("function "))
-        .filter_map(|rest| rest.split_once("()").map(|(name, _)| name))
-        .collect()
+/// The functions `source` declares without parameters: its cases, each with
+/// how native code ends where the interpreter is expected to end otherwise.
+fn cases(source: &str) -> Vec<(&str, Option<Outcome>)> {
+    let mut native = None;
+    let mut found = Vec::new();
+    for line in source.lines() {
+        let declared = native.take();
+        if let Some(text) = line.strip_prefix("// native prints: ") {
+            native = Some(Ok(text.to_owned()));
+        } else if let Some(text) = line.strip_prefix("// native throws: ") {
+            native = Some(Err(text.to_owned()));
+        } else if let Some((name, _)) = line
+            .strip_prefix("function ")
+            .and_then(|rest| rest.split_once("()"))
+        {
+            found.push((name, declared));
+        }
+    }
+    found
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -149,16 +168,23 @@ async fn natives_end_as_the_interpreter_does() {
     let mut ran = 0;
     let mut failures = Vec::new();
     for (file, text) in &texts {
-        for case in cases(text) {
+        for (case, diverging) in cases(text) {
             ran += 1;
             let interpreted = interpret(&engine, case).await;
             let (native, stressed) = match build(&db, case, directory.path()) {
                 Ok(executable) => (run(&executable, false), run(&executable, true)),
                 Err(error) => (Ok(error.clone()), Ok(error)),
             };
-            if native != interpreted || stressed != interpreted {
+            let agrees = diverging.is_none();
+            let expected = diverging.as_ref().unwrap_or(&interpreted);
+            if native != *expected || stressed != *expected || (interpreted == *expected) != agrees
+            {
                 failures.push(format!(
-                    "{file}: {case}:\n  interpreter       {interpreted:?}\n  native            {native:?}\n  collecting always {stressed:?}",
+                    "{file}: {case}:\n  interpreter       {interpreted:?}{}\n  native            {native:?}\n  collecting always {stressed:?}",
+                    match &diverging {
+                        Some(expected) => format!("\n  native expected   {expected:?}"),
+                        None => String::new(),
+                    },
                 ));
             }
         }
