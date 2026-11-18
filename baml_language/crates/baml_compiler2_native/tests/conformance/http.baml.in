@@ -1,0 +1,75 @@
+// `baml.http.fetch`, run against a server the test starts on a loopback
+// port: `{open}` is its address, and `{closed}` is one nothing listens on.
+// The file is not a case file of its own because the addresses are only
+// known when the test runs.
+
+function http_spin(n: int) -> int {
+  let kept: string[] = [];
+  for (let i = 0; i < n; i += 1) { kept.push(`item ${i}`); };
+  kept.length()
+}
+
+function http_fetch() -> string {
+  let response = baml.http.fetch("{open}/hello");
+  let moved = http_spin(30);
+  `${response.status_code} ${response.ok()} ${response.headers["x-asked"]} ${response.headers["content-type"]} ${response.url} ${moved} ${response.text()}`
+}
+function http_not_found() -> string {
+  let response = baml.http.fetch("{open}/missing");
+  `${response.status_code} ${response.ok()} ${response.text()}`
+}
+// Bytes that are not UTF-8 are replaced.
+function http_bytes() -> string {
+  baml.http.fetch("{open}/bytes").text()
+}
+// A body is read once.
+function http_text_twice() -> string {
+  let response = baml.http.fetch("{open}/hello");
+  let first = response.text();
+  let second = response.text() catch (e) {
+    baml.errors.Io => e.message,
+    baml.errors.Timeout => "timeout",
+  };
+  `${first.length()} ${second}`
+}
+function http_refused() -> string {
+  let response = baml.http.fetch("{closed}/") catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return "timeout"; },
+  };
+  `${response.status_code}`
+}
+function http_refused_uncaught() -> int {
+  baml.http.fetch("{closed}/").status_code
+}
+function http_bad_url() -> string {
+  let response = baml.http.fetch("no scheme") catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return "timeout"; },
+  };
+  `${response.status_code}`
+}
+// The limit that passed comes back as a duration.
+function http_timeout() -> string {
+  let response = baml.http.fetch("{open}/slow", timeout = baml.time.Duration.from_milliseconds(200)) catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return `${e.timeout_type} ${e.duration?.to_milliseconds() ?? 0n} ${e.message}`; },
+  };
+  `${response.status_code}`
+}
+// More responses than bring on a collection, each dead with its
+// connection once its status is read.
+function http_many() -> int {
+  let total = 0;
+  for (let i = 0; i < 150; i += 1) {
+    total += baml.http.fetch("{open}/hello").status_code;
+  };
+  total
+}
+// Three requests at once, each read by the task that sent it.
+function http_tasks() -> string {
+  let a = spawn { baml.http.fetch("{open}/hello").text().length() };
+  let b = spawn { baml.http.fetch("{open}/missing").status_code };
+  let c = spawn { let kept = http_spin(20); baml.http.fetch("{open}/hello").headers["x-asked"] + `${kept}` };
+  `${await a} ${await b} ${await c}`
+}

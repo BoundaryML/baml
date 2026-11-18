@@ -7,10 +7,23 @@ use std::{
     process::Command,
 };
 
-/// The runtime archive this build of the compiler was built with.
-const RUNTIME_ARCHIVE: &str = env!("BAML_NATIVE_RT_ARCHIVE");
-/// The system libraries the runtime archive needs, as linker arguments.
-const RUNTIME_LINK_LIBS: &str = env!("BAML_NATIVE_RT_LINK_LIBS");
+/// The runtime archive this build of the compiler was built with, and the
+/// system libraries the archive needs, as linker arguments.
+const RUNTIME: (&str, &str) = (
+    env!("BAML_NATIVE_RT_ARCHIVE"),
+    env!("BAML_NATIVE_RT_LINK_LIBS"),
+);
+/// The same runtime built with `baml.http`. A TLS library sets itself up
+/// when a program that links it starts, and brings system frameworks to
+/// load, whether or not a request is ever sent, and the linker cannot drop
+/// either. So only a program that calls a native of `baml.http` is linked
+/// against this one.
+const RUNTIME_WITH_HTTP: (&str, &str) = (
+    env!("BAML_NATIVE_RT_HTTP_ARCHIVE"),
+    env!("BAML_NATIVE_RT_HTTP_LINK_LIBS"),
+);
+/// How the symbol of every native of `baml.http` starts.
+const HTTP_NATIVE: &[u8] = b"baml_rt_baml_http_";
 
 #[derive(Debug, thiserror::Error)]
 pub enum LinkError {
@@ -42,10 +55,19 @@ pub fn link(object: &[u8], output: &Path) -> Result<(), LinkError> {
         source,
     })?;
 
+    // The object names the natives it calls.
+    let calls_http = object
+        .windows(HTTP_NATIVE.len())
+        .any(|window| window == HTTP_NATIVE);
+    let (archive, libs) = if calls_http {
+        RUNTIME_WITH_HTTP
+    } else {
+        RUNTIME
+    };
     let driver = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
     let mut command = Command::new(&driver);
-    command.arg(&object_path).arg(RUNTIME_ARCHIVE);
-    command.args(RUNTIME_LINK_LIBS.split_whitespace());
+    command.arg(&object_path).arg(archive);
+    command.args(libs.split_whitespace());
     // Only a little of the runtime archive is reachable from a program.
     command.arg(if cfg!(target_vendor = "apple") {
         "-Wl,-dead_strip"

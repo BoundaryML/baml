@@ -58,12 +58,16 @@ fn main() {
         manifest_dir.join("../baml_builtins2/baml_std").display()
     );
 
-    let (archive, native_libs) = build_runtime(&runtime_dir, &out_dir);
-    println!(
-        "cargo:rustc-env=BAML_NATIVE_RT_ARCHIVE={}",
-        archive.display()
-    );
-    println!("cargo:rustc-env=BAML_NATIVE_RT_LINK_LIBS={native_libs}");
+    // The runtime is built twice: without `baml.http` for the programs
+    // that call none of it, and with it for the others.
+    for (variant, with_http) in [("", false), ("_HTTP", true)] {
+        let (archive, native_libs) = build_runtime(&runtime_dir, &out_dir, with_http);
+        println!(
+            "cargo:rustc-env=BAML_NATIVE_RT{variant}_ARCHIVE={}",
+            archive.display()
+        );
+        println!("cargo:rustc-env=BAML_NATIVE_RT{variant}_LINK_LIBS={native_libs}");
+    }
 
     let implemented = baml_builtins2_codegen::read_native_lists(&runtime_dir.join("natives"))
         .unwrap_or_else(|error| panic!("{error}"));
@@ -88,9 +92,9 @@ fn runtime_target_dir(out_dir: &Path) -> PathBuf {
         .map_or_else(|| out_dir.join("native-rt"), |dir| dir.join("native-rt"))
 }
 
-/// Build the runtime archive, and return it with the system libraries it
-/// needs as linker arguments.
-fn build_runtime(runtime_dir: &Path, out_dir: &Path) -> (PathBuf, String) {
+/// Build the runtime archive, with `baml.http` or without, and return it
+/// with the system libraries it needs as linker arguments.
+fn build_runtime(runtime_dir: &Path, out_dir: &Path, with_http: bool) -> (PathBuf, String) {
     let cargo = env::var_os("CARGO").expect("set by cargo");
     let target = env::var("TARGET").expect("set by cargo");
     let host = env::var("HOST").expect("set by cargo");
@@ -107,6 +111,9 @@ fn build_runtime(runtime_dir: &Path, out_dir: &Path) -> (PathBuf, String) {
         .args(["--profile", PROFILE])
         .arg("--target-dir")
         .arg(&target_dir);
+    if !with_http {
+        command.arg("--no-default-features");
+    }
     let mut artifact_dir = target_dir;
     if target != host {
         command.args(["--target", &target]);
@@ -126,9 +133,22 @@ fn build_runtime(runtime_dir: &Path, out_dir: &Path) -> (PathBuf, String) {
         "building the native runtime failed:\n{diagnostics}"
     );
 
+    // Both builds leave their archive under one name, so each is kept
+    // under a name of its own.
+    let built = artifact_dir.join(PROFILE).join("libbaml_native_rt.a");
+    assert!(
+        built.is_file(),
+        "the nested build left no archive at `{}`",
+        built.display()
+    );
+    let archive = built.with_file_name(if with_http {
+        "libbaml_native_rt_http.a"
+    } else {
+        "libbaml_native_rt_plain.a"
+    });
+    std::fs::copy(&built, &archive).expect("the target directory is writable");
     // `rustc` names the libraries only when it compiles the archive, so they
     // are kept beside it for the builds that find it fresh.
-    let archive = artifact_dir.join(PROFILE).join("libbaml_native_rt.a");
     let libs_file = archive.with_extension("libs");
     let native_libs = match diagnostics
         .lines()
@@ -146,10 +166,5 @@ fn build_runtime(runtime_dir: &Path, out_dir: &Path) -> (PathBuf, String) {
             )
         }),
     };
-    assert!(
-        archive.is_file(),
-        "the nested build left no archive at `{}`",
-        archive.display()
-    );
     (archive, native_libs)
 }

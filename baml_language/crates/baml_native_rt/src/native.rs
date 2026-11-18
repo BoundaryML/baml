@@ -1211,6 +1211,8 @@ mod env;
 mod float;
 mod fs;
 mod hash;
+#[cfg(feature = "http")]
+mod http;
 mod int;
 mod json;
 mod map;

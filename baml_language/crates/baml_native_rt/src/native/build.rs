@@ -98,7 +98,10 @@ impl Class {
     }
 
     /// The class the type of field `field` names: the field's own type, or
-    /// what it is an optional, an array or a map of.
+    /// what it is an optional, an array or a map of. Nothing when the
+    /// program describes the field only as a reference: the type of a
+    /// field is described as far as `baml.json` reads it, and it reads no
+    /// class that holds a `bigint`, a function or Rust state.
     pub fn field_class(self, field: usize) -> Option<Self> {
         let (_, mut ty) = self.0.field_place(field)?;
         loop {

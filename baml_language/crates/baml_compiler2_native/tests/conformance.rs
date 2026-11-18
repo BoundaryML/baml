@@ -111,6 +111,92 @@ async fn natives_end_as_the_interpreter_does() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// Serve HTTP on a loopback port until the test process ends, and return
+/// the port. Every connection is answered once and closed.
+fn serve_http() -> u16 {
+    use std::io::{Read as _, Write as _};
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
+    let port = listener.local_addr().expect("a bound address").port();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            std::thread::spawn(move || {
+                let mut request = Vec::new();
+                let mut chunk = [0; 1024];
+                while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    match stream.read(&mut chunk) {
+                        Ok(read) if read > 0 => request.extend_from_slice(&chunk[..read]),
+                        _ => return,
+                    }
+                }
+                let request = String::from_utf8_lossy(&request);
+                let path = request.split(' ').nth(1).unwrap_or("");
+                let (status, body): (&str, &[u8]) = match path {
+                    "/hello" => ("200 OK", "hello from loopback, caf\u{e9}".as_bytes()),
+                    "/bytes" => ("200 OK", b"not \xFF utf-8"),
+                    "/slow" => {
+                        std::thread::sleep(std::time::Duration::from_secs(3));
+                        ("200 OK", b"late")
+                    }
+                    _ => ("404 Not Found", b"nothing here"),
+                };
+                let head = format!(
+                    "HTTP/1.1 {status}\r\ncontent-type: text/plain\r\nx-asked: {path}\r\n\
+                     content-length: {}\r\nconnection: close\r\n\r\n",
+                    body.len()
+                );
+                // The client may have given up: a late answer has no reader.
+                let _ = stream.write_all(head.as_bytes());
+                let _ = stream.write_all(body);
+            });
+        }
+    });
+    port
+}
+
+/// A loopback port nothing listens on.
+fn closed_port() -> u16 {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
+    listener.local_addr().expect("a bound address").port()
+}
+
+/// `baml.http.fetch` against a server in this process: the request is sent
+/// by the runtime's own client, and the `Response` it returns is built in
+/// Rust and owns its unread body.
+#[tokio::test(flavor = "multi_thread")]
+async fn http_requests_end_as_the_interpreter_does() {
+    // A proxy named by the environment would be sent these requests.
+    for variable in ["ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy"] {
+        assert!(
+            std::env::var_os(variable).is_none(),
+            "unset `{variable}` to run this test: it must not leave the machine"
+        );
+    }
+    let source = include_str!("conformance/http.baml.in")
+        .replace("{open}", &format!("http://127.0.0.1:{}", serve_http()))
+        .replace("{closed}", &format!("http://127.0.0.1:{}", closed_port()));
+    let db = setup_test_db(&source);
+    assert_no_diagnostic_errors(&db);
+    let engine = engine(&db);
+    let directory = tempfile::tempdir().expect("a temporary directory");
+
+    let mut failures = Vec::new();
+    for (case, _) in cases(&source) {
+        let interpreted = interpret(&engine, case).await;
+        let (native, stressed) = match build(&db, case, directory.path()) {
+            Ok(executable) => (run(&executable, false), run(&executable, true)),
+            Err(error) => (Ok(error.clone()), Ok(error)),
+        };
+        if native != interpreted || stressed != interpreted {
+            failures.push(format!(
+                "{case}:\n  interpreter       {interpreted:?}\n  native            {native:?}\n  collecting always {stressed:?}",
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// Build `SOURCE`'s `main` and run it both ways: what it prints, what it
 /// reports and the status it exits with.
 fn ends(source: &str, stdout: &str, stderr: &str) {
@@ -207,17 +293,38 @@ function main() -> int throws Failure {{
     );
 }
 
-/// Whether the executable built from `source` imports what starts a
-/// thread, which the runtime itself never does: only Tokio, for the jobs of
-/// `scope.io`. An import is by name, so the name is there to find.
-fn can_start_a_thread(source: &str) -> bool {
-    const IMPORT: &[u8] = b"_pthread_create";
+/// Whether the executable built from `source` names `symbol`: an import
+/// is by name, and so is every function of an executable that is not
+/// stripped.
+fn names(source: &str, symbol: &[u8]) -> bool {
     let db = setup_test_db(source);
     assert_no_diagnostic_errors(&db);
     let directory = tempfile::tempdir().expect("a temporary directory");
     let executable = build(&db, "main", directory.path()).expect("the program compiles");
     let bytes = std::fs::read(executable).expect("a readable executable");
-    bytes.windows(IMPORT.len()).any(|window| window == IMPORT)
+    bytes.windows(symbol.len()).any(|window| window == symbol)
+}
+
+/// Whether the executable built from `source` imports what starts a
+/// thread, which the runtime itself never does: only Tokio, for the jobs of
+/// `scope.io`.
+fn can_start_a_thread(source: &str) -> bool {
+    names(source, b"_pthread_create")
+}
+
+/// A TLS library sets itself up when a program that links it starts, and
+/// the linker cannot drop that. So a program is linked against the runtime
+/// that has `baml.http` only when it calls a native of it.
+#[test]
+fn a_program_without_http_links_no_tls() {
+    assert!(!names(
+        "function main() -> string { baml.fs.read(\"no such file\") }\n",
+        b"rustls"
+    ));
+    assert!(names(
+        "function main() -> int { baml.http.fetch(\"http://127.0.0.1:9/\").status_code }\n",
+        b"rustls"
+    ));
 }
 
 /// Only a native that calls `scope.io` names Tokio, so a program with

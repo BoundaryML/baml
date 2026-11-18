@@ -105,6 +105,23 @@ describes the classes of `NAMED` that the declarations of the natives it
 calls name, in what they take, return and throw. Asking for one that no
 such declaration names ends the program.
 
+## `baml.http` and the two builds of the runtime
+
+`baml.http` sends its requests with `reqwest` over `rustls`, set up as
+`sys_native` sets them up: the crate's `aws-crypto` and `ring-crypto`
+features choose the TLS provider the same way. The TLS library runs code
+when a program that links it starts, and on macOS it brings two system
+frameworks for the program to load. The linker keeps both even when
+nothing sends a request, which costs every start about 11 M instructions
+and the executable about 700 KB.
+
+So the compiler builds the runtime twice, with the `http` feature and
+without, and links the one with it only into a program whose object names
+a native of `baml.http`. The build without the feature skips the natives
+whose path starts with `baml.http.`. A native of another namespace that
+needs TLS has to be named beside it, in the runtime's `build.rs` and in
+the compiler's `link.rs`.
+
 ## These files are temporary
 
 The same facts belong on the BAML declarations, as annotations. Today the
