@@ -115,6 +115,15 @@ impl BexVm {
         level: usize,
         landing: Option<(usize, usize)>,
     ) -> Result<(Value, Value), Box<VmError>> {
+        self.with_telemetry_unwind(|vm| vm.land_compiled_catch_frames(error, level, landing))
+    }
+
+    fn land_compiled_catch_frames(
+        &mut self,
+        error: Box<VmError>,
+        level: usize,
+        landing: Option<(usize, usize)>,
+    ) -> Result<(Value, Value), Box<VmError>> {
         let VmError::Thrown(thrown) = *error else {
             return Err(error);
         };
