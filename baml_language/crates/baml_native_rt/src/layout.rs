@@ -86,6 +86,7 @@ pub const KIND_REFS: u32 = 2;
 pub const KIND_STRING: u32 = 3;
 pub const KIND_ARRAY: u32 = 4;
 pub const KIND_SLICE: u32 = 5;
+pub const KIND_ENTRIES: u32 = 6;
 
 /// A type is four `u32`s: its kind; the size in bytes of an object, for a
 /// fixed one; the number of reference fields; and, for an array, the type id
@@ -129,8 +130,55 @@ pub const TYPE_ERROR: usize = 208;
 /// like [`TYPE_ERROR`]. A handler that takes every error does not take a
 /// panic, so the two are told apart.
 pub const TYPE_PANIC: usize = 232;
+/// A map: see [`MAP_SIZE`].
+pub const TYPE_MAP: usize = 256;
+/// The entries of a map, by which words of a record are references:
+/// neither, the key, the value, both. The second `u32` of such a type is
+/// the size of a record, and its reference offsets are within one.
+pub const TYPE_ENTRIES: usize = 280;
+pub const TYPE_ENTRIES_KEY_REF: usize = 296;
+pub const TYPE_ENTRIES_VALUE_REF: usize = 320;
+pub const TYPE_ENTRIES_REFS: usize = 344;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 256;
+pub const FIRST_CLASS_TYPE: usize = 368;
+
+/// A map is a header, whose high half is kept for a lock word, and four
+/// words: the number of keys it has and of records used, dead ones
+/// included, a `u32` each; its entries object; its index object, zero while
+/// the entries are few enough to search without one; and the index's slot
+/// count less one and a count of the times its membership has changed, a
+/// `u32` each.
+pub const MAP_LEN: usize = HEADER;
+pub const MAP_USED: usize = HEADER + 4;
+pub const MAP_ENTRIES: usize = 2 * WORD;
+pub const MAP_INDEX: usize = 3 * WORD;
+pub const MAP_MASK: usize = 4 * WORD;
+pub const MAP_EPOCH: usize = 4 * WORD + 4;
+pub const MAP_SIZE: usize = 5 * WORD;
+
+/// Entries are a header, a capacity, that many records of a key and a
+/// value in insertion order, and then that many `u32` hashes. A record
+/// never used or deleted is all zero, and so is its hash. Record `n` is at
+/// `(n + 1) * ENTRY_SIZE`.
+pub const ENTRIES_CAPACITY: usize = HEADER;
+pub const ENTRIES_RECORDS: usize = 2 * WORD;
+pub const ENTRY_VALUE: usize = WORD;
+pub const ENTRY_SIZE: usize = 2 * WORD;
+/// The most records searched without an index, and the fewest entries
+/// have: their hashes are compared all at once.
+pub const SMALL_ENTRIES: usize = 8;
+/// The bytes of entries with room for `capacity` records.
+pub const fn entries_size(capacity: usize) -> usize {
+    ENTRIES_RECORDS + capacity * ENTRY_SIZE + words(capacity * 4)
+}
+
+/// A hash as entries and an index hold it has this bit set, so that it is
+/// neither of the two values an index slot's low half has when the slot
+/// holds no entry: 0 for one never used, 1 for one whose entry was deleted.
+pub const HASH_SET: u32 = 0x8000_0000;
+/// The bits of a string's header's high half that cache its hash, zero
+/// while it has not been computed. The four above them are flags.
+pub const STRING_HASH_MASK: u32 = 0x0FFF_FFFF;
 
 /// The start of every type table, as `u32`s: eight bytes no type lives at,
 /// so that no id is zero, then the fixed types.
@@ -201,6 +249,34 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     0,
     BOX_VALUE as u32,
     0,
+    KIND_FIXED,
+    MAP_SIZE as u32,
+    2,
+    0,
+    MAP_ENTRIES as u32,
+    MAP_INDEX as u32,
+    KIND_ENTRIES,
+    ENTRY_SIZE as u32,
+    0,
+    0,
+    KIND_ENTRIES,
+    ENTRY_SIZE as u32,
+    1,
+    0,
+    0,
+    0,
+    KIND_ENTRIES,
+    ENTRY_SIZE as u32,
+    1,
+    0,
+    ENTRY_VALUE as u32,
+    0,
+    KIND_ENTRIES,
+    ENTRY_SIZE as u32,
+    2,
+    0,
+    0,
+    ENTRY_VALUE as u32,
 ];
 
 const _: () = {
@@ -213,6 +289,11 @@ const _: () = {
     assert!(RUNTIME_TYPES[TYPE_BOX_BOOL / 4 + 1] == BOX_SIZE as u32);
     assert!(RUNTIME_TYPES[TYPE_ERROR / 4 + 4] == BOX_VALUE as u32);
     assert!(RUNTIME_TYPES[TYPE_PANIC / 4 + 4] == BOX_VALUE as u32);
+    assert!(RUNTIME_TYPES[TYPE_MAP / 4 + 1] == MAP_SIZE as u32);
+    assert!(RUNTIME_TYPES[TYPE_ENTRIES / 4] == KIND_ENTRIES);
+    assert!(RUNTIME_TYPES[TYPE_ENTRIES_KEY_REF / 4 + 2] == 1);
+    assert!(RUNTIME_TYPES[TYPE_ENTRIES_VALUE_REF / 4 + 4] == ENTRY_VALUE as u32);
+    assert!(RUNTIME_TYPES[TYPE_ENTRIES_REFS / 4 + 5] == ENTRY_VALUE as u32);
 };
 
 /// Where the mutator keeps the address of the next object and the address
@@ -229,6 +310,8 @@ pub const MUTATOR_POLL: usize = 3 * WORD;
 /// nothing in registers: the size asked of the allocation slow path going
 /// in, the address of the memory coming out.
 pub const MUTATOR_SCRATCH: usize = 4 * WORD;
+/// What this process's hashes are mixed with, where a map probe reads it.
+pub const MUTATOR_HASH_SEED: usize = 5 * WORD;
 
 /// Round a byte count up to whole words.
 pub const fn words(bytes: usize) -> usize {

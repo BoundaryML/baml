@@ -17,6 +17,8 @@ pub(crate) enum Ty {
     Null,
     String,
     Array(&'static Ty),
+    /// A map from the builtin's first type parameter to its second.
+    Map,
     /// A type or `null`.
     Optional(&'static Ty),
     /// The type a call names for the builtin's type parameter at this
@@ -62,6 +64,7 @@ impl Ty {
             Self::Null => NativeTy::Null,
             Self::String => NativeTy::String,
             Self::Array(element) => NativeTy::Array(Box::new(element.native(types))),
+            Self::Map => NativeTy::Map(Box::new(types[0].clone()), Box::new(types[1].clone())),
             Self::Optional(inner) => NativeTy::Optional(Box::new(inner.native(types))),
         }
     }
@@ -89,6 +92,9 @@ pub(crate) enum Kind {
     #[expect(dead_code, reason = "no native is listed as async yet")]
     Async,
 }
+
+/// The native `map[key]` is a call of where it is not a place.
+pub(crate) const MAP_INDEX: &str = "baml.Map.index";
 
 /// One Rust-declared builtin of the standard library.
 #[derive(Debug)]
@@ -121,7 +127,10 @@ pub(crate) fn named(name: &str) -> Option<&'static Native> {
 impl Native {
     /// How to call it, or why compiled code cannot yet.
     pub(crate) fn callable(&self) -> Result<(&Signature, Kind), Blocker> {
-        let Some(kind) = self.kind else {
+        // `map[key]` is compiled as a probe and a panic, and never called:
+        // the runtime has no symbol for it.
+        let inline = (self.path == MAP_INDEX).then_some(Kind::Leaf);
+        let Some(kind) = self.kind.or(inline) else {
             return Err(Blocker::new(
                 "standard library native that is not ported",
                 self.path,

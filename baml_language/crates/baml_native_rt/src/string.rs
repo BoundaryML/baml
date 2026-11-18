@@ -41,15 +41,38 @@ fn allocate(mutator: &mut Mutator, bytes: usize, chars: usize) -> usize {
         u32::try_from(bytes).is_ok(),
         "a string cannot be longer than 4 GiB"
     );
-    let string = mutator.allocate_object(TYPE_STRING, STRING_TEXT + words(bytes));
-    // SAFETY: the object is at least `STRING_TEXT` bytes.
+    let size = STRING_TEXT + words(bytes);
+    let string = mutator.allocate_object(TYPE_STRING, size);
+    // SAFETY: the object is at least `STRING_TEXT` bytes. The last word
+    // first, for the zeros after the text: whole words of it are hashed and
+    // compared.
     unsafe {
+        store(string + size - WORD, 0);
         store(
             string + STRING_LENGTHS,
             bytes | (chars << STRING_CHAR_COUNT_SHIFT),
         );
     };
     string
+}
+
+/// A new string holding the text of the string in the root `source`. May
+/// collect.
+///
+/// # Safety
+///
+/// `source` is a root holding a live string.
+pub(crate) unsafe fn copy_flat(mutator: &mut Mutator, source: *const usize) -> usize {
+    // SAFETY: the caller's contract: the root is read again after the
+    // allocation, which can move the string.
+    unsafe {
+        let lengths = load(source.read_volatile() + STRING_LENGTHS);
+        let bytes = lengths & 0xFFFF_FFFF;
+        let copy = allocate(mutator, bytes, lengths >> STRING_CHAR_COUNT_SHIFT);
+        let from = text(source.read_volatile());
+        std::ptr::copy_nonoverlapping(from.as_ptr(), (copy + STRING_TEXT) as *mut u8, bytes);
+        copy
+    }
 }
 
 /// A new string object holding `value`. May collect.

@@ -324,6 +324,26 @@ pub(crate) extern "C" fn panic_index_out_of_bounds(
     unwind(mutator, error, 0, resume);
 }
 
+pub(crate) extern "C" fn panic_map_key_not_found(
+    _unused: usize,
+    _also_unused: usize,
+    mutator: &mut Mutator,
+    frame: usize,
+    resume: &mut Resume,
+) {
+    mutator.enter(frame);
+    let error = panic_object(mutator, crate::MAP_KEY_NOT_FOUND_TEXT);
+    unwind(mutator, error, 0, resume);
+}
+
+/// The `baml.panics.MapKeyNotFound` a handler in the indexing function
+/// lands with.
+#[unsafe(no_mangle)]
+pub extern "C" fn baml_rt_error_map_key_not_found(mutator: &mut Mutator) -> usize {
+    mutator.enter(current_frame());
+    panic_object(mutator, crate::MAP_KEY_NOT_FOUND_TEXT)
+}
+
 /// The `baml.panics.DivisionByZero` a handler in the dividing function
 /// lands with.
 #[unsafe(no_mangle)]

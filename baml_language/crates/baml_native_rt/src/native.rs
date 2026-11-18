@@ -68,6 +68,8 @@ pub struct Str;
 pub struct Arr<E>(PhantomData<E>);
 /// A class instance.
 pub struct Obj;
+/// A map, of whatever key and value types a call names.
+pub struct Map;
 /// An `int` array element.
 pub struct Int;
 /// A `float` array element.
@@ -92,6 +94,9 @@ impl<E: Element> Managed for Arr<E> {
 }
 impl Managed for Obj {
     type View<'a> = ObjRef<'a>;
+}
+impl Managed for Map {
+    type View<'a> = MapRef<'a>;
 }
 
 impl Element for Int {
@@ -290,6 +295,19 @@ impl<'a> ArrRef<'a, Float> {
     }
 }
 
+/// A view of a map. What is done with one is in [`crate::map`].
+#[derive(Clone, Copy)]
+pub struct MapRef<'a>(usize, PhantomData<&'a ()>);
+
+impl<'a> View<'a> for MapRef<'a> {
+    unsafe fn from_raw(raw: usize) -> Self {
+        Self(raw, PhantomData)
+    }
+    fn raw(self) -> usize {
+        self.0
+    }
+}
+
 /// A view of a class instance: its slots, by position.
 #[derive(Clone, Copy)]
 pub struct ObjRef<'a>(usize, PhantomData<&'a ()>);
@@ -481,7 +499,9 @@ impl RtResult {
 pub struct Scope<'s> {
     mutator: &'s mut Mutator,
     slots: &'s RootSlots,
+    /// How many slots are held, and how many of them are roots.
     used: usize,
+    rooted: usize,
 }
 
 impl<'s> Scope<'s> {
@@ -494,6 +514,7 @@ impl<'s> Scope<'s> {
             mutator,
             slots,
             used: 0,
+            rooted: 0,
         }
     }
 
@@ -506,6 +527,7 @@ impl<'s> Scope<'s> {
         let slot = self.slots.hold(self.used, raw);
         self.mutator.root_at(slot.as_ptr() as usize);
         self.used += 1;
+        self.rooted += 1;
         Root(slot, PhantomData)
     }
 
@@ -518,9 +540,12 @@ impl<'s> Scope<'s> {
     pub unsafe fn elem_raw(&mut self, word: usize, ty: TypeId) -> Elem<'s> {
         let slot = self.slots.hold(self.used, word);
         let is_ref = self.is_reference(ty);
+        // The slot is this value's whether or not it is a root: a native
+        // can hold two values that are not references.
+        self.used += 1;
         if is_ref {
             self.mutator.root_at(slot.as_ptr() as usize);
-            self.used += 1;
+            self.rooted += 1;
         }
         Elem { slot, is_ref }
     }
@@ -599,7 +624,7 @@ impl<'s> Scope<'s> {
 
 impl Drop for Scope<'_> {
     fn drop(&mut self) {
-        self.mutator.unroot(self.used);
+        self.mutator.unroot(self.rooted);
     }
 }
 
@@ -665,9 +690,12 @@ impl<'s> Reservation<'_, 's> {
             "a string cannot be longer than 4 GiB"
         );
         debug_assert_eq!(text.chars().count(), chars);
-        let string = self.take(str_size(text.len()));
-        // SAFETY: the string has room for its two words and the text.
+        let size = str_size(text.len());
+        let string = self.take(size);
+        // SAFETY: the string has room for its two words and the text. The
+        // last word first, for the zeros after the text.
         unsafe {
+            store(string + size - WORD, 0);
             store(string, TYPE_STRING);
             store(
                 string + STRING_LENGTHS,
@@ -726,9 +754,12 @@ impl<'s> Reservation<'_, 's> {
             u32::try_from(bytes).is_ok(),
             "a string cannot be longer than 4 GiB"
         );
-        let string = self.take(str_size(bytes));
-        // SAFETY: the string has room for its two words.
+        let size = str_size(bytes);
+        let string = self.take(size);
+        // SAFETY: the string has room for its two words. The last word
+        // first, for the zeros after the text.
         unsafe {
+            store(string + size - WORD, 0);
             store(string, TYPE_STRING);
             store(
                 string + STRING_LENGTHS,
@@ -922,6 +953,7 @@ pub struct Natives;
 mod array;
 mod float;
 mod int;
+mod map;
 mod root;
 mod string;
 
@@ -934,8 +966,8 @@ mod string;
 mod generated {
     #[allow(unused_imports, reason = "what the listed natives need varies")]
     use super::{
-        Arr, ArrRef, Bool, Elem, Float, Int, Natives, OptionalScalar, Root, RootSlots, RtResult,
-        Scope, Slot, Str, StrRef, Thrown, TypeId, View,
+        Arr, ArrRef, Bool, Elem, Float, Int, Map, MapRef, Natives, OptionalScalar, Root, RootSlots,
+        RtResult, Scope, Slot, Str, StrRef, Thrown, TypeId, View,
     };
     use crate::heap::{Mutator, current_frame};
 

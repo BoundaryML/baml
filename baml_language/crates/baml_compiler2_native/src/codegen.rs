@@ -65,6 +65,7 @@ use crate::{
     },
 };
 
+mod map;
 mod native_call;
 mod string_slice;
 mod unwind;
@@ -117,6 +118,7 @@ fn clif_type(ty: &NativeTy<'_>) -> ir::Type {
         | NativeTy::Class(..)
         | NativeTy::Tuple(_)
         | NativeTy::Array(_)
+        | NativeTy::Map(..)
         | NativeTy::Function(_)
         | NativeTy::Cell(_)
         | NativeTy::Union(_)
@@ -171,6 +173,8 @@ enum Runtime {
     PanicDivisionByZero,
     PanicNegativeShift,
     PanicIndexOutOfBounds,
+    PanicMapKeyNotFound,
+    ErrorMapKeyNotFound,
     ErrorDivisionByZero,
     ErrorNegativeShift,
     ErrorIndexOutOfBounds,
@@ -203,6 +207,8 @@ impl Runtime {
             Self::PanicDivisionByZero => "baml_rt_panic_division_by_zero",
             Self::PanicNegativeShift => "baml_rt_panic_negative_shift",
             Self::PanicIndexOutOfBounds => "baml_rt_panic_index_out_of_bounds",
+            Self::PanicMapKeyNotFound => "baml_rt_panic_map_key_not_found",
+            Self::ErrorMapKeyNotFound => "baml_rt_error_map_key_not_found",
             Self::ErrorDivisionByZero => "baml_rt_error_division_by_zero",
             Self::ErrorNegativeShift => "baml_rt_error_negative_shift",
             Self::ErrorIndexOutOfBounds => "baml_rt_error_index_out_of_bounds",
@@ -236,7 +242,11 @@ impl Runtime {
             Self::StackSlow | Self::PollSlow | Self::AllocSlow => (vec![], vec![]),
             Self::PrintFloat => (vec![float], vec![]),
             Self::PrintBool => (vec![byte], vec![]),
-            Self::PanicIndexOutOfBounds | Self::Throw | Self::Rethrow => (vec![word, word], vec![]),
+            Self::PanicIndexOutOfBounds
+            | Self::PanicMapKeyNotFound
+            | Self::Throw
+            | Self::Rethrow => (vec![word, word], vec![]),
+            Self::ErrorMapKeyNotFound => (vec![word], vec![word]),
             Self::ErrorDivisionByZero | Self::ErrorNegativeShift => (vec![word, word], vec![word]),
             Self::ErrorIndexOutOfBounds => (vec![word, word, word], vec![word]),
             Self::Uncaught => (vec![word, word, word], vec![]),
@@ -277,6 +287,7 @@ enum Panic {
     DivisionByZero(ir::Value),
     NegativeShift(ir::Value),
     IndexOutOfBounds(ir::Value, ir::Value),
+    MapKeyNotFound,
 }
 
 /// The stack maps of one function: for each call, the offset of its return
@@ -728,9 +739,12 @@ impl<'db> Backend<'db> {
         bytes[layout::STRING_TEXT..layout::STRING_TEXT + text.len()]
             .copy_from_slice(text.as_bytes());
 
+        // Writable: a string's hash is cached in its header the first time
+        // it is asked for, and the seed it is computed with is the
+        // process's.
         let id = self
             .module
-            .declare_anonymous_data(false, false)
+            .declare_anonymous_data(true, false)
             .map_err(internal)?;
         self.define_data(id, DataDescription::new(), bytes)?;
         self.strings.insert(text.to_owned(), id);
@@ -982,6 +996,7 @@ pub(crate) fn generate<'db>(
         | NativeTy::Class(..)
         | NativeTy::Tuple(_)
         | NativeTy::Array(_)
+        | NativeTy::Map(..)
         | NativeTy::Function(_)
         | NativeTy::Cell(_)
         | NativeTy::Optional(_) => {
@@ -1981,6 +1996,16 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let tuple = self.read_place(base)?;
                 Ok(self.load_slot(&ty, tuple, bytes))
             }
+            Place::Index {
+                base,
+                index,
+                kind: IndexKind::Map,
+            } => {
+                let map_ty = self.place_ty(base)?;
+                let map = self.read_place(base)?;
+                let key = self.read_local(*index);
+                self.map_index(map, &map_ty, key)
+            }
             Place::Index { base, index, .. } => {
                 let ty = self.place_ty(place)?;
                 let array = self.read_place(base)?;
@@ -2099,6 +2124,16 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let (ty, bytes) = self.tuple_slot(base, *index)?;
                 let tuple = self.read_place(base)?;
                 self.store_slot(&ty, value, tuple, bytes);
+            }
+            Place::Index {
+                base,
+                index,
+                kind: IndexKind::Map,
+            } => {
+                let map_ty = self.place_ty(base)?;
+                let map = self.read_place(base)?;
+                let key = self.read_local(*index);
+                self.map_store(map, &map_ty, key, value)?;
             }
             Place::Index { base, index, .. } => {
                 let ty = self.place_ty(place)?;
@@ -2240,9 +2275,15 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             Rvalue::Discriminant(place) => self.read_place(place)?,
             Rvalue::Len(place) => {
+                let length_of = narrowed(self.place_ty(place)?);
                 let array = self.read_place(place)?;
-                self.array_view(array).0
+                if matches!(length_of, NativeTy::Map(..)) {
+                    self.map_length(array)
+                } else {
+                    self.array_view(array).0
+                }
             }
+            Rvalue::Map(_, _, entries) => self.map_literal(ty, entries)?,
             Rvalue::Array(_, elements)
             | Rvalue::Aggregate {
                 kind: AggregateKind::Array,
@@ -2443,6 +2484,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 Panic::IndexOutOfBounds(index, length) => {
                     (Runtime::ErrorIndexOutOfBounds, vec![mutator, index, length])
                 }
+                Panic::MapKeyNotFound => (Runtime::ErrorMapKeyNotFound, vec![mutator]),
             };
             let error = self
                 .emit_runtime_call(function, &arguments)?
@@ -2459,6 +2501,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 Panic::IndexOutOfBounds(index, length) => {
                     (Runtime::PanicIndexOutOfBounds, vec![index, length])
                 }
+                Panic::MapKeyNotFound => (Runtime::PanicMapKeyNotFound, vec![zero, zero]),
             };
             self.emit_runtime_call(function, &arguments)?;
             self.builder.ins().trap(TRAP_AFTER_PANIC);
@@ -2782,6 +2825,14 @@ impl<'a, 'db> Translator<'a, 'db> {
                 };
                 let presence = self.presence(optional, ty);
                 Ok(self.builder.ins().icmp_imm(int_condition, presence, 0))
+            }
+            BinaryMode::Map => {
+                let equal = self.map_equal(&left_ty, left_value, right_value)?;
+                Ok(if op == BinOp::Eq {
+                    equal
+                } else {
+                    self.builder.ins().bxor_imm(equal, 1)
+                })
             }
             BinaryMode::String if op == BinOp::Add => self.concat(&[left_value, right_value]),
             BinaryMode::String if matches!(op, BinOp::Eq | BinOp::Ne) => {
@@ -3124,6 +3175,18 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let array = self.operand(array)?;
                 let item = self.operand_as(item, &element)?;
                 self.array_push(array, item, &element)
+            }
+            (Intrinsic::EnumEq | Intrinsic::EnumNe, [left, right])
+                if matches!(self.operand_ty(left)?, NativeTy::Map(..)) =>
+            {
+                let ty = self.operand_ty(left)?;
+                let (left, right) = (self.operand(left)?, self.operand(right)?);
+                let equal = self.map_equal(&ty, left, right)?;
+                Ok(if intrinsic == Intrinsic::EnumEq {
+                    equal
+                } else {
+                    self.builder.ins().bxor_imm(equal, 1)
+                })
             }
             (Intrinsic::EnumEq | Intrinsic::EnumNe, [left, right]) => {
                 let (left, right) = (self.operand(left)?, self.operand(right)?);

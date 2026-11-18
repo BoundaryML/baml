@@ -35,9 +35,10 @@
 use std::alloc::{Layout, alloc, dealloc};
 
 use crate::layout::{
-    ARRAY_DATA, ARRAY_SIZE, KIND_ARRAY, KIND_FIXED, KIND_REFS, KIND_SLICE, KIND_STRING,
-    KIND_VALUES, SLICE_OFFSET, SLICE_PARENT, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS,
-    STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK, TYPE_STRING, WORD, words,
+    ARRAY_DATA, ARRAY_SIZE, ENTRIES_CAPACITY, ENTRIES_RECORDS, KIND_ARRAY, KIND_ENTRIES,
+    KIND_FIXED, KIND_REFS, KIND_SLICE, KIND_STRING, KIND_VALUES, SLICE_OFFSET, SLICE_PARENT,
+    STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK,
+    TYPE_STRING, WORD, words,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
@@ -248,6 +249,8 @@ pub struct Mutator {
     poll: u32,
     /// What the allocation slow path is asked for and what it answers.
     scratch: usize,
+    /// The seed of this process's hashes: see [`crate::map`].
+    hash_seed: u64,
     /// The true end of this mutator's span.
     span_end: usize,
     heap: Heap,
@@ -269,6 +272,7 @@ const _: () = {
     assert!(std::mem::offset_of!(Mutator, stack_limit) == crate::layout::MUTATOR_STACK_LIMIT);
     assert!(std::mem::offset_of!(Mutator, poll) == crate::layout::MUTATOR_POLL);
     assert!(std::mem::offset_of!(Mutator, scratch) == crate::layout::MUTATOR_SCRATCH);
+    assert!(std::mem::offset_of!(Mutator, hash_seed) == crate::layout::MUTATOR_HASH_SEED);
 };
 
 /// The top compiled frame of a stack, recorded where compiled code calls the
@@ -303,6 +307,7 @@ impl Mutator {
             stack_limit: 0,
             poll: 0,
             scratch: 0,
+            hash_seed: crate::map::seed(),
             span_end: space.end(),
             heap: Heap {
                 space,
@@ -565,6 +570,7 @@ impl<'a> Copy<'a> {
                     STORAGE_ELEMENTS + load(object + STORAGE_CAPACITY) * WORD
                 }
                 KIND_STRING => STRING_TEXT + words(load(object + STRING_LENGTHS) & 0xFFFF_FFFF),
+                KIND_ENTRIES => crate::layout::entries_size(load(object + ENTRIES_CAPACITY)),
                 kind => unreachable!("an object of unknown kind {kind}"),
             }
         }
@@ -830,6 +836,23 @@ impl<'a> Copy<'a> {
                     KIND_REFS => {
                         for index in 0..load(scan + STORAGE_CAPACITY) {
                             self.forward(scan + STORAGE_ELEMENTS + index * WORD);
+                        }
+                    }
+                    // A map's entries: the references of each record, at
+                    // the same offsets in every one. A record not in use
+                    // is zero.
+                    KIND_ENTRIES => {
+                        let offsets =
+                            (std::ptr::from_ref(info) as usize + TYPE_HEADER) as *const u32;
+                        let stride = info.size as usize;
+                        for record in 0..load(scan + ENTRIES_CAPACITY) {
+                            for index in 0..info.pointer_count as usize {
+                                self.forward(
+                                    scan + ENTRIES_RECORDS
+                                        + record * stride
+                                        + *offsets.add(index) as usize,
+                                );
+                            }
                         }
                     }
                     _ => {}

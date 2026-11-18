@@ -71,6 +71,10 @@ pub(crate) enum NativeTy<'db> {
     Tuple(Vec<NativeTy<'db>>),
     /// A reference to a growable array of the element type.
     Array(Box<NativeTy<'db>>),
+    /// A reference to a map from the first type to the second. A key is a
+    /// `string`, an `int`, a `bool`, an enum variant or a `float`, and a
+    /// value is one slot.
+    Map(Box<NativeTy<'db>>, Box<NativeTy<'db>>),
     /// A reference to a closure: a function value. Calling it passes the
     /// closure and then arguments of these types.
     Function(Box<Signature<'db>>),
@@ -97,6 +101,7 @@ impl NativeTy<'_> {
             | Self::Class(..)
             | Self::Tuple(_)
             | Self::Array(_)
+            | Self::Map(..)
             | Self::Function(_)
             | Self::Cell(_)
             | Self::Union(_)
@@ -149,6 +154,15 @@ pub(crate) fn type_argument(ty: Option<NativeTy<'_>>) -> TypeArg<'_> {
 /// `RuntimeTy` and `TyTemplate` are one family of types with the same
 /// variant names; the native type of either is found the same way, apart
 /// from how each names a type parameter.
+/// Whether the native runtime hashes and compares keys of this type
+/// itself: every other key type has a `hash` and an `equals` to call.
+pub(crate) fn is_map_key(ty: &NativeTy<'_>) -> bool {
+    matches!(
+        ty,
+        NativeTy::String | NativeTy::Int | NativeTy::Bool | NativeTy::Enum(_) | NativeTy::Float
+    )
+}
+
 macro_rules! native_type_of {
     ($name:ident, $family:ident, $parameter:pat => $slot:expr) => {
         pub(crate) fn $name<'db>(
@@ -221,6 +235,14 @@ macro_rules! native_type_of {
                         return None;
                     }
                     NativeTy::Array(Box::new(element))
+                }
+                $family::Map { key, value, .. } => {
+                    let key = $name(db, key, arguments)?;
+                    let value = $name(db, value, arguments)?;
+                    if !is_map_key(&key) || value.is_pair() || value == NativeTy::Null {
+                        return None;
+                    }
+                    NativeTy::Map(Box::new(key), Box::new(value))
                 }
                 $family::Function { params, ret, .. } => {
                     let params = params
@@ -838,9 +860,20 @@ pub(crate) fn place_ty<'db>(
             }
         }
         Place::Index {
+            base,
+            index,
             kind: IndexKind::Map,
-            ..
-        } => Err(Blocker::new("map index access", place.to_string())),
+        } => match narrowed(place_ty(db, body, base)?) {
+            NativeTy::Map(key, value) if local_ty(db, body, *index)? == *key => Ok(*value),
+            NativeTy::Map(..) => Err(Blocker::new(
+                "map index that is not of the key type",
+                place.to_string(),
+            )),
+            _ => Err(Blocker::new(
+                "index access on a non-map value",
+                place.to_string(),
+            )),
+        },
         Place::Index {
             base,
             index,
@@ -971,6 +1004,9 @@ pub(crate) fn assignable(expected: &NativeTy<'_>, found: &NativeTy<'_>) -> bool 
             (NativeTy::Array(expected), NativeTy::Array(found)) => {
                 expected.is_ref() && found.is_ref()
             }
+            (NativeTy::Map(expected_key, expected), NativeTy::Map(found_key, found)) => {
+                expected_key == found_key && expected.is_ref() && found.is_ref()
+            }
             // The type checker has decided the two function types agree;
             // what is left to ask is that a call passes the same registers.
             (NativeTy::Function(expected), NativeTy::Function(found)) => {
@@ -1002,6 +1038,8 @@ pub(crate) enum BinaryMode {
     /// An optional against `null`; only `==` and `!=`. The flag says the
     /// optional is the left operand.
     NullTest { optional_on_left: bool },
+    /// Two maps of string keys, compared key by key in whatever order.
+    Map,
 }
 
 pub(crate) fn is_comparison(op: BinOp) -> bool {
@@ -1040,6 +1078,16 @@ pub(crate) fn binary_typing<'db>(
         (NativeTy::String, NativeTy::String) if is_comparison(op) || op == BinOp::Add => {
             BinaryMode::String
         }
+        // The runtime compares the values, and calls no `equals`.
+        (NativeTy::Map(key, value), NativeTy::Map(other_key, other_value))
+            if equality
+                && **key == NativeTy::String
+                && key == other_key
+                && value == other_value
+                && is_map_key(value) =>
+        {
+            BinaryMode::Map
+        }
         (NativeTy::Optional(_) | NativeTy::Union(_) | NativeTy::Unknown, NativeTy::Null)
             if equality =>
         {
@@ -1063,7 +1111,7 @@ pub(crate) fn binary_typing<'db>(
             BinaryMode::Int => NativeTy::Int,
             BinaryMode::Float => NativeTy::Float,
             BinaryMode::String => NativeTy::String,
-            BinaryMode::Bool | BinaryMode::Null | BinaryMode::NullTest { .. } => {
+            BinaryMode::Bool | BinaryMode::Null | BinaryMode::NullTest { .. } | BinaryMode::Map => {
                 return Err(unsupported());
             }
         }
@@ -1085,6 +1133,7 @@ pub(crate) fn describe(ty: &NativeTy<'_>) -> &'static str {
         NativeTy::Class(..) => "class",
         NativeTy::Tuple(_) => "tuple",
         NativeTy::Array(_) => "array",
+        NativeTy::Map(..) => "map",
         NativeTy::Function(_) => "function",
         NativeTy::Cell(_) => "cell",
         NativeTy::Optional(_) => "optional",

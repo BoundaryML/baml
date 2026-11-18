@@ -21,6 +21,7 @@
 pub mod array;
 pub mod heap;
 pub mod layout;
+pub mod map;
 pub mod native;
 pub mod string;
 pub mod stubs;
@@ -67,6 +68,7 @@ pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
             unwind: &raw const baml_native_unwind as usize,
             functions: &raw const baml_native_functions as usize,
         };
+        map::randomize_seed();
         let mut mutator = Mutator::new(program, stress);
         mutator.set_base_frame(current_frame());
         baml_native_entry((&raw mut mutator).cast());
@@ -100,6 +102,10 @@ pub fn division_by_zero_text(dividend: i64) -> String {
 pub fn negative_shift_text(count: i64) -> String {
     format!("baml.panics.NegativeBitShift {{message: \"bit shift count is negative: {count}\"}}")
 }
+
+/// The text of an uncaught `baml.panics.MapKeyNotFound`, which does not say
+/// which key.
+pub const MAP_KEY_NOT_FOUND_TEXT: &str = "baml.panics.MapKeyNotFound {key: \"(unknown)\"}";
 
 /// The text of an uncaught `baml.panics.IndexOutOfBounds`.
 pub fn index_out_of_bounds_text(index: i64, length: i64) -> String {
