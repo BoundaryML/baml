@@ -605,6 +605,7 @@ impl NewArray<'_, Bool> {
 pub struct Natives;
 
 mod float;
+mod int;
 mod root;
 mod string;
 

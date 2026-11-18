@@ -1,0 +1,13 @@
+# Natives of `baml.Int`, implemented in `src/native/int.rs`.
+baml.Int.abs reentrant
+baml.Int.isqrt reentrant
+baml.Int.pow leaf
+baml.Int.ilog reentrant
+baml.Int.leading_zeros leaf
+baml.Int.leading_ones leaf
+baml.Int.trailing_zeros leaf
+baml.Int.trailing_ones leaf
+baml.Int.count_zeros leaf
+baml.Int.count_ones leaf
+baml.Int.parse reentrant
+baml.Int._random_in_range leaf
