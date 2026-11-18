@@ -3,29 +3,23 @@
 
 use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_mir::{
-    AggregateKind, Constant, Local, MirFunction, MirFunctionBody, MirFunctionKind, Operand,
-    OptLevel, Place, RuntimeTy, Rvalue, ShortCircuitKind, StatementKind, SwitchKey, Terminator,
-    TypeTest, function_display_name, lower_function,
+    AggregateKind, BoundFrame, Constant, Local, MirFunction, MirFunctionBody, MirFunctionKind,
+    Operand, OptLevel, Place, RuntimeTy, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
+    Terminator, TypeTest, function_display_name,
 };
 
 use crate::{
     Blocker,
     loops::{ArrayLoops, is_done_test, operand_local},
+    program::{Entry, FnKey, Needed},
     types::{
-        Body, NativeTy, assignable, binary_typing, class_layout, declared_ty, describe, local_ty,
-        narrowed, operand_ty, place_local, place_ty, unary_typing,
+        Body, NativeTy, Signature, assignable, binary_typing, class_layout, declared_ty, describe,
+        local_ty, narrowed, operand_ty, place_local, place_ty, unary_typing,
     },
 };
 
 /// The optimization level every function of a native program is lowered at.
 pub(crate) const OPT: OptLevel = OptLevel::Two;
-
-/// Parameter and result types of a function with a native calling convention.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub(crate) struct Signature<'db> {
-    pub(crate) params: Vec<NativeTy<'db>>,
-    pub(crate) result: NativeTy<'db>,
-}
 
 /// A standard library function implemented by the interpreter that native
 /// code implements itself, inline or in its runtime.
@@ -83,6 +77,8 @@ impl Intrinsic {
 pub(crate) enum Callee<'db> {
     Function(FunctionLoc<'db>),
     Intrinsic(Intrinsic),
+    /// The function value an operand holds.
+    Value,
 }
 
 /// The body of a function that has one in MIR.
@@ -109,11 +105,38 @@ pub(crate) fn signature<'db>(
     };
     let result = declared_ty(db, body, Local(0)).map_err(|blocker| rename(blocker, "result"))?;
     let params = (1..=mir.arity)
-        .map(|index| {
-            declared_ty(db, body, Local(index)).map_err(|blocker| rename(blocker, "parameter"))
+        .map(|index| match declared_ty(db, body, Local(index)) {
+            // A captured parameter arrives as its value; the function puts
+            // it in a cell.
+            Ok(NativeTy::Cell(content)) => Ok(*content),
+            Ok(ty) => Ok(ty),
+            Err(blocker) => Err(rename(blocker, "parameter")),
         })
         .collect::<Result<_, _>>()?;
     Ok(Signature { params, result })
+}
+
+/// The signature of a function declared in source.
+pub(crate) fn function_signature<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    function: FunctionLoc<'db>,
+) -> Result<Signature<'db>, Blocker> {
+    let mir = FnKey::new(function, Entry::Direct).mir(db)?;
+    signature(db, mir, body_of(mir)?)
+}
+
+/// The signature of the function value `function` bound to a receiver is:
+/// the function's, less its first parameter, which is returned beside it.
+fn bound_signature<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    function: FunctionLoc<'db>,
+) -> Result<(NativeTy<'db>, Signature<'db>), Blocker> {
+    let mut signature = function_signature(db, function)?;
+    if signature.params.is_empty() {
+        return Err(Blocker::new("bound method value", "without a receiver"));
+    }
+    let receiver = signature.params.remove(0);
+    Ok((receiver, signature))
 }
 
 /// What a call names directly: a function written in BAML source, or a
@@ -140,9 +163,7 @@ pub(crate) fn direct_callee<'db>(
             function_display_name(db, *func),
         )),
         Operand::Constant(_) => Err(Blocker::new("call of a non-function constant", "")),
-        Operand::Copy(place) | Operand::Move(place) => {
-            Err(Blocker::new("indirect call", place.to_string()))
-        }
+        Operand::Copy(_) | Operand::Move(_) => Ok(Callee::Value),
     }
 }
 
@@ -151,23 +172,29 @@ pub(crate) fn direct_callee<'db>(
 pub(crate) struct Checked<'db> {
     /// Every unsupported construct, in block order, without repeats.
     pub(crate) blockers: Vec<Blocker>,
-    /// The source functions it calls directly.
-    pub(crate) callees: Vec<FunctionLoc<'db>>,
+    /// The functions it calls directly or makes values of.
+    pub(crate) needed: Vec<Needed<'db>>,
 }
 
 pub(crate) fn check_function<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
+    key: &FnKey<'db>,
     mir: &MirFunction<'db>,
+    captures: &[NativeTy<'db>],
 ) -> Checked<'db> {
     let mut checker = Checker {
         db,
+        key,
         blockers: Vec::new(),
-        callees: Vec::new(),
+        needed: Vec::new(),
     };
     match body_of(mir) {
         Ok(body) => {
             checker.note(signature(db, mir, body).map(drop));
-            let body = &Body::new(db, body);
+            if key.entry == Entry::Bound {
+                checker.note(bound_signature(db, key.loc).map(drop));
+            }
+            let body = &Body::new(db, mir, body, captures);
             let loops = ArrayLoops::of(db, body);
             for block in &body.blocks {
                 if block.unwind.is_some() || block.landing.is_some() {
@@ -177,6 +204,7 @@ pub(crate) fn check_function<'db>(
                     )));
                 }
                 for statement in &block.statements {
+                    checker.statement_needs(body, &statement.kind);
                     checker.note(statement_supported(db, body, &loops, &statement.kind));
                 }
                 match &block.terminator {
@@ -192,17 +220,76 @@ pub(crate) fn check_function<'db>(
     }
     Checked {
         blockers: checker.blockers,
-        callees: checker.callees,
+        needed: checker.needed,
     }
 }
 
-struct Checker<'db> {
+struct Checker<'a, 'db> {
     db: &'db dyn baml_compiler2_mir::Db,
+    key: &'a FnKey<'db>,
     blockers: Vec<Blocker>,
-    callees: Vec<FunctionLoc<'db>>,
+    needed: Vec<Needed<'db>>,
 }
 
-impl<'db> Checker<'db> {
+impl<'db> Checker<'_, 'db> {
+    fn need(&mut self, key: FnKey<'db>, captures: Vec<NativeTy<'db>>) {
+        if !self
+            .needed
+            .iter()
+            .any(|needed| needed.key == key && needed.captures == captures)
+        {
+            self.needed.push(Needed { key, captures });
+        }
+    }
+
+    /// A function named where a value is expected is needed as one.
+    fn operand_needs(&mut self, operand: &Operand<'db>) {
+        if let Operand::Constant(Constant::Function(DeclRef::Source(function))) = operand {
+            self.need(FnKey::new(*function, Entry::Value), Vec::new());
+        }
+    }
+
+    /// The functions a statement makes values of.
+    fn statement_needs(&mut self, body: &Body<'_, 'db>, statement: &StatementKind<'db>) {
+        let StatementKind::Assign { value, .. } = statement else {
+            return;
+        };
+        match value {
+            Rvalue::Use(operand) => self.operand_needs(operand),
+            Rvalue::Array(_, operands)
+            | Rvalue::Aggregate {
+                fields: operands, ..
+            } => {
+                for operand in operands {
+                    self.operand_needs(operand);
+                }
+            }
+            Rvalue::MakeClosure {
+                lambda_idx,
+                captures,
+                ..
+            } => {
+                // A capture that is not a cell is reported by the statement's
+                // own check.
+                let captures = captures
+                    .iter()
+                    .map(|capture| match operand_ty(self.db, body, capture) {
+                        Ok(NativeTy::Cell(content)) => Some(*content),
+                        _ => None,
+                    })
+                    .collect::<Option<Vec<_>>>();
+                if let Some(captures) = captures {
+                    self.need(self.key.lambda(*lambda_idx), captures);
+                }
+            }
+            Rvalue::MakeBoundMethod {
+                func: DeclRef::Source(function),
+                ..
+            } => self.need(FnKey::new(*function, Entry::Bound), Vec::new()),
+            _ => {}
+        }
+    }
+
     fn note(&mut self, outcome: Result<(), Blocker>) {
         if let Err(blocker) = outcome
             && !self
@@ -220,11 +307,13 @@ impl<'db> Checker<'db> {
         loops: &ArrayLoops<'db>,
         terminator: &Terminator<'db>,
     ) {
-        if let Terminator::Call { callee, .. } = terminator
-            && let Ok(Callee::Function(function)) = direct_callee(self.db, callee)
-            && !self.callees.contains(&function)
-        {
-            self.callees.push(function);
+        if let Terminator::Call { callee, args, .. } = terminator {
+            if let Ok(Callee::Function(function)) = direct_callee(self.db, callee) {
+                self.need(FnKey::new(function, Entry::Direct), Vec::new());
+            }
+            for argument in args {
+                self.operand_needs(argument);
+            }
         }
         let outcome = if loops.start(terminator).is_some() || loops.step(terminator).is_some() {
             Ok(())
@@ -279,7 +368,7 @@ fn rvalue_name(value: &Rvalue<'_>) -> &'static str {
 fn all_assignable<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     body: &Body<'_, 'db>,
-    operands: &[Operand<'_>],
+    operands: &[Operand<'db>],
     mut expected: impl FnMut(usize) -> Option<NativeTy<'db>>,
     what: &str,
 ) -> Result<(), Blocker> {
@@ -404,6 +493,51 @@ pub(crate) fn rvalue_ty<'db>(
             )?;
             Ok(NativeTy::Class(*class))
         }
+        Rvalue::MakeClosure {
+            lambda_idx,
+            captures,
+            type_arg_templates,
+        } => {
+            if !type_arg_templates.is_empty() {
+                return Err(Blocker::new("closure that captures type arguments", ""));
+            }
+            for capture in captures {
+                if !matches!(operand_ty(db, body, capture)?, NativeTy::Cell(_)) {
+                    return Err(Blocker::new("closure capture that is not a cell", ""));
+                }
+            }
+            let lambda = body
+                .mir
+                .lambdas
+                .get(*lambda_idx)
+                .ok_or_else(|| Blocker::new("closure of a lambda that does not exist", ""))?;
+            // A lambda outside the subset is reported as its own blocked
+            // function.
+            let signature = signature(db, lambda, body_of(lambda)?)
+                .map_err(|_| Blocker::new("closure of a lambda outside the subset", ""))?;
+            Ok(NativeTy::Function(Box::new(signature)))
+        }
+        Rvalue::MakeBoundMethod {
+            func,
+            receiver,
+            frame,
+        } => {
+            let DeclRef::Source(function) = func else {
+                return Err(Blocker::new(
+                    "bound method value",
+                    function_display_name(db, *func),
+                ));
+            };
+            if !matches!(frame, BoundFrame::Receiver) {
+                return Err(Blocker::new("bound method value", "with type arguments"));
+            }
+            let (expected, signature) = bound_signature(db, *function)?;
+            let found = operand_ty(db, body, receiver)?;
+            if !found.is_ref() || !assignable(&expected, &found) {
+                return Err(Blocker::new("bound method value", describe(&found)));
+            }
+            Ok(NativeTy::Function(Box::new(signature)))
+        }
         other => Err(Blocker::new(rvalue_name(other), "")),
     }
 }
@@ -449,9 +583,10 @@ fn statement_supported<'db>(
                 place_ty(db, body, place).map(drop)
             }
         }
-        StatementKind::FreshCell { local, .. } => {
-            Err(Blocker::new("closure-captured local", local.to_string()))
-        }
+        StatementKind::FreshCell { local, .. } => match local_ty(db, body, *local)? {
+            NativeTy::Cell(_) => Ok(()),
+            _ => Err(Blocker::new("fresh cell for a local that has none", "")),
+        },
         StatementKind::Intrinsic { op, .. } => {
             Err(Blocker::new("compiler intrinsic", format!("{op:?}")))
         }
@@ -546,7 +681,7 @@ fn terminator_supported<'db>(
             unwind,
             ..
         } => {
-            let callee = direct_callee(db, callee)?;
+            let called = direct_callee(db, callee)?;
             if *has_trace {
                 return Err(Blocker::new("call with a trace attachment", ""));
             }
@@ -554,7 +689,31 @@ fn terminator_supported<'db>(
                 return Err(Blocker::new("catch or defer handler", "call"));
             }
             let result = local_ty(db, body, place_local(destination)?)?;
-            match callee {
+            match called {
+                Callee::Value => {
+                    let NativeTy::Function(expected) = narrowed(operand_ty(db, body, callee)?)
+                    else {
+                        return Err(Blocker::new("call of a value that is not a function", ""));
+                    };
+                    if *ntypeargs != 0 {
+                        return Err(Blocker::new("call with type arguments", "function value"));
+                    }
+                    let fits = expected.params.len() == args.len()
+                        && assignable(&result, &expected.result);
+                    if !fits {
+                        return Err(Blocker::new(
+                            "call that does not match its callee's layout",
+                            "function value",
+                        ));
+                    }
+                    all_assignable(
+                        db,
+                        body,
+                        args,
+                        |index| expected.params.get(index).cloned(),
+                        "argument",
+                    )
+                }
                 Callee::Intrinsic(intrinsic) => {
                     // Leading type arguments carry nothing native code needs.
                     let found = args
@@ -582,10 +741,7 @@ fn terminator_supported<'db>(
                     // A callee outside the subset is reported as its own
                     // blocked function; only a callee that will be compiled
                     // constrains the call.
-                    if let Ok(mir) = lower_function(db, function, OPT)
-                        && let Ok(callee_body) = body_of(mir)
-                        && let Ok(expected) = signature(db, mir, callee_body)
-                    {
+                    if let Ok(expected) = function_signature(db, function) {
                         let fits = expected.params.len() == found.len()
                             && expected
                                 .params

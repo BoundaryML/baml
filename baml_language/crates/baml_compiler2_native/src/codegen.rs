@@ -21,11 +21,11 @@
 
 use std::{collections::HashMap, fmt::Write as _};
 
-use baml_compiler2_hir::loc::FunctionLoc;
+use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, Constant, Local, MirFunction, MirFunctionBody, Operand, Place,
-    Rvalue, ShortCircuitKind, StatementKind, SwitchKey, Terminator, UnaryOp,
+    AggregateKind, BinOp, BlockId, CellId, Constant, Local, MirFunction, MirFunctionBody, Operand,
+    Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey, Terminator, UnaryOp,
 };
 use cranelift_codegen::{
     Context,
@@ -43,17 +43,15 @@ use cranelift_object::{ObjectBuilder, ObjectModule};
 
 use crate::{
     CompileError, CompileOptions,
-    check::{
-        Callee, Intrinsic, Signature, body_of, direct_callee, narrow_test_wants_reference,
-        signature,
-    },
+    check::{Callee, Intrinsic, body_of, direct_callee, narrow_test_wants_reference, signature},
     flow::{Flow, ProvenIndexes},
     layout,
     loops::{ArrayLoops, operand_local},
-    program::Program,
+    program::{Entry, FnKey, Program},
     types::{
-        BinaryMode, Body, NativeTy, binary_typing, class_layout, field_slots, is_comparison,
-        layout_slots, local_ty, narrowed, operand_ty, place_local, place_ty, unary_typing,
+        BinaryMode, Body, NativeTy, Signature, binary_typing, class_layout, field_slots,
+        is_comparison, layout_slots, local_ty, narrowed, operand_ty, place_local, place_ty,
+        unary_typing,
     },
 };
 
@@ -94,7 +92,12 @@ fn clif_type(ty: &NativeTy<'_>) -> ir::Type {
         NativeTy::Int | NativeTy::Enum => types::I64,
         NativeTy::Float => types::F64,
         NativeTy::Bool | NativeTy::Null => types::I8,
-        NativeTy::String | NativeTy::Class(_) | NativeTy::Array(_) | NativeTy::Optional(_) => WORD,
+        NativeTy::String
+        | NativeTy::Class(_)
+        | NativeTy::Array(_)
+        | NativeTy::Function(_)
+        | NativeTy::Cell(_)
+        | NativeTy::Optional(_) => WORD,
     }
 }
 
@@ -117,6 +120,12 @@ fn slot_access() -> MemFlags {
 
 /// ... the length and storage of an array, the capacity of its storage and
 /// the lengths of a string; ...
+/// A word of a closure, written once where the closure is made and never
+/// by the code that reads it.
+fn closure_access() -> MemFlags {
+    slot_access().with_readonly()
+}
+
 fn array_access() -> MemFlags {
     MemFlags::trusted().with_alias_region(Some(AliasRegion::Table))
 }
@@ -225,6 +234,12 @@ struct Backend<'db> {
     types: Vec<u8>,
     /// The type id of each class met: the offset of its entry in `types`.
     class_types: HashMap<ClassRef<'db>, usize>,
+    /// The type id of closures, by which of their captured words are
+    /// references.
+    closure_types: HashMap<Vec<bool>, usize>,
+    /// The closure standing for each function used as a value without
+    /// capturing anything.
+    function_values: HashMap<FuncId, DataId>,
     strings: HashMap<String, DataId>,
     stack_maps: Vec<(FuncId, FunctionStackMaps)>,
 }
@@ -260,6 +275,8 @@ impl<'db> Backend<'db> {
                 .flat_map(|word| word.to_ne_bytes())
                 .collect(),
             class_types: HashMap::new(),
+            closure_types: HashMap::new(),
+            function_values: HashMap::new(),
             strings: HashMap::new(),
             stack_maps: Vec::new(),
         })
@@ -272,12 +289,26 @@ impl<'db> Backend<'db> {
     /// The signature of a BAML function. Functions call each other with the
     /// tail convention, the one Cranelift has both tail calls and exception
     /// edges for on every target.
-    fn clif_signature(signature: &Signature<'_>) -> ir::Signature {
+    ///
+    /// A function entered through a value takes the closure first; one
+    /// entered as a bound method finds its receiver there.
+    fn clif_signature(signature: &Signature<'_>, entry: Entry) -> ir::Signature {
         let mut clif = ir::Signature::new(CallConv::Tail);
-        clif.params = signature
-            .params
-            .iter()
-            .map(|ty| AbiParam::new(clif_type(ty)))
+        let (closure, receiver) = match entry {
+            Entry::Direct => (false, 0),
+            Entry::Value => (true, 0),
+            Entry::Bound => (true, 1),
+        };
+        clif.params = closure
+            .then(|| AbiParam::new(WORD))
+            .into_iter()
+            .chain(
+                signature
+                    .params
+                    .iter()
+                    .skip(receiver)
+                    .map(|ty| AbiParam::new(clif_type(ty))),
+            )
             .collect();
         clif.returns = vec![AbiParam::new(clif_type(&signature.result))];
         clif
@@ -314,27 +345,75 @@ impl<'db> Backend<'db> {
         if let Some(id) = self.class_types.get(&class) {
             return *id;
         }
-        let id = self.types.len();
-        let references: Vec<u32> = fields
+        let references: Vec<usize> = fields
             .iter()
             .zip(field_slots(fields))
             .filter(|(field, _)| field.is_ref())
-            .map(|(_, slot)| table_word(layout::field_offset(slot)))
+            .map(|(_, slot)| layout::field_offset(slot))
             .collect();
+        let id = self.fixed_type(layout::instance_size(layout_slots(fields)), &references);
+        self.class_types.insert(class, id);
+        id
+    }
+
+    /// A new type of objects of `size` bytes with references at these byte
+    /// offsets.
+    fn fixed_type(&mut self, size: usize, references: &[usize]) -> usize {
+        let id = self.types.len();
         let entry = [
             layout::KIND_FIXED,
-            table_word(layout::instance_size(layout_slots(fields))),
+            table_word(size),
             table_word(references.len()),
             0,
         ];
-        for word in entry.into_iter().chain(references) {
+        for word in entry
+            .into_iter()
+            .chain(references.iter().map(|offset| table_word(*offset)))
+        {
             self.types.extend_from_slice(&word.to_ne_bytes());
         }
         // Entries start on a word, so that an id leaves the low header bits
         // to the collector.
         self.types.resize(layout::words(self.types.len()), 0);
-        self.class_types.insert(class, id);
         id
+    }
+
+    /// The type id of closures whose captured words are references where
+    /// `references` says so.
+    fn closure_type(&mut self, references: &[bool]) -> usize {
+        if let Some(id) = self.closure_types.get(references) {
+            return *id;
+        }
+        let offsets: Vec<usize> = references
+            .iter()
+            .enumerate()
+            .filter(|(_, is_ref)| **is_ref)
+            .map(|(index, _)| layout::CLOSURE_CAPTURES + index * layout::WORD)
+            .collect();
+        let size = layout::CLOSURE_CAPTURES + references.len() * layout::WORD;
+        let id = self.fixed_type(size, &offsets);
+        self.closure_types.insert(references.to_vec(), id);
+        id
+    }
+
+    /// The closure that stands for a function used as a value: an object in
+    /// the executable's data that captures nothing.
+    fn function_value(&mut self, function: FuncId) -> Result<DataId, CompileError> {
+        if let Some(id) = self.function_values.get(&function) {
+            return Ok(*id);
+        }
+        let mut bytes = vec![0; layout::CLOSURE_CAPTURES];
+        bytes[..layout::HEADER].copy_from_slice(&self.closure_type(&[]).to_ne_bytes());
+        let mut description = DataDescription::new();
+        let code = self.module.declare_func_in_data(function, &mut description);
+        description.write_function_addr(table_word(layout::CLOSURE_CODE), code);
+        let id = self
+            .module
+            .declare_anonymous_data(false, false)
+            .map_err(internal)?;
+        self.define_data(id, description, bytes)?;
+        self.function_values.insert(function, id);
+        Ok(id)
     }
 
     /// Emit the type table.
@@ -409,6 +488,7 @@ impl<'db> Backend<'db> {
 
 struct Declared<'db> {
     id: FuncId,
+    entry: Entry,
     signature: Signature<'db>,
     /// Whether the function checks the stack limit on entry.
     checks_stack: bool,
@@ -469,7 +549,7 @@ pub(crate) fn generate<'db>(
 
     // Declare everything first: calls can go forward and in cycles.
     let mut bodies = Vec::with_capacity(program.functions.len());
-    let mut declared: HashMap<FunctionLoc<'db>, Declared<'db>> = HashMap::new();
+    let mut declared: HashMap<FnKey<'db>, Declared<'db>> = HashMap::new();
     for (index, function) in program.functions.iter().enumerate() {
         let mir = function
             .mir
@@ -481,24 +561,25 @@ pub(crate) fn generate<'db>(
             .declare_function(
                 &symbol_name(index, &function.name),
                 Linkage::Local,
-                &Backend::clif_signature(&signature),
+                &Backend::clif_signature(&signature, function.key.entry),
             )
             .map_err(internal)?;
         declared.insert(
-            function.loc,
+            function.key.clone(),
             Declared {
                 id,
+                entry: function.key.entry,
                 signature,
                 checks_stack: checks_stack(db, body),
             },
         );
-        bodies.push((function, mir, Body::new(db, body)));
+        bodies.push((function, mir, Body::new(db, mir, body, &function.captures)));
     }
 
     let entry = program
         .functions
         .first()
-        .and_then(|function| declared.get(&function.loc))
+        .and_then(|function| declared.get(&function.key))
         .ok_or_else(|| internal("a program has an entry function"))?;
     if !entry.signature.params.is_empty() {
         return Err(CompileError::EntryTakesArguments);
@@ -509,7 +590,12 @@ pub(crate) fn generate<'db>(
         NativeTy::Bool => Some(Runtime::PrintBool),
         NativeTy::String => Some(Runtime::PrintString),
         NativeTy::Null => None,
-        NativeTy::Enum | NativeTy::Class(_) | NativeTy::Array(_) | NativeTy::Optional(_) => {
+        NativeTy::Enum
+        | NativeTy::Class(_)
+        | NativeTy::Array(_)
+        | NativeTy::Function(_)
+        | NativeTy::Cell(_)
+        | NativeTy::Optional(_) => {
             return Err(CompileError::EntryResultNotPrintable);
         }
     };
@@ -517,12 +603,13 @@ pub(crate) fn generate<'db>(
     let mut context = backend.module.make_context();
     let mut builder_context = FunctionBuilderContext::new();
     for (function, mir, body) in bodies {
-        let this = &declared[&function.loc];
-        context.func.signature = Backend::clif_signature(&this.signature);
+        let this = &declared[&function.key];
+        context.func.signature = Backend::clif_signature(&this.signature, this.entry);
         Translator::new(
             db,
             &mut backend,
             &declared,
+            &function.key,
             &body,
             &mut context.func,
             &mut builder_context,
@@ -651,9 +738,12 @@ fn entry_shim(
 struct Translator<'a, 'db> {
     db: &'db dyn baml_compiler2_mir::Db,
     backend: &'a mut Backend<'db>,
-    declared: &'a HashMap<FunctionLoc<'db>, Declared<'db>>,
+    declared: &'a HashMap<FnKey<'db>, Declared<'db>>,
+    key: &'a FnKey<'db>,
     body: &'a Body<'a, 'db>,
     builder: FunctionBuilder<'a>,
+    /// The closure this function was entered through, when it was.
+    closure: Variable,
     /// The variable of each local that carries a value; `None` for a `null`
     /// local and for a local of a type outside the subset, which a checked
     /// body never reads or writes.
@@ -692,7 +782,8 @@ impl<'a, 'db> Translator<'a, 'db> {
     fn new(
         db: &'db dyn baml_compiler2_mir::Db,
         backend: &'a mut Backend<'db>,
-        declared: &'a HashMap<FunctionLoc<'db>, Declared<'db>>,
+        declared: &'a HashMap<FnKey<'db>, Declared<'db>>,
+        key: &'a FnKey<'db>,
         body: &'a Body<'a, 'db>,
         function: &'a mut ir::Function,
         builder_context: &'a mut FunctionBuilderContext,
@@ -713,6 +804,8 @@ impl<'a, 'db> Translator<'a, 'db> {
         let blocks = body.blocks.iter().map(|_| builder.create_block()).collect();
         let loops = ArrayLoops::of(db, body);
         let worker = builder.declare_var(WORD);
+        let closure = builder.declare_var(WORD);
+        builder.declare_var_needs_stack_map(closure);
         let mut iterator_variables = HashMap::new();
         let mut item_variables = HashMap::new();
         for index in 0..body.locals.len() {
@@ -738,8 +831,10 @@ impl<'a, 'db> Translator<'a, 'db> {
             db,
             backend,
             declared,
+            key,
             body,
             builder,
+            closure,
             variables,
             blocks,
             function_refs: HashMap::new(),
@@ -762,13 +857,56 @@ impl<'a, 'db> Translator<'a, 'db> {
         let entry = self.builder.create_block();
         self.builder.append_block_params_for_function_params(entry);
         self.builder.switch_to_block(entry);
+        let mut arriving = self.builder.block_params(entry).to_vec().into_iter();
+        if self.key.entry != Entry::Direct {
+            let closure = arriving.next().expect("a closure parameter");
+            self.builder.def_var(self.closure, closure);
+        }
+        // A captured parameter waits in a variable of its own until its
+        // cell can be allocated.
+        let mut captured = Vec::new();
         for index in 1..=mir.arity {
-            let value = self.builder.block_params(entry)[index - 1];
-            self.write_local(Local(index), value);
+            let local = Local(index);
+            let ty = self.local_ty(local)?;
+            let content = match &ty {
+                NativeTy::Cell(content) => content,
+                other => other,
+            };
+            let value = if index == 1 && self.key.entry == Entry::Bound {
+                let closure = self.builder.use_var(self.closure);
+                let receiver = self.builder.ins().load(
+                    clif_type(content),
+                    closure_access(),
+                    closure,
+                    offset(layout::CLOSURE_CAPTURES),
+                );
+                self.track(receiver, content)
+            } else {
+                arriving.next().expect("a parameter per argument")
+            };
+            if let NativeTy::Cell(content) = &ty {
+                if **content != NativeTy::Null {
+                    let waiting = self.builder.declare_var(clif_type(content));
+                    if content.is_ref() {
+                        self.builder.declare_var_needs_stack_map(waiting);
+                    }
+                    self.builder.def_var(waiting, value);
+                    captured.push((local, (**content).clone(), Some(waiting)));
+                } else {
+                    captured.push((local, NativeTy::Null, None));
+                }
+            } else {
+                self.write_local(local, value);
+            }
         }
         self.read_worker();
         if checks_stack {
             self.check_stack()?;
+        }
+        for (local, content, waiting) in captured {
+            let value = waiting.map(|waiting| self.builder.use_var(waiting));
+            let cell = self.new_cell(&content, value)?;
+            self.write_local(local, cell);
         }
         let first = self.block(self.body.entry);
         self.builder.ins().jump(first, &[]);
@@ -816,7 +954,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                                 match direct_callee(self.db, callee) {
                                     Ok(Callee::Function(function)) => self
                                         .declared
-                                        .get(&function)
+                                        .get(&FnKey::new(function, Entry::Direct))
                                         .is_some_and(|callee| callee.checks_stack),
                                     _ => false,
                                 }
@@ -1107,8 +1245,100 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let element = self.indexed(base, array, *index)?;
                 Ok(self.load_slot(&ty, element, 0))
             }
-            Place::Capture(_) | Place::Deref(_) => Err(internal("a checked place is not a cell")),
+            Place::Capture(index) => {
+                let closure = self.builder.use_var(self.closure);
+                let cell = self.builder.ins().load(
+                    WORD,
+                    closure_access(),
+                    closure,
+                    offset(layout::CLOSURE_CAPTURES + index * layout::WORD),
+                );
+                self.builder.declare_value_needs_stack_map(cell);
+                Ok(cell)
+            }
+            Place::Deref(cell) => {
+                let ty = self.place_ty(place)?;
+                let cell = self.cell(*cell)?;
+                Ok(self.load_slot(&ty, cell, layout::CELL_VALUE))
+            }
         }
+    }
+
+    /// The address of a cell.
+    fn cell(&mut self, cell: CellId) -> Result<ir::Value, CompileError> {
+        self.read_place(&match cell {
+            CellId::Local(local) => Place::Local(local),
+            CellId::Capture(index) => Place::Capture(index),
+        })
+    }
+
+    /// A new cell for a value of type `content`, holding `value` or, without
+    /// one, `null`.
+    fn new_cell(
+        &mut self,
+        content: &NativeTy<'db>,
+        value: Option<ir::Value>,
+    ) -> Result<ir::Value, CompileError> {
+        let (cell_type, slots) = if content.is_pair() {
+            (layout::TYPE_CELL_PAIR, 2)
+        } else if content.is_ref() {
+            (layout::TYPE_CELL_REF, 1)
+        } else {
+            (layout::TYPE_CELL_VALUE, 1)
+        };
+        let cell = self.allocate(layout::instance_size(slots))?;
+        let cell_type = self.word_const(cell_type);
+        self.builder.ins().store(slot_access(), cell_type, cell, 0);
+        match value {
+            Some(value) => self.store_slot(content, value, cell, layout::CELL_VALUE),
+            None => {
+                let zero = self.word_const(0);
+                for slot in 0..slots {
+                    self.builder.ins().store(
+                        slot_access(),
+                        zero,
+                        cell,
+                        offset(layout::field_offset(slot)),
+                    );
+                }
+            }
+        }
+        Ok(cell)
+    }
+
+    /// A new closure over `captured`, entered at `code`.
+    fn closure(
+        &mut self,
+        code: FuncId,
+        captured: &[(ir::Value, bool)],
+    ) -> Result<ir::Value, CompileError> {
+        let references: Vec<bool> = captured.iter().map(|(_, is_ref)| *is_ref).collect();
+        let closure_type = self.backend.closure_type(&references);
+        let closure = self.allocate(layout::CLOSURE_CAPTURES + captured.len() * layout::WORD)?;
+        let closure_type = self.word_const(closure_type);
+        self.builder
+            .ins()
+            .store(slot_access(), closure_type, closure, 0);
+        let code = self.function_ref(code);
+        let code = self.builder.ins().func_addr(WORD, code);
+        self.builder
+            .ins()
+            .store(slot_access(), code, closure, offset(layout::CLOSURE_CODE));
+        for (index, (value, _)) in captured.iter().enumerate() {
+            self.builder.ins().store(
+                slot_access(),
+                *value,
+                closure,
+                offset(layout::CLOSURE_CAPTURES + index * layout::WORD),
+            );
+        }
+        Ok(closure)
+    }
+
+    fn declared(&self, key: &FnKey<'db>) -> Result<&'a Declared<'db>, CompileError> {
+        self.declared
+            .get(key)
+            .ok_or_else(|| internal("a function that is used is part of the program"))
     }
 
     fn write_place(&mut self, place: &Place, value: ir::Value) -> Result<(), CompileError> {
@@ -1125,8 +1355,11 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let element = self.indexed(base, array, *index)?;
                 self.store_slot(&ty, value, element, 0);
             }
-            Place::Capture(_) | Place::Deref(_) => {
-                return Err(internal("a checked place is not a cell"));
+            Place::Capture(_) => return Err(internal("a capture is never assigned")),
+            Place::Deref(cell) => {
+                let ty = self.place_ty(place)?;
+                let cell = self.cell(*cell)?;
+                self.store_slot(&ty, value, cell, layout::CELL_VALUE);
             }
         }
         Ok(())
@@ -1147,6 +1380,11 @@ impl<'a, 'db> Translator<'a, 'db> {
             Operand::Constant(Constant::String(text)) => {
                 let string = self.backend.string_constant(text)?;
                 Ok(self.data_address(string))
+            }
+            Operand::Constant(Constant::Function(DeclRef::Source(function))) => {
+                let code = self.declared(&FnKey::new(*function, Entry::Value))?.id;
+                let closure = self.backend.function_value(code)?;
+                Ok(self.data_address(closure))
             }
             Operand::Constant(_) => Err(internal("a checked operand is a supported constant")),
         }
@@ -1176,6 +1414,20 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let (value, found) = self.rvalue(value, &expected)?;
                 let value = self.coerce(value, &found, &expected);
                 self.write_place(destination, value)
+            }
+            StatementKind::FreshCell { local, carry_value } => {
+                let NativeTy::Cell(content) = self.local_ty(*local)? else {
+                    return Err(internal("a checked fresh cell is for a captured local"));
+                };
+                let carried = if *carry_value {
+                    let old = self.read_local(*local);
+                    Some(self.load_slot(&content, old, layout::CELL_VALUE))
+                } else {
+                    None
+                };
+                let cell = self.new_cell(&content, carried)?;
+                self.write_local(*local, cell);
+                Ok(())
             }
             _ => Err(internal("a checked statement is an assignment")),
         }
@@ -1238,6 +1490,27 @@ impl<'a, 'db> Translator<'a, 'db> {
                 kind: AggregateKind::Class { class, .. },
                 fields,
             } => self.instance(*class, fields)?,
+            Rvalue::MakeClosure {
+                lambda_idx,
+                captures,
+                ..
+            } => {
+                let cells = captures
+                    .iter()
+                    .map(|capture| Ok((self.operand(capture)?, true)))
+                    .collect::<Result<Vec<_>, CompileError>>()?;
+                let code = self.declared(&self.key.lambda(*lambda_idx))?.id;
+                self.closure(code, &cells)?
+            }
+            Rvalue::MakeBoundMethod {
+                func: DeclRef::Source(function),
+                receiver,
+                ..
+            } => {
+                let receiver = self.operand(receiver)?;
+                let code = self.declared(&FnKey::new(*function, Entry::Bound))?.id;
+                self.closure(code, &[(receiver, true)])?
+            }
             _ => return Err(internal("a checked rvalue is supported")),
         })
     }
@@ -2186,11 +2459,32 @@ impl<'a, 'db> Translator<'a, 'db> {
                             .ok_or_else(|| internal("a checked builtin call has a result"))?;
                         (self.intrinsic(intrinsic, arguments)?, produced)
                     }
+                    Callee::Value => {
+                        let NativeTy::Function(signature) = narrowed(self.operand_ty(callee)?)
+                        else {
+                            return Err(internal("a checked call is of a function value"));
+                        };
+                        let closure = self.operand(callee)?;
+                        let mut arguments = vec![closure];
+                        for (argument, ty) in args.iter().zip(&signature.params) {
+                            arguments.push(self.operand_as(argument, ty)?);
+                        }
+                        let code = self.builder.ins().load(
+                            WORD,
+                            closure_access(),
+                            closure,
+                            offset(layout::CLOSURE_CODE),
+                        );
+                        let clif = Backend::clif_signature(&signature, Entry::Value);
+                        let clif = self.builder.import_signature(clif);
+                        // The callee can collect, which moves storage.
+                        self.forget_arrays();
+                        let call = self.builder.ins().call_indirect(clif, code, &arguments);
+                        self.read_worker();
+                        (self.builder.inst_results(call)[0], signature.result)
+                    }
                     Callee::Function(function) => {
-                        let callee = self
-                            .declared
-                            .get(&function)
-                            .ok_or_else(|| internal("a called function is part of the program"))?;
+                        let callee = self.declared(&FnKey::new(function, Entry::Direct))?;
                         let arguments = args
                             .iter()
                             .zip(&callee.signature.params)

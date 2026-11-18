@@ -157,7 +157,7 @@ fn operand_int(operand: &Operand<'_>) -> Option<i64> {
 }
 
 /// The local a terminator assigns, if it assigns one.
-fn terminator_destination(terminator: &Terminator<'_>) -> Option<Local> {
+pub(crate) fn terminator_destination(terminator: &Terminator<'_>) -> Option<Local> {
     let place = match terminator {
         Terminator::NarrowBind { destination, .. } => return Some(*destination),
         Terminator::Call { destination, .. }

@@ -4,17 +4,36 @@
 //! Both the support check and code generation go through these functions, so
 //! a construct is accepted exactly when code can be generated for it.
 
+use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::{
     extern_loc::ClassRef,
     layout::{class_fields, class_generic_params, class_head, class_ref_of},
 };
 use baml_compiler2_mir::{
-    BinOp, Constant, IndexKind, Local, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
-    StatementKind, UnaryOp, resolved_aliases_for_package,
+    BinOp, CellId, Constant, IndexKind, Local, MirFunction, MirFunctionBody, Operand, Place,
+    RuntimeTy, Rvalue, StatementKind, UnaryOp, resolved_aliases_for_package,
 };
 use baml_type::Literal;
 
-use crate::Blocker;
+use crate::{Blocker, check::function_signature, flow::terminator_destination};
+
+/// Parameter and result types of a function with a native calling convention.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) struct Signature<'db> {
+    pub(crate) params: Vec<NativeTy<'db>>,
+    pub(crate) result: NativeTy<'db>,
+}
+
+/// What a value is to the machine: which register class it travels in and
+/// whether the collector follows it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Repr {
+    Int,
+    Float,
+    Byte,
+    Ref,
+    Pair,
+}
 
 /// A type whose values native code knows the representation of. There are no
 /// tags: the static type alone says what the bits mean.
@@ -37,6 +56,12 @@ pub(crate) enum NativeTy<'db> {
     Class(ClassRef<'db>),
     /// A reference to a growable array of the element type.
     Array(Box<NativeTy<'db>>),
+    /// A reference to a closure: a function value. Calling it passes the
+    /// closure and then arguments of these types.
+    Function(Box<Signature<'db>>),
+    /// A reference to the cell holding a local that a closure captures.
+    /// Never the type of a source value: only of the local itself.
+    Cell(Box<NativeTy<'db>>),
     /// A type or `null`. For a reference type it is the same reference,
     /// with zero for `null`. For an `int`, `float` or `bool` it is a pair of
     /// words: the value's bits, and whether there is a value at all.
@@ -47,7 +72,9 @@ impl NativeTy<'_> {
     /// Whether a value is a pointer the collector must know about.
     pub(crate) fn is_ref(&self) -> bool {
         match self {
-            Self::String | Self::Class(_) | Self::Array(_) => true,
+            Self::String | Self::Class(_) | Self::Array(_) | Self::Function(_) | Self::Cell(_) => {
+                true
+            }
             Self::Optional(inner) => inner.is_ref(),
             Self::Int | Self::Float | Self::Bool | Self::Null | Self::Enum => false,
         }
@@ -56,6 +83,16 @@ impl NativeTy<'_> {
     /// Whether a value is an optional scalar: a pair of words.
     pub(crate) fn is_pair(&self) -> bool {
         matches!(self, Self::Optional(inner) if !inner.is_ref())
+    }
+
+    pub(crate) fn repr(&self) -> Repr {
+        match self {
+            Self::Int | Self::Enum => Repr::Int,
+            Self::Float => Repr::Float,
+            Self::Bool | Self::Null => Repr::Byte,
+            _ if self.is_pair() => Repr::Pair,
+            _ => Repr::Ref,
+        }
     }
 
     /// How many slots a value takes in an object.
@@ -90,6 +127,14 @@ pub(crate) fn native_ty<'db>(
                 return None;
             }
             NativeTy::Array(Box::new(element))
+        }
+        RuntimeTy::Function { params, ret, .. } => {
+            let params = params
+                .iter()
+                .map(|param| native_ty(db, &param.ty))
+                .collect::<Option<_>>()?;
+            let result = native_ty(db, ret)?;
+            NativeTy::Function(Box::new(Signature { params, result }))
         }
         RuntimeTy::Union(members) => {
             let [first, second] = &members[..] else {
@@ -194,9 +239,13 @@ pub(crate) fn class_layout<'db>(
 /// After the optimizer has replaced an object by its fields, a temporary can
 /// be left declared with the type of something it no longer holds, or as
 /// `unknown`. Such a local is only ever a copy of other values, so its type
-/// is theirs.
+/// is theirs wherever its declaration could not hold them.
 pub(crate) struct Body<'a, 'db> {
-    body: &'a MirFunctionBody<'db>,
+    /// The function the body belongs to: closures name its lambdas.
+    pub(crate) mir: &'a MirFunction<'db>,
+    inner: &'a MirFunctionBody<'db>,
+    /// What the cells a lambda captures hold, in capture order.
+    captures: &'a [NativeTy<'db>],
     inferred: Vec<Option<NativeTy<'db>>>,
 }
 
@@ -204,16 +253,44 @@ impl<'db> std::ops::Deref for Body<'_, 'db> {
     type Target = MirFunctionBody<'db>;
 
     fn deref(&self) -> &Self::Target {
-        self.body
+        self.inner
     }
 }
 
 impl<'a, 'db> Body<'a, 'db> {
-    pub(crate) fn new(db: &'db dyn baml_compiler2_mir::Db, body: &'a MirFunctionBody<'db>) -> Self {
+    pub(crate) fn new(
+        db: &'db dyn baml_compiler2_mir::Db,
+        mir: &'a MirFunction<'db>,
+        body: &'a MirFunctionBody<'db>,
+        captures: &'a [NativeTy<'db>],
+    ) -> Self {
         let mut typed = Self {
-            body,
+            mir,
+            inner: body,
+            captures,
             inferred: vec![None; body.locals.len()],
         };
+        // A local written any other way than by copying has the type it is
+        // declared with.
+        let mut copied_only = vec![true; body.locals.len()];
+        for parameter in copied_only.iter_mut().take(mir.arity + 1) {
+            *parameter = false;
+        }
+        for block in &body.blocks {
+            for statement in &block.statements {
+                match &statement.kind {
+                    StatementKind::Assign {
+                        destination: Place::Local(local),
+                        value,
+                    } if !matches!(value, Rvalue::Use(_)) => copied_only[local.0] = false,
+                    StatementKind::FreshCell { local, .. } => copied_only[local.0] = false,
+                    _ => {}
+                }
+            }
+            if let Some(local) = block.terminator.as_ref().and_then(terminator_destination) {
+                copied_only[local.0] = false;
+            }
+        }
         // A local assigned values of two different types has no type.
         let mut conflicting = vec![false; body.locals.len()];
         loop {
@@ -227,15 +304,18 @@ impl<'a, 'db> Body<'a, 'db> {
                     continue;
                 };
                 let declaration = body.local(*local);
-                if declaration.is_captured
-                    || conflicting[local.0]
-                    || native_ty(db, &declaration.ty).is_some()
-                {
+                if declaration.is_captured || conflicting[local.0] || !copied_only[local.0] {
                     continue;
                 }
                 let Ok(found) = operand_ty(db, &typed, operand) else {
                     continue;
                 };
+                // A declaration that can hold what is copied stands.
+                if native_ty(db, &declaration.ty)
+                    .is_some_and(|declared| assignable(&declared, &found))
+                {
+                    continue;
+                }
                 match &typed.inferred[local.0] {
                     None => {
                         typed.inferred[local.0] = Some(found);
@@ -256,18 +336,32 @@ impl<'a, 'db> Body<'a, 'db> {
     }
 }
 
-/// The type a local is declared with, when it is a native one.
+/// The type a local is declared with, when it is a native one. A local
+/// that a closure captures is a cell of its declared type.
 pub(crate) fn declared_ty<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     body: &MirFunctionBody<'_>,
     local: Local,
 ) -> Result<NativeTy<'db>, Blocker> {
     let declaration = body.local(local);
-    if declaration.is_captured {
-        return Err(Blocker::new("closure-captured local", local.to_string()));
+    let ty = native_ty(db, &declaration.ty)
+        .ok_or_else(|| unsupported_type(&declaration.ty, local.to_string()))?;
+    Ok(if declaration.is_captured {
+        NativeTy::Cell(Box::new(ty))
+    } else {
+        ty
+    })
+}
+
+/// What the cell a place names holds.
+fn cell_content<'db>(ty: NativeTy<'db>, place: &Place) -> Result<NativeTy<'db>, Blocker> {
+    match ty {
+        NativeTy::Cell(content) => Ok(*content),
+        _ => Err(Blocker::new(
+            "closure cell access outside a cell",
+            place.to_string(),
+        )),
     }
-    native_ty(db, &declaration.ty)
-        .ok_or_else(|| unsupported_type(&declaration.ty, local.to_string()))
 }
 
 pub(crate) fn local_ty<'db>(
@@ -346,13 +440,22 @@ pub(crate) fn place_ty<'db>(
             kind: IndexKind::Tuple,
             ..
         } => Err(Blocker::new("tuple index access", place.to_string())),
-        Place::Capture(_) | Place::Deref(_) => {
-            Err(Blocker::new("closure cell access", place.to_string()))
+        Place::Capture(index) => body
+            .captures
+            .get(*index)
+            .map(|content| NativeTy::Cell(Box::new(content.clone())))
+            .ok_or_else(|| Blocker::new("capture outside its closure", place.to_string())),
+        Place::Deref(CellId::Local(local)) => cell_content(local_ty(db, body, *local)?, place),
+        Place::Deref(CellId::Capture(index)) => {
+            cell_content(place_ty(db, body, &Place::Capture(*index))?, place)
         }
     }
 }
 
-pub(crate) fn constant_ty<'db>(constant: &Constant<'_>) -> Result<NativeTy<'db>, Blocker> {
+pub(crate) fn constant_ty<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    constant: &Constant<'db>,
+) -> Result<NativeTy<'db>, Blocker> {
     match constant {
         Constant::Int(_) => Ok(NativeTy::Int),
         Constant::Float(_) => Ok(NativeTy::Float),
@@ -361,9 +464,13 @@ pub(crate) fn constant_ty<'db>(constant: &Constant<'_>) -> Result<NativeTy<'db>,
         Constant::String(_) => Ok(NativeTy::String),
         Constant::Bigint(_) => Err(Blocker::new("bigint value", "constant")),
         Constant::OmittedArg => Err(Blocker::new("defaulted argument", "")),
-        Constant::Function(_) | Constant::GenericFunction { .. } => {
-            Err(Blocker::new("function value", "constant"))
+        Constant::Function(DeclRef::Source(function)) => Ok(NativeTy::Function(Box::new(
+            function_signature(db, *function)?,
+        ))),
+        Constant::Function(DeclRef::External(_)) => {
+            Err(Blocker::new("function value", "a function without source"))
         }
+        Constant::GenericFunction { .. } => Err(Blocker::new("function value", "generic")),
         Constant::GlobalItem(_) => Err(Blocker::new("global read", "")),
         Constant::EnumVariant { .. } => Ok(NativeTy::Enum),
     }
@@ -372,11 +479,11 @@ pub(crate) fn constant_ty<'db>(constant: &Constant<'_>) -> Result<NativeTy<'db>,
 pub(crate) fn operand_ty<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     body: &Body<'_, 'db>,
-    operand: &Operand<'_>,
+    operand: &Operand<'db>,
 ) -> Result<NativeTy<'db>, Blocker> {
     match operand {
         Operand::Copy(place) | Operand::Move(place) => place_ty(db, body, place),
-        Operand::Constant(constant) => constant_ty(constant),
+        Operand::Constant(constant) => constant_ty(db, constant),
     }
 }
 
@@ -386,10 +493,23 @@ pub(crate) fn operand_ty<'db>(
 pub(crate) fn assignable(expected: &NativeTy<'_>, found: &NativeTy<'_>) -> bool {
     expected == found
         || match (expected, found) {
-            (NativeTy::Optional(inner), found) => **inner == *found || *found == NativeTy::Null,
+            (NativeTy::Optional(inner), found) => {
+                *found == NativeTy::Null || assignable(inner, found)
+            }
             // Flow narrowing: MIR reads an optional as its reference where
             // the checker proved it is not null.
-            (expected, NativeTy::Optional(inner)) => **inner == *expected,
+            (expected, NativeTy::Optional(inner)) => assignable(expected, inner),
+            // The type checker has decided the two function types agree;
+            // what is left to ask is that a call passes the same registers.
+            (NativeTy::Function(expected), NativeTy::Function(found)) => {
+                expected.params.len() == found.params.len()
+                    && expected.result.repr() == found.result.repr()
+                    && expected
+                        .params
+                        .iter()
+                        .zip(&found.params)
+                        .all(|(expected, found)| expected.repr() == found.repr())
+            }
             _ => false,
         }
 }
@@ -482,6 +602,8 @@ pub(crate) fn describe(ty: &NativeTy<'_>) -> &'static str {
         NativeTy::String => "string",
         NativeTy::Class(_) => "class",
         NativeTy::Array(_) => "array",
+        NativeTy::Function(_) => "function",
+        NativeTy::Cell(_) => "cell",
         NativeTy::Optional(_) => "optional",
     }
 }

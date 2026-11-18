@@ -1,5 +1,6 @@
-//! The functions a program's entry reaches through direct calls, each
-//! lowered to optimized MIR and checked against the native subset.
+//! The functions a program's entry reaches, through calls and through the
+//! function values it makes, each lowered to optimized MIR and checked
+//! against the native subset.
 
 use std::collections::{HashMap, VecDeque};
 
@@ -9,20 +10,90 @@ use baml_compiler2_mir::{MirFunction, lower_function};
 use crate::{
     Blocker,
     check::{OPT, check_function},
+    types::NativeTy,
 };
 
-pub(crate) struct ProgramFunction<'db> {
+/// How a compiled function is entered.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) enum Entry {
+    /// By a call that names it: its parameters, in order.
+    Direct,
+    /// Through a function value: the closure first, then its parameters.
+    Value,
+    /// Through a bound method value: the closure first, then the
+    /// parameters after the receiver, which the closure holds.
+    Bound,
+}
+
+/// One compiled function: a declared function or a lambda inside one,
+/// entered one way.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct FnKey<'db> {
     pub(crate) loc: FunctionLoc<'db>,
+    /// The lambda's position in its parent's `lambdas`, parent by parent
+    /// from `loc`; empty for `loc` itself.
+    pub(crate) lambdas: Vec<usize>,
+    pub(crate) entry: Entry,
+}
+
+impl<'db> FnKey<'db> {
+    pub(crate) fn new(loc: FunctionLoc<'db>, entry: Entry) -> Self {
+        Self {
+            loc,
+            lambdas: Vec::new(),
+            entry,
+        }
+    }
+
+    /// Lambda `index` of this function. A lambda is only ever entered
+    /// through its closure.
+    pub(crate) fn lambda(&self, index: usize) -> Self {
+        let mut lambdas = self.lambdas.clone();
+        lambdas.push(index);
+        Self {
+            loc: self.loc,
+            lambdas,
+            entry: Entry::Value,
+        }
+    }
+
+    pub(crate) fn mir(
+        &self,
+        db: &'db dyn baml_compiler2_mir::Db,
+    ) -> Result<&'db MirFunction<'db>, Blocker> {
+        let mut mir = lower_function(db, self.loc, OPT)
+            .as_ref()
+            .map_err(|error| Blocker::new("MIR lowering failure", error.to_string()))?;
+        for index in &self.lambdas {
+            mir = mir
+                .lambdas
+                .get(*index)
+                .ok_or_else(|| Blocker::new("closure of a lambda that does not exist", ""))?;
+        }
+        Ok(mir)
+    }
+}
+
+/// A function some other needs compiled, and what its captured cells hold.
+pub(crate) struct Needed<'db> {
+    pub(crate) key: FnKey<'db>,
+    pub(crate) captures: Vec<NativeTy<'db>>,
+}
+
+pub(crate) struct ProgramFunction<'db> {
+    pub(crate) key: FnKey<'db>,
     pub(crate) name: String,
     /// `None` when lowering failed; the failure is then the one blocker.
     pub(crate) mir: Option<&'db MirFunction<'db>>,
+    /// What the cells a lambda captures hold, in capture order.
+    pub(crate) captures: Vec<NativeTy<'db>>,
     pub(crate) blockers: Vec<Blocker>,
 }
 
 /// Reachable functions in breadth-first order; the entry is first.
 pub(crate) struct Program<'db> {
     pub(crate) functions: Vec<ProgramFunction<'db>>,
-    pub(crate) index: HashMap<FunctionLoc<'db>, usize>,
+    pub(crate) index: HashMap<FnKey<'db>, usize>,
 }
 
 pub(crate) fn collect<'db>(
@@ -33,31 +104,50 @@ pub(crate) fn collect<'db>(
         functions: Vec::new(),
         index: HashMap::new(),
     };
-    let mut queue = VecDeque::from([entry]);
-    while let Some(loc) = queue.pop_front() {
-        if program.index.contains_key(&loc) {
+    let mut queue = VecDeque::from([Needed {
+        key: FnKey::new(entry, Entry::Direct),
+        captures: Vec::new(),
+    }]);
+    while let Some(Needed { key, captures }) = queue.pop_front() {
+        if let Some(&known) = program.index.get(&key) {
+            // Every closure of one lambda captures the same cells.
+            let known = &mut program.functions[known];
+            if known.captures != captures && known.blockers.is_empty() {
+                known.blockers.push(Blocker::new(
+                    "closures of one lambda that capture different types",
+                    "",
+                ));
+            }
             continue;
         }
-        program.index.insert(loc, program.functions.len());
-        let function = match lower_function(db, loc, OPT) {
+        program.index.insert(key.clone(), program.functions.len());
+        let function = match key.mir(db) {
             Ok(mir) => {
-                let checked = check_function(db, mir);
-                queue.extend(checked.callees);
+                let checked = check_function(db, &key, mir, &captures);
+                queue.extend(checked.needed);
+                let name = mir.identity.display_name(db);
                 ProgramFunction {
-                    loc,
-                    name: mir.identity.display_name(db),
+                    name: match key.entry {
+                        Entry::Direct => name,
+                        _ if !key.lambdas.is_empty() => name,
+                        Entry::Value => format!("{name} as a value"),
+                        Entry::Bound => format!("{name} as a bound method"),
+                    },
+                    key,
                     mir: Some(mir),
+                    captures,
                     blockers: checked.blockers,
                 }
             }
-            Err(error) => ProgramFunction {
-                loc,
+            Err(blocker) => ProgramFunction {
                 name: baml_compiler2_mir::definition_display_name(
                     db,
-                    baml_compiler2_hir::contributions::Definition::Function(loc),
+                    baml_compiler2_hir::contributions::Definition::Function(key.loc),
                 ),
+                key,
                 mir: None,
-                blockers: vec![Blocker::new("MIR lowering failure", error.to_string())],
+                captures,
+                blockers: vec![blocker],
             },
         };
         program.functions.push(function);

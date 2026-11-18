@@ -3,9 +3,10 @@
 //!
 //! What is compiled so far: `int`, `float`, `bool`, `null` and `string`
 //! values, instances of classes without type parameters, arrays of any of
-//! these, and optional references; arithmetic and comparisons, field and
-//! index access, branches, int switches, and direct calls between functions
-//! that stay inside that subset. [`coverage`] says, for a program, which
+//! these, optional references, and function values (closures over cells,
+//! functions and bound methods); arithmetic and comparisons, field and
+//! index access, branches, int switches, and calls, direct or through a
+//! function value, between functions that stay inside that subset. [`coverage`] says, for a program, which
 //! reachable functions fall outside it and why; [`compile`] refuses a
 //! program with any.
 //!

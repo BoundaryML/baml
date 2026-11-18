@@ -50,6 +50,16 @@ pub const STRING_LENGTHS: usize = HEADER;
 pub const STRING_TEXT: usize = HEADER + WORD;
 pub const STRING_CHAR_COUNT_SHIFT: u32 = 32;
 
+/// A cell holds a local that a closure captures: a header and the value, one
+/// slot, or two for an optional scalar.
+pub const CELL_VALUE: usize = field_offset(0);
+
+/// A function value is a closure: a header, the address of the code, and
+/// what the code reads its environment from. The code takes the closure
+/// itself as its first argument.
+pub const CLOSURE_CODE: usize = field_offset(0);
+pub const CLOSURE_CAPTURES: usize = field_offset(1);
+
 /// The kinds of object a type describes to the collector.
 pub const KIND_FIXED: u32 = 0;
 pub const KIND_VALUES: u32 = 1;
@@ -69,8 +79,13 @@ pub const TYPE_VALUES: usize = 24;
 pub const TYPE_REFS: usize = 40;
 pub const TYPE_ARRAY_OF_VALUES: usize = 56;
 pub const TYPE_ARRAY_OF_REFS: usize = 72;
+/// Cells holding one slot that is not a reference, one that is, and two
+/// that are not.
+pub const TYPE_CELL_VALUE: usize = 88;
+pub const TYPE_CELL_REF: usize = 104;
+pub const TYPE_CELL_PAIR: usize = 128;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 88;
+pub const FIRST_CLASS_TYPE: usize = 144;
 
 /// The start of every type table, as `u32`s: eight bytes no type lives at,
 /// so that no id is zero, then the fixed types.
@@ -97,6 +112,20 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     ARRAY_SIZE as u32,
     0,
     TYPE_REFS as u32,
+    KIND_FIXED,
+    instance_size(1) as u32,
+    0,
+    0,
+    KIND_FIXED,
+    instance_size(1) as u32,
+    1,
+    0,
+    CELL_VALUE as u32,
+    0,
+    KIND_FIXED,
+    instance_size(2) as u32,
+    0,
+    0,
 ];
 
 /// Where the mutator keeps the address of the next object and the address

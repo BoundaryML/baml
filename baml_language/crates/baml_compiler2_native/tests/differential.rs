@@ -428,6 +428,83 @@ function strings_survive_collection() -> int {
   for (let w in words) { n += w.length(); };
   n
 }
+function apply(f: (int) -> int throws never, x: int) -> int { f(x) }
+function make_adder(n: int) -> (int) -> int throws never { (x: int) -> int { x + n } }
+function closure_captures_parameter() -> int {
+  let add = make_adder(count(5));
+  apply(add, 1) + add(10)
+}
+function double(x: int) -> int { x * 2 }
+function pick_function(flag: bool) -> (int) -> int throws never {
+  if flag { double } else { make_adder(100) }
+}
+function function_as_value() -> int {
+  let f = pick_function(count(1) == 1);
+  let g = pick_function(count(1) == 0);
+  f(4) * 1000 + g(4)
+}
+function make_counter() -> () -> int throws never {
+  let n = 0;
+  () -> int { n += 1; n }
+}
+function closure_writes_its_capture() -> int {
+  let next = make_counter();
+  let other = make_counter();
+  next();
+  next();
+  other();
+  next() * 10 + other()
+}
+function closures_share_a_cell() -> int {
+  let total = 0;
+  let fs: ((int) -> int throws never)[] = [];
+  fs.push((x: int) -> int { total += x; total });
+  fs.push((x: int) -> int { total * x });
+  let a = fs[count(0)](5);
+  let b = fs[count(1)](3);
+  total += 1;
+  a * 10000 + b * 100 + fs[1](2)
+}
+function closure_per_iteration() -> int {
+  let fs: (() -> int throws never)[] = [];
+  for (let i = 0; i < 4; i += 1) { fs.push(() -> int { i * 10 }); }
+  let s = 0;
+  for (let f in fs) { s = s * 100 + f(); }
+  s
+}
+function closure_captures_references() -> string {
+  let name = "a" + count(2).to_string();
+  let parts: string[] = [];
+  let fs = [(s: string) -> int { parts.push(name + s); parts.length() }];
+  fs[count(0)]("x");
+  fs[0]("y");
+  parts[0] + parts[1]
+}
+class Tally {
+  total: int
+  function add(self, x: int) -> int { self.total += x; self.total }
+}
+function bound_method() -> int {
+  let t = Tally { total: count(1) };
+  let fs = [t.add];
+  fs[count(0)](5) * 100 + t.total
+}
+function nested_closures() -> int {
+  let base = count(3);
+  let fs = [(a: int) -> (int) -> int throws never { (b: int) -> int { base += 1; a * b + base } }];
+  let f = fs[count(0)](2);
+  f(5) * 100 + f(5)
+}
+function closure_over_optional() -> int {
+  let last: int? = null;
+  let fs = [(x: int) -> int { let prev = last ?? -1; last = x; prev }];
+  fs[count(0)](7) * 100 + fs[0](9) + 1
+}
+function closure_of_floats() -> float {
+  let scale = half(3);
+  let fs = [(x: float, n: int) -> float { x * scale + n }];
+  fs[count(0)](2.0, 1)
+}
 "#;
 
 /// How a run ended. `baml run` prints a result on stdout and exits zero, or
@@ -599,6 +676,16 @@ const CASES: &[Case] = &[
         Printed("\"n=3 ok=true half=0.5 inf=Infinity\""),
     ),
     case("strings_survive_collection", Printed("600")),
+    case("closure_captures_parameter", Printed("21")),
+    case("function_as_value", Printed("8104")),
+    case("closure_writes_its_capture", Printed("32")),
+    case("closures_share_a_cell", Printed("51512")),
+    case("closure_per_iteration", Printed("102030")),
+    case("closure_captures_references", Printed("\"a2xa2y\"")),
+    case("bound_method", Printed("606")),
+    case("nested_closures", Printed("1415")),
+    case("closure_over_optional", Printed("-92")),
+    case("closure_of_floats", Printed("4.0")),
 ];
 
 /// The text of the thrown value in an uncaught-panic report.
