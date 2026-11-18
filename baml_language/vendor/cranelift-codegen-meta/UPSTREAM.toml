@@ -7,4 +7,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 # unchanged. Packaging omits Cargo.lock and Cargo.toml.orig.
 #
 # Changes from upstream, one entry per patch:
-# (none)
+#
+# src/shared/settings.rs: new shared setting `fold_pinned_reg_reads` (default
+#   off). The frontend promises that reading the pinned register at a use of a
+#   `get_pinned_reg` result is equivalent to reading it at the instruction.

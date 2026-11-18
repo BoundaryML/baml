@@ -516,6 +516,13 @@
       (to_amode flags (stack_addr slot offset1) offset2)
       (stackslot_amode slot offset1 offset2))
 
+;; An address off the pinned register uses the register itself as the base
+;; when the frontend allows reading it at the use (`fold_pinned_reg_reads`),
+;; rather than a copy of it.
+(rule 3 (to_amode flags (get_pinned_reg) offset)
+        (if (fold_pinned_reg_reads))
+        (Amode.ImmReg offset (preg_to_reg (preg_pinned)) flags))
+
 ;; Same as `to_amode`, except that the base address is computed via the addition
 ;; of the two `Value` arguments provided.
 ;;
@@ -3522,6 +3529,11 @@
 
 ;; For GPR-held values we only need to emit `CMP`.
 (rule 0 (emit_cmp cc a @ (value_type ty) b) (CondResult.CC (x64_cmp ty a b) cc))
+
+;; The stack pointer compares in place rather than through a copy. It is the
+;; same throughout the function body.
+(rule 7 (emit_cmp cc (get_stack_pointer) b)
+        (CondResult.CC (x64_cmp $I64 (gpr_new (preg_to_reg (preg_rsp))) b) cc))
 
 ;; As a special case, swap the arguments to the comparison when the LHS is a
 ;; constant. This ensures that we avoid moving the constant into a register when

@@ -315,6 +315,15 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn fold_pinned_reg_reads(&mut self) -> Option<()> {
+            if self.backend.flags().fold_pinned_reg_reads() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn preserve_frame_pointers(&mut self) -> Option<()> {
             if self.backend.flags().preserve_frame_pointers() {
                 Some(())

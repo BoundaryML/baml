@@ -273,6 +273,11 @@ impl<'db> Backend<'db> {
         flags.set("is_pic", "true").map_err(internal)?;
         // The mutator's address lives in the pinned register.
         flags.set("enable_pinned_reg", "true").map_err(internal)?;
+        // Every read of it wants the worker this code is running on now, so
+        // an address off it can use the register itself.
+        flags
+            .set("fold_pinned_reg_reads", "true")
+            .map_err(internal)?;
         // The collector walks the chain of frame records.
         flags
             .set("preserve_frame_pointers", "true")
@@ -1958,9 +1963,11 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.ins().symbol_value(WORD, global)
     }
 
-    /// The address of the worker this code is running on.
+    /// The address of the worker this code is running on: the pinned
+    /// register, read where it is used so that an access to the worker
+    /// addresses off the register itself.
     fn mutator(&mut self) -> ir::Value {
-        self.builder.use_var(self.worker)
+        self.builder.ins().get_pinned_reg(WORD)
     }
 
     /// Read the worker's address from the pinned register: on entry, and

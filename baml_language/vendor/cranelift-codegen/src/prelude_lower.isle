@@ -973,6 +973,9 @@
 (decl pure partial preserve_frame_pointers () Unit)
 (extern constructor preserve_frame_pointers preserve_frame_pointers)
 
+(decl pure partial fold_pinned_reg_reads () Unit)
+(extern constructor fold_pinned_reg_reads fold_pinned_reg_reads)
+
 ;; This definition should be kept up to date with the values defined in
 ;; cranelift/codegen/meta/src/shared/settings.rs
 (type StackSwitchModel extern (enum (None) (Basic) (UpdateWindowsTib)))

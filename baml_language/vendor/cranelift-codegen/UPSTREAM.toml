@@ -7,4 +7,16 @@ license = "Apache-2.0 WITH LLVM-exception"
 # unchanged. Packaging omits Cargo.lock and Cargo.toml.orig.
 #
 # Changes from upstream, one entry per patch:
-# (none)
+#
+# Pinned register as an address base, behind `fold_pinned_reg_reads`:
+#   src/prelude_lower.isle, src/machinst/isle.rs: expose the setting to ISLE.
+#   src/isa/aarch64/inst.isle: `amode_no_more_iconst` of `get_pinned_reg` plus
+#     an offset builds the address mode on x21 itself (`amode_pinned_reg`).
+#   src/isa/x64/inst.isle: `to_amode` of `get_pinned_reg` uses r15 as the base.
+#     Not built or run: written on an arm64 host.
+#
+# Stack pointer compared in place (no setting; sp is fixed in a function body):
+#   src/isa/aarch64/inst.isle: `lower_icmp_into_flags` with `get_stack_pointer`
+#     on the left emits `subs xzr, sp, y, uxtx`.
+#   src/isa/x64/inst.isle: `emit_cmp` with `get_stack_pointer` on the left
+#     compares rsp. Not built or run.

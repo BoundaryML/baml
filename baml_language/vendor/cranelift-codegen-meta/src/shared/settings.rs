@@ -134,6 +134,20 @@ pub(crate) fn define() -> SettingGroup {
         false,
     );
 
+    settings.add_bool(
+        "fold_pinned_reg_reads",
+        "Let backends read the pinned register where a `get_pinned_reg` result is used.",
+        r#"
+            A `get_pinned_reg` result normally holds what the register contained at that
+            instruction. With this set, the frontend promises that reading the register again at
+            any use of the result is as good: nothing between the instruction and the use (a
+            `set_pinned_reg`, or a call whose callee sets the register) changes the register, or
+            the frontend wants the new content if something does. Backends can then address
+            memory off the pinned register itself, with no copy into another register.
+        "#,
+        false,
+    );
+
     settings.add_enum(
         "tls_model",
         "Defines the model used to perform TLS accesses.",
