@@ -203,9 +203,13 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
         }
         Rvalue::Aggregate { kind, .. } => match kind {
             AggregateKind::Class {
-                type_arg_templates, ..
+                type_arg_templates: templates,
+                ..
+            }
+            | AggregateKind::Tuple {
+                element_templates: templates,
             } => {
-                for template in type_arg_templates {
+                for template in templates {
                     template.for_each_type_arg_ref(f);
                 }
             }
@@ -274,8 +278,12 @@ pub fn for_each_rvalue_template_mut(rvalue: &mut Rvalue<'_>, f: &mut impl FnMut(
         }
         Rvalue::Aggregate { kind, .. } => match kind {
             AggregateKind::Class {
-                type_arg_templates, ..
-            } => type_arg_templates.iter_mut().for_each(f),
+                type_arg_templates: templates,
+                ..
+            }
+            | AggregateKind::Tuple {
+                element_templates: templates,
+            } => templates.iter_mut().for_each(f),
             AggregateKind::Array => {}
         },
         Rvalue::IsType { test, .. } => test.for_each_template_mut(f),

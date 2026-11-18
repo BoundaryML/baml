@@ -40,15 +40,6 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0163
 
-  × client `InvokedThunk` reaches `baml.env.get`, which performs io, through `baml.env.get_or_panic` — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at
-  │ request time instead — e.g. `env.X`, a late-bound reference read only when the request is made
-    ╭─[init_io.baml:48:24]
- 48 │     api_key = (() -> { baml.env.get_or_panic("OPENAI_API_KEY") })(),
-    ·                        ─────────────────────
-    ╰────
-
-  [type] E0163
-
   × client `ViaSpawn` reaches `baml.env.get`, which performs io, through `spawned_secret` — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at request
   │ time instead — e.g. `env.X`, a late-bound reference read only when the request is made
     ╭─[init_io.baml:62:15]

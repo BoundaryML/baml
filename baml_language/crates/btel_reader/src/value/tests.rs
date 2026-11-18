@@ -841,3 +841,89 @@ fn redacted_values_are_withheld_present_values() {
         Some(Kind::Redacted)
     );
 }
+
+#[test]
+fn tuples_render_as_json_arrays_under_the_list_policy() {
+    use DecodedObject as O;
+    use DecodedValue as V;
+    let blobs = Blobs::default();
+    let limits = RenderLimits::default();
+    let render = |objects: Vec<DecodedObject>| {
+        let snapshot = Arc::new(DecodedSnapshot {
+            id: CasId::from_bytes([9; 16]),
+            encoded_len: 0,
+            children: vec![],
+            root: DecodedRoot::Value(V::Object(NodeId(0))),
+            objects,
+        });
+        let nav = navigate(&blobs, &snapshot, Root::Value, None, &[], 0);
+        let Nav::Value(value) = &nav else { panic!() };
+        let json = render_value(&blobs, value, &limits).json;
+        let scalar = to_scalar(&blobs, &nav, None, &limits);
+        (json, scalar.kind)
+    };
+
+    let (whole, kind) = render(vec![O::Tuple {
+        element_types: vec![ty(), ty()],
+        items: vec![V::Int(1), s("a")],
+        original_len: 2,
+    }]);
+    assert_eq!(whole, json!([1, "a"]));
+    assert_eq!(kind, Kind::Json);
+
+    let (shared, _) = render(vec![
+        O::List {
+            element_type: ty(),
+            items: vec![V::Object(NodeId(1)), V::Object(NodeId(1))],
+            original_len: 2,
+        },
+        O::Tuple {
+            element_types: vec![ty()],
+            items: vec![V::Int(1)],
+            original_len: 1,
+        },
+    ]);
+    assert_eq!(shared, json!([{"$id": 0, "$list": [1]}, {"$ref": 0}]));
+
+    let (cut, _) = render(vec![O::Tuple {
+        element_types: vec![ty(), ty(), ty()],
+        items: vec![V::Int(1)],
+        original_len: 3,
+    }]);
+    assert_eq!(cut, json!({"$list": [1], "$original_len": 3}));
+}
+
+#[test]
+fn tuple_slots_navigate_by_position_through_nested_and_cut_tuples() {
+    use DecodedObject as O;
+    use DecodedValue as V;
+    let snapshot = Arc::new(DecodedSnapshot {
+        id: CasId::from_bytes([9; 16]),
+        encoded_len: 0,
+        children: vec![],
+        root: DecodedRoot::Value(V::Object(NodeId(0))),
+        objects: vec![
+            O::Tuple {
+                element_types: vec![ty(), ty(), ty()],
+                items: vec![V::Object(NodeId(1)), V::Bool(true)],
+                original_len: 3,
+            },
+            O::Tuple {
+                element_types: vec![ty(), ty()],
+                items: vec![V::Int(1), s("a")],
+                original_len: 2,
+            },
+        ],
+    });
+    let at = |p: &[&str]| navigate(&Blobs::default(), &snapshot, Root::Value, None, &path(p), 0);
+    assert_eq!(found(&at(&["0", "1"])), Some(s("a")));
+    assert_eq!(found(&at(&["1"])), Some(V::Bool(true)));
+    assert_eq!(
+        at(&["2"]),
+        Nav::Unavailable(Unavailable::Truncated(Limit::Values))
+    );
+    assert_eq!(at(&["3"]), Nav::Missing);
+    assert_eq!(at(&["0", "2"]), Nav::Missing);
+    assert_eq!(at(&["0", "-1"]), Nav::Missing);
+    assert_eq!(at(&["slot"]), Nav::Missing);
+}

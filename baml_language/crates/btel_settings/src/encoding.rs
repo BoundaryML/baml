@@ -55,3 +55,9 @@ pub const OWNED_SPAN_FORMAT_MINOR: u32 = 12;
 /// (`FunctionCompletion.usage`, `ThreadCompletion.usage`), and function
 /// metadata marks model invoke functions (`FunctionMetadata.model_invoke`).
 pub const MODEL_USAGE_FORMAT_MINOR: u32 = 13;
+
+/// Function metadata names the compiled package that owns the function by
+/// its compilation unit hash (`FunctionMetadata.compilation_unit_hash`), and
+/// the header names the linked program and the build of its package
+/// (`RecordingHeader.program_id`, `RecordingHeader.build`).
+pub const PACKAGE_IDENTITY_FORMAT_MINOR: u32 = 14;

@@ -481,6 +481,7 @@ fn baml_ty_depth(ty: &wire::BamlTy) -> usize {
         Some(Ty::ClassTy(class)) => 1 + deepest(&class.type_args),
         Some(Ty::TypeAlias(alias)) => 1 + deepest(&alias.type_args),
         Some(Ty::List(list)) => 1 + list.item.as_deref().map_or(0, nested),
+        Some(Ty::Tuple(tuple)) => 1 + deepest(&tuple.items),
         Some(Ty::Map(map)) => {
             1 + map
                 .key

@@ -20,6 +20,12 @@ class WrapperUpdater {
     function update(telemetry: WrapperTelemetry? = null) -> string? {
         let helper = WrapperUpdater.new().apply() catch (error) {
             _ => {
+                record_wrapper_error(
+                    "self_update",
+                    wrapper_error_category(error, $trace = trace.hidden()),
+                    "propagated",
+                    $trace = trace.hidden(),
+                );
                 telemetry_event(telemetry, "wrapper_self_update", fields = { "outcome": "failure" });
                 throw error;
             }

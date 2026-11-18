@@ -510,6 +510,57 @@ mod tests {
         (db, root)
     }
 
+    #[test]
+    fn root_application_version_survives_artifacts_and_metadata_only_updates() {
+        let mut db = ProjectDatabase::new();
+        db.ensure_stdlib_sources();
+        let root = db
+            .add_source_root(SourceRootSpec::new(
+                "/version-test",
+                SourceRootKind::Workspace,
+            ))
+            .unwrap();
+        db.add_or_update_file_in(
+            root,
+            std::path::Path::new("/version-test/main.baml"),
+            "function f() -> int { 0 }",
+        );
+        for version in [None, Some("1.2.3+build.4"), Some("2.0.0-beta.1"), None] {
+            db.set_claimed_identity(
+                root,
+                baml_base::ClaimedIdentity {
+                    version: version.map(str::to_owned),
+                    ..Default::default()
+                },
+            );
+            let program = db.get_bytecode(root).unwrap();
+            assert_eq!(
+                program.packages[program.root as usize]
+                    .metadata
+                    .as_ref()
+                    .unwrap()
+                    .claimed
+                    .version
+                    .as_deref(),
+                version
+            );
+            let bytes =
+                baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
+            let decoded: Program =
+                baml_artifact::decode(baml_artifact::ArtifactKind::Program, &bytes).unwrap();
+            assert_eq!(
+                decoded.packages[decoded.root as usize]
+                    .metadata
+                    .as_ref()
+                    .unwrap()
+                    .claimed
+                    .version
+                    .as_deref(),
+                version
+            );
+        }
+    }
+
     /// An error with no span belongs to no file, and still refuses the world.
     #[test]
     fn a_span_less_error_refuses_the_world() {

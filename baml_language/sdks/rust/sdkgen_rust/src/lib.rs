@@ -478,9 +478,13 @@ fn to_source_code_with_optional_metadata(
                 PathBuf::from("src/lib.rs"),
                 // BAML names keep their spelling, and docstrings are copied
                 // verbatim from BAML sources: their prose need not follow
-                // rustdoc's Markdown list-continuation rules.
                 quote! {
-                    #![allow(non_camel_case_types, non_snake_case, clippy::doc_lazy_continuation)]
+                    #![allow(
+                        non_camel_case_types,
+                        non_snake_case,
+                        clippy::doc_lazy_continuation,
+                        clippy::type_complexity
+                    )]
 
                     // BUG: `_inlinedbaml`/`_runtime` are not reserved against
                     // user symbols. A root-level BAML class/enum named
@@ -766,6 +770,10 @@ mod tests {
         src.chars().filter(|c| !c.is_whitespace()).collect()
     }
 
+    fn tight(src: &str) -> String {
+        flat(src).replace(",)", ")").replace(",>", ">")
+    }
+
     #[test]
     fn multi_arm_unions_synthesize_an_enum_with_from_and_into_params() {
         let n = name("user", &[], "f");
@@ -952,6 +960,467 @@ mod tests {
         ] {
             assert!(lib.contains(expected), "missing `{expected}` in:\n{lib}");
         }
+    }
+
+    #[test]
+    fn recursion_through_a_tuple_boxes_the_inline_element() {
+        let node = name("user", &[], "Node");
+        let node_ty = Ty::Class(node.clone(), Box::new([]));
+        let next = Ty::Union(Box::new([
+            Ty::Tuple(Box::new([node_ty.clone(), Ty::Int])),
+            Ty::Null,
+        ]));
+        let kids = Ty::Tuple(Box::new([Ty::List(Box::new(node_ty))]));
+        let pool = SymbolPool::from([(
+            node.clone(),
+            class_symbol(
+                &node,
+                vec![
+                    baml_sdkgen_types::ClassProperty {
+                        name: baml_base::Name::new("next"),
+                        docstring: None,
+                        ty: next,
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
+                    },
+                    baml_sdkgen_types::ClassProperty {
+                        name: baml_base::Name::new("kids"),
+                        docstring: None,
+                        ty: kids,
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
+                    },
+                ],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        assert!(
+            flat.contains(
+                "pubnext:::std::option::Option<(::std::boxed::Box<crate::Node>,::core::primitive::i64),>"
+            ),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("pub kids: (::std::vec::Vec<crate::Node>,)"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn recursion_through_a_tuple_union_arm_boxes_the_enum_reference() {
+        let a = name("user", &[], "A");
+        let union_field = Ty::Union(Box::new([
+            Ty::Tuple(Box::new([Ty::Class(a.clone(), Box::new([])), Ty::String])),
+            Ty::Int,
+        ]));
+        let pool = SymbolPool::from([(
+            a.clone(),
+            class_symbol(
+                &a,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("x"),
+                    docstring: None,
+                    ty: union_field,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            lib.contains("pub x: ::std::boxed::Box<crate::AStringTupleOrInt>"),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("AStringTuple((crate::A, ::std::string::String))"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn recursion_through_a_nullable_tuple_element_boxes_the_enum_reference() {
+        let a = name("user", &[], "A");
+        let union_field = Ty::Union(Box::new([
+            Ty::Tuple(Box::new([
+                Ty::Union(Box::new([Ty::Class(a.clone(), Box::new([])), Ty::Null])),
+                Ty::Int,
+            ])),
+            Ty::Bool,
+        ]));
+        let pool = SymbolPool::from([(
+            a.clone(),
+            class_symbol(
+                &a,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("x"),
+                    docstring: None,
+                    ty: union_field,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(
+            flat(lib).contains("pubx:::std::boxed::Box<crate::AIntTupleOrBool>"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn a_null_tuple_element_in_a_union_arm_is_unit() {
+        let n = name("user", &[], "f");
+        let arg = Ty::Union(Box::new([Ty::Tuple(Box::new([Ty::Null])), Ty::Int]));
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(flat(lib).contains("NullTuple(((),))"), "{lib}");
+    }
+
+    #[test]
+    fn tuples_wider_than_std_impls_are_native_tuples() {
+        for arity in [13, 20, crate::translate_ty::MAX_BRIDGE_TUPLE_ARITY] {
+            let n = name("user", &[], "f");
+            let mut slots = vec![Ty::Int; arity - 1];
+            slots.push(Ty::String);
+            let arg = Ty::Tuple(slots.into_boxed_slice());
+            let pool =
+                SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg.clone(), arg)))]);
+            let generated = to_source_code_with_bytecode(&pool, &[], &options());
+            assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+            let lib = tight(text(&generated, "src/lib.rs"));
+            let native = format!(
+                "({}::std::string::String)",
+                "::core::primitive::i64,".repeat(arity - 1)
+            );
+            assert!(lib.contains(&format!("u:{native}")), "{lib}");
+            assert!(!lib.contains("structTuple"), "{lib}");
+        }
+    }
+
+    #[test]
+    fn a_tuple_wider_than_the_bridge_skips_its_symbol() {
+        let n = name("user", &[], "f");
+        let arity = crate::translate_ty::MAX_BRIDGE_TUPLE_ARITY + 1;
+        let arg = Ty::Tuple(vec![Ty::Int; arity].into_boxed_slice());
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
+        assert!(
+            generated.warnings[0]
+                .reason
+                .contains(&format!("tuple of {arity} slots")),
+            "{:?}",
+            generated.warnings
+        );
+        let wide = name("user", &[], "Wide");
+        let pool = SymbolPool::from([(
+            wide.clone(),
+            class_symbol(
+                &wide,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("t"),
+                    docstring: None,
+                    ty: Ty::Tuple(vec![Ty::Int; arity].into_boxed_slice()),
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|w| w.fqn == "user.Wide" && w.reason.contains("tuple of")),
+            "{:?}",
+            generated.warnings
+        );
+    }
+
+    #[test]
+    fn a_class_with_a_wide_tuple_field_derives_only_clone() {
+        let wide = name("user", &[], "Wide");
+        let outer = name("user", &[], "Outer");
+        let narrow = name("user", &[], "Narrow");
+        let field = |field: &str, ty: Ty| baml_sdkgen_types::ClassProperty {
+            name: baml_base::Name::new(field),
+            docstring: None,
+            ty,
+            json_fallback: false,
+            json_flatten: false,
+            json_rename: None,
+        };
+        let pool = SymbolPool::from([
+            (
+                wide.clone(),
+                class_symbol(
+                    &wide,
+                    vec![field("t", Ty::Tuple(vec![Ty::Int; 13].into_boxed_slice()))],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                outer.clone(),
+                class_symbol(
+                    &outer,
+                    vec![field(
+                        "w",
+                        Ty::List(Box::new(Ty::Class(wide.clone(), Box::new([])))),
+                    )],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                narrow.clone(),
+                class_symbol(
+                    &narrow,
+                    vec![field("t", Ty::Tuple(vec![Ty::Int; 12].into_boxed_slice()))],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        let serde =
+            "#[cfg_attr(feature=\"serde\",derive(::serde::Serialize,::serde::Deserialize))]";
+        assert!(
+            lib.contains(&format!("#[derive(Clone)]{serde}pubstructWide{{")),
+            "{lib}"
+        );
+        assert!(
+            lib.contains("field`t`holdsatupleofmorethan12slots"),
+            "{lib}"
+        );
+        assert!(lib.contains("#[derive(Clone)]"), "{lib}");
+        assert!(lib.contains("pubstructOuter{"), "{lib}");
+        assert!(
+            !lib.contains("#[derive(Debug,Clone,PartialEq)]#[cfg_attr(feature=\"serde\",derive(::serde::Serialize,::serde::Deserialize))]pubstructOuter"),
+            "{lib}"
+        );
+        assert!(
+            lib.contains(&format!(
+                "#[derive(Debug,Clone,PartialEq)]{serde}pubstructNarrow{{"
+            )),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn a_tuple_wider_than_serde_impls_has_no_serde_form() {
+        let wide = name("user", &[], "Wide");
+        let pool = SymbolPool::from([(
+            wide.clone(),
+            class_symbol(
+                &wide,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("t"),
+                    docstring: None,
+                    ty: Ty::Tuple(vec![Ty::Int; 17].into_boxed_slice()),
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        assert!(!lib.contains("derive(::serde::Serialize"), "{lib}");
+        assert!(lib.contains("tupleofmorethan16slots"), "{lib}");
+    }
+
+    #[test]
+    fn a_union_with_a_wide_tuple_arm_derives_only_clone() {
+        let n = name("user", &[], "f");
+        let wide = Ty::Tuple(vec![Ty::Bool; 13].into_boxed_slice());
+        let ret = Ty::Union(Box::new([wide, Ty::Int]));
+        let narrow = Ty::Union(Box::new([
+            Ty::Tuple(vec![Ty::Bool; 12].into_boxed_slice()),
+            Ty::String,
+        ]));
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, narrow, ret)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        let wide_arm = format!("{}Tuple", "Bool".repeat(13));
+        assert!(
+            lib.contains(&format!("#[derive(Clone)]pubenum{wide_arm}OrInt{{")),
+            "{lib}"
+        );
+        assert!(
+            lib.contains(&format!("arm`{wide_arm}`holdsatupleofmorethan12slots")),
+            "{lib}"
+        );
+        let narrow_arm = format!("{}Tuple", "Bool".repeat(12));
+        assert!(
+            lib.contains(&format!(
+                "#[derive(Debug,Clone,PartialEq)]pubenum{narrow_arm}OrString{{"
+            )),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn wide_and_native_tuples_nest_in_each_other_and_in_unions() {
+        let n = name("user", &[], "f");
+        let a = name("user", &[], "A");
+        let a_ty = Ty::Class(a.clone(), Box::new([]));
+        let mut slots = vec![
+            Ty::Tuple(Box::new([Ty::Int, Ty::String])),
+            Ty::Union(Box::new([Ty::Int, Ty::String, Ty::Null])),
+            a_ty,
+        ];
+        slots.extend(vec![Ty::Bool; 10]);
+        let wide = Ty::Tuple(slots.into_boxed_slice());
+        let arg = Ty::Tuple(Box::new([wide, Ty::Int]));
+        let pool = SymbolPool::from([
+            (
+                a.clone(),
+                class_symbol(&a, Vec::new(), Vec::new(), Vec::new()),
+            ),
+            (n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String))),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = tight(text(&generated, "src/lib.rs"));
+        assert!(
+            lib.contains(&format!(
+                "u:(((::core::primitive::i64,::std::string::String),\
+                 ::std::option::Option<crate::IntOrString>,crate::A,{}::core::primitive::bool),\
+                 ::core::primitive::i64)",
+                "::core::primitive::bool,".repeat(9)
+            )),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn recursion_through_a_wide_tuple_boxes_the_inline_element() {
+        let node = name("user", &[], "Node");
+        let mut slots = vec![Ty::Class(node.clone(), Box::new([]))];
+        slots.extend(vec![Ty::Int; 12]);
+        let next = Ty::Union(Box::new([Ty::Tuple(slots.into_boxed_slice()), Ty::Null]));
+        let pool = SymbolPool::from([(
+            node.clone(),
+            class_symbol(
+                &node,
+                vec![baml_sdkgen_types::ClassProperty {
+                    name: baml_base::Name::new("next"),
+                    docstring: None,
+                    ty: next,
+                    json_fallback: false,
+                    json_flatten: false,
+                    json_rename: None,
+                }],
+                Vec::new(),
+                Vec::new(),
+            ),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = tight(text(&generated, "src/lib.rs"));
+        assert!(
+            lib.contains(&format!(
+                "pubnext:::std::option::Option<(::std::boxed::Box<crate::Node>,{}::core::primitive::i64)>",
+                "::core::primitive::i64,".repeat(11)
+            )),
+            "{lib}"
+        );
+        assert!(lib.contains("#[derive(Clone)]"), "{lib}");
+        assert!(!lib.contains("#[derive(Debug,Clone,PartialEq)]"), "{lib}");
+    }
+
+    #[test]
+    fn a_tuple_slot_follows_the_slot_types_own_rules() {
+        let unsupported = [
+            Ty::Unknown,
+            Ty::Media(baml_base::MediaKind::Image),
+            Ty::Tuple(Box::new([])),
+        ];
+        for slot in unsupported {
+            for arg in [
+                Ty::Tuple(Box::new([Ty::Int, slot.clone()])),
+                Ty::Tuple(Box::new([Ty::Tuple(Box::new([slot.clone()])), Ty::Int])),
+                Ty::List(Box::new(Ty::Tuple(Box::new([slot.clone(), Ty::Int])))),
+                Ty::Union(Box::new([
+                    Ty::Tuple(Box::new([slot.clone(), Ty::Int])),
+                    Ty::String,
+                ])),
+            ] {
+                let n = name("user", &[], "f");
+                let pool = SymbolPool::from([(
+                    n.clone(),
+                    Symbol::Function(unary_fn(&n, arg, Ty::String)),
+                )]);
+                let generated = to_source_code_with_bytecode(&pool, &[], &options());
+                assert_eq!(
+                    generated.warnings.len(),
+                    1,
+                    "{slot}: {:?}",
+                    generated.warnings
+                );
+                assert_eq!(generated.warnings[0].fqn, "user.f");
+                let lib = flat(text(&generated, "src/lib.rs"));
+                assert!(!lib.contains("dynamic::Value>"), "{lib}");
+            }
+            let n = name("user", &[], "f");
+            let pool = SymbolPool::from([(
+                n.clone(),
+                Symbol::Function(unary_fn(&n, Ty::List(Box::new(slot)), Ty::String)),
+            )]);
+            let generated = to_source_code_with_bytecode(&pool, &[], &options());
+            assert!(
+                matches!(&generated.warnings[..], [w] if w.fqn == "user.f"),
+                "{:?}",
+                generated.warnings
+            );
+        }
+    }
+
+    #[test]
+    fn unions_inside_tuples_register_in_the_leaf() {
+        let n = name("user", &[], "f");
+        let arg = Ty::Tuple(Box::new([
+            Ty::Union(Box::new([Ty::Int, Ty::String])),
+            Ty::Bool,
+        ]));
+        let pool = SymbolPool::from([(n.clone(), Symbol::Function(unary_fn(&n, arg, Ty::String)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        assert!(lib.contains("pub enum IntOrString"), "{lib}");
+        assert!(
+            lib.contains("(crate::IntOrString, ::core::primitive::bool)"),
+            "{lib}"
+        );
     }
 
     #[test]
@@ -3265,7 +3734,8 @@ mod tests {
         let note = |field: &str| {
             format!(
                 "#[cfg_attr(feature=\"serde\",doc=\"\",doc=\"Notserializablewiththe`serde`feature:\
-                 field`{field}`holdsa`bigint`,`uint8array`,function,handleorBAMLstandard-libraryclass.\")]"
+                 field`{field}`holdsa`bigint`,`uint8array`,function,handle,BAMLstandard-libraryclass,\
+                 ortupleofmorethan16slots.\")]"
             )
         };
         assert!(

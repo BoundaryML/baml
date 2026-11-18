@@ -31,6 +31,9 @@ test "query context native" {
     assert.equal(query_context_main(7), 14);
 }
 
+// Declares a span so the call is kept and recorded: an inlined function has
+// no span of its own.
+/// baml:$trace=trace.span
 function launch_context_leaf() -> int {
     assert.equal(trace.current_context().distinct_id, "launch-user");
     assert.equal(trace.current_context().metadata["root"], "launch");

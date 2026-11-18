@@ -7,6 +7,7 @@ mod coerce_map;
 mod coerce_primitive;
 mod coerce_shaped;
 mod coerce_stream_state;
+mod coerce_tuple;
 mod coerce_ty;
 mod coerce_union;
 mod match_string;
@@ -35,6 +36,7 @@ pub(crate) enum VisitedType<'t, N> {
     Class(&'t N),
     /// Anonymous array types are identified by the address of the model node.
     Array(*const ()),
+    Tuple(*const ()),
 }
 
 /// The shape values a host refused to build a shaped type from
@@ -79,6 +81,16 @@ fn write_shape_key<N: TypeIdent>(
                 write_shape_key(&item.value, out);
             }
             out.push(']');
+        }
+        BamlValue::Tuple(tuple) => {
+            out.push('(');
+            for (index, item) in tuple.value.iter().enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                write_shape_key(&item.value, out);
+            }
+            out.push(')');
         }
         BamlValue::Map(map) => {
             out.push('{');

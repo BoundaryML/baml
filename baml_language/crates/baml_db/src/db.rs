@@ -17,7 +17,8 @@ use std::{
 };
 
 use baml_base::{
-    Dependency, FileId, Name, SourceFile, SourceRoot, SourceRootKind, SourceRootTable,
+    ClaimedIdentity, Dependency, FileId, Name, SourceFile, SourceRoot, SourceRootKind,
+    SourceRootTable,
 };
 use baml_compiler2_hir::{
     inputs::{LangRootsInput, SeededCallableThrows, SeededStdlibInterface, SeededThrowFacts},
@@ -45,6 +46,9 @@ pub struct SourceRootSpec {
     /// by the database to every non-`Stdlib` root; only explicit edges go
     /// here, and every root they name must already be live.
     pub dependencies: Vec<Dependency>,
+    /// What the package's manifest claims it is. Ignored for a root served
+    /// from an interface, whose blob states the claim it was compiled under.
+    pub claim: ClaimedIdentity,
 }
 
 impl SourceRootSpec {
@@ -56,6 +60,7 @@ impl SourceRootSpec {
             self_name: None,
             interface: None,
             dependencies: Vec::new(),
+            claim: ClaimedIdentity::default(),
         }
     }
 
@@ -74,6 +79,12 @@ impl SourceRootSpec {
     #[must_use]
     pub fn depending_on(mut self, dependencies: Vec<Dependency>) -> Self {
         self.dependencies = dependencies;
+        self
+    }
+
+    #[must_use]
+    pub fn claiming(mut self, claim: ClaimedIdentity) -> Self {
+        self.claim = claim;
         self
     }
 }
@@ -607,6 +618,7 @@ impl ProjectDatabase {
             self_name,
             interface,
             dependencies,
+            claim,
         } = spec;
         let path = canonicalize_lossy(&path);
 
@@ -618,6 +630,9 @@ impl ProjectDatabase {
             .map(|bytes| Self::decode_interface(kind, bytes))
             .transpose()?;
         let dependencies = self.complete_dependencies(kind, dependencies)?;
+        let claim = wire_interface
+            .as_ref()
+            .map_or(claim, |wire| wire.claimed.clone());
 
         // Revive the tombstoned input if a root lived at this path before —
         // creating a fresh input would leak the old one forever.
@@ -631,6 +646,7 @@ impl ProjectDatabase {
                 root.set_kind(self).to(kind);
                 root.set_self_name(self).to(self_name);
                 root.set_exclude_tests(self).to(false);
+                root.set_claim(self).to(ClaimedIdentity::default());
                 root.set_interface(self).to(interface);
                 root.set_dependencies(self).to(dependencies);
                 root
@@ -654,6 +670,9 @@ impl ProjectDatabase {
         roots.insert(at, root);
         table.set_roots(self).to(roots);
         Arc::make_mut(&mut self.roots_by_path).insert(path, root);
+        if claim != root.claim(self) {
+            root.set_claim(self).to(claim);
+        }
 
         // A served-from-interface root's blob must be a faithful export of
         // the root it now is: every slot of its dependency table binds
@@ -675,6 +694,19 @@ impl ProjectDatabase {
             });
         }
         Ok(root)
+    }
+
+    /// State what `root`'s manifest claims the package is. A tracked input
+    /// change: the claim is part of the package's interface, so the root's
+    /// interface digest and everything compiled against it follow.
+    pub fn set_claimed_identity(&mut self, root: SourceRoot, claim: ClaimedIdentity) {
+        debug_assert!(
+            root.interface(self).is_none(),
+            "a root served from an interface takes its claim from the blob"
+        );
+        if claim != root.claim(self) {
+            root.set_claim(self).to(claim);
+        }
     }
 
     /// Add one dependency edge to a live root.
@@ -1706,6 +1738,9 @@ mod tests {
         let blob = baml_artifact::encode(
             baml_artifact::ArtifactKind::PackageInterface,
             &baml_compiler2_hir_ty::package_interface::WireInterface {
+                claimed: baml_base::ClaimedIdentity::default(),
+                compiler_version: baml_compiler2_hir_ty::package_interface::COMPILER_VERSION
+                    .to_owned(),
                 dependencies: Vec::new(),
                 rows: baml_compiler2_hir_ty::package_interface::PackageInterface::<
                     baml_type::WireName,

@@ -33,6 +33,8 @@ fn sdk_completion_is_emitted_only_in_the_terminal_file() {
             sources: None,
             context: None,
             exit: Arc::clone(&exit),
+            program_id: None,
+            build: None,
         });
     exit.set(btel_types::ProcessExit {
         status: btel_types::ProcessStatus::Unknown,
@@ -1376,6 +1378,7 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
         lambda_path: None,
         definition_key: None,
         package_name: Some("user".into()),
+        compilation_unit_hash: None,
         namespace: Vec::new(),
         argument_layout: Some(btel_types::ArgumentLayout {
             slots: vec![btel_types::ArgumentSlot {
@@ -1819,4 +1822,100 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     assert_eq!(done.completion_flags, 16 | 8);
     assert_eq!(done.self_await_ticks, 4);
     assert_eq!(done.exited_at_ticks, 9);
+}
+
+/// A recording that leaves package identity out names no program, build or
+/// package hash, and so reads as the minor it had before those were added.
+#[test]
+fn package_identity_is_recorded_unless_the_destination_declines_it() {
+    use proto::function_definition::Resolution;
+    let allocator = FunctionIdAllocator::default();
+    let function = allocator.allocate().unwrap();
+    let record = |with_identity: bool| {
+        let files = RefCell::new(Vec::new());
+        let table = std::sync::Arc::new(btel_types::FunctionMetadataTable {
+            functions: vec![btel_types::FunctionMetadata {
+                function_id: function,
+                fqn: "user.main".into(),
+                display_name: "main".into(),
+                source_file: None,
+                source_span: None,
+                kind: btel_types::RuntimeFunctionKind::Bytecode,
+                origin: btel_types::RuntimeFunctionOrigin::UserDefined,
+                owner_type: None,
+                parent_function: None,
+                lambda_path: None,
+                definition_key: None,
+                package_name: Some("user".into()),
+                compilation_unit_hash: Some([7; 32]),
+                namespace: Vec::new(),
+                argument_layout: None,
+                source_map: None,
+                model_invoke: false,
+            }],
+        });
+        let mut publisher = RecordingPublisher::new(RecordingId::generate(), config(), |file| {
+            files.borrow_mut().push(file);
+        })
+        .unwrap();
+        if !with_identity {
+            publisher = publisher.without_package_identity();
+        }
+        let mut publisher =
+            publisher
+                .with_function_metadata(table)
+                .with_process(ProcessRecording {
+                    info: btel_types::ProcessInfo {
+                        process_id: [9; 16],
+                        ..Default::default()
+                    },
+                    sources: None,
+                    context: None,
+                    exit: Arc::default(),
+                    program_id: Some([4; 16]),
+                    build: Some(btel_types::BuildRecord {
+                        build_id: [1; 16],
+                        timestamp_unix_ns: 7,
+                        origin: btel_types::BuildOrigin::Run,
+                        git: None,
+                        source_hash: [2; 32],
+                        compilation_unit_hash: [7; 32],
+                    }),
+                });
+        publisher.span(
+            allocate_telemetry_id(),
+            &mut SpanRecord::CallPathDefined {
+                call_path: CallPathId::new_non_root(1).unwrap(),
+                parent_call_path: CallPathId::ROOT,
+                visible_caller: None,
+                caller_pc: 0,
+                callee: function,
+                edge: btel_types::CallPathEdge::Synchronous,
+            },
+        );
+        publisher.flush_recording().unwrap();
+        let file = decode(&files.borrow()[0]);
+        let header = file.header.unwrap();
+        let Some(Resolution::Metadata(definition)) =
+            file.definitions.unwrap().functions[0].resolution.clone()
+        else {
+            panic!("the function is defined")
+        };
+        (header, definition.compilation_unit_hash)
+    };
+
+    let (header, unit) = record(true);
+    assert_eq!(header.program_id, Some(vec![4; 16]));
+    assert_eq!(header.build.unwrap().origin, "run");
+    assert_eq!(unit, Some(vec![7; 32]));
+    assert_eq!(
+        header.format_minor,
+        btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR
+    );
+
+    let (header, unit) = record(false);
+    assert_eq!(header.program_id, None);
+    assert_eq!(header.build, None);
+    assert_eq!(unit, None);
+    assert!(header.format_minor < btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR);
 }

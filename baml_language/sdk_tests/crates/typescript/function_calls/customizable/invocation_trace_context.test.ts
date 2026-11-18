@@ -16,7 +16,7 @@ describe('invocation_trace_context', () => {
       expect(trace.current_cancel_token()).not.toBe(null);
       const current = trace.current_context_sync();
       expect(current.distinct_id).toBe('internal-id');
-      expect(current.metadata).toEqual({ phase: 'internal', keep: 7 });
+      expectMetadata(current.metadata, { phase: 'internal', keep: 7 });
       return value;
     }, 7, { $baml: { trace: trace.hidden_sync().context_sync({
       distinct_id: 'root-id', metadata: { phase: 'root', keep: 7, remove: 9 },
@@ -30,7 +30,7 @@ describe('invocation_trace_context', () => {
       const observed = trace.current_context_sync();
       observed.metadata.request = 99;
       observed.distinct_id = 'changed';
-      expect(trace.current_context_sync().metadata).toEqual({ request: 7 });
+      expectMetadata(trace.current_context_sync().metadata, { request: 7 });
       expect(trace.current_context_sync().distinct_id).toBe('original');
       return value;
     }, 1, { $baml: { trace: trace.context_sync({ distinct_id: 'original', metadata: { request: 7 } }) } })).toBe(1);
@@ -44,12 +44,12 @@ describe('invocation_trace_context', () => {
     let entered = 0;
     const pending = [0, 1].map(index => {
       const callback = withExecutionContext(async (active, value: number) => {
-        expect(trace.current_context_sync().metadata).toEqual({ request: index });
+        expectMetadata(trace.current_context_sync().metadata, { request: index });
         if (++entered === 2) markReady();
         await release;
-        expect(active.run(() => trace.current_context_sync().metadata)).toEqual({ request: index });
+        expectMetadata(active.run(() => trace.current_context_sync().metadata), { request: index });
         const nested = await active.run(() => contextBaml.current_context());
-        expect(nested.metadata).toEqual({ request: index });
+        expectMetadata(nested.metadata, { request: index });
         return value;
       });
       return baml.call_int_callback(callback as unknown as (value: number) => number, index,
@@ -69,9 +69,9 @@ describe('invocation_trace_context', () => {
     }, 1, { $baml: { trace: trace.hidden_sync().context_sync({ metadata: { request: 7 } }) } })).toBe(1);
     expect(trace.current_cancel_token()).toBe(null);
     const active = captured!;
-    expect(active.run(() => trace.current_context_sync().metadata)).toEqual({ request: 7 });
+    expectMetadata(active.run(() => trace.current_context_sync().metadata), { request: 7 });
     expect(await active.run(() => baml.call_int_callback(value => {
-      expect(trace.current_context_sync().metadata).toEqual({ request: 7 });
+      expectMetadata(trace.current_context_sync().metadata, { request: 7 });
       return value;
     }, 7))).toBe(7);
     expect(trace.current_cancel_token()).toBe(null);
@@ -81,7 +81,7 @@ describe('invocation_trace_context', () => {
   it('reservation_does_not_inherit', async () => {
     const reserved = trace.span_sync().context_sync({ metadata: { request: 7 } }).reserve_sync();
     const callback = withExecutionContext(async (active, value: number) => {
-      expect((await active.run(() => contextBaml.current_context())).metadata).toEqual({ request: 7 });
+      expectMetadata((await active.run(() => contextBaml.current_context())).metadata, { request: 7 });
       return value;
     });
     expect(await baml.call_int_callback(callback as unknown as (value: number) => number, 1,
@@ -112,10 +112,10 @@ describe('invocation_trace_context', () => {
         : active.signal.addEventListener('abort', () => resolve(), { once: true }));
       markCleanup();
       try {
-        expect(active.run(() => trace.current_context_sync().metadata)).toEqual({ request: 7 });
+        expectMetadata(active.run(() => trace.current_context_sync().metadata), { request: 7 });
         expect(active.run(() => trace.current_cancel_token()!.is_cancelled_sync())).toBe(true);
         await release;
-        expect(active.run(() => trace.current_context_sync().metadata)).toEqual({ request: 7 });
+        expectMetadata(active.run(() => trace.current_context_sync().metadata), { request: 7 });
       } catch (error) {
         // The cancelled waiter cannot report failures from physical cleanup.
         cleanupErrors.push(error);
@@ -137,3 +137,10 @@ describe('invocation_trace_context', () => {
     expect(cleanupErrors).toEqual([]);
   });
 });
+
+function expectMetadata(actual: Record<string, unknown>, expected: Record<string, unknown>) {
+  const version = actual["baml.ctx.baml_version"];
+  expect(version).toEqual(expect.any(String));
+  expect(version).not.toBe("");
+  expect(actual).toEqual({ ...expected, "baml.ctx.baml_version": version });
+}

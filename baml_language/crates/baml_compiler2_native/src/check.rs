@@ -175,6 +175,10 @@ fn rvalue_name(value: &Rvalue<'_>) -> &'static str {
             kind: AggregateKind::Class { .. },
             ..
         } => "class instance construction",
+        Rvalue::Aggregate {
+            kind: AggregateKind::Tuple { .. },
+            ..
+        } => "tuple construction",
         Rvalue::Discriminant(_) => "enum discriminant read",
         Rvalue::TypeTag(_) => "type tag read",
         Rvalue::Len(_) => "array length",

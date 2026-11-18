@@ -6,6 +6,13 @@ import pytest
 from replay_harness import replay_server
 
 
+def assert_metadata(actual, expected):
+    """Require native identity while comparing the complete authored context."""
+    version = actual.get("baml.ctx.baml_version")
+    assert isinstance(version, str) and version
+    assert actual == {**expected, "baml.ctx.baml_version": version}
+
+
 # SDK_PARITY_LINT(skip): Python stream lifetime/context regression
 @replay_server(recording_path="replay_extract_string")
 async def test_stream_async_for_keeps_context_after_creator_returns():
@@ -31,7 +38,8 @@ async def test_stream_async_for_keeps_context_after_creator_returns():
     assert len(partials) >= 10
     assert isinstance(await stream.final(), str)
     assert len(contexts) >= 3
-    assert all(context.metadata == {"feature": "creator"} for context in contexts)
+    for context in contexts:
+        assert_metadata(context.metadata, {"feature": "creator"})
     assert all(context.distinct_id == "u1" for context in contexts)
     assert trace.current_context_sync().metadata == {}
 
@@ -57,7 +65,8 @@ async def test_stream_contexts_are_isolated_during_concurrent_iteration():
             await asyncio.sleep(0)
         assert isinstance(await stream.final(), str)
         assert len(seen) >= 3
-        assert all(metadata == {"feature": feature} for metadata in seen)
+        for metadata in seen:
+            assert_metadata(metadata, {"feature": feature})
 
     await asyncio.gather(consume("first"), consume("second"))
     assert trace.current_context_sync().metadata == {}
@@ -81,8 +90,9 @@ def test_stream_final_keeps_context_and_allows_a_step_patch():
     )
     final = stream.final_sync(_baml={"trace": trace.context_sync(metadata={"feature": "step"})})
     assert isinstance(final, str)
-    assert seen[0] == {"feature": "origin", "user": "u1"}
-    assert all(metadata == {"feature": "step", "user": "u1"} for metadata in seen[1:])
+    assert_metadata(seen[0], {"feature": "origin", "user": "u1"})
+    for metadata in seen[1:]:
+        assert_metadata(metadata, {"feature": "step", "user": "u1"})
     assert trace.current_context_sync().metadata == {}
 
 
@@ -367,7 +377,7 @@ def test_stream_recording_parent_chain(tmp_path):
         g.span_name AS grandparent
         FROM spans s LEFT JOIN spans p ON p.span_id = s.parent_span_id
         LEFT JOIN spans g ON g.span_id = p.parent_span_id
-        WHERE ({recording_filter}) AND CAST(s.context_metadata AS TEXT) LIKE '%{marker}%'"""
+        WHERE ({recording_filter})"""
     result = subprocess.run(
         [
             str(cli),
@@ -390,10 +400,11 @@ def test_stream_recording_parent_chain(tmp_path):
     assert result.returncode == 0, result.stderr + result.stdout
     data = json.loads(result.stdout)
     assert data["outcome"]["status"] == "complete"
-    rows = [
+    all_rows = [
         dict(zip((column["name"] for column in data["columns"]), row))
         for row in data["rows"]
     ]
+    rows = [row for row in all_rows if row["context_metadata"].get("stream_audit") == marker]
     origins = {
         row["context_metadata"]["case"]: row
         for row in rows
@@ -409,7 +420,7 @@ def test_stream_recording_parent_chain(tmp_path):
     }
     networks = [row for row in rows if row["span_type"] == "network_span"]
     assert len(networks) == 5
-    by_id = {row["span_id"]: row for row in rows}
+    by_id = {row["span_id"]: row for row in all_rows}
     for request in networks:
         origin = origins[request["context_metadata"]["case"]]
         assert request["parent"] == "ai.clients.retry_attempt"

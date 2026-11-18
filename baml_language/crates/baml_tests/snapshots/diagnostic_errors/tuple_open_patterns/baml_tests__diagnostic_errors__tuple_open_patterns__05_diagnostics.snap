@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0004
+
+  × operator `+` cannot be applied to `unknown` and `1`
+   ╭─[patterns.baml:3:28]
+ 3 │         (let number, _) => number + 1,
+   ·                            ──────────
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[patterns.baml:11:14]
+ 11 │         _ => value,
+    ·              ──┬──
+    ·                ╰── expected `null`, found `T | null`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[patterns.baml:17:27]
+ 17 │         (let a, let b) => value,
+    ·                           ──┬──
+    ·                             ╰── expected `(unknown, unknown)`, found `T`
+    ╰────

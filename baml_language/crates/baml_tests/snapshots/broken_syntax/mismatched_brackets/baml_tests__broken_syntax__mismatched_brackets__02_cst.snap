@@ -174,25 +174,20 @@ SourceFile@262..1105
               token: Word "int" @776..779
       stmts: Bogus@779..780
         tokens: Comma "," @779..780
-      stmts: ExprStmt@781..791
-        expr: BinaryExpr@781..791
-          lhs: PathExpr@781..787
-            head: Name@781..787
-              token: Word "string" @781..787
-          op: Greater ">" @787..788
-          op: Greater ">" @788..789
-          rhs: ParenExpr@789..791
-            l: LParen "(" @789..790
-            inner: LiteralExpr@790..791
-              token: Integer "1" @790..791
-            r: <missing @791>
-      stmts: Bogus@791..792
-        tokens: Comma "," @791..792
-      stmts: ExprStmt@793..798
-        expr: StringLit@793..798
-          token: String "\"two\"" @793..798
-      stmts: Bogus@798..799
-        tokens: RParen ")" @798..799
+      tail: BinaryExpr@781..799
+        lhs: PathExpr@781..787
+          head: Name@781..787
+            token: Word "string" @781..787
+        op: Greater ">" @787..788
+        op: Greater ">" @788..789
+        rhs: TupleExpr@789..799
+          l: LParen "(" @789..790
+          elements: LiteralExpr@790..791
+            token: Integer "1" @790..791
+          elements: Comma "," @791..792
+          elements: StringLit@793..798
+            token: String "\"two\"" @793..798
+          r: RParen ")" @798..799
       r: RBrace "}" @800..801
   items: FunctionDef@841..897
     kw: Function "function" @841..849
@@ -292,9 +287,6 @@ error @416..417: expected ')', found '}'
 error @534..535: expected expression, found ')'
 error @674..675: expected expression, found ','
 error @779..780: expected expression, found ','
-error @791..792: expected ')', found ','
-error @791..792: expected expression, found ','
-error @798..799: expected expression, found ')'
 error @894..895: expected ')', found ']'
 error @894..895: expected expression, found ']'
 error @986..987: expected expression, found '}'

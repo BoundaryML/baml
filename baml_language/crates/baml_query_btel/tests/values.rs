@@ -410,3 +410,54 @@ async fn captured_images_store_each_content_once_and_render_as_descriptors() {
     }
     assert_eq!(result.rows.len(), 2);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dotted_and_bracketed_tuple_slots_read_the_same() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        function Pair(n: int) -> ((int, string), bool?) { ((n, "a"), null) }
+        function main(n: int) -> int {
+            Pair(n);
+            n
+        }
+    "#;
+    let results = record_program(project.path(), source, &["Pair"], &[("main", 4)]).await;
+    assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(4))]);
+    let mut index = index(project.path());
+    let pairs = [
+        ("output_value.0", "output_value[0]"),
+        ("output_value.0.0", "output_value[0][0]"),
+        ("output_value.0.1", "output_value[0][1]"),
+        ("output_value[0].1", "output_value[0][1]"),
+        ("output_value.1", "output_value[1]"),
+        ("output_value.2", "output_value[2]"),
+        ("output_value.0.2", "output_value[0][2]"),
+    ];
+    let select = pairs
+        .iter()
+        .enumerate()
+        .map(|(at, (dotted, bracketed))| format!("{dotted} AS d{at}, {bracketed} AS b{at}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let result = sql(
+        &mut index,
+        &format!("SELECT {select} FROM spans WHERE span_name = 'user.Pair'"),
+    );
+    assert_eq!(result.rows.len(), 1, "{:?}", result.outcome.diagnostics);
+    for (at, (dotted, _)) in pairs.iter().enumerate() {
+        assert_eq!(
+            column(&result, &format!("d{at}")),
+            column(&result, &format!("b{at}")),
+            "{dotted}"
+        );
+    }
+    assert_eq!(column(&result, "d0"), vec![&json!([4, "a"])]);
+    assert_eq!(column(&result, "d1"), vec![&json!(4)]);
+    assert_eq!(column(&result, "d2"), vec![&json!("a")]);
+    assert_eq!(column(&result, "d4"), vec![&json!(null)]);
+    let filtered = sql(
+        &mut index,
+        "SELECT COUNT(*) FROM spans WHERE span_name = 'user.Pair' AND output_value.0.1 = 'a' AND output_value.0.0 = output_value[0][0]",
+    );
+    assert_eq!(filtered.rows, vec![vec![json!(1)]]);
+}

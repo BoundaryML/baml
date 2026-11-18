@@ -68,7 +68,9 @@ impl Blob<'_> {
             let mut total = 0u64;
             while let Some(ty) = pending.pop() {
                 let payload = match ty {
-                    RealizedTy::Class(_, args) | RealizedTy::Union(args) => {
+                    RealizedTy::Class(_, args)
+                    | RealizedTy::Union(args)
+                    | RealizedTy::Tuple(args) => {
                         pending.extend(args.iter());
                         0
                     }
@@ -228,6 +230,19 @@ impl Blob<'_> {
                             pending
                                 .extend(snapshot.values(*items).iter().copied().map(Task::Value));
                             8u64.checked_add(type_bytes(snapshot.ty(*element_type))?)?
+                        }
+                        SnapshotObject::Tuple {
+                            element_types,
+                            items,
+                            ..
+                        } => {
+                            pending
+                                .extend(snapshot.values(*items).iter().copied().map(Task::Value));
+                            let mut bytes = 8u64;
+                            for ty in snapshot.type_arguments(*element_types) {
+                                bytes = bytes.checked_add(type_bytes(ty)?)?;
+                            }
+                            bytes
                         }
                         SnapshotObject::Map {
                             key_type,
