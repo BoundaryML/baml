@@ -17,6 +17,8 @@
 //! lands in a handler only for the chain to throw the error on. The chain
 //! stays in the code: a throw in the handler's own function jumps to it.
 
+use std::collections::HashMap;
+
 use baml_compiler2_mir::{
     BlockId, Local, Operand, Place, Rvalue, StatementKind, SwitchKey, Terminator,
 };
@@ -28,8 +30,6 @@ use cranelift_codegen::{
     },
 };
 use cranelift_module::{DataDescription, FuncId, Linkage, Module};
-
-use std::collections::HashMap;
 
 use super::{Backend, TRAP_AFTER_PANIC, Translator, WORD, internal};
 use crate::{

@@ -1782,6 +1782,26 @@ impl<'a, 'db> Translator<'a, 'db> {
                 };
                 return Ok(self.builder.ins().icmp_imm(condition, presence, 0));
             }
+            TypeTestPlan::Equals(literal) => {
+                use crate::narrow::Value;
+                return match literal {
+                    Value::Int(wanted) => {
+                        Ok(self.builder.ins().icmp_imm(IntCC::Equal, value, *wanted))
+                    }
+                    Value::Bool(wanted) => {
+                        Ok(self
+                            .builder
+                            .ins()
+                            .icmp_imm(IntCC::Equal, value, i64::from(*wanted)))
+                    }
+                    Value::String(text) => {
+                        let wanted = self.backend.string_constant(text)?;
+                        let wanted = self.data_address(wanted);
+                        self.call_runtime(Runtime::StringEq, &[value, wanted])?
+                            .ok_or_else(|| internal("string equality returns a bool"))
+                    }
+                };
+            }
             TypeTestPlan::Header(test) => test,
         };
         let classes::Passing {
@@ -1954,6 +1974,9 @@ impl<'a, 'db> Translator<'a, 'db> {
             // Compared with the type id the function was passed.
             TestKind::Argument(_) => {}
             TestKind::Panic => ids.push(classes::ANY_PANIC),
+            TestKind::Is(_) => {
+                return Err(internal("a checked literal test compares values"));
+            }
             TestKind::AnyOf(tests) => {
                 let mut null_passes = false;
                 for test in tests {

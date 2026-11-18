@@ -1302,6 +1302,8 @@ pub(crate) enum TypeTestPlan<'db> {
     /// By the type id in the header of the object a union's reference
     /// names; `null` fails.
     Header(TestKind<'db>),
+    /// By whether the value, of the literal's own type, equals it.
+    Equals(crate::narrow::Value),
 }
 
 /// How `test` is decided for an operand of type `operand`. `coarse` says the
@@ -1313,6 +1315,20 @@ pub(crate) fn type_test_plan<'db>(
     coarse: bool,
 ) -> Result<TypeTestPlan<'db>, Blocker> {
     let test = test.ok_or_else(|| Blocker::new("type test", "of a type without one type id"))?;
+    if let TestKind::Is(value) = &test {
+        use crate::narrow::Value;
+        // A value whose type is a union of literals is held as their one
+        // type is: which literal it is, is which value it is.
+        return match (operand, value) {
+            (NativeTy::String, Value::String(_))
+            | (NativeTy::Int, Value::Int(_))
+            | (NativeTy::Bool, Value::Bool(_)) => Ok(TypeTestPlan::Equals(value.clone())),
+            _ => Err(Blocker::new(
+                "type test",
+                "of a literal, on a value of another type or of several",
+            )),
+        };
+    }
     Ok(match operand {
         NativeTy::Union(_) | NativeTy::Unknown => {
             match &test {
@@ -1326,6 +1342,12 @@ pub(crate) fn type_test_plan<'db>(
                             type_test_plan(db, operand, Some(test.clone()), coarse)?;
                         }
                     }
+                }
+                TestKind::Is(_) => {
+                    return Err(Blocker::new(
+                        "type test",
+                        "of a literal, on a value of another type or of several",
+                    ));
                 }
                 TestKind::Exactly(_)
                 | TestKind::Argument(_)

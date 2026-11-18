@@ -54,6 +54,16 @@ pub(crate) enum TestKind<'db> {
     /// A panic: an instance of any class of `baml.panics`, which its
     /// header's flag says; see [`crate::layout::HEADER_PANIC`].
     Panic,
+    /// This one value of a literal type: a value of its type equal to it.
+    Is(Value),
+}
+
+/// The value of a literal type a test asks for.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) enum Value {
+    String(String),
+    Int(i64),
+    Bool(bool),
 }
 
 impl<'db> TestKind<'db> {
@@ -105,6 +115,15 @@ impl<'db> TestKind<'db> {
             TyTemplate::String => NativeTy::String,
             TyTemplate::Bigint => NativeTy::Bigint,
             TyTemplate::Null => NativeTy::Null,
+            TyTemplate::Literal(baml_type::Literal::String(text), _) => {
+                return Some(Self::Is(Value::String(text.clone())));
+            }
+            TyTemplate::Literal(baml_type::Literal::Int(value), _) => {
+                return Some(Self::Is(Value::Int(*value)));
+            }
+            TyTemplate::Literal(baml_type::Literal::Bool(value), _) => {
+                return Some(Self::Is(Value::Bool(*value)));
+            }
             TyTemplate::List(_) => return Some(Self::AnyArray),
             TyTemplate::TypeArgRef(slot) => match arguments.get(*slot as usize)?.clone()? {
                 NativeTy::Unknown => return Some(Self::Argument(*slot as usize)),
@@ -151,7 +170,7 @@ impl<'db> TestKind<'db> {
     pub(crate) fn is_static(&self) -> bool {
         match self {
             Self::Exactly(_) | Self::AnyArray => true,
-            Self::Argument(_) | Self::Implements(_) | Self::Panic => false,
+            Self::Argument(_) | Self::Implements(_) | Self::Panic | Self::Is(_) => false,
             Self::AnyOf(tests) => tests.iter().all(Self::is_static),
         }
     }
@@ -176,7 +195,7 @@ impl<'db> TestKind<'db> {
             Self::Exactly(ty) => ty == member,
             Self::AnyArray => matches!(member, NativeTy::Array(_)),
             // Nothing is known of it where the code is compiled.
-            Self::Argument(_) | Self::Implements(_) | Self::Panic => false,
+            Self::Argument(_) | Self::Implements(_) | Self::Panic | Self::Is(_) => false,
             Self::AnyOf(tests) => tests.iter().any(|test| test.matches(member)),
         }
     }
