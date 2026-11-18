@@ -2452,7 +2452,9 @@ fn determine_concrete<'db>(
         return Determination::Poisoned;
     };
     let mut declarers: Vec<baml_type::Interface> = Vec::new();
-    for interface in crate::impls::impl_views_for_type(db, viewer, base) {
+    for interface in crate::impls::impl_views_for_type(db, viewer, base, |name| {
+        interface_declares_member(db, name, member, ns)
+    }) {
         if interface_declares_member(db, &interface.name, member, ns)
             && !declarers.contains(&interface)
         {
