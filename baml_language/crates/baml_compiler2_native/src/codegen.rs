@@ -2615,6 +2615,17 @@ impl<'a, 'db> Translator<'a, 'db> {
         };
         match mode {
             BinaryMode::Int if is_comparison(op) => {
+                // Whether a remainder by a power of two is zero is whether
+                // the low bits are, whatever the sign: one test in place of
+                // the rounding the remainder itself takes.
+                let left_value = match (op, right, self.remainder_mask(left_value)) {
+                    (
+                        BinOp::Eq | BinOp::Ne,
+                        Operand::Constant(Constant::Int(0)),
+                        Some((dividend, mask)),
+                    ) => self.builder.ins().band_imm(dividend, mask),
+                    _ => left_value,
+                };
                 Ok(self
                     .builder
                     .ins()
@@ -2683,6 +2694,50 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
     }
 
+    /// The constant `value` is, when it is the result of an `iconst`.
+    fn constant_of(&self, value: ir::Value) -> Option<i64> {
+        let dfg = &self.builder.func.dfg;
+        let instruction = dfg.value_def(dfg.resolve_aliases(value)).inst()?;
+        match dfg.insts[instruction] {
+            ir::InstructionData::UnaryImm {
+                opcode: ir::Opcode::Iconst,
+                imm,
+            } => Some(imm.bits()),
+            _ => None,
+        }
+    }
+
+    /// When `value` is `dividend % divisor` for a constant `divisor` that is
+    /// a power of two above one: the dividend, and the mask of the bits
+    /// below the divisor's.
+    fn remainder_mask(&self, value: ir::Value) -> Option<(ir::Value, i64)> {
+        let dfg = &self.builder.func.dfg;
+        let instruction = dfg.value_def(dfg.resolve_aliases(value)).inst()?;
+        let ir::InstructionData::Binary {
+            opcode: ir::Opcode::Srem,
+            args: [dividend, divisor],
+        } = dfg.insts[instruction]
+        else {
+            return None;
+        };
+        let divisor = self.constant_of(divisor)?;
+        (divisor > 1 && divisor & (divisor - 1) == 0).then_some((dividend, divisor - 1))
+    }
+
+    /// `value * factor` as a shift and an add, for the factors that are one
+    /// more than a power of two and small: a single instruction where a
+    /// multiply needs the factor in a register first.
+    fn multiply_by_shift_and_add(&mut self, value: ir::Value, factor: i64) -> Option<ir::Value> {
+        let shift = match factor {
+            3 => 1,
+            5 => 2,
+            9 => 3,
+            _ => return None,
+        };
+        let shifted = self.builder.ins().ishl_imm(value, shift);
+        Some(self.builder.ins().iadd(value, shifted))
+    }
+
     fn int_arithmetic(
         &mut self,
         op: BinOp,
@@ -2693,7 +2748,17 @@ impl<'a, 'db> Translator<'a, 'db> {
         match op {
             BinOp::Add => Ok(self.builder.ins().iadd(left, right)),
             BinOp::Sub => Ok(self.builder.ins().isub(left, right)),
-            BinOp::Mul => Ok(self.builder.ins().imul(left, right)),
+            BinOp::Mul => {
+                let by_constant = match (self.constant_of(left), self.constant_of(right)) {
+                    (_, Some(factor)) => self.multiply_by_shift_and_add(left, factor),
+                    (Some(factor), None) => self.multiply_by_shift_and_add(right, factor),
+                    (None, None) => None,
+                };
+                Ok(match by_constant {
+                    Some(product) => product,
+                    None => self.builder.ins().imul(left, right),
+                })
+            }
             BinOp::Div => self.divide(left, right, right_constant),
             // The remainder of the smallest int by -1 is zero, which is what
             // the instruction gives on every target: unlike division it is

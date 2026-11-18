@@ -78,6 +78,23 @@ function float_small() -> float { half(2) / 3.0 * 0.0000001 }
 function float_divide_by_zero() -> float { -half(2) / half(0) }
 function float_nan() -> float { half(0) / half(0) }
 function float_remainder() -> float { -half(15) % half(4) }
+function remainder_by_power_of_two_is_zero() -> int {
+  let hits = 0;
+  for (let x = -count(9); x < 10; x += 1) {
+    if x % 2 == 0 { hits += 1; }
+    if x % 4 != 0 { hits += 100; }
+    if 0 == x % 8 { hits += 10000; }
+    if x % 1 == 0 { hits += 1000000; }
+    if x % -2 == 0 { hits += 100000000; }
+  }
+  if int_min() % 16 == 0 { hits += 10000000000; }
+  if int_max() % 16 != 0 { hits += 20000000000; }
+  hits
+}
+function multiply_by_three_five_nine() -> int {
+  let x = -count(7);
+  (3 * x) + (x * 5) * 100 + (9 * x) * 10000 + int_max() * 3 + int_min() * 9 + count(11) * 5
+}
 function nan_orders_above_numbers() -> bool {
   let nan = half(0) / half(0);
   let one = half(2);
@@ -984,6 +1001,8 @@ const CASES: &[Case] = &[
         "smallest_divided_by_minus_one",
         Printed("-9223372036854775808"),
     ),
+    wide("remainder_by_power_of_two_is_zero", Printed("30919031409")),
+    wide("multiply_by_three_five_nine", Printed("-633469")),
     wide("smallest_remainder_by_minus_one", Printed("0")),
     case("int_times_float", Printed("6.5")),
     case("float_shortest_digits", Printed("0.30000000000000004")),
