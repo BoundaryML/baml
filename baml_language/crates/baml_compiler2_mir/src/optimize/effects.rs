@@ -230,7 +230,7 @@ impl Facts {
                 };
                 let rhs = self.range(self.number(right, body)?);
                 let offset = offset.checked_add(rhs.lo)?;
-                (rhs.lo == rhs.hi && rhs.lo >= 0 && offset <= MAX).then_some((local, offset))
+                (rhs.lo == rhs.hi && rhs.lo >= 0).then_some((local, offset))
             }
             _ => None,
         }

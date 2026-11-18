@@ -80,7 +80,9 @@ pub(crate) fn coerce(code: &str, from: Repr, to: Repr) -> String {
     use Repr::{Bool, Float, Int, Value};
     match (from, to) {
         (a, b) if a == b => code.to_string(),
-        (Int, Value) => format!("vm.int_value({code})"),
+        // The int is computed before `vm` is borrowed to box it: `{code}` may
+        // itself borrow `vm` mutably.
+        (Int, Value) => format!("{{ let int: i64 = {code}; vm.int_value(int) }}"),
         (Bool, Value) => format!("Value::bool({code})"),
         (Float, Value) => format!("vm.float_value({code})"),
         // Reject wrong value kinds instead of silently converting them.

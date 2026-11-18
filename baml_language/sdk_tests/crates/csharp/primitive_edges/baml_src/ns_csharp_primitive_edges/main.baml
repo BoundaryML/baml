@@ -1,9 +1,9 @@
 function int_min() -> int {
-    -4611686018427387904
+    -9223372036854775808
 }
 
 function int_max() -> int {
-    4611686018427387903
+    9223372036854775807
 }
 
 function echo_int(value: int) -> int {

@@ -17,7 +17,7 @@ interface        baml.Concrete                    <builtin>/baml/core.baml:19
 class            baml.TaggedString                <builtin>/baml/core.baml:45
 class            baml.Float                       <builtin>/baml/float.baml:18
 interface        baml.Hash                        <builtin>/baml/hashing.baml:15
-class            baml.Int                         <builtin>/baml/int.baml:33
+class            baml.Int                         <builtin>/baml/int.baml:31
 class            baml.Null                        <builtin>/baml/null.baml:2
 interface        baml.Sortable                    <builtin>/baml/sortable.baml:22
 class            baml.String                      <builtin>/baml/string.baml:17
@@ -219,9 +219,9 @@ function         baml.path.parent                 <builtin>/baml/ns_path/path.ba
 function         baml.path.is_absolute            <builtin>/baml/ns_path/path.baml:12
 function         baml.path.absolute               <builtin>/baml/ns_path/path.baml:20
 interface        baml.random.Rng                  <builtin>/baml/ns_random/random.baml:7
-class            baml.random.SystemRandom         <builtin>/baml/ns_random/random.baml:45
-class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:68
-class            baml.random.ChaCha20             <builtin>/baml/ns_random/random.baml:114
+class            baml.random.SystemRandom         <builtin>/baml/ns_random/random.baml:46
+class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:69
+class            baml.random.ChaCha20             <builtin>/baml/ns_random/random.baml:115
 class            baml.regex.Group                 <builtin>/baml/ns_regex/regex.baml:19
 class            baml.regex.Match                 <builtin>/baml/ns_regex/regex.baml:39
 enum             baml.regex.ErrorKind             <builtin>/baml/ns_regex/regex.baml:55
@@ -276,10 +276,10 @@ function         baml.time.system_timezone        <builtin>/baml/ns_time/timezon
 class            baml.time.ZonedDateTime          <builtin>/baml/ns_time/zoneddatetime.baml:19
 type             baml.toml.Item                   <builtin>/baml/ns_toml/toml.baml:12
 class            baml.toml.Table                  <builtin>/baml/ns_toml/toml.baml:35
-function         baml.toml.table_from_json        <builtin>/baml/ns_toml/toml.baml:190
-function         baml.toml.item_to_json           <builtin>/baml/ns_toml/toml.baml:220
-function         baml.toml.item_from_json         <builtin>/baml/ns_toml/toml.baml:244
-class            baml.toml.ParseError             <builtin>/baml/ns_toml/toml.baml:260
+function         baml.toml.table_from_json        <builtin>/baml/ns_toml/toml.baml:189
+function         baml.toml.item_to_json           <builtin>/baml/ns_toml/toml.baml:219
+function         baml.toml.item_from_json         <builtin>/baml/ns_toml/toml.baml:243
+class            baml.toml.ParseError             <builtin>/baml/ns_toml/toml.baml:259
 class            baml.ws.WebSocket                <builtin>/baml/ns_ws/ws.baml:4
 class            baml.ws.CloseEvent               <builtin>/baml/ns_ws/ws.baml:51
 function         baml.ws.connect                  <builtin>/baml/ns_ws/ws.baml:66

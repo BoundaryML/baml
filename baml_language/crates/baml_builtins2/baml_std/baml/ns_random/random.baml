@@ -25,14 +25,17 @@ interface Rng {
         // The 64 bits fill the whole `int` uniformly; the arithmetic `>> 1`
         // drops the lowest and keeps the sign, so the 63 that remain tile
         // `[-2^62, 2^62)`, one draw per value.
-        ((bytes[0] << 56)
-            | (bytes[1] << 48)
-            | (bytes[2] << 40)
-            | (bytes[3] << 32)
-            | (bytes[4] << 24)
-            | (bytes[5] << 16)
-            | (bytes[6] << 8)
-            | bytes[7]) >> 1
+        (
+            (bytes[0] << 56)
+                | (bytes[1] << 48)
+                | (bytes[2] << 40)
+                | (bytes[3] << 32)
+                | (bytes[4] << 24)
+                | (bytes[5] << 16)
+                | (bytes[6] << 8)
+                | bytes[7]
+        )
+            >> 1
     }
 }
 

@@ -131,19 +131,19 @@ impl Value {
 
     /// Largest int with an inline encoding (`2^62 - 1`): the low bit is the
     /// tag, so an inline int has 63 bits.
-    #[cfg(not(feature = "narrow_inline_int"))]
+    #[cfg(not(baml_narrow_inline_int))]
     pub const INLINE_INT_MAX: i64 = (1 << 62) - 1;
 
     /// Smallest int with an inline encoding (`-2^62`).
-    #[cfg(not(feature = "narrow_inline_int"))]
+    #[cfg(not(baml_narrow_inline_int))]
     pub const INLINE_INT_MIN: i64 = -(1 << 62);
 
     /// The test-only narrow inline range, so ordinary programs box ints.
-    #[cfg(feature = "narrow_inline_int")]
+    #[cfg(baml_narrow_inline_int)]
     pub const INLINE_INT_MAX: i64 = (1 << 20) - 1;
 
     /// The test-only narrow inline range, so ordinary programs box ints.
-    #[cfg(feature = "narrow_inline_int")]
+    #[cfg(baml_narrow_inline_int)]
     pub const INLINE_INT_MIN: i64 = -(1 << 20);
 
     // ── Tagged-int fast-path arithmetic ───────────────────────────────────
@@ -196,7 +196,7 @@ impl Value {
             return None;
         }
         // The narrow test range is smaller than what the overflow flag checks.
-        if cfg!(feature = "narrow_inline_int") && !Self::fits_inline(t >> 1) {
+        if cfg!(baml_narrow_inline_int) && !Self::fits_inline(t >> 1) {
             return None;
         }
         Some(Value(t as u64))
@@ -219,7 +219,7 @@ impl Value {
 
     /// Build an inline `Value` carrying an integer.
     ///
-    /// Asserts, in debug builds and in the `narrow_inline_int` test mode,
+    /// Asserts, in debug builds and in the `baml_narrow_inline_int` test mode,
     /// that `i` is in `[INLINE_INT_MIN, INLINE_INT_MAX]`. Values outside that
     /// range are truncated by the encoding shift, so passing one here is a
     /// caller bug: an int of arbitrary magnitude goes through the heap's
@@ -228,7 +228,7 @@ impl Value {
     /// first or use [`Value::try_inline_int`].
     #[inline(always)]
     pub const fn int(i: i64) -> Self {
-        if cfg!(any(debug_assertions, feature = "narrow_inline_int")) {
+        if cfg!(any(debug_assertions, baml_narrow_inline_int)) {
             assert!(
                 Self::fits_inline(i),
                 "Value::int called with an i64 outside the inline int range"

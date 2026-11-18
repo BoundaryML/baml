@@ -156,10 +156,10 @@ fn javascript(scalar: &Scalar, slot: ScalarSlot) -> Answer<Scalar> {
     reason = "the round trip checks the cast was exact"
 )]
 fn exact_float(int: i64) -> Option<f64> {
-    let float = int as f64;
     // `as i64` saturates, so `i64::MAX`, which rounds up to `2^63`, would
     // compare equal; the half-open bound rules that out. `-2^63` is exact.
     const LIMIT: f64 = 9_223_372_036_854_775_808.0;
+    let float = int as f64;
     ((-LIMIT..LIMIT).contains(&float) && float as i64 == int).then_some(float)
 }
 
