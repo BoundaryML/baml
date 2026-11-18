@@ -356,7 +356,7 @@ pub(crate) unsafe fn each_root(task: *mut Task, mut each: impl FnMut(usize)) {
     unsafe {
         let mut head = (*task).natives;
         while !head.is_null() {
-            (*head).slots.roots().for_each(&mut each);
+            (*head).slots.each_root(&mut each);
             head = (*head).outer;
         }
     }
@@ -667,10 +667,11 @@ mod tests {
             let head = start(&mut worker, "test.owns", |scope| async move {
                 let owned = scope.alloc_owned(Arc::new(Counted(7)));
                 let plain = scope.alloc_plain([1_u64, 2, 3]);
-                let dead = scope.alloc_owned(Arc::new(Counted(9)));
-                assert_eq!(dead.get(scope).owned::<Counted>().0, 9);
-                // The root just made is not used again.
-                scope.release_last(1);
+                // Its root is given back, so nothing holds the object.
+                scope.scoped(|scope, _| {
+                    let dead = scope.alloc_owned(Arc::new(Counted(9)));
+                    assert_eq!(dead.get(scope).owned::<Counted>().0, 9);
+                });
                 // Every allocation collects: the value of the dead object
                 // goes, and the others are found where their objects are.
                 scope.alloc_str("moves everything");
@@ -789,6 +790,54 @@ mod tests {
             let status = unsafe { crate::sched::run(&raw mut *worker, entry, migrate) };
             assert_eq!(status, 0);
             assert!(INTACT.swap(false, Ordering::AcqRel), "migrating: {migrate}");
+        }
+    }
+
+    /// Whether the native below found every string it held.
+    static ALL_HELD: AtomicBool = AtomicBool::new(false);
+
+    /// Runs a native that holds forty roots across a stop.
+    unsafe extern "C" fn holds_forty_roots(worker: *mut Mutator) -> *mut Mutator {
+        // SAFETY: on a task of `worker`.
+        let (worker, _) = unsafe {
+            drive(worker, "test.holds_forty_roots", |scope| async move {
+                let held: Vec<_> = (0..40)
+                    .map(|index| scope.alloc_str(&format!("root {index}")))
+                    .collect();
+                let called = scope.call_baml(BamlFn(sleeps as *const () as usize), &[]);
+                let slept = called.await.is_ok();
+                // One more allocation, which moves all forty.
+                let last = scope.alloc_str("and one more");
+                let intact = held
+                    .iter()
+                    .enumerate()
+                    .all(|(index, text)| text.get(scope).as_str() == format!("root {index}"));
+                ALL_HELD.store(
+                    slept && intact && last.get(scope).as_str() == "and one more",
+                    Ordering::Release,
+                );
+                RtResult::ok(0)
+            })
+        };
+        worker
+    }
+    crate::sched::tests::task_function!(holds_forty_roots_task => holds_forty_roots);
+
+    /// A native holds as many roots as it makes, and the collector keeps
+    /// every one current across a stop, with and without a move.
+    #[test]
+    fn a_native_holds_forty_roots_across_a_stop() {
+        for (stress, migrate) in [(false, false), (true, false), (false, true), (true, true)] {
+            let mut worker = worker(stress);
+            let entry = holds_forty_roots_task as *const () as usize;
+            // SAFETY: the worker is this test's, and the entry a task
+            // function.
+            let status = unsafe { crate::sched::run(&raw mut *worker, entry, migrate) };
+            assert_eq!(status, 0);
+            assert!(
+                ALL_HELD.swap(false, Ordering::AcqRel),
+                "collecting always: {stress}, migrating: {migrate}"
+            );
         }
     }
 

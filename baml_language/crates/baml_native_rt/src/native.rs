@@ -34,7 +34,8 @@ use crate::{
     },
 };
 
-/// How many roots one call of a native can hold at once.
+/// How many slots a chunk of roots has. A call that holds no more than
+/// this many values at once uses the one chunk that is in place.
 const ROOTS: usize = 16;
 
 /// What a reference refers to: implemented by the markers [`Str`],
@@ -421,65 +422,167 @@ impl From<Option<bool>> for OptionalScalar {
     }
 }
 
-/// The slots behind the roots of one call of a native. It lives in the
-/// frame of the function compiled code called, or for an `async` native in
-/// the block that holds its state.
-///
-/// A slot is written when it is first handed out and not before: a call
-/// that roots two things pays for two.
-pub struct RootSlots {
+/// Some of the slots behind the roots of one call: [`ROOTS`] of them, and
+/// which are roots.
+struct Chunk {
     slots: MaybeUninit<[Cell<usize>; ROOTS]>,
-    /// How many slots are held.
-    used: Cell<usize>,
-    /// Which of them are roots, a bit each.
+    /// Which of the slots are roots, a bit each. The bit of a slot that is
+    /// not held is clear.
     refs: Cell<u32>,
+    /// The chunk the next slots are in, once a call has held that many:
+    /// on the Rust heap, and null until then.
+    next: Cell<*mut Chunk>,
 }
 
 const _: () = assert!(ROOTS <= u32::BITS as usize);
 
+impl Chunk {
+    fn new() -> Self {
+        Self {
+            slots: MaybeUninit::uninit(),
+            refs: Cell::new(0),
+            next: Cell::new(std::ptr::null_mut()),
+        }
+    }
+}
+
+/// The slots behind the roots of one call of a native. It lives in the
+/// frame of the function compiled code called, or for an `async` native in
+/// the block that holds its state.
+///
+/// The first [`ROOTS`] slots are here. A call that holds more gets further
+/// chunks of as many, which stay where they are until the call is over: a
+/// root is the address of its slot. A slot is written when it is first
+/// handed out and not before: a call that roots two things pays for two.
+pub struct RootSlots {
+    first: Chunk,
+    /// How many slots are held.
+    used: Cell<usize>,
+    /// The chunk after the first that a slot was last taken from, and
+    /// which chunk it is, counting the first as zero: the one a call that
+    /// holds many asks for next. Zero and null until there is one.
+    last: Cell<(usize, *mut Chunk)>,
+}
+
 impl RootSlots {
     pub fn new() -> Self {
         Self {
-            slots: MaybeUninit::uninit(),
+            first: Chunk::new(),
             used: Cell::new(0),
-            refs: Cell::new(0),
+            last: Cell::new((0, std::ptr::null_mut())),
+        }
+    }
+
+    /// Chunk `number`, which is not the first, made if no call has held
+    /// that many slots yet.
+    #[cold]
+    fn further(&self, number: usize) -> &Chunk {
+        let (mut at, mut chunk) = match self.last.get() {
+            (at, chunk) if at != 0 && at <= number => (at, chunk.cast_const()),
+            _ => (0, &raw const self.first),
+        };
+        // SAFETY: a chunk's `next` is null or a chunk made here, which
+        // lives until `self` is dropped.
+        unsafe {
+            while at < number {
+                let mut next = (*chunk).next.get();
+                if next.is_null() {
+                    next = Box::into_raw(Box::new(Chunk::new()));
+                    (*chunk).next.set(next);
+                }
+                (chunk, at) = (next, at + 1);
+            }
+            self.last.set((number, chunk.cast_mut()));
+            &*chunk
         }
     }
 
     /// The next slot, holding `word`, which is a reference if `is_ref`.
     fn hold(&self, word: usize, is_ref: bool) -> &Cell<usize> {
         let index = self.used.get();
-        assert!(index < ROOTS, "a native holds at most {ROOTS} roots");
         self.used.set(index + 1);
-        self.refs.set(self.refs.get() | u32::from(is_ref) << index);
-        // SAFETY: the slot is inside the array, a cell may be written
-        // through a shared reference, and it is written before the
+        let chunk = if index < ROOTS {
+            &self.first
+        } else {
+            self.further(index / ROOTS)
+        };
+        let at = index % ROOTS;
+        chunk.refs.set(chunk.refs.get() | u32::from(is_ref) << at);
+        // SAFETY: the slot is inside the chunk's array, a cell may be
+        // written through a shared reference, and it is written before the
         // reference to it is made.
         unsafe {
-            let slot = self
+            let slot = chunk
                 .slots
                 .as_ptr()
                 .cast::<Cell<usize>>()
-                .add(index)
+                .add(at)
                 .cast_mut();
             slot.write(Cell::new(word));
             &*slot
         }
     }
 
-    /// The addresses of the slots that are roots.
-    pub(crate) fn roots(&self) -> impl Iterator<Item = usize> {
-        let refs = self.refs.get();
-        let first = self.slots.as_ptr() as usize;
-        (0..self.used.get())
-            .filter(move |index| refs >> index & 1 != 0)
-            .map(move |index| first + index * WORD)
+    /// Give back every slot from `kept` on, and say how many of them were
+    /// roots.
+    fn release_to(&self, kept: usize) -> usize {
+        let mut dropped = 0;
+        let mut chunk = &raw const self.first;
+        let mut first_slot = 0;
+        // SAFETY: a call that holds slots has the chunks they are in.
+        unsafe {
+            while first_slot < self.used.get() {
+                let refs = (*chunk).refs.get();
+                // The slots of this chunk that stay held.
+                let stay = match kept.saturating_sub(first_slot) {
+                    stay if stay >= ROOTS => u32::MAX,
+                    stay => (1 << stay) - 1,
+                };
+                dropped += (refs & !stay).count_ones() as usize;
+                (*chunk).refs.set(refs & stay);
+                first_slot += ROOTS;
+                chunk = (*chunk).next.get();
+            }
+        }
+        self.used.set(kept);
+        dropped
+    }
+
+    /// Hand `each` the address of every slot that is a root.
+    pub(crate) fn each_root(&self, mut each: impl FnMut(usize)) {
+        let mut chunk = &raw const self.first;
+        let mut left = self.used.get();
+        // SAFETY: as in `Self::release_to`.
+        unsafe {
+            while left != 0 {
+                let refs = (*chunk).refs.get();
+                let first = (*chunk).slots.as_ptr() as usize;
+                for at in 0..left.min(ROOTS) {
+                    if refs >> at & 1 != 0 {
+                        each(first + at * WORD);
+                    }
+                }
+                left = left.saturating_sub(ROOTS);
+                chunk = (*chunk).next.get();
+            }
+        }
     }
 }
 
 impl Default for RootSlots {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Drop for RootSlots {
+    fn drop(&mut self) {
+        let mut chunk = self.first.next.get();
+        while !chunk.is_null() {
+            // SAFETY: made by `Self::further`, and no root of the call is
+            // used once its slots are dropped.
+            chunk = unsafe { Box::from_raw(chunk) }.next.get();
+        }
     }
 }
 
@@ -712,20 +815,68 @@ impl<'s> Scope<'s> {
     }
 
     /// Give back the last `count` slots handed out, for a native that
-    /// holds one value after another in a loop.
+    /// holds one value after another in a loop and stops in it. A loop
+    /// that does not stop uses [`Self::scoped`], which needs no promise.
     ///
     /// # Safety
     ///
     /// No root or [`Elem`] of those slots is used again.
     pub(crate) unsafe fn release_last(&mut self, count: usize) {
-        let slots = self.slots;
-        let kept = slots.used.get() - count;
-        let dropped = slots.refs.get() >> kept;
-        slots.used.set(kept);
-        slots.refs.set(slots.refs.get() & !(u32::MAX << kept));
+        let dropped = self.slots.release_to(self.slots.used.get() - count);
         if self.exchange.is_null() {
-            self.mutator().unroot(dropped.count_ones() as usize);
+            self.mutator().unroot(dropped);
         }
+    }
+
+    /// Run `body` with a scope of its own, and give back every root it
+    /// made when it returns: a loop that makes a few each time around then
+    /// holds one round's and no more.
+    ///
+    /// The roots `body` makes cannot leave it: they are of a lifetime only
+    /// `body` sees, so neither what it returns nor anything outside it can
+    /// hold one. What it makes and wants kept it stores in an object the
+    /// outer scope holds, whose roots it can use: the second argument is
+    /// what tells the compiler they outlive its own. `body` does not stop,
+    /// since it is no `async` block.
+    ///
+    /// ```no_run
+    /// use baml_native_rt::native::{Root, Scope, Str};
+    ///
+    /// fn measures<'s>(scope: &mut Scope<'s>, held: Root<'s, Str>) -> usize {
+    ///     scope.scoped(|scope, _| {
+    ///         let made = scope.alloc_str("made inside");
+    ///         made.get(scope).byte_len() + held.get(scope).byte_len()
+    ///     })
+    /// }
+    /// ```
+    ///
+    /// A root made inside does not come out:
+    ///
+    /// ```compile_fail
+    /// use baml_native_rt::native::{Root, Scope, Str};
+    ///
+    /// fn leaks<'s>(scope: &mut Scope<'s>) -> Root<'s, Str> {
+    ///     scope.scoped(|scope, _| scope.alloc_str("made inside"))
+    /// }
+    /// ```
+    pub fn scoped<R>(
+        &mut self,
+        body: impl for<'n> FnOnce(&mut Scope<'n>, Within<'n, 's>) -> R,
+    ) -> R {
+        let held = self.slots.used.get();
+        let mut inner = Scope {
+            mutator: self.mutator,
+            slots: self.slots,
+            exchange: self.exchange,
+            life: PhantomData,
+        };
+        let result = body(&mut inner, Within(PhantomData));
+        // Dropping it would give back the roots of the whole call.
+        std::mem::forget(inner);
+        // SAFETY: every root made since is of the inner scope's lifetime,
+        // which is over.
+        unsafe { self.release_last(self.slots.used.get() - held) };
+        result
     }
 
     /// Whether values of the type a call names by `ty` are references.
@@ -900,10 +1051,15 @@ impl<'s> Scope<'s> {
     }
 }
 
+/// What the body of [`Scope::scoped`] is handed beside its scope: that the
+/// outer scope, of `'s`, outlives its own, of `'n`.
+pub struct Within<'n, 's: 'n>(PhantomData<(&'n (), &'s ())>);
+
 impl Drop for Scope<'_> {
     fn drop(&mut self) {
         if self.exchange.is_null() {
-            let rooted = self.slots.refs.get().count_ones() as usize;
+            let mut rooted = 0;
+            self.slots.each_root(|_| rooted += 1);
             self.mutator().unroot(rooted);
         }
     }

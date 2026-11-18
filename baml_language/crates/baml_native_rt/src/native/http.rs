@@ -234,12 +234,13 @@ impl NativeBamlHttp for Natives {
         };
         let headers: Root<'s, Map> = scope.alloc_str_map(head.headers.len());
         for (name, value) in &head.headers {
-            let name = scope.alloc_str(name);
-            let value = scope.alloc_str(value);
-            scope.str_map_set(headers, name, Some(value));
-            // SAFETY: the name and the value are reached through the map
-            // from here on.
-            unsafe { scope.release_last(2) };
+            // The name and the value are reached through the map once
+            // the round is over.
+            scope.scoped(|scope, _| {
+                let name = scope.alloc_str(name);
+                let value = scope.alloc_str(value);
+                scope.str_map_set(headers, name, Some(value));
+            });
         }
         let url = scope.alloc_str(&head.url);
         let body = scope.alloc_owned(head.body);

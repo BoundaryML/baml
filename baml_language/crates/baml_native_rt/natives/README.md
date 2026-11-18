@@ -32,6 +32,13 @@ held across an allocation. The call passes the worker first, the caller
 treats the call as a point where objects move, and a native whose
 declaration can throw returns the thrown object beside its value.
 
+A native holds as many roots as it makes: the first sixteen are in the
+call's own frame, and more spill to chunks on the Rust heap that the
+collector also walks. A loop that makes a few roots each time around runs
+its body in `scope.scoped(|scope, _| ...)`, which gives them back when the
+body returns, and they cannot leave it. A loop that stops in its body
+cannot, and uses the unsafe `scope.release_last`.
+
 **`async`.** The native may stop and go on later. It implies `allocates`.
 The native is an `async fn`, and it stops in exactly two ways, both methods
 of its scope:

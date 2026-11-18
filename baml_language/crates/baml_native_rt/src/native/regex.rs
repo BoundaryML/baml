@@ -103,24 +103,22 @@ fn match_value<'s>(
     let mut next = 0;
     for (index, span) in raw.groups.iter().enumerate() {
         let name = program.names().get(index).and_then(Option::as_deref);
-        let mut held = 0;
-        let made = span.map(|span| {
-            let built = spanned(scope, group, haystack, span, (chars[next], chars[next + 1]));
-            next += 2;
-            held += 2;
-            built.finish()
+        // The group, its text and its name are reached through the array
+        // and the map once the round is over.
+        scope.scoped(|scope, _| {
+            let made = span.map(|span| {
+                let built = spanned(scope, group, haystack, span, (chars[next], chars[next + 1]));
+                next += 2;
+                built.finish()
+            });
+            groups.set(scope, index, made);
+            // Every name of the pattern is a key, whether or not its
+            // group took part.
+            if let Some(name) = name {
+                let key = scope.alloc_str(name);
+                scope.str_map_set(named, key, made);
+            }
         });
-        groups.set(scope, index, made);
-        // Every name of the pattern is a key, whether or not its group
-        // took part.
-        if let Some(name) = name {
-            let key = scope.alloc_str(name);
-            held += 1;
-            scope.str_map_set(named, key, made);
-        }
-        // SAFETY: the group, its text and its name are reached through
-        // the array and the map from here on.
-        unsafe { scope.release_last(held) };
     }
     found.set(scope, MATCH_GROUPS, groups);
     found.set(scope, MATCH_NAMED, named);
