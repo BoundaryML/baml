@@ -407,9 +407,11 @@ jobs:
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
-          cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "windows-cargo"
+          # EXPERIMENT (do not merge): cache the dependency build output too,
+          # and save from this PR so its second run can restore it.
+          cache-targets: true
+          save-if: true
+          shared-key: "windows-cargo-targets-experiment"
 
       - name: "Load .envrc with direnv"
         run: |
