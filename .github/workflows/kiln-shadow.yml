@@ -1,0 +1,297 @@
+name: Trunk Kiln shadow
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  proto-sync-unfixed:
+    name: "proto sync (no touch)"
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    timeout-minutes: 20
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v7
+        with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
+          persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version.
+      - name: "Install Rust toolchain"
+        run: rustup toolchain install
+        working-directory: baml_language
+
+      # bridge_ctypes/build.rs needs `protoc`; baml_go's generate.sh needs
+      # `protoc` + `protoc-gen-go`; bridge_typescript needs node + pnpm.
+      # The `cargo build -p bridge_ctypes` step uses cargo from rustup
+      # (not mise), so we don't need `go` itself here either.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          cache: "false"
+          install_args: "node npm:pnpm protoc protoc-gen-go"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
+      # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_bridge/cffi/v1/.
+      - name: "Generate Rust + Python proto bindings (bridge_ctypes)"
+        # bridge_ctypes/build.rs writes the bindings into the source tree but
+        # does not track them, so cargo skips it on a warm target/ tree when its
+        # inputs are unchanged, and a hand edit to a generated file would pass
+        # the check below. Touch build.rs (it is a rerun-if-changed input) so
+        # the script always runs and writes the bindings again.
+        run: cargo build -p bridge_ctypes
+        working-directory: baml_language
+
+      # Go (protoc-gen-go) — writes into sdks/go/baml_go/internal/cffi/.
+      - name: "Generate Go proto bindings (sdks/go/baml_go)"
+        run: ./generate.sh
+        working-directory: baml_language/sdks/go/baml_go/internal/cffi
+
+      # --ignore-workspace: install from bridge_typescript's own pnpm-lock.yaml
+      # rather than the root workspace lockfile. The two resolve different
+      # protobufjs-cli versions, and pbjs codegen output (committed under
+      # typescript_src/proto/) must come from the version this package pins.
+      # --ignore-scripts: skip dependency build scripts (esbuild's binary
+      # fetch, protobufjs postinstall) — none are needed for pbjs/tsc/napi
+      # codegen, and pnpm errors on unapproved build scripts otherwise.
+      # Same flags as sdk_tests/crates/typescript/setup.sh.
+      - name: "Install Node SDK dependencies"
+        run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+
+      # Node / TypeScript (protobufjs) — writes into sdks/typescript/bridge_typescript/typescript_src/proto/.
+      # build:debug also regenerates typescript2/pkg-proto/src/generated/ (ts-proto / buf).
+      - name: "Generate Node/TypeScript proto bindings (sdks/typescript/bridge_typescript)"
+        run: pnpm build:debug
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+
+      # Swift (protoc-gen-swift) — the plugin needs a Swift toolchain,
+      # which this Linux job doesn't have. The generated .pb.swift files
+      # are instead checked via the input-hash manifest that
+      # sdks/swift/scripts/generate-protos.sh writes alongside them:
+      # recompute the source protos' hashes here; if they differ from
+      # the committed manifest, the Swift bindings were not regenerated.
+      # The bundled ABI header is a verbatim copy of the canonical one
+      # (itself byte-enforced by bridge_cffi's header_generation test),
+      # so re-copy it and let the dirty-tree check below catch drift.
+      - name: "Sync-check Swift proto bindings + ABI header (sdks/swift)"
+        run: |
+          (cd baml_language/crates/bridge_ctypes/types \
+            && sha256sum baml_bridge/cffi/v1/*.proto) \
+            > baml_language/sdks/swift/Sources/BamlBridge/Proto/.generated-from
+          cp baml_language/crates/bridge_cffi/include/baml_cffi.h \
+             baml_language/sdks/swift/Sources/CBamlBridge/include/baml_cffi.h
+
+      - name: "Check generated proto files are in sync"
+        run: |
+          # Check for both modified tracked files and untracked files across every
+          # codegen output documented in baml_language/crates/bridge_ctypes/README.md.
+          PATHS=(
+            baml_language/sdks/typescript/bridge_typescript
+            baml_language/crates/bridge_ctypes
+            baml_language/sdks/go/baml_go/internal/cffi
+            baml_language/sdks/python/src/baml_bridge/cffi
+            baml_language/sdks/rust/bridge_rust/src/wire
+            baml_language/sdks/swift/Sources/BamlBridge/Proto
+            baml_language/sdks/swift/Sources/CBamlBridge/include
+            typescript2/pkg-proto
+          )
+          README="baml_language/crates/bridge_ctypes/README.md"
+          STATUS=$(git status --porcelain -- "${PATHS[@]}")
+          if [ -n "$STATUS" ]; then
+            echo "::error::proto generated files are out of sync — consult ${README} for the regeneration commands and commit the resulting changes."
+            echo ""
+            echo "The following files are out of sync:"
+            echo "$STATUS"
+            echo ""
+            echo "===== ${README} ====="
+            cat "${README}"
+            echo "===== end of ${README} ====="
+            echo ""
+            git diff -- "${PATHS[@]}"
+            exit 1
+          fi
+          echo "All generated proto files are in sync."
+
+  proto-sync-fixed:
+    name: "proto sync (with touch)"
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
+    timeout-minutes: 20
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v7
+        with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
+          persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
+
+      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version.
+      - name: "Install Rust toolchain"
+        run: rustup toolchain install
+        working-directory: baml_language
+
+      # bridge_ctypes/build.rs needs `protoc`; baml_go's generate.sh needs
+      # `protoc` + `protoc-gen-go`; bridge_typescript needs node + pnpm.
+      # The `cargo build -p bridge_ctypes` step uses cargo from rustup
+      # (not mise), so we don't need `go` itself here either.
+      - name: "Install mise"
+        uses: ./.github/actions/setup-mise
+        with:
+          cache: "false"
+          install_args: "node npm:pnpm protoc protoc-gen-go"
+
+      # Separate step so if fetch is slow, build is fast.
+      - name: "Fetch cargo dependencies"
+        run: cargo fetch
+        working-directory: baml_language
+
+      # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
+      # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_bridge/cffi/v1/.
+      - name: "Generate Rust + Python proto bindings (bridge_ctypes)"
+        # bridge_ctypes/build.rs writes the bindings into the source tree but
+        # does not track them, so cargo skips it on a warm target/ tree when its
+        # inputs are unchanged, and a hand edit to a generated file would pass
+        # the check below. Touch build.rs (it is a rerun-if-changed input) so
+        # the script always runs and writes the bindings again.
+        run: |
+          touch crates/bridge_ctypes/build.rs
+          cargo build -p bridge_ctypes
+        working-directory: baml_language
+
+      # Go (protoc-gen-go) — writes into sdks/go/baml_go/internal/cffi/.
+      - name: "Generate Go proto bindings (sdks/go/baml_go)"
+        run: ./generate.sh
+        working-directory: baml_language/sdks/go/baml_go/internal/cffi
+
+      # --ignore-workspace: install from bridge_typescript's own pnpm-lock.yaml
+      # rather than the root workspace lockfile. The two resolve different
+      # protobufjs-cli versions, and pbjs codegen output (committed under
+      # typescript_src/proto/) must come from the version this package pins.
+      # --ignore-scripts: skip dependency build scripts (esbuild's binary
+      # fetch, protobufjs postinstall) — none are needed for pbjs/tsc/napi
+      # codegen, and pnpm errors on unapproved build scripts otherwise.
+      # Same flags as sdk_tests/crates/typescript/setup.sh.
+      - name: "Install Node SDK dependencies"
+        run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+
+      # Node / TypeScript (protobufjs) — writes into sdks/typescript/bridge_typescript/typescript_src/proto/.
+      # build:debug also regenerates typescript2/pkg-proto/src/generated/ (ts-proto / buf).
+      - name: "Generate Node/TypeScript proto bindings (sdks/typescript/bridge_typescript)"
+        run: pnpm build:debug
+        working-directory: baml_language/sdks/typescript/bridge_typescript
+
+      # Swift (protoc-gen-swift) — the plugin needs a Swift toolchain,
+      # which this Linux job doesn't have. The generated .pb.swift files
+      # are instead checked via the input-hash manifest that
+      # sdks/swift/scripts/generate-protos.sh writes alongside them:
+      # recompute the source protos' hashes here; if they differ from
+      # the committed manifest, the Swift bindings were not regenerated.
+      # The bundled ABI header is a verbatim copy of the canonical one
+      # (itself byte-enforced by bridge_cffi's header_generation test),
+      # so re-copy it and let the dirty-tree check below catch drift.
+      - name: "Sync-check Swift proto bindings + ABI header (sdks/swift)"
+        run: |
+          (cd baml_language/crates/bridge_ctypes/types \
+            && sha256sum baml_bridge/cffi/v1/*.proto) \
+            > baml_language/sdks/swift/Sources/BamlBridge/Proto/.generated-from
+          cp baml_language/crates/bridge_cffi/include/baml_cffi.h \
+             baml_language/sdks/swift/Sources/CBamlBridge/include/baml_cffi.h
+
+      - name: "Check generated proto files are in sync"
+        run: |
+          # Check for both modified tracked files and untracked files across every
+          # codegen output documented in baml_language/crates/bridge_ctypes/README.md.
+          PATHS=(
+            baml_language/sdks/typescript/bridge_typescript
+            baml_language/crates/bridge_ctypes
+            baml_language/sdks/go/baml_go/internal/cffi
+            baml_language/sdks/python/src/baml_bridge/cffi
+            baml_language/sdks/rust/bridge_rust/src/wire
+            baml_language/sdks/swift/Sources/BamlBridge/Proto
+            baml_language/sdks/swift/Sources/CBamlBridge/include
+            typescript2/pkg-proto
+          )
+          README="baml_language/crates/bridge_ctypes/README.md"
+          STATUS=$(git status --porcelain -- "${PATHS[@]}")
+          if [ -n "$STATUS" ]; then
+            echo "::error::proto generated files are out of sync — consult ${README} for the regeneration commands and commit the resulting changes."
+            echo ""
+            echo "The following files are out of sync:"
+            echo "$STATUS"
+            echo ""
+            echo "===== ${README} ====="
+            cat "${README}"
+            echo "===== end of ${README} ====="
+            echo ""
+            git diff -- "${PATHS[@]}"
+            exit 1
+          fi
+          echo "All generated proto files are in sync."
+

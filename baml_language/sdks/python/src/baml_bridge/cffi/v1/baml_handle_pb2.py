@@ -37,3 +37,4 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_BAMLHANDLE']._serialized_start=62
   _globals['_BAMLHANDLE']._serialized_end=145
 # @@protoc_insertion_point(module_scope)
+# hand edit to a generated binding
