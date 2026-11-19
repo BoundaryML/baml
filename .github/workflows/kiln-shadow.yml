@@ -229,7 +229,7 @@ jobs:
             ':typescript2/pnpm-workspace.yaml' \
             ':.envrc' \
             ':mise.toml' \
-            ':tools/baml-sccache' \
+            ':tools/sccache-shim/**' \
             ':.github/actions/setup-mise/**' \
             ':.github/actions/setup-node2/**' \
           ; then

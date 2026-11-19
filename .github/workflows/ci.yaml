@@ -140,7 +140,7 @@ jobs:
             'release/platforms.json'
             'mise.toml'
             '.envrc'
-            'tools/baml-sccache'
+            'tools/sccache-shim/**'
             '.github/actions/setup-rust/**'
             '.github/actions/setup-musl-cross/**'
             '.github/actions/setup-mise/**'
@@ -264,7 +264,7 @@ jobs:
             ':typescript2/pnpm-workspace.yaml' \
             ':.envrc' \
             ':mise.toml' \
-            ':tools/baml-sccache' \
+            ':tools/sccache-shim/**' \
             ':.github/actions/setup-mise/**' \
             ':.github/actions/setup-node2/**' \
           ; then

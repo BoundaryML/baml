@@ -11,8 +11,9 @@ publish = false
 [package.metadata.ci]
 wasm_support = false
 
-# Build the binary under the recognizable `baml-sccache` name, matching the
-# shell wrappers in tools/.
+# The binary must be named `sccache`, like the tools/sccache-shim/sccache shell
+# wrapper: the `cc` crate only reuses RUSTC_WRAPPER for C/C++ compiles when the
+# wrapper's file stem is `sccache`.
 [[bin]]
-name = "baml-sccache"
+name = "sccache"
 path = "src/main.rs"

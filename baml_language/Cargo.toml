@@ -35,7 +35,7 @@ members = [
   "sdk_tests/crates/typescript_web",
   "sdk_tests/crates/rust",
   # Native RUSTC_WRAPPER shim (see tools_sccache/src/main.rs); the Windows
-  # counterpart to the tools/baml-sccache POSIX script, built explicitly in CI.
+  # counterpart to the tools/sccache-shim/sccache POSIX script, built explicitly in CI.
   "tools_sccache",
 ]
 exclude = [

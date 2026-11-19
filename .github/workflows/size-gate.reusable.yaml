@@ -273,7 +273,7 @@ jobs:
   #         # plain rustc — then point RUSTC_WRAPPER at it for the cargo steps
   #         # below.
   #         cargo build -p tools_sccache
-  #         echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
+  #         echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/sccache.exe" >> "$GITHUB_ENV"
   #       working-directory: baml_language
 
   #     - name: "Run size-gate check"

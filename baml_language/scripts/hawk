@@ -24,7 +24,7 @@ if ! command -v cargo-hawk >/dev/null 2>&1; then
 fi
 
 # 2. RUSTC_WRAPPER: hawk drives an instrumented check through its own rustc
-#    driver, which the baml-sccache wrapper cannot probe (and caching an
+#    driver, which the sccache wrapper cannot probe (and caching an
 #    instrumented build is useless anyway).
 export RUSTC_WRAPPER=""
 
