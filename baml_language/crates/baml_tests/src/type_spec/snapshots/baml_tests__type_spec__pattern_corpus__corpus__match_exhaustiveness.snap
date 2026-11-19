@@ -94,3 +94,5 @@ JumpTableEnumDiscriminant: hir_ty=0
 JumpTableTypeTag: hir_ty=0
 JumpTableClassTypeTag: hir_ty=0
 DistinctInstantiationWitnesses: hir_ty=1
+WitnessCollapseClassFields: hir_ty=1
+WitnessCollapseIntField: hir_ty=1
