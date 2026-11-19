@@ -22,17 +22,21 @@
 //! S10b else-branch subtraction needs (B-1069).
 
 use baml_compiler2_ast::{ExprBody, ExprId, MatchArmId, PatId, Pattern};
+use baml_compiler2_hir::loc::DeclRef;
 use baml_type::{
     interned::{InferInterface, InferTy, Ty},
     normalize::normalize_interned,
 };
 
 use super::{
-    Expectation, InferenceContext, Suppress,
+    ClassHead, ClassHeadMiss, Expectation, InferenceContext, Suppress,
     coverage::{HirPatCtx, PatternHead},
     flow::{CondFacts, TestPosition},
 };
-use crate::exhaustiveness::{PatCtx, compute_match_usefulness};
+use crate::{
+    diagnostics::NotDestructurableReason,
+    exhaustiveness::{PatCtx, compute_match_usefulness},
+};
 
 /// One typed pattern: the refined scrutinee type the arm body sees, and two
 /// type-only verdicts (the matrix row is built separately, by
@@ -1260,56 +1264,98 @@ impl<'db> InferenceContext<'db> {
                 consumes_matched: false,
             };
         }
-        // A type parameter or scoped `type` binding at the head shadows
-        // every item (as for a type pattern): no class is named.
-        let head = self.lower.path_head(class_path);
-        let definition = (!self.scoped_type_param_heads(head, class_path))
-            .then(|| self.lower.resolve_type_definition(head, class_path))
-            .flatten();
-        // Destructure spelled with an INTERFACE name: the existential's
-        // declared FIELDS destructure like a class's.
-        if let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
-            definition
-        {
-            return self
-                .lower_interface_pattern(body, pat, interface, class_path, field_pats, scrut);
-        }
-        let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = definition else {
-            // The destructured name resolves nowhere (E0002 at the pattern,
-            // as for a type pattern) or to something that is neither a class
-            // nor an interface; fields lower against the sentinel.
-            let name = baml_type::Name::new(
+        // The head resolves as a class literal's does: an alias (or a
+        // chain of them) of a class destructures that class, at the
+        // arguments the alias pins.
+        let path_head = self.lower.path_head(class_path);
+        let name = || {
+            baml_type::Name::new(
                 class_path
                     .iter()
                     .map(baml_type::Name::as_str)
                     .collect::<Vec<_>>()
                     .join("."),
-            );
-            if definition.is_none() {
-                self.report(super::PendingDiag::UnresolvedPatternName {
-                    pat,
-                    name,
-                    suggestions: self.lower.type_suggestions(class_path),
-                });
-            } else {
-                self.report(super::PendingDiag::PatternHeadNotDestructurable { pat, name });
+            )
+        };
+        let resolved = match self.resolve_class_head(path_head, class_path) {
+            Ok(ClassHead::Class {
+                class: DeclRef::Source(class),
+                pinned,
+            }) => Ok((class, pinned)),
+            // Destructure spelled with an INTERFACE name: the existential's
+            // declared FIELDS destructure like a class's.
+            Ok(ClassHead::Interface(interface)) => {
+                return self
+                    .lower_interface_pattern(body, pat, interface, class_path, field_pats, scrut);
             }
-            self.pattern_heads.insert(pat, PatternHead::Recovery);
-            for &(_, field_pat) in field_pats {
-                self.lower_pattern(body, field_pat, &Ty::error());
+            // Destructures read source declarations only: a served
+            // dependency's class or interface resolves to nothing here.
+            Ok(
+                ClassHead::Class {
+                    class: DeclRef::External(_),
+                    ..
+                }
+                | ClassHead::ExportedInterface,
+            )
+            | Err(ClassHeadMiss::Unresolved | ClassHeadMiss::TypeParameter) => Err(None),
+            Err(ClassHeadMiss::NotAClass) => Err(Some(NotDestructurableReason::NotAClass)),
+            Err(ClassHeadMiss::Alias(alias)) => Err(Some(match alias.target {
+                Some(baml_type::Ty::Union(_)) => NotDestructurableReason::AliasOfUnion,
+                Some(baml_type::Ty::Interface(..)) => NotDestructurableReason::AliasOfInterface,
+                _ => NotDestructurableReason::NotAClass,
+            })),
+        };
+        let (class, pinned) = match resolved {
+            Ok(class_and_pinned) => class_and_pinned,
+            Err(reason) => {
+                // E0002 for a name that resolves nowhere, as for a type
+                // pattern; fields lower against the sentinel.
+                match reason {
+                    None => self.report(super::PendingDiag::UnresolvedPatternName {
+                        pat,
+                        name: name(),
+                        suggestions: self.lower.type_suggestions(class_path),
+                    }),
+                    Some(reason) => {
+                        self.report(super::PendingDiag::PatternHeadNotDestructurable {
+                            pat,
+                            name: name(),
+                            reason,
+                        });
+                    }
+                }
+                self.pattern_heads.insert(pat, PatternHead::Recovery);
+                for &(_, field_pat) in field_pats {
+                    self.lower_pattern(body, field_pat, &Ty::error());
+                }
+                return PatternOutcome {
+                    matched_ty: Ty::error(),
+                    recorded_ty: None,
+                    covers_type: false,
+                    consumes_matched: false,
+                };
             }
-            return PatternOutcome {
-                matched_ty: Ty::error(),
-                recorded_ty: None,
-                covers_type: false,
-                consumes_matched: false,
-            };
         };
         let qtn = crate::lower::class_qualified_name(self.db, class);
         let generic_count = crate::lower::class_generic_frame(self.db, class).len();
-        // A generic class destructure must WRITE its type arguments (the
-        // ratified rule; inference from the scrutinee is not offered).
-        if generic_count > 0 && !self.type_refs.pattern_class_args.contains_key(&pat) {
+        let written_count = self
+            .type_refs
+            .pattern_class_args
+            .get(&pat)
+            .map_or(0, |args| args.len());
+        if pinned.is_some() {
+            // An alias takes no arguments of its own: written ones are an
+            // arity error, and the class's come from the alias's definition.
+            if written_count > 0 {
+                self.report(super::PendingDiag::PatternAliasTakesNoTypeArgs {
+                    pat,
+                    name: name(),
+                    got: written_count,
+                });
+            }
+        } else if generic_count > 0 && !self.type_refs.pattern_class_args.contains_key(&pat) {
+            // A generic class destructure must WRITE its type arguments (the
+            // ratified rule; inference from the scrutinee is not offered).
             self.report(super::PendingDiag::GenericDestructureNoArgs {
                 pat,
                 class_name: qtn.name().clone(),
@@ -1325,7 +1371,9 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .map(|&type_ref| self.lower_body_annotation(type_ref))
             .collect();
-        let args: Vec<Ty> = if !written.is_empty() || generic_count == 0 {
+        let args: Vec<Ty> = if let Some(pinned) = pinned {
+            pinned
+        } else if !written.is_empty() || generic_count == 0 {
             written
         } else {
             // Adoption: same-class scrutinee members that pin the args.
@@ -1859,17 +1907,17 @@ impl<'db> InferenceContext<'db> {
     fn class_head_fits(&mut self, class_path: &[baml_type::Name], ty: &Ty) -> bool {
         use baml_compiler2_hir::contributions::Definition;
         let head = self.lower.path_head(class_path);
-        let definition = (!self.scoped_type_param_heads(head, class_path))
-            .then(|| self.lower.resolve_type_definition(head, class_path))
-            .flatten();
-        match definition {
-            Some(Definition::Class(class)) => match ty.kind() {
+        match self.resolve_class_head(head, class_path) {
+            Ok(ClassHead::Class {
+                class: DeclRef::Source(class),
+                ..
+            }) => match ty.kind() {
                 InferTy::Class(qtn, ..) => {
                     *qtn == crate::lower::class_qualified_name(self.db, class)
                 }
                 _ => false,
             },
-            Some(Definition::Interface(interface)) => {
+            Ok(ClassHead::Interface(interface)) => {
                 if matches!(ty.kind(), InferTy::Interface(..)) {
                     return true;
                 }
@@ -1880,7 +1928,8 @@ impl<'db> InferenceContext<'db> {
                 crate::impls::structural_interface(self.db, &qtn).is_some()
                     || !crate::impls::impl_candidates(self.db, ty, &qtn).is_empty()
             }
-            Some(_) | None => true,
+            // Anything else is reported by the lowering.
+            Ok(ClassHead::Class { .. } | ClassHead::ExportedInterface) | Err(_) => true,
         }
     }
 
