@@ -1320,6 +1320,7 @@ dependencies = [
  "vfs",
  "walkdir",
  "wasm-bindgen-futures",
+ "web-time",
 ]
 
 [[package]]

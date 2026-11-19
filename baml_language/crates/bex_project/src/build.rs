@@ -25,8 +25,8 @@ pub fn new_build_id() -> [u8; 16] {
 
 #[must_use]
 pub fn unix_now_ns() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+    web_time::SystemTime::now()
+        .duration_since(web_time::UNIX_EPOCH)
         .ok()
         .and_then(|elapsed| i64::try_from(elapsed.as_nanos()).ok())
         .unwrap_or(0)
