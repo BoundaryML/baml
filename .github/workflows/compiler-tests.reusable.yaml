@@ -86,6 +86,9 @@ jobs:
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+          # EXPERIMENT (do not merge): no sccache, to see whether the cached
+          # target directory alone is enough.
+          echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
 
       - name: "Run the Rust backend differential test"
         run: cargo nextest run -p baml_tests --test rust_differential --all-features --run-ignored only --success-output immediate
@@ -139,6 +142,9 @@ jobs:
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+          # EXPERIMENT (do not merge): no sccache, to see whether the cached
+          # target directory alone is enough.
+          echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"

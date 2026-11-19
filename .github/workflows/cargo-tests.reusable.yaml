@@ -121,6 +121,9 @@ jobs:
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+          # EXPERIMENT (do not merge): no sccache, to see whether the cached
+          # target directory alone is enough.
+          echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
@@ -137,7 +140,7 @@ jobs:
       # SDK under test — both of which the dedicated `sdk-tests` matrix below
       # provides.
       - name: "Build tests with --timings"
-        run: cargo nextest run --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
+        run: cargo nextest run --no-run --cargo-verbose --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Run tests with nextest"
@@ -257,6 +260,9 @@ jobs:
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+          # EXPERIMENT (do not merge): no sccache, to see whether the cached
+          # target directory alone is enough.
+          echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
 
       - name: "Fetch cargo dependencies"
         run: cargo fetch
@@ -472,26 +478,18 @@ jobs:
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+          # EXPERIMENT (do not merge): no sccache. .envrc would otherwise pick
+          # up the wrapper binary restored inside the cached target directory.
+          echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch
         working-directory: baml_language
 
-      - name: "Build native sccache wrapper"
-        run: |
-          set -euo pipefail
-          # The native RUSTC_WRAPPER (tools_sccache crate) maps the R2 creds and
-          # execs sccache; cargo launches it via CreateProcess (32767-char
-          # limit), avoiding cmd.exe's ~8191-char limit that windows-sys' huge
-          # `--check-cfg cfg(feature, values(...))` line blows past. The binary
-          # lives in the build tree, so build it first — .envrc leaves
-          # RUSTC_WRAPPER unset until it exists, so this bootstrap compiles with
-          # plain rustc — then point RUSTC_WRAPPER at it for the cargo steps
-          # below.
-          cargo build -p tools_sccache
-          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
-        working-directory: baml_language
+      # EXPERIMENT (do not merge): the native sccache wrapper step is removed
+      # so this job runs without sccache (.envrc leaves RUSTC_WRAPPER unset on
+      # Windows until that wrapper exists).
 
       # Snapshot tests live in `baml_tests` and are covered by the dedicated
       # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
@@ -499,7 +497,7 @@ jobs:
       # level (`--exclude`), not a nextest `-E` filter, so their test binaries
       # (the heaviest links, and on Windows the largest PDBs) aren't built.
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        run: cargo test --no-run -v --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Preserve workspace Cargo timings"
