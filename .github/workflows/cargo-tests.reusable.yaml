@@ -370,6 +370,11 @@ jobs:
     runs-on: blacksmith-8vcpu-windows-2025
     env:
       CARGO_BUILD_JOBS: "16"
+      # EXPERIMENT (do not merge): Cargo's unstable checksum-based freshness
+      # lets a fresh checkout reuse cached workspace crates. It needs
+      # RUSTC_BOOTSTRAP on a stable toolchain.
+      RUSTC_BOOTSTRAP: "1"
+      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
       # Windows debug builds emit very large PDBs; full debuginfo across the
       # whole `--all-features` test build overruns the runner's ~130 GB disk
       # ("no space on device" during codegen, before any test runs).
@@ -403,15 +408,15 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
+      # EXPERIMENT (do not merge): cache the whole target directory, our own
+      # crates included, and save from this PR so its second run can restore
+      # it. Wraps Swatinem/rust-cache and restores build-input timestamps.
+      - uses: astral-sh/github-actions/rust-workspace-cache@61a5a2c7e0df1c0caf46fe5d1e74a4cb8a7205f8 # 2026.11.16.1
         with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          # EXPERIMENT (do not merge): cache the dependency build output too,
-          # and save from this PR so its second run can restore it.
-          cache-targets: true
-          save-if: true
-          shared-key: "windows-cargo-targets-experiment"
+          workspace: baml_language
+          profile: debug
+          prefix-key: v1-windows-workspace-experiment
+          save-if: "true"
 
       - name: "Load .envrc with direnv"
         run: |
