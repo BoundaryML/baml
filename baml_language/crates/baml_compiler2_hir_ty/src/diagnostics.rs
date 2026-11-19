@@ -679,6 +679,11 @@ pub enum TirTypeError {
     /// or-patterns — see `lower_array_pat` for why each is blocked and what
     /// expanding the set would take.
     RestSubPatternNotBinding,
+    /// A destructure pattern's head resolves to something other than a
+    /// class or an interface (an alias, an enum, ...): nothing to destructure.
+    PatternHeadNotDestructurable {
+        name: Name,
+    },
     /// A `let` statement or `for-let` binding uses a pattern that can fail
     /// for values of the type flowing into it.
     RefutablePatternInLet {
@@ -2167,6 +2172,10 @@ impl TirTypeError {
                 TirTypeError::RestSubPatternNotBinding => write!(
                     f,
                     "rest pattern `..` can only carry a binding; write `..let name` or `..let name: T[]`"
+                ),
+                TirTypeError::PatternHeadNotDestructurable { name } => write!(
+                    f,
+                    "cannot destructure `{name}`: only a class or an interface can be destructured"
                 ),
                 TirTypeError::RefutablePatternInLet { context } => write!(
                     f,

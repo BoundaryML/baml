@@ -20,9 +20,9 @@ use super::InferenceContext;
 use crate::exhaustiveness::{ColumnTy, Ctor, DPat, PatCtx, SliceShape, ctor_sub_tys};
 
 /// What a pattern wrote, as typing resolved it: the inputs a row needs
-/// beyond the pattern's syntax. A pattern with no entry (a destructure
-/// that failed to resolve, or one under an errored scrutinee) lowers to a
-/// wildcard row, so its own diagnostic is not stacked with a coverage one.
+/// beyond the pattern's syntax. Typing records one for every type pattern,
+/// destructure and list pattern it lowers; a missing or mismatched entry
+/// fails closed (the row covers nothing, and debug builds assert).
 #[derive(Clone)]
 pub(super) enum PatternHead {
     /// A type pattern's written type.
@@ -42,9 +42,10 @@ pub(super) enum PatternHead {
     },
     /// A list pattern's written ascription.
     Array { ascription: Option<Ty> },
-    /// A structural pattern typing reported as never matching its
-    /// scrutinee: its row is a wildcard, so no coverage verdict stacks on
-    /// that report.
+    /// A pattern typing reported (a destructure whose head resolves to no
+    /// class or interface, a tuple that never matches its scrutinee) or one
+    /// under an already-reported errored scrutinee: its row is a wildcard,
+    /// so no coverage verdict stacks on that report.
     Recovery,
 }
 
@@ -105,7 +106,7 @@ impl HirPatCtx<'_, '_> {
                 suffix,
                 ..
             } => self.slice_dpat(body, pat, prefix, rest.as_ref(), suffix, col),
-            Pattern::Type(_) | Pattern::Class { .. } => match self.infer.pattern_heads.get(&pat) {
+            Pattern::Type(_) => match self.infer.pattern_heads.get(&pat) {
                 Some(PatternHead::Type(written)) => match self.written(written) {
                     Some(written) if baml_type::contains_error(&written) => {
                         // An erroneous written type was reported where it
@@ -116,15 +117,16 @@ impl HirPatCtx<'_, '_> {
                     Some(written) => self.type_dpat(&written, col),
                     None => proves_nothing(col),
                 },
+                _ => missing_head(pat, "type", col),
+            },
+            Pattern::Class { .. } => match self.infer.pattern_heads.get(&pat) {
                 Some(PatternHead::Class { qtn, head, fields }) => {
                     self.class_dpat(body, qtn, head, fields, col)
                 }
                 Some(PatternHead::Interface { head, fields }) => {
                     self.interface_dpat(body, head, fields, col)
                 }
-                Some(PatternHead::Array { .. } | PatternHead::Recovery) | None => {
-                    DPat::wildcard(col.clone())
-                }
+                _ => missing_head(pat, "destructure", col),
             },
         }
     }
@@ -231,14 +233,10 @@ impl HirPatCtx<'_, '_> {
         let Some(written) = self.written(head) else {
             return proves_nothing(col);
         };
-        let args: Box<[baml_type::Ty]> = match written {
-            baml_type::Ty::Class(_, args) => args,
-            _ => match head.kind() {
-                baml_type::interned::InferTy::Class(_, args) => {
-                    vec![baml_type::Ty::Error; args.len()].into_boxed_slice()
-                }
-                _ => Box::new([]),
-            },
+        // Error args (a generic destructure without them, an erroneous
+        // written arg) were reported by typing; such a ctor covers any args.
+        let baml_type::Ty::Class(_, args) = written else {
+            return fails_closed(col, format_args!("class destructure head {written:?}"));
         };
         let ctor = Ctor::Class(qtn.clone(), args.clone());
         let build = |col: &ColumnTy| {
@@ -278,7 +276,7 @@ impl HirPatCtx<'_, '_> {
             return proves_nothing(col);
         };
         let baml_type::Ty::Interface(qtn, ..) = &head else {
-            return DPat::wildcard(col.clone());
+            return fails_closed(col, format_args!("interface destructure head {head:?}"));
         };
         let ctor = Ctor::Interface(head.clone());
         let build = |col: &ColumnTy| {
@@ -363,8 +361,10 @@ impl HirPatCtx<'_, '_> {
                 .collect();
             DPat::slice(shape.clone(), rows, col.clone())
         };
-        let Some(ascriptions) = self.slice_ascriptions(body, pat, rest) else {
-            return proves_nothing(col);
+        let ascriptions = match self.slice_ascriptions(body, pat, rest) {
+            Ok(Some(ascriptions)) => ascriptions,
+            Ok(None) => return proves_nothing(col),
+            Err(missing) => return missing_head(missing, "list ascription", col),
         };
         let within_ascriptions = |member: &baml_type::Ty| {
             ascriptions
@@ -395,25 +395,31 @@ impl HirPatCtx<'_, '_> {
     }
 
     /// The canonical written ascriptions of a list pattern: its own, and
-    /// its rest binding's. `None` while one is still open.
+    /// its rest binding's. An erroneous one was reported where it was
+    /// written and constrains nothing. `Ok(None)` while one is still open;
+    /// `Err` names a pattern typing recorded no head for.
     fn slice_ascriptions(
         &self,
         body: &ExprBody,
         pat: PatId,
         rest: Option<&ArrayRestPat>,
-    ) -> Option<Vec<baml_type::Ty>> {
-        let own = match self.infer.pattern_heads.get(&pat) {
-            Some(PatternHead::Array { ascription }) => ascription.as_ref(),
-            _ => None,
+    ) -> Result<Option<Vec<baml_type::Ty>>, PatId> {
+        let Some(PatternHead::Array { ascription: own }) = self.infer.pattern_heads.get(&pat)
+        else {
+            return Err(pat);
         };
-        let rest = rest
+        let rest = match rest
             .and_then(|rest| rest.pat)
             .and_then(|rest_pat| rest_ascription(body, rest_pat))
-            .and_then(|type_pat| match self.infer.pattern_heads.get(&type_pat) {
+        {
+            Some(type_pat) => match self.infer.pattern_heads.get(&type_pat) {
                 Some(PatternHead::Type(written)) => Some(written),
-                _ => None,
-            });
-        own.into_iter()
+                _ => return Err(type_pat),
+            },
+            None => None,
+        };
+        Ok(own
+            .iter()
             .chain(rest)
             .map(|ascription| self.written(ascription))
             .filter(|ascription| {
@@ -421,7 +427,7 @@ impl HirPatCtx<'_, '_> {
                     .as_ref()
                     .is_none_or(|ascription| !baml_type::contains_error(ascription))
             })
-            .collect()
+            .collect())
     }
 
     /// Whether `pat` may match some value of `col`: false only on a
@@ -569,6 +575,19 @@ fn any_of(mut alts: Vec<DPat>, col: &ColumnTy, empty: impl FnOnce() -> DPat) -> 
 /// nothing proves which values it matches.
 fn proves_nothing(col: &ColumnTy) -> DPat {
     DPat::type_test(baml_type::Ty::Never, col.clone())
+}
+
+/// The row for a pattern whose recorded head is missing or of the wrong
+/// kind, which typing never leaves: it covers nothing, and debug builds
+/// fail.
+fn fails_closed(col: &ColumnTy, what: std::fmt::Arguments<'_>) -> DPat {
+    debug_assert!(false, "coverage head invariant broken: {what}");
+    proves_nothing(col)
+}
+
+/// [`fails_closed`] for a pattern typing recorded no fitting head for.
+fn missing_head(pat: PatId, kind: &str, col: &ColumnTy) -> DPat {
+    fails_closed(col, format_args!("no {kind} head recorded for {pat:?}"))
 }
 
 /// The type pattern a rest binding's chain ends in (`..let rest: T`).

@@ -1503,6 +1503,10 @@ enum PendingDiag<'db> {
     RestNotBinding {
         pat: PatId,
     },
+    PatternHeadNotDestructurable {
+        pat: PatId,
+        name: baml_type::Name,
+    },
     UnresolvedPatternName {
         pat: PatId,
         name: baml_type::Name,
@@ -14453,6 +14457,15 @@ impl<'db> InferenceContext<'db> {
                         diags.push(TirDiagnostic {
                             error: crate::diagnostics::removed_reflect_spelling(&name)
                                 .unwrap_or(TirTypeError::UnresolvedType { name, suggestions }),
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Pat(pat),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::PatternHeadNotDestructurable { pat, name } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::PatternHeadNotDestructurable { name },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Pat(pat),
                             related: Vec::new(),

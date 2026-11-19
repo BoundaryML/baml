@@ -2272,6 +2272,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::OrPatternBindingTypeMismatch { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::GenericClassDestructureRequiresTypeArgs { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::RestSubPatternNotBinding => DiagnosticId::TypeMismatch,
+        TirTypeError::PatternHeadNotDestructurable { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::RefutablePatternInLet { .. } => DiagnosticId::RefutablePatternInLet,
         TirTypeError::IrrefutablePatternInIfLet => DiagnosticId::IrrefutablePatternInIfLet,
         TirTypeError::LetElseMustDiverge { .. } => DiagnosticId::LetElseMustDiverge,

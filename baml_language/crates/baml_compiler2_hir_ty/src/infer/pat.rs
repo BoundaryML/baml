@@ -1252,6 +1252,7 @@ impl<'db> InferenceContext<'db> {
             for &(_, field_pat) in field_pats {
                 self.lower_pattern(body, field_pat, &Ty::error());
             }
+            self.pattern_heads.insert(pat, PatternHead::Recovery);
             return PatternOutcome {
                 matched_ty: Ty::error(),
                 recorded_ty: None,
@@ -1274,22 +1275,26 @@ impl<'db> InferenceContext<'db> {
                 .lower_interface_pattern(body, pat, interface, class_path, field_pats, scrut);
         }
         let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = definition else {
-            // The destructured name resolves nowhere (or to a non-class):
-            // E0002 at the pattern, as for a type pattern; fields lower
-            // against the sentinel.
+            // The destructured name resolves nowhere (E0002 at the pattern,
+            // as for a type pattern) or to something that is neither a class
+            // nor an interface; fields lower against the sentinel.
+            let name = baml_type::Name::new(
+                class_path
+                    .iter()
+                    .map(baml_type::Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join("."),
+            );
             if definition.is_none() {
                 self.report(super::PendingDiag::UnresolvedPatternName {
                     pat,
-                    name: baml_type::Name::new(
-                        class_path
-                            .iter()
-                            .map(baml_type::Name::as_str)
-                            .collect::<Vec<_>>()
-                            .join("."),
-                    ),
+                    name,
                     suggestions: self.lower.type_suggestions(class_path),
                 });
+            } else {
+                self.report(super::PendingDiag::PatternHeadNotDestructurable { pat, name });
             }
+            self.pattern_heads.insert(pat, PatternHead::Recovery);
             for &(_, field_pat) in field_pats {
                 self.lower_pattern(body, field_pat, &Ty::error());
             }
