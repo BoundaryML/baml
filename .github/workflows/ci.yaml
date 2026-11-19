@@ -951,7 +951,14 @@ jobs:
       # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
       # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_bridge/cffi/v1/.
       - name: "Generate Rust + Python proto bindings (bridge_ctypes)"
-        run: cargo build -p bridge_ctypes
+        # bridge_ctypes/build.rs writes the bindings into the source tree but
+        # does not track them, so cargo skips it on a warm target/ tree when its
+        # inputs are unchanged, and a hand edit to a generated file would pass
+        # the check below. Touch build.rs (it is a rerun-if-changed input) so
+        # the script always runs and writes the bindings again.
+        run: |
+          touch crates/bridge_ctypes/build.rs
+          cargo build -p bridge_ctypes
         working-directory: baml_language
 
       # Go (protoc-gen-go) — writes into sdks/go/baml_go/internal/cffi/.
