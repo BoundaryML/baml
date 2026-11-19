@@ -468,6 +468,20 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    /// A pattern column as the usefulness matrix splits it: a root alias
+    /// unfolds exactly as `HirPatCtx::enumerate_ctors` unfolds it, so a
+    /// field or slot typed `R = int | R[]` claims the same `UnionMember`
+    /// ctors its arms are checked against.
+    fn pattern_column(&self, ty: &Ty) -> Ty {
+        match ty.kind() {
+            InferTy::TypeAlias(qtn) => Ty::from_plain(
+                &HirPatCtx { infer: self }
+                    .peel_aliases(baml_type::Ty::TypeAlias(qtn.clone()), 8),
+            ),
+            _ => ty.clone(),
+        }
+    }
+
     /// The scrutinee's binding, when it is a bare local - the only
     /// narrowable reference shape in S10a (member chains are a documented
     /// later extension).
@@ -571,6 +585,15 @@ impl<'db> InferenceContext<'db> {
                 .flatten()
                 .map(|(_, type_ref)| *type_ref),
         );
+        // A pattern that writes a type or a shape is lowered against the
+        // column the matrix splits, not its alias spelling.
+        let column = self.pattern_column(scrut);
+        let scrut = match &body.patterns[pat] {
+            Pattern::Type(_) | Pattern::Class { .. } | Pattern::Array { .. } | Pattern::Tuple(_) => {
+                &column
+            }
+            Pattern::Wildcard | Pattern::Bind { .. } | Pattern::Or(_) => scrut,
+        };
         match &body.patterns[pat] {
             // A pattern that writes no type matches what reaches it. Its
             // matrix row is still a wildcard over the whole column.
