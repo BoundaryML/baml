@@ -120,9 +120,24 @@ jobs:
       # and their suites only pass behind the setup script that generates the
       # SDK under test — both of which the dedicated `sdk-tests` matrix below
       # provides.
+      - name: "Restore prebuilt AWS-LC"
+        id: aws-lc
+        uses: ./.github/actions/aws-lc-prebuilt
+        with:
+          target: x86_64-unknown-linux-gnu
+          profile: opt1
+
       - name: "Build tests with --timings"
         run: cargo nextest run --no-run --all-features --timings --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
+
+      - name: "Save prebuilt AWS-LC"
+        if: steps.aws-lc.outputs.cache-hit != 'true'
+        uses: ./.github/actions/aws-lc-prebuilt/save
+        with:
+          key: ${{ steps.aws-lc.outputs.key }}
+          path: ${{ steps.aws-lc.outputs.path }}
+          version: ${{ steps.aws-lc.outputs.version }}
 
       - name: "Run tests with nextest"
         run: cargo nextest run --all-features --workspace --exclude baml_tests --exclude baml_cli --exclude baml_pack_host --exclude "sdk_test_*" --exclude baml_bridge
@@ -224,9 +239,24 @@ jobs:
       # Enabling every feature turns on the optional native-tls backend, which
       # needs a separate target-specific OpenSSL build. Default features match
       # the rustls-based musl artifacts we ship.
+      - name: "Restore prebuilt AWS-LC"
+        id: aws-lc
+        uses: ./.github/actions/aws-lc-prebuilt
+        with:
+          target: x86_64-unknown-linux-musl
+          profile: opt1
+
       - name: "Build tests with --timings"
         run: cargo build --tests --bin baml-cli --bin baml-pack-host --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
+
+      - name: "Save prebuilt AWS-LC"
+        if: steps.aws-lc.outputs.cache-hit != 'true'
+        uses: ./.github/actions/aws-lc-prebuilt/save
+        with:
+          key: ${{ steps.aws-lc.outputs.key }}
+          path: ${{ steps.aws-lc.outputs.path }}
+          version: ${{ steps.aws-lc.outputs.version }}
 
       - name: "Run tests with nextest"
         # The runtime corpus and type quiz moved from the excluded baml_tests
@@ -443,9 +473,24 @@ jobs:
       # dedicated `sdk-tests` matrix below. Skip both here — at the cargo
       # level (`--exclude`), not a nextest `-E` filter, so their test binaries
       # (the heaviest links, and on Windows the largest PDBs) aren't built.
+      - name: "Restore prebuilt AWS-LC"
+        id: aws-lc
+        uses: ./.github/actions/aws-lc-prebuilt
+        with:
+          target: x86_64-pc-windows-msvc
+          profile: opt1-line-tables
+
       - name: "Build tests with --timings"
         run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
+
+      - name: "Save prebuilt AWS-LC"
+        if: steps.aws-lc.outputs.cache-hit != 'true'
+        uses: ./.github/actions/aws-lc-prebuilt/save
+        with:
+          key: ${{ steps.aws-lc.outputs.key }}
+          path: ${{ steps.aws-lc.outputs.path }}
+          version: ${{ steps.aws-lc.outputs.version }}
 
       - name: "Preserve workspace Cargo timings"
         run: mv target/cargo-timings/cargo-timing.html cargo-timing-test-windows.html

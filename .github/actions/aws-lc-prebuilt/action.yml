@@ -1,0 +1,69 @@
+name: "Restore prebuilt AWS-LC"
+description: >-
+  Restores a prebuilt AWS-LC install for aws-lc-sys and points
+  AWS_LC_SYS_SYSTEM_DIR at it, so the build links one cached library instead of
+  compiling AWS-LC's C sources. On a miss the build runs from source as usual;
+  call the `save` sub-action after it to populate the cache. Test jobs only:
+  release builds must keep building AWS-LC from source.
+
+inputs:
+  target:
+    description: "Rust target triple the job builds for"
+    required: true
+  profile:
+    description: >-
+      Names the cargo profile settings the job compiles C with (e.g. opt1).
+      Change it whenever those settings change, so a library built under the
+      old ones is not reused.
+    required: true
+
+outputs:
+  cache-hit:
+    description: "'true' when a prebuilt install was restored"
+    value: ${{ steps.restore.outputs.cache-hit }}
+  key:
+    description: "Cache key, for the save sub-action"
+    value: ${{ steps.meta.outputs.key }}
+  path:
+    description: "Install directory, for the save sub-action"
+    value: ${{ steps.meta.outputs.path }}
+  version:
+    description: "aws-lc-sys version from Cargo.lock"
+    value: ${{ steps.meta.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: meta
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+        PROFILE: ${{ inputs.profile }}
+        ACTION_HASH: ${{ hashFiles('.github/actions/aws-lc-prebuilt/**') }}
+      run: |
+        set -euo pipefail
+        version="$(awk '/^name = "aws-lc-sys"$/ { getline; gsub(/version = |"/, ""); print; exit }' baml_language/Cargo.lock)"
+        if [ -z "$version" ]; then
+          echo "aws-lc-sys not found in baml_language/Cargo.lock" >&2
+          exit 1
+        fi
+        # Under the repo root so sccache's SCCACHE_BASEDIRS normalizes the
+        # `-L` path that reaches every dependent crate's rustc invocation.
+        root="$(pwd -W 2>/dev/null || pwd)"
+        {
+          echo "version=$version"
+          echo "path=$root/baml_language/target/aws-lc-prebuilt/$TARGET"
+          echo "key=aws-lc-prebuilt-$TARGET-$version-$PROFILE-${ACTION_HASH:0:16}"
+        } >> "$GITHUB_OUTPUT"
+
+    - id: restore
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ steps.meta.outputs.path }}
+        key: ${{ steps.meta.outputs.key }}
+
+    - if: steps.restore.outputs.cache-hit == 'true'
+      shell: bash
+      env:
+        PREBUILT: ${{ steps.meta.outputs.path }}
+      run: echo "AWS_LC_SYS_SYSTEM_DIR=$PREBUILT" >> "$GITHUB_ENV"

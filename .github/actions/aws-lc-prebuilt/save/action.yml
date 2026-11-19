@@ -1,0 +1,39 @@
+name: "Save prebuilt AWS-LC"
+description: >-
+  Packages the AWS-LC library the preceding from-source build produced and
+  saves it for the `aws-lc-prebuilt` restore action. Run only after a restore
+  miss, once the build step has succeeded.
+
+inputs:
+  key:
+    description: "`key` output of the restore action"
+    required: true
+  path:
+    description: "`path` output of the restore action"
+    required: true
+  version:
+    description: "`version` output of the restore action"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - id: harvest
+      shell: bash
+      working-directory: baml_language
+      env:
+        VERSION: ${{ inputs.version }}
+        DEST: ${{ inputs.path }}
+        HARVEST: ${{ github.action_path }}/../harvest.sh
+      run: |
+        set -euo pipefail
+        bash "$HARVEST" "$VERSION" "$DEST"
+        if [ -d "$DEST" ]; then
+          echo "harvested=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - if: steps.harvest.outputs.harvested == 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}

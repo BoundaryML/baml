@@ -143,6 +143,7 @@ jobs:
             'tools/baml-sccache'
             '.github/actions/setup-rust/**'
             '.github/actions/setup-musl-cross/**'
+            '.github/actions/aws-lc-prebuilt/**'
             '.github/actions/setup-mise/**'
             '.github/actions/export-build-fingerprint/**'
             '.github/workflows/wrapper-tests.reusable.yaml'
