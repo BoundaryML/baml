@@ -33,10 +33,65 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0062
 
-  × non-exhaustive match on type (int | string | R[], bool); missing: (string, true), (string, false)
+  × non-exhaustive match on type (int | string | R[], bool); missing: (string, _)
     ╭─[recursive_alias_coverage.baml:43:5]
  43 │ ╭─▶     match (t) {
  44 │ │           (int, _) => 1,
  45 │ │           (R[], _) => 2,
  46 │ ╰─▶     }
     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[recursive_alias_coverage.baml:59:14]
+ 59 │         _ => 1,
+    ·              ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[recursive_alias_coverage.baml:68:26]
+ 68 │         [let v: true] => 2,
+    ·                          ─
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type Ia | Ib | null; missing: null
+    ╭─[recursive_alias_coverage.baml:92:5]
+ 92 │ ╭─▶     match (x) {
+ 93 │ │           HasV { v: _ } => 1,
+ 94 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type (string, int) | ((int, int), int); missing: (_, _)
+     ╭─[recursive_alias_coverage.baml:98:5]
+  98 │ ╭─▶     match (t) {
+  99 │ │           ((_, _), _) => 1,
+ 100 │ ╰─▶     }
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type int[] | string[]; missing: [..]
+     ╭─[recursive_alias_coverage.baml:104:5]
+ 104 │ ╭─▶     match (xs) {
+ 105 │ │           [..let rest: int[]] => 1,
+ 106 │ ╰─▶     }
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type Box<int> | Box<string>; missing: Box<string> { v: _ }
+     ╭─[recursive_alias_coverage.baml:110:5]
+ 110 │ ╭─▶     match (b) {
+ 111 │ │           let x: Box<_> => {
+ 112 │ │               let t: Box<int> = x;
+ 113 │ │               1
+ 114 │ │           }
+ 115 │ ╰─▶     }
+     ╰────
