@@ -33,6 +33,11 @@ env:
   # 1 matters for runtime as well as sharing compiled dependencies in sccache.
   CARGO_PROFILE_DEV_OPT_LEVEL: "1"
   CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+  # EXPERIMENT (do not merge): Cargo's unstable checksum-based freshness
+  # lets a fresh checkout reuse cached workspace crates. It needs
+  # RUSTC_BOOTSTRAP on a stable toolchain.
+  RUSTC_BOOTSTRAP: "1"
+  CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
   # No job attaches a debugger or prints backtraces, so debug info only costs
   # compile time, link time, and target/ size. Panic messages keep their file
   # and line without it.
@@ -65,13 +70,18 @@ jobs:
         with:
           install_args: "sccache direnv cargo:cargo-nextest"
 
-      - uses: Swatinem/rust-cache@v2
+      # EXPERIMENT (do not merge): pin the commit baml_artifact stamps, then
+      # cache the whole target directory, our own crates included.
+      - uses: ./.github/actions/pin-git-stamp
         with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
+          sha: ${{ github.event.pull_request.base.sha || github.sha }}
+
+      - uses: astral-sh/github-actions/rust-workspace-cache@61a5a2c7e0df1c0caf46fe5d1e74a4cb8a7205f8 # 2026.11.16.1
+        with:
+          workspace: baml_language
+          profile: debug
+          prefix-key: v1-rust-differential-workspace-experiment
+          save-if: "true"
 
       - name: "Load .envrc with direnv"
         run: |
@@ -113,13 +123,18 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
-      - uses: Swatinem/rust-cache@v2
+      # EXPERIMENT (do not merge): pin the commit baml_artifact stamps, then
+      # cache the whole target directory, our own crates included.
+      - uses: ./.github/actions/pin-git-stamp
         with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
+          sha: ${{ github.event.pull_request.base.sha || github.sha }}
+
+      - uses: astral-sh/github-actions/rust-workspace-cache@61a5a2c7e0df1c0caf46fe5d1e74a4cb8a7205f8 # 2026.11.16.1
+        with:
+          workspace: baml_language
+          profile: debug
+          prefix-key: v1-snapshot-tests-workspace-experiment
+          save-if: "true"
 
       - name: "Load .envrc with direnv"
         run: |
