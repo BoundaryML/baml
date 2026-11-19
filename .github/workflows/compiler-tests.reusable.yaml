@@ -79,6 +79,14 @@ jobs:
         run: cargo nextest run -p baml_tests --test rust_differential --all-features --run-ignored only --success-output immediate
         working-directory: baml_language
 
+      # EXPERIMENT (do not merge): sizes the target directory to estimate how
+      # much cache storage whole-target caching would need.
+      - name: "Report target size"
+        if: always()
+        run: |
+          du -sh baml_language/target 2>/dev/null || true
+          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
+
   snapshot-tests:
     name: "Compiler and documentation tests"
     runs-on: blacksmith-16vcpu-ubuntu-2404
@@ -188,6 +196,14 @@ jobs:
       # The full baml_cli::baml_corpus test above already executes
       # root.compiler.mounted_interface_diagnostics. Do not compile the corpus
       # again just to select those three package-boundary assertions.
+
+      # EXPERIMENT (do not merge): sizes the target directory to estimate how
+      # much cache storage whole-target caching would need.
+      - name: "Report target size"
+        if: always()
+        run: |
+          du -sh baml_language/target 2>/dev/null || true
+          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
 
       - name: "Show sccache stats"
         if: always()

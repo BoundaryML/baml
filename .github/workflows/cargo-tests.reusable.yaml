@@ -143,6 +143,14 @@ jobs:
             baml_language/**/*.snap.new
             baml_language/**/target/nextest/
 
+      # EXPERIMENT (do not merge): sizes the target directory to estimate how
+      # much cache storage whole-target caching would need.
+      - name: "Report target size"
+        if: always()
+        run: |
+          du -sh baml_language/target 2>/dev/null || true
+          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
+
       - name: "Show sccache stats"
         if: always()
         run: sccache --show-stats
@@ -244,6 +252,14 @@ jobs:
           path: |
             baml_language/**/*.snap.new
             baml_language/**/target/nextest/
+
+      # EXPERIMENT (do not merge): sizes the target directory to estimate how
+      # much cache storage whole-target caching would need.
+      - name: "Report target size"
+        if: always()
+        run: |
+          du -sh baml_language/target 2>/dev/null || true
+          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
 
       - name: "Show sccache stats"
         if: always()
@@ -474,6 +490,14 @@ jobs:
         working-directory: baml_language
         env:
           BAML_PACK_HOST_PREBUILT: "1"
+
+      # EXPERIMENT (do not merge): sizes the target directory to estimate how
+      # much cache storage whole-target caching would need.
+      - name: "Report target size"
+        if: always()
+        run: |
+          du -sh baml_language/target 2>/dev/null || true
+          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
 
       - name: "Show sccache stats"
         if: always()
@@ -1192,6 +1216,14 @@ jobs:
         run: |
           "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py restore
 
+      # EXPERIMENT (do not merge): sizes the target directory to estimate how
+      # much cache storage whole-target caching would need.
+      - name: "Report target size"
+        if: always()
+        run: |
+          du -sh baml_language/target 2>/dev/null || true
+          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
+
       - name: "Show sccache stats"
         if: always()
         run: sccache --show-stats
@@ -1259,6 +1291,14 @@ jobs:
             baml_language/sdk_tests/crates/${{ matrix.sdk-path }}/*/generated/
             baml_language/target/nextest/
           if-no-files-found: ignore
+
+      # EXPERIMENT (do not merge): sizes the target directory to estimate how
+      # much cache storage whole-target caching would need.
+      - name: "Report target size"
+        if: always()
+        run: |
+          du -sh baml_language/target 2>/dev/null || true
+          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
 
       - name: "Show sccache stats"
         if: always()
@@ -1364,6 +1404,14 @@ jobs:
         run: ls -lh target/wasm32-unknown-unknown/release/*.wasm || true
         working-directory: baml_language
 
+      # EXPERIMENT (do not merge): sizes the target directory to estimate how
+      # much cache storage whole-target caching would need.
+      - name: "Report target size"
+        if: always()
+        run: |
+          du -sh baml_language/target 2>/dev/null || true
+          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
+
       - name: "Show sccache stats"
         if: always()
         run: sccache --show-stats
@@ -1444,6 +1492,14 @@ jobs:
         working-directory: baml_language
         env:
           RUSTDOCFLAGS: "-D warnings"
+
+      # EXPERIMENT (do not merge): sizes the target directory to estimate how
+      # much cache storage whole-target caching would need.
+      - name: "Report target size"
+        if: always()
+        run: |
+          du -sh baml_language/target 2>/dev/null || true
+          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
 
       - name: "Show sccache stats"
         if: always()
