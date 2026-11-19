@@ -4,8 +4,6 @@
 /// additionally throws `ParseError` when the remaining bytes are not valid
 /// UTF-8.
 class File {
-    _handle: $rust_type,
-
     /// Reads the entire remaining file contents as a UTF-8 string.
     ///
     /// # Throws
@@ -94,6 +92,8 @@ class File {
     function write(self, data: string | uint8array) -> int throws root.errors.Io {
         self.as<root.io.Write>.write(data)
     }
+
+    @@rust_type("File")
 }
 
 /// Opens the file at `path` with the given `mode`.
@@ -255,10 +255,11 @@ function write_atomic(path: string, content: uint8array) -> void throws root.err
 /// An advisory cross-process lock. Keep the handle alive; close or process exit releases it.
 /// The lock file remains on disk and must not be deleted while other processes may use it.
 class Lock {
-    _handle: $rust_type,
     function close(self) -> void throws never {
         $rust_io_function
     }
+
+    @@rust_type("Lock")
 }
 
 /// Acquires an exclusive advisory lock, waiting up to timeout_ms. Creates missing parent directories.

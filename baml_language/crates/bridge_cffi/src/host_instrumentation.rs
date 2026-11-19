@@ -1,7 +1,9 @@
 //! Shared host instrumentation bindings. No host body is executed here.
 use std::sync::Arc;
 
-use bex_project::{HostDefinition, HostInvocation, RustDataArc as _, TraceOptionsData};
+use bex_project::{
+    HostDefinition, HostInvocation, RustDataArc as _, TraceControl, TraceOptionsData,
+};
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, InvocationStateHandle, TableKey};
 
 use crate::BridgeError;
@@ -21,17 +23,13 @@ pub fn options(key: u64) -> Result<TraceOptionsData, BridgeError> {
             ..Default::default()
         });
     };
-    let entry = HANDLE_TABLE
-        .resolve(key)
-        .ok_or_else(|| invalid("host trace options are no longer live"))?;
-    let CffiHandleTableEntry::RustData(data) = &*entry else {
-        return Err(invalid("instrument accepts generated trace.Options only"));
-    };
-    data.downcast_ref::<TraceOptionsData>()
-        .cloned()
-        .ok_or_else(|| {
-            invalid("instrument accepts generated trace.Options only; reservations are unsupported")
-        })
+    let runtime = crate::get_runtime()?;
+    match crate::control_projection::trace_control(&*runtime, key.get(), "host trace options")? {
+        TraceControl::Options(options) => Ok(TraceOptionsData::clone(&options)),
+        TraceControl::Reservation(_) => Err(invalid(
+            "instrument accepts generated trace.Options only; reservations are unsupported",
+        )),
+    }
 }
 
 pub fn begin(
@@ -73,49 +71,43 @@ pub fn begin(
     Ok((execution, key.get()))
 }
 
-/// A marker retains immutable declaration data only, not a runtime or parent.
-pub fn define_marker(definition: HostDefinition, options_key: u64) -> Result<u64, BridgeError> {
-    let marker = bex_project::HostMarker {
+/// The marker of an instrumented host function: its declaration and trace
+/// options, validated once. It retains immutable declaration data only, not
+/// a runtime or parent. The host adapter holds it beside the function and
+/// hands it back when it registers the function as a callback.
+pub fn define_marker(
+    definition: HostDefinition,
+    options_key: u64,
+) -> Result<Arc<bex_project::HostMarker>, BridgeError> {
+    Ok(Arc::new(bex_project::HostMarker {
         definition,
         options: options(options_key)?,
-    };
-    Ok(HANDLE_TABLE
-        .insert(
-            CffiHandleTableEntry::try_from(bex_project::BexExternalValue::RustData(Arc::new(
-                marker,
-            )))
-            .expect("RustData is a handle-table value"),
-        )
-        .get())
+    }))
 }
 
+/// The marker a callback registers under: its own when it is an instrumented
+/// function, otherwise the anonymous callback's.
 pub fn registration_marker(
-    key: u64,
+    marker: Option<&Arc<bex_project::HostMarker>>,
     language: &str,
-) -> Result<Arc<bex_project::HostMarker>, BridgeError> {
-    let Some(key) = TableKey::new(key) else {
-        return Ok(Arc::new(bex_project::HostMarker {
-            definition: HostDefinition {
-                language: language.into(),
-                module: "<host>".into(),
-                qualified_name: "<unmarked-callback>".into(),
-                source_file: "<native>".into(),
-                definition_line: 0,
-                wrapper_line: 0,
-                display_name: "<callback>".into(),
-            },
-            options: TraceOptionsData::default(),
-        }));
-    };
-    let entry = HANDLE_TABLE
-        .resolve(key)
-        .ok_or_else(|| invalid("host marker is no longer live"))?;
-    let CffiHandleTableEntry::RustData(data) = &*entry else {
-        return Err(invalid("expected a host marker"));
-    };
-    Arc::clone(data)
-        .downcast_payload::<bex_project::HostMarker>()
-        .map_err(|_| invalid("expected a host marker"))
+) -> Arc<bex_project::HostMarker> {
+    marker.map_or_else(
+        || {
+            Arc::new(bex_project::HostMarker {
+                definition: HostDefinition {
+                    language: language.into(),
+                    module: "<host>".into(),
+                    qualified_name: "<unmarked-callback>".into(),
+                    source_file: "<native>".into(),
+                    definition_line: 0,
+                    wrapper_line: 0,
+                    display_name: "<callback>".into(),
+                },
+                options: TraceOptionsData::default(),
+            })
+        },
+        Arc::clone,
+    )
 }
 
 pub fn callback(call_id: u32) -> Option<Arc<bex_project::CallbackHostInvocation>> {
@@ -125,6 +117,23 @@ pub fn callback(call_id: u32) -> Option<Arc<bex_project::CallbackHostInvocation>
         .ok()?
         .host
         .clone()
+}
+
+/// The `baml.spawn.CancelToken` a host body holds, encoded as the outbound
+/// value a host decodes: a reference to a token observing the execution's
+/// effective cancellation. Issuing one touches no heap, so a host thread
+/// calls this without waiting on the runtime.
+pub fn cancel_token(execution: &HostInvocation) -> Result<Vec<u8>, BridgeError> {
+    use prost::Message as _;
+
+    let token = execution
+        .cancel_token()
+        .map_err(bex_project::RuntimeError::from)?;
+    Ok(bridge_ctypes::external_to_outbound(
+        &token,
+        &bridge_ctypes::CffiHandleTableOptions::for_wire(),
+    )?
+    .encode_to_vec())
 }
 
 #[cfg(test)]
@@ -137,20 +146,5 @@ mod tests {
         assert_eq!(resolved.inputs, None);
         assert_eq!(resolved.output, Some(true));
         assert_eq!(resolved.error, Some(true));
-    }
-
-    #[test]
-    fn explicit_empty_span_keeps_capture_disabled() {
-        let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(Arc::new(TraceOptionsData {
-            inputs: Some(false),
-            output: Some(false),
-            error: Some(false),
-            ..Default::default()
-        })));
-        let resolved = options(key.get()).unwrap();
-        assert_eq!(resolved.inputs, Some(false));
-        assert_eq!(resolved.output, Some(false));
-        assert_eq!(resolved.error, Some(false));
-        assert!(HANDLE_TABLE.release(key));
     }
 }

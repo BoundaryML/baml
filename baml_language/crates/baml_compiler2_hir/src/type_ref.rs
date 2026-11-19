@@ -97,8 +97,6 @@ pub enum TypeRefKind {
     Unknown,
     /// The `type` meta-type keyword.
     Type,
-    /// `$rust_type` — opaque Rust-managed state field type.
-    Rust,
     /// Error-recovery sentinel.
     Error,
     /// No type was written at this slot (an omitted annotation), as distinct
@@ -311,7 +309,6 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
             }
             TypeRefKind::Unknown => write!(f, "unknown"),
             TypeRefKind::Type => write!(f, "reflect.Type"),
-            TypeRefKind::Rust => write!(f, "$rust_type"),
             TypeRefKind::Error => write!(f, "error"),
             TypeRefKind::Missing => write!(f, "?"),
             TypeRefKind::Infer => write!(f, "_"),
@@ -458,7 +455,6 @@ impl TypeRefBuilder {
             },
             TypeExprKind::Unknown => TypeRefKind::Unknown,
             TypeExprKind::Type => TypeRefKind::Type,
-            TypeExprKind::Rust => TypeRefKind::Rust,
             TypeExprKind::Error => TypeRefKind::Error,
             TypeExprKind::Missing => TypeRefKind::Missing,
             TypeExprKind::Infer => TypeRefKind::Infer,

@@ -622,14 +622,13 @@ mod tests {
             None,
             &readers,
         );
-        let body = crate::http_server::downcast_body(&body).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
-        let crate::http_server::HttpBody::Client(client) = &*body else {
+        let crate::http_server::HttpBody::Client { body: client, .. } = &*body else {
             panic!("client body");
         };
         assert_eq!(client.retained(), 0, "telemetry off does not eagerly read");
-        assert_eq!(body.read_text(None).await.unwrap(), "a\u{fffd}");
-        assert!(body.read_bytes(None).await.is_err());
+        assert_eq!(body.read_text().await.unwrap(), "a\u{fffd}");
+        assert!(body.read_bytes().await.is_err());
         readers.shutdown(Duration::from_millis(100)).await;
     }
 

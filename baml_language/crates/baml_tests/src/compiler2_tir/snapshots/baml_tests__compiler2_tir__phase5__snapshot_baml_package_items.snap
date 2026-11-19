@@ -64,7 +64,9 @@ namespace baml.csv:
   class WriterOptions { methods: [] }
   class _Headers { methods: [] }
   class _NeedData { methods: [] }
+  class _ReaderState { methods: [] }
   class _Skip { methods: [] }
+  class _WriterState { methods: [] }
   function _buffer
   function _cell_by_index<T>
   function _cell_by_name<T>
@@ -165,15 +167,19 @@ namespace baml.hash:
   type Hasher
 namespace baml.host:
   class Value { methods: [] }
-  function call_host_value<T, E>
+  function _call_host_value<T, E>
 namespace baml.http:
   class Request { methods: [from_url, set_method, set_headers, set_body, set_timeout, set_connect_timeout] }
   class Response { methods: [text, bytes, ok, new, new_streaming, write, end] }
-  class Server { methods: [bind, serve, _serve] }
+  class Server { methods: [addr, bind, serve, _serve] }
   class ServerRequest { methods: [] }
   class SseStream { methods: [next, close] }
   class TlsConfig { methods: [new, _new] }
   type WsAccept
+  class _ResponseBody { methods: [text, bytes, write, end] }
+  class _ServerState { methods: [] }
+  class _SseState { methods: [next, close] }
+  class _TlsKeys { methods: [] }
   function _default_connect_timeout
   function _default_timeout
   function _fetch
@@ -329,12 +335,11 @@ namespace baml.spawn:
 namespace baml.sync:
   class Permit { methods: [release] }
   class Semaphore { methods: [new, capacity, active_count, queued_count, acquire, with, _admit] }
+  class Ticket { methods: [] }
   function _admitted
   function _enter
   function _exit
   function _held<K>
-  function _permit
-  function _release_permit
   function _wait
   function _wait_permit
   function atomic<R, E>
@@ -346,9 +351,10 @@ namespace baml.sys:
   class ReadPipe { methods: [close, lines] }
   class ReadPipeLines { methods: [] }
   type Stdio
-  class Subprocess { methods: [wait, kill, close, cleanup] }
+  class Subprocess { methods: [pid, wait, kill, close, cleanup] }
   class WritePipe { methods: [close] }
   class _ProcessOptions { methods: [] }
+  class _SubprocessState { methods: [wait, kill, close] }
   function _run
   function _shell
   function _sleep

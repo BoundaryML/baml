@@ -3,15 +3,15 @@ source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
 class            reflect.Class                    <builtin>/reflect/kinds.baml:2
-class            reflect.Enum                     <builtin>/reflect/kinds.baml:164
-class            reflect.Union                    <builtin>/reflect/kinds.baml:258
-class            reflect.Literal                  <builtin>/reflect/kinds.baml:296
-class            reflect.Array                    <builtin>/reflect/kinds.baml:327
-class            reflect.Map                      <builtin>/reflect/kinds.baml:349
-class            reflect.Interface                <builtin>/reflect/kinds.baml:388
-class            reflect.Primitive                <builtin>/reflect/kinds.baml:411
-class            reflect.Function                 <builtin>/reflect/kinds.baml:428
-class            reflect.Tuple                    <builtin>/reflect/kinds.baml:455
+class            reflect.Enum                     <builtin>/reflect/kinds.baml:161
+class            reflect.Union                    <builtin>/reflect/kinds.baml:255
+class            reflect.Literal                  <builtin>/reflect/kinds.baml:293
+class            reflect.Array                    <builtin>/reflect/kinds.baml:324
+class            reflect.Map                      <builtin>/reflect/kinds.baml:346
+class            reflect.Interface                <builtin>/reflect/kinds.baml:385
+class            reflect.Primitive                <builtin>/reflect/kinds.baml:408
+class            reflect.Function                 <builtin>/reflect/kinds.baml:425
+class            reflect.Tuple                    <builtin>/reflect/kinds.baml:452
 class            reflect.Arg                      <builtin>/reflect/reflect.baml:2
 class            reflect.Meta                     <builtin>/reflect/reflect.baml:14
 class            reflect.WithMeta                 <builtin>/reflect/reflect.baml:27
@@ -33,8 +33,8 @@ function         reflect.signature                <builtin>/reflect/reflect.baml
 function         reflect.call_any                 <builtin>/reflect/reflect.baml:761
 class            reflect.Type                     <builtin>/reflect/type.baml:8
 class            reflect.class.Field              <builtin>/reflect/ns_class/class.baml:8
-class            reflect.class.Builder            <builtin>/reflect/ns_class/class.baml:38
-class            reflect.class.PendingType        <builtin>/reflect/ns_class/class.baml:111
+class            reflect.class.Builder            <builtin>/reflect/ns_class/class.baml:51
+class            reflect.class.PendingType        <builtin>/reflect/ns_class/class.baml:124
 class            reflect.enum.Value               <builtin>/reflect/ns_enum/enum.baml:2
 class            reflect.errors.CompilationError  <builtin>/reflect/ns_errors/errors.baml:2
 class            reflect.errors.EvaluationError   <builtin>/reflect/ns_errors/errors.baml:8

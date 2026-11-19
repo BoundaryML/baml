@@ -1,0 +1,34 @@
+// A generic class the runtime keeps to itself (`baml.sap._ParseCache<T>`): an
+// instance crosses as a reference that carries its type arguments, so its
+// methods bind `T` from the receiver, and one engine instance is one wrapper.
+import "./baml_sdk/index.js";
+import { describe, it, expect } from "vitest";
+import { _ParseCache, _new_parse_cache, _new_parse_cache_sync } from "./baml_sdk/baml/sap/index.js";
+import { identity, identity_sync } from "./baml_sdk/generic_tests/index.js";
+
+describe("function_calls — generic references", () => {
+  it("generic_references_method_binds_the_class_type_argument_from_its_receiver", async () => {
+    const ints = await _new_parse_cache({ $types: { T: "int" } });
+    expect(ints).toBeInstanceOf(_ParseCache);
+    expect(await ints._parse_final("41")).toBe(41);
+    expect(ints._parse_final_sync("41")).toBe(41);
+    // The same text read at another type argument: the binding is the
+    // receiver's, not a default.
+    const strings = _new_parse_cache_sync({ $types: { T: "string" } });
+    expect(strings._parse_final_sync("41")).toBe("41");
+  });
+
+  it("generic_references_reference_carries_its_type_arguments", () => {
+    // The type argument a reference came with binds another call: a cache
+    // built at the strings cache's `T` reads text as a string.
+    const t = _new_parse_cache_sync({ $types: { T: "string" } }).$types!.T!;
+    expect(_new_parse_cache_sync({ $types: { T: t } })._parse_final_sync("41")).toBe("41");
+  });
+
+  it("generic_references_one_engine_instance_is_one_reference", async () => {
+    const cache = _new_parse_cache_sync({ $types: { T: "int" } });
+    expect(await identity(cache)).toBe(cache);
+    expect(identity_sync(cache)).toBe(cache);
+    expect(_new_parse_cache_sync({ $types: { T: "int" } })).not.toBe(cache);
+  });
+});

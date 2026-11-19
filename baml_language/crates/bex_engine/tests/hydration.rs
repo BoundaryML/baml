@@ -11,7 +11,9 @@ use std::sync::Arc;
 
 use baml_type::TypeName;
 use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
-use bex_external_types::{BexExternalAdt, MediaKind, WireFunctionParamTy, WireHead, WireTy};
+use bex_external_types::{
+    BexExternalAdt, ConcreteMediaKind, WireFunctionParamTy, WireHead, WireTy,
+};
 use bex_resource_types::{HostValueArc, HostValueKind};
 use common::compile_for_engine;
 use indexmap::IndexMap;
@@ -293,7 +295,7 @@ async fn the_json_alias_takes_a_json_typed_tree() {
 }
 
 #[tokio::test]
-async fn an_opaque_host_value_is_rust_data() {
+async fn an_opaque_host_value_is_a_host_value_instance() {
     let source = r#"
         function keep(x: unknown) -> unknown { x }
         function count(x: int) -> int { x }
@@ -309,29 +311,19 @@ async fn an_opaque_host_value_is_rust_data() {
     );
     let message = refusal(call(source, "count", vec![opaque]).await);
     assert!(
-        message.contains("Value of type '$rust_type' does not match the declared type `int`"),
+        message.contains("Value of type 'baml.host.Value' does not match the declared type `int`"),
         "{message}"
     );
 }
 
 #[tokio::test]
 async fn a_class_holding_native_data_cannot_be_built_by_a_host() {
-    // `baml.media.Image` keeps its payload in a `$rust_type` field: a host
-    // sends the media itself, never the wrapper by its fields.
+    // `baml.media.Image` is a `@@rust_type` class: a host sends the media
+    // itself, never the class by its fields.
     let source = r#"
         function width(x: image) -> int { 1 }
     "#;
-    let forged = instance(
-        "baml.media.Image",
-        vec![],
-        &[(
-            "_data",
-            BexExternalValue::HostValue(HostValueArc::new(
-                bex_resource_types::HostKey::new(7_002).expect("nonzero"),
-                HostValueKind::Opaque,
-            )),
-        )],
-    );
+    let forged = instance("baml.media.Image", vec![], &[]);
     let message = refusal(call(source, "width", vec![forged]).await);
     assert!(
         message.contains("is a media value; send the media itself"),
@@ -345,7 +337,7 @@ async fn media_lands_as_its_kind() {
         function width(x: image) -> int { 1 }
     "#;
     let picture = BexExternalValue::Adt(BexExternalAdt::Media(bex_vm_types::MediaValue::from_url(
-        MediaKind::Image,
+        ConcreteMediaKind::Image,
         "https://example.test/p.png",
         Some("image/png"),
     )));
@@ -354,7 +346,7 @@ async fn media_lands_as_its_kind() {
         BexExternalValue::Int(1)
     );
     let clip = BexExternalValue::Adt(BexExternalAdt::Media(bex_vm_types::MediaValue::from_url(
-        MediaKind::Audio,
+        ConcreteMediaKind::Audio,
         "https://example.test/a.mp3",
         Some("audio/mpeg"),
     )));

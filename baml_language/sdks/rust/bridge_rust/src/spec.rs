@@ -86,11 +86,14 @@ impl CapabilityHandle {
 }
 
 /// The engine's own instance of a class that crosses by reference
-/// (`reflect.Package`, `reflect.Session`, `reflect.CompileArtifact`): the
-/// private state of the generated wrapper for such a class. It arrives as an
-/// `ADT_RUNTIME_VALUE` handle whose type names the class, goes back as that
-/// handle, and is owned once and shared by clones. Two instances are equal
-/// when they hold the same key.
+/// (`reflect.Package`, `regex.Regex`, `sap._ParseCache<T>`, ...): the private
+/// state of the generated wrapper for such a class. It arrives as an
+/// `ADT_RUNTIME_VALUE` handle whose type names the class at its type
+/// arguments, goes back as that handle, and is owned once and shared by
+/// clones. The type arguments are not checked: the engine judges the live
+/// object against its slot whenever the handle comes back. The engine keys
+/// one instance by one handle while any reference to it is held, so two
+/// instances are equal when they hold the same key.
 #[doc(hidden)]
 #[derive(Clone)]
 pub struct RuntimeInstance(Arc<CapabilityHandle>);
@@ -111,8 +114,8 @@ impl RuntimeInstance {
         match handle.ty.as_ref().and_then(|ty| ty.ty.as_ref()) {
             Some(Ty::ClassTy(wire::BamlTyClass {
                 head: Some(Head::Name(name)),
-                type_args,
-            })) if type_args.is_empty() => {
+                ..
+            })) => {
                 if name != class {
                     return Err(DecodeError::FqnMismatch {
                         expected: class,
@@ -133,6 +136,12 @@ impl RuntimeInstance {
     /// The instance as an inbound value: a fresh clone of its handle.
     pub fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
         self.0.to_baml(encoder)
+    }
+
+    /// The key of the handle it owns, for a control the runtime reads the
+    /// instance through while the instance is held.
+    pub(crate) fn key(&self) -> u64 {
+        self.0.key
     }
 }
 
@@ -425,22 +434,20 @@ impl<T: BamlValue> Stream<T> {
     /// Yield one partial, or `None` for the distinct `ai.stream.Done`
     /// sentinel. A nullable partial is therefore `Some(None)`, not done.
     pub fn next_sync(&self) -> Result<Option<T>, Error<Infallible>> {
-        let value: wire::BamlOutboundValue =
-            crate::runtime::invoke_sync("ai.stream.Stream.next", |args| {
-                args.receiver(self)?;
-                Ok(Vec::new())
-            })?;
-        decode_stream_item(value).map_err(Error::Decode)
+        crate::runtime::invoke_sync("ai.stream.Stream.next", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
+        .map(StreamItem::into_partial)
     }
 
     pub async fn next(&self) -> Result<Option<T>, Error<Infallible>> {
-        let value: wire::BamlOutboundValue =
-            crate::runtime::invoke("ai.stream.Stream.next", |args| {
-                args.receiver(self)?;
-                Ok(Vec::new())
-            })
-            .await?;
-        decode_stream_item(value).map_err(Error::Decode)
+        crate::runtime::invoke("ai.stream.Stream.next", |args| {
+            args.receiver(self)?;
+            Ok(Vec::new())
+        })
+        .await
+        .map(StreamItem::into_partial)
     }
 
     /// Drain the stream and return its settled output.
@@ -460,17 +467,35 @@ impl<T: BamlValue> Stream<T> {
     }
 }
 
-fn decode_stream_item<T: BamlValue>(
-    value: wire::BamlOutboundValue,
-) -> Result<Option<T>, DecodeError> {
-    let unwrapped = crate::decode::unwrap(value.clone());
-    if matches!(
-        unwrapped.value,
-        Some(Out::ClassValue(ref class)) if class.name == "ai.stream.Done"
-    ) {
-        Ok(None)
-    } else {
-        T::from_baml(value).map(Some)
+/// What `ai.stream.Stream.next` yields: a partial, or `None` for the
+/// distinct `ai.stream.Done` sentinel.
+struct StreamItem<T>(Option<T>);
+
+impl<T> StreamItem<T> {
+    fn into_partial(self) -> Option<T> {
+        self.0
+    }
+}
+
+impl<T: BamlValue> __BamlValuePrivate for StreamItem<T> {
+    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
+        Err(EncodeError::RuntimeOnly {
+            what: "a stream item",
+        })
+    }
+
+    fn from_baml(value: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        if crate::outbound::class_name(&value) == Some("ai.stream.Done") {
+            Ok(Self(None))
+        } else {
+            T::from_baml(value).map(|partial| Self(Some(partial)))
+        }
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        wire::BamlTy {
+            ty: Some(wire::baml_ty::Ty::Unknown(wire::BamlTyUnknown {})),
+        }
     }
 }
 
@@ -569,26 +594,6 @@ impl __BamlValuePrivate for Prompt {
     fn baml_ty() -> wire::BamlTy {
         wire::BamlTy {
             ty: Some(wire::baml_ty::Ty::PromptAst(wire::BamlTyPromptAst {})),
-        }
-    }
-}
-
-// The stream bridge first decodes its union result as a raw outbound value so
-// it can distinguish `Done` from a nullable partial.
-impl __BamlValuePrivate for wire::BamlOutboundValue {
-    fn to_baml(&self, _encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
-        Err(EncodeError::RuntimeOnly {
-            what: "a raw outbound wire value",
-        })
-    }
-
-    fn from_baml(value: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
-        Ok(value)
-    }
-
-    fn baml_ty() -> wire::BamlTy {
-        wire::BamlTy {
-            ty: Some(wire::baml_ty::Ty::Unknown(wire::BamlTyUnknown {})),
         }
     }
 }
@@ -747,21 +752,7 @@ impl<T: BamlValue> Stream<T> {
         &self,
         baml: impl Into<crate::invocation::InvocationOptions>,
     ) -> Result<Option<T>, Error<Infallible>> {
-        let value: wire::BamlOutboundValue = crate::runtime::invoke_sync_with_options(
-            "ai.stream.Stream.next",
-            |args| {
-                args.receiver(self)?;
-                Ok(Vec::new())
-            },
-            baml.into(),
-        )?;
-        decode_stream_item(value).map_err(Error::Decode)
-    }
-    pub async fn next_with_options(
-        &self,
-        baml: impl Into<crate::invocation::InvocationOptions>,
-    ) -> Result<Option<T>, Error<Infallible>> {
-        let value: wire::BamlOutboundValue = crate::runtime::invoke_with_options(
+        crate::runtime::invoke_sync_with_options(
             "ai.stream.Stream.next",
             |args| {
                 args.receiver(self)?;
@@ -769,8 +760,22 @@ impl<T: BamlValue> Stream<T> {
             },
             baml.into(),
         )
-        .await?;
-        decode_stream_item(value).map_err(Error::Decode)
+        .map(StreamItem::into_partial)
+    }
+    pub async fn next_with_options(
+        &self,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Option<T>, Error<Infallible>> {
+        crate::runtime::invoke_with_options(
+            "ai.stream.Stream.next",
+            |args| {
+                args.receiver(self)?;
+                Ok(Vec::new())
+            },
+            baml.into(),
+        )
+        .await
+        .map(StreamItem::into_partial)
     }
     pub fn final_sync_with_options(
         &self,
@@ -893,6 +898,7 @@ mod tests {
                 key,
                 handle_type: kind as i32,
                 ty: Some(crate::baml_value::internal::class_ty(head, Vec::new())),
+                pin: 0,
             })),
         }
     }
@@ -984,13 +990,20 @@ mod tests {
                 fields: Vec::new(),
             })),
         };
-        assert_eq!(decode_stream_item::<Option<String>>(done).unwrap(), None);
+        assert_eq!(
+            StreamItem::<Option<String>>::from_baml(done)
+                .unwrap()
+                .into_partial(),
+            None
+        );
 
         let null = wire::BamlOutboundValue {
             value: Some(Out::NullValue(wire::BamlValueNull {})),
         };
         assert_eq!(
-            decode_stream_item::<Option<String>>(null).unwrap(),
+            StreamItem::<Option<String>>::from_baml(null)
+                .unwrap()
+                .into_partial(),
             Some(None)
         );
     }

@@ -100,7 +100,8 @@ fn to_source_code_with_optional_metadata(
     for (key, symbol) in sorted_pool {
         let fqn = key.to_string();
         // A class the BamlBridge runtime spells (`BamlStream`,
-        // `BamlFunctionSpec`, `BamlPrompt`) is never a generated struct.
+        // `BamlFunctionSpec`, `BamlPrompt`, `BamlHandle`) is never a
+        // generated struct.
         if let Symbol::Class(class) = symbol
             && runtime_owned(class.crossing)
         {
@@ -419,7 +420,10 @@ fn compute_boxed_fields(pool: &SymbolPool, ctx: &TranslateCtx) -> BTreeSet<(Stri
 /// generated struct stands for it.
 fn runtime_owned(crossing: ClassCrossing) -> bool {
     match crossing {
-        ClassCrossing::Stream | ClassCrossing::FunctionSpec | ClassCrossing::Prompt => true,
+        ClassCrossing::Stream
+        | ClassCrossing::FunctionSpec
+        | ClassCrossing::Prompt
+        | ClassCrossing::HostValue => true,
         ClassCrossing::Fields | ClassCrossing::Opaque | ClassCrossing::Media(_) => false,
     }
 }
@@ -484,7 +488,7 @@ fn render_supported_class(
             ty: translate_ty(&prop.ty, ctx).ok_or_else(unrepresentable)?,
             boxed: boxed_fields.contains(&(fqn.clone(), prop.name.as_str().to_string())),
             doc: prop.docstring.clone(),
-            is_rust: matches!(prop.ty, Ty::RustType),
+            is_handle: translate_ty::is_handle(&prop.ty, ctx),
             slot: slot_expr(&prop.ty, ctx, &class_argument).ok_or_else(unrepresentable)?,
             equal_slot: if holds_native_tuple(&prop.ty, ctx) {
                 Some(
@@ -560,42 +564,55 @@ fn render_supported_class(
     }
 
     match class.crossing {
-        ClassCrossing::Opaque => render_opaque_class(class, key, &methods),
+        ClassCrossing::Opaque => Ok(render_opaque_class(class, key, &methods)),
         ClassCrossing::Fields => Ok(render_class(class, key, &fields, &methods, None)),
         ClassCrossing::Media(kind) => {
-            // A media wrapper is the media type itself on the wire: it holds
-            // exactly its `$rust_type` payload.
-            let [data] = fields.as_slice() else {
-                return Err("a media class must hold exactly its `$rust_type` payload".into());
-            };
-            if !data.is_rust {
-                return Err("a media class must hold exactly its `$rust_type` payload".into());
-            }
+            // A media class is the media type itself on the wire. It declares
+            // no fields; the struct stores the engine's handle to its media.
+            debug_assert!(fields.is_empty(), "a media class stores only its media");
+            let data = media_handle_field();
             Ok(render_class(
                 class,
                 key,
-                &fields,
+                std::slice::from_ref(&data),
                 &methods,
-                Some((kind, data)),
+                Some((kind, &data)),
             ))
         }
-        ClassCrossing::Stream | ClassCrossing::FunctionSpec | ClassCrossing::Prompt => {
+        ClassCrossing::Stream
+        | ClassCrossing::FunctionSpec
+        | ClassCrossing::Prompt
+        | ClassCrossing::HostValue => {
             unreachable!("a runtime-owned class is never rendered")
         }
     }
 }
 
+/// The one field of a media struct, `_data`: the engine's handle to the media.
+fn media_handle_field() -> RenderedField {
+    RenderedField {
+        name: "_data".to_string(),
+        ty: translate_ty::HANDLE.to_string(),
+        boxed: false,
+        doc: Some("The engine's handle to the media.".to_string()),
+        is_handle: true,
+        slot: translate_ty::engine_handle_slot(),
+        equal_slot: None,
+    }
+}
+
 /// The declared fields the generated Swift type of `class` stores, which
 /// decide whether the class is emitted. An opaque class stores none: it holds
-/// the engine's instance, whose fields are the runtime's own.
+/// the engine's instance, whose fields are the runtime's own. A media class
+/// declares none: its struct stores its media's handle ([`media_handle_field`]).
 fn stored_fields(class: &Class) -> &[ClassProperty] {
     match class.crossing {
-        ClassCrossing::Opaque => &[],
+        ClassCrossing::Opaque | ClassCrossing::Media(_) => &[],
         ClassCrossing::Fields
         | ClassCrossing::Stream
         | ClassCrossing::FunctionSpec
-        | ClassCrossing::Media(_)
-        | ClassCrossing::Prompt => &class.properties,
+        | ClassCrossing::Prompt
+        | ClassCrossing::HostValue => &class.properties,
     }
 }
 
@@ -1185,9 +1202,10 @@ mod tests {
                 .starts_with("Equatable, Sendable, BamlTyped, BamlLeafEncodable, BamlDecodable {"),
             "{opaque}"
         );
-        // The handle is the whole value: no field, no public initializer.
+        // The handle is the whole value, read-only and internal to the
+        // generated module: no field, no public initializer.
         assert!(
-            opaque.contains("private let _bamlHandle: BamlHandle"),
+            opaque.contains("\tinternal let _bamlHandle: BamlHandle"),
             "{opaque}"
         );
         assert!(!opaque.contains("_inner"), "{opaque}");
@@ -1235,6 +1253,42 @@ mod tests {
             ),
             "{emitted}"
         );
+    }
+
+    /// A generic opaque class states its type arguments: its slot names the
+    /// class at them, it decodes only an instance at exactly them, and its
+    /// methods bind the class's parameters from the receiver's Swift type.
+    #[test]
+    fn generic_opaque_classes_state_their_type_arguments() {
+        let cache = || user("Cache");
+        let t = || Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, "T".into()));
+        let Symbol::Function(get) = function("get", Vec::new(), t()) else {
+            unreachable!("`function` builds a function symbol");
+        };
+        let class = Symbol::Class(baml_sdkgen_types::Class {
+            crossing: ClassCrossing::Opaque,
+            name: cache(),
+            generic_params: vec!["T".into()],
+            docstring: None,
+            properties: Vec::new(),
+            static_methods: Vec::new(),
+            instance_methods: vec![get],
+            origin: origin(),
+            json_omit_nulls: false,
+        });
+        let pool = SymbolPool::from([(cache(), class)]);
+        let emitted = emit(&pool);
+        for expected in [
+            "public struct Cache<T: BamlCodableValue>: Equatable, Sendable, BamlTyped, BamlLeafEncodable, BamlDecodable {",
+            "._leaf(.classType(\"user.Cache\", typeArguments: [BamlSlot<T>.own.type]))",
+            "BamlHandle._bamlDecodeOpaque(v, of: \"user.Cache\")",
+            "typeArgs: [BamlTypeArgument(\"T\", BamlSlot<T>.own.type)]",
+        ] {
+            assert!(
+                emitted.contains(expected),
+                "missing {expected} in\n{emitted}"
+            );
+        }
     }
 
     #[test]
@@ -1569,6 +1623,85 @@ mod tests {
         );
     }
 
+    /// A host's own value is the host's handle, `BamlHandle?`, in every
+    /// position a type names it, and its class emits nothing.
+    #[test]
+    fn host_value_class_is_the_host_handle() {
+        let host_value = Name::new("baml".into(), vec!["host".into()], "Value".into());
+        let class = |name: Name, crossing, properties: Vec<(&str, Ty)>| {
+            Symbol::Class(baml_sdkgen_types::Class {
+                crossing,
+                name,
+                generic_params: Vec::new(),
+                docstring: None,
+                properties: properties
+                    .into_iter()
+                    .map(|(name, ty)| baml_sdkgen_types::ClassProperty {
+                        name: name.into(),
+                        docstring: None,
+                        ty,
+                        json_fallback: false,
+                        json_flatten: false,
+                        json_rename: None,
+                    })
+                    .collect(),
+                static_methods: Vec::new(),
+                instance_methods: Vec::new(),
+                origin: origin(),
+                json_omit_nulls: false,
+            })
+        };
+        let pool_with = |handle: Ty| {
+            let mut optional = function("optional", vec![("value", handle.clone())], int());
+            if let Symbol::Function(function) = &mut optional {
+                function.arguments[0].default =
+                    Some(baml_sdkgen_types::FunctionArgumentDefault::Null);
+            }
+            SymbolPool::from([
+                (
+                    user("Holder"),
+                    class(
+                        user("Holder"),
+                        ClassCrossing::Fields,
+                        vec![
+                            ("handle", handle.clone()),
+                            ("maybe", Ty::Union(Box::new([handle.clone(), null()]))),
+                            ("many", Ty::List(Box::new(handle.clone()))),
+                            ("either", Ty::Union(Box::new([handle.clone(), int()]))),
+                        ],
+                    ),
+                ),
+                (
+                    user("Only"),
+                    class(
+                        user("Only"),
+                        ClassCrossing::Fields,
+                        vec![("handle", handle.clone())],
+                    ),
+                ),
+                (
+                    user("echo"),
+                    function("echo", vec![("value", handle.clone())], handle),
+                ),
+                (user("optional"), optional),
+            ])
+        };
+        let generate = |pool: &SymbolPool| {
+            to_source_code_with_bytecode(pool, &[], NamingConvention::PreserveCase)
+        };
+        let mut pool = pool_with(Ty::Class(host_value.clone(), Box::new([])));
+        pool.insert(
+            host_value.clone(),
+            class(host_value, ClassCrossing::HostValue, Vec::new()),
+        );
+        let host_value = generate(&pool);
+
+        let all: String = host_value.values().cloned().collect();
+        assert!(all.contains("BamlHandle?"), "{all}");
+        assert!(all.contains("BamlHandle._bamlDecode(v)"), "{all}");
+        assert!(!all.contains("struct Value"), "{all}");
+    }
+
     #[test]
     fn a_parameter_named_args_keeps_its_value() {
         // The kwargs local must not shadow a parameter named `args`.
@@ -1755,7 +1888,7 @@ mod tests {
             supported_classes: BTreeSet::from([image_class.to_string()]),
             crossings: BTreeMap::from([(
                 image_class.to_string(),
-                ClassCrossing::Media(baml_base::MediaKind::Image),
+                ClassCrossing::Media(baml_base::ConcreteMediaKind::Image),
             )]),
             class_names: BTreeMap::from([(image_class.to_string(), image_class)]),
             supported_enums: BTreeSet::new(),

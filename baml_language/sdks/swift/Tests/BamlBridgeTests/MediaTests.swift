@@ -18,13 +18,15 @@ final class MediaTests: XCTestCase {
         XCTAssertEqual(decoded.fileContent.base64, "aGk=")
     }
 
-    func testNamedContentOfTheGenericKindIsBuilt() throws {
-        let handle = try BamlMedia.fromFileContent(
-            .generic, file: "/nowhere/notes.bin", base64: "aGk=", mimeType: nil)
-        let media = try XCTUnwrap(handle.portableMedia)
-        XCTAssertEqual(media.media, .other)
-        XCTAssertEqual(media.fileContent.name, "notes.bin")
-        XCTAssertEqual(media.mimeType, "application/octet-stream")
+    /// A media value always has a kind; the wire's reserved or unknown
+    /// kinds name none.
+    func testPortableMediaWithoutAKindIsRefused() {
+        for raw in [0, 5, 42] {
+            var media = BamlBridge_Cffi_V1_BamlValueMedia()
+            media.media = BamlBridge_Cffi_V1_MediaTypeEnum(rawValue: raw)!
+            media.base64 = "aGk="
+            XCTAssertThrowsError(try BamlMedia.decodePortable(media), "kind \(raw)")
+        }
     }
 
     func testOnlyContentReadFromAFileHasAName() throws {

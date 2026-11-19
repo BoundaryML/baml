@@ -25,6 +25,7 @@ internal static class Program
         using NativeFixture native = new();
         VerifyRegistryLifecycle(native.Api);
         VerifyStrictOptionalBindingAndArity(native.Api);
+        VerifyOutboundPinsAreReleased(native.Api);
         NativeCallbacks.Register(native.Api);
         await VerifyAsyncDispatchContextAndBorrowedCopy(native.Api);
         await VerifyCancellationClassification(native.Api);
@@ -189,7 +190,7 @@ internal static class Program
                 Arguments(new BamlToHostCall(), api),
                 out string? diagnostic)
                 ?? throw new InvalidOperationException(diagnostic);
-            hostValues.Release(firstKey);
+            hostValues.Release(firstKey, 1);
             Require(
                 hostValues.EntryCount == 1,
                 "native release invalidated an active managed dispatch lease");
@@ -205,7 +206,7 @@ internal static class Program
             Require(
                 replacement.Key != firstKey,
                 "a recycled host-value slot reused a stale generation key");
-            hostValues.Release(replacement.Key);
+            hostValues.Release(replacement.Key, 1);
         }
         hostValues.CompleteFunctionCall(91);
 
@@ -227,21 +228,149 @@ internal static class Program
                 canceledInvocation.CancellationToken.IsCancellationRequested,
                 "caller cancellation before dispatch did not reach the invocation token");
             canceledInvocation.Complete();
-            hostValues.Release(canceled.Key);
+            hostValues.Release(canceled.Key, 1);
             hostValues.CompleteFunctionCall(92);
         }
 
         hostValues.BeginFunctionCall(93, CancellationToken.None);
+        var settled = new InvalidOperationException("settled");
         using (HostValueRegistration exception = hostValues.RegisterException(
-            ExceptionDispatchInfo.Capture(new InvalidOperationException("settled")),
-            parentFunctionCallId: 93))
+            ExceptionDispatchInfo.Capture(settled)))
         {
             exception.Commit();
             hostValues.CompleteFunctionCall(93);
             Require(
+                hostValues.EntryCount == 1,
+                "a completed operation dropped an exception the engine still holds");
+            Require(
+                hostValues.TryRestoreException(exception.Key, out ExceptionDispatchInfo? restored)
+                    && ReferenceEquals(restored.SourceException, settled),
+                "a held exception was not restored");
+            Require(
+                !hostValues.TryRestoreException(exception.Key, out _),
+                "an exception was restored twice");
+            Require(
+                hostValues.EntryCount == 1,
+                "claiming an exception dropped the engine's reference to it");
+            hostValues.Release(exception.Key, 1);
+            Require(
                 hostValues.EntryCount == 0,
-                "a settled operation retained an exception that native never adopted");
+                "an exception the engine gave back was retained");
         }
+
+        VerifyReferenceCounts(hostValues, callable);
+    }
+
+    /// <summary>
+    /// A key's references balance: the engine's releases give back what the
+    /// host handed over, a rolled-back send gives back its own, and no release
+    /// drops an entry another reference or a pending send still holds.
+    /// </summary>
+    private static void VerifyReferenceCounts(
+        HostValueRegistry hostValues,
+        BamlGeneratedHostCallable callable)
+    {
+        long stale = hostValues.StaleReleases;
+        using (HostValueRegistration early = hostValues.RegisterCallable(
+            callable,
+            parentFunctionCallId: 94))
+        {
+            // The engine may give a reference back before the send that
+            // carried it returns: the entry stays until the send settles.
+            hostValues.Release(early.Key, 1);
+            Require(
+                hostValues.EntryCount == 1,
+                "a release that raced its send dropped the pending registration");
+            early.Commit();
+            Require(
+                hostValues.EntryCount == 0,
+                "a settled send whose reference came back was retained");
+        }
+
+        using (HostValueRegistration counted = hostValues.RegisterCallable(
+            callable,
+            parentFunctionCallId: 94))
+        {
+            counted.Commit();
+            hostValues.Release(counted.Key, 2);
+            hostValues.Release(counted.Key, 0);
+            Require(
+                hostValues.EntryCount == 1 && hostValues.StaleReleases == stale + 2,
+                "a release of more references than the engine holds, or of none, changed the entry");
+            hostValues.Release(counted.Key, 1);
+            Require(
+                hostValues.EntryCount == 0,
+                "the engine's last reference did not drop the entry");
+            hostValues.Release(counted.Key, 1);
+            Require(
+                hostValues.StaleReleases == stale + 3,
+                "a release of a dropped key was not stale");
+        }
+
+        // A rolled-back send gives back only its own reference.
+        HostValueRegistration kept = hostValues.RegisterCallable(callable, parentFunctionCallId: 94);
+        kept.Commit();
+        HostValueRegistration rolledBack = hostValues.RegisterCallable(callable, parentFunctionCallId: 94);
+        rolledBack.Dispose();
+        rolledBack.Commit();
+        Require(
+            hostValues.EntryCount == 1 && hostValues.StaleReleases == stale + 3,
+            "a rollback dropped another registration or settled twice");
+        kept.Dispose();
+        Require(hostValues.EntryCount == 1, "disposing a committed registration gave back its reference");
+        hostValues.Release(kept.Key, 1);
+        Require(hostValues.EntryCount == 0, "the committed registration was not given back");
+    }
+
+    /// <summary>
+    /// Every host value the engine sends carries a pin, which the host
+    /// releases exactly once with whatever carried it: a result it decodes or
+    /// refuses, a late result, a callback's arguments. A host value with no
+    /// pin owns nothing.
+    /// </summary>
+    private static void VerifyOutboundPinsAreReleased(NativeApi api)
+    {
+        static BamlOutboundValue HostValue(ulong key, ulong pin) => new()
+        {
+            HandleValue = new BamlOutboundHandle
+            {
+                Key = key,
+                HandleType = BamlHandleType.HostValueOpaque,
+                Pin = pin,
+            },
+        };
+
+        var twice = new BamlOutboundValue { ListValue = new BamlValueList() };
+        twice.ListValue.Items.Add(HostValue(key: 0x51, pin: 0x5150_0101));
+        twice.ListValue.Items.Add(HostValue(key: 0x51, pin: 0x5150_0102));
+        Expect<BamlProtocolException>(() =>
+            PrimitiveProtocol.DecodeCallResult(
+                new BamlOutboundResult { Ok = twice }.ToByteArray(),
+                "test.pins",
+                api));
+        Require(
+            ReleasedHandles(0x5150_0101) == 1 && ReleasedHandles(0x5150_0102) == 1,
+            "a refused result did not release each host value's pin once");
+
+        PrimitiveProtocol.ReleaseOwnedCallResult(
+            new BamlOutboundResult { Ok = HostValue(key: 0x52, pin: 0x5150_0103) }.ToByteArray(),
+            api);
+        Require(
+            ReleasedHandles(0x5150_0103) == 1,
+            "a late result did not release its host value's pin");
+
+        BamlToHostCall call = Call(new BamlToHostArg { Value = HostValue(key: 0x53, pin: 0x5150_0104) });
+        Arguments(call, api).Dispose();
+        Require(
+            ReleasedHandles(0x5150_0104) == 1,
+            "callback arguments did not release their host value's pin");
+
+        int before = Released.Count;
+        Expect<BamlProtocolException>(() =>
+            PrimitiveProtocol.Decode(HostValue(key: 0x54, pin: 0)));
+        Require(
+            Released.Count == before,
+            "a host value without a pin released a handle");
     }
 
     private static void VerifyStrictOptionalBindingAndArity(NativeApi api)
@@ -386,7 +515,7 @@ internal static class Program
             "host callback ran inline on the unmanaged dispatch thread");
 
         await WaitUntil(() => HostValueRegistry.Shared.InvocationCount == 0);
-        HostValueRegistry.Shared.Release(registration.Key);
+        HostValueRegistry.Shared.Release(registration.Key, 1);
         registration.Dispose();
         HostValueRegistry.Shared.CompleteFunctionCall(functionCallId);
     }
@@ -444,9 +573,9 @@ internal static class Program
             "a canceled callback must report its actual exit exactly once");
         ulong exceptionKey = (completion.Outcome.Raised
             ?? throw new InvalidOperationException("the completion lost its raised exception")).Handle;
-        HostValueRegistry.Shared.Release(exceptionKey);
+        HostValueRegistry.Shared.Release(exceptionKey, 1);
 
-        HostValueRegistry.Shared.Release(registration.Key);
+        HostValueRegistry.Shared.Release(registration.Key, 1);
         registration.Dispose();
         HostValueRegistry.Shared.CompleteFunctionCall(functionCallId);
     }
@@ -499,7 +628,7 @@ internal static class Program
             "reentrant callback dispatch did not complete independently");
 
         await WaitUntil(() => HostValueRegistry.Shared.InvocationCount == 0);
-        HostValueRegistry.Shared.Release(registration.Key);
+        HostValueRegistry.Shared.Release(registration.Key, 1);
         registration.Dispose();
         HostValueRegistry.Shared.CompleteFunctionCall(functionCallId);
     }
@@ -542,8 +671,9 @@ internal static class Program
             raised.Handle != 0,
             "callback exception did not carry its registration for rehydration");
 
-        HostValueRegistry.Shared.Release(raised.Handle);
-        BamlOutboundResult outbound = ToOutboundError(raised);
+        int entries = HostValueRegistry.Shared.EntryCount;
+        const ulong pin = 0x5150_0001;
+        BamlOutboundResult outbound = ToOutboundError(raised, pin);
         Exception? restored = null;
         try
         {
@@ -555,11 +685,33 @@ internal static class Program
         }
 
         Require(
+            ReleasedHandles(pin) == 1,
+            "the error's pin was not released exactly once");
+        Require(
+            HostValueRegistry.Shared.EntryCount == entries,
+            "restoring the exception dropped the engine's reference to it");
+
+        Require(
             ReferenceEquals(restored, original)
                 && restored.StackTrace?.Contains(
                     nameof(ThrowOriginalException),
                     StringComparison.Ordinal) == true,
             "HostCallable round-trip did not rethrow the exact managed exception via EDI");
+
+        // The exception is claimed once: the same error decoded again is the
+        // engine's description of it, not the managed object.
+        Expect<BamlHostCallbackException>(() =>
+            PrimitiveProtocol.DecodeCallResult(
+                ToOutboundError(raised, pin: 0x5150_0002).ToByteArray(),
+                "test.callback",
+                api));
+        Require(
+            ReleasedHandles(0x5150_0002) == 1,
+            "a second decode of the error did not release its pin");
+        HostValueRegistry.Shared.Release(raised.Handle, 1);
+        Require(
+            HostValueRegistry.Shared.EntryCount == entries - 1,
+            "the engine's release did not drop the claimed exception");
 
         BamlOutboundResult foreign = outbound.Clone();
         foreign.Error.Value.ClassValue.Fields
@@ -569,7 +721,7 @@ internal static class Program
             PrimitiveProtocol.DecodeCallResult(foreign.ToByteArray(), "test.callback", api));
 
         await WaitUntil(() => HostValueRegistry.Shared.InvocationCount == 0);
-        HostValueRegistry.Shared.Release(registration.Key);
+        HostValueRegistry.Shared.Release(registration.Key, 1);
         registration.Dispose();
         HostValueRegistry.Shared.CompleteFunctionCall(functionCallId);
     }
@@ -825,10 +977,10 @@ internal static class Program
         HostCallCompletion outcome = completion.Outcome;
         if (outcome.Raised is { } raised)
         {
-            HostValueRegistry.Shared.Release(raised.Handle);
+            HostValueRegistry.Shared.Release(raised.Handle, 1);
         }
 
-        HostValueRegistry.Shared.Release(registration.Key);
+        HostValueRegistry.Shared.Release(registration.Key, 1);
         registration.Dispose();
         HostValueRegistry.Shared.CompleteFunctionCall(functionCallId);
         return outcome;
@@ -890,7 +1042,7 @@ internal static class Program
         new(BamlGeneratedValue.CreateHandle(new Baml.BamlHandle(
             new BamlSafeHandle(4242, &RefuseClone, &AcceptRelease),
             BamlTypeDescriptor.CreateHandle("test.Resource"),
-            BamlHandleType.UntaggedRustData)));
+            BamlHandleType.UntaggedBexHeap)));
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe BamlCffiStatus RefuseClone(ulong key, ulong* output) =>
@@ -947,7 +1099,7 @@ internal static class Program
     /// The <c>baml.errors.HostCallable</c> the engine builds from a raised
     /// exception, as it reaches the host when the throw escapes the call.
     /// </summary>
-    private static BamlOutboundResult ToOutboundError(HostException raised)
+    private static BamlOutboundResult ToOutboundError(HostException raised, ulong pin)
     {
         var value = new BamlValueClass { Name = "baml.errors.HostCallable" };
         void Field(string key, BamlOutboundValue outbound) =>
@@ -968,6 +1120,7 @@ internal static class Program
                 {
                     Key = raised.Handle,
                     HandleType = BamlHandleType.HostValueOpaque,
+                    Pin = pin,
                 },
             });
 
@@ -1142,8 +1295,28 @@ internal static class Program
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void RegisterHostRelease(
-        delegate* unmanaged[Cdecl]<ulong, void> callback)
+        delegate* unmanaged[Cdecl]<ulong, ulong, void> callback)
     {
+    }
+
+    private static readonly ConcurrentQueue<ulong> Released = new();
+    private static long nextClonedHandle = 0x7c10_0000;
+
+    /// <summary>How often the fixture's <c>handle_release</c> received <paramref name="key"/>.</summary>
+    private static int ReleasedHandles(ulong key) => Released.Count(released => released == key);
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe BamlCffiStatus FixtureCloneHandle(ulong key, ulong* output)
+    {
+        *output = (ulong)Interlocked.Increment(ref nextClonedHandle);
+        return BamlCffiStatus.Ok;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static BamlCffiStatus FixtureReleaseHandle(ulong key)
+    {
+        Released.Enqueue(key);
+        return BamlCffiStatus.Ok;
     }
 
     private sealed class IntCodec : IBamlGeneratedCodec<long>
@@ -1195,7 +1368,7 @@ internal static class Program
             table = (BamlApiV1*)NativeMemory.AllocZeroed((nuint)sizeof(BamlApiV1));
             *table = new BamlApiV1
             {
-                AbiVersion = 5,
+                AbiVersion = 6,
                 StructSize = (nuint)sizeof(BamlApiV1),
                 RegisterCallback = &RegisterResult,
                 RegisterHostDispatchCallback = &RegisterHostDispatch,
@@ -1203,6 +1376,8 @@ internal static class Program
                 RegisterHostCancelCallback = &RegisterHostCancel,
                 RegisterHostReleaseCallback = &RegisterHostRelease,
                 CompleteHostCall = &CompleteHostCall,
+                HandleClone = &FixtureCloneHandle,
+                HandleRelease = &FixtureReleaseHandle,
             };
             Api = new NativeApi(table, "host-callable-test");
         }

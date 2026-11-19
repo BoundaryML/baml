@@ -33,7 +33,7 @@ import { fileURLToPath } from 'node:url';
 
 import { vi } from 'vitest';
 
-import { BamlRuntime, newFunctionCall, releaseFunctionCall } from '../dist/native.js';
+import { BamlRuntime, _hostValueCount, newFunctionCall, releaseFunctionCall } from '../dist/native.js';
 import { callFunction, callFunctionSync } from '../dist/index.js';
 import { encodeCallArgs } from '../dist/proto.js';
 import * as hostValueRegistry from '../dist/host_value_registry.js';
@@ -51,6 +51,11 @@ function CallIntCb(callback: (int) -> int, x: int) -> int {
 
 function CallFloatCb(callback: () -> float) -> float {
     callback()
+}
+
+function Collect() -> int {
+    baml.sys.collect_garbage();
+    0
 }
 
 function UnionCbs(callbacks: ((int) -> int throws never)[] | string[]) -> int {
@@ -142,6 +147,31 @@ describe('host-callable round-trip', () => {
         const rb = await callFunction(rt, 'CallCb', { callback: cbB, x: 2 });
         expect(rb.result()).toBe('b:2');
         expect(seen).toEqual({ a: 1, b: 1 });
+    });
+});
+
+describe('host-callable references', () => {
+    test('every callable is unregistered once BAML has let it go', async () => {
+        const rt = makeRuntime();
+        const before = _hostValueCount();
+        for (let x = 0; x < 4; x += 1) {
+            const result = await callFunction(rt, 'CallCb', { callback: (value: number) => `n${value}`, x });
+            expect(result.result()).toBe(`n${x}`);
+        }
+        // Each collection gives back what it frees; the call drains it.
+        for (let attempt = 0; attempt < 20 && _hostValueCount() > before; attempt += 1) {
+            await callFunction(rt, 'Collect', {});
+        }
+        // Other suites' runtimes may give back theirs meanwhile, never add.
+        expect(_hostValueCount()).toBeLessThanOrEqual(before);
+    });
+
+    test('a call whose arguments do not encode gives back the callable it registered', async () => {
+        const rt = makeRuntime();
+        const before = _hostValueCount();
+        await expect(callFunction(rt, 'CallCb', { callback: (x: number) => `${x}`, x: 'not an int' }))
+            .rejects.toThrow();
+        expect(_hostValueCount()).toBe(before);
     });
 });
 

@@ -21,8 +21,8 @@ pub use bex_external_types::{
 pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
 pub use bex_vm_types::{
-    BexRustData, Meter, MeteredMutex, RetainedBytes, RetainedFootprint, RustDataArc, SysOp,
-    TestRustData,
+    BexRustData, Meter, MeteredMutex, OpOutput, RetainedBytes, RetainedFootprint, RustDataArc,
+    SysOp, TestRustData, http, resource,
 };
 pub use tokio_util::sync::CancellationToken;
 
@@ -109,7 +109,10 @@ pub mod generated {
     pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
     pub use bex_vm_types::{self, SysOp};
 
-    pub use crate::{BexHeap, CallId, OpError, SysOpContext, SysOpFn, SysOpOutput, SysOpResult};
+    pub use crate::{
+        BexHeap, CallId, FromOpValue, OpError, OpValue, SysOpContext, SysOpFn, SysOpOutput,
+        SysOpResult,
+    };
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
 }
@@ -384,13 +387,65 @@ impl From<OpError> for OpErrorBody {
 /// originating [`SysOp`] for engine-side attribution. The body itself
 /// works with the bare `VmRustFnError`; the `SysOp` is attached at the
 /// `into_result` glue boundary (see [`SysOpOutput::into_result`]).
-pub type OpFuture = Pin<Box<dyn Future<Output = Result<BexExternalValue, OpError>> + Send>>;
+pub type OpFuture = Pin<Box<dyn Future<Output = Result<OpValue, OpError>> + Send>>;
+
+/// What a system operation settles with.
+#[derive(Debug)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "the external arm is nearly every result; boxing it would allocate for each one"
+)]
+pub enum OpValue {
+    /// A value the engine builds from its external form and checks against
+    /// the operation's declared return type.
+    External(BexExternalValue),
+    /// A new instance of a `@@rust_type` class: the class, and the state the
+    /// instance is built around. An instance has no external form, so this is
+    /// the one way an operation hands one back, and no host can build one.
+    RustInstance {
+        class: baml_base::LangItem,
+        payload: bex_vm_types::RustPayload,
+    },
+    /// A new instance of a class holding one of these: its fields, in
+    /// declaration order. The engine lands each against its field's type.
+    Instance {
+        class: baml_base::LangItem,
+        fields: Vec<OpValue>,
+    },
+}
+
+impl From<BexExternalValue> for OpValue {
+    fn from(value: BexExternalValue) -> Self {
+        Self::External(value)
+    }
+}
+
+impl OpValue {
+    /// What the value is, for a message that refuses it.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::External(value) => value.type_name().to_string(),
+            Self::RustInstance { class, .. } | Self::Instance { class, .. } => class.to_string(),
+        }
+    }
+}
+
+/// A runtime type read back from the runtime's own form of a value: what a
+/// sys-op gets from a BAML callback it ran (`VmSpawner`), whose result may
+/// hold the runtime's tagged instances. Generated for every class the
+/// runtime builds (a `@@rust_type` class's state, and a class holding one).
+pub trait FromOpValue: Sized {
+    /// # Errors
+    ///
+    /// `value` is not an instance of this type.
+    fn from_op_value(value: OpValue) -> Result<Self, bex_heap::AccessError>;
+}
 
 /// Result of a system operation - either immediate or async.
 #[allow(clippy::large_enum_variant)]
 pub enum SysOpResult {
     /// Operation completed synchronously with this result.
-    Ready(Result<BexExternalValue, OpError>),
+    Ready(Result<OpValue, OpError>),
     /// Operation is async and needs to be awaited.
     Async(OpFuture),
 }
@@ -485,11 +540,11 @@ impl<T: AsBexExternalValue + Send + 'static> SysOpOutput<T> {
     /// This is called by generated glue code — implementors don't use this directly.
     pub fn into_result(self, op: SysOp) -> SysOpResult {
         match self {
-            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(v.into_bex_external_value())),
+            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(v.into_bex_external_value().into())),
             Self::Ready(Err(err)) => SysOpResult::Ready(Err(OpError::new(op, err))),
             Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
                 fut.await
-                    .map(AsBexExternalValue::into_bex_external_value)
+                    .map(|v| v.into_bex_external_value().into())
                     .map_err(|body| body.into_op_error(op))
             })),
         }
@@ -500,18 +555,35 @@ impl<T: Send + 'static> SysOpOutput<T> {
     /// Convert to [`SysOpResult`] using a custom value mapping function.
     ///
     /// Used by generated glue code for return types that don't implement
-    /// [`AsBexExternalValue`] directly (e.g. `Vec<ClassName>`).
-    pub fn into_result_mapped(
+    /// [`AsBexExternalValue`] directly (e.g. `Vec<ClassName>`), and for a
+    /// new instance the runtime builds, which no external value can be.
+    pub fn into_result_mapped<V: Into<OpValue>>(
         self,
         op: SysOp,
-        f: impl Fn(T) -> BexExternalValue + Send + 'static,
+        f: impl Fn(T) -> V + Send + 'static,
     ) -> SysOpResult {
         match self {
-            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(f(v))),
+            Self::Ready(Ok(v)) => SysOpResult::Ready(Ok(f(v).into())),
             Self::Ready(Err(err)) => SysOpResult::Ready(Err(OpError::new(op, err))),
             Self::Async(fut) => SysOpResult::Async(Box::pin(async move {
-                fut.await.map(f).map_err(|body| body.into_op_error(op))
+                fut.await
+                    .map(|v| f(v).into())
+                    .map_err(|body| body.into_op_error(op))
             })),
+        }
+    }
+}
+
+/// A resource operation's outcome, as the sys-op it is the body of.
+impl<T: Send + 'static> From<bex_vm_types::OpOutput<T>> for SysOpOutput<T> {
+    fn from(output: bex_vm_types::OpOutput<T>) -> Self {
+        match output {
+            bex_vm_types::OpOutput::Ready(result) => Self::Ready(result),
+            bex_vm_types::OpOutput::Async(future) => {
+                Self::Async(Box::pin(
+                    async move { future.await.map_err(OpErrorBody::from) },
+                ))
+            }
         }
     }
 }
@@ -565,15 +637,20 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
     fn capture_invocation(&self) -> Option<Arc<dyn BexRustData>> {
         None
     }
-    /// Spawn a a new VM with the given function name and arguments.
+    /// Spawn a new VM that calls the function named `function_name` with
+    /// `args`, and return its result.
     ///
-    /// Generally just calls `BexEngine::call_function`.
+    /// The arguments and the result are the runtime's own values: an
+    /// argument is built on the callee's heap as an op's result is, and the
+    /// result comes back in the same form, so either may hold the runtime's
+    /// tagged instances, which no external value can. Read a result of a
+    /// class the runtime builds with [`FromOpValue`].
     async fn spawn_with_function(
         self: Arc<Self>,
         function_name: String,
-        args: Vec<BexExternalValue>,
+        args: Vec<OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, E>;
+    ) -> Result<OpValue, E>;
 
     /// Spawn a new VM that invokes a callable BAML value — a raw function,
     /// closure, or bound method — referenced by a [`bex_external_types::Handle`]
@@ -582,13 +659,14 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
     ///
     /// Unlike [`Self::spawn_with_function`], the callee need not be a named
     /// global — this is how a sys-op invokes a BAML callback (e.g. an HTTP
-    /// server `handler`). Generally just calls `BexEngine::call_callable`.
+    /// server `handler`). Its arguments and result are the runtime's own
+    /// values, as [`Self::spawn_with_function`]'s are.
     async fn spawn_with_callable(
         self: Arc<Self>,
         callable: bex_external_types::Handle,
-        args: Vec<BexExternalValue>,
+        args: Vec<OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, E>;
+    ) -> Result<OpValue, E>;
 }
 
 /// Context available to `sys_ops` that need engine-level information.
@@ -730,9 +808,19 @@ pub struct ClassDefinition {
     pub description: Option<String>,
     pub docstring: Option<String>,
     pub alias: Option<String>,
-    pub fields: Vec<ClassFieldDefinition>,
+    pub body: ClassDefinitionBody,
     /// `@@stream.done`: no partial parse until the whole object is complete.
     pub stream_done: bool,
+}
+
+/// What a [`ClassDefinition`]'s values are made of.
+#[derive(Clone, Debug)]
+pub enum ClassDefinitionBody {
+    /// Its fields, `@skip` ones included, in declaration order.
+    Fields(Vec<ClassFieldDefinition>),
+    /// State that is the runtime's own (a `@@rust_type` class, a capability
+    /// such as `reflect.Package`): no value has a JSON form.
+    RuntimeOwned,
 }
 
 /// A field in a pre-extracted class definition.
@@ -839,9 +927,9 @@ impl SysOpContext {
             async fn spawn_with_function(
                 self: Arc<Self>,
                 _function_name: String,
-                _args: Vec<BexExternalValue>,
+                _args: Vec<OpValue>,
                 _cancel: CancellationToken,
-            ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+            ) -> Result<OpValue, Box<dyn Send + Sync + 'static>> {
                 Err(Box::new(
                     "VmSpawner::spawn_with_function called on NeverSpawner (empty/test context)",
                 ))
@@ -850,9 +938,9 @@ impl SysOpContext {
             async fn spawn_with_callable(
                 self: Arc<Self>,
                 _callable: bex_external_types::Handle,
-                _args: Vec<BexExternalValue>,
+                _args: Vec<OpValue>,
                 _cancel: CancellationToken,
-            ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+            ) -> Result<OpValue, Box<dyn Send + Sync + 'static>> {
                 Err(Box::new(
                     "VmSpawner::spawn_with_callable called on NeverSpawner (empty/test context)",
                 ))
@@ -927,6 +1015,21 @@ impl CompletionHandle {
     }
 }
 
+/// What a host completes an operation with through its [`CompletionHandle`]:
+/// a value it built, or the error it completed with.
+pub type HostCompletion = Pin<Box<dyn Future<Output = Result<BexExternalValue, OpError>> + Send>>;
+
+impl CompletionHandle {
+    /// A completion a host settles later: the future, and the handle that
+    /// settles it. Dropping the handle unsettled cancels `operation`.
+    pub fn pending(operation: SysOp) -> (HostCompletion, Self) {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let future =
+            Box::pin(async move { rx.await.unwrap_or(Err(OpError::cancelled(operation))) });
+        (future, Self(tx))
+    }
+}
+
 impl SysOpResult {
     /// Create a pending async result that can be completed externally.
     ///
@@ -936,10 +1039,9 @@ impl SysOpResult {
     ///
     /// The future will resolve when `handle.complete()` is called.
     pub fn pending(operation: SysOp) -> (Self, CompletionHandle) {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let future =
-            Box::pin(async move { rx.await.unwrap_or(Err(OpError::cancelled(operation))) });
-        (SysOpResult::Async(future), CompletionHandle(tx))
+        let (completion, handle) = CompletionHandle::pending(operation);
+        let future = Box::pin(async move { completion.await.map(OpValue::External) });
+        (SysOpResult::Async(future), handle)
     }
 }
 
@@ -1039,7 +1141,9 @@ mod tests {
         match result {
             SysOpResult::Async(fut) => {
                 let value = fut.await.unwrap();
-                assert!(matches!(value, BexExternalValue::String(s) if s.as_str() == "done"));
+                assert!(
+                    matches!(value, OpValue::External(BexExternalValue::String(s)) if s.as_str() == "done")
+                );
             }
             SysOpResult::Ready(_) => panic!("Expected Async result"),
         }

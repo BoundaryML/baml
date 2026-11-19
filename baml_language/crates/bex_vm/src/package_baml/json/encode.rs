@@ -259,9 +259,9 @@ fn has_to_json_override(vm: &BexVm, value: Value) -> Result<bool, VmInternalErro
 /// recorded and *not* descended into — its `to_json` owns its whole subtree.
 /// Matches the walk's order (array elements, then map values, then the
 /// instance fields `options` writes) so the two stay index-aligned. A media
-/// instance is a leaf, as the walk writes its tagged form without descending
-/// into its opaque `_data` field. A container met again inside itself is not
-/// descended into again: the walk refuses it.
+/// instance is a leaf: the walk writes its tagged form from its payload. A
+/// container met again inside itself is not descended into again: the walk
+/// refuses it.
 fn collect(
     vm: &BexVm,
     value: Value,
@@ -315,14 +315,9 @@ fn children(vm: &BexVm, ptr: HeapPtr, options: WriteOptions) -> Vec<Value> {
             .collect(),
         Object::Instance => {
             let instance = vm.get_instance(ptr).expect("an instance pointer");
-            let class = instance.class_object();
-            let head = TypeHead::new(instance.class(), class.type_tag);
-            if vm.stdlib_heads().media_kind(head).is_some() {
-                return Vec::new();
-            }
             instance
                 .fields()
-                .zip(&class.fields)
+                .zip(instance.class_object().instance_fields())
                 .filter_map(|(field, declared)| {
                     let value = field.as_value()?;
                     options.writes_field(declared, value).then_some(value)
@@ -503,6 +498,8 @@ enum Shape {
     Array(Vec<Value>),
     Map,
     Instance(HeapPtr),
+    /// A media value, written in its tagged form.
+    Media(baml_type::ConcreteMediaKind),
     Variant(HeapPtr, usize),
     /// No JSON form: the message, and the `SerializationError.reason` tag.
     Unserializable(&'static str, &'static str),
@@ -690,6 +687,15 @@ impl Walker<'_, '_> {
             Object::Future(_) => {
                 Shape::Unserializable("a future has no JSON form (await it first)", "future")
             }
+            // A media value writes its tagged form; any other state lives in
+            // the runtime, which gives it no form outside.
+            Object::RustInstance(instance) => match instance.payload.as_media() {
+                Some(media) => Shape::Media(media.kind),
+                None => Shape::Unserializable(
+                    "a value whose state lives in the runtime has no JSON form",
+                    "unserializable",
+                ),
+            },
             _ => Shape::Unserializable("value has no json representation", "unserializable"),
         };
         match shape {
@@ -698,7 +704,8 @@ impl Walker<'_, '_> {
             Shape::Bigint => sink.bigint(vm, value),
             Shape::Array(values) => self.open_array(vm, ptr, values, false, sink)?,
             Shape::Map => self.open_map(vm, ptr, false, sink)?,
-            Shape::Instance(class) => self.open_instance(vm, value, ptr, class, sink)?,
+            Shape::Instance(class) => self.open_instance(vm, ptr, class, sink)?,
+            Shape::Media(kind) => self.write_media(vm, value, kind, sink)?,
             Shape::Variant(enm, index) => {
                 let name = match vm.get_object(enm) {
                     Object::Enum(e) => match e.variants.get(index) {
@@ -864,70 +871,67 @@ impl Walker<'_, '_> {
     fn open_instance(
         &mut self,
         vm: &mut BexVm,
-        value: Value,
         ptr: HeapPtr,
         class: HeapPtr,
         sink: &mut impl Sink,
     ) -> Result<(), Stopped> {
-        let (head, plan) = match vm.get_object(class) {
-            Object::Class(declaration) => (
-                TypeHead::new(class, declaration.type_tag),
-                (!self.plans.contains_key(&class)).then(|| {
-                    let keys: Vec<String> = declaration
-                        .fields
+        let plan = match vm.get_object(class) {
+            Object::Class(declaration) => (!self.plans.contains_key(&class)).then(|| {
+                let keys: Vec<String> = declaration
+                    .instance_fields()
+                    .iter()
+                    .map(|field| {
+                        self.options
+                            .naming
+                            .key(
+                                &field.name,
+                                field.alias.as_deref(),
+                                field.json_rename.as_deref(),
+                            )
+                            .to_owned()
+                    })
+                    .collect();
+                // A `@json.flatten` field has no key of its own.
+                let keyed = |field: &bex_vm_types::ClassField| {
+                    self.options.naming.shows(field.skip) && !field.json_flatten
+                };
+                let shared_keys =
+                    declaration
+                        .instance_fields()
                         .iter()
-                        .map(|field| {
-                            self.options
-                                .naming
-                                .key(
-                                    &field.name,
-                                    field.alias.as_deref(),
-                                    field.json_rename.as_deref(),
-                                )
-                                .to_owned()
-                        })
-                        .collect();
-                    // A `@json.flatten` field has no key of its own.
-                    let keyed = |field: &bex_vm_types::ClassField| {
-                        self.options.naming.shows(field.skip) && !field.json_flatten
-                    };
-                    let shared_keys = declaration.fields.iter().enumerate().any(|(i, field)| {
-                        keyed(field)
-                            && declaration.fields[..i]
-                                .iter()
-                                .enumerate()
-                                .any(|(j, other)| keyed(other) && keys[i] == keys[j])
-                    });
-                    WritePlan { keys, shared_keys }
-                }),
-            ),
+                        .enumerate()
+                        .any(|(i, field)| {
+                            keyed(field)
+                                && declaration.instance_fields()[..i]
+                                    .iter()
+                                    .enumerate()
+                                    .any(|(j, other)| keyed(other) && keys[i] == keys[j])
+                        });
+                WritePlan { keys, shared_keys }
+            }),
             _ => {
                 return Err(self.refuse(vm, "instance class pointer is not a class", "class"));
             }
         };
-        // Media instances write their tagged form, not a field map.
-        if let Some(kind) = vm.stdlib_heads().media_kind(head) {
-            return self.write_media(vm, value, kind, sink);
-        }
         if let Some(plan) = plan {
             self.plans.insert(class, plan);
         }
         let instance = vm.get_instance(ptr).expect("an instance pointer");
         let declaration = instance.class_object();
-        let values: Vec<Value> = (0..declaration.fields.len())
+        let values: Vec<Value> = (0..declaration.instance_fields().len())
             .map(|field| vm.load_field_value(instance, field))
             .collect();
         // A `@json.fallback` class is the object it was read from.
         let fallback = values
             .iter()
-            .zip(&declaration.fields)
+            .zip(declaration.instance_fields())
             .find_map(|(value, field)| field.json_fallback.then_some(*value));
         if let Some(raw) = fallback {
             return self.visit(vm, raw, false, sink);
         }
         let mut children: Vec<(Option<Slot>, Value)> = values
             .into_iter()
-            .zip(&declaration.fields)
+            .zip(declaration.instance_fields())
             .enumerate()
             .filter(|(_, (value, field))| self.options.writes_field(field, *value))
             .map(|(index, (value, _))| (Some(Slot::Field(class, index)), value))
@@ -944,8 +948,8 @@ impl Walker<'_, '_> {
                 let seen = unique.iter_mut().find(|(seen, _)| {
                     matches!(seen, Some(Slot::Field(_, i))
                         if plan.keys[*i] == plan.keys[index]
-                            && !declaration.fields[*i].json_flatten
-                            && !declaration.fields[index].json_flatten)
+                            && !declaration.instance_fields()[*i].json_flatten
+                            && !declaration.instance_fields()[index].json_flatten)
                 });
                 match seen {
                     Some(entry) => entry.1 = value,
@@ -956,7 +960,11 @@ impl Walker<'_, '_> {
         }
         // A `@json.flatten` field writes its entries where it sits, and a key
         // a declared field writes stays that field's.
-        if let Some(flattened) = declaration.fields.iter().position(|f| f.json_flatten) {
+        if let Some(flattened) = declaration
+            .instance_fields()
+            .iter()
+            .position(|f| f.json_flatten)
+        {
             let at = children
                 .iter()
                 .position(|(slot, _)| matches!(slot, Some(Slot::Field(_, i)) if *i == flattened));
@@ -997,7 +1005,7 @@ impl Walker<'_, '_> {
         &mut self,
         vm: &mut BexVm,
         value: Value,
-        kind: baml_type::MediaKind,
+        kind: baml_type::ConcreteMediaKind,
         sink: &mut impl Sink,
     ) -> Result<(), Stopped> {
         let Some(media) = super::read_media_value(vm, value) else {

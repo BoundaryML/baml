@@ -5383,16 +5383,13 @@ export const baml_bridge = $root.baml_bridge = (() => {
              * @name baml_bridge.cffi.v1.BamlHandleType
              * @enum {number}
              * @property {number} HANDLE_UNSPECIFIED=0 HANDLE_UNSPECIFIED value
-             * @property {number} UNTAGGED_RUST_DATA=1 UNTAGGED_RUST_DATA value
              * @property {number} UNTAGGED_BEX_HEAP=2 UNTAGGED_BEX_HEAP value
              * @property {number} FUNCTION_REF=5 FUNCTION_REF value
              * @property {number} ADT_MEDIA_IMAGE=6 ADT_MEDIA_IMAGE value
              * @property {number} ADT_MEDIA_AUDIO=7 ADT_MEDIA_AUDIO value
              * @property {number} ADT_MEDIA_VIDEO=8 ADT_MEDIA_VIDEO value
              * @property {number} ADT_MEDIA_PDF=9 ADT_MEDIA_PDF value
-             * @property {number} ADT_MEDIA_GENERIC=10 ADT_MEDIA_GENERIC value
              * @property {number} ADT_PROMPT_AST=11 ADT_PROMPT_AST value
-             * @property {number} ADT_TYPE=13 ADT_TYPE value
              * @property {number} ADT_TAGGED_HEAP_HANDLE=14 ADT_TAGGED_HEAP_HANDLE value
              * @property {number} HOST_VALUE_CALLABLE=15 HOST_VALUE_CALLABLE value
              * @property {number} HOST_VALUE_OPAQUE=16 HOST_VALUE_OPAQUE value
@@ -5400,20 +5397,18 @@ export const baml_bridge = $root.baml_bridge = (() => {
              * @property {number} ADT_RUNTIME_VALUE=18 ADT_RUNTIME_VALUE value
              * @property {number} INVOCATION_STATE=19 INVOCATION_STATE value
              * @property {number} TRACE_RESERVATION=20 TRACE_RESERVATION value
+             * @property {number} HOST_VALUE_PIN=21 HOST_VALUE_PIN value
              */
             v1.BamlHandleType = (function() {
                 const valuesById = {}, values = Object.create(valuesById);
                 values[valuesById[0] = "HANDLE_UNSPECIFIED"] = 0;
-                values[valuesById[1] = "UNTAGGED_RUST_DATA"] = 1;
                 values[valuesById[2] = "UNTAGGED_BEX_HEAP"] = 2;
                 values[valuesById[5] = "FUNCTION_REF"] = 5;
                 values[valuesById[6] = "ADT_MEDIA_IMAGE"] = 6;
                 values[valuesById[7] = "ADT_MEDIA_AUDIO"] = 7;
                 values[valuesById[8] = "ADT_MEDIA_VIDEO"] = 8;
                 values[valuesById[9] = "ADT_MEDIA_PDF"] = 9;
-                values[valuesById[10] = "ADT_MEDIA_GENERIC"] = 10;
                 values[valuesById[11] = "ADT_PROMPT_AST"] = 11;
-                values[valuesById[13] = "ADT_TYPE"] = 13;
                 values[valuesById[14] = "ADT_TAGGED_HEAP_HANDLE"] = 14;
                 values[valuesById[15] = "HOST_VALUE_CALLABLE"] = 15;
                 values[valuesById[16] = "HOST_VALUE_OPAQUE"] = 16;
@@ -5421,6 +5416,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 values[valuesById[18] = "ADT_RUNTIME_VALUE"] = 18;
                 values[valuesById[19] = "INVOCATION_STATE"] = 19;
                 values[valuesById[20] = "TRACE_RESERVATION"] = 20;
+                values[valuesById[21] = "HOST_VALUE_PIN"] = 21;
                 return values;
             })();
 
@@ -5592,16 +5588,13 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         default:
                             return "handleType: enum value expected";
                         case 0:
-                        case 1:
                         case 2:
                         case 5:
                         case 6:
                         case 7:
                         case 8:
                         case 9:
-                        case 10:
                         case 11:
-                        case 13:
                         case 14:
                         case 15:
                         case 16:
@@ -5609,6 +5602,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 18:
                         case 19:
                         case 20:
+                        case 21:
                             break;
                         }
                     return null;
@@ -5652,10 +5646,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case 0:
                         message.handleType = 0;
                         break;
-                    case "UNTAGGED_RUST_DATA":
-                    case 1:
-                        message.handleType = 1;
-                        break;
                     case "UNTAGGED_BEX_HEAP":
                     case 2:
                         message.handleType = 2;
@@ -5680,17 +5670,9 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case 9:
                         message.handleType = 9;
                         break;
-                    case "ADT_MEDIA_GENERIC":
-                    case 10:
-                        message.handleType = 10;
-                        break;
                     case "ADT_PROMPT_AST":
                     case 11:
                         message.handleType = 11;
-                        break;
-                    case "ADT_TYPE":
-                    case 13:
-                        message.handleType = 13;
                         break;
                     case "ADT_TAGGED_HEAP_HANDLE":
                     case 14:
@@ -5719,6 +5701,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case "TRACE_RESERVATION":
                     case 20:
                         message.handleType = 20;
+                        break;
+                    case "HOST_VALUE_PIN":
+                    case 21:
+                        message.handleType = 21;
                         break;
                     }
                     return message;
@@ -5811,7 +5797,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {baml_bridge.cffi.v1.IBamlTyEnumVariant|null} [enumVariant] BamlTy enumVariant
                  * @property {baml_bridge.cffi.v1.IBamlTyFunction|null} ["function"] BamlTy function
                  * @property {baml_bridge.cffi.v1.IBamlTyFuture|null} [future] BamlTy future
-                 * @property {baml_bridge.cffi.v1.IBamlTyRustType|null} [rustType] BamlTy rustType
                  * @property {baml_bridge.cffi.v1.IBamlTyMetaType|null} [metaType] BamlTy metaType
                  * @property {baml_bridge.cffi.v1.IBamlTyResource|null} [resource] BamlTy resource
                  * @property {baml_bridge.cffi.v1.IBamlTyPromptAst|null} [promptAst] BamlTy promptAst
@@ -5957,14 +5942,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 BamlTy.prototype.future = null;
 
                 /**
-                 * BamlTy rustType.
-                 * @member {baml_bridge.cffi.v1.IBamlTyRustType|null|undefined} rustType
-                 * @memberof baml_bridge.cffi.v1.BamlTy
-                 * @instance
-                 */
-                BamlTy.prototype.rustType = null;
-
-                /**
                  * BamlTy metaType.
                  * @member {baml_bridge.cffi.v1.IBamlTyMetaType|null|undefined} metaType
                  * @memberof baml_bridge.cffi.v1.BamlTy
@@ -6025,12 +6002,12 @@ export const baml_bridge = $root.baml_bridge = (() => {
 
                 /**
                  * BamlTy ty.
-                 * @member {"primitive"|"classTy"|"enum"|"list"|"map"|"optional"|"union"|"literal"|"typeAlias"|"unknown"|"media"|"interface"|"enumVariant"|"function"|"future"|"rustType"|"metaType"|"resource"|"promptAst"|"typeVar"|"associatedTypeProjection"|"never"|"tuple"|undefined} ty
+                 * @member {"primitive"|"classTy"|"enum"|"list"|"map"|"optional"|"union"|"literal"|"typeAlias"|"unknown"|"media"|"interface"|"enumVariant"|"function"|"future"|"metaType"|"resource"|"promptAst"|"typeVar"|"associatedTypeProjection"|"never"|"tuple"|undefined} ty
                  * @memberof baml_bridge.cffi.v1.BamlTy
                  * @instance
                  */
                 Object.defineProperty(BamlTy.prototype, "ty", {
-                    get: $util.oneOfGetter($oneOfFields = ["primitive", "classTy", "enum", "list", "map", "optional", "union", "literal", "typeAlias", "unknown", "media", "interface", "enumVariant", "function", "future", "rustType", "metaType", "resource", "promptAst", "typeVar", "associatedTypeProjection", "never", "tuple"]),
+                    get: $util.oneOfGetter($oneOfFields = ["primitive", "classTy", "enum", "list", "map", "optional", "union", "literal", "typeAlias", "unknown", "media", "interface", "enumVariant", "function", "future", "metaType", "resource", "promptAst", "typeVar", "associatedTypeProjection", "never", "tuple"]),
                     set: $util.oneOfSetter($oneOfFields)
                 });
 
@@ -6092,8 +6069,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         $root.baml_bridge.cffi.v1.BamlTyFunction.encode(message["function"], writer.uint32(/* id 14, wireType 2 =*/114).fork(), q + 1).ldelim();
                     if (message.future != null && Object.hasOwnProperty.call(message, "future"))
                         $root.baml_bridge.cffi.v1.BamlTyFuture.encode(message.future, writer.uint32(/* id 15, wireType 2 =*/122).fork(), q + 1).ldelim();
-                    if (message.rustType != null && Object.hasOwnProperty.call(message, "rustType"))
-                        $root.baml_bridge.cffi.v1.BamlTyRustType.encode(message.rustType, writer.uint32(/* id 16, wireType 2 =*/130).fork(), q + 1).ldelim();
                     if (message.metaType != null && Object.hasOwnProperty.call(message, "metaType"))
                         $root.baml_bridge.cffi.v1.BamlTyMetaType.encode(message.metaType, writer.uint32(/* id 17, wireType 2 =*/138).fork(), q + 1).ldelim();
                     if (message.resource != null && Object.hasOwnProperty.call(message, "resource"))
@@ -6206,10 +6181,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             }
                         case 15: {
                                 message.future = $root.baml_bridge.cffi.v1.BamlTyFuture.decode(reader, reader.uint32(), undefined, long + 1);
-                                break;
-                            }
-                        case 16: {
-                                message.rustType = $root.baml_bridge.cffi.v1.BamlTyRustType.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
                         case 17: {
@@ -6428,16 +6399,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 return "future." + error;
                         }
                     }
-                    if (message.rustType != null && message.hasOwnProperty("rustType")) {
-                        if (properties.ty === 1)
-                            return "ty: multiple values";
-                        properties.ty = 1;
-                        {
-                            let error = $root.baml_bridge.cffi.v1.BamlTyRustType.verify(message.rustType, long + 1);
-                            if (error)
-                                return "rustType." + error;
-                        }
-                    }
                     if (message.metaType != null && message.hasOwnProperty("metaType")) {
                         if (properties.ty === 1)
                             return "ty: multiple values";
@@ -6604,11 +6565,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             throw TypeError(".baml_bridge.cffi.v1.BamlTy.future: object expected");
                         message.future = $root.baml_bridge.cffi.v1.BamlTyFuture.fromObject(object.future, long + 1);
                     }
-                    if (object.rustType != null) {
-                        if (!$util.isObject(object.rustType))
-                            throw TypeError(".baml_bridge.cffi.v1.BamlTy.rustType: object expected");
-                        message.rustType = $root.baml_bridge.cffi.v1.BamlTyRustType.fromObject(object.rustType, long + 1);
-                    }
                     if (object.metaType != null) {
                         if (!$util.isObject(object.metaType))
                             throw TypeError(".baml_bridge.cffi.v1.BamlTy.metaType: object expected");
@@ -6738,11 +6694,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         object.future = $root.baml_bridge.cffi.v1.BamlTyFuture.toObject(message.future, options, q + 1);
                         if (options.oneofs)
                             object.ty = "future";
-                    }
-                    if (message.rustType != null && message.hasOwnProperty("rustType")) {
-                        object.rustType = $root.baml_bridge.cffi.v1.BamlTyRustType.toObject(message.rustType, options, q + 1);
-                        if (options.oneofs)
-                            object.ty = "rustType";
                     }
                     if (message.metaType != null && message.hasOwnProperty("metaType")) {
                         object.metaType = $root.baml_bridge.cffi.v1.BamlTyMetaType.toObject(message.metaType, options, q + 1);
@@ -12165,201 +12116,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 return BamlTyFuture;
             })();
 
-            v1.BamlTyRustType = (function() {
-
-                /**
-                 * Properties of a BamlTyRustType.
-                 * @memberof baml_bridge.cffi.v1
-                 * @interface IBamlTyRustType
-                 */
-
-                /**
-                 * Constructs a new BamlTyRustType.
-                 * @memberof baml_bridge.cffi.v1
-                 * @classdesc Represents a BamlTyRustType.
-                 * @implements IBamlTyRustType
-                 * @constructor
-                 * @param {baml_bridge.cffi.v1.IBamlTyRustType=} [properties] Properties to set
-                 */
-                function BamlTyRustType(properties) {
-                    if (properties)
-                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
-                                this[keys[i]] = properties[keys[i]];
-                }
-
-                /**
-                 * Creates a new BamlTyRustType instance using the specified properties.
-                 * @function create
-                 * @memberof baml_bridge.cffi.v1.BamlTyRustType
-                 * @static
-                 * @param {baml_bridge.cffi.v1.IBamlTyRustType=} [properties] Properties to set
-                 * @returns {baml_bridge.cffi.v1.BamlTyRustType} BamlTyRustType instance
-                 */
-                BamlTyRustType.create = function create(properties) {
-                    return new BamlTyRustType(properties);
-                };
-
-                /**
-                 * Encodes the specified BamlTyRustType message. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyRustType.verify|verify} messages.
-                 * @function encode
-                 * @memberof baml_bridge.cffi.v1.BamlTyRustType
-                 * @static
-                 * @param {baml_bridge.cffi.v1.IBamlTyRustType} message BamlTyRustType message or plain object to encode
-                 * @param {$protobuf.Writer} [writer] Writer to encode to
-                 * @returns {$protobuf.Writer} Writer
-                 */
-                BamlTyRustType.encode = function encode(message, writer, q) {
-                    if (!writer)
-                        writer = $Writer.create();
-                    if (q === undefined)
-                        q = 0;
-                    if (q > $util.recursionLimit)
-                        throw Error("max depth exceeded");
-                    return writer;
-                };
-
-                /**
-                 * Encodes the specified BamlTyRustType message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyRustType.verify|verify} messages.
-                 * @function encodeDelimited
-                 * @memberof baml_bridge.cffi.v1.BamlTyRustType
-                 * @static
-                 * @param {baml_bridge.cffi.v1.IBamlTyRustType} message BamlTyRustType message or plain object to encode
-                 * @param {$protobuf.Writer} [writer] Writer to encode to
-                 * @returns {$protobuf.Writer} Writer
-                 */
-                BamlTyRustType.encodeDelimited = function encodeDelimited(message, writer) {
-                    return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
-                };
-
-                /**
-                 * Decodes a BamlTyRustType message from the specified reader or buffer.
-                 * @function decode
-                 * @memberof baml_bridge.cffi.v1.BamlTyRustType
-                 * @static
-                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-                 * @param {number} [length] Message length if known beforehand
-                 * @returns {baml_bridge.cffi.v1.BamlTyRustType} BamlTyRustType
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                BamlTyRustType.decode = function decode(reader, length, error, long) {
-                    if (!(reader instanceof $Reader))
-                        reader = $Reader.create(reader);
-                    if (long === undefined)
-                        long = 0;
-                    if (long > $Reader.recursionLimit)
-                        throw Error("maximum nesting depth exceeded");
-                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.BamlTyRustType();
-                    while (reader.pos < end) {
-                        let tag = reader.uint32();
-                        if (tag === error)
-                            break;
-                        switch (tag >>> 3) {
-                        default:
-                            reader.skipType(tag & 7, long);
-                            break;
-                        }
-                    }
-                    return message;
-                };
-
-                /**
-                 * Decodes a BamlTyRustType message from the specified reader or buffer, length delimited.
-                 * @function decodeDelimited
-                 * @memberof baml_bridge.cffi.v1.BamlTyRustType
-                 * @static
-                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-                 * @returns {baml_bridge.cffi.v1.BamlTyRustType} BamlTyRustType
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                BamlTyRustType.decodeDelimited = function decodeDelimited(reader) {
-                    if (!(reader instanceof $Reader))
-                        reader = new $Reader(reader);
-                    return this.decode(reader, reader.uint32());
-                };
-
-                /**
-                 * Verifies a BamlTyRustType message.
-                 * @function verify
-                 * @memberof baml_bridge.cffi.v1.BamlTyRustType
-                 * @static
-                 * @param {Object.<string,*>} message Plain object to verify
-                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
-                 */
-                BamlTyRustType.verify = function verify(message, long) {
-                    if (typeof message !== "object" || message === null)
-                        return "object expected";
-                    if (long === undefined)
-                        long = 0;
-                    if (long > $util.recursionLimit)
-                        return "maximum nesting depth exceeded";
-                    return null;
-                };
-
-                /**
-                 * Creates a BamlTyRustType message from a plain object. Also converts values to their respective internal types.
-                 * @function fromObject
-                 * @memberof baml_bridge.cffi.v1.BamlTyRustType
-                 * @static
-                 * @param {Object.<string,*>} object Plain object
-                 * @returns {baml_bridge.cffi.v1.BamlTyRustType} BamlTyRustType
-                 */
-                BamlTyRustType.fromObject = function fromObject(object, long) {
-                    if (object instanceof $root.baml_bridge.cffi.v1.BamlTyRustType)
-                        return object;
-                    if (!$util.isObject(object))
-                        throw TypeError(".baml_bridge.cffi.v1.BamlTyRustType: object expected");
-                    if (long === undefined)
-                        long = 0;
-                    if (long > $util.recursionLimit)
-                        throw Error("maximum nesting depth exceeded");
-                    return new $root.baml_bridge.cffi.v1.BamlTyRustType();
-                };
-
-                /**
-                 * Creates a plain object from a BamlTyRustType message. Also converts values to other types if specified.
-                 * @function toObject
-                 * @memberof baml_bridge.cffi.v1.BamlTyRustType
-                 * @static
-                 * @param {baml_bridge.cffi.v1.BamlTyRustType} message BamlTyRustType
-                 * @param {$protobuf.IConversionOptions} [options] Conversion options
-                 * @returns {Object.<string,*>} Plain object
-                 */
-                BamlTyRustType.toObject = function toObject() {
-                    return {};
-                };
-
-                /**
-                 * Converts this BamlTyRustType to JSON.
-                 * @function toJSON
-                 * @memberof baml_bridge.cffi.v1.BamlTyRustType
-                 * @instance
-                 * @returns {Object.<string,*>} JSON object
-                 */
-                BamlTyRustType.prototype.toJSON = function toJSON() {
-                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-                };
-
-                /**
-                 * Gets the default type url for BamlTyRustType
-                 * @function getTypeUrl
-                 * @memberof baml_bridge.cffi.v1.BamlTyRustType
-                 * @static
-                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns {string} The default type url
-                 */
-                BamlTyRustType.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
-                    if (typeUrlPrefix === undefined) {
-                        typeUrlPrefix = "type.googleapis.com";
-                    }
-                    return typeUrlPrefix + "/baml_bridge.cffi.v1.BamlTyRustType";
-                };
-
-                return BamlTyRustType;
-            })();
-
             v1.BamlTyMetaType = (function() {
 
                 /**
@@ -15437,6 +15193,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                  * @property {number|Long|null} [key] BamlOutboundHandle key
                  * @property {baml_bridge.cffi.v1.BamlHandleType|null} [handleType] BamlOutboundHandle handleType
                  * @property {baml_bridge.cffi.v1.IBamlTy|null} [ty] BamlOutboundHandle ty
+                 * @property {number|Long|null} [pin] BamlOutboundHandle pin
                  */
 
                 /**
@@ -15479,6 +15236,14 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 BamlOutboundHandle.prototype.ty = null;
 
                 /**
+                 * BamlOutboundHandle pin.
+                 * @member {number|Long} pin
+                 * @memberof baml_bridge.cffi.v1.BamlOutboundHandle
+                 * @instance
+                 */
+                BamlOutboundHandle.prototype.pin = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+                /**
                  * Creates a new BamlOutboundHandle instance using the specified properties.
                  * @function create
                  * @memberof baml_bridge.cffi.v1.BamlOutboundHandle
@@ -15512,6 +15277,8 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         writer.uint32(/* id 2, wireType 0 =*/16).int32(message.handleType);
                     if (message.ty != null && Object.hasOwnProperty.call(message, "ty"))
                         $root.baml_bridge.cffi.v1.BamlTy.encode(message.ty, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                    if (message.pin != null && Object.hasOwnProperty.call(message, "pin"))
+                        writer.uint32(/* id 4, wireType 0 =*/32).uint64(message.pin);
                     return writer;
                 };
 
@@ -15564,6 +15331,10 @@ export const baml_bridge = $root.baml_bridge = (() => {
                                 message.ty = $root.baml_bridge.cffi.v1.BamlTy.decode(reader, reader.uint32(), undefined, long + 1);
                                 break;
                             }
+                        case 4: {
+                                message.pin = reader.uint64();
+                                break;
+                            }
                         default:
                             reader.skipType(tag & 7, long);
                             break;
@@ -15611,16 +15382,13 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         default:
                             return "handleType: enum value expected";
                         case 0:
-                        case 1:
                         case 2:
                         case 5:
                         case 6:
                         case 7:
                         case 8:
                         case 9:
-                        case 10:
                         case 11:
-                        case 13:
                         case 14:
                         case 15:
                         case 16:
@@ -15628,6 +15396,7 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 18:
                         case 19:
                         case 20:
+                        case 21:
                             break;
                         }
                     if (message.ty != null && message.hasOwnProperty("ty")) {
@@ -15635,6 +15404,9 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         if (error)
                             return "ty." + error;
                     }
+                    if (message.pin != null && message.hasOwnProperty("pin"))
+                        if (!$util.isInteger(message.pin) && !(message.pin && $util.isInteger(message.pin.low) && $util.isInteger(message.pin.high)))
+                            return "pin: integer|Long expected";
                     return null;
                 };
 
@@ -15676,10 +15448,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case 0:
                         message.handleType = 0;
                         break;
-                    case "UNTAGGED_RUST_DATA":
-                    case 1:
-                        message.handleType = 1;
-                        break;
                     case "UNTAGGED_BEX_HEAP":
                     case 2:
                         message.handleType = 2;
@@ -15704,17 +15472,9 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case 9:
                         message.handleType = 9;
                         break;
-                    case "ADT_MEDIA_GENERIC":
-                    case 10:
-                        message.handleType = 10;
-                        break;
                     case "ADT_PROMPT_AST":
                     case 11:
                         message.handleType = 11;
-                        break;
-                    case "ADT_TYPE":
-                    case 13:
-                        message.handleType = 13;
                         break;
                     case "ADT_TAGGED_HEAP_HANDLE":
                     case 14:
@@ -15744,12 +15504,25 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case 20:
                         message.handleType = 20;
                         break;
+                    case "HOST_VALUE_PIN":
+                    case 21:
+                        message.handleType = 21;
+                        break;
                     }
                     if (object.ty != null) {
                         if (!$util.isObject(object.ty))
                             throw TypeError(".baml_bridge.cffi.v1.BamlOutboundHandle.ty: object expected");
                         message.ty = $root.baml_bridge.cffi.v1.BamlTy.fromObject(object.ty, long + 1);
                     }
+                    if (object.pin != null)
+                        if ($util.Long)
+                            message.pin = $util.Long.fromValue(object.pin, true);
+                        else if (typeof object.pin === "string")
+                            message.pin = parseInt(object.pin, 10);
+                        else if (typeof object.pin === "number")
+                            message.pin = object.pin;
+                        else if (typeof object.pin === "object")
+                            message.pin = new $util.LongBits(object.pin.low >>> 0, object.pin.high >>> 0).toNumber(true);
                     return message;
                 };
 
@@ -15778,6 +15551,11 @@ export const baml_bridge = $root.baml_bridge = (() => {
                             object.key = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
                         object.handleType = options.enums === String ? "HANDLE_UNSPECIFIED" : 0;
                         object.ty = null;
+                        if ($util.Long) {
+                            let long = new $util.Long(0, 0, true);
+                            object.pin = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
+                        } else
+                            object.pin = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
                     }
                     if (message.key != null && message.hasOwnProperty("key"))
                         if (typeof BigInt !== "undefined" && options.longs === BigInt)
@@ -15790,6 +15568,13 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         object.handleType = options.enums === String ? $root.baml_bridge.cffi.v1.BamlHandleType[message.handleType] === undefined ? message.handleType : $root.baml_bridge.cffi.v1.BamlHandleType[message.handleType] : message.handleType;
                     if (message.ty != null && message.hasOwnProperty("ty"))
                         object.ty = $root.baml_bridge.cffi.v1.BamlTy.toObject(message.ty, options, q + 1);
+                    if (message.pin != null && message.hasOwnProperty("pin"))
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.pin = typeof message.pin === "number" ? BigInt(message.pin) : $util.Long.fromBits(message.pin.low >>> 0, message.pin.high >>> 0, true).toBigInt();
+                        else if (typeof message.pin === "number")
+                            object.pin = options.longs === String ? String(message.pin) : message.pin;
+                        else
+                            object.pin = options.longs === String ? $util.Long.prototype.toString.call(message.pin) : options.longs === Number ? new $util.LongBits(message.pin.low >>> 0, message.pin.high >>> 0).toNumber(true) : message.pin;
                     return object;
                 };
 
@@ -18123,7 +17908,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
              * @property {number} AUDIO=2 AUDIO value
              * @property {number} PDF=3 PDF value
              * @property {number} VIDEO=4 VIDEO value
-             * @property {number} OTHER=5 OTHER value
              */
             v1.MediaTypeEnum = (function() {
                 const valuesById = {}, values = Object.create(valuesById);
@@ -18132,7 +17916,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 values[valuesById[2] = "AUDIO"] = 2;
                 values[valuesById[3] = "PDF"] = 3;
                 values[valuesById[4] = "VIDEO"] = 4;
-                values[valuesById[5] = "OTHER"] = 5;
                 return values;
             })();
 
@@ -18371,7 +18154,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                         case 2:
                         case 3:
                         case 4:
-                        case 5:
                             break;
                         }
                     if (message.mimeType != null && message.hasOwnProperty("mimeType")) {
@@ -18448,10 +18230,6 @@ export const baml_bridge = $root.baml_bridge = (() => {
                     case "VIDEO":
                     case 4:
                         message.media = 4;
-                        break;
-                    case "OTHER":
-                    case 5:
-                        message.media = 5;
                         break;
                     }
                     if (object.mimeType != null)

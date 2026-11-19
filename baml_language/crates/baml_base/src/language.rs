@@ -4,11 +4,260 @@
 //! editor tooling. Human-readable documentation lives in `baml_builtins2` and
 //! is keyed by the stable names exposed here.
 
+use borsh::{BorshDeserialize, BorshSerialize};
+
 /// The argument shape accepted by a built-in schema attribute.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchemaAttributeArguments {
     None,
-    String { placeholder: &'static str },
+    String {
+        placeholder: &'static str,
+    },
+    /// No argument, or one string from a closed list. The lowering checks
+    /// membership, so a carrier only ever stores a listed choice.
+    OptionalChoice {
+        choices: &'static [&'static str],
+        placeholder: &'static str,
+    },
+}
+
+/// The kind of Rust-owned state a `@@rust_type` class keeps, one per runtime
+/// payload variant. Bare `@@rust_type` is [`Self::Foreign`]; every other kind
+/// is named by its spelling: `@@rust_type("OrderedSet")`.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
+)]
+pub enum RustPayloadKind {
+    /// A value the VM cannot look inside, reached only through its `Arc`.
+    /// Transitional: the kind of every class that has no kind of its own yet.
+    Foreign,
+    DefaultHasher,
+    Sha256,
+    Aes256GcmSiv,
+    Aes128GcmSiv,
+    ChaCha20Poly1305,
+    XChaCha20Poly1305,
+    Regex,
+    CsvRecord,
+    /// A `baml.sync.Semaphore`'s admission state: its slots and its queue.
+    Semaphore,
+    CancelToken,
+    SpanId,
+    TraceOptions,
+    ReservedSpan,
+    /// A `baml.fs.File`: a platform's open file, reached through the
+    /// operations its resource trait declares.
+    File,
+    /// A `baml.glob.Glob`: a platform's compiled pattern.
+    Glob,
+    /// A `baml.net.TcpStream`: a platform's open connection.
+    TcpStream,
+    /// A `baml.net.TcpListener`: a platform's bound listener.
+    TcpListener,
+    /// A `baml.net.UdpSocket`: a platform's bound socket.
+    UdpSocket,
+    /// A `baml.random.Xoshiro256PlusPlus`'s generator state.
+    Xoshiro256PlusPlus,
+    /// A `baml.random.ChaCha20`'s generator state.
+    ChaCha20,
+    /// A `reflect.interface.Implementation`'s witness, being built.
+    InterfaceWitness,
+    /// A `baml.csv.Reader`'s state: its options, input and position.
+    CsvReader,
+    /// A `baml.csv.Writer`'s state: its options, counts and buffer.
+    CsvWriter,
+    /// A `reflect.class.Builder`'s state: the class it is defining.
+    ClassBuilder,
+    /// A `baml.sys.Process`'s child: a platform's running process.
+    ChildProcess,
+    /// A `baml.sys.ReadPipe`: a platform's pipe to read from.
+    ReadPipe,
+    /// A `baml.sys.WritePipe`: a platform's pipe to write to.
+    WritePipe,
+    /// A `baml.ws.WebSocket`: a platform's connected socket.
+    WebSocket,
+    /// A `baml.http.Response`'s body: a platform's response body.
+    HttpBody,
+    /// A `baml.http.SseStream`'s state: a platform's event stream.
+    SseStream,
+    /// A `baml.http.Server`'s state: its bound listener.
+    HttpServer,
+    /// A `baml.http.TlsConfig`'s certificate chain and private key.
+    TlsKeys,
+    /// A `baml.host.Value`: a host's own value, held by its reference.
+    HostValue,
+    /// A `baml.media.Image`'s content.
+    Image,
+    /// A `baml.media.Audio`'s content.
+    Audio,
+    /// A `baml.media.Pdf`'s content.
+    Pdf,
+    /// A `baml.media.Video`'s content.
+    Video,
+    /// An `ai.Prompt`: a rendered, provider-neutral prompt.
+    Prompt,
+    /// An `ai.OutputFormat`: an output type's schema, ready to render.
+    OutputFormat,
+    /// A `baml.fs.Lock`: a platform's held advisory lock.
+    Lock,
+    /// A `baml.sync.Permit`: one slot of a semaphore, held or queued for.
+    Permit,
+    /// A `baml.sync.Ticket`: a task's place in line for the keys a
+    /// `baml.sync.atomic` block waits on.
+    Ticket,
+}
+
+impl RustPayloadKind {
+    /// Every kind, in declaration order.
+    pub const ALL: [Self; 43] = [
+        Self::Foreign,
+        Self::DefaultHasher,
+        Self::Sha256,
+        Self::Aes256GcmSiv,
+        Self::Aes128GcmSiv,
+        Self::ChaCha20Poly1305,
+        Self::XChaCha20Poly1305,
+        Self::Regex,
+        Self::CsvRecord,
+        Self::Semaphore,
+        Self::CancelToken,
+        Self::SpanId,
+        Self::TraceOptions,
+        Self::ReservedSpan,
+        Self::File,
+        Self::Glob,
+        Self::TcpStream,
+        Self::TcpListener,
+        Self::UdpSocket,
+        Self::Xoshiro256PlusPlus,
+        Self::ChaCha20,
+        Self::InterfaceWitness,
+        Self::CsvReader,
+        Self::CsvWriter,
+        Self::ClassBuilder,
+        Self::ChildProcess,
+        Self::ReadPipe,
+        Self::WritePipe,
+        Self::WebSocket,
+        Self::HttpBody,
+        Self::SseStream,
+        Self::HttpServer,
+        Self::TlsKeys,
+        Self::HostValue,
+        Self::Image,
+        Self::Audio,
+        Self::Pdf,
+        Self::Video,
+        Self::Prompt,
+        Self::OutputFormat,
+        Self::Lock,
+        Self::Permit,
+        Self::Ticket,
+    ];
+
+    /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
+    pub const SPELLINGS: &'static [&'static str] = &[
+        "DefaultHasher",
+        "Sha256",
+        "Aes256GcmSiv",
+        "Aes128GcmSiv",
+        "ChaCha20Poly1305",
+        "XChaCha20Poly1305",
+        "Regex",
+        "CsvRecord",
+        "Semaphore",
+        "CancelToken",
+        "SpanId",
+        "TraceOptions",
+        "ReservedSpan",
+        "File",
+        "Glob",
+        "TcpStream",
+        "TcpListener",
+        "UdpSocket",
+        "Xoshiro256PlusPlus",
+        "ChaCha20",
+        "InterfaceWitness",
+        "CsvReader",
+        "CsvWriter",
+        "ClassBuilder",
+        "ChildProcess",
+        "ReadPipe",
+        "WritePipe",
+        "WebSocket",
+        "HttpBody",
+        "SseStream",
+        "HttpServer",
+        "TlsKeys",
+        "HostValue",
+        "Image",
+        "Audio",
+        "Pdf",
+        "Video",
+        "Prompt",
+        "OutputFormat",
+        "Lock",
+        "Permit",
+        "Ticket",
+    ];
+
+    /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
+    /// bare `@@rust_type` means. The spelling is also the name of the kind's
+    /// payload type and runtime variant.
+    pub fn spelling(self) -> Option<&'static str> {
+        match self {
+            Self::Foreign => None,
+            Self::DefaultHasher => Some("DefaultHasher"),
+            Self::Sha256 => Some("Sha256"),
+            Self::Aes256GcmSiv => Some("Aes256GcmSiv"),
+            Self::Aes128GcmSiv => Some("Aes128GcmSiv"),
+            Self::ChaCha20Poly1305 => Some("ChaCha20Poly1305"),
+            Self::XChaCha20Poly1305 => Some("XChaCha20Poly1305"),
+            Self::Regex => Some("Regex"),
+            Self::CsvRecord => Some("CsvRecord"),
+            Self::Semaphore => Some("Semaphore"),
+            Self::CancelToken => Some("CancelToken"),
+            Self::SpanId => Some("SpanId"),
+            Self::TraceOptions => Some("TraceOptions"),
+            Self::ReservedSpan => Some("ReservedSpan"),
+            Self::File => Some("File"),
+            Self::Glob => Some("Glob"),
+            Self::TcpStream => Some("TcpStream"),
+            Self::TcpListener => Some("TcpListener"),
+            Self::UdpSocket => Some("UdpSocket"),
+            Self::Xoshiro256PlusPlus => Some("Xoshiro256PlusPlus"),
+            Self::ChaCha20 => Some("ChaCha20"),
+            Self::InterfaceWitness => Some("InterfaceWitness"),
+            Self::CsvReader => Some("CsvReader"),
+            Self::CsvWriter => Some("CsvWriter"),
+            Self::ClassBuilder => Some("ClassBuilder"),
+            Self::ChildProcess => Some("ChildProcess"),
+            Self::ReadPipe => Some("ReadPipe"),
+            Self::WritePipe => Some("WritePipe"),
+            Self::WebSocket => Some("WebSocket"),
+            Self::HttpBody => Some("HttpBody"),
+            Self::SseStream => Some("SseStream"),
+            Self::HttpServer => Some("HttpServer"),
+            Self::TlsKeys => Some("TlsKeys"),
+            Self::HostValue => Some("HostValue"),
+            Self::Image => Some("Image"),
+            Self::Audio => Some("Audio"),
+            Self::Pdf => Some("Pdf"),
+            Self::Video => Some("Video"),
+            Self::Prompt => Some("Prompt"),
+            Self::OutputFormat => Some("OutputFormat"),
+            Self::Lock => Some("Lock"),
+            Self::Permit => Some("Permit"),
+            Self::Ticket => Some("Ticket"),
+        }
+    }
+
+    /// The kind `@@rust_type("spelling")` names.
+    pub fn from_spelling(spelling: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|kind| kind.spelling() == Some(spelling))
+    }
 }
 
 /// Where a schema attribute is written. Attributes belong to declarations: a
@@ -61,6 +310,9 @@ pub struct SchemaAttributeSpec {
     pub name: &'static str,
     pub arguments: SchemaAttributeArguments,
     pub repeatable: bool,
+    /// Written only in the standard library: a user file is refused, and the
+    /// menus and diagnostics shown to a user never list it.
+    pub builtin_only: bool,
     /// The positions the attribute has meaning at. Anywhere else it is an
     /// error: an attribute the compiler knows but does not read at a position
     /// would otherwise be accepted and silently ignored.
@@ -72,7 +324,8 @@ impl SchemaAttributeSpec {
     pub fn signature(self) -> String {
         match self.arguments {
             SchemaAttributeArguments::None => self.name.to_string(),
-            SchemaAttributeArguments::String { placeholder } => {
+            SchemaAttributeArguments::String { placeholder }
+            | SchemaAttributeArguments::OptionalChoice { placeholder, .. } => {
                 format!(r#"{}("{placeholder}")"#, self.name)
             }
         }
@@ -106,6 +359,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
             placeholder: "text",
         },
         repeatable: false,
+        builtin_only: false,
         positions: DATA_MEMBERS_AND_BLOCKS,
     },
     SchemaAttributeSpec {
@@ -114,12 +368,14 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
             placeholder: "name",
         },
         repeatable: false,
+        builtin_only: false,
         positions: DATA_MEMBERS_AND_BLOCKS,
     },
     SchemaAttributeSpec {
         name: "skip",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: DATA_MEMBERS,
     },
     // BEP-075: the streaming attributes are declaration attributes. A field's
@@ -129,6 +385,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "stream.done",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::ClassField, AttributePosition::Class],
     },
     // The field has no default, so its class has no partial parse until the
@@ -137,6 +394,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "stream.must_exist",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::ClassField],
     },
     // The JSON key of a field or variant, in `baml.json` and generated SDK
@@ -145,6 +403,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "json.rename",
         arguments: SchemaAttributeArguments::String { placeholder: "key" },
         repeatable: false,
+        builtin_only: false,
         positions: DATA_MEMBERS,
     },
     // A `map<string, json>` field that holds every key no other field took,
@@ -153,6 +412,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "json.flatten",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::ClassField],
     },
     // A `map<string, json>` field that makes its class the member of a union
@@ -162,6 +422,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "json.fallback",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::ClassField],
     },
     // The class's optional fields holding `null` are left out when it is
@@ -170,6 +431,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "json.omit_nulls",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::Class],
     },
     // Telemetry records a redaction marker in place of the value: a field's
@@ -179,7 +441,20 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "trace.redact",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::ClassField, AttributePosition::Class],
+    },
+    // The one attribute here that is about the language rather than the
+    // schema: the class keeps its state in Rust, of the kind named.
+    SchemaAttributeSpec {
+        name: "rust_type",
+        arguments: SchemaAttributeArguments::OptionalChoice {
+            choices: RustPayloadKind::SPELLINGS,
+            placeholder: "Kind",
+        },
+        repeatable: false,
+        builtin_only: true,
+        positions: &[AttributePosition::Class],
     },
 ];
 
@@ -194,6 +469,15 @@ pub fn schema_attribute_specs_at(
     SCHEMA_ATTRIBUTE_SPECS
         .iter()
         .filter(move |spec| spec.allows(position))
+}
+
+/// The attributes a user may write at `position`: those with meaning there
+/// that are not builtin-only. What a completion menu offers and what an
+/// unknown-attribute diagnostic suggests.
+pub fn user_attribute_specs_at(
+    position: AttributePosition,
+) -> impl Iterator<Item = &'static SchemaAttributeSpec> {
+    schema_attribute_specs_at(position).filter(|spec| !spec.builtin_only)
 }
 
 /// Presentation-neutral identity and signature for a well-known client
@@ -243,6 +527,81 @@ mod tests {
     use super::*;
 
     #[test]
+    fn rust_payload_spellings_are_the_kinds_spellings_in_order() {
+        let spelled: Vec<&str> = RustPayloadKind::ALL
+            .into_iter()
+            .filter_map(RustPayloadKind::spelling)
+            .collect();
+        assert_eq!(spelled, RustPayloadKind::SPELLINGS);
+        for kind in RustPayloadKind::ALL {
+            if let Some(spelling) = kind.spelling() {
+                assert_eq!(RustPayloadKind::from_spelling(spelling), Some(kind));
+            }
+        }
+    }
+
+    /// Lock the Borsh wire format: compiled artifacts store a kind by its tag,
+    /// so every kind keeps its tag and a new kind takes the next one.
+    #[test]
+    fn rust_payload_kind_borsh_tags_are_locked() {
+        fn locked(kind: RustPayloadKind) -> u8 {
+            match kind {
+                RustPayloadKind::Foreign => 0,
+                RustPayloadKind::DefaultHasher => 1,
+                RustPayloadKind::Sha256 => 2,
+                RustPayloadKind::Aes256GcmSiv => 3,
+                RustPayloadKind::Aes128GcmSiv => 4,
+                RustPayloadKind::ChaCha20Poly1305 => 5,
+                RustPayloadKind::XChaCha20Poly1305 => 6,
+                RustPayloadKind::Regex => 7,
+                RustPayloadKind::CsvRecord => 8,
+                RustPayloadKind::Semaphore => 9,
+                RustPayloadKind::CancelToken => 10,
+                RustPayloadKind::SpanId => 11,
+                RustPayloadKind::TraceOptions => 12,
+                RustPayloadKind::ReservedSpan => 13,
+                RustPayloadKind::File => 14,
+                RustPayloadKind::Glob => 15,
+                RustPayloadKind::TcpStream => 16,
+                RustPayloadKind::TcpListener => 17,
+                RustPayloadKind::UdpSocket => 18,
+                RustPayloadKind::Xoshiro256PlusPlus => 19,
+                RustPayloadKind::ChaCha20 => 20,
+                RustPayloadKind::InterfaceWitness => 21,
+                RustPayloadKind::CsvReader => 22,
+                RustPayloadKind::CsvWriter => 23,
+                RustPayloadKind::ClassBuilder => 24,
+                RustPayloadKind::ChildProcess => 25,
+                RustPayloadKind::ReadPipe => 26,
+                RustPayloadKind::WritePipe => 27,
+                RustPayloadKind::WebSocket => 28,
+                RustPayloadKind::HttpBody => 29,
+                RustPayloadKind::SseStream => 30,
+                RustPayloadKind::HttpServer => 31,
+                RustPayloadKind::TlsKeys => 32,
+                RustPayloadKind::HostValue => 33,
+                RustPayloadKind::Image => 34,
+                RustPayloadKind::Audio => 35,
+                RustPayloadKind::Pdf => 36,
+                RustPayloadKind::Video => 37,
+                RustPayloadKind::Prompt => 38,
+                RustPayloadKind::OutputFormat => 39,
+                RustPayloadKind::Lock => 40,
+                RustPayloadKind::Permit => 41,
+                RustPayloadKind::Ticket => 42,
+            }
+        }
+        for (index, kind) in RustPayloadKind::ALL.into_iter().enumerate() {
+            assert_eq!(borsh::to_vec(&kind).unwrap(), [locked(kind)], "{kind:?}");
+            assert_eq!(
+                usize::from(locked(kind)),
+                index,
+                "{kind:?} is out of order in `ALL`"
+            );
+        }
+    }
+
+    #[test]
     fn schema_attribute_lookup_and_signatures() {
         assert_eq!(
             schema_attribute_spec("alias").map(|spec| spec.signature()),
@@ -286,6 +645,20 @@ mod tests {
         );
         assert_eq!(
             names_at(AttributePosition::Class),
+            [
+                "description",
+                "alias",
+                "stream.done",
+                "json.omit_nulls",
+                "trace.redact",
+                "rust_type"
+            ]
+        );
+        // A user is never offered what a user cannot write.
+        assert_eq!(
+            user_attribute_specs_at(AttributePosition::Class)
+                .map(|spec| spec.name)
+                .collect::<Vec<_>>(),
             [
                 "description",
                 "alias",

@@ -381,12 +381,13 @@ async fn captured_images_store_each_content_once_and_render_as_descriptors() {
     let (small, large): (Vec<u64>, Vec<u64>) = sizes.iter().partition(|size| **size < 1024);
     assert_eq!(large.len(), 4, "{sizes:?}");
     assert_eq!(small.len(), 5, "{sizes:?}");
-    // The list names its element class, whose definition is stored once.
+    // An image is a value of its own type, which names no declaration: no
+    // definition is stored.
     let definitions: Vec<_> = blobs(project.path())
         .into_iter()
         .filter_map(|(_, members)| members)
         .collect();
-    assert_eq!(definitions, vec![vec!["baml.media.Image".to_owned()]]);
+    assert!(definitions.is_empty(), "{definitions:?}");
     assert!(large.iter().all(|size| (32 << 10..33 << 10).contains(size)));
 
     let mut index = index(project.path());
@@ -405,7 +406,7 @@ async fn captured_images_store_each_content_once_and_render_as_descriptors() {
     );
     let descriptor = json!({"$media": "image", "mime": "image/png", "base64_len": (32 << 10) + 1});
     for row in &result.rows {
-        assert_eq!(row[0]["_data"], descriptor, "{}", row[0]);
+        assert_eq!(row[0], descriptor, "{}", row[0]);
         assert_eq!((&row[1], &row[2]), (&json!(1), &json!(0)));
     }
     assert_eq!(result.rows.len(), 2);
@@ -498,13 +499,13 @@ async fn base64_on_a_media_value_reads_its_content() {
     let mut index = index(project.path());
     let result = sql(
         &mut index,
-        "SELECT input_args['small']['_data']['base64'] AS small,
-           input_args['large']['_data']['base64'] AS large,
-           input_args['linked']['_data']['base64'] AS linked,
-           baml_value_state(input_args['linked']['_data']['base64']) AS linked_state,
-           baml_value_state(input_args['small']['_data']['mime']) AS other_key,
-           input_args['small']['_data'] AS described,
-           input_args['linked']['_data'] AS described_link
+        "SELECT input_args['small']['base64'] AS small,
+           input_args['large']['base64'] AS large,
+           input_args['linked']['base64'] AS linked,
+           baml_value_state(input_args['linked']['base64']) AS linked_state,
+           baml_value_state(input_args['small']['mime']) AS other_key,
+           input_args['small'] AS described,
+           input_args['linked'] AS described_link
          FROM spans WHERE span_name = 'user.Show'",
     );
     assert_eq!(
@@ -534,7 +535,7 @@ async fn base64_on_a_media_value_reads_its_content() {
     let found = sql(
         &mut index,
         "SELECT COUNT(*) FROM spans
-         WHERE span_name = 'user.Show' AND input_args['small']['_data']['base64'] = 'iVBORw0KGgo='",
+         WHERE span_name = 'user.Show' AND input_args['small']['base64'] = 'iVBORw0KGgo='",
     );
     assert_eq!(found.rows, vec![vec![json!(1)]]);
 }

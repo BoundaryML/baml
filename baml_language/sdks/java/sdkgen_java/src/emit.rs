@@ -420,18 +420,7 @@ pub(crate) fn render_class(
     // classes (both routed through here). Sealed-union
     // interfaces and their permitted records are emitted elsewhere (records are
     // already final).
-    let trace_selection = matches!(class_fqn, "trace.Options" | "trace.ReservedSpan");
-    let implements = if trace_selection {
-        " implements baml_sdk.vendor.trace.TraceSelection"
-    } else {
-        ""
-    };
-    out.push_str(&format!(
-        "public final class {ident}{generics}{implements} {{\n"
-    ));
-    if trace_selection {
-        out.push_str("    public baml_bridge.BamlHandle bamlTraceHandle() { return _handle; }\n");
-    }
+    out.push_str(&format!("public final class {ident}{generics} {{\n"));
 
     // A class that carries method bindings (static or instance) must boot the
     // runtime when it is the FIRST generated symbol a program touches — merely
@@ -490,7 +479,12 @@ pub(crate) fn render_class(
             class.generic_params.len(),
             &display_fields,
         ));
-        out.push_str(&render_baml_type_args_readback(&fields));
+        let claimed = display_fields
+            .iter()
+            .map(|(f_ident, _)| java_method_identifier(f_ident))
+            .chain(class_method_identifiers(class))
+            .collect();
+        out.push_str(&render_baml_type_args_readback(&claimed));
     }
 
     out.push_str(&render_method_bindings(class, class_fqn, ctx, sink));
@@ -581,9 +575,29 @@ pub(crate) fn render_opaque_class(
             .collect();
         format!("<{}>", params.join(", "))
     };
+    // A trace selection is the options or reservation a call is traced
+    // with: the reference the runtime reads them through.
+    let trace_selection = matches!(class_fqn, "trace.Options" | "trace.ReservedSpan");
+    let implements = if trace_selection {
+        " implements baml_sdk.vendor.trace.TraceSelection"
+    } else {
+        ""
+    };
     out.push_str(&format!(
-        "public final class {ident}{generics} extends baml_bridge.BamlOpaque {{\n    static {{\n        {anchor_fqn}.ensure();\n        baml_bridge.TypeRegistry.bindOpaqueFactory({class_fqn:?}, {ident}::new);\n    }}\n\n    private {ident}(baml_bridge.BamlHandle handle) {{\n        super(handle);\n    }}\n"
+        "public final class {ident}{generics} extends baml_bridge.BamlOpaque{implements} {{\n    static {{\n        {anchor_fqn}.ensure();\n        baml_bridge.TypeRegistry.bindOpaqueFactory({class_fqn:?}, {ident}::new);\n    }}\n\n    private {ident}(baml_bridge.BamlHandle handle) {{\n        super(handle);\n    }}\n"
     ));
+    if trace_selection {
+        out.push_str(
+            "\n    public baml_bridge.BamlHandle bamlTraceHandle() { return bamlHandle(); }\n",
+        );
+    }
+    // A generic class's instance reads back the type arguments the engine
+    // stated for it.
+    if !class.generic_params.is_empty() {
+        out.push_str(&render_baml_type_args_readback(
+            &class_method_identifiers(class).collect(),
+        ));
+    }
     let bindings = render_method_bindings(class, class_fqn, ctx, sink);
     if !bindings.is_empty() {
         out.push('\n');
@@ -702,13 +716,22 @@ fn render_reified_factory(
     )
 }
 
+/// The Java names a class's BAML methods take.
+fn class_method_identifiers(class: &Class) -> impl Iterator<Item = String> + '_ {
+    class
+        .static_methods
+        .iter()
+        .chain(&class.instance_methods)
+        .map(|method| java_method_identifier(method.name.as_str()))
+}
+
 /// The `bamlTypeArgs()` readback for a generic class: returns the reified
 /// type-arg tokens bound on this instance (via the reified factory or wire
 /// decode), or an empty list for an unbound instance. Escapes to
-/// `bamlTypeArgs$()` iff a BAML field of the class already claims the name
-/// (its accessor would collide) — the `Fns` → `Fns$` policy.
-fn render_baml_type_args_readback(fields: &[(String, String)]) -> String {
-    let name = if fields.iter().any(|(f_ident, _)| f_ident == "bamlTypeArgs") {
+/// `bamlTypeArgs$()` iff a field accessor or BAML method of the class already
+/// claims the name (`claimed`) — the `Fns` → `Fns$` policy.
+fn render_baml_type_args_readback(claimed: &BTreeSet<String>) -> String {
+    let name = if claimed.contains("bamlTypeArgs") {
         "bamlTypeArgs$"
     } else {
         "bamlTypeArgs"
@@ -1767,7 +1790,7 @@ pub(crate) fn render_union(
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
-    let arm_tokens = crate::translate_ty::union_arm_tokens(arms);
+    let arm_tokens = crate::translate_ty::union_arm_tokens(arms, ctx.crossings);
     let arm_infos: Vec<(String, String)> = arms
         .iter()
         .zip(&arm_tokens)

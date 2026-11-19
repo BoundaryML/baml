@@ -432,7 +432,6 @@ fn write_ty_identity<N: baml_type::Head + CtorHead>(out: &mut String, ty: &Ty<N>
         Ty::Never => out.push_str("Never"),
         Ty::Unknown => out.push_str("BUnk"),
         Ty::Error => out.push_str("Err"),
-        Ty::RustType => out.push_str("Rust"),
         Ty::Type => out.push_str("Type"),
         Ty::Function {
             params,
@@ -639,7 +638,8 @@ pub fn render_witness_pat(
                 _ => crate::extern_loc::mounted_class_loc(db, qtn)
                     .map(|class| {
                         crate::extern_loc::extern_class_row(db, class)
-                            .fields
+                            .body
+                            .fields()
                             .iter()
                             .map(|(name, ..)| name.clone())
                             .collect()

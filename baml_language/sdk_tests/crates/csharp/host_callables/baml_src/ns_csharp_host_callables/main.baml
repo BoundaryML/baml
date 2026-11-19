@@ -220,3 +220,9 @@ function chain_argument_has_next(chain: Chain) -> bool {
 function accept_unknown(value: unknown) -> bool {
     true
 }
+
+/// Collect the engine's garbage, so every host value nothing in BAML holds
+/// any more is given back to the host.
+function collect_garbage() -> null {
+    baml.sys.collect_garbage()
+}

@@ -232,7 +232,6 @@ fn heads_match_their_kind(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Result<(
         | Anchored::Union(_)
         | Anchored::Function { .. }
         | Anchored::Future(..)
-        | Anchored::RustType
         | Anchored::Type
         | Anchored::Resource
         | Anchored::PromptAst
@@ -382,14 +381,17 @@ impl BexEngine {
         // values intentionally become opaque tagged handles at the host
         // boundary; re-selecting from that host carrier would discard the
         // heap-owned nominal identity that made the arm unambiguous.
-        let selected_runtime = selected_interface.or_else(|| match declared_type {
-            bex_vm_types::RealizedTy::Union(members) => {
-                find_matching_union_member(value, members, vm)
+        // The shape rules pick the arm of most values cheaply; a value they
+        // don't discriminate (a function value) takes the first arm it is a
+        // member of. A value inhabits its declared type, so some arm holds it.
+        let selected_runtime = match (selected_interface, declared_type) {
+            (Some(member), _) => Some(member),
+            (None, bex_vm_types::RealizedTy::Union(members)) => {
+                Some(select_union_member(value, members, vm)?)
             }
-            _ => None,
-        });
-        let effective_type =
-            selected_runtime.unwrap_or_else(|| resolve_effective_type(value, declared_type, vm));
+            (None, _) => None,
+        };
+        let effective_type = selected_runtime.unwrap_or(declared_type);
 
         let external = match value.kind() {
             ValueKind::OmittedArg => {
@@ -584,71 +586,40 @@ impl BexEngine {
                     }),
                     // An instance no host reads into stays on the heap and
                     // crosses as a rooted reference: a standard-library
-                    // capability, or an instance of a declaration made at
-                    // run time, which no host has a type for. The engine's
-                    // proxy kinds select the host wrapper; the wire `ty` is
-                    // annotation-only, and method generic substitution
-                    // recovers the instance's head and class type arguments
-                    // after resolving the handle.
-                    ClassCrossing::Opaque => {
-                        Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-                            kind: bex_external_types::TaggedHeapHandleKind::RuntimeValue,
-                            ty: ty()?,
-                            heap_handle: self.heap.create_handle(ptr),
-                        }))
-                    }
-                    ClassCrossing::Stream => {
-                        Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-                            kind: bex_external_types::TaggedHeapHandleKind::Stream,
-                            ty: ty()?,
-                            heap_handle: self.heap.create_handle(ptr),
-                        }))
-                    }
-                    ClassCrossing::FunctionSpec => {
-                        Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-                            kind: bex_external_types::TaggedHeapHandleKind::FunctionSpec,
-                            ty: ty()?,
-                            heap_handle: self.heap.create_handle(ptr),
-                        }))
-                    }
-                    // A media value and a rendered prompt cross as the
-                    // payload their wrapper holds; a host builds a fresh
-                    // wrapper around it.
-                    form @ (ClassCrossing::Media(_) | ClassCrossing::Prompt) => {
-                        let payload = class
-                            .fields
-                            .iter()
-                            .position(|field| {
-                                field.name == bex_external_types::MEDIA_WRAPPER_DATA_FIELD
-                            })
-                            .and_then(|slot| instance.load_value(slot).as_object_ptr())
-                            .and_then(|data| match unsafe { data.get() } {
-                                Object::RustData(arc) => {
-                                    bex_external_types::try_convert_rust_data(arc)
-                                }
-                                _ => None,
-                            });
-                        match (form, payload) {
-                            (
-                                ClassCrossing::Media(kind),
-                                Some(BexExternalValue::Adt(BexExternalAdt::Media(media))),
-                            ) if media.kind == kind => {
-                                Ok(BexExternalValue::Adt(BexExternalAdt::Media(media)))
-                            }
-                            (
-                                ClassCrossing::Prompt,
-                                Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt))),
-                            ) => Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt))),
-                            _ => Err(EngineError::VmInternalError(
-                                bex_vm::errors::VmInternalError::BridgeFailure {
-                                    message: format!(
-                                        "an instance of `{}` does not hold its payload",
-                                        class.name()
-                                    ),
-                                },
-                            )),
-                        }
-                    }
+                    // capability, a `@@rust_type` instance, or an instance of
+                    // a declaration made at run time. The `ty` sent with it
+                    // names its class and type arguments for the host; method
+                    // generic substitution still recovers them from the
+                    // resolved instance, never from anything a host sends.
+                    ClassCrossing::Opaque => Ok(self.live_reference(
+                        ptr,
+                        bex_external_types::TaggedHeapHandleKind::RuntimeValue,
+                        ty()?,
+                    )),
+                    ClassCrossing::Stream => Ok(self.live_reference(
+                        ptr,
+                        bex_external_types::TaggedHeapHandleKind::Stream,
+                        ty()?,
+                    )),
+                    ClassCrossing::FunctionSpec => Ok(self.live_reference(
+                        ptr,
+                        bex_external_types::TaggedHeapHandleKind::FunctionSpec,
+                        ty()?,
+                    )),
+                    // A media value, a rendered prompt and a host's value are
+                    // `@@rust_type` classes, whose instances are
+                    // `RustInstance`s.
+                    crossing @ (ClassCrossing::Media(_)
+                    | ClassCrossing::Prompt
+                    | ClassCrossing::HostValue) => Err(EngineError::VmInternalError(
+                        bex_vm::errors::VmInternalError::BridgeFailure {
+                            message: format!(
+                                "`{}` crosses as {crossing:?} but is a plain instance, \
+                                 not a payload-backed one",
+                                class.name()
+                            ),
+                        },
+                    )),
                 }
             }
 
@@ -743,8 +714,7 @@ impl BexEngine {
                 self.to_statement(&type_value.ty)?,
             ))),
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
-            Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
-                .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
+            Object::RustInstance(instance) => self.rust_instance_reference(ptr, instance),
             Object::HostClosure(_) => Err(EngineError::CannotConvert {
                 type_name: "host_closure".to_string(),
             }),
@@ -761,6 +731,100 @@ impl BexEngine {
 }
 
 impl BexEngine {
+    /// The live reference a `@@rust_type` instance (`instance`, at `ptr`)
+    /// crosses as: its state has no form outside the VM, so it crosses by
+    /// reference, as an `Instance` of the same crossing does.
+    pub(crate) fn rust_instance_reference(
+        &self,
+        ptr: HeapPtr,
+        instance: &bex_vm_types::RustInstance,
+    ) -> Result<BexExternalValue, EngineError> {
+        // SAFETY: a live instance's class is a compile-time class object.
+        let Object::Class(class) = (unsafe { instance.class.get() }) else {
+            panic!("RustInstance.class should point to a Class object")
+        };
+        let ty = to_annotation(&bex_vm_types::RealizedTy::Class(
+            bex_vm_types::TypeHead::new(instance.class, class.type_tag),
+            Box::from(instance.class_type_args.as_slice()),
+        ))?;
+        let not_its_payload = || {
+            EngineError::VmInternalError(bex_vm::errors::VmInternalError::BridgeFailure {
+                message: format!(
+                    "an instance of `{}` holds {:?}, which is not what it crosses as",
+                    class.name(),
+                    instance.payload.kind()
+                ),
+            })
+        };
+        let kind = match class.crossing() {
+            // A media value and a rendered prompt cross as themselves; a host
+            // builds a fresh instance around one it sends.
+            ClassCrossing::Media(kind) => {
+                return match instance.payload.as_media() {
+                    Some(media) if media.kind == kind => Ok(BexExternalValue::Adt(
+                        BexExternalAdt::Media(std::sync::Arc::clone(media)),
+                    )),
+                    _ => Err(not_its_payload()),
+                };
+            }
+            ClassCrossing::Prompt => {
+                let bex_vm_types::RustPayload::Prompt(prompt) = &instance.payload else {
+                    return Err(not_its_payload());
+                };
+                return Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(
+                    std::sync::Arc::clone(prompt),
+                )));
+            }
+            // A host's own value crosses as the host's reference to it, which
+            // the host resolves back to its own object.
+            ClassCrossing::HostValue => {
+                let bex_vm_types::RustPayload::HostValue(host) = &instance.payload else {
+                    return Err(not_its_payload());
+                };
+                return Ok(BexExternalValue::HostValue(std::sync::Arc::clone(host)));
+            }
+            // A trace control's reference carries its payload, so a host
+            // configuring a call reads it without the heap.
+            ClassCrossing::Opaque => bex_external_types::TraceControl::of(&instance.payload)
+                .map_or(
+                    bex_external_types::TaggedHeapHandleKind::RuntimeValue,
+                    bex_external_types::TaggedHeapHandleKind::TraceControl,
+                ),
+            ClassCrossing::Stream => bex_external_types::TaggedHeapHandleKind::Stream,
+            ClassCrossing::FunctionSpec => bex_external_types::TaggedHeapHandleKind::FunctionSpec,
+            // The compiler never gives a `@@rust_type` class a crossing by
+            // its fields.
+            crossing @ ClassCrossing::Fields => {
+                return Err(EngineError::VmInternalError(
+                    bex_vm::errors::VmInternalError::BridgeFailure {
+                        message: format!(
+                            "`{}` is a `@@rust_type` class but crosses as {crossing:?}",
+                            class.name()
+                        ),
+                    },
+                ));
+            }
+        };
+        Ok(self.live_reference(ptr, kind, ty))
+    }
+
+    /// A rooted reference to the instance at `ptr`, for a class that crosses
+    /// by reference: the engine's proxy `kind` selects the host wrapper, and
+    /// method generic substitution recovers the instance's head and class type
+    /// arguments after resolving the handle.
+    fn live_reference(
+        &self,
+        ptr: HeapPtr,
+        kind: bex_external_types::TaggedHeapHandleKind,
+        ty: bex_external_types::AnnotationTy,
+    ) -> BexExternalValue {
+        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+            kind,
+            ty,
+            heap_handle: self.heap.create_handle(ptr),
+        })
+    }
+
     /// An instance's fields, each at its type under the instance's type
     /// arguments.
     fn instance_fields(
@@ -772,7 +836,7 @@ impl BexEngine {
         path: &mut Vec<*mut Object>,
     ) -> Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> {
         class
-            .fields
+            .instance_fields()
             .iter()
             .zip(instance.fields())
             .map(|(field, value)| {
@@ -1191,7 +1255,6 @@ pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: 
             | RuntimeTy::Literal(..)
             | RuntimeTy::Enum(_)
             | RuntimeTy::EnumVariant(..)
-            | RuntimeTy::RustType
             | RuntimeTy::Type
             | RuntimeTy::Resource
             | RuntimeTy::PromptAst
@@ -1243,8 +1306,8 @@ pub(crate) fn contains_type_var<N: Clone>(ty: &baml_type::RuntimeTy<N>) -> bool 
 /// Combine two types into a normalized union — the `RuntimeTy` seam over the
 /// shared [`baml_type_runtime::union_ty`]. Used when the same `TypeVar` is
 /// inferred from several arguments (`choose(5, "a")` → `T = int | string`) or a
-/// host-only sibling (`choose(5, host_obj)` → `int | rust_type`, the type an
-/// opaque host value has).
+/// host-only sibling (`choose(5, host_obj)` → `int | baml.host.Value`, the
+/// type an opaque host value has).
 #[cfg(test)]
 pub(crate) fn union_runtime_ty(
     a: &baml_type::RuntimeTy,
@@ -1609,14 +1672,16 @@ fn value_matches_type(value: &BexExternalValue, ty: &WireTy) -> bool {
                 && variant_name == expected_variant.as_str()
         }
         (BexExternalValue::Adt(BexExternalAdt::Media(media)), WireTy::Media(expected_kind)) => {
-            *expected_kind == baml_type::MediaKind::Generic || media.kind == *expected_kind
+            expected_kind.admits(media.kind)
         }
         (BexExternalValue::HostValue(value), WireTy::Function { .. }) => {
             value.kind == bex_external_types::HostValueKind::Callable
         }
-        (BexExternalValue::RustData(_), WireTy::RustType) => true,
-        (BexExternalValue::HostValue(value), WireTy::RustType) => {
+        // A host's own value is a `baml.host.Value`.
+        (BexExternalValue::HostValue(value), WireTy::Class(WireHead::Static(name), args)) => {
             value.kind == bex_external_types::HostValueKind::Opaque
+                && args.is_empty()
+                && *name == baml_type::TypeName::of_lang_item(bex_vm::lang_items::BAML_HOST_VALUE)
         }
         (
             BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::WireType(_)),
@@ -1757,19 +1822,27 @@ fn callable_frame_is_complete(vm: &BexVm, callable: &Object) -> bool {
     }
 }
 
-/// For union types, find which member matches the actual runtime value.
-///
-/// If the declared type is not a union, returns it unchanged.
-fn resolve_effective_type<'a>(
+/// The arm of the union `members` that the live `value` goes out as: the
+/// shape rules' pick, else the first arm it is a member of.
+fn select_union_member<'m>(
     value: Value,
-    declared_type: &'a bex_vm_types::RealizedTy,
+    members: &'m [bex_vm_types::RealizedTy],
     vm: &BexVm,
-) -> &'a bex_vm_types::RealizedTy {
-    match declared_type {
-        bex_vm_types::RealizedTy::Union(members) => find_matching_union_member(value, members, vm)
-            .unwrap_or_else(|| members.first().unwrap_or(declared_type)),
-        _ => declared_type,
+) -> Result<&'m bex_vm_types::RealizedTy, EngineError> {
+    if let Some(member) = find_matching_union_member(value, members, vm) {
+        debug_assert_ne!(
+            bex_vm::value_is_member(vm, value, member.as_ty()),
+            Some(false),
+            "the shape rules picked an arm the value is not a member of"
+        );
+        return Ok(member);
     }
+    members
+        .iter()
+        .find(|member| bex_vm::value_is_member(vm, value, member.as_ty()) == Some(true))
+        .ok_or_else(|| EngineError::TypeMismatch {
+            message: "a value is a member of no arm of its declared union".to_string(),
+        })
 }
 
 /// Select a declared interface arm using nominal facts from the live program.
@@ -1884,14 +1957,10 @@ fn find_matching_union_member<'a>(
                     }),
                 Object::Instance => {
                     let inst = unsafe { InstanceRef::of(ptr) }.expect("an instance pointer");
-                    let head =
-                        inst.head();
-                    let actual = inst.type_args();
-                    members.iter().find(|m| {
-                        matches!(m, bex_vm_types::RealizedTy::Class(tn, expected_args)
-                            if *tn == head
-                            && (expected_args.is_empty() || **expected_args == *actual))
-                    })
+                    matching_class_member(inst.class(), inst.type_args(), members)
+                }
+                Object::RustInstance(inst) => {
+                    matching_class_member(inst.class, &inst.class_type_args, members)
                 }
                 Object::Variant(variant) => {
                     let enum_obj = unsafe { variant.enm.get() };
@@ -1971,7 +2040,6 @@ fn find_matching_union_member<'a>(
                 | Object::Class(_)
                 | Object::Enum(_)
                 | Object::Future(_)
-                | Object::RustData(_)
                 | Object::Type(_) => None,
                 Object::Tombstone => Object::tombstone_reached(),
                 #[cfg(feature = "heap_debug")]
@@ -1987,28 +2055,58 @@ fn find_matching_union_member<'a>(
     })
 }
 
-/// The generated host SDKs expose primitive media through the corresponding
-/// handle-backed stdlib wrapper class. Some bridges therefore annotate the
-/// class-shaped `_data` payload with that wrapper's exact FQN even when the
-/// contextual BAML slot is the primitive `image`/`audio`/`video`/`pdf` type.
+/// The union member an instance of `class` at `class_type_args` matches.
+///
+/// Compares both class and type args. When the union member has empty type
+/// args (e.g. a bare `Foo`) it matches any instance of `Foo` regardless of its
+/// `class_type_args`, preserving first-match semantics for `Foo<int> | Foo`.
+/// When type args are present on the union member they must equal the
+/// instance's `class_type_args` exactly.
+fn matching_class_member<'m>(
+    class: HeapPtr,
+    class_type_args: &[bex_vm_types::RealizedTy],
+    members: &'m [bex_vm_types::RealizedTy],
+) -> Option<&'m bex_vm_types::RealizedTy> {
+    let Object::Class(declaration) = (unsafe { class.get() }) else {
+        return None;
+    };
+    let head = bex_vm_types::TypeHead::new(class, declaration.type_tag);
+    members.iter().find(|m| {
+        matches!(m, bex_vm_types::RealizedTy::Class(tn, expected_args)
+            if *tn == head
+            && (expected_args.is_empty()
+                || (expected_args.len() == class_type_args.len()
+                    && expected_args
+                        .iter()
+                        .zip(class_type_args.iter())
+                        .all(|(e, a)| e == a))))
+    })
+}
+
+/// The media kind a stdlib media wrapper class (`baml.media.Image`, …) is,
+/// when `annotation` names one. A media value crosses as its portable ADT,
+/// and inhabits a slot that names its wrapper class as well as one that names
+/// the primitive `image`/`audio`/`video`/`pdf` type.
 ///
 /// Keep this conversion contextual: the same wrapper remains an ordinary
 /// nominal class when passed as the receiver of a `baml.media.Image` method.
-pub(crate) fn stdlib_media_wrapper_kind(annotation: &WireTy) -> Option<baml_type::MediaKind> {
+pub(crate) fn stdlib_media_wrapper_kind(
+    annotation: &WireTy,
+) -> Option<baml_type::ConcreteMediaKind> {
     let WireTy::Class(WireHead::Static(name), args) = annotation else {
         return None;
     };
     if !args.is_empty() {
         return None;
     }
-    baml_type::MediaKind::from_wrapper_class_name(&name.render_dotted(false))
+    baml_type::ConcreteMediaKind::from_wrapper_class_name(&name.render_dotted(false))
 }
 
 #[cfg(test)]
 mod outbound_selection_tests {
     use std::sync::Arc;
 
-    use baml_type::{Freshness, MediaKind, Name, TypeName};
+    use baml_type::{ConcreteMediaKind, Freshness, Name, TypeName};
     use bex_heap::{BexHeap, Tlab};
     use bex_vm_types::{
         EnumVariant, MediaContent, MediaValue, Object, Value,
@@ -2092,7 +2190,7 @@ mod outbound_selection_tests {
         WireTy::Literal(Literal::Float(value.to_string()), Freshness::Regular)
     }
 
-    fn media_value(kind: MediaKind) -> BexExternalValue {
+    fn media_value(kind: ConcreteMediaKind) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Media(Arc::new(MediaValue::new(
             kind,
             MediaContent::Url {
@@ -2103,15 +2201,11 @@ mod outbound_selection_tests {
         ))))
     }
 
-    fn media_wrapper_ty(kind: MediaKind) -> WireTy {
-        let name = match kind {
-            MediaKind::Image => "baml.media.Image",
-            MediaKind::Audio => "baml.media.Audio",
-            MediaKind::Video => "baml.media.Video",
-            MediaKind::Pdf => "baml.media.Pdf",
-            MediaKind::Generic => panic!("generic media has no stdlib wrapper class"),
-        };
-        WireTy::static_class_with_args(TypeName::from_dotted_path(name), Box::new([]))
+    fn media_wrapper_ty(kind: ConcreteMediaKind) -> WireTy {
+        WireTy::static_class_with_args(
+            TypeName::from_dotted_path(kind.wrapper_class_name()),
+            Box::new([]),
+        )
     }
 
     #[test]
@@ -2224,7 +2318,7 @@ mod outbound_selection_tests {
             tlab.alloc(Object::Class(Box::new(Class {
                 declared_crossing: baml_type::ClassCrossing::Fields,
                 path,
-                fields: Vec::new(),
+                body: bex_vm_types::ClassBody::Fields(Vec::new()),
                 description: None,
                 alias: None,
                 docstring: None,
@@ -2293,14 +2387,15 @@ mod outbound_selection_tests {
     #[test]
     fn portable_media_selects_the_nested_prompt_part_wrapper_union() {
         let media_part = WireTy::Union(Box::new([
-            media_wrapper_ty(MediaKind::Image),
-            media_wrapper_ty(MediaKind::Audio),
-            media_wrapper_ty(MediaKind::Video),
-            media_wrapper_ty(MediaKind::Pdf),
+            media_wrapper_ty(ConcreteMediaKind::Image),
+            media_wrapper_ty(ConcreteMediaKind::Audio),
+            media_wrapper_ty(ConcreteMediaKind::Video),
+            media_wrapper_ty(ConcreteMediaKind::Pdf),
         ]));
         let prompt_part = WireTy::Union(Box::new([WireTy::string(), media_part.clone()]));
 
-        let wrapped = maybe_wrap_union(media_value(MediaKind::Image), &prompt_part).unwrap();
+        let wrapped =
+            maybe_wrap_union(media_value(ConcreteMediaKind::Image), &prompt_part).unwrap();
         let BexExternalValue::Union { value, metadata } = wrapped else {
             panic!("expected prompt-part union metadata")
         };
@@ -2311,7 +2406,7 @@ mod outbound_selection_tests {
         assert!(matches!(
             *value,
             BexExternalValue::Adt(BexExternalAdt::Media(ref media))
-                if media.kind == MediaKind::Image
+                if media.kind == ConcreteMediaKind::Image
         ));
     }
 
@@ -2536,8 +2631,11 @@ mod inference_unifier_tests {
     fn null() -> RuntimeTy {
         RuntimeTy::null()
     }
-    fn rust() -> RuntimeTy {
-        RuntimeTy::RustType
+    fn host_value() -> RuntimeTy {
+        RuntimeTy::Class(
+            baml_type::QualifiedTypeName::from_dotted_path("baml.host.Value"),
+            Box::new([]),
+        )
     }
     fn never() -> RuntimeTy {
         RuntimeTy::Never
@@ -2588,10 +2686,10 @@ mod inference_unifier_tests {
     }
     #[test]
     fn union_host_only_with_known() {
-        // 00b3 T25: choose(5, host_obj) ⇒ int | rust_type.
+        // 00b3 T25: choose(5, host_obj) ⇒ int | baml.host.Value.
         assert_eq!(
-            union_runtime_ty(&int(), &rust()),
-            union(vec![int(), rust()])
+            union_runtime_ty(&int(), &host_value()),
+            union(vec![int(), host_value()])
         );
     }
 

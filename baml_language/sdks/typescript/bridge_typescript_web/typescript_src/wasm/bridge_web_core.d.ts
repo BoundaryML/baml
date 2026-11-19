@@ -19,9 +19,11 @@ export function _testHandleTableEntryCount(): number;
 
 export function _testWebFireHostRelease(key: bigint): void;
 
-export function _testWebHostCallableCount(): number;
-
 export function _testWebHostReleaseCallbackInstalled(): boolean;
+
+export function _testWebHostValueCount(): number;
+
+export function _testWebHostValueRegistered(key: bigint): boolean;
 
 export function _testWebInFlightHostCallCount(): number;
 
@@ -153,6 +155,7 @@ export function mediaUrl(key: bigint, handle_type: number): string | undefined;
 /**
  * Mint a key for a JS-owned opaque value from the same keyspace used by
  * callable host values: both are the engine's references to host objects.
+ * The key holds the one reference the send it is minted for takes.
  */
 export function mintHostValueKey(): bigint;
 
@@ -180,8 +183,8 @@ export function registerHostCallable(callable: Function): bigint;
 export function registerHostCancelCallback(callback: Function): boolean;
 
 /**
- * Register the JS callback that releases opaque values from the SDK's local
- * registry when the engine drops its last corresponding `HostValueArc`.
+ * Register the JS callback told of every key whose last reference was given
+ * back, so the SDK can drop what it keeps for the key.
  */
 export function registerHostValueReleaseCallback(callback: Function): boolean;
 
@@ -202,13 +205,21 @@ export function releaseFunctionCall(call_id: bigint): boolean;
 export function releaseHandle(key: bigint): boolean;
 
 /**
- * Remove a callable that was registered but never transferred to the engine.
+ * Give back one reference to the host value `key` that was registered or
+ * sent again but never reached the engine. Returns whether it was the last.
  */
-export function releaseHostCallable(key: bigint): void;
+export function releaseWebHostValue(key: bigint): boolean;
 
-export function releaseWebHostCallable(key: bigint): void;
+/**
+ * Test-only: seed an image media entry into the handle table.
+ */
+export function seedMediaHandle(): bigint;
 
-export function seedGenericMediaHandle(): bigint;
+/**
+ * Take one more reference to the host value `key` for sending it to the
+ * engine again; refused once every reference has been given back.
+ */
+export function sendWebHostValueAgain(key: bigint): void;
 
 /**
  * Finalize the SDK lifetime: drain in-flight calls and spawned work, then
@@ -243,8 +254,9 @@ export interface InitOutput {
     readonly mediaName: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaUrl: (a: bigint, b: number) => [number, number, number, number];
     readonly _testWebFireHostRelease: (a: bigint) => void;
-    readonly _testWebHostCallableCount: () => number;
     readonly _testWebHostReleaseCallbackInstalled: () => number;
+    readonly _testWebHostValueCount: () => number;
+    readonly _testWebHostValueRegistered: (a: bigint) => number;
     readonly _testWebInFlightHostCallCount: () => number;
     readonly _testWebMissingHostCallableError: (a: bigint) => any;
     readonly _testWebSyncPendingHostCallableError: (a: bigint) => [number, number];
@@ -255,7 +267,8 @@ export interface InitOutput {
     readonly registerWebHostCallable: (a: any) => bigint;
     readonly registerWebHostCancelCallback: (a: any) => number;
     readonly registerWebHostValueReleaseCallback: (a: any) => number;
-    readonly releaseWebHostCallable: (a: bigint) => void;
+    readonly releaseWebHostValue: (a: bigint) => number;
+    readonly sendWebHostValueAgain: (a: bigint) => [number, number];
     readonly _encodeWebInbound: (a: any, b: number, c: number) => [number, number, number, number];
     readonly completeWebHostCallThrow: (a: number, b: any, c: number) => [number, number, number];
     readonly completeWebHostCallValue: (a: number, b: any) => [number, number, number, number];
@@ -270,7 +283,7 @@ export interface InitOutput {
     readonly _testHandleTableEntryCount: () => [number, number, number];
     readonly cloneHandle: (a: bigint) => [bigint, number, number];
     readonly releaseHandle: (a: bigint) => number;
-    readonly seedGenericMediaHandle: () => [bigint, number, number];
+    readonly seedMediaHandle: () => [bigint, number, number];
     readonly callFunction: (a: number, b: number, c: any, d: any) => [number, number, number];
     readonly callFunctionSync: (a: number, b: number, c: any, d: any) => [number, number, number, number];
     readonly shutdownRuntime: () => any;
@@ -291,7 +304,6 @@ export interface InitOutput {
     readonly registerHostCallable: (a: any) => bigint;
     readonly registerHostCancelCallback: (a: any) => number;
     readonly registerHostValueReleaseCallback: (a: any) => number;
-    readonly releaseHostCallable: (a: bigint) => void;
     readonly cancel_function_call: (a: bigint) => number;
     readonly new_function_call: () => bigint;
     readonly release_function_call: (a: bigint) => number;

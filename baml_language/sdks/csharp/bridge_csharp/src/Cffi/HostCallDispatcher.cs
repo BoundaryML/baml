@@ -260,7 +260,7 @@ internal static class HostCallDispatcher
         // `baml.errors.HostCallable` whose `_handle` is this registration, so
         // the same process restores the exception by identity on round trip.
         using HostValueRegistration registration =
-            HostValueRegistry.Shared.RegisterException(error, invocation.FunctionCallId);
+            HostValueRegistry.Shared.RegisterException(error);
         Complete(api, invocation.HostCallId, new HostCallCompletion
         {
             Raised = HostCallableProtocol.Raised(error.SourceException, registration.Key),

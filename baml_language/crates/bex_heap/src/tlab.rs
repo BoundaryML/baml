@@ -182,15 +182,27 @@ impl Tlab {
             !matches!(obj, Object::Float(f) if Value::try_inline_float(f).is_some()),
             "a float with an inline encoding must not be boxed; use float_value"
         );
+        // SAFETY: the allocating VM holds a heap permit, so an instance's
+        // class object is live.
+        unsafe { debug_assert_rust_instance_fits(&obj) };
+        // BEP-042: a `@@rust_type` instance of a class with a finalizer joins
+        // the collector's finalizable list, as `alloc_instance` registers a
+        // field-backed one. Checked before the write moves `obj`.
+        // SAFETY: as above.
+        let finalizable = unsafe { BexHeap::needs_finalizer_registration(&obj) };
         self.charge(&mut obj);
         let cell = self.alloc_cell(OBJECT_CELL_WORDS);
 
         // SAFETY: the cell was just carved for this object alone; the pointer
         // names the object written into it.
-        unsafe {
+        let ptr = unsafe {
             self.heap
                 .make_heap_ptr(crate::cell_space::write_object_cell(cell, obj))
+        };
+        if finalizable {
+            self.heap.register_finalizable(ptr);
         }
+        ptr
     }
 
     /// Assign a fresh telemetry identity without registering a weak reference.
@@ -224,6 +236,9 @@ impl Tlab {
     /// `reservation` must come from a TLAB of this heap.
     pub unsafe fn publish(&mut self, reservation: Reservation, mut obj: Object) -> HeapPtr {
         self.charge(&mut obj);
+        // SAFETY: the publishing VM holds a heap permit, so an instance's
+        // class object is live.
+        unsafe { debug_assert_rust_instance_fits(&obj) };
         let finalizable = crate::Finalizable::of(&obj);
         let ptr = reservation.ptr;
         // SAFETY: the caller guarantees the slot is still the one reserved. It
@@ -470,12 +485,6 @@ impl Tlab {
         self.alloc(Object::Bigint(Arc::new(value)))
     }
 
-    /// Allocate opaque Rust data on the heap.
-    #[inline]
-    pub fn alloc_rust_data(&mut self, data: Arc<dyn bex_vm_types::BexRustData>) -> HeapPtr {
-        self.alloc(Object::RustData(data))
-    }
-
     /// Allocate a type descriptor object on the heap.
     ///
     /// Static materialization inside the VM should go through
@@ -646,10 +655,6 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_bigint(value)
     }
 
-    fn alloc_rust_data(&mut self, data: Arc<dyn bex_vm_types::BexRustData>) -> HeapPtr {
-        self.tlab_mut().alloc_rust_data(data)
-    }
-
     fn alloc_type(&mut self, tv: bex_vm_types::types::TypeValue) -> HeapPtr {
         self.tlab_mut().alloc_type(tv)
     }
@@ -660,6 +665,32 @@ pub trait TlabHolder {
 
     fn alloc_bound_method(&mut self, method: bex_vm_types::BoundMethod) -> HeapPtr {
         self.tlab_mut().alloc_bound_method(method)
+    }
+}
+
+/// Asserts that a `@@rust_type` instance entering the heap fits its class
+/// ([`RustInstance::fits`](bex_vm_types::RustInstance::fits)).
+///
+/// # Safety
+///
+/// If `object` is a `RustInstance`, its class pointer names a live object.
+#[inline]
+unsafe fn debug_assert_rust_instance_fits(object: &Object) {
+    if cfg!(debug_assertions)
+        && let Object::RustInstance(instance) = object
+    {
+        // SAFETY: the caller guarantees the class object is live.
+        let Object::Class(class) = (unsafe { instance.class.get() }) else {
+            panic!("a `@@rust_type` instance's class pointer names no class")
+        };
+        assert!(
+            instance.fits(class),
+            "a `{}` instance holds a {:?} payload at {} type argument(s), which its class \
+             does not declare",
+            class.path,
+            instance.payload.kind(),
+            instance.class_type_args.len(),
+        );
     }
 }
 
@@ -829,7 +860,7 @@ mod tests {
                 Vec::new(),
                 baml_type::Name::new("TestClass"),
             ),
-            fields: vec![
+            body: bex_vm_types::ClassBody::Fields(vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
                     field_type: baml_type::RuntimeTy::Int,
@@ -866,7 +897,7 @@ mod tests {
                     json_omit_null: false,
                     redact: false,
                 },
-            ],
+            ]),
             description: None,
             alias: None,
             docstring: None,

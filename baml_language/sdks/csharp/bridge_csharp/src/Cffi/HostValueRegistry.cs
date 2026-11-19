@@ -1,17 +1,24 @@
-using System.Runtime.ExceptionServices;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.ExceptionServices;
 
 using Baml.Generated.V1;
 
 namespace Baml.Cffi;
 
+/// <summary>
+/// The host's table of objects the engine references by host key. Each key
+/// counts the references the host has handed the engine: a registration
+/// starts at one, for the send it is registered for, and the engine's release
+/// callback gives references back. An entry is dropped once the engine holds
+/// none, its own send is settled, and no dispatch of it is running.
+/// </summary>
 internal sealed class HostValueRegistry
 {
     private readonly object gate = new();
     private readonly List<Slot> slots = [];
     private readonly Stack<int> freeSlots = [];
     private readonly Dictionary<ulong, Operation> operations = [];
-    private readonly Dictionary<ulong, HashSet<ulong>> operationExceptions = [];
     private readonly Dictionary<uint, HostInvocation> invocations = [];
     private long staleReleases;
     private long staleDispatches;
@@ -51,62 +58,16 @@ internal sealed class HostValueRegistry
         ArgumentNullException.ThrowIfNull(callable);
         parentFunctionCallId =
             NativeApi.RequireFunctionCallIdentifier(parentFunctionCallId);
-        var entry = new Entry(
-            EntryKind.Callable,
+        return Register(new CallableObject(
             callable,
             ExecutionContext.Capture(),
-            exception: null,
-            parentFunctionCallId,
-            operationSettled: false);
-        return Register(entry);
+            parentFunctionCallId));
     }
 
-    internal HostValueRegistration RegisterException(
-        ExceptionDispatchInfo exception,
-        ulong parentFunctionCallId)
+    internal HostValueRegistration RegisterException(ExceptionDispatchInfo exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        bool operationSettled;
-        lock (gate)
-        {
-            operationSettled = parentFunctionCallId == 0
-                || !operations.ContainsKey(parentFunctionCallId);
-        }
-
-        var entry = new Entry(
-            EntryKind.Exception,
-            callable: null,
-            executionContext: null,
-            exception,
-            parentFunctionCallId,
-            operationSettled);
-        HostValueRegistration registration = Register(entry);
-        if (!operationSettled)
-        {
-            lock (gate)
-            {
-                if (TryGetEntry(registration.Key, out Entry? registered)
-                    && ReferenceEquals(registered, entry)
-                    && operations.ContainsKey(parentFunctionCallId))
-                {
-                    if (!operationExceptions.TryGetValue(
-                            parentFunctionCallId,
-                            out HashSet<ulong>? keys))
-                    {
-                        keys = [];
-                        operationExceptions.Add(parentFunctionCallId, keys);
-                    }
-
-                    keys.Add(registration.Key);
-                }
-                else
-                {
-                    entry.OperationSettled = true;
-                }
-            }
-        }
-
-        return registration;
+        return Register(new ExceptionObject(exception));
     }
 
     internal void BeginFunctionCall(ulong functionCallId, CancellationToken cancellationToken)
@@ -133,21 +94,6 @@ internal sealed class HostValueRegistry
         lock (gate)
         {
             _ = operations.Remove(functionCallId);
-            if (!operationExceptions.Remove(functionCallId, out HashSet<ulong>? keys))
-            {
-                return;
-            }
-
-            foreach (ulong key in keys)
-            {
-                if (TryGetEntry(key, out Entry? entry)
-                    && entry.Kind == EntryKind.Exception
-                    && entry.ParentFunctionCallId == functionCallId)
-                {
-                    entry.OperationSettled = true;
-                    TryCollect(key, entry);
-                }
-            }
         }
     }
 
@@ -182,10 +128,10 @@ internal sealed class HostValueRegistry
                 return null;
             }
 
+            // The engine dispatches only a callable it holds a reference to.
             if (!TryGetEntry(hostKey, out Entry? entry)
-                || entry.Kind != EntryKind.Callable
-                || entry.Aborted
-                || entry.ReleaseObserved)
+                || entry.Object is not CallableObject callable
+                || entry.References == 0)
             {
                 diagnostic = $"The native host dispatch referenced stale callable key {hostKey}.";
                 Interlocked.Increment(ref staleDispatches);
@@ -193,7 +139,7 @@ internal sealed class HostValueRegistry
             }
 
             entry.ActiveLeases = checked(entry.ActiveLeases + 1);
-            ulong functionCallId = hostEnvironment ?? entry.ParentFunctionCallId;
+            ulong functionCallId = hostEnvironment ?? callable.ParentFunctionCallId;
             CancellationToken callerToken = operations.TryGetValue(
                 functionCallId,
                 out Operation? operation)
@@ -206,10 +152,10 @@ internal sealed class HostValueRegistry
                 hostCallId,
                 functionCallId,
                 arguments,
-                entry.Callable!,
+                callable.Callable,
                 hostEnvironment.HasValue && operation is not null
                     ? operation.ExecutionContext
-                    : entry.ExecutionContext,
+                    : callable.ExecutionContext,
                 cancellation);
             invocations.Add(hostCallId, invocation);
         }
@@ -245,42 +191,53 @@ internal sealed class HostValueRegistry
         invocation.DisposeCancellation();
     }
 
-    internal void Release(ulong key)
+    /// <summary>
+    /// The engine giving back <paramref name="count"/> references to
+    /// <paramref name="key"/>. A release of an unknown key, of no references,
+    /// or of more references than the engine holds is counted as stale and
+    /// changes nothing.
+    /// </summary>
+    internal void Release(ulong key, ulong count)
     {
         lock (gate)
         {
-            if (!TryGetEntry(key, out Entry? entry) || entry.ReleaseObserved)
+            if (count == 0
+                || !TryGetEntry(key, out Entry? entry)
+                || count > entry.References)
             {
                 Interlocked.Increment(ref staleReleases);
                 return;
             }
 
-            entry.ReleaseObserved = true;
+            entry.References -= count;
             TryCollect(key, entry);
         }
     }
 
-    internal bool TryRestoreException(ulong key, out ExceptionDispatchInfo? exception)
+    /// <summary>
+    /// The exception registered at <paramref name="key"/>, claimed once: a
+    /// second restore of the same registration finds nothing, however long
+    /// the engine still holds it.
+    /// </summary>
+    internal bool TryRestoreException(ulong key, [NotNullWhen(true)] out ExceptionDispatchInfo? exception)
     {
         lock (gate)
         {
             if (!TryGetEntry(key, out Entry? entry)
-                || entry.Kind != EntryKind.Exception
-                || entry.Aborted
-                || entry.ExceptionClaimed)
+                || entry.Object is not ExceptionObject registered
+                || registered.Claimed)
             {
                 exception = null;
                 return false;
             }
 
-            entry.ExceptionClaimed = true;
-            exception = entry.Exception;
-            TryCollect(key, entry);
+            registered.Claimed = true;
+            exception = registered.Exception;
             return true;
         }
     }
 
-    private HostValueRegistration Register(Entry entry)
+    private HostValueRegistration Register(HostObject hostObject)
     {
         lock (gate)
         {
@@ -303,37 +260,47 @@ internal sealed class HostValueRegistry
                     "The managed host-value free list is corrupt.");
             }
 
-            slot.Entry = entry;
+            slot.Entry = new Entry(hostObject);
             ulong key = Pack(index, slot.Generation);
             return new HostValueRegistration(this, key);
         }
     }
 
+    /// <summary>The registration's send reached the engine, which now holds its reference.</summary>
     internal void Commit(ulong key)
     {
         lock (gate)
         {
-            if (!TryGetEntry(key, out Entry? entry) || entry.Aborted)
+            if (!TryGetEntry(key, out Entry? entry) || !entry.SendPending)
             {
                 throw new InvalidOperationException(
                     "The managed host-value ownership transaction is no longer pending.");
             }
 
-            entry.Committed = true;
+            entry.SendPending = false;
             TryCollect(key, entry);
         }
     }
 
+    /// <summary>The registration's send never reached the engine: its one reference comes back.</summary>
     internal void Abort(ulong key)
     {
         lock (gate)
         {
-            if (!TryGetEntry(key, out Entry? entry) || entry.Committed)
+            if (!TryGetEntry(key, out Entry? entry) || !entry.SendPending)
             {
                 return;
             }
 
-            entry.Aborted = true;
+            Debug.Assert(
+                entry.References != 0,
+                "The engine released a reference to a host value whose send never reached it.");
+            entry.SendPending = false;
+            if (entry.References != 0)
+            {
+                entry.References--;
+            }
+
             TryCollect(key, entry);
         }
     }
@@ -365,18 +332,7 @@ internal sealed class HostValueRegistry
 
     private void TryCollect(ulong key, Entry entry)
     {
-        if (entry.ActiveLeases != 0)
-        {
-            return;
-        }
-
-        bool collect = entry.Aborted
-            || entry.Committed
-                && (entry.Kind == EntryKind.Callable
-                    ? entry.ReleaseObserved
-                    : entry.OperationSettled
-                        || entry.ReleaseObserved && entry.ExceptionClaimed);
-        if (!collect)
+        if (entry.References != 0 || entry.SendPending || entry.ActiveLeases != 0)
         {
             return;
         }
@@ -390,19 +346,6 @@ internal sealed class HostValueRegistry
         }
 
         slot.Entry = null;
-        if (entry.Kind == EntryKind.Exception
-            && entry.ParentFunctionCallId != 0
-            && operationExceptions.TryGetValue(
-                entry.ParentFunctionCallId,
-                out HashSet<ulong>? keys))
-        {
-            _ = keys.Remove(key);
-            if (keys.Count == 0)
-            {
-                _ = operationExceptions.Remove(entry.ParentFunctionCallId);
-            }
-        }
-
         if (slot.Generation == uint.MaxValue)
         {
             slot.Retired = true;
@@ -426,35 +369,42 @@ internal sealed class HostValueRegistry
         internal bool Retired { get; set; }
     }
 
-    private sealed class Entry(
-        EntryKind kind,
-        BamlGeneratedHostCallable? callable,
-        ExecutionContext? executionContext,
-        ExceptionDispatchInfo? exception,
-        ulong parentFunctionCallId,
-        bool operationSettled)
+    private sealed class Entry(HostObject hostObject)
     {
-        internal EntryKind Kind { get; } = kind;
+        internal HostObject Object { get; } = hostObject;
 
-        internal BamlGeneratedHostCallable? Callable { get; } = callable;
+        /// <summary>
+        /// References the host has handed the engine and not had back,
+        /// including the one of a send not yet settled.
+        /// </summary>
+        internal ulong References { get; set; } = 1;
+
+        /// <summary>The registration's own send has neither reached the engine nor been rolled back.</summary>
+        internal bool SendPending { get; set; } = true;
+
+        internal int ActiveLeases { get; set; }
+    }
+
+    private abstract class HostObject;
+
+    private sealed class CallableObject(
+        BamlGeneratedHostCallable callable,
+        ExecutionContext? executionContext,
+        ulong parentFunctionCallId) : HostObject
+    {
+        internal BamlGeneratedHostCallable Callable { get; } = callable;
 
         internal ExecutionContext? ExecutionContext { get; } = executionContext;
 
-        internal ExceptionDispatchInfo? Exception { get; } = exception;
-
         internal ulong ParentFunctionCallId { get; } = parentFunctionCallId;
+    }
 
-        internal bool OperationSettled { get; set; } = operationSettled;
+    private sealed class ExceptionObject(ExceptionDispatchInfo exception) : HostObject
+    {
+        internal ExceptionDispatchInfo Exception { get; } = exception;
 
-        internal bool Committed { get; set; }
-
-        internal bool Aborted { get; set; }
-
-        internal bool ReleaseObserved { get; set; }
-
-        internal bool ExceptionClaimed { get; set; }
-
-        internal int ActiveLeases { get; set; }
+        /// <summary>The exception has been rethrown once; it is never restored again.</summary>
+        internal bool Claimed { get; set; }
     }
 
     private sealed class Operation(CancellationToken cancellationToken, ExecutionContext? executionContext)
@@ -462,12 +412,6 @@ internal sealed class HostValueRegistry
         internal CancellationToken CancellationToken { get; } = cancellationToken;
 
         internal ExecutionContext? ExecutionContext { get; } = executionContext;
-    }
-
-    private enum EntryKind
-    {
-        Callable,
-        Exception,
     }
 }
 

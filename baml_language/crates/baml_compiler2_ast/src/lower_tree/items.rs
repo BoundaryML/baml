@@ -229,6 +229,7 @@ impl<'t> Items<'t> {
                 DirectiveKind::MayYield => ast::NativeDirective::MayYield,
                 DirectiveKind::Fallible => ast::NativeDirective::Fallible,
                 DirectiveKind::LocalTwin => ast::NativeDirective::LocalTwin,
+                DirectiveKind::RuntimeOnly => ast::NativeDirective::RuntimeOnly,
                 DirectiveKind::TaggedString
                 | DirectiveKind::TracePassthrough
                 | DirectiveKind::Trace => continue,

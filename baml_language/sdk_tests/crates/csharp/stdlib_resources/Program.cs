@@ -235,7 +235,7 @@ if (CanCreateLoopbackSockets())
     using (System.Net.Http.HttpClient client = new())
     {
         using HttpResponseMessage served = await client.GetAsync(
-            $"http://{bamlServer.Addr}/resource?q=1",
+            $"http://{bamlServer.Addr()}/resource?q=1",
             networkTimeout.Token);
         string servedBody = await served.Content.ReadAsStringAsync(networkTimeout.Token);
         Require(
@@ -427,6 +427,19 @@ Require(
     "Writer typed writes or buffer text changed");
 _ = writer.Flush();
 _ = writer.Close();
+
+using (Sap.ParseCache<long> cache = Functions.IntParseCache())
+{
+    // The reference carries its type argument: passed back, it parses at
+    // `int`, and the instance comes back as itself.
+    Require(
+        Functions.ParseFinalWith(cache, "41") == 41,
+        "a generic reference lost its type argument");
+    using Sap.ParseCache<long> same = Functions.SameParseCache(cache);
+    Require(same.Equals(cache), "a generic reference did not come back as itself");
+    using Sap.ParseCache<long> other = Functions.IntParseCache();
+    Require(!other.Equals(cache), "two generic references compared equal");
+}
 
 _ = csvReader.Close();
 

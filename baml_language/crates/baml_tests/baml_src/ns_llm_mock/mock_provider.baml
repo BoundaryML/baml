@@ -111,7 +111,7 @@ class MockJsonServer {
 
     // Hand this to the client under test: `.new(base_url = mock.base_url())`.
     function base_url(self) -> string {
-        "http://" + self.server.addr
+        "http://" + self.server.addr()
     }
 
     function request_count(self) -> int {
@@ -225,7 +225,7 @@ class MockSseServer {
     requests: MockRequest[],
 
     function base_url(self) -> string {
-        "http://" + self.server.addr
+        "http://" + self.server.addr()
     }
 
     function request_count(self) -> int {

@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 1036. IDs with complete required parity: 287. Required gaps: 5140.
+Distinct exact test IDs: 1057. IDs with complete required parity: 288. Required gaps: 5233.
 
-Baseline ratchet: BETTER. Required gaps: 5140 (baseline: 5140). Present declarations: 2835 (baseline: 2816). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: WORSE. Required gaps: 5233 (baseline: 5140). Present declarations: 2941 (baseline: 2835). Newly missing required pairs: 100. Resolved baseline gaps: 7. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 481 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 491 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 481 / 481 | 100.0% |
-| typescript_node | 213 / 481 | 44.3% |
-| typescript_web_chromium | 189 / 481 | 39.3% |
-| typescript_web_cloudflare_workers | 189 / 481 | 39.3% |
-| cpp | 157 / 481 | 32.6% |
-| csharp | 0 / 481 | 0.0% |
-| rust | 255 / 481 | 53.0% |
-| go | 36 / 481 | 7.5% |
-| java | 328 / 481 | 68.2% |
-| swift | 211 / 481 | 43.9% |
+| python_pydantic2 | 491 / 491 | 100.0% |
+| typescript_node | 223 / 491 | 45.4% |
+| typescript_web_chromium | 198 / 491 | 40.3% |
+| typescript_web_cloudflare_workers | 198 / 491 | 40.3% |
+| cpp | 163 / 491 | 33.2% |
+| csharp | 0 / 491 | 0.0% |
+| rust | 264 / 491 | 53.8% |
+| go | 45 / 491 | 9.2% |
+| java | 337 / 491 | 68.6% |
+| swift | 220 / 491 | 44.8% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -295,6 +295,9 @@ Parity is the share of the 481 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_inference_wrap_infers_and_returns_generic | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_nullable_type_variables_preserve_every_pointer_boundary | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_receiver_and_static_helpers | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/generic_references_method_binds_the_class_type_argument_from_its_receiver | y | y | y | y | - | - | y | y | y | y | all |  |
+| function_calls/generic_references_one_engine_instance_is_one_reference | y | y | y | y | - | - | y | y | y | y | all |  |
+| function_calls/generic_references_reference_carries_its_type_arguments | y | y | y | y | - | - | y | y | y | y | all |  |
 | function_calls/generic_return_only_type_arguments | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_union_input_and_engine_validation | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/go_codegen_context_deadline | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -328,6 +331,7 @@ Parity is the share of the 481 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callable_structured_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run | y | y | y | y | y | - | y | y | y | y | all |  |
 | function_calls/host_callable_void_signatures | y | y | y | y | y | - | y | y | y | - | all |  |
+| function_calls/host_callables_a_cancel_token_dies_with_its_runtime | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_adopts_a_custom_thenable_exactly_once | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_adopts_a_promise_from_a_separate_browser_realm | - | - | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, cpp, csharp, rust, go, java, swift |  |
 | function_calls/host_callables_async_callable_future_completing_exceptionally_round_trips_original | - | - | - | - | - | - | - | - | y | - | all |  |
@@ -338,7 +342,6 @@ Parity is the share of the 481 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_call_repeatedly_invokes_callback_n_times | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/host_callables_call_repeatedly_with_zero_n_returns_empty_list | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/host_callables_call_with_throwing_in_baml_catches_host_callable_error | y | y | y | y | y | - | y | - | y | y | all |  |
-| function_calls/host_callables_cancels_through_the_originating_runtime_after_runtime_replacement | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_class_callback_round_trips_class_value | - | - | - | - | y | - | - | - | - | y | all |  |
 | function_calls/host_callables_class_callback_round_trips_pydantic_model | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/host_callables_completes_a_pending_host_call_after_runtime_replacement | - | y | y | y | - | - | - | - | - | - | all |  |
@@ -371,6 +374,7 @@ Parity is the share of the 481 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callables_preserves_arbitrary_thrown_js_values_without_hanging | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_preserves_number_kind_for_float_bigint_union | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | exercises JavaScript's distinct number and bigint host representations |
 | function_calls/host_callables_preserves_same_realm_thrown_object_identity | - | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/host_callables_raised_exception_is_released_after_its_round_trip | - | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/host_callables_rejects_callable_args_on_the_generated_sync_path_instead_of_hanging | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_release_fires_on_drop_of_callable | y | y | y | y | - | - | y | - | y | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, rust, java | callable release coverage depends on host weak-reference support and remains nondeterministic |
 | function_calls/host_callables_resolves_integral_number_for_float_class_field | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | exercises the Node bridge's JavaScript number encoding in generated classes |
@@ -411,7 +415,9 @@ Parity is the share of the 481 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_context_inherits_and_restores | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/host_current_exposes_generated_cancel_token | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/host_defaults_baml_span_and_error_capture_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python instrumentation defaults Python-to-BAML span/capture requests |
+| function_calls/host_error_in_an_error_envelope_stays_usable | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_errors_preserve_identity_and_restore_context | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
+| function_calls/host_instrumented_function_survives_runtime_replacement | y | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
 | function_calls/host_preserves_call_shape_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | covers JS receivers, variadic arguments, and native Promise results |
 | function_calls/host_recording_audit_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | runs the Node half of the independent local SQL audit |
 | function_calls/host_rejects_unsupported_configuration_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers unsupported Python generator/decorator shapes |
@@ -419,6 +425,14 @@ Parity is the share of the 481 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_supplied_empty_and_null_bearing_json_containers_state_the_alias | - | - | - | - | - | - | - | - | - | y | all |  |
 | function_calls/host_supplied_json_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
 | function_calls/host_thread_context_handoff_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | covers Python ContextVar handoff to a thread pool |
+| function_calls/host_value_back_decodes_after_baml_collects_garbage | - | - | - | - | y | - | y | y | y | y | all |  |
+| function_calls/host_value_decoded_twice_is_one_value | - | - | - | - | - | - | - | y | y | y | all |  |
+| function_calls/host_values_come_back_inside_a_list | - | - | - | - | y | - | y | y | - | - | all |  |
+| function_calls/host_values_of_a_rolled_back_call_give_back_only_its_references | - | - | - | - | y | - | - | - | - | y | all |  |
+| function_calls/host_values_raised_by_a_callback_are_given_back | - | - | - | - | - | - | - | - | - | y | all |  |
+| function_calls/host_values_round_trip_as_the_same_value | - | - | - | - | y | - | y | y | - | y | all |  |
+| function_calls/host_values_sent_again_stay_the_same_value | - | - | - | - | - | - | y | - | - | - | all |  |
+| function_calls/host_values_sent_twice_are_one_value_to_baml | - | - | - | - | y | - | y | y | - | y | all |  |
 | function_calls/instance_method_cancellation_returns_exact_context_error | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_media_receiver_default_and_ownership_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/instance_method_optional_arguments | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -517,6 +531,12 @@ Parity is the share of the 481 test IDs declared in `python_pydantic2` that are 
 | function_calls/raises_single_throws | y | - | - | - | y | - | y | - | y | - | all |  |
 | function_calls/raises_summary_precedes_raises_block | y | - | - | - | y | - | y | - | y | - | all |  |
 | function_calls/raises_union_throws_lists_all_names | y | - | - | - | y | - | y | - | y | - | all |  |
+| function_calls/references_a_callback_receives_and_returns_the_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_a_field_holds_the_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_a_returned_instance_passed_back_is_the_same_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_a_union_selects_the_instance_arm | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_containers_hold_the_instance | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/references_one_engine_instance_is_one_reference | y | y | y | y | y | - | y | y | y | y | all |  |
 | function_calls/reflect_facade_builds_runtime_declarations_and_decodes_their_instances | - | - | - | - | - | - | - | y | - | - | go | Go's hand-written reflect facade; the host_reflect fixture that would cover it does not compile |
 | function_calls/reflected_type_closed_dynamic_unions_and_callback | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/reflected_type_composes_through_optional_containers_and_classes | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -636,6 +656,7 @@ Parity is the share of the 481 test IDs declared in `python_pydantic2` that are 
 | integration/generics_generated_surface_rejects_ambiguous_generic_calls | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific generated-surface compile coverage |
 | integration/host_callable_hof_receives_a_baml_closure | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
 | integration/host_callables_callback_faults_complete_by_whose_they_are | - | - | - | - | - | y | - | - | - | - | csharp | C# completion-contract coverage executes through its native integration harness |
+| integration/host_callables_host_values_are_given_back_once_unreferenced | - | - | - | - | - | y | - | - | - | - | csharp | observes the C# host registry draining through the native release callback |
 | integration/host_callables_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result | - | - | - | - | - | y | - | - | - | - | csharp | C# measures typed lists and class chains at the wire's exact limit |
 | integration/host_callables_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument | - | - | - | - | - | y | - | - | - | - | csharp | C# measures typed lists and class chains at the wire's exact limit |
 | integration/media_executes_media_in_both_directions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
@@ -1064,5 +1085,116 @@ Parity is the share of the 481 test IDs declared in `python_pydantic2` that are 
 
 ## Baseline comparison
 
-No required coverage pairs changed.
+### Newly missing required pairs
+
+- `function_calls/generic_references_method_binds_the_class_type_argument_from_its_receiver` in `cpp`
+- `function_calls/generic_references_method_binds_the_class_type_argument_from_its_receiver` in `csharp`
+- `function_calls/generic_references_one_engine_instance_is_one_reference` in `cpp`
+- `function_calls/generic_references_one_engine_instance_is_one_reference` in `csharp`
+- `function_calls/generic_references_reference_carries_its_type_arguments` in `cpp`
+- `function_calls/generic_references_reference_carries_its_type_arguments` in `csharp`
+- `function_calls/host_callables_a_cancel_token_dies_with_its_runtime` in `cpp`
+- `function_calls/host_callables_a_cancel_token_dies_with_its_runtime` in `csharp`
+- `function_calls/host_callables_a_cancel_token_dies_with_its_runtime` in `go`
+- `function_calls/host_callables_a_cancel_token_dies_with_its_runtime` in `java`
+- `function_calls/host_callables_a_cancel_token_dies_with_its_runtime` in `python_pydantic2`
+- `function_calls/host_callables_a_cancel_token_dies_with_its_runtime` in `rust`
+- `function_calls/host_callables_a_cancel_token_dies_with_its_runtime` in `swift`
+- `function_calls/host_callables_raised_exception_is_released_after_its_round_trip` in `cpp`
+- `function_calls/host_callables_raised_exception_is_released_after_its_round_trip` in `csharp`
+- `function_calls/host_callables_raised_exception_is_released_after_its_round_trip` in `go`
+- `function_calls/host_callables_raised_exception_is_released_after_its_round_trip` in `python_pydantic2`
+- `function_calls/host_callables_raised_exception_is_released_after_its_round_trip` in `rust`
+- `function_calls/host_callables_raised_exception_is_released_after_its_round_trip` in `swift`
+- `function_calls/host_callables_raised_exception_is_released_after_its_round_trip` in `typescript_node`
+- `function_calls/host_callables_raised_exception_is_released_after_its_round_trip` in `typescript_web_chromium`
+- `function_calls/host_callables_raised_exception_is_released_after_its_round_trip` in `typescript_web_cloudflare_workers`
+- `function_calls/host_error_in_an_error_envelope_stays_usable` in `cpp`
+- `function_calls/host_error_in_an_error_envelope_stays_usable` in `csharp`
+- `function_calls/host_error_in_an_error_envelope_stays_usable` in `java`
+- `function_calls/host_error_in_an_error_envelope_stays_usable` in `python_pydantic2`
+- `function_calls/host_error_in_an_error_envelope_stays_usable` in `rust`
+- `function_calls/host_error_in_an_error_envelope_stays_usable` in `swift`
+- `function_calls/host_error_in_an_error_envelope_stays_usable` in `typescript_node`
+- `function_calls/host_error_in_an_error_envelope_stays_usable` in `typescript_web_chromium`
+- `function_calls/host_error_in_an_error_envelope_stays_usable` in `typescript_web_cloudflare_workers`
+- `function_calls/host_instrumented_function_survives_runtime_replacement` in `cpp`
+- `function_calls/host_instrumented_function_survives_runtime_replacement` in `csharp`
+- `function_calls/host_instrumented_function_survives_runtime_replacement` in `go`
+- `function_calls/host_instrumented_function_survives_runtime_replacement` in `java`
+- `function_calls/host_instrumented_function_survives_runtime_replacement` in `rust`
+- `function_calls/host_instrumented_function_survives_runtime_replacement` in `swift`
+- `function_calls/host_value_back_decodes_after_baml_collects_garbage` in `csharp`
+- `function_calls/host_value_back_decodes_after_baml_collects_garbage` in `python_pydantic2`
+- `function_calls/host_value_back_decodes_after_baml_collects_garbage` in `typescript_node`
+- `function_calls/host_value_back_decodes_after_baml_collects_garbage` in `typescript_web_chromium`
+- `function_calls/host_value_back_decodes_after_baml_collects_garbage` in `typescript_web_cloudflare_workers`
+- `function_calls/host_value_decoded_twice_is_one_value` in `cpp`
+- `function_calls/host_value_decoded_twice_is_one_value` in `csharp`
+- `function_calls/host_value_decoded_twice_is_one_value` in `python_pydantic2`
+- `function_calls/host_value_decoded_twice_is_one_value` in `rust`
+- `function_calls/host_value_decoded_twice_is_one_value` in `typescript_node`
+- `function_calls/host_value_decoded_twice_is_one_value` in `typescript_web_chromium`
+- `function_calls/host_value_decoded_twice_is_one_value` in `typescript_web_cloudflare_workers`
+- `function_calls/host_values_come_back_inside_a_list` in `csharp`
+- `function_calls/host_values_come_back_inside_a_list` in `java`
+- `function_calls/host_values_come_back_inside_a_list` in `python_pydantic2`
+- `function_calls/host_values_come_back_inside_a_list` in `swift`
+- `function_calls/host_values_come_back_inside_a_list` in `typescript_node`
+- `function_calls/host_values_come_back_inside_a_list` in `typescript_web_chromium`
+- `function_calls/host_values_come_back_inside_a_list` in `typescript_web_cloudflare_workers`
+- `function_calls/host_values_of_a_rolled_back_call_give_back_only_its_references` in `csharp`
+- `function_calls/host_values_of_a_rolled_back_call_give_back_only_its_references` in `go`
+- `function_calls/host_values_of_a_rolled_back_call_give_back_only_its_references` in `java`
+- `function_calls/host_values_of_a_rolled_back_call_give_back_only_its_references` in `python_pydantic2`
+- `function_calls/host_values_of_a_rolled_back_call_give_back_only_its_references` in `rust`
+- `function_calls/host_values_of_a_rolled_back_call_give_back_only_its_references` in `typescript_node`
+- `function_calls/host_values_of_a_rolled_back_call_give_back_only_its_references` in `typescript_web_chromium`
+- `function_calls/host_values_of_a_rolled_back_call_give_back_only_its_references` in `typescript_web_cloudflare_workers`
+- `function_calls/host_values_raised_by_a_callback_are_given_back` in `cpp`
+- `function_calls/host_values_raised_by_a_callback_are_given_back` in `csharp`
+- `function_calls/host_values_raised_by_a_callback_are_given_back` in `go`
+- `function_calls/host_values_raised_by_a_callback_are_given_back` in `java`
+- `function_calls/host_values_raised_by_a_callback_are_given_back` in `python_pydantic2`
+- `function_calls/host_values_raised_by_a_callback_are_given_back` in `rust`
+- `function_calls/host_values_raised_by_a_callback_are_given_back` in `typescript_node`
+- `function_calls/host_values_raised_by_a_callback_are_given_back` in `typescript_web_chromium`
+- `function_calls/host_values_raised_by_a_callback_are_given_back` in `typescript_web_cloudflare_workers`
+- `function_calls/host_values_round_trip_as_the_same_value` in `csharp`
+- `function_calls/host_values_round_trip_as_the_same_value` in `java`
+- `function_calls/host_values_round_trip_as_the_same_value` in `python_pydantic2`
+- `function_calls/host_values_round_trip_as_the_same_value` in `typescript_node`
+- `function_calls/host_values_round_trip_as_the_same_value` in `typescript_web_chromium`
+- `function_calls/host_values_round_trip_as_the_same_value` in `typescript_web_cloudflare_workers`
+- `function_calls/host_values_sent_again_stay_the_same_value` in `cpp`
+- `function_calls/host_values_sent_again_stay_the_same_value` in `csharp`
+- `function_calls/host_values_sent_again_stay_the_same_value` in `go`
+- `function_calls/host_values_sent_again_stay_the_same_value` in `java`
+- `function_calls/host_values_sent_again_stay_the_same_value` in `python_pydantic2`
+- `function_calls/host_values_sent_again_stay_the_same_value` in `swift`
+- `function_calls/host_values_sent_again_stay_the_same_value` in `typescript_node`
+- `function_calls/host_values_sent_again_stay_the_same_value` in `typescript_web_chromium`
+- `function_calls/host_values_sent_again_stay_the_same_value` in `typescript_web_cloudflare_workers`
+- `function_calls/host_values_sent_twice_are_one_value_to_baml` in `csharp`
+- `function_calls/host_values_sent_twice_are_one_value_to_baml` in `java`
+- `function_calls/host_values_sent_twice_are_one_value_to_baml` in `python_pydantic2`
+- `function_calls/host_values_sent_twice_are_one_value_to_baml` in `typescript_node`
+- `function_calls/host_values_sent_twice_are_one_value_to_baml` in `typescript_web_chromium`
+- `function_calls/host_values_sent_twice_are_one_value_to_baml` in `typescript_web_cloudflare_workers`
+- `function_calls/references_a_callback_receives_and_returns_the_instance` in `csharp`
+- `function_calls/references_a_field_holds_the_instance` in `csharp`
+- `function_calls/references_a_returned_instance_passed_back_is_the_same_instance` in `csharp`
+- `function_calls/references_a_union_selects_the_instance_arm` in `csharp`
+- `function_calls/references_containers_hold_the_instance` in `csharp`
+- `function_calls/references_one_engine_instance_is_one_reference` in `csharp`
+
+### Resolved baseline gaps
+
+- `function_calls/host_callables_cancels_through_the_originating_runtime_after_runtime_replacement` in `cpp`
+- `function_calls/host_callables_cancels_through_the_originating_runtime_after_runtime_replacement` in `csharp`
+- `function_calls/host_callables_cancels_through_the_originating_runtime_after_runtime_replacement` in `go`
+- `function_calls/host_callables_cancels_through_the_originating_runtime_after_runtime_replacement` in `java`
+- `function_calls/host_callables_cancels_through_the_originating_runtime_after_runtime_replacement` in `python_pydantic2`
+- `function_calls/host_callables_cancels_through_the_originating_runtime_after_runtime_replacement` in `rust`
+- `function_calls/host_callables_cancels_through_the_originating_runtime_after_runtime_replacement` in `swift`
 

@@ -7,7 +7,6 @@ use std::{
     },
 };
 
-use bex_project::RustDataArc as _;
 use bridge_cffi::baml_bridge::cffi::{
     BamlHandle, BamlHandleType, BamlOutboundResult, CallFunctionArgs, InboundMapEntry,
     InboundValue, InvocationOptions, TraceSelection, baml_outbound_result, baml_outbound_value,
@@ -53,13 +52,24 @@ fn request(name: &str) -> CallFunctionArgs {
         ..Default::default()
     }
 }
+/// An ordinary value row: a handle a host may pass as an application value.
+fn ordinary_row() -> CffiHandleTableEntry {
+    CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::Media(
+        bex_project::MediaValue::from_url(
+            bex_project::ConcreteMediaKind::Image,
+            "https://example.com/",
+            None,
+        ),
+    ))
+}
+
 fn handle_arg(key: u64) -> InboundMapEntry {
     InboundMapEntry {
         key: Some(Key::StringKey("unused".into())),
         value: Some(InboundValue {
             value: Some(Value::Handle(BamlHandle {
                 key,
-                handle_type: BamlHandleType::UntaggedRustData as i32,
+                handle_type: BamlHandleType::AdtMediaImage as i32,
             })),
             ..Default::default()
         }),
@@ -78,7 +88,7 @@ fn assert_cancelled(bytes: &[u8]) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn raw_invocation_and_callback_lifecycles() {
-    bridge_cffi::initialize_runtime(".", HashMap::from([("main.baml".into(), "function identity() -> int throws never { 7 }\nfunction through_host(callback: () -> int) -> int { callback() }\nfunction reserve() -> trace.ReservedSpan throws never { trace.span().reserve() }".into())])).unwrap();
+    bridge_cffi::initialize_runtime(".", HashMap::from([("main.baml".into(), "function identity() -> int throws never { 7 }\nfunction through_host(callback: () -> int) -> int { callback() }\nfunction reserve() -> trace.ReservedSpan throws never { trace.span().reserve() }\nfunction no_capture() -> trace.Options throws never { trace.empty_span() }".into())])).unwrap();
 
     let id = bridge_cffi::new_function_call_id();
     assert_ne!(id, 0);
@@ -92,9 +102,7 @@ async fn raw_invocation_and_callback_lifecycles() {
     // Rejected legacy/control envelopes retire allocation and wire owners.
     let mut legacy = request("identity");
     legacy.invocation = None;
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
-        bex_project::TraceOptionsData::default(),
-    )));
+    let key = HANDLE_TABLE.insert(ordinary_row());
     legacy.kwargs.push(handle_arg(key.get()));
     assert!(bridge_cffi::decode_invocation_request(&legacy.encode_to_vec()).is_err());
     assert!(HANDLE_TABLE.resolve(key).is_none());
@@ -107,9 +115,7 @@ async fn raw_invocation_and_callback_lifecycles() {
     assert!(!bridge_cffi::cancel_function_call_by_id(unknown.call_id));
 
     let mut malformed = request("identity");
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
-        bex_project::TraceOptionsData::default(),
-    )));
+    let key = HANDLE_TABLE.insert(ordinary_row());
     malformed.kwargs.push(handle_arg(key.get()));
     let mut bytes = malformed.encode_to_vec();
     bytes.push(0xff); // Invalid trailing protobuf key after the allocation and owner.
@@ -118,9 +124,7 @@ async fn raw_invocation_and_callback_lifecycles() {
     assert!(!bridge_cffi::cancel_function_call_by_id(malformed.call_id));
 
     // Both control capability kinds reject ordinary, stale and foreign keys.
-    let wrong = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
-        bex_project::TraceOptionsData::default(),
-    )));
+    let wrong = HANDLE_TABLE.insert(ordinary_row());
     let mut call = request("identity");
     call.invocation.as_mut().unwrap().inherited_state = wrong.get();
     assert!(bridge_cffi::decode_invocation_request(&call.encode_to_vec()).is_err());
@@ -151,35 +155,49 @@ async fn raw_invocation_and_callback_lifecycles() {
     let Some(baml_outbound_result::Result::Ok(value)) = envelope.result else {
         panic!("reserve failed: {envelope:?}")
     };
-    let Some(baml_outbound_value::Value::ClassValue(class)) = &value.value else {
-        panic!("expected ReservedSpan")
-    };
-    let handle = class
-        .fields
-        .iter()
-        .find(|field| field.key == "_handle")
-        .unwrap()
-        .value
-        .as_ref()
-        .unwrap();
-    let Some(baml_outbound_value::Value::HandleValue(handle)) = &handle.value else {
-        panic!("expected reservation data")
+    let Some(baml_outbound_value::Value::HandleValue(handle)) = &value.value else {
+        panic!("a ReservedSpan crosses as a reference")
     };
     let entry = HANDLE_TABLE.resolve(table_key(handle.key)).unwrap();
-    let CffiHandleTableEntry::RustData(data) = &*entry else {
-        panic!("expected reservation RustData")
+    let CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::TaggedHeapHandle {
+        kind:
+            bex_project::TaggedHeapHandleKind::TraceControl(bex_project::TraceControl::Reservation(
+                reservation,
+            )),
+        ..
+    }) = &*entry
+    else {
+        panic!("expected a reference carrying the reservation")
     };
-    let reservation = data
-        .clone()
-        .downcast_payload::<bex_project::ReservedSpanData>()
-        .unwrap();
     let reservation_key = HANDLE_TABLE.insert(CffiHandleTableEntry::TraceReservation(
         TraceReservationHandle {
             owner: bridge_cffi::get_runtime().unwrap(),
-            reservation,
+            reservation: std::sync::Arc::clone(reservation),
         },
     ));
     bridge_ctypes::release_outbound_references(value);
+
+    // A host function's explicit options keep their capture requests: an
+    // empty span requests none, where bare instrumentation requests outputs
+    // and errors.
+    let no_capture = bridge_cffi::execute_invocation(
+        bridge_cffi::decode_invocation_request(&request("no_capture").encode_to_vec()).unwrap(),
+    )
+    .await;
+    let envelope = BamlOutboundResult::decode(no_capture.as_slice()).unwrap();
+    let Some(baml_outbound_result::Result::Ok(options)) = envelope.result else {
+        panic!("no_capture failed: {envelope:?}")
+    };
+    let Some(baml_outbound_value::Value::HandleValue(handle)) = &options.value else {
+        panic!("trace.Options crosses as a reference")
+    };
+    let resolved = bridge_cffi::host_instrumentation::options(handle.key).unwrap();
+    assert_eq!(
+        (resolved.inputs, resolved.output, resolved.error),
+        (Some(false), Some(false), Some(false))
+    );
+    bridge_ctypes::release_outbound_references(options);
+
     let mut cancelled_call = request("identity");
     cancelled_call.invocation.as_mut().unwrap().trace = Some(TraceSelection {
         selection: Some(trace_selection::Selection::Reservation(
@@ -313,16 +331,14 @@ async fn raw_invocation_and_callback_lifecycles() {
     HANDLE_TABLE.release(reservation_key);
 
     // Late completion reports actual exit and releases its transferred value.
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
-        bex_project::TraceOptionsData::default(),
-    )));
+    let key = HANDLE_TABLE.insert(ordinary_row());
     let late = bridge_ctypes::baml_bridge::cffi::HostCallCompletion {
         outcome: Some(
             bridge_ctypes::baml_bridge::cffi::host_call_completion::Outcome::Returned(
                 InboundValue {
                     value: Some(Value::Handle(BamlHandle {
                         key: key.get(),
-                        handle_type: BamlHandleType::UntaggedRustData as i32,
+                        handle_type: BamlHandleType::AdtMediaImage as i32,
                     })),
                     ..Default::default()
                 },
@@ -348,9 +364,7 @@ fn a_kwargs_fault_releases_the_type_args_transfers() {
     use bridge_cffi::baml_bridge::cffi::{BamlTy, BamlTyArg, BamlTyClass, baml_ty, baml_ty_class};
     let mut faulty = request("identity");
     faulty.kwargs.push(handle_arg(0));
-    let declaration = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
-        bex_project::TraceOptionsData::default(),
-    )));
+    let declaration = HANDLE_TABLE.insert(ordinary_row());
     faulty.type_args.push(BamlTyArg {
         type_var: "T".into(),
         type_value: Some(BamlTy {

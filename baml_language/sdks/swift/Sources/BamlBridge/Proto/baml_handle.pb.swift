@@ -27,28 +27,19 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
 ///
 /// Stdlib symbols with special host-side decoding rules today:
 ///   - baml.media.{Image,Audio,Video,Pdf}     -> ADT_MEDIA_*
-///   - baml.llm.PromptAst                     -> ADT_PROMPT_AST
+///   - ai.Prompt                              -> ADT_PROMPT_AST
 ///   - ai.stream.Stream                       -> ADT_TAGGED_HEAP_HANDLE
 ///   - ai.FunctionSpec                        -> ADT_FUNCTION_SPEC
-///   - runtime-created nominal values         -> ADT_RUNTIME_VALUE
+///   - `@@rust_type` and run-time instances  -> ADT_RUNTIME_VALUE
 ///
 /// `ADT_TAGGED_HEAP_HANDLE` signals "the on-the-wire payload is a
 /// `BamlOutboundHandle` (outbound) / `BamlHandle` (inbound) whose
 /// engine-side `BexExternalAdt` is a `TaggedHeapHandle { ty, heap_handle }`."
 /// The outbound `BamlOutboundHandle.name` field carries the underlying
 /// class + concrete generic args.
-///
-/// Stdlib symbols TODO (decode to bare BamlPyHandle today):
-///   - baml.io.File, baml.net.Socket, baml.http.{Response,SseStream}
-///   - baml.glob.Glob, baml.sap.ParseCache
-///
-/// To enumerate all candidates: `rg '\$rust_type' baml_language/crates/baml_builtins2/`.
 nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.CaseIterable {
   typealias RawValue = Int
   case handleUnspecified // = 0
-
-  /// CffiHandleTableEntry::RustData(_)
-  case untaggedRustData // = 1
 
   /// CffiHandleTableEntry::BexHeapHandle(_)
   case untaggedBexHeap // = 2
@@ -57,9 +48,7 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
   case adtMediaAudio // = 7
   case adtMediaVideo // = 8
   case adtMediaPdf // = 9
-  case adtMediaGeneric // = 10
   case adtPromptAst // = 11
-  case adtType // = 13
   case adtTaggedHeapHandle // = 14
 
   /// Host-owned callable referenced via per-bridge HostValueRegistry.
@@ -81,17 +70,24 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
   /// heap object.
   case adtFunctionSpec // = 17
 
-  /// A live instance the engine alone builds: a runtime-created class or enum
-  /// value, or a standard-library capability whose fields are the runtime's
-  /// internals (reflect.Package, reflect.Session, reflect.CompileArtifact).
-  /// The host must not resolve its display name through a generated typemap;
-  /// only the originating engine can interpret the rooted declaration identity.
+  /// A live instance the engine alone builds: an instance of a `@@rust_type`
+  /// class, a standard-library capability whose fields are the runtime's
+  /// internals (reflect.Package, reflect.Session, reflect.CompileArtifact), or
+  /// a runtime-created class or enum value. Its `ty` names the class with its
+  /// type arguments, and a host may pick a compiled class's wrapper by it; a
+  /// runtime declaration's name is display text no generated typemap resolves.
+  /// A handle sent back carries no statement: the engine judges the live object.
   case adtRuntimeValue // = 18
 
   /// Internal BEP-81 capabilities. They belong to their issuing runtime and
   /// cannot be supplied as ordinary application values.
   case invocationState // = 19
   case traceReservation // = 20
+
+  /// The engine's hold on a host value it sent the host: the `pin` of a
+  /// `BamlOutboundHandle`, released with the result that carried it. Never a
+  /// value.
+  case hostValuePin // = 21
   case UNRECOGNIZED(Int)
 
   init() {
@@ -101,16 +97,13 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
   init?(rawValue: Int) {
     switch rawValue {
     case 0: self = .handleUnspecified
-    case 1: self = .untaggedRustData
     case 2: self = .untaggedBexHeap
     case 5: self = .functionRef
     case 6: self = .adtMediaImage
     case 7: self = .adtMediaAudio
     case 8: self = .adtMediaVideo
     case 9: self = .adtMediaPdf
-    case 10: self = .adtMediaGeneric
     case 11: self = .adtPromptAst
-    case 13: self = .adtType
     case 14: self = .adtTaggedHeapHandle
     case 15: self = .hostValueCallable
     case 16: self = .hostValueOpaque
@@ -118,6 +111,7 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     case 18: self = .adtRuntimeValue
     case 19: self = .invocationState
     case 20: self = .traceReservation
+    case 21: self = .hostValuePin
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -125,16 +119,13 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
   var rawValue: Int {
     switch self {
     case .handleUnspecified: return 0
-    case .untaggedRustData: return 1
     case .untaggedBexHeap: return 2
     case .functionRef: return 5
     case .adtMediaImage: return 6
     case .adtMediaAudio: return 7
     case .adtMediaVideo: return 8
     case .adtMediaPdf: return 9
-    case .adtMediaGeneric: return 10
     case .adtPromptAst: return 11
-    case .adtType: return 13
     case .adtTaggedHeapHandle: return 14
     case .hostValueCallable: return 15
     case .hostValueOpaque: return 16
@@ -142,6 +133,7 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     case .adtRuntimeValue: return 18
     case .invocationState: return 19
     case .traceReservation: return 20
+    case .hostValuePin: return 21
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -149,16 +141,13 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
   // The compiler won't synthesize support with the UNRECOGNIZED case.
   static let allCases: [BamlBridge_Cffi_V1_BamlHandleType] = [
     .handleUnspecified,
-    .untaggedRustData,
     .untaggedBexHeap,
     .functionRef,
     .adtMediaImage,
     .adtMediaAudio,
     .adtMediaVideo,
     .adtMediaPdf,
-    .adtMediaGeneric,
     .adtPromptAst,
-    .adtType,
     .adtTaggedHeapHandle,
     .hostValueCallable,
     .hostValueOpaque,
@@ -166,6 +155,7 @@ nonisolated enum BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf.Enum, Swift.Ca
     .adtRuntimeValue,
     .invocationState,
     .traceReservation,
+    .hostValuePin,
   ]
 
 }
@@ -189,7 +179,7 @@ nonisolated struct BamlBridge_Cffi_V1_BamlHandle: Sendable {
 fileprivate nonisolated let _protobuf_package = "baml_bridge.cffi.v1"
 
 nonisolated extension BamlBridge_Cffi_V1_BamlHandleType: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HANDLE_UNSPECIFIED\0\u{1}UNTAGGED_RUST_DATA\0\u{1}UNTAGGED_BEX_HEAP\0\u{2}\u{3}FUNCTION_REF\0\u{1}ADT_MEDIA_IMAGE\0\u{1}ADT_MEDIA_AUDIO\0\u{1}ADT_MEDIA_VIDEO\0\u{1}ADT_MEDIA_PDF\0\u{1}ADT_MEDIA_GENERIC\0\u{1}ADT_PROMPT_AST\0\u{2}\u{2}ADT_TYPE\0\u{1}ADT_TAGGED_HEAP_HANDLE\0\u{1}HOST_VALUE_CALLABLE\0\u{1}HOST_VALUE_OPAQUE\0\u{1}ADT_FUNCTION_SPEC\0\u{1}ADT_RUNTIME_VALUE\0\u{1}INVOCATION_STATE\0\u{1}TRACE_RESERVATION\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0HANDLE_UNSPECIFIED\0\u{2}\u{2}UNTAGGED_BEX_HEAP\0\u{2}\u{3}FUNCTION_REF\0\u{1}ADT_MEDIA_IMAGE\0\u{1}ADT_MEDIA_AUDIO\0\u{1}ADT_MEDIA_VIDEO\0\u{1}ADT_MEDIA_PDF\0\u{2}\u{2}ADT_PROMPT_AST\0\u{2}\u{3}ADT_TAGGED_HEAP_HANDLE\0\u{1}HOST_VALUE_CALLABLE\0\u{1}HOST_VALUE_OPAQUE\0\u{1}ADT_FUNCTION_SPEC\0\u{1}ADT_RUNTIME_VALUE\0\u{1}INVOCATION_STATE\0\u{1}TRACE_RESERVATION\0\u{1}HOST_VALUE_PIN\0")
 }
 
 nonisolated extension BamlBridge_Cffi_V1_BamlHandle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

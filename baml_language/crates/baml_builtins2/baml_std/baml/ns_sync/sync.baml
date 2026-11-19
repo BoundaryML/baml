@@ -101,13 +101,19 @@ function _held<K>(key: K) -> K throws never {
 /// returns its place in line.
 //baml:mut_vm
 //baml:fallible
-function _enter(key: reflect.AnyClass | reflect.AnyClass[]) -> $rust_type? throws never {
+function _enter(key: reflect.AnyClass | reflect.AnyClass[]) -> Ticket? throws never {
     $rust_function
 }
 
 /// (internal) Waits until the keys queued for by `_enter` are this task's.
-function _wait(ticket: $rust_type) -> null throws never {
+//baml:runtime_only
+function _wait(ticket: Ticket) -> null throws never {
     $rust_io_function
+}
+
+/// (internal) A task's place in line for the keys `_enter` queued it for.
+class Ticket {
+    @@rust_type("Ticket")
 }
 
 /// (internal) Undoes one `_enter` of `key` by this task.
@@ -142,8 +148,6 @@ function _exit(key: reflect.AnyClass | reflect.AnyClass[]) -> void throws never 
 /// }
 /// ```
 class Semaphore {
-    _handle: $rust_type,
-
     /// Creates a semaphore with `capacity` free slots.
     ///
     /// # Throws
@@ -184,19 +188,18 @@ class Semaphore {
     /// Waiting is a cancellation checkpoint; taking a free slot is not. A task
     /// cancelled while waiting holds no slot.
     function acquire(self) -> Permit throws never {
-        let held = self._admit();
+        let permit = self._admit();
         let acquired = false;
         // Armed before the wait, so a wait that ends in cancellation leaves
         // the queue, or gives back a slot that raced it.
         defer {
             if (!acquired) {
-                _release_permit(held)
+                permit.release()
             }
         }
-        if (!_admitted(held)) {
-            _wait_permit(held);
+        if (!_admitted(permit)) {
+            _wait_permit(permit);
         }
-        let permit = _permit(held);
         acquired = true;
         permit
     }
@@ -210,19 +213,22 @@ class Semaphore {
     ///
     /// Whatever `fn` throws, after releasing the slot.
     function with<R, E>(self, fn: () -> R throws E) -> R throws E {
-        let held = self._admit();
-        defer { _release_permit(held) }
-        if (!_admitted(held)) {
-            _wait_permit(held);
+        let permit = self._admit();
+        defer { permit.release() }
+        if (!_admitted(permit)) {
+            _wait_permit(permit);
         }
         fn()
     }
 
-    /// (internal) Takes a free slot, or queues for one, and returns the hold.
+    /// (internal) Takes a free slot, or queues for one, and returns the
+    /// permit for it.
     //baml:mut_vm
-    function _admit(self) -> $rust_type throws never {
+    function _admit(self) -> Permit throws never {
         $rust_function
     }
+
+    @@rust_type("Semaphore")
 }
 
 /// One slot of a [`Semaphore`], from `Semaphore.acquire`.
@@ -231,13 +237,14 @@ class Semaphore {
 /// without `release`) gives its slot back when it is garbage collected, which
 /// can be much later.
 class Permit {
-    _handle: $rust_type,
-
-    /// Releases this slot. Releasing it again does nothing.
+    /// Releases this slot, or withdraws it from the queue if it has not been
+    /// granted yet. Releasing it again does nothing.
     //baml:vm
     function release(self) -> void throws never {
         $rust_function
     }
+
+    @@rust_type("Permit")
 }
 
 implements<T, E> root.spawn.Modifier<T, E> for Semaphore {
@@ -246,26 +253,14 @@ implements<T, E> root.spawn.Modifier<T, E> for Semaphore {
     }
 }
 
-/// (internal) Whether the hold from `Semaphore._admit` has its slot.
+/// (internal) Whether the permit from `Semaphore._admit` has its slot.
 //baml:vm
-function _admitted(held: $rust_type) -> bool throws never {
+function _admitted(permit: Permit) -> bool throws never {
     $rust_function
 }
 
-/// (internal) Waits until the hold from `Semaphore._admit` has its slot.
-function _wait_permit(held: $rust_type) -> null throws never {
+/// (internal) Waits until the permit from `Semaphore._admit` has its slot.
+//baml:runtime_only
+function _wait_permit(permit: Permit) -> null throws never {
     $rust_io_function
-}
-
-/// (internal) A permit for the hold from `Semaphore._admit`.
-//baml:mut_vm
-function _permit(held: $rust_type) -> Permit throws never {
-    $rust_function
-}
-
-/// (internal) Releases the hold from `Semaphore._admit`, or withdraws it from
-/// the queue.
-//baml:vm
-function _release_permit(held: $rust_type) -> void throws never {
-    $rust_function
 }

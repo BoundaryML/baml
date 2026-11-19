@@ -99,10 +99,6 @@ class VersionToolTests(unittest.TestCase):
                 + "\n",
             )
         self.write(
-            "baml_language/sdks/typescript/bridge_typescript/dist/native.js",
-            f"if (bindingPackageVersion !== '{version}') {{ throw new Error(); }}\n",
-        )
-        self.write(
             "baml_language/sdks/go/baml_go/version.go",
             f'const ToolchainVersion = "{version}"\n'
             f'const BridgeRuntimeVersion = "v{version}"\n',
@@ -181,24 +177,6 @@ class VersionToolTests(unittest.TestCase):
             "baml_language/sdks/java/gradle-plugin/build.gradle.kts",
             "val bamlVersion = \"fixture\"\nversion = bamlVersion\n",
         )
-        fake_pnpm = self.write(
-            "bin/pnpm",
-            """#!/usr/bin/env python3
-import json
-import pathlib
-import sys
-
-if "build:debug" in sys.argv:
-    root = pathlib.Path.cwd()
-    version = json.loads((root / "package.json").read_text())["version"]
-    output = root / "dist" / "native.js"
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        f"if (bindingPackageVersion !== '{version}') {{ throw new Error(); }}\\n"
-    )
-""",
-        )
-        fake_pnpm.chmod(0o755)
 
     def run_tool(
         self,

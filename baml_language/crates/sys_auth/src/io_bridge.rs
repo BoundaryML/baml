@@ -172,9 +172,8 @@ impl BamlAuthIo {
             )
             .await
             .map_err(|e| e.to_string())?;
-        let text = self
-            .io
-            .http_response_text(&resp)
+        let text = sys_types::resource::HttpBodyResource::text(Arc::clone(&resp._body))
+            .resolve()
             .await
             .map_err(|e| e.to_string())?;
         Ok((u16::try_from(resp.status_code).unwrap_or(0), text))

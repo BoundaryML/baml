@@ -10,7 +10,7 @@ use baml_type::Name;
 use bex_heap::{BexHeap, GcStats, Generation, Tlab};
 use bex_vm_types::{
     Class, ClassField, ForwardRoots, GenericFunction, GlobalIndex, HeapPtr, Object, RealizedTy,
-    RootVisitor, Value, Weak,
+    RootVisitor, RustInstance, RustPayload, TestRustData, Value, Weak,
     types::{
         Edge, EdgeKind, ExportSurface, InterfaceDef, LocalName, MethodImpl, Objects, Package,
         PackageKind, RuntimeImplRule, Slots, TypeAliasDef, TypeValue,
@@ -58,7 +58,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: class_name.clone(),
-            fields: Vec::new(),
+            body: bex_vm_types::ClassBody::Fields(Vec::new()),
             description: None,
             alias: None,
             docstring: None,
@@ -578,7 +578,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
     let field_ty = RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enum_tag));
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
         path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("FieldOwner")),
-        fields: vec![ClassField {
+        body: bex_vm_types::ClassBody::Fields(vec![ClassField {
             name: "value".to_string(),
             field_type: bex_vm_types::RuntimeTy::from(field_ty.clone()),
             field_template: bex_vm_types::TyTemplate::from(field_ty.clone()),
@@ -595,7 +595,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
             json_flatten: false,
             json_rename: None,
             json_omit_null: false,
-        }],
+        }]),
         description: None,
         alias: None,
         docstring: None,
@@ -625,7 +625,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
     let Object::Class(class) = (unsafe { roots[0].get() }) else {
         panic!("root was not the class")
     };
-    let exact = class.fields[0]
+    let exact = class.instance_fields()[0]
         .runtime_type
         .as_ref()
         .expect("field runtime type was lost");
@@ -648,6 +648,141 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         matches!(unsafe { owner.get() }, Object::Package(_)),
         "the declaration's owner does not point at the package"
     );
+}
+
+/// A class with no fields, as a `@@rust_type` class is, allocated at run time.
+fn alloc_tagged_class(
+    tlab: &mut Tlab,
+    name: &str,
+    kind: baml_base::RustPayloadKind,
+    generic_param_count: usize,
+) -> HeapPtr {
+    tlab.alloc(Object::Class(Box::new(Class {
+        path: LocalName::new(Vec::new(), Name::new(name)),
+        body: bex_vm_types::ClassBody::RustType(kind),
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+        stream_done: false,
+        redact: false,
+        declared_crossing: baml_type::ClassCrossing::Opaque,
+        type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
+        cleanup: None,
+        methods: IndexMap::new(),
+        generic_param_count,
+        owner: bex_vm_types::types::Owner::anonymous(),
+        telemetry_definition: bex_vm_types::DefinitionCell::default(),
+    })))
+}
+
+/// A `@@rust_type` instance holds its class by pointer: a collection keeps the
+/// class alive through the instance alone and repoints the instance when the
+/// class moves.
+#[test]
+fn rust_instance_keeps_and_follows_its_class() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+
+    let class = alloc_tagged_class(&mut tlab, "Tagged", baml_base::RustPayloadKind::Foreign, 1);
+    // Reached by nothing: the control for "the class survives through the
+    // instance", not through anything else.
+    let orphan = alloc_tagged_class(&mut tlab, "Orphan", baml_base::RustPayloadKind::Foreign, 1);
+    let instance = tlab.alloc(Object::RustInstance(RustInstance::new(
+        class,
+        bex_vm_types::ThinVec::from([RealizedTy::int()]),
+        RustPayload::Foreign(Arc::new(TestRustData(7))),
+    )));
+
+    let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[instance]) };
+    tlab.invalidate();
+    assert!(
+        forwarding.get(orphan).is_none(),
+        "an unreached class is collected"
+    );
+    let Object::RustInstance(moved) = (unsafe { roots[0].get() }) else {
+        panic!("expected a rust instance")
+    };
+    assert_eq!(
+        Some(moved.class),
+        forwarding.get(class),
+        "the class edge was repointed"
+    );
+    assert_eq!(heap.generation_of(moved.class), Generation::Gen2);
+    let Object::Class(class_object) = (unsafe { moved.class.get() }) else {
+        panic!("the class edge must reach a class")
+    };
+    assert_eq!(class_object.name().to_string(), "Tagged");
+    assert_eq!(&*moved.class_type_args, &[RealizedTy::int()]);
+    let RustPayload::Foreign(payload) = &moved.payload else {
+        panic!("the payload moved with the instance: {:?}", moved.payload)
+    };
+    assert_eq!(
+        payload.downcast_ref::<TestRustData>(),
+        Some(&TestRustData(7))
+    );
+}
+
+/// A `reflect.interface.Implementation` holds the interface it witnesses and
+/// the type it is witnessed at: a collection keeps the interface alive through
+/// the witness alone, and repoints both the pointer and the type's head.
+#[test]
+fn an_interface_witness_keeps_and_follows_its_interface() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let tag = baml_type::typetag::TypeTag::fresh_dynamic();
+    let interface = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
+        path: LocalName::new(Vec::new(), Name::new("Witnessed")),
+        structural_default: None,
+        type_tag: tag,
+        args: Vec::new(),
+        requires: Vec::new(),
+        assoc: Vec::new(),
+        fields: Vec::new(),
+        methods: Vec::new(),
+        owner: HeapPtr::null(),
+    })));
+    let class = alloc_tagged_class(
+        &mut tlab,
+        "Implementation",
+        baml_base::RustPayloadKind::InterfaceWitness,
+        0,
+    );
+    let witness = tlab.alloc(Object::RustInstance(RustInstance::new(
+        class,
+        bex_vm_types::ThinVec::new(),
+        RustPayload::InterfaceWitness(Box::new(bex_vm_types::InterfaceWitness {
+            interface_ptr: interface,
+            interface_ty: RealizedTy::Interface(
+                bex_vm_types::TypeHead::new(interface, tag),
+                Box::new([]),
+                Box::new([]),
+            ),
+            field_links: IndexMap::new(),
+        })),
+    )));
+
+    // Only the witness is a root: the interface is reachable through it alone.
+    let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[witness]) };
+    tlab.invalidate();
+    let moved_interface = forwarding
+        .get(interface)
+        .expect("the interface survives through the witness");
+    let Object::RustInstance(moved) = (unsafe { roots[0].get() }) else {
+        panic!("expected a rust instance")
+    };
+    let RustPayload::InterfaceWitness(moved_witness) = &moved.payload else {
+        panic!("the payload moved with the instance: {:?}", moved.payload)
+    };
+    assert_eq!(moved_witness.interface_ptr, moved_interface);
+    let RealizedTy::Interface(head, ..) = &moved_witness.interface_ty else {
+        panic!("the witnessed type ceased to name an interface")
+    };
+    assert_eq!(head.ptr(), moved_interface, "the type's head was repointed");
+    assert!(matches!(
+        unsafe { moved_interface.get() },
+        Object::Interface(_)
+    ));
 }
 
 /// A runtime-allocated impl rule (a session's `implements` block or an
@@ -813,7 +948,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
     );
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
         path: class_name.clone(),
-        fields: Vec::new(),
+        body: bex_vm_types::ClassBody::Fields(Vec::new()),
         description: None,
         alias: None,
         docstring: None,
@@ -902,7 +1037,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
     let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
         path: class_name,
-        fields: Vec::new(),
+        body: bex_vm_types::ClassBody::Fields(Vec::new()),
         description: None,
         alias: None,
         docstring: None,
@@ -1047,7 +1182,13 @@ fn test_survivor_payload_is_dropped_exactly_once() {
 
     let drops = Arc::new(AtomicUsize::new(0));
     let payload = Arc::new(CountsDrops(Arc::clone(&drops)));
-    let mut roots = vec![tlab.alloc_rust_data(payload.clone())];
+    let class = alloc_tagged_class(&mut tlab, "Tagged", baml_base::RustPayloadKind::Foreign, 0);
+    let instance = tlab.alloc(Object::RustInstance(RustInstance::new(
+        class,
+        bex_vm_types::ThinVec::new(),
+        RustPayload::Foreign(payload.clone()),
+    )));
+    let mut roots = vec![instance];
 
     for _ in 0..4 {
         let (_, new_roots, _) = unsafe { heap.collect_garbage(&roots) };
@@ -1074,10 +1215,18 @@ fn test_heap_teardown_drops_live_payloads() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
     let payload = Arc::new(CountsDrops(Arc::default()));
-    let survivor = tlab.alloc_rust_data(payload.clone());
-    let _ = unsafe { heap.collect_garbage(&[survivor]) };
+    let class = alloc_tagged_class(&mut tlab, "Tagged", baml_base::RustPayloadKind::Foreign, 0);
+    let instance = |tlab: &mut Tlab, class| {
+        tlab.alloc(Object::RustInstance(RustInstance::new(
+            class,
+            bex_vm_types::ThinVec::new(),
+            RustPayload::Foreign(payload.clone()),
+        )))
+    };
+    let survivor = instance(&mut tlab, class);
+    let (_, roots, _) = unsafe { heap.collect_garbage(&[survivor, class]) };
     tlab.invalidate();
-    tlab.alloc_rust_data(payload.clone());
+    instance(&mut tlab, roots[1]);
     assert_eq!(Arc::strong_count(&payload), 3, "one in Gen2, one in Gen0");
 
     drop(tlab);
@@ -1097,7 +1246,7 @@ fn class_with_cleanup(name: &str, cleanup: bex_vm_types::HeapPtr) -> Class {
     );
     Class {
         path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
-        fields: Vec::new(),
+        body: bex_vm_types::ClassBody::Fields(Vec::new()),
         description: None,
         alias: None,
         docstring: None,

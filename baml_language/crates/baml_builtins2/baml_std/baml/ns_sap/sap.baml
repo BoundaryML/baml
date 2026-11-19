@@ -6,8 +6,6 @@
 /// (internal) Cached type and assertion data used by incremental schema-aligned
 /// parsing.
 class _ParseCache<T> {
-    _data: $rust_type,
-
     //baml:mut_vm
     //baml:may_yield
     /// (internal) Final SAP operation shared by streams and public SAP.
@@ -21,6 +19,8 @@ class _ParseCache<T> {
     function _parse_partial(self, json: string) -> T | _NoYield throws root.errors.LlmClient {
         $rust_function
     }
+
+    @@rust_type
 }
 
 /// (internal) sentinel returned when an incremental parse needs more text.

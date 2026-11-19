@@ -410,10 +410,8 @@ pub enum DiagnosticId {
     /// A binding, item, type parameter, or namespace was named `root`, the
     /// path to the package itself.
     RootIsReserved,
-    /// A class literal named a class that holds a `$rust_type` field. That
-    /// state is created only by the class's own native functions; a literal
-    /// could only copy a handle out of another value, which relabels what the
-    /// handle means (its type arguments, or its class).
+    /// A class literal named a `@@rust_type` class. Its state is created only
+    /// by the class's own native functions.
     CannotConstructOpaqueClass,
     /// Reserved (E0178): a value path into a package served from its
     /// compiled interface that names a declaration the interface does not
@@ -427,6 +425,9 @@ pub enum DiagnosticId {
     ServedInterfaceExportsFunctionsOnly,
     /// A constant pattern passed to `baml.regex.new` does not compile (E0174).
     InvalidRegexPattern,
+    /// A `@@rust_type` class declared a field. Its state lives in Rust, so it
+    /// has no fields: a field there would be a second, unrelated store (E0186).
+    RustTypeClassHasFields,
     /// An unparenthesized function/union boundary has two syntactic owners (E0175).
     AmbiguousUnion,
     /// A builtin the compiler lowers where it is called (`log.info`,
@@ -698,6 +699,7 @@ impl DiagnosticId {
             DiagnosticId::InvalidJsonAttribute => "E0186",
             DiagnosticId::LoopControlOutsideLoop => "E0187",
             DiagnosticId::LoopControlInLoopHeader => "E0188",
+            DiagnosticId::RustTypeClassHasFields => "E0189",
         }
     }
 }

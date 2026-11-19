@@ -18,7 +18,6 @@ from .baml_py import (
     _begin_host_invocation,
     _define_host_marker,
     _validate_host_options,
-    BamlPyHandle,
 )
 from ._host_marker import consume_adoption, register_marker
 from .typemap import get_type_map
@@ -34,26 +33,18 @@ def _options_handle(options):
         return None
     if not isinstance(options, get_type_map().get_class("trace.Options")):
         raise TraceUsageError("instrument accepts generated trace.Options or None")
-    handle = next(
-        (
-            getattr(options, name)
-            for name, field in type(options).model_fields.items()
-            if (field.serialization_alias or field.alias or name) == "_handle"
-        ),
-        None,
-    )
-    if not isinstance(handle, BamlPyHandle):
-        raise TraceUsageError("instrument options must contain a live generated handle")
-    return handle
+    # The options are a reference to the runtime's instance.
+    return options._to_pyhandle()
 
 
-def _enter(definition, options, caller, inputs):
+def _enter(marker, caller, inputs):
     active = _current_execution_context.get()
     try:
+        # The marker holds the definition and options, read once when the
+        # function was instrumented.
         execution, state, cancel = _begin_host_invocation(
-            definition,
+            marker,
             active._state if active is not None else None,
-            options,
             caller,
             inputs,
         )
@@ -179,7 +170,7 @@ def instrument(function_or_options=None, *, name=None):
                     if consume_adoption(marker):
                         return await function(*args, **kwargs)
                     execution, token = _enter(
-                        definition, options, _caller_site(), inputs(args, kwargs)
+                        marker, _caller_site(), inputs(args, kwargs)
                     )
                     outcome = "ok"
                     result = None
@@ -204,9 +195,7 @@ def instrument(function_or_options=None, *, name=None):
             with _trace_options_scope(options):
                 if consume_adoption(marker):
                     return function(*args, **kwargs)
-                execution, token = _enter(
-                    definition, options, _caller_site(), inputs(args, kwargs)
-                )
+                execution, token = _enter(marker, _caller_site(), inputs(args, kwargs))
                 outcome = "ok"
                 result = None
                 try:

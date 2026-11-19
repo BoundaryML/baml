@@ -30,15 +30,15 @@ pub use bex_engine::{
     CallbackHostInvocation, HostCallSite, HostDefinition, HostInvocation, capture_callback_inputs,
 };
 pub use bex_external_types::{
-    AnnotationTy, BexExternalAdt, BexExternalValue, Bounded, Handle, HostCallCompletion,
-    HostException, HostKey, HostOutcome, HostReleaseFn, HostValueArc, HostValueKind, MediaKind,
-    RuntimeTy, TaggedHeapHandleKind, WeakHeapRef, WireFunctionParamTy, WireHead, WireTy,
-    host_release_dispatch, runtime_ty_structurally_equal, selected_arm_equal,
-    try_convert_rust_data,
+    AnnotationTy, BexExternalAdt, BexExternalValue, Bounded, CancelTokenCapability,
+    ConcreteMediaKind, Handle, HostCallCompletion, HostException, HostKey, HostOutcome,
+    HostReleaseFn, HostValueArc, HostValueKind, MediaKind, RuntimeTy, TaggedHeapHandleKind,
+    TraceControl, WeakHeapRef, WireFunctionParamTy, WireHead, WireTy, host_release_dispatch,
+    runtime_ty_structurally_equal, selected_arm_equal,
 };
 pub use bex_vm_types::{
     BexRustData, HeapPtr, MediaContent, MediaValue, Meter, Program, PromptAst, PromptAstSimple,
-    RetainedBytes, RustDataArc, TestRustData,
+    RetainedBytes, RustDataArc, RustPayload, TestRustData,
     trace::{HostMarker, ReservedSpanData, TraceOptionsData},
 };
 use indexmap::IndexMap;

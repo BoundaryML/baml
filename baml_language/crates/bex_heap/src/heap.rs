@@ -67,7 +67,8 @@ pub struct HeapStats {
 /// BEP-042: the instances a collection checks for finalization, so it need not
 /// walk every object in from-space.
 ///
-/// Invariant, unless `stale`: every `Instance` in gen0 or gen2 whose
+/// Invariant, unless `stale`: every instance (plain or `@@rust_type`, see
+/// [`Object::cleanup_subject`]) in gen0 or gen2 whose
 /// class has a `cleanup` finalizer is in `instances`. Entries may repeat, and
 /// may name an instance whose class has since lost its finalizer or that was
 /// already cleaned: a collection re-checks each entry exactly as a full walk
@@ -946,6 +947,25 @@ impl BexHeap {
     /// from here on scans for finalizable instances.
     pub fn note_finalizable_class(&self) {
         self.has_finalizable_classes.store(true, Ordering::Release);
+    }
+
+    /// BEP-042: whether `object` is a `@@rust_type` instance of a class with
+    /// a `cleanup` finalizer, and so belongs in the collector's finalizable
+    /// list. A field-backed instance is never an `Object`: it registers when
+    /// `alloc_instance` builds its cell (see `needs_finalizer`).
+    ///
+    /// # Safety
+    ///
+    /// If `object` is an instance, its class pointer must name a live object:
+    /// the caller holds a heap permit, or is the collector before it moves
+    /// anything.
+    #[inline]
+    pub unsafe fn needs_finalizer_registration(object: &Object) -> bool {
+        let Object::RustInstance(instance) = object else {
+            return false;
+        };
+        // SAFETY: the caller guarantees the class object is live.
+        matches!(unsafe { instance.class.get() }, Object::Class(class) if class.cleanup.is_some())
     }
 
     /// BEP-042: whether `instance`'s class has a `cleanup` finalizer, so

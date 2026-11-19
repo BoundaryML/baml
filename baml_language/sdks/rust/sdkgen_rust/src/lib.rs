@@ -2805,8 +2805,13 @@ mod tests {
         // declared `_inner` is the runtime's own).
         assert!(
             flat_reflect.contains(
-                "#[derive(Debug,Clone,PartialEq,Eq,Hash)]pubstructPackage(::baml_bridge::baml_value::internal::RuntimeInstance);"
+                "pubstructPackage(::baml_bridge::baml_value::internal::RuntimeInstance);"
             ),
+            "{reflect}"
+        );
+        // Equal and hashed as the instance it references.
+        assert!(
+            flat_reflect.contains("impl::std::cmp::PartialEqforPackage{fneq(&self,other:&Self)->bool{self.0==other.0}}"),
             "{reflect}"
         );
         assert!(!reflect.contains("_inner"), "{reflect}");
@@ -2815,7 +2820,7 @@ mod tests {
         // as the handle.
         assert!(
             flat_reflect.contains(
-                r#"::baml_bridge::baml_value::internal::RuntimeInstance::decode(v,"reflect.Package","#
+                r#"::baml_bridge::baml_value::internal::RuntimeInstance::decode(v,"reflect.Package""#
             ),
             "{reflect}"
         );
@@ -2837,6 +2842,78 @@ mod tests {
         assert!(
             lib.contains("u:impl::std::borrow::Borrow<crate::reflect::Package>"),
             "{lib}"
+        );
+    }
+
+    /// A generic opaque class with an instance method over `T`, and a
+    /// function returning one at its own `T`.
+    fn generic_cache_pool(crossing: baml_sdkgen_types::ClassCrossing) -> SymbolPool {
+        let cache = name("user", &[], "Cache");
+        let mut get = nullary_string_fn(&name("user", &[], "get"));
+        get.return_type = typevar(0, "T");
+        let Symbol::Class(class) = class_symbol(&cache, Vec::new(), Vec::new(), vec![get]) else {
+            unreachable!("class_symbol builds a class")
+        };
+        let make = name("user", &[], "make");
+        let mut make_fn = nullary_string_fn(&make);
+        make_fn.generic_params.push(baml_base::Name::new("T"));
+        make_fn.return_type = Ty::Class(cache.clone(), Box::new([typevar(0, "T")]));
+        SymbolPool::from([
+            (
+                cache,
+                Symbol::Class(baml_sdkgen_types::Class {
+                    crossing,
+                    generic_params: vec![baml_base::Name::new("T")],
+                    ..class
+                }),
+            ),
+            (make, Symbol::Function(make_fn)),
+        ])
+    }
+
+    #[test]
+    fn a_generic_opaque_class_is_a_wrapper_at_its_type_arguments() {
+        let generated = to_source_code_with_bytecode(
+            &generic_cache_pool(baml_sdkgen_types::ClassCrossing::Opaque),
+            &[],
+            &options(),
+        );
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat_lib = flat(lib);
+        let type_arg = "<Tas::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty()";
+        for expected in [
+            // The parameter names what the instance is; the wrapper holds no `T`.
+            "pubstructCache<T:::baml_bridge::BamlValue>(::baml_bridge::baml_value::internal::RuntimeInstance,::std::marker::PhantomData<fn()->(T,)>,);".to_string(),
+            // Decodes the handle naming the class, and states its type arguments.
+            r#"RuntimeInstance::decode(v,"user.Cache""#.to_string(),
+            format!(r#"class_ty("user.Cache",::std::vec![{type_arg}],)"#),
+            // Its methods bind `T` from the receiver's Rust type.
+            "impl<T:::baml_bridge::BamlValue>Cache<T>{".to_string(),
+            "pubasyncfnget(&self".to_string(),
+            "pubfnget_sync(&self".to_string(),
+        ] {
+            assert!(flat_lib.contains(&expected), "missing {expected} in:\n{lib}");
+        }
+    }
+
+    /// Negative control: a generic class crossing by its fields with no field
+    /// over `T` cannot be a Rust struct, so it skips.
+    #[test]
+    fn a_generic_class_of_fields_needs_a_field_over_each_parameter() {
+        let generated = to_source_code_with_bytecode(
+            &generic_cache_pool(baml_sdkgen_types::ClassCrossing::Fields),
+            &[],
+            &options(),
+        );
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|warning| warning.fqn == "user.Cache"
+                    && warning.reason.contains("generic type parameter `T`")),
+            "{:?}",
+            generated.warnings
         );
     }
 
@@ -3885,6 +3962,57 @@ mod tests {
         assert!(lib.contains("Throws=CbError"), "{lib}");
     }
 
+    /// A host's own value is the `baml_bridge::HostValue` handle, stated as the
+    /// `baml.host.Value` class, and its class emits nothing.
+    #[test]
+    fn host_value_class_is_the_host_value_handle() {
+        let host_value = name("baml", &["host"], "Value");
+        let holder = name("user", &[], "Holder");
+        let round_trip = name("user", &[], "round_trip");
+        let handle = Ty::Class(host_value.clone(), Box::new([]));
+        let mut f = nullary_string_fn(&round_trip);
+        f.arguments = vec![arg("handle", handle.clone())];
+        f.return_type = handle.clone();
+        let Symbol::Class(class) = generic_class(&host_value, &[], Vec::new()) else {
+            unreachable!("generic_class builds a class");
+        };
+        let pool = SymbolPool::from([
+            (
+                holder.clone(),
+                generic_class(&holder, &[], vec![("handle", handle)]),
+            ),
+            (round_trip, Symbol::Function(f)),
+            (
+                host_value,
+                Symbol::Class(baml_sdkgen_types::Class {
+                    crossing: baml_sdkgen_types::ClassCrossing::HostValue,
+                    ..class
+                }),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let files = generated
+            .files
+            .into_iter()
+            .filter_map(|(path, file)| match file {
+                FileContent::Text(text) => Some((path, text)),
+                FileContent::Binary(_) => None,
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let flat_lib = flat(&files[std::path::Path::new("src/lib.rs")]);
+        assert!(
+            flat_lib.contains("pubhandle:::baml_bridge::HostValue"),
+            "{flat_lib}"
+        );
+        assert!(
+            flat_lib.contains("class_ty(\"baml.host.Value\""),
+            "{flat_lib}"
+        );
+        let host = &files[std::path::Path::new("src/baml/host/mod.rs")];
+        assert!(!flat(host).contains("structValue"), "{host}");
+    }
+
     /// A class with a crossing of its own emits nothing: a capability is the
     /// `baml_bridge` type wherever a type names it (and a class holding one
     /// is emitted), and a media wrapper, which no Rust type represents yet,
@@ -3908,16 +4036,16 @@ mod tests {
                     &stream,
                     baml_sdkgen_types::ClassCrossing::Stream,
                     &["T"],
-                    vec![("_handle", Ty::RustType)],
+                    Vec::new(),
                 ),
             ),
             (
                 pdf.clone(),
                 class(
                     &pdf,
-                    baml_sdkgen_types::ClassCrossing::Media(baml_base::MediaKind::Pdf),
+                    baml_sdkgen_types::ClassCrossing::Media(baml_base::ConcreteMediaKind::Pdf),
                     &[],
-                    vec![("_data", Ty::RustType)],
+                    Vec::new(),
                 ),
             ),
             (

@@ -14,7 +14,7 @@ mod host_call_completion;
 mod host_value_registry;
 mod invocation;
 pub use host_call_completion::decode_host_call_completion;
-pub use host_value_registry::HostValueRegistry;
+pub use host_value_registry::{DeadHostKey, HostValueRegistry, Released};
 pub use invocation::{
     OwnedHostArguments, OwnedHostInvocation, build_host_invocation, release_outbound_references,
 };
@@ -40,7 +40,7 @@ pub use bex_project::{Bounded, Handle, HeapPtr, WeakHeapRef, WireTy};
 pub use error::CtypesError;
 pub use handle_table::{
     CffiHandleTable, CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
-    InvocationStateHandle, TableKey, TraceReservationHandle,
+    InvocationStateHandle, TableAdt, TableKey, TraceReservationHandle,
 };
 pub use traceback::format_traceback_lines;
 pub use ty_decode::{

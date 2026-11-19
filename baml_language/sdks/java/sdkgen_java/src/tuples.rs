@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use baml_sdkgen_types::{CallableParam, Function, Symbol, SymbolPool, Ty};
 
-use crate::translate_ty::{AliasTable, collect_type_vars, union_arm_token};
+use crate::translate_ty::{AliasTable, CrossingTable, collect_type_vars, union_arm_token};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TupleDecl {
@@ -19,6 +19,7 @@ impl TupleTable {
     pub(crate) fn collect(
         pool: &SymbolPool,
         aliases: &AliasTable,
+        crossings: &CrossingTable,
         reserved: &BTreeSet<String>,
     ) -> Self {
         let mut identities: BTreeSet<Ty> = BTreeSet::new();
@@ -56,7 +57,7 @@ impl TupleTable {
             let Ty::Tuple(items) = &identity else {
                 unreachable!("a tuple identity is a tuple type");
             };
-            let base = tuple_base_name(items);
+            let base = tuple_base_name(items, crossings);
             let mut ident = base.clone();
             let mut n = 2;
             while taken.contains(&ident) {
@@ -92,22 +93,22 @@ fn visit_function(function: &Function, visit: &mut dyn FnMut(&Ty)) {
     }
 }
 
-pub(crate) fn tuple_base_name(items: &[Ty]) -> String {
+pub(crate) fn tuple_base_name(items: &[Ty], crossings: &CrossingTable) -> String {
     let mut name = format!("Tuple{}_", items.len());
     for item in items {
-        name.push_str(&tuple_slot_token(item));
+        name.push_str(&tuple_slot_token(item, crossings));
     }
     name
 }
 
-fn tuple_slot_token(ty: &Ty) -> String {
+fn tuple_slot_token(ty: &Ty, crossings: &CrossingTable) -> String {
     let Ty::Union(members) = ty else {
-        return union_arm_token(ty);
+        return union_arm_token(ty, crossings);
     };
     let tokens: Vec<String> = members
         .iter()
         .filter(|member| !matches!(member, Ty::Null))
-        .map(union_arm_token)
+        .map(|member| union_arm_token(member, crossings))
         .collect();
     let nullable = tokens.len() != members.len();
     match (nullable, tokens.is_empty()) {
@@ -181,7 +182,6 @@ fn erase_aliases(ty: &Ty, aliases: &AliasTable) -> Ty {
         | Ty::Enum(_)
         | Ty::EnumVariant(..)
         | Ty::TypeVar(_)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst

@@ -46,13 +46,11 @@ class ContextOptions {
 /// Equality includes the recording scope, not just its local span number.
 /// There is no public constructor, component access, or serialization API.
 class SpanId {
-    _handle: $rust_type,
+    @@rust_type("SpanId")
 }
 
 /// Immutable, reusable tracing options. Builders leave their receiver unchanged.
 class Options {
-    _handle: $rust_type,
-
     /// Compose a shallow patch without reading ambient context.
     //baml:mut_vm
     function context(
@@ -105,12 +103,12 @@ class Options {
     function reserve(self) -> ReservedSpan throws never {
         $rust_function
     }
+
+    @@rust_type("TraceOptions")
 }
 
 /// A single-use reservation. Inspection remains available after attachment.
 class ReservedSpan {
-    _handle: $rust_type,
-
     //baml:mut_vm
     function id(self) -> SpanId throws never {
         $rust_function
@@ -121,6 +119,8 @@ class ReservedSpan {
     function inspect(self) -> Settings throws never {
         $rust_function
     }
+
+    @@rust_type("ReservedSpan")
 }
 
 function options(mode: Mode? = null) -> Options throws never {
@@ -214,8 +214,6 @@ class SpanError {
 /// `close`. Inputs are captured at creation. The first ending wins; `close`
 /// makes no claim about the outcome.
 class Span {
-    _handle: $rust_type,
-
     //baml:mut_vm
     function id(self) -> SpanId? throws never {
         $rust_function
@@ -268,6 +266,8 @@ class Span {
     function _activate(self) -> void throws SpanError {
         $rust_function
     }
+
+    @@rust_type
 }
 
 /// Start an operation associated with a name or an existing function value.

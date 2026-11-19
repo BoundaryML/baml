@@ -1,7 +1,8 @@
 //! Rust values held on the BAML heap.
 //!
-//! A `$rust_type` field holds an [`Object::RustData`](crate::Object::RustData):
-//! an `Arc` to a Rust value the VM cannot look inside. The collector treats it
+//! A `@@rust_type` class whose kind has no payload variant of its own holds a
+//! [`RustPayload::Foreign`](crate::RustPayload::Foreign): an `Arc` to a Rust
+//! value the VM cannot look inside. The collector treats it
 //! as a leaf, so the only thing it needs from the value is how much memory it
 //! keeps alive, and every payload type says so by implementing
 //! [`BexRustData`]. There is no default: a type that cannot be sized cannot be
@@ -188,30 +189,14 @@ impl<T: RetainedFootprint> Drop for MeteredGuard<'_, T> {
     }
 }
 
-/// A payload with nothing to measure, for tests that only need some
-/// `RustData` object.
+/// A payload with nothing to measure, for tests that only need some foreign
+/// payload.
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TestRustData(pub u64);
 
 impl BexRustData for TestRustData {
     fn measure(&self, _: &mut Meter) {}
-}
-
-// The resource crate sits below this one, so its payloads are sized here.
-
-impl BexRustData for bex_resource_types::HostValueArc {
-    fn measure(&self, _: &mut Meter) {
-        // The value itself lives in the host.
-    }
-}
-
-impl BexRustData for bex_resource_types::ResourceHandle {
-    fn measure(&self, meter: &mut Meter) {
-        // The resource lives in a registry the handle only names; what it
-        // buffers on the handle's behalf is published by whoever fills it.
-        meter.bytes(self.display_name().len() + self.retained_bytes());
-    }
 }
 
 #[cfg(test)]

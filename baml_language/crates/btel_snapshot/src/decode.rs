@@ -626,7 +626,6 @@ fn depth<N: Clone>(ty: &TyTemplate<N>) -> usize {
         | TyTemplate::Literal(..)
         | TyTemplate::Enum(_)
         | TyTemplate::EnumVariant(..)
-        | TyTemplate::RustType
         | TyTemplate::Type
         | TyTemplate::Resource
         | TyTemplate::PromptAst

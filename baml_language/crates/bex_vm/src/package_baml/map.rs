@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use bex_vm_types::{
     BexStr, EntryId, MapData, MapReadGuard, MapWriteGuard, Object, RootHaver, RootVisitor, Value,
 };
@@ -21,8 +19,9 @@ struct MapDriver {
     map: Value,
     key: Value,
     value: Value,
+    /// The `DefaultHasher` the key's `hash` writes into, or null for a string
+    /// key, which hashes without a callback.
     state: Value,
-    hasher: Option<Arc<super::hasher::HasherState>>,
     operation: Operation,
     hash: u64,
     epoch: u64,
@@ -165,18 +164,16 @@ impl MapDriver {
         // A plain key whose bucket holds a key with its own `Equals` keeps
         // its native hash, so both searches find the same bucket.
         let native_hash = PlainKey::of(vm, args[1]).map(|key| key.hash());
-        let (state, hasher) = if native_hash.is_some() {
-            (Value::NULL, None)
+        let state = if native_hash.is_some() {
+            Value::NULL
         } else {
-            let (state, hasher) = super::hasher::new_map_key_state(vm);
-            (state, Some(hasher))
+            super::hasher::new_map_key_state(vm)
         };
         let mut driver = Self {
             map: args[0],
             key: args[1],
             value: args.get(2).copied().unwrap_or(Value::NULL),
             state,
-            hasher,
             operation,
             hash: native_hash.unwrap_or(0),
             epoch: 0,
@@ -263,7 +260,6 @@ impl RootHaver for MapDriver {
             key,
             value,
             state,
-            hasher: _,
             operation: _,
             hash: _,
             epoch: _,
@@ -286,9 +282,10 @@ impl Continuation for MapDriver {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         let matched = if self.hashing {
             self.hashing = false;
-            self.hash = super::hasher::finish_state(
-                self.hasher.as_ref().expect("hash callback has a state"),
-            );
+            self.hash = match super::hasher::finish_state(vm, self.state) {
+                Ok(hash) => hash,
+                Err(error) => return error.into(),
+            };
             self.snapshot(vm);
             None
         } else {

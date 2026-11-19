@@ -1,24 +1,25 @@
 //! WASM `baml.glob` namespace implementation via `WasmVfs` JS callbacks.
 //!
-//! `WasmIoGlob` implements `IoNamespaceGlob` and `IoClassGlobGlob` for WASM:
-//!
-//! - `new(pattern)` — compiles the pattern via `sys_glob::GlobPattern` and
-//!   stores the resulting compiled regex in the glob handle so subsequent
-//!   `scan` and `matches` calls reuse it without recompilation.
+//! - `new(pattern)` — compiles the pattern via `sys_glob::GlobPattern` into a
+//!   `baml.glob.Glob` whose payload holds the compiled pattern and the VFS, so
+//!   `scan` and `matches` reuse it without recompilation.
 //! - `Glob.scan(root)` — walks the VFS via `WasmVfs.readDir` and filters with
-//!   the compiled `GlobPattern` from the handle.
+//!   the compiled `GlobPattern`.
 //! - `Glob.matches(path)` — pure-Rust glob matching via the compiled
-//!   `GlobPattern` from the handle.
+//!   `GlobPattern`.
 
-use std::{any::TypeId, sync::Arc};
+use std::sync::Arc;
 
 use sys_glob::GlobPattern;
-use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
-use sys_types::{BexHeap, RustDataArc as _, VmInternalError, VmPanic};
+use sys_ops::io::{self, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
+use sys_types::{
+    BexHeap, OpOutput, VmPanic,
+    resource::{GlobResource, GlobScanStart},
+};
 
 use crate::{send_wrapper::SendWrapper, wasm_vfs::WasmVfs};
 
-/// WASM implementation of `baml.glob` namespace + `Glob` class.
+/// WASM implementation of `baml.glob` namespace.
 pub(crate) struct WasmIoGlob {
     vfs: SendWrapper<Arc<WasmVfs>>,
 }
@@ -30,40 +31,17 @@ impl WasmIoGlob {
             vfs: SendWrapper::new(vfs),
         }
     }
-
-    fn vfs(&self) -> &WasmVfs {
-        self.vfs.as_ref()
-    }
 }
 
 // ============================================================================
-// IoNamespaceGlob — `baml.glob.new(pattern)` creates a Glob handle.
+// IoNamespaceGlob — `baml.glob.new(pattern)` creates a Glob.
 // ============================================================================
 
-/// A compiled pattern as `$rust_type` data.
-struct GlobHandle(GlobPattern);
-
-impl sys_types::BexRustData for GlobHandle {
-    fn measure(&self, _: &mut sys_types::Meter) {
-        // Bounded by the pattern text; the regex crate does not report its size.
-    }
-}
-
-impl std::ops::Deref for GlobHandle {
-    type Target = GlobPattern;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmInternalError> {
-    glob._handle
-        .clone()
-        .downcast_payload::<GlobHandle>()
-        .map_err(|_| VmInternalError::RustTypeError {
-            expected: TypeId::of::<GlobHandle>(),
-            got: glob._handle.payload_type_id(),
-        })
+/// A compiled pattern: a `baml.glob.Glob`'s payload. It scans the VFS of the
+/// runtime that compiled it.
+struct WasmGlobHandle {
+    pattern: GlobPattern,
+    vfs: SendWrapper<Arc<WasmVfs>>,
 }
 
 impl io::IoNamespaceGlob for WasmIoGlob {
@@ -75,46 +53,28 @@ impl io::IoNamespaceGlob for WasmIoGlob {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::glob::Glob> {
         match GlobPattern::new(&pattern) {
-            Ok(compiled) => {
-                let handle: Arc<dyn sys_types::BexRustData> = Arc::new(GlobHandle(compiled));
-                SysOpOutput::ok(owned::glob::Glob { _handle: handle })
-            }
+            Ok(pattern) => SysOpOutput::ok(Arc::new(WasmGlobHandle {
+                pattern,
+                vfs: self.vfs.clone(),
+            })),
             Err(e) => SysOpOutput::err(VmBamlError::ParseError { message: e }),
         }
     }
 }
 
 // ============================================================================
-// IoClassGlobGlob — `Glob.scan` and `Glob.matches` method implementations.
+// GlobResource — `Glob.scan` and `Glob.matches`.
 // ============================================================================
 
-impl io::IoClassGlobGlob for WasmIoGlob {
-    fn scan(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        glob: owned::glob::Glob,
-        root: BexExternalValue,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<String>> {
-        let compiled = match downcast_glob_handle(&glob) {
-            Ok(c) => c,
-            Err(e) => return SysOpOutput::err(e),
-        };
-        let scan_args = match ScanArgs::from_root(&root) {
+impl GlobResource for WasmGlobHandle {
+    fn scan(self: Arc<Self>, start: GlobScanStart) -> OpOutput<Vec<String>> {
+        let scan_args = match ScanArgs::from_start(start) {
             Ok(args) => args,
-            // `root` is declared `string | ScanOptions`, so a value of any
-            // other shape means the wire value disagrees with the declared
-            // parameter type.
-            Err(ScanArgError::Shape(message)) => {
-                return SysOpOutput::err(VmInternalError::BridgeFailure { message });
-            }
             // A legal option this host cannot honor is a missing host
-            // capability, not a bridge fault: `scan` declares only `throws
-            // Io`, so it surfaces on the panic channel like every other
-            // absent facility.
-            Err(ScanArgError::Unsupported(message)) => {
-                return SysOpOutput::err(VmPanic::HostUnavailable {
+            // capability: `scan` declares only `throws Io`, so it surfaces on
+            // the panic channel like every other absent facility.
+            Err(message) => {
+                return OpOutput::err(VmPanic::HostUnavailable {
                     resource: "filesystem".to_string(),
                     message,
                 });
@@ -123,13 +83,13 @@ impl io::IoClassGlobGlob for WasmIoGlob {
 
         let mut scanned_paths = Vec::new();
         if let Err(e) = collect_scan_paths(
-            self.vfs(),
+            self.vfs.as_ref(),
             &scan_args.cwd,
             scan_args.dot,
             scan_args.only_files,
             &mut scanned_paths,
         ) {
-            return SysOpOutput::err(VmBamlError::Io { message: e });
+            return OpOutput::err(VmBamlError::Io { message: e });
         }
 
         let mut paths = Vec::new();
@@ -144,7 +104,7 @@ impl io::IoClassGlobGlob for WasmIoGlob {
                 continue;
             }
 
-            if !compiled.is_match_entry(&rel_path, &path) {
+            if !self.pattern.is_match_entry(&rel_path, &path) {
                 continue;
             }
 
@@ -154,21 +114,15 @@ impl io::IoClassGlobGlob for WasmIoGlob {
                 paths.push(rel_path);
             }
         }
-        SysOpOutput::ok(paths)
+        OpOutput::ok(paths)
     }
 
-    fn matches(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        glob: owned::glob::Glob,
-        path: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<bool> {
-        match downcast_glob_handle(&glob) {
-            Ok(compiled) => SysOpOutput::ok(compiled.is_match(&path)),
-            Err(e) => SysOpOutput::err(e),
-        }
+    fn matches(self: Arc<Self>, path: String) -> OpOutput<bool> {
+        OpOutput::ok(self.pattern.is_match(&path))
+    }
+
+    fn measure(&self, _: &mut sys_types::Meter) {
+        // Bounded by the pattern text; the regex crate does not report its size.
     }
 }
 
@@ -179,58 +133,39 @@ struct ScanArgs {
     only_files: bool,
 }
 
-/// Why [`ScanArgs::from_root`] rejected the wire value.
-enum ScanArgError {
-    /// The value disagrees with the declared `string | ScanOptions` type: a
-    /// bridge fault, never something user code can provoke.
-    Shape(String),
-    /// A legal `ScanOptions` value this host cannot honor.
-    Unsupported(String),
-}
-
 impl ScanArgs {
-    fn from_root(root: &BexExternalValue) -> Result<Self, ScanArgError> {
-        match root {
-            BexExternalValue::String(cwd) => Ok(Self {
-                cwd: normalize_cwd(cwd),
+    /// The scan `start` asks for, or why this host cannot honor it.
+    fn from_start(start: GlobScanStart) -> Result<Self, String> {
+        match start {
+            GlobScanStart::String(cwd) => Ok(Self {
+                cwd: normalize_cwd(&cwd),
                 dot: false,
                 absolute: false,
                 only_files: true,
             }),
-            BexExternalValue::Instance { fields, .. } => {
-                let cwd = get_string_field(fields, "cwd", ".").map_err(ScanArgError::Shape)?;
-                let dot = get_bool_field(fields, "dot", false).map_err(ScanArgError::Shape)?;
-                let absolute =
-                    get_bool_field(fields, "absolute", false).map_err(ScanArgError::Shape)?;
-                let only_files =
-                    get_bool_field(fields, "only_files", true).map_err(ScanArgError::Shape)?;
+            GlobScanStart::ScanOptions(options) => {
                 // The WASM bridge has no symlink concept (entries come from a
                 // VFS that doesn't model symlinks). Reject explicit non-default
                 // values for these options instead of silently no-opping, so
                 // users don't think the option took effect.
-                if get_bool_field(fields, "follow_symlinks", false).map_err(ScanArgError::Shape)? {
-                    return Err(ScanArgError::Unsupported(
+                if options.follow_symlinks.unwrap_or(false) {
+                    return Err(
                         "ScanOptions.follow_symlinks is not supported in the WASM bridge".into(),
-                    ));
+                    );
                 }
-                if get_bool_field(fields, "throw_error_on_broken_symlink", false)
-                    .map_err(ScanArgError::Shape)?
-                {
-                    return Err(ScanArgError::Unsupported(
+                if options.throw_error_on_broken_symlink.unwrap_or(false) {
+                    return Err(
                         "ScanOptions.throw_error_on_broken_symlink is not supported in the WASM bridge"
                             .into(),
-                    ));
+                    );
                 }
                 Ok(Self {
-                    cwd: normalize_cwd(&cwd),
-                    dot,
-                    absolute,
-                    only_files,
+                    cwd: normalize_cwd(options.cwd.as_deref().unwrap_or(".")),
+                    dot: options.dot.unwrap_or(false),
+                    absolute: options.absolute.unwrap_or(false),
+                    only_files: options.only_files.unwrap_or(true),
                 })
             }
-            _ => Err(ScanArgError::Shape(
-                "scan argument must be a string or ScanOptions".into(),
-            )),
         }
     }
 }
@@ -317,38 +252,6 @@ fn collect_scan_paths(
         }
     }
     Ok(())
-}
-
-fn get_string_field(
-    fields: &indexmap::IndexMap<String, BexExternalValue>,
-    key: &str,
-    default: &str,
-) -> Result<String, String> {
-    match fields.get(key) {
-        None | Some(BexExternalValue::Null) => Ok(default.to_string()),
-        Some(value) => value.as_string().map(|s| s.to_string()).ok_or_else(|| {
-            format!(
-                "ScanOptions.{key} must be a string, got {}",
-                value.type_name()
-            )
-        }),
-    }
-}
-
-fn get_bool_field(
-    fields: &indexmap::IndexMap<String, BexExternalValue>,
-    key: &str,
-    default: bool,
-) -> Result<bool, String> {
-    match fields.get(key) {
-        None | Some(BexExternalValue::Null) => Ok(default),
-        Some(value) => value.as_bool().ok_or_else(|| {
-            format!(
-                "ScanOptions.{key} must be a bool, got {}",
-                value.type_name()
-            )
-        }),
-    }
 }
 
 fn normalize_path(path: &str) -> String {

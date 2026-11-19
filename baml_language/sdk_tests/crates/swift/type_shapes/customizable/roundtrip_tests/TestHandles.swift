@@ -1,10 +1,9 @@
 // Handle-backed stdlib resources — port of python_pydantic2
 // `roundtrip_tests/test_handles.py`. All symbols are stdlib pkg `baml`.
 //
-// The load-bearing property: opaque `$rust_type` handles round-trip —
-// a File's cursor state persists across separate host→engine FFI
-// calls because the same engine-side resource rides back in as a
-// cloned handle key.
+// The load-bearing property: a reference to an engine instance round-trips —
+// a File's cursor state persists across separate host→engine FFI calls
+// because each call receives the same engine instance back.
 import XCTest
 import Foundation
 import Baml

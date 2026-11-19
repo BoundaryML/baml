@@ -231,9 +231,14 @@ use sha2::{Digest, Sha256};
 /// `metadata` (its content hashes and claim, BEP-085), and a
 /// `ProgramPackage` carries it into the executable.
 ///
-/// Version 29: a `ProgramPackage` carries the `build_id` of the build that
+/// Version 29: classes whose state Rust holds are `@@rust_type` classes. The
+/// `$rust_type` type is gone, so a type no longer encodes the `RustType`
+/// head (its discriminant, 18, is unused), and `ClassCrossing` gained the
+/// appended `HostValue`.
+///
+/// Version 30: a `ProgramPackage` carries the `build_id` of the build that
 /// produced it (BEP-088). A cached program names none.
-pub const FORMAT_VERSION: u32 = 29;
+pub const FORMAT_VERSION: u32 = 30;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
