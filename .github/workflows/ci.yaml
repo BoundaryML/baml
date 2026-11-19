@@ -46,8 +46,6 @@ jobs:
       codegen: ${{ steps.check_codegen.outputs.changed }}
       # Docs example changes need the CLI, but not the full platform/SDK matrix.
       documentation_snippets: ${{ steps.check_documentation_snippets.outputs.changed }}
-      # Flag for docs/frontend changes
-      docs: ${{ steps.check_docs.outputs.changed }}
       # Flag for typescript2/webview changes
       webview: ${{ steps.check_webview.outputs.changed }}
       # Flag for typescript2 grammar changes
@@ -271,20 +269,6 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Check if docs changed
-        id: check_docs
-        env:
-          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
-        run: |
-          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':fern/**' \
-            ':.github/workflows/docs.reusable.yaml' \
-          ; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check if webview changed
@@ -631,16 +615,6 @@ jobs:
     uses: ./.github/workflows/wasm-pack-tests.reusable.yaml
     secrets: inherit
 
-  docs:
-    name: "Docs"
-    needs: determine_changes
-    uses: ./.github/workflows/docs.reusable.yaml
-    with:
-      docs_changed: ${{ needs.determine_changes.outputs.docs }}
-      is_canary: ${{ github.ref == 'refs/heads/canary' }}
-    secrets: inherit
-    permissions: write-all
-
   webview-tests:
     name: "Webview Tests"
     needs: determine_changes
@@ -954,7 +928,6 @@ jobs:
       - wrapper-tests
       - documentation-snippets
       - wasm-pack-tests
-      - docs
       - webview-tests
       - grammar-tests
       - linguist-compile-gate
@@ -984,7 +957,6 @@ jobs:
           echo "| wrapper-tests | ${{ needs.wrapper-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| documentation-snippets | ${{ needs.documentation-snippets.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| grammar-tests | ${{ needs.grammar-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| linguist-compile-gate | ${{ needs.linguist-compile-gate.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -1024,7 +996,6 @@ jobs:
       - wrapper-tests
       - documentation-snippets
       - wasm-pack-tests
-      - docs
       - webview-tests
       - grammar-tests
       - linguist-compile-gate
