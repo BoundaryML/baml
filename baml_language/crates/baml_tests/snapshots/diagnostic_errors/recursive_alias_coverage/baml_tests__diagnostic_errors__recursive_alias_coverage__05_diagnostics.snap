@@ -1,0 +1,42 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0062
+
+  × non-exhaustive match on type OBox; missing: OBox { v: [..] }
+    ╭─[recursive_alias_coverage.baml:23:5]
+ 23 │ ╭─▶     match (b) {
+ 24 │ │           OBox { v: null } => 0,
+ 25 │ │           OBox { v: int } => 1,
+ 26 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type Box<int | R[] | null>; missing: Box<int | null | R[]> { v: null }
+    ╭─[recursive_alias_coverage.baml:30:5]
+ 30 │ ╭─▶     match (b) {
+ 31 │ │           Box<R?> { v: int } => 1,
+ 32 │ │           Box<R?> { v: R[] } => 2,
+ 33 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type Holder; missing: Holder { v: int }
+    ╭─[recursive_alias_coverage.baml:37:5]
+ 37 │ ╭─▶     match (h) {
+ 38 │ │           Holder { v: LR[] } => 2,
+ 39 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type (int | string | R[], bool); missing: (string, true), (string, false)
+    ╭─[recursive_alias_coverage.baml:43:5]
+ 43 │ ╭─▶     match (t) {
+ 44 │ │           (int, _) => 1,
+ 45 │ │           (R[], _) => 2,
+ 46 │ ╰─▶     }
+    ╰────
