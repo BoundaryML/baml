@@ -391,6 +391,7 @@ impl GenerateArgs {
             package,
             &mut program,
             btel_types::BuildOrigin::Generate,
+            &telemetry,
             &from,
         );
         let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)

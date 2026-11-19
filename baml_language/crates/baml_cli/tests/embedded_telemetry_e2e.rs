@@ -55,6 +55,55 @@ async fn embedding_api(server: &MockServer) {
         .respond_with(ResponseTemplate::new(200).set_body_json(verification_response()))
         .mount(server)
         .await;
+    // A build registers where its artifact records (BEP-088).
+    Mock::given(method("POST"))
+        .and(path("/v1/builds"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"status":"already_present"})))
+        .mount(server)
+        .await;
+}
+
+/// Every build the functions of the recordings uploaded in `requests` name.
+fn recorded_builds(requests: &[Request]) -> Vec<Vec<u8>> {
+    use prost::Message as _;
+    let mut builds: Vec<Vec<u8>> = requests
+        .iter()
+        .filter(|request| request.method == "PUT")
+        .filter_map(|request| {
+            btel_bcs::proto::CloudUploadEnvelope::decode(request.body.as_slice())
+                .ok()?
+                .recording_file
+        })
+        .flat_map(|bytes| {
+            btel_recorder::proto::RecordingFile::decode(bytes.as_slice())
+                .unwrap()
+                .definitions
+                .unwrap()
+                .functions
+        })
+        .filter_map(|function| match function.resolution? {
+            btel_recorder::proto::function_definition::Resolution::Metadata(metadata) => {
+                metadata.build_id
+            }
+            btel_recorder::proto::function_definition::Resolution::Unavailable(_) => None,
+        })
+        .collect();
+    builds.sort();
+    builds.dedup();
+    builds
+}
+
+/// The one build `requests` registered, sent with `key`.
+fn registered_build(requests: &[Request], key: &str) -> Value {
+    let [build] = requests
+        .iter()
+        .filter(|request| request.url.path() == "/v1/builds")
+        .collect::<Vec<_>>()[..]
+    else {
+        panic!("one build registers");
+    };
+    assert_eq!(build.headers["authorization"], format!("Bearer {key}"));
+    serde_json::from_slice(&build.body).unwrap()
 }
 async fn ingest_api(server: &MockServer) {
     let base = server.uri();
@@ -396,8 +445,13 @@ async fn packed_api_key_is_verified_and_fixed_with_endpoint_override() {
         &build_server.uri(),
         &["pack", "main", "--embed-telemetry", "-o", "out"],
     ));
-    assert_eq!(build_server.received_requests().await.unwrap().len(), 1);
+    assert_eq!(build_server.received_requests().await.unwrap().len(), 2);
     let requests = build_server.received_requests().await.unwrap();
+    // The build registers with the key the artifact records with, never
+    // the builder's own, and the binary carries its ID.
+    let build = registered_build(&requests, "bdry_secret_embedded");
+    assert_eq!(build["build"]["origin"], "pack");
+    assert_eq!(build["target"], json!({}));
     assert_eq!(requests[0].url.path(), "/v1/auth/verify");
     assert_eq!(
         serde_json::from_slice::<Value>(&requests[0].body).unwrap(),
@@ -434,6 +488,17 @@ async fn packed_api_key_is_verified_and_fixed_with_endpoint_override() {
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
     let requests = run_server.received_requests().await.unwrap();
     assert!(requests.iter().any(|request| request.method == "PUT"));
+    // The binary's functions name the build that packed it, which runs no
+    // compiler of its own and so registers nothing.
+    assert_eq!(
+        recorded_builds(&requests),
+        [hex::decode(build["build"]["build_id"].as_str().unwrap()).unwrap()]
+    );
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.url.path() != "/v1/builds")
+    );
     for request in requests.iter().filter(|request| request.method == "POST") {
         assert_eq!(
             request.headers["authorization"],
@@ -443,7 +508,7 @@ async fn packed_api_key_is_verified_and_fixed_with_endpoint_override() {
         assert_eq!(body.get("buildId"), None);
         assert_eq!(body["target"], json!({}));
     }
-    assert_eq!(build_server.received_requests().await.unwrap().len(), 1);
+    assert_eq!(build_server.received_requests().await.unwrap().len(), 2);
 
     run_server.reset().await;
     Mock::given(method("POST"))
@@ -497,7 +562,8 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
         .unwrap()
         .iter()
         .filter(|request| {
-            request.method == "POST" && !matches!(request.url.path(), "/v1/auth/verify")
+            request.method == "POST"
+                && !matches!(request.url.path(), "/v1/auth/verify" | "/v1/builds")
         })
     {
         assert_eq!(
@@ -557,13 +623,25 @@ async fn generate_embeds_named_api_key_and_plain_generate_omits_it() {
         policy.embedded.as_ref().unwrap().api_key.expose(),
         "bdry_secret_embedded"
     );
-    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 2);
+    let build = registered_build(&requests, "bdry_secret_embedded");
+    assert_eq!(build["build"]["origin"], "generate");
     succeeded(&cli(temp.path(), &server.uri(), &["generate"]));
     let inlined =
         std::fs::read_to_string(temp.path().join("generated/baml_sdk/src/_inlinedbaml.rs"))
             .unwrap();
     assert!(!inlined.contains("bdry_secret_embedded"));
-    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    // A client that embeds no credential registers its build where the
+    // project's own runs record: with the builder's key.
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 3);
+    let build = registered_build(&requests[2..], "bdry_secret_builder_do_not_embed");
+    assert_eq!(build["build"]["origin"], "generate");
+    assert_eq!(
+        build["target"],
+        json!({"project": "ambient/project_must_not_override_manifest"})
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -629,7 +707,8 @@ async fn malformed_publisher_settings_fail_before_writing_an_artifact() {
 
   Valid [boundary] settings:
     project
-    api_url"#,
+    api_url
+    upload_source"#,
         ),
     ] {
         let mut config: toml::Value = manifest("").parse().unwrap();

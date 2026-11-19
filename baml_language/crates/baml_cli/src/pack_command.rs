@@ -214,6 +214,7 @@ impl PackArgs {
             root,
             &mut program,
             btel_types::BuildOrigin::Pack,
+            &telemetry,
             root.path(&db),
         );
         // Mirror `baml run`'s format advisory: if any source file

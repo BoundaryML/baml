@@ -118,6 +118,10 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
             expected_minor =
                 expected_minor.max(btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR);
         }
+        if header.os.is_some() {
+            expected_minor =
+                expected_minor.max(btel_settings::encoding::BUILD_PROVENANCE_FORMAT_MINOR);
+        }
         assert_eq!(header.format_minor, expected_minor);
         let definitions = file.definitions.as_ref().unwrap();
         for function in &definitions.functions {

@@ -461,17 +461,25 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         let header = file.header.unwrap();
         assert_eq!(header.recording_id, recording_id.as_bytes());
         assert!(header.source_cas_id.is_none(), "cloud sources stay local");
-        // Cloud files carry nothing recording minor 14 added.
-        assert!(header.program_id.is_none() && header.build.is_none());
-        assert!(header.format_minor < btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR);
+        // Cloud files name the program and the process's platform; a
+        // build's row reaches BCS by its registration, never in a file.
+        assert!(header.program_id.is_some() && header.build.is_none());
+        assert_eq!(header.os.as_deref(), Some(std::env::consts::OS));
+        assert_eq!(header.arch.as_deref(), Some(std::env::consts::ARCH));
+        assert_eq!(
+            header.format_minor,
+            btel_settings::encoding::BUILD_PROVENANCE_FORMAT_MINOR
+        );
         // Normal shutdown settles every run: the last uploaded file ends it.
         assert_eq!(file.end.is_some(), index + 1 == prepares.len());
         for definition in file.definitions.unwrap_or_default().functions {
             if let Some(proto::function_definition::Resolution::Metadata(metadata)) =
                 definition.resolution
             {
-                assert!(metadata.compilation_unit_hash.is_none());
+                // No host named a build of this program.
+                assert!(metadata.build_id.is_none());
                 if metadata.fqn == "user.leaf" || metadata.fqn == "user.main" {
+                    assert!(metadata.compilation_unit_hash.is_some());
                     assert!(metadata.argument_layout.as_ref().unwrap().slots.is_empty());
                     named_functions.insert(metadata.fqn);
                 }

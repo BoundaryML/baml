@@ -1158,3 +1158,116 @@ async fn telemetry_off_ignores_unused_boundary_configuration() {
     }
     assert!(server.received_requests().await.unwrap().is_empty());
 }
+
+/// A package compiled at run time is a build of its own (BEP-088), beside
+/// the program's, and `upload_source = false` keeps the text of both from
+/// Boundary while the builds still register.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_runtime_compile_registers_a_dynamic_build_and_opting_out_withholds_source() {
+    use sha2::Digest as _;
+
+    let temp = fixture(
+        r#"function main() -> int throws unknown {
+  let leaf = reflect.Package.compile({"lib.baml": "function leaf() -> int { 1 }"})
+  7
+}
+"#,
+    );
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .and(path_regex(r"^/v1/recordings/[^/]+/uploads:prepare$"))
+        .respond_with({
+            let base = base.clone();
+            move |request: &Request| {
+                ResponseTemplate::new(200).set_body_json(cloud_protocol::response(
+                    request,
+                    &base,
+                    &[],
+                ))
+            }
+        })
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path_regex(r"^/v1/recordings/[^/]+/heartbeat$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path_regex(r"^/v1/builds$"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "status": "upload_required",
+            "presigned_put_url": format!("{base}/build-source"),
+            "expires_at_unix_ms": u64::MAX,
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+
+    // What the run registered, by origin, and the sources it uploaded.
+    let run = || async {
+        let before = server.received_requests().await.unwrap().len();
+        let output = execute_case(temp.path(), &base, KEY, &["run", "main"]);
+        assert!(output.status.success(), "{output:?}");
+        let requests = server.received_requests().await.unwrap().split_off(before);
+        let mut builds: Vec<serde_json::Value> = requests
+            .iter()
+            .filter(|request| request.url.path() == "/v1/builds")
+            .map(|request| serde_json::from_slice(&request.body).unwrap())
+            .collect();
+        builds.sort_by_key(|build| build["build"]["origin"].as_str().unwrap().to_owned());
+        let sources: Vec<Vec<u8>> = requests
+            .iter()
+            .filter(|request| request.url.path() == "/build-source")
+            .map(|request| request.body.clone())
+            .collect();
+        (builds, sources)
+    };
+
+    let (builds, sources) = run().await;
+    let [dynamic, program] = builds.as_slice() else {
+        panic!("the program's build and the compiled package's: {builds:?}");
+    };
+    assert_eq!(program["build"]["origin"], "run");
+    assert_eq!(dynamic["build"]["origin"], "dynamic");
+    assert_eq!(dynamic["program"], serde_json::json!(null));
+    assert_eq!(dynamic["build"]["git"], serde_json::json!(null));
+    assert_ne!(dynamic["build"]["build_id"], program["build"]["build_id"]);
+    assert_ne!(
+        dynamic["package"]["compilation_unit_hash"],
+        program["package"]["compilation_unit_hash"]
+    );
+    assert_eq!(sources.len(), 2);
+    let compiled = sources
+        .iter()
+        .find(|source| {
+            dynamic["source"]["sha256"] == hex::encode(sha2::Sha256::digest(source)).as_str()
+        })
+        .expect("the compiled package's source uploads");
+    let files: std::collections::BTreeMap<String, String> =
+        serde_json::from_slice(compiled).unwrap();
+    assert_eq!(files.keys().collect::<Vec<_>>(), ["lib.baml"]);
+    assert!(files["lib.baml"].contains("function leaf() -> int"));
+
+    std::fs::write(
+        temp.path().join("baml.toml"),
+        "[package]\nname = \"pack_e2e\"\n[boundary]\nupload_source = false\n",
+    )
+    .unwrap();
+    let (builds, sources) = run().await;
+    assert_eq!(
+        builds
+            .iter()
+            .map(|build| (build["build"]["origin"].as_str().unwrap(), &build["source"]))
+            .collect::<Vec<_>>(),
+        [
+            ("dynamic", &serde_json::json!(null)),
+            ("run", &serde_json::json!(null))
+        ]
+    );
+    assert!(sources.is_empty(), "no source leaves an opted-out project");
+}

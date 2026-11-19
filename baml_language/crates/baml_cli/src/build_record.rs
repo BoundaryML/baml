@@ -66,27 +66,50 @@ pub(crate) fn provider(
     Some(Box::new(describe?))
 }
 
-/// Registers this build of `package` with Boundary now, when the project at
-/// `project_root` sends telemetry there, and stamps `program`'s root with
-/// the build's ID, which the artifact written from it carries to its
-/// runtime. For a build that runs no program (`baml pack`, `baml generate`):
-/// a failure prints a warning and the build goes on.
+/// Where the artifact built under `policy` from the project at
+/// `project_root` registers its build: where the artifact's own recordings
+/// go when it embeds a credential, so its spans find the build there, and
+/// otherwise where this project's do, as for `baml run`. `None` when that
+/// is not Boundary.
+fn destination(
+    policy: &btel_settings::artifact::ArtifactTelemetry,
+    project_root: &Path,
+) -> Option<bex_engine::TelemetryRecording> {
+    let recording = if policy.embedded.is_some() {
+        // The embedded credential alone: the names a deployment binds its
+        // own destination to mean nothing where the artifact is built.
+        let embedded = btel_settings::artifact::ArtifactTelemetry {
+            destination_overrides: btel_settings::artifact::DestinationOverrides::Default,
+            ..policy.clone()
+        };
+        bex_engine::TelemetryRecording::from_artifact(&embedded).ok()?
+    } else {
+        let boundary = crate::cloud_config::Boundary::read(project_root).ok()?;
+        bex_engine::TelemetryRecording::from_boundary_defaults(
+            boundary.project.as_deref(),
+            boundary.api_url.as_deref(),
+        )?
+        .with_source_upload(boundary.upload_source)
+    };
+    recording.registers_builds().then_some(recording)
+}
+
+/// Registers this build of `package` with Boundary now, when the artifact
+/// built under `policy` or the project at `project_root` sends telemetry
+/// there, and stamps `program`'s root with the build's ID, which the
+/// artifact written from it carries to its runtime. For a build that runs
+/// no program (`baml pack`, `baml generate`): a failure prints a warning and
+/// the build goes on.
 pub(crate) fn register(
     db: &ProjectDatabase,
     package: SourceRoot,
     program: &mut bex_vm_types::Program,
     origin: BuildOrigin,
+    policy: &btel_settings::artifact::ArtifactTelemetry,
     project_root: &Path,
 ) {
     program.set_build(None);
-    let Ok(boundary) = crate::cloud_config::Boundary::read(project_root) else {
-        return;
-    };
-    let Some(recording) = bex_engine::TelemetryRecording::from_boundary_defaults(
-        boundary.project.as_deref(),
-        boundary.api_url.as_deref(),
-    )
-    .filter(bex_engine::TelemetryRecording::registers_builds) else {
+    let Some(recording) = destination(policy, project_root) else {
         return;
     };
     let build_id = new_build_id();
@@ -96,10 +119,7 @@ pub(crate) fn register(
         return;
     };
     program.set_build(Some(build_id));
-    if let Err(error) = recording
-        .with_source_upload(boundary.upload_source)
-        .register_build(registration)
-    {
+    if let Err(error) = recording.register_build(registration) {
         crate::reporter::print_warning(format_args!(
             "this build was not registered with Boundary: {error}"
         ));
