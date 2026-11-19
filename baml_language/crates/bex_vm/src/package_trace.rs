@@ -536,6 +536,7 @@ fn start_span_impl(
                 lambda_path: None,
                 package_name: None,
                 compilation_unit_hash: None,
+                build_id: None,
                 namespace: vec![],
                 argument_layout: None,
                 source_map: None,

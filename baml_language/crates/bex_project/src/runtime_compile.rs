@@ -1679,6 +1679,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             packages,
             aliases,
             mode,
+            record_build,
         } = request;
         let mut session_request = None;
         let mut lowered_session = None;
@@ -1994,11 +1995,36 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 )
             }
         };
+        // A whole package is a build of its own; a session's submission is
+        // one step of a package that is never built whole.
+        let build = match (&kind, record_build, &emitted.record.metadata) {
+            (ArtifactKind::Package, Some(record), Some(metadata)) => crate::build::registration(
+                &db,
+                workspace,
+                metadata,
+                crate::build::BuildFacts {
+                    build_id: crate::build::new_build_id(),
+                    timestamp_unix_ns: crate::build::unix_now_ns(),
+                    origin: btel_types::BuildOrigin::Dynamic,
+                    git: None,
+                    program: None,
+                },
+            )
+            .ok()
+            .map(|mut build| {
+                if !record.upload_source {
+                    build.source = None;
+                }
+                Box::new(build)
+            }),
+            _ => None,
+        };
         Ok(RuntimeCompileArtifact {
             emitted,
             interface_blob,
             diagnostics,
             kind,
+            build,
         })
     }
 }

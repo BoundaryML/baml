@@ -1297,6 +1297,7 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "btel_settings",
+ "btel_types",
  "ignore",
  "indexmap",
  "log",
@@ -1314,6 +1315,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "uuid",
  "vfs",
  "walkdir",
  "wasm-bindgen-futures",
@@ -1765,6 +1767,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tokio",
+ "tracing",
  "uuid",
  "wiremock",
 ]

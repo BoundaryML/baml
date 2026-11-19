@@ -448,13 +448,13 @@ impl TestArgs {
 
         let cached_program = session.try_cached_program();
 
-        let cached_engine = cached_program.and_then(|program| {
+        let cached_engine = cached_program.and_then(|mut program| {
             // Bytecode-cache hit: the Program carries the in-VM test registry,
             // so the database (typecheck, HIR discovery, emit) is skipped.
             let build = crate::build_record::provider(
                 &session.db,
                 session.package,
-                &program,
+                &mut program,
                 btel_types::BuildOrigin::Test,
             );
             match crate::runtime_telemetry::create_engine(
@@ -503,7 +503,7 @@ impl TestArgs {
             };
 
             // 3. Compile + engine + runtime
-            let program = crate::bytecode_cache::compile_program(&world, cache.as_ref())
+            let mut program = crate::bytecode_cache::compile_program(&world, cache.as_ref())
                 .map_err(|e| anyhow!("compilation failed: {e}"))?;
             if let Some(ctx) = cache {
                 let fresh = fresh_diagnostics
@@ -521,7 +521,7 @@ impl TestArgs {
             let build = crate::build_record::provider(
                 &session.db,
                 session.package,
-                &program,
+                &mut program,
                 btel_types::BuildOrigin::Test,
             );
             Arc::new(

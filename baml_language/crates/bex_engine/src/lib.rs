@@ -4098,6 +4098,7 @@ impl BexEngine {
                     })
                     .collect(),
                 mode: bex_vm_types::RuntimeCompileMode::Package,
+                record_build: None,
             }
         };
         // Compile without the heap permit, as `Package.compile` does.
@@ -7923,6 +7924,7 @@ impl BexEngine {
                     })
                     .collect(),
                 mode: bex_vm_types::RuntimeCompileMode::Package,
+                record_build: None,
             },
             pins,
         })
@@ -8067,6 +8069,7 @@ impl BexEngine {
                 packages,
                 aliases,
                 mode: bex_vm_types::RuntimeCompileMode::Session(Box::new(session)),
+                record_build: None,
             },
             pins: IndexMap::new(),
         })
@@ -8244,8 +8247,24 @@ impl BexEngine {
             }
         }
 
-        let PendingRuntimeCompile { request, pins } = pending;
+        #[cfg_attr(target_arch = "wasm32", expect(unused_mut))]
+        let PendingRuntimeCompile { mut request, pins } = pending;
         let compiler = self.runtime_compiler.clone();
+        // A whole package compiled while builds register with BCS is a build
+        // of its own (BEP-088): the compile describes it, and it registers
+        // once the compile succeeds.
+        #[cfg(not(target_arch = "wasm32"))]
+        let delivery = self
+            .telemetry
+            .as_ref()
+            .and_then(|telemetry| telemetry.delivery.clone())
+            .filter(|_| matches!(request.mode, bex_vm_types::RuntimeCompileMode::Package));
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            request.record_build = delivery
+                .as_ref()
+                .and_then(telemetry::RecordingDelivery::record_build);
+        }
         SysOpResult::Async(Box::pin(async move {
             let Some(compiler) = compiler else {
                 // `reflect.*._compile` declares only `CompilationError`
@@ -8277,6 +8296,12 @@ impl BexEngine {
                         details: None,
                     }])
                 });
+            #[cfg(not(target_arch = "wasm32"))]
+            if let (Some(delivery), Ok(artifact)) = (&delivery, &compiled) {
+                if let Some(build) = &artifact.build {
+                    delivery.register_build(build);
+                }
+            }
             match compiled {
                 Ok(artifact) => Ok(BexExternalValue::Instance {
                     class_name: "reflect.CompileArtifact".to_string(),

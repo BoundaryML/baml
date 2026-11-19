@@ -177,17 +177,36 @@ fn baml_run_uploads_from_boundary_env() {
                 .respond_with(ResponseTemplate::new(200))
                 .mount(&server)
                 .await;
+            let source_url = format!("{}/build-source", server.uri());
+            Mock::given(method("POST"))
+                .and(path_regex(r"^/publisher/v1/builds$"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "status": "upload_required",
+                    "presigned_put_url": source_url,
+                    "expires_at_unix_ms": u64::MAX,
+                })))
+                .mount(&server)
+                .await;
+            Mock::given(method("PUT"))
+                .and(path_regex(r"^/build-source$"))
+                .respond_with(ResponseTemplate::new(200))
+                .mount(&server)
+                .await;
 
             run(temp.path(), &boundary_url, "medium", true);
             let requests = server.received_requests().await.unwrap();
             let mut prepares = 0;
             let mut recordings = Vec::new();
+            let mut builds = Vec::new();
+            let mut sources = Vec::new();
             for request in &requests {
                 if request.method == "POST" {
                     assert_eq!(request.headers["authorization"], format!("Bearer {KEY}"));
                     let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
                     assert_eq!(body["target"], serde_json::json!({"project": "acme/app"}));
-                    if request.url.path().ends_with("/uploads:prepare") {
+                    if request.url.path().ends_with("/v1/builds") {
+                        builds.push(body);
+                    } else if request.url.path().ends_with("/uploads:prepare") {
                         prepares += 1;
                         let prepare: PrepareUploadsRequest = cloud_protocol::prepare(request);
                         assert_eq!(
@@ -201,6 +220,10 @@ fn baml_run_uploads_from_boundary_env() {
                     } else {
                         assert!(request.url.path().ends_with("/heartbeat"));
                     }
+                } else if request.url.path() == "/build-source" {
+                    assert_eq!(request.method, "PUT");
+                    assert!(!request.headers.contains_key("authorization"));
+                    sources.push(request.body.clone());
                 } else {
                     assert_eq!(request.method, "PUT");
                     assert!(!request.headers.contains_key("authorization"));
@@ -215,6 +238,90 @@ fn baml_run_uploads_from_boundary_env() {
             }
             assert!(prepares > 0, "CLI must prepare cloud uploads");
             assert!(!recordings.is_empty(), "CLI must upload a recording");
+
+            // The run registers its build (BEP-088) and uploads the source
+            // the build's hash was taken over.
+            let [registration] = builds.as_slice() else {
+                panic!("one build registers: {builds:?}");
+            };
+            let [source] = sources.as_slice() else {
+                panic!("one source uploads: {} did", sources.len());
+            };
+            let build = &registration["build"];
+            assert_eq!(build["origin"], "run");
+            assert_eq!(
+                build["compilation_unit_hash"],
+                registration["package"]["compilation_unit_hash"]
+            );
+            assert_eq!(registration["package"]["name"], "pack_e2e");
+            assert!(
+                registration["program"]["static_packages"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&build["compilation_unit_hash"])
+            );
+            {
+                use sha2::Digest as _;
+                assert_eq!(
+                    registration["source"],
+                    serde_json::json!({
+                        "sha256": hex::encode(sha2::Sha256::digest(source)),
+                        "byte_length": source.len(),
+                    })
+                );
+            }
+            let files: std::collections::BTreeMap<String, String> =
+                serde_json::from_slice(source).unwrap();
+            assert_eq!(
+                files.keys().collect::<Vec<_>>(),
+                ["baml_src/main.baml"],
+                "the package's sources, by normalized path"
+            );
+            assert!(files["baml_src/main.baml"].contains("function main() -> int"));
+            assert_eq!(
+                build["source_hash"],
+                hex::encode(
+                    bex_vm_types::identity::package_source_hash(
+                        files
+                            .iter()
+                            .map(|(path, text)| (path.as_str(), text.as_bytes()))
+                    )
+                    .0
+                )
+            );
+
+            // The recording names the program in its header and the build
+            // on each function of the built package, and carries no row of
+            // the build itself.
+            let unit = hex::decode(build["compilation_unit_hash"].as_str().unwrap()).unwrap();
+            let build_id = hex::decode(build["build_id"].as_str().unwrap()).unwrap();
+            let mut built_functions = 0;
+            for recording in &recordings {
+                let header = recording.header.as_ref().unwrap();
+                assert_eq!(
+                    header.program_id.as_deref().map(hex::encode).as_deref(),
+                    registration["program"]["program_id"].as_str()
+                );
+                assert!(header.build.is_none(), "the build's row is registered apart");
+                assert_eq!(header.os.as_deref(), Some(std::env::consts::OS));
+                assert_eq!(header.arch.as_deref(), Some(std::env::consts::ARCH));
+                for function in &recording.definitions.as_ref().unwrap().functions {
+                    let Some(
+                        btel_recorder::proto::function_definition::Resolution::Metadata(metadata),
+                    ) = &function.resolution
+                    else {
+                        continue;
+                    };
+                    if metadata.compilation_unit_hash.as_deref() == Some(unit.as_slice()) {
+                        assert_eq!(metadata.build_id.as_deref(), Some(build_id.as_slice()));
+                        built_functions += 1;
+                    } else {
+                        assert_eq!(metadata.build_id, None, "no build produced {}", metadata.fqn);
+                    }
+                }
+            }
+            assert!(built_functions > 0, "a function of the built package ran");
+
             for recording in &recordings {
                 let header = recording.header.as_ref().unwrap();
                 assert_eq!(header.host.as_deref(), Some("baml"));

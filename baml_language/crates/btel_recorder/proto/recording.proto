@@ -47,6 +47,8 @@ message RecordingHeader {
                                  // and the build of the program's package.
                                  // 15 adds the source line of a log event and the
                                  // error a thread ended with.
+                                 // 16 adds the build of a function's package and
+                                 // the process's operating system and architecture.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -65,8 +67,14 @@ message RecordingHeader {
   // Derived from the program's packages when they record their hashes, so
   // every run of one program writes the same value; random otherwise.
   optional bytes program_id = 12;
-  // Minor 14. The build of the program's own package.
+  // Minor 14. The build of the program's own package. Local recordings
+  // only: a cloud recording names builds by FunctionMetadata.build_id, and
+  // the build's row reaches BCS by its own registration.
   Build build = 13;
+  // Minor 16. The operating system and CPU architecture the process runs
+  // on, as Rust names them (linux, macos, windows; x86_64, aarch64).
+  optional string os = 14;
+  optional string arch = 15;
 }
 
 // One run of the compiler building one package. Two builds of the same code
@@ -136,6 +144,10 @@ message FunctionMetadata {
   // build of the package its spans ran. Exactly 32 bytes when supplied.
   // Absent for functions no compiled package owns and for older producers.
   optional bytes compilation_unit_hash = 17;
+  // Minor 16. The build that produced the function's package: exactly 16
+  // bytes (UUID). Absent when no recorded build did, such as a precompiled
+  // standard library.
+  optional bytes build_id = 18;
 }
 
 // Line table of the code the VM executed, sorted by strictly increasing PC.

@@ -3,10 +3,27 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-#[derive(Default, Deserialize)]
+#[derive(Deserialize)]
 pub(crate) struct Boundary {
     pub project: Option<String>,
     pub api_url: Option<String>,
+    /// Builds sent to Boundary carry the package's source text (BEP-088).
+    #[serde(default = "enabled")]
+    pub upload_source: bool,
+}
+
+fn enabled() -> bool {
+    true
+}
+
+impl Default for Boundary {
+    fn default() -> Self {
+        Self {
+            project: None,
+            api_url: None,
+            upload_source: true,
+        }
+    }
 }
 impl Boundary {
     pub fn read(root: &Path) -> Result<Self> {

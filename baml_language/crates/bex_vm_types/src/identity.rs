@@ -70,6 +70,21 @@ pub struct PackageMetadata {
     pub compiler_version: String,
 }
 
+impl PackageMetadata {
+    /// The package as a build reports it to BCS (BEP-088).
+    #[must_use]
+    pub fn record(&self) -> btel_types::PackageRecord {
+        btel_types::PackageRecord {
+            compilation_unit_hash: self.compilation_unit_hash.0,
+            package_interface: self.package_interface.0,
+            dependencies: self.dependencies.iter().map(|hash| hash.0).collect(),
+            name: self.claimed.name.clone().unwrap_or_default(),
+            version: self.claimed.version.clone(),
+            compiler_version: self.compiler_version.clone(),
+        }
+    }
+}
+
 /// Hashes a compiled package into its [`CompilationUnitHash`]:
 ///
 /// ```text
@@ -343,6 +358,22 @@ mod tests {
             formula("0.17.1", "0a.baml", b"same"),
             formula("0.17.10", "a.baml", b"same"),
             "a version boundary must not be absorbed into the first path"
+        );
+    }
+
+    /// BCS recomputes the hash over the source a build uploads and refuses
+    /// one that differs: this is the vector of its own verification test.
+    #[test]
+    fn package_source_hash_is_the_hash_bcs_verifies() {
+        use std::fmt::Write as _;
+        let hash = package_source_hash([("main.baml", b"hello".as_slice())]);
+        let mut hex = String::new();
+        for byte in hash.0 {
+            write!(hex, "{byte:02x}").unwrap();
+        }
+        assert_eq!(
+            hex,
+            "72659bc07e31fabd0451aee9113c58816e63d541556e402bc8d6938ef354cd1d"
         );
     }
 

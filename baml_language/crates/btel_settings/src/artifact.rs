@@ -120,6 +120,10 @@ pub struct ArtifactTelemetry {
     /// response bodies, at any level.
     #[serde(default)]
     pub omit_http_bodies: bool,
+    /// Set by `upload_source = false` under `[boundary]`: a build the
+    /// artifact's runtime makes registers with BCS without its source text.
+    #[serde(default)]
+    pub omit_source: bool,
 }
 
 /// An omitted binding follows credential-dependent defaults: embedded credentials
@@ -269,7 +273,7 @@ const ENVVAR_FIELDS: &[&str] = &["BAML_TELEMETRY", "BOUNDARY_PROJECT", "BOUNDARY
 /// Other manifest tables (package, generators, etc.) have their own parsers.
 fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError> {
     for (name, fields) in [
-        ("boundary", &["project", "api_url"][..]),
+        ("boundary", &["project", "api_url", "upload_source"][..]),
         ("pack", PRODUCER_FIELDS),
         ("bridge", PRODUCER_FIELDS),
     ] {
@@ -353,6 +357,11 @@ impl ArtifactTelemetry {
                             .to_owned(),
                     );
                 }
+            }
+            if let Some(value) = boundary.get("upload_source") {
+                policy.omit_source = !value.as_bool().ok_or_else(|| {
+                    PolicyError("boundary.upload_source must be true or false.".into())
+                })?;
             }
         }
         let Some(value) = manifest.get(name) else {
@@ -734,7 +743,8 @@ api_ur = "https://api.cloud.boundaryml.com""#,
 
   Valid [boundary] settings:
     project
-    api_url"#,
+    api_url
+    upload_source"#,
             ),
         ] {
             let manifest: toml::Value = input.parse().unwrap();
@@ -788,7 +798,7 @@ action = "warn"
 "#,
         )
         .unwrap();
-        let original_borsh = [2, 0, 1, 0, 0, 0, 0, 0, 0];
+        let original_borsh = [2, 0, 1, 0, 0, 0, 0, 0, 0, 0];
         let legacy_borsh: ArtifactTelemetry = borsh::from_slice(&original_borsh).unwrap();
         assert_eq!(borsh::to_vec(&legacy).unwrap(), original_borsh);
         for policy in [legacy, legacy_borsh] {

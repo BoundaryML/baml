@@ -952,6 +952,7 @@ impl Function {
             package_name,
             compilation_unit_hash: super::owner::package_compilation_unit_hash(self.owner)
                 .map(|hash| hash.0),
+            build_id: super::owner::package_build_id(self.owner),
             namespace,
             argument_layout: self.telemetry_argument_layout(),
             source_map: self.telemetry_source_map(),

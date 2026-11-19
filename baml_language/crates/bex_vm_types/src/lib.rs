@@ -50,7 +50,7 @@ pub use roots::{
     RootVisitor, Survival, Weak,
 };
 pub use runtime_compile::{
-    DeclFingerprints, MountHead, RuntimeCompileDiagnostic, RuntimeCompileMode,
+    DeclFingerprints, MountHead, RecordBuild, RuntimeCompileDiagnostic, RuntimeCompileMode,
     RuntimeCompileRequest, RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails,
     RuntimeDiagnosticHighlight, RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase,
     RuntimeDiagnosticRelatedInfo, RuntimeDiagnosticSeverity, RuntimeMountEdge, RuntimeMountSurface,

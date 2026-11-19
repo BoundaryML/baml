@@ -29,6 +29,24 @@ pub async fn prepare(
     .await
 }
 
+/// Register one build: its row, its package and program, and the descriptor
+/// of the source it will upload.
+pub async fn register_build(
+    client: &Client,
+    endpoint: &Url,
+    bearer_token: Option<&str>,
+    authorization: Option<&RequestAuthorization>,
+    body: Bytes,
+) -> Result<Response, ControlError> {
+    send_control(endpoint, bearer_token, authorization, || {
+        client
+            .post(endpoint.clone())
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(body.clone())
+    })
+    .await
+}
+
 /// Report process liveness using the same authorization as upload preparation.
 pub async fn heartbeat(
     client: &Client,

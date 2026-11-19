@@ -31,6 +31,7 @@ pub struct TelemetryRecording {
     host: String,
     sources: Vec<(String, String)>,
     build: Option<BuildProvider>,
+    upload_source: bool,
     exit: Arc<btel_types::ProcessExitSlot>,
     initial_failure: Option<InitialFailurePolicy>,
     recording_override: RecordingOverride,
@@ -38,7 +39,7 @@ pub struct TelemetryRecording {
 
 /// Describes the build of a program's package; see
 /// [`TelemetryRecording::with_build`].
-pub type BuildProvider = Box<dyn FnOnce() -> Option<btel_types::BuildRecord> + Send>;
+pub type BuildProvider = Box<dyn FnOnce() -> Option<btel_types::BuildRegistration> + Send>;
 enum Destination {
     InvalidConfiguration(Box<bcs_api::diagnostics::Diagnostic>),
     LocalFiles {
@@ -65,12 +66,32 @@ pub(crate) enum RecordingDelivery {
         initial_auth_error: Arc<OnceLock<EngineError>>,
         initial_failure: InitialFailurePolicy,
         recording_override: RecordingOverride,
+        /// Builds registered with BCS carry their source text.
+        upload_source: bool,
         #[cfg(feature = "telemetry_diagnostics")]
         gauges: Arc<btel_bcs::PublisherGauges>,
     },
 }
 
 impl RecordingDelivery {
+    /// How a package compiled at run time describes itself as a build, when
+    /// this delivery registers builds: only BCS takes them.
+    pub(crate) fn record_build(&self) -> Option<bex_vm_types::RecordBuild> {
+        match self {
+            Self::Cloud { upload_source, .. } => Some(bex_vm_types::RecordBuild {
+                upload_source: *upload_source,
+            }),
+            Self::Local(_) => None,
+        }
+    }
+
+    /// Register a build with BCS in the background.
+    pub(crate) fn register_build(&self, build: &btel_types::BuildRegistration) {
+        if let Self::Cloud { delivery, .. } = self {
+            delivery.handle().register_build(build);
+        }
+    }
+
     /// Start cloud delivery's shutdown timeout. Local files have none.
     pub(crate) fn start_draining(&self) {
         if let Self::Cloud { delivery, .. } = self {
@@ -178,6 +199,11 @@ impl TelemetryRecording {
     /// Resolve an artifact's explicitly permitted bindings without changing process
     /// environment. Embedded credentials never fall back to an ambient login or key.
     pub fn from_artifact(policy: &ArtifactTelemetry) -> Result<Self, EngineError> {
+        Self::destination_of(policy)
+            .map(|recording| recording.with_source_upload(!policy.omit_source))
+    }
+
+    fn destination_of(policy: &ArtifactTelemetry) -> Result<Self, EngineError> {
         use btel_settings::artifact::IngestionSelection;
         if policy.resolve_level().is_none() {
             return Ok(Self::user_files(RecordingConfig::default()));
@@ -388,6 +414,7 @@ impl TelemetryRecording {
             host: "unknown".to_owned(),
             sources: Vec::new(),
             build: None,
+            upload_source: true,
             exit: Arc::default(),
             destination: Destination::Cloud {
                 publisher,
@@ -412,6 +439,7 @@ impl TelemetryRecording {
             host: "unknown".to_owned(),
             sources: Vec::new(),
             build: None,
+            upload_source: true,
             exit: Arc::default(),
             destination: Destination::LocalFiles {
                 recordings: project_root
@@ -439,6 +467,7 @@ impl TelemetryRecording {
             host: "unknown".to_owned(),
             sources: Vec::new(),
             build: None,
+            upload_source: true,
             exit: Arc::default(),
             destination: Destination::LocalFiles { recordings, cas },
             initial_failure: None,
@@ -458,6 +487,7 @@ impl TelemetryRecording {
             host: "unknown".to_owned(),
             sources: Vec::new(),
             build: None,
+            upload_source: true,
             exit: Arc::default(),
             destination: Destination::UserFiles {
                 project_from_cwd: false,
@@ -508,13 +538,65 @@ impl TelemetryRecording {
     }
 
     /// How to describe the build of the program's package (its git commit,
-    /// source hash and unit hash). Called at most once, and only when a
-    /// recording that keeps it starts, so a host pays for reading git and
-    /// formatting sources only then.
+    /// source hash and unit hash). Called at most once, and only when the
+    /// recording starts, so a host pays for reading git and formatting
+    /// sources only then. A local recording writes the build in its header;
+    /// a cloud recording registers it with BCS (BEP-088).
     #[must_use]
     pub fn with_build(mut self, build: BuildProvider) -> Self {
         self.build = Some(build);
         self
+    }
+
+    /// Whether builds registered with BCS carry their source text: the
+    /// program's own, and those of packages it compiles at run time.
+    /// On unless the project opts out (`upload_source = false`).
+    #[must_use]
+    pub fn with_source_upload(mut self, upload_source: bool) -> Self {
+        self.upload_source = upload_source;
+        self
+    }
+
+    /// Whether this recording's destination takes builds: only BCS does.
+    #[must_use]
+    pub fn registers_builds(&self) -> bool {
+        matches!(self.destination, Destination::Cloud { .. })
+    }
+
+    /// Register `build` with this recording's BCS destination on the
+    /// calling thread, for a build that runs no program (`baml pack`,
+    /// `baml generate`). Nothing is sent to any other destination.
+    ///
+    /// # Errors
+    ///
+    /// The Boundary configuration is invalid, or BCS did not take the build.
+    pub fn register_build(
+        &self,
+        mut build: btel_types::BuildRegistration,
+    ) -> Result<(), EngineError> {
+        if !self.upload_source {
+            build.source = None;
+        }
+        match &self.destination {
+            Destination::Cloud { delivery, .. } => {
+                btel_bcs::build::register_blocking(delivery, &build)
+                    .map_err(|error| EngineError::Other(error.to_string()))
+            }
+            Destination::InvalidConfiguration(diagnostic) => {
+                Err(EngineError::CloudAuthorization(diagnostic.clone()))
+            }
+            Destination::LocalFiles { .. } | Destination::UserFiles { .. } => Ok(()),
+        }
+    }
+
+    /// The build of the program's package, without its source text when the
+    /// project keeps it from BCS.
+    fn build(&mut self) -> Option<btel_types::BuildRegistration> {
+        let mut build = self.build.take()?()?;
+        if !self.upload_source {
+            build.source = None;
+        }
+        Some(build)
     }
 
     /// Where the host records how the process ended.
@@ -526,9 +608,10 @@ impl TelemetryRecording {
     /// allowlisted environment metadata and omit arguments/sources; local
     /// recordings retain the caller's context and existing debugging details.
     fn process(
-        &mut self,
+        &self,
         launch_context: &btel_types::context::Context,
         program_id: Option<[u8; 16]>,
+        build: Option<&btel_types::BuildRegistration>,
     ) -> btel_recorder::ProcessRecording {
         let recorded_context = if matches!(self.destination, Destination::Cloud { .. }) {
             environment::context(launch_context)
@@ -551,6 +634,8 @@ impl TelemetryRecording {
                         .collect()
                 },
                 started_at_unix_ns: process_started_at_unix_ns(),
+                os: std::env::consts::OS.to_owned(),
+                arch: std::env::consts::ARCH.to_owned(),
             },
             // Cloud source uploads are a separate feature; local recordings retain their code.
             sources: (matches!(
@@ -568,19 +653,17 @@ impl TelemetryRecording {
             ),
             exit: Arc::clone(&self.exit),
             program_id,
-            // The build names the git remote and branch: like the sources,
-            // it stays out of cloud recordings until source upload lands. A
-            // cloud recording drops the program identity too, in its builder.
-            build: self
-                .build
-                .take()
+            // A cloud recording names builds by ID on each function; the
+            // build's row, with its git remote and branch, is registered
+            // with BCS apart from the recording.
+            build: build
                 .filter(|_| {
                     matches!(
                         self.destination,
                         Destination::LocalFiles { .. } | Destination::UserFiles { .. }
                     )
                 })
-                .and_then(|build| build()),
+                .map(|registration| registration.build.clone()),
         }
     }
 
@@ -598,7 +681,8 @@ impl TelemetryRecording {
         EngineError,
     > {
         let transport = btel_settings::transport::ChunkConfig::default();
-        let process = self.process(launch_context, program_id);
+        let build = self.build();
+        let process = self.process(launch_context, program_id, build.as_ref());
         self.config
             .validate_transport(&transport)
             .map_err(|error| EngineError::Other(error.to_owned()))?;
@@ -623,6 +707,8 @@ impl TelemetryRecording {
                     functions,
                     transport,
                     process,
+                    build.as_ref(),
+                    self.upload_source,
                 );
             }
             Destination::UserFiles { project_from_cwd } => user_file_roots(
@@ -711,6 +797,8 @@ impl TelemetryRecording {
         functions: Arc<btel_types::FunctionMetadataTable>,
         transport: btel_settings::transport::ChunkConfig,
         process: btel_recorder::ProcessRecording,
+        build: Option<&btel_types::BuildRegistration>,
+        upload_source: bool,
     ) -> Result<
         (
             Arc<btel_processor::TelemetryRuntime>,
@@ -769,8 +857,12 @@ impl TelemetryRecording {
                 ) {
                     Ok(worker) => {
                         let handle = worker.handle();
+                        if let Some(build) = build {
+                            handle.register_build(build);
+                        }
                         delivery = Some(RecordingDelivery::Cloud {
                             delivery: Arc::new(worker),
+                            upload_source,
                             initial_auth_cancel: initial_auth_cancel.clone(),
                             authorization_context: authorization_context.clone(),
                             initial_auth_error: Arc::new(OnceLock::new()),
@@ -1295,20 +1387,39 @@ mod source_privacy_tests {
     use super::*;
 
     #[test]
-    /// Cloud process snapshots gain environment metadata without source text;
-    /// local snapshots retain their sources and unmodified launch context.
+    /// Cloud process snapshots gain environment metadata without source text
+    /// or the build's row, which reach BCS by the build's registration; local
+    /// snapshots retain their sources, build and unmodified launch context.
     fn cloud_recordings_exclude_sources_while_local_recordings_remain_readable() {
         let sources = vec![(
             "main.baml".to_owned(),
             "function Secret() -> int { 42 }".to_owned(),
         )];
-        let build = || btel_types::BuildRecord {
-            build_id: [1; 16],
-            timestamp_unix_ns: 7,
-            origin: btel_types::BuildOrigin::Run,
-            git: None,
-            source_hash: [2; 32],
-            compilation_unit_hash: [3; 32],
+        let build = || btel_types::BuildRegistration {
+            build: btel_types::BuildRecord {
+                build_id: [1; 16],
+                timestamp_unix_ns: 7,
+                origin: btel_types::BuildOrigin::Run,
+                git: None,
+                source_hash: [2; 32],
+                compilation_unit_hash: [3; 32],
+            },
+            package: btel_types::PackageRecord {
+                compilation_unit_hash: [3; 32],
+                package_interface: [5; 32],
+                dependencies: Vec::new(),
+                name: "app".into(),
+                version: None,
+                compiler_version: "test".into(),
+            },
+            program: None,
+            source: Some(
+                [(
+                    "main.baml".to_owned(),
+                    "function Secret() -> int { 42 }".to_owned(),
+                )]
+                .into(),
+            ),
         };
         let mut local =
             TelemetryRecording::local_files("/tmp/baml-source-privacy", RecordingConfig::default())
@@ -1322,15 +1433,33 @@ mod source_privacy_tests {
             ),
         )
         .with_sources(sources)
-        .with_build(Box::new(|| {
-            unreachable!("a cloud recording never describes the build")
-        }));
+        .with_build(Box::new(move || Some(build())))
+        .with_source_upload(false);
         let program_id = Some([4; 16]);
-        let local_process = local.process(&btel_types::context::Context::default(), program_id);
+        let described = local.build();
+        assert_eq!(described, Some(build()));
+        let local_process = local.process(
+            &btel_types::context::Context::default(),
+            program_id,
+            described.as_ref(),
+        );
         assert!(local_process.sources.is_some());
-        assert_eq!(local_process.build, Some(build()));
+        assert_eq!(local_process.build, Some(build().build));
         assert_eq!(local_process.program_id, program_id);
-        let cloud_process = cloud.process(&btel_types::context::Context::default(), program_id);
+        // A project that opts out registers its builds without their text.
+        let registered = cloud.build();
+        assert_eq!(
+            registered,
+            Some(btel_types::BuildRegistration {
+                source: None,
+                ..build()
+            })
+        );
+        let cloud_process = cloud.process(
+            &btel_types::context::Context::default(),
+            program_id,
+            registered.as_ref(),
+        );
         assert!(cloud_process.sources.is_none());
         assert_eq!(cloud_process.build, None);
         assert_eq!(cloud_process.program_id, program_id);
@@ -1344,11 +1473,19 @@ mod source_privacy_tests {
             .root_id()
         };
         assert_eq!(
-            local.process(&context, None).context.unwrap().root_id(),
+            local
+                .process(&context, None, None)
+                .context
+                .unwrap()
+                .root_id(),
             snapshot(&context)
         );
         assert_ne!(
-            cloud.process(&context, None).context.unwrap().root_id(),
+            cloud
+                .process(&context, None, None)
+                .context
+                .unwrap()
+                .root_id(),
             snapshot(&context)
         );
     }

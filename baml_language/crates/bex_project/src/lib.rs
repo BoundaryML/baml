@@ -47,6 +47,7 @@ pub use sys_types::{CallId, CancellationToken};
 use thiserror::Error;
 
 mod bex;
+pub mod build;
 mod fs;
 pub mod hotswap_fingerprint;
 mod precompiled_stdlib;

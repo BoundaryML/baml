@@ -230,7 +230,10 @@ use sha2::{Digest, Sha256};
 /// and the compiler version, a `PackageRecord` carries the package's
 /// `metadata` (its content hashes and claim, BEP-085), and a
 /// `ProgramPackage` carries it into the executable.
-pub const FORMAT_VERSION: u32 = 28;
+///
+/// Version 29: a `ProgramPackage` carries the `build_id` of the build that
+/// produced it (BEP-088). A cached program names none.
+pub const FORMAT_VERSION: u32 = 29;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
