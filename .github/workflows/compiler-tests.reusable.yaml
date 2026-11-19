@@ -70,12 +70,9 @@ jobs:
         with:
           install_args: "sccache direnv cargo:cargo-nextest"
 
-      # EXPERIMENT (do not merge): pin the commit baml_artifact stamps, then
-      # cache the whole target directory, our own crates included.
-      - uses: ./.github/actions/pin-git-stamp
-        with:
-          sha: ${{ github.event.pull_request.base.sha || github.sha }}
-
+      # EXPERIMENT (do not merge): cache the whole target directory. No git
+      # stamp pin here: this test packs against the workspace, and the CLI
+      # refuses a workspace whose commit differs from the one it was built from.
       - uses: astral-sh/github-actions/rust-workspace-cache@61a5a2c7e0df1c0caf46fe5d1e74a4cb8a7205f8 # 2026.11.16.1
         with:
           workspace: baml_language
