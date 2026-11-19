@@ -45,3 +45,72 @@ function union_tuple_slot_missing_string(t: (R | string, bool)) -> int {
         (R[], _) => 2,
     }
 }
+
+type Void = never;
+
+class VoidBox {
+    v: Void,
+}
+
+// A field whose alias names an uninhabited type makes the class
+// uninhabited: the wildcard arm is unreachable.
+function uninhabited_alias_field(b: VoidBox) -> int {
+    match (b) {
+        _ => 1,
+    }
+}
+
+// `[let v: true]` cannot match an `int[]`, and `bool[]` is already
+// covered: the middle arm is unreachable.
+function list_member_fit(xs: bool[] | int[]) -> int {
+    match (xs) {
+        [..]: bool[] => 1,
+        [let v: true] => 2,
+        [..]: int[] => 3,
+    }
+}
+
+// Witnesses for the interface destructure over implementors, the nested
+// tuple shape, the typed rest and the solved hole.
+interface HasV {
+    v: int,
+}
+
+class Ia {
+    v: int,
+
+    implements HasV {}
+}
+
+class Ib {
+    v: int,
+
+    implements HasV {}
+}
+
+function interface_missing_implementor(x: Ia | Ib | null) -> int {
+    match (x) {
+        HasV { v: _ } => 1,
+    }
+}
+
+function nested_tuple_shape(t: ((int, int), int) | (string, int)) -> int {
+    match (t) {
+        ((_, _), _) => 1,
+    }
+}
+
+function typed_rest(xs: int[] | string[]) -> int {
+    match (xs) {
+        [..let rest: int[]] => 1,
+    }
+}
+
+function solved_hole(b: Box<int> | Box<string>) -> int {
+    match (b) {
+        let x: Box<_> => {
+            let t: Box<int> = x;
+            1
+        }
+    }
+}
