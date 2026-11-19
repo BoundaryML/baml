@@ -67,7 +67,7 @@ The rest of the language:
 - **Interfaces = shared behavior + dynamic dispatch.** `interface I { function m(self) -> T throws never; }`; each method declares its `throws` clause. A method with a body is a default implementation, which an implementor may override. A class opts in via `implements I { … }` inside the class; a value typed `I` (or `I[]`) dispatches to the implementor at runtime. Interfaces can also declare associated types and generic bounds. `baml describe interfaces`.
 - **Operators are interfaces, like Rust's traits.** `<`, `>`, and sorting need `baml.ops.Compare` (`cmp` returns a `baml.ops.Ordering`); `+`, `-`, `*`, `/`, and `%` call `baml.ops.Add<Rhs>`, `Subtract`, `Multiply`, `Divide`, and `Remainder`, each with a `type Output`; `==` compares structurally (deep, across classes/arrays/maps) unless the type implements `baml.ops.Equals`. `${}` uses `baml.ToString`, and json uses `baml.ToJson` / `baml.FromJson`. Implement them on your own classes to get the operator. `baml describe baml.ops`.
 - **`requires`, not inheritance.** BAML has no inheritance: a class can't extend a class. `interface Pet requires Animal, Named { … }` makes those interfaces prerequisites of `Pet`. `Pet`'s default bodies can call their methods, and a value typed `Pet` exposes them. Every `Pet` implementor also writes its own `implements Animal` and `implements Named` blocks (E0125 otherwise). A diamond of `requires` compiles, and the shared interface is implemented once; a cycle is an error. When two interfaces on one class declare the same method name, an unqualified call is an error (E0121); call `obj.as<I>.m()` instead.
-- **Pattern matching.** `match (v) { … }` over values/types; arms are `pattern => expr`: literals, `let x: T` (bind + narrow), class destructure `T { f: let y }`, or-patterns `A | B`, guards `… if cond`, `_`; must be exhaustive. Also `v is T` → bool (narrows) and `if let x: T = v { … } else { … }`. `baml describe patterns`.
+- **Pattern matching.** `match (v) { … }` over values/types; arms are `pattern => expr`: literals, `let x: T` (bind + narrow), class destructure `T { f: let y }`, or-patterns `A | B`, guards `… if cond`, `_`; must be exhaustive. Also `v is T` → bool (narrows), which takes any pattern (`k is Kind.A | Kind.B`), and `if let x: T = v { … } else { … }`. `baml describe patterns`.
 - **Closures** `(x) -> { ... }` infer param/return from context (annotate `(x: T) -> R` only when ambiguous; the `->` is required).
 - **Stdlib methods are snake_case, called on a value.** Some return new, some mutate in place, a few do both (`sort_by_key` sorts the receiver *and* returns it). To read the docs, run `baml describe <word/type/identifier/keyword/etc>`.
 - **Arrays have a JS-like method set**: `map`/`filter`/`filter_map`/`reduce`/`find`/`some`/`every`/`flat_map`/`slice`/`concat`/`join`/`includes`/length(), plus in-place `push`/`pop`/`shift`/`unshift`/`sort_by`/`sort_by_key`. Most take closures that can `throws`. `.map`/`.filter` return arrays directly (no `.collect()`). `baml describe Array` gives more info.
@@ -1491,6 +1491,82 @@ class Tag {
         }
         Tag { name: name }
     }
+}
+```
+
+### 28. Use `is` with an or-pattern instead of `==` chains
+
+`is` takes any pattern, so one test covers several values. The subject is written and read once.
+
+Bad:
+
+```baml
+enum UserKind {
+    Admin,
+    Moderator,
+    Helper,
+    Member,
+}
+
+class User {
+    name: string,
+    kind: UserKind,
+}
+
+function is_staff(user: User) -> bool {
+    user.kind == UserKind.Admin || user.kind == UserKind.Moderator || user.kind == UserKind.Helper
+}
+```
+
+Good:
+
+```baml
+enum UserKind {
+    Admin,
+    Moderator,
+    Helper,
+    Member,
+}
+
+class User {
+    name: string,
+    kind: UserKind,
+}
+
+function is_staff(user: User) -> bool {
+    user.kind is UserKind.Admin | UserKind.Moderator | UserKind.Helper
+}
+```
+
+### 29. Don't write functions that only forward their arguments
+
+A function whose body is one call with the same arguments adds a name to learn and nothing else. Call the target directly. A wrapper earns its place when it does something: fixes an argument, converts a type, or handles an error.
+
+Bad:
+
+```baml
+function shipping_cost(weight_kg: float, distance_km: float) -> float {
+    2.5 + weight_kg * 0.8 + distance_km * 0.01
+}
+
+function calculate_shipping(weight_kg: float, distance_km: float) -> float {
+    shipping_cost(weight_kg, distance_km)
+}
+
+function order_total(subtotal: float, weight_kg: float, distance_km: float) -> float {
+    subtotal + calculate_shipping(weight_kg, distance_km)
+}
+```
+
+Good:
+
+```baml
+function shipping_cost(weight_kg: float, distance_km: float) -> float {
+    2.5 + weight_kg * 0.8 + distance_km * 0.01
+}
+
+function order_total(subtotal: float, weight_kg: float, distance_km: float) -> float {
+    subtotal + shipping_cost(weight_kg, distance_km)
 }
 ```
 
