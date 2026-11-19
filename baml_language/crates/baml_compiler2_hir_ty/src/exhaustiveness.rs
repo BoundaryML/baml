@@ -1035,13 +1035,27 @@ struct Row<'p> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ArmId(pub usize);
 
+/// A place under investigation: one matrix column. Mirrors rustc's
+/// `PlaceInfo`.
+#[derive(Debug, Clone)]
+struct PlaceInfo {
+    ty: ColumnTy,
+    /// Whether a column with no present ctor still names each missing ctor
+    /// instead of reporting `_`; see [`CtorSplit::with_missing`]. rustc's
+    /// `is_scrutinee`: true for the scrutinee itself, false for field
+    /// sub-places. Also true for the place under a `UnionMember`, which
+    /// narrows its parent instead of projecting a field: the member tag and
+    /// the member's own ctor together play a rustc enum variant, which is
+    /// always named once the variant is reported missing (`Some(_)`).
+    names_missing_ctors: bool,
+}
+
 #[derive(Debug, Clone)]
 struct Matrix<'p> {
     rows: Vec<Row<'p>>,
-    /// Column types. Length = width of the matrix. As we specialize on a
-    /// column-0 ctor, this shifts — column 0's sub-pattern types take its
-    /// place.
-    col_tys: Vec<ColumnTy>,
+    /// Column places. Length = width of the matrix. As we specialize on a
+    /// column-0 ctor, this shifts: column 0's sub-places take its place.
+    places: Vec<PlaceInfo>,
 }
 
 impl<'p> Matrix<'p> {
@@ -1057,15 +1071,18 @@ impl<'p> Matrix<'p> {
             .collect();
         Self {
             rows,
-            col_tys: vec![scrut_ty],
+            places: vec![PlaceInfo {
+                ty: scrut_ty,
+                names_missing_ctors: true,
+            }],
         }
     }
 
     fn col_count(&self) -> usize {
-        self.col_tys.len()
+        self.places.len()
     }
-    fn first_col_ty(&self) -> &ColumnTy {
-        &self.col_tys[0]
+    fn head_place(&self) -> &PlaceInfo {
+        &self.places[0]
     }
 
     /// Specialize: keep only rows whose column-0 ctor is covered by `ctor`,
@@ -1116,7 +1133,7 @@ impl<'p> Matrix<'p> {
             }
             return Matrix {
                 rows: new_rows,
-                col_tys: self.col_tys.clone(),
+                places: self.places.clone(),
             };
         }
 
@@ -1136,12 +1153,7 @@ impl<'p> Matrix<'p> {
                     });
                 }
                 _ => {
-                    let interface_projection = match (&head.ctor, ctor) {
-                        (Ctor::Interface(iface_ty), Ctor::Class(class_qtn, class_args)) => {
-                            cx.interface_field_projection_for_class(iface_ty, class_qtn, class_args)
-                        }
-                        _ => None,
-                    };
+                    let interface_projection = interface_projection(cx, &head.ctor, ctor);
                     if !head.ctor.covers(ctor, cx) && interface_projection.is_none() {
                         // Row's pattern doesn't accept any value of shape
                         // `ctor`. Skip — this row can't contribute to this
@@ -1209,12 +1221,30 @@ impl<'p> Matrix<'p> {
                 }
             }
         }
-        let mut col_tys = sub_tys.to_vec();
-        col_tys.extend_from_slice(&self.col_tys[1..]);
+        let names_missing_ctors = matches!(ctor, Ctor::UnionMember(_));
+        let mut places: Vec<PlaceInfo> = sub_tys
+            .iter()
+            .map(|ty| PlaceInfo {
+                ty: ty.clone(),
+                names_missing_ctors,
+            })
+            .collect();
+        places.extend_from_slice(&self.places[1..]);
         Matrix {
             rows: new_rows,
-            col_tys,
+            places,
         }
+    }
+}
+
+/// The class field index of each interface field when an interface row head
+/// joins a class ctor's branch, or `None` when it does not.
+fn interface_projection(cx: &dyn PatCtx, head: &Ctor, ctor: &Ctor) -> Option<Vec<usize>> {
+    match (head, ctor) {
+        (Ctor::Interface(iface_ty), Ctor::Class(class_qtn, class_args)) => {
+            cx.interface_field_projection_for_class(iface_ty, class_qtn, class_args)
+        }
+        _ => None,
     }
 }
 
@@ -1342,12 +1372,9 @@ impl WitnessMatrix {
     }
     /// For each missing ctor, clone the witness matrix and prepend a
     /// wildcard-filled pat for that ctor at top. Used for the synthetic
-    /// `Missing` ctor case.
-    ///
-    /// Skips ctors whose value-set is empty: if any sub-field type is
-    /// uninhabited (`Ty::Never`), no value can match this ctor, so it is
-    /// not a real "missing case" — e.g., `Array<Never>` cannot inhabit
-    /// length ≥ 1, so the `[Never, ..]` witness must not be reported.
+    /// `Missing` ctor case. `missing` never holds an empty ctor (one with an
+    /// uninhabited field, e.g. `[Never, ..]`): `CtorSplit::with_missing`
+    /// drops those.
     fn apply_missing(&mut self, missing: &[Ctor], col: &ColumnTy, cx: &dyn PatCtx) {
         let original = std::mem::take(&mut self.0);
         for ctor in missing {
@@ -1355,9 +1382,6 @@ impl WitnessMatrix {
             // the parent column type. For `Class(Node)`, fields are typed
             // by the class's declared field types.
             let field_tys = ctor_sub_tys(cx, ctor, col);
-            if field_tys.iter().any(|t| !cx.is_inhabited(t)) {
-                continue;
-            }
             let fields: Vec<WitnessPat> = field_tys
                 .iter()
                 .map(|t| WitnessPat::wildcard(t.ty().clone()))
@@ -1399,12 +1423,13 @@ fn compute_exhaustiveness(cx: &dyn PatCtx, matrix: &mut Matrix<'_>, witnesses: &
         return;
     }
 
-    let col_ty = matrix.first_col_ty().clone();
+    let place = matrix.head_place().clone();
+    let col_ty = place.ty.clone();
     let CtorSplit {
         split,
         missing: missing_in_matrix,
         reachability_only,
-    } = split_ctors(cx, &col_ty, matrix);
+    } = split_ctors(cx, &place, matrix);
 
     for (ctor, in_alphabet) in split
         .iter()
@@ -1493,11 +1518,56 @@ impl CtorSplit {
             reachability_only: vec![],
         }
     }
+
+    /// The branches `split` plus one synthetic `Missing` branch standing for
+    /// the ctors in `missing`, derived together so that the branch exists
+    /// exactly when some missing ctor has a value. Mirrors rustc's
+    /// `split_column_ctors`:
+    /// - Empty ctors (an uninhabited field) are never missing (rustc's
+    ///   `missing_empty`); without any other, there is no `Missing` branch,
+    ///   so no wildcard row is marked useful through it.
+    /// - `all_missing` (no ctor of the column is present) reports `_` instead
+    ///   of each ctor unless the place names its missing ctors (rustc's
+    ///   `report_individual_missing_ctors`). Enumerating per column would make
+    ///   the witnesses the cartesian product of every unmatched field.
+    fn with_missing(
+        cx: &dyn PatCtx,
+        place: &PlaceInfo,
+        mut split: Vec<Ctor>,
+        missing: Vec<Ctor>,
+        all_missing: bool,
+        reachability_only: Vec<Ctor>,
+    ) -> Self {
+        let mut missing: Vec<Ctor> = missing
+            .into_iter()
+            .filter(|ctor| !ctor_is_empty(cx, ctor, &place.ty))
+            .collect();
+        if !missing.is_empty() {
+            split.push(Ctor::Missing);
+            if all_missing && !place.names_missing_ctors {
+                missing = vec![Ctor::Wildcard];
+            }
+        }
+        Self {
+            split,
+            missing,
+            reachability_only,
+        }
+    }
+}
+
+/// Whether no value has the shape `ctor` in column `col`, because
+/// one of its fields is uninhabited.
+fn ctor_is_empty(cx: &dyn PatCtx, ctor: &Ctor, col: &ColumnTy) -> bool {
+    ctor_sub_tys(cx, ctor, col)
+        .iter()
+        .any(|t| !cx.is_inhabited(t))
 }
 
 /// Decide which ctors to specialize on. See [`CtorSplit`] for how the
 /// returned branches participate in the verdict.
-fn split_ctors(cx: &dyn PatCtx, col: &ColumnTy, matrix: &Matrix<'_>) -> CtorSplit {
+fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorSplit {
+    let col = &place.ty;
     let col_ty = col.ty();
     // If any row has an Or-pattern at column 0, force expansion via the
     // `Or` ctor before any other split logic. Or-rows can't participate in
@@ -1515,40 +1585,34 @@ fn split_ctors(cx: &dyn PatCtx, col: &ColumnTy, matrix: &Matrix<'_>) -> CtorSpli
     // `class Node { next: Optional<Node> }`. Instead, emit a single
     // synthetic `Missing` ctor that drops the column without descending.
     // The unspecialize step (`apply_missing`) wraps the witness with one
-    // wildcard-filled pat per missing ctor of `col_ty`.
+    // wildcard-filled pat per missing ctor of `col_ty`, or with a single `_`
+    // (see `CtorSplit::with_missing`). An uninhabited column gets no branch:
+    // `with_missing` drops ctors with an uninhabited field, which catches
+    // transitively-uninhabited classes (e.g. `class A { x: Never }` or
+    // `class A { x: B }` where `B` is uninhabited) that `enumerate_ctors`
+    // alone can't detect (it returns `[Class(A)]`).
     if matrix.rows.is_empty() {
-        // Empty matrix on an uninhabited column type → vacuously exhaustive.
-        // Catches transitively-uninhabited classes (e.g. `class A { x: Never }`
-        // or `class A { x: B }` where `B` is uninhabited) that
-        // `enumerate_ctors` alone can't detect (it returns `[Class(A)]`).
-        if !cx.is_inhabited(col) {
-            return CtorSplit::alphabet(vec![], vec![]);
-        }
         // Lists: a single open-ended `[..]` witness covers "any list".
         // Check this *before* `enumerate_ctors` because List's `enumerate`
         // returns empty (slice splitting normally handles it). Without
         // this short-circuit, the empty result would incorrectly mark the
         // list as vacuously exhaustive.
-        if matches!(col_ty, Ty::List(_)) {
-            return CtorSplit::alphabet(
-                vec![Ctor::Missing],
-                vec![Ctor::Slice(SliceShape::Variable {
-                    prefix: 0,
-                    suffix: 0,
-                })],
-            );
-        }
-        let all = cx.enumerate_ctors(col);
-        if all.is_empty() {
-            // Vacuously exhaustive (e.g. `Ty::Never` directly).
-            return CtorSplit::alphabet(vec![], vec![]);
-        }
-        let missing = if all.iter().any(|c| matches!(c, Ctor::NonExhaustive)) {
-            vec![Ctor::NonExhaustive]
+        let missing = if matches!(col_ty, Ty::List(_)) {
+            vec![Ctor::Slice(SliceShape::Variable {
+                prefix: 0,
+                suffix: 0,
+            })]
         } else {
-            dedup_ctors(all)
+            // An empty alphabet (`Ty::Never`) leaves no branch: vacuously
+            // exhaustive.
+            let all = cx.enumerate_ctors(col);
+            if all.iter().any(|c| matches!(c, Ctor::NonExhaustive)) {
+                vec![Ctor::NonExhaustive]
+            } else {
+                dedup_ctors(all)
+            }
         };
-        return CtorSplit::alphabet(vec![Ctor::Missing], missing);
+        return CtorSplit::with_missing(cx, place, vec![], missing, true, vec![]);
     }
 
     let present: Vec<Ctor> = collect_column_ctors(matrix);
@@ -1561,7 +1625,7 @@ fn split_ctors(cx: &dyn PatCtx, col: &ColumnTy, matrix: &Matrix<'_>) -> CtorSpli
     // Slice types need a special split that treats variable-length patterns
     // as covering open-ended length classes — set membership isn't enough.
     if matches!(col_ty, Ty::List(_)) {
-        return split_slice_ctors(&present_no_wild, has_wildcard);
+        return split_slice_ctors(cx, place, &present_no_wild);
     }
 
     let all = cx.enumerate_ctors(col);
@@ -1579,16 +1643,15 @@ fn split_ctors(cx: &dyn PatCtx, col: &ColumnTy, matrix: &Matrix<'_>) -> CtorSpli
         }
         // Infinite alphabet (raw int/string/float, generics, opaque types).
         let mut split: Vec<Ctor> = dedup_equivalent_type_tests(cx, present_no_wild);
-        let missing = vec![Ctor::NonExhaustive];
         if has_wildcard {
             // Wildcard rows must be specialized through. NonExhaustive as a
             // pass-through ctor: concrete heads don't cover it (they get
             // skipped), but wildcard rows pad and take.
             split.push(Ctor::NonExhaustive);
+            CtorSplit::alphabet(split, vec![])
         } else {
-            split.push(Ctor::Missing);
+            CtorSplit::with_missing(cx, place, split, vec![Ctor::NonExhaustive], false, vec![])
         }
-        CtorSplit::alphabet(split, missing)
     } else if all.is_empty() {
         // Vacuously exhaustive (e.g., Never).
         CtorSplit::alphabet(vec![], vec![])
@@ -1610,10 +1673,15 @@ fn split_ctors(cx: &dyn PatCtx, col: &ColumnTy, matrix: &Matrix<'_>) -> CtorSpli
         // Membership by `covers`, not equality: a present ctor with
         // error-recovery args (`Box` with unresolved type args) covers its
         // column ctor without being identity-equal to it, and must not
-        // resurface the ctor as missing.
+        // resurface the ctor as missing. An interface head that projects
+        // onto a class ctor is present for it too, as in `specialize`.
         let missing: Vec<Ctor> = all
             .iter()
-            .filter(|c| !present_no_wild.iter().any(|p| p.covers(c, cx)))
+            .filter(|c| {
+                !present_no_wild
+                    .iter()
+                    .any(|p| p.covers(c, cx) || interface_projection(cx, p, c).is_some())
+            })
             .cloned()
             .collect();
         // Possible-but-not-covering rows — a rigid `Type` (`let t: T` in a
@@ -1630,6 +1698,12 @@ fn split_ctors(cx: &dyn PatCtx, col: &ColumnTy, matrix: &Matrix<'_>) -> CtorSpli
             .into_iter()
             .filter(|c| !all_set.contains(c))
             .collect();
+        if missing.len() == all.len() {
+            // Only reachability-only heads (and wildcards) are present. The
+            // wildcard rows are all that join any alphabet branch, so one
+            // `Missing` branch stands for every ctor.
+            return CtorSplit::with_missing(cx, place, vec![], missing, true, reachability_only);
+        }
         CtorSplit {
             split: all,
             missing,
@@ -1643,7 +1717,7 @@ fn split_ctors(cx: &dyn PatCtx, col: &ColumnTy, matrix: &Matrix<'_>) -> CtorSpli
 /// into a finite set of `Fixed` lengths plus one open-ended `Variable` that
 /// covers all longer lengths. Each output slice is tagged as seen/unseen by
 /// the column.
-fn split_slice_ctors(present: &[Ctor], _has_wildcard: bool) -> CtorSplit {
+fn split_slice_ctors(cx: &dyn PatCtx, place: &PlaceInfo, present: &[Ctor]) -> CtorSplit {
     let column: Vec<&SliceShape> = present
         .iter()
         .filter_map(|c| {
@@ -1731,14 +1805,9 @@ fn split_slice_ctors(present: &[Ctor], _has_wildcard: bool) -> CtorSplit {
         .cloned()
         .collect();
 
-    if !missing.is_empty() {
-        split.push(Ctor::Missing);
-    }
-    CtorSplit {
-        split,
-        missing,
-        reachability_only,
-    }
+    // No slice ctor present means every length class is missing.
+    let all_missing = column.is_empty();
+    CtorSplit::with_missing(cx, place, split, missing, all_missing, reachability_only)
 }
 
 fn collect_column_ctors(matrix: &Matrix<'_>) -> Vec<Ctor> {
@@ -2407,20 +2476,19 @@ mod tests {
             .map(|w| w.render(&crate::test_heads::viewpoint()))
             .collect();
 
+        // rustc reports `(Some(true), _)` and `(None, _)` here: the right
+        // column is fully missing under a non-false left side, so it
+        // collapses to `_` instead of listing every right value.
         assert_eq!(
             witnesses.len(),
-            8,
-            "all Optional<bool> pairs except false/false should be missing"
+            4,
+            "all Optional<bool> pairs except false/false should be missing, got {witnesses:?}"
         );
         for expected in [
-            "OptionalPair { true, true }",
-            "OptionalPair { true, false }",
-            "OptionalPair { true, null }",
+            "OptionalPair { true, _ }",
             "OptionalPair { false, true }",
             "OptionalPair { false, null }",
-            "OptionalPair { null, true }",
-            "OptionalPair { null, false }",
-            "OptionalPair { null, null }",
+            "OptionalPair { null, _ }",
         ] {
             assert!(
                 witnesses.iter().any(|w| w == expected),
@@ -3170,16 +3238,9 @@ mod tests {
             .iter()
             .map(|w| w.render(&crate::test_heads::viewpoint()))
             .collect();
-        // Three missing combos: (T,F), (F,T), (F,F). Just check rendering
-        // includes the class name and both bool words.
-        assert_eq!(strs.len(), 3, "expected 3 missing combos, got {:?}", strs);
-        for s in &strs {
-            assert!(
-                s.contains("Pair") || s.contains("user.Pair"),
-                "missing should render with class qualified name, got {}",
-                s
-            );
-        }
+        // Missing: (T,F) and (F,_). The second field is fully missing under
+        // `false`, so it collapses to `_` as in rustc.
+        assert_eq!(strs, vec!["Pair { true, false }", "Pair { false, _ }"]);
     }
 
     // ── 11. Pathological depth ──────────────────────────────────────────
@@ -5283,5 +5344,382 @@ mod tests {
             "the rigid arm stays reachable through its own branch: {:?}",
             report.unreachable_arms
         );
+    }
+
+    // -- Wildcard collapse of fully missing sub-places --------------------
+    //
+    // Port of rustc's `report_individual_missing_ctors` rule: a column with
+    // no present ctor is reported as `_` unless its place names its missing
+    // ctors (the scrutinee, or the place under a `UnionMember`).
+
+    fn render_missing(report: &UsefulnessReport) -> Vec<String> {
+        report
+            .missing
+            .iter()
+            .map(|w| w.render(&crate::test_heads::viewpoint()))
+            .collect()
+    }
+
+    #[test]
+    fn witness_collapse_partially_matched_class() {
+        let mut cx = TestingCtx::new();
+        let big = qtn("Big");
+        cx.register(big.clone(), vec![bool_ty(); 4]);
+        let big_ty = class_ty(&big);
+        let mut fields = vec![DPat::type_test(bool_lit(true), col(&bool_ty()))];
+        fields.extend((0..3).map(|_| DPat::wildcard(col(&bool_ty()))));
+        let arm = DPat::class(big.clone(), fields, col(&big_ty));
+
+        let report = compute_match_usefulness(&cx, &[arm], col(&big_ty));
+        assert_eq!(render_missing(&report), vec!["Big { false, _, _, _ }"]);
+    }
+
+    #[test]
+    fn witness_collapse_int_field_with_recursive_optional() {
+        let mut cx = TestingCtx::new();
+        let node = qtn("Node");
+        let node_ty = class_ty(&node);
+        cx.register(node.clone(), vec![int_ty(), opt_of(node_ty.clone())]);
+        let arm = DPat::class(
+            node.clone(),
+            vec![
+                DPat::type_test(int_lit(1), col(&int_ty())),
+                DPat::wildcard(col(&opt_of(node_ty.clone()))),
+            ],
+            col(&node_ty),
+        );
+
+        let report = compute_match_usefulness(&cx, &[arm], col(&node_ty));
+        assert_eq!(render_missing(&report), vec!["Node { _, _ }"]);
+    }
+
+    #[test]
+    fn witness_collapse_nested_classes() {
+        let mut cx = TestingCtx::new();
+        let inner = qtn("Inner");
+        let outer = qtn("Outer");
+        let inner_ty = class_ty(&inner);
+        let outer_ty = class_ty(&outer);
+        cx.register(inner.clone(), vec![bool_ty(), bool_ty()]);
+        cx.register(outer.clone(), vec![inner_ty.clone(), bool_ty()]);
+        let arm = DPat::class(
+            outer.clone(),
+            vec![
+                DPat::class(
+                    inner.clone(),
+                    vec![
+                        DPat::type_test(bool_lit(true), col(&bool_ty())),
+                        DPat::wildcard(col(&bool_ty())),
+                    ],
+                    col(&inner_ty),
+                ),
+                DPat::wildcard(col(&bool_ty())),
+            ],
+            col(&outer_ty),
+        );
+
+        let report = compute_match_usefulness(&cx, &[arm], col(&outer_ty));
+        assert_eq!(
+            render_missing(&report),
+            vec!["Outer { Inner { false, _ }, _ }"]
+        );
+    }
+
+    #[test]
+    fn witness_collapse_keeps_partially_covered_columns_individual() {
+        // rustc `test_witnesses`: `(Some(false), Some(false))` on
+        // `(Option<bool>, Option<bool>)` reports `(Some(true), _)` and
+        // `(None, _)`: the first column is partially covered, so its missing
+        // ctors are listed, while the second is fully missing under them.
+        let mut cx = TestingCtx::new();
+        let e = qtn("E");
+        let holder = qtn("Holder");
+        let variant = |v: &str| Ty::EnumVariant(e.clone(), Name::new(v));
+        let e_ty = union_of(vec![variant("V0"), variant("V1"), variant("V2")]);
+        let holder_ty = class_ty(&holder);
+        cx.register(holder.clone(), vec![e_ty.clone(), bool_ty()]);
+        let arm = DPat::class(
+            holder.clone(),
+            vec![
+                DPat::type_test(variant("V0"), col(&e_ty)),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+            ],
+            col(&holder_ty),
+        );
+
+        let report = compute_match_usefulness(&cx, &[arm], col(&holder_ty));
+        let witnesses = render_missing(&report);
+        assert_eq!(witnesses.len(), 3, "got {witnesses:?}");
+        for expected in [
+            "Holder { E.V0, false }",
+            "Holder { E.V1, _ }",
+            "Holder { E.V2, _ }",
+        ] {
+            assert!(
+                witnesses.iter().any(|w| w == expected),
+                "expected {expected} in {witnesses:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn witness_collapse_lists_missing_scrutinee_ctors_individually() {
+        let cx = TestingCtx::new();
+        let e = qtn("E");
+        let variant = |v: &str| Ty::EnumVariant(e.clone(), Name::new(v));
+        let e_ty = union_of(vec![variant("V0"), variant("V1"), variant("V2")]);
+
+        let report = compute_match_usefulness(
+            &cx,
+            &[DPat::type_test(variant("V0"), col(&e_ty))],
+            col(&e_ty),
+        );
+        assert_eq!(render_missing(&report), vec!["E.V1", "E.V2"]);
+
+        let report = compute_match_usefulness(&cx, &[], col(&e_ty));
+        assert_eq!(render_missing(&report), vec!["E.V0", "E.V1", "E.V2"]);
+    }
+
+    #[test]
+    fn witness_collapse_fully_missing_list_field() {
+        let mut cx = TestingCtx::new();
+        let w = qtn("W");
+        let w_ty = class_ty(&w);
+        cx.register(w.clone(), vec![bool_ty(), list_of(bool_ty())]);
+
+        // Empty sub-matrix at the list column: `_`, not `[..]`.
+        let arm = DPat::class(
+            w.clone(),
+            vec![
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+                DPat::wildcard(col(&list_of(bool_ty()))),
+            ],
+            col(&w_ty),
+        );
+        let report = compute_match_usefulness(&cx, &[arm], col(&w_ty));
+        assert_eq!(render_missing(&report), vec!["W { false, _ }"]);
+
+        // Wildcard-only list column ahead of a refutable column: `_`, not
+        // one witness per length class.
+        let v = qtn("V");
+        let v_ty = class_ty(&v);
+        cx.register(v.clone(), vec![list_of(bool_ty()), bool_ty()]);
+        let arm = DPat::class(
+            v.clone(),
+            vec![
+                DPat::wildcard(col(&list_of(bool_ty()))),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+            ],
+            col(&v_ty),
+        );
+        let report = compute_match_usefulness(&cx, &[arm], col(&v_ty));
+        assert_eq!(render_missing(&report), vec!["V { _, false }"]);
+    }
+
+    #[test]
+    fn witness_collapse_column_with_only_reachability_rows() {
+        // A rigid type test covers no `bool` ctor, so the first column has no
+        // present ctor even though its matrix is not empty.
+        let mut cx = TestingCtx::new();
+        let p = qtn("P");
+        let p_ty = class_ty(&p);
+        cx.register(p.clone(), vec![bool_ty(), bool_ty()]);
+        let rigid = DPat::class(
+            p.clone(),
+            vec![
+                DPat::type_test(type_var_ty("T"), col(&bool_ty())),
+                DPat::wildcard(col(&bool_ty())),
+            ],
+            col(&p_ty),
+        );
+        let second = DPat::class(
+            p.clone(),
+            vec![
+                DPat::wildcard(col(&bool_ty())),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+            ],
+            col(&p_ty),
+        );
+
+        let report = compute_match_usefulness(&cx, &[rigid, second], col(&p_ty));
+        assert_eq!(render_missing(&report), vec!["P { _, false }"]);
+        assert!(report.unreachable_arms.is_empty());
+    }
+
+    #[test]
+    fn witness_collapse_names_missing_union_member_ctor() {
+        // `match (h: Holder) { Holder { b: true } =>, Holder { b: false, next: null } => }`
+        // with `next: bool[] | null`. The missing member is listed, and like
+        // rustc's `Some(_)` its own ctor is named: `[..]`, not a bare `_`
+        // that would read as if `null` were missing too.
+        let mut cx = UnionCtx::new();
+        let holder = qtn("Holder");
+        let holder_ty = class_ty(&holder);
+        let list = list_of(bool_ty());
+        let next_ty = union_of(vec![list, null_ty()]);
+        cx.register(holder.clone(), vec![bool_ty(), next_ty.clone()]);
+        let first = DPat::class(
+            holder.clone(),
+            vec![
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+                DPat::wildcard(col(&next_ty)),
+            ],
+            col(&holder_ty),
+        );
+        let second = DPat::class(
+            holder.clone(),
+            vec![
+                DPat::type_test(bool_lit(false), col(&bool_ty())),
+                DPat::union_member(
+                    null_ty(),
+                    DPat::type_test(null_ty(), col(&null_ty())),
+                    col(&next_ty),
+                ),
+            ],
+            col(&holder_ty),
+        );
+
+        let report = compute_match_usefulness(&cx, &[first, second], col(&holder_ty));
+        assert_eq!(render_missing(&report), vec!["Holder { false, [..] }"]);
+    }
+
+    #[test]
+    fn interface_row_is_present_for_the_class_it_projects_onto() {
+        // `match (x: Impl) { Src { value } => }`: the interface row joins the
+        // `Impl` branch through a field projection rather than `covers`, so
+        // the column is not all-missing and the match is exhaustive.
+        struct ProjectionCtx(TestingCtx);
+        impl PatCtx for ProjectionCtx {
+            fn canonicalize(&self, ty: &Ty) -> Ty {
+                self.0.canonicalize(ty)
+            }
+            fn enumerate_ctors(&self, col: &ColumnTy) -> Vec<Ctor> {
+                self.0.enumerate_ctors(col)
+            }
+            fn class_field_types(&self, qtn: &DeclName, ty: &Ty) -> Vec<Ty> {
+                self.0.class_field_types(qtn, ty)
+            }
+            fn interface_field_types(&self, _ty: &Ty) -> Vec<Ty> {
+                vec![int_ty()]
+            }
+            fn interface_field_projection_for_class(
+                &self,
+                _iface_ty: &Ty,
+                _class_qtn: &DeclName,
+                _class_type_args: &[Ty],
+            ) -> Option<Vec<usize>> {
+                Some(vec![0])
+            }
+            fn list_element_type(&self, ty: &Ty) -> Ty {
+                self.0.list_element_type(ty)
+            }
+        }
+
+        let mut inner = TestingCtx::new();
+        let imp = qtn("Impl");
+        let imp_ty = class_ty(&imp);
+        inner.register(imp.clone(), vec![int_ty()]);
+        let cx = ProjectionCtx(inner);
+        let iface_ty = Ty::Interface(qtn("Src"), Box::new([]), Box::new([]));
+        let arm = DPat::interface(iface_ty, vec![DPat::wildcard(col(&int_ty()))], col(&imp_ty));
+
+        let report = compute_match_usefulness(&cx, &[arm], col(&imp_ty));
+        assert!(
+            report.missing.is_empty(),
+            "got {:?}",
+            render_missing(&report)
+        );
+        assert!(report.unreachable_arms.is_empty());
+    }
+
+    #[test]
+    fn witness_collapse_skips_uninhabited_column_with_only_reachability_rows() {
+        // `match (o: Outer | null) { Outer { d: let t: T } =>, null => }` with
+        // `class Outer { d: Dead }` and `class Dead { x: never }`. `Outer` has
+        // no values, so nothing is missing even though the rigid row covers
+        // no ctor of the `Dead` column.
+        let mut cx = TestingCtx::new();
+        let outer = qtn("Outer");
+        let dead = qtn("Dead");
+        let outer_ty = class_ty(&outer);
+        let dead_ty = class_ty(&dead);
+        cx.register(dead.clone(), vec![never_ty()]);
+        cx.register(outer.clone(), vec![dead_ty.clone()]);
+        let scrut = union_of(vec![outer_ty.clone(), null_ty()]);
+        let rigid = DPat::class(
+            outer.clone(),
+            vec![DPat::type_test(type_var_ty("T"), col(&dead_ty))],
+            col(&outer_ty),
+        );
+        let null = DPat::type_test(null_ty(), col(&scrut));
+
+        let report = compute_match_usefulness(&cx, &[rigid, null], col(&scrut));
+        assert!(
+            report.missing.is_empty(),
+            "got {:?}",
+            render_missing(&report)
+        );
+    }
+
+    /// `match (o: Outer | null) { Outer { d: let t: T } =>, Outer { d: _ } =>, null => }`
+    /// with `class Outer { d: Dead }`. Arm 1 is the reachability-only rigid
+    /// row; arm 2 is the wildcard row under test.
+    fn rigid_then_wildcard_in_dead_field(dead_field: Ty) -> UsefulnessReport {
+        let mut cx = TestingCtx::new();
+        let outer = qtn("Outer");
+        let dead = qtn("Dead");
+        let outer_ty = class_ty(&outer);
+        let dead_ty = class_ty(&dead);
+        cx.register(dead.clone(), vec![dead_field]);
+        cx.register(outer.clone(), vec![dead_ty.clone()]);
+        let scrut = union_of(vec![outer_ty.clone(), null_ty()]);
+        let rigid = DPat::class(
+            outer.clone(),
+            vec![DPat::type_test(type_var_ty("T"), col(&dead_ty))],
+            col(&outer_ty),
+        );
+        let wild = DPat::class(
+            outer.clone(),
+            vec![DPat::wildcard(col(&dead_ty))],
+            col(&outer_ty),
+        );
+        let null = DPat::type_test(null_ty(), col(&scrut));
+        compute_match_usefulness(&cx, &[rigid, wild, null], col(&scrut))
+    }
+
+    #[test]
+    fn wildcard_row_in_uninhabited_column_beside_rigid_row_is_unreachable() {
+        let report = rigid_then_wildcard_in_dead_field(never_ty());
+        assert!(
+            report.missing.is_empty(),
+            "got {:?}",
+            render_missing(&report)
+        );
+        assert_eq!(report.unreachable_arms, vec![ArmId(1)]);
+    }
+
+    #[test]
+    fn wildcard_row_in_inhabited_column_beside_rigid_row_is_useful() {
+        let report = rigid_then_wildcard_in_dead_field(bool_ty());
+        assert!(
+            report.missing.is_empty(),
+            "got {:?}",
+            render_missing(&report)
+        );
+        assert!(report.unreachable_arms.is_empty());
+    }
+
+    #[test]
+    fn witness_collapse_scales_linearly_in_field_count() {
+        let mut cx = TestingCtx::new();
+        let wide = qtn("Wide");
+        let wide_ty = class_ty(&wide);
+        cx.register(wide.clone(), vec![bool_ty(); 20]);
+        let mut fields = vec![DPat::type_test(bool_lit(true), col(&bool_ty()))];
+        fields.extend((0..19).map(|_| DPat::wildcard(col(&bool_ty()))));
+        let arm = DPat::class(wide.clone(), fields, col(&wide_ty));
+
+        let report = compute_match_usefulness(&cx, &[arm], col(&wide_ty));
+        assert_eq!(report.missing.len(), 1);
     }
 }
