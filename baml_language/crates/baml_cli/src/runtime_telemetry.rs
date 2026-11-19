@@ -106,15 +106,15 @@ pub(crate) fn create_engine_with_hotswap(
     if let Some(wait) = flags.startup_wait {
         config.startup_wait = wait;
     }
+    let mut hotswap =
+        bex_hotswap::HotswapBuild::new(sources.iter().cloned().collect(), None, false, config);
+    // Reading git is not free: only a build that can be swapped needs it.
+    if hotswap.config.enabled && !hotswap.marked().is_empty() {
+        (hotswap.commit, hotswap.dirty) = crate::build_record::hotswap_commit(project_root);
+    }
     let boundary = crate::cloud_config::Boundary::read(project_root)?;
-    let recording = recording(project_root, &boundary, sources.clone(), build);
-    let (commit, dirty) = crate::build_record::hotswap_commit(project_root);
-    let build = bex_hotswap::HotswapBuild {
-        sources: sources.iter().cloned().collect(),
-        commit,
-        dirty,
-        config,
-    };
+    let recording = recording(project_root, &boundary, sources, build);
+    let build = hotswap;
     let prepared =
         bex_hotswap::Prepared::new(build, false, &recording).map_err(anyhow::Error::msg)?;
     let mut config = bex_engine::EngineConfig {

@@ -67,6 +67,7 @@ serde = { workspace = true }
 serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 serde_yaml = { workspace = true }
 sha2 = { workspace = true }
+similar = { workspace = true }
 strsim = { workspace = true }
 text-size = { workspace = true }
 tokio = { workspace = true }

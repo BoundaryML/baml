@@ -265,7 +265,7 @@ pub struct RunArgs {
     #[arg(
         long,
         value_name = "DURATION",
-        value_parser = parse_startup_wait,
+        value_parser = baml_db::manifest::parse_duration,
         help_heading = "Target options",
         conflicts_with = "no_hotswap"
     )]
@@ -334,10 +334,6 @@ pub use baml_exec::OutputFormat;
 struct Swapping {
     watch: Option<crate::hot_reload::HotWatch>,
     cloud: Option<bex_hotswap::Prepared>,
-}
-
-fn parse_startup_wait(text: &str) -> std::result::Result<std::time::Duration, String> {
-    baml_db::manifest::parse_duration(text)
 }
 
 // ============================================================================

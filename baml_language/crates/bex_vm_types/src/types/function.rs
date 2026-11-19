@@ -469,7 +469,10 @@ impl HotswapRedirect {
 
 impl Default for HotswapRedirect {
     fn default() -> Self {
-        Self(AtomicValueSlot::new(Value::NULL), std::sync::OnceLock::new())
+        Self(
+            AtomicValueSlot::new(Value::NULL),
+            std::sync::OnceLock::new(),
+        )
     }
 }
 

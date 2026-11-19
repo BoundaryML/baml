@@ -526,10 +526,6 @@ impl PackArgs {
         Ok(())
     }
 
-    /// What the binary needs to be swapped from Boundary Cloud: its source,
-    /// commit and `[hotswap]` settings, unless `--no-hotswap`, `[hotswap]
-    /// enabled = false`, `--rust` (native code cannot be swapped), or no
-    /// function is marked.
     /// The project's git commit and whether it has changes, for
     /// [`Self::packed_hotswap`]; `None` outside a project.
     fn project_git(&self) -> Result<Option<(Option<String>, bool)>> {
@@ -542,8 +538,11 @@ impl PackArgs {
         )
     }
 
-    /// `compiled` is the source the program was compiled from, and
-    /// `git_before` the checkout's state before it compiled.
+    /// What the binary needs to be swapped from Boundary Cloud: its source,
+    /// commit and `[hotswap]` settings, unless `--no-hotswap`, `[hotswap]
+    /// enabled = false`, `--rust` (native code cannot be swapped), or no
+    /// function is marked. `compiled` is the source the program was compiled
+    /// from, and `git_before` the checkout's state before it compiled.
     fn packed_hotswap(
         &self,
         compiled: Sources,
@@ -568,12 +567,7 @@ impl PackArgs {
             anyhow::bail!("the checkout moved to another commit while packing; pack again");
         }
         let dirty = dirty || dirty_before;
-        let build = bex_hotswap::HotswapBuild {
-            sources,
-            commit,
-            dirty,
-            config,
-        };
+        let build = bex_hotswap::HotswapBuild::new(sources, commit, dirty, config);
         if build.marked().is_empty() {
             return Ok(None);
         }

@@ -261,12 +261,7 @@ pub struct SwapOutcome {
 
 /// A path segment BCS accepts as an ID.
 fn checked_id(id: &str) -> Result<&str> {
-    let valid = !id.is_empty()
-        && id.len() <= 128
-        && id
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-');
-    if valid {
+    if crate::query::is_route_id(id) {
         Ok(id)
     } else {
         Err(Error::Protocol("Invalid hot swap or process ID"))
@@ -330,7 +325,8 @@ impl Client {
         }
     }
 
-    /// `POST` to a process route, as the process `token` names.
+    /// `POST` to a hot swap route, as the process `token` names when one
+    /// does.
     fn post_process<T: serde::de::DeserializeOwned>(
         &self,
         authorization: &RequestAuthorization,
@@ -353,22 +349,14 @@ impl Client {
         Self::read_json_limited(response, MAX_PROCESS_RESPONSE_BYTES)
     }
 
+    /// `POST` to a publisher's route.
     fn post_hotswap<T: serde::de::DeserializeOwned>(
         &self,
         authorization: &RequestAuthorization,
         path: &str,
         fields: impl Serialize,
-        timeout: Option<Duration>,
     ) -> Result<T> {
-        let body = with_target(authorization, fields);
-        let response = self.send_authorized(authorization, || {
-            let request = self.http.post(self.url(path)).json(&body);
-            match timeout {
-                Some(timeout) => request.timeout(timeout),
-                None => request,
-            }
-        })?;
-        Self::read_json(response)
+        self.post_process(authorization, None, path, fields, None)
     }
 
     pub fn create_hotswap(
@@ -376,7 +364,7 @@ impl Client {
         authorization: &RequestAuthorization,
         request: &CreateHotswap,
     ) -> Result<Hotswap> {
-        self.post_hotswap(authorization, "/v1/hotswaps", request, None)
+        self.post_hotswap(authorization, "/v1/hotswaps", request)
     }
 
     pub fn list_hotswaps(&self, authorization: &RequestAuthorization) -> Result<Vec<Hotswap>> {
@@ -454,7 +442,7 @@ impl Client {
         files: &[SourceFile],
     ) -> Result<PreparedSources> {
         let path = format!("/v1/hotswaps/{}/uploads:prepare", checked_id(id)?);
-        self.post_hotswap(authorization, &path, json!({ "files": files }), None)
+        self.post_hotswap(authorization, &path, json!({ "files": files }))
     }
 
     /// PUT one changed file where `uploads:prepare` said to.
@@ -501,7 +489,7 @@ impl Client {
         payload: &HotswapPayload,
     ) -> Result<Hotswap> {
         let path = format!("/v1/hotswaps/{}/payload", checked_id(id)?);
-        self.post_hotswap(authorization, &path, payload, None)
+        self.post_hotswap(authorization, &path, payload)
     }
 
     /// `approve`, `disable` or `enable`.
@@ -512,7 +500,7 @@ impl Client {
         action: &str,
     ) -> Result<Hotswap> {
         let path = format!("/v1/hotswaps/{}/{action}", checked_id(id)?);
-        self.post_hotswap(authorization, &path, json!({}), None)
+        self.post_hotswap(authorization, &path, json!({}))
     }
 
     pub fn delete_hotswap(

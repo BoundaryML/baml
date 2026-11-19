@@ -291,11 +291,11 @@ struct PatchClassification {
 }
 
 fn label(key: &str) -> &str {
-    key.split_once(' ').map_or(key, |(_, name)| name)
+    DeclFingerprints::label(key)
 }
 
 fn is_function_key(key: &str) -> bool {
-    key.starts_with("fn ") || key.starts_with("method ") || key.starts_with("implmethod ")
+    DeclFingerprints::is_function_key(key)
 }
 
 /// What `new` changes relative to `build`, the program as built.
@@ -437,6 +437,24 @@ pub fn hotswap_changes(before: &DeclFingerprints, after: &DeclFingerprints) -> B
         .changed
         .iter()
         .map(|key| label(key).to_string())
+        .collect()
+}
+
+/// The clients a source change from `before` to `after` builds anew, by
+/// simple name: those whose configuration changed, and every client built
+/// from one of them, directly or through functions. Rules see a client
+/// change through this, so they follow exactly what a patch rebuilds.
+pub fn hotswap_changed_clients(
+    before: &DeclFingerprints,
+    after: &DeclFingerprints,
+) -> BTreeSet<String> {
+    classify(before, after)
+        .fresh
+        .iter()
+        .map(|key| {
+            let name = label(key);
+            name.rsplit('.').next().unwrap_or(name).to_string()
+        })
         .collect()
 }
 

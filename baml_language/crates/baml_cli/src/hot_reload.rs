@@ -21,6 +21,7 @@ pub(crate) struct HotWatch {
     pub(crate) built: BTreeMap<String, String>,
 }
 
+#[derive(Clone)]
 pub(crate) enum HotFiles {
     /// A project, by its root: the files project discovery finds, ignore files
     /// and source root included, so a patch compiles what the program was
@@ -58,6 +59,24 @@ pub(crate) fn read_sources(files: &HotFiles) -> Option<BTreeMap<String, String>>
             .ok()
             .map(|text| BTreeMap::from([(file_key(path), text)])),
     }
+}
+
+/// Each watched file's path, modification time and size, which a save
+/// changes. `None` when one cannot be read.
+fn stamp(files: &HotFiles) -> Option<Vec<(PathBuf, std::time::SystemTime, u64)>> {
+    let paths = match files {
+        HotFiles::Project(root) => {
+            baml_db::discover_baml_files(&baml_db::project_source_root(root))
+        }
+        HotFiles::File(path) => vec![path.clone()],
+    };
+    paths
+        .into_iter()
+        .map(|path| {
+            let metadata = std::fs::metadata(&path).ok()?;
+            Some((path, metadata.modified().ok()?, metadata.len()))
+        })
+        .collect()
 }
 
 /// One cargo-style status line on stderr, beside the program's own output:
@@ -160,11 +179,26 @@ pub(crate) fn spawn(
             );
         }
         let mut last = built;
+        let mut last_stamp = None;
         loop {
             tokio::time::sleep(POLL_INTERVAL).await;
-            let Some(current) = read_sources(&files) else {
+            // Each file's modification time and size first: the text is read
+            // only once one of them moves. Off the runtime's threads, which
+            // run the program.
+            let watched = files.clone();
+            let Ok(stamp) = tokio::task::spawn_blocking(move || stamp(&watched)).await else {
                 continue;
             };
+            if stamp.is_some() && stamp == last_stamp {
+                continue;
+            }
+            let watched = files.clone();
+            let Ok(Some(current)) =
+                tokio::task::spawn_blocking(move || read_sources(&watched)).await
+            else {
+                continue;
+            };
+            last_stamp = stamp;
             if current != last {
                 last.clone_from(&current);
                 patch(&engine, &current).await;

@@ -297,6 +297,20 @@ pub struct DeclFingerprints {
     pub refs: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
 }
 
+impl DeclFingerprints {
+    /// The name a declaration key gives: `fn ns.f` is `ns.f`.
+    #[must_use]
+    pub fn label(key: &str) -> &str {
+        key.split_once(' ').map_or(key, |(_, name)| name)
+    }
+
+    /// Whether `key` names a function, method or implementation method.
+    #[must_use]
+    pub fn is_function_key(key: &str) -> bool {
+        key.starts_with("fn ") || key.starts_with("method ") || key.starts_with("implmethod ")
+    }
+}
+
 /// One isolated `reflect.Package.compile` request.
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeCompileRequest {

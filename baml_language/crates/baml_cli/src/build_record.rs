@@ -106,16 +106,7 @@ pub(crate) fn git_info(package_root: &Path) -> Option<GitInfo> {
 /// hex, and whether the package had changes since it.
 pub(crate) fn hotswap_commit(package_root: &Path) -> (Option<String>, bool) {
     git_info(package_root).map_or((None, false), |git| {
-        let hex = git
-            .hash
-            .as_bytes()
-            .iter()
-            .fold(String::new(), |mut hex, byte| {
-                use std::fmt::Write as _;
-                let _ = write!(hex, "{byte:02x}");
-                hex
-            });
-        (Some(hex), git.dirty)
+        (Some(hex::encode(git.hash.as_bytes())), git.dirty)
     })
 }
 

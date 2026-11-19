@@ -36,12 +36,12 @@ function unmarked(x: int) -> int { x }
 const COMMIT: &str = "3f2a91c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6";
 
 fn build(config: HotswapConfig) -> Arc<HotswapBuild> {
-    Arc::new(HotswapBuild {
-        sources: [("main.baml".to_string(), SOURCE.to_string())].into(),
-        commit: Some(COMMIT.to_string()),
-        dirty: false,
+    Arc::new(HotswapBuild::new(
+        [("main.baml".to_string(), SOURCE.to_string())].into(),
+        Some(COMMIT.to_string()),
+        false,
         config,
-    })
+    ))
 }
 
 fn swapper_with(config: HotswapConfig) -> (Arc<BexEngine>, Swapper) {
@@ -197,7 +197,7 @@ async fn each_rule_accepts_and_rejects_in_the_process() {
             .await,
         "route: hotswap.select_only",
     );
-    let (engine, mut swapper) = swapper_fresh();
+    let (engine, mut swapper) = self::swapper();
     rejected(
         swapper
             .install(&swap("hs_3", &[("guarded", "helper(x)", "other(x)")]))
@@ -228,10 +228,6 @@ async fn each_rule_accepts_and_rejects_in_the_process() {
         .await
         .unwrap();
     assert_eq!(int(&engine, "traced", 1).await, 2);
-}
-
-fn swapper_fresh() -> (Arc<BexEngine>, Swapper) {
-    swapper()
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -286,10 +282,13 @@ async fn a_swap_installs_only_on_its_baseline_and_with_approval() {
     assert_eq!(int(&engine, "step", 1).await, 20);
 
     // A build with changes since its commit is not that commit.
-    let (_, mut swapper) = swapper_of(Arc::new(HotswapBuild {
-        dirty: true,
-        ..(*build(HotswapConfig::default())).clone()
-    }));
+    let built = build(HotswapConfig::default());
+    let (_, mut swapper) = swapper_of(Arc::new(HotswapBuild::new(
+        built.sources.clone(),
+        built.commit.clone(),
+        true,
+        built.config.clone(),
+    )));
     rejected(
         swapper
             .install(&swap("hs_3", &[("step", "helper(x)", "helper(x) * 10")]))
@@ -319,28 +318,30 @@ async fn a_swap_without_renewal_lapses() {
 
 #[test]
 fn marks_without_a_rule_need_a_default_rule() {
-    let unruled = HotswapBuild {
-        sources: [(
+    let unruled = HotswapBuild::new(
+        [(
             "main.baml".to_string(),
             "/// baml:hotswap\nfunction f() -> int { 1 }\n".to_string(),
         )]
         .into(),
-        commit: None,
-        dirty: false,
-        config: HotswapConfig::default(),
-    };
+        None,
+        false,
+        HotswapConfig::default(),
+    );
     assert_eq!(
         unruled.check_marks(),
         Err("`f` is marked `/// baml:hotswap` with no rule, and baml.toml sets no `[hotswap] default_rule`".to_string())
     );
     assert_eq!(unruled.marked().into_iter().collect::<Vec<_>>(), ["f"]);
-    let defaulted = HotswapBuild {
-        config: HotswapConfig {
+    let defaulted = HotswapBuild::new(
+        unruled.sources,
+        None,
+        false,
+        HotswapConfig {
             default_rule: Some(bex_project::hotswap_rules::Rule::Any),
             ..HotswapConfig::default()
         },
-        ..unruled
-    };
+    );
     assert_eq!(defaulted.check_marks(), Ok(()));
 }
 
@@ -372,8 +373,8 @@ async fn a_rejected_replacement_leaves_the_swap_it_replaces() {
 #[test]
 fn a_key_implementations_share_is_swappable_only_if_all_are_marked() {
     let build = |second: &str| {
-        HotswapBuild {
-        sources: [
+        HotswapBuild::new(
+        [
             (
                 "main.baml".to_string(),
                 "interface Show { function show(self) -> string; }\nclass Foo { n int }\nimplement Show for Foo {\n    /// baml:hotswap=hotswap.any\n    function show(self) -> string { \"root\" }\n}\n".to_string(),
@@ -384,10 +385,10 @@ fn a_key_implementations_share_is_swappable_only_if_all_are_marked() {
             ),
         ]
         .into(),
-        commit: None,
-        dirty: false,
-        config: HotswapConfig::default(),
-    }
+        None,
+        false,
+        HotswapConfig::default(),
+    )
     };
     assert!(build("").marked().is_empty());
     assert_eq!(
@@ -459,12 +460,12 @@ function step(x: int) -> int { x + 1 }
 /// as built and drops that swap too, to be reported rejected.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_removal_that_cannot_rebuild_another_swap_drops_it() {
-    let (engine, mut swapper) = swapper_of(Arc::new(HotswapBuild {
-        sources: [("main.baml".to_string(), CLIENTS.to_string())].into(),
-        commit: Some(COMMIT.to_string()),
-        dirty: false,
-        config: HotswapConfig::default(),
-    }));
+    let (engine, mut swapper) = swapper_of(Arc::new(HotswapBuild::new(
+        [("main.baml".to_string(), CLIENTS.to_string())].into(),
+        Some(COMMIT.to_string()),
+        false,
+        HotswapConfig::default(),
+    )));
     let edit = |id: &str, name: &str, from: &str, to: &str| {
         let start = CLIENTS.find(from).expect("present");
         let start = CLIENTS[..start].rfind("\n\n").map_or(0, |blank| blank + 2);

@@ -21,12 +21,10 @@ pub enum Rule {
 
 impl std::fmt::Display for Rule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())?;
         match self {
-            Rule::SelectOnly(names) => write!(f, "hotswap.select_only([{}])", names.join(", ")),
-            Rule::TelemetryOnly => f.write_str("hotswap.telemetry_only"),
-            Rule::TextOnly => f.write_str("hotswap.text_only"),
-            Rule::NoNewCalls => f.write_str("hotswap.no_new_calls"),
-            Rule::Any => f.write_str("hotswap.any"),
+            Rule::SelectOnly(names) => write!(f, "([{}])", names.join(", ")),
+            _ => Ok(()),
         }
     }
 }
@@ -70,11 +68,10 @@ impl Rule {
                     "`{text}`: `hotswap.select_only` needs at least one function"
                 ));
             }
-            if let Some(bad) = names.iter().find(|name| {
-                !name
-                    .split('.')
-                    .all(crate::lexer::is_identifier)
-            }) {
+            if let Some(bad) = names
+                .iter()
+                .find(|name| !name.split('.').all(crate::lexer::is_identifier))
+            {
                 return Err(format!("`{text}`: `{bad}` is not a function name"));
             }
             return Ok(Rule::SelectOnly(names));

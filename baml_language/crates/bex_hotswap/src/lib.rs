@@ -16,7 +16,13 @@
 pub mod agent;
 mod swapper;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::{Arc, OnceLock},
+};
+
+use bex_project::hotswap_fingerprint::DeclSources;
+use bex_vm_types::DeclFingerprints;
 
 pub use baml_db::manifest::HotswapConfig;
 pub use swapper::{LAPSE, Swapper, SwapperError};
@@ -31,33 +37,46 @@ pub struct HotswapBuild {
     /// Whether the package had changes since `commit` when built.
     pub dirty: bool,
     pub config: HotswapConfig,
+    /// `sources` parsed into declarations, once.
+    parsed: OnceLock<(DeclFingerprints, DeclSources)>,
 }
 
 impl HotswapBuild {
+    pub fn new(
+        sources: BTreeMap<String, String>,
+        commit: Option<String>,
+        dirty: bool,
+        config: HotswapConfig,
+    ) -> Self {
+        Self {
+            sources,
+            commit,
+            dirty,
+            config,
+            parsed: OnceLock::new(),
+        }
+    }
+
+    fn parsed(&self) -> &(DeclFingerprints, DeclSources) {
+        self.parsed.get_or_init(|| {
+            bex_project::hotswap_fingerprint::declarations(
+                self.sources
+                    .iter()
+                    .map(|(path, text)| (path.as_str(), text.as_str())),
+            )
+        })
+    }
+
+    /// Every declaration as built, by fingerprint key.
+    pub fn declarations(&self) -> &DeclSources {
+        &self.parsed().1
+    }
+
     /// The functions marked `/// baml:hotswap`, by the names swaps report,
     /// for `EngineConfig::hotswap_marked`. An empty set means the project
     /// has nothing to swap.
-    pub fn marked(&self) -> std::collections::BTreeSet<String> {
-        let (_, declarations) = bex_project::hotswap_fingerprint::declarations(
-            self.sources
-                .iter()
-                .map(|(path, text)| (path.as_str(), text.as_str())),
-        );
-        // A key several declarations share (implementations are keyed by bare
-        // names) is swappable only when every one of them is marked.
-        declarations
-            .iter()
-            .filter(|(key, _)| is_function_key(key))
-            .filter(|(_, sources)| {
-                sources.iter().all(|source| {
-                    matches!(
-                        bex_project::hotswap_rules::mark_of(&source.text),
-                        Some(Ok(_))
-                    )
-                })
-            })
-            .map(|(key, _)| label(key).to_string())
-            .collect()
+    pub fn marked(&self) -> BTreeSet<String> {
+        marked_functions(self.declarations())
     }
 
     /// Why the build's marks cannot run: a mark that names no rule while
@@ -66,12 +85,8 @@ impl HotswapBuild {
         if self.config.default_rule.is_some() {
             return Ok(());
         }
-        let (_, declarations) = bex_project::hotswap_fingerprint::declarations(
-            self.sources
-                .iter()
-                .map(|(path, text)| (path.as_str(), text.as_str())),
-        );
-        let unruled: Vec<String> = declarations
+        let unruled: Vec<String> = self
+            .declarations()
             .iter()
             .filter(|(key, _)| is_function_key(key))
             .filter(|(_, sources)| {
@@ -96,13 +111,28 @@ impl HotswapBuild {
     }
 
     /// The fingerprints the engine compares every swap with.
-    pub fn baseline(&self) -> bex_vm_types::DeclFingerprints {
-        bex_project::hotswap_fingerprint::declaration_fingerprints(
-            self.sources
-                .iter()
-                .map(|(path, text)| (path.as_str(), text.as_str())),
-        )
+    pub fn baseline(&self) -> DeclFingerprints {
+        self.parsed().0.clone()
     }
+}
+
+/// The swappable functions of `declarations`, by the names swaps report. A
+/// key several declarations share (implementations are keyed by bare names)
+/// is swappable only when every one of them is marked.
+pub fn marked_functions(declarations: &DeclSources) -> BTreeSet<String> {
+    declarations
+        .iter()
+        .filter(|(key, _)| is_function_key(key))
+        .filter(|(_, sources)| {
+            sources.iter().all(|source| {
+                matches!(
+                    bex_project::hotswap_rules::mark_of(&source.text),
+                    Some(Ok(_))
+                )
+            })
+        })
+        .map(|(key, _)| label(key).to_string())
+        .collect()
 }
 
 /// Whether `commit` is `baseline`, either possibly abbreviated (at least 7
@@ -117,11 +147,11 @@ pub fn same_commit(commit: &str, baseline: &str) -> bool {
 }
 
 pub(crate) fn is_function_key(key: &str) -> bool {
-    key.starts_with("fn ") || key.starts_with("method ") || key.starts_with("implmethod ")
+    bex_vm_types::DeclFingerprints::is_function_key(key)
 }
 
 pub(crate) fn label(key: &str) -> &str {
-    key.split_once(' ').map_or(key, |(_, name)| name)
+    bex_vm_types::DeclFingerprints::label(key)
 }
 
 /// Everything a host needs to make a process swappable from Boundary Cloud,
@@ -190,7 +220,6 @@ impl Prepared {
                 process_id,
                 baml_version: env!("CARGO_PKG_VERSION").to_string(),
                 host: host.to_string(),
-                lapse: None,
                 retry: None,
             },
         );
@@ -208,4 +237,4 @@ impl Prepared {
 }
 
 /// The functions a source change swaps, as the engine names them.
-pub use bex_vm::hotswap::hotswap_changes;
+pub use bex_vm::hotswap::{hotswap_changed_clients, hotswap_changes};

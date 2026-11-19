@@ -172,11 +172,11 @@ fn new_engine(
                 .map(bex_project::hotswap_rules::Rule::parse)
                 .transpose()
                 .map_err(bex_engine::EngineError::Other)?;
-            let build = bex_hotswap::HotswapBuild {
-                sources: packed.sources.into_iter().collect(),
-                commit: packed.commit,
-                dirty: packed.dirty,
-                config: bex_hotswap::HotswapConfig {
+            let build = bex_hotswap::HotswapBuild::new(
+                packed.sources.into_iter().collect(),
+                packed.commit,
+                packed.dirty,
+                bex_hotswap::HotswapConfig {
                     enabled: true,
                     default_rule,
                     require_approval: packed.require_approval,
@@ -184,7 +184,7 @@ fn new_engine(
                         .startup_wait
                         .unwrap_or(std::time::Duration::from_millis(packed.startup_wait_ms)),
                 },
-            };
+            );
             bex_hotswap::Prepared::new(build, flags.disabled, &recording)
                 .map_err(bex_engine::EngineError::Other)?
         }

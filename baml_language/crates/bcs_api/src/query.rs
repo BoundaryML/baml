@@ -104,12 +104,7 @@ impl Client {
     }
 
     pub fn cancel_query(&self, authorization: &RequestAuthorization, query_id: &str) -> Result<()> {
-        if !(query_id
-            .bytes()
-            .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
-            && !query_id.is_empty()
-            && query_id.len() <= 128)
-        {
+        if !is_route_id(query_id) {
             return Err(Error::QueryId);
         }
         self.send_authorized(authorization, || {
@@ -122,6 +117,16 @@ impl Client {
         })?;
         Ok(())
     }
+}
+
+/// Whether `id` can sit in a route's path as is: 1 to 128 ASCII letters,
+/// digits, `_` and `-`.
+pub(crate) fn is_route_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
 }
 
 #[cfg(test)]

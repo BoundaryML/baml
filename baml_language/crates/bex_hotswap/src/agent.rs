@@ -26,12 +26,10 @@ use bex_engine::BexEngine;
 
 use crate::{HotswapBuild, Swapper};
 
-/// How long BCS holds an idle connection when it does not say.
-const DEFAULT_HOLD: Duration = Duration::from_secs(300);
 /// The wait after a request to BCS fails, before the next.
 const RETRY: Duration = Duration::from_secs(5);
 /// The longest the agent holds a connection, whatever BCS asks, so it checks
-/// for lapsed swaps at least this often.
+/// for lapsed swaps at least this often; also the hold when BCS names none.
 const MAX_HOLD: Duration = Duration::from_secs(300);
 /// Outcomes kept for BCS while it cannot take them; older ones are dropped.
 const MAX_PENDING: usize = 1000;
@@ -48,8 +46,6 @@ pub struct AgentOptions {
     pub process_id: String,
     pub baml_version: String,
     pub host: String,
-    /// See `Swapper::with_lapse`; an hour unless a test shortens it.
-    pub lapse: Option<Duration>,
     /// Retry and hold faster, for tests.
     pub retry: Option<Duration>,
 }
@@ -153,10 +149,7 @@ pub fn start(
                     return;
                 }
             };
-            let mut swapper = Swapper::new(Arc::clone(&engine), Arc::clone(&build));
-            if let Some(lapse) = options.lapse {
-                swapper = swapper.with_lapse(lapse);
-            }
+            let swapper = Swapper::new(Arc::clone(&engine), Arc::clone(&build));
             let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 Loop {
                     swapper,
@@ -241,7 +234,7 @@ impl Loop {
             }
             let request = RegisterProcess {
                 process_id: self.options.process_id.clone(),
-                commit: self.swapper_build_commit(),
+                commit: self.swapper.build().commit.clone(),
                 baml_version: self.options.baml_version.clone(),
                 host: self.options.host.clone(),
                 installed: self.swapper.installed(),
@@ -275,7 +268,7 @@ impl Loop {
     /// Act on deliveries and hold the connection for more, until stopped or
     /// until BCS answers that it does not know the process.
     fn serve(&mut self, mut delivery: Delivery) {
-        let mut hold = DEFAULT_HOLD;
+        let mut hold = MAX_HOLD;
         let mut first = true;
         while !self.stop.load(Ordering::Relaxed) {
             if let Some(seconds) = delivery.hold_seconds {
@@ -311,14 +304,6 @@ impl Loop {
 
     fn token(&self) -> Option<String> {
         token_of(&self.token)
-    }
-
-    fn swapper_build_commit(&self) -> Option<String> {
-        self.swapper_build().commit.clone()
-    }
-
-    fn swapper_build(&self) -> &HotswapBuild {
-        self.swapper.build()
     }
 
     /// Install what `delivery` carries and act on its notifications, fetching
@@ -431,12 +416,7 @@ impl Loop {
     /// Remove every swap BCS has not renewed within the lapse.
     fn lapse(&mut self) {
         for id in self.swapper.lapsed() {
-            let revision = self
-                .swapper
-                .installed()
-                .into_iter()
-                .find(|installed| installed.id == id)
-                .map_or(0, |installed| installed.revision);
+            let revision = self.swapper.revision(&id).unwrap_or(0);
             // A failed removal leaves the swap running; the next pass tries again.
             match self.runtime.block_on(self.swapper.remove(&id, "lapsed")) {
                 Ok(()) => {

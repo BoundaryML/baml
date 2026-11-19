@@ -313,34 +313,23 @@ fn describe_event(event: &HotswapEvent) -> String {
     parts.join("  ")
 }
 
-/// The lines of `old` and `new` that differ, `-` and `+`, by a longest
-/// common subsequence of lines. Unchanged lines are left out.
+/// The lines of `old` and `new` that differ, `-` and `+`. Unchanged lines
+/// are left out.
 fn diff_lines(old: &str, new: &str) -> Vec<String> {
-    let (a, b): (Vec<&str>, Vec<&str>) = (old.lines().collect(), new.lines().collect());
-    let mut lcs = vec![vec![0usize; b.len() + 1]; a.len() + 1];
-    for i in (0..a.len()).rev() {
-        for j in (0..b.len()).rev() {
-            lcs[i][j] = if a[i] == b[j] {
-                lcs[i + 1][j + 1] + 1
-            } else {
-                lcs[i + 1][j].max(lcs[i][j + 1])
+    similar::TextDiff::from_lines(old, new)
+        .iter_all_changes()
+        .filter_map(|change| {
+            let sign = match change.tag() {
+                similar::ChangeTag::Delete => '-',
+                similar::ChangeTag::Insert => '+',
+                similar::ChangeTag::Equal => return None,
             };
-        }
-    }
-    let (mut i, mut j, mut out) = (0, 0, Vec::new());
-    while i < a.len() || j < b.len() {
-        if i < a.len() && j < b.len() && a[i] == b[j] {
-            i += 1;
-            j += 1;
-        } else if i < a.len() && (j == b.len() || lcs[i + 1][j] >= lcs[i][j + 1]) {
-            out.push(format!("-{}", a[i]));
-            i += 1;
-        } else {
-            out.push(format!("+{}", b[j]));
-            j += 1;
-        }
-    }
-    out
+            Some(format!(
+                "{sign}{}",
+                change.value().trim_end_matches(['\n', '\r'])
+            ))
+        })
+        .collect()
 }
 
 impl crate::output::Command for Hotswaps<'_> {
@@ -438,14 +427,9 @@ fn connect(root: &Path, scope: &CloudScope) -> anyhow::Result<(Client, RequestAu
     Ok((Client::new(endpoint)?, authorization))
 }
 
-/// One cargo-style status line on stderr, as `baml run --hot` prints them.
-#[allow(clippy::print_stderr, reason = "status goes to stderr")]
+/// One cargo-style status line on stderr.
 fn status(verb: &str, message: impl std::fmt::Display) {
-    if crate::reporter::quiet() {
-        return;
-    }
-    let painter = Painter::stderr();
-    eprintln!("{} {message}", painter.accent(format!("{verb:>12}")));
+    crate::reporter::Reporter::new().status(verb, message.to_string());
 }
 
 #[allow(clippy::print_stderr, reason = "status goes to stderr")]
@@ -543,29 +527,20 @@ fn local_change(root: &Path, baseline: &str) -> anyhow::Result<LocalChange> {
             }
         }
     }
-    let as_iter = |files: &BTreeMap<String, String>| {
-        files
-            .iter()
-            .map(|(path, text)| (path.clone(), text.clone()))
-            .collect::<Vec<_>>()
-    };
-    let (before_files, after_files) = (as_iter(&before), as_iter(&current));
     let (old_fingerprints, old) = bex_project::hotswap_fingerprint::declarations(
-        before_files.iter().map(|(p, t)| (p.as_str(), t.as_str())),
+        before
+            .iter()
+            .map(|(path, text)| (path.as_str(), text.as_str())),
     );
     let (new_fingerprints, new) = bex_project::hotswap_fingerprint::declarations(
-        after_files.iter().map(|(p, t)| (p.as_str(), t.as_str())),
+        current
+            .iter()
+            .map(|(path, text)| (path.as_str(), text.as_str())),
     );
     let config = crate::runtime_telemetry::hotswap_config(&root)?;
-    let is_function = |key: &str| {
-        key.starts_with("fn ") || key.starts_with("method ") || key.starts_with("implmethod ")
-    };
+    let is_function = bex_vm_types::DeclFingerprints::is_function_key;
     let marked = |text: &str| matches!(bex_project::hotswap_rules::mark_of(text), Some(Ok(_)));
-    let label = |key: &str| {
-        key.split_once(' ')
-            .map_or(key, |(_, name)| name)
-            .to_string()
-    };
+    let label = |key: &str| bex_vm_types::DeclFingerprints::label(key).to_string();
     let mut functions = Vec::new();
     let keys: std::collections::BTreeSet<&String> = old_fingerprints
         .decls
@@ -625,14 +600,10 @@ fn local_change(root: &Path, baseline: &str) -> anyhow::Result<LocalChange> {
         }
     }
     // Every function a changed client reaches must be swappable too.
+    let swappable = bex_hotswap::marked_functions(&old);
     let mut affects = Vec::new();
     for name in bex_hotswap::hotswap_changes(&old_fingerprints, &new_fingerprints) {
-        let swappable = old.iter().any(|(key, sources)| {
-            label(key) == name
-                && is_function(key)
-                && sources.iter().all(|source| marked(&source.text))
-        });
-        if !swappable {
+        if !swappable.contains(&name) {
             bail!("`{name}` changed, and only swappable functions can change without a deploy");
         }
         if functions.iter().all(|function| function.name != name) {
@@ -663,10 +634,7 @@ fn local_change(root: &Path, baseline: &str) -> anyhow::Result<LocalChange> {
 
 fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest as _, Sha256};
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    hex::encode(Sha256::digest(bytes))
 }
 
 fn short(commit: &str) -> &str {

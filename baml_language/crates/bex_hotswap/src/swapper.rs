@@ -46,7 +46,6 @@ pub struct Swapper {
     engine: Arc<BexEngine>,
     build: Arc<HotswapBuild>,
     /// Each declaration as built, by fingerprint key.
-    built: DeclSources,
     installed: BTreeMap<String, Installed>,
     /// The last revision of each swap this process removed or retired: an
     /// older revision of it never installs again.
@@ -60,16 +59,9 @@ pub struct Swapper {
 
 impl Swapper {
     pub fn new(engine: Arc<BexEngine>, build: Arc<HotswapBuild>) -> Self {
-        let (_, built) = declarations(
-            build
-                .sources
-                .iter()
-                .map(|(path, text)| (path.as_str(), text.as_str())),
-        );
         Self {
             engine,
             build,
-            built,
             installed: BTreeMap::new(),
             removed: BTreeMap::new(),
             retired: Vec::new(),
@@ -149,6 +141,24 @@ impl Swapper {
     }
 
     /// The project's source with each of `swaps` spliced in.
+    /// The installed swaps a rebuild keeps, those `drop` does not name, and
+    /// the swap each of their functions comes from.
+    fn kept(&self, drop: impl Fn(&str) -> bool) -> (Vec<&Swap>, BTreeMap<String, Arc<str>>) {
+        let mut swap_ids = BTreeMap::new();
+        let mut keep = Vec::new();
+        for installed in self.installed.values() {
+            if drop(&installed.swap.id) {
+                continue;
+            }
+            keep.push(&installed.swap);
+            let id: Arc<str> = installed.swap.id.as_str().into();
+            for name in &installed.changes {
+                swap_ids.insert(name.clone(), Arc::clone(&id));
+            }
+        }
+        (keep, swap_ids)
+    }
+
     fn spliced<'a>(&self, swaps: impl Iterator<Item = &'a Swap>) -> IndexMap<String, String> {
         let mut files: IndexMap<String, String> = self
             .build
@@ -241,12 +251,7 @@ impl Swapper {
                 }
             }
         }
-        let keep: Vec<&Swap> = self
-            .installed
-            .values()
-            .filter(|installed| !retiring.contains(installed.swap.id.as_str()))
-            .map(|installed| &installed.swap)
-            .collect();
+        let (keep, mut swap_ids) = self.kept(|id| retiring.contains(id));
         let current = self.spliced(keep.iter().copied());
         let next = self.spliced(keep.iter().copied().chain(std::iter::once(swap)));
         let (current_fingerprints, _) =
@@ -254,7 +259,8 @@ impl Swapper {
         let (next_fingerprints, next_sources) =
             declarations(next.iter().map(|(p, t)| (p.as_str(), t.as_str())));
         let changes = bex_vm::hotswap::hotswap_changes(&current_fingerprints, &next_fingerprints);
-        let changed_clients = changed_clients(&current_fingerprints, &next_fingerprints);
+        let changed_clients =
+            bex_vm::hotswap::hotswap_changed_clients(&current_fingerprints, &next_fingerprints);
         // One swap per function: those it lists, and those it changes through
         // a client.
         let listed = swap.functions.iter().map(|function| &function.name);
@@ -277,16 +283,6 @@ impl Swapper {
         }
         if !problems.is_empty() {
             return reject(problems.join("\n"));
-        }
-        let mut swap_ids: BTreeMap<String, Arc<str>> = BTreeMap::new();
-        for installed in self.installed.values() {
-            if retiring.contains(installed.swap.id.as_str()) {
-                continue;
-            }
-            let id: Arc<str> = installed.swap.id.as_str().into();
-            for name in &installed.changes {
-                swap_ids.insert(name.clone(), id.clone());
-            }
         }
         let id: Arc<str> = swap.id.as_str().into();
         for name in &changes {
@@ -336,11 +332,12 @@ impl Swapper {
         changed_clients: &BTreeSet<String>,
     ) -> Result<(), String> {
         let key = self
-            .built
+            .build
+            .declarations()
             .keys()
             .find(|key| is_function_key(key) && label(key) == name)
             .ok_or_else(|| format!("`{name}` is new, and a swap cannot add declarations"))?;
-        let originals = &self.built[key];
+        let originals = &self.build.declarations()[key];
         let replacements = next
             .get(key)
             .filter(|replacements| replacements.len() == originals.len())
@@ -394,7 +391,8 @@ impl Swapper {
                 format!("`{name}` names no rule, and baml.toml sets no `[hotswap] default_rule`")
             })?;
         let shipped = |function: &str| {
-            self.built
+            self.build
+                .declarations()
                 .iter()
                 .find(|(key, sources)| {
                     is_function_key(key) && label(key) == function && sources.len() == 1
@@ -427,20 +425,8 @@ impl Swapper {
         else {
             return Ok(());
         };
-        let keep: Vec<&Swap> = self
-            .installed
-            .values()
-            .filter(|installed| installed.swap.id != id)
-            .map(|installed| &installed.swap)
-            .collect();
+        let (keep, swap_ids) = self.kept(|other| other == id);
         let files = self.spliced(keep.iter().copied());
-        let mut swap_ids: BTreeMap<String, Arc<str>> = BTreeMap::new();
-        for installed in self.installed.values().filter(|i| i.swap.id != id) {
-            let swap_id: Arc<str> = installed.swap.id.as_str().into();
-            for name in &installed.changes {
-                swap_ids.insert(name.clone(), swap_id.clone());
-            }
-        }
         if let Err(error) = self.engine.hotswap_patch_named(files, &swap_ids).await {
             // Rebuilding the others failed, such as a changed client whose
             // initializer now throws. A removal must not fail on another swap,
@@ -539,54 +525,6 @@ impl Swapper {
     }
 }
 
-/// Clients whose configuration differs between `current` and `next`, and
-/// every client built from one of them, directly or through functions, by
-/// simple name: a client built from a changed client holds the changed one
-/// too. This follows the engine, which rebuilds those clients.
-fn changed_clients(
-    current: &bex_vm_types::DeclFingerprints,
-    next: &bex_vm_types::DeclFingerprints,
-) -> BTreeSet<String> {
-    let simple = |key: &str| {
-        label(key)
-            .rsplit('.')
-            .next()
-            .unwrap_or_default()
-            .to_string()
-    };
-    let refers = |key: &str, names: &BTreeSet<String>| {
-        next.refs
-            .get(key)
-            .is_some_and(|refs| refs.iter().any(|name| names.contains(name)))
-    };
-    let mut changed: BTreeSet<String> = next
-        .decls
-        .iter()
-        .filter(|(key, text)| key.starts_with("client ") && current.decls.get(*key) != Some(*text))
-        .map(|(key, _)| simple(key))
-        .collect();
-    // Functions whose result may hold a changed client.
-    let mut through: BTreeSet<String> = BTreeSet::new();
-    loop {
-        let reached: BTreeSet<String> = changed.union(&through).cloned().collect();
-        let mut grew = false;
-        for key in next.decls.keys() {
-            let name = simple(key);
-            if is_function_key(key) && !through.contains(&name) && refers(key, &reached) {
-                grew |= through.insert(name);
-            } else if key.starts_with("client ")
-                && !changed.contains(&name)
-                && refers(key, &reached)
-            {
-                grew |= changed.insert(name);
-            }
-        }
-        if !grew {
-            return changed;
-        }
-    }
-}
-
 /// The first seven characters of a commit, whatever BCS sent.
 fn short(commit: &str) -> String {
     commit.chars().take(7).collect()
@@ -596,7 +534,7 @@ fn short(commit: &str) -> String {
 mod tests {
     use bex_vm_types::DeclFingerprints;
 
-    use super::changed_clients;
+    use bex_vm::hotswap::hotswap_changed_clients as changed_clients;
 
     fn fingerprints(decls: &[(&str, &str)]) -> DeclFingerprints {
         DeclFingerprints {

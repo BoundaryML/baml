@@ -59,11 +59,7 @@ fn is_comment(kind: TokenKind) -> bool {
 
 fn is_trace_directive(token: &Token<'_>) -> bool {
     is_comment(token.kind)
-        && token
-            .text
-            .trim_start_matches('/')
-            .trim()
-            .starts_with("baml:$trace")
+        && baml_syntax::nodes::DirectiveKind::trace_hook_value(token.text).is_some()
 }
 
 /// What a rule checks: one swappable function's source as built and its

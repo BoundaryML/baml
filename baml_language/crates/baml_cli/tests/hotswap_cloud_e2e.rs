@@ -5,6 +5,8 @@
 //! BCS itself is tested in its own repository; the fake here holds only what
 //! a publisher and a process can observe.
 
+mod common;
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
@@ -412,12 +414,12 @@ async fn step(engine: &Arc<BexEngine>) -> i64 {
 
 /// The engine as a process built from `commit` runs it, with its agent.
 fn process(url: &str, commit: &str) -> (Arc<BexEngine>, bex_hotswap::agent::Agent) {
-    let build = Arc::new(bex_hotswap::HotswapBuild {
-        sources: [("main.baml".to_string(), SOURCE.to_string())].into(),
-        commit: Some(commit.to_string()),
-        dirty: false,
-        config: bex_hotswap::HotswapConfig::default(),
-    });
+    let build = Arc::new(bex_hotswap::HotswapBuild::new(
+        [("main.baml".to_string(), SOURCE.to_string())].into(),
+        Some(commit.to_string()),
+        false,
+        bex_hotswap::HotswapConfig::default(),
+    ));
     let program = baml_tests::engine::compile_source(SOURCE);
     let engine = Arc::new(
         BexEngine::new_with_config(
@@ -452,7 +454,6 @@ fn process(url: &str, commit: &str) -> (Arc<BexEngine>, bex_hotswap::agent::Agen
             process_id: "p_91".into(),
             baml_version: "test".into(),
             host: "test".into(),
-            lapse: None,
             retry: Some(Duration::from_millis(100)),
         },
     )
@@ -475,6 +476,7 @@ async fn create_then_approve_installs_on_the_registered_process() {
 
     let repo = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
+    common::share_build_cache(home.path());
     std::fs::write(
         home.path().join("config.toml"),
         "[update]\nauto_check = false\n",
@@ -740,6 +742,7 @@ async fn no_hotswap_keeps_a_process_from_registering() {
     let url = server.uri();
     let repo = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();
+    common::share_build_cache(home.path());
     std::fs::write(
         home.path().join("config.toml"),
         "[update]\nauto_check = false\n",
