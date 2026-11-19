@@ -18,7 +18,9 @@
 //! (directory + `mod.rs`) per namespace, user symbols from the crate root
 //! down, stdlib under `baml/`, vendor packages under `vendor/<pkg>/`.
 //! Container modules only re-export their children as modules — symbols
-//! are never flattened into a parent.
+//! are never flattened into a parent. The crate root also declares items of
+//! its own (`init`, the `baml_bridge` re-export, `BamlOptions`, and the
+//! `experimental` and `invocation` modules); root BAML names yield to them.
 //!
 //! Symbols that reference BAML types the Rust SDK cannot represent yet are
 //! skipped rather than failing codegen: each skip is reported through
@@ -380,14 +382,20 @@ fn to_source_code_with_optional_metadata(
             mod _invocation;
             pub use _invocation::BamlOptions;
             pub use vendor::trace;
-            pub use ::baml_bridge::dynamic::{Target, Arguments, TypeBindings, Input, Type, Value};
-            pub async fn invoke(target: Target, args: Arguments, types: TypeBindings, baml: impl ::std::convert::Into<BamlOptions>) -> ::std::result::Result<Value, ::baml_bridge::Error<Value>> {
-                crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
-                ::baml_bridge::dynamic::invoke(target, args, types, ::std::convert::Into::<BamlOptions>::into(baml).into()).await
-            }
-            pub fn invoke_sync(target: Target, args: Arguments, types: TypeBindings, baml: impl ::std::convert::Into<BamlOptions>) -> ::std::result::Result<Value, ::baml_bridge::Error<Value>> {
-                crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
-                ::baml_bridge::dynamic::invoke_sync(target, args, types, ::std::convert::Into::<BamlOptions>::into(baml).into())
+            /// Experimental APIs: these may change independently of the stable SDK.
+            pub mod experimental {
+                pub use ::baml_bridge::dynamic::{Arguments, Input, Target, Type, TypeBindings, Value};
+                /// Call a BAML function or method chosen at runtime, binding its type
+                /// parameters from `types`.
+                pub async fn invoke(target: Target, args: Arguments, types: TypeBindings, baml: impl ::std::convert::Into<crate::BamlOptions>) -> ::std::result::Result<Value, ::baml_bridge::Error<Value>> {
+                    crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
+                    ::baml_bridge::dynamic::invoke(target, args, types, ::std::convert::Into::<crate::BamlOptions>::into(baml).into()).await
+                }
+                /// The blocking twin of [`invoke`].
+                pub fn invoke_sync(target: Target, args: Arguments, types: TypeBindings, baml: impl ::std::convert::Into<crate::BamlOptions>) -> ::std::result::Result<Value, ::baml_bridge::Error<Value>> {
+                    crate::_runtime::ensure_init().map_err(::baml_bridge::Error::Sdk)?;
+                    ::baml_bridge::dynamic::invoke_sync(target, args, types, ::std::convert::Into::<crate::BamlOptions>::into(baml).into())
+                }
             }
             pub mod invocation {
                 #[derive(Clone)]
@@ -486,17 +494,19 @@ fn to_source_code_with_optional_metadata(
                         clippy::type_complexity
                     )]
 
-                    // BUG: `_inlinedbaml`/`_runtime` are not reserved against
-                    // user symbols. A root-level BAML class/enum named
-                    // `_inlinedbaml` or `_runtime` would emit a same-named
-                    // item that collides with these modules in Rust's type
-                    // namespace. The collision-rename machinery (`analyze.rs`)
-                    // handles namespace-vs-type collisions but not these
-                    // internal module names.
+                    // Root BAML names yield to every name this root binds
+                    // itself (`names::ROOT_TYPE_NAMES`,
+                    // `names::ROOT_VALUE_NAMES`), and root BAML types also to
+                    // the modules dependencies live in (`baml`, `vendor`, ...).
                     mod _inlinedbaml;
                     mod _runtime;
 
                     pub use _runtime::init;
+                    /// The `baml_bridge` runtime this SDK calls into. Name the bridge types in
+                    /// this SDK's signatures (`Error`, `OptionalArg`, …) through this re-export,
+                    /// so they always match the bridge the SDK was built with.
+                    #[doc(inline)]
+                    pub use ::baml_bridge;
                     #invocation_root
 
                     #(#mod_decls)*
@@ -608,6 +618,9 @@ name = "{package_name}"
 version = "0.1.0"
 edition = "{edition}"
 publish = false
+# A BAML namespace `bin` is the module `src/bin/`, which Cargo would
+# otherwise build as binaries.
+autobins = false
 
 [lib]
 name = "{lib_name}"
@@ -1446,7 +1459,234 @@ mod tests {
         );
         let lib = text(&generated, "src/lib.rs");
         assert!(lib.contains("pub mod baml;"));
+        assert!(lib.contains("pub use ::baml_bridge;"));
         assert!(lib.contains("pub use _runtime::init;"));
+    }
+
+    /// The stdlib declarations that turn on the root's invocation API.
+    fn facade_pool() -> SymbolPool {
+        [
+            name("baml", &["spawn"], "CancelToken"),
+            name("trace", &[], "Options"),
+        ]
+        .into_iter()
+        .map(|n| {
+            let class = class_symbol(&n, Vec::new(), Vec::new(), Vec::new());
+            (n, class)
+        })
+        .collect()
+    }
+
+    /// One of Rust's namespaces.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    enum RustNamespace {
+        /// Types, modules and crates.
+        Type,
+        /// Functions and constructors.
+        Value,
+    }
+
+    /// The namespace each import of the generated crate root binds its name
+    /// in, which the syntax does not say. Written out here rather than read
+    /// from `names`, whose tables these tests check.
+    const ROOT_IMPORTS: &[(&str, RustNamespace)] = &[
+        ("init", RustNamespace::Value),
+        ("baml_bridge", RustNamespace::Type),
+        ("BamlOptions", RustNamespace::Type),
+        ("trace", RustNamespace::Type),
+    ];
+
+    /// A name the generated crate root binds.
+    #[derive(Debug)]
+    enum RootName {
+        /// An item: the root's own, or a root BAML symbol's.
+        Item(RustNamespace, String),
+        /// A namespace's module: a file module with a `mod.rs` of its own.
+        Namespace(String),
+    }
+
+    fn root_names(generated: &Generated) -> Vec<RootName> {
+        use syn::ext::IdentExt;
+
+        fn imports(tree: &syn::UseTree, names: &mut Vec<RootName>) {
+            let ident = match tree {
+                syn::UseTree::Path(path) => return imports(&path.tree, names),
+                syn::UseTree::Group(group) => {
+                    for tree in &group.items {
+                        imports(tree, names);
+                    }
+                    return;
+                }
+                syn::UseTree::Name(name) => name.ident.unraw().to_string(),
+                syn::UseTree::Rename(rename) => rename.rename.unraw().to_string(),
+                syn::UseTree::Glob(glob) => panic!("the root glob-imports: {}", quote!(#glob)),
+            };
+            let (_, namespace) = ROOT_IMPORTS
+                .iter()
+                .find(|(name, _)| *name == ident)
+                .unwrap_or_else(|| panic!("add the root's import `{ident}` to `ROOT_IMPORTS`"));
+            names.push(RootName::Item(*namespace, ident));
+        }
+
+        let lib: syn::File = syn::parse_str(text(generated, "src/lib.rs")).expect("lib.rs parses");
+        let mut names = Vec::new();
+        for item in &lib.items {
+            let bind = |namespace, ident: &syn::Ident| {
+                RootName::Item(namespace, ident.unraw().to_string())
+            };
+            match item {
+                syn::Item::Mod(module) => {
+                    let ident = module.ident.unraw().to_string();
+                    let own_file = PathBuf::from(format!("src/{ident}/mod.rs"));
+                    names.push(
+                        if module.content.is_none() && generated.files.contains_key(&own_file) {
+                            RootName::Namespace(ident)
+                        } else {
+                            RootName::Item(RustNamespace::Type, ident)
+                        },
+                    );
+                }
+                syn::Item::Struct(syn_struct) => {
+                    names.push(bind(RustNamespace::Type, &syn_struct.ident));
+                    // A tuple or unit struct's constructor is a value.
+                    if !matches!(syn_struct.fields, syn::Fields::Named(_)) {
+                        names.push(bind(RustNamespace::Value, &syn_struct.ident));
+                    }
+                }
+                syn::Item::Enum(syn_enum) => names.push(bind(RustNamespace::Type, &syn_enum.ident)),
+                syn::Item::Type(alias) => names.push(bind(RustNamespace::Type, &alias.ident)),
+                syn::Item::Fn(function) => {
+                    names.push(bind(RustNamespace::Value, &function.sig.ident));
+                }
+                syn::Item::Const(constant) => {
+                    names.push(bind(RustNamespace::Value, &constant.ident));
+                }
+                syn::Item::Static(statik) => names.push(bind(RustNamespace::Value, &statik.ident)),
+                syn::Item::Use(import) => imports(&import.tree, &mut names),
+                syn::Item::Impl(_) => {}
+                other => panic!("unexpected root item: {}", quote!(#other)),
+            }
+        }
+        names
+    }
+
+    #[test]
+    fn the_root_reserves_every_name_it_binds_itself() {
+        // The root's own names, and the namespaces it declares modules for.
+        let own_names = |pool: &SymbolPool| {
+            let generated = to_source_code_with_bytecode(pool, &[], &options());
+            let mut items = BTreeSet::new();
+            let mut namespaces = Vec::new();
+            for root_name in root_names(&generated) {
+                match root_name {
+                    RootName::Item(namespace, name) => {
+                        items.insert((namespace, name));
+                    }
+                    RootName::Namespace(name) => namespaces.push(name),
+                }
+            }
+            (items, namespaces)
+        };
+        let reserved: BTreeSet<(RustNamespace, String)> = [
+            (RustNamespace::Type, names::ROOT_TYPE_NAMES),
+            (RustNamespace::Value, names::ROOT_VALUE_NAMES),
+        ]
+        .into_iter()
+        .flat_map(|(namespace, table)| table.iter().map(move |name| (namespace, name.to_string())))
+        .collect();
+
+        let (items, namespaces) = own_names(&facade_pool());
+        assert_eq!(namespaces, ["baml", "vendor"]);
+        assert_eq!(items, reserved);
+        // Without the stdlib's invocation types the root binds fewer names.
+        let (items, namespaces) = own_names(&SymbolPool::default());
+        assert_eq!(namespaces, ["baml"]);
+        assert!(items.is_subset(&reserved), "{items:?}");
+    }
+
+    #[test]
+    fn root_names_never_clash_with_the_roots_own() {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum Declared {
+            Class,
+            Function,
+            Namespace,
+        }
+        // Spelled like a name the root binds itself, a dependency's module,
+        // or a module name rustc treats specially.
+        let spellings: Vec<&str> = names::ROOT_TYPE_NAMES
+            .iter()
+            .chain(names::ROOT_VALUE_NAMES)
+            .copied()
+            .chain(baml_sdkgen_types::dependency_root_segments())
+            .chain(["lib", "main"])
+            .collect();
+        for naming_convention in [NamingConvention::PreserveCase, NamingConvention::Language] {
+            let options = RustGenOptions {
+                naming_convention,
+                ..options()
+            };
+            for &spelling in &spellings {
+                for declared in [Declared::Class, Declared::Function, Declared::Namespace] {
+                    if declared == Declared::Namespace
+                        && baml_sdkgen_types::dependency_root_segments()
+                            .any(|root| root == spelling)
+                    {
+                        // BUG: a local namespace spelled like a dependency's
+                        // module merges into it (see `namespace_segments`).
+                        continue;
+                    }
+                    let mut pool = facade_pool();
+                    match declared {
+                        Declared::Class | Declared::Namespace => {
+                            let n = if declared == Declared::Class {
+                                name("user", &[], spelling)
+                            } else {
+                                name("user", &[spelling], "Thing")
+                            };
+                            let class = class_symbol(&n, Vec::new(), Vec::new(), Vec::new());
+                            pool.insert(n, class);
+                        }
+                        Declared::Function => {
+                            let n = name("user", &[], spelling);
+                            let function = nullary_string_fn(&n);
+                            pool.insert(n, Symbol::Function(function));
+                        }
+                    }
+                    let case = format!("{naming_convention}: {declared:?} `{spelling}`");
+                    let generated = to_source_code_with_bytecode(&pool, &[], &options);
+                    assert!(generated.warnings.is_empty(), "{case}");
+
+                    let mut bound = BTreeMap::<_, usize>::new();
+                    for root_name in root_names(&generated) {
+                        let key = match root_name {
+                            RootName::Item(namespace, name) => (namespace, name),
+                            RootName::Namespace(name) => {
+                                assert!(
+                                    !["lib", "main"].contains(&name.as_str()),
+                                    "{case}: `mod {name};`"
+                                );
+                                (RustNamespace::Type, name)
+                            }
+                        };
+                        *bound.entry(key).or_default() += 1;
+                    }
+                    let clashes: Vec<_> =
+                        bound.into_iter().filter(|(_, count)| *count > 1).collect();
+                    assert!(clashes.is_empty(), "{case}: {clashes:?}");
+                    // The root's own paths into the stdlib still reach its types.
+                    assert!(
+                        text(&generated, "src/baml/spawn/mod.rs")
+                            .contains("pub struct CancelToken"),
+                        "{case}"
+                    );
+                    assert!(
+                        text(&generated, "src/vendor/trace/mod.rs").contains("pub struct Options"),
+                        "{case}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

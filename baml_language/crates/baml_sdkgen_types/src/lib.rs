@@ -22,7 +22,7 @@ pub use errors::*;
 pub use generator_fields::*;
 pub use naming::{Candidate, Case, allocate_distinct, allocate_one};
 pub use output_writer::*;
-pub use routing::namespace_segments;
+pub use routing::{dependency_root_segments, namespace_segments};
 pub use skip_warning::SkipWarning;
 pub use string_literal::quoted_string;
 pub use symbols::*;

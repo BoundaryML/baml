@@ -1,6 +1,6 @@
 //! Roundtrip coverage for `baml_sdk::maps` — map Ty variants.
 
-use baml_bridge::Map;
+use baml_sdk::baml_bridge::Map;
 use baml_sdk::maps::{
     Resume, Sentiment, round_trip_list_valued_map_sync, round_trip_resume_sync,
     round_trip_sentiment_sync, round_trip_simple_map_sync,
