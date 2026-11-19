@@ -4,5 +4,5 @@ export function companionFunctionName(
   functionName: string,
   companion: LlmCompanionFunction,
 ): string {
-  return `${functionName}$${companion}`;
+  return `${functionName}@${companion}`;
 }
