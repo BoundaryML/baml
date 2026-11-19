@@ -97,6 +97,10 @@ pub(super) fn event_name(kind: &NetworkEventKind) -> NetworkEventName {
         NetworkEventKind::StreamEnd => NetworkEventName::End,
         NetworkEventKind::Await => NetworkEventName::Await,
         NetworkEventKind::Close => NetworkEventName::Close,
+        NetworkEventKind::Drop => NetworkEventName::Drop,
+        NetworkEventKind::Complete { .. } | NetworkEventKind::Cancelled => {
+            unreachable!("internal completion is not a wire event")
+        }
     }
 }
 
@@ -115,6 +119,8 @@ pub(super) enum NetworkPayload<'a> {
         status: u16,
         headers: &'a [(String, String)],
     },
+    /// Owned native transport error, without VM heap references.
+    Error { message: &'a str, timeout: bool },
     /// A whole body: a string when it is UTF-8, otherwise bytes.
     Body(&'a [u8]),
     /// `{event, data, id}`, with null for an absent event or id.
@@ -225,13 +231,22 @@ mod tests {
             NetworkEventKind::StreamEnd,
             NetworkEventKind::Await,
             NetworkEventKind::Close,
+            NetworkEventKind::Drop,
         ]
         .iter()
         .map(|kind| event_name(kind).as_str().to_owned())
         .collect::<Vec<_>>();
         assert_eq!(
             names,
-            ["connection", "data", "data", "end", "await", "close"]
+            [
+                "connection",
+                "data",
+                "data",
+                "end",
+                "await",
+                "close",
+                "drop"
+            ]
         );
     }
 }

@@ -15,11 +15,13 @@ baml_compiler2_hir = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_type = { workspace = true }
 baml_type_runtime = { workspace = true }
+baml_version = { workspace = true }
 sys_regex = { workspace = true }
 borsh = { workspace = true }
 ena = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
+nunny = { workspace = true }
 rustc-hash = { workspace = true }
 salsa = { workspace = true }
 sha2 = { workspace = true }

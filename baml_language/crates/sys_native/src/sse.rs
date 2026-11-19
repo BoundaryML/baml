@@ -8,8 +8,10 @@ use std::sync::{
 
 use sys_ops::io::VmBamlError;
 use sys_types::{
-    OpOutput, RetainedBytes, VmInternalError, VmRustFnError, network::NetworkContext,
-    resource::SseStreamResource, sse::SseEvent,
+    OpOutput, RetainedBytes, VmInternalError, VmRustFnError,
+    network::{NetworkCarrier, NetworkContext},
+    resource::SseStreamResource,
+    sse::SseEvent,
 };
 use tokio::{
     sync::{Mutex as TokioMutex, Notify},
@@ -49,7 +51,9 @@ pub(crate) struct SseStreamState {
     pub(crate) notify: Arc<Notify>,
     pub(crate) reader: AbortHandle,
     pub(crate) retained: Arc<RetainedBytes>,
-    pub(crate) network: Option<NetworkContext>,
+    /// The traced request's response, owned by this stream alone: the
+    /// reading task holds a context clone, which cannot delay its `drop`.
+    pub(crate) carrier: Option<NetworkCarrier>,
 }
 
 impl SseStreamState {
@@ -125,6 +129,6 @@ impl SseStreamResource for SseStreamState {
     }
 
     fn network(&self) -> Option<&NetworkContext> {
-        self.network.as_ref()
+        self.carrier.as_ref().map(NetworkCarrier::network)
     }
 }

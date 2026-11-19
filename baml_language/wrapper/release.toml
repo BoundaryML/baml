@@ -1,0 +1,7 @@
+# Build-time PostHog ingestion settings. The wrapper version lives in baml.toml.
+
+# The PostHog project wrapper telemetry is sent to. The key is a public
+# write-only project key.
+[posthog]
+api_key = "phc_yoDVuQmKRGRWyRjCaQEw5GBnDHxGLDKHJCAYvsJswdoY"
+host = "https://us.i.posthog.com"

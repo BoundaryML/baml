@@ -65,7 +65,7 @@ impl ClassCrossing {
             | RustPayloadKind::XChaCha20Poly1305
             | RustPayloadKind::Regex
             | RustPayloadKind::CsvRecord
-            | RustPayloadKind::Limit
+            | RustPayloadKind::Semaphore
             | RustPayloadKind::CancelToken
             | RustPayloadKind::SpanId
             | RustPayloadKind::TraceOptions
@@ -90,7 +90,9 @@ impl ClassCrossing {
             | RustPayloadKind::HttpServer
             | RustPayloadKind::TlsKeys
             | RustPayloadKind::OutputFormat
-            | RustPayloadKind::Lock => Self::Opaque,
+            | RustPayloadKind::Lock
+            | RustPayloadKind::Permit
+            | RustPayloadKind::Ticket => Self::Opaque,
         }
     }
 

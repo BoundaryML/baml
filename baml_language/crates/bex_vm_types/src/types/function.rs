@@ -2,7 +2,7 @@ use baml_base::Name;
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use super::{BodyKey, FnPath, ImplBodyKey, InterfaceBound, ItemPath};
-use crate::{Bytecode, HeapPtr, SysOp, TyTemplate, Value};
+use crate::{AtomicValueSlot, Bytecode, HeapPtr, SysOp, TyTemplate, Value};
 
 /// Function type.
 ///
@@ -428,6 +428,50 @@ fn impl_body_tail(body: &ImplBodyKey, label: Option<&Name>) -> String {
     )
 }
 
+/// The implementation a hot swap installed for a function: the callable a call
+/// of the function enters instead of its own body, if any (BEP-087).
+///
+/// Interior mutability because functions are reached through `&'static`
+/// references. Written only while every VM is parked, by an install or by the
+/// collector forwarding the replacement, so the heap permit hand-off orders
+/// each write before any later read and a relaxed load is enough. `BexHeap`
+/// keeps the matching table that makes an occupied redirect a GC root.
+pub struct HotswapRedirect(AtomicValueSlot);
+
+impl HotswapRedirect {
+    /// The installed replacement, or `None` for the function's own body.
+    #[inline]
+    #[must_use]
+    pub fn get(&self) -> Option<HeapPtr> {
+        self.0.load_relaxed().as_object_ptr()
+    }
+
+    /// Install `replacement`. The caller must hold every heap permit.
+    pub fn set(&self, replacement: Option<HeapPtr>) {
+        self.0
+            .store_relaxed(replacement.map_or(Value::NULL, Value::object));
+    }
+}
+
+impl Default for HotswapRedirect {
+    fn default() -> Self {
+        Self(AtomicValueSlot::new(Value::NULL))
+    }
+}
+
+/// A copy of a function is not the function a swap targeted, so it starts empty.
+impl Clone for HotswapRedirect {
+    fn clone(&self) -> Self {
+        Self::default()
+    }
+}
+
+impl std::fmt::Debug for HotswapRedirect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "HotswapRedirect({:?})", self.get())
+    }
+}
+
 /// Represents any Baml function.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Function {
@@ -483,6 +527,10 @@ pub struct Function {
     /// may publish a newer policy while calls are in flight.
     #[borsh(skip)]
     pub telemetry_policy_id: btel_types::TelemetryPolicyId,
+
+    /// The hot swap installed for this function, if any. Runtime-only.
+    #[borsh(skip)]
+    pub hotswap_redirect: HotswapRedirect,
 
     /// Local variable names indexed by slot number.
     ///
@@ -587,6 +635,22 @@ pub struct Function {
 }
 
 impl Function {
+    /// The stack slots entering a bytecode frame of this function reserves
+    /// past its arguments: its locals, then its operand bound
+    /// ([`crate::bytecode::CompactCode::max_stack`]), so the dispatch loop's
+    /// pushes inside the frame need no capacity check. Code whose operand
+    /// stack was never verified, or never lowered, carries a bound no stack
+    /// can hold, so entering it fails with a stack overflow.
+    #[must_use]
+    pub fn frame_reserve(&self) -> usize {
+        self.bytecode
+            .compact
+            .as_ref()
+            .map_or(crate::stack_effect::UNVERIFIED_MAX_STACK, |code| {
+                code.frame_slots
+            })
+    }
+
     /// The function's rendered name: [`FunctionIdentity::render`] under its
     /// owner package's display label (lossy display, as a class's
     /// [`name`](super::Class::name) is), or the identity alone when it has no
@@ -886,6 +950,8 @@ impl Function {
             lambda_path,
             definition_key: Some(btel_types::DefinitionKey(format!("function:{fqn}"))),
             package_name,
+            compilation_unit_hash: super::owner::package_compilation_unit_hash(self.owner)
+                .map(|hash| hash.0),
             namespace,
             argument_layout: self.telemetry_argument_layout(),
             source_map: self.telemetry_source_map(),

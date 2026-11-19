@@ -84,8 +84,8 @@ class TypeVariety {
                           (union_type
                             (type_path
                               (identifier))
-                            (type_path
-                              (identifier))))))))))))))))
+                            (literal_type
+                              (null))))))))))))))))
 
 ==================
 map and generic types, named type arguments
@@ -339,3 +339,65 @@ class Fields {
                     (string)))))
             (type_path
               (identifier))))))))
+
+==================
+tuple types: singleton, trailing comma, nested, function slot
+==================
+
+class Tuples {
+  single (int,)
+  pair (int, string)
+  trailing (int, string,)
+  nested ((int, bool), string[])?
+  callback ((int) -> int, bool)
+}
+
+---
+
+(source_file
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (identifier)
+        (tuple_type
+          (type_path
+            (identifier))))
+      (field_declaration
+        (identifier)
+        (tuple_type
+          (type_path
+            (identifier))
+          (type_path
+            (identifier))))
+      (field_declaration
+        (identifier)
+        (tuple_type
+          (type_path
+            (identifier))
+          (type_path
+            (identifier))))
+      (field_declaration
+        (identifier)
+        (optional_type
+          (tuple_type
+            (tuple_type
+              (type_path
+                (identifier))
+              (type_path
+                (identifier)))
+            (array_type
+              (type_path
+                (identifier))))))
+      (field_declaration
+        (identifier)
+        (tuple_type
+          (function_type
+            (function_type_parameters
+              (function_type_parameter
+                (type_path
+                  (identifier))))
+            (type_path
+              (identifier)))
+          (type_path
+            (identifier)))))))

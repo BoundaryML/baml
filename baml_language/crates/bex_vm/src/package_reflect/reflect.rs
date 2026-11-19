@@ -98,7 +98,7 @@ impl BamlPackageReflect for PackageReflectImpl {
 /// image's root reaches them — the runtime mirror of the compiler's edge
 /// table for a package without a manifest, so the package can name exactly
 /// what its compile could.
-fn runtime_edges(
+pub(crate) fn runtime_edges(
     vm: &BexVm,
     declared: &IndexMap<String, HeapPtr>,
 ) -> IndexMap<baml_type::Name, Edge> {
@@ -179,10 +179,10 @@ fn package_object(vm: &BexVm, value: Value) -> Result<HeapPtr, &'static str> {
     let Some(wrapper_ptr) = value.as_object_ptr() else {
         return Err("reflect.Package receiver is not an instance");
     };
-    let Object::Instance(wrapper) = vm.get_object(wrapper_ptr) else {
+    let Some(wrapper) = vm.get_instance(wrapper_ptr) else {
         return Err("reflect.Package receiver is not an instance");
     };
-    let Some(ptr) = wrapper.load_field(0).as_object_ptr() else {
+    let Some(ptr) = wrapper.load_value(0).as_object_ptr() else {
         return Err("reflect.Package is not initialized");
     };
     if !matches!(vm.get_object(ptr), Object::Package(_)) {
@@ -1108,9 +1108,9 @@ impl RootHaver for FinishPackageTests {
 
 impl Continuation for FinishPackageTests {
     fn call(self: Box<Self>, vm: &mut BexVm, _value: Value) -> NativeCallResult {
-        let tests_value = match vm.get_object(self.collector_ptr) {
-            Object::Instance(collector) => collector.load_field(1),
-            _ => {
+        let tests_value = match vm.get_instance(self.collector_ptr) {
+            Some(collector) => collector.load_value(1),
+            None => {
                 return invalid_argument(vm, "test collector changed kind during registration")
                     .into();
             }
@@ -1124,11 +1124,11 @@ impl Continuation for FinishPackageTests {
             let Some(ptr) = registration.as_object_ptr() else {
                 continue;
             };
-            let Object::Instance(registration) = vm.get_object(ptr) else {
+            let Some(registration) = vm.get_instance(ptr) else {
                 continue;
             };
-            let name_value = registration.load_field(0);
-            let body = registration.load_field(1);
+            let name_value = registration.load_value(0);
+            let body = registration.load_value(1);
             let Ok(name) = vm.as_string(&name_value) else {
                 continue;
             };
@@ -1175,6 +1175,7 @@ impl BamlClassPackage for PackageReflectImpl {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
             kind: PackageKind::Ordinary,
             edges: runtime_edges(vm, &dependencies),
+            metadata: artifact.emitted.record.metadata.clone(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -1376,6 +1377,7 @@ impl BamlClassPackage for PackageReflectImpl {
             name,
             kind: PackageKind::Ordinary,
             edges: view_edges(vm, base_ptr, &reached),
+            metadata: None,
             classes: additions.classes,
             enums: additions.enums,
             interfaces: additions.interfaces,
@@ -1799,6 +1801,11 @@ fn graft_session_submission(
         unreachable!("Session payload is a Package")
     };
     package.surface = ExportSurface::Compiled(artifact.interface_blob.clone());
+    // A session is one package compiled a submission at a time: it carries
+    // the metadata of the latest one.
+    package
+        .metadata
+        .clone_from(&artifact.emitted.record.metadata);
     let Some(state) = package.session.as_deref_mut() else {
         unreachable!("Session graft target is a Session package")
     };
@@ -1836,6 +1843,7 @@ impl BamlClassSession for PackageReflectImpl {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
             kind: PackageKind::Ordinary,
             edges: runtime_edges(vm, &dependencies),
+            metadata: None,
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -2066,6 +2074,28 @@ fn callee_fn_ty(sig: &CallableSignature) -> RealizedTy {
     }
 }
 
+/// Why `replacement`'s type is not exactly `target`'s, or `None` when it is:
+/// each must be a subtype of the other, `throws` included.
+pub(crate) fn replacement_type_problem(
+    vm: &BexVm,
+    target: &bex_vm_types::Function,
+    replacement: &bex_vm_types::Function,
+) -> Option<String> {
+    let (Ok(target), Ok(replacement)) = (
+        crate::vm::function_callable_signature(vm, target, &[], false),
+        crate::vm::function_callable_signature(vm, replacement, &[], false),
+    ) else {
+        return Some("the signatures could not be read".to_string());
+    };
+    let expected = callee_fn_ty(&target);
+    let actual = callee_fn_ty(&replacement);
+    let actual_ty = Ty::from(actual.clone());
+    let expected_ty = Ty::from(expected.clone());
+    let same = normalize::is_subtype(&actual_ty, &expected_ty, vm)
+        && normalize::is_subtype(&expected_ty, &actual_ty, vm);
+    (!same).then(|| format!("the replacement has type `{actual}`, not `{expected}`"))
+}
+
 /// A value's reconstructed type, `unknown` when it has none (a bound method, an
 /// opaque handle). A future reconstructs to the `Future<T, E>` it was spawned at.
 fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
@@ -2092,7 +2122,7 @@ fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
 
 /// `reflect.call_any` mirrors the ordinary call boundary's one numeric
 /// conversion: an exactly representable `int` may enter a `float` (or
-/// `float?`) slot. Materialize the boxed float before dispatch so the callee
+/// `float?`) slot. Materialize the float before dispatch so the callee
 /// receives the runtime representation its signature promises.
 #[expect(
     clippy::cast_precision_loss,
@@ -2120,7 +2150,7 @@ fn prepare_call_any_argument(vm: &mut BexVm, value: Value, expected: &RealizedTy
         if widened as i64 != number {
             return None;
         }
-        return Some(Value::object(vm.tlab.alloc(Object::Float(widened))));
+        return Some(vm.float_value(widened));
     }
     value_fits(vm, value, expected).then_some(value)
 }

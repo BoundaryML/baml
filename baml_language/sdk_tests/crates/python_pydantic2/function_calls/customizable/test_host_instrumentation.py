@@ -18,6 +18,13 @@ from baml_bridge import _host_capture
 from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
 
 
+def assert_metadata(actual, expected):
+    """Require native identity while comparing the complete authored context."""
+    version = actual.get("baml.ctx.baml_version")
+    assert isinstance(version, str) and version
+    assert actual == {**expected, "baml.ctx.baml_version": version}
+
+
 # SDK_PARITY_LINT(skip): Python instrumentation defaults Python-to-BAML span/capture requests
 @pytest.mark.parametrize("asynchronous", [False, True], ids=["sync", "async"])
 async def test_host_defaults_baml_span_and_error_capture_python_only(monkeypatch, asynchronous):
@@ -45,7 +52,7 @@ async def test_host_defaults_baml_span_and_error_capture_python_only(monkeypatch
         assert context_baml.leaf_has_span_sync()
         current = context_baml.current_context_sync()
         assert current.distinct_id == "u1"
-        assert current.metadata == {"feature": "chat.title", "user_id": "u1", "nested": True}
+        assert_metadata(current.metadata, {"feature": "chat.title", "user_id": "u1", "nested": True})
         ExtractInt_sync()  # deterministic client returns "not a number"; no network
 
     @trace.instrument(tags)
@@ -57,7 +64,7 @@ async def test_host_defaults_baml_span_and_error_capture_python_only(monkeypatch
         assert await context_baml.leaf_has_span()
         current = await context_baml.current_context()
         assert current.distinct_id == "u1"
-        assert current.metadata == {"feature": "chat.title", "user_id": "u1"}
+        assert_metadata(current.metadata, {"feature": "chat.title", "user_id": "u1"})
         await ExtractInt()
 
     # Ignore the options-builder calls above; inspect the real failing call's
@@ -97,12 +104,12 @@ async def test_host_baml_trace_override_and_callback_context_python_only():
             # Inherited capture options must not reapply the parent's tag patch.
             current = await context_baml.current_context()
             assert current.distinct_id == "internal-id"
-            assert current.metadata == {"phase": "internal", "keep": 7}
+            assert_metadata(current.metadata, {"phase": "internal", "keep": 7})
             assert await context_baml.leaf_has_span()
             return value
 
         assert await context_baml.internal_context(callback, 7) == 7
-        assert trace.current_context_sync().metadata == {"phase": "root", "keep": 7, "remove": 9}
+        assert_metadata(trace.current_context_sync().metadata, {"phase": "root", "keep": 7, "remove": 9})
 
     await parent()
     assert trace.current_context_sync().metadata == {}
@@ -160,14 +167,14 @@ def test_host_context_inherits_and_restores():
     def child():
         observed = context_baml.current_context_sync()
         assert observed.distinct_id == "alice"
-        assert observed.metadata == {"keep": 1, "child": True}
+        assert_metadata(observed.metadata, {"keep": 1, "child": True})
         observed.metadata["keep"] = 99
-        assert trace.current_context_sync().metadata == {"keep": 1, "child": True}
+        assert_metadata(trace.current_context_sync().metadata, {"keep": 1, "child": True})
 
     @trace.instrument(options)
     def parent():
         child()
-        assert trace.current_context_sync().metadata == {"keep": 1, "drop": 2}
+        assert_metadata(trace.current_context_sync().metadata, {"keep": 1, "drop": 2})
 
     parent()
     assert trace.current_context_sync().metadata == {}
@@ -177,9 +184,9 @@ async def test_host_callback_reentry_context():
     @trace.instrument(trace.context_sync(metadata={"phase": "host"}))
     async def parent():
         async def callback(value):
-            assert trace.current_context_sync().metadata == {"phase": "callback"}
+            assert_metadata(trace.current_context_sync().metadata, {"phase": "callback"})
             observed = await context_baml.current_context()
-            assert observed.metadata == {"phase": "callback"}
+            assert_metadata(observed.metadata, {"phase": "callback"})
             return value
 
         assert (
@@ -192,7 +199,7 @@ async def test_host_callback_reentry_context():
             )
             == 7
         )
-        assert trace.current_context_sync().metadata == {"phase": "host"}
+        assert_metadata(trace.current_context_sync().metadata, {"phase": "host"})
 
     await parent()
     assert trace.current_cancel_token() is None
@@ -217,7 +224,7 @@ async def test_host_callback_cleanup_retains_context():
             cleaning.set()
             try:
                 await release.wait()
-                assert trace.current_context_sync().metadata == {"request": 7}
+                assert_metadata(trace.current_context_sync().metadata, {"request": 7})
                 assert active.is_cancelled_sync() is True
             except Exception as error:
                 failures.append(error)
@@ -299,7 +306,7 @@ async def test_coroutine_entry_uses_execution_context_python_only():
 
     coroutine = create()
     assert trace.current_cancel_token() is None
-    assert await consume(coroutine) == {"phase": "consumer"}
+    assert_metadata(await consume(coroutine), {"phase": "consumer"})
 
 
 async def test_concurrent_host_invocations_isolate_context():
@@ -320,7 +327,10 @@ async def test_concurrent_host_invocations_isolate_context():
         await asyncio.wait_for(asyncio.gather(*(event.wait() for event in ready)), 5)
     finally:
         release.set()
-    assert await asyncio.gather(*tasks) == [{"request": 0}, {"request": 1}]
+    results = await asyncio.gather(*tasks)
+    assert len(results) == 2
+    for index, metadata in enumerate(results):
+        assert_metadata(metadata, {"request": index})
     assert trace.current_cancel_token() is None
 
 
@@ -339,7 +349,7 @@ async def test_host_child_outlives_parent():
     task = await parent()
     assert trace.current_cancel_token() is None
     release.set()
-    assert await task == {"request": 7}
+    assert_metadata(await task, {"request": 7})
 
 
 # SDK_PARITY_LINT(skip): covers Python ContextVar handoff to a thread pool
@@ -351,8 +361,8 @@ def test_host_thread_context_handoff_python_only():
     @trace.instrument(trace.context_sync(metadata={"request": 7}))
     def parent(pool):
         copied = contextvars.copy_context()
-        assert pool.submit(copied.run, child).result(timeout=5) == {"request": 7}
-        assert pool.submit(child).result(timeout=5) == {}
+        assert_metadata(pool.submit(copied.run, child).result(timeout=5), {"request": 7})
+        assert_metadata(pool.submit(child).result(timeout=5), {})
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         parent(pool)
@@ -370,7 +380,7 @@ def test_host_errors_preserve_identity_and_restore_context():
         with pytest.raises(ValueError) as caught:
             child()
         assert caught.value is failure
-        assert trace.current_context_sync().metadata == {"phase": "parent"}
+        assert_metadata(trace.current_context_sync().metadata, {"phase": "parent"})
 
     parent()
     assert trace.current_cancel_token() is None
@@ -391,7 +401,7 @@ async def test_host_cancellation_waits_for_cleanup_python_only():
         finally:
             cleaning.set()
             await release.wait()
-            assert trace.current_context_sync().metadata == {"phase": "host"}
+            assert_metadata(trace.current_context_sync().metadata, {"phase": "host"})
             exited.set()
 
     task = asyncio.create_task(work())
@@ -478,8 +488,8 @@ async def test_callback_marker_context_precedence():
     async def callback(value):
         expected = {"stage": "call", "keep": 1, "caller": True}
         assert trace.current_context_sync().distinct_id == "call"
-        assert trace.current_context_sync().metadata == expected
-        assert (await context_baml.current_context()).metadata == expected
+        assert_metadata(trace.current_context_sync().metadata, expected)
+        assert_metadata((await context_baml.current_context()).metadata, expected)
         return value
 
     assert (
@@ -503,7 +513,7 @@ async def test_callback_marker_context_precedence():
 async def test_callback_marker_adopts_sync_body():
     @trace.instrument(trace.context_sync(metadata={"stage": "marker"}))
     def callback(value):
-        assert trace.current_context_sync().metadata == {"stage": "call"}
+        assert_metadata(trace.current_context_sync().metadata, {"stage": "call"})
         return value
 
     assert (
@@ -518,7 +528,7 @@ async def test_callback_marker_adopts_sync_body():
 async def test_callback_marker_defaults_override_inherited_context():
     @trace.instrument(trace.context_sync(metadata={"stage": "marker"}))
     async def callback(value):
-        assert trace.current_context_sync().metadata == {"stage": "marker", "keep": 1}
+        assert_metadata(trace.current_context_sync().metadata, {"stage": "marker", "keep": 1})
         return value
 
     assert (
@@ -559,11 +569,11 @@ async def test_callback_marker_adopts_once_during_recursion():
 async def test_callback_marker_only_outer_wrapper_adopts():
     @trace.instrument(trace.context_sync(metadata={"stage": "inner"}))
     async def inner(value):
-        assert trace.current_context_sync().metadata == {
+        assert_metadata(trace.current_context_sync().metadata, {
             "stage": "inner",
             "outer": True,
             "call": True,
-        }
+        })
         return value
 
     outer = trace.instrument(trace.context_sync(metadata={"stage": "outer", "outer": True}))(
@@ -588,7 +598,7 @@ async def test_callback_marker_concurrent_reuse_and_later_direct_call():
             ready[value].set()
             await release.wait()
         expected = "marker" if value == 2 else value
-        assert trace.current_context_sync().metadata == {"stage": expected}
+        assert_metadata(trace.current_context_sync().metadata, {"stage": expected})
         return value
 
     pending = [
@@ -611,7 +621,7 @@ async def test_callback_marker_concurrent_reuse_and_later_direct_call():
 async def test_callback_third_party_wrapper_is_not_adopted():
     @trace.instrument(trace.context_sync(metadata={"stage": "marker"}))
     async def marked(value):
-        assert trace.current_context_sync().metadata == {"stage": "marker"}
+        assert_metadata(trace.current_context_sync().metadata, {"stage": "marker"})
         return value
 
     # SDK identity must not follow __wrapped__ or copied marker attributes.
@@ -619,7 +629,7 @@ async def test_callback_third_party_wrapper_is_not_adopted():
 
     @functools.wraps(marked)
     async def third_party(value):
-        assert trace.current_context_sync().metadata == {"stage": "call"}
+        assert_metadata(trace.current_context_sync().metadata, {"stage": "call"})
         return await marked(value)
 
     assert (
@@ -633,12 +643,12 @@ async def test_callback_third_party_wrapper_is_not_adopted():
 
 async def test_unmarked_callback_explicit_context_and_reentry():
     async def callback(value):
-        assert trace.current_context_sync().metadata == {"stage": "call"}
+        assert_metadata(trace.current_context_sync().metadata, {"stage": "call"})
         child = await context_baml.current_context(
             _baml={"trace": trace.context_sync(metadata={"stage": "child"})}
         )
-        assert child.metadata == {"stage": "child"}
-        assert trace.current_context_sync().metadata == {"stage": "call"}
+        assert_metadata(child.metadata, {"stage": "child"})
+        assert_metadata(trace.current_context_sync().metadata, {"stage": "call"})
         return value
 
     assert (
@@ -655,7 +665,7 @@ async def test_callback_bound_method_adoption_python_only():
     class Service:
         @trace.instrument(trace.context_sync(metadata={"stage": "marker"}))
         async def callback(self, value):
-            assert trace.current_context_sync().metadata == {"stage": "call"}
+            assert_metadata(trace.current_context_sync().metadata, {"stage": "call"})
             return value
 
     assert (
@@ -671,7 +681,7 @@ async def test_callback_bound_method_adoption_python_only():
 def test_callback_marker_sync_entry_python_only():
     @trace.instrument(trace.context_sync(metadata={"stage": "marker"}))
     def callback(value):
-        assert trace.current_context_sync().metadata == {"stage": "call"}
+        assert_metadata(trace.current_context_sync().metadata, {"stage": "call"})
         return value
 
     assert (

@@ -622,7 +622,7 @@ fn short_platform(platform: &str) -> &str {
     }
 }
 
-/// Render a unified CodSpeed-style markdown report from multiple JSON reports.
+/// Render a unified markdown report from multiple JSON reports.
 ///
 /// The `run_url` is optional and used for the footer link to the workflow run.
 pub(crate) fn render_aggregate_markdown(reports: &[JsonReport], run_url: Option<&str>) {

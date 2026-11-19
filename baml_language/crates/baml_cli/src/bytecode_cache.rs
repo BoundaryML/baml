@@ -202,7 +202,7 @@ impl CacheContext {
         if !build_cache_enabled() {
             return None;
         }
-        let fingerprint = compiler_fingerprint(&dir);
+        let fingerprint = hot_cache_salt(compiler_fingerprint(&dir));
 
         // Root-relative paths keep the key location-independent. Discovery
         // order is sorted by full path; stripping the shared root prefix
@@ -498,6 +498,21 @@ impl CacheContext {
     }
 }
 
+/// `baml run --hot` makes every user function opaque to escape analysis, so
+/// its bytecode must never share a cache entry with an ordinary build. Every
+/// tier's key starts from the fingerprint, and without `--hot` it is
+/// unchanged.
+fn hot_cache_salt(fingerprint: [u8; 32]) -> [u8; 32] {
+    if !baml_env::hotswap_enabled() {
+        return fingerprint;
+    }
+    use sha2::{Digest as _, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(fingerprint);
+    hasher.update(b"baml run --hot");
+    hasher.finalize().into()
+}
+
 // ── The per-package tier ─────────────────────────────────────────────────────
 
 impl CacheContext {
@@ -525,6 +540,7 @@ impl CacheContext {
             opt_level: opt as u8,
             files: &files,
             dependencies: &dependencies,
+            claim: &root.claim(db),
         })
     }
 
@@ -2061,6 +2077,9 @@ mod tests {
         let (mut db, _) = build_db(&[("a.baml", A_V1)]);
 
         let sentinel = WireInterface {
+            claimed: baml_db::ClaimedIdentity::default(),
+            compiler_version: baml_db::baml_compiler2_hir_ty::package_interface::COMPILER_VERSION
+                .to_owned(),
             dependencies: Vec::new(),
             rows: PackageInterface::<baml_type::WireName> {
                 types: Default::default(),

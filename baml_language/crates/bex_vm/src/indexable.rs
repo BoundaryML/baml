@@ -38,6 +38,80 @@ impl EvalStack {
         Ok(())
     }
 
+    /// Push into spare capacity, or report that the stack must grow first.
+    ///
+    /// Pushes outside the dispatch loop's reserved operand space take this
+    /// path: one capacity compare, no `Result`. On `false` nothing was pushed, and the caller
+    /// grows the stack through [`Self::try_push`], which owns the budget and
+    /// the allocation-failure handling.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    #[must_use]
+    pub(crate) fn push_within_capacity(&mut self, value: Value) -> bool {
+        let len = self.values.len();
+        if len == self.values.capacity() {
+            return false;
+        }
+        // SAFETY: `len < capacity`, so slot `len` is allocated and unused.
+        // `Value` is `Copy`, so writing it needs no drop of the old bits.
+        unsafe {
+            self.values.as_mut_ptr().add(len).write(value);
+            self.values.set_len(len + 1);
+        }
+        true
+    }
+
+    /// Push into capacity reserved in advance, without checking it.
+    ///
+    /// # Safety
+    ///
+    /// The stack must have spare capacity. The dispatch loop's operand
+    /// pushes guarantee it: entering a bytecode frame reserves the
+    /// function's locals and operand bound (`Function::frame_reserve`), and
+    /// the stack's capacity never shrinks while the frame runs.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    pub(crate) unsafe fn push_reserved(&mut self, value: Value) {
+        let len = self.values.len();
+        debug_assert!(
+            len < self.values.capacity(),
+            "operand push past reserved capacity"
+        );
+        // SAFETY: the caller guarantees `len < capacity`; `Value` is `Copy`.
+        unsafe {
+            self.values.as_mut_ptr().add(len).write(value);
+            self.values.set_len(len + 1);
+        }
+    }
+
+    /// Base pointer, length, and capacity of the value array, for a dispatch
+    /// segment that keeps the stack top in a register. The segment writes
+    /// only below `capacity` and publishes its final length with
+    /// [`Self::set_len`] before anything else can observe the stack.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub(crate) fn raw_parts(&mut self) -> (*mut Value, usize, usize) {
+        (
+            self.values.as_mut_ptr(),
+            self.values.len(),
+            self.values.capacity(),
+        )
+    }
+
+    /// Publish a length chosen by a [`Self::raw_parts`] segment.
+    ///
+    /// # Safety
+    ///
+    /// `len <= capacity`, and every slot below `len` holds an initialized
+    /// `Value`.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    pub(crate) unsafe fn set_len(&mut self, len: usize) {
+        debug_assert!(len <= self.values.capacity());
+        // SAFETY: forwarded to the caller.
+        unsafe { self.values.set_len(len) };
+    }
+
     /// Accept a host operation's result between exec calls. Allocation failure
     /// is delivered through the normal unwinder when execution next resumes.
     pub fn push(&mut self, value: Value) {
@@ -65,6 +139,7 @@ impl EvalStack {
     }
 
     /// Initialize real-local slots after fallibly reserving their backing array.
+    #[inline]
     pub(crate) fn try_resize(&mut self, len: usize, value: Value) -> Result<(), VmPanic> {
         self.try_reserve(len.saturating_sub(self.len()))?;
         self.values.resize(len, value);

@@ -72,7 +72,7 @@ test "hash compiler accepts explicit hash with custom equality and empty equals"
 }
 
 test "hash compiler rejects opaque and unbounded generic fields" {
-    for (let field_type in ["unknown", "(int) -> int", "reflect.Type", "T", "baml.regex.Regex", "baml.spawn.Limit"]) {
+    for (let field_type in ["unknown", "(int) -> int", "reflect.Type", "T", "baml.regex.Regex", "baml.sync.Semaphore"]) {
         root.compiler.AssertHasMessage({
             "opaque.baml": `
                 class Box<T> { value: ${field_type} }

@@ -1,8 +1,9 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 
+use super::cell::cell_tag;
 use crate::{
     ArrayContainer, BoundMethod, Class, CleanupLatch, Enum, Function, GenericFunction, HeapPtr,
-    HostClosure, Instance, Uint8ArrayContainer, Value, Variant,
+    HostClosure, Uint8ArrayContainer, Value, Variant,
     types::{
         Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
         RuntimeImplRule, RustInstance, TypeAliasDef,
@@ -17,44 +18,50 @@ use crate::{
 /// into the `Vm::objects` pool.
 ///
 /// Read `Vm::objects` for more information.
+/// `repr(u64)` puts the variant tag in the first word, ahead of the payload,
+/// and each tag sets [`OBJECT_BODY`](crate::OBJECT_BODY): the tag is the
+/// header of the object's cell (see `types/cell.rs`).
 #[derive(Clone, Debug)]
+#[repr(u64)]
 pub enum Object {
     /// Package object.
-    Package(Box<Package>),
+    Package(Box<Package>) = cell_tag(0),
 
     /// Function object.
-    Function(Box<Function>),
+    Function(Box<Function>) = cell_tag(1),
 
     /// Represents an interface definition. Not a value object.
-    Interface(Box<InterfaceDef>),
+    Interface(Box<InterfaceDef>) = cell_tag(2),
 
     /// Represents an implementation rule for an interface.
-    ImplRule(Box<RuntimeImplRule>),
+    ImplRule(Box<RuntimeImplRule>) = cell_tag(3),
 
     /// Class object.
-    Class(Box<Class>),
+    Class(Box<Class>) = cell_tag(4),
 
-    /// Class instance object.
-    Instance(Instance),
+    /// What [`HeapPtr::get`](crate::HeapPtr::get) shows for a class
+    /// instance. An instance lives in a cell of its own, never in an
+    /// `Object` slot; read it through [`InstanceRef`](crate::InstanceRef).
+    Instance = cell_tag(5),
 
     /// Enum object.
-    Enum(Box<Enum>),
+    Enum(Box<Enum>) = cell_tag(6),
 
     /// Type-alias object. A declaration, not a value — only recursive aliases
     /// reach the runtime, and they exist so a nominal reference can point at the
     /// indirection rather than expand it away.
-    TypeAlias(Box<TypeAliasDef>),
+    TypeAlias(Box<TypeAliasDef>) = cell_tag(7),
 
     /// Enum value object.
-    Variant(Variant),
+    Variant(Variant) = cell_tag(8),
 
     /// A closure: a function paired with captured variable cells.
-    Closure(Closure),
+    Closure(Closure) = cell_tag(9),
 
     /// A method bound to a specific receiver instance.
     /// Created by `MakeBoundMethod`. The receiver is inserted as `self`
     /// at call time by `CallIndirect`.
-    BoundMethod(BoundMethod),
+    BoundMethod(BoundMethod) = cell_tag(10),
 
     /// A generic function instantiation carrying concrete type arguments
     /// (`foo<int>` referenced as a value, not called). Pooled and interned at
@@ -63,7 +70,7 @@ pub enum Object {
     /// `function` via the global table and seeds `frame.type_args` from
     /// `type_args`, so type-reifying bodies (`reflect.Type.of<T>`, json natives)
     /// work through the value.
-    GenericFunction(GenericFunction),
+    GenericFunction(GenericFunction) = cell_tag(11),
 
     /// A host-language callable bound to a BAML function type.
     ///
@@ -71,67 +78,70 @@ pub enum Object {
     /// `RuntimeTy::Function` parameter. Calling it (`CallIndirect`) dispatches
     /// `SysOp::BamlHostCallHostValue`, which fires the bridge's
     /// `HostDispatchFn` and awaits the host's response.
-    HostClosure(HostClosure),
+    HostClosure(HostClosure) = cell_tag(12),
 
     /// A mutable cell holding a single captured value.
-    Cell(Cell),
+    Cell(Cell) = cell_tag(13),
 
     /// Heap allocated string backed by [`bex_str::BexStr`].
     ///
     /// `BexStr` avoids allocating for small strings (up to ~22 bytes inline)
     /// and reference-counts larger ones, making clone cheap.
-    String(bex_str::BexStr),
+    String(bex_str::BexStr) = cell_tag(14),
 
     /// Heap-allocated arbitrary-precision integer.
     ///
     /// `Value: Copy` so bigints must live on the heap behind an `Arc`. The
     /// `Arc` lets multiple values share the same allocation (e.g. after a
     /// `let y = x` assignment) without deep-copying the underlying digit slice.
-    Bigint(std::sync::Arc<num_bigint::BigInt>),
+    Bigint(std::sync::Arc<num_bigint::BigInt>) = cell_tag(15),
 
     /// Byte array (uint8array). Wrapped in [`Uint8ArrayContainer`] so the
     /// underlying `Vec<u8>` is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against
     /// racing mutation under `spawn`.
-    Uint8Array(Uint8ArrayContainer),
+    Uint8Array(Uint8ArrayContainer) = cell_tag(16),
 
     /// List of values. Wrapped in [`ArrayContainer`] so the underlying
     /// `Vec<Value>` is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
     /// mutation under `spawn`.
-    Array(Array),
+    Array(Array) = cell_tag(17),
 
     /// Map of values. Wrapped in [`crate::MapContainer`] so the underlying
     /// [`crate::MapData`] is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
     /// mutation under `spawn`.
-    Map(Map),
+    Map(Map) = cell_tag(18),
+
+    Tuple(crate::Tuple),
 
     /// Boxed 64-bit float. Floats are heap-allocated because `Value`
     /// itself is a single tagged 64-bit word with no inline encoding
     /// for full-precision f64. Allocation rate is low in practice —
     /// BAML programs are integer-and-object-heavy.
-    Float(f64),
+    Float(f64) = cell_tag(19),
 
-    Future(crate::Future),
+    Future(crate::Future) = cell_tag(20),
 
     /// An instance of a `@@rust_type` class: its class, its type arguments,
-    /// and its Rust-owned state in place of fields.
-    RustInstance(RustInstance),
+    /// and its Rust-owned state in place of fields. Unlike a field-backed
+    /// instance, it is an object cell: its state is one Rust value, not a
+    /// run of slots its class lays out.
+    RustInstance(RustInstance) = cell_tag(21),
 
     /// A type descriptor value — wraps a [`crate::types::TypeValue`]. The
     /// described type is the whole of it: `==` is type equivalence, so a GC
     /// copy, a `baml.deep_copy`, and a wire round trip all denote the same
     /// type by construction.
-    Type(Box<crate::types::TypeValue>),
+    Type(Box<crate::types::TypeValue>) = cell_tag(22),
 
-    /// What is in a slot with no object: one a collection moved to another
-    /// space, or one reserved and not yet published (`bex_heap::Reservation`).
-    /// Nothing live points at a tombstone, except a member of a reserved group
-    /// naming a sibling that is published before anything reads it; so one is
-    /// only ever seen by code that walks slots by position, and reaching one by
-    /// following a reference is a use-after-free.
-    Tombstone,
+    /// What is in a cell reserved and not yet published
+    /// (`bex_heap::Reservation`), or, under `heap_debug`, a cell a collection
+    /// found dead. Nothing live points at a tombstone, except a member of a
+    /// reserved group naming a sibling that is published before anything
+    /// reads it; reaching one any other way is a use-after-free.
+    Tombstone = cell_tag(23),
 
     #[cfg(feature = "heap_debug")]
-    Sentinel(crate::types::SentinelKind),
+    Sentinel(crate::types::SentinelKind) = cell_tag(24),
 }
 
 const _: () = assert!(
@@ -147,7 +157,7 @@ impl Object {
     #[must_use]
     pub fn is_first_class_value(&self) -> bool {
         match self {
-            Object::Instance(_)
+            Object::Instance
             | Object::RustInstance(_)
             | Object::Variant(_)
             | Object::Function(_)
@@ -159,6 +169,7 @@ impl Object {
             | Object::Bigint(_)
             | Object::Uint8Array(_)
             | Object::Array(_)
+            | Object::Tuple(_)
             | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
@@ -176,14 +187,27 @@ impl Object {
         }
     }
 
-    /// The class an instance belongs to and the type arguments it was built
-    /// at, for a plain or a `@@rust_type` instance alike: what every class
-    /// test (`is`, `match`, a typed `catch`) and every class-keyed dispatch
-    /// asks of a value.
+    /// The class the instance at `ptr` belongs to and the type arguments it
+    /// was built at, for a field-backed or a `@@rust_type` instance alike:
+    /// what every class test (`is`, `match`, a typed `catch`) and every
+    /// class-keyed dispatch asks of a value. A field-backed instance keeps
+    /// both in its cell, so this reads the pointer, not an `Object`.
+    ///
+    /// # Safety
+    ///
+    /// As for [`HeapPtr::get`]: the cell must be live.
     #[must_use]
-    pub fn class_instance(&self) -> Option<(HeapPtr, &[crate::RealizedTy])> {
-        match self {
-            Object::Instance(instance) => Some((instance.class, &instance.class_type_args)),
+    pub unsafe fn class_instance_at(
+        ptr: HeapPtr,
+    ) -> Option<(HeapPtr, &'static [crate::RealizedTy])> {
+        // SAFETY: the caller keeps the cell live.
+        match unsafe { ptr.get() } {
+            Object::Instance => {
+                // SAFETY: as above; the tag says the cell is an instance.
+                let instance = unsafe { crate::InstanceRef::of(ptr) }
+                    .unwrap_or_else(|| unreachable!("an instance tag names an instance cell"));
+                Some((instance.class(), instance.type_args()))
+            }
             Object::RustInstance(instance) => Some((instance.class, &instance.class_type_args)),
             Object::Package(_)
             | Object::Function(_)
@@ -203,42 +227,7 @@ impl Object {
             | Object::Uint8Array(_)
             | Object::Array(_)
             | Object::Map(_)
-            | Object::Float(_)
-            | Object::Future(_)
-            | Object::Type(_)
-            | Object::Tombstone => None,
-            #[cfg(feature = "heap_debug")]
-            Object::Sentinel(_) => None,
-        }
-    }
-
-    /// The instance a BEP-042 `cleanup` finalizer runs on: its class and its
-    /// run-once latch. Plain and `@@rust_type` instances both qualify, so the
-    /// collector and the run-once guard read every instance the same way;
-    /// whether the class has a finalizer is the class's to say.
-    #[must_use]
-    pub fn cleanup_subject(&self) -> Option<(HeapPtr, &CleanupLatch)> {
-        match self {
-            Object::Instance(instance) => Some((instance.class, &instance.cleaned)),
-            Object::RustInstance(instance) => Some((instance.class, &instance.cleaned)),
-            Object::Package(_)
-            | Object::Function(_)
-            | Object::Interface(_)
-            | Object::ImplRule(_)
-            | Object::Class(_)
-            | Object::Enum(_)
-            | Object::TypeAlias(_)
-            | Object::Variant(_)
-            | Object::Closure(_)
-            | Object::BoundMethod(_)
-            | Object::GenericFunction(_)
-            | Object::HostClosure(_)
-            | Object::Cell(_)
-            | Object::String(_)
-            | Object::Bigint(_)
-            | Object::Uint8Array(_)
-            | Object::Array(_)
-            | Object::Map(_)
+            | Object::Tuple(_)
             | Object::Float(_)
             | Object::Future(_)
             | Object::Type(_)
@@ -289,13 +278,14 @@ impl Object {
             | Object::Type(_)
             | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Instance(_)
+            | Object::Instance
             | Object::Variant(_)
             | Object::Closure(_)
             | Object::BoundMethod(_)
             | Object::HostClosure(_)
             | Object::Cell(_)
             | Object::Array(_)
+            | Object::Tuple(_)
             | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
@@ -322,13 +312,14 @@ impl Object {
             | Object::Type(_)
             | Object::Package(_)
             | Object::ImplRule(_)
-            | Object::Instance(_)
+            | Object::Instance
             | Object::Variant(_)
             | Object::Closure(_)
             | Object::BoundMethod(_)
             | Object::HostClosure(_)
             | Object::Cell(_)
             | Object::Array(_)
+            | Object::Tuple(_)
             | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
@@ -376,7 +367,7 @@ enum ObjectWire {
     Interface(Box<InterfaceDef>),
     ImplRule(Box<RuntimeImplRule>),
     Class(Box<Class>),
-    Instance(Instance),
+    Instance,
     Enum(Box<Enum>),
     TypeAlias(Box<TypeAliasDef>),
     Variant(Variant),
@@ -409,6 +400,7 @@ enum ObjectWire {
     /// (`ConstValue::Type` templates materialize through the VM's `LoadType`),
     /// so this round trip is exercised only by unit/link tooling.
     Type(Box<crate::RealizedTy>),
+    Tuple(Vec<crate::RealizedTy>, Vec<Value>),
 }
 
 impl BorshSerialize for Object {
@@ -424,7 +416,12 @@ impl BorshSerialize for Object {
             }
             Self::ImplRule(v) => ObjectWire::ImplRule(v.clone()),
             Self::Class(v) => ObjectWire::Class(v.clone()),
-            Self::Instance(v) => ObjectWire::Instance(v.clone()),
+            Self::Instance => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "an instance has no wire form",
+                ));
+            }
             Self::Enum(v) => ObjectWire::Enum(v.clone()),
             Self::TypeAlias(v) => ObjectWire::TypeAlias(v.clone()),
             Self::Variant(v) => ObjectWire::Variant(v.clone()),
@@ -445,6 +442,7 @@ impl BorshSerialize for Object {
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
             Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
+            Self::Tuple(v) => ObjectWire::Tuple(v.element_tys.to_vec(), v.slot_values().collect()),
             Self::RustInstance(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -483,7 +481,12 @@ impl BorshDeserialize for Object {
             ObjectWire::Interface(v) => Self::Interface(v),
             ObjectWire::ImplRule(v) => Self::ImplRule(v),
             ObjectWire::Class(v) => Self::Class(v),
-            ObjectWire::Instance(v) => Self::Instance(v),
+            ObjectWire::Instance => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "an instance has no wire form",
+                ));
+            }
             ObjectWire::Enum(v) => Self::Enum(v),
             ObjectWire::TypeAlias(v) => Self::TypeAlias(v),
             ObjectWire::Variant(v) => Self::Variant(v),
@@ -507,6 +510,10 @@ impl BorshDeserialize for Object {
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
             ObjectWire::Type(v) => Self::Type(Box::new(crate::types::TypeValue::new(*v))),
+            ObjectWire::Tuple(tys, data) => Self::Tuple(
+                crate::Tuple::new(tys, data)
+                    .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?,
+            ),
         })
     }
 }
@@ -519,7 +526,7 @@ impl std::fmt::Display for Object {
             Object::Package(_) => write!(f, "<package>"),
             Object::ImplRule(_) => write!(f, "<impl_rule>"),
             Object::Class(class) => class.fmt(f),
-            Object::Instance(instance) => instance.fmt(f),
+            Object::Instance => write!(f, "<instance>"),
             Object::Enum(enm) => enm.fmt(f),
             Object::TypeAlias(alias) => alias.fmt(f),
             Object::Variant(value) => value.fmt(f),
@@ -549,6 +556,7 @@ impl std::fmt::Display for Object {
                 map.value_ty,
                 map.data.lock().len()
             ),
+            Object::Tuple(tuple) => write!(f, "<tuple len={}>", tuple.len()),
             Object::RustInstance(instance) => instance.fmt(f),
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
@@ -589,6 +597,7 @@ pub enum ObjectType {
     Float,
     /// Not a value: the slot's object is gone. See [`Object::Tombstone`].
     Tombstone,
+    Tuple,
 }
 
 impl ObjectType {
@@ -605,7 +614,7 @@ impl ObjectType {
 
             Object::Cell(_) => Self::Cell,
             Object::Class(_) => Self::Class,
-            Object::Instance(_) => Self::Instance,
+            Object::Instance => Self::Instance,
             Object::Enum(_) => Self::Enum,
             Object::TypeAlias(_) => Self::TypeAlias,
             Object::Variant(_) => Self::Enum,
@@ -614,6 +623,7 @@ impl ObjectType {
             Object::Uint8Array(_) => Self::Uint8Array,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
+            Object::Tuple(_) => Self::Tuple,
             Object::RustInstance(_) => Self::RustInstance,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
@@ -663,6 +673,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::RustInstance => write!(f, "rust_instance"),
             ObjectType::Float => write!(f, "float"),
             ObjectType::Tombstone => write!(f, "tombstone"),
+            ObjectType::Tuple => write!(f, "tuple"),
         }
     }
 }
@@ -732,5 +743,98 @@ mod wire_tests {
             panic!("decoded object should be a type")
         };
         assert_eq!(type_value.ty, ty);
+    }
+}
+
+/// The instance a BEP-042 `cleanup` finalizer runs on: its class and its
+/// run-once latch. Field-backed and `@@rust_type` instances both qualify, so
+/// the collector and the run-once guard read every instance the same way;
+/// whether the class has a finalizer is the class's to say.
+#[derive(Clone, Copy)]
+pub enum CleanupSubject {
+    /// A field-backed instance, whose latch is its cell header's
+    /// [`CLEANED`](crate::CLEANED) bit.
+    Instance(crate::InstanceRef),
+    /// A `@@rust_type` instance, an object cell whose header is its variant
+    /// tag, so its latch is inline.
+    Rust {
+        class: HeapPtr,
+        latch: &'static CleanupLatch,
+    },
+}
+
+impl CleanupSubject {
+    /// The cleanup subject at `ptr`, if it is an instance.
+    ///
+    /// # Safety
+    ///
+    /// As for [`HeapPtr::get`]: the cell must be live.
+    #[must_use]
+    pub unsafe fn at(ptr: HeapPtr) -> Option<Self> {
+        // SAFETY: the caller keeps the cell live.
+        match unsafe { ptr.get() } {
+            // SAFETY: as above; the tag says the cell is an instance.
+            Object::Instance => Some(Self::Instance(
+                unsafe { crate::InstanceRef::of(ptr) }
+                    .unwrap_or_else(|| unreachable!("an instance tag names an instance cell")),
+            )),
+            Object::RustInstance(instance) => Some(Self::Rust {
+                class: instance.class,
+                latch: &instance.cleaned,
+            }),
+            Object::Package(_)
+            | Object::Function(_)
+            | Object::Interface(_)
+            | Object::ImplRule(_)
+            | Object::Class(_)
+            | Object::Enum(_)
+            | Object::TypeAlias(_)
+            | Object::Variant(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::GenericFunction(_)
+            | Object::HostClosure(_)
+            | Object::Cell(_)
+            | Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::Array(_)
+            | Object::Map(_)
+            | Object::Tuple(_)
+            | Object::Float(_)
+            | Object::Future(_)
+            | Object::Type(_)
+            | Object::Tombstone => None,
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => None,
+        }
+    }
+
+    /// The class whose `cleanup` runs.
+    #[must_use]
+    pub fn class(self) -> HeapPtr {
+        match self {
+            Self::Instance(instance) => instance.class(),
+            Self::Rust { class, .. } => class,
+        }
+    }
+
+    /// Test-and-set the latch on cleanup entry: `true` iff this call is the
+    /// first, which runs the body.
+    #[must_use]
+    pub fn begin(self) -> bool {
+        match self {
+            Self::Instance(instance) => instance.begin_cleanup(),
+            Self::Rust { latch, .. } => latch.begin(),
+        }
+    }
+
+    /// Whether cleanup has started.
+    #[must_use]
+    pub fn is_cleaned(self) -> bool {
+        match self {
+            Self::Instance(instance) => instance.is_cleaned(),
+            Self::Rust { latch, .. } => latch.is_cleaned(),
+        }
     }
 }

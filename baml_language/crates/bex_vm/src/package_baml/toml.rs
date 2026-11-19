@@ -22,7 +22,9 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
             Ok(table) => {
                 let value = convert_toml_value(vm, ::toml::Value::Table(table))?;
                 let source = Value::object(vm.alloc_string(s.clone()));
-                vm.as_instance(&value)?.store_field(1, source);
+                vm.as_instance(&value)?
+                    .store(1, source)
+                    .map_err(|mismatch| vm.slot_kind_error(mismatch))?;
                 Ok(value)
             }
             Err(e) => Err(VmRustFnError::thrown_fresh(make_toml_parse_error(
@@ -33,7 +35,7 @@ impl super::BamlClassTomlTable for PackageBamlImpl {
     }
 
     fn _to_string_impl(vm: &mut BexVm, table: &Value) -> Result<bex_str::BexStr, VmRustFnError> {
-        let source = vm.as_instance(table)?.load_field(1);
+        let source = vm.as_instance(table)?.load_value(1);
         let mut document = if source.is_null() {
             DocumentMut::new()
         } else {
@@ -64,7 +66,7 @@ fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmR
                 "BAML `int` is 63 bits. It is unable to parse 64-bit TOML integers.".to_string(),
             ))
         }),
-        toml::Value::Float(f) => Ok(Value::object(vm.alloc_float(f))),
+        toml::Value::Float(f) => Ok(vm.float_value(f)),
         toml::Value::Boolean(b) => Ok(Value::bool(b)),
         toml::Value::Datetime(datetime) => convert_toml_datetime(vm, datetime),
         toml::Value::Array(values) => {
@@ -215,6 +217,7 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
     match value.kind() {
         ValueKind::Bool(b) => return Ok(Node::Scalar(b.into())),
         ValueKind::Int(i) => return Ok(Node::Scalar(i.into())),
+        ValueKind::Float(f) => return Ok(Node::Scalar(f.into())),
         ValueKind::Object(_) => {}
         _ => return Err(invalid_argument("Value is not a TOML item")),
     }
@@ -234,15 +237,16 @@ fn snapshot(vm: &BexVm, value: Value, active: &mut Vec<Value>) -> Result<Node, V
             .map(|v| snapshot(vm, v, active))
             .collect::<Result<Vec<_>, _>>()
             .map(Node::Array),
-        Object::Instance(instance) => {
-            let class = instance.class;
+        Object::Instance => {
+            let instance = &vm.get_instance(ptr).expect("an instance pointer");
+            let class = instance.class();
             if class == vm.lang_object(crate::lang_items::BAML_TOML_TABLE) {
                 let items = vm
-                    .as_map(&instance.load_field(0))?
+                    .as_map(&instance.load_value(0))?
                     .iter()
                     .map(|(k, v)| Ok((vm.as_string(k)?.to_string(), snapshot(vm, *v, active)?)))
                     .collect::<Result<IndexMap<_, _>, VmRustFnError>>()?;
-                let names = instance.load_field(2);
+                let names = instance.load_value(2);
                 let renamed = if names.is_null() {
                     IndexMap::new()
                 } else {

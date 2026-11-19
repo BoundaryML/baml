@@ -182,6 +182,7 @@ borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
 bytes = "1"
 bytesize = "2.4.2"
 cargo_metadata = { version = "0.23.1" }
+caseless = "0.2.2"
 cbindgen = "=0.29.0"
 cc = "1.2"
 clap = { version = "4.4.6", features = [ "cargo", "derive" ] }
@@ -193,7 +194,7 @@ crossbeam-channel = { version = "0.5" }
 derive_more = { version = "2.1.1", features = [ "from" ] }
 dirs = "7.0.0"
 dunce = "1.0.5"
-divan = { package = "codspeed-divan-compat", version = "*" }
+divan = "0.1.21"
 # Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
 # crate rustc and rust-analyzer build their inference tables on.
 ena = "0.14"
@@ -201,6 +202,9 @@ flate2 = { version = "1" }
 fs2 = "0.4"
 futures = { version = "0.3.30", features = [ "executor" ] }
 graphviz-rust = { version = "0.9" }
+# Read-only repository facts for build records: HEAD, branch, origin and
+# work-tree status. No network, no mutation.
+gix = { version = "0.90.0", default-features = false, features = [ "sha1", "sha256", "status" ] }
 hex = "0.4"
 httpdate = "1.0.3"
 hmac = "0.12"
@@ -224,6 +228,7 @@ loom = { version = "0.7" }
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
 notify = "7.0"
+nunny = { version = "0.2", default-features = false, features = [ "alloc" ] }
 once_cell = "1.19"
 ouroboros = "0.18.5"
 parking_lot = { version = "0.12" }
@@ -250,7 +255,6 @@ base64 = "0.22"
 crc32fast = "1.5"
 # LZ4 frames compress the bytecode that generated SDKs embed.
 lz4_flex = { version = "0.13" }
-mime_guess = "2"
 bytecount = "0.6"
 reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
@@ -278,6 +282,8 @@ serde_json = { version = "1.0.113" }
 # Number formatting for the baml.json writer: the crates serde_json uses.
 itoa = { version = "1" }
 zmij = { version = "1" }
+# Byte and substring search for the string natives (`split`).
+memchr = { version = "2.8.1" }
 semver = { version = "1" }
 # The maintained fork of the archived serde_yaml, published by the YAML org;
 # package-renamed so `use serde_yaml::` imports stay unchanged.
@@ -379,7 +385,6 @@ unsafe_code = "warn"
 unreachable_pub = "warn"
 unexpected_cfgs = { level = "warn", check-cfg = [
   "cfg(fuzzing)",
-  "cfg(codspeed)",
   # Reserved for concurrency model-checked builds.
   "cfg(baml_loom)",
 ] }

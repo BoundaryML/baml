@@ -4,17 +4,20 @@
 //! palette (green for Enabled, red for Disabled, cyan for the docs URL),
 //! same output structure.
 
-// `println!` here is the primary UX of the subcommand: printing the current
-// status and confirmation of a state change. The workspace-wide ban on
-// `print*!` exists to catch stray debug prints, not to break intentional
-// user-facing output.
-#![allow(clippy::print_stdout)]
+use std::{
+    io::{self, Write},
+    path::PathBuf,
+};
 
-use anyhow::Result;
-use clap::{Args, ValueEnum};
-use console::style;
+use anyhow::{Context, Result};
+use clap::{Args, Subcommand};
+use serde::Serialize;
 
-use crate::{ExitCode, telemetry};
+use crate::{
+    ExitCode,
+    output::{Command, CommandContext, Outcome, Report, Style},
+    telemetry,
+};
 
 /// `baml __flush-telemetry` — the hidden entry point for the detached
 /// child process that drains the on-disk telemetry queue (see
@@ -34,107 +37,109 @@ impl FlushTelemetryArgs {
 
 /// Show or change BAML CLI telemetry preferences.
 ///
-/// Run without an action to see the current status, config file path, and
+/// Run without a subcommand to see the current status, config file path, and
 /// docs link. Use `baml telemetry disable` to opt out, or
 /// `baml telemetry enable` to opt back in. See <https://boundaryml.com/telemetry>.
-//
-// Impl note: modeled as a positional `ValueEnum` rather than a nested
-// subcommand so `baml telemetry` (no action) works cleanly as "show status"
-// without fighting clap 4's default `subcommand_required = true` on
-// tuple-variant subcommands. UX matches Next.js's
-// `next telemetry [enable|disable|status]`.
 #[derive(Args, Debug)]
 pub(crate) struct TelemetryArgs {
-    #[arg(
-        value_enum,
-        value_name = "ACTION",
-        help = "Telemetry action [default: status] [possible values: status, enable, disable]",
-        hide_default_value = true,
-        hide_possible_values = true,
-        default_value_t = TelemetryAction::Status
-    )]
-    pub action: TelemetryAction,
+    #[command(subcommand)]
+    pub command: Option<TelemetryCommand>,
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TelemetryAction {
-    /// Show the current telemetry preference.
+#[derive(Subcommand, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TelemetryCommand {
+    #[command(
+        about = "Show the current telemetry preference",
+        after_long_help = "Examples:\n  Show the current setting:\n    baml telemetry status"
+    )]
     Status,
-    /// Enable BAML CLI telemetry.
+    #[command(
+        about = "Enable BAML CLI telemetry",
+        after_long_help = "Examples:\n  Opt in:\n    baml telemetry enable"
+    )]
     Enable,
-    /// Disable BAML CLI telemetry.
+    #[command(
+        about = "Disable BAML CLI telemetry",
+        after_long_help = "Examples:\n  Opt out:\n    baml telemetry disable"
+    )]
     Disable,
 }
 
-impl TelemetryArgs {
-    pub(crate) fn run(&self) -> Result<ExitCode> {
-        let t = telemetry::Telemetry::load();
-        // Snapshot the pre-change state so `disable` can distinguish
-        // "already off" from "just turned off" (matches Next's UX).
-        let was_enabled = t.is_enabled();
+/// The telemetry preference after the action ran.
+#[derive(Debug, Serialize)]
+pub(crate) struct TelemetryStatus {
+    pub enabled: bool,
+    pub config: PathBuf,
+}
 
-        match self.action {
-            TelemetryAction::Status => {}
-            TelemetryAction::Enable => {
-                let path = t.set_enabled(true);
-                println!("{}", style("Success!").cyan());
-                if let Some(path) = &path {
-                    println!("Your preference has been saved to {}.", path.display());
-                }
-            }
-            TelemetryAction::Disable => {
-                let path = t.set_enabled(false);
-                if was_enabled {
-                    if let Some(path) = &path {
-                        println!(
-                            "{} Your preference has been saved to {}.",
-                            style("Success!").cyan(),
-                            path.display()
-                        );
-                    } else {
-                        println!("{}", style("Success!").cyan());
-                    }
-                } else {
-                    println!(
-                        "{}",
-                        style("BAML CLI telemetry is already disabled.").yellow()
-                    );
-                }
-            }
+/// Format matches Next.js's `nextTelemetry`: bold header, colored status,
+/// short body, cyan "Learn more" URL.
+impl Report for TelemetryStatus {
+    fn text(&self, out: &mut dyn Write, style: &Style) -> io::Result<()> {
+        writeln!(out, "{}", style.bold("BAML CLI Telemetry"))?;
+        let status_word = if self.enabled {
+            style.good("Enabled")
+        } else {
+            style.bad("Disabled")
+        };
+        writeln!(out, "\nStatus: {status_word}")?;
+        writeln!(out, "Config: {}", style.dim(self.config.display()))?;
+        if self.enabled {
+            writeln!(
+                out,
+                "\nBAML telemetry is completely anonymous. Thank you for participating!"
+            )?;
+        } else {
+            writeln!(
+                out,
+                "\nYou have opted out of BAML's anonymous telemetry program.\n\
+                 No data will be collected from your machine."
+            )?;
         }
-
-        // Re-load so the printed status reflects the post-change value.
-        let t = telemetry::Telemetry::load();
-        print_status(&t);
-        Ok(ExitCode::Success)
+        writeln!(out, "\nLearn more: {}", style.url(telemetry::TELEMETRY_URL))
     }
 }
 
-/// Print the "Status: Enabled/Disabled" block plus a link to the docs page.
-/// Format matches Next.js's `nextTelemetry`: bold header, colored status,
-/// short body, cyan "Learn more" URL.
-fn print_status(t: &telemetry::Telemetry) {
-    let is_enabled = t.is_enabled();
-    println!();
-    println!("{}", style("BAML CLI Telemetry").bold());
-    let status_word = if is_enabled {
-        style("Enabled").green().bold().to_string()
-    } else {
-        style("Disabled").red().bold().to_string()
-    };
-    println!("\nStatus: {status_word}");
-    println!("Config: {}", style(t.config_path().display()).dim());
+impl Command for TelemetryArgs {
+    type Output = TelemetryStatus;
 
-    if is_enabled {
-        println!("\nBAML telemetry is completely anonymous. Thank you for participating!");
-    } else {
-        println!(
-            "\nYou have opted out of BAML's anonymous telemetry program.\n\
-             No data will be collected from your machine."
-        );
+    fn run(&self, _cx: &CommandContext) -> Result<Outcome<TelemetryStatus>> {
+        let t = telemetry::Telemetry::load();
+        let reporter = crate::reporter::Reporter::new();
+        // Snapshot the pre-change state so `disable` can distinguish
+        // "already off" from "just turned off" (matches Next's UX).
+        let was_enabled = t.is_enabled();
+        let save = |enabled: bool| {
+            t.set_enabled(enabled).with_context(|| {
+                format!(
+                    "could not save the telemetry preference to {}",
+                    t.config_path().display()
+                )
+            })
+        };
+        match self.command.unwrap_or(TelemetryCommand::Status) {
+            TelemetryCommand::Status => {}
+            TelemetryCommand::Enable => {
+                reporter.status("Saved", save(true)?.display().to_string());
+            }
+            TelemetryCommand::Disable if was_enabled => {
+                reporter.status("Saved", save(false)?.display().to_string());
+            }
+            // `DO_NOT_TRACK` can mask an enabled preference, so the opt-out
+            // is still written.
+            TelemetryCommand::Disable => {
+                save(false)?;
+                reporter.status("Unchanged", "BAML CLI telemetry is already disabled");
+            }
+        }
+
+        // Re-load so the reported status reflects the post-change value.
+        let t = telemetry::Telemetry::load();
+        Ok(Outcome::ok(TelemetryStatus {
+            enabled: t.is_enabled(),
+            config: t.config_path().to_path_buf(),
+        }))
     }
-
-    println!("\nLearn more: {}", style(telemetry::TELEMETRY_URL).cyan());
 }
 
 #[cfg(test)]
@@ -152,23 +157,22 @@ mod tests {
         args: TelemetryArgs,
     }
 
-    /// `baml telemetry` with no action defaults to `Status`.
+    /// `baml telemetry` with no subcommand shows the status.
     #[test]
-    fn no_action_parses_and_defaults_to_status() {
+    fn no_subcommand_parses() {
         let cli = TestCli::try_parse_from(Vec::<String>::new()).unwrap();
-        assert_eq!(cli.args.action, TelemetryAction::Status);
+        assert_eq!(cli.args.command, None);
     }
 
-    /// Explicit actions parse to their respective variants.
     #[test]
-    fn actions_parse() {
-        let cli = TestCli::try_parse_from(["enable"]).unwrap();
-        assert_eq!(cli.args.action, TelemetryAction::Enable);
-
-        let cli = TestCli::try_parse_from(["disable"]).unwrap();
-        assert_eq!(cli.args.action, TelemetryAction::Disable);
-
-        let cli = TestCli::try_parse_from(["status"]).unwrap();
-        assert_eq!(cli.args.action, TelemetryAction::Status);
+    fn subcommands_parse() {
+        for (name, expected) in [
+            ("enable", TelemetryCommand::Enable),
+            ("disable", TelemetryCommand::Disable),
+            ("status", TelemetryCommand::Status),
+        ] {
+            let cli = TestCli::try_parse_from([name]).unwrap();
+            assert_eq!(cli.args.command, Some(expected));
+        }
     }
 }

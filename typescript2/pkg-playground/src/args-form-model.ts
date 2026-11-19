@@ -98,12 +98,30 @@ export function defaultValueForSchema(
   return defaultValue(schema, lookup, new Set(), new Set());
 }
 
+/** What seeding returns on reaching an alias already being seeded: a value
+ *  the alias can only hold by recursing forever. A union skips a variant that
+ *  yields it, so `type A = (A | string,)` seeds `[""]`; a tuple slot passes
+ *  it up, since the whole tuple is then as unseedable as the slot. */
+const ALIAS_CYCLE: unique symbol = Symbol('alias cycle');
+
 function defaultValue(
   schema: FieldSchema,
   lookup: TypeLookup,
   classPath: Set<string>,
-  /** Ref names already hopped through at this level (alias chains); guards
-   *  pathological pure-ref cycles the extractor shouldn't emit. */
+  aliasPath: Set<string>,
+): unknown {
+  const value = seedValue(schema, lookup, classPath, aliasPath);
+  return value === ALIAS_CYCLE ? null : value;
+}
+
+function seedValue(
+  schema: FieldSchema,
+  lookup: TypeLookup,
+  classPath: Set<string>,
+  /** Alias names being seeded on the current path, through alias chains and
+   *  tuple slots (which are as required as the tuple). Reaching one again
+   *  yields [`ALIAS_CYCLE`]. Class fields start afresh: `classPath` cuts
+   *  recursion through a class. */
   aliasPath: Set<string>,
 ): unknown {
   switch (schema.type) {
@@ -122,7 +140,7 @@ function defaultValue(
     case 'enumVariant':
       return schema.value;
     case 'ref': {
-      if (aliasPath.has(schema.name)) return null;
+      if (aliasPath.has(schema.name)) return ALIAS_CYCLE;
       const resolved = resolveRef(schema.name, lookup);
       if (resolved === undefined) return null;
       if (resolved.kind === 'enum') {
@@ -131,7 +149,7 @@ function defaultValue(
       if (resolved.kind === 'schema') {
         const next = new Set(aliasPath);
         next.add(schema.name);
-        return defaultValue(resolved.schema, lookup, classPath, next);
+        return seedValue(resolved.schema, lookup, classPath, next);
       }
       if (classPath.has(resolved.name)) {
         return {};
@@ -153,12 +171,24 @@ function defaultValue(
       return [];
     case 'map':
       return {};
+    case 'tuple': {
+      // Every slot is required, so a slot that can only recurse makes the
+      // tuple unseedable too.
+      const slots = schema.elements.map((element) =>
+        seedValue(element, lookup, classPath, aliasPath),
+      );
+      return slots.includes(ALIAS_CYCLE) ? ALIAS_CYCLE : slots;
+    }
     case 'optional':
       return null;
-    case 'union':
-      return schema.variants.length > 0
-        ? defaultValue(schema.variants[0], lookup, classPath, aliasPath)
-        : null;
+    case 'union': {
+      // The first variant that seeds without recursing forever.
+      for (const variant of schema.variants) {
+        const value = seedValue(variant, lookup, classPath, aliasPath);
+        if (value !== ALIAS_CYCLE) return value;
+      }
+      return schema.variants.length > 0 ? ALIAS_CYCLE : null;
+    }
     case 'media':
     case 'unsupported':
       return null;
@@ -223,6 +253,14 @@ function matches(
       return Array.isArray(value);
     case 'map':
       return isPlainObject(value);
+    case 'tuple':
+      return (
+        Array.isArray(value) &&
+        value.length === schema.elements.length &&
+        schema.elements.every((element, i) =>
+          matches(value[i], element, lookup, new Set()),
+        )
+      );
     case 'optional':
       return value === null || matches(value, schema.inner, lookup, seen);
     case 'union':
@@ -261,6 +299,11 @@ export function schemaLabel(schema: FieldSchema): string {
       return `${schemaLabel(schema.item)}[]`;
     case 'map':
       return 'map';
+    case 'tuple':
+      // A singleton keeps its comma: `(int)` would read as a grouping.
+      return schema.elements.length === 1
+        ? `(${schemaLabel(schema.elements[0])},)`
+        : `(${schema.elements.map(schemaLabel).join(', ')})`;
     case 'optional':
       return `${schemaLabel(schema.inner)}?`;
     case 'union':
@@ -300,6 +343,7 @@ export function isRawJsonSchema(
     case 'enumVariant':
     case 'list':
     case 'map':
+    case 'tuple':
     case 'optional':
     case 'union':
       return false;
@@ -351,7 +395,7 @@ function reconcileValue(
   /** Class names active on the current value path. */
   classPath: Set<string>,
 ): unknown {
-  if (!valueMatchesSchema(value, schema, lookup)) {
+  if (!reconcilable(value, schema, lookup, new Set())) {
     return defaultValue(schema, lookup, classPath, aliasPath);
   }
 
@@ -407,6 +451,13 @@ function reconcileValue(
       );
       return items.some((item, i) => item !== value[i]) ? items : value;
     }
+    case 'tuple': {
+      if (!Array.isArray(value)) return value;
+      const slots = value.map((slot, i) =>
+        reconcileValue(slot, schema.elements[i], lookup, new Set(), classPath),
+      );
+      return slots.some((slot, i) => slot !== value[i]) ? slots : value;
+    }
     case 'map': {
       if (!valueMatchesSchema(value, schema, lookup)) return value;
       return mapObject(value as Record<string, unknown>, (_key, entry) =>
@@ -434,6 +485,36 @@ function reconcileValue(
     default:
       return value;
   }
+}
+
+/** Whether reconciliation keeps `value`'s shape for `schema` and repairs it
+ *  inside. A tuple of the right arity is kept and reconciled slot by slot, so
+ *  one bad slot resets only that slot; everything else (including choosing a
+ *  union variant, which must still match every slot) is
+ *  [`valueMatchesSchema`]. */
+function reconcilable(
+  value: unknown,
+  schema: FieldSchema,
+  lookup: TypeLookup,
+  seen: Set<string>,
+): boolean {
+  switch (schema.type) {
+    case 'tuple':
+      return Array.isArray(value) && value.length === schema.elements.length;
+    case 'ref': {
+      if (seen.has(schema.name)) break;
+      const resolved = resolveRef(schema.name, lookup);
+      if (resolved?.kind !== 'schema') break;
+      const next = new Set(seen);
+      next.add(schema.name);
+      return reconcilable(value, resolved.schema, lookup, next);
+    }
+    case 'optional':
+      return value === null || reconcilable(value, schema.inner, lookup, seen);
+    default:
+      break;
+  }
+  return valueMatchesSchema(value, schema, lookup);
 }
 
 /** Shallow-map an object's values, returning the original reference when

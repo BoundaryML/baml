@@ -434,6 +434,15 @@ export const hostAdapter = {
         });
     },
     /**
+     * The carried tuple type of an array decoded from a BAML tuple, as wire
+     * `BamlTy` bytes, or undefined for any other value. A received tuple sent
+     * back where no tuple type is declared restates it with this type.
+     */
+    tupleTypeOf(value: unknown): Uint8Array | undefined {
+        const ty = carriedTupleType(value);
+        return ty === undefined ? undefined : baml_bridge.cffi.v1.BamlTy.encode(baml_bridge.cffi.v1.BamlTy.create(ty)).finish();
+    },
+    /**
      * The kind of leaf a runtime-owned value is, or undefined for any other
      * value. A question only: nothing is cloned or serialized until the bridge
      * asks for the payload with `leafOf`.
@@ -619,6 +628,12 @@ function decodeValueHolder(
                 return Number(lit.floatValue);
         }
     }
+    if (holder.tupleValue) {
+        const items = (holder.tupleValue.items || []).map(item => decodeValueHolder(item, typeMap, ownership));
+        const carried = holder.tupleValue.tupleType;
+        if (carried?.tuple) carriedTupleTypes.set(items, carried);
+        return items;
+    }
     if (holder.listValue) {
         return (holder.listValue.items || []).map(item => decodeValueHolder(item, typeMap, ownership));
     }
@@ -721,6 +736,23 @@ const FORGET_REFERENCE = new FinalizationRegistry<string>((key) => {
 
 function referenceKey(handle: BamlHandle): string {
     return `${handle.key.high}:${handle.key.low}`;
+}
+
+/**
+ * The carried (instantiated) type of each array decoded from a BAML tuple,
+ * always the `tuple` arm of a `BamlTy`. Its slot types are annotations and
+ * name no live rows, so holding them owns nothing.
+ */
+const carriedTupleTypes = new WeakMap<object, baml_bridge.cffi.v1.IBamlTy>();
+
+/**
+ * The carried type of an array decoded from a BAML tuple, while the array
+ * still has the tuple's arity; `undefined` for any other value.
+ */
+export function carriedTupleType(value: unknown): baml_bridge.cffi.v1.IBamlTy | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const ty = carriedTupleTypes.get(value);
+    return ty?.tuple?.items?.length === value.length ? ty : undefined;
 }
 
 /**
@@ -992,6 +1024,8 @@ function forEachReference(
         visit(holder);
     } else if (holder.listValue) {
         for (const item of holder.listValue.items ?? []) forEachReference(item, visit);
+    } else if (holder.tupleValue) {
+        for (const item of holder.tupleValue.items ?? []) forEachReference(item, visit);
     } else if (holder.mapValue || holder.classValue) {
         const entries = holder.mapValue?.entries ?? holder.classValue?.fields ?? [];
         for (const entry of entries) {

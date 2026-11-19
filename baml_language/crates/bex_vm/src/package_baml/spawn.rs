@@ -1,11 +1,10 @@
-//! Native implementations for `namespace baml.spawn`: `Limit` and
-//! `CancelToken`, and [`spawn_launch`], which reads what a `spawn` starts out
-//! of its `Plan`.
+//! Native implementations for `namespace baml.spawn`: `CancelToken`, and
+//! [`spawn_launch`], which reads what a `spawn` starts out of its `Plan`
+//! (including its `baml.sync.Semaphore`s).
 //!
-//! `Limit` and `CancelToken` are `@@rust_type` classes whose state is their
-//! payload.
+//! `CancelToken` is a `@@rust_type` class whose state is its payload.
 
-use std::{num::NonZeroUsize, sync::Arc};
+use std::sync::Arc;
 
 use bex_vm_types::{
     HeapPtr, LimitInner, LimitSet, ObjectType, RealizedTy, RustPayload,
@@ -13,13 +12,8 @@ use bex_vm_types::{
     types::{CancellationToken, Value},
 };
 
-use super::{
-    BamlClassSpawnCancelToken, BamlClassSpawnLimit, BamlNamespaceSpawn, PackageBamlImpl, copy, view,
-};
-use crate::{
-    BexVm,
-    errors::{VmBamlError, VmInternalError, VmRustFnError},
-};
+use super::{BamlClassSpawnCancelToken, BamlNamespaceSpawn, PackageBamlImpl, copy, view};
+use crate::{BexVm, errors::VmInternalError};
 
 /// The tokens a `baml.spawn.CancelToken` value fires on (see
 /// [`CancelTokenState`]), or `None` if the value is not a `CancelToken`
@@ -52,7 +46,7 @@ fn alloc_cancel_token(vm: &mut BexVm, state: CancelTokenState) -> Value {
 /// Convert a `usize` count/limit to `i64`, saturating at `i64::MAX`. Group
 /// counts and limits are always small in practice; this just makes the cast
 /// explicitly lossless-or-saturating for clippy.
-fn clamp_to_i64(value: usize) -> i64 {
+pub(super) fn clamp_to_i64(value: usize) -> i64 {
     i64::try_from(value).unwrap_or(i64::MAX)
 }
 
@@ -106,7 +100,7 @@ pub struct SpawnLaunch {
 /// The callable a launch `plan` (a `baml.spawn.Plan<T, E>` instance) runs.
 pub fn plan_body(vm: &BexVm, plan: Value) -> Result<HeapPtr, VmInternalError> {
     let body = view::spawn::Plan {
-        instance: vm.as_instance(&plan)?,
+        instance: &vm.as_instance(&plan)?,
     }
     .body();
     body.as_object_ptr()
@@ -120,15 +114,17 @@ pub fn plan_body(vm: &BexVm, plan: Value) -> Result<HeapPtr, VmInternalError> {
 pub fn spawn_launch(vm: &BexVm, plan: Value) -> Result<SpawnLaunch, VmInternalError> {
     let body = plan_body(vm, plan)?;
     let instance = vm.as_instance(&plan)?;
-    let [returns, throws] = &*instance.class_type_args else {
+    let [returns, throws] = instance.type_args() else {
         return Err(VmInternalError::InvalidArgumentCount {
             expected: 2,
-            got: instance.class_type_args.len(),
+            got: instance.type_args().len(),
         });
     };
-    let plan = view::spawn::Plan { instance };
+    let plan = view::spawn::Plan {
+        instance: &instance,
+    };
     let limits = plan
-        .limits(vm)
+        .semaphores(vm)
         .iter()
         .try_fold(LimitSet::new(), |limits, &limit| {
             Ok::<_, VmInternalError>(limits.with(&limit_inner(vm, limit)?))
@@ -153,41 +149,10 @@ pub fn spawn_launch(vm: &BexVm, plan: Value) -> Result<SpawnLaunch, VmInternalEr
     })
 }
 
-/// Allocate a fresh `baml.spawn.Limit` instance wrapping `inner`.
-fn alloc_limit(vm: &mut BexVm, inner: Arc<LimitInner>) -> Value {
-    copy::spawn::Limit { payload: inner }.to_value(vm)
-}
-
-/// The shared admission state behind a `baml.spawn.Limit` value.
-fn limit_inner(vm: &BexVm, limit: Value) -> Result<Arc<LimitInner>, VmInternalError> {
+/// The shared admission state behind a `baml.sync.Semaphore` value.
+pub(super) fn limit_inner(vm: &BexVm, limit: Value) -> Result<Arc<LimitInner>, VmInternalError> {
     let instance = vm.as_rust_instance(&limit)?;
-    Ok(Arc::clone(view::spawn::Limit { instance }.payload()))
-}
-
-impl BamlClassSpawnLimit for PackageBamlImpl {
-    // Static constructor: returns the heap `Limit` instance, not `Self`.
-    #[allow(clippy::new_ret_no_self)]
-    fn new(vm: &mut BexVm, capacity: i64) -> Result<Value, VmRustFnError> {
-        let capacity = usize::try_from(capacity)
-            .ok()
-            .and_then(NonZeroUsize::new)
-            .ok_or_else(|| VmBamlError::InvalidArgument {
-                message: format!("baml.spawn.Limit.new: capacity must be positive, got {capacity}"),
-            })?;
-        Ok(alloc_limit(vm, LimitInner::new(capacity)))
-    }
-
-    fn capacity(_vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
-        clamp_to_i64(limit.payload().capacity().get())
-    }
-
-    fn active_count(_vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
-        clamp_to_i64(limit.payload().active_count())
-    }
-
-    fn queued_count(_vm: &BexVm, limit: &view::spawn::Limit<'_>) -> i64 {
-        clamp_to_i64(limit.payload().queued_count())
-    }
+    Ok(Arc::clone(view::sync::Semaphore { instance }.payload()))
 }
 
 // The namespace declares no free functions of its own beyond `__spawn`,

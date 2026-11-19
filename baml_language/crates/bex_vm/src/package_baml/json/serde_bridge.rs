@@ -50,7 +50,7 @@ fn string_map_entries(
 ///
 /// JSON numbers: i63-representable integers become integers, larger integral
 /// tokens become bigints, and tokens with a fraction or exponent become
-/// heap-boxed floats.
+/// floats.
 pub(in crate::package_baml) fn serde_to_value(vm: &mut BexVm, v: &serde_json::Value) -> Value {
     match v {
         serde_json::Value::Null => Value::NULL,
@@ -64,12 +64,12 @@ pub(in crate::package_baml) fn serde_to_value(vm: &mut BexVm, v: &serde_json::Va
                 // `parse_json_bigint` already enforces the VM's bit limit.
                 Value::object(vm.tlab.alloc(Object::Bigint(Arc::new(bigint))))
             } else if let Some(f) = n.as_f64() {
-                Value::object(vm.alloc_float(f))
+                vm.float_value(f)
             } else {
                 // With `arbitrary_precision`, a non-integral number whose
                 // magnitude cannot fit in an f64 reaches here. NaN preserves
                 // the existing sentinel for a number we cannot represent.
-                Value::object(vm.alloc_float(f64::NAN))
+                vm.float_value(f64::NAN)
             }
         }
         serde_json::Value::String(s) => Value::object(vm.alloc_string(s.clone())),
@@ -175,6 +175,7 @@ fn value_to_serde_at(
         ValueKind::Null => serde_json::Value::Null,
         ValueKind::Bool(b) => serde_json::Value::Bool(b),
         ValueKind::Int(i) => serde_json::Value::Number(i.into()),
+        ValueKind::Float(f) => float_to_serde(f, path)?,
         ValueKind::OmittedArg => {
             return Err(ValueToSerdeError::NotJson {
                 message: NOT_JSON,
@@ -182,7 +183,10 @@ fn value_to_serde_at(
             });
         }
         ValueKind::Object(ptr) => {
-            let is_container = matches!(vm.get_object(ptr), Object::Array(_) | Object::Map(_));
+            let is_container = matches!(
+                vm.get_object(ptr),
+                Object::Array(_) | Object::Map(_) | Object::Tuple(_)
+            );
             if is_container {
                 if active.contains(&ptr) {
                     return Err(ValueToSerdeError::Unrepresentable(Unrepresentable::Cycle {
@@ -200,6 +204,20 @@ fn value_to_serde_at(
     })
 }
 
+/// A float as JSON: a number, or `null` for a non-finite float.
+/// `f` as a JSON number. JSON has no NaN or infinity, and no stand-in for
+/// one is the same value, so a non-finite float is refused.
+fn float_to_serde(f: f64, path: &str) -> Result<serde_json::Value, ValueToSerdeError> {
+    serde_json::Number::from_f64(f)
+        .map(serde_json::Value::Number)
+        .ok_or_else(|| {
+            ValueToSerdeError::Unrepresentable(Unrepresentable::NonFinite {
+                value: f,
+                path: path.to_owned(),
+            })
+        })
+}
+
 /// The heap object at `ptr` as JSON ([`value_to_serde_at`]'s object arm).
 fn object_to_serde_at(
     vm: &BexVm,
@@ -208,22 +226,22 @@ fn object_to_serde_at(
     active: &mut Vec<HeapPtr>,
 ) -> Result<serde_json::Value, ValueToSerdeError> {
     Ok(match vm.get_object(ptr) {
-        Object::Float(f) => match serde_json::Number::from_f64(*f) {
-            Some(number) => serde_json::Value::Number(number),
-            None => {
-                return Err(ValueToSerdeError::Unrepresentable(
-                    Unrepresentable::NonFinite {
-                        value: *f,
-                        path: path.clone(),
-                    },
-                ));
-            }
-        },
+        Object::Float(f) => float_to_serde(*f, path)?,
         Object::String(s) => serde_json::Value::String(s.to_string()),
         Object::Array(arr) => {
             let arr = arr.to_vec();
             let mut out = Vec::with_capacity(arr.len());
             for (i, el) in arr.into_iter().enumerate() {
+                out.push(with_path_segment(path, format_args!("[{i}]"), |p| {
+                    value_to_serde_at(vm, el, p, active)
+                })?);
+            }
+            serde_json::Value::Array(out)
+        }
+        Object::Tuple(tuple) => {
+            let elements: Vec<Value> = tuple.slot_values().collect();
+            let mut out = Vec::with_capacity(elements.len());
+            for (i, el) in elements.into_iter().enumerate() {
                 out.push(with_path_segment(path, format_args!("[{i}]"), |p| {
                     value_to_serde_at(vm, el, p, active)
                 })?);
@@ -263,7 +281,7 @@ fn object_to_serde_at(
         }
         // A capture cell stands for the value it holds, as membership reads it.
         Object::Cell(cell) => return value_to_serde_at(vm, cell.load(), path, active),
-        Object::Instance(_)
+        Object::Instance
         | Object::Class(_)
         | Object::Enum(_)
         | Object::TypeAlias(_)

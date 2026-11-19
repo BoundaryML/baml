@@ -1025,6 +1025,12 @@ pub fn match_ty_pattern_into(
         (Ty::List(p), Ty::List(c)) => {
             match_ty_pattern_into(p, c, generic_params, aliases, bindings)
         }
+        (Ty::Tuple(p), Ty::Tuple(c)) if p.len() == c.len() => {
+            for (p, c) in p.iter().zip(c.iter()) {
+                match_ty_pattern_into(p, c, generic_params, aliases, bindings)?;
+            }
+            Some(())
+        }
         (
             Ty::Map {
                 key: pk, value: pv, ..
@@ -1650,7 +1656,7 @@ fn collect_type_generic_bound_errors<'db>(
             collect_type_generic_bound_errors(db, facts, key, seen_aliases, errors);
             collect_type_generic_bound_errors(db, facts, value, seen_aliases, errors);
         }
-        baml_type::LoweringTy::Union(members) => {
+        baml_type::LoweringTy::Union(members) | baml_type::LoweringTy::Tuple(members) => {
             for member in members {
                 collect_type_generic_bound_errors(db, facts, member, seen_aliases, errors);
             }
@@ -1745,7 +1751,7 @@ fn check_head_args(
                 db,
                 &baml_type::interned::InferInterface::from_constraint(&bound),
             ) || (crate::impls::structural_interface(db, &bound.name)
-                == Some(baml_type::StructuralInterface::Hash)
+                .is_some_and(baml_type::StructuralInterface::is_conditional)
                 && normalized_arg_implements_bound(facts, &arg, &bound))
                 || arg.is_concrete()
                 || matches!(
@@ -2042,6 +2048,7 @@ fn determine_interface<'db>(
         | Ty::TypeAlias(..)
         | Ty::List(..)
         | Ty::Map { .. }
+        | Ty::Tuple(..)
         | Ty::Int
         | Ty::Bigint
         | Ty::Float
@@ -2446,7 +2453,9 @@ fn determine_concrete<'db>(
         return Determination::Poisoned;
     };
     let mut declarers: Vec<baml_type::Interface> = Vec::new();
-    for interface in crate::impls::impl_views_for_type(db, viewer, base) {
+    for interface in crate::impls::impl_views_for_type(db, viewer, base, |name| {
+        interface_declares_member(db, name, member, ns)
+    }) {
         if interface_declares_member(db, &interface.name, member, ns)
             && !declarers.contains(&interface)
         {

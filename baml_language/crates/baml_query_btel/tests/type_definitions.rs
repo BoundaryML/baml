@@ -372,7 +372,7 @@ class Resume {
 }
 function Pick<T>(x: T) -> T { x }
 function main(n: int) -> int {
-    let r = Pick(Resume { name: "ann" }, $trace = trace.span());
+    let r = Pick(Resume { name: "ann" }, $trace = trace.span(inputs = false));
     n
 }
 "#;

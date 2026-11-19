@@ -232,7 +232,7 @@ fn compare_gc_policy() {
         .unwrap();
     runtime.block_on(async {
         let engine = Arc::new(BexEngine::new(program, Arc::new(sys_native::SysOps::native()), vec![]).unwrap());
-        let slot_size = std::mem::size_of::<bex_vm_types::Object>();
+        let slot_size = std::mem::size_of::<u64>();
         engine.collect_garbage().await;
         let mut policy = Policy::new(policy_name);
         let (default_calls, default_n, function, copy_result): (usize, usize, &str, bool) = match workload.as_str() {
@@ -276,9 +276,9 @@ fn compare_gc_policy() {
         let cache = if workload == "cache" {
             Some(engine.call_function("Batch", vec![BexExternalValue::Int(cache_n)], context(), false).await.unwrap())
         } else { None };
-        let warmup_gc = engine.collect_garbage().await;
-        // A permanent cache is part of the survivor baseline before timings.
-        policy.after_gc(warmup_gc.live_count * slot_size);
+        engine.collect_garbage().await;
+        let mut survivors = engine.heap_stats().runtime_words;
+        policy.after_gc(survivors * slot_size);
         let mut cycles = Vec::new();
         let mut kept = VecDeque::new();
         let mut gc_ms = vec![];
@@ -286,7 +286,7 @@ fn compare_gc_policy() {
         let mut collection_count = 0;
         let initial_rss = rss_bytes();
         let mut peak_rss = initial_rss;
-        let mut peak_slots = engine.heap_stats().runtime_objects;
+        let mut peak_slots = engine.heap_stats().runtime_words;
         let mut snapshots = vec![];
         // Payload-heavy matrices make few calls, so sample RSS after each one.
         let rss_every = if calls <= 512 { 1 } else { 32 };
@@ -295,7 +295,7 @@ fn compare_gc_policy() {
         for call in 0..calls {
             if workload == "burst" && call == calls / 2 { kept.clear(); }
             let stats = engine.heap_stats();
-            let nursery_slots = stats.tlab_chunks * engine.heap().tlab_size();
+            let nursery_slots = stats.runtime_words.saturating_sub(survivors);
             let nursery_bytes = nursery_slots * slot_size;
             let call_start = Instant::now();
             if policy.due(nursery_bytes) {
@@ -304,7 +304,8 @@ fn compare_gc_policy() {
                 gc_ms.push(gc_start.elapsed().as_secs_f64() * 1000.0);
                 cycles.push((call, start.elapsed().as_secs_f64(), result.clone(), nursery_bytes, policy.budget));
                 collection_count += 1;
-                policy.after_gc(engine.heap_stats().runtime_objects * slot_size);
+                survivors = engine.heap_stats().runtime_words;
+                policy.after_gc(survivors * slot_size);
             }
             let result = engine.call_function(function, make_args(), context(), copy_result).await.unwrap();
             match workload.as_str() {
@@ -328,19 +329,19 @@ fn compare_gc_policy() {
                 }
             }
             call_ms.push(call_start.elapsed().as_secs_f64() * 1000.0);
-            peak_slots = peak_slots.max(engine.heap_stats().runtime_objects);
+            peak_slots = peak_slots.max(engine.heap_stats().runtime_words);
             if call % rss_every == 0 || call == calls-1 {
                 peak_rss = peak_rss.max(rss_bytes());
             }
             if (call+1) % (calls/10).max(1) == 0 || call+1 == calls {
                 snapshots.push(serde_json::json!({"calls":call+1,
                     "elapsed_seconds":start.elapsed().as_secs_f64(),
-                    "slot_mib":engine.heap_stats().runtime_objects as f64*slot_size as f64/MIB as f64,
+                    "slot_mib":engine.heap_stats().runtime_words as f64*slot_size as f64/MIB as f64,
                     "rss_mib":rss_mib(rss_bytes()), "budget_mib":policy.budget/MIB}));
             }
         }
         let elapsed = start.elapsed().as_secs_f64();
-        let end_slots = engine.heap_stats().runtime_objects;
+        let end_slots = engine.heap_stats().runtime_words;
         let end_rss = rss_bytes();
         let budget_after = engine.heap().gc_budget();
         // Every full collection bumps the engine's counter; the ones this harness
@@ -348,13 +349,13 @@ fn compare_gc_policy() {
         let automatic_full_collections = (budget_after.full_collections - budget_before.full_collections).saturating_sub(collection_count);
         let idle_observation = if workload == "burst_idle" {
             kept.clear();
-            let before = engine.heap_stats().runtime_objects;
+            let before = engine.heap_stats().runtime_words;
             let before_rss = rss_bytes();
             let idle_ms = setting("GC_IDLE_MS", 1000);
             // Keep the executor alive, but make no engine call or forced GC.
             tokio::time::sleep(std::time::Duration::from_millis(idle_ms as u64)).await;
             Some(serde_json::json!({"idle_ms":idle_ms,
-                "before_slots":before,"after_slots":engine.heap_stats().runtime_objects,
+                "before_slots":before,"after_slots":engine.heap_stats().runtime_words,
                 "before_rss_mib":rss_mib(before_rss),"after_rss_mib":rss_mib(rss_bytes())}))
         } else { None };
         // Verify retained native handles after a moving collection, outside timings.
@@ -420,8 +421,8 @@ fn profile_json(_: &bex_heap::GcStats) -> serde_json::Value {
 fn profile_json(stats: &bex_heap::GcStats) -> serde_json::Value {
     let p = &stats.profile;
     serde_json::json!({
-        "before_generations":p.before.generation_slots, "after_generations":p.after.generation_slots,
-        "before_capacity":p.before.capacity_slots, "after_capacity":p.after.capacity_slots,
+        "before_generations":p.before.generation_words, "after_generations":p.after.generation_words,
+        "before_capacity":p.before.capacity_words, "after_capacity":p.after.capacity_words,
         "actual_new_objects":p.before.new_objects, "roots":p.roots,
         "prepare_ms":p.prepare.as_secs_f64()*1000.0, "trace_ms":p.trace.as_secs_f64()*1000.0,
         "keepalive_ms":p.keepalive.as_secs_f64()*1000.0, "fixup_ms":p.fixup.as_secs_f64()*1000.0,

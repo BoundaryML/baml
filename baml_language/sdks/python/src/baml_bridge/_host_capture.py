@@ -154,6 +154,8 @@ def capture(value):
             origin, args = typing.get_origin(annotation), typing.get_args(annotation)
             if origin is list and len(args) == 1:
                 return ["list", native_type(args[0], depth + 1)]
+            if origin is tuple and args and not any(arg is Ellipsis for arg in args):
+                return ["tuple", [native_type(arg, depth + 1) for arg in args]]
             if origin is dict and len(args) == 2:
                 return [
                     "map",

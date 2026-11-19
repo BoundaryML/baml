@@ -6,6 +6,13 @@ pub const CHUNK_CAPACITY: NonZeroUsize = NonZeroUsize::new(256).unwrap();
 /// **Tune with processing limits.** Scratch capacity for removing/recycling ready chunks;
 /// raising it cannot override the processor/publisher batch cap.
 pub const DRAIN_BATCH_CHUNKS: usize = 8;
+/// **Measure with wake cost.** A producer that seals a chunk because it is full
+/// wakes a consumer sleeping until a deadline only once this many chunks are
+/// ready (at most half a lane): each wake is a system call on the producer's
+/// thread. The consumer's own deadline bounds how long a sealed chunk waits.
+/// Every other seal, a producer's release and a producer out of chunks wake it
+/// at once, as does any seal while it sleeps without a deadline.
+pub const WAKE_BATCH_CHUNKS: usize = 8;
 /// **Measure first under backpressure.** Extra chunks can reduce producer probing at the
 /// cost of resident memory. Each lane covers the configured producers with this many
 /// chunks each; threads beyond the table share the lanes. This sizes the lane, not
@@ -99,4 +106,4 @@ pub struct RingConfig {
 }
 const _: () = assert!(MIN_PRODUCER_SLOTS > 0 && CHUNKS_PER_PRODUCER_PER_LANE > 0);
 const _: () = assert!(!OVERAGE_WAIT_BASE_DURATION.is_zero() && OVERAGE_UNIT_CHUNKS > 0);
-const _: () = assert!(DRAIN_BATCH_CHUNKS > 0);
+const _: () = assert!(DRAIN_BATCH_CHUNKS > 0 && WAKE_BATCH_CHUNKS > 0);

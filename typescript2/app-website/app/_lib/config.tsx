@@ -1,6 +1,7 @@
 import { Globe } from 'lucide-react';
 import { FirstBentoAnimation } from '@/components/first-bento-animation';
 import { FourthBentoAnimation } from '@/components/fourth-bento-animation';
+import { SIGNUP } from '@/components/home/links';
 import { DeploymentStatus } from '@/components/magicui/deployment-status';
 import { SyntaxTypingAnimation } from '@/components/magicui/syntax-typing-animation';
 import { WordRotate } from '@/components/magicui/word-rotate';
@@ -185,8 +186,8 @@ export const siteConfig = {
   ctaSection: {
     backgroundImage: '/agent-cta-background.png',
     button: {
-      href: 'https://calendly.com/boundaryml/meeting-with-founders?back=1&month=2023-12&utm_source=marketing-site&utm_medium=cta-button',
-      text: 'Book a meeting with us',
+      href: SIGNUP,
+      text: 'Get early access',
     },
     id: 'cta',
     subtext:

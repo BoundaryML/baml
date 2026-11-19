@@ -121,9 +121,12 @@ async def main():
             ready[value].set()
             await release.wait()
         current = trace.current_context()
+        version = current.metadata["baml.ctx.baml_version"]
+        assert isinstance(version, str) and version
         if value < 2:
             assert current.distinct_id == f"request-{value}"
             assert current.metadata == {
+                "baml.ctx.baml_version": version,
                 "audit": "python",
                 "case": f"call-{value}",
                 "keep": 1,
@@ -132,6 +135,7 @@ async def main():
         else:
             assert current.distinct_id == "audit-python"
             assert current.metadata == {
+                "baml.ctx.baml_version": version,
                 "audit": "python",
                 "case": "marker",
                 "keep": 1,

@@ -212,22 +212,18 @@ These expressions are tests of a binding `x`:
 - `x` itself where a condition is expected (truthiness): when it is true, `x` loses the members that are always falsy (`null`, `false`, the zero and empty literals), and when it is false, the members that are always truthy.
 - `!` swaps the facts of its operand, and `&&` / `||` combine the facts of their operands (De Morgan).
 
-The facts of a test hold:
-
-- in the branch of an `if`, the body of a `while`, and the arm of a `match` guard that the test guards, and with the opposite facts in the `else` branch;
-- after an early exit: if one branch of an `if` cannot complete (it returns, throws, breaks or continues), the code after the `if` has the facts of the other branch;
-- in the right operand of `&&` and `||`. These operators short-circuit, so the right operand is evaluated only after the left operand was true (`&&`) or false (`||`), and it is typed with the left operand's facts for that outcome. The facts are for the right operand alone: after the operator, the binding has the type it had before it.
+The facts of a test hold in branches which are only reachable if the test passed, and the opposite facts in branches which are only reachable if the test failed. These include `if`/`else` bodies, loop bodies, `match` arms, and the right operand of short-circuiting operators. This also accounts for diverging branches: if one branch of an `if` cannot complete (it returns, throws, breaks or continues), the code after the `if` has the facts of the other branch.
 
 ```baml
 function f(x: A | B | null, s: string?) -> bool {
-    let a = x is A && x.a == 1;            // right operand: `x` is an `A`
-    let b = s == null || s.length() == 0;  // right operand: `s` is a `string`
-    let c = x != null && (x is B || x.a == 1);
+    let a = (x is A) && (x.a == 1);            // right operand: `x` is an `A`
+    let b = (s == null) || (s.length() == 0);  // right operand: `s` is a `string`
+    let c = (x != null) && (x is B || x.a == 1);
     x.a                                    // error: `x` is `A | B | null` again
 }
 ```
 
-An assignment to the binding ends every fact about it. The assigned value is checked against the binding's declared type, never against the narrowed one, and the binding then has the type of the assigned value. A loop drops the facts about every binding that its body assigns before it types its condition and body. A right operand of `&&` / `||` that assigns the binding leaves no fact about it for the code that follows: `x is A && { x = b; true }` proves nothing about `x`.
+An assignment to the binding ends every fact about it. The assigned value is checked against the binding's declared type, never against the narrowed one, and the binding then has the type of the assigned value. A loop drops the facts about every binding that its body or header assigns before it types its condition and body. A right operand of `&&` / `||` / `??` / `?.` that assigns the binding leaves no fact about it for the code that follows: `x is A && { x = b; true }` proves nothing about `x`.
 
 An `is` test that can never hold, given the facts in force where it is evaluated, is dead code. In the condition of an `if`, a `while` or a `match` guard it is rejected, as an unreachable `match` arm is: in `if (x is A && x is B)` with unrelated classes `A` and `B`, the second test can never be true. Written as a value (`let b = x is B;`), the same test is permitted and is `false`.
 

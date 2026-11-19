@@ -665,6 +665,40 @@ pub(crate) fn suspends_directly<'db>(
     }
 }
 
+/// Whether a body may run without a record linked for it: it has no
+/// handler (whose slots and landing level are its frame's) and calls no
+/// `trace` builtin (which reads or scopes to the innermost frame).
+pub(crate) fn frameless_body<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    index: &ProgramIndex,
+    body: &MirFunctionBody<'db>,
+) -> bool {
+    body.blocks.iter().all(|block| {
+        block.handling.is_none()
+            && block.landing.is_none()
+            && !block.statements.iter().any(|statement| {
+                matches!(
+                    &statement.kind,
+                    StatementKind::Intrinsic {
+                        op: IntrinsicOp::Log(_),
+                        ..
+                    }
+                )
+            })
+            && !matches!(
+                &block.terminator,
+                Some(Terminator::Call {
+                    callee: Operand::Constant(Constant::Function(func)),
+                    ..
+                }) if index.function(db, *func).is_some_and(|(_, info)| {
+                    info.native_key
+                        .as_deref()
+                        .is_some_and(|key| key.starts_with("trace."))
+                })
+            )
+    })
+}
+
 pub(crate) fn user_callee<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     index: &ProgramIndex,
@@ -737,6 +771,32 @@ pub(crate) fn operand_ty(body: &MirFunctionBody<'_>, operand: &Operand<'_>) -> O
     }
 }
 
+/// For `x == null` (a call of the `==` builtin `native_key` with no type
+/// arguments and one side typed `null`), the other side. The `==` driver
+/// answers such a pair by kind alone: `null` equals only `null`, and no user
+/// `Equals.eq` can run.
+pub(crate) fn null_compared<'a, 'db>(
+    body: &MirFunctionBody<'db>,
+    native_key: Option<&str>,
+    ntypeargs: usize,
+    args: &'a [Operand<'db>],
+) -> Option<&'a Operand<'db>> {
+    if native_key != Some(EQUALS_EQUALS) || ntypeargs != 0 {
+        return None;
+    }
+    let [lhs, rhs] = args else {
+        return None;
+    };
+    let is_null = |arg: &Operand<'db>| operand_ty(body, arg).is_some_and(|ty| ty.is_null());
+    if is_null(rhs) {
+        Some(lhs)
+    } else if is_null(lhs) {
+        Some(rhs)
+    } else {
+        None
+    }
+}
+
 /// Equality can call user code only for a class or enum pair; an operand
 /// containing neither rules out callbacks, including in nested containers.
 pub(crate) fn equality_is_primitive(ty: &RuntimeTy) -> bool {
@@ -769,8 +829,12 @@ fn is_primitive_key(ty: &RuntimeTy) -> bool {
 /// Keep aligned with `bex_vm::package_baml::VM_NATIVE_PACKAGES`.
 const VM_PACKAGES: &[&str] = &["baml", "testing", "ai", "reflect", "trace"];
 
-fn builtin_metadata() -> Result<&'static HashMap<String, bool>, &'static str> {
-    static TABLE: OnceLock<Result<HashMap<String, bool>, String>> = OnceLock::new();
+/// Each VM builtin's generated entry point, keyed by its BAML path, from the
+/// stdlib source the VM's own dispatch is generated from.
+fn builtin_entries()
+-> Result<&'static HashMap<String, baml_builtins2_codegen::NativeEntry>, &'static str> {
+    static TABLE: OnceLock<Result<HashMap<String, baml_builtins2_codegen::NativeEntry>, String>> =
+        OnceLock::new();
     TABLE
         .get_or_init(|| {
             let mut table = HashMap::new();
@@ -780,7 +844,8 @@ fn builtin_metadata() -> Result<&'static HashMap<String, bool>, &'static str> {
                         format!("the stdlib's `{package}` builtins do not extract: {error}")
                     })?;
                 for builtin in builtins {
-                    table.insert(builtin.path, builtin.may_yield);
+                    let entry = baml_builtins2_codegen::NativeEntry::of(&builtin, package);
+                    table.insert(builtin.path, entry);
                 }
             }
             Ok(table)
@@ -790,11 +855,16 @@ fn builtin_metadata() -> Result<&'static HashMap<String, bool>, &'static str> {
 }
 
 pub(crate) fn validate_builtin_metadata() -> Result<(), String> {
-    builtin_metadata().map(|_| ()).map_err(str::to_owned)
+    builtin_entries().map(|_| ()).map_err(str::to_owned)
 }
 
 fn builtin_may_yield(key: &str) -> Option<bool> {
-    builtin_metadata().ok()?.get(key).copied()
+    builtin_entry(key).map(|entry| entry.may_yield)
+}
+
+/// The generated entry point compiled code calls for builtin `key`.
+pub(crate) fn builtin_entry(key: &str) -> Option<&'static baml_builtins2_codegen::NativeEntry> {
+    builtin_entries().ok()?.get(key)
 }
 
 // Primitive values cannot override `to_string`.

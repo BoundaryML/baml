@@ -324,7 +324,7 @@ type ShapeCase = (
 #[rustfmt::skip]
 const CONSTRUCTS: &[ShapeCase] = &[
     ("compute.fib", FIXTURE,
-        &["vm.should_yield_at_call()", "vm.suspend(Step::Yield)"], &[]),
+        &["vm.should_yield_at_call()", "vm.suspend_from(fr, Step::Yield)", "vm.call_pending(fr, vm.own_callable(fr, "], &[]),
     ("containers.Color", r#"enum Color { Red Green }"#,
         &[], &[]),
     ("containers.Circle", r#"class Circle { r: int }"#,
@@ -357,12 +357,20 @@ const CONSTRUCTS: &[ShapeCase] = &[
         &[], &[]),
     ("containers.here", r#"function here() -> reflect.Package { reflect.Package.current() }"#,
         &[], &[]),
+    ("tuples.pair", r#"function pair(n: int) -> (int, string) { (n, "a") }"#,
+        &["vm.new_tuple("], &[]),
+    ("tuples.first", r#"function first(t: (int, string)?) -> int? { t?.0 }"#,
+        &["vm.load_tuple_field("], &[]),
+    ("tuples.head", r#"function head(t: (int, bool) | (string, bool, int)) -> bool { match t { (let _, let b) => b, (let _, let b, _) => b } }"#,
+        &["vm.load_tuple_field("], &[]),
+    ("tuples.project", r#"function project(t: ((int, string), bool)) -> int { match (t) { ((let n, _), true) => n, _ => 0 } }"#,
+        &["vm.load_tuple_field("], &[]),
     ("interface_defaults.Grows", r#"interface Grows { function grow(self, by: int) -> int throws never }"#,
         &[], &[]),
     ("interface_defaults.Plot", r#"class Plot { side int implements Grows { function grow(self, by: int, extra: int = 1) -> int throws never { self.side * by + extra } } }"#,
         &[], &[]),
     ("interface_defaults.grow_by", r#"function grow_by(g: Grows, by: int) -> int { g.grow(by) }"#,
-        &[], &[]),
+        &["vm.virtual_target("], &["vm.instance_class("]),
     ("truthiness.tr_and", r#"function tr_and(a: string?, b: int) -> bool { a && b }"#,
         &[], &[]),
     ("reservations.own_id", r#"function own_id() -> trace.SpanId? { trace.current_span_id() }"#,
@@ -424,9 +432,9 @@ function hooked_without_settings(n: int) -> int { n + 6 }"#,
     ("interfaces.Person", r#"class Person { name: string implements Named {} }"#,
         &[], &[]),
     ("interfaces.total", r#"function total(shapes: Shape[]) -> int { let sum = 0; for (let s in shapes) { sum += s.area(); } sum }"#,
-        &[], &[]),
+        &["vm.instance_class(", "Square_as_user_interfaces_Shape___area_", "Rect_as_user_interfaces_Shape___area_", "vm.virtual_target("], &[]),
     ("interfaces.scaled", r#"function scaled(s: Shape, by: int) -> int { s.scaled(by) }"#,
-        &[], &[]),
+        &["vm.instance_class(", "vm.class_type(", "user_interfaces_Shape_scaled_", "vm.virtual_target(", "vm.call_pending(fr, vm.record_object(fr, "], &[]),
     ("interfaces.area_fn", r#"function area_fn(s: Shape) -> () -> int throws never { s.area }"#,
         &[], &[]),
     ("interfaces.rename", r#"function rename(n: Named, to: string) -> string { n.name = to; n.name }"#,
@@ -534,11 +542,11 @@ function hooked_without_settings(n: int) -> int { n + 6 }"#,
     ("catch.all_panics", r#"function all_panics(n: int) -> int { (1 / n) catch_all_panics (e) { _ => -1 } }"#,
         &[], &["vm.is_panic("]),
     ("unwind.caught_loop", r#"function caught_loop(n: int) -> int { (1 / n) catch (e) { baml.panics.DivisionByZero => { let i = 0; while (i < n) { i += 1; } i } } }"#,
-        &["vm.should_yield()", "vm.suspend(Step::Yield)"], &[]),
+        &["vm.should_yield()", "vm.suspend_from(fr, Step::Yield)"], &[]),
     ("recursive.left", r#"function left(s: string, n: int) -> string { if (n == 0) { s } else { right(s, n - 1) } }"#,
-        &["vm.should_yield_at_call()", "vm.suspend(Step::Yield)", "vm.set_slot(fr,", "vm.slot(fr,"], &[]),
+        &["vm.should_yield_at_call()", "vm.suspend_from(fr, Step::Yield)", "vm.set_slot(fr,", "vm.slot(fr,"], &[]),
     ("recursive.right", r#"function right(s: string, n: int) -> string { if (n == 0) { s } else { left(s, n - 1) } }"#,
-        &["vm.should_yield_at_call()", "vm.suspend(Step::Yield)", "vm.set_slot(fr,", "vm.slot(fr,"], &[]),
+        &["vm.should_yield_at_call()", "vm.suspend_from(fr, Step::Yield)", "vm.set_slot(fr,", "vm.slot(fr,"], &[]),
     ("recursive.caller", r#"function caller(s: string, n: int) -> string { left(s, n) + s }"#,
         &["vm.set_slot(fr,", "vm.slot(fr,"], &["vm.should_yield_at_call()"]),
     ("recursive.plain", r#"function plain(n: int) -> int { n + 1 }"#,
@@ -548,11 +556,30 @@ function hooked_without_settings(n: int) -> int { n + 6 }"#,
     ("trace.Probe", r#"class Probe { implements Reader { function read(self, n: int) -> int throws never { n } } }"#,
         &[], &[]),
     ("trace.traced", r#"function traced(p: Reader, xs: int[]) -> int { p.read(xs[0], $trace = trace.hidden()) }"#,
+        &[], &["vm.instance_class("]),
+    ("megamorphic.Nine", r#"interface Nine { function n(self) -> int throws never }
+        class N1 { implements Nine { function n(self) -> int throws never { 1 } } }
+        class N2 { implements Nine { function n(self) -> int throws never { 2 } } }
+        class N3 { implements Nine { function n(self) -> int throws never { 3 } } }
+        class N4 { implements Nine { function n(self) -> int throws never { 4 } } }
+        class N5 { implements Nine { function n(self) -> int throws never { 5 } } }
+        class N6 { implements Nine { function n(self) -> int throws never { 6 } } }
+        class N7 { implements Nine { function n(self) -> int throws never { 7 } } }
+        class N8 { implements Nine { function n(self) -> int throws never { 8 } } }
+        class N9 { implements Nine { function n(self) -> int throws never { 9 } } }"#,
         &[], &[]),
+    ("megamorphic.nine", r#"function nine(x: Nine) -> int { x.n() }"#,
+        &["vm.virtual_target("], &["vm.instance_class("]),
+    ("logs.logger", r#"function logger(n: int) -> int { log.info("logged"); n + 1 }"#,
+        &[], &[]),
+    ("logs.calls_logger", r#"function calls_logger(n: int) -> int { logger(n) }"#,
+        &[], &["vm.call_frameless(fr, "]),
     ("compute.uses_closure", "",
-        &["vm.suspend("], &[]),
+        &["vm.suspend_from("], &[]),
+    ("compute.main", "",
+        &["vm.call_frameless(fr, "], &[]),
     ("<lambda(uses_closure, 0)>", "",
-        &[], &["vm.suspend(", "vm.should_yield()"]),
+        &[], &["vm.suspend_from(", "vm.should_yield()"]),
 ];
 
 #[test]
@@ -585,10 +612,11 @@ fn constructs_and_generated_shapes() {
         );
     }
     syn::parse_file(&module.source).expect("generated module parses as Rust");
+    // Stdlib bytecode the probes reach compiles with them. (`baml.String.length`,
+    // which `tracing.total` calls, is a native and has no body to compile.)
     assert_admitted(
         &module,
         &[
-            "baml.String.length",
             "baml.iter.Range.new",
             "baml.<(baml.iter.Range as baml.iter.Iterator)>.next",
             "baml.<(baml.iter.Range as baml.iter.Iterable)>.iter",
@@ -616,7 +644,7 @@ fn constructs_and_generated_shapes() {
         ("trace.traced", "vm.load_array_element(", "vm.set_call_trace("),
         ("trace.traced", "vm.virtual_target(", "vm.set_call_trace("),
         ("trace.traced", "vm.push_virtual_args(", "vm.set_call_trace("),
-        ("trace.traced", "vm.set_call_trace(", "vm.suspend(Step::Call"),
+        ("trace.traced", "vm.set_call_trace(", "vm.suspend_from(fr, Step::Call"),
     ];
     for (name, before, after) in orderings {
         let body = body_of(&module, &format!("user.{name}"));
@@ -666,6 +694,31 @@ fn entry_points_prune_admission_to_what_they_reach() {
             ));
         }
     }
+}
+
+/// A class with nothing to register at allocation takes the inline bump
+/// path; one with a finalizer still allocates through the runtime, which
+/// registers it.
+#[test]
+fn plain_classes_allocate_inline() {
+    let db = baml_test_support::setup_test_db(
+        r#"
+class Plain { x: int, y: float }
+class Kept {
+    n: int,
+    function cleanup(self) -> void {}
+}
+function make_plain(i: int) -> Plain { Plain { x: i, y: 1.5 } }
+function make_kept(i: int) -> Kept { Kept { n: i } }
+"#,
+    );
+    let program = lower(&db, OptLevel::Two);
+    let module = render(&db, &program, OptLevel::Two, None);
+    let plain = body_of(&module, "user.make_plain");
+    assert!(plain.contains("vm.new_plain_instance("), "{plain}");
+    let kept = body_of(&module, "user.make_kept");
+    assert!(kept.contains("vm.new_instance_of("), "{kept}");
+    assert!(!kept.contains("vm.new_plain_instance("), "{kept}");
 }
 
 #[test]
@@ -774,4 +827,262 @@ function Boundary() -> int { let map = { "present": 1 }; map["missing"] }
             }
         }
     }
+}
+
+/// Escape to stack: the module of `source` at `-O2`, checked to parse.
+fn stack_module(source: &str) -> RustModule {
+    let db = baml_test_support::setup_test_db(source);
+    let program = lower(&db, OptLevel::Two);
+    let module = render(&db, &program, OptLevel::Two, None);
+    syn::parse_file(&module.source).expect("generated Rust parses");
+    module
+}
+
+/// `function`'s allocation sites in order: `None` for a stack object, else
+/// the start of the reason it stays on the heap.
+#[track_caller]
+fn assert_sites(module: &RustModule, function: &str, expected: &[Option<&str>]) {
+    let report = module
+        .stack
+        .iter()
+        .find(|report| report.function == function)
+        .unwrap_or_else(|| panic!("no allocation sites reported for {function}"));
+    let actual: Vec<Option<&str>> = report
+        .sites
+        .iter()
+        .map(|site| site.heap_because.as_deref())
+        .collect();
+    assert_eq!(actual.len(), expected.len(), "{function}: {actual:?}");
+    for (actual, expected) in actual.iter().zip(expected) {
+        match (actual, expected) {
+            (None, None) => {}
+            (Some(actual), Some(expected)) if actual.starts_with(expected) => {}
+            _ => panic!("{function}: sites {actual:?}, expected {expected:?}"),
+        }
+    }
+}
+
+const STACK_VEC: &str = r#"
+class Vec {
+  x: int
+  y: int
+  function norm2(self) -> int { self.x * self.x + self.y * self.y }
+}
+"#;
+
+fn symbol_of<'a>(module: &'a RustModule, name: &str) -> &'a str {
+    &module
+        .functions
+        .iter()
+        .find(|f| f.display == name)
+        .unwrap_or_else(|| panic!("{name} should compile: {:?}", module.rejected))
+        .symbol
+}
+
+#[test]
+fn scalar_objects_in_a_loop_become_stack_structs() {
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function dot(a: Vec, b: Vec) -> int {{ a.x * b.x + a.y * b.y }}
+function main() -> int {{
+  let acc = 0;
+  for (let i = 0; i < 100; i += 1) {{
+    let v = Vec {{ x: i, y: i + 1 }};
+    let w = Vec {{ x: 3, y: i }};
+    acc += v.x + v.y + v.norm2() + dot(v, w);
+  }}
+  acc
+}}"
+    ));
+    assert_sites(&module, "user.main", &[None, None]);
+    assert!(module.source.contains("struct user_Vec_stack_"));
+    let main = body_of(&module, "user.main");
+    assert!(
+        !main.contains("vm.new_plain_instance(") && !main.contains("vm.new_instance("),
+        "{main}"
+    );
+    assert!(main.contains("let mut s0: user_Vec_stack_"), "{main}");
+    assert!(main.contains("s0.f0"), "{main}");
+    let norm2 = symbol_of(&module, "user.Vec.norm2");
+    let variant = format!(
+        "pub fn {norm2}_stack1(vm: &mut BexVm, fr: &FrameRecord, arg0: &mut user_Vec_stack_"
+    );
+    assert!(
+        module.source.contains(&variant),
+        "no stack variant of norm2"
+    );
+    assert!(
+        main.contains(&format!("{norm2}_stack1(vm, fr, &mut s0, ")),
+        "{main}"
+    );
+    assert!(
+        main.contains("s0.heap(vm, fr)") && main.contains("s0.reload(vm, "),
+        "{main}"
+    );
+    let dot = symbol_of(&module, "user.dot");
+    assert!(module.source.contains(&format!("pub fn {dot}_stack3(")));
+    assert!(
+        main.contains(&format!("{dot}_stack3(vm, fr, &mut s0, &mut s1, ")),
+        "{main}"
+    );
+}
+
+#[test]
+fn objects_that_escape_stay_on_the_heap() {
+    let cases: &[(&str, &str, &[Option<&str>])] = &[
+        (
+            "function main() -> int {
+  let kept: Vec[] = [];
+  let v = Vec { x: 1, y: 2 };
+  kept.push(v);
+  let w = Vec { x: 3, y: 4 };
+  let all = [w];
+  kept.length() + all.length()
+}",
+            "user.main",
+            &[
+                Some("passed to baml.Array.push"),
+                Some("stored into a container"),
+            ],
+        ),
+        (
+            "function make(x: int) -> Vec { let v = Vec { x: x, y: x }; v.y = 2; v }
+function main() -> int { make(3).x }",
+            "user.make",
+            &[Some("returned")],
+        ),
+        (
+            "function main() -> bool {
+  let a = Vec { x: 1, y: 2 };
+  let b = Vec { x: 1, y: 2 };
+  let c = Vec { x: 1, y: 2 };
+  let d = Vec { x: 1, y: 2 };
+  a == b && [c].includes(d) && c != null
+}",
+            "user.main",
+            &[
+                Some("passed to baml.ops.equals_equals"),
+                Some("passed to baml.ops.equals_equals"),
+                Some("stored into a container"),
+                Some("passed to generic baml.Array.includes"),
+            ],
+        ),
+        (
+            "class Res {
+  n: int
+  function cleanup(self) -> void { }
+}
+function main() -> int { let r = Res { n: 1 }; r.n += 1; r.n }",
+            "user.main",
+            &[Some("`user.Res` has a cleanup finalizer")],
+        ),
+        (
+            "function keep(v: Vec, into: Vec[]) -> int { into.push(v); into.length() }
+function main() -> int { let into: Vec[] = []; let v = Vec { x: 1, y: 2 }; keep(v, into) }",
+            "user.main",
+            &[Some("passed to user.keep, whose parameter 1 escapes")],
+        ),
+    ];
+    for (program, function, sites) in cases {
+        let module = stack_module(&format!("{STACK_VEC}\n{program}"));
+        assert_sites(&module, function, sites);
+    }
+}
+
+#[test]
+fn heap_fields_of_a_stack_object_are_spilled_across_an_await() {
+    let module = stack_module(
+        r#"
+class Tagged {
+  name: string
+  n: int
+}
+function work(n: int) -> int { n + 1 }
+function main() -> string {
+  let t = Tagged { name: "start", n: 1 };
+  let child = spawn { work(2) };
+  t.n = await child;
+  `${t.name}:${t.n}`
+}"#,
+    );
+    assert_sites(&module, "user.main", &[None]);
+    let main = body_of(&module, "user.main");
+    assert!(
+        main.contains("vm.set_slot(fr, ") && main.contains(", s0.f0); "),
+        "{main}"
+    );
+    assert!(main.contains("s0.f0 = vm.slot(fr, "), "{main}");
+    assert!(!main.contains("s0.f1 = vm.slot("), "{main}");
+}
+
+#[test]
+fn a_function_gets_a_bounded_number_of_stack_variants() {
+    let calls: String = (1..16u32)
+        .map(|mask| {
+            let args: Vec<String> = (0..4)
+                .map(|i| {
+                    if mask & (1 << i) == 0 {
+                        "h".to_string()
+                    } else {
+                        format!("Vec {{ x: {i}, y: {mask} }}")
+                    }
+                })
+                .collect();
+            format!("  t += f({});\n", args.join(", "))
+        })
+        .collect();
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function f(a: Vec, b: Vec, c: Vec, d: Vec) -> int {{ a.x + b.x + c.x + d.x }}
+function main() -> int {{
+  let kept: Vec[] = [];
+  let h = Vec {{ x: 0, y: 0 }};
+  kept.push(h);
+  let t = 0;
+{calls}  t
+}}"
+    ));
+    let f = symbol_of(&module, "user.f");
+    let variants = module.source.matches(&format!("pub fn {f}_stack")).count();
+    assert_eq!(variants, 8, "{}", body_of(&module, "user.main"));
+    let report = module
+        .stack
+        .iter()
+        .find(|report| report.function == "user.main")
+        .expect("main's sites");
+    assert!(
+        report.sites.iter().any(|site| site
+            .heap_because
+            .as_deref()
+            .is_some_and(|why| why.ends_with("which has its 8 stack variants"))),
+        "{:?}",
+        report
+            .sites
+            .iter()
+            .map(|site| &site.heap_because)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn objects_past_the_64th_parameter_stay_on_the_heap() {
+    let ints: String = (1..64).map(|i| format!("a{i}: int, ")).collect();
+    let zeros = "0, ".repeat(63);
+    let module = stack_module(&format!(
+        "{STACK_VEC}
+function big(first: Vec, {ints}last: Vec) -> int {{ first.x + last.y }}
+function main() -> int {{
+  let a = Vec {{ x: 1, y: 2 }};
+  let b = Vec {{ x: 3, y: 4 }};
+  big(a, {zeros}b)
+}}"
+    ));
+    assert_sites(
+        &module,
+        "user.main",
+        &[
+            None,
+            Some("passed to user.big beyond its first 64 parameters"),
+        ],
+    );
 }

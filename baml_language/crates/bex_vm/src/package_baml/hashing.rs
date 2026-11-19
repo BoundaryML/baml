@@ -35,7 +35,35 @@ fn framed(tag: u8, bytes: &[u8]) -> Vec<u8> {
     result
 }
 
+/// The framed hash bytes of a float, by value class: every NaN hashes alike
+/// and `-0.0` hashes as `0.0`, matching float equality (`float_order::eq`).
+fn hash_float(value: f64) -> Vec<u8> {
+    let bits = if value.is_nan() {
+        f64::NAN.to_bits()
+    } else if value == 0.0 {
+        0
+    } else {
+        value.to_bits()
+    };
+    framed(3, &bits.to_le_bytes())
+}
+
 impl HashDriver {
+    /// An instance's own bytes, its class and field count; its fields are
+    /// queued to hash after it, in order.
+    fn instance_bytes(&mut self, vm: &mut BexVm, ptr: HeapPtr) -> Vec<u8> {
+        let instance = vm.get_instance(ptr).expect("an instance pointer");
+        let type_tag = instance.class_object().type_tag.as_i64();
+        let mut bytes = framed(9, &type_tag.to_le_bytes());
+        bytes.extend_from_slice(&(instance.field_len() as u64).to_le_bytes());
+        let fields: Vec<_> = instance.fields().collect();
+        for field in fields.into_iter().rev() {
+            let value = vm.field_to_value(field);
+            self.pending.push(Work::Value(value, true));
+        }
+        bytes
+    }
+
     fn drive(mut self, vm: &mut BexVm) -> NativeCallResult {
         while let Some(work) = self.pending.pop() {
             let bytes = match work {
@@ -122,17 +150,9 @@ impl HashDriver {
                         ValueKind::Int(value) => framed(1, &value.to_le_bytes()),
                         ValueKind::Bool(value) => vec![2, u8::from(value)],
                         ValueKind::OmittedArg => return panic("Cannot hash an omitted argument"),
+                        ValueKind::Float(value) => hash_float(value),
                         ValueKind::Object(ptr) => match vm.get_object(ptr) {
-                            Object::Float(value) => {
-                                let bits = if value.is_nan() {
-                                    f64::NAN.to_bits()
-                                } else if *value == 0.0 {
-                                    0
-                                } else {
-                                    value.to_bits()
-                                };
-                                framed(3, &bits.to_le_bytes())
-                            }
+                            Object::Float(value) => hash_float(*value),
                             Object::Bigint(value) => framed(4, &value.to_signed_bytes_le()),
                             Object::String(value) => framed(5, value.as_bytes()),
                             Object::Uint8Array(value) => framed(6, &value.lock()),
@@ -156,23 +176,7 @@ impl HashDriver {
                                 }
                                 continue;
                             }
-                            Object::Instance(instance) => {
-                                let Object::Class(class) = vm.get_object(instance.class) else {
-                                    return panic("Invalid class while hashing");
-                                };
-                                let mut bytes = framed(9, &class.type_tag.as_i64().to_le_bytes());
-                                bytes.extend_from_slice(
-                                    &(instance.fields.len() as u64).to_le_bytes(),
-                                );
-                                self.pending.extend(
-                                    instance
-                                        .fields
-                                        .iter()
-                                        .rev()
-                                        .map(|field| Work::Value(field.load(), true)),
-                                );
-                                bytes
-                            }
+                            Object::Instance => self.instance_bytes(vm, ptr),
                             Object::Variant(variant) => {
                                 let Object::Enum(enm) = vm.get_object(variant.enm) else {
                                     return panic("Invalid enum while hashing");
@@ -194,7 +198,9 @@ impl HashDriver {
                                 | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
                                 | bex_vm_types::RustPayload::Regex(_)
                                 | bex_vm_types::RustPayload::CsvRecord(_)
-                                | bex_vm_types::RustPayload::Limit(_)
+                                | bex_vm_types::RustPayload::Semaphore(_)
+                                | bex_vm_types::RustPayload::Permit(_)
+                                | bex_vm_types::RustPayload::Ticket(_)
                                 | bex_vm_types::RustPayload::CancelToken(_)
                                 | bex_vm_types::RustPayload::SpanId(_)
                                 | bex_vm_types::RustPayload::TraceOptions(_)
@@ -321,4 +327,60 @@ pub(super) fn hash_value(vm: &mut BexVm, value: Value, state: Value) -> NativeCa
         map_hashes: Vec::new(),
     }
     .drive(vm)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::hash::Hasher as _;
+
+    use super::framed;
+
+    /// What a map computes for a key whose `Hash` runs BAML code and writes
+    /// `chunks`: a map-key hasher fed those writes, then finished.
+    fn driver_hash(chunks: &[&[u8]]) -> u64 {
+        let mut hasher = bex_vm_types::map_key_hasher();
+        for chunk in chunks {
+            hasher.write(chunk);
+        }
+        hasher.finish()
+    }
+
+    /// Maps hash string and int keys natively. A key whose `Hash` writes the
+    /// same value must land in the same bucket, so the native hashes keep the
+    /// driver's framing.
+    #[test]
+    fn native_key_hashes_match_the_driver() {
+        for int in [0, 1, -1, 42, i64::from(i32::MAX), -(1 << 62)] {
+            assert_eq!(
+                bex_vm_types::map_int_hash(int),
+                driver_hash(&[&framed(1, &int.to_le_bytes())])
+            );
+        }
+        let long = "a key longer than the stack buffer a native hash frames into, ".repeat(3);
+        for text in [
+            "",
+            "a",
+            "ggtatt",
+            "a string longer than sixteen bytes",
+            &long,
+        ] {
+            assert_eq!(
+                bex_vm_types::map_string_hash(text),
+                driver_hash(&[&framed(5, text.as_bytes())])
+            );
+        }
+    }
+
+    /// `baml.hash.Hasher` promises that writing a stream in chunks hashes
+    /// like writing it whole; a map's key hash keeps that promise.
+    #[test]
+    fn map_key_hash_ignores_chunking() {
+        let stream = framed(5, b"a string longer than sixteen bytes");
+        let whole = driver_hash(&[&stream]);
+        for split in [0, 1, 9, 17, stream.len()] {
+            let (head, tail) = stream.split_at(split);
+            assert_eq!(driver_hash(&[head, tail]), whole);
+        }
+        assert_ne!(driver_hash(&[&framed(5, b"ggtatt")]), whole);
+    }
 }

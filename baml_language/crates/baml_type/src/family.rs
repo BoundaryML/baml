@@ -351,6 +351,8 @@ ty_family! {
         InferVar {
             var: crate::interned::InferVar,
         } = 37,
+        #[axis(concrete)]
+        Tuple(Box<[Ty<N>]>) = 38,
     }
 }
 

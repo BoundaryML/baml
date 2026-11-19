@@ -121,8 +121,12 @@ and a bounded diagnostic. The audit includes hostile serializer/getter hooks,
 custom handler failures and cycles, native/builtin precedence, asynchronous
 functions, and value/byte budgets.
 
-Spans request outputs and errors by default. Request inputs explicitly with
-`trace.span(inputs=True)` in Python or `trace.span({ inputs: true })` in Node.
+`trace.span()` requests inputs, outputs and errors, as it does in BAML; pass
+`inputs=False` (Python) or `{ inputs: false }` (Node) to leave the arguments
+out. That withdraws only the function's own request: a BAML caller that
+requests inputs, for example with `$trace = trace.span()`, still records them,
+because the span records a value when either side requests it.
+Instrumentation without options requests outputs and errors only.
 `trace.empty_span()` requests a span without value capture. The equivalent
 builders are available on `trace.Options`; `trace.rich()` has been removed.
 

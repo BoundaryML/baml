@@ -3,7 +3,7 @@ function engine_context_check(expected: string?) -> bool {
     if (expected != null) {
         assert.equal(trace.current_context().metadata["owner"], expected);
     } else {
-        assert.equal(trace.current_context().metadata.length(), 0);
+        assert.equal(trace.current_context().metadata.length(), 1);
     }
     let child = spawn {
         assert.equal(trace.current_context().distinct_id, expected);
@@ -27,8 +27,8 @@ function engine_context_check(expected: string?) -> bool {
 }
 
 test "engine context inheritance and override isolation" {
-    assert.equal(engine_context_check("native", $trace = trace.context(
-        distinct_id = "native",
-        metadata = { "owner": "native" },
-    )), true);
+    assert.equal(
+        engine_context_check("native", $trace = trace.context(distinct_id = "native", metadata = { "owner": "native" })),
+        true,
+    );
 }

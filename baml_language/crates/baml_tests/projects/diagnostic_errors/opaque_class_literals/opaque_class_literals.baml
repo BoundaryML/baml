@@ -2,8 +2,8 @@
 // literal of one is refused.
 
 // A spread would copy one.
-function spread_copy(limit: baml.spawn.Limit) -> baml.spawn.Limit throws never {
-    baml.spawn.Limit { ...limit }
+function spread_copy(limit: baml.sync.Semaphore) -> baml.sync.Semaphore throws never {
+    baml.sync.Semaphore { ...limit }
 }
 
 // An empty literal would make one from nothing.

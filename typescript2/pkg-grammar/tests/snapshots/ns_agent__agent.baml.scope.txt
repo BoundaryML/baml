@@ -18,7 +18,7 @@
 17:5-12      "thought"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 17:12-13     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 17:14-20     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-17:20-21     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+17:20-21     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 18:5-11      "action"           source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 18:11-12     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 18:13-14     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
@@ -44,37 +44,37 @@
 18:82-83     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.begin.baml
 18:83-90     "respond"          source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml
 18:90-91     "\""               source.baml meta.class.baml meta.class.body.baml meta.field.baml string.quoted.double.baml punctuation.definition.string.end.baml
-18:91-92     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+18:91-92     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 19:5-9       "path"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 19:9-10      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 19:11-17     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
 19:17-18     "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
-19:18-19     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+19:18-19     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 20:5-12      "content"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 20:12-13     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 20:14-20     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
 20:20-21     "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
-20:21-22     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+20:21-22     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 21:5-12      "old_str"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 21:12-13     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 21:14-20     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
 21:20-21     "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
-21:21-22     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+21:21-22     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 22:5-12      "new_str"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 22:12-13     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 22:14-20     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
 22:20-21     "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
-22:21-22     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+22:21-22     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 23:5-12      "command"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 23:12-13     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 23:14-20     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
 23:20-21     "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
-23:21-22     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+23:21-22     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 24:5-12      "message"          source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 24:12-13     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 24:14-20     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
 24:20-21     "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
-24:21-22     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+24:21-22     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 25:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 27:1-6       "class"            source.baml meta.class.baml keyword.declaration.class.baml
 27:7-11      "Turn"             source.baml meta.class.baml meta.class.header.baml entity.name.type.class.baml
@@ -82,27 +82,27 @@
 28:5-11      "answer"           source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 28:11-12     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 28:13-19     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-28:19-20     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+28:19-20     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 29:5-15      "transcript"       source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 29:15-16     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 29:17-23     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-29:23-24     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+29:23-24     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 30:5-10      "steps"            source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 30:10-11     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 30:12-15     "int"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-30:15-16     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+30:15-16     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 31:5-77      "// Set when the user cancelled mid-turn with esc + enter. `queued` holds" source.baml meta.class.baml meta.class.body.baml comment.line.double-slash.baml
 32:5-65      "// any lines they typed while the turn ran, to run after it." source.baml meta.class.baml meta.class.body.baml comment.line.double-slash.baml
 33:5-16      "interrupted"      source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 33:16-17     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 33:18-22     "bool"             source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-33:22-23     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+33:22-23     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 34:5-11      "queued"           source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 34:11-12     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 34:13-19     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
 34:19-20     "["                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
 34:20-21     "]"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-34:21-22     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+34:21-22     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 35:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 37:1-72      "// The result of peeking at stdin during a turn: esc + enter requests a" source.baml comment.line.double-slash.baml
 38:1-73      "// cancel; any other typed line is staged in `queued` to run afterwards." source.baml comment.line.double-slash.baml
@@ -112,11 +112,11 @@
 40:5-11      "cancel"           source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 40:11-12     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 40:13-17     "bool"             source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-40:17-18     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+40:17-18     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 41:5-11      "queued"           source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 41:11-12     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 41:13-19     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-41:19-20     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+41:19-20     ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 42:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 44:1-79      "// ---------------------------------------------------------------------------" source.baml comment.line.double-slash.baml
 45:1-73      "// The brain: given the running transcript, decide the next single step." source.baml comment.line.double-slash.baml
@@ -2834,11 +2834,11 @@
 540:5-9      "text"             source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 540:9-10     ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 540:11-17    "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-540:17-18    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+540:17-18    ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 541:5-8      "eof"              source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 541:8-9      ":"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.separator.colon.baml
 541:10-14    "bool"             source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-541:14-15    ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+541:14-15    ","                source.baml meta.class.baml meta.class.body.baml punctuation.separator.comma.baml
 542:1-2      "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 544:1-80     "// Read one line from the terminal (inherited stdin). eof=true at end of input." source.baml comment.line.double-slash.baml
 545:1-9      "function"         source.baml meta.function.baml keyword.declaration.function.baml

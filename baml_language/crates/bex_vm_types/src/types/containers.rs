@@ -1,6 +1,16 @@
-use std::{cell::UnsafeCell, collections::HashMap};
+use std::{
+    cell::UnsafeCell,
+    collections::{
+        HashMap,
+        hash_map::{DefaultHasher, RandomState},
+    },
+    hash::{BuildHasher, BuildHasherDefault, Hasher},
+    sync::LazyLock,
+};
 
 use indexmap::IndexMap;
+use rustc_hash::FxBuildHasher;
+use smallvec::SmallVec;
 
 use crate::{AllocDebt, Value, lazy_biased_mutex::LazyBiasedMutex};
 
@@ -427,6 +437,79 @@ impl Array {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Tuple {
+    pub element_tys: Box<[crate::RealizedTy]>,
+    slots: Box<[Value]>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TupleShapeMismatch {
+    pub types: usize,
+    pub values: usize,
+}
+
+impl std::fmt::Display for TupleShapeMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "tuple of {} slot types given {} elements",
+            self.types, self.values
+        )
+    }
+}
+
+impl std::error::Error for TupleShapeMismatch {}
+
+impl Tuple {
+    pub fn new(
+        element_tys: impl Into<Box<[crate::RealizedTy]>>,
+        data: impl IntoIterator<Item = Value>,
+    ) -> Result<Self, TupleShapeMismatch> {
+        let element_tys = element_tys.into();
+        let slots: Box<[Value]> = data.into_iter().collect();
+        if element_tys.len() != slots.len() {
+            return Err(TupleShapeMismatch {
+                types: element_tys.len(),
+                values: slots.len(),
+            });
+        }
+        Ok(Self { element_tys, slots })
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.slots.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+
+    #[inline]
+    pub fn try_load_slot(&self, idx: usize) -> Option<Value> {
+        self.slots.get(idx).copied()
+    }
+
+    #[inline]
+    pub fn load_slot(&self, idx: usize) -> Value {
+        self.slots[idx]
+    }
+
+    pub fn values_mut(&mut self) -> &mut [Value] {
+        &mut self.slots
+    }
+
+    pub fn slot_values(&self) -> impl ExactSizeIterator<Item = Value> + '_ {
+        self.slots.iter().copied()
+    }
+
+    pub fn ty(&self) -> crate::RealizedTy {
+        crate::RealizedTy::Tuple(self.element_tys.clone())
+    }
+}
+
 /// Heap-mutable array container.
 ///
 /// Held inline by `Object::Array`. Size: 24 (Vec) + 1 (mutex) + padding = 32 bytes.
@@ -459,14 +542,68 @@ pub type MapWriteGuard<'a> = LockedWriteGuard<'a, Box<MapData>>;
 
 pub type EntryId = u64;
 
-/// Hash a native string key with the same framing as the VM's `Hash` driver.
+/// The keys of every map key hash: std's `RandomState`, whose SipHash-1-3
+/// keys come from the OS once per process. Keys can come from untrusted
+/// input (JSON), so where they land must be unpredictable.
+static MAP_KEY_STATE: LazyLock<RandomState> = LazyLock::new(RandomState::new);
+
+/// A hasher for the hash a map files a key under: SipHash-1-3 keyed per
+/// process, so unlike `baml.hash.DefaultHasher` its results differ between
+/// processes. A key whose `Hash` runs BAML code writes into one of these.
+pub fn map_key_hasher() -> DefaultHasher {
+    MAP_KEY_STATE.build_hasher()
+}
+
+/// Hash a native string key as the VM's `Hash` driver frames it, so a map
+/// finds a string key whichever of the two hashed it.
 pub fn map_string_hash(key: &str) -> u64 {
-    use std::hash::Hasher;
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    hasher.write(&[5]);
-    hasher.write(&(key.len() as u64).to_le_bytes());
-    hasher.write(key.as_bytes());
+    framed_hash(5, key.as_bytes())
+}
+
+/// Hash a native int key as the VM's `Hash` driver frames it.
+pub fn map_int_hash(key: i64) -> u64 {
+    framed_hash(1, &key.to_le_bytes())
+}
+
+/// The map key hash of the `Hash` driver's framing of a primitive: `tag`,
+/// the byte length, the bytes. A short key is framed on the stack and
+/// written once, which hashes faster than three small writes.
+fn framed_hash(tag: u8, bytes: &[u8]) -> u64 {
+    const HEADER: usize = 1 + size_of::<u64>();
+    const INLINE: usize = 128;
+    let len = (bytes.len() as u64).to_le_bytes();
+    let mut hasher = map_key_hasher();
+    if HEADER + bytes.len() <= INLINE {
+        let mut stream = [0_u8; INLINE];
+        stream[0] = tag;
+        stream[1..HEADER].copy_from_slice(&len);
+        stream[HEADER..HEADER + bytes.len()].copy_from_slice(bytes);
+        hasher.write(&stream[..HEADER + bytes.len()]);
+    } else {
+        hasher.write(&[tag]);
+        hasher.write(&len);
+        hasher.write(bytes);
+    }
     hasher.finish()
+}
+
+/// The bucket table's hasher. Its keys are map key hashes, already keyed
+/// and well mixed, so they index the table as they are.
+#[derive(Default)]
+struct KeyHashHasher(u64);
+
+impl Hasher for KeyHashHasher {
+    fn write(&mut self, _bytes: &[u8]) {
+        unreachable!("bucket-table keys are u64 hashes")
+    }
+
+    fn write_u64(&mut self, hash: u64) {
+        self.0 = hash;
+    }
+
+    fn finish(&self) -> u64 {
+        self.0
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -479,15 +616,56 @@ pub struct MapEntry {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MapEpochChanged;
 
+/// A bucket held a key that [`MapData::find_hashed`]'s comparison could not
+/// judge without running VM code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MapKeyUndecided;
+
+/// The ids of the entries whose keys share one hash. Almost every bucket has
+/// one entry, so it is held inline.
+type MapBucket = SmallVec<[EntryId; 2]>;
+
+/// The id slots `bucket` allocated beyond its inline room.
+fn spilled_capacity(bucket: &MapBucket) -> usize {
+    if bucket.spilled() {
+        bucket.capacity()
+    } else {
+        0
+    }
+}
+
 /// Ordered entries indexed by hashes computed by the VM, never by Rust's
 /// pointer-based `Value` equality or hashing.
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct MapData {
-    entries: IndexMap<EntryId, MapEntry>,
-    buckets: HashMap<u64, Vec<EntryId>>,
+    /// Fx-hashed: entry ids are this map's own counter, never program input.
+    entries: IndexMap<EntryId, MapEntry, FxBuildHasher>,
+    /// Indexed by the keys' hashes, which are keyed per process
+    /// ([`map_key_hasher`]): keys may come from untrusted input.
+    buckets: HashMap<u64, MapBucket, BuildHasherDefault<KeyHashHasher>>,
+    /// Id slots allocated by buckets that outgrew their inline room, for the
+    /// footprint. A bucket keeps its allocation until it is dropped.
+    spilled_capacity: usize,
     next_id: EntryId,
     // Only membership changes invalidate an in-flight key comparison.
     epoch: u64,
+}
+
+impl Clone for MapData {
+    fn clone(&self) -> Self {
+        let buckets = self.buckets.clone();
+        // A cloned bucket allocates only what its ids need: one that kept a
+        // spilled allocation after removals can come back inline, or with
+        // less room. Charge what the clone holds.
+        let spilled_capacity = buckets.values().map(spilled_capacity).sum();
+        Self {
+            entries: self.entries.clone(),
+            buckets,
+            spilled_capacity,
+            next_id: self.next_id,
+            epoch: self.epoch,
+        }
+    }
 }
 
 impl MapData {
@@ -514,14 +692,14 @@ impl MapData {
         // An entry stores its id, the entry and its hash, plus an index slot.
         let entry = size_of::<EntryId>() + size_of::<MapEntry>() + 2 * size_of::<usize>();
         // A bucket-table slot stores the hash, the bucket and a control byte.
-        let bucket_slot = size_of::<u64>() + size_of::<Vec<EntryId>>() + 1;
-        // Each distinct hash has a bucket, whose first allocation holds four ids.
-        let bucket = 4 * size_of::<EntryId>();
+        let bucket_slot = size_of::<u64>() + size_of::<MapBucket>() + 1;
+        // A bucket holds its first ids inline; only a hash collision past
+        // them allocates, charged by the allocation it keeps.
         self.entries
             .capacity()
             .saturating_mul(entry)
             .saturating_add(self.buckets.capacity().saturating_mul(bucket_slot))
-            .saturating_add(self.buckets.len().saturating_mul(bucket))
+            .saturating_add(self.spilled_capacity.saturating_mul(size_of::<EntryId>()))
     }
 
     pub fn len(&self) -> usize {
@@ -537,6 +715,7 @@ impl MapData {
             self.advance_epoch();
             self.entries.clear();
             self.buckets.clear();
+            self.spilled_capacity = 0;
         }
     }
 
@@ -580,6 +759,31 @@ impl MapData {
         )
     }
 
+    /// The entry with key hash `hash` whose key `matches` accepts, for keys
+    /// whose equality the caller can decide without running VM code, such as
+    /// strings and ints. `matches` returns `None` for a candidate it cannot
+    /// judge (a key with its own `Equals`); the search then stops with
+    /// [`MapKeyUndecided`] and the caller takes the general, snapshot-based
+    /// search. Under the caller's lock the result is current, so the ids it
+    /// returns are valid for this map's current epoch.
+    pub fn find_hashed(
+        &self,
+        hash: u64,
+        mut matches: impl FnMut(&Value) -> Option<bool>,
+    ) -> Result<Option<EntryId>, MapKeyUndecided> {
+        let Some(bucket) = self.buckets.get(&hash) else {
+            return Ok(None);
+        };
+        for id in bucket {
+            match matches(&self.entries[id].key) {
+                Some(true) => return Ok(Some(*id)),
+                Some(false) => {}
+                None => return Err(MapKeyUndecided),
+            }
+        }
+        Ok(None)
+    }
+
     /// The value of the entry with key hash `hash` whose key `matches`
     /// accepts. For keys whose equality the caller can decide without
     /// running VM code, such as strings.
@@ -605,7 +809,10 @@ impl MapData {
             .expect("map entry IDs exhausted");
         self.advance_epoch();
         self.entries.insert(id, MapEntry { key, value, hash });
-        self.buckets.entry(hash).or_default().push(id);
+        let bucket = self.buckets.entry(hash).or_default();
+        let before = spilled_capacity(bucket);
+        bucket.push(id);
+        self.spilled_capacity = self.spilled_capacity - before + spilled_capacity(bucket);
         id
     }
 
@@ -655,8 +862,10 @@ impl MapData {
         self.advance_epoch();
         let entry = self.entries.shift_remove(&id).expect("validated map entry");
         let bucket = self.buckets.get_mut(&entry.hash).expect("map bucket");
+        // Removal keeps a spilled bucket's allocation until the bucket goes.
         bucket.retain(|candidate| *candidate != id);
         if bucket.is_empty() {
+            self.spilled_capacity -= spilled_capacity(bucket);
             self.buckets.remove(&entry.hash);
         }
         Ok(Some(entry.value))
@@ -878,6 +1087,62 @@ mod map_tests {
         map.set_if_epoch(epoch, Some(id), 0, Value::TRUE, Value::NULL)
             .unwrap();
         assert_eq!(map.get_if_epoch(epoch, Some(id)), Ok(Some(Value::NULL)));
+    }
+
+    /// A bucket that outgrew its inline room keeps its allocation while it
+    /// has entries, and the footprint charges it until the bucket goes.
+    #[test]
+    fn spilled_buckets_are_charged_until_they_are_dropped() {
+        let mut map = MapData::new();
+        let ids: Vec<_> = (0..3)
+            .map(|i| map.insert_hashed(7, Value::int(i), Value::NULL))
+            .collect();
+        let spilled = map.backing_bytes();
+        assert!(map.spilled_capacity >= 3, "three colliding ids spill");
+        for id in &ids[..2] {
+            map.remove_if_epoch(map.epoch(), Some(*id)).unwrap();
+        }
+        assert_eq!(
+            map.backing_bytes(),
+            spilled,
+            "removal keeps the bucket's allocation"
+        );
+        map.remove_if_epoch(map.epoch(), Some(ids[2])).unwrap();
+        assert_eq!(map.spilled_capacity, 0, "the empty bucket is dropped");
+        assert!(map.backing_bytes() < spilled);
+    }
+
+    /// A clone charges the spilled room its own buckets hold, not the
+    /// original's: a bucket that shrank by removal clones back inline.
+    #[test]
+    fn a_clone_charges_the_spilled_room_it_holds() {
+        let mut map = MapData::new();
+        let ids: Vec<_> = (0..3)
+            .map(|i| map.insert_hashed(7, Value::int(i), Value::NULL))
+            .collect();
+        for id in &ids[..2] {
+            map.remove_if_epoch(map.epoch(), Some(*id)).unwrap();
+        }
+        assert!(map.spilled_capacity > 0, "removal keeps the allocation");
+
+        let mut clone = map.clone();
+        assert_eq!(clone.spilled_capacity, 0, "one id clones back inline");
+        clone.remove_if_epoch(clone.epoch(), Some(ids[2])).unwrap();
+        assert_eq!(
+            clone.spilled_capacity, 0,
+            "an emptied clone charges no spilled room"
+        );
+
+        let mut spilled = MapData::new();
+        for i in 0..5 {
+            spilled.insert_hashed(7, Value::int(i), Value::NULL);
+        }
+        let clone = spilled.clone();
+        assert_eq!(
+            clone.spilled_capacity,
+            clone.buckets.values().map(spilled_capacity).sum::<usize>(),
+            "a spilled bucket's clone is charged for its own allocation"
+        );
     }
 
     #[test]

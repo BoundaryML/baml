@@ -145,6 +145,33 @@ pub fn package_label(package: HeapPtr) -> Option<baml_base::Name> {
     Some(package.name.clone())
 }
 
+/// The compilation unit hash of the package at `package`
+/// ([`super::Package::metadata`]), or `None` for a null pointer and for a
+/// package no compile produced.
+#[must_use]
+pub fn package_compilation_unit_hash(
+    package: HeapPtr,
+) -> Option<crate::identity::CompilationUnitHash> {
+    if package.is_null() {
+        return None;
+    }
+    // SAFETY: as in `package_label`: the owner edge keeps the package live
+    // wherever the function is. Read-only. A session package's metadata is
+    // rewritten by each submission under the session's lease, so this reads
+    // the latest submission's.
+    #[expect(
+        unsafe_code,
+        reason = "a function's telemetry metadata reads its package's hash"
+    )]
+    let crate::Object::Package(package) = (unsafe { package.get() }) else {
+        unreachable!("a function's owner edge points at a package")
+    };
+    package
+        .metadata
+        .as_ref()
+        .map(|metadata| metadata.compilation_unit_hash)
+}
+
 impl Default for Owner {
     fn default() -> Self {
         Self::anonymous()

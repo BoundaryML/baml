@@ -1781,11 +1781,16 @@ fn tir_rendered_to_diagnostic_with_message(
             range: related.range,
         };
         let message = related.message;
+        // The reachability family labels the code it talks about in the
+        // same frame: the unreachable branch, body or arm of a constant
+        // condition, and the never-ending loop that leaves the code after
+        // it dead.
         if matches!(
             rendered.error,
             TirTypeError::UncalledFunctionInCondition { .. }
                 | TirTypeError::ConditionAlwaysConstant { .. }
                 | TirTypeError::ComparisonAlwaysDisjoint { .. }
+                | TirTypeError::DeadCode { .. }
         ) {
             return diag.with_secondary(span, message);
         }
@@ -2019,20 +2024,34 @@ fn rich_source_aware_tir_type_error_message(
         }
         TirTypeError::UnresolvedMember {
             base_type, member, ..
-        } => DiagnosticText::new()
-            .text("type ")
-            .type_expr(ty(base_type))
-            .text(" has no member ")
-            .identifier(member, DiagnosticIdentifierKind::Field),
+        } => {
+            let message = DiagnosticText::new()
+                .text("type ")
+                .type_expr(ty(base_type))
+                .text(" has no member ")
+                .identifier(member, DiagnosticIdentifierKind::Field);
+            if matches!(base_type, Ty::Tuple(_)) {
+                message.text("; tuple slots are numbered, such as `.0`")
+            } else {
+                message
+            }
+        }
         TirTypeError::NotCallable { ty: callee_ty } => DiagnosticText::new()
             .type_expr(ty(callee_ty))
             .text(" is not a function and cannot be called"),
         TirTypeError::NotIterable { ty: iter_ty } => DiagnosticText::new()
             .text("cannot iterate over type ")
             .type_expr(ty(iter_ty)),
-        TirTypeError::NotIndexable { ty: index_ty } => DiagnosticText::new()
-            .text("cannot index into type ")
-            .type_expr(ty(index_ty)),
+        TirTypeError::NotIndexable { ty: index_ty } => {
+            let message = DiagnosticText::new()
+                .text("cannot index into type ")
+                .type_expr(ty(index_ty));
+            if matches!(index_ty, Ty::Tuple(_)) {
+                message.text("; tuples use fixed dot slots such as `.0`; use `reflect.Tuple.get_element` for a runtime-selected slot")
+            } else {
+                message
+            }
+        }
         TirTypeError::ImplicitUnit {
             form,
             expected,
@@ -2216,6 +2235,7 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnionMemberNoCommonInterface { .. } => DiagnosticId::NoSuchField,
+        TirTypeError::UnionMemberAssociatedTypeConflict { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnknownClassField { .. } | TirTypeError::UnknownClassPatternField { .. } => {
             DiagnosticId::NoSuchField
         }
@@ -2259,6 +2279,11 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ItemShadowsPackage { .. } => DiagnosticId::UnknownVariable,
         TirTypeError::RemovedReflectSpelling { .. } => DiagnosticId::RemovedFeature,
         TirTypeError::NonInterfaceProjectionQualifier => DiagnosticId::TypeMismatch,
+        TirTypeError::TupleElementNotAssignable | TirTypeError::FunctionFieldNeedsParens => {
+            DiagnosticId::TypeMismatch
+        }
+        TirTypeError::TupleIndexOutOfRange { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::TupleTypeTestNeverMatches { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::UnknownAssociatedType { .. } => DiagnosticId::UnknownType,
         TirTypeError::AmbiguousAssociatedTypeProjection { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::ArgumentCountMismatch { .. }
@@ -2288,6 +2313,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::IrrefutablePatternInWhileLet => DiagnosticId::IrrefutablePatternInWhileLet,
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::DeferControlFlowEscape { .. } => DiagnosticId::DeferControlFlowEscape,
+        TirTypeError::LoopControlOutsideLoop { .. } => DiagnosticId::LoopControlOutsideLoop,
+        TirTypeError::LoopControlInLoopHeader { .. } => DiagnosticId::LoopControlInLoopHeader,
         TirTypeError::ThrowsContractViolation { .. }
         | TirTypeError::CallbackThrowsContractViolation { .. } => {
             DiagnosticId::ThrowsContractViolation
@@ -2378,7 +2405,7 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::JsonFallbackOverlap { .. } => DiagnosticId::InvalidJsonAttribute,
         // Global variables.
         TirTypeError::AssignmentToGlobal { .. } => DiagnosticId::AssignmentToGlobal,
-        TirTypeError::ReturnInGlobalInitializer { .. } => DiagnosticId::ReturnInGlobalInitializer,
+        TirTypeError::ReturnOutsideFunctionBody { .. } => DiagnosticId::ReturnOutsideFunctionBody,
         TirTypeError::GlobalInitializationCycle { .. } => DiagnosticId::GlobalInitializationCycle,
         // Interface impl conformance (BEP-044, E0113–E0139): tir2 owns these and
         // check.rs surfaces them via `check_interfaces`.

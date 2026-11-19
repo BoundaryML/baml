@@ -63,6 +63,7 @@ use bex_vm_types::{
     bytecode::{SwitchDispatch, SwitchKey},
     head_walk::visit_object_heads_mut,
     relink::{IndexOperand, visit_object_operands},
+    stack_effect::StackContext,
     types::{
         ExportSurface, LocalName, MethodImpl, Objects, Owner, Package, PackageKind,
         RuntimeImplRule, Slots, Value,
@@ -76,7 +77,7 @@ use crate::{
 };
 
 /// Why a compiled unit failed to load into its package.
-pub(super) enum LinkError {
+pub(crate) enum LinkError {
     /// The unit does not fit the package or the dependencies it binds.
     Link(String),
     Internal(VmInternalError),
@@ -94,13 +95,33 @@ impl LinkError {
     }
 }
 
+/// How a patch's unit relates to the package it updates.
+#[derive(Clone, Copy)]
+pub(crate) struct PatchPlan<'a> {
+    pub(crate) live: HeapPtr,
+    /// Whether the declaration at this path is the live one, unchanged.
+    pub(crate) keep: &'a dyn Fn(&DeclPath) -> bool,
+}
+
+impl PatchPlan<'_> {
+    fn live_package<'v>(&self, vm: &'v BexVm) -> &'v Package {
+        let Object::Package(live) = vm.get_object(self.live) else {
+            unreachable!("a patch updates a package")
+        };
+        live
+    }
+}
+
 /// Whose image a load extends.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum LoadTarget {
+#[derive(Clone, Copy)]
+pub(crate) enum LoadTarget<'a> {
     /// A fresh `Package.compile` package: its tables start empty, so its
     /// unit imports nothing at `SELF` — the static linker's malformed-unit
     /// rule — and only the tail names the unit just loaded.
     Package,
+    /// A new version of a live package (a hot swap patch): what `keep`
+    /// says is unchanged binds to the live package's objects.
+    Patch(&'a PatchPlan<'a>),
     /// A session package: its earlier submissions are live in its tables,
     /// so a `SELF` import may name any of them — a `let` binds its CELL, a
     /// body its own package-private entry.
@@ -111,18 +132,18 @@ pub(super) enum LoadTarget {
 /// tail slot of the helper computing the value and the `let` whose cell
 /// receives it — the binding the step declares, or, for an assignment step,
 /// the visible binding it writes back to.
-pub(super) struct Commit<'a> {
-    pub(super) helper: u32,
-    pub(super) target: &'a LocalName,
+pub(crate) struct Commit<'a> {
+    pub(crate) helper: u32,
+    pub(crate) target: &'a LocalName,
 }
 
 /// What a load produced beyond the tables it filled.
-pub(super) struct Loaded {
+pub(crate) struct Loaded {
     /// The package's `$init`, when its tail has one.
     pub(super) init: Option<HeapPtr>,
     /// A submission's commits in execution order: each helper's pointer and
     /// the package slot of the cell it commits into.
-    pub(super) commits: Vec<(HeapPtr, usize)>,
+    pub(crate) commits: Vec<(HeapPtr, usize)>,
 }
 
 /// Graft `emitted` onto `package_ptr`'s image. The package object already
@@ -137,10 +158,10 @@ pub(super) struct Loaded {
 /// bound package, an operand outside the unit, a switch table no hash
 /// separates, or a commit into a cell the package does not own: each is a
 /// link error, never a dangling reference, and leaves the package untouched.
-pub(super) fn load_package(
+pub(crate) fn load_package(
     vm: &mut BexVm,
     package_ptr: HeapPtr,
-    target: LoadTarget,
+    target: LoadTarget<'_>,
     emitted: &EmittedPackage,
     commits: &[Commit<'_>],
 ) -> Result<Loaded, LinkError> {
@@ -156,7 +177,7 @@ pub(super) fn load_package(
             misplaced.bucket
         )));
     }
-    if target == LoadTarget::Package
+    if matches!(target, LoadTarget::Package | LoadTarget::Patch(_))
         && let Some(entry) = unit
             .object_imports
             .iter()
@@ -171,6 +192,10 @@ pub(super) fn load_package(
     let slots = bind_slots(vm, package_ptr, &unit.dependencies)?;
     let mut image = Image::of(vm, package_ptr);
 
+    let reuse = match target {
+        LoadTarget::Patch(plan) => reused_locals(vm, unit, plan),
+        LoadTarget::Package | LoadTarget::Session => HashMap::new(),
+    };
     let Placed {
         locals,
         imports,
@@ -182,6 +207,7 @@ pub(super) fn load_package(
         &slots,
         unit.objects(),
         &unit.object_imports,
+        &reuse,
     )?;
     // The unit's own slots — every function and `let` in export order — then
     // one slot per global import that copies a dependency's value.
@@ -201,10 +227,22 @@ pub(super) fn load_package(
     // Relocation: every operand and head of every owned object, then the
     // rules the unit declares. The unit's slots are filled once the objects
     // are published, since filling them checks each object's kind.
-    relocate_all(vm, &mut image, &space, pending)?;
+    let mut functions = relocate_all(vm, &mut image, &space, pending)?;
     slot_unit_functions(vm, &mut image, unit, &space.locals, base_slot)?;
+    if let LoadTarget::Patch(plan) = target {
+        share_kept_lets(vm, &image, unit, plan, base_slot);
+    }
     let type_count = unit.type_object_count();
     for rule in &unit.impl_rules {
+        // A rule over a body the live package already has is the live rule:
+        // dispatch finds the live body, and its redirect reaches a new one.
+        if rule.methods.iter().any(|(_, body)| {
+            reuse.contains_key(&(type_count + body.code_offset as usize))
+                || matches!(target, LoadTarget::Patch(plan)
+                    if patch_replaces_body(vm, plan, unit, body.code_offset))
+        }) {
+            continue;
+        }
         let (interface_ptr, rule_ptr) = load_rule(vm, rule, &space, &image, type_count)?;
         image.add(vm, rule_ptr);
         image
@@ -239,7 +277,10 @@ pub(super) fn load_package(
         init,
         test_init,
         commits,
+        functions: tail_functions,
     } = tail;
+    functions.extend(tail_functions);
+    verify_operand_stacks(vm, &image, &functions)?;
     publish(vm, package_ptr, image, init, test_init);
     Ok(Loaded { init, commits })
 }
@@ -250,6 +291,8 @@ struct LoadedTail {
     init: Option<HeapPtr>,
     test_init: Option<HeapPtr>,
     commits: Vec<(HeapPtr, usize)>,
+    /// The tail's functions, for [`verify_operand_stacks`].
+    functions: Vec<HeapPtr>,
 }
 
 /// Graft a package's tail after its unit: the `let` helpers, `$init`, and
@@ -274,6 +317,7 @@ fn load_tail(
         &slots,
         tail.objects.iter(),
         &tail.object_imports,
+        &HashMap::new(),
     )?;
     let base_slot = image.cells.len();
     for &object in &tail.slot_objects {
@@ -289,7 +333,7 @@ fn load_tail(
         local_slots: (base_slot..base_slot + tail.slot_objects.len()).collect(),
         import_slots,
     };
-    relocate_all(vm, image, &space, pending)?;
+    let functions = relocate_all(vm, image, &space, pending)?;
 
     let tail_object = |index: u32| -> Result<HeapPtr, LinkError> {
         space
@@ -328,6 +372,7 @@ fn load_tail(
         init,
         test_init,
         commits: bound,
+        functions,
     })
 }
 
@@ -372,6 +417,75 @@ fn publish(
     // The package's rule tables changed in place, under the same pointer
     // every cached resolver answer keys this world by.
     vm.dynamic_dispatch.bump_generation();
+}
+
+/// The live object behind each local a patch keeps, by unit-local index.
+fn reused_locals(
+    vm: &BexVm,
+    unit: &CompilationUnit,
+    plan: &PatchPlan<'_>,
+) -> HashMap<usize, HeapPtr> {
+    let live = plan.live_package(vm);
+    let mut reuse = HashMap::new();
+    for (path, local) in &unit.exports.objects {
+        if !(plan.keep)(path) {
+            continue;
+        }
+        let object = match path {
+            DeclPath::Class(name) => live.classes.get(name).copied(),
+            DeclPath::Enum(name) => live.enums.get(name).copied(),
+            DeclPath::Interface(name) => live.interfaces.get(name).copied(),
+            DeclPath::TypeAlias(name) => live.type_aliases.get(name).copied(),
+            DeclPath::Function(_) | DeclPath::InterfaceBody(_) => live
+                .globals
+                .get(path)
+                .and_then(|&cell| cell_value(vm, live, cell))
+                .and_then(|value| value.as_object_ptr()),
+            DeclPath::Let(_) => None,
+        };
+        if let Some(object) = object {
+            reuse.insert(unit.local_index(*local), object);
+        }
+    }
+    reuse
+}
+
+/// Whether the impl body at `code_offset` is one a patch replaces: its rule
+/// stays the live one either way.
+fn patch_replaces_body(
+    vm: &BexVm,
+    plan: &PatchPlan<'_>,
+    unit: &CompilationUnit,
+    code_offset: u32,
+) -> bool {
+    let live = plan.live_package(vm);
+    unit.exports.objects.iter().any(|(path, local)| {
+        matches!(local, LocalRef::Code(offset) if *offset == code_offset)
+            && live.globals.contains_key(path)
+    })
+}
+
+/// A patch never re-runs an unchanged `let`: its cell holds the live value.
+fn share_kept_lets(
+    vm: &BexVm,
+    image: &Image,
+    unit: &CompilationUnit,
+    plan: &PatchPlan<'_>,
+    base_slot: usize,
+) {
+    let live = plan.live_package(vm);
+    for (path, slot) in &unit.exports.globals {
+        if !matches!(path, DeclPath::Let(_)) || !(plan.keep)(path) {
+            continue;
+        }
+        if let Some(value) = live
+            .globals
+            .get(path)
+            .and_then(|&cell| cell_value(vm, live, cell))
+        {
+            image.cells[base_slot + *slot as usize].store(value);
+        }
+    }
 }
 
 fn link_error(message: impl std::fmt::Display) -> LinkError {
@@ -580,12 +694,17 @@ fn place_objects<'a>(
     slots: &[Bound],
     owned: impl IntoIterator<Item = &'a Object>,
     imports: &[ImportEntry],
+    reuse: &HashMap<usize, HeapPtr>,
 ) -> Result<Placed, LinkError> {
     // A declaration is minted with its identity here — the only place a
     // runtime tag comes from.
     let mut locals = Vec::new();
     let mut pending = Vec::new();
-    for object in owned {
+    for (local, object) in owned.into_iter().enumerate() {
+        if let Some(&live) = reuse.get(&local) {
+            locals.push(image.place(vm, live));
+            continue;
+        }
         let mut object = object.clone();
         adopt(&mut object, package_ptr);
         // A class with a finalizer joins the heap: the collector's
@@ -718,13 +837,15 @@ fn slot_unit_functions(
 }
 
 /// Relocate every pending local of `space` and publish it at its reserved
-/// address, keeping the float constants it boxes in the image.
+/// address, keeping the float constants it boxes (the few with no inline
+/// encoding) in the image.
 fn relocate_all(
     vm: &mut BexVm,
     image: &mut Image,
     space: &Space,
     pending: Vec<Pending>,
-) -> Result<(), LinkError> {
+) -> Result<Vec<HeapPtr>, LinkError> {
+    let mut functions = Vec::new();
     for Pending {
         index,
         reservation,
@@ -732,6 +853,9 @@ fn relocate_all(
     } in pending
     {
         let floats = relocate(vm, &mut object, space, image)?;
+        if matches!(object, Object::Function(_)) {
+            functions.push(image.objects[index]);
+        }
         // A runtime function takes its telemetry identity as it is published.
         // SAFETY: the load runs no code and reaches no safepoint, so no
         // collection has run since `place_objects` reserved the slot.
@@ -745,6 +869,55 @@ fn relocate_all(
         for float in floats {
             image.add(vm, float);
         }
+    }
+    Ok(functions)
+}
+
+/// Verify every function this load grafted and give it compact code a frame
+/// can run ([`bex_vm_types::Bytecode::lower_verified`]). A call without a
+/// recorded layout passes its callee's arity, read through the package's
+/// slots, so this runs once every object is published and every slot bound,
+/// and before [`publish`] makes any of them reachable.
+fn verify_operand_stacks(
+    vm: &BexVm,
+    image: &Image,
+    functions: &[HeapPtr],
+) -> Result<(), LinkError> {
+    let global_arity = |global: GlobalIndex| -> Option<usize> {
+        let callee = image.cells.get(global.raw())?.load().as_object_ptr()?;
+        match vm.get_object(callee) {
+            Object::Function(function) => Some(function.arity),
+            _ => None,
+        }
+    };
+    let ctx = StackContext::new(&global_arity);
+    for &ptr in functions {
+        let Object::Function(function) = vm.get_object(ptr) else {
+            unreachable!("only functions were collected")
+        };
+        let compiled = function.compiled_body.is_some();
+        let mut compact = function
+            .bytecode
+            .lower_verified(&ctx, function.real_local_count, compiled)
+            .map_err(|error| {
+                link_error(format!(
+                    "function `{}` fails the operand-stack check: {error}",
+                    function.name()
+                ))
+            })?;
+        if compiled {
+            compact
+                .code
+                .extend(crate::compiled_rt::stub::CODE.map(|op| op as u8));
+        }
+        // SAFETY: as in `publish`: nothing reaches the package's objects
+        // until its load is published, so no reader observes this write.
+        #[expect(unsafe_code, reason = "complete an object before its load is visible")]
+        let mut metered = unsafe { vm.get_object_mut(ptr) };
+        let Object::Function(function) = &mut *metered else {
+            unreachable!("only functions were collected")
+        };
+        function.bytecode.compact = Some(compact);
     }
     Ok(())
 }
@@ -1062,7 +1235,7 @@ enum BoundBody {
 }
 
 /// The value in the cell at `ordinal` of `package`'s slots.
-pub(super) fn cell_value(vm: &BexVm, package: &Package, ordinal: u32) -> Option<Value> {
+pub(crate) fn cell_value(vm: &BexVm, package: &Package, ordinal: u32) -> Option<Value> {
     match &package.slots {
         Slots::Program { base } => Some(vm.globals.get(
             vm.proof(),
@@ -1189,13 +1362,14 @@ fn adopt(object: &mut Object, package_ptr: HeapPtr) {
         | Object::Type(_)
         | Object::Package(_)
         | Object::ImplRule(_)
-        | Object::Instance(_)
+        | Object::Instance
         | Object::Variant(_)
         | Object::Closure(_)
         | Object::BoundMethod(_)
         | Object::HostClosure(_)
         | Object::Cell(_)
         | Object::Array(_)
+        | Object::Tuple(_)
         | Object::Map(_)
         | Object::Float(_)
         | Object::Future(_)
@@ -1235,8 +1409,8 @@ impl Space {
 
 /// Rewrite `object`'s operands and heads into the package's tables, solve its
 /// switch tables, resolve its constants, and bind the pointers its wire
-/// operands stood for. Returns the boxed float constants it allocated, which
-/// the package's object table must keep alive.
+/// operands stood for. Returns the boxed float constants it allocated (the few
+/// with no inline encoding), which the package's object table must keep alive.
 fn relocate(
     vm: &mut BexVm,
     object: &mut Object,
@@ -1310,14 +1484,20 @@ fn relocate(
                     | ConstValue::ClassWithTypeArgs { .. }
                     | ConstValue::Literal(_) => Value::NULL,
                     ConstValue::Float(value) => {
-                        let boxed = vm.alloc_float(*value);
-                        floats.push(boxed);
-                        Value::object(boxed)
+                        let float = vm.float_value(*value);
+                        // An inline float needs no rooting; a boxed one
+                        // (NaN, `±inf`, extreme magnitudes) lives in the image.
+                        if let Some(boxed) = float.as_object_ptr() {
+                            floats.push(boxed);
+                        }
+                        float
                     }
                     other => other.to_value(|index| image.objects[index.raw()]),
                 });
             }
             function.bytecode.resolved_constants = resolved;
+            // Unverified until `verify_operand_stacks` replaces it once every
+            // callee is published; unverified code cannot enter a frame.
             function.bytecode.compact = Some(function.bytecode.lower_to_compact());
         }
         Object::Interface(interface) => {
@@ -1345,13 +1525,14 @@ fn relocate(
         | Object::Type(_)
         | Object::Package(_)
         | Object::ImplRule(_)
-        | Object::Instance(_)
+        | Object::Instance
         | Object::Variant(_)
         | Object::Closure(_)
         | Object::BoundMethod(_)
         | Object::HostClosure(_)
         | Object::Cell(_)
         | Object::Array(_)
+        | Object::Tuple(_)
         | Object::Map(_)
         | Object::Float(_)
         | Object::Future(_)

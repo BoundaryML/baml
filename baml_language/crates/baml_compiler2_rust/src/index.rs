@@ -13,8 +13,9 @@ use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef, GlobalRe
 use baml_compiler2_mir::{FunctionOwner, MirFunctionId};
 use baml_type::{DeclName, typetag::TypeTag};
 use bex_vm_types::{
-    Bytecode, ConstValue, DeclPath, FnPath, Object, ObjectIndex, Program, TypeHead,
-    types::{FunctionIdentity, PackageKind},
+    Bytecode, ClassLayout, ConstValue, DeclPath, FnPath, Object, ObjectIndex, Program, TyTemplate,
+    TypeHead,
+    types::{FunctionIdentity, PackageKind, ProgramImplRule},
 };
 
 use crate::coords::{
@@ -23,7 +24,7 @@ use crate::coords::{
 };
 
 pub(crate) struct ProgramIndex<'p> {
-    program: &'p Program,
+    pub(crate) program: &'p Program,
     names: Vec<(String, String)>,
     /// Package ordinals derived from the linked dependency edges.
     packages: HashMap<SourceRoot, u32>,
@@ -207,8 +208,52 @@ impl<'p> ProgramIndex<'p> {
         self.lookup(interface_head_coords(head))
     }
 
+    /// The implementations of `method` on `interface` that a receiver's class
+    /// alone selects, as [`DispatchArm`]s.
+    ///
+    /// Sound because the orphan rule and coherence stop any later package
+    /// from implementing a static interface for a static class: the
+    /// assumption `BexVm::virtual_target`'s static cache already makes.
+    pub(crate) fn class_implementations(&self, interface: usize, method: &str) -> Vec<DispatchArm> {
+        let Object::Interface(declaration) =
+            &self.program.objects[ObjectIndex::from_raw(interface)]
+        else {
+            return Vec::new();
+        };
+        let default = declaration
+            .methods
+            .iter()
+            .find(|def| def.name.as_str() == method)
+            .and_then(|def| def.default);
+        self.program
+            .packages
+            .iter()
+            .filter_map(|package| package.impl_rules.get(&ObjectIndex::from_raw(interface)))
+            .flatten()
+            .filter_map(|rule| class_method(rule, method, default))
+            .collect()
+    }
+
     pub(crate) fn enum_at(&self, head: &baml_type::DeclName) -> Option<usize> {
         self.lookup(enum_head_coords(head))
+    }
+
+    /// Where an instance of the class at `object` keeps its fields.
+    pub(crate) fn class_layout(&self, object: usize) -> Option<ClassLayout<'p>> {
+        let Object::Class(class) = &self.program.objects[ObjectIndex::from_raw(object)] else {
+            return None;
+        };
+        Some(ClassLayout::of(class))
+    }
+
+    /// Whether instances of class `object` are a header and their fields
+    /// alone, with nothing to register: no class type arguments and no
+    /// finalizer.
+    pub(crate) fn plain_class(&self, object: usize) -> bool {
+        matches!(
+            &self.program.objects[ObjectIndex::from_raw(object)],
+            Object::Class(class) if class.cleanup.is_none() && class.generic_param_count == 0
+        )
     }
 
     fn class_fields(&self, coords: DeclCoords) -> Option<(usize, usize)> {
@@ -436,4 +481,49 @@ fn package_ordinals(
         }
     }
     ordinals
+}
+
+/// One arm of a compile-time dispatch: the receiver's class and the body
+/// it selects.
+pub(crate) struct DispatchArm {
+    pub(crate) class: usize,
+    pub(crate) body: usize,
+    /// The body is the interface's default, whose frame holds `Self` (the
+    /// class) as its one type argument.
+    pub(crate) default: bool,
+}
+
+/// The arm of `rule`'s `method` when the rule is for one non-generic class,
+/// unbounded, with no interface arguments. A method the rule omits is the
+/// interface's `default` body, run with `Self` as its frame, as
+/// `ImplResolver::rule_method_impl` does; a provided method with a frame
+/// binds type arguments a direct call lacks.
+fn class_method(
+    rule: &ProgramImplRule,
+    method: &str,
+    default: Option<ObjectIndex>,
+) -> Option<DispatchArm> {
+    let TyTemplate::Class(head, args) = &rule.for_ty_pattern else {
+        return None;
+    };
+    if !args.is_empty() || !rule.generic_param_bounds.is_empty() || !rule.interface_args.is_empty()
+    {
+        return None;
+    }
+    let class = head.tag().static_index()?;
+    let Some(body) = rule.methods.get(method) else {
+        return Some(DispatchArm {
+            class,
+            body: default?.raw(),
+            default: true,
+        });
+    };
+    if !body.frame.is_empty() {
+        return None;
+    }
+    Some(DispatchArm {
+        class,
+        body: body.fqn.raw(),
+        default: false,
+    })
 }

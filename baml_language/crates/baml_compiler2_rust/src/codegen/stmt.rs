@@ -128,7 +128,7 @@ impl<'db> Generator<'_, 'db> {
         }
         let live = self.header_locals(id.0);
         let at = pc_arg(pc);
-        let request = format!("{{ fr.note_pc({at}); vm.suspend(Step::Yield) }}");
+        let request = format!("{{ fr.note_pc({at}); vm.suspend_from(fr, Step::Yield) }}");
         let call = self.rooted(&live, &request);
         let code = self.fallible(id, &call)?;
         self.emit_line("iterations = iterations.wrapping_add(1);");
@@ -171,6 +171,11 @@ impl<'db> Generator<'_, 'db> {
                     && self.analysis.is_type_local(local.0)
                 {
                     return Ok(());
+                }
+                if let Place::Local(local) = destination
+                    && let Some(group) = self.stack_group(local.0)
+                {
+                    return self.stack_assign(id, group, value);
                 }
                 let value = self.rvalue(id, value)?;
                 self.store(id, destination, &value)?
@@ -281,6 +286,11 @@ impl<'db> Generator<'_, 'db> {
                 let condition = self.operand(id, condition)?;
                 let code = coerce(&condition.code, condition.repr, Repr::Bool);
                 self.emit_statement(&format!("c{} = {code};", id.0));
+            }
+            Terminator::NarrowBind { source, test, .. } if self.stack_operand(source).is_some() => {
+                let group = self.stack_operand(source).expect("checked");
+                let matches = self.stack_test(group, test)?;
+                self.emit_statement(&format!("c{} = {matches};", id.0));
             }
             Terminator::NarrowBind {
                 source,

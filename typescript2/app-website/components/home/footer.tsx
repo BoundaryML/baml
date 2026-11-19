@@ -1,6 +1,6 @@
 import { section } from './analytics';
 import { BoundaryLogo } from './boundary-logo';
-import { BOOK } from './links';
+import { SIGNUP } from './links';
 import { LANES, LEFT, LINKS, WRAP } from './ui';
 
 // The footer on every page. Its columns follow the nav's Platform menu, plus the community links.
@@ -9,10 +9,11 @@ const COLUMNS: { title: string; links: [string, string][] }[] = [
   {
     links: [
       ['Overview', '/'],
+      ['BAML Quickstart', '/quickstart'],
       ['Adopt', '/adopt'],
       ['How BAML works', '/how-baml-works'],
       ['Pricing', '/pricing'],
-      ['Get early access', BOOK],
+      ['Get early access', SIGNUP],
     ],
     title: 'Platform',
   },
@@ -53,7 +54,7 @@ export default function Footer() {
           >
             {COLUMNS.map((c) => (
               <div
-                className="tap-list flex flex-col gap-3 min-w-[120px] whitespace-nowrap"
+                className="tap-list flex flex-col gap-3 min-w-[120px] whitespace-nowrap max-[359px]:whitespace-normal"
                 key={c.title}
               >
                 <p className="text-footer-muted">{c.title}</p>
@@ -75,9 +76,17 @@ export default function Footer() {
           </nav>
         </div>
         <div className="flex flex-col sm:flex-row justify-between gap-3 pt-[22px] border-t border-footer-rule text-[13px] text-footer-muted">
-          <span>© 2026 Boundary</span>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <span>© 2026 Boundary</span>
+            <a
+              className="hover:text-footer-accent transition-colors"
+              href="/privacy-policy"
+            >
+              Privacy policy
+            </a>
+          </div>
           <span className="text-[15px] font-medium leading-[18px] tracking-[-0.01em] text-footer-accent">
-            The unified software stack for agents.
+            The hyper-observable programming language.
           </span>
         </div>
       </div>

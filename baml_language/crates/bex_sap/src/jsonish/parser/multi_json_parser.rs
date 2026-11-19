@@ -9,18 +9,48 @@ pub(super) fn parse<'s>(
     let mut stack = Vec::new();
     let mut json_str_start = None;
     let mut json_objects = Vec::new();
+    let mut quote = None;
+    let mut escaped = false;
 
     for (index, character) in str.char_indices() {
+        if let Some(delimiter) = quote {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == delimiter {
+                quote = None;
+            }
+            continue;
+        }
+        if !stack.is_empty() && matches!(character, '"' | '\'' | '`') {
+            quote = Some(character);
+            continue;
+        }
+        if character == '('
+            && (str[..index]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_alphanumeric() || c == '_')
+                || !super::fixing_parser::is_tuple_start(str[index + 1..].chars()))
+        {
+            continue;
+        }
         match character {
-            '{' | '[' => {
+            '{' | '[' | '(' => {
                 if stack.is_empty() {
                     json_str_start = Some(index);
                 }
                 stack.push(character);
             }
-            '}' | ']' => {
+            '}' | ']' | ')' if character != ')' || !stack.is_empty() => {
                 if let Some(last) = stack.last() {
-                    let expected_open = if character == '}' { '{' } else { '[' };
+                    let expected_open = match character {
+                        '}' => '{',
+                        ']' => '[',
+                        ')' => '(',
+                        _ => unreachable!(),
+                    };
                     if *last == expected_open {
                         stack.pop();
                     } else {

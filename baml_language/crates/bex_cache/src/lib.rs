@@ -226,11 +226,16 @@ use sha2::{Digest, Sha256};
 /// telemetry records a redaction in place of the value (`@@trace.redact`,
 /// `@trace.redact`).
 ///
-/// Version 28: classes whose state Rust holds are `@@rust_type` classes. The
+/// Version 28: a package interface opens with the package's claimed identity
+/// and the compiler version, a `PackageRecord` carries the package's
+/// `metadata` (its content hashes and claim, BEP-085), and a
+/// `ProgramPackage` carries it into the executable.
+///
+/// Version 29: classes whose state Rust holds are `@@rust_type` classes. The
 /// `$rust_type` type is gone, so a type no longer encodes the `RustType`
 /// head (its discriminant, 18, is unused), and `ClassCrossing` gained the
 /// appended `HostValue`.
-pub const FORMAT_VERSION: u32 = 28;
+pub const FORMAT_VERSION: u32 = 29;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -401,8 +406,8 @@ pub fn manifest_key(
 
 /// Every input one package's compiled output ([`EmittedPackage`]) is a
 /// function of: the compiler build, the optimization level, the package's own
-/// sources, and the interface digest of every package it reaches, by the edge
-/// name it reaches it under.
+/// sources, the interface digest of every package it reaches, by the edge
+/// name it reaches it under, and what its manifest claims it is.
 ///
 /// Fields are hashed with length-prefixed framing, so concatenation ambiguity
 /// cannot alias two different input sets.
@@ -421,6 +426,10 @@ pub struct PackageKeyInputs<'a> {
     /// by it — so the same package reached under another name is another
     /// output.
     pub dependencies: &'a [(String, [u8; 32])],
+    /// What the package's manifest claims it is. The claim is part of the
+    /// interface the output's package record carries, so it is an input
+    /// like the sources.
+    pub claim: &'a baml_base::ClaimedIdentity,
 }
 
 /// Key for one package's [`EmittedPackage`] entry.
@@ -451,6 +460,15 @@ pub fn package_key(inputs: &PackageKeyInputs<'_>) -> CacheKey {
     for (edge, digest) in dependencies {
         update_framed(&mut h, edge.as_bytes());
         h.update(digest);
+    }
+    let baml_base::ClaimedIdentity {
+        registry,
+        organization,
+        name,
+        version,
+    } = inputs.claim;
+    for part in [registry, organization, name, version] {
+        hash_opt_str(&mut h, part.as_deref());
     }
     CacheKey(h.finalize().into())
 }
@@ -981,6 +999,7 @@ mod tests {
             opt_level: 2,
             files: &files,
             dependencies: &dependencies,
+            claim: &baml_base::ClaimedIdentity::default(),
         });
         assert!(
             cache.load_package_shared(&key).is_none(),
@@ -991,6 +1010,7 @@ mod tests {
             unit: baml_linker_types::CompilationUnit::default(),
             record: baml_linker_types::PackageRecord {
                 interface_blob: vec![1, 2, 3, 4],
+                metadata: None,
             },
             tail: None,
         };
@@ -1021,6 +1041,7 @@ mod tests {
             opt_level: 2,
             files: &files,
             dependencies: &dependencies,
+            claim: &baml_base::ClaimedIdentity::default(),
         });
         // Order of presentation is not an input.
         let two_files = vec![
@@ -1034,12 +1055,14 @@ mod tests {
                 opt_level: 2,
                 files: &two_files,
                 dependencies: &dependencies,
+                claim: &baml_base::ClaimedIdentity::default(),
             }),
             package_key(&PackageKeyInputs {
                 compiler_fingerprint: [1u8; 32],
                 opt_level: 2,
                 files: &two_sorted,
                 dependencies: &dependencies,
+                claim: &baml_base::ClaimedIdentity::default(),
             })
         );
         // Every input moves the key.
@@ -1048,12 +1071,14 @@ mod tests {
             opt_level: 2,
             files: &files,
             dependencies: &dependencies,
+            claim: &baml_base::ClaimedIdentity::default(),
         });
         let other_opt = package_key(&PackageKeyInputs {
             compiler_fingerprint: [1u8; 32],
             opt_level: 1,
             files: &files,
             dependencies: &dependencies,
+            claim: &baml_base::ClaimedIdentity::default(),
         });
         let other_digest = vec![("baml".to_string(), [6u8; 32])];
         let other_dependency = package_key(&PackageKeyInputs {
@@ -1061,6 +1086,17 @@ mod tests {
             opt_level: 2,
             files: &files,
             dependencies: &other_digest,
+            claim: &baml_base::ClaimedIdentity::default(),
+        });
+        let other_claim = package_key(&PackageKeyInputs {
+            compiler_fingerprint: [1u8; 32],
+            opt_level: 2,
+            files: &files,
+            dependencies: &dependencies,
+            claim: &baml_base::ClaimedIdentity {
+                version: Some("1.0.0".to_owned()),
+                ..baml_base::ClaimedIdentity::default()
+            },
         });
         let other_edge = vec![("std".to_string(), [5u8; 32])];
         let other_edge_name = package_key(&PackageKeyInputs {
@@ -1068,11 +1104,13 @@ mod tests {
             opt_level: 2,
             files: &files,
             dependencies: &other_edge,
+            claim: &baml_base::ClaimedIdentity::default(),
         });
         for other in [
             other_fingerprint,
             other_opt,
             other_dependency,
+            other_claim,
             other_edge_name,
         ] {
             assert_ne!(base, other);
@@ -1533,6 +1571,7 @@ mod remote_tests {
             unit: baml_linker_types::CompilationUnit::default(),
             record: baml_linker_types::PackageRecord {
                 interface_blob: vec![4, 3, 2, 1],
+                metadata: None,
             },
             tail: None,
         };
@@ -1541,6 +1580,7 @@ mod remote_tests {
             opt_level: 2,
             files: &files,
             dependencies: &[],
+            claim: &baml_base::ClaimedIdentity::default(),
         });
         cache_a
             .store_package_shared(&package_entry, &package)

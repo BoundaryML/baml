@@ -166,7 +166,7 @@ testset "CLI delegation" {
             let result = fixture.manage(candidate, args);
             root.harness.require(
                 result.stdout.to_string().includes("toolchain")
-                    && result.stdout.to_string().includes("self-update"),
+                    && result.stdout.to_string().includes("self update"),
                 "root help omitted wrapper commands",
             );
             root.harness.require(
@@ -187,8 +187,8 @@ testset "CLI delegation" {
                 ["help", "toolchain", "status"],
                 ["toolchain", "status", "--help"],
                 ["toolchain", "help", "status"],
-                ["help", "self-update"],
-                ["self-update", "--help"],
+                ["help", "self", "update"],
+                ["self", "update", "--help"],
             ]
         ) {
             fixture.manage(candidate, args);
@@ -287,8 +287,8 @@ testset "CLI delegation" {
                 ["upgrade"],
                 ["future-command", "--flag"],
                 ["pack", "--unknown"],
-                ["run", "main", "--", "--project", "target"],
-                ["query", "--project", "cloud/name"],
+                ["run", "main", "--", "--project-dir", "target"],
+                ["cloud", "recordings", "query", "--project", "cloud/name"],
             ]
         ) {
             fixture.behavior(BASE_VERSION, "forwarded\n", args = args);

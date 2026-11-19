@@ -225,13 +225,10 @@ impl ToJsonCache {
             Object::Uint8Array(_) => OverrideKey::Uint8Array,
             Object::Array(array) => OverrideKey::List((*array.element_ty).clone()),
             Object::Map(map) => OverrideKey::Map((*map.key_ty).clone(), (*map.value_ty).clone()),
-            Object::Instance(instance) => match vm.get_object(instance.class) {
-                Object::Class(class) => OverrideKey::Instance(
-                    TypeHead::new(instance.class, class.type_tag),
-                    instance.class_type_args.clone(),
-                ),
-                _ => return has_to_json_override(vm, value),
-            },
+            Object::Instance => {
+                let instance = vm.get_instance(ptr).expect("an instance pointer");
+                OverrideKey::Instance(instance.head(), instance.type_args().into())
+            }
             Object::Variant(variant) => match vm.get_object(variant.enm) {
                 Object::Enum(enm) => OverrideKey::Variant(TypeHead::new(variant.enm, enm.type_tag)),
                 _ => return has_to_json_override(vm, value),
@@ -310,20 +307,23 @@ fn collect(
 fn children(vm: &BexVm, ptr: HeapPtr, options: WriteOptions) -> Vec<Value> {
     match vm.get_object(ptr) {
         Object::Array(values) => values.to_vec(),
+        Object::Tuple(tuple) => tuple.slot_values().collect(),
         Object::Map(map) => map
             .snapshot_entries()
             .into_iter()
             .map(|(_, value)| value)
             .collect(),
-        Object::Instance(instance) => match vm.get_object(instance.class) {
-            Object::Class(class) => instance
-                .field_values()
-                .zip(class.instance_fields())
-                .filter(|(value, field)| options.writes_field(field, *value))
-                .map(|(value, _)| value)
-                .collect(),
-            _ => Vec::new(),
-        },
+        Object::Instance => {
+            let instance = vm.get_instance(ptr).expect("an instance pointer");
+            instance
+                .fields()
+                .zip(instance.class_object().instance_fields())
+                .filter_map(|(field, declared)| {
+                    let value = field.as_value()?;
+                    options.writes_field(declared, value).then_some(value)
+                })
+                .collect()
+        }
         _ => Vec::new(),
     }
 }
@@ -632,6 +632,9 @@ impl Walker<'_, '_> {
                 sink.int(vm, i);
                 return Ok(());
             }
+            // Like an int, an inline float cannot carry an override: `float`
+            // and `baml.ToJson` are both the `baml` package's (E0139).
+            ValueKind::Float(f) => return self.float(vm, value, f, sink),
             ValueKind::Object(ptr) => ptr,
         };
         if !spliced {
@@ -664,8 +667,11 @@ impl Walker<'_, '_> {
             Object::String(_) => Shape::String,
             Object::Bigint(_) => Shape::Bigint,
             Object::Array(values) => Shape::Array(values.to_vec()),
+            Object::Tuple(tuple) => Shape::Array(tuple.slot_values().collect()),
             Object::Map(_) => Shape::Map,
-            Object::Instance(instance) => Shape::Instance(instance.class),
+            Object::Instance => {
+                Shape::Instance(vm.get_instance(ptr).expect("an instance pointer").class())
+            }
             Object::Variant(variant) => Shape::Variant(variant.enm, variant.index),
             Object::Uint8Array(_) => Shape::Unserializable(
                 "uint8array requires explicit encoding (use to_base64() or to_hex())",
@@ -739,7 +745,7 @@ impl Walker<'_, '_> {
         Ok(())
     }
 
-    /// Write the float object `value`, holding `f`, as the sink takes it.
+    /// Write the float `value`, holding `f`, as the sink takes it.
     fn float(
         &self,
         vm: &mut BexVm,
@@ -780,6 +786,7 @@ impl Walker<'_, '_> {
             Object::String(_) => JsonShape::String,
             Object::Bigint(_) => JsonShape::Bigint,
             Object::Array(values) => JsonShape::Array(values.to_vec()),
+            Object::Tuple(tuple) => JsonShape::Array(tuple.slot_values().collect()),
             Object::Map(_) => JsonShape::Map,
             Object::Variant(variant) => JsonShape::Variant(match vm.get_object(variant.enm) {
                 Object::Enum(e) => e.variants.get(variant.index).map(|v| v.name.clone()),
@@ -909,21 +916,21 @@ impl Walker<'_, '_> {
         if let Some(plan) = plan {
             self.plans.insert(class, plan);
         }
-        let (Object::Instance(instance), Object::Class(declaration)) =
-            (vm.get_object(ptr), vm.get_object(class))
-        else {
-            unreachable!("the instance and its class were just read")
-        };
+        let instance = vm.get_instance(ptr).expect("an instance pointer");
+        let declaration = instance.class_object();
+        let values: Vec<Value> = (0..declaration.instance_fields().len())
+            .map(|field| vm.load_field_value(instance, field))
+            .collect();
         // A `@json.fallback` class is the object it was read from.
-        let fallback = instance
-            .field_values()
+        let fallback = values
+            .iter()
             .zip(declaration.instance_fields())
-            .find_map(|(value, field)| field.json_fallback.then_some(value));
+            .find_map(|(value, field)| field.json_fallback.then_some(*value));
         if let Some(raw) = fallback {
             return self.visit(vm, raw, false, sink);
         }
-        let mut children: Vec<(Option<Slot>, Value)> = instance
-            .field_values()
+        let mut children: Vec<(Option<Slot>, Value)> = values
+            .into_iter()
             .zip(declaration.instance_fields())
             .enumerate()
             .filter(|(_, (value, field))| self.options.writes_field(field, *value))

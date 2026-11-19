@@ -27,11 +27,11 @@
 16:17-18     "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
 17:5-13      "settings"         source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 17:14-17     "map"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-17:17-18     "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-17:18-24     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-17:24-25     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-17:26-32     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-17:32-33     ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+17:17-18     "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+17:18-24     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml support.type.primitive.baml
+17:24-25     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+17:26-32     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml support.type.primitive.baml
+17:32-33     ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 17:33-34     "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
 18:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 20:1-6       "class"            source.baml meta.class.baml keyword.declaration.class.baml
@@ -58,11 +58,11 @@
 28:20-21     "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
 29:5-11      "labels"           source.baml meta.class.baml meta.class.body.baml meta.field.baml variable.other.property.baml
 29:12-15     "map"              source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-29:15-16     "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-29:16-22     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml support.type.primitive.baml
-29:22-23     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
-29:24-28     "Node"             source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-reference.baml entity.name.type.baml
-29:28-29     ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml punctuation.definition.type.baml
+29:15-16     "<"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+29:16-22     "string"           source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml support.type.primitive.baml
+29:22-23     ","                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type.baml
+29:24-28     "Node"             source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+29:28-29     ">"                source.baml meta.class.baml meta.class.body.baml meta.field.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
 29:29-30     "?"                source.baml meta.class.baml meta.class.body.baml meta.field.baml keyword.operator.optional.baml
 30:1-2       "}"                source.baml meta.class.baml meta.class.body.baml punctuation.definition.block.end.baml
 32:1-80      "// ============================================================================" source.baml comment.line.double-slash.baml

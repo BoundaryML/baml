@@ -19,7 +19,7 @@ aws-smithy-eventstream = { workspace = true }
 bytes = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
-tokio = { workspace = true, features = [ "sync" ] }
+tokio = { workspace = true, features = [ "sync", "rt", "time" ] }
 tokio-util = { workspace = true }
 
 [build-dependencies]

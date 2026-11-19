@@ -95,6 +95,9 @@ internal static class LiveHeads
             case BamlTy.TyOneofCase.Union:
                 MapAll(type.Union.Options, map);
                 break;
+            case BamlTy.TyOneofCase.Tuple:
+                MapAll(type.Tuple.Items, map);
+                break;
             case BamlTy.TyOneofCase.Function:
                 foreach (BamlTyFunctionParam parameter in type.Function.Params)
                 {

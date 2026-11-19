@@ -1,10 +1,10 @@
 // Output formatting for `BexExternalValue` — shared by `baml run` and
 // packaged binaries produced by `baml pack`.
 //
-// Two formats, per BEP-027:
-//   - Debug: human-readable, with type annotations. Default for `baml run`.
-//   - Json:  single JSON document, no wrapping. Default for `baml pack`,
-//            designed for pipelines / CI / agents.
+// Two formats, chosen at run time with `--output-format` by both `baml run`
+// and packed binaries:
+//   - Text: human-readable, with type annotations. The default.
+//   - Json: single JSON document, no wrapping; for pipelines, CI and agents.
 
 #![allow(clippy::print_stdout)]
 
@@ -16,13 +16,11 @@ use bex_engine::{BexCallArg, BexEngine, BexExternalValue};
 use crate::HelperCallContext;
 
 /// Serialization format for a target's return value.
-#[derive(
-    Copy, Clone, Debug, Default, borsh::BorshSerialize, borsh::BorshDeserialize, clap::ValueEnum,
-)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum OutputFormat {
     /// Human-readable formatting with type annotations.
     #[default]
-    Debug,
+    Text,
     /// Single JSON document with no wrapping noise.
     Json,
 }
@@ -54,7 +52,7 @@ pub async fn write_output_with_context(
     before_print: impl FnOnce(),
 ) -> Result<()> {
     match format {
-        OutputFormat::Debug => {
+        OutputFormat::Text => {
             // TODO: route debug mode through a stdlib `baml.debug.format<T>`
             // (or auto-derived `to_string` on user classes) so user-defined
             // display overrides are honored, mirroring how `json` mode goes

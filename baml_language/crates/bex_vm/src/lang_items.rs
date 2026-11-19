@@ -31,10 +31,12 @@ pub const BAML_JSON_PARSE_ERROR: LangItem = lang_item!(Baml: json.ParseError);
 pub const BAML_JSON_PATH_ERROR: LangItem = lang_item!(Baml: json.PathError);
 pub const BAML_JSON_SERIALIZATION_ERROR: LangItem = lang_item!(Baml: json.SerializationError);
 pub const BAML_OPS_ADD: LangItem = lang_item!(Baml: ops.Add);
+pub const BAML_OPS_COMPARE: LangItem = lang_item!(Baml: ops.Compare);
 pub const BAML_OPS_DIVIDE: LangItem = lang_item!(Baml: ops.Divide);
 pub const BAML_OPS_EQUALS: LangItem = lang_item!(Baml: ops.Equals);
 pub const BAML_OPS_MULTIPLY: LangItem = lang_item!(Baml: ops.Multiply);
 pub const BAML_OPS_NEGATE: LangItem = lang_item!(Baml: ops.Negate);
+pub const BAML_OPS_ORDERING: LangItem = lang_item!(Baml: ops.Ordering);
 pub const BAML_OPS_REMAINDER: LangItem = lang_item!(Baml: ops.Remainder);
 pub const BAML_OPS_SUBTRACT: LangItem = lang_item!(Baml: ops.Subtract);
 pub const BAML_REGEX_ERROR_KIND: LangItem = lang_item!(Baml: regex.ErrorKind);
@@ -42,7 +44,8 @@ pub const BAML_SAP_NO_YIELD: LangItem = lang_item!(Baml: sap._NoYield);
 pub const BAML_SAP_PARSE_CACHE: LangItem = lang_item!(Baml: sap._ParseCache);
 pub const BAML_SAP_REJECTED: LangItem = lang_item!(Baml: sap._Rejected);
 pub const BAML_SPAWN_CANCEL_TOKEN: LangItem = lang_item!(Baml: spawn.CancelToken);
-pub const BAML_SPAWN_LIMIT: LangItem = lang_item!(Baml: spawn.Limit);
+pub const BAML_SYNC_PERMIT: LangItem = lang_item!(Baml: sync.Permit);
+pub const BAML_SYNC_SEMAPHORE: LangItem = lang_item!(Baml: sync.Semaphore);
 pub const BAML_TIME_DURATION: LangItem = lang_item!(Baml: time.Duration);
 pub const BAML_TIME_INSTANT: LangItem = lang_item!(Baml: time.Instant);
 pub const BAML_TIME_PLAIN_DATE: LangItem = lang_item!(Baml: time.PlainDate);
@@ -97,10 +100,12 @@ pub const ALL: &[LangItem] = &[
     BAML_JSON_PATH_ERROR,
     BAML_JSON_SERIALIZATION_ERROR,
     BAML_OPS_ADD,
+    BAML_OPS_COMPARE,
     BAML_OPS_DIVIDE,
     BAML_OPS_EQUALS,
     BAML_OPS_MULTIPLY,
     BAML_OPS_NEGATE,
+    BAML_OPS_ORDERING,
     BAML_OPS_REMAINDER,
     BAML_OPS_SUBTRACT,
     BAML_REGEX_ERROR_KIND,
@@ -108,7 +113,8 @@ pub const ALL: &[LangItem] = &[
     BAML_SAP_PARSE_CACHE,
     BAML_SAP_REJECTED,
     BAML_SPAWN_CANCEL_TOKEN,
-    BAML_SPAWN_LIMIT,
+    BAML_SYNC_PERMIT,
+    BAML_SYNC_SEMAPHORE,
     BAML_TIME_DURATION,
     BAML_TIME_INSTANT,
     BAML_TIME_PLAIN_DATE,

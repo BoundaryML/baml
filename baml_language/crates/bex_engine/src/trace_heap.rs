@@ -15,7 +15,9 @@ use std::{
 
 use bex_external_types::ConcreteMediaKind;
 use bex_heap::{BexHeap, PermitProof};
-use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
+use bex_vm_types::{
+    Field, HeapPtr, InstanceRef, MediaContent, MediaValue, Object, Value, ValueKind,
+};
 
 /// A structured-log snapshot could not allocate its owned value graph.
 #[derive(Debug)]
@@ -58,6 +60,10 @@ pub enum TraceValue {
     String(String),
     Bytes(Vec<u8>),
     Array(Vec<TraceValueRef>),
+    Tuple {
+        element_types: Vec<baml_type::RuntimeTy>,
+        items: Vec<TraceValueRef>,
+    },
     Map(Vec<(String, TraceValueRef)>),
     Media(TraceMediaValue),
     Instance {
@@ -289,22 +295,7 @@ impl TraceSnapshotBuilder {
         class_type_args: &[bex_vm_types::RealizedTy],
     ) -> Result<Vec<baml_type::RuntimeTy>, CopyError> {
         let mut type_args = Self::vec_with_capacity(class_type_args.len())?;
-        for type_arg in class_type_args {
-            let Ok(annotated) =
-                crate::conversion::to_annotation::<std::convert::Infallible>(type_arg)
-            else {
-                continue;
-            };
-            type_args.push(baml_type::RuntimeTy::from(&annotated.map_heads(
-                &mut |head: &bex_external_types::WireHead<std::convert::Infallible>| match head {
-                    bex_external_types::WireHead::Static(name) => name.clone(),
-                    bex_external_types::WireHead::Live(never) => match *never {},
-                    bex_external_types::WireHead::Anonymous(label) => {
-                        baml_type::TypeName::local(label.clone())
-                    }
-                },
-            )));
-        }
+        type_args.extend(class_type_args.iter().filter_map(display_ty));
         Ok(type_args)
     }
 
@@ -340,6 +331,7 @@ impl TraceSnapshotBuilder {
             ValueKind::Null => self.alloc(TraceValue::Null),
             ValueKind::Bool(value) => self.alloc(TraceValue::Bool(value)),
             ValueKind::Int(value) => self.alloc(TraceValue::Int(value)),
+            ValueKind::Float(value) => self.alloc(TraceValue::Float(value)),
             ValueKind::OmittedArg => {
                 self.omitted(TraceOmissionReason::OmittedArgument, "omitted argument")
             }
@@ -356,7 +348,7 @@ impl TraceSnapshotBuilder {
         let object = unsafe { ptr.get() };
         let tracks_recursion = matches!(
             object,
-            Object::Array(_) | Object::Map(_) | Object::Instance(_)
+            Object::Array(_) | Object::Map(_) | Object::Instance | Object::Tuple(_)
         );
         if tracks_recursion && self.in_progress.contains(&ptr) {
             return self.omitted(TraceOmissionReason::CyclicReference, "cyclic reference");
@@ -390,6 +382,20 @@ impl TraceSnapshotBuilder {
                 }
                 self.alloc(TraceValue::Array(items))
             }
+            Object::Tuple(tuple) => {
+                let mut element_types = Self::vec_with_capacity(tuple.element_tys.len())?;
+                for ty in &tuple.element_tys {
+                    element_types.push(display_ty(ty).unwrap_or(baml_type::RuntimeTy::Unknown));
+                }
+                let mut items = Self::vec_with_capacity(tuple.len())?;
+                for value in tuple.slot_values() {
+                    items.push(self.copy_value(heap, permit, value)?);
+                }
+                self.alloc(TraceValue::Tuple {
+                    element_types,
+                    items,
+                })
+            }
             Object::Map(map) => {
                 let map = map.data.lock();
                 let string_key = |key: &Value| {
@@ -415,31 +421,25 @@ impl TraceSnapshotBuilder {
                     self.alloc(TraceValue::Map(entries))
                 }
             }
-            Object::Instance(instance) => {
-                let class_object = unsafe { instance.class.get() };
-                if let Object::Class(class) = class_object {
-                    let mut fields = Self::vec_with_capacity(class.instance_fields().len())?;
-                    for (field, slot) in class.instance_fields().iter().zip(instance.fields.iter())
-                    {
-                        let name = Self::copy_str(&field.name)?;
-                        let value = self.copy_value(heap, permit, slot.load())?;
-                        fields.push((name, value));
-                    }
-                    let type_args = Self::trace_type_args(&instance.class_type_args)?;
-                    // A trace is read by a person: the display name, never an
-                    // internal identity.
-                    let type_name = Self::copy_str(&class.name().to_string())?;
-                    self.alloc(TraceValue::Instance {
-                        type_name,
-                        type_args,
-                        fields,
-                    })
-                } else {
-                    self.omitted(
-                        TraceOmissionReason::InvalidRuntimeValue,
-                        "instance class pointer did not point at a class",
-                    )
+            Object::Instance => {
+                let instance = unsafe { InstanceRef::of(ptr) }.expect("an instance pointer");
+                let class = instance.class_object();
+                let mut fields = Self::vec_with_capacity(class.instance_fields().len())?;
+                for (field, value) in class.instance_fields().iter().zip(instance.fields()) {
+                    let name = Self::copy_str(&field.name)?;
+                    let value = match value {
+                        Field::Value(value) => self.copy_value(heap, permit, value)?,
+                        Field::Float(float) => self.alloc(TraceValue::Float(float))?,
+                    };
+                    fields.push((name, value));
                 }
+                let type_args = Self::trace_type_args(instance.type_args())?;
+                let type_name = Self::copy_str(&class.name().to_string())?;
+                self.alloc(TraceValue::Instance {
+                    type_name,
+                    type_args,
+                    fields,
+                })
             }
             // Media is traced as the value it is; a rendered prompt and a
             // host's value are omitted. Any other instance is its declaration
@@ -469,7 +469,9 @@ impl TraceSnapshotBuilder {
                 | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
                 | bex_vm_types::RustPayload::Regex(_)
                 | bex_vm_types::RustPayload::CsvRecord(_)
-                | bex_vm_types::RustPayload::Limit(_)
+                | bex_vm_types::RustPayload::Semaphore(_)
+                | bex_vm_types::RustPayload::Permit(_)
+                | bex_vm_types::RustPayload::Ticket(_)
                 | bex_vm_types::RustPayload::CancelToken(_)
                 | bex_vm_types::RustPayload::SpanId(_)
                 | bex_vm_types::RustPayload::TraceOptions(_)
@@ -620,12 +622,26 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         | Object::Bigint(_)
         | Object::Uint8Array(_)
         | Object::Array(_)
+        | Object::Tuple(_)
         | Object::Map(_)
-        | Object::Instance(_)
+        | Object::Instance
         | Object::RustInstance(_)
         | Object::Variant(_)
         | Object::Float(_) => "unsupported value",
     }
+}
+
+fn display_ty(ty: &bex_vm_types::RealizedTy) -> Option<baml_type::RuntimeTy> {
+    let annotated = crate::conversion::to_annotation::<std::convert::Infallible>(ty).ok()?;
+    Some(baml_type::RuntimeTy::from(&annotated.map_heads(
+        &mut |head: &bex_external_types::WireHead<std::convert::Infallible>| match head {
+            bex_external_types::WireHead::Static(name) => name.clone(),
+            bex_external_types::WireHead::Live(never) => match *never {},
+            bex_external_types::WireHead::Anonymous(label) => {
+                baml_type::TypeName::local(label.clone())
+            }
+        },
+    )))
 }
 
 #[cfg(test)]
@@ -738,6 +754,70 @@ mod tests {
                     if descriptor.reason == TraceOmissionReason::UnsupportedValue
             ));
         }
+    }
+
+    #[tokio::test]
+    async fn a_traced_tuple_keeps_its_carried_types_through_a_cyclic_omission() {
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let mut permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let child = permit
+            .tlab_mut()
+            .alloc_array(bex_vm_types::RealizedTy::Unknown, vec![]);
+        let tuple = permit.tlab_mut().alloc_tuple(
+            bex_vm_types::Tuple::new(
+                [
+                    bex_vm_types::RealizedTy::Union(
+                        vec![
+                            bex_vm_types::RealizedTy::int(),
+                            bex_vm_types::RealizedTy::null(),
+                        ]
+                        .into(),
+                    ),
+                    bex_vm_types::RealizedTy::unknown(),
+                ],
+                [Value::int(1), Value::object(child)],
+            )
+            .unwrap(),
+        );
+        // SAFETY: this test is the child's only reader or writer.
+        let Object::Array(array) = (unsafe { child.get() }) else {
+            unreachable!()
+        };
+        unsafe { array.data_unchecked_mut() }.push(Value::object(tuple));
+        let trace_heap = TraceHeap::new();
+        let handle =
+            trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::object(tuple));
+        let snapshot = trace_heap.release(handle).expect("snapshot retained");
+        let Some(TraceValue::Tuple {
+            element_types,
+            items,
+        }) = snapshot.value(snapshot.root())
+        else {
+            panic!("the root is a tuple");
+        };
+        assert_eq!(
+            element_types,
+            &vec![
+                baml_type::RuntimeTy::Union(
+                    vec![baml_type::RuntimeTy::Int, baml_type::RuntimeTy::Null].into()
+                ),
+                baml_type::RuntimeTy::Unknown,
+            ],
+            "the carried types, not the types of what the slots hold"
+        );
+        assert_eq!(snapshot.value(items[0]), Some(&TraceValue::Int(1)));
+        assert!(matches!(
+            match snapshot.value(items[1]) { Some(TraceValue::Array(children)) => snapshot.value(children[0]), _ => None },
+            Some(TraceValue::Omitted(descriptor))
+                if descriptor.reason == TraceOmissionReason::CyclicReference
+        ));
     }
 
     #[tokio::test]

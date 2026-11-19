@@ -26,6 +26,7 @@ use crate::{
     },
     index::ProgramIndex,
     render::coerce,
+    stack::{BodyPlan, Group, StackClass, StackPlans, bare_local, takes_param},
     structure::{Structured, structurize},
 };
 
@@ -62,11 +63,15 @@ pub(crate) struct ProgramContext<'a, 'db> {
     pub(crate) pausing: &'a BTreeSet<usize>,
     /// Functions whose bodies run with a VM frame, never a frame record.
     pub(crate) framed: &'a BTreeSet<usize>,
+    /// Functions a compiled caller runs without linking a record for them.
+    pub(crate) frameless: &'a BTreeSet<usize>,
     /// Typed signatures of the direct entries of compiled bodies.
     pub(crate) signatures: &'a HashMap<usize, Signature>,
     /// Per compiled body: the locality-mask bits some compiled caller can
     /// set. A bit no caller sets compiles its condition to the locked path.
     pub(crate) masks: &'a HashMap<usize, u64>,
+    /// Every body's stack objects.
+    pub(crate) stack: &'a StackPlans,
 }
 
 pub(crate) struct Generator<'a, 'db> {
@@ -79,6 +84,8 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) pausing: &'a BTreeSet<usize>,
     /// Functions whose bodies run with a VM frame, never a frame record.
     pub(crate) framed: &'a BTreeSet<usize>,
+    /// Functions a compiled caller runs without linking a record for them.
+    pub(crate) frameless: &'a BTreeSet<usize>,
     pub(crate) signatures: &'a HashMap<usize, Signature>,
     /// The locality-mask bits some caller can set ([`ProgramContext::masks`]).
     pub(crate) mask_bits: u64,
@@ -88,7 +95,7 @@ pub(crate) struct Generator<'a, 'db> {
     /// keeps live heap values in frame slots across every suspension.
     pub(crate) pauses: bool,
     pub(crate) recursive: bool,
-    pub(crate) builtins: &'a mut BTreeMap<String, usize>,
+
     pub(crate) body: &'a MirFunctionBody<'db>,
     pub(crate) lambdas: &'a [MirFunction<'db>],
     pub(crate) analysis: &'a Analysis,
@@ -112,6 +119,13 @@ pub(crate) struct Generator<'a, 'db> {
     /// Static type value sites, by their generated expression; each site is
     /// one type object, as bytecode's `LoadType` site is.
     pub(crate) static_value_sites: Vec<String>,
+    /// The parameters this body takes as stack structs: nonzero for a stack
+    /// variant (`stack` module).
+    pub(crate) variant: u64,
+    /// This body's stack objects.
+    pub(crate) plan: Option<&'a BodyPlan>,
+    /// The structs of stack classes, by class object.
+    pub(crate) stack_classes: &'a BTreeMap<usize, StackClass>,
 }
 
 type Gen<T> = Result<T, Rejection>;
@@ -119,9 +133,9 @@ type Gen<T> = Result<T, Rejection>;
 impl<'a, 'db> Generator<'a, 'db> {
     pub(crate) fn new(
         program: &ProgramContext<'a, 'db>,
-        builtins: &'a mut BTreeMap<String, usize>,
         object: usize,
         unit: &'a crate::admit::Unit<'db>,
+        variant: u64,
     ) -> Self {
         Self {
             db: program.db,
@@ -131,12 +145,12 @@ impl<'a, 'db> Generator<'a, 'db> {
             symbols: program.symbols,
             pausing: program.pausing,
             framed: program.framed,
+            frameless: program.frameless,
             signatures: program.signatures,
             mask_bits: program.masks.get(&object).copied().unwrap_or(0),
             spill_base: 0,
             pauses: program.pausing.contains(&object),
             recursive: unit.recursive,
-            builtins,
             body: &unit.body,
             lambdas: &unit.lambdas,
             analysis: &unit.analysis,
@@ -154,6 +168,9 @@ impl<'a, 'db> Generator<'a, 'db> {
             call_trace: None,
             structured: None,
             static_value_sites: Vec::new(),
+            variant,
+            plan: program.stack.bodies.get(&(object, variant)),
+            stack_classes: &program.stack.classes,
         }
     }
 }
@@ -171,9 +188,34 @@ fn unsupported<T>(what: impl Into<String>) -> Gen<T> {
     Err(Rejection::Unsupported(what.into()))
 }
 
-impl<'db> Generator<'_, 'db> {
+impl<'a, 'db> Generator<'a, 'db> {
     fn repr(&self, local: Local) -> Repr {
         self.analysis.reprs[local.0]
+    }
+
+    /// The stack object `local` holds, if it holds one.
+    pub(super) fn stack_group(&self, local: usize) -> Option<&'a Group> {
+        self.plan?.group(local)
+    }
+
+    /// The stack object a bare-local operand holds.
+    pub(super) fn stack_operand(&self, operand: &Operand<'db>) -> Option<&'a Group> {
+        bare_local(operand).and_then(|local| self.stack_group(local))
+    }
+
+    pub(super) fn stack_class(&self, group: &Group) -> Gen<&'a StackClass> {
+        self.stack_classes
+            .get(&group.class)
+            .ok_or_else(|| Rejection::Invalid("stack object of an unplanned class".into()))
+    }
+
+    /// The type a stack variant's parameter `i` takes, if it is a stack struct.
+    fn stack_param(&self, i: usize) -> Option<&'a StackClass> {
+        if !takes_param(self.variant, i) {
+            return None;
+        }
+        let group = self.stack_group(i + 1)?;
+        self.stack_classes.get(&group.class)
     }
 
     /// `needs` (`escape::EscapeFacts::needs`), or
@@ -252,6 +294,9 @@ impl<'db> Generator<'_, 'db> {
         self.structured = Some(structured);
         self.out.clear();
         let signature = self.analysis.signature(self.body);
+        if self.variant != 0 {
+            return self.stack_variant(symbol, &signature, &stmts);
+        }
         // The VM and runtime-dispatched calls enter with boxed arguments; a
         // compiled caller calls the typed direct entry.
         let params: Vec<String> = signature
@@ -284,9 +329,54 @@ impl<'db> Generator<'_, 'db> {
         // Every closure exit records the current PC before returning an error.
         // `mask` has bit `i` set when the caller proved argument `i`, and all
         // it reaches, thread-local (`escape::EscapeFacts::needs`).
+        let inline = if self.recursive {
+            "#[inline(never)]"
+        } else {
+            "#[inline]"
+        };
         self.emit_line(&format!(
-            "#[inline]\n#[allow(unused_variables)]\npub fn {symbol}_d(vm: &mut BexVm, fr: &FrameRecord{typed}, mask: u64) -> R<{ret}> {{"
+            "{inline}\n#[allow(unused_variables)]\npub fn {symbol}_d(vm: &mut BexVm, fr: &FrameRecord{typed}, mask: u64) -> R<{ret}> {{"
         ));
+        self.body_closure(&signature, &stmts)?;
+        Ok(std::mem::take(&mut self.out))
+    }
+
+    /// A stack variant: the typed direct entry with its stack parameters as
+    /// `&mut` structs. Only compiled callers call it, directly.
+    fn stack_variant(
+        &mut self,
+        symbol: &str,
+        signature: &Signature,
+        stmts: &[crate::structure::Stmt],
+    ) -> Gen<String> {
+        let ret = signature.ret.rust_type();
+        let mut typed = String::new();
+        for (i, repr) in signature.params.iter().enumerate() {
+            match self.stack_param(i) {
+                Some(class) => {
+                    let _ = write!(typed, ", arg{i}: &mut {}", class.name);
+                }
+                None if takes_param(self.variant, i) => {
+                    return Err(Rejection::Invalid(format!(
+                        "stack variant parameter {i} holds no stack object"
+                    )));
+                }
+                None => {
+                    let _ = write!(typed, ", arg{i}: {}", repr.rust_type());
+                }
+            }
+        }
+        self.emit_line(&format!(
+            "#[inline]\n#[allow(unused_variables)]\npub fn {symbol}_stack{:x}(vm: &mut BexVm, fr: &FrameRecord{typed}, mask: u64) -> R<{ret}> {{",
+            self.variant
+        ));
+        self.body_closure(signature, stmts)?;
+        Ok(std::mem::take(&mut self.out))
+    }
+
+    /// The body of a direct entry, from its `pc` to its result.
+    fn body_closure(&mut self, signature: &Signature, stmts: &[crate::structure::Stmt]) -> Gen<()> {
+        let ret = signature.ret.rust_type();
         self.emit_line("let mut pc: u32 = 0;");
         // A scalar closure argument keeps LLVM from reloading a captured mask
         // across VM calls when the result body is outlined.
@@ -302,7 +392,7 @@ impl<'db> Generator<'_, 'db> {
         if self.recursive {
             self.recursion_check();
         }
-        self.stmts(&stmts)?;
+        self.stmts(stmts)?;
         // Every path ends in an `Exit`; this keeps the closure well-typed.
         self.emit_line("#[allow(unreachable_code)]");
         self.emit_line(&format!("Ok({})", signature.ret.default_value()));
@@ -312,7 +402,7 @@ impl<'db> Generator<'_, 'db> {
         self.emit_line("}");
         self.emit_line("result");
         self.emit_line("}");
-        Ok(std::mem::take(&mut self.out))
+        Ok(())
     }
 
     /// Hook prologues need their arguments in leading slots across suspension.
@@ -324,11 +414,27 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
+    /// The struct of each stack object allocated here.
+    fn declare_stack_structs(&mut self) {
+        let Some(plan) = self.plan else {
+            return;
+        };
+        for group in plan.groups.iter().filter(|group| group.allocated) {
+            if let Some(class) = self.stack_classes.get(&group.class) {
+                let name = &class.name;
+                self.emit_line(&format!(
+                    "let mut {}: {name} = {name}::ZERO;",
+                    group.storage
+                ));
+            }
+        }
+    }
+
     fn declare_locals(&mut self, iterations: bool) {
         let analysis = self.analysis;
         let arity = self.body.locals.len().min(self.analysis.arity);
         for (i, &repr) in analysis.reprs.iter().enumerate() {
-            if analysis.is_type_local(i) {
+            if analysis.is_type_local(i) || self.stack_group(i).is_some() {
                 continue;
             }
             let ty = repr.rust_type();
@@ -345,9 +451,11 @@ impl<'db> Generator<'_, 'db> {
         for iter in &analysis.array_iters {
             self.emit_line(&format!("let mut i{iter}: i64 = 0;"));
         }
+        self.declare_stack_structs();
         if iterations {
             self.emit_line("let mut iterations: u32 = 0;");
         }
+        self.emit_line("let statics = vm.static_objects(fr);");
         for block in &self.body.blocks {
             let declaration = match &block.terminator {
                 Some(
@@ -501,11 +609,11 @@ impl<'db> Generator<'_, 'db> {
 
     fn recursion_check(&mut self) {
         let live = self.header_locals(self.body.entry.0);
-        let call = self.rooted(&live, "vm.suspend(Step::Yield)");
+        let call = self.rooted(&live, "vm.suspend_from(fr, Step::Yield)");
         self.emit_line(&format!("if vm.should_yield_at_call() {{ {call}?; }}"));
     }
 
-    fn header_locals(&self, header: usize) -> Vec<usize> {
+    fn header_locals(&self, header: usize) -> Vec<String> {
         self.saved(|i| self.live_in[header][i])
     }
 
@@ -518,17 +626,17 @@ impl<'db> Generator<'_, 'db> {
     }
 
     /// `call` with `live` written to the spill slots before and read back after.
-    fn rooted(&self, live: &[usize], call: &str) -> String {
+    fn rooted(&self, live: &[String], call: &str) -> String {
         if live.is_empty() {
             return call.to_string();
         }
         let mut out = String::from("{ ");
-        for (j, i) in live.iter().enumerate() {
-            let _ = write!(out, "vm.set_slot(fr, {}, l{i}); ", self.spill_base + j);
+        for (j, place) in live.iter().enumerate() {
+            let _ = write!(out, "vm.set_slot(fr, {}, {place}); ", self.spill_base + j);
         }
         let _ = write!(out, "let r = {call}; ");
-        for (j, i) in live.iter().enumerate() {
-            let _ = write!(out, "l{i} = vm.slot(fr, {}); ", self.spill_base + j);
+        for (j, place) in live.iter().enumerate() {
+            let _ = write!(out, "{place} = vm.slot(fr, {}); ", self.spill_base + j);
         }
         out.push_str("r }");
         out
@@ -536,7 +644,7 @@ impl<'db> Generator<'_, 'db> {
 
     /// Keep what the continuation reads except the result, plus what the
     /// handler reads.
-    fn rooted_locals(&self, block: BlockId) -> Gen<Vec<usize>> {
+    fn rooted_locals(&self, block: BlockId) -> Gen<Vec<String>> {
         let (destination, target) = self.continuation(block)?;
         let overwritten = match destination {
             Place::Local(local) => Some(local.0),
@@ -549,8 +657,9 @@ impl<'db> Generator<'_, 'db> {
         }))
     }
 
-    /// Handler contexts stay live so leaving a nested handler can restore its cause.
-    fn saved(&self, live: impl Fn(usize) -> bool) -> Vec<usize> {
+    /// Handler contexts stay live so leaving a nested handler can restore its
+    /// cause. A live stack object keeps its heap fields.
+    fn saved(&self, live: impl Fn(usize) -> bool) -> Vec<String> {
         let kept = |i| {
             live(i)
                 || (self.cause_slot.is_some()
@@ -561,9 +670,35 @@ impl<'db> Generator<'_, 'db> {
                         .filter_map(|block| block.landing)
                         .any(|landing| landing.context_local.0 == i))
         };
+        let mut saved = self.saved_locals(&kept);
+        saved.extend(self.saved_stack_fields(&kept));
+        saved
+    }
+
+    /// The boxed locals `kept` holds, outside stack objects.
+    fn saved_locals(&self, kept: &impl Fn(usize) -> bool) -> Vec<String> {
         (0..self.analysis.reprs.len())
             .filter(|&i| {
-                kept(i) && !self.analysis.is_type_local(i) && self.repr(Local(i)) == Repr::Value
+                kept(i)
+                    && !self.analysis.is_type_local(i)
+                    && self.stack_group(i).is_none()
+                    && self.repr(Local(i)) == Repr::Value
+            })
+            .map(|i| format!("l{i}"))
+            .collect()
+    }
+
+    /// The heap fields of every stack object a `kept` local holds.
+    fn saved_stack_fields(&self, kept: &impl Fn(usize) -> bool) -> Vec<String> {
+        self.plan
+            .iter()
+            .flat_map(|plan| &plan.groups)
+            .filter(|group| group.members.iter().any(|&member| kept(member)))
+            .filter_map(|group| Some((group, self.stack_classes.get(&group.class)?)))
+            .flat_map(|(group, class)| {
+                (0..class.fields.len())
+                    .filter(|&field| class.fields[field] == Repr::Value)
+                    .map(move |field| format!("{}.f{field}", group.storage))
             })
             .collect()
     }
@@ -592,7 +727,7 @@ impl<'db> Generator<'_, 'db> {
             let _ = write!(out, "vm.push_type_arg({ty}); ");
         }
         let site = self.site_pc(block);
-        let _ = write!(out, "fr.note_pc({site}); vm.suspend({step}) }}");
+        let _ = write!(out, "fr.note_pc({site}); vm.suspend_from(fr, {step}) }}");
         self.attach_trace(&out)
     }
 
@@ -786,11 +921,16 @@ impl<'db> Generator<'_, 'db> {
 
     /// `expr` as an atomic `Value` argument.
     fn value_arg(&mut self, expr: &Expr) -> String {
-        if expr.atom && expr.repr == Repr::Value {
+        self.repr_arg(expr, Repr::Value)
+    }
+
+    /// `expr` in representation `repr`, bound to a local unless it is one.
+    fn repr_arg(&mut self, expr: &Expr, repr: Repr) -> String {
+        if expr.atom && expr.repr == repr {
             return expr.code.clone();
         }
-        let coerced = coerce(&expr.code, expr.repr, Repr::Value);
-        self.hoist(Expr::new(coerced, Repr::Value)).code
+        let coerced = coerce(&expr.code, expr.repr, repr);
+        self.hoist(Expr::new(coerced, repr)).code
     }
 
     fn flush_bindings(&mut self) {

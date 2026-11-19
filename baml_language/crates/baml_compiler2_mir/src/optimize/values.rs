@@ -424,7 +424,9 @@ fn live_out<const PRECISE: bool>(
     (live, exceptional)
 }
 
-fn transfer(statement: &Statement<'_>, live: &mut [bool], exceptional: &[bool]) {
+/// Liveness across one statement, backwards; `exceptional` is live into its
+/// handler.
+pub fn transfer(statement: &Statement<'_>, live: &mut [bool], exceptional: &[bool]) {
     if let StatementKind::Assign {
         destination: Place::Local(local),
         ..

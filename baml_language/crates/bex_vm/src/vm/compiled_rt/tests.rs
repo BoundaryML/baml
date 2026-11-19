@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use bex_vm_types::{FunctionKind, HeapPtr, Object, ObjectIndex, RootHaverExt, Value};
+use bex_vm_types::{FunctionKind, HeapPtr, Object, ObjectIndex, RealizedTy, RootHaverExt, Value};
 
 use super::{CompiledFn, FrameRecord};
 
@@ -116,6 +116,165 @@ fn vm_with_main(body: CompiledFn, slots: u32, telemetry: bool) -> BexVm {
     }
     vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
     vm
+}
+
+/// The opcodes no corpus program runs (`baml_cli`'s corpus test lists them)
+/// run here, so their handlers pass the dispatch loop's debug-build
+/// operand-depth check too.
+#[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
+#[test]
+fn opcodes_the_corpus_never_runs_pass_the_operand_depth_check() {
+    use bex_vm_types::{
+        ConstValue,
+        bytecode::{Bytecode, CmpOp, Instruction, InstructionMeta, OpCode},
+    };
+
+    /// Compile `source`, give function `name` the hand-built `instructions`,
+    /// and run `user.Main`.
+    fn run(
+        source: &str,
+        name: &str,
+        instructions: Vec<Instruction>,
+        constants: Vec<ConstValue>,
+    ) -> Result<VmExecState, VmError> {
+        let mut program = baml_test_support::compile_source(source);
+        let target = program.rendered_callables()[name].object;
+        let Object::Function(function) = &mut program.objects[target] else {
+            unreachable!()
+        };
+        function.bytecode = Bytecode {
+            meta: vec![InstructionMeta { operand: None }; instructions.len()],
+            instructions,
+            constants,
+            ..Bytecode::default()
+        };
+        function.real_local_count = 0;
+        let entry = program.rendered_callables()["user.Main"].object;
+        let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+        vm.telemetry = None;
+        vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
+        vm.exec()
+    }
+
+    // A compiled body starts through its resume stub.
+    #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
+    fn body(_vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> BodyResult {
+        Ok(Value::NULL)
+    }
+    let mut vm = vm_with_main(body, 0, false);
+    assert!(matches!(vm.exec(), Ok(VmExecState::Complete(_))));
+
+    // `Unreachable` raises the moment it runs.
+    let main = "function Main() -> int { 1 }";
+    assert!(run(main, "user.Main", vec![Instruction::Unreachable], vec![]).is_err());
+
+    // `AllocVariant` from a variant index, which the compiler now emits as
+    // one `LoadVariant`.
+    let with_enum = "enum Color { Red Green } function Main() -> int { 1 }";
+    let color = baml_test_support::compile_source(with_enum)
+        .objects
+        .iter()
+        .position(|object| matches!(object, Object::Enum(_)))
+        .expect("the program declares an enum");
+    let ran = run(
+        with_enum,
+        "user.Main",
+        vec![
+            Instruction::LoadConst(0),
+            Instruction::AllocVariant(ObjectIndex::from_raw(color)),
+            Instruction::Pop(1),
+            Instruction::LoadConst(0),
+            Instruction::Return,
+        ],
+        vec![ConstValue::Int(1)],
+    );
+    assert!(matches!(ran, Ok(VmExecState::Complete(value)) if value == Value::int(1)));
+
+    // The legacy rich-span hook, as the prologue of a hooked function.
+    let ran = run(
+        main,
+        "user.Main",
+        vec![
+            Instruction::TraceHookRich,
+            Instruction::LoadConst(0),
+            Instruction::Return,
+        ],
+        vec![ConstValue::Int(1)],
+    );
+    assert!(matches!(ran, Ok(VmExecState::Complete(value)) if value == Value::int(1)));
+
+    // Generic and bigint comparisons and the peeking branch.
+    let probe = r#"
+        function Probe(m: map<string, int>, k: string) -> int { 0 }
+        function Main() -> int { Probe({"a": 1}, "a") }
+    "#;
+    let compare = |cmp: Instruction| {
+        [
+            Instruction::LoadConst(1),
+            Instruction::LoadConst(2),
+            cmp,
+            Instruction::JumpIfFalse(1),
+            Instruction::Pop(1),
+        ]
+    };
+    let mut instructions = Vec::new();
+    instructions.extend(compare(Instruction::CmpOp(CmpOp::LtEq)));
+    instructions.extend(compare(Instruction::CmpOp(CmpOp::GtEq)));
+    instructions.extend(compare(Instruction::CmpBigintOp(CmpOp::NotEq)));
+    instructions.extend([Instruction::LoadConst(0), Instruction::Return]);
+    let constants = vec![ConstValue::Int(5), ConstValue::Int(1), ConstValue::Int(2)];
+    let ran = run(probe, "user.Probe", instructions, constants.clone());
+    assert!(matches!(ran, Ok(VmExecState::Complete(value)) if value == Value::int(5)));
+
+    // The map element opcodes: the compiler lowers map access to `baml.Map`
+    // calls, so their handlers refuse to run. They still pass the check on
+    // the way in.
+    for (op, value) in [
+        (Instruction::LoadMapElement, None),
+        (
+            Instruction::StoreMapElement,
+            Some(Instruction::LoadConst(0)),
+        ),
+    ] {
+        let stored = value.is_some();
+        let mut instructions = vec![Instruction::LoadVar(1), Instruction::LoadVar(2)];
+        instructions.extend(value);
+        instructions.push(op);
+        if stored {
+            instructions.push(Instruction::LoadConst(0));
+        }
+        instructions.push(Instruction::Return);
+        let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            run(probe, "user.Probe", instructions, constants.clone())
+        }))
+        .expect_err("a map element handler refuses to run");
+        let message = refused
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| refused.downcast_ref::<&str>().copied())
+            .unwrap_or_default();
+        // The handler's own refusal, not a failed depth check before it.
+        assert!(
+            message.contains("must be lowered through baml.Map"),
+            "{op:?} panicked with {message:?}"
+        );
+    }
+
+    let executed = crate::opcode_coverage::executed();
+    for op in [
+        OpCode::ResumeCompiled,
+        OpCode::Unreachable,
+        OpCode::AllocVariant,
+        OpCode::TraceHookRich,
+        OpCode::StoreMapElement,
+        OpCode::LoadMapElement,
+        OpCode::LtEq,
+        OpCode::GtEq,
+        OpCode::CmpBigintNotEq,
+        OpCode::JumpIfFalse,
+    ] {
+        assert!(executed.contains(&op), "{op:?} did not run");
+    }
 }
 
 /// Run `user.Main` with compiled bodies installed and publish named object indices.
@@ -246,15 +405,31 @@ fn exec_string(vm: &mut BexVm) -> String {
     }
 }
 
+/// Run `vm` to completion, collecting at every yield as a stressed engine
+/// would.
+#[cfg(not(target_arch = "wasm32"))]
+fn exec_collecting(vm: &mut BexVm) -> Value {
+    loop {
+        match vm.exec().unwrap() {
+            VmExecState::EarlyYield => {
+                collect(vm, &[]);
+            }
+            VmExecState::Complete(value) => break value,
+            other => panic!("unexpected execution state: {other:?}"),
+        }
+    }
+}
+
 // SAFETY: callers own the heap's only mutator and keep its fiber parked.
 #[allow(unsafe_code)]
-fn collect(vm: &mut BexVm) -> HashMap<HeapPtr, HeapPtr> {
+/// Collect, forward the VM's roots, and return where each of `watched` went.
+fn collect(vm: &mut BexVm, watched: &[HeapPtr]) -> Vec<Option<HeapPtr>> {
     let mut roots = Vec::new();
     vm.collect_roots(&mut roots);
-    let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
     let heap = Arc::clone(&vm.heap);
+    let (_, _, forwarding) = unsafe { heap.collect_garbage(&roots) };
     vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
-    forwarding
+    watched.iter().map(|&ptr| forwarding.get(ptr)).collect()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -290,15 +465,7 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
         Ok(live)
     }
     let mut vm = vm_with_main(body, 1, true);
-    let out = loop {
-        match vm.exec().unwrap() {
-            VmExecState::EarlyYield => {
-                collect(&mut vm);
-            }
-            VmExecState::Complete(value) => break value,
-            other => panic!("unexpected execution state: {other:?}"),
-        }
-    };
+    let out = exec_collecting(&mut vm);
     assert_eq!(vm.as_string(&out).unwrap().as_str(), "still live");
 }
 
@@ -1165,10 +1332,10 @@ fn compiled_delivery_survives_collection_before_resume() {
             .suspend(Step::Yield)
             .expect_err("expected a delivered exception");
         let (value, context) = vm.catch(error, fr)?;
-        let Object::Instance(context) = vm.get_object(context.as_object_ptr().unwrap()) else {
+        let Some(context) = vm.get_instance(context.as_object_ptr().unwrap()) else {
             panic!("expected error context");
         };
-        assert_eq!(context.load_field(0), value);
+        assert_eq!(context.load_value(0), value);
         assert_eq!(vm.as_string(&value).unwrap(), "delivered error");
         Ok(value)
     }
@@ -1188,9 +1355,8 @@ fn compiled_delivery_survives_collection_before_resume() {
     assert!(roots.contains(&thrown_ptr));
     assert!(roots.contains(&context_ptr));
 
-    let forwarding = collect(&mut vm);
-    let moved_value = forwarding[&thrown_ptr];
-    let moved_context = forwarding[&context_ptr];
+    let moved = collect(&mut vm, &[thrown_ptr, context_ptr]);
+    let (moved_value, moved_context) = (moved[0].unwrap(), moved[1].unwrap());
     assert_ne!(moved_value, thrown_ptr);
     assert_ne!(moved_context, context_ptr);
     let Some(VmError::Thrown(thrown)) = vm.compiled.delivery.as_deref() else {
@@ -1496,7 +1662,7 @@ fn compiled_rethrow_keeps_the_original_context() {
 
 #[test]
 fn call_type_lanes_root_and_forward_runtime_heads() {
-    for lane in 0..4 {
+    for lane in [0, 1, 3, 4] {
         let (mut vm, native_ptr) = crate::vm::tests::vm_with_native_entry();
         vm.set_entry_point(native_ptr, &[]);
 
@@ -1525,10 +1691,15 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
             bex_vm_types::TypeHead::new(class_ptr, tag),
             Box::new([]),
         );
+        let mut lent = [ty.clone()];
         match lane {
             0 => vm.pending_call_type_args.push(ty),
             1 => vm.compiled.call_type_args.push(ty),
-            2 => vm.compiled.builtin_type_args.push(ty),
+            4 => {
+                vm.compiled.lent_type_args = Some(super::state::LentTypeArgs(
+                    std::ptr::NonNull::from(&mut lent[..]),
+                ));
+            }
             _ => {
                 vm.pending_call_type_args.push(ty);
                 vm.save_call_types();
@@ -1542,16 +1713,16 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
             "a native call's realized argument must root its runtime declaration",
         );
 
-        let forwarding = collect(&mut vm);
-        let moved = forwarding
-            .get(&class_ptr)
-            .copied()
+        let moved = collect(&mut vm, &[class_ptr])[0]
             .expect("the pending native type argument must survive collection");
 
         let ty = match lane {
             0 => &vm.pending_call_type_args[0],
             1 => &vm.compiled.call_type_args[0],
-            2 => &vm.compiled.builtin_type_args[0],
+            4 => {
+                vm.compiled.lent_type_args = None;
+                &lent[0]
+            }
             _ => {
                 vm.restore_call_types();
                 &vm.pending_call_type_args[0]
@@ -1748,6 +1919,30 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
         assert_eq!(spans("->user.Timing"), 0, "{:#?}", compiled.1);
         assert_eq!(spans("->user.Span"), 2, "{:#?}", compiled.1);
         assert_eq!(spans("->user.Hooked"), 2, "{:#?}", compiled.1);
+        // `trace.span` as a declaration hook records the call's inputs, as
+        // `trace.span()` at a call site does; `trace.empty_span` records none.
+        for (path, records) in [("compiled", &compiled.1), ("bytecode", &bytecode.1)] {
+            let announced = |callee: &str, inputs: &str| {
+                records
+                    .iter()
+                    .filter(|span| {
+                        span.starts_with("FunctionSpanAnnouncement")
+                            && span.contains(callee)
+                            && span.contains(inputs)
+                    })
+                    .count()
+            };
+            for (callee, with_inputs, without) in [("->user.Span", 2, 0), ("->user.Empty", 0, 2)] {
+                assert_eq!(
+                    (
+                        announced(callee, "captured_inputs: Some"),
+                        announced(callee, "captured_inputs: None")
+                    ),
+                    (with_inputs, without),
+                    "{path} {callee}: {records:#?}"
+                );
+            }
+        }
         for callee in ["->user.Decide)", "->user.Boom)", "->user.Fallback)"] {
             assert!(
                 compiled.1.iter().any(|span| span.contains(callee)),
@@ -1771,6 +1966,127 @@ fn call_safepoints_keep_yielding_under_gc_stress() {
     let mut vm = vm_with_main(main, 0, false);
     vm.early_yield =
         bex_vm_types::EarlyYieldCheck::with_interval(Arc::new(AtomicBool::new(false)), 3);
-    let yields: Vec<_> = (1..=9).filter(|_| vm.yield_at_call(true)).collect();
+    let yields: Vec<_> = (1..=9).filter(|_| vm.yield_at_call(|| true)).collect();
     assert_eq!(yields, [3, 6, 9]);
+}
+
+const TELEMETRY_LEVELS: [Option<btel_settings::mode::AutoTelemetryLevel>; 2] =
+    [None, Some(btel_settings::mode::AutoTelemetryLevel::Medium)];
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_generic_record_reads_its_type_arguments_after_a_collection() {
+    use crate::compiled_rt::Step;
+
+    static COUNT: AtomicU32 = AtomicU32::new(0);
+    fn count(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let ty = vm.frame_type_arg(fr, 0)?;
+        vm.suspend(Step::Yield)?;
+        assert_eq!(vm.frame_type_arg(fr, 0)?, ty);
+        let (x, n) = (args[0], test_int(args[1]));
+        if n == 0 {
+            return Ok(Value::bool(vm.value_is_member_of(x, &ty)));
+        }
+        let next = [x, Value::int(n - 1)];
+        let callee = object(vm, &COUNT);
+        unsafe {
+            vm.call_record_typed(
+                fr,
+                callee,
+                &[ty],
+                0,
+                |_| next,
+                |vm, fr| count(vm, fr, &next),
+            )
+        }
+    }
+    const SOURCE: &str = r#"
+        function Count<T>(x: T, n: int) -> bool { if (n == 0) { x is T } else { Count<T>(x, n - 1) } }
+        function Main() -> bool { Count<int>(1, 3) }
+    "#;
+    for level in TELEMETRY_LEVELS {
+        let program = compiled_program(SOURCE, &[("user.Count", count)], &[("user.Count", &COUNT)]);
+        let mut vm = program_vm(program, level);
+        assert_eq!(exec_collecting(&mut vm), Value::bool(true), "{level:?}");
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_closure_record_reads_captured_type_arguments_after_a_collection() {
+    use crate::compiled_rt::Step;
+
+    static CHECK: AtomicU32 = AtomicU32::new(0);
+    fn check(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let (closure, ty) = (fr.function(), vm.frame_type_arg(fr, 0)?);
+        vm.suspend(Step::Yield)?;
+        assert_ne!(fr.function(), closure, "the collection moves the closure");
+        assert_eq!(vm.frame_type_arg(fr, 0)?, ty);
+        Ok(Value::bool(vm.value_is_member_of(args[0], &ty)))
+    }
+    fn main(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> BodyResult {
+        let function = object(vm, &CHECK);
+        let closure = vm.make_closure(function, Vec::new(), Box::new([RealizedTy::Int]));
+        let callee = closure.as_object_ptr().unwrap();
+        vm.call_closure_compiled(fr, callee, check, &[Value::int(1)], 0)
+    }
+    const SOURCE: &str = r#"
+        function Check(x: int) -> bool { true }
+        function Main() -> bool { false }
+    "#;
+    for level in TELEMETRY_LEVELS {
+        let bodies = [("user.Check", check as CompiledFn), ("user.Main", main)];
+        let program = compiled_program(SOURCE, &bodies, &[("user.Check", &CHECK)]);
+        let mut vm = program_vm(program, level);
+        assert_eq!(exec_collecting(&mut vm), Value::bool(true), "{level:?}");
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_error_through_a_generic_record_traces_as_bytecode_does() {
+    static FAIL: AtomicU32 = AtomicU32::new(0);
+    fn fail(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        vm.frame_type_arg(fr, 0)?;
+        Ok(Value::int(vm.div_i64(test_int(args[1]), 0)?))
+    }
+    fn relay(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let ty = vm.frame_type_arg(fr, 0)?;
+        let callee = object(vm, &FAIL);
+        let passed = [args[0], args[1]];
+        unsafe {
+            vm.call_record_typed(
+                fr,
+                callee,
+                &[ty],
+                0,
+                |_| passed,
+                |vm, fr| fail(vm, fr, &passed),
+            )
+        }
+    }
+    const SOURCE: &str = r#"
+        function Fail<T>(x: T, n: int) -> int { n / 0 }
+        function Relay<T>(x: T, n: int) -> int { Fail<T>(x, n) }
+        function Main() -> string {
+            let out = "";
+            let r = Relay<int>(1, 1) catch (e, ctx) {
+                baml.panics.DivisionByZero => {
+                    for (let frame in ctx.stack_trace.frames) {
+                        out = out + `${frame.function_name}@${frame.line};`;
+                    }
+                    -1
+                }
+            };
+            out
+        }
+    "#;
+    let bytecode = run_with_compiled_bodies(SOURCE, &[], &[], true);
+    assert!(bytecode.contains("user.Fail@"), "{bytecode}");
+    assert_compiled_output(
+        SOURCE,
+        &[("user.Fail", fail), ("user.Relay", relay)],
+        &[("user.Fail", &FAIL)],
+        &bytecode,
+    );
 }

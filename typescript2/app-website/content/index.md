@@ -1,6 +1,6 @@
 # BAML
 
-> The hyperobservable software stack.
+> The hyper-observable programming language.
 
 BAML is a Turing-complete programming language designed for software written by agents and humans. It feels familiar to TypeScript developers, keeps types meaningful at runtime, has explicit error handling, and includes first-class tools for discovering, running, testing, and sharing code.
 

@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use bex_heap::TlabHolder;
 use bex_str::BexStr;
-use bex_vm_types::{
-    HeapPtr, PromptAst, PromptAstSimple, RootHaver, RootVisitor,
-    types::{Object, Value},
-};
+use bex_vm_types::{HeapPtr, PromptAst, PromptAstSimple, RootHaver, RootVisitor, types::Value};
 
 use super::{
     Continuation, NativeCallResult, make_to_string_callee,
@@ -122,21 +119,14 @@ fn prompt_json(vm: &BexVm, value: Value, what: &str) -> Result<serde_json::Value
 /// The `args` of an `ai.CacheDelimiter` instance, which is what `${cache(args)}`
 /// interpolates. `None` for any other value.
 fn cache_delimiter_args(vm: &BexVm, value: Value) -> Option<Value> {
-    let ptr = value.as_object_ptr()?;
-    let (class, args) = match vm.get_object(ptr) {
-        Object::Instance(instance) => (instance.class, instance.fields.first()?.load()),
-        _ => return None,
-    };
-    let is_delimiter = match vm.get_object(class) {
-        Object::Class(c) => vm
-            .stdlib_heads()
-            .is_class(StdlibClass::CacheDelimiter, c.type_tag),
-        _ => false,
-    };
-    if !is_delimiter {
+    let instance = vm.get_instance(value.as_object_ptr()?)?;
+    if !vm.stdlib_heads().is_class(
+        StdlibClass::CacheDelimiter,
+        instance.class_object().type_tag,
+    ) {
         return None;
     }
-    Some(args)
+    Some(instance.load_value(0))
 }
 
 /// Trim leading whitespace off a run of content parts: whitespace-only text
@@ -211,35 +201,25 @@ fn message(role: PromptRole, mut content: PromptContentSink, trim: bool) -> Arc<
 /// The `name` and `metadata` of an `ai.Role` instance, which opens a message.
 /// `None` for any other value.
 fn role_fields(vm: &BexVm, value: Value) -> Option<(String, Value)> {
-    let ptr = value.as_object_ptr()?;
-    let (class_ptr, fields) = match vm.get_object(ptr) {
-        Object::Instance(instance) => (
-            instance.class,
-            instance.field_values().collect::<Vec<Value>>(),
-        ),
-        _ => return None,
+    let instance = vm.get_instance(value.as_object_ptr()?)?;
+    let class = instance.class_object();
+    if !vm
+        .stdlib_heads()
+        .is_class(StdlibClass::PromptRole, class.type_tag)
+    {
+        return None;
+    }
+    let field = |name: &str| {
+        class
+            .instance_fields()
+            .iter()
+            .position(|field| field.name == name)
     };
-    let (name_index, metadata_index) = match vm.get_object(class_ptr) {
-        Object::Class(class)
-            if vm
-                .stdlib_heads()
-                .is_class(StdlibClass::PromptRole, class.type_tag) =>
-        {
-            (
-                class
-                    .instance_fields()
-                    .iter()
-                    .position(|field| field.name == "name")?,
-                class
-                    .instance_fields()
-                    .iter()
-                    .position(|field| field.name == "metadata")?,
-            )
-        }
-        _ => return None,
-    };
-    let name = vm.as_string(fields.get(name_index)?).ok()?;
-    Some((name.as_str().to_string(), *fields.get(metadata_index)?))
+    let name = vm.as_string(&instance.load_value(field("name")?)).ok()?;
+    Some((
+        name.as_str().to_string(),
+        instance.load_value(field("metadata")?),
+    ))
 }
 
 /// The role `value` opens a message with, if it is an `ai.Role`.

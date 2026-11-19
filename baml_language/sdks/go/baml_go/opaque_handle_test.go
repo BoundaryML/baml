@@ -15,6 +15,17 @@ func handleWireValue(handle *cffi.BamlOutboundHandle) Value {
 	return Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_HandleValue{HandleValue: handle}}}
 }
 
+// releaseAtCleanup releases `handle` when the test ends, before the release
+// hook the test installed is restored: left to its finalizer, it would be
+// released into whatever hook a later test has installed.
+func releaseAtCleanup(t *testing.T, handle OpaqueHandle) {
+	t.Helper()
+	t.Cleanup(func() {
+		runtime.SetFinalizer(handle.handle, nil)
+		finalizeOpaqueHandle(handle.handle)
+	})
+}
+
 func sessionWireHandle(key uint64) *cffi.BamlOutboundHandle {
 	return &cffi.BamlOutboundHandle{
 		Key:        key,
@@ -258,6 +269,7 @@ func TestRuntimeValueOfAnyDeclarationDecodesDynamically(t *testing.T) {
 		if !ok || handle.handle == nil || handle.handle.key != 107 {
 			t.Fatalf("decode %v = %#v, want an OpaqueHandle owning its own clone", ty, decoded)
 		}
+		releaseAtCleanup(t, handle)
 		encoded, err := handle.BAMLInput().encodeValue(&inputTransaction{})
 		if err != nil || encoded.GetHandle().GetHandleType() != cffi.BamlHandleType_ADT_RUNTIME_VALUE {
 			t.Fatalf("re-send %v = %v, %v; want the handle it crossed as", ty, encoded, err)
@@ -289,6 +301,7 @@ func TestOpaqueHandleEqualityIsInstanceIdentity(t *testing.T) {
 		if err != nil {
 			t.Fatalf("decode %d: %v", key, err)
 		}
+		releaseAtCleanup(t, handle)
 		return handle
 	}
 	first, second, other := decode(7), decode(7), decode(8)

@@ -7,26 +7,70 @@
 /// Execute `baml test`
 #[test]
 fn baml_test() {
-    run_baml_tests(
+    let executed = run_baml_tests(
         concat!(env!("CARGO_MANIFEST_DIR"), "/../baml_tests/baml_src"),
         "medium",
+    );
+    // Only a debug `baml-cli` (the test's own profile) records opcodes.
+    if cfg!(debug_assertions) {
+        assert_runs_every_opcode(&executed);
+    }
+}
+
+/// Opcodes no corpus program runs. `bex_vm`'s
+/// `opcodes_the_corpus_never_runs_pass_the_operand_depth_check` runs these
+/// same ones, under the same debug-build checks; keep the two lists equal.
+const OPCODES_RUN_ELSEWHERE: &[&str] = &[
+    // A compiled body's resume stub; the corpus runs bytecode only.
+    "ResumeCompiled",
+    // Raises; no correct program reaches it.
+    "Unreachable",
+    // Kept for older bytecode; the compiler no longer emits them.
+    "AllocVariant",
+    "TraceHookRich",
+    "JumpIfFalse",
+    // Map access compiles to `baml.Map` calls; these handlers refuse to run.
+    "LoadMapElement",
+    "StoreMapElement",
+    // Corpus comparisons of these kinds take the typed or driver paths.
+    "LtEq",
+    "GtEq",
+    "CmpBigintNotEq",
+];
+
+/// Every instruction a debug `baml-cli` runs passes the dispatch loop's
+/// operand-depth assertion, which ties the load-time stack check's effect
+/// table to the VM's handlers. Running every opcode means no handler escapes
+/// that assertion.
+fn assert_runs_every_opcode(executed: &[String]) {
+    let missing: Vec<String> = (0..=u8::MAX)
+        .filter_map(|byte| bex_vm_types::bytecode::OpCode::try_from(byte).ok())
+        .map(|op| format!("{op:?}"))
+        .filter(|name| !executed.contains(name) && !OPCODES_RUN_ELSEWHERE.contains(&name.as_str()))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "the corpus never runs these opcodes, so their handlers escape the \
+         debug-build stack-effect check: {missing:?}"
     );
 }
 
 #[test]
 fn tracing_disabled() {
-    run_baml_tests(
+    let _ = run_baml_tests(
         concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/trace_disabled"),
         "off",
     );
 }
 
-fn run_baml_tests(project: &str, telemetry: &str) {
+/// Run the corpus with a debug `baml-cli`, returning the opcodes it ran.
+fn run_baml_tests(project: &str, telemetry: &str) -> Vec<String> {
     // Isolate the CLI's home per run. Without this, the CLI would write its
     // build cache straight into the source tree that the
     // `corpus_snapshots`/`emit_determinism` tests scan concurrently, and
     // successive runs would share (and could corrupt) that cache.
     let tmp = tempfile::tempdir().expect("tempdir for corpus cache");
+    let executed_opcodes = tmp.path().join("executed-opcodes.txt");
     // The build cache lives under the cargo target dir -- outside the source
     // tree the `corpus_snapshots`/`emit_determinism` tests
     // scan -- and stays warm across runs, so an unchanged corpus recompiles
@@ -63,11 +107,20 @@ fn run_baml_tests(project: &str, telemetry: &str) {
     #[cfg(not(unix))]
     let _ = &cache_dir;
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_baml-cli"))
-        .args(["test", "--from", project])
+        .args(["test", "--project-dir", project])
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         .env("BAML_TELEMETRY", telemetry)
         .env("BAML_HOME", &home)
+        .env("BAML_DEBUG_EXECUTED_OPCODES", &executed_opcodes)
         .status()
         .expect("baml_cli test should not fail");
     assert!(status.success());
+    if !cfg!(debug_assertions) {
+        return Vec::new();
+    }
+    std::fs::read_to_string(&executed_opcodes)
+        .expect("a debug baml-cli writes the opcodes it ran")
+        .lines()
+        .map(str::to_string)
+        .collect()
 }

@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { CopyToken } from "./copy-token";
-import { currentViewer, signCliToken } from "@/lib/bcs-auth";
+import { accessEndsAt, currentViewer, signCliToken } from "@/lib/bcs-auth";
 import { TeamOnly } from "../team-only";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "BCS CLI token" };
 
-/** A fresh `bep bcs` token for the signed-in member, valid for 90 days. */
+/** A fresh `bep bcs` token for the signed-in member, valid until their sign-in expires. */
 export default async function BcsToken() {
   const viewer = await currentViewer();
   if (!viewer) return <TeamOnly />;
@@ -23,8 +23,9 @@ export default async function BcsToken() {
         </div>
         <p className="text-muted-foreground">
           The <code>bep</code> script pulls and pushes BCS proposals with this token. It is yours
-          ({viewer.login}), works for 30 days, and a new one is made each time you open this page.
-          Keep it out of git and chat.
+          ({viewer.login}) and works until{" "}
+          {new Date(accessEndsAt(viewer) * 1000).toUTCString()}, two weeks after you last signed in
+          with GitHub; sign in again for a token that lasts longer. Keep it out of git and chat.
         </p>
         {token ? (
           <CopyToken token={token} />
@@ -35,7 +36,10 @@ export default async function BcsToken() {
           {`export BCS_TOKEN=<the token above>
 ./bep bcs pull                     # BCS/BCS-001-.../index.html
 ./bep bcs new "Title" design.html  # a new proposal
-./bep bcs push 1 -n "What changed" # a new version of BCS-001`}
+./bep bcs push 1 -n "What changed" # a new version of BCS-001
+./bep bcs comments 1               # its open threads, with each block's source
+./bep bcs reply 1 <id> "Text"      # reply to a thread
+./bep bcs reply 1 <id> "Text" --agent claude  # written by your agent`}
         </pre>
       </main>
     </div>

@@ -11,8 +11,8 @@ function decoded_regex() -> string {
     "built"
 }
 
-function yaml_limit() -> string {
-    let built = baml.yaml.decode<baml.spawn.Limit>("{}") catch (e) {
+function yaml_semaphore() -> string {
+    let built = baml.yaml.decode<baml.sync.Semaphore>("{}") catch (e) {
         _ => {
             return "refused";
         },
@@ -20,8 +20,8 @@ function yaml_limit() -> string {
     "built"
 }
 
-function json_to_limit() -> string {
-    let built = baml.json.to<baml.spawn.Limit>({}) catch (e) {
+function json_to_semaphore() -> string {
+    let built = baml.json.to<baml.sync.Semaphore>({}) catch (e) {
         _ => {
             return "refused";
         },
@@ -71,8 +71,8 @@ function decoded_holder() -> string {
 
 test "decoders refuse a class only the runtime builds" {
     assert.equal(decoded_regex(), "refused");
-    assert.equal(yaml_limit(), "refused");
-    assert.equal(json_to_limit(), "refused");
+    assert.equal(yaml_semaphore(), "refused");
+    assert.equal(json_to_semaphore(), "refused");
     assert.equal(decoded_holder(), "refused");
     assert.equal(csv_regex(), "refused");
 }

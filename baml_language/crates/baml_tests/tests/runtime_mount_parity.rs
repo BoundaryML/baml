@@ -294,6 +294,8 @@ fn runtime_mount_consumer_unit_is_byte_identical_to_the_source_dependency_compil
 fn with_types_consumer_wire_contract_is_pinned() {
     use baml_compiler2_hir_ty::package_interface::{PackageInterface, WireInterface};
     let empty = WireInterface {
+        claimed: baml_base::ClaimedIdentity::default(),
+        compiler_version: baml_compiler2_hir_ty::package_interface::COMPILER_VERSION.to_owned(),
         dependencies: Vec::new(),
         rows: PackageInterface::<baml_type::WireName> {
             types: indexmap::IndexMap::new(),

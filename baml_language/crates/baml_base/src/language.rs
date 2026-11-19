@@ -39,7 +39,8 @@ pub enum RustPayloadKind {
     XChaCha20Poly1305,
     Regex,
     CsvRecord,
-    Limit,
+    /// A `baml.sync.Semaphore`'s admission state: its slots and its queue.
+    Semaphore,
     CancelToken,
     SpanId,
     TraceOptions,
@@ -99,11 +100,16 @@ pub enum RustPayloadKind {
     OutputFormat,
     /// A `baml.fs.Lock`: a platform's held advisory lock.
     Lock,
+    /// A `baml.sync.Permit`: one slot of a semaphore, held or queued for.
+    Permit,
+    /// A `baml.sync.Ticket`: a task's place in line for the keys a
+    /// `baml.sync.atomic` block waits on.
+    Ticket,
 }
 
 impl RustPayloadKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 41] = [
+    pub const ALL: [Self; 43] = [
         Self::Foreign,
         Self::DefaultHasher,
         Self::Sha256,
@@ -113,7 +119,7 @@ impl RustPayloadKind {
         Self::XChaCha20Poly1305,
         Self::Regex,
         Self::CsvRecord,
-        Self::Limit,
+        Self::Semaphore,
         Self::CancelToken,
         Self::SpanId,
         Self::TraceOptions,
@@ -145,6 +151,8 @@ impl RustPayloadKind {
         Self::Prompt,
         Self::OutputFormat,
         Self::Lock,
+        Self::Permit,
+        Self::Ticket,
     ];
 
     /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
@@ -157,7 +165,7 @@ impl RustPayloadKind {
         "XChaCha20Poly1305",
         "Regex",
         "CsvRecord",
-        "Limit",
+        "Semaphore",
         "CancelToken",
         "SpanId",
         "TraceOptions",
@@ -189,6 +197,8 @@ impl RustPayloadKind {
         "Prompt",
         "OutputFormat",
         "Lock",
+        "Permit",
+        "Ticket",
     ];
 
     /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
@@ -205,7 +215,7 @@ impl RustPayloadKind {
             Self::XChaCha20Poly1305 => Some("XChaCha20Poly1305"),
             Self::Regex => Some("Regex"),
             Self::CsvRecord => Some("CsvRecord"),
-            Self::Limit => Some("Limit"),
+            Self::Semaphore => Some("Semaphore"),
             Self::CancelToken => Some("CancelToken"),
             Self::SpanId => Some("SpanId"),
             Self::TraceOptions => Some("TraceOptions"),
@@ -237,6 +247,8 @@ impl RustPayloadKind {
             Self::Prompt => Some("Prompt"),
             Self::OutputFormat => Some("OutputFormat"),
             Self::Lock => Some("Lock"),
+            Self::Permit => Some("Permit"),
+            Self::Ticket => Some("Ticket"),
         }
     }
 
@@ -543,7 +555,7 @@ mod tests {
                 RustPayloadKind::XChaCha20Poly1305 => 6,
                 RustPayloadKind::Regex => 7,
                 RustPayloadKind::CsvRecord => 8,
-                RustPayloadKind::Limit => 9,
+                RustPayloadKind::Semaphore => 9,
                 RustPayloadKind::CancelToken => 10,
                 RustPayloadKind::SpanId => 11,
                 RustPayloadKind::TraceOptions => 12,
@@ -575,6 +587,8 @@ mod tests {
                 RustPayloadKind::Prompt => 38,
                 RustPayloadKind::OutputFormat => 39,
                 RustPayloadKind::Lock => 40,
+                RustPayloadKind::Permit => 41,
+                RustPayloadKind::Ticket => 42,
             }
         }
         for (index, kind) in RustPayloadKind::ALL.into_iter().enumerate() {

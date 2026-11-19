@@ -145,6 +145,9 @@ pub struct BexThread {
     /// The network span the failing sys-op ends: closed with the thrown
     /// value once the engine has built it.
     pub(crate) network_close: Option<crate::telemetry_network::NetworkClose>,
+    /// Why the thread is parked, for the stuck-task report; `None` while it
+    /// runs.
+    pub(crate) parked: Option<crate::task_report::Parked>,
 }
 
 impl BexThread {
@@ -160,6 +163,7 @@ impl BexThread {
             settles_future: None,
             escaped_outcome: None,
             network_close: None,
+            parked: None,
         }
     }
 
@@ -180,6 +184,8 @@ impl BexThread {
             settles_future: Some(settles_future),
             escaped_outcome: None,
             network_close: None,
+            // Until it is admitted and starts running.
+            parked: Some(crate::task_report::Parked::Starting),
         }
     }
 
@@ -249,12 +255,17 @@ impl RootHaver for BexThread {
             settles_future: _,
             escaped_outcome: _,
             network_close: _,
+            parked: _,
         } = self;
         vm.visit_roots(visitor);
     }
 
     fn relocated(&mut self) {
         self.vm.relocated();
+    }
+
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
     }
 }
 

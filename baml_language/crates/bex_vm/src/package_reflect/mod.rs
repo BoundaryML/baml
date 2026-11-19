@@ -3,7 +3,7 @@
 //! The generated trait hierarchy is built from `baml_std/reflect`, so every
 //! `$rust_function` declared by the package requires a Rust implementation.
 
-mod graft;
+pub(crate) mod graft;
 pub(crate) mod reflect;
 pub(crate) mod runtime_class_builder;
 mod type_class;
@@ -12,7 +12,8 @@ pub(crate) mod type_kinds;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     ArrayReadGuard, MapReadGuard,
-    types::{Instance, Value},
+    errors::VmInternalError,
+    types::{InstanceRef, Type, Value},
 };
 use indexmap::IndexMap;
 

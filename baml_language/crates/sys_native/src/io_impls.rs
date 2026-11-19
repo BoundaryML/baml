@@ -2607,6 +2607,7 @@ fn build_io_http_response(
     url: String,
     timeout_options: HttpTimeoutOptions,
     network: Option<sys_types::network::NetworkContext>,
+    readers: &sys_types::http_readers::HttpReaders,
 ) -> owned::http::Response {
     let status = i64::from(response.status().as_u16());
     let headers: indexmap::IndexMap<String, String> = response
@@ -2618,7 +2619,7 @@ fn build_io_http_response(
         status_code: status,
         headers,
         url,
-        _body: crate::http_server::HttpBody::client(response, timeout_options, network),
+        _body: crate::http_server::HttpBody::client(response, timeout_options, network, readers),
     }
 }
 
@@ -2779,6 +2780,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         let network = ctx.network.clone();
+        let readers = ctx.http_readers.clone();
         SysOpOutput::async_op(async move {
             crate::ensure_rustls_crypto_provider();
             let timeout_options =
@@ -2796,6 +2798,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 final_url,
                 timeout_options,
                 network,
+                &readers,
             ))
         })
     }
@@ -2827,6 +2830,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         let network = ctx.network.clone();
+        let readers = ctx.http_readers.clone();
         SysOpOutput::async_op(async move {
             let method = http_method(&request.method)?;
 
@@ -2856,6 +2860,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 final_url,
                 timeout_options,
                 network,
+                &readers,
             ))
         })
     }
@@ -3105,7 +3110,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                     notify,
                     reader: consumer.abort_handle(),
                     retained,
-                    network,
+                    carrier: network.map(sys_types::network::NetworkCarrier::new),
                 }),
             })
         })

@@ -72,11 +72,12 @@ if ({json.dumps(mode)} === 'nonzero') process.exitCode = 7;
         run(
             [
                 str(CLI),
+                "local",
+                "recordings",
                 "query",
-                "--local",
-                "--from",
+                "--project-dir",
                 str(tmp_path / "config"),
-                "--format",
+                "--output-format",
                 "json",
                 sql,
             ],

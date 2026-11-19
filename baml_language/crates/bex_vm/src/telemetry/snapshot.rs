@@ -2,7 +2,9 @@
 //! snapshot-local indexes. Locks sample containers independently, not atomically.
 use std::borrow::Cow;
 
-use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind};
+use bex_vm_types::{
+    Field, HeapPtr, InstanceRef, MediaContent, MediaValue, Object, TypeHead, Value, ValueKind,
+};
 use btel_snapshot::{
     Builder, Carried, Description, Leaves, Limit, MediaSource, ObjectId, OwnedType,
     RedactionReason, Reserved, Shaper, Snapshot, SnapshotObject, SnapshotRoot, SnapshotValue,
@@ -67,6 +69,15 @@ impl Scratch {
         Some(id)
     }
 
+    /// [`Self::add`] for an instance field, which may be a raw float.
+    fn add_field(&mut self, leaves: &mut Leaves<'_>, field: Field, depth: usize) -> SnapshotValue {
+        match field {
+            Field::Value(value) => self.add(leaves, value, depth),
+            Field::Float(_) if past_depth(leaves, depth) => SnapshotValue::Truncated(Limit::Depth),
+            Field::Float(float) => SnapshotValue::Float(float),
+        }
+    }
+
     /// The value as the capture holds it. An object gets its identity here
     /// and its content later, so that what it holds can name it.
     fn add(&mut self, leaves: &mut Leaves<'_>, value: Value, depth: usize) -> SnapshotValue {
@@ -75,7 +86,7 @@ impl Scratch {
                 return *value;
             }
         }
-        if leaves.limits().max_depth.is_some_and(|max| depth > max) {
+        if past_depth(leaves, depth) {
             return SnapshotValue::Truncated(Limit::Depth);
         }
         let ptr = match value.kind() {
@@ -83,6 +94,7 @@ impl Scratch {
             ValueKind::OmittedArg => return SnapshotValue::OmittedArg,
             ValueKind::Int(v) => return SnapshotValue::Int(v),
             ValueKind::Bool(v) => return SnapshotValue::Bool(v),
+            ValueKind::Float(v) => return SnapshotValue::Float(v),
             ValueKind::Object(ptr) => ptr,
         };
         // SAFETY: capture holds the heap permit and never allocates in the VM heap.
@@ -117,10 +129,12 @@ impl Scratch {
             // A class declared redacted is withheld whole, whether its
             // instance holds fields or runtime state: nothing of the instance
             // enters the capture, which records only that it was.
-            Object::Instance(bex_vm_types::Instance { class, .. })
-            | Object::RustInstance(bex_vm_types::RustInstance { class, .. })
-                // SAFETY: the class lives under the same heap permit.
-                if matches!(unsafe { class.get() }, Object::Class(class) if class.redact) =>
+            Object::Instance | Object::RustInstance(_)
+                // SAFETY: the instance and its class live under the same heap
+                // permit.
+                if unsafe { Object::class_instance_at(ptr) }.is_some_and(|(class, _)| {
+                    matches!(unsafe { class.get() }, Object::Class(class) if class.redact)
+                }) =>
             {
                 SnapshotValue::Redacted(RedactionReason::Declared)
             }
@@ -184,6 +198,19 @@ impl Scratch {
                         self.add(leaves, *value, depth + 1)
                     })
                 }
+                Object::Tuple(tuple) => {
+                    let element_types: SmallVec<[(OwnedType, bool); 4]> = {
+                        let mut leaves = b.leaves();
+                        tuple
+                            .element_tys
+                            .iter()
+                            .map(|ty| owned_type(&mut leaves, &mut self.carried, ty))
+                            .collect()
+                    };
+                    b.described_tuple(element_types, tuple.slot_values(), |leaves, value| {
+                        self.add(leaves, value, depth + 1)
+                    })
+                }
                 Object::Map(data) => {
                     let key_type = described(&mut b.leaves(), &mut self.carried, &data.key_ty);
                     let value_type = described(&mut b.leaves(), &mut self.carried, &data.value_ty);
@@ -195,22 +222,21 @@ impl Scratch {
                         )
                     })
                 }
-                Object::Instance(instance) => {
-                    let class = Value::object(instance.class);
+                Object::Instance => {
+                    // SAFETY: the instance lives under the same heap permit.
+                    let instance = unsafe { InstanceRef::of(ptr) }.expect("an instance pointer");
+                    let class = Value::object(instance.class());
                     match self.add(&mut b.leaves(), class, depth + 1) {
                         SnapshotValue::Object(declaration) => {
-                            // SAFETY: class lives under the same heap permit.
-                            let Object::Class(class) = (unsafe { instance.class.get() }) else {
-                                unreachable!("instance class")
-                            };
+                            let class = instance.class_object();
                             // A generic instance's type arguments; most have none.
                             let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
-                                if instance.class_type_args.is_empty() {
+                                if instance.type_args().is_empty() {
                                     SmallVec::new()
                                 } else {
                                     let mut leaves = b.leaves();
                                     instance
-                                        .class_type_args
+                                        .type_args()
                                         .iter()
                                         .map(|ty| owned_type(&mut leaves, &mut self.carried, ty))
                                         .collect()
@@ -225,7 +251,7 @@ impl Scratch {
                                     let value = if field.redact {
                                         SnapshotValue::Redacted(RedactionReason::Declared)
                                     } else {
-                                        self.add(leaves, instance.load_field(at), depth + 1)
+                                        self.add_field(leaves, instance.load(at), depth + 1)
                                     };
                                     (field.name.as_str().into(), value)
                                 },
@@ -251,7 +277,9 @@ impl Scratch {
                                 | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
                                 | bex_vm_types::RustPayload::Regex(_)
                                 | bex_vm_types::RustPayload::CsvRecord(_)
-                                | bex_vm_types::RustPayload::Limit(_)
+                                | bex_vm_types::RustPayload::Semaphore(_)
+                                | bex_vm_types::RustPayload::Permit(_)
+                                | bex_vm_types::RustPayload::Ticket(_)
                                 | bex_vm_types::RustPayload::CancelToken(_)
                                 | bex_vm_types::RustPayload::SpanId(_)
                                 | bex_vm_types::RustPayload::TraceOptions(_)
@@ -397,6 +425,23 @@ fn network(b: &mut Builder, payload: &NetworkPayload<'_>) -> SnapshotValue {
                 OwnedType::Unknown,
                 &[("status", status), ("headers", headers)],
             )
+        }
+        NetworkPayload::Error { message, timeout } => {
+            let message = text(&mut b.leaves(), message);
+            let kind = text(
+                &mut b.leaves(),
+                if timeout {
+                    "baml.errors.Timeout"
+                } else {
+                    "baml.errors.Io"
+                },
+            );
+            let error = map(
+                b,
+                OwnedType::Unknown,
+                &[("message", message), ("type", kind)],
+            );
+            map(b, OwnedType::Unknown, &[("error", error)])
         }
         NetworkPayload::Body(bytes) => body(b, bytes),
         NetworkPayload::SseEvent { event, data, id } => {
@@ -570,6 +615,11 @@ fn media(
 fn describe(kind: Description) -> SnapshotObject {
     SnapshotObject::Descriptive { kind, name: None }
 }
+/// Whether a value at `depth` lies past the capture's depth limit.
+fn past_depth(leaves: &Leaves<'_>, depth: usize) -> bool {
+    leaves.limits().max_depth.is_some_and(|max| depth > max)
+}
+
 /// A network or type-argument snapshot as JSON, to compare shapes in tests:
 /// bytes become an array of numbers, a truncated value names its limit, a
 /// type is `"type: <type>"`.
@@ -742,7 +792,8 @@ mod tests {
             "b".repeat(1024).into(),
         ));
         let big = vm.tlab.alloc_bigint(num_bigint::BigInt::from(123));
-        let float = vm.tlab.alloc_float(2.5);
+        let float = vm.tlab.float_value(2.5);
+        let boxed_float = vm.tlab.float_value(f64::INFINITY);
         let snapshot = capture(&[
             Value::NULL,
             Value::OMITTED_ARG,
@@ -750,7 +801,8 @@ mod tests {
             Value::int(-3),
             Value::object(string),
             Value::object(big),
-            Value::object(float),
+            float,
+            boxed_float,
         ]);
         unsafe { vm.heap.collect_garbage(&[]) };
         drop(vm);
@@ -768,6 +820,8 @@ mod tests {
         );
         assert!(matches!(roots[5], Val::Bigint(_)));
         assert!(matches!(roots[6], Val::Float(2.5)));
+        // Inline and boxed floats capture alike.
+        assert!(matches!(roots[7], Val::Float(f) if f == f64::INFINITY));
     }
     #[test]
     fn media_is_captured_by_content_without_retaining_sources() {
@@ -910,6 +964,21 @@ mod tests {
                 .iter()
                 .all(|item| *item == Val::Truncated(Limit::Depth))
         );
+    }
+    /// A raw float field is cut at the depth limit like any value there.
+    #[test]
+    fn a_raw_float_field_past_the_depth_limit_is_truncated() {
+        let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits {
+            max_depth: Some(1),
+            ..Default::default()
+        });
+        let mut builder = pool.try_acquire().unwrap();
+        let mut leaves = builder.leaves();
+        let mut scratch = Scratch::default();
+        let float = Field::Float(0.5);
+        assert_eq!(scratch.add_field(&mut leaves, float, 1), Val::Float(0.5));
+        let past = scratch.add_field(&mut leaves, float, 2);
+        assert_eq!(past, Val::Truncated(Limit::Depth));
     }
     #[test]
     fn a_value_too_large_to_hold_whole_is_captured_as_truncated() {
@@ -1074,6 +1143,7 @@ mod tests {
             other: indexmap::IndexMap::default(),
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
         let instance = vm.tlab.alloc_instance_with_type_args(
             class_ptr,
@@ -1094,10 +1164,8 @@ mod tests {
         );
         let snapshot = capture(&[Value::object(map)]);
         unsafe {
-            let Object::Instance(instance) = instance.get() else {
-                unreachable!()
-            };
-            instance.store_field(0, Value::int(99));
+            let instance = InstanceRef::of(instance).unwrap();
+            instance.store(0, Value::int(99)).unwrap();
             let Object::Map(map) = map.get() else {
                 unreachable!()
             };
@@ -1442,7 +1510,7 @@ mod tests {
             .tlab
             .alloc_array(RealizedTy::int(), (0..10_000).map(Value::int).collect());
         let float_values = (0..10_000)
-            .map(|i| Value::object(vm.tlab.alloc_float(f64::from(i))))
+            .map(|i| vm.tlab.float_value(f64::from(i)))
             .collect();
         let floats = vm.tlab.alloc_array(ty(), float_values);
         let map = vm.tlab.alloc_map(

@@ -1,9 +1,10 @@
 import Image from 'next/image';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { createMetadata } from '@/app/_lib/metadata';
 import { DiscordCard } from '@/components/community-cards';
 import { section } from '@/components/home/analytics';
-import { BOOK } from '@/components/home/links';
+import { SIGNUP } from '@/components/home/links';
 import { PAGE_WRAP, PageShell } from '@/components/home/page-shell';
 import { Button, Cmd } from '@/components/home/ui';
 // CONTENT PARITY: keep substantive copy and commands in sync with
@@ -20,10 +21,10 @@ export const metadata = createMetadata({
   title: 'Quickstart',
 });
 
-// The install page, in the homepage's BAML lane. It isn't linked from the nav or the footer. It
-// offers one prompt to hand to a coding agent, then the same setup as numbered steps for anyone who
-// would rather run the commands, then where to go once BAML is running: Boundary's cloud for
-// production, Discord, and a few links.
+// The install page, in the homepage's BAML lane, linked from the nav's bar and Platform menu and from
+// the footer. It offers one prompt to hand to a coding agent, then the same setup as numbered steps
+// for anyone who would rather run the commands, then what to write in BAML first, then where to go
+// once BAML is running: Boundary's cloud for production, Discord, and a few links.
 
 type Step = {
   after?: { body: ReactNode; commands: Command[] };
@@ -197,6 +198,34 @@ export default function QuickstartPage() {
       </section>
 
       <section
+        {...section('quickstart_first')}
+        aria-labelledby="first"
+        className={`${PAGE_WRAP} pb-12 md:pb-16`}
+      >
+        <div className="max-w-[45rem] flex flex-col gap-4">
+          <h2 className={H2} id="first">
+            What should I write with BAML first?
+          </h2>
+          <p className={BODY}>
+            We recommend your AI workflows or agents. Write the prompts, the
+            tools, and the steps between them as BAML functions, and leave the
+            rest of your app in the language it is in.
+          </p>
+          <p className={BODY}>
+            BAML generates a typed SDK for most languages, so your existing code
+            calls those functions like its own.{' '}
+            <Link
+              className="underline underline-offset-4 hover:text-ink"
+              href="/adopt#incremental"
+            >
+              See the three ways to adopt BAML
+            </Link>
+            .
+          </p>
+        </div>
+      </section>
+
+      <section
         {...section('quickstart_ci')}
         aria-labelledby="ci"
         className={`${PAGE_WRAP} pb-12 md:pb-16`}
@@ -263,7 +292,7 @@ export default function QuickstartPage() {
                 it up with you.
               </p>
               <div className="mt-auto pt-1">
-                <Button href={BOOK}>Book a call</Button>
+                <Button href={SIGNUP}>Get early access</Button>
               </div>
             </div>
             <DiscordCard />
@@ -304,7 +333,7 @@ export default function QuickstartPage() {
             <p className={`mt-4 border-l-2 border-rule pl-4 ${BODY}`}>
               The <Cmd>baml</Cmd> command is a version manager, so it rarely
               needs updating. Update it with your package manager (
-              <Cmd>brew upgrade baml</Cmd>) or with <Cmd>baml self-update</Cmd>.
+              <Cmd>brew upgrade baml</Cmd>) or with <Cmd>baml self update</Cmd>.
               If you change your project&rsquo;s toolchain version, run{' '}
               <Cmd>baml agent install</Cmd> again when the CLI asks. If
               something doesn&rsquo;t work, tell us on Discord.

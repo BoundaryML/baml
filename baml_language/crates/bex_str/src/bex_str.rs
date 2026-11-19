@@ -1,5 +1,6 @@
 use std::{
     borrow::Borrow,
+    cell::Cell,
     fmt,
     hash::{Hash, Hasher},
     ops::{Deref, Range},
@@ -87,8 +88,47 @@ pub struct ConcatNode {
 }
 
 pub(crate) enum ConcatState {
-    Deferred { left: BexStr, right: BexStr },
+    Deferred {
+        left: BexStr,
+        right: BexStr,
+    },
     Flattened(Arc<FlatStr>),
+    /// The children were moved out by `flatten` (under the lock) or by
+    /// `drop` (with exclusive access); never observed by anyone else.
+    Released,
+}
+
+thread_local! {
+    /// Text allocated for ropes on this thread since the last
+    /// [`take_materialized_bytes`] (a flattened buffer, or a run of short
+    /// parts [`BexStr::concat_many`] copied into one): what
+    /// [`BexStr::unshared_heap_bytes`] leaves out of a concatenation's
+    /// charge, reported once it exists.
+    /// Per thread, so a VM is charged for the ropes it reads itself.
+    static MATERIALIZED_BYTES: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Report `bytes` of text allocated for a rope on this thread.
+fn record_materialized(bytes: usize) {
+    if bytes != 0 {
+        MATERIALIZED_BYTES.with(|count| count.set(count.get().saturating_add(bytes)));
+    }
+}
+
+/// Text allocated for ropes on this thread since the last call, which
+/// resets the count. A VM adds them to its allocation debt, so text a
+/// concatenation materializes counts toward the next collection like any
+/// other allocation.
+#[inline]
+pub fn take_materialized_bytes() -> usize {
+    MATERIALIZED_BYTES.with(|bytes| {
+        // A read first: no flattening since the last call is the usual case.
+        if bytes.get() == 0 {
+            0
+        } else {
+            bytes.replace(0)
+        }
+    })
 }
 
 /// Bytes of an `Arc<FlatStr>` allocation beyond the text itself: the two
@@ -143,8 +183,11 @@ impl BexStr {
 
     /// Heap bytes this string would own if it shared nothing: zero when
     /// inline, otherwise an allocation holding its full length. A slice counts
-    /// only the bytes it views, and a concatenation counts the buffer that
-    /// reading it would materialize. Never flattens.
+    /// only the bytes it views. A concatenation counts only its node: its
+    /// pieces are strings of their own, and the buffer reading it materializes
+    /// is reported when that happens (see [`take_materialized_bytes`]), so a
+    /// loop of `s = s + piece` is not charged the whole text at every step.
+    /// Never flattens.
     ///
     /// Every handle to shared storage reports it in full, so summing this over
     /// handles overestimates; see [`Self::shared_heap_bytes`] for the share.
@@ -153,8 +196,7 @@ impl BexStr {
             Self::Inline { .. } => 0,
             Self::Flat(flat) => FLAT_OVERHEAD.saturating_add(flat.data.len()),
             Self::Slice { byte_len, .. } => usize::try_from(*byte_len).unwrap_or(usize::MAX),
-            Self::Concat(node) => CONCAT_OVERHEAD
-                .saturating_add(usize::try_from(node.total_byte_len).unwrap_or(usize::MAX)),
+            Self::Concat(_) => CONCAT_OVERHEAD,
         }
     }
 
@@ -163,7 +205,7 @@ impl BexStr {
     /// handle, a shared buffer is counted about once. A slice shares its whole
     /// parent, so a small slice of a large string reports a large share.
     ///
-    /// A concatenation is sized as in [`Self::unshared_heap_bytes`] without
+    /// A concatenation is sized as its node plus the text it holds, without
     /// looking inside, so its pieces are counted again if they are also held
     /// elsewhere. Never flattens.
     pub fn shared_heap_bytes(&self) -> usize {
@@ -526,6 +568,7 @@ impl BexStr {
     /// still costs nothing in the length of `s`.
     pub fn concat_many(parts: &[&BexStr]) -> BexStr {
         let mut result = BexStr::empty();
+        let mut copied_bytes = 0_usize;
         let mut rest = parts;
         loop {
             let short = rest
@@ -533,13 +576,22 @@ impl BexStr {
                 .take_while(|part| part.byte_len() <= CONCAT_MANY_COPY_LIMIT)
                 .count();
             let (copied, after) = rest.split_at(short);
-            result = BexStr::concat(result, copy_parts(copied));
+            let copy = copy_parts(copied);
+            copied_bytes = copied_bytes.saturating_add(copy.unshared_heap_bytes());
+            result = BexStr::concat(result, copy);
             let Some((long, after)) = after.split_first() else {
-                return result;
+                break;
             };
             result = BexStr::concat(result, (*long).clone());
             rest = after;
         }
+        // A copied run that ends up inside a rope is new memory the rope's
+        // node-only charge leaves out. When the copy is the whole result,
+        // the string's own charge already counts it.
+        if matches!(result, BexStr::Concat(_)) {
+            record_materialized(copied_bytes);
+        }
+        result
     }
 
     /// Pointer equality check — true if both point to the same Arc.
@@ -576,7 +628,7 @@ impl BexStr {
                 let guard = c.state.lock().unwrap();
                 match &*guard {
                     ConcatState::Flattened(f) => read_hash(&f.hash),
-                    ConcatState::Deferred { .. } => None,
+                    ConcatState::Deferred { .. } | ConcatState::Released => None,
                 }
             }
         }
@@ -603,21 +655,14 @@ fn copy_parts(parts: &[&BexStr]) -> BexStr {
         };
     }
     let mut bytes = Vec::with_capacity(byte_len);
-    let mut char_len = 0;
-    let mut ascii_prefix_len = 0;
     for part in parts {
-        let (prefix, chars) = part.ascii_prefix_and_char_len();
-        if ascii_prefix_len == bytes.len() {
-            ascii_prefix_len += prefix;
-        }
-        char_len += chars;
         bytes.extend_from_slice(part.as_bytes());
     }
-    BexStr::Flat(Arc::new(FlatStr::from_parts(
-        bytes.into_boxed_slice(),
-        char_len as u64,
-        ascii_prefix_len as u64,
-    )))
+    // One vectorized scan of the result for its codepoint count and ASCII
+    // prefix: cheaper than asking each part, since an inline part (the usual
+    // template hole or separator) has no cached count and would be scanned
+    // on its own. The scan costs no more than the copy it follows.
+    BexStr::Flat(Arc::new(FlatStr::new(bytes.into_boxed_slice())))
 }
 
 // ── FlatStr ────────────────────────────────────────────────────────
@@ -642,11 +687,6 @@ impl FlatStr {
             data,
         }
     }
-
-    /// The empty string, left behind in a `ConcatNode` whose children were taken.
-    fn placeholder() -> FlatStr {
-        FlatStr::from_parts(Box::new([]), 0, 0)
-    }
 }
 
 // ── ConcatNode ─────────────────────────────────────────────────────
@@ -659,16 +699,14 @@ impl ConcatNode {
         match &*guard {
             ConcatState::Flattened(f) => return f.clone(),
             ConcatState::Deferred { .. } => {}
+            ConcatState::Released => unreachable!("a released ConcatNode is never shared"),
         }
 
         // Take ownership of the deferred state
-        let old = std::mem::replace(
-            &mut *guard,
-            ConcatState::Flattened(Arc::new(FlatStr::placeholder())),
-        );
-        let (left, right) = match old {
-            ConcatState::Deferred { left, right } => (left, right),
-            ConcatState::Flattened(_) => unreachable!(),
+        let ConcatState::Deferred { left, right } =
+            std::mem::replace(&mut *guard, ConcatState::Released)
+        else {
+            unreachable!("checked above")
         };
 
         // Iterative tree walk — heap-allocated work-stack
@@ -702,6 +740,9 @@ impl ConcatNode {
                         ConcatState::Flattened(f) => {
                             buf.extend_from_slice(&f.data);
                         }
+                        ConcatState::Released => {
+                            unreachable!("a released ConcatNode is never shared")
+                        }
                         ConcatState::Deferred { left, right } => {
                             // Clone the child handles (O(1): Arc bump or inline
                             // memcpy) and leave this node's `Deferred` state
@@ -720,6 +761,7 @@ impl ConcatNode {
             }
         }
 
+        record_materialized(FLAT_OVERHEAD.saturating_add(buf.len()));
         let flat = Arc::new(FlatStr::from_parts(
             buf.into_boxed_slice(),
             self.total_char_len,
@@ -734,12 +776,11 @@ impl ConcatNode {
 impl Drop for ConcatNode {
     fn drop(&mut self) {
         let state = match self.state.get_mut() {
-            Ok(s) => std::mem::replace(s, ConcatState::Flattened(Arc::new(FlatStr::placeholder()))),
+            Ok(s) => std::mem::replace(s, ConcatState::Released),
             Err(_) => return, // Mutex poisoned — leak rather than risk UB
         };
-        let (left, right) = match state {
-            ConcatState::Deferred { left, right } => (left, right),
-            ConcatState::Flattened(_) => return,
+        let ConcatState::Deferred { left, right } = state else {
+            return;
         };
 
         let mut stack: Vec<BexStr> = Vec::new();
@@ -751,10 +792,7 @@ impl Drop for ConcatNode {
                 && let Ok(mut owned) = Arc::try_unwrap(arc)
             {
                 let inner = match owned.state.get_mut() {
-                    Ok(s) => std::mem::replace(
-                        s,
-                        ConcatState::Flattened(Arc::new(FlatStr::placeholder())),
-                    ),
+                    Ok(s) => std::mem::replace(s, ConcatState::Released),
                     Err(_) => continue,
                 };
                 if let ConcatState::Deferred { left, right } = inner {

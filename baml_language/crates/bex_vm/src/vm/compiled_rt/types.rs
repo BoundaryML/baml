@@ -112,8 +112,9 @@ impl BexVm {
             ));
         };
         let slot = slot as usize;
-        frame.type_args.resize(slot + 1, RealizedTy::unknown());
-        frame.type_args[slot] = type_value.ty;
+        let type_args = frame.type_args.to_mut();
+        type_args.resize(slot + 1, RealizedTy::unknown());
+        type_args[slot] = type_value.ty;
         Ok(())
     }
 
@@ -129,15 +130,16 @@ impl BexVm {
         class: HeapPtr,
         type_args: &[RealizedTy],
     ) -> bool {
-        value
+        let Some((instance_class, actual)) = value
             .as_object_ptr()
-            .and_then(|ptr| self.get_object(ptr).class_instance())
-            .is_some_and(|(instance_class, actual_args)| {
-                instance_class == class
-                    && actual_args.len() == type_args.len()
-                    && actual_args.iter().zip(type_args).all(|(actual, expected)| {
-                        baml_type::normalize::equivalent(actual.as_ty(), expected.as_ty(), self)
-                    })
+            .and_then(|ptr| self.class_instance(ptr))
+        else {
+            return false;
+        };
+        instance_class == class
+            && actual.len() == type_args.len()
+            && actual.iter().zip(type_args).all(|(actual, expected)| {
+                baml_type::normalize::equivalent(actual.as_ty(), expected.as_ty(), self)
             })
     }
 

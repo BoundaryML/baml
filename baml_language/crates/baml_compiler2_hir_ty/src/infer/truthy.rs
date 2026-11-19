@@ -6,9 +6,11 @@
 //! array. Everything else - including `NaN`, class instances, enum
 //! variants, functions, and media - is truthy. A condition whose static
 //! type decides the branch is a warning (a unit condition is one: its only
-//! value, `null`, is falsy). The reachability pass also diagnoses
-//! written constants and labels the unreachable code; `while (true)`
-//! stays idiomatic.
+//! value, `null`, is falsy). The reachability pass diagnoses the dead code
+//! a written constant leaves: a branch, a `while` body under an
+//! always-falsy condition, the code after a loop that never ends. An
+//! always-truthy `while` condition is no finding there, since the loop is
+//! left from its body or not at all.
 //!
 //! Layering: the checker DECIDES here and records an [`Adjust::Truthy`]
 //! adjustment on the
@@ -68,7 +70,8 @@ pub(crate) fn truthiness(ty: &Ty) -> Truthiness {
         | InferTy::Future(..)
         | InferTy::Type
         | InferTy::Resource
-        | InferTy::PromptAst => Truthiness::AlwaysTruthy,
+        | InferTy::PromptAst
+        | InferTy::Tuple(..) => Truthiness::AlwaysTruthy,
         InferTy::Union(members) => {
             let mut all_truthy = true;
             let mut all_falsy = true;
@@ -273,12 +276,11 @@ impl<'db> InferenceContext<'db> {
             Truthiness::AlwaysFalsy => false,
             Truthiness::Runtime => return,
         };
-        self.pending_diags
-            .push(super::PendingDiag::ConditionAlwaysConst {
-                expr: condition,
-                ty: resolved,
-                always_true,
-            });
+        self.report(super::PendingDiag::ConditionAlwaysConst {
+            expr: condition,
+            ty: resolved,
+            always_true,
+        });
     }
 }
 

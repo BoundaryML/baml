@@ -51,12 +51,22 @@
   font-family: var(--font-geist-pixel);
 }
 
-/* The homepage's two heading tiers: every section heading at the size .v4-h3 has elsewhere, and
-   every heading inside a section (a box's title, a step, a column) one tier below it. */
+/* The homepage's three heading tiers under the hero's 64px, each about three quarters of the one
+   above: a section's heading (48px), a second statement inside a section (36px, .v4-sub), and a
+   heading inside a figure (28px: a box's title, a step, a column). The section heading also shrinks
+   on a short window, like the hero's, so it never reaches the hero's size.
+
+   Below those, the page's components set their own sizes, and keep to these: a small title inside a
+   card or a row is Lexend 20px; a number that stands in for a heading is 36px; prose inside a card
+   is 16px; a footnote is 13px. The section intros and the Adopt cards' lines are the 20px body. */
 .home-page .v4-h2 {
-  font-size: clamp(26px, 3vw, 40px);
-  line-height: 1.2;
+  font-size: clamp(28px, min(3.4vw, 6.4vh), 48px);
+  line-height: 1.15;
   letter-spacing: -0.03em;
+}
+.home-page .v4-h2.v4-sub {
+  font-size: clamp(24px, 2.6vw, 36px);
+  line-height: 1.2;
 }
 .home-page .v4-h3 {
   font-size: clamp(20px, 2.1vw, 28px);
@@ -271,7 +281,7 @@
 /* The hero headline also scales with the screen's height, so a short window keeps room for the
    diagram. */
 .hero-title {
-  /* The floor drops below 36px on phones narrower than 400px, so "hyperobservable", which never
+  /* The floor drops below 36px on phones narrower than 400px, so "hyper-observable", which never
      breaks, still fits on one line at 320px. */
   font-size: clamp(min(36px, 9vw), min(4.6vw, 7.5vh), 64px);
 }
@@ -390,19 +400,18 @@
   }
 }
 
-/* The rotating word in the hyperobservability heading: each new word rises in. */
-@keyframes heading-swap {
+/* The query board's panel: each time a query is picked, its contents rise in. */
+@keyframes query-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 0.25em, 0);
+    transform: translate3d(0, 6px, 0);
   }
 }
-.heading-swap {
-  display: inline-block;
-  animation: heading-swap 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+.query-in {
+  animation: query-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 @media (prefers-reduced-motion: reduce) {
-  .heading-swap {
+  .query-in {
     animation: none;
   }
 }

@@ -175,6 +175,7 @@ fn is_abstract_head(head: &InferTy) -> bool {
         | InferTy::Class(..)
         | InferTy::Enum(..)
         | InferTy::List(..)
+        | InferTy::Tuple(..)
         | InferTy::Map { .. }
         | InferTy::Function { .. }
         | InferTy::Future(..)
@@ -269,14 +270,19 @@ impl<'db> InferenceContext<'db> {
         if !visiting.insert(root) {
             return false;
         }
-        if self.obligations.iter().any(|Pending { obligation, .. }| {
-            let Obligation::Operator { out, .. } = obligation else {
-                return false;
-            };
-            let out = self.table.resolve_completely(out);
-            matches!(out.kind(), InferTy::InferVar { var, .. }
+        if self
+            .journals
+            .obligations
+            .iter()
+            .any(|Pending { obligation, .. }| {
+                let Obligation::Operator { out, .. } = obligation else {
+                    return false;
+                };
+                let out = self.table.resolve_completely(out);
+                matches!(out.kind(), InferTy::InferVar { var, .. }
                 if self.table.unsolved_root_var(*var) == Some(root))
-        }) {
+            })
+        {
             return true;
         }
         let bounds = self.table.var_bounds(root);
@@ -331,27 +337,28 @@ impl<'db> InferenceContext<'db> {
             .table
             .unsolved_root_var(*var)
             .expect("resolve_completely leaves only unsolved variables");
-        let operator = self
-            .obligations
-            .iter()
-            .find_map(|Pending { obligation, .. }| {
-                let Obligation::Operator {
-                    interface,
-                    lhs,
-                    rhs,
-                    out,
-                    ..
-                } = obligation
-                else {
-                    return None;
-                };
-                let out = self.table.resolve_completely(out);
-                let InferTy::InferVar { var, .. } = out.kind() else {
-                    return None;
-                };
-                (self.table.unsolved_root_var(*var) == Some(root))
-                    .then(|| (*interface, lhs.clone(), rhs.clone()))
-            });
+        let operator =
+            self.journals
+                .obligations
+                .iter()
+                .find_map(|Pending { obligation, .. }| {
+                    let Obligation::Operator {
+                        interface,
+                        lhs,
+                        rhs,
+                        out,
+                        ..
+                    } = obligation
+                    else {
+                        return None;
+                    };
+                    let out = self.table.resolve_completely(out);
+                    let InferTy::InferVar { var, .. } = out.kind() else {
+                        return None;
+                    };
+                    (self.table.unsolved_root_var(*var) == Some(root))
+                        .then(|| (*interface, lhs.clone(), rhs.clone()))
+                });
         if let Some((interface, lhs, rhs)) = operator {
             let lhs = self.resolve_structure_operand(&lhs, visiting);
             let rhs = rhs.map(|rhs| self.resolve_structure_operand(&rhs, visiting));
@@ -364,7 +371,7 @@ impl<'db> InferenceContext<'db> {
     }
 
     pub(super) fn register_obligation(&mut self, obligation: Obligation) {
-        self.obligations.push(Pending {
+        self.journals.obligations.push(Pending {
             obligation,
             stall: None,
         });
@@ -373,12 +380,12 @@ impl<'db> InferenceContext<'db> {
     /// One discharge round over every pending obligation. Returns whether
     /// anything discharged (progress for the fixpoint driver).
     pub(super) fn discharge_obligations_once(&mut self) -> bool {
-        let pending = std::mem::take(&mut self.obligations);
+        let pending = std::mem::take(&mut self.journals.obligations);
         let mut progressed = false;
         for Pending { obligation, .. } in pending {
             match self.attempt(&obligation) {
                 Attempt::Done => progressed = true,
-                Attempt::Stalled(stall) => self.obligations.push(Pending {
+                Attempt::Stalled(stall) => self.journals.obligations.push(Pending {
                     obligation,
                     stall: Some(stall),
                 }),
@@ -476,18 +483,20 @@ impl<'db> InferenceContext<'db> {
                 if purpose == GoalPurpose::Bound
                     && is_abstract_head(bound_subject.kind())
                     && !crate::impls::is_structural_interface(self.db, &interface)
-                    && !(crate::impls::structural_interface(self.db, &interface.name)
-                        == Some(baml_type::StructuralInterface::Hash)
-                        && crate::impls::hash_eligible(self.db, &self.facts, &ty, &interface))
+                    && crate::impls::conditional_structural_verdict(
+                        self.db,
+                        &self.facts,
+                        &ty,
+                        &interface,
+                    ) != Some(true)
                 {
                     // Named as the user wrote it: the judgment widened.
-                    self.pending_diags
-                        .push(super::PendingDiag::BoundedArgNotConcrete {
-                            expr: at,
-                            arg: subject,
-                            bound: interface,
-                            required_for: required_for.clone(),
-                        });
+                    self.report(super::PendingDiag::BoundedArgNotConcrete {
+                        expr: at,
+                        arg: subject,
+                        bound: interface,
+                        required_for: required_for.clone(),
+                    });
                     return Attempt::Done;
                 }
                 if let Ok(closed) = baml_type::interned::ClosedTy::try_from(&ty)
@@ -631,15 +640,28 @@ impl<'db> InferenceContext<'db> {
             if crate::impls::is_structural_interface(self.db, interface) {
                 return Ok(None);
             }
-            if crate::impls::structural_interface(self.db, &interface.name)
-                == Some(baml_type::StructuralInterface::Hash)
-            {
-                if goal.has_infer() || interface_has_infer(interface) {
-                    return Err(Selection::Unresolved);
+            match crate::impls::structural_interface(self.db, &interface.name) {
+                Some(baml_type::StructuralInterface::Hash) => {
+                    if goal.has_infer() || interface_has_infer(interface) {
+                        return Err(Selection::Unresolved);
+                    }
+                    if crate::impls::hash_eligible(self.db, &self.facts, subject, interface) {
+                        return Ok(None);
+                    }
                 }
-                if crate::impls::hash_eligible(self.db, &self.facts, subject, interface) {
-                    return Ok(None);
+                Some(baml_type::StructuralInterface::Compare)
+                    if matches!(subject.kind(), InferTy::Tuple(_)) =>
+                {
+                    if goal.has_infer() || interface_has_infer(interface) {
+                        return Err(Selection::Unresolved);
+                    }
+                    if crate::impls::derived_tuple_compare(self.db, &self.facts, subject, interface)
+                        == Some(true)
+                    {
+                        return Ok(None);
+                    }
                 }
+                _ => {}
             }
             return Err(Selection::NoCandidate);
         };
@@ -866,7 +888,7 @@ impl<'db> InferenceContext<'db> {
         // "cannot infer" of its own.
         self.taint_goal_vars(&subject, interface);
         let interface = interface.existential();
-        let already = self.pending_diags.iter().any(|pending| {
+        let already = self.journals.pending_diags.iter().any(|pending| {
             matches!(
                 pending,
                 super::PendingDiag::DoesNotImplement { expr, value, interface: reported, .. }
@@ -874,13 +896,12 @@ impl<'db> InferenceContext<'db> {
             )
         });
         if !already {
-            self.pending_diags
-                .push(super::PendingDiag::DoesNotImplement {
-                    expr: at,
-                    value: subject,
-                    interface,
-                    required_for: required_for.to_vec(),
-                });
+            self.report(super::PendingDiag::DoesNotImplement {
+                expr: at,
+                value: subject,
+                interface,
+                required_for: required_for.to_vec(),
+            });
         }
     }
 
@@ -892,7 +913,7 @@ impl<'db> InferenceContext<'db> {
     /// resolved - no candidate was ever consulted - and the diagnostics for
     /// an undetermined type own it, as they own the deferred subs' residue.
     pub(super) fn settle_stalled_obligations(&mut self) {
-        for Pending { obligation, stall } in std::mem::take(&mut self.obligations) {
+        for Pending { obligation, stall } in std::mem::take(&mut self.journals.obligations) {
             // An operator stalls only on an unsolved operand, so one pattern
             // covers both kinds: ambiguity is impl selection's outcome alone.
             // The operand's own undetermined-type report owns a stalled
@@ -934,13 +955,12 @@ impl<'db> InferenceContext<'db> {
             // the selection would have decided.
             self.taint_goal_vars(&ty, &interface);
             let interface = interface.existential();
-            self.pending_diags
-                .push(super::PendingDiag::AmbiguousImplementation {
-                    expr: at,
-                    value: ty,
-                    interface,
-                    required_for,
-                });
+            self.report(super::PendingDiag::AmbiguousImplementation {
+                expr: at,
+                value: ty,
+                interface,
+                required_for,
+            });
         }
     }
 
@@ -1162,6 +1182,11 @@ impl<'db> InferenceContext<'db> {
                 crate::impls::structural_interface_roots(self.db)
                     .into_iter()
                     .chain(crate::impls::hash_interface_root(self.db))
+                    .chain(
+                        matches!(receiver.kind(), InferTy::Tuple(_))
+                            .then(|| crate::impls::compare_interface_root(self.db))
+                            .flatten(),
+                    )
                     .collect()
             } else {
                 crate::impls::applicable_structural_interface_roots(self.db, &self.facts, receiver)
@@ -1184,7 +1209,7 @@ impl<'db> InferenceContext<'db> {
             // Discovering a conditional default's signature does not prove
             // conformance. Fulfillment checks it once the receiver resolves.
             if crate::impls::structural_interface(self.db, &interface.name)
-                == Some(baml_type::StructuralInterface::Hash)
+                .is_some_and(baml_type::StructuralInterface::is_conditional)
             {
                 self.register_obligation(Obligation::implements(
                     receiver.clone(),
@@ -1267,10 +1292,10 @@ impl<'db> InferenceContext<'db> {
         if crate::impls::is_structural_interface(self.db, interface) {
             return true;
         }
-        if crate::impls::structural_interface(self.db, &interface.name)
-            == Some(baml_type::StructuralInterface::Hash)
+        if let Some(eligible) =
+            crate::impls::conditional_structural_verdict(self.db, &self.facts, ty, interface)
         {
-            return crate::impls::hash_eligible(self.db, &self.facts, ty, interface);
+            return eligible;
         }
         let target = interface.clone();
         let eq = crate::impls::AliasOnlyFacts::new(self.db);

@@ -713,7 +713,7 @@ function gemini_build_body(
     fetch_url: bool = true,
     preview: bool = false,
 ) -> string {
-    let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
+    let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type));
     let lowered = lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
     let contents = lowered.contents;
     let journal = ai.wire.sanitize_for_client(input.journal, provider, requested_model);

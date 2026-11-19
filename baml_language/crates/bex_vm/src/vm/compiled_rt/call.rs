@@ -14,9 +14,9 @@ use bex_vm_types::{
 
 use super::{CompiledFn, FrameRecord, Step};
 use crate::{
-    errors::{VmError, VmInternalError, VmPanic},
+    errors::{VmError, VmInternalError, VmPanic, VmRustFnError},
     indexable::EvalStackTrait,
-    package_baml::{NativeCallResult, NativeFunction},
+    package_baml::{NativeCallResult, NativeFunctionResult},
     types::ObjectTrait as _,
     vm::{BexVm, Frame, VmExecState},
 };
@@ -36,46 +36,85 @@ impl BexVm {
             .map_err(|error| Box::new(error.into()))
     }
 
-    pub fn call_builtin(
-        &mut self,
-        builtin: NativeFunction,
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        let outcome = builtin(self, args);
+    /// The result of a builtin call: what generated code does after calling a
+    /// builtin's entry point (`package_baml::builtins::Array::push`, …) by
+    /// name.
+    #[inline]
+    pub fn finish_builtin(&mut self, outcome: NativeCallResult) -> Result<Value, Box<VmError>> {
         self.settle();
         match outcome {
             NativeCallResult::Done(value) => Ok(value),
-            NativeCallResult::Error(error) => Err(Box::new(self.native_error_to_vm_error(error))),
-            NativeCallResult::YieldToCall { .. } => Err(Box::new(
+            outcome => Err(self.builtin_failed(outcome)),
+        }
+    }
+
+    /// The result of a builtin that cannot pause, called by name: what
+    /// [`Self::finish_builtin`] does, for a plain `Result`.
+    #[allow(clippy::inline_always, reason = "every compiled builtin call's tail")]
+    #[inline(always)]
+    pub fn finish_result(&mut self, result: NativeFunctionResult) -> Result<Value, Box<VmError>> {
+        self.settle();
+        match result {
+            Ok(value) => Ok(value),
+            Err(error) => Err(self.builtin_error(error)),
+        }
+    }
+
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "boxing out of line keeps the allocation off the inlined fast path"
+    )]
+    #[cold]
+    #[inline(never)]
+    fn builtin_error(&mut self, error: VmRustFnError) -> Box<VmError> {
+        Box::new(self.native_error_to_vm_error(error))
+    }
+
+    /// Run a builtin's entry point with `type_args` as its call's type
+    /// arguments. The arguments are lent, not copied: the builtin reads them
+    /// through `current_call_type_args`, and the collector roots and updates
+    /// them in place for the call. Only a builtin that can read them is given
+    /// them (`NativeEntry::reads_type_args`).
+    #[inline]
+    pub fn with_call_type_args<R>(
+        &mut self,
+        type_args: &mut [RealizedTy],
+        call: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let previous = self
+            .compiled
+            .lent_type_args
+            .replace(super::state::LentTypeArgs(std::ptr::NonNull::from(
+                type_args,
+            )));
+        let guard = RestoreLoan { vm: self, previous };
+        call(&mut *guard.vm)
+    }
+
+    #[allow(
+        clippy::unnecessary_box_returns,
+        reason = "boxing out of line keeps the allocation off the inlined fast path"
+    )]
+    #[cold]
+    #[inline(never)]
+    fn builtin_failed(&mut self, outcome: NativeCallResult) -> Box<VmError> {
+        match outcome {
+            NativeCallResult::Error(error) => Box::new(self.native_error_to_vm_error(error)),
+            NativeCallResult::Done(_) | NativeCallResult::YieldToCall { .. } => Box::new(
                 VmInternalError::CompiledBody {
                     message: "a builtin yielded inside compiled code".to_string(),
                 }
                 .into(),
-            )),
+            ),
         }
     }
 
-    /// Call a generic builtin with type arguments available through `current_call_type_args()`.
-    pub fn call_builtin_typed(
-        &mut self,
-        builtin: NativeFunction,
-        type_args: &[RealizedTy],
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        self.save_call_types();
-        let mut buffer = std::mem::take(&mut self.compiled.builtin_type_args);
-        buffer.clear();
-        buffer.extend_from_slice(type_args);
-        self.pending_call_type_args = buffer;
-        let result = self.call_builtin(builtin, args);
-        self.compiled.builtin_type_args = self.restore_call_types();
-        self.compiled.builtin_type_args.clear();
-        result
-    }
-
+    #[inline]
     pub fn reserve_slots(&mut self, frame: &FrameRecord, slots: usize) -> Result<(), Box<VmError>> {
         let end = frame.base() + slots;
-        self.resize_stack(end, Value::NULL).map_err(Box::new)
+        self.stack
+            .try_resize(end, Value::NULL)
+            .map_err(|panic| Box::new(self.panic_error(panic)))
     }
 
     #[inline]
@@ -110,14 +149,16 @@ impl BexVm {
     /// Tick the interpreter's call countdown; GC stress yields whenever it expires.
     #[inline]
     pub fn should_yield_at_call(&mut self) -> bool {
-        self.yield_at_call(super::gc_stress())
+        self.yield_at_call(super::gc_stress)
     }
 
     /// Poll before forcing the stress yield: the poll is what restarts the
     /// countdown, and a countdown left at zero underflows on the next tick.
+    /// `stress` is read only when the countdown expires: `gc_stress` is an
+    /// acquire load, which on every call would wait behind the record's stores.
     #[inline]
-    pub(super) fn yield_at_call(&mut self, stress: bool) -> bool {
-        self.early_yield.tick() && (self.poll_for_yield() || stress)
+    pub(super) fn yield_at_call(&mut self, stress: impl FnOnce() -> bool) -> bool {
+        self.early_yield.tick() && (self.poll_for_yield() || stress())
     }
 
     /// Return the caught value and its `baml.errors.Context`, propagating internal errors.
@@ -186,6 +227,7 @@ impl BexVm {
         event_name: Value,
         pc: u32,
     ) -> Result<(), Box<VmError>> {
+        self.materialize(frame);
         let name = if event_name.is_null() || event_name.is_omitted() {
             None
         } else {
@@ -221,6 +263,7 @@ impl BexVm {
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
+        self.materialize(caller);
         caller.note_pc(pc);
         self.check_compiled_call()?;
         if self.telemetry.is_some() {
@@ -242,6 +285,7 @@ impl BexVm {
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
+        self.materialize(caller);
         if self.direct_calls() {
             let (function, type_args): (HeapPtr, &[RealizedTy]) = match self.get_object(callee) {
                 Object::Closure(closure) => (closure.function, &closure.captured_type_args),
@@ -254,8 +298,7 @@ impl BexVm {
                     .all(crate::reachable::is_statically_declared)
                 && !Self::body_is_framed(function)
             {
-                let type_args = type_args.to_vec();
-                return self.call_record_dispatched(caller, callee, body, type_args, args, pc);
+                return self.call_record_dispatched(caller, callee, body, args, pc);
             }
         }
         caller.note_pc(pc);
@@ -411,5 +454,18 @@ impl BexVm {
             )),
             Err(error) => Err(Box::new(error)),
         }
+    }
+}
+
+/// Restores the previous type-argument loan when dropped, even if the
+/// builtin unwinds, so no loan outlives the array it names.
+struct RestoreLoan<'a> {
+    vm: &'a mut BexVm,
+    previous: Option<super::state::LentTypeArgs>,
+}
+
+impl Drop for RestoreLoan<'_> {
+    fn drop(&mut self) {
+        self.vm.compiled.lent_type_args = self.previous;
     }
 }

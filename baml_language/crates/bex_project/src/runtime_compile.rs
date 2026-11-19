@@ -479,6 +479,8 @@ fn projected_interface(
         });
     }
     Ok(WireInterface {
+        claimed: baml_base::ClaimedIdentity::default(),
+        compiler_version: baml_compiler2_hir_ty::package_interface::COMPILER_VERSION.to_owned(),
         dependencies: slots.locators(),
         rows: interface,
     })
@@ -1659,6 +1661,17 @@ fn steps_publishing_a_binding(
 }
 
 impl RuntimeCompiler for ProjectRuntimeCompiler {
+    fn declaration_fingerprints(
+        &self,
+        files: &indexmap::IndexMap<String, String>,
+    ) -> bex_vm_types::DeclFingerprints {
+        crate::hotswap_fingerprint::declaration_fingerprints(
+            files
+                .iter()
+                .map(|(path, text)| (path.as_str(), text.as_str())),
+        )
+    }
+
     fn compile(
         &self,
         request: RuntimeCompileRequest,

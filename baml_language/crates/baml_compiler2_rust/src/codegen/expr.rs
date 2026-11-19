@@ -1,7 +1,7 @@
 //! Rvalues: operators, type tests, and aggregates.
 
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, BoundFrame, Rvalue, TyTemplate, TypeTest, UnaryOp,
+    AggregateKind, BinOp, BlockId, BoundFrame, Operand, Rvalue, TyTemplate, TypeTest, UnaryOp,
     class_display_name, enum_display_name, function_display_name,
 };
 use baml_type::typetag;
@@ -10,8 +10,8 @@ use bex_vm_types::ConstValue;
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     Rejection,
-    analysis::{CallShape, Repr, builtin_is_callable, reads_frame, static_realized},
-    render::{binop_name, cmp_name, object_value},
+    analysis::{CallShape, Repr, builtin_entry, builtin_is_callable, reads_frame, static_realized},
+    render::{binop_name, class_ptr, cmp_name, object_value},
 };
 
 impl<'db> Generator<'_, 'db> {
@@ -19,6 +19,11 @@ impl<'db> Generator<'_, 'db> {
         let code = match rvalue {
             Rvalue::Use(operand) => return self.operand(block, operand),
             Rvalue::BinaryOp { op, left, right } => {
+                if let Some((tested, negate)) = rvalue.null_test() {
+                    let value = self.value_operand(block, tested)?;
+                    let not = if negate { "!" } else { "" };
+                    return Ok(Expr::new(format!("({not}({value}).is_null())"), Repr::Bool));
+                }
                 let left = self.operand(block, left)?;
                 let right = self.operand(block, right)?;
                 return self.binary(block, *op, &left, &right);
@@ -44,6 +49,13 @@ impl<'db> Generator<'_, 'db> {
                 let code = self.fallible(block, &format!("vm.discriminant({value})"))?;
                 return Ok(Expr::new(code, Repr::Int));
             }
+            Rvalue::TypeTag(baml_compiler2_mir::Place::Local(local))
+                if self.stack_group(local.0).is_some() =>
+            {
+                let group = self.stack_group(local.0).expect("checked");
+                let tag = self.stack_class(group)?.tag;
+                return Ok(Expr::new(format!("{tag}i64"), Repr::Int));
+            }
             Rvalue::TypeTag(place) => {
                 let value = self.load(block, place)?;
                 let value = self.value_arg(&value);
@@ -64,6 +76,11 @@ impl<'db> Generator<'_, 'db> {
                     Repr::Bool,
                 ));
             }
+            Rvalue::IsType { operand, test } if self.stack_operand(operand).is_some() => {
+                let group = self.stack_operand(operand).expect("checked");
+                let matches = self.stack_test(group, test)?;
+                return Ok(Expr::new(matches, Repr::Bool));
+            }
             Rvalue::IsType { operand, test } => {
                 let value = self.value_operand(block, operand)?;
                 let code = self.type_test(&format!("({value})"), test)?;
@@ -80,6 +97,18 @@ impl<'db> Generator<'_, 'db> {
                 let element_ty = self.realized_type(template)?;
                 let values = self.arg_values(block, elements)?;
                 format!("vm.new_array({element_ty}, vec![{}])", values.join(", "))
+            }
+            Rvalue::Aggregate {
+                kind: AggregateKind::Tuple { element_templates },
+                fields,
+            } => {
+                let tuple_ty =
+                    self.realized_type(&TyTemplate::Tuple(element_templates.clone().into()))?;
+                let values = self.arg_values(block, fields)?;
+                self.fallible(
+                    block,
+                    &format!("vm.new_tuple({tuple_ty}, vec![{}])", values.join(", ")),
+                )?
             }
             Rvalue::Aggregate {
                 kind:
@@ -99,12 +128,21 @@ impl<'db> Generator<'_, 'db> {
                         fields.len()
                     ));
                 }
-                let values = self.arg_values(block, fields)?;
-                let class = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
-                let values = values.join(", ");
-                if type_arg_templates.is_empty() {
-                    format!("vm.new_instance({class}, vec![{values}])")
+                let class = class_ptr(object);
+                let generic = self
+                    .index
+                    .class_layout(object)
+                    .is_some_and(|layout| layout.type_args_slot().is_some());
+                if !generic {
+                    let words = self.slot_words(block, object, fields)?.join(", ");
+                    let new = if self.index.plain_class(object) {
+                        "new_plain_instance"
+                    } else {
+                        "new_instance_of"
+                    };
+                    format!("unsafe {{ vm.{new}({class}, [{words}]) }}")
                 } else {
+                    let values = self.arg_values(block, fields)?.join(", ");
                     let type_args = self.realized_all(type_arg_templates)?.join(", ");
                     format!(
                         "vm.new_generic_instance({class}, Box::new([{type_args}]), vec![{values}])"
@@ -155,15 +193,9 @@ impl<'db> Generator<'_, 'db> {
                         "yielding builtin `{key}` emitted inline"
                     )));
                 }
-                let ordinal = self.builtin_ordinal(key);
                 let template = self.hoist(Expr::new(object_value(object), Repr::Value));
-                self.fallible(
-                    block,
-                    &format!(
-                        "vm.call_builtin(builtin_{ordinal}()?, &[{}])",
-                        template.code
-                    ),
-                )?
+                let call = Self::builtin_call(key, false, &[template.code], &[])?;
+                self.fallible(block, &call)?
             }
             Rvalue::MakeClosure {
                 lambda_idx,
@@ -390,6 +422,33 @@ impl<'db> Generator<'_, 'db> {
         ))
     }
 
+    /// Each of a class literal's `fields`, in the encoding of its slot.
+    fn slot_words(
+        &mut self,
+        block: BlockId,
+        object: usize,
+        fields: &[Operand<'db>],
+    ) -> Gen<Vec<String>> {
+        let Some(layout) = self.index.class_layout(object) else {
+            return unsupported("class literal of a non-class object");
+        };
+        fields
+            .iter()
+            .enumerate()
+            .map(|(field, operand)| {
+                let value = self.operand(block, operand)?;
+                let (_, repr) = super::place::slot_repr(layout.kind(field));
+                let code = self.repr_arg(&value, repr);
+                Ok(match repr {
+                    Repr::Int => format!("i64::cast_unsigned({code})"),
+                    Repr::Float => format!("f64::to_bits({code})"),
+                    Repr::Bool => format!("u64::from({code})"),
+                    Repr::Value => format!("Value::bits({code})"),
+                })
+            })
+            .collect()
+    }
+
     fn realized_type(&mut self, template: &TyTemplate) -> Gen<String> {
         if reads_frame(template) {
             return self.realized(template);
@@ -417,9 +476,48 @@ impl<'db> Generator<'_, 'db> {
         Ok(name)
     }
 
-    pub(super) fn builtin_ordinal(&mut self, key: &str) -> usize {
-        let next = self.builtins.len();
-        *self.builtins.entry(key.to_owned()).or_insert(next)
+    /// A call to builtin `key`'s generated entry point, or with `local` its
+    /// lock-free twin, finished by [`bex_vm::BexVm::finish_builtin`] or
+    /// `finish_result`: an `R<Value>` expression.
+    pub(super) fn builtin_call(
+        key: &str,
+        local: bool,
+        args: &[String],
+        types: &[String],
+    ) -> Gen<String> {
+        let entry = checked_builtin_entry(key, local, args.len())?;
+        let path = if local {
+            format!("{}_local", entry.path)
+        } else {
+            entry.path.clone()
+        };
+        let names: Vec<String> = (0..args.len()).map(|i| format!("__a{i}")).collect();
+        let call = if names.is_empty() {
+            format!("{path}(vm)")
+        } else {
+            format!("{path}(vm, {})", names.join(", "))
+        };
+        let bind = if args.is_empty() {
+            String::new()
+        } else {
+            format!("let ({},) = ({},);", names.join(", "), args.join(", "))
+        };
+        let call = if types.is_empty() || !entry.reads_type_args {
+            call
+        } else {
+            format!(
+                "{{ let mut __types = [{}]; vm.with_call_type_args(&mut __types, |vm| {call}) }}",
+                types.join(", ")
+            )
+        };
+        let finish = if entry.may_yield {
+            "finish_builtin"
+        } else {
+            "finish_result"
+        };
+        Ok(format!(
+            "{{ {bind} let __result = {call}; vm.{finish}(__result) }}"
+        ))
     }
 
     fn binary(&mut self, block: BlockId, op: BinOp, left: &Expr, right: &Expr) -> Gen<Expr> {
@@ -499,4 +597,30 @@ impl<'db> Generator<'_, 'db> {
             }
         })
     }
+}
+
+/// Builtin `key`'s generated entry point, if a call with `arity` arguments
+/// (to its thread-local twin when `local`) can use it.
+fn checked_builtin_entry(
+    key: &str,
+    local: bool,
+    arity: usize,
+) -> Gen<&'static baml_builtins2_codegen::NativeEntry> {
+    let Some(entry) = builtin_entry(key) else {
+        return Err(Rejection::Invalid(format!(
+            "builtin `{key}` has no generated entry point"
+        )));
+    };
+    if arity != entry.arity {
+        return Err(Rejection::Invalid(format!(
+            "builtin `{key}` takes {} arguments, given {arity}",
+            entry.arity
+        )));
+    }
+    if local && !entry.local_twin {
+        return Err(Rejection::Invalid(format!(
+            "builtin `{key}` has no thread-local twin"
+        )));
+    }
+    Ok(entry)
 }

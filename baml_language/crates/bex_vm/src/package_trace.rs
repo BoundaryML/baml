@@ -7,7 +7,7 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{
     MapReadGuard,
     trace::{ReservedSpanData, SpanId, TraceOptionsData},
-    types::{Instance, Object, Type, Value},
+    types::{InstanceRef, Object, Type, Value},
 };
 use btel_types::{
     InvocationMode,
@@ -143,11 +143,12 @@ fn patch_from_values(
                     Some(ContextValue::Bool(value))
                 } else if let Some(value) = value.as_int() {
                     Some(ContextValue::Int(value))
+                } else if let Some(value) = value.as_float() {
+                    Some(ContextValue::Float(value))
                 } else {
                     Some(
                         match vm.get_object(value.as_object_ptr().expect("context primitive")) {
                             Object::String(value) => ContextValue::String(value.to_string()),
-                            Object::Float(value) => ContextValue::Float(*value),
                             _ => unreachable!("context metadata must be primitive"),
                         },
                     )
@@ -171,7 +172,7 @@ fn alloc_metadata<'a>(
                 None => Value::NULL,
                 Some(ContextValue::String(value)) => Value::object(vm.alloc_string(value.as_str())),
                 Some(ContextValue::Int(value)) => Value::int(*value),
-                Some(ContextValue::Float(value)) => Value::object(vm.alloc_float(*value)),
+                Some(ContextValue::Float(value)) => vm.float_value(*value),
                 Some(ContextValue::Bool(value)) => Value::bool(*value),
             };
             (key.as_str().into(), value)
@@ -462,8 +463,8 @@ impl BamlClassSpan for PackageTraceImpl {
             }));
         }
         let original = vm.as_instance(context).expect("validated error Context");
-        let stack = original.load_field(1);
-        let cause = original.load_field(2);
+        let stack = original.load_value(1);
+        let cause = original.load_value(2);
         // Preserve the supplied stack/cause while recording the supplied error,
         // even when it differs from the Context's original error value.
         let recorded = vm.alloc_error_value(
@@ -501,7 +502,13 @@ fn start_span_impl(
 ) -> Result<Value, VmRustFnError> {
     (|| -> Result<Value, String> {
         let invalid = |message: &str| message.to_owned();
+        // A named span has no function policy, but the engine's still
+        // applies: without HTTP bodies it records no error value.
         let mut options = crate::telemetry::manual::OperationOptions::default();
+        options.errors_withheld = vm
+            .telemetry
+            .as_ref()
+            .is_some_and(|state| !state.records_errors());
         let mut captured_type_args = None;
         let definition = if let Ok(name) = vm.as_string(&target) {
             if name.is_empty() {
@@ -523,6 +530,7 @@ fn start_span_impl(
                 parent_function: None,
                 lambda_path: None,
                 package_name: None,
+                compilation_unit_hash: None,
                 namespace: vec![],
                 argument_layout: None,
                 source_map: None,

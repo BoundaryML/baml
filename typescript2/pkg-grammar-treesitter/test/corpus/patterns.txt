@@ -56,7 +56,8 @@ function classify(status: string) -> string {
               (string))
             (match_arm
               (type_pattern
-                (null))
+                (literal_type
+                  (null)))
               (string))
             (match_arm
               (wildcard_pattern)
@@ -620,3 +621,94 @@ function F(t: reflect.Type) -> int? {
         (array_expression))
       (expression_statement
         (number)))))
+
+==================
+tuple patterns: const, nested, refutable, scrutinee ascription
+==================
+
+function F(pair: (int, string)?) -> int {
+  const (const a, (const b, _)) = (1, (2, 3));
+  if let (0, let s) = pair { return 0; }
+  match ((a, b): (int, int)) {
+    (let only,) => only,
+    (0, _) | (_, 0) => 0,
+    _ => 1,
+  }
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (optional_type
+          (tuple_type
+            (type_path
+              (identifier))
+            (type_path
+              (identifier))))))
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (tuple_pattern
+          (binding_pattern
+            (identifier))
+          (tuple_pattern
+            (binding_pattern
+              (identifier))
+            (wildcard_pattern)))
+        (tuple_expression
+          (number)
+          (tuple_expression
+            (number)
+            (number))))
+      (expression_statement
+        (if_expression
+          (tuple_pattern
+            (type_pattern
+              (literal_type
+                (number)))
+            (binding_pattern
+              (identifier)))
+          (identifier)
+          (block
+            (expression_statement
+              (return_expression
+                (number))))))
+      (expression_statement
+        (match_expression
+          (match_ascription
+            (tuple_expression
+              (identifier)
+              (identifier))
+            (tuple_type
+              (type_path
+                (identifier))
+              (type_path
+                (identifier))))
+          (match_body
+            (match_arm
+              (tuple_pattern
+                (binding_pattern
+                  (identifier)))
+              (identifier))
+            (match_arm
+              (union_pattern
+                (tuple_pattern
+                  (type_pattern
+                    (literal_type
+                      (number)))
+                  (wildcard_pattern))
+                (tuple_pattern
+                  (wildcard_pattern)
+                  (type_pattern
+                    (literal_type
+                      (number)))))
+              (number))
+            (match_arm
+              (wildcard_pattern)
+              (number))))))))

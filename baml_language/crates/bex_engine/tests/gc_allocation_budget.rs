@@ -19,7 +19,7 @@ function Compute(n: int) -> int {
     i
 }
 function ChurnAndWait() -> int {
-    let n = Churn(1000000);
+    let n = Churn(3000000);
     baml.sys.sleep(baml.time.Duration.from_milliseconds(30000n));
     n
 }
@@ -48,6 +48,17 @@ function Concat(chunk: string, n: int) -> int {
     let i = 0;
     while (i < n) { text = text + chunk; i = i + 1; }
     text.length()
+}
+function ConcatAndRead(chunk: string, n: int) -> int {
+    let text = "";
+    let i = 0;
+    let found = 0;
+    while (i < n) {
+        text = text + chunk;
+        if (text.includes("y")) { found = found + 1; }
+        i = i + 1;
+    }
+    text.length() + found
 }
 function CsvGrow(cell: string, n: int) -> int {
     let w = baml.csv.buffer();
@@ -126,7 +137,7 @@ async fn spawn_services_pressure_after_rooting_child_and_future() {
 #[tokio::test]
 async fn long_compute_collects_before_returning() {
     let engine = engine();
-    let n = 2_100_000;
+    let n = 5_000_000;
     assert_eq!(
         call(&engine, "Churn", vec![Ext::Int(n)], true).await,
         Ext::Int(n * (n - 1) / 2)
@@ -238,10 +249,42 @@ async fn large_buffers_collect_during_the_call() {
     engine.shutdown().await;
 }
 
-/// String concatenation is a single instruction that can allocate any amount,
-/// so a loop of it must also collect during the call.
+/// A concatenation defers its copy until the text is read, and reading it
+/// allocates the whole text at once. A loop that appends a 1 MiB chunk and
+/// reads the result each time materializes 1 + 2 + ... + 64 MiB, about 2 GiB,
+/// so it must collect during the call: the buffers reading allocates count
+/// like any other allocation.
 #[tokio::test(start_paused = true)]
-async fn string_concatenation_collects_during_the_call() {
+async fn reading_concatenations_collects_during_the_call() {
+    let engine = engine();
+    engine.collect_garbage().await;
+    let before = engine.heap().gc_budget().full_collections;
+    let chunk = 1024 * 1024;
+    assert_eq!(
+        call(
+            &engine,
+            "ConcatAndRead",
+            vec![Ext::String("x".repeat(chunk).into()), Ext::Int(64)],
+            true
+        )
+        .await,
+        Ext::Int(64 * i64::try_from(chunk).unwrap())
+    );
+    let collections = engine.heap().gc_budget().full_collections - before;
+    assert!(
+        collections >= 4,
+        "{collections} collections while 64 growing strings were built and read"
+    );
+    engine.shutdown().await;
+}
+
+/// The same loop without reading allocates one small node per step: every
+/// node shares the one chunk, so the call holds about 1 MiB of text however
+/// long the result is. It is charged that, not the length of every
+/// intermediate result (64 MiB at the end, about 2 GiB in all), so it needs
+/// no collection.
+#[tokio::test(start_paused = true)]
+async fn unread_concatenation_is_charged_its_nodes() {
     let engine = engine();
     engine.collect_garbage().await;
     let before = engine.heap().gc_budget().full_collections;
@@ -257,9 +300,9 @@ async fn string_concatenation_collects_during_the_call() {
         Ext::Int(64 * i64::try_from(chunk).unwrap())
     );
     let collections = engine.heap().gc_budget().full_collections - before;
-    assert!(
-        collections >= 4,
-        "{collections} collections while 64 growing strings were built"
+    assert_eq!(
+        collections, 0,
+        "an unread rope of 64 shared chunks brought {collections} collections"
     );
     engine.shutdown().await;
 }
@@ -374,8 +417,8 @@ async fn cancellation_after_pressure_does_not_latch_the_checker() {
     assert!(bex_engine::is_cancelled_engine_error(&result.unwrap_err()));
     let before = engine.heap().gc_budget().full_collections;
     assert_eq!(
-        call(&engine, "Churn", vec![Ext::Int(2_100_000)], true).await,
-        Ext::Int(2_100_000 * 2_099_999 / 2)
+        call(&engine, "Churn", vec![Ext::Int(5_000_000)], true).await,
+        Ext::Int(5_000_000 * 4_999_999 / 2)
     );
     assert!(engine.heap().gc_budget().full_collections > before);
     engine.shutdown().await;

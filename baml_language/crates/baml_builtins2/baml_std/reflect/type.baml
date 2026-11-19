@@ -108,6 +108,10 @@ class Type {
     function as_function(self) -> root.Function? throws never {
         $rust_function
     }
+    //baml:mut_vm
+    function as_tuple(self) -> root.Tuple? throws never {
+        $rust_function
+    }
 
     /// (internal) Internal shared-render-boundary guard for BEP-066 R-1 and R-3.
     //baml:mut_vm

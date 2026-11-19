@@ -158,7 +158,7 @@ fn lock_state<'a>(handle: &'a BuilderHandle, vm: &BexVm) -> MeteredGuard<'a, Bui
 /// a class that merely renders under the same name is not it.
 fn is_instance_of(vm: &BexVm, value: Value, class: baml_base::LangItem) -> bool {
     vm.as_instance(&value)
-        .is_ok_and(|instance| vm.lang_declaration(class) == Some(instance.class))
+        .is_ok_and(|instance| vm.lang_declaration(class) == Some(instance.class()))
 }
 
 fn builder_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, BuilderHandle), String> {
@@ -172,7 +172,7 @@ fn builder_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, BuilderHandle), S
         .as_instance(&value)
         .map_err(|_| "builder is not an instance".to_string())?;
     let handle = match vm
-        .as_rust_instance(&instance.load_field(0))
+        .as_rust_instance(&instance.load_value(0))
         .map(|state| &state.payload)
     {
         Ok(bex_vm_types::RustPayload::ClassBuilder(state)) => Arc::clone(state),
@@ -191,7 +191,7 @@ fn pending_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, PendingHandle), S
     let instance = vm
         .as_instance(&value)
         .map_err(|_| "pending type is not an instance".to_string())?;
-    let op = PendingOp::of(vm, instance.load_field(0))?;
+    let op = PendingOp::of(vm, instance.load_value(0))?;
     Ok((ptr, PendingHandle { op }))
 }
 
@@ -228,14 +228,14 @@ fn instance_array_field(vm: &BexVm, value: Value, index: usize) -> Result<Vec<Va
     let instance = vm
         .as_instance(&value)
         .map_err(|_| "expected an instance".to_string())?;
-    vm.as_array(&instance.load_field(index))
+    vm.as_array(&instance.load_value(index))
         .map(|array| array.to_vec())
         .map_err(|_| "native roots field is not an array".to_string())
 }
 
 fn instance_field(vm: &BexVm, value: Value, index: usize) -> Result<Value, String> {
     vm.as_instance(&value)
-        .map(|instance| instance.load_field(index))
+        .map(|instance| instance.load_value(index))
         .map_err(|_| "expected an instance".to_string())
 }
 
@@ -248,10 +248,12 @@ fn store_instance_field(
     let instance = vm
         .as_instance(&value)
         .map_err(|_| "expected an instance".to_string())?;
+    if index >= instance.field_len() {
+        return Err("native instance field index is invalid".to_string());
+    }
     instance
-        .try_store_field(index, field)
-        .map_err(|_| "native instance field index is invalid".to_string())?;
-    Ok(())
+        .store(index, field)
+        .map_err(|mismatch| format!("native instance field has the wrong kind: {mismatch:?}"))
 }
 
 fn replace_array_field(
@@ -365,7 +367,7 @@ impl BamlClassClassBuilder for PackageReflectImpl {
                 None => None,
             };
         let (stored_type, pending_builders) = if let Some(root) = pending_root {
-            match resolve_pending_if_ready(vm, root.pending)
+            match resolve_pending_if_ready(vm, root.pending, &[])
                 .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?
             {
                 // The group this reference names is already frozen, so the
@@ -540,7 +542,9 @@ impl BamlClassClassPendingType for PackageReflectImpl {
     }
 
     fn resolved(vm: &mut BexVm, pendingtype: &Value) -> Option<Value> {
-        resolve_pending_if_ready(vm, *pendingtype).ok().flatten()
+        resolve_pending_if_ready(vm, *pendingtype, &[])
+            .ok()
+            .flatten()
     }
 
     fn meta(
@@ -1014,12 +1018,13 @@ fn build_group(
         prepare_class_witnesses(vm, &plans[&start_id].ty, witnesses).map_err(|diagnostic| {
             VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
         })?;
-    for node in group.values() {
-        let plan = &plans[&node.id];
-        let value = Value::object(vm.tlab.alloc_type(TypeValue::new(plan.ty.clone())));
-        store_instance_field(vm, node.value, 3, value)
-            .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
-    }
+    let unpublished: Vec<(Value, Value)> = group
+        .values()
+        .map(|node| {
+            let ty = TypeValue::new(plans[&node.id].ty.clone());
+            (node.value, Value::object(vm.tlab.alloc_type(ty)))
+        })
+        .collect();
 
     for node in group.values() {
         let mut class_fields = Vec::new();
@@ -1027,7 +1032,7 @@ fn build_group(
             let type_value = match &field.field_type {
                 PreparedFieldType::Concrete(value) => (**value).clone(),
                 PreparedFieldType::Pending(value) => {
-                    let resolved = resolve_pending_if_ready(vm, *value)
+                    let resolved = resolve_pending_if_ready(vm, *value, &unpublished)
                         .map_err(|message| {
                             compilation_error(vm, DiagnosticId::TypeMismatch, message)
                         })?
@@ -1059,14 +1064,9 @@ fn build_group(
             });
         }
         let plan = &plans[&node.id];
-        // SAFETY: the builder's protocol — the group's classes belong to this
-        // builder until it freezes them.
-        // BUG: the protocol is weaker than the contract: each class's type is
-        // stored into a builder instance (BAML-visible) before its fields are
-        // written here, so a reader of that type can race this write, and can
-        // dispatch on it before `register_class_witnesses` below has given it
-        // its interfaces. Building the fields before the class is allocated
-        // would close it, but the witness resolver reads the class in between.
+        // SAFETY: the group's classes belong to this builder until it freezes
+        // them, and nothing else can name one: its type is published below,
+        // once the class is complete.
         #[expect(unsafe_code, reason = "fill a class the builder still owns")]
         let mut metered = unsafe { vm.get_object_mut(plan.ptr) };
         let Object::Class(class) = &mut *metered else {
@@ -1074,8 +1074,14 @@ fn build_group(
         };
         class.body = bex_vm_types::ClassBody::Fields(class_fields);
     }
+    vm.dynamic_dispatch.bump_generation();
 
     register_class_witnesses(vm, plans[&start_id].ptr, rules);
+
+    for (builder, ty) in unpublished {
+        store_instance_field(vm, builder, 3, ty)
+            .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
+    }
 
     for node in group.values() {
         lock_state(&node.handle, vm).frozen = true;
@@ -1093,7 +1099,14 @@ fn cloned_type_value(vm: &BexVm, value: Value) -> Option<TypeValue> {
     Some((**value).clone())
 }
 
-fn resolve_pending_if_ready(vm: &mut BexVm, pending: Value) -> Result<Option<Value>, String> {
+/// `unpublished` maps the builders of a group being frozen to their types,
+/// which those builders do not hold yet; a type resolved through one is not
+/// cached on its pending value, so nothing BAML can reach names it early.
+fn resolve_pending_if_ready(
+    vm: &mut BexVm,
+    pending: Value,
+    unpublished: &[(Value, Value)],
+) -> Result<Option<Value>, String> {
     let (_, handle) = pending_parts(vm, pending)?;
     let prior = instance_field(vm, pending, 2)?;
     if !prior.is_null() {
@@ -1104,12 +1117,15 @@ fn resolve_pending_if_ready(vm: &mut BexVm, pending: Value) -> Result<Option<Val
     let mut resolved_roots = Vec::with_capacity(roots.len());
     for root in roots {
         if is_instance_of(vm, root, PENDING) {
-            let Some(value) = resolve_pending_if_ready(vm, root)? else {
+            let Some(value) = resolve_pending_if_ready(vm, root, unpublished)? else {
                 return Ok(None);
             };
             resolved_roots.push(value);
         } else if is_instance_of(vm, root, BUILDER) {
-            let value = instance_field(vm, root, 3)?;
+            let value = match unpublished.iter().find(|(builder, _)| *builder == root) {
+                Some(&(_, ty)) => ty,
+                None => instance_field(vm, root, 3)?,
+            };
             if value.is_null() {
                 return Ok(None);
             }
@@ -1156,6 +1172,8 @@ fn resolve_pending_if_ready(vm: &mut BexVm, pending: Value) -> Result<Option<Val
             Value::object(vm.tlab.alloc_type(TypeValue::new(ty)))
         }
     };
-    store_instance_field(vm, pending, 2, resolved)?;
+    if unpublished.is_empty() {
+        store_instance_field(vm, pending, 2, resolved)?;
+    }
     Ok(Some(resolved))
 }

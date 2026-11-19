@@ -63,6 +63,7 @@ fn each_pin(value: &wire::BamlOutboundValue, pin: &mut impl FnMut(u64)) {
             }
         }
         Out::ListValue(list) => list.items.iter().for_each(|item| each_pin(item, pin)),
+        Out::TupleValue(tuple) => tuple.items.iter().for_each(|item| each_pin(item, pin)),
         Out::MapValue(map) => map
             .entries
             .iter()
@@ -108,6 +109,10 @@ fn renew_pins(value: &mut wire::BamlOutboundValue, pins: &mut Pins) -> Result<()
             Ok(())
         }
         Out::ListValue(list) => list
+            .items
+            .iter_mut()
+            .try_for_each(|item| renew_pins(item, pins)),
+        Out::TupleValue(tuple) => tuple
             .items
             .iter_mut()
             .try_for_each(|item| renew_pins(item, pins)),
@@ -162,6 +167,7 @@ pub(crate) fn release(value: wire::BamlOutboundValue) {
             });
         }
         Out::ListValue(list) => list.items.into_iter().for_each(release),
+        Out::TupleValue(tuple) => tuple.items.into_iter().for_each(release),
         Out::MapValue(map) => map
             .entries
             .into_iter()
@@ -223,6 +229,14 @@ pub(crate) fn clone(
                 .iter()
                 .map(|item| clone(item, encoder))
                 .collect::<Result<_, _>>()?,
+        }),
+        Out::TupleValue(tuple) => Out::TupleValue(wire::BamlValueTuple {
+            items: tuple
+                .items
+                .iter()
+                .map(|item| clone(item, encoder))
+                .collect::<Result<_, _>>()?,
+            tuple_type: tuple.tuple_type.clone(),
         }),
         Out::MapValue(map) => Out::MapValue(wire::BamlValueMap {
             key_type: map.key_type.clone(),
@@ -368,6 +382,26 @@ pub(crate) fn to_inbound(
                     type_args,
                 )),
                 Some(In::ClassValue(wire::InboundClassValue { fields })),
+            )
+        }
+        Out::TupleValue(tuple) => {
+            let value_type = restate(
+                tuple
+                    .tuple_type
+                    .as_ref()
+                    .ok_or(EncodeError::UntypedContainer)?,
+                encoder,
+            )?;
+            let values = encoder.nested(|encoder| {
+                tuple
+                    .items
+                    .iter()
+                    .map(|item| to_inbound(item, encoder))
+                    .collect::<Result<_, _>>()
+            })?;
+            (
+                Some(value_type),
+                Some(In::ListValue(wire::InboundListValue { values })),
             )
         }
         Out::ListValue(list) => {
@@ -571,6 +605,13 @@ fn map_heads<E>(
         Ty::List(list) => Ty::List(Box::new(wire::BamlTyList {
             item: boxed(list.item.as_deref(), head)?,
         })),
+        Ty::Tuple(tuple) => Ty::Tuple(wire::BamlTyTuple {
+            items: tuple
+                .items
+                .iter()
+                .map(|item| map_heads(item, head))
+                .collect::<Result<_, E>>()?,
+        }),
         Ty::Map(map) => Ty::Map(Box::new(wire::BamlTyMap {
             key: boxed(map.key.as_deref(), head)?,
             value: boxed(map.value.as_deref(), head)?,

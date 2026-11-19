@@ -222,6 +222,35 @@ trace.redact:
   details: |
     A recording keeps a marker saying the value was redacted in its place, wherever the value is captured: a function's inputs or output, a thrown error, or `log.*` data. `@trace.redact` applies to a class field, and `@@trace.redact` to a class, whose every instance is withheld whole, fields and all. Only recordings change: the program reads, prints and serializes the value as before. A value copied out of a redacted field into a plain string or another field is recorded as that copy. Takes no arguments, at most once per declaration.
 
+$trace:
+  summary: "The tracing options of one call: a hidden parameter every function takes, and a directive on a function declaration."
+  syntax: |
+    // At a call site, by name.
+    charge(account, 500, $trace = trace.span())
+    charge(account, 500, $trace = trace.context(
+        distinct_id = "user-42",
+        metadata = { "phase": "billing" },
+    ))
+
+    // On a declaration, for every call of the function.
+    /// baml:$trace=trace.span
+    function charge(account: Account, cents: int) -> int {
+        cents
+    }
+  details: |
+    A recording keeps a call as a span or as timing. A span is one row of `baml query`'s `spans` table, with its parent, times, status and captured values. A timing call adds to its function's totals in `profiler` and keeps no row and no values. At the default level (`BAML_TELEMETRY=medium`), AI functions are spans and other functions are timing. A root call and every `spawn` are spans of type `future`.
+
+    `trace.span()` records the call as a span and captures its inputs and its output. `inputs = false` or `output = false` leaves one out, and `trace.empty_span()` leaves out both. AI functions are the exception: they capture their inputs, output and error by default, and a call-site `false` or `trace.empty_span()` does not turn that off. To keep an AI function's values out of a recording, use `@trace.redact`, or call it with `trace.timing()` or `trace.hidden()`. When a call throws or panics, the innermost span the error escapes records it, an AI function's or one made by `BAML_TELEMETRY=high` included. An outer span records it again only with `error = true`, and `error = false` passes it to the next span out. An AI function's span is the exception: it records every error that escapes it, whatever its `error` option. A failed future carries the error that escaped it. `http_bodies = false` in `baml.toml` keeps every error value out. `trace.timing()` keeps timing only and `trace.hidden()` leaves the call out. `trace.context(distinct_id = ..., metadata = {...})` sets the distinct id and metadata of the call and of everything it runs; `baml query` serves them as `context_distinct_id` and `context_metadata`. Builders chain: `trace.context(...).span()`. The mode and the capture requests apply to that one call, not to the calls it makes.
+
+    The directive `/// baml:$trace=<name>` takes `trace.span`, `trace.empty_span`, `trace.timing` or `trace.hidden`, or the name of a `throws never` function that returns the `trace.Options` to use. A value that must not be recorded is withheld with `@trace.redact`. See `baml describe trace` and `baml describe trace.redact`.
+
+tracing:
+  summary: "Alias topic for `$trace`."
+  syntax: |
+    charge(account, 500, $trace = trace.span())
+  details: |
+    See `baml describe '$trace'` for spans, timing, capture defaults and the declaration directive.
+
 function:
   summary: "Declares a named callable with typed parameters and a return type."
   syntax: |
@@ -390,7 +419,7 @@ generator:
 
     `naming_convention` accepts `"preserve-case"`, which spells generated functions, modules, fields, parameters and types exactly as in BAML, or `"language"`, which respells them in the target language's casing (`nextCursor` becomes `next_cursor` in Python and Rust). Names that already follow that casing keep their spelling, and the runtime always sees the BAML names. Python and Rust accept either; `baml generate add` writes `"language"`. Go and C# require `"language"`; Go also requires `sdk_import_path`. All other targets require `"preserve-case"`.
 
-    `package_name` is optional and names the generated SDK; it defaults to `baml_sdk`. For Python it is a dotted import path such as `"my_app._generated"`: the SDK is written to `<output_dir>/my_app/_generated` and imported as `my_app._generated`, so `output_dir` is the import root. BAML creates missing parent directories but never writes or edits their `__init__.py`. For Go it is the root package's name (`[a-z][a-z0-9_]*`), and the last segment of `sdk_import_path` must be `<package_name>` (a bare `<package_name>` is the root of a module with that name). For Rust it is the crate name, used for both the Cargo package and the library you `use`. For TypeScript it is only the directory name. Swift, Java, C++ and C# do not accept `package_name` yet. With `package_name` set, `baml generate` refuses to write into an existing, non-empty directory that it did not create. `baml generate --output-dir <PATH>` writes the SDK to exactly `<PATH>`, overriding both `output_dir` and the directory `package_name` selects; the check against writing into a directory BAML did not create still applies.
+    `package_name` is optional and names the generated SDK; it defaults to `baml_sdk`. For Python it is a dotted import path such as `"my_app._generated"`: the SDK is written to `<output_dir>/my_app/_generated` and imported as `my_app._generated`, so `output_dir` is the import root. BAML creates missing parent directories but never writes or edits their `__init__.py`. For Go it is the root package's name (`[a-z][a-z0-9_]*`), and the last segment of `sdk_import_path` must be `<package_name>` (a bare `<package_name>` is the root of a module with that name). For Rust it is the crate name, used for both the Cargo package and the library you `use`. For TypeScript it is only the directory name. Swift, Java, C++ and C# do not accept `package_name` yet. With `package_name` set, `baml generate` refuses to write into an existing, non-empty directory that it did not create. `baml generate --output <PATH>` writes the SDK to exactly `<PATH>`, overriding both `output_dir` and the directory `package_name` selects; the check against writing into a directory BAML did not create still applies.
 
 test:
   summary: "Defines a named executable test using ordinary BAML expressions."
@@ -1048,8 +1077,8 @@ default:
 check:
   summary: "Explains how to ask the CLI to validate a project."
   syntax: |
-    baml check --project .
-    baml run --list --project .
+    baml check --project-dir .
+    baml run --list --project-dir .
   details: |
     `baml check` compiles the project and reports compiler errors without running anything — the most direct way to validate. Other commands (`baml run`, `baml run --list`, `baml fmt`, `baml test`) also load and check the project before their main work. Use `baml run --list` when you additionally want the compiled function signatures.
 
@@ -1057,7 +1086,7 @@ playground:
   summary: "Serves the BAML playground web UI for a project and opens it in a browser."
   syntax: |
     baml playground                      # current project, first free port from 4265
-    baml playground --project ./my-app   # explicit project directory
+    baml playground --project-dir ./my-app   # explicit project directory
     baml playground --file ./one.baml    # standalone single file
     baml playground --port 4265          # pin the port (errors if taken)
     baml playground --no-open            # don't launch a browser (automatic in SSH/headless sessions)
@@ -1219,34 +1248,40 @@ pattern:
     Full guide: `baml describe patterns`. Match-arm reference: `baml describe match`.
 
 query:
-  summary: "SQL over the project's local recordings: `baml query \"SELECT …\"`."
+  summary: "SQL over recordings: `baml local recordings query \"SELECT …\"`, or `baml cloud recordings query` for Boundary Cloud."
   syntax: |
-    baml query "SELECT process_id, status, command, last_updated FROM processes"
-    baml query "SELECT span_name, status, duration FROM spans
-                WHERE span_type = 'future' AND parent_span_id IS NULL
-                ORDER BY start_time DESC LIMIT 20"
-    baml query "SELECT function_name, sum(invocation_count) calls, sum(self_time) self_ns
-                FROM profiler GROUP BY function_name ORDER BY self_ns DESC LIMIT 10"
-    baml query "SELECT span_id, input_args['customer']['age'] AS age, output_value
-                FROM spans WHERE input_args['customer']['age'] >= 30" --format jsonl
-    baml query "SELECT span_name, total_usage[0]['model'], total_usage[0]['input_tokens']
-                FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL"
-    baml query --schema --table spans
+    baml local recordings query "SELECT process_id, status, command, last_updated FROM processes"
+    baml local recordings query "SELECT span_name, status, duration FROM spans
+                                 WHERE span_type = 'future' AND parent_span_id IS NULL
+                                 ORDER BY start_time DESC LIMIT 20"
+    baml local recordings query "SELECT function_name, sum(invocation_count) calls, sum(self_time) self_ns
+                                 FROM profiler GROUP BY function_name ORDER BY self_ns DESC LIMIT 10"
+    baml local recordings query "SELECT span_id, input_args['customer']['age'] AS age, output_value
+                                 FROM spans WHERE input_args['customer']['age'] >= 30" --output-format jsonl
+    baml local recordings query "SELECT span_name, total_usage[0]['model'], total_usage[0]['input_tokens']
+                                 FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL"
+    baml local recordings schema spans
   details: |
     Every `baml run`/`baml test` records to `.baml/btel`; the first query
     builds `.baml/btel/query.sqlite` and later queries apply only new files.
     Relations: `processes` (one row per process, with its status),
     `spans` (completed function calls that were retained, and futures: a
     root call is a future without a parent; `input_args`, `output_value`,
-    `error_value` (a `baml.errors.Context`), `self_usage` (the model usage
+    `error_value` (a `baml.errors.Context`: the error a failed call threw or
+    the error that escaped a failed future), `self_usage` (the model usage
     of the calls an `ai.Client.invoke` span made) and `total_usage` (every
     call under a span, one entry per model with its token counts) are BAML values), `span_announcements` (every
     started span), and `profiler` (one row per calling-context node of an
     ended process: invocations, outcomes, total/self/I/O time). Value columns
     support ordinary subscripts and comparisons —
     `input_args['customer']['age'] >= 30`,
-    `input_args = baml_value_json('{"x":1}')` — decoded on demand. `WITH
+    `input_args = baml_value_json('{"x":1}')` — decoded on demand. An image,
+    audio, pdf or video value is described without its content:
+    `{"$media", "mime"}`, plus `url` or `file` when the value names one, and
+    `base64_len` when its content was captured. `['base64']` on it reads that
+    content as base64 text, and is missing when none was captured. `WITH
     RECURSIVE` walks span trees through `parent_span_id`. Discovery:
-    `--schema`, `--explain`. Output: `--format table|json|jsonl` (jsonl ends
-    with an outcome frame). Exit codes: 0 complete, 1 evidence-incomplete,
-    2 invalid SQL, 3 budget, 4 cancelled, 5 index/internal.
+    `baml local recordings schema [TABLE]`. Output: `--output-format
+    text|json|jsonl` (jsonl ends with an outcome frame). `baml cloud
+    recordings query` takes the same arguments against Boundary Cloud. Exit codes: 0 rows returned (the outcome's
+    `status` says whether they are complete), 1 failure, 2 usage.

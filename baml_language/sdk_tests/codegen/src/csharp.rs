@@ -28,6 +28,7 @@ const FIXTURES: &[&str] = &[
     "stdlib_resources",
     "stdlib_structurals",
     "streaming",
+    "tuples",
     "type_roundtrips",
 ];
 
@@ -544,20 +545,11 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             ],
         ),
         (
-            // `apply` comes from `implements baml.spawn.Modifier`;
-            // interface-impl methods are not generated, which is what keeps
-            // the host-unrepresentable `baml.spawn.Plan` off this surface.
-            "Spawn/Limit.g.cs",
-            vec![
-                " New(",
-                " NewAsync(",
-                " Capacity(",
-                " CapacityAsync(",
-                " ActiveCount(",
-                " ActiveCountAsync(",
-                " QueuedCount(",
-                " QueuedCountAsync(",
-            ],
+            // `baml.sync` types cross as handles only: a host gets no
+            // operations on them (`build_symbol_pool`). Like `baml.sap`'s,
+            // their namespace is their own, beside `Baml`.
+            "../Sync/Semaphore.g.cs",
+            vec![],
         ),
         (
             "Csv/Record.g.cs",

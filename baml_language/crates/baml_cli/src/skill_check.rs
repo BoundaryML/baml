@@ -41,7 +41,7 @@ struct SkillMetadata {
 }
 
 pub(crate) fn check(project: Option<&Path>) -> anyhow::Result<()> {
-    let policy = crate::output::policy().agent_skill_check;
+    let policy = crate::output::agent_skill_check();
     if policy == AgentSkillCheckPolicy::Off {
         return Ok(());
     }

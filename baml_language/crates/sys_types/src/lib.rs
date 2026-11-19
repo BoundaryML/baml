@@ -26,6 +26,7 @@ pub use bex_vm_types::{
 };
 pub use tokio_util::sync::CancellationToken;
 
+pub mod http_readers;
 pub mod network;
 pub mod sse;
 
@@ -722,6 +723,8 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// The span of the request this call makes. `None` unless telemetry is
     /// on and the op sends an HTTP request.
     pub network: Option<network::NetworkContext>,
+    /// Native client body readers, joined before the engine recorder closes.
+    pub http_readers: Arc<http_readers::HttpReaders>,
 }
 
 impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
@@ -736,6 +739,7 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
             spawner: self.spawner.clone(),
             runtime_io: self.runtime_io.clone(),
             network: self.network.clone(),
+            http_readers: self.http_readers.clone(),
         }
     }
 }
@@ -744,6 +748,7 @@ impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
 /// When passing to a sys op, convert to [`SysOpContext`] with `to_op_context`.
 #[derive(Clone)]
 pub struct EngineSysOpContext {
+    pub http_readers: Arc<http_readers::HttpReaders>,
     /// Pre-extracted LLM function metadata, keyed by function name.
     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
     pub llm_functions: Arc<std::collections::HashMap<String, LlmFunctionInfo>>,
@@ -951,6 +956,7 @@ impl SysOpContext {
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
             network: None,
+            http_readers: Arc::default(),
         }
     }
 }
@@ -972,6 +978,7 @@ impl EngineSysOpContext {
             spawner,
             runtime_io: self.runtime_io.clone(),
             network: None,
+            http_readers: self.http_readers.clone(),
         }
     }
 }

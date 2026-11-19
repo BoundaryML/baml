@@ -13,6 +13,7 @@ pub enum AnyType {
     Path(Id<PathType>),
     Literal(Id<LiteralType>),
     Paren(Id<ParenType>),
+    Tuple(Id<TupleType>),
     Function(Id<FunctionType>),
     Optional(Id<OptionalType>),
     Array(Id<ArrayType>),
@@ -118,4 +119,11 @@ pub struct QualifiedPath {
     pub r: Result<Token![")"], Missing>,
     pub dot: Result<Token!["."], Missing>,
     pub member: Result<Id<Name>, Missing>,
+}
+
+#[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TupleType {
+    pub l: Token!["("],
+    pub elements: Sep<AnyType, punct::Comma>,
+    pub r: Result<Token![")"], Missing>,
 }

@@ -17,10 +17,7 @@ use std::sync::Arc;
 
 use baml_type::ConcreteMediaKind;
 use bex_heap::TlabHolder;
-use bex_vm_types::{
-    BexStr, Object, RealizedTy, TypeHead, Value,
-    types::{Array, Instance},
-};
+use bex_vm_types::{BexStr, Object, RealizedTy, TypeHead, Value, types::Array};
 
 use super::{
     MediaFields,
@@ -79,13 +76,14 @@ impl TextDecoder<'_, '_> {
                 // A fraction or exponent past `f64` is a syntax error; an
                 // integer that large is a bigint, which no `float` holds.
                 let float = reader.number()?.as_f64().ok_or(Stop)?;
-                Ok(Value::object(vm.alloc_float(float)))
+                Ok(vm.float_value(float))
             }
             RealizedTy::String => {
                 let text = reader.string()?;
                 Ok(Value::object(vm.alloc_string(text)))
             }
             RealizedTy::List(element) => self.list(vm, element),
+            RealizedTy::Tuple(slots) => self.tuple(vm, slots),
             RealizedTy::Map { key, value } => self.map(vm, key, value),
             RealizedTy::TypeAlias(head) if vm.stdlib_heads().is_json_alias(*head) => {
                 self.parser.value(vm)
@@ -142,6 +140,23 @@ impl TextDecoder<'_, '_> {
         Ok(Value::object(
             vm.alloc(Object::Array(Array::new(element.clone(), items))),
         ))
+    }
+
+    fn tuple(&mut self, vm: &mut BexVm, slots: &[RealizedTy]) -> Result<Value, Stop> {
+        self.parser.reader.open_array()?;
+        let mut items = Vec::with_capacity(slots.len());
+        for slot in slots {
+            if !self.parser.reader.next_element(items.is_empty())? {
+                return Err(Stop);
+            }
+            items.push(self.value(vm, slot)?);
+        }
+        if self.parser.reader.next_element(items.is_empty())? {
+            return Err(Stop);
+        }
+        let tuple = bex_vm_types::Tuple::new(slots.to_vec(), items)
+            .unwrap_or_else(|_| unreachable!("one element is read per slot"));
+        Ok(Value::object(vm.tlab.alloc_tuple(tuple)))
     }
 
     /// A recursive alias decodes as its definition.
@@ -225,7 +240,7 @@ impl TextDecoder<'_, '_> {
                 let actual = reader.number()?.as_f64().ok_or(Stop)?;
                 match expected.parse::<f64>() {
                     Ok(expected) if (expected - actual).abs() < f64::EPSILON => {
-                        Ok(Value::object(vm.alloc_float(actual)))
+                        Ok(vm.float_value(actual))
                     }
                     _ => Err(Stop),
                 }
@@ -314,11 +329,11 @@ impl TextDecoder<'_, '_> {
             };
             values.push(value);
         }
-        Ok(Value::object(vm.alloc(Object::Instance(Instance::new(
+        Ok(Value::object(vm.tlab.alloc_instance_with_type_args(
             plan.class,
             plan.type_args.clone(),
             values,
-        )))))
+        )))
     }
 
     /// A media value from its tagged object.

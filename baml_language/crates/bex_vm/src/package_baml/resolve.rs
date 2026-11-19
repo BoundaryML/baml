@@ -460,9 +460,16 @@ impl<'vm> ImplResolver<'vm> {
             ));
         }
         let kind = self.structural_default(interface, args)?;
-        if kind == StructuralInterface::Hash
-            && !self.hash_eligible(self_ty, interface, &mut Vec::new(), &mut Vec::new())
-        {
+        let eligible = match kind {
+            StructuralInterface::Hash => {
+                self.hash_eligible(self_ty, interface, &mut Vec::new(), &mut Vec::new())
+            }
+            StructuralInterface::Compare => {
+                self.tuple_compare_eligible(self_ty, interface, &mut Vec::new())
+            }
+            _ => true,
+        };
+        if !eligible {
             return None;
         }
         Some((
@@ -587,6 +594,20 @@ impl<'vm> ImplResolver<'vm> {
         };
         active.pop();
         eligible
+    }
+
+    fn tuple_compare_eligible(
+        self,
+        ty: &RealizedTy,
+        compare: TypeHead,
+        stack: &mut Vec<Obligation>,
+    ) -> bool {
+        match &*concrete_base(ty) {
+            RealizedTy::Tuple(slots) => slots
+                .iter()
+                .all(|slot| self.prove(slot, compare, &[], &[], stack)),
+            _ => false,
+        }
     }
 
     fn interface_requires_hash(self, head: TypeHead, hash: TypeHead) -> bool {
@@ -969,9 +990,14 @@ impl<'vm> ImplResolver<'vm> {
                 requested_assoc.is_empty()
                     && self
                         .structural_default(iface, requested_args)
-                        .is_some_and(|kind| {
-                            kind != StructuralInterface::Hash
-                                || self.hash_eligible(concrete_ty, iface, &mut Vec::new(), stack)
+                        .is_some_and(|kind| match kind {
+                            StructuralInterface::Hash => {
+                                self.hash_eligible(concrete_ty, iface, &mut Vec::new(), stack)
+                            }
+                            StructuralInterface::Compare => {
+                                self.tuple_compare_eligible(concrete_ty, iface, stack)
+                            }
+                            _ => true,
                         })
             }
         };
@@ -1564,11 +1590,12 @@ mod tests {
         let mut roots = Vec::new();
         vm.collect_roots(&mut roots);
         roots.extend([live_head.ptr(), dead_head.ptr(), live_rule, live_owner]);
+        let gc_heap = std::sync::Arc::clone(&vm.heap);
         // SAFETY: the test VM is the heap's only mutator and holds no
         // pointer the root set misses.
         #[allow(unsafe_code, reason = "a test drives the collector directly")]
-        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
-        let moved_rule = forwarding[&live_rule];
+        let (_, _, forwarding) = unsafe { gc_heap.collect_garbage(&roots) };
+        let moved_rule = forwarding.get(live_rule).unwrap();
         assert_ne!(
             moved_rule, live_rule,
             "the collection moves the live witness"
@@ -1585,8 +1612,8 @@ mod tests {
             vm.impl_cache.borrow().cached_rules().collect::<Vec<_>>(),
             [moved_rule]
         );
-        let live_head = TypeHead::new(forwarding[&live_head.ptr()], live_head.tag());
-        let dead_head = TypeHead::new(forwarding[&dead_head.ptr()], dead_head.tag());
+        let live_head = TypeHead::new(forwarding.get(live_head.ptr()).unwrap(), live_head.tag());
+        let dead_head = TypeHead::new(forwarding.get(dead_head.ptr()).unwrap(), dead_head.tag());
         let resolver = ImplResolver::new(&vm);
         let Some(ResolvedInterfaceImpl::Explicit { rule, .. }) =
             resolver.resolve_implementation(&int, live_head, &[])
@@ -1630,11 +1657,12 @@ mod tests {
         let mut roots = Vec::new();
         vm.collect_roots(&mut roots);
         roots.extend([head.ptr(), live_root]);
+        let gc_heap = std::sync::Arc::clone(&vm.heap);
         // SAFETY: the test VM is the heap's only mutator and holds no
         // pointer the root set misses.
         #[allow(unsafe_code, reason = "a test drives the collector directly")]
-        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
-        let moved_root = forwarding[&live_root];
+        let (_, _, forwarding) = unsafe { gc_heap.collect_garbage(&roots) };
+        let moved_root = forwarding.get(live_root).unwrap();
         assert_ne!(moved_root, live_root, "the collection moves the live root");
         let heap = std::sync::Arc::clone(&vm.heap);
         vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
@@ -1642,7 +1670,7 @@ mod tests {
         // The answer under the freed root is gone; the other one now lives
         // under the moved root, so asking there is a hit that stores nothing.
         assert_eq!(vm.impl_cache.borrow().len(), 1);
-        let head = TypeHead::new(forwarding[&head.ptr()], head.tag());
+        let head = TypeHead::new(forwarding.get(head.ptr()).unwrap(), head.tag());
         assert!(is_structural(
             ImplResolver::for_package(&vm, moved_root)
                 .resolve_implementation(&int, head, &[])

@@ -69,6 +69,13 @@ public struct BamlOutboundValue: Sendable {
         }
         return nil
     }
+
+    public func carriedTupleType() -> BamlTypeDescriptor? {
+        guard case .tupleValue(let tuple) = normalized.value, tuple.hasTupleType else {
+            return nil
+        }
+        return BamlTypeDescriptor(tuple.tupleType)
+    }
 }
 
 /// Decode-side failure: the wire value's shape didn't match what the
@@ -146,8 +153,14 @@ extension BamlSlot {
     /// declared arm: the arm's own type, or one member of a merged leaf arm
     /// (`"a" | "b"`, one `String` case).
     public func _bamlSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        node.selects(selected)
+    }
+}
+
+extension BamlSlotNode {
+    func selects(_ selected: BamlTypeDescriptor) -> Bool {
         if type == selected { return true }
-        guard case .leaf = node.shape, case .union(let merged)? = type.raw.ty else {
+        guard case .leaf = shape, case .union(let merged)? = type.raw.ty else {
             return false
         }
         return merged.options.contains(selected.raw)
@@ -182,6 +195,7 @@ func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
     case .enumValue(let e): return "enum \(e.name)"
     case .literalValue: return "literal"
     case .listValue: return "list"
+    case .tupleValue: return "tuple"
     case .mapValue: return "map"
     case .unionVariantValue: return "union variant"
     case .handleValue: return "handle"
@@ -250,6 +264,7 @@ func forEachHead(_ ty: BamlBridge_Cffi_V1_BamlTy, _ body: (BamlWireHead) -> Void
             case nil: break
             }
         case .list(let list): visit(list.item)
+        case .tuple(let tuple): tuple.items.forEach(visit)
         case .map(let map): visit(map.key); visit(map.value)
         case .optional(let optional): visit(optional.inner)
         case .union(let union): union.options.forEach(visit)
@@ -310,6 +325,7 @@ func engineRows(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) -> [EngineRow] {
             }
         case .tyValue(let ty): rows.append(contentsOf: liveKeys(ty).map(EngineRow.typeValue))
         case .listValue(let list): list.items.forEach(visit)
+        case .tupleValue(let tuple): tuple.items.forEach(visit)
         case .mapValue(let map): for entry in map.entries { visit(entry.value) }
         case .classValue(let cls): for field in cls.fields { visit(field.value) }
         case .unionVariantValue(let variant): visit(variant.value)
@@ -332,6 +348,14 @@ func releaseUnownedRows(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
         case .handle: break
         case .pin(let key), .typeValue(let key): _ = BamlApi.handleRelease(key)
         }
+    }
+}
+
+/// Give back the engine handles `value` holds, for a value no Swift value will
+/// decode: its pins and type values went back on arrival.
+func releaseEngineHandles(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
+    for row in engineRows(value) {
+        if case .handle(let key) = row { _ = BamlApi.handleRelease(key) }
     }
 }
 
@@ -463,73 +487,92 @@ extension BamlNull: BamlDecodable {
 
 extension Optional: BamlDecodable where Wrapped: BamlDecodable {
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Wrapped? {
-        try decode(value) { try Wrapped._bamlDecode($0) }
+        try decodeOptional(value) { try Wrapped._bamlDecode($0) }
     }
 
     public static func _bamlDecode(_ value: BamlOutboundValue, as slot: BamlSlot<Wrapped?>) throws -> Wrapped? {
         guard case .optional(let wrapped) = slot.node.shape else { slot.node.mismatch("an optional") }
-        return try decode(value) { try Wrapped._bamlDecode($0, as: BamlSlot(wrapped)) }
+        return try decodeOptional(value) { try Wrapped._bamlDecode($0, as: BamlSlot(wrapped)) }
     }
+}
 
-    private static func decode(
-        _ value: BamlOutboundValue,
-        _ wrapped: (BamlOutboundValue) throws -> Wrapped
-    ) throws -> Wrapped? {
-        switch value.normalized.value {
-        case nil, .nullValue: return nil
-        // The value as it came, union wrapper and all: a union wrapped in
-        // `Optional` selects its case from it.
-        default: return try wrapped(value)
-        }
+func decodeOptional<Wrapped>(
+    _ value: BamlOutboundValue,
+    _ wrapped: (BamlOutboundValue) throws -> Wrapped
+) throws -> Wrapped? {
+    switch value.normalized.value {
+    case nil, .nullValue: return nil
+    default: return try wrapped(value)
     }
 }
 
 extension Array: BamlDecodable where Element: BamlDecodable {
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> [Element] {
-        try items(value).map { try Element._bamlDecode(BamlOutboundValue($0)) }
+        try listItems(value).map { try Element._bamlDecode(BamlOutboundValue($0)) }
     }
 
     public static func _bamlDecode(_ value: BamlOutboundValue, as slot: BamlSlot<[Element]>) throws -> [Element] {
         guard case .list(let item) = slot.node.shape else { slot.node.mismatch("a list") }
         let itemSlot = BamlSlot<Element>(item)
-        return try items(value).map { try Element._bamlDecode(BamlOutboundValue($0), as: itemSlot) }
+        return try listItems(value).map { try Element._bamlDecode(BamlOutboundValue($0), as: itemSlot) }
     }
+}
 
-    private static func items(_ value: BamlOutboundValue) throws -> [BamlBridge_Cffi_V1_BamlOutboundValue] {
-        let raw = value.normalized
-        guard case .listValue(let list) = raw.value else {
-            throw BamlDecodeError.typeMismatch(expected: "Array", got: wireArmName(raw))
-        }
-        // `item_type` metadata is deliberately ignored, like Python.
-        return list.items
+func listItems(_ value: BamlOutboundValue) throws -> [BamlBridge_Cffi_V1_BamlOutboundValue] {
+    let raw = value.normalized
+    guard case .listValue(let list) = raw.value else {
+        throw BamlDecodeError.typeMismatch(expected: "Array", got: wireArmName(raw))
     }
+    return list.items
 }
 
 extension Dictionary: BamlDecodable where Key == String, Value: BamlDecodable {
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> [String: Value] {
-        try decode(value) { try Value._bamlDecode($0) }
+        try decodeMap(value) { try Value._bamlDecode($0) }
     }
 
     public static func _bamlDecode(_ value: BamlOutboundValue, as slot: BamlSlot<[String: Value]>) throws -> [String: Value] {
         guard case .map(let valueNode) = slot.node.shape else { slot.node.mismatch("a map") }
         let valueSlot = BamlSlot<Value>(valueNode)
-        return try decode(value) { try Value._bamlDecode($0, as: valueSlot) }
+        return try decodeMap(value) { try Value._bamlDecode($0, as: valueSlot) }
     }
+}
 
-    private static func decode(
-        _ value: BamlOutboundValue,
-        _ entry: (BamlOutboundValue) throws -> Value
-    ) throws -> [String: Value] {
-        let raw = value.normalized
-        guard case .mapValue(let mapValue) = raw.value else {
-            throw BamlDecodeError.typeMismatch(expected: "Dictionary", got: wireArmName(raw))
-        }
-        var out: [String: Value] = [:]
-        for item in mapValue.entries {
-            out[item.key] = try entry(BamlOutboundValue(item.value))
-        }
-        return out
+func decodeMap<Value>(
+    _ value: BamlOutboundValue,
+    _ entry: (BamlOutboundValue) throws -> Value
+) throws -> [String: Value] {
+    let raw = value.normalized
+    guard case .mapValue(let mapValue) = raw.value else {
+        throw BamlDecodeError.typeMismatch(expected: "Dictionary", got: wireArmName(raw))
     }
+    var out: [String: Value] = [:]
+    for item in mapValue.entries {
+        out[item.key] = try entry(BamlOutboundValue(item.value))
+    }
+    return out
+}
+
+func tupleItems(_ value: BamlOutboundValue, arity: Int) throws -> [BamlBridge_Cffi_V1_BamlOutboundValue] {
+    let raw = value.normalized
+    guard case .tupleValue(let tuple) = raw.value else {
+        throw BamlDecodeError.typeMismatch(expected: "a tuple of \(arity) slots", got: wireArmName(raw))
+    }
+    guard tuple.items.count == arity else {
+        throw BamlDecodeError.typeMismatch(
+            expected: "a tuple of \(arity) slots",
+            got: "tuple of \(tuple.items.count) slots"
+        )
+    }
+    return tuple.items
+}
+
+func decodeOwn<Value>(_ value: BamlOutboundValue, as _: Value.Type) throws -> Value {
+    guard let decodable = Value.self as? any BamlDecodable.Type else {
+        throw BamlDecodeError.unsupported("decoding \(Value.self) without its declared type")
+    }
+    func decode<D: BamlDecodable>(_: D.Type) throws -> Value { try D._bamlDecode(value) as! Value }
+    return try decode(decodable)
 }
 
 /// Decoded class fields keyed by name — what a generated model's
@@ -543,8 +586,8 @@ public struct BamlClassFields: Sendable {
     }
 
     /// Field `name`, decoded as a node of its declared type `slot`.
-    public func _baml<T: BamlDecodable>(_ name: String, as slot: BamlSlot<T>) throws -> T {
-        try T._bamlDecode(field(name), as: slot)
+    public func _baml<T>(_ name: String, as slot: BamlSlot<T>) throws -> T {
+        try slot._bamlDecode(field(name))
     }
 
     private func field(_ name: String) -> BamlOutboundValue {

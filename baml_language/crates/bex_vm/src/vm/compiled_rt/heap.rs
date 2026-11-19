@@ -25,7 +25,8 @@ impl BexVm {
         self.container_len_in::<true>(container)
     }
 
-    #[inline]
+    #[allow(clippy::inline_always, reason = "the array length's fast path")]
+    #[inline(always)]
     fn container_len_in<const THREAD_LOCAL: bool>(
         &self,
         container: Value,
@@ -45,6 +46,7 @@ impl BexVm {
             Object::Map(map) if THREAD_LOCAL => unsafe { map.lock_thread_local() }.len() as i64,
             Object::Array(arr) => arr.len() as i64,
             Object::Uint8Array(bytes) => bytes.len() as i64,
+            Object::Tuple(tuple) => tuple.len() as i64,
             Object::Map(map) => map.len() as i64,
             Object::String(s) => s.byte_len() as i64,
             other => return Err(object_type_error(ObjectType::Array, other)),
@@ -72,7 +74,8 @@ impl BexVm {
         self.load_array_element_in::<true>(array, index)
     }
 
-    #[inline]
+    #[allow(clippy::inline_always, reason = "the array element read's fast path")]
+    #[inline(always)]
     fn load_array_element_in<const THREAD_LOCAL: bool>(
         &mut self,
         array: Value,
@@ -141,8 +144,38 @@ impl BexVm {
         self.store_array_element_in::<true>(array, index, new_value)
     }
 
-    #[inline]
+    /// An in-bounds store into a list, small enough to inline; byte arrays
+    /// and every error take [`Self::store_array_element_slow`].
+    #[allow(clippy::inline_always, reason = "the array element store's fast path")]
+    #[inline(always)]
     fn store_array_element_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        array: Value,
+        index: Value,
+        new_value: Value,
+    ) -> Result<(), Box<VmError>> {
+        if let (Some(ptr), Some(i)) = (array.as_object_ptr(), index.as_int())
+            && let Object::Array(arr) = self.get_object(ptr)
+        {
+            let debt = self.tlab.alloc_debt();
+            // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
+            #[allow(unsafe_code)]
+            let mut guard = if THREAD_LOCAL {
+                unsafe { arr.lock_mut_thread_local(debt) }
+            } else {
+                arr.lock_mut(debt)
+            };
+            if let Some(idx) = crate::array_index::resolve_index_inline(i, guard.len()) {
+                guard[idx] = new_value;
+                return Ok(());
+            }
+        }
+        self.store_array_element_slow::<THREAD_LOCAL>(array, index, new_value)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn store_array_element_slow<const THREAD_LOCAL: bool>(
         &mut self,
         array: Value,
         index: Value,
@@ -209,12 +242,6 @@ impl BexVm {
         Box::new(self.index_out_of_bounds(index, length))
     }
 
-    #[cold]
-    #[inline(never)]
-    fn invalid_field_access_boxed(&mut self, idx: usize, length: usize) -> Box<VmError> {
-        Box::new(self.invalid_field_access_error(idx, length))
-    }
-
     /// `expected`, got `value`: the `TypeError` an accessor raises for an
     /// operand of the wrong type. Out of line, so the accessors' fast paths
     /// stay small enough to inline into compiled bodies.
@@ -244,33 +271,15 @@ impl BexVm {
         self.load_field_in::<true>(instance, idx)
     }
 
-    #[allow(clippy::inline_always)]
+    #[allow(clippy::inline_always, reason = "the generic field read's fast path")]
     #[inline(always)]
     fn load_field_in<const THREAD_LOCAL: bool>(
         &mut self,
         instance: Value,
         idx: usize,
     ) -> Result<Value, Box<VmError>> {
-        // The fast path: a tag check, the object's kind, a bounds check and
-        // the field load. Every failure leaves through a cold helper.
-        let Some(ptr) = instance.as_object_ptr() else {
-            return Err(self.type_error(ObjectType::Instance, instance));
-        };
-        let Object::Instance(object) = self.get_object(ptr) else {
-            return Err(self.type_error(ObjectType::Instance, instance));
-        };
-        let loaded = if THREAD_LOCAL {
-            object.try_load_field_relaxed(idx)
-        } else {
-            object.try_load_field(idx)
-        };
-        match loaded {
-            Some(value) => Ok(value),
-            None => {
-                let length = object.field_len();
-                Err(self.invalid_field_access_boxed(idx, length))
-            }
-        }
+        self.load_instance_field(instance, idx, THREAD_LOCAL)
+            .map_err(Box::new)
     }
 
     #[inline]
@@ -295,7 +304,7 @@ impl BexVm {
         self.store_field_in::<true>(instance, idx, new_value)
     }
 
-    #[allow(clippy::inline_always)]
+    #[allow(clippy::inline_always, reason = "the generic field store's fast path")]
     #[inline(always)]
     fn store_field_in<const THREAD_LOCAL: bool>(
         &mut self,
@@ -303,23 +312,19 @@ impl BexVm {
         idx: usize,
         new_value: Value,
     ) -> Result<(), Box<VmError>> {
-        let Some(obj_ptr) = instance.as_object_ptr() else {
-            return Err(self.type_error(ObjectType::Instance, instance));
-        };
-        let Object::Instance(object) = self.get_object(obj_ptr) else {
-            return Err(self.type_error(ObjectType::Instance, instance));
-        };
-        let length = object.field_len();
-        if idx >= length {
-            return Err(self.invalid_field_access_boxed(idx, length));
-        }
+        self.store_instance_field(instance, idx, new_value, THREAD_LOCAL)
+            .map_err(Box::new)
+    }
 
-        if THREAD_LOCAL {
-            object.store_field_relaxed(idx, new_value);
-        } else {
-            object.store_field(idx, new_value);
+    pub fn load_tuple_field(&mut self, tuple: Value, idx: usize) -> Result<Value, Box<VmError>> {
+        let load_result = {
+            let tuple = self.as_tuple(&tuple)?;
+            tuple.try_load_slot(idx).ok_or_else(|| tuple.len())
+        };
+        match load_result {
+            Ok(value) => Ok(value),
+            Err(length) => Err(Box::new(self.invalid_field_access_error(idx, length))),
         }
-        Ok(())
     }
 
     pub fn make_closure(
@@ -367,10 +372,7 @@ impl BexVm {
     #[inline]
     #[must_use]
     pub fn is_instance_of(&self, value: Value, class: HeapPtr) -> bool {
-        value
-            .as_object_ptr()
-            .and_then(|ptr| self.get_object(ptr).class_instance())
-            .is_some_and(|(instance_class, _)| instance_class == class)
+        self.instance_class(value) == Some(class)
     }
 
     #[inline]
@@ -398,6 +400,17 @@ impl BexVm {
     }
 
     #[inline]
+    pub fn new_tuple(
+        &mut self,
+        tuple_ty: RealizedTy,
+        values: Vec<Value>,
+    ) -> Result<Value, Box<VmError>> {
+        let tuple =
+            Self::tuple_at_type(tuple_ty, values).map_err(|err| Box::new(VmError::from(err)))?;
+        Ok(Value::object(self.tlab.alloc_tuple(tuple)))
+    }
+
+    #[inline]
     pub fn new_map(&mut self, key_ty: RealizedTy, value_ty: RealizedTy) -> Value {
         Value::object(
             self.tlab
@@ -407,6 +420,13 @@ impl BexVm {
 
     #[inline]
     pub fn new_variant(&mut self, enm: HeapPtr, index: usize) -> Value {
+        // A compile-time enum's variants are permanent shared objects (see
+        // `Enum::shared_variants`); only a runtime enum allocates.
+        if let Object::Enum(declaration) = self.get_object(enm)
+            && let Some(&shared) = declaration.shared_variants.get(index)
+        {
+            return Value::object(shared);
+        }
         Value::object(self.tlab.alloc_variant(enm, index))
     }
 
@@ -462,6 +482,7 @@ mod tests {
             other: IndexMap::default(),
             owner: Owner::default(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         }))
     }
 
@@ -475,6 +496,27 @@ mod tests {
         };
         assert_eq!(*object.key_ty, RealizedTy::String);
         assert_eq!(*object.value_ty, RealizedTy::Int);
+    }
+
+    /// In-bounds stores take the inline path; the rest take the slow one.
+    /// (Out-of-bounds panics need the program's panic classes, so the
+    /// `DirectContainerOps` differential probe covers them.)
+    #[test]
+    fn stores_land_in_bounds_and_leave_the_rest_to_the_slow_path() {
+        let mut vm = test_vm(Vec::new());
+        let list = vm.new_array(RealizedTy::Int, vec![Value::int(0); 3]);
+        vm.store_array_element(list, Value::int(0), Value::int(1))
+            .unwrap();
+        vm.store_array_element_local(list, Value::int(-1), Value::int(3))
+            .unwrap();
+        assert!(
+            vm.store_array_element(list, Value::TRUE, Value::int(9))
+                .is_err()
+        );
+        let elements: Vec<_> = (0..3)
+            .map(|i| vm.load_array_element(list, Value::int(i)).unwrap())
+            .collect();
+        assert_eq!(elements, [Value::int(1), Value::int(0), Value::int(3)]);
     }
 
     #[test]

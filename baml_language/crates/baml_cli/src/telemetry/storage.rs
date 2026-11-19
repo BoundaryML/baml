@@ -27,7 +27,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use console::style;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -364,8 +363,9 @@ impl Drop for InvocationGuard {
 /// team like ours decides what to build next," which is more honest for
 /// a team our size.
 fn print_first_run_notice() {
-    let attention = style("Attention:").magenta().bold();
-    let url = style(TELEMETRY_URL).cyan();
+    let painter = crate::paint::Painter::stderr();
+    let attention = painter.accent("Attention:");
+    let url = painter.url(TELEMETRY_URL);
     eprintln!("\n{attention} BAML now collects completely anonymous CLI usage telemetry.");
     eprintln!("This is how a small team like ours decides what to build next.");
     eprintln!("Learn more, including how to opt out, at:");

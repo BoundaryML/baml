@@ -508,6 +508,7 @@ function releaseControlValue(value: baml_bridge.cffi.v1.IBamlOutboundValue): voi
         if (key !== 0n) releaseWasmHandle(key);
     }
     for (const item of value.listValue?.items ?? []) releaseControlValue(item);
+    for (const item of value.tupleValue?.items ?? []) releaseControlValue(item);
     for (const item of value.mapValue?.entries ?? value.classValue?.fields ?? []) if (item.value) releaseControlValue(item.value);
     if (value.unionVariantValue?.value) releaseControlValue(value.unionVariantValue.value);
 }

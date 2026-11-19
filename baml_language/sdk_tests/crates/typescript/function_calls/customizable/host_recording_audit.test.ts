@@ -71,7 +71,7 @@ it.runIf(isTestRuntime('node'))('host_recording_audit_typescript_only', async ()
     if (value < 2) { entered[value](); await release; }
     const current = trace.current_context_sync();
     expect(current.distinct_id).toBe(value < 2 ? `request-${value}` : 'audit-typescript');
-    expect(current.metadata).toEqual(value < 2
+    expectMetadata(current.metadata, value < 2
       ? { audit: 'typescript', case: `call-${value}`, keep: 1, caller: true }
       : { audit: 'typescript', case: 'marker', keep: 1, drop: 2 });
     expect((await contextBaml.current_context()).metadata).toEqual(current.metadata);
@@ -96,3 +96,10 @@ it.runIf(isTestRuntime('node'))('host_recording_audit_typescript_only', async ()
     await shutdownRuntime();
   }
 });
+
+function expectMetadata(actual: Record<string, unknown>, expected: Record<string, unknown>) {
+  const version = actual["baml.ctx.baml_version"];
+  expect(version).toEqual(expect.any(String));
+  expect(version).not.toBe("");
+  expect(actual).toEqual({ ...expected, "baml.ctx.baml_version": version });
+}

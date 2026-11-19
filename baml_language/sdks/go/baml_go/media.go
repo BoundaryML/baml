@@ -133,6 +133,10 @@ func appendOutboundHandles(keys []uint64, value *cffi.BamlOutboundValue) []uint6
 			if item.ListValue != nil {
 				stack = append(stack, item.ListValue.Items...)
 			}
+		case *cffi.BamlOutboundValue_TupleValue:
+			if item.TupleValue != nil {
+				stack = append(stack, item.TupleValue.Items...)
+			}
 		case *cffi.BamlOutboundValue_MapValue:
 			if item.MapValue != nil {
 				for _, entry := range item.MapValue.Entries {

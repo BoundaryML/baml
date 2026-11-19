@@ -22,6 +22,116 @@ function Containers() -> void {
     baml.io.println(`${xs[0]}:${xs.length()}:${m["a"]}:${m["b"]}`);
 }
 
+function TupleArity(value: (int,) | (int, string)) -> int {
+    match (value) {
+        (let a,) => a,
+        (let a, let b) => a + b.length(),
+    }
+}
+
+function Tuples() -> void {
+    let pair = (1, "two");
+    let nested = (pair, [3, 4]);
+    let (let n, let s) = pair;
+    nested.1.push(5);
+    baml.io.println(
+        `${pair.0}:${pair.1}:${nested.0.1}:${nested.1.length()}:${n}:${s}:${pair == (1, "two")}:${TupleArity((7,))}:${TupleArity((1, "abc"))}`,
+    );
+}
+
+function TupleFirst(value: (int, string)?) -> int? {
+    value?.0
+}
+
+function TupleHead(value: (int, bool) | (string, bool, int)) -> string {
+    match (value) {
+        (let head, let flag) => `${head}:${flag}`,
+        (let head, let flag, _) => `${head}:${flag}`,
+    }
+}
+
+function TupleProject(value: ((int, string), bool)) -> string {
+    match (value) {
+        ((let n, _), true) => `yes:${n}`,
+        ((_, let s), false) => `no:${s}`,
+    }
+}
+
+function TupleOpenShape<T>(value: T) -> string {
+    match value {
+        (let n: int, _) => `${n + 1}`,
+        (let s: string, _) => s,
+        _ => "other",
+    }
+}
+
+function TupleOpenUnion<T>(value: T | (int, bool)) -> string {
+    match value {
+        (let n: int, _) => `${n + 1}`,
+        (let s: string, _) => s,
+        _ => "other",
+    }
+}
+
+function TupleAccess() -> void {
+    let whole: (let a, (let b, let c)) = (1, ("two", 3));
+    baml.io.println(
+        `${TupleFirst((4, "x")) ?? -1}:${TupleFirst(null) ?? -1}:${TupleHead((5, true))}:${TupleHead(("six", false, 7))}:${TupleProject(((8, "y"), true))}:${TupleProject(((9, "z"), false))}:${a}:${b}:${c}:${whole.1.0}`,
+    );
+    baml.io.println(
+        `${TupleOpenShape((10, true))}:${TupleOpenShape(("open", false))}:${TupleOpenShape([1, 2])}:${TupleOpenUnion<(string, bool)>(("union", true))}:${TupleOpenUnion<string>((11, false))}:${TupleOpenUnion<string>("other")}`,
+    );
+}
+
+function MissingKey(m: map<string, int>, key: string) -> string {
+    let found = m[key] catch (e) {
+        _ => -1,
+    } catch (e, ctx) {
+        baml.panics.MapKeyNotFound => -2,
+    };
+    `${found}`
+}
+
+function StoreAt(xs: int[], i: int) -> int {
+    xs[i] = 7;
+    i
+}
+
+function OutOfBounds(xs: int[], i: int) -> string {
+    let found = xs[i] catch (e) {
+        _ => -1,
+    } catch (e, ctx) {
+        baml.panics.IndexOutOfBounds => -2,
+    };
+    let stored = StoreAt(xs, i) catch (e) {
+        _ => -1,
+    } catch (e, ctx) {
+        baml.panics.IndexOutOfBounds => -2,
+    };
+    `${found}/${stored}`
+}
+
+// Builtin container calls compiled code makes directly, and the list store's
+// fast path, on hits, misses and errors.
+function DirectContainerOps() -> void {
+    let xs: int[] = [];
+    let n = 0;
+    for (let i = 0; i < 5; i += 1) {
+        n = xs.push(i * i);
+    }
+    xs[-1] = xs[1] + xs[-2];
+    let m: map<string, int> = {};
+    let fresh = m.set("a", 1);
+    let replaced = m.set("a", 2);
+    m["b"] = 3;
+    m["b"] += 4;
+    let bytes = baml.Uint8Array.from_array([1, 2]);
+    bytes[0] = 9;
+    baml.io.println(
+        `${n}:${xs}:${fresh ?? -1}:${replaced ?? -1}:${m.get("a") ?? -1}:${m.get("z") ?? -1}:${m.has("b")}:${m.has("z")}:${m}:${bytes[0]}:${MissingKey(m, "z")}:${OutOfBounds(xs, 5)}:${OutOfBounds(xs, -6)}`,
+    );
+}
+
 enum Color {
     Red,
     Blue,
@@ -666,7 +776,7 @@ function TaggedKind(value: unknown) -> string {
     match (value) {
         let h: baml.hash.DefaultHasher => "hasher",
         let r: baml.regex.Regex => "regex",
-        let l: baml.spawn.Limit => "limit",
+        let l: baml.sync.Semaphore => "semaphore",
         let s: string => "string",
         _ => "other",
     }

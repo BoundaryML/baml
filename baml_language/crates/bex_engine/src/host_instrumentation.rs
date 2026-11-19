@@ -100,6 +100,7 @@ impl BexEngine {
                     parent_function: None,
                     lambda_path: None,
                     package_name: Some(definition.module.clone()),
+                    compilation_unit_hash: None,
                     namespace: vec![definition.language.clone()],
                     argument_layout: None,
                     source_map: None,

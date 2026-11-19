@@ -211,6 +211,7 @@ pub(crate) fn build_enum_object<'db>(
         other: indexmap::IndexMap::new(),
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        shared_variants: Box::default(),
     }
 }
 
@@ -1025,6 +1026,7 @@ fn synthesized_function(
         telemetry_function_id: None,
         telemetry_registration: bex_vm_types::FunctionRegistration::default(),
         telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
+        hotswap_redirect: bex_vm_types::types::HotswapRedirect::default(),
         compiled_body: None,
         local_names: Vec::new(),
         debug_locals: Vec::new(),

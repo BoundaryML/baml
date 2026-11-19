@@ -24,8 +24,9 @@ use super::{
     BamlClassReflectTypeView_for_Enum, BamlClassReflectTypeView_for_Function,
     BamlClassReflectTypeView_for_Interface, BamlClassReflectTypeView_for_Literal,
     BamlClassReflectTypeView_for_Map, BamlClassReflectTypeView_for_Primitive,
-    BamlClassReflectTypeView_for_Union, BamlClassUnion, BamlNamespaceClass, BamlNamespaceInterface,
-    BamlNamespaceReflect, PackageReflectImpl, copy,
+    BamlClassReflectTypeView_for_Tuple, BamlClassReflectTypeView_for_Union, BamlClassTuple,
+    BamlClassUnion, BamlNamespaceClass, BamlNamespaceInterface, BamlNamespaceReflect,
+    PackageReflectImpl, copy,
 };
 use crate::{BexVm, package_load::StdlibClass};
 
@@ -699,24 +700,21 @@ impl BamlClassClass for PackageReflectImpl {
             return Err(fail_non_instance(vm));
         };
         let (field_value, class_name) = {
-            let instance = match vm.get_object(instance_ptr) {
-                Object::Instance(instance) => instance,
-                // A `@@rust_type` class instance holds native state, not fields.
-                Object::RustInstance(instance) => {
-                    let Object::Class(class) = vm.get_object(instance.class) else {
-                        unreachable!("RustInstance.class must point to Object::Class")
-                    };
-                    let message = format!(
-                        "class `{}` has no field `{name}`",
-                        class.name().display_name()
-                    );
-                    return Err(fail(vm, message));
-                }
-                _ => return Err(fail_non_instance(vm)),
+            // A `@@rust_type` class instance holds native state, not fields.
+            if let Object::RustInstance(instance) = vm.get_object(instance_ptr) {
+                let Object::Class(class) = vm.get_object(instance.class) else {
+                    unreachable!("RustInstance.class must point to Object::Class")
+                };
+                let message = format!(
+                    "class `{}` has no field `{name}`",
+                    class.name().display_name()
+                );
+                return Err(fail(vm, message));
+            }
+            let Some(instance) = vm.get_instance(instance_ptr) else {
+                return Err(fail_non_instance(vm));
             };
-            let Object::Class(class) = vm.get_object(instance.class) else {
-                unreachable!("Instance.class must point to Object::Class")
-            };
+            let class = instance.class_object();
             let Some(index) = class
                 .instance_fields()
                 .iter()
@@ -731,7 +729,7 @@ impl BamlClassClass for PackageReflectImpl {
                 ));
             };
             (
-                instance.load_field(index),
+                vm.load_field_value(instance, index),
                 class.name().display_name().to_string(),
             )
         };
@@ -1024,6 +1022,7 @@ impl BamlClassEnum for PackageReflectImpl {
             type_tag,
             owner: bex_vm_types::types::Owner::anonymous(),
             telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            shared_variants: Box::default(),
         })));
         let ty = bex_vm_types::RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, type_tag));
         Ok({
@@ -1264,11 +1263,9 @@ impl BamlClassLiteral for PackageReflectImpl {
                 baml_type::Literal::Int(n) => Value::int(n),
                 baml_type::Literal::Bool(b) => Value::bool(b),
                 baml_type::Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n))?,
-                baml_type::Literal::Float(s) => Value::object(
-                    vm.alloc_float(
-                        s.parse()
-                            .expect("a float literal has a valid representation"),
-                    ),
+                baml_type::Literal::Float(s) => vm.float_value(
+                    s.parse()
+                        .expect("a float literal has a valid representation"),
                 ),
             }),
             bex_vm_types::RealizedTy::EnumVariant(head, name) => {
@@ -1437,6 +1434,12 @@ fn substitute_witness_field_type(
                 .map(|member| substitute_witness_field_type(member, interface, args, assoc))
                 .collect::<Result<Box<[_]>, _>>()?,
         )),
+        RuntimeTy::Tuple(elements) => Ok(RuntimeTy::Tuple(
+            elements
+                .iter()
+                .map(|element| substitute_witness_field_type(element, interface, args, assoc))
+                .collect::<Result<Box<[_]>, _>>()?,
+        )),
         RuntimeTy::Class(name, type_args) => Ok(RuntimeTy::Class(
             *name,
             type_args
@@ -1567,12 +1570,8 @@ pub(super) struct WithMetaRow {
 
 /// Read `value` as a `reflect.WithMeta` wrapper. `None` when it is not one.
 pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaRow, String>> {
-    let Object::Instance(instance) = vm.get_object(value.as_object_ptr()?) else {
-        return None;
-    };
-    let Object::Class(class) = vm.get_object(instance.class) else {
-        unreachable!("Instance.class must point to Object::Class")
-    };
+    let instance = vm.get_instance(value.as_object_ptr()?)?;
+    let class = instance.class_object();
     if !vm
         .stdlib_heads()
         .is_class(StdlibClass::WithMeta, class.type_tag)
@@ -1580,7 +1579,7 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
         return None;
     }
     let optional_string = |index| {
-        let value = instance.load_field(index);
+        let value = instance.load_value(index);
         if value.is_null() {
             Ok(None)
         } else {
@@ -1591,7 +1590,7 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
     };
     let read = || {
         let other = vm
-            .as_string_map(&instance.load_field(4))
+            .as_string_map(&instance.load_value(4))
             .map_err(|_| "reflect.WithMeta.other must be map<string, string>".to_string())?
             .iter()
             .map(|(key, value)| {
@@ -1601,7 +1600,7 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
             })
             .collect::<Result<IndexMap<_, _>, _>>()?;
         Ok(WithMetaRow {
-            payload: instance.load_field(0),
+            payload: instance.load_value(0),
             alias: optional_string(1)?,
             description: optional_string(2)?,
             docstring: optional_string(3)?,
@@ -1694,14 +1693,11 @@ pub(crate) fn check_kind_invariant(
 /// If `value` is an instance of one of the nine kind views, its `_ty` value
 /// (no kind check — callers that accept `reflect.TypeView` accept any kind).
 pub(crate) fn as_view_type_value(vm: &BexVm, value: Value) -> Option<Value> {
-    let ptr = value.as_object_ptr()?;
-    let Object::Instance(instance) = vm.get_object(ptr) else {
-        return None;
-    };
+    let instance = vm.get_instance(value.as_object_ptr()?)?;
     let is_view = baml_type::type_kind::TypeKind::ALL
         .iter()
-        .any(|kind| vm.lang_declaration(kind.class()) == Some(instance.class));
-    is_view.then(|| instance.fields[0].load())
+        .any(|kind| vm.lang_declaration(kind.class()) == Some(instance.class()));
+    is_view.then(|| instance.load_value(0))
 }
 
 /// The `Object::Type` value a kind-view instance wraps (`_ty`, its sole
@@ -1715,10 +1711,10 @@ pub(crate) fn view_type_value(
     let ptr = view
         .as_object_ptr()
         .unwrap_or_else(|| unreachable!("kind-view receiver must be an instance"));
-    let Object::Instance(instance) = vm.get_object(ptr) else {
+    let Some(instance) = vm.get_instance(ptr) else {
         unreachable!("kind-view receiver must be an Object::Instance")
     };
-    check_kind_invariant(vm, instance.fields[0].load(), expected)
+    check_kind_invariant(vm, instance.load_value(0), expected)
 }
 
 fn reflected_class(
@@ -2003,10 +1999,9 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
             skip: false,
             json_rename: None,
         }),
-        Object::Instance(instance) => {
-            let Object::Class(class) = vm.get_object(instance.class) else {
-                unreachable!("Instance.class must point to Object::Class")
-            };
+        Object::Instance => {
+            let instance = vm.get_instance(ptr).expect("an instance pointer");
+            let class = instance.class_object();
             if !vm
                 .stdlib_heads()
                 .is_class(StdlibClass::EnumValue, class.type_tag)
@@ -2016,19 +2011,17 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 );
             }
             let name = vm
-                .as_string(&instance.load_field(0))
+                .as_string(&instance.load_value(0))
                 .map_err(|_| "reflect.enum.Value.name must be a string")?
                 .to_string();
-            let meta_value = instance.load_field(1);
+            let meta_value = instance.load_value(1);
             let Some(meta_ptr) = meta_value.as_object_ptr() else {
                 return Err("reflect.enum.Value.meta must be reflect.Meta".into());
             };
-            let Object::Instance(meta) = vm.get_object(meta_ptr) else {
+            let Some(meta) = vm.get_instance(meta_ptr) else {
                 return Err("reflect.enum.Value.meta must be reflect.Meta".into());
             };
-            let Object::Class(meta_class) = vm.get_object(meta.class) else {
-                unreachable!("Instance.class must point to Object::Class")
-            };
+            let meta_class = meta.class_object();
             if !vm
                 .stdlib_heads()
                 .is_class(StdlibClass::Meta, meta_class.type_tag)
@@ -2036,7 +2029,7 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 return Err("reflect.enum.Value.meta must be reflect.Meta".into());
             }
             let optional_string = |index| {
-                let value = meta.load_field(index);
+                let value = meta.load_value(index);
                 if value.is_null() {
                     Ok(None)
                 } else {
@@ -2046,7 +2039,7 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 }
             };
             let other = vm
-                .as_string_map(&meta.load_field(3))
+                .as_string_map(&meta.load_value(3))
                 .map_err(|_| "reflect.Meta.other must be map<string, string>".to_string())?
                 .iter()
                 .map(|(key, value)| {
@@ -2057,7 +2050,7 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 .collect::<Result<IndexMap<_, _>, _>>()?;
             // A row read back from `values()` keeps its skip flag, so
             // rebuilding an enum from reflected rows does not unskip a variant.
-            let skip = meta.load_field(4).as_bool().unwrap_or(false);
+            let skip = meta.load_value(4).as_bool().unwrap_or(false);
             Ok(EnumVariant {
                 name,
                 alias: optional_string(0)?,
@@ -2093,28 +2086,28 @@ fn field_value_fits(vm: &BexVm, value: Value, expected: &bex_vm_types::RealizedT
     })
 }
 
-/// The fix `reflect.Class.instantiate` names when a list or map misses its
-/// field's type: the field takes a container of the same kind, so only the
-/// element, key or value types differ. A container keeps the types it was
-/// built with, so a literal written inside `fields` is typed by its own
-/// elements and `[]` is `unknown[]`. Empty when the mismatch is anything else.
 fn container_hint(
     vm: &BexVm,
     got: &bex_vm_types::RealizedTy,
     expected: &bex_vm_types::RealizedTy,
 ) -> String {
-    let (list, rule) = match got {
-        bex_vm_types::RealizedTy::List(_) => {
-            (true, "a list keeps the element type it was built with")
-        }
+    let (kind, rule) = match got {
+        bex_vm_types::RealizedTy::List(_) => (
+            ContainerKind::List,
+            "a list keeps the element type it was built with",
+        ),
         bex_vm_types::RealizedTy::Map { .. } => (
-            false,
+            ContainerKind::Map,
             "a map keeps the key and value types it was built with",
+        ),
+        bex_vm_types::RealizedTy::Tuple(slots) => (
+            ContainerKind::Tuple(slots.len()),
+            "a tuple keeps the slot types it was built with",
         ),
         _ => return String::new(),
     };
     let mut wanted = Vec::new();
-    same_kind_containers(vm, expected.as_ty(), list, &mut Vec::new(), &mut wanted);
+    same_kind_containers(vm, expected.as_ty(), kind, &mut Vec::new(), &mut wanted);
     if wanted.is_empty() {
         return String::new();
     }
@@ -2126,27 +2119,36 @@ fn container_hint(
     format!(": {rule}; build it as {wanted} first")
 }
 
-/// The lists (`list`) or maps of `ty` and of its union members, through the
+#[derive(Clone, Copy)]
+enum ContainerKind {
+    List,
+    Map,
+    Tuple(usize),
+}
+
 /// type aliases not in `within`.
 fn same_kind_containers(
     vm: &BexVm,
     ty: &bex_vm_types::Ty,
-    list: bool,
+    kind: ContainerKind,
     within: &mut Vec<bex_vm_types::TypeHead>,
     out: &mut Vec<bex_vm_types::Ty>,
 ) {
-    match ty {
-        bex_vm_types::Ty::List(_) if list => out.push(ty.clone()),
-        bex_vm_types::Ty::Map { .. } if !list => out.push(ty.clone()),
-        bex_vm_types::Ty::Union(members) => {
+    match (ty, kind) {
+        (bex_vm_types::Ty::List(_), ContainerKind::List)
+        | (bex_vm_types::Ty::Map { .. }, ContainerKind::Map) => out.push(ty.clone()),
+        (bex_vm_types::Ty::Tuple(slots), ContainerKind::Tuple(arity)) if slots.len() == arity => {
+            out.push(ty.clone());
+        }
+        (bex_vm_types::Ty::Union(members), _) => {
             for member in members {
-                same_kind_containers(vm, member, list, within, out);
+                same_kind_containers(vm, member, kind, within, out);
             }
         }
-        bex_vm_types::Ty::TypeAlias(head) if !within.contains(head) => {
+        (bex_vm_types::Ty::TypeAlias(head), _) if !within.contains(head) => {
             within.push(*head);
             if let Some(definition) = baml_type::normalize::TypeContext::alias_def(vm, head) {
-                same_kind_containers(vm, &definition, list, within, out);
+                same_kind_containers(vm, &definition, kind, within, out);
             }
         }
         _ => {}
@@ -2223,6 +2225,116 @@ impl BamlClassArray for PackageReflectImpl {
     }
 }
 
+impl BamlClassTuple for PackageReflectImpl {
+    fn _new(vm: &mut BexVm, element_types: &[Value]) -> Value {
+        let elements = element_types
+            .iter()
+            .map(|value| reflected_type_value(vm, *value).ty)
+            .collect();
+        alloc_runtime_composite(
+            vm,
+            baml_type::type_kind::TypeKind::Tuple,
+            bex_vm_types::RealizedTy::Tuple(elements),
+        )
+    }
+
+    fn instantiate(
+        vm: &mut BexVm,
+        values: &[Value],
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        let Some(tuple_ty) = vm.current_call_type_args().first().cloned() else {
+            return Err(crate::errors::VmRustFnError::InternalError(
+                bex_vm_types::errors::VmInternalError::MissingNativeFunction {
+                    name: "reflect.Tuple.instantiate: missing type argument".to_string(),
+                },
+            ));
+        };
+        let bex_vm_types::RealizedTy::Tuple(element_tys) = &tuple_ty else {
+            return Err(invalid_argument(
+                vm,
+                format!("reflect.Tuple.instantiate expects a tuple type, got `{tuple_ty}`"),
+            ));
+        };
+        if element_tys.len() != values.len() {
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Tuple.instantiate: `{tuple_ty}` has {} slots, got {} values",
+                    element_tys.len(),
+                    values.len()
+                ),
+            ));
+        }
+        for (index, (value, ty)) in values.iter().zip(element_tys.iter()).enumerate() {
+            if field_value_fits(vm, *value, ty) {
+                continue;
+            }
+            let got = match vm.value_concrete_ty(*value) {
+                Some(got) => {
+                    let got = bex_vm_types::RealizedTy::from(got);
+                    let hint = container_hint(vm, &got, ty);
+                    format!("`{got}`{hint}")
+                }
+                None => "a value with no BAML type".to_string(),
+            };
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Tuple.instantiate: slot {index} of `{tuple_ty}` expects `{ty}`, got {got}"
+                ),
+            ));
+        }
+        let tuple = bex_vm_types::Tuple::new(element_tys.clone(), values.to_vec())
+            .unwrap_or_else(|err| unreachable!("arity checked above: {err}"));
+        Ok(Value::object(vm.tlab.alloc_tuple(tuple)))
+    }
+
+    fn get_element(
+        vm: &mut BexVm,
+        value: &Value,
+        index: i64,
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        let result = value
+            .as_object_ptr()
+            .and_then(|ptr| match vm.get_object(ptr) {
+                bex_vm_types::Object::Tuple(tuple) => Some((
+                    usize::try_from(index)
+                        .ok()
+                        .and_then(|slot| tuple.try_load_slot(slot)),
+                    tuple.len(),
+                )),
+                _ => None,
+            });
+        match result {
+            Some((Some(value), _)) => Ok(value),
+            Some((None, arity)) => Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Tuple.get_element: slot {index} is out of range for a tuple of {arity} slots"
+                ),
+            )),
+            None => Err(invalid_argument(
+                vm,
+                "reflect.Tuple.get_element expects a tuple value".to_string(),
+            )),
+        }
+    }
+
+    fn element_types(
+        vm: &mut BexVm,
+        r#type: &Value,
+    ) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Tuple)?;
+        let bex_vm_types::RealizedTy::Tuple(elements) = ty else {
+            unreachable!("a Tuple-classified type is RealizedTy::Tuple")
+        };
+        Ok(elements
+            .into_iter()
+            .map(|ty| Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(ty))))
+            .collect())
+    }
+}
+
 impl BamlClassFunction for PackageReflectImpl {
     fn params(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Function)?;
@@ -2265,6 +2377,10 @@ impl BamlClassFunction for PackageReflectImpl {
 
 impl BamlClassReflectTypeView_for_Array for PackageReflectImpl {
     impl_as_type!(Array);
+}
+
+impl BamlClassReflectTypeView_for_Tuple for PackageReflectImpl {
+    impl_as_type!(Tuple);
 }
 
 impl BamlClassReflectTypeView_for_Class for PackageReflectImpl {
@@ -2348,9 +2464,7 @@ class Fresh {}
         );
         let value = <PackageReflectImpl as BamlClassLiteral>::value(&mut vm, &literal)
             .expect("a literal view has a value");
-        let Object::Float(value) = vm.get_object(value.as_object_ptr().unwrap()) else {
-            panic!("expected a float value")
-        };
+        let value = value.as_float().expect("expected a float value");
         assert_eq!(value.to_bits(), (-1.25_f64).to_bits());
     }
 
@@ -2412,11 +2526,11 @@ class Fresh {}
         let heap = Arc::clone(&vm.heap);
         let mut index = crate::package_load::DynDispatchRoot::new(Arc::clone(&vm.dynamic_dispatch));
         let (_, _, forwarding) = unsafe { heap.collect_garbage(&[class.ptr()]) };
-        assert!(forwarding.contains_key(&rule), "the class owns its rule");
+        assert!(forwarding.get(rule).is_some(), "the class owns its rule");
         vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         index.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         assert_eq!(index.tables.rule_count(), 1);
-        let moved = TypeHead::new(forwarding[&class.ptr()], class.tag());
+        let moved = TypeHead::new(forwarding.get(class.ptr()).unwrap(), class.tag());
         assert!(
             crate::package_baml::resolve::ImplResolver::new(&vm).type_implements(
                 &class_ty(moved),

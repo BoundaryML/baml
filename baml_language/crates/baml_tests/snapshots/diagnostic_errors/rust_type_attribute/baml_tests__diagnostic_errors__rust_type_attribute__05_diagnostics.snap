@@ -20,7 +20,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ·          ╰── builtin-only syntax
     ╰────
 
-  [hir] E0187
+  [hir] E0189
 
   × class `WithFields` is a `@@rust_type` class and cannot declare fields: its state lives in Rust
     ╭─[rust_type_attribute.baml:12:5]

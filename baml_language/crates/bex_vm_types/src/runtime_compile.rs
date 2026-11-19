@@ -285,6 +285,18 @@ pub enum RuntimeCompileMode {
     Session(Box<RuntimeSessionCompileRequest>),
 }
 
+/// Each declaration of a package's source, as the tokens that mean something:
+/// comments and formatting removed. Keyed by kind and name (`fn ns.f`,
+/// `method C.m`, `implmethod I for T.m`, `class C`), and compared to decide
+/// what a hot swap patch changed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DeclFingerprints {
+    pub decls: std::collections::BTreeMap<String, String>,
+    /// The names each declaration refers to, by key: identifiers outside
+    /// literal text, `${...}` interpolations included.
+    pub refs: std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+}
+
 /// One isolated `reflect.Package.compile` request.
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeCompileRequest {

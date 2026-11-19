@@ -20,8 +20,9 @@ use crate::{BexRustData, HeapPtr};
 
 /// The instance of a `@@rust_type` class.
 ///
-/// The class and type arguments are what [`Instance`](super::Instance) holds;
-/// the payload stands in for the fields a plain class would have.
+/// The class and type arguments are what a field-backed instance's cell
+/// holds (see [`InstanceRef`](crate::InstanceRef)); the payload stands in for
+/// the fields a plain class would have.
 #[derive(Clone, Debug)]
 pub struct RustInstance {
     /// The `Object::Class` this is an instance of.
@@ -32,8 +33,8 @@ pub struct RustInstance {
     /// even where `HeapPtr` carries a debug epoch.
     pub class_type_args: thin_vec::ThinVec<crate::RealizedTy>,
     pub payload: RustPayload,
-    /// BEP-042 `cleanup` run-once latch, as on a plain
-    /// [`Instance`](super::Instance): `false` when built, set by the first
+    /// BEP-042 `cleanup` run-once latch, the counterpart of a field-backed
+    /// instance's CLEANED header bit: `false` when built, set by the first
     /// `cleanup` invocation. A deep copy starts unset.
     pub cleaned: crate::CleanupLatch,
 }
@@ -61,9 +62,9 @@ pub mod payload {
     pub type Regex = Arc<sys_regex::Program>;
     /// A `baml.csv.Record`'s parsed cells, which never change.
     pub type CsvRecord = Arc<crate::CsvRecord>;
-    /// A `baml.spawn.Limit`'s admission state, which every holder shares: the
-    /// sharing is what a limit is.
-    pub type Limit = Arc<crate::LimitInner>;
+    /// A `baml.sync.Semaphore`'s admission state, which every holder shares:
+    /// the sharing is what a semaphore is.
+    pub type Semaphore = Arc<crate::LimitInner>;
     /// A `baml.spawn.CancelToken`'s sources, which every holder shares with
     /// the tasks it cancels.
     pub type CancelToken = Arc<crate::cancellation::CancelTokenState>;
@@ -144,6 +145,12 @@ pub mod payload {
     pub type OutputFormat = Arc<dyn crate::resource::OutputFormatResource>;
     /// A `baml.fs.Lock`: the platform's held lock.
     pub type Lock = Arc<dyn crate::resource::LockResource>;
+    /// A `baml.sync.Permit`'s slot, held or queued for. Shared with the
+    /// semaphore's queue, which grants it.
+    pub type Permit = Arc<crate::PermitState>;
+    /// A `baml.sync.Ticket`: a task's place in line for contended keys,
+    /// shared with the lock table that grants it.
+    pub type Ticket = Arc<crate::Waiter>;
 }
 
 /// The state behind a `@@rust_type` instance, one variant per kind.
@@ -167,7 +174,7 @@ pub enum RustPayload {
     XChaCha20Poly1305(payload::XChaCha20Poly1305),
     Regex(payload::Regex),
     CsvRecord(payload::CsvRecord),
-    Limit(payload::Limit),
+    Semaphore(payload::Semaphore),
     CancelToken(payload::CancelToken),
     SpanId(payload::SpanId),
     TraceOptions(payload::TraceOptions),
@@ -199,6 +206,8 @@ pub enum RustPayload {
     Prompt(payload::Prompt),
     OutputFormat(payload::OutputFormat),
     Lock(payload::Lock),
+    Permit(payload::Permit),
+    Ticket(payload::Ticket),
 }
 
 impl RustPayload {
@@ -214,7 +223,7 @@ impl RustPayload {
             Self::XChaCha20Poly1305(_) => RustPayloadKind::XChaCha20Poly1305,
             Self::Regex(_) => RustPayloadKind::Regex,
             Self::CsvRecord(_) => RustPayloadKind::CsvRecord,
-            Self::Limit(_) => RustPayloadKind::Limit,
+            Self::Semaphore(_) => RustPayloadKind::Semaphore,
             Self::CancelToken(_) => RustPayloadKind::CancelToken,
             Self::SpanId(_) => RustPayloadKind::SpanId,
             Self::TraceOptions(_) => RustPayloadKind::TraceOptions,
@@ -246,6 +255,8 @@ impl RustPayload {
             Self::Prompt(_) => RustPayloadKind::Prompt,
             Self::OutputFormat(_) => RustPayloadKind::OutputFormat,
             Self::Lock(_) => RustPayloadKind::Lock,
+            Self::Permit(_) => RustPayloadKind::Permit,
+            Self::Ticket(_) => RustPayloadKind::Ticket,
         }
     }
 
@@ -275,7 +286,9 @@ impl RustPayload {
             | Self::XChaCha20Poly1305(_)
             | Self::Regex(_)
             | Self::CsvRecord(_)
-            | Self::Limit(_)
+            | Self::Semaphore(_)
+            | Self::Permit(_)
+            | Self::Ticket(_)
             | Self::CancelToken(_)
             | Self::SpanId(_)
             | Self::TraceOptions(_)
@@ -324,7 +337,9 @@ impl RustPayload {
             | Self::XChaCha20Poly1305(_)
             | Self::Regex(_)
             | Self::CsvRecord(_)
-            | Self::Limit(_)
+            | Self::Semaphore(_)
+            | Self::Permit(_)
+            | Self::Ticket(_)
             | Self::CancelToken(_)
             | Self::SpanId(_)
             | Self::TraceOptions(_)
@@ -372,7 +387,7 @@ impl RustPayload {
             Self::XChaCha20Poly1305(_) => TypeId::of::<payload::XChaCha20Poly1305>(),
             Self::Regex(_) => TypeId::of::<payload::Regex>(),
             Self::CsvRecord(_) => TypeId::of::<payload::CsvRecord>(),
-            Self::Limit(_) => TypeId::of::<payload::Limit>(),
+            Self::Semaphore(_) => TypeId::of::<payload::Semaphore>(),
             Self::CancelToken(_) => TypeId::of::<payload::CancelToken>(),
             Self::SpanId(_) => TypeId::of::<payload::SpanId>(),
             Self::TraceOptions(_) => TypeId::of::<payload::TraceOptions>(),
@@ -403,6 +418,8 @@ impl RustPayload {
             Self::Prompt(_) => TypeId::of::<payload::Prompt>(),
             Self::OutputFormat(_) => TypeId::of::<payload::OutputFormat>(),
             Self::Lock(_) => TypeId::of::<payload::Lock>(),
+            Self::Permit(_) => TypeId::of::<payload::Permit>(),
+            Self::Ticket(_) => TypeId::of::<payload::Ticket>(),
         }
     }
 }

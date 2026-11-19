@@ -18,6 +18,7 @@ pub mod compile_artifact;
 pub mod debug;
 pub mod definitions;
 pub mod errors;
+pub mod hotswap;
 mod impl_cache;
 pub mod indexable;
 mod json_defs;
@@ -25,6 +26,10 @@ pub mod kperf;
 pub mod lang_items;
 pub mod llm_shape;
 mod model_usage;
+#[cfg(feature = "kperf")]
+pub mod op_mix;
+#[cfg(debug_assertions)]
+pub mod opcode_coverage;
 pub mod package_ai;
 pub mod package_baml;
 pub mod package_load;
@@ -50,8 +55,8 @@ pub use type_match::{Primitive, value_is_member, value_primitive};
 #[doc(hidden)]
 pub use vm::compiled_rt;
 pub use vm::{
-    BexVm, BoundCheck, BoundParts, BytecodeFrame, BytecodeProgram, Frame, VmEventSourceLocation,
-    VmExecState,
+    BexVm, BoundCheck, BoundParts, BytecodeFrame, BytecodeProgram, Frame, FrameTypeArgs,
+    VmEventSourceLocation, VmExecState,
     compiled_rt::{CompiledBodies, CompiledBodyTable},
     convert_program, prepare_compact_code,
 };

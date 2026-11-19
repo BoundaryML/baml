@@ -23,13 +23,15 @@ brew install baml                # CLI binary: `baml`
 baml init                        # new project (baml.toml + baml_src/)
 baml help <command>              # CLI options and examples
 baml describe baml.json          # reference for any module/type/method/signature/keyword
-baml describe Array --budget 120 #   (Array, String, Map, assert, match, patterns, spawn, python, ...)
-                                 #   ends with "N more lines"? re-run with `--budget <N>`
+baml describe Array --limit 120  #   (Array, String, Map, assert, match, patterns, spawn, python, ...)
+                                 #   ends with "N more lines"? re-run with `--limit <N>`
 baml check                       # compile-check the project
 baml run -e 'expr'               # eval an expression; fast feedback + syntax check
 baml test --list && baml test    # run every test/testset block
 baml fmt baml_src/main.baml      # canonicalize the project's formatting
 baml codequality --functions     # complexity per function, worst first
+baml <command> --output-format json  # one JSON document on stdout, status on stderr
+                                 #   (`baml run` also passes the program's own output through)
 ```
 
 `baml describe <name>` prints the **full source body** of stdlib functions. It's the fastest way to verify behavior, and the only path for embedded builtins like `assert` (no on-disk file). Pure functions need no test/client; check them with `baml run -e 'add(2, 3)'`. For anything not shown here (signatures, niche stdlib, advanced features), run `baml describe <name>`; never guess the stdlib.
@@ -69,6 +71,7 @@ The rest of the language:
 - **Closures** `(x) -> { ... }` infer param/return from context (annotate `(x: T) -> R` only when ambiguous; the `->` is required).
 - **Stdlib methods are snake_case, called on a value.** Some return new, some mutate in place, a few do both (`sort_by_key` sorts the receiver *and* returns it). To read the docs, run `baml describe <word/type/identifier/keyword/etc>`.
 - **Arrays have a JS-like method set**: `map`/`filter`/`filter_map`/`reduce`/`find`/`some`/`every`/`flat_map`/`slice`/`concat`/`join`/`includes`/length(), plus in-place `push`/`pop`/`shift`/`unshift`/`sort_by`/`sort_by_key`. Most take closures that can `throws`. `.map`/`.filter` return arrays directly (no `.collect()`). `baml describe Array` gives more info.
+- **Tuples.** `let pair: (int, string) = (1, "a");` groups values with fixed, individually typed slots. Read with `pair.0` / `pair.1`, or destructure with `let (let n, let s) = pair;`. Slots cannot be reassigned. A one-element tuple needs a trailing comma: `(int,)` / `(1,)`.
 - **Strings.** Backtick strings interpolate `${...}`; the old `#" "#` syntax is removed. Escape with `` \` `` / `\${`; nest with extra backticks.
 - **Namespaces =** `ns_*` **directories, no imports.** A folder `ns_<name>/` under `baml_src/` puts its files in namespace `<name>`; files in `baml_src/` itself are the `root` namespace (nesting stacks: `ns_a/ns_b/` → `root.a.b`; non-`ns_` folders don't namespace). Same namespace = same scope: files share definitions with no import. To reach *another* namespace, use the **absolute** path `root.<ns>.<name>` (for example, `root.llm.Response`). Run a target by its namespace-relative path (`baml run agent.main`), but `baml run -e` evaluates in the root scope, so reach in with the absolute form: `baml run -e 'root.agent.main()'`. Keep namespaces as flat as practical, like Go packages.
 - **Logging.** BAML has `log.info(..)`, `log.debug(..)`, `log.warn(..)`, and `log.error(..)`.
@@ -83,8 +86,47 @@ The rest of the language:
 
 ## Concurrency and resources
 
-- **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }`. Each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.spawn.Limit.new(n)` caps concurrency (excess spawns queue), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. Use it to parallelize LLM and HTTP calls. `baml describe spawn` / `baml describe baml.future`.
+- **Concurrency = green threads.** `spawn { … }` returns a `Future`; `await` collects it. Combine many with `baml.future.all` / `all_settled` / `race` / `any`. `all_settled` returns `Success<T>`, `Failure<E>`, or `Panicked` for each input; input cancellation is a `Panicked` outcome. Configure a spawn with a `with` clause: `spawn with limit, token { … }`. Each value listed is a `baml.spawn.Modifier` that transforms the plan the spawn builds, left to right. `baml.sync.Semaphore.new(n)` caps concurrency (excess spawns queue; a running task takes a slot with `sem.with(fn)`), a `baml.spawn.CancelToken` cancels cooperatively, `baml.spawn.Root.new()` detaches the task from its spawner's cancellation. Use it to parallelize LLM and HTTP calls. Tasks run in parallel even between awaits, so guard an object's own state with `baml.sync.atomic(self, () -> { ... })`, or several objects at once with `baml.sync.atomic([a, b], ...)` (re-entrant; only other `atomic` blocks on the same key are excluded, code outside them is not protected). `baml describe spawn` / `baml describe baml.sync` / `baml describe baml.future`.
 - **Resource safety.** `defer { … }` runs a block at scope exit, LIFO, on *every* path (return / throw / fall-through), like Go. A class method named `function cleanup(self) -> void` is a **finalizer**: it runs at most once per instance whether you call it, `defer` it, or the GC reclaims it.
+
+## Tracing
+
+Every `baml run` and `baml test` records what ran, and `baml local recordings query` reads it back (see [Debugging a recorded call](#debugging-a-recorded-call)).
+
+- **Spans and timing.** A recording keeps a call as a *span* or as *timing*. A span is one row of the `spans` table, with its parent, times, status and captured values. A timing call adds to its function's totals in `profiler` and keeps no row and no values. AI functions are spans by default, and other functions are timing. A root call and every `spawn` are spans of type `future`.
+- **Make a function a span** with a directive above its declaration: `/// baml:$trace=trace.span`. `trace.empty_span` (a span without values), `trace.timing` and `trace.hidden` are the other choices.
+- **Or choose per call.** Every function takes a hidden `$trace` parameter, passed by name: `fee(paid, $trace = trace.span())`. `trace.context(distinct_id = …, metadata = {…})` labels the call and everything it runs; `spans` serves the labels as `context_distinct_id` and `context_metadata['phase']`. Builders chain: `trace.context(…).span()`.
+- **What a span captures.** `trace.span()` captures the call's inputs and output (`input_args`, `output_value`). `inputs = false` or `output = false` leaves one out, and `trace.empty_span()` leaves out both. AI functions are the exception: they capture their inputs, output and error by default, and a call-site `false` or `trace.empty_span()` does not turn that off. To keep an AI function's values out of a recording, use `@trace.redact`, or call it with `trace.timing()` or `trace.hidden()`. When a call throws or panics, the innermost span the error escapes records it as `error_value`. An outer span records it again only with `error = true`, and `error = false` passes it to the next span out. An AI function's span is the exception: it records every error that escapes it, whatever its `error` option. A cancelled span records no error. A failed future, a failed root call included, carries the error that escaped it. `http_bodies = false` in `baml.toml` keeps every error value out, since an error can quote a response body. A timing call captures nothing.
+- **Keep a value out** with `@trace.redact` on a class field or `@@trace.redact` on a class. A recording holds a marker in its place wherever the value would be captured. Redaction does not follow copies: a value copied out of a redacted field into a plain string or another field is recorded as that copy.
+
+```baml
+class Account {
+    name: string,
+    api_key: string @trace.redact,
+}
+
+/// baml:$trace=trace.span
+function charge(account: Account, cents: int) -> int {
+    cents
+}
+
+function fee(cents: int) -> int {
+    cents / 100
+}
+
+function checkout(account: Account) -> int {
+    let paid = charge(account, 500);
+    let billing = trace.context(distinct_id = account.name, metadata = { "phase": "billing" });
+    paid + fee(paid, $trace = billing.span())
+}
+
+test "checkout charges and adds the fee" {
+    let account = Account { name: "ann", api_key: "sk-1" };
+    assert.equal(checkout(account), 505);
+}
+```
+
+`baml describe '$trace'` / `baml describe trace` / `baml describe trace.redact`.
 
 ## LLM functions
 
@@ -116,17 +158,17 @@ To add cross-cutting behavior (metering, caching, replay, budgets), write a clas
 
 ### Debugging a recorded call
 
-Runs record their calls, and AI functions record their inputs, output, error and type arguments by default. `baml query` answers SQL over them (`baml query --schema` lists the tables). To turn a failing call into a test:
+Runs record their calls. AI functions record their inputs, output, error and type arguments by default. A failed call's error is recorded on the innermost span that does not pass `error = false` and on every AI function's span it escapes, and a failed future records the error that escaped it. Neither is recorded when `baml.toml` sets `http_bodies = false` (see [Tracing](#tracing)). `baml local recordings query` answers SQL over them (`baml local recordings schema` lists the tables). To turn a failing call into a test:
 
 ```bash
 # 1. Find the call.
-baml query "SELECT span_id, input_args, error_value FROM spans
+baml local recordings query "SELECT span_id, input_args, error_value FROM spans
   WHERE span_name = 'user.Extract' AND error_value IS NOT NULL ORDER BY start_time DESC LIMIT 1"
 # 2. Its types as BAML code, classes and enums built at run time included.
 #    baml_code also takes an instance or enum value: input_args['row'].
-baml query "SELECT baml_code(type_args['T']) FROM spans WHERE span_id = '<span_id>'"
+baml local recordings query "SELECT baml_code(type_args['T']) FROM spans WHERE span_id = '<span_id>'"
 # 3. The model's raw HTTP response, from the request under the call.
-baml query "SELECT network_event_values FROM spans
+baml local recordings query "SELECT network_event_values FROM spans
   WHERE span_type = 'network_span' AND parent_span_id = '<span_id>' ORDER BY start_time"
 ```
 
@@ -532,10 +574,10 @@ function fetch_all(urls: string[]) -> string[] {
     await baml.future.all(urls.map((u) -> { spawn { baml.http.fetch(u).text() } }))
 }
 
-// Each value after `with` is a `baml.spawn.Modifier`: a Limit caps concurrency (excess
+// Each value after `with` is a `baml.spawn.Modifier`: a Semaphore caps concurrency (excess
 // spawns queue), a CancelToken cancels cooperatively, a Root detaches from the spawner.
 function rate_limited() -> int {
-    let g = baml.spawn.Limit.new(2);
+    let g = baml.sync.Semaphore.new(2);
     let a = spawn with g { 1 };
     let b = spawn with g { 2 };
     (await a) + (await b)

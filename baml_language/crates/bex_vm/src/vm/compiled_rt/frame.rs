@@ -96,10 +96,13 @@ impl BytecodeFrame {
             function,
             instruction_ptr: crate::compiled_rt::RUNNING,
             locals_offset,
-            type_args,
+            type_args: type_args.into(),
             faulting_pc: 0,
             telemetry,
             context,
+            // A compiled frame starts at `RUNNING`: its body runs natively,
+            // and the dispatch loop runs only its resume stub.
+            room: crate::vm::frame_room::FrameRoom::for_compiled_body(),
         }
     }
 }
@@ -107,6 +110,15 @@ impl BytecodeFrame {
 impl BexVm {
     /// Internal errors propagate without unwinding; thrown values unwind to `level`.
     pub(crate) fn land_compiled_catch(
+        &mut self,
+        error: Box<VmError>,
+        level: usize,
+        landing: Option<(usize, usize)>,
+    ) -> Result<(Value, Value), Box<VmError>> {
+        self.with_telemetry_unwind(|vm| vm.land_compiled_catch_frames(error, level, landing))
+    }
+
+    fn land_compiled_catch_frames(
         &mut self,
         error: Box<VmError>,
         level: usize,
@@ -451,6 +463,7 @@ impl BexVm {
         // Call-site type arguments follow those carried by the callee.
         frame
             .type_args
+            .to_mut()
             .extend_from_slice(&self.pending_call_type_args);
     }
     pub(in crate::vm) fn unwind_suspended_compiled(
@@ -477,7 +490,7 @@ impl BexVm {
             .last()
             .is_some_and(|hook| hook.frame == depth && hook.evaluating)
             && !self.as_instance(&exception_value).is_ok_and(|instance| {
-                instance.class == self.panic_class_ptrs[PanicClass::Cancelled as usize]
+                instance.class() == self.panic_class_ptrs[PanicClass::Cancelled as usize]
             })
         {
             self.stack.truncate(kept);

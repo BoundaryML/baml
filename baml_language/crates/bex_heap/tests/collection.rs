@@ -34,6 +34,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
             name: Name::default(),
             kind: PackageKind::Ordinary,
             edges: IndexMap::new(),
+            metadata: None,
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -127,7 +128,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
         panic!("package class ceased to be a class")
     };
     assert_eq!(class.owner.package(), Some(moved_package));
-    assert_eq!(forwarding.get(&package_ptr), Some(&moved_package));
+    assert_eq!(forwarding.get(package_ptr), Some(moved_package));
 
     let dropped_heap = BexHeap::new(vec![]);
     let (mut dropped_tlab, dropped_package, _) = alloc_cycle(&dropped_heap);
@@ -136,7 +137,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
     assert!(roots.is_empty());
     assert_eq!(stats.live_count, 0);
     assert!(stats.collected_count >= 4);
-    assert!(!forwarding.contains_key(&dropped_package));
+    assert!(forwarding.get(dropped_package).is_none());
 }
 
 #[test]
@@ -271,7 +272,7 @@ fn survivor_edge_to_a_fresh_object_is_traced_and_repointed() {
         .get(0)
         .and_then(|value| value.as_object_ptr())
         .expect("slot 0 holds an object");
-    assert_eq!(edge, forwarding[&fresh]);
+    assert_eq!(edge, forwarding.get(fresh).unwrap());
     let Object::String(text) = (unsafe { edge.get() }) else {
         panic!("expected the fresh string")
     };
@@ -308,9 +309,9 @@ fn survivor_edge_to_a_fresh_chain_is_traced_and_repointed() {
             .expect("slot 0 holds an object")
     };
     let middle_after = link(roots[0]);
-    assert_eq!(middle_after, forwarding[&middle]);
+    assert_eq!(middle_after, forwarding.get(middle).unwrap());
     let leaf_after = link(middle_after);
-    assert_eq!(leaf_after, forwarding[&leaf]);
+    assert_eq!(leaf_after, forwarding.get(leaf).unwrap());
     let Object::String(text) = (unsafe { leaf_after.get() }) else {
         panic!("expected the leaf string")
     };
@@ -333,7 +334,7 @@ fn weak_verdicts_follow_the_collection() {
     let mut forward = ForwardRoots::new(&forwarding, &*heap);
     let mut live_ref = Weak::new(live);
     assert!(live_ref.visit(&mut forward));
-    assert_eq!(live_ref.ptr(), forwarding[&live]);
+    assert_eq!(live_ref.ptr(), forwarding.get(live).unwrap());
     assert!(
         live_ref.visit(&mut forward),
         "a second visit in the same pass agrees with the first"
@@ -364,6 +365,7 @@ fn empty_package() -> Package {
         name: Name::default(),
         kind: PackageKind::Ordinary,
         edges: IndexMap::new(),
+        metadata: None,
         classes: IndexMap::new(),
         enums: IndexMap::new(),
         interfaces: IndexMap::new(),
@@ -399,7 +401,7 @@ fn collect_three_times<const N: usize>(
         // SAFETY: single-threaded test; no VM is executing.
         let (stats, roots, forwarding) = unsafe { heap.collect_garbage(&[root]) };
         for ptr in &mut tracked {
-            *ptr = forwarding[ptr];
+            *ptr = forwarding.get(*ptr).unwrap();
         }
         (stats, roots[0])
     };
@@ -569,6 +571,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         type_tag: enum_tag,
         owner: bex_vm_types::types::Owner::Package(package_ptr),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        shared_variants: Box::default(),
     })));
     let field_ty = RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enum_tag));
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
@@ -692,14 +695,15 @@ fn rust_instance_keeps_and_follows_its_class() {
     let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[instance]) };
     tlab.invalidate();
     assert!(
-        !forwarding.contains_key(&orphan),
+        forwarding.get(orphan).is_none(),
         "an unreached class is collected"
     );
     let Object::RustInstance(moved) = (unsafe { roots[0].get() }) else {
         panic!("expected a rust instance")
     };
     assert_eq!(
-        moved.class, forwarding[&class],
+        Some(moved.class),
+        forwarding.get(class),
         "the class edge was repointed"
     );
     assert_eq!(heap.generation_of(moved.class), Generation::Gen2);
@@ -759,8 +763,8 @@ fn an_interface_witness_keeps_and_follows_its_interface() {
     // Only the witness is a root: the interface is reachable through it alone.
     let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[witness]) };
     tlab.invalidate();
-    let moved_interface = *forwarding
-        .get(&interface)
+    let moved_interface = forwarding
+        .get(interface)
         .expect("the interface survives through the witness");
     let Object::RustInstance(moved) = (unsafe { roots[0].get() }) else {
         panic!("expected a rust instance")
@@ -830,7 +834,8 @@ fn impl_rule_edges_are_traced_and_forwarded() {
         panic!("root was not the impl rule")
     };
     assert_eq!(
-        rule.interface_head, forwarding[&iface_ptr],
+        rule.interface_head,
+        forwarding.get(iface_ptr).unwrap(),
         "interface moved; head must be repointed"
     );
     let Object::Interface(iface) = (unsafe { rule.interface_head.get() }) else {
@@ -839,7 +844,8 @@ fn impl_rule_edges_are_traced_and_forwarded() {
     assert_eq!(iface.path, iface_name);
     let fqn = rule.methods["run"].fqn;
     assert_eq!(
-        fqn, forwarding[&method_ptr],
+        fqn,
+        forwarding.get(method_ptr).unwrap(),
         "method body moved; fqn must be repointed"
     );
     assert!(matches!(unsafe { fqn.get() }, Object::String(_)));
@@ -889,9 +895,9 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
     for _ in 0..3 {
         let (stats, next_roots, forwarding) = unsafe { heap.collect_garbage(&roots) };
         assert_eq!(stats.live_count, 4);
-        let next_body = forwarding[&expected_body];
-        let next_structural = forwarding[&expected_structural];
-        let next_owner = forwarding[&expected_owner];
+        let next_body = forwarding.get(expected_body).unwrap();
+        let next_structural = forwarding.get(expected_structural).unwrap();
+        let next_owner = forwarding.get(expected_owner).unwrap();
         assert_ne!(next_body, expected_body);
         assert_ne!(next_structural, expected_structural);
         assert_ne!(next_owner, expected_owner);
@@ -962,8 +968,8 @@ fn class_method_bodies_are_traced_and_forwarded() {
     for _ in 0..3 {
         let (stats, next_roots, forwarding) = unsafe { heap.collect_garbage(&roots) };
         assert_eq!(stats.live_count, 3);
-        let next_body = forwarding[&expected_body];
-        let next_owner = forwarding[&expected_owner];
+        let next_body = forwarding.get(expected_body).unwrap();
+        let next_owner = forwarding.get(expected_owner).unwrap();
         assert_ne!(next_body, expected_body);
         assert_ne!(next_owner, expected_owner);
         expected_body = next_body;
@@ -1201,6 +1207,31 @@ fn test_survivor_payload_is_dropped_exactly_once() {
     assert_eq!(drops.load(Ordering::SeqCst), 1);
 }
 
+/// Dropping the heap releases what its live objects own.
+#[test]
+fn test_heap_teardown_drops_live_payloads() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+    let payload = Arc::new(CountsDrops(Arc::default()));
+    let class = alloc_tagged_class(&mut tlab, "Tagged", baml_base::RustPayloadKind::Foreign, 0);
+    let instance = |tlab: &mut Tlab, class| {
+        tlab.alloc(Object::RustInstance(RustInstance::new(
+            class,
+            bex_vm_types::ThinVec::new(),
+            RustPayload::Foreign(payload.clone()),
+        )))
+    };
+    let survivor = instance(&mut tlab, class);
+    let (_, roots, _) = unsafe { heap.collect_garbage(&[survivor, class]) };
+    tlab.invalidate();
+    instance(&mut tlab, roots[1]);
+    assert_eq!(Arc::strong_count(&payload), 3, "one in Gen2, one in Gen0");
+
+    drop(tlab);
+    drop(heap);
+    assert_eq!(Arc::strong_count(&payload), 1);
+}
+
 /// A class whose `cleanup` method is the function at `cleanup`.
 fn class_with_cleanup(name: &str, cleanup: bex_vm_types::HeapPtr) -> Class {
     let mut methods = IndexMap::new();
@@ -1273,11 +1304,11 @@ fn test_finalizer_is_queued_when_its_runtime_class_was_evacuated() {
             *queued_cleanup, roots[1],
             "the queued finalizer is the class's relocated `cleanup` body"
         );
-        let Object::Instance(instance) = (unsafe { kept_alive.get() }) else {
-            panic!("the queued pointer is not an instance")
-        };
+        let instance = unsafe { bex_vm_types::InstanceRef::of(*kept_alive) }
+            .expect("the queued pointer is not an instance");
         assert_eq!(
-            instance.class, roots[0],
+            instance.class(),
+            roots[0],
             "the kept-alive instance points at its relocated class"
         );
     }

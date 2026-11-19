@@ -54,6 +54,12 @@ public final class BamlHandle implements AutoCloseable {
     public static final int HOST_VALUE_OPAQUE = 16;
     public static final int ADT_RUNTIME_VALUE = 18;
 
+    /**
+     * Test seam: called with each key as it is released, before the native
+     * release. Lets offline codec tests observe ownership without the bridge.
+     */
+    static volatile java.util.function.LongConsumer releaseObserver;
+
     private final long key;
     private final int handleType;
     /** Root class identity carried by an outbound tagged handle's {@code ty}. */
@@ -84,6 +90,10 @@ public final class BamlHandle implements AutoCloseable {
             // race between explicit close() and the Cleaner.
             if (!released.compareAndSet(false, true) || owned == 0) {
                 return;
+            }
+            java.util.function.LongConsumer observer = releaseObserver;
+            if (observer != null) {
+                observer.accept(owned);
             }
             try {
                 BamlFfi.nativeHandleRelease(owned);

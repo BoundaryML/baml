@@ -8,10 +8,24 @@ work="${RUNNER_TEMP:?}/baml-action"
 mkdir -p "$work"
 
 # CI is not an agent, and its logs have no terminal to color or animate.
-flags=(--agent-skill-check off --color never --no-progress)
+flags=(--agent-skill-check off --color never)
+
+# The flag that names a project directory was renamed from `--project` to
+# `--project-dir`, and the action runs whichever toolchain the caller selects.
+# Probe from the project so the wrapper resolves the toolchain the steps use.
+project_flag=--project
+if [[ "$(cd "$project" && baml check --help 2>/dev/null || true)" == *--project-dir* ]]; then
+  project_flag=--project-dir
+fi
+
+baml_in() {
+  local dir="$1"
+  shift
+  baml "${flags[@]}" "$project_flag" "$dir" "$@"
+}
 
 run_check() {
-  baml "${flags[@]}" --project "$project" check
+  baml_in "$project" check
 }
 
 run_fmt() {
@@ -23,7 +37,7 @@ run_fmt() {
     echo "::error::baml fmt --check is not available in BAML $(baml --version 2>/dev/null); use a newer toolchain or set fmt: false"
     return 1
   fi
-  baml "${flags[@]}" --project "$project" fmt --check
+  baml_in "$project" fmt --check
 }
 
 run_test() {
@@ -32,8 +46,9 @@ run_test() {
     args+=(--profile "$INPUT_TEST_PROFILE")
   fi
   local status=0
-  baml "${flags[@]}" --project "$project" "${args[@]}" || status=$?
-  # 5 is `baml test`'s "no tests were found".
+  baml_in "$project" "${args[@]}" || status=$?
+  # Toolchains that predate the three-code scheme exit 5 for "no tests were
+  # found"; newer ones exit 0.
   if [[ $status -eq 5 ]]; then
     echo "::notice::baml test found no tests in $project"
     return 0
@@ -43,7 +58,7 @@ run_test() {
 
 measure() {
   local dir="$1" out="$2"
-  baml "${flags[@]}" --project "$dir" codequality --output-format json >"$out"
+  baml_in "$dir" codequality --output-format json >"$out"
 }
 
 # Prints the base branch's report path, or nothing if the base can't be
@@ -109,7 +124,7 @@ run_codequality() {
 
   if [[ -z "${PR_NUMBER:-}" ]]; then
     local table="$work/codequality.txt"
-    baml "${flags[@]}" --project "$project" codequality | tee "$table"
+    baml_in "$project" codequality | tee "$table"
     {
       echo "### Code quality"
       echo
@@ -127,20 +142,27 @@ run_codequality() {
     base_args=(--base "$base_report")
   fi
 
-  local status
   # The renderer is a BAML project pinned to its own toolchain, so drop
-  # setup-baml's BAML_TOOLCHAIN and let its baml.toml choose.
-  status="$(env -u BAML_TOOLCHAIN BAML_TELEMETRY=off \
-    baml "${flags[@]}" --project "$GITHUB_ACTION_PATH/codequality" run main -- \
-    ${base_args[@]+"${base_args[@]}"} \
-    --head "$work/head.json" \
-    --out "$summary" \
-    --server_url "$GITHUB_SERVER_URL" \
-    --repo "$GITHUB_REPOSITORY" \
-    --head_sha "$(git -C "$project" rev-parse HEAD)" \
-    --base_label "$PR_BASE_REF" \
-    --project_prefix "$(git -C "$project" rev-parse --show-prefix)" \
-    --project "$project")"
+  # setup-baml's BAML_TOOLCHAIN and run from its directory to let its baml.toml
+  # choose. Paths are resolved here first because `project` may be relative.
+  local status head_sha project_prefix
+  head_sha="$(git -C "$project" rev-parse HEAD)"
+  project_prefix="$(git -C "$project" rev-parse --show-prefix)"
+  status="$(
+    unset BAML_TOOLCHAIN
+    export BAML_TELEMETRY=off
+    cd "$GITHUB_ACTION_PATH/codequality"
+    baml "${flags[@]}" run main -- \
+      ${base_args[@]+"${base_args[@]}"} \
+      --head "$work/head.json" \
+      --out "$summary" \
+      --server_url "$GITHUB_SERVER_URL" \
+      --repo "$GITHUB_REPOSITORY" \
+      --head_sha "$head_sha" \
+      --base_label "$PR_BASE_REF" \
+      --project_prefix "$project_prefix" \
+      --project "$project"
+  )"
   cat "$summary"
 
   if [[ "${INPUT_COMMENT:-true}" == "true" ]]; then

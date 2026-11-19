@@ -37,6 +37,7 @@ pub(crate) enum GeneratorIdent {
     UnionVariantField,
     OtherParameter,
     ReferenceField,
+    TupleSlotsLocal,
     StringType,
     Int64Type,
     Float64Type,
@@ -80,6 +81,59 @@ pub(crate) struct EnumCodecIdent {
 pub(crate) struct UnionCodecIdent {
     direction: UnionCodecDirection,
     index: usize,
+}
+
+pub(crate) struct TupleCodecIdent {
+    direction: UnionCodecDirection,
+    index: usize,
+}
+
+impl TupleCodecIdent {
+    pub(crate) fn new(direction: UnionCodecDirection, index: usize) -> Self {
+        Self { direction, index }
+    }
+}
+
+impl fmt::Display for TupleCodecIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let direction = match self.direction {
+            UnionCodecDirection::Encode => "Encode",
+            UnionCodecDirection::Decode => "Decode",
+        };
+        write!(f, "_baml{direction}Tuple{}", self.index)
+    }
+}
+
+pub(crate) struct TupleSlotField {
+    index: usize,
+}
+
+impl TupleSlotField {
+    pub(crate) fn new(index: usize) -> Self {
+        Self { index }
+    }
+}
+
+impl fmt::Display for TupleSlotField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Item{}", self.index)
+    }
+}
+
+pub(crate) struct TupleSlotLocal {
+    index: usize,
+}
+
+impl TupleSlotLocal {
+    pub(crate) fn new(index: usize) -> Self {
+        Self { index }
+    }
+}
+
+impl fmt::Display for TupleSlotLocal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "_bamlSlot{}_", self.index)
+    }
 }
 
 pub(crate) struct CallbackCodecIdent {
@@ -208,6 +262,7 @@ impl GeneratorIdent {
         Self::UnionVariantField,
         Self::OtherParameter,
         Self::ReferenceField,
+        Self::TupleSlotsLocal,
         Self::StringType,
         Self::Int64Type,
         Self::Float64Type,
@@ -250,6 +305,7 @@ impl GeneratorIdent {
             Self::UnionVariantField => "variant_",
             Self::OtherParameter => "other_",
             Self::ReferenceField => "handle_",
+            Self::TupleSlotsLocal => "slots_",
             Self::StringType => "string",
             Self::Int64Type => "int64",
             Self::Float64Type => "float64",

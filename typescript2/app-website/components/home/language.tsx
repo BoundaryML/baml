@@ -247,7 +247,7 @@ const PYTHON = '#e3b53c';
 /** The lineage list, one language per line. */
 function Lineage() {
   const line =
-    'py-2 whitespace-nowrap font-display text-[clamp(22px,2.15vw,32px)] font-medium leading-tight tracking-[-0.02em] text-head';
+    'py-2 whitespace-nowrap font-display text-[clamp(20px,2.1vw,28px)] font-medium leading-tight tracking-[-0.02em] text-head';
   return (
     <ul>
       {LINEAGE.map((part) => (

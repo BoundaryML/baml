@@ -5,6 +5,11 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[ns_core/core.baml:245:14]
+ 245 │       while (true) {
+     ·              ──┬─
+     ·                ╰── this loop never ends: its condition is always truthy and its body never breaks
+     ╰────
      ╭─[ns_core/core.baml:255:7]
  255 │       Done {}
      ·       ───────
@@ -13,6 +18,11 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[ns_core/core.baml:270:14]
+ 270 │       while (true) {
+     ·              ──┬─
+     ·                ╰── this loop never ends: its condition is always truthy and its body never breaks
+     ╰────
      ╭─[ns_core/core.baml:281:7]
  281 │       Done {}
      ·       ───────
@@ -21,6 +31,11 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[ns_core/core.baml:297:14]
+ 297 │       while (true) {
+     ·              ──┬─
+     ·                ╰── this loop never ends: its condition is always truthy and its body never breaks
+     ╰────
      ╭─[ns_core/core.baml:316:7]
  316 │       Done {}
      ·       ───────
@@ -29,6 +44,11 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[ns_core/core.baml:331:14]
+ 331 │       while (true) {
+     ·              ──┬─
+     ·                ╰── this loop never ends: its condition is always truthy and its body never breaks
+     ╰────
      ╭─[ns_core/core.baml:350:7]
  350 │       Done {}
      ·       ───────

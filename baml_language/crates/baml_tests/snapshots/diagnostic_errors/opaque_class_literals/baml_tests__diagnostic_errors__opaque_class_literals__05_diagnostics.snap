@@ -4,10 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0173
 
-  × class `baml.spawn.Limit` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
+  × class `baml.sync.Semaphore` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
    ╭─[opaque_class_literals.baml:6:5]
- 6 │     baml.spawn.Limit { ...limit }
-   ·     ─────────────────────────────
+ 6 │     baml.sync.Semaphore { ...limit }
+   ·     ────────────────────────────────
    ╰────
 
   [type] E0173

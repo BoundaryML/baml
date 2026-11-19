@@ -49,29 +49,25 @@ fn diagnostic(output: &std::process::Output) -> String {
 }
 
 /// Pin credential recovery text for fail-open CLI warnings and fatal query/artifact errors.
-fn assert_api_key_rejection(
-    output: &std::process::Output,
-    endpoint: &str,
-    query: bool,
-    recording_off_allowed: bool,
-) {
+fn assert_api_key_rejection(output: &std::process::Output, endpoint: &str, query: bool) {
     let actual = diagnostic(output);
-    let prefix = if !query && recording_off_allowed {
+    let prefix = if !query && output.status.success() {
         "warning"
     } else {
         "error"
     };
     let local_and_outcome = if query {
-        r#"    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+        r#"    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
-    } else if recording_off_allowed {
+    } else if output.status.success() {
         r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
     • Disable recording: rerun with BAML_TELEMETRY=off.
 
   Cloud telemetry disabled. Program execution continues."#
     } else {
         r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
+    • Disable recording: rerun with BAML_TELEMETRY=off.
 
   Execution cancelled."#
     };
@@ -79,8 +75,8 @@ fn assert_api_key_rejection(
     // is compared in full; unit tests independently pin each specific saved-login state.
     let expected = [
         "Unset BOUNDARY_API_KEY to use your saved Boundary login.",
-        "Unset BOUNDARY_API_KEY, then run `baml auth login`.",
-        "Your saved login could not be read. Unset BOUNDARY_API_KEY, then run `baml auth login` to restore user authentication.",
+        "Unset BOUNDARY_API_KEY, then run `baml cloud auth login`.",
+        "Your saved login could not be read. Unset BOUNDARY_API_KEY, then run `baml cloud auth login` to restore user authentication.",
     ].map(|login_recovery| format!(r#"{prefix}: Boundary rejected BOUNDARY_API_KEY (401).
   Endpoint: {endpoint}
 
@@ -290,6 +286,72 @@ fn fixture(source: &str) -> tempfile::TempDir {
     temp
 }
 
+/// Runtime recording is opt-out even when the user has logged in. Exercise both
+/// commands against a live loopback server so an upload or heartbeat is observable.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn telemetry_off_prevents_cloud_requests_for_run_and_test() {
+    use sha2::Digest as _;
+
+    let temp = fixture(
+        "function main() -> int { 7 }\ntestset \"smoke\" { test \"ok\" { assert.is_true(true) } }\n",
+    );
+    let home = temp.path().join("home");
+    let server = MockServer::start().await;
+    let endpoint = bcs_api::Endpoint::parse(&server.uri()).unwrap();
+    let file = home.join("login/cache").join(format!(
+        "{}.json",
+        hex::encode(sha2::Sha256::digest(endpoint.as_str().as_bytes()))
+    ));
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(
+        file,
+        serde_json::to_vec(&bcs_api::StoredSession {
+            refresh_token: bcs_api::Secret::new("bdry_session_cli_test".into()),
+            caller: bcs_api::auth::Caller {
+                user_id: "test-user".into(),
+                email: "test@example.invalid".into(),
+            },
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    common::share_build_cache(&home);
+    for credential in [None, Some(KEY)] {
+        for level in ["off", "0", "false", "no"] {
+            for args in [&["run", "main"][..], &["test"][..]] {
+                let output = Command::new(common::baml_cli())
+                    .args(args)
+                    .current_dir(temp.path())
+                    .env("BAML_HOME", &home)
+                    .env("BAML_TELEMETRY", level)
+                    .env("BOUNDARY_API_URL", server.uri())
+                    .env("BOUNDARY_PROJECT", "acme/app")
+                    .env_remove("BOUNDARY_API_KEY")
+                    .envs(credential.map(|key| ("BOUNDARY_API_KEY", key)))
+                    .env("BAML_CLI_ALLOW_DIRECT", "1")
+                    .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+                    .env("DO_NOT_TRACK", "1")
+                    .output()
+                    .unwrap();
+                assert!(
+                    output.status.success(),
+                    "{credential:?}/{level}/{args:?}: {output:?}"
+                );
+                assert!(
+                    !String::from_utf8_lossy(&output.stderr).contains("warning: Boundary"),
+                    "{output:?}"
+                );
+                assert!(
+                    server.received_requests().await.unwrap().is_empty(),
+                    "{credential:?}/{level}/{args:?}"
+                );
+                assert!(!temp.path().join(RECORDINGS).exists());
+                assert!(!home.join("btel").exists());
+            }
+        }
+    }
+}
+
 /// A late initial refusal must preserve a result already printed by the command.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_rejection_warns_even_if_execution_finishes_before_authorization() {
@@ -309,7 +371,7 @@ async fn initial_rejection_warns_even_if_execution_finishes_before_authorization
         assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
         let stderr = String::from_utf8_lossy(&output.stderr);
         if status == 401 {
-            assert_api_key_rejection(&output, &server.uri(), false, true);
+            assert_api_key_rejection(&output, &server.uri(), false);
         } else {
             assert_ingest_forbidden(&output, &server.uri());
         }
@@ -387,7 +449,7 @@ async fn local_sentinel_records_and_queries_locally_without_boundary_requests() 
         &[
             "query",
             "SELECT COUNT(*) AS recordings FROM processes",
-            "--format",
+            "--output-format",
             "json",
         ],
     );
@@ -406,7 +468,7 @@ async fn local_sentinel_records_and_queries_locally_without_boundary_requests() 
         &[
             "query",
             "SELECT COUNT(*) FROM processes",
-            "--format",
+            "--output-format",
             "json",
         ],
     );
@@ -415,7 +477,14 @@ async fn local_sentinel_records_and_queries_locally_without_boundary_requests() 
         temp.path(),
         &server.uri(),
         "local",
-        &["query", "SELECT 1", "--project", "acme/app"],
+        &[
+            "cloud",
+            "recordings",
+            "query",
+            "SELECT 1",
+            "--project",
+            "acme/app",
+        ],
     );
     assert!(!output.status.success());
     assert_eq!(
@@ -423,7 +492,7 @@ async fn local_sentinel_records_and_queries_locally_without_boundary_requests() 
             .lines()
             .find(|line| line.starts_with("error: "))
             .unwrap(),
-        r#"error: BOUNDARY_API_KEY=local selects local recordings; unset BOUNDARY_API_KEY to use --project or --environment for a cloud query"#
+        "error: BOUNDARY_API_KEY=local selects local recordings; unset it to query Boundary Cloud"
     );
 
     assert!(server.received_requests().await.unwrap().is_empty());
@@ -445,7 +514,7 @@ async fn cloud_query_uses_shared_diagnostics_with_query_specific_recovery() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let endpoint = server.uri();
         if status == 401 {
-            assert_api_key_rejection(&output, &endpoint, true, true);
+            assert_api_key_rejection(&output, &endpoint, true);
         } else {
             let expected = match status {
                 403 => format!(
@@ -454,7 +523,7 @@ async fn cloud_query_uses_shared_diagnostics_with_query_specific_recovery() {
 
   To continue, choose one:
     • Use a credential with query permission for the selected project and environment.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
                 ),
@@ -464,7 +533,7 @@ async fn cloud_query_uses_shared_diagnostics_with_query_specific_recovery() {
 
   To continue, choose one:
     • Check the command inputs and requested project/environment.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
                 ),
@@ -474,7 +543,7 @@ async fn cloud_query_uses_shared_diagnostics_with_query_specific_recovery() {
 
   To continue, choose one:
     • Check the endpoint and requested project/environment, then retry.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
                 ),
@@ -484,7 +553,7 @@ async fn cloud_query_uses_shared_diagnostics_with_query_specific_recovery() {
 
   To continue, choose one:
     • Retry the command after Boundary becomes available.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
                 ),
@@ -529,7 +598,7 @@ async fn cloud_query_distinguishes_bad_responses_from_connection_failures() {
 
   To continue, choose one:
     • Check that the endpoint is a Boundary API compatible with this BAML client.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         )
@@ -550,7 +619,7 @@ async fn cloud_query_distinguishes_bad_responses_from_connection_failures() {
 
   To continue, choose one:
     • Check the endpoint and network connection, then retry the command.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
     );
@@ -584,8 +653,8 @@ async fn cloud_query_displays_structured_error_codes_and_optional_messages() {
   Select an environment: this credential can query multiple environments.
 
   To continue, choose one:
-    • Select an environment with --environment <name> and, when needed, --project <org/project>.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Select an environment with --env <name> and, when needed, --project <org/project>.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
             )
@@ -596,8 +665,8 @@ async fn cloud_query_displays_structured_error_codes_and_optional_messages() {
   Code: ENVIRONMENT_REQUIRED
 
   To continue, choose one:
-    • Select an environment with --environment <name> and, when needed, --project <org/project>.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Select an environment with --env <name> and, when needed, --project <org/project>.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
             )
@@ -645,7 +714,7 @@ async fn initial_telemetry_rejection_preserves_the_public_api_message() {
 #[test]
 fn cloud_configuration_errors_share_diagnostics_without_exposing_invalid_url_credentials() {
     let temp = fixture("function main() -> int { 7 }\n");
-    for args in [&["query", "SELECT 1"][..], &["auth", "login"][..]] {
+    for args in [&["query", "SELECT 1"][..], &["cloud", "auth", "login"][..]] {
         let output = execute_case(
             temp.path(),
             "https://user:private-password@example.test",
@@ -659,7 +728,7 @@ fn cloud_configuration_errors_share_diagnostics_without_exposing_invalid_url_cre
 
   To continue, choose one:
     • Fix BOUNDARY_API_URL or boundary.api_url in baml.toml.
-    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
+    • Query local recordings: run `baml local recordings query`.
 
   Query failed."#
         } else {
@@ -715,7 +784,7 @@ function main() -> int {
         String::from_utf8_lossy(&output.stdout),
         "execution-started\n7\n"
     );
-    assert_api_key_rejection(&output, &server.uri(), false, true);
+    assert_api_key_rejection(&output, &server.uri(), false);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -802,7 +871,7 @@ async fn standalone_binary_reports_initial_refusal_after_a_fast_main() {
         .output()
         .unwrap();
     assert!(!output.status.success(), "{output:?}");
-    assert_api_key_rejection(&output, &server.uri(), false, false);
+    assert_api_key_rejection(&output, &server.uri(), false);
 }
 
 #[test]
@@ -885,7 +954,7 @@ fn corrupt_saved_login_errors_for_query_and_execution_but_explicit_local_recordi
         (
             ["query", "SELECT 7"],
             "Query failed.",
-            "    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.",
+            "    • Query local recordings: run `baml local recordings query`.",
         ),
     ] {
         let output = Command::new(common::baml_cli())
@@ -909,7 +978,7 @@ fn corrupt_saved_login_errors_for_query_and_execution_but_explicit_local_recordi
   Endpoint: {endpoint}
 
   To continue, choose one:
-    • Remove the invalid saved login: run `baml auth logout`, then `baml auth login`.
+    • Remove the invalid saved login: run `baml cloud auth logout`, then `baml cloud auth login`.
     • Set BOUNDARY_API_KEY to a valid API key.
 {recovery}
 
@@ -936,4 +1005,49 @@ fn corrupt_saved_login_errors_for_query_and_execution_but_explicit_local_recordi
         assert!(output.status.success(), "{output:?}");
         assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
     }
+}
+
+/// Off precedes unused runtime destination validation on cold and cached paths.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn telemetry_off_ignores_unused_boundary_configuration() {
+    let server = MockServer::start().await;
+    let temp = fixture(
+        "function main() -> int { 7 }\ntestset \"smoke\" { test \"ok\" { assert.is_true(true) } }\n",
+    );
+    let home = temp.path().join("home");
+    common::share_build_cache(&home);
+    for boundary in [
+        "project = 42\napi_url = false",
+        "project = \"fixture/app\"\napi_url = \"not a URL\"",
+    ] {
+        std::fs::write(
+            temp.path().join("baml.toml"),
+            format!("[package]\nname = \"off_e2e\"\n[boundary]\n{boundary}\n"),
+        )
+        .unwrap();
+        for args in [&["run", "main"][..], &["run", "main"][..], &["test"][..]] {
+            let output = Command::new(common::baml_cli())
+                .args(args)
+                .current_dir(temp.path())
+                .env("BAML_HOME", &home)
+                .env("HOME", &home)
+                .env("USERPROFILE", &home)
+                .env("BAML_CLI_ALLOW_DIRECT", "1")
+                .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+                .env("DO_NOT_TRACK", "1")
+                .env("BAML_TELEMETRY", " FaLsE ")
+                .env("BOUNDARY_API_URL", server.uri())
+                .env("BOUNDARY_API_KEY", KEY)
+                .env("BOUNDARY_PROJECT", "ignored/fixture")
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{boundary}/{args:?}: {output:?}");
+            if args[0] == "run" {
+                assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+            }
+            assert!(!temp.path().join(RECORDINGS).exists());
+            assert!(!home.join("btel").exists());
+        }
+    }
+    assert!(server.received_requests().await.unwrap().is_empty());
 }

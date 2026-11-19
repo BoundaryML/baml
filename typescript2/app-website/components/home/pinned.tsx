@@ -7,9 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useScrollProgress } from './scroll';
-
-// Shared by the homepage's scroll-driven figures.
+// Shared by the homepage's animated figures.
 
 /** The word, in the color it always has. */
 export function Hyper({
@@ -33,42 +31,8 @@ export function leftVertically(e: { clientY: number; currentTarget: Element }) {
   return e.clientY <= r.top + 1 || e.clientY >= r.bottom - 1;
 }
 
-/** Scroll progress as a straight line, with a little held at each end. */
+/** Progress as a straight line, with a little held at each end. */
 export const sweep = (p: number) => Math.min(1, Math.max(0, (p - 0.04) / 0.9));
-
-/** A figure that pins while its spacer scrolls past, handing its children the progress. Under reduced
- *  motion the progress hook reports 1, so the figure shows its finished state. */
-export function Pinned({
-  children,
-  length,
-  phone,
-  still = false,
-}: {
-  children: (p: number) => ReactNode;
-  length: string;
-  // Pin on narrow screens too, for a figure short enough to fit on one.
-  phone?: boolean;
-  // Shows the finished state with no spacer.
-  still?: boolean;
-}) {
-  const track = useRef<HTMLDivElement>(null);
-  const pin = useRef<HTMLDivElement>(null);
-  const [progress] = useScrollProgress(track, pin);
-  return (
-    <div ref={track}>
-      <div className={phone ? 'sticky' : 'md:sticky'} ref={pin}>
-        {children(still ? 1 : (progress ?? 0))}
-      </div>
-      {!still && (
-        <div
-          aria-hidden
-          className={phone ? 'block' : 'hidden md:block'}
-          style={{ height: length }}
-        />
-      )}
-    </div>
-  );
-}
 
 // ---------- figures that play on their own ----------
 
@@ -89,24 +53,38 @@ export function useReducedMotion() {
   return reduce;
 }
 
-/** Turns true the first time the element is well inside the screen, and stays true. */
-export function useInView(ref: RefObject<HTMLElement | null>) {
+/** Turns true the first time the element's top passes `line`, a fraction of the way down the window
+ *  (0.75 by default), and stays true. */
+export function useInView(ref: RefObject<HTMLElement | null>, line = 0.75) {
   const [seen, setSeen] = useState(false);
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setSeen(true);
-          io.disconnect();
-        }
-      },
-      { rootMargin: '0px 0px -25% 0px' },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [ref]);
+    if (!el || seen) return;
+    let io: IntersectionObserver | undefined;
+    // The margin is in pixels of the window's height: browsers have disagreed on what a percentage
+    // margin is relative to. A resize before the figure is seen moves the line with the window.
+    const watch = () => {
+      io?.disconnect();
+      io = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setSeen(true);
+            io?.disconnect();
+          }
+        },
+        {
+          rootMargin: `0px 0px -${Math.round((1 - line) * window.innerHeight)}px 0px`,
+        },
+      );
+      io.observe(el);
+    };
+    watch();
+    window.addEventListener('resize', watch);
+    return () => {
+      window.removeEventListener('resize', watch);
+      io?.disconnect();
+    };
+  }, [ref, line, seen]);
   return seen;
 }
 
@@ -127,8 +105,14 @@ export function useVisible(ref: RefObject<HTMLElement | null>) {
   return visible;
 }
 
-/** A value that eases to `target` over `ms` whenever the target changes. Under reduced motion it jumps. */
-export function useTween(target: number, ms: number, snap = false) {
+/** A value that eases to `target` over `ms` whenever the target changes, or moves at a steady pace
+ *  when `linear` is set. Under reduced motion it jumps. */
+export function useTween(
+  target: number,
+  ms: number,
+  snap = false,
+  linear = false,
+) {
   const reduce = useReducedMotion();
   const [value, setValue] = useState(target);
   const current = useRef(target);
@@ -144,28 +128,94 @@ export function useTween(target: number, ms: number, snap = false) {
     let frame = 0;
     const tick = (now: number) => {
       const k = Math.min(1, (now - start) / ms);
-      current.current = from + (target - from) * ease(k);
+      current.current = from + (target - from) * (linear ? k : ease(k));
       setValue(current.current);
       if (k < 1) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [target, ms, reduce, snap]);
+  }, [target, ms, reduce, snap, linear]);
   return value;
 }
 
-/** A figure that plays from start to finish once, when it first comes into view, and then stays. */
+/** A figure that plays from start to finish once, when it first comes into view, and then stays. Under
+ *  reduced motion it shows the finished figure. */
 export function Played({
   children,
+  line,
+  linear = false,
   ms = 2400,
 }: {
   children: (p: number) => ReactNode;
+  // Where in the window the figure's top has to reach before it plays. A tall figure waits until
+  // more of it is on screen.
+  line?: number;
+  // Plays at a steady pace, for a figure whose beats are spaced out along its progress.
+  linear?: boolean;
   ms?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const seen = useInView(ref);
-  const p = useTween(seen ? 1 : 0, ms);
+  const seen = useInView(ref, line);
+  // Anyone who asked for less motion gets the finished figure from the start, not once it's in view.
+  // Once finished it stays finished, even if reduced motion is turned off afterward.
+  const reduce = useReducedMotion();
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (seen || reduce) setDone(true);
+  }, [seen, reduce]);
+  const p = useTween(done || seen || reduce ? 1 : 0, ms, false, linear);
   return <div ref={ref}>{children(p)}</div>;
+}
+
+/** A figure whose progress follows the scroll, without pinning: 0 while its middle is `from` of the
+ *  way down the window, 1 once its middle reaches `to`, so scrolling back plays it in reverse. Under
+ *  reduced motion it shows the finished figure. */
+export function Scrubbed({
+  children,
+  from = 0.9,
+  to = 0.3,
+}: {
+  children: (p: number) => ReactNode;
+  from?: number;
+  to?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const reduce = useReducedMotion();
+  const [p, setP] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || reduce) return;
+    let frame = 0;
+    let shown = -1;
+    const target = () => {
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const mid = r.top + r.height / 2;
+      return Math.min(1, Math.max(0, (vh * from - mid) / (vh * (from - to))));
+    };
+    // The shown progress covers part of the distance each frame, so a jump in the scroll position
+    // eases in rather than snapping.
+    const tick = () => {
+      frame = 0;
+      const t = target();
+      shown = shown < 0 ? t : shown + (t - shown) * 0.18;
+      if (Math.abs(t - shown) < 0.0005) shown = t;
+      setP(shown);
+      if (shown !== t) frame = requestAnimationFrame(tick);
+    };
+    const wake = () => {
+      if (!frame) frame = requestAnimationFrame(tick);
+    };
+    wake();
+    window.addEventListener('scroll', wake, { passive: true });
+    window.addEventListener('resize', wake);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', wake);
+      window.removeEventListener('resize', wake);
+    };
+  }, [from, to, reduce]);
+  return <div ref={ref}>{children(reduce ? 1 : p)}</div>;
 }
 
 // How long a picked side takes to arrive.

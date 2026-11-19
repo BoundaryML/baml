@@ -1,0 +1,193 @@
+// Interface calls compiled code dispatches on the receiver's class, and the
+// receivers each site leaves to the VM.
+
+interface DxShape {
+    function area(self) -> int throws string
+}
+
+class DxSquare {
+    side: int,
+    implements DxShape {
+        function area(self) -> int {
+            if (self.side < 0) {
+                throw `negative:${self.side}`;
+            }
+            self.side * self.side
+        }
+    }
+}
+
+class DxRect {
+    w: int,
+    h: int,
+    implements DxShape {
+        function area(self) -> int { (self.w * self.h) / self.h }
+    }
+}
+
+// Pausing: the loop polls, so a live caller value is rooted across the call.
+class DxSlow {
+    n: int,
+    implements DxShape {
+        function area(self) -> int {
+            let total = 0;
+            for (let i = 0; i < self.n; i += 1) {
+                total += await spawn { i % 3 };
+            }
+            total
+        }
+    }
+}
+
+// An extra optional parameter leaves this implementation to the VM.
+class DxPadded {
+    side: int,
+    implements DxShape {
+        function area(self, pad: int = 1) -> int { self.side + pad }
+    }
+}
+
+class DxBox<T> {
+    side: int,
+    implements DxShape {
+        function area(self) -> int { self.side * 10 }
+    }
+}
+
+function DxArea(s: DxShape) -> int {
+    s.area()
+}
+
+function DxTotal(shapes: DxShape[]) -> int {
+    let total = 0;
+    for (let s in shapes) {
+        let before = total;
+        total = before + s.area();
+    }
+    total
+}
+
+function DispatchKnown() -> void {
+    let shapes: DxShape[] = [];
+    for (let i = 0; i < 50; i += 2) {
+        shapes.push(DxSquare { side: i });
+        shapes.push(DxRect { w: i + 1, h: 2 });
+    }
+    baml.io.println(`${DxTotal(shapes)}:${DxArea(DxRect { w: 7, h: 3 })}`);
+    let thrown = DxArea(DxSquare { side: -2 }) catch (e) {
+        let s: string => s,
+    };
+    let divided = DxArea(DxRect { w: 4, h: 0 }) catch (e) {
+        baml.panics.DivisionByZero => -1,
+    };
+    baml.io.println(`${thrown}:${divided}`);
+}
+
+// Arms that suspend, and receivers the site leaves to the VM (an optional
+// parameter, a generic class), at one site.
+function DispatchMixed() -> void {
+    let shapes: DxShape[] = [
+        DxSlow { n: 20 }, DxPadded { side: 4 }, DxSquare { side: 3 }, DxBox<int> { side: 2 },
+        DxRect { w: 5, h: 1 }, DxBox<string> { side: 3 }, DxPadded { side: 1 }, DxSlow { n: 7 },
+    ];
+    baml.io.println(`${DxTotal(shapes)}`);
+}
+
+interface DxLabeled {
+    label: string
+    function shout(self) -> string throws never {
+        self.label + "!"
+    }
+}
+
+class DxLoud {
+    label: string,
+    implements DxLabeled {
+        function shout(self) -> string throws never { self.label + "!!!" }
+    }
+}
+
+class DxQuiet {
+    label: string,
+    implements DxLabeled {
+        function shout(self) -> string throws never { self.label + "." }
+    }
+}
+
+// Adopts the default body, whose frame binds `Self`.
+class DxPlain {
+    label: string,
+    implements DxLabeled {}
+}
+
+function DxShout(value: unknown) -> string {
+    match (value) {
+        let labeled: DxLabeled => labeled.shout(),
+        _ => "",
+    }
+}
+
+function DispatchDefault() -> void {
+    let out = [DxShout(DxLoud { label: "a" }), DxShout(DxPlain { label: "b" }), DxShout(DxQuiet { label: "c" })];
+    baml.io.println(out.join(","));
+    let minted = reflect.Class.new(
+        "DxRow",
+        { "label": string.type() },
+        implementations = [reflect.Interface.implementation<DxLabeled>().field("label")],
+    );
+    let type Row = minted;
+    let row: Row = baml.json.to<Row>({ "label": "r" });
+    baml.io.println(`${DxShout(row)},${DxShout(DxLoud { label: "l" })},${DxShout(DxQuiet { label: "q" })}`);
+}
+
+// Defaults that call back into the receiver, and that throw, entered from a
+// site whose classes all adopt them.
+interface DxCounter {
+    base: int
+    function step(self) -> int throws never
+    function total(self) -> int throws never {
+        self.base + self.step()
+    }
+    function ratio(self) -> int throws string {
+        if (self.base < 0) {
+            throw `negative:${self.base}`;
+        }
+        self.base / self.step()
+    }
+}
+
+class DxInc {
+    base: int,
+    implements DxCounter {
+        function step(self) -> int throws never { 1 }
+    }
+}
+
+class DxNone {
+    base: int,
+    implements DxCounter {
+        function step(self) -> int throws never { 0 }
+    }
+}
+
+function DxRun(c: DxCounter) -> int {
+    c.total()
+}
+
+function DxRatio(c: DxCounter) -> int {
+    c.ratio()
+}
+
+function DispatchDefaultChain() -> void {
+    let acc = 0;
+    for (let i = 0; i < 40; i += 2) {
+        acc += DxRun(DxInc { base: i }) + DxRun(DxNone { base: i + 1 });
+    }
+    let thrown = DxRatio(DxInc { base: -3 }) catch (e) {
+        let s: string => s,
+    };
+    let divided = DxRatio(DxNone { base: 4 }) catch (e) {
+        baml.panics.DivisionByZero => -1,
+    };
+    baml.io.println(`${acc}:${DxRatio(DxInc { base: 9 })}:${thrown}:${divided}`);
+}

@@ -78,6 +78,10 @@ pub enum Hir2Diagnostic {
     DuplicatePatternBinding { name: Name, sites: Vec<TextRange> },
     /// A class destructure names the same field more than once.
     DuplicatePatternField { name: Name, sites: Vec<TextRange> },
+    /// A class literal names the same field more than once (e.g.
+    /// `Pair { a: null, a: 1 }`). `sites` lists every field-name span for
+    /// `name` in source order; the first is the original.
+    DuplicateObjectField { name: Name, sites: Vec<TextRange> },
     /// Two or more members of a class or enum serialize to the same JSON key —
     /// either two members share an `@alias("k")`, or one member's name equals
     /// another member's `@alias`. Because an aliased member's real name is never
@@ -522,6 +526,31 @@ impl Hir2Diagnostic {
                             range: *range,
                         },
                         format!("field `{name}` destructured again here"),
+                    );
+                }
+                diag.with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::DuplicateObjectField { name, sites } => {
+                let first = sites.first().copied().unwrap_or_default();
+                let rest = sites.get(1..).unwrap_or(&[]);
+                let mut diag = Diagnostic::error(
+                    DiagnosticId::DuplicateField,
+                    format!("duplicate field `{name}` in class literal"),
+                )
+                .with_secondary(
+                    Span {
+                        file_id,
+                        range: first,
+                    },
+                    format!("field `{name}` first set here"),
+                );
+                for range in rest {
+                    diag = diag.with_primary(
+                        Span {
+                            file_id,
+                            range: *range,
+                        },
+                        format!("field `{name}` set again here"),
                     );
                 }
                 diag.with_phase(DiagnosticPhase::Hir)

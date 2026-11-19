@@ -42,8 +42,34 @@ impl ThreadStackBudget {
         }
     }
     /// Reserve additional live elements without exceeding the shared byte budget.
+    ///
+    /// The fit test is one subtraction and compare (`len <= capacity`, so
+    /// `capacity - len` cannot underflow). Everything that can fail, including
+    /// building a `VmPanic`, lives in the cold growth path: an eagerly built
+    /// error value would be dropped on every successful call.
     #[inline]
     pub(crate) fn try_reserve<T>(
+        &self,
+        storage: &mut Vec<T>,
+        additional: usize,
+        #[cfg(test)] refuse_next_growth: &mut bool,
+    ) -> Result<(), VmPanic> {
+        if additional <= storage.capacity() - storage.len() {
+            return Ok(());
+        }
+        self.grow(
+            storage,
+            additional,
+            #[cfg(test)]
+            refuse_next_growth,
+        )
+    }
+
+    /// Allocate a replacement safely, validate its actual capacity, then move
+    /// live elements. The old array stays intact on allocation/budget failure.
+    #[cold]
+    #[inline(never)]
+    fn grow<T>(
         &self,
         storage: &mut Vec<T>,
         additional: usize,
@@ -53,26 +79,6 @@ impl ThreadStackBudget {
             .len()
             .checked_add(additional)
             .ok_or(VmPanic::StackOverflow)?;
-        if needed <= storage.capacity() {
-            return Ok(());
-        }
-        self.grow(
-            storage,
-            needed,
-            #[cfg(test)]
-            refuse_next_growth,
-        )
-    }
-
-    /// Allocate a replacement safely, validate its actual capacity, then move
-    /// live elements. The old array stays intact on allocation/budget failure.
-    #[cold]
-    fn grow<T>(
-        &self,
-        storage: &mut Vec<T>,
-        needed: usize,
-        #[cfg(test)] refuse_next_growth: &mut bool,
-    ) -> Result<(), VmPanic> {
         let old_bytes = storage.capacity() * size_of::<T>();
         let used = self.0.load(Ordering::Relaxed);
         let maximum = (THREAD_STACK_BUDGET_BYTES - used + old_bytes) / size_of::<T>();
@@ -344,10 +350,10 @@ mod tests {
                 panic!("entry allocation refusal must propagate as a BAML panic")
             };
             assert!(trace.is_empty());
-            let Object::Instance(instance) = vm.get_object(value.as_object_ptr().unwrap()) else {
+            let Some(instance) = vm.get_instance(value.as_object_ptr().unwrap()) else {
                 panic!("expected panic instance")
             };
-            let Object::Class(class) = vm.get_object(instance.class) else {
+            let Object::Class(class) = vm.get_object(instance.class()) else {
                 panic!("expected panic class")
             };
             assert_eq!(class.path.to_string(), "panics.AllocFailure");
@@ -371,16 +377,22 @@ mod tests {
         let entry = program.rendered_callables()["user.main"].object.raw();
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
         vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+        // Entering `main` reserved its locals and operand bound; fill that
+        // so the host result's push has to grow the stack.
+        while vm.stack.len() < vm.stack.capacity() {
+            vm.stack.push(Value::NULL);
+        }
+        let filled = vm.stack.len();
         vm.stack.refuse_next_growth = true;
         vm.stack.push(Value::NULL);
-        assert!(vm.stack.is_empty());
+        assert_eq!(vm.stack.len(), filled);
         let Err(VmError::ThrownUnhandled { value, .. }) = vm.exec() else {
             panic!("host-result allocation refusal must propagate as a BAML panic")
         };
-        let Object::Instance(instance) = vm.get_object(value.as_object_ptr().unwrap()) else {
+        let Some(instance) = vm.get_instance(value.as_object_ptr().unwrap()) else {
             panic!("expected panic instance")
         };
-        let Object::Class(class) = vm.get_object(instance.class) else {
+        let Object::Class(class) = vm.get_object(instance.class()) else {
             panic!("expected panic class")
         };
         assert_eq!(class.path.to_string(), "panics.AllocFailure");

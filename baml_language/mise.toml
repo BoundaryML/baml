@@ -110,11 +110,11 @@ BAML_CLI_ALLOW_DIRECT=1 \
 DEV_BAML_CLI_DISABLE_AGENT_DETECTION=1 \
 BAML_TELEMETRY=off \
 BAML_HOME="$home" \
-    cargo run -p baml_cli -- test --test-timeout 15m --from tools/type_quiz
+    cargo run -p baml_cli -- test --test-timeout 15m --project-dir tools/type_quiz
 '''
 
 [tasks.fmt-type-quiz]
 description = "Run the BAML formatter on tools/type_quiz"
 env = { DEV_BAML_CLI_DISABLE_AGENT_DETECTION = "1" }
-run = "cargo run -p baml_cli -- fmt --project tools/type_quiz"
+run = "cargo run -p baml_cli -- fmt --project-dir tools/type_quiz"
 sources = ["tools/type_quiz/**/*.baml"]

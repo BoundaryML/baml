@@ -1,0 +1,120 @@
+// A diverging `||` right operand, `??` fallback or catch arm may not run, so
+// it does not end the flow around it: the code after it is reachable and
+// its writes are seen. These are the shapes that must stay errors; the types
+// the accepted shapes get are in the type fixture `divergence_scoping`, and
+// their run-time behavior in the corpus namespace `ns_loop_narrowing`.
+
+class Tag {}
+
+function thrower(a: int) -> int throws string {
+    if (a > 0) {
+        throw "boom";
+    }
+    a
+}
+
+// The right operand of `||` may not run: the body still completes.
+function or_right_operand_may_not_run(a: int, xs: int[]) -> int {
+    let x: int | Tag = a;
+    x = a;
+    for let v in xs {
+        let ok = v < 5 || { return 7; };
+        x = Tag {};
+    }
+    let u: int = x;
+    u
+}
+
+// A `??` fallback may not run: the body still completes.
+function null_coalesce_fallback_may_not_run(a: int, o: int?, xs: int[]) -> int {
+    let x: int | Tag = a;
+    x = a;
+    for let v in xs {
+        let w = o ?? { return 7; };
+        x = Tag {};
+    }
+    let u: int = x;
+    u
+}
+
+// A catch arm runs only when the base throws: the body still completes.
+function catch_arm_may_not_run(a: int, xs: int[]) -> int {
+    let x: int | Tag = a;
+    x = a;
+    for let v in xs {
+        let r = thrower(v) catch (e) { _ => { return 5; } };
+        x = Tag {};
+    }
+    let u: int = x;
+    u
+}
+
+// The same, outside a loop: the branch the fallback is in still completes.
+function null_coalesce_fallback_in_a_branch(a: int, o: int?) -> int {
+    let x: int | Tag = a;
+    x = a;
+    if (a > 0) {
+        x = Tag {};
+        let w = o ?? { return 5; };
+    }
+    let u: int = x;
+    u
+}
+
+// A `??` fallback that returns does not return for the whole body.
+function null_coalesce_fallback_is_not_the_return(o: int?) -> int {
+    let v = o ?? { return 1; };
+}
+
+
+class Box {
+    function m(self, v: int) -> int throws never {
+        v
+    }
+}
+
+// A write inside a `?.` argument is skipped when the base is null.
+function optional_call_argument_write_may_be_skipped(a: int, b: Box?) -> int {
+    let x: int | Tag = a;
+    x = Tag {};
+    let r = b?.m({ x = a; 1 });
+    let u: int = x;
+    u
+}
+
+// The header completes when the argument is skipped: that false edge keeps the
+// earlier write.
+function optional_call_argument_return_keeps_the_false_edge(a: int, b: Box?) -> int {
+    let x: int | Tag = a;
+    x = Tag {};
+    while (b?.m({ x = a; return 0; }) == 1) {}
+    let u: int = x;
+    u
+}
+
+// A write inside a `??` fallback is skipped when the lhs is not null.
+function null_coalesce_fallback_write_may_be_skipped(a: int, o: int?) -> int {
+    let x: int | Tag = a;
+    x = Tag {};
+    let r = o ?? { x = a; 0 };
+    let u: int = x;
+    u
+}
+
+// The body's end is an exit of the loop when the fallback is skipped.
+function null_coalesce_fallback_continue_keeps_the_body_end(a: int, o: int?, xs: int[]) -> int {
+    let x: int | Tag = a;
+    x = a;
+    for let v in xs {
+        x = Tag {};
+        let r = o ?? { x = a; continue; };
+    }
+    let u: int = x;
+    u
+}
+
+// A `return` inside a `?.` argument does not make the else block diverge.
+function let_else_with_a_return_in_an_optional_argument(p: int?, b: Box?) -> int {
+    let v: int = p else { b?.m({ return 1; }); };
+    v
+}

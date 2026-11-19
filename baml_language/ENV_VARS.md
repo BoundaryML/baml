@@ -40,12 +40,11 @@ Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential
 | `BAML_BUILD_CACHE` | `false` turns off the build cache. |
 | `BAML_BUILD_CACHE_REMOTE`, `BAML_BUILD_CACHE_REMOTE_TOKEN` | Shared build cache for CI. URL must be https (or localhost). |
 | `BAML_LOG` | Level for `log.*` output from `baml run` and `baml test` (same as `--log`): `off`, `error`, `warn`, `info` (default), `debug`, `trace`. |
-| `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. |
+| `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. Set `off` to disable recording and cloud uploads in CLI runs/tests and native generated SDKs/packed programs using the standard control, including when logged in. |
 | `BOUNDARY_API_URL` | Boundary API gateway for login, cloud queries and telemetry. Overrides `[boundary].api_url`; default `https://api.prod.bcs.boundaryml.com`. |
-| `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. |
-| `BOUNDARY_PROJECT` | Cloud target as `org_handle/project_name`. Overrides `[boundary].project`; query's `--project` flag takes precedence. |
+| `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. The sentinel `local` selects local recordings instead of cloud uploads when the artifact permits this API-key binding. |
+| `BOUNDARY_PROJECT` | Cloud target as `org_handle/project_name`. Overrides `[boundary].project`; `baml cloud --project` takes precedence. |
 | `BAML_CLI_ALLOW_DIRECT` | Hides the "don't run baml-cli directly" warning. The wrapper sets it. |
-| `BAML_FEEDBACK_HOST` | Where `baml feedback` sends reports. Staging and tests. |
 | `BAML_AWS_CREDENTIAL_PROCESS` | Allow running an AWS profile's `credential_process`. Off by default because it runs a program. |
 
 ## Bridges

@@ -7,7 +7,9 @@ pub(crate) use call::{FORCE_CALL_FUNNEL, FORCE_VM_FRAMES};
 mod cell;
 mod fiber;
 pub use fiber::STACKFUL_FIBERS_SUPPORTED;
+mod field;
 mod frame;
+mod frameless;
 pub(crate) use frame::attach_compiled_bodies;
 pub(in crate::vm) use frame::validate_compiled_program;
 pub use frame::{CompiledBodies, CompiledBodyTable};
@@ -16,7 +18,7 @@ mod heap;
 mod program;
 mod record;
 pub(crate) use record::{FrameAt, RecordChain, record_ref};
-pub use record::{FrameRecord, RecordResult};
+pub use record::{FrameRecord, RecordResult, StaticObjects};
 mod state;
 mod trace;
 mod types;
@@ -50,7 +52,7 @@ pub use trace::TraceHookMode;
 
 use crate::{
     errors::{ThrowKind, VmError, VmInternalError, VmThrown},
-    vm::{BexVm, value_as_float},
+    vm::BexVm,
 };
 
 /// Bodies run on their VM's fiber and can suspend anywhere in their call chain.
@@ -235,7 +237,7 @@ pub fn expect_bool(value: Value) -> Result<bool, Box<VmError>> {
 
 #[inline]
 pub fn expect_f64(value: Value) -> Result<f64, Box<VmError>> {
-    value_as_float(value).ok_or_else(|| checker_hole("float"))
+    value.as_float().ok_or_else(|| checker_hole("float"))
 }
 
 #[allow(

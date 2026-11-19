@@ -1,0 +1,125 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// A binding assigned inside a loop can hold, after the loop or on a later
+// iteration, a value from a different path than the one the loop header
+// wrote. These are the shapes that must stay errors. The shapes that
+// compile, and their run-time behavior, are in the corpus namespace
+// `ns_loop_narrowing`; the post-loop types are in the type fixture
+// `loop_exit_edges`.
+
+class Tag {
+}
+
+function widen(v: int | Tag) -> int | Tag {
+    v
+}
+
+// The body assigns before a `break`: the condition's write does not hold on
+// the break edge.
+function while_break_after_the_condition_write(a: int) -> int {
+    let x: int | Tag = a;
+    while (
+        {
+            x = a;
+            a > 0
+        }
+    ) {
+        x = Tag {};
+        break;
+    }
+    let u: int = x;
+    u
+}
+
+// The same shape with `while let`: the scrutinee is re-evaluated, but the
+// break edge carries the body's write.
+function while_let_break_after_the_scrutinee_write(a: int) -> int {
+    let x: int | Tag = Tag {};
+    while let v: int = {
+        x = a;
+        widen(x)
+    } {
+        x = Tag {};
+        break;
+    }
+    let u: int = x;
+    u
+}
+
+// The C-style step runs between iterations: the second iteration's body
+// reads what the step wrote.
+function step_write_reaches_the_body(a: int) -> int {
+    let x: int | Tag = a;
+    x = a;
+    let out = 0;
+    for (let i = 0; i < 2; x = Tag {}) {
+        let u: int = x;
+        out = u;
+        i += 1;
+    }
+    out
+}
+
+// A for-in collection runs once; the body's write outlives it.
+function for_in_body_write_outlives_the_collection(a: int, xs: int[]) -> int {
+    let x: int | Tag = Tag {};
+    for let i in {
+            x = a;
+            xs
+        } {
+        x = Tag {};
+    }
+    let u: int = x;
+    u
+}
+
+// The step slot is entered from every `continue`, not only from the end of
+// the body.
+function step_sees_the_continue_edge(a: int, n: int) -> int {
+    let x: int | Tag = a;
+    let y: int = 0;
+    for (let i = 0; i < n; y = x) {
+        i += 1;
+        if (i == 1) {
+            x = Tag {};
+            continue;
+        }
+        x = a;
+    }
+    y
+}
+
+// A binding the condition assigns is read again by the condition's next
+// evaluation.
+function condition_reads_its_own_write(a: int) -> int {
+    let x: int | Tag = a;
+    x = a;
+    let i = 0;
+    let out = 0;
+    while (
+        {
+            let u: int = x;
+            out = u;
+            x = Tag {};
+            i += 1;
+            i < 2
+        }
+    ) {}
+    out
+}
+
+// A defer armed in the body runs on the break edge, after the body's last
+// write.
+function defer_write_on_the_break_edge(a: int) -> int {
+    let x: int | Tag = a;
+    while (true) {
+        defer {
+            x = Tag {};
+        }
+        x = a;
+        break;
+    }
+    let u: int = x;
+    u
+}

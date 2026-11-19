@@ -1,4 +1,4 @@
-import boundaryIcon from '@boundaryml/brand/logo/favicon/boundary/apple-touch-icon.png';
+import boundaryIcon from '@/app/(home)/icons/apple-touch-icon.png';
 
 // Server-rendered JSON-LD structured data. These components emit
 // <script type="application/ld+json"> tags into the SSR HTML so search engines

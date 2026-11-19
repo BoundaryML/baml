@@ -50,6 +50,11 @@ function commaSep1(rule) {
   return seq(rule, repeat(seq(',', rule)), optional(','));
 }
 
+// `(a,)` `(a, b)` `(a, b,)`: a group with at least one comma.
+function tuple($, rule) {
+  return seq('(', rule, ',', optional(commaSep1(rule)), ')');
+}
+
 function commaSep(rule) {
   return optional(commaSep1(rule));
 }
@@ -119,6 +124,11 @@ module.exports = grammar({
     // `(int` in type position — function-type params vs parenthesized type.
     [$.function_type_parameter, $.parenthesized_type],
     [$.function_type_parameter, $.parenthesized_type, $.type_pattern],
+    // `(int,` — function-type params vs tuple type; `->` decides.
+    [$.function_type_parameter, $.tuple_type],
+    [$.const_identifier, $.binding_pattern, $.destructure_pattern],
+    [$.const_identifier, $.array_pattern],
+    [$.function_type_parameter, $.tuple_type, $.type_pattern],
     // `f <` — explicit type arguments (a call, or a specialized function
     // value) vs. less-than comparison.
     [
@@ -650,6 +660,7 @@ module.exports = grammar({
         $.type_path,
         $.function_type,
         $.parenthesized_type,
+        $.tuple_type,
         $.literal_type,
       ),
 
@@ -703,8 +714,11 @@ module.exports = grammar({
 
     parenthesized_type: ($) => seq('(', $._type, ')'),
 
+    // `(int,)` `(int, string)`; the comma is what makes it a tuple.
+    tuple_type: ($) => tuple($, $._type),
+
     // Literal types: `"user" | "assistant"`, `2 | 3`, `true | false`
-    literal_type: ($) => choice($.string, $.number, $.boolean),
+    literal_type: ($) => choice($.string, $.number, $.boolean, $.null),
 
     // ==========================================================================
     // Statements
@@ -834,6 +848,7 @@ module.exports = grammar({
         $.raw_string,
         $.backtick_string,
         $.member_expression,
+        $.tuple_field_expression,
         $.upcast_expression,
         $.index_expression,
         $.call_expression,
@@ -842,6 +857,7 @@ module.exports = grammar({
         $.companion_expression,
         $.constructor_expression,
         $.parenthesized_expression,
+        $.tuple_expression,
         $.array_expression,
         $.map_expression,
         $.lambda_expression,
@@ -873,6 +889,17 @@ module.exports = grammar({
           field('object', $._expression),
           field('operator', choice('.', '?.')),
           field('property', alias($.identifier, $.property_identifier)),
+        ),
+      ),
+
+    // `t.0`, `t?.1`; `t.0.1` nests, with each slot its own index token.
+    tuple_field_expression: ($) =>
+      prec(
+        PREC.MEMBER,
+        seq(
+          field('object', $._expression),
+          field('operator', choice('.', '?.')),
+          field('field', $.tuple_index),
         ),
       ),
 
@@ -997,6 +1024,8 @@ module.exports = grammar({
 
     parenthesized_expression: ($) => seq('(', $._expression, ')'),
 
+    tuple_expression: ($) => tuple($, $._expression),
+
     array_expression: ($) =>
       seq('[', commaSep(choice($._expression, $.spread_element)), ']'),
 
@@ -1043,7 +1072,15 @@ module.exports = grammar({
       ),
 
     match_expression: ($) =>
-      seq('match', field('value', $._expression), field('body', $.match_body)),
+      seq(
+        'match',
+        field('value', choice($._expression, $.match_ascription)),
+        field('body', $.match_body),
+      ),
+
+    // `match ((a, b): (int, string?)) { .. }` types the scrutinee.
+    match_ascription: ($) =>
+      seq('(', $._expression, ':', field('type', $._type), ')'),
 
     match_body: ($) => seq('{', repeat($.match_arm), '}'),
 
@@ -1111,6 +1148,7 @@ module.exports = grammar({
         $.wildcard_pattern,
         $.array_pattern,
         $.paren_pattern,
+        $.tuple_pattern,
         $.type_pattern,
       ),
 
@@ -1224,7 +1262,7 @@ module.exports = grammar({
     // Patterns (let / match arms / catch arms / is)
     //   PATTERN := UNION (':' UNION)*     (chain narrows)
     //   UNION   := ATOM ('|' ATOM)*
-    //   ATOM    := 'let' name | '_' | destructure | array | '(' PATTERN ')' | type
+    //   ATOM    := ('let'|'const') name | '_' | destructure | array | '(' PATTERN ')' | type
     // ==========================================================================
 
     _pattern: ($) => choice($.chain_pattern, $._pattern_union),
@@ -1244,12 +1282,19 @@ module.exports = grammar({
         $.destructure_pattern,
         $.array_pattern,
         $.paren_pattern,
+        $.tuple_pattern,
         $.type_pattern,
+        alias($.const_type_pattern, $.type_pattern),
       ),
+
+    // `const` is contextual: `let const = x` binds a pattern named `const`.
+    const_type_pattern: ($) => alias($.const_type_path, $.type_path),
+
+    const_type_path: ($) => alias($.const_identifier, $.identifier),
 
     // `let x` (also the leading name of `let x: int = ...` via chain).
     binding_pattern: ($) =>
-      seq('let', field('name', choice($.identifier, '_'))),
+      seq(choice('let', 'const'), field('name', choice($.identifier, '_'))),
 
     wildcard_pattern: (_) => '_',
 
@@ -1257,7 +1302,7 @@ module.exports = grammar({
     // `name.space.Type { field }`
     destructure_pattern: ($) =>
       seq(
-        optional('let'),
+        optional(choice('let', 'const')),
         field('type', seq($.identifier, repeat(seq('.', $.identifier)))),
         '{',
         commaSep($.field_pattern),
@@ -1273,7 +1318,7 @@ module.exports = grammar({
     // `[let first, string, ..let rest]` | `[..]` | `let [let head, ..let tail]`
     array_pattern: ($) =>
       seq(
-        optional('let'),
+        optional(choice('let', 'const')),
         '[',
         commaSep(choice($._pattern, $.rest_pattern)),
         ']',
@@ -1283,9 +1328,12 @@ module.exports = grammar({
 
     paren_pattern: ($) => prec.dynamic(-1, seq('(', $._pattern, ')')),
 
+    // `(let a, let b)` `(0, _)` `(let only,)`
+    tuple_pattern: ($) => tuple($, $._pattern),
+
     // Bare type as a pattern: `int`, `Status.Active`, `map<string, T[]>`,
     // `(int) -> int`, `"accept"`, `0`, `null`, `PatternRecord?`
-    type_pattern: ($) => choice($._type, $.null),
+    type_pattern: ($) => $._type,
 
     // ==========================================================================
     // Terminals
@@ -1302,6 +1350,9 @@ module.exports = grammar({
           /[0-9]+/, //                         integer
         ),
       ),
+
+    // Digits only, so `t.0.1` lexes as two slots rather than the float `0.1`.
+    tuple_index: (_) => /[0-9]+/,
 
     boolean: (_) => choice('true', 'false'),
 

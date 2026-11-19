@@ -205,7 +205,11 @@ async fn host_shutdown_waits_for_actual_exit() {
         .await
         .unwrap()
         .unwrap();
-    assert!(retained.trace_context().metadata().is_empty());
+    assert_eq!(retained.trace_context().metadata().len(), 1);
+    assert_eq!(
+        retained.trace_context().metadata()["baml.ctx.baml_version"],
+        btel_types::context::ContextValue::String(baml_version::CANONICAL_VERSION.into())
+    );
     assert!(retained.is_cancelled());
 }
 

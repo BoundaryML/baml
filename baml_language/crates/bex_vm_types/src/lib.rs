@@ -15,7 +15,6 @@ pub mod cancellation;
 pub mod class_builder;
 pub mod csv;
 mod csv_record;
-pub mod edge_walk;
 pub mod errors;
 pub mod float_order;
 pub mod head_walk;
@@ -28,6 +27,7 @@ pub mod lazy_biased_mutex;
 pub mod limit;
 pub mod media;
 pub mod meter;
+pub mod monitor;
 pub mod network;
 pub mod op_output;
 mod owned_state;
@@ -37,6 +37,7 @@ pub mod resource;
 mod roots;
 pub mod runtime_compile;
 pub mod rust_data;
+pub mod stack_effect;
 pub mod trace;
 pub mod type_head;
 pub mod types;
@@ -50,23 +51,24 @@ pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
 pub use interface_witness::InterfaceWitness;
-pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
+pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet, PermitState};
 pub use media::{MediaContent, MediaValue};
 pub use meter::{AllocDebt, Meter};
+pub use monitor::{MonitorTable, Waiter};
 pub use op_output::OpOutput;
 pub use owned_state::OwnedState;
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{
-    CollectRoots, ForwardRoots, NothingCollected, PermitProof, RootHaver, RootHaverExt,
+    CollectRoots, ForwardRoots, Forwarding, NothingCollected, PermitProof, RootHaver, RootHaverExt,
     RootVisitor, Survival, Weak,
 };
 pub use runtime_compile::{
-    MountHead, RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
-    RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight,
-    RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase, RuntimeDiagnosticRelatedInfo,
-    RuntimeDiagnosticSeverity, RuntimeMountEdge, RuntimeMountSurface, RuntimeMountedAlias,
-    RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedImpl,
-    RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount,
+    DeclFingerprints, MountHead, RuntimeCompileDiagnostic, RuntimeCompileMode,
+    RuntimeCompileRequest, RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails,
+    RuntimeDiagnosticHighlight, RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase,
+    RuntimeDiagnosticRelatedInfo, RuntimeDiagnosticSeverity, RuntimeMountEdge, RuntimeMountSurface,
+    RuntimeMountedAlias, RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs,
+    RuntimeMountedImpl, RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount,
     RuntimeProjectedSurface, RuntimeReExport, RuntimeReExportKind, RuntimeSessionCompileRequest,
     RuntimeSourceSpan, SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };
@@ -181,16 +183,19 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
     ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
 }
 pub use types::{
-    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod, Class,
-    ClassBody, ClassField, ClassMethodDef, CleanupLatch, ConstValue, DeclPath, DeclarationName,
-    EntryId, Enum, EnumVariant, FnPath, Function, FunctionKind, FunctionMeta, FunctionOrigin,
-    Future, FutureRead, GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey,
-    ImplCoherenceKey, Instance, InterfaceBound, InterfaceKey, ItemPath, LockedContainer,
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod,
+    CLEANED, Class, ClassBody, ClassField, ClassLayout, ClassMethodDef, ClassShape, CleanupLatch,
+    CleanupSubject, ConstValue, DeclPath, DeclarationName, EntryId, Enum, EnumVariant, FORWARDED,
+    Field, FieldRef, FnPath, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future,
+    FutureRead, GenericFunction, HEADER_FLAGS, HostClosure, ImplBodyCoherence, ImplBodyKey,
+    ImplCoherenceKey, InstanceRef, InterfaceBound, InterfaceKey, ItemPath, LockedContainer,
     LockedReadGuard, LockedWriteGuard, MapContainer, MapData, MapEntry, MapEpochChanged,
-    MapReadGuard, MapWriteGuard, Object, ObjectType, PanicClass, Program, RenderedCallable,
-    RustInstance, RustPayload, SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory,
-    Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Unbuildable, Value, ValueKind,
-    Variant, format_float, map_string_hash, payload, sys_op_for_path, type_tags,
+    MapKeyUndecided, MapReadGuard, MapWriteGuard, OBJECT_BODY, OBJECT_CELL_WORDS, Object,
+    ObjectType, PanicClass, Program, RenderedCallable, RustInstance, RustPayload, SlotKind,
+    SlotKindMismatch, SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory, Tuple,
+    TupleShapeMismatch, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard,
+    Unbuildable, Value, ValueKind, Variant, WORD_BYTES, format_float, map_int_hash, map_key_hasher,
+    map_string_hash, payload, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.
@@ -295,6 +300,20 @@ impl EarlyYieldCheck {
     pub fn tick(&mut self) -> bool {
         self.counter -= 1;
         self.counter == 0
+    }
+
+    /// [`Self::tick`] when that tick leaves the interval running; false, and
+    /// no tick, when it would elapse it. A dispatch fast path that cannot
+    /// poll uses this, then hands the elapsing tick to the full check.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub fn tick_unless_due(&mut self) -> bool {
+        if self.counter > 1 {
+            self.counter -= 1;
+            true
+        } else {
+            false
+        }
     }
 
     /// Make the next [`Self::tick`] elapse, so the flags are polled at the

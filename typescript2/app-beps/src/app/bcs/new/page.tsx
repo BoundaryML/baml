@@ -1,11 +1,7 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { currentViewer } from "@/lib/bcs-auth";
-import { BCS_STATUSES } from "@/lib/bcs-convex";
 import { createProposal } from "../actions";
-import { HtmlField } from "../proposal-fields";
+import { NewProposalForm } from "../forms";
 import { TeamOnly } from "../team-only";
 
 export const dynamic = "force-dynamic";
@@ -23,29 +19,7 @@ export default async function NewBcsProposal() {
           <span className="text-muted-foreground">/</span>
           <h1 className="text-2xl font-bold">New proposal</h1>
         </div>
-        <form action={createProposal} className="space-y-5">
-          <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
-            <Input id="title" name="title" required placeholder="Alerts on Alien Commands" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
-            <select
-              id="status"
-              name="status"
-              defaultValue="proposed"
-              className="h-9 rounded-md border bg-background px-3 text-sm"
-            >
-              {BCS_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </div>
-          <HtmlField />
-          <Button type="submit">Create</Button>
-        </form>
+        <NewProposalForm action={createProposal} />
       </main>
     </div>
   );

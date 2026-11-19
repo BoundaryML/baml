@@ -380,10 +380,14 @@ func Test_invocation_inheritance(t *testing.T) {
 						if err != nil || before.DistinctId == nil || *before.DistinctId != "A" {
 							panic("B lost A")
 						}
+						bamlVersion, ok := before.Metadata["baml.ctx.baml_version"].(string)
+						if !ok || bamlVersion == "" {
+							panic("missing native BAML version")
+						}
 						_, err = baml_sdk.HostCallableTestsCallIntCallback(b, func(c context.Context, value int64) int64 {
 							_, err := baml_sdk.HostCallableTestsCallIntCallback(c, func(d context.Context, value int64) int64 {
 								current, err := trace.CurrentContext(d)
-								want := map[string]any{"outer": int64(1), "inner": int64(2), "shared": "C"}
+								want := map[string]any{"outer": int64(1), "inner": int64(2), "shared": "C", "baml.ctx.baml_version": bamlVersion}
 								if err != nil || current.DistinctId == nil || *current.DistinctId != "C" || !reflect.DeepEqual(current.Metadata, want) {
 									panic(fmt.Sprintf("D context: %#v %v", current, err))
 								}

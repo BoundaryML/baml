@@ -411,3 +411,131 @@ async fn captured_images_store_each_content_once_and_render_as_descriptors() {
     }
     assert_eq!(result.rows.len(), 2);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dotted_and_bracketed_tuple_slots_read_the_same() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        function Pair(n: int) -> ((int, string), bool?) { ((n, "a"), null) }
+        function main(n: int) -> int {
+            Pair(n);
+            n
+        }
+    "#;
+    let results = record_program(project.path(), source, &["Pair"], &[("main", 4)]).await;
+    assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(4))]);
+    let mut index = index(project.path());
+    let pairs = [
+        ("output_value.0", "output_value[0]"),
+        ("output_value.0.0", "output_value[0][0]"),
+        ("output_value.0.1", "output_value[0][1]"),
+        ("output_value[0].1", "output_value[0][1]"),
+        ("output_value.1", "output_value[1]"),
+        ("output_value.2", "output_value[2]"),
+        ("output_value.0.2", "output_value[0][2]"),
+    ];
+    let select = pairs
+        .iter()
+        .enumerate()
+        .map(|(at, (dotted, bracketed))| format!("{dotted} AS d{at}, {bracketed} AS b{at}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let result = sql(
+        &mut index,
+        &format!("SELECT {select} FROM spans WHERE span_name = 'user.Pair'"),
+    );
+    assert_eq!(result.rows.len(), 1, "{:?}", result.outcome.diagnostics);
+    for (at, (dotted, _)) in pairs.iter().enumerate() {
+        assert_eq!(
+            column(&result, &format!("d{at}")),
+            column(&result, &format!("b{at}")),
+            "{dotted}"
+        );
+    }
+    assert_eq!(column(&result, "d0"), vec![&json!([4, "a"])]);
+    assert_eq!(column(&result, "d1"), vec![&json!(4)]);
+    assert_eq!(column(&result, "d2"), vec![&json!("a")]);
+    assert_eq!(column(&result, "d4"), vec![&json!(null)]);
+    let filtered = sql(
+        &mut index,
+        "SELECT COUNT(*) FROM spans WHERE span_name = 'user.Pair' AND output_value.0.1 = 'a' AND output_value.0.0 = output_value[0][0]",
+    );
+    assert_eq!(filtered.rows, vec![vec![json!(1)]]);
+}
+
+/// A media value renders as a descriptor without its content; a path that
+/// ends in `base64` on it reads the content, from the value's own blob or
+/// from the child blob a large content lives in.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn base64_on_a_media_value_reads_its_content() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        function Show(small: image, large: image, linked: image) -> int { 0 }
+        function main(n: int) -> int {
+            let chunk = "iVBORw0K";
+            let i = 0;
+            while (i < 12) {
+                chunk = chunk + chunk;
+                i = i + 1;
+            }
+            Show(
+                baml.media.Image.from_base64("iVBORw0KGgo=", "image/png"),
+                baml.media.Image.from_base64(chunk + "a", "image/png"),
+                baml.media.Image.from_url("https://example.com/cat.png", "image/png"),
+            );
+            n
+        }
+    "#;
+    let results = record_program(project.path(), source, &["Show"], &[("main", 0)]).await;
+    assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(0))]);
+    // The large content is past the leaf size: it is a blob of its own.
+    let sizes = blob_sizes(project.path());
+    assert_eq!(
+        sizes.iter().filter(|size| **size >= 32 << 10).count(),
+        1,
+        "{sizes:?}"
+    );
+
+    let mut index = index(project.path());
+    let result = sql(
+        &mut index,
+        "SELECT input_args['small']['base64'] AS small,
+           input_args['large']['base64'] AS large,
+           input_args['linked']['base64'] AS linked,
+           baml_value_state(input_args['linked']['base64']) AS linked_state,
+           baml_value_state(input_args['small']['mime']) AS other_key,
+           input_args['small'] AS described,
+           input_args['linked'] AS described_link
+         FROM spans WHERE span_name = 'user.Show'",
+    );
+    assert_eq!(
+        result.outcome.status,
+        Status::Complete,
+        "{:?}",
+        result.outcome.diagnostics
+    );
+    assert_eq!(result.rows.len(), 1);
+    let row = &result.rows[0];
+    assert_eq!(row[0], json!("iVBORw0KGgo="));
+    assert_eq!(row[1], json!("iVBORw0K".repeat(1 << 12) + "a"));
+    // Media that names a URL holds no content, and no other key reads media.
+    assert_eq!(
+        row[2..5],
+        [serde_json::Value::Null, json!("missing"), json!("missing")]
+    );
+    // The value itself is still described without its content.
+    assert_eq!(
+        row[5],
+        json!({"$media": "image", "mime": "image/png", "base64_len": 12})
+    );
+    assert_eq!(row[6]["url"], json!("https://example.com/cat.png"));
+    assert_eq!(row[6].get("base64_len"), None);
+
+    // The content is a value like any other text: a predicate reads it.
+    let found = sql(
+        &mut index,
+        "SELECT COUNT(*) FROM spans
+         WHERE span_name = 'user.Show' AND input_args['small']['base64'] = 'iVBORw0KGgo='",
+    );
+    assert_eq!(found.rows, vec![vec![json!(1)]]);
+}

@@ -15,7 +15,6 @@ import { PostDrawing } from '@/app/(home)/blog/_lib/art';
 import { section } from '@/components/home/analytics';
 import { BAML_LOGO, LAMB_PATHS } from '@/components/home/lamb';
 import {
-  Hyper,
   leftVertically,
   sweep,
   useInView,
@@ -29,15 +28,12 @@ import { ramp } from '@/components/home/scroll';
 // steps from baml-action, and the comment follows the action's render.baml. The metrics are
 // `baml codequality` on three versions of one example function.
 
-// The titles inside this section are set in the pixel font, like the BAML lamb.
-const PIXEL = { fontFamily: 'var(--font-geist-pixel)' };
-
+// A box's title is set like the stack section's ("We made observability fast."), in the display
+// face. The pixel font is kept for captions and the word "hyperobservability".
 function Box({ children, title }: { children: ReactNode; title: string }) {
   return (
     <div className="mt-4 md:mt-6 rounded-xl border border-rule bg-raised p-5">
-      <p className="v4-h3 text-head" style={PIXEL}>
-        {title}
-      </p>
+      <p className="v4-h3 text-head">{title}</p>
       {children}
     </div>
   );
@@ -186,9 +182,7 @@ E0001
     ·                               ╰── expected \`string\`, found \`int\`
     ╰────`;
 
-/** Box-drawing lines only join up in a font drawn for them, so this one doesn't use the site's mono. */
-const TERMINAL_FONT =
-  "Menlo, Monaco, 'SF Mono', Consolas, 'DejaVu Sans Mono', monospace";
+const TERMINAL_FONT = 'var(--font-mono)';
 
 function lineColor(line: string) {
   if (/^E\d{4}/.test(line) || line.trim().startsWith('×')) return ERROR_RED;
@@ -343,7 +337,7 @@ function CompilerName({ name }: { name: string }) {
   );
 }
 
-function Speed() {
+export function Speed() {
   const [at, setAt] = useState(0);
   const { times } = KINDS[at];
   // BAML first, then the same order on every tab, so nothing jumps around.
@@ -354,7 +348,7 @@ function Speed() {
   const most = Math.max(...times);
   const base = times[BAML_ROW];
   return (
-    <Box title="Honest compile times">
+    <Box title="Our (honest) compile times">
       <div className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-black/40">
         <div className="flex flex-wrap items-center border-b border-white/10 px-2">
           {KINDS.map((kind, i) => (
@@ -523,7 +517,7 @@ function Run() {
   const cur = RUNS[at];
   return (
     <Box title="Every function is a CLI">
-      <p className="mt-2 text-[18px] text-white/70">
+      <p className="mt-2 text-[16px] text-white/70">
         The fastest way to understand a function is to call it.
         <br />
         For AI functions, it's the only way.
@@ -580,7 +574,7 @@ function Run() {
                 className={`px-4 py-2.5 ${i ? 'sm:border-l border-white/10' : ''}`}
                 key={win.big}
               >
-                <p className="font-display text-[21px] font-medium text-clover">
+                <p className="font-display text-[20px] font-medium text-clover">
                   {win.big}
                 </p>
                 <p className="text-[14px] leading-[1.3] text-white/70">
@@ -619,10 +613,11 @@ function Run() {
 const POST = {
   href: '/blog/teaching-agents-to-write-maintainable-code',
   slug: 'teaching-agents-to-write-maintainable-code',
+  title: 'Teaching Agents to Write Maintainable Code',
 };
 
-/** The section's closing claim, with the post that backs it: its before-and-after drawing, then the
- *  claim and a link to the post. */
+/** The post behind the section's answer, under the question: its before-and-after drawing, its title,
+ *  and a link to the post. */
 function Research() {
   return (
     <a
@@ -635,18 +630,13 @@ function Research() {
         slug={POST.slug}
       />
       <div className="px-3 pb-3 md:px-2 md:pb-0">
-        <p className="v4-body text-ink">
-          There's no bad BAML in the training data to learn from. And we make
-          sure the only BAML that gets checked in is great BAML.
-        </p>
-        <p className="mt-5 text-[15px] text-clover">
-          <span className="text-muted">Blog:</span> Teaching Agents to Write
-          Maintainable Code{' '}
+        <p className="v4-h3 text-head">{POST.title}</p>
+        <p className="mt-3 v4-body text-clover">
+          Read the blog{' '}
           <span className="inline-block transition-transform group-hover:translate-x-1">
             →
           </span>
         </p>
-        <p className="mt-1 text-[14px] text-muted">Avery Townsend</p>
       </div>
     </a>
   );
@@ -730,94 +720,7 @@ const PUSHES: { changes: Change[]; summary: string }[] = [
 
 const CHECKS = ['check', 'fmt', 'test', 'code health'];
 
-// What the agent's first push changed: the legacy router out, the routing it fed rewritten. It adds
-// up to the comment's count, 1,240 lines to 1,556.
-const FILES = [
-  { add: 188, del: 12, name: 'routing.baml' },
-  { add: 161, del: 9, name: 'prompts.baml' },
-  { add: 63, del: 0, name: 'legacy_router_shim.baml' },
-  { add: 0, del: 75, name: 'keyword_router.baml' },
-];
-
-/** GitHub's five-square diffstat: green for added lines, red for removed, by share. */
-function Diffstat({ add, del }: { add: number; del: number }) {
-  const green = Math.round((add / (add + del)) * 5);
-  return (
-    <span className="flex gap-[2px]">
-      {[0, 1, 2, 3, 4].map((k) => (
-        <span
-          className="size-[7px] rounded-[1px]"
-          key={k}
-          style={{ background: k < green ? '#3fb950' : '#f85149' }}
-        />
-      ))}
-    </span>
-  );
-}
-
-// The pull request as the agent opens it, one row at a time.
-const OPENED: { key: string; node: ReactNode }[] = [
-  {
-    key: 'state',
-    node: (
-      <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="rounded-full bg-[#238636] px-2.5 py-0.5 text-[12px] font-semibold text-white">
-          Open
-        </span>
-        <span style={{ color: GH.muted }}>
-          <b className="text-[#e6edf3]">your agent</b> wants to merge 1 commit
-          into
-        </span>
-        <code className="rounded-md bg-[#388bfd26] px-1.5 font-mono text-[12px] text-[#58a6ff]">
-          main
-        </code>
-        <span style={{ color: GH.muted }}>from</span>
-        <code className="rounded-md bg-[#388bfd26] px-1.5 font-mono text-[12px] text-[#58a6ff]">
-          remove-keyword-router
-        </code>
-      </p>
-    ),
-  },
-  {
-    key: 'commit',
-    node: (
-      <p className="mt-4 flex items-center gap-2 font-mono text-[13px]">
-        <span className="size-2.5 shrink-0 rounded-full border-2 border-[#8b949e]" />
-        <span style={{ color: '#58a6ff' }}>7c2e019</span>
-        <span className="truncate">Remove the legacy keyword router</span>
-      </p>
-    ),
-  },
-  ...FILES.map((f, i) => ({
-    key: f.name,
-    node: (
-      <p
-        className={`${i ? 'mt-2' : 'mt-4'} flex items-center gap-3 border-t pt-2 font-mono text-[13px]`}
-        style={{ borderColor: GH.border }}
-      >
-        <span className="min-w-0 flex-1 truncate">{f.name}</span>
-        <span className="text-[#3fb950]">+{f.add}</span>
-        <span className="text-[#f85149]">−{f.del}</span>
-        <Diffstat add={f.add} del={f.del} />
-      </p>
-    ),
-  })),
-  {
-    key: 'checks',
-    node: (
-      <p
-        className="mt-4 flex items-center gap-2 text-[13px]"
-        style={{ color: GH.muted }}
-      >
-        <span className="size-3 shrink-0 animate-spin rounded-full border-2 border-[#d29922] border-t-transparent" />
-        BAML checks are running
-      </p>
-    ),
-  },
-];
-
-// The agent at work on the third step, one line at a time: it runs `baml codequality`, fixes what
-// it found, checks its work, measures again, and pushes. The names match the comment on either side of it.
+// The agent measures the problem, fixes it, checks its work, and pushes.
 const WORK: { key: string; node: ReactNode }[] = [
   {
     key: 'who',
@@ -969,45 +872,11 @@ function Swatch({ color, label }: { color: string; label: string }) {
 
 // The PR story's stages, as points along `Comment`'s progress. It steps through them on its own once
 // in view; clicking a stage goes straight to it and stops the stepping.
-// Each step's point in the comment's timeline, how long the loop stays on it, and what it says under
-// the steps. The agent's two pushes are quick beats; the two comments are what to read.
-const STAGES: {
-  at: number;
-  label: string;
-  ms: number;
-  says: ReactNode;
-}[] = [
-  {
-    at: 0,
-    label: 'Your agent opens a PR',
-    ms: 3600,
-    says: 'Your agent removes a feature and opens a pull request.',
-  },
-  {
-    at: 0.31,
-    label: 'Bad code is flagged',
-    ms: 4500,
-    says: (
-      <>
-        Removing features should leave simpler code.{' '}
-        <span style={{ color: '#f85149' }}>This code got worse.</span>
-      </>
-    ),
-  },
-  {
-    at: 0.6,
-    label: 'Your agent pushes a fix',
-    ms: 4200,
-    says: 'Your agent reads the comment and rewrites the code.',
-  },
-  {
-    at: 1,
-    label: 'Good code is merged',
-    ms: 4500,
-    says: (
-      <span className="text-clover">The code is now simpler than main.</span>
-    ),
-  },
+// Each step sets the comment animation and the time it stays on screen.
+const STAGES: { at: number; label: string; ms: number }[] = [
+  { at: 0.31, label: 'Bad code is flagged', ms: 4500 },
+  { at: 0.6, label: 'Your agent pushes a fix', ms: 4200 },
+  { at: 1, label: 'Good code is merged', ms: 4500 },
 ];
 
 function Story() {
@@ -1067,7 +936,7 @@ function Story() {
   const p = useTween(0.04 + STAGES[stage].at * 0.9, 1200, stage === 0);
   const steps = (
     <div className="mt-5">
-      <ol className="grid grid-cols-4 gap-2">
+      <ol className="grid grid-cols-3 gap-2">
         {STAGES.map((s, i) => {
           const on = i === stage;
           return (
@@ -1087,7 +956,7 @@ function Story() {
                   {i + 1}
                 </span>
                 <span
-                  className={`hidden pt-1 text-[14px] leading-snug transition-colors md:block ${on ? 'text-white' : 'text-white/50'}`}
+                  className={`sr-only text-[14px] leading-snug transition-colors md:not-sr-only md:pt-1 ${on ? 'text-white' : 'text-white/50'}`}
                 >
                   {s.label}
                 </span>
@@ -1109,19 +978,6 @@ function Story() {
           <span className="absolute left-0 top-0 size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-clover" />
         </span>
       </div>
-      {/* What the step means, right above the pull request. */}
-      <div className="mt-4 grid text-[17px] leading-snug text-white md:text-[20px]">
-        {STAGES.map((st, i) => (
-          <p
-            aria-hidden={i !== stage}
-            className="[grid-area:1/1] transition-opacity duration-300"
-            key={st.label}
-            style={{ opacity: i === stage ? 1 : 0 }}
-          >
-            {st.says}
-          </p>
-        ))}
-      </div>
     </div>
   );
   return (
@@ -1131,43 +987,22 @@ function Story() {
       }}
       ref={ref}
     >
-      <Comment
-        fixing={seen && stage === 2}
-        opening={seen && stage === 0}
-        p={p}
-        steps={steps}
-      />
+      <Comment fixing={seen && stage === 1} p={p} steps={steps} />
     </div>
   );
 }
 
 function Comment({
   fixing,
-  opening,
   p,
   steps,
 }: {
-  // The third step: the agent reads the comment and works through the fix, before it pushes.
+  // The agent works through the fix before it pushes.
   fixing: boolean;
-  // The first step: the agent pushes its branch and opens the PR, before any comment.
-  opening: boolean;
   p: number;
   steps: ReactNode;
 }) {
   const s = sweep(p);
-  // The bot's comment arrives as the loop leaves the first step.
-  const open = ramp(s, 0.01, 0.12);
-  // Plays the push each time the loop comes back to the first step.
-  const [typed, setTyped] = useState(false);
-  useEffect(() => {
-    if (!opening) {
-      setTyped(false);
-      return;
-    }
-    const frame = requestAnimationFrame(() => setTyped(true));
-    return () => cancelAnimationFrame(frame);
-  }, [opening]);
-  // Plays the agent's work each time the loop reaches the third step.
   const [working, setWorking] = useState(false);
   useEffect(() => {
     if (!fixing) {
@@ -1177,29 +1012,22 @@ function Comment({
     const frame = requestAnimationFrame(() => setWorking(true));
     return () => cancelAnimationFrame(frame);
   }, [fixing]);
-  // Worse, hold while the reader takes it in, a commit arrives, then better.
-  const shrink = ramp(s, 0.03, 0.18);
+  // Start with the flagged metrics, then animate to the fixed metrics after the push.
   const commit = ramp(s, 0.5, 0.58);
   const fix = ramp(s, 0.6, 0.8);
   const pushed = fix > 0.5;
   const push = PUSHES[pushed ? 1 : 0];
-  const now = FIRST.map((v, i) => 1 + (v - 1) * shrink + (SECOND[i] - v) * fix);
+  const now = FIRST.map((v, i) => v + (SECOND[i] - v) * fix);
   return (
     // A box like the others in this section, so the story reads as one of them.
     <div className="mt-4 md:mt-6 rounded-xl border border-rule bg-raised p-5">
-      <p className="v4-h3 text-head" style={PIXEL}>
-        Our GitHub Action measures code quality on every pull request.
-      </p>
-      <p className="mt-2 text-[18px] text-white/70">
-        No model in the loop, so the token bill is $0.
-      </p>
+      <p className="v4-h3 text-head">Code quality, on every pull request.</p>
       {/* CI/CD by default: the action that posts the comment, in one line. */}
       <p className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[14px]">
         <span className="rounded-md bg-black/50 px-2.5 py-1 text-white">
           <span className="text-white/50">- uses: </span>
           <span className="text-clover">BoundaryML/baml-action@v1</span>
         </span>
-        <span className="text-white/50">check, fmt, test and codequality</span>
       </p>
       {steps}
       <div
@@ -1215,9 +1043,7 @@ function Comment({
             {CHECKS.map((name) => {
               const health = name === 'code health';
               const warn = health && !pushed;
-              // Queued until the checks have run, as the comment arrives.
-              const queued = open < 0.5;
-              const color = queued ? GH.muted : warn ? '#d29922' : '#3fb950';
+              const color = warn ? '#d29922' : '#3fb950';
               return (
                 <span
                   className={`flex items-center gap-1.5 ${health ? 'rounded-full border px-2.5 py-0.5 font-semibold' : ''}`}
@@ -1232,9 +1058,7 @@ function Comment({
                       : undefined
                   }
                 >
-                  <span style={{ color }}>
-                    {queued ? '•' : warn ? '⚠' : '✓'}
-                  </span>
+                  <span style={{ color }}>{warn ? '⚠' : '✓'}</span>
                   <span style={{ color: health ? color : GH.muted }}>
                     BAML / {name}
                   </span>
@@ -1264,27 +1088,7 @@ function Comment({
           </span>
         </div>
         <div className="relative">
-          {/* The first step: the agent opens the pull request, where the comment will be. */}
-          <div
-            aria-hidden={!opening}
-            className="absolute inset-x-0 -top-9 bottom-0 z-10 px-4 pt-4 will-change-[opacity]"
-            style={{ background: GH.canvas, opacity: 1 - open }}
-          >
-            {OPENED.map((row, i) => (
-              <div
-                className="transition-[opacity,transform] duration-300 ease-out"
-                key={row.key}
-                style={{
-                  opacity: typed ? 1 : 0,
-                  transform: `translate3d(0, ${typed ? 0 : 8}px, 0)`,
-                  transitionDelay: `${typed ? i * 140 : 0}ms`,
-                }}
-              >
-                {row.node}
-              </div>
-            ))}
-          </div>
-          {/* The third step: the agent at work, over the comment it is answering. */}
+          {/* The agent works over the comment it is answering. */}
           <div
             aria-hidden={!fixing}
             className="absolute inset-x-0 -top-9 bottom-0 z-10 px-4 pt-4 transition-opacity duration-300 will-change-[opacity]"
@@ -1398,14 +1202,10 @@ export default function Review() {
     >
       <div className="v3-wrap mx-auto px-(--frame-pad) py-20 md:py-28">
         <h2 className="v4-h2 text-head max-w-[22em]" id="review">
-          Can agents write high-quality <Hyper>BAML</Hyper>?
+          Built for agents.
         </h2>
-        <p className="mt-4 max-w-[40rem] v4-body text-ink-2">
-          BAML isn't even close to a mainstream language, so we overcompensate
-          by building amazing <span className="text-clover">backpressure</span>{' '}
-          into the toolchain.
-        </p>
-        <div className="mt-10">
+        <Research />
+        <div className="mt-16">
           <Errors />
         </div>
         <div className="mt-16">
@@ -1414,16 +1214,6 @@ export default function Review() {
         <div className="mt-16">
           <Story />
         </div>
-        <div className="mt-16">
-          <Speed />
-        </div>
-        <div className="mt-16 md:mt-20">
-          <p className="v4-h2 text-head max-w-[22em]">
-            So yes, agents can write high-quality <Hyper>BAML</Hyper>. By
-            design.
-          </p>
-        </div>
-        <Research />
       </div>
     </section>
   );

@@ -207,28 +207,28 @@ describe('invocation_callbacks', () => {
     for (const leafThrows of [false, true]) {
       const original = new Error('leaf failed');
       const leaf = withExecutionContext(async (active, value: number) => {
-        expect(trace.current_context_sync().metadata).toEqual({ request: 'C', keep: 7 });
+        expectMetadata(trace.current_context_sync().metadata, { request: 'C', keep: 7 });
         await Promise.resolve();
-        expect(active.run(() => trace.current_context_sync().metadata)).toEqual({ request: 'C', keep: 7 });
+        expectMetadata(active.run(() => trace.current_context_sync().metadata), { request: 'C', keep: 7 });
         if (leafThrows) throw original;
         return value + 1;
       });
       const forward = await baml.make_callback_forwarder(leaf as unknown as (value: number) => number, { $baml: { trace: trace.context_sync({ metadata: { request: 'factory' } }) } });
       const overridden = withExecutionContext(async (active, value: number) => {
         try { return await forward(value); }
-        finally { expect(active.run(() => trace.current_context_sync().metadata)).toEqual({ request: 'C', keep: 7 }); }
+        finally { expectMetadata(active.run(() => trace.current_context_sync().metadata), { request: 'C', keep: 7 }); }
       });
       const inherited = withExecutionContext(async (active, value: number) => {
         let result: number;
         try { result = await baml.call_int_callback(overridden as unknown as (value: number) => number, value, { $baml: { trace: trace.context_sync({ metadata: { request: 'C' } }) } }); }
         catch (error) { expect(leafThrows).toBe(true); expect(error).toBe(original); result = value + 1; }
-        expect(active.run(() => trace.current_context_sync().metadata)).toEqual({ request: 'A', keep: 7 });
-        expect(await active.run(() => baml.call_int_callback(v => { expect(trace.current_context_sync().metadata).toEqual({ request: 'A', keep: 7 }); return v; }, value))).toBe(value);
+        expectMetadata(active.run(() => trace.current_context_sync().metadata), { request: 'A', keep: 7 });
+        expect(await active.run(() => baml.call_int_callback(v => { expectMetadata(trace.current_context_sync().metadata, { request: 'A', keep: 7 }); return v; }, value))).toBe(value);
         return result;
       });
       const outer = withExecutionContext(async (active, value: number) => {
         const result = await baml.call_int_callback(inherited as unknown as (value: number) => number, value);
-        expect(active.run(() => trace.current_context_sync().metadata)).toEqual({ request: 'A', keep: 7 });
+        expectMetadata(active.run(() => trace.current_context_sync().metadata), { request: 'A', keep: 7 });
         return result;
       });
       expect(await baml.call_int_callback(outer as unknown as (value: number) => number, 6, { $baml: { trace: trace.hidden_sync().context_sync({ metadata: { request: 'A', keep: 7 } }) } })).toBe(7);
@@ -245,7 +245,7 @@ describe.runIf(isTestRuntime('node'))('invocation_typescript_only', () => {
       const active = currentExecutionContext();
       await Promise.resolve();
       expect(currentExecutionContext()).toBe(active);
-      expect(trace.current_context_sync().metadata).toEqual({ request: 'A' });
+      expectMetadata(trace.current_context_sync().metadata, { request: 'A' });
       return value;
     }), 1, { $baml: { trace: trace.context_sync({ metadata: { request: 'A' } }) } })).toBe(1);
   });
@@ -302,7 +302,7 @@ describe.runIf(isTestRuntime('node'))('invocation_options_typescript_only', () =
           expect(trace.current_cancel_token()!.is_cancelled_sync()).toBe(false);
           expect(local.getStore()).toBe('application');
           const context = trace.current_context_sync();
-          expect(context.metadata).toEqual(depth >= 2 ? rootMetadata : childMetadata);
+          expectMetadata(context.metadata, depth >= 2 ? rootMetadata : childMetadata);
           expect(context.distinct_id).toBe(depth >= 2 ? 'root-id' : 'child-id');
         };
         const callbackFor = (depth: number): ((value: number) => number) => {
@@ -320,3 +320,10 @@ describe.runIf(isTestRuntime('node'))('invocation_options_typescript_only', () =
     }
   });
 });
+
+function expectMetadata(actual: Record<string, unknown>, expected: Record<string, unknown>) {
+  const version = actual["baml.ctx.baml_version"];
+  expect(version).toEqual(expect.any(String));
+  expect(version).not.toBe("");
+  expect(actual).toEqual({ ...expected, "baml.ctx.baml_version": version });
+}

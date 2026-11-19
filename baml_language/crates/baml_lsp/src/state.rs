@@ -867,6 +867,7 @@ impl GlobalState {
                                 self_name: spec.self_name.clone(),
                                 interface: None,
                                 dependencies: Vec::new(),
+                                claim: spec.claim.clone(),
                             })
                             .map_err(|e| LspError::RequestFailed(e.to_string()))?;
                         applied.roots_changed = true;
@@ -876,6 +877,10 @@ impl GlobalState {
                         root
                     }
                 };
+                // A root that already exists takes the claim too: its
+                // manifest may have changed, or it was created before
+                // discovery read one.
+                self.db.set_claimed_identity(root, spec.claim.clone());
                 // Open overlays are authoritative over the disk text. A
                 // BTreeMap keeps the root's file order deterministic (path
                 // order — the same order CLI discovery loads), so the emitted

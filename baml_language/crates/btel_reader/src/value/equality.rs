@@ -112,6 +112,7 @@ enum Value<'a> {
     Uint8Array(&'a [u8]),
     Enum(&'a DecodedName, &'a str),
     List(Vec<Self>),
+    Tuple(Vec<Self>),
     Map(Fields<'a>),
     GeneralMap(Vec<(Self, Self)>),
     Class(&'a DecodedName, Fields<'a>),
@@ -143,7 +144,7 @@ impl Value<'_> {
             (Self::Omitted, Self::Omitted) => Some(true),
             (Self::Uint8Array(a), Self::Uint8Array(b)) => Some(a == b),
             (Self::Enum(a, x), Self::Enum(b, y)) => Some(a == b && x == y),
-            (Self::List(a), Self::List(b)) => {
+            (Self::List(a), Self::List(b)) | (Self::Tuple(a), Self::Tuple(b)) => {
                 if a.len() != b.len() {
                     return Ok(Some(false));
                 }
@@ -167,6 +168,7 @@ impl Value<'_> {
                 | Self::Uint8Array(_)
                 | Self::Enum(..)
                 | Self::List(_)
+                | Self::Tuple(_)
                 | Self::Map(_)
                 | Self::GeneralMap(_)
                 | Self::Class(..)
@@ -454,6 +456,7 @@ impl<'a> Builder<'a> {
             DecodedObject::Declaration { .. }
             | DecodedObject::Uint8Array { .. }
             | DecodedObject::List { .. }
+            | DecodedObject::Tuple { .. }
             | DecodedObject::Map { .. }
             | DecodedObject::Instance { .. }
             | DecodedObject::Cell(_)
@@ -503,6 +506,19 @@ impl<'a> Builder<'a> {
             } => {
                 complete(items.len(), *original_len)?;
                 Value::List(
+                    items
+                        .iter()
+                        .map(|v| self.value(s, v, depth + 1))
+                        .collect::<Result<_, _>>()?,
+                )
+            }
+            DecodedObject::Tuple {
+                items,
+                original_len,
+                ..
+            } => {
+                complete(items.len(), *original_len)?;
+                Value::Tuple(
                     items
                         .iter()
                         .map(|v| self.value(s, v, depth + 1))

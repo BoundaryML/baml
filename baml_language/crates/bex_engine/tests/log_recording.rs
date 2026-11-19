@@ -139,7 +139,7 @@ fn assert_logs(
                 };
                 assert!(
                     file.header.as_ref().unwrap().format_minor
-                        >= btel_settings::encoding::LOG_FORMAT_MINOR
+                        >= btel_settings::encoding::LOG_LINE_FORMAT_MINOR
                 );
                 let ContextReference::Snapshot(context) = reference(section) else {
                     panic!("missing log context")
@@ -174,6 +174,26 @@ fn assert_logs(
                         .source_map
                         .as_ref()
                         .is_some_and(|map| log.pc < map.code_bytes)
+                );
+                // The event carries the line a reader resolves from the definition's line
+                // table, so a file without the definition still places it.
+                let own_file = function.source_span.as_ref().map(|span| span.file_id);
+                let resolved = btel_reader::source_map::SourceMap::from_wire(
+                    function.source_map.as_ref().unwrap(),
+                    own_file,
+                )
+                .unwrap()
+                .resolve(log.pc)
+                .unwrap();
+                assert_eq!(log.line, Some(resolved.line));
+                assert!(
+                    SOURCE
+                        .lines()
+                        .nth(resolved.line as usize - 1)
+                        .unwrap()
+                        .contains("log."),
+                    "line {} is a log call",
+                    resolved.line
                 );
                 if log.event_name.as_deref() == Some("span") {
                     assert!(spans.contains(&log.parent_id));

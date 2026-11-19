@@ -44,6 +44,15 @@ test "primitive_to_string" {
     assert.equal(true.to_string(), "true")
 }
 
+test "primitive_to_string_extremes" {
+    assert.equal(int.max_value().to_string(), "4611686018427387903");
+    assert.equal(int.min_value().to_string(), "-4611686018427387904");
+    assert.equal(`${int.min_value()}`, "-4611686018427387904");
+    assert.equal((0).to_string(), "0");
+    assert.equal(false.to_string(), "false");
+    assert.equal((1.5).to_string(), "1.5")
+}
+
 test "string_to_string_is_bare" {
     assert.equal("hi".to_string(), "hi")
 }

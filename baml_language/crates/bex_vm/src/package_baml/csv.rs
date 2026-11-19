@@ -34,11 +34,11 @@ use std::{fmt::Write as _, sync::Arc};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    CsvCell, CsvHeader, CsvRecord, MeteredGuard, MeteredMutex, RetainedFootprint, RustPayload,
-    ValueKind,
+    CsvCell, CsvHeader, CsvRecord, Field, InstanceRef, MeteredGuard, MeteredMutex,
+    RetainedFootprint, RustPayload, ValueKind,
     csv::{ErrInfo, Kind, QuoteStyle, Ragged, ReaderOpts, ReaderState, WriterOpts, WriterState},
     payload,
-    types::{Instance, Object, Value},
+    types::{Object, Value},
 };
 use indexmap::IndexMap;
 use time::{
@@ -132,7 +132,7 @@ fn reader_state_in(vm: &BexVm, state: Value) -> payload::CsvReader {
 
 /// The state of the reader `reader`.
 fn reader_state_of(vm: &BexVm, reader: Value) -> Result<payload::CsvReader, VmInternalError> {
-    Ok(reader_state_in(vm, vm.as_instance(&reader)?.load_field(0)))
+    Ok(reader_state_in(vm, vm.as_instance(&reader)?.load_value(0)))
 }
 
 /// The state a writer's `_state` instance holds.
@@ -148,7 +148,7 @@ fn writer_state_in(vm: &BexVm, state: Value) -> payload::CsvWriter {
 
 /// The state of the writer `writer`.
 fn writer_state_of(vm: &BexVm, writer: Value) -> Result<payload::CsvWriter, VmInternalError> {
-    Ok(writer_state_in(vm, vm.as_instance(&writer)?.load_field(0)))
+    Ok(writer_state_in(vm, vm.as_instance(&writer)?.load_value(0)))
 }
 
 /// A writer's `_state` instance, holding `state`.
@@ -177,15 +177,15 @@ fn options_err(vm: &mut BexVm, message: impl Into<String>) -> VmRustFnError {
 /// declaration provides the name → index mapping).
 fn field_by_name(vm: &BexVm, inst_val: Value, name: &str) -> Result<Value, VmRustFnError> {
     let inst = vm.as_instance(&inst_val)?;
-    let class_ptr = inst.class;
-    let idx = match vm.get_object(class_ptr) {
-        Object::Class(c) => c.instance_fields().iter().position(|f| f.name == name),
-        _ => None,
-    }
-    .ok_or_else(|| VmInternalError::MissingNativeFunction {
-        name: format!("csv options field `{name}` not found"),
-    })?;
-    Ok(inst.load_field(idx))
+    let idx = inst
+        .class_object()
+        .instance_fields()
+        .iter()
+        .position(|f| f.name == name)
+        .ok_or_else(|| VmInternalError::MissingNativeFunction {
+            name: format!("csv options field `{name}` not found"),
+        })?;
+    Ok(inst.load_value(idx))
 }
 
 fn opt_string(vm: &BexVm, v: Value) -> Result<Option<String>, VmRustFnError> {
@@ -1138,7 +1138,7 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
                 return Ok(Conv::Bad(format!("cannot convert {text:?} to float")));
             }
             match text.parse::<f64>() {
-                Ok(f) if f.is_finite() => Conv::Ok(Value::object(vm.alloc_float(f))),
+                Ok(f) if f.is_finite() => Conv::Ok(vm.float_value(f)),
                 _ => Conv::Bad(format!("cannot convert {text:?} to float")),
             }
         }
@@ -1376,9 +1376,11 @@ fn decode_record_to_instance(
         }
     }
 
-    Ok(Value::object(vm.tlab.alloc(Object::Instance(
-        Instance::new(class_ptr, type_args.clone(), field_values),
-    ))))
+    Ok(Value::object(vm.tlab.alloc_instance_with_type_args(
+        class_ptr,
+        type_args.clone(),
+        field_values,
+    )))
 }
 
 fn current_type_arg(vm: &mut BexVm, who: &str) -> Result<bex_vm_types::RealizedTy, VmRustFnError> {
@@ -1582,8 +1584,8 @@ fn format_float(f: f64) -> String {
     }
 }
 
-fn plaindate_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
-    let days = view::time::PlainDate { instance: inst }._days();
+fn plaindate_cell_text(inst: InstanceRef) -> Result<String, CellTextErr> {
+    let days = view::time::PlainDate { instance: &inst }._days();
     let date = super::time::date_for_days(days, "csv cell")
         .map_err(|_| CellTextErr::Unsupported("PlainDate out of range".to_string()))?;
     let mut out = String::new();
@@ -1591,8 +1593,8 @@ fn plaindate_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
     Ok(out)
 }
 
-fn plaindatetime_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
-    let nanos = view::time::PlainDateTime { instance: inst }._nanoseconds();
+fn plaindatetime_cell_text(inst: InstanceRef) -> Result<String, CellTextErr> {
+    let nanos = view::time::PlainDateTime { instance: &inst }._nanoseconds();
     let dt = super::time::civil_datetime(&nanos, "csv cell")
         .map_err(|_| CellTextErr::Unsupported("PlainDateTime out of range".to_string()))?;
     let mut out = String::new();
@@ -1608,8 +1610,8 @@ fn plaindatetime_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
     Ok(out)
 }
 
-fn instant_cell_text(inst: &Instance) -> Result<String, CellTextErr> {
-    let nanos = view::time::Instant { instance: inst }._nanoseconds();
+fn instant_cell_text(inst: InstanceRef) -> Result<String, CellTextErr> {
+    let nanos = view::time::Instant { instance: &inst }._nanoseconds();
     let nanos = i128::try_from(&*nanos)
         .map_err(|_| CellTextErr::Unsupported("Instant out of range".to_string()))?;
     let dt = OffsetDateTime::from_unix_timestamp_nanos(nanos)
@@ -1624,6 +1626,7 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
         ValueKind::Null => null_value.to_string(),
         ValueKind::Bool(b) => if b { "true" } else { "false" }.to_string(),
         ValueKind::Int(i) => i.to_string(),
+        ValueKind::Float(f) => float_cell_text(f)?,
         ValueKind::OmittedArg => {
             return Err(CellTextErr::Unsupported("omitted argument".to_string()));
         }
@@ -1640,18 +1643,12 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
                     CellTextErr::Unsupported("unresolvable enum variant".to_string())
                 })?
             }
-            Object::Instance(inst) => {
+            Object::Instance => {
+                let inst = vm.get_instance(ptr).expect("an instance pointer");
                 // Match the instance's class against the stdlib time classes
                 // by head — an integer compare per cell, with no name rendered
                 // and no package-index lookup.
-                let class_head = match vm.get_object(inst.class) {
-                    Object::Class(class) => bex_vm_types::TypeHead::new(inst.class, class.type_tag),
-                    _ => {
-                        return Err(CellTextErr::Unsupported(
-                            "value is not representable as a CSV cell".to_string(),
-                        ));
-                    }
-                };
+                let class_head = inst.head();
                 match vm.stdlib_heads().time_class(class_head) {
                     Some(TimeClass::Instant) => instant_cell_text(inst)?,
                     Some(TimeClass::PlainDate) => plaindate_cell_text(inst)?,
@@ -1683,44 +1680,35 @@ fn cell_text_err_info(e: CellTextErr, context: &str) -> ErrInfo {
 }
 
 /// Field names and per-row field values for a typed row instance.
-fn row_fields(vm: &BexVm, row: Value) -> Result<(Vec<String>, Vec<Value>), ErrInfo> {
-    let inst = match row.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
-        Some(Object::Instance(inst)) => inst,
-        // A `@@rust_type` class instance holds native state, not fields.
-        Some(Object::RustInstance(inst)) => {
-            let Object::Class(class) = vm.get_object(inst.class) else {
-                unreachable!("RustInstance.class must point to Object::Class")
-            };
-            return Err(ErrInfo::new(
-                Kind::Options,
-                format!(
-                    "write_row target `{}` has no fields; CSV writes flat classes",
-                    class.name().display_name()
-                ),
-            ));
-        }
-        _ => {
-            return Err(ErrInfo::new(
-                Kind::Options,
-                "write_row target is not a class instance; CSV writes flat classes",
-            ));
-        }
-    };
-    let names = match vm.get_object(inst.class) {
-        Object::Class(c) => c
-            .instance_fields()
-            .iter()
-            .map(|f| f.name.clone())
-            .collect::<Vec<_>>(),
-        _ => {
-            return Err(ErrInfo::new(
-                Kind::Options,
-                "write_row target is not a class instance",
-            ));
-        }
-    };
-    let values = (0..names.len()).map(|i| inst.load_field(i)).collect();
-    Ok((names, values))
+fn row_fields(vm: &BexVm, row: Value) -> Result<(Vec<String>, Vec<Field>), ErrInfo> {
+    // A `@@rust_type` class instance holds native state, not fields.
+    if let Some(ptr) = row.as_object_ptr()
+        && let Object::RustInstance(inst) = vm.get_object(ptr)
+    {
+        let Object::Class(class) = vm.get_object(inst.class) else {
+            unreachable!("RustInstance.class must point to Object::Class")
+        };
+        return Err(ErrInfo::new(
+            Kind::Options,
+            format!(
+                "write_row target `{}` has no fields; CSV writes flat classes",
+                class.name().display_name()
+            ),
+        ));
+    }
+    let inst = vm.as_instance(&row).map_err(|_| {
+        ErrInfo::new(
+            Kind::Options,
+            "write_row target is not a class instance; CSV writes flat classes",
+        )
+    })?;
+    let names = inst
+        .class_object()
+        .instance_fields()
+        .iter()
+        .map(|f| f.name.clone())
+        .collect();
+    Ok((names, inst.fields().collect()))
 }
 
 /// Encode one typed row (plus the auto-header when `header_pending`), into
@@ -1740,9 +1728,12 @@ fn encode_typed_row(
         *header_pending = false;
     }
     let mut cells = Vec::with_capacity(values.len());
-    for (name, v) in names.iter().zip(&values) {
-        let text = value_cell_text(vm, *v, &o.null_value)
-            .map_err(|e| cell_text_err_info(e, &format!("field `{name}`")))?;
+    for (name, field) in names.iter().zip(values) {
+        let text = match field {
+            Field::Value(v) => value_cell_text(vm, v, &o.null_value),
+            Field::Float(f) => float_cell_text(f),
+        }
+        .map_err(|e| cell_text_err_info(e, &format!("field `{name}`")))?;
         cells.push(text);
     }
     out.push_str(&encode_line(o, &cells)?);
@@ -1767,10 +1758,8 @@ fn md_escape(text: &str) -> String {
 
 fn md_value_text(vm: &mut BexVm, v: Value, json_fallback: bool) -> String {
     // Prompt text is not meant to round-trip: non-finite floats render as-is.
-    if let ValueKind::Object(ptr) = v.kind() {
-        if let Object::Float(f) = vm.get_object(ptr) {
-            return format_float_md(*f);
-        }
+    if let Some(f) = v.as_float() {
+        return format_float_md(f);
     }
     match value_cell_text(vm, v, "") {
         Ok(t) => t,
@@ -2389,8 +2378,9 @@ impl BamlNamespaceCsv for PackageBamlImpl {
                     .take(max)
                     .map(|row| match vm.as_instance(row) {
                         Ok(inst) => {
-                            let values: Vec<Value> =
-                                (0..headers.len()).map(|i| inst.load_field(i)).collect();
+                            let values: Vec<Value> = (0..headers.len())
+                                .map(|i| vm.load_field_value(inst, i))
+                                .collect();
                             values.iter().map(|v| md_value_text(vm, *v, true)).collect()
                         }
                         Err(_) => vec!["<unrepresentable>".to_string(); headers.len()],

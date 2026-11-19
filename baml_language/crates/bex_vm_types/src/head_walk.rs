@@ -134,11 +134,6 @@ macro_rules! walk_object_heads {
                 Object::Function(func) => $func_walk(func, f),
                 Object::TypeAlias(alias) => alias.definition.$visit(f),
                 Object::Type(value) => value.ty.$visit(f),
-                Object::Instance(instance) => {
-                    for arg in &$($mut)? *instance.class_type_args {
-                        arg.$visit(f);
-                    }
-                }
                 // A payload's element type, where it has one, is the
                 // instance's type argument; an interface witness also holds
                 // the type it is witnessed at.
@@ -159,7 +154,9 @@ macro_rules! walk_object_heads {
                         | crate::RustPayload::XChaCha20Poly1305(_)
                         | crate::RustPayload::Regex(_)
                         | crate::RustPayload::CsvRecord(_)
-                        | crate::RustPayload::Limit(_)
+                        | crate::RustPayload::Semaphore(_)
+                        | crate::RustPayload::Permit(_)
+                        | crate::RustPayload::Ticket(_)
                         | crate::RustPayload::CancelToken(_)
                         | crate::RustPayload::SpanId(_)
                         | crate::RustPayload::TraceOptions(_)
@@ -220,6 +217,11 @@ macro_rules! walk_object_heads {
                     map.key_ty.$visit(f);
                     map.value_ty.$visit(f);
                 }
+                Object::Tuple(tuple) => {
+                    for ty in &$($mut)? *tuple.element_tys {
+                        ty.$visit(f);
+                    }
+                }
                 // Carry no head. `Package` and `Enum` reference declarations by
                 // pointer, and the rest are plain values.
                 Object::Package(_)
@@ -230,7 +232,7 @@ macro_rules! walk_object_heads {
                 | Object::Bigint(_)
                 | Object::Uint8Array(_)
                 | Object::Tombstone
-
+                | Object::Instance
                 | Object::Float(_) => {}
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => {}

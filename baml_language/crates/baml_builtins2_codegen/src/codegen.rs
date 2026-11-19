@@ -255,7 +255,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     // Struct definition
     writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
     writeln!(out, "{indent}pub struct {class_name}<'a> {{").unwrap();
-    writeln!(out, "{inner}pub instance: &'a Instance,").unwrap();
+    writeln!(out, "{inner}pub instance: &'a InstanceRef,").unwrap();
     writeln!(out, "{indent}}}\n").unwrap();
 
     // Impl block with typed accessors
@@ -269,7 +269,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> i64 {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}self.instance.load_field({}).as_int()",
+                    "{inner2}self.instance.load_value({}).as_int()",
                     field.index
                 )
                 .unwrap();
@@ -282,37 +282,14 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             }
             BamlType::Float => {
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> f64 {{").unwrap();
-                writeln!(
-                    out,
-                    "{inner2}match self.instance.load_field({}).as_object_ptr() {{",
-                    field.index
-                )
-                .unwrap();
-                writeln!(
-                    out,
-                    "{inner2}    Some(ptr) => match unsafe {{ ptr.get() }} {{"
-                )
-                .unwrap();
-                writeln!(out, "{inner2}        bex_vm_types::Object::Float(f) => *f,").unwrap();
-                writeln!(
-                    out,
-                    "{inner2}        _ => panic!(\"{class_name}.{raw_name}: expected Float\"),"
-                )
-                .unwrap();
-                writeln!(out, "{inner2}    }},").unwrap();
-                writeln!(
-                    out,
-                    "{inner2}    None => panic!(\"{class_name}.{raw_name}: expected Float\"),"
-                )
-                .unwrap();
-                writeln!(out, "{inner2}}}").unwrap();
+                writeln!(out, "{inner2}self.instance.load_float({})", field.index).unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Bool => {
                 writeln!(out, "{inner}pub fn {field_name}(&self) -> bool {{").unwrap();
                 writeln!(
                     out,
-                    "{inner2}self.instance.load_field({}).as_bool()",
+                    "{inner2}self.instance.load_value({}).as_bool()",
                     field.index
                 )
                 .unwrap();
@@ -332,7 +309,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_string(&self.instance.load_field({}))",
+                    "{inner2}vm.as_string(&self.instance.load_value({}))",
                     field.index
                 )
                 .unwrap();
@@ -351,7 +328,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_array(&self.instance.load_field({}))",
+                    "{inner2}vm.as_array(&self.instance.load_value({}))",
                     field.index
                 )
                 .unwrap();
@@ -370,7 +347,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}vm.as_map(&self.instance.load_field({}))",
+                    "{inner2}vm.as_map(&self.instance.load_value({}))",
                     field.index
                 )
                 .unwrap();
@@ -392,7 +369,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}if self.instance.load_field({}).is_null() {{",
+                    "{inner2}if self.instance.load_value({}).is_null() {{",
                     field.index
                 )
                 .unwrap();
@@ -412,7 +389,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 .unwrap();
                 writeln!(
                     out,
-                    "{inner2}match self.instance.load_field({}).as_object_ptr() {{",
+                    "{inner2}match self.instance.load_value({}).as_object_ptr() {{",
                     field.index
                 )
                 .unwrap();
@@ -447,7 +424,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                     "{inner}pub fn {field_name}(&self) -> bex_vm_types::Value {{"
                 )
                 .unwrap();
-                writeln!(out, "{inner2}self.instance.load_field({})", field.index).unwrap();
+                writeln!(out, "{inner2}self.instance.load_value({})", field.index).unwrap();
                 writeln!(out, "{inner}}}\n").unwrap();
             }
         }
@@ -467,36 +444,30 @@ fn view_optional_type_and_expr(
         BamlType::Int => (
             "Option<i64>".to_string(),
             format!(
-                "self.instance.load_field({field_index}).as_int().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
+                "self.instance.load_value({field_index}).as_int().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Int\"))"
             ),
         ),
         BamlType::Float => (
             "Option<f64>".to_string(),
             format!(
-                "{{ \
-                    let Some(ptr) = self.instance.load_field({field_index}).as_object_ptr() \
-                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
-                    let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
-                        else {{ panic!(\"{class_name}.{field_name}: expected Float\") }}; \
-                    *f \
-                }}"
+                "self.instance.load_value({field_index}).as_float().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Float\"))"
             ),
         ),
         BamlType::Bool => (
             "Option<bool>".to_string(),
             format!(
-                "self.instance.load_field({field_index}).as_bool().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
+                "self.instance.load_value({field_index}).as_bool().unwrap_or_else(|| panic!(\"{class_name}.{field_name}: expected Bool\"))"
             ),
         ),
         BamlType::String => (
             "Option<&'v str>".to_string(),
             format!(
-                "vm.as_string(&self.instance.load_field({field_index})).expect(\"{class_name}.{field_name}: expected String\")"
+                "vm.as_string(&self.instance.load_value({field_index})).expect(\"{class_name}.{field_name}: expected String\")"
             ),
         ),
         _ => (
             "Option<bex_vm_types::Value>".to_string(),
-            format!("self.instance.load_field({field_index})"),
+            format!("self.instance.load_value({field_index})"),
         ),
     }
 }
@@ -790,7 +761,7 @@ fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
                 \"failed to allocate bigint field `{field_name}`: {{p}}\"))"
         ),
         BamlType::Float => {
-            format!("bex_vm_types::Value::object(vm.alloc_float(self.{field_name}))")
+            format!("vm.float_value(self.{field_name})")
         }
         BamlType::Bool => format!("bex_vm_types::Value::bool(self.{field_name})"),
         BamlType::Null => "bex_vm_types::Value::NULL".to_string(),
@@ -919,8 +890,245 @@ pub fn generate_native_trait_for(
 
     emit_subtree_traits(&mut out, &tree, "");
     emit_root_trait(&mut out, &tree, package);
+    emit_entry_module(&mut out, &tree, package);
 
     out
+}
+
+/// Where a builtin's entry point lives and how to call it: `baml.Array.push`
+/// is `bex_vm::package_baml::builtins::Array::push(vm, array, item)`.
+///
+/// The one naming rule shared by the generator, which defines the entry
+/// points, and the Rust emitter, which calls them.
+pub struct NativeEntry {
+    /// The full Rust path of the function.
+    pub path: String,
+    /// The `Value` arguments after `vm`: the receiver, if any, then the params.
+    pub arity: usize,
+    /// Whether a `{path}_local` twin takes the receiver without its lock.
+    pub local_twin: bool,
+    /// Whether the builtin can pause. One that cannot returns its result as
+    /// `NativeFunctionResult`; one that can returns `NativeCallResult`.
+    pub may_yield: bool,
+    /// Whether the builtin can read its call's type arguments: its body takes
+    /// `vm`, it can pause, or its generated glue reads them. A caller passes
+    /// type arguments only to a builtin that can read them.
+    pub reads_type_args: bool,
+}
+
+impl NativeEntry {
+    #[must_use]
+    pub fn of(b: &NativeBuiltin, package: &str) -> Self {
+        let (modules, name) = entry_segments(&b.path, package);
+        let path = std::iter::once(format!("bex_vm::package_{package}::builtins"))
+            .chain(modules)
+            .chain([name])
+            .collect::<Vec<_>>()
+            .join("::");
+        Self {
+            path,
+            arity: entry_params(b).len(),
+            local_twin: b.local_twin,
+            may_yield: b.may_yield,
+            reads_type_args: b.may_yield
+                || !matches!(b.vm_usage, VmUsage::None)
+                || glue_work("Builtin", "builtin", b).contains("current_call_type_args"),
+        }
+    }
+}
+
+/// The modules under `builtins` and the function name of a builtin's entry
+/// point. Modules spell the BAML path's segments (`json`, `Array`,
+/// `media::Pdf`), so a namespace and a same-named class never collide.
+fn entry_segments(path: &str, package: &str) -> (Vec<String>, String) {
+    let rest = path.strip_prefix(&format!("{package}.")).unwrap_or(path);
+    let mut segments: Vec<&str> = rest.split('.').collect();
+    let name = segments.pop().unwrap_or(rest);
+    let modules = segments
+        .iter()
+        .map(|segment| {
+            let ident = sanitize_ident(segment);
+            if syn::parse_str::<syn::Ident>(&ident).is_ok() {
+                ident
+            } else {
+                format!("{ident}_")
+            }
+        })
+        .collect();
+    (modules, rust_method_name(name))
+}
+
+/// The entry point's `Value` parameters, named as the builtin's own (the
+/// receiver, then each param), or positionally if those would clash.
+fn entry_params(b: &NativeBuiltin) -> Vec<String> {
+    let receiver = b
+        .receiver
+        .as_ref()
+        .filter(|recv| !recv.receiver_type.is_static())
+        .map(receiver_param_name);
+    let names: Vec<String> = receiver
+        .into_iter()
+        .chain(
+            b.params
+                .iter()
+                .map(|param| rust_field_ident(&param.name).to_string()),
+        )
+        .collect();
+    let mut seen = std::collections::HashSet::new();
+    let clean = names
+        .iter()
+        .all(|name| name != "vm" && seen.insert(name.as_str()));
+    if clean {
+        names
+    } else {
+        (0..names.len()).map(|i| format!("arg{i}")).collect()
+    }
+}
+
+/// Emit `pub mod builtins`: one plain function per builtin, at its BAML path,
+/// calling the builtin's glue. Compiled code calls these by name, so rustc
+/// sees the callee and can inline it; the interpreter keeps calling the same
+/// glue through its dispatch table.
+fn emit_entry_module(out: &mut String, root: &NamespaceNode, package: &str) {
+    let mut modules: BTreeMap<Vec<String>, String> = BTreeMap::new();
+    collect_entries(
+        &mut modules,
+        root,
+        "",
+        package,
+        &package_trait_name(package),
+    );
+    out.push_str(
+        "/// One plain entry point per builtin, at its BAML path: `baml.Array.push` is\n\
+         /// `builtins::Array::push`. Each is the builtin's `__entry_*`, whose\n\
+         /// body the interpreter's glue runs too.\n",
+    );
+    out.push_str(
+        "#[allow(non_snake_case, clippy::used_underscore_items, clippy::too_many_arguments)]\n",
+    );
+    out.push_str("pub mod builtins {\n    #[allow(unused_imports)]\n    use super::*;\n");
+    emit_entry_tree(out, &modules, &[], 1);
+    out.push_str("}\n");
+}
+
+/// Gather each entry function's source under its module path.
+fn collect_entries(
+    modules: &mut BTreeMap<Vec<String>, String>,
+    node: &NamespaceNode,
+    namespace_prefix: &str,
+    package: &str,
+    free_fn_trait: &str,
+) {
+    for (class_name, entries) in &node.classes {
+        let trait_name = class_trait_name(namespace_prefix, class_name);
+        for entry in entries {
+            push_entry(
+                modules,
+                entry.builtin,
+                package,
+                &trait_name,
+                &entry.rust_method_name,
+            );
+        }
+    }
+    for entry in &node.free_fns {
+        push_entry(
+            modules,
+            entry.builtin,
+            package,
+            free_fn_trait,
+            &entry.rust_method_name,
+        );
+    }
+    for (ns_name, sub_node) in &node.sub_namespaces {
+        let child_prefix = if namespace_prefix.is_empty() {
+            ns_name.clone()
+        } else {
+            format!("{namespace_prefix}.{ns_name}")
+        };
+        let child_trait = namespace_trait_name(&child_prefix);
+        collect_entries(modules, sub_node, &child_prefix, package, &child_trait);
+    }
+}
+
+fn push_entry(
+    modules: &mut BTreeMap<Vec<String>, String>,
+    b: &NativeBuiltin,
+    package: &str,
+    trait_name: &str,
+    glue_method: &str,
+) {
+    let (module, name) = entry_segments(&b.path, package);
+    let params = entry_params(b);
+    let signature = entry_signature(b);
+    let call_args = params.iter().fold(String::new(), |mut args, param| {
+        write!(args, ", {param}").unwrap();
+        args
+    });
+    let impl_ty = format!("Package{}Impl", to_pascal_case(package));
+    let body = modules.entry(module).or_default();
+    let array_args = params.join(", ");
+    let mut twin = |suffix: &str, glue_suffix: &str, doc: &str| {
+        let (result_ty, call) = if b.may_yield {
+            (
+                "NativeCallResult",
+                format!("__entry_{glue_method}{glue_suffix}(vm{call_args})"),
+            )
+        } else {
+            (
+                "NativeFunctionResult",
+                format!("__body_{glue_method}{glue_suffix}(vm, [{array_args}])"),
+            )
+        };
+        writeln!(
+            body,
+            "/// `{path}`{doc}\n#[inline]\npub fn {name}{suffix}(vm: &mut BexVm{signature}) -> {result_ty} {{\n    \
+             <{impl_ty} as {trait_name}>::{call}\n}}",
+            path = b.path,
+        )
+        .unwrap();
+    };
+    twin("", "", "");
+    if b.local_twin {
+        twin(
+            "_local",
+            "__local",
+            ", for a receiver escape analysis proved thread-local: it is read\n/// without its lock.",
+        );
+    }
+}
+
+/// Emit `modules` as nested `pub mod` blocks below `prefix`.
+fn emit_entry_tree(
+    out: &mut String,
+    modules: &BTreeMap<Vec<String>, String>,
+    prefix: &[String],
+    depth: usize,
+) {
+    let indent = "    ".repeat(depth);
+    for line in modules
+        .get(prefix)
+        .into_iter()
+        .flat_map(|body| body.lines())
+    {
+        writeln!(out, "{indent}{line}").unwrap();
+    }
+    let children: std::collections::BTreeSet<&String> = modules
+        .keys()
+        .filter(|path| path.len() > prefix.len() && path.starts_with(prefix))
+        .map(|path| &path[prefix.len()])
+        .collect();
+    for child in children {
+        let mut path = prefix.to_vec();
+        path.push(child.clone());
+        writeln!(
+            out,
+            "{indent}pub mod {child} {{\n{indent}    #[allow(unused_imports)]\n{indent}    use super::*;"
+        )
+        .unwrap();
+        emit_entry_tree(out, modules, &path, depth + 1);
+        writeln!(out, "{indent}}}").unwrap();
+    }
 }
 
 /// Recursively emit class traits and namespace traits (bottom-up).
@@ -1226,11 +1434,23 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
     }
 }
 
-/// The glue of [`emit_glue_method`] for a receiver only this thread can
-/// reach: the same body, with the receiver read through the thread-local
-/// accessor, which takes no lock. Callers select it per call site, where
-/// escape analysis proves the receiver thread-local. A yielding builtin's
-/// twin is declared for its implementation to write.
+/// A builtin's entry point and glue. `__entry_{name}` takes the builtin's
+/// arguments as `Value`s and holds its whole generated body: read each
+/// argument, call the Rust implementation, convert the result. It is
+/// `#[inline]`, so a caller that names it (compiled code, through
+/// `builtins::...`) gets the body inlined. `__glue_{name}` is the
+/// interpreter's adapter: it unpacks the argument slice into the entry.
+fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &NativeBuiltin) {
+    let work = glue_work(trait_name, method_name, b);
+    out.push_str(&entry_from_work(&work, trait_name, method_name, "", b));
+    emit_glue_adapter(out, trait_name, method_name, "", b);
+}
+
+/// [`emit_glue_method`] for a receiver only this thread can reach: the same
+/// body, with the receiver read through the thread-local accessor, which
+/// takes no lock. Callers select it per call site, where escape analysis
+/// proves the receiver thread-local. A yielding builtin's twin entry is
+/// declared for its implementation to write.
 fn emit_thread_local_twin(
     out: &mut String,
     trait_name: &str,
@@ -1242,20 +1462,15 @@ fn emit_thread_local_twin(
         // its implementation knows every access the twin must make lock-free.
         writeln!(
             out,
-            "    /// `__glue_{method_name}` for a receiver escape analysis proved thread-local.\n    fn __glue_{method_name}__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult;"
+            "    /// `__entry_{method_name}` for a receiver escape analysis proved thread-local.\n    fn __entry_{method_name}__local(vm: &mut BexVm{}) -> NativeCallResult;",
+            entry_signature(b)
         )
         .unwrap();
+        emit_glue_adapter(out, trait_name, method_name, "__local", b);
         return;
     }
-    let mut glue = String::new();
-    emit_glue_method(&mut glue, trait_name, method_name, b);
-    let glue = glue.replacen(
-        &format!("fn __glue_{method_name}("),
-        &format!("fn __glue_{method_name}__local("),
-        1,
-    );
     let mut replaced = 0;
-    let glue = [
+    let body = [
         (
             "vm.as_array_mut(&args[0])?",
             "unsafe { vm.as_array_mut_local(&args[0]) }?",
@@ -1274,10 +1489,13 @@ fn emit_thread_local_twin(
         ),
     ]
     .iter()
-    .fold(glue, |glue, (locked, local)| {
-        replaced += glue.matches(locked).count();
-        glue.replace(locked, local)
-    });
+    .fold(
+        glue_work(trait_name, method_name, b),
+        |body, (locked, local)| {
+            replaced += body.matches(locked).count();
+            body.replace(locked, local)
+        },
+    );
     assert_eq!(
         replaced, 1,
         "baml codegen error: {} has a thread-local twin but its glue reads the receiver {replaced} times",
@@ -1286,11 +1504,105 @@ fn emit_thread_local_twin(
     out.push_str(
         "    // SAFETY: selected only for a receiver escape analysis proved thread-local.\n    #[allow(unsafe_code)]\n",
     );
-    out.push_str(&glue);
+    out.push_str(&entry_from_work(
+        &body,
+        trait_name,
+        method_name,
+        "__local",
+        b,
+    ));
+    emit_glue_adapter(out, trait_name, method_name, "__local", b);
 }
 
-fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &NativeBuiltin) {
-    let glue_name = format!("__glue_{method_name}");
+/// `, a: Value, b: Value`: an entry point's parameters after `vm`.
+fn entry_signature(b: &NativeBuiltin) -> String {
+    entry_params(b)
+        .iter()
+        .fold(String::new(), |mut signature, param| {
+            write!(signature, ", {param}: Value").unwrap();
+            signature
+        })
+}
+
+/// Turn a builtin's [`glue_work`] into its entry point. The work becomes
+/// `__body_{method_name}{suffix}`, an `#[inline(always)]` method
+/// taking the arguments as an array the body reads unchanged, and the entry
+/// `__entry_{method_name}{suffix}` takes them as parameters and converts the
+/// body's result. A closure is not reliably inlined; a method so marked is.
+fn entry_from_work(
+    work: &str,
+    trait_name: &str,
+    method_name: &str,
+    suffix: &str,
+    b: &NativeBuiltin,
+) -> String {
+    let (result_ty, ok) = if b.may_yield {
+        ("Result<NativeCallResult, VmRustFnError>", "r")
+    } else {
+        ("NativeFunctionResult", "NativeCallResult::Done(r)")
+    };
+    let params = entry_params(b);
+    let n = params.len();
+    format!(
+        "    #[inline(always)]\n    #[allow(unused_variables, clippy::inline_always)]\n    \
+         fn __body_{method_name}{suffix}(vm: &mut BexVm, args: [Value; {n}]) -> {result_ty} {{\n\
+         {work}    }}\n\
+         \x20   #[inline]\n    \
+         fn __entry_{method_name}{suffix}(vm: &mut BexVm{sig}) -> NativeCallResult {{\n        \
+         match <Self as {trait_name}>::__body_{method_name}{suffix}(vm, [{args}]) {{\n            \
+         Ok(r) => {ok},\n            \
+         Err(e) => NativeCallResult::Error(e),\n        \
+         }}\n    \
+         }}\n",
+        sig = entry_signature(b),
+        args = params.join(", "),
+    )
+}
+
+/// `__glue_{method_name}{suffix}`: the interpreter's adapter, unpacking the
+/// argument slice into the entry.
+fn emit_glue_adapter(
+    out: &mut String,
+    trait_name: &str,
+    method_name: &str,
+    suffix: &str,
+    b: &NativeBuiltin,
+) {
+    let params = entry_params(b).len();
+    if b.may_yield {
+        let args = (0..params).fold(String::new(), |mut args, i| {
+            write!(args, ", args[{i}]").unwrap();
+            args
+        });
+        writeln!(
+            out,
+            "    fn __glue_{method_name}{suffix}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{\n        \
+             <Self as {trait_name}>::__entry_{method_name}{suffix}(vm{args})\n    }}"
+        )
+        .unwrap();
+        return;
+    }
+    let args = (0..params)
+        .map(|i| format!("args[{i}]"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    writeln!(
+        out,
+        "    fn __glue_{method_name}{suffix}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{\n        \
+         match <Self as {trait_name}>::__body_{method_name}{suffix}(vm, [{args}]) {{\n            \
+         Ok(r) => NativeCallResult::Done(r),\n            \
+         Err(e) => NativeCallResult::Error(e),\n        \
+         }}\n    }}"
+    )
+    .unwrap();
+}
+
+/// A builtin's generated work, as statements returning its `Result`: read
+/// each argument from `args`, call the Rust implementation, convert the
+/// result.
+fn glue_work(trait_name: &str, method_name: &str, b: &NativeBuiltin) -> String {
+    let mut work = String::new();
+    let out = &mut work;
     // When the receiver is `&mut self`, parameter extractions run BEFORE the
     // mutable receiver extraction. If any parameter borrows VM state shared-ly
     // (e.g. `vm.as_array(&args[i])?` for a `T[]` param), that borrow conflicts
@@ -1319,18 +1631,11 @@ fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &N
     let arraymap_needs_owned =
         needs_owned || return_type_needs_alloc(&b.return_type) || reads_multiple_containers(b);
 
-    writeln!(
-        out,
-        "    fn {glue_name}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{"
-    )
-    .unwrap();
-
     if b.may_yield {
         // Yielding method — returns NativeCallResult directly.
         // Use a closure returning Result<NativeCallResult, VmRustFnError> so `?`
         // operators in arg extractions work (VmInternalError -> VmRustFnError via From),
         // then flatten the result.
-        out.push_str("        let __result: Result<NativeCallResult, VmRustFnError> = (|| {\n");
         emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
         let call_args = call_arg_list(b, needs_owned, arraymap_needs_owned);
         writeln!(
@@ -1338,19 +1643,10 @@ fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &N
             "            Ok(<Self as {trait_name}>::{method_name}(vm, {call_args}))"
         )
         .unwrap();
-        out.push_str("        })();\n");
-        out.push_str("        match __result {\n");
-        out.push_str("            Ok(r) => r,\n");
-        out.push_str("            Err(e) => NativeCallResult::Error(e),\n");
-        out.push_str("        }\n");
-        out.push_str("    }\n");
-        return;
+        return work;
     }
 
     let fallible = is_fallible(b);
-
-    // Use a closure returning NativeFunctionResult so `?` operators work inside.
-    out.push_str("        let __result: NativeFunctionResult = (|| {\n");
 
     emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
 
@@ -1383,12 +1679,7 @@ fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &N
 
     emit_result_conversion_ok(out, b, "            ");
 
-    out.push_str("        })();\n");
-    out.push_str("        match __result {\n");
-    out.push_str("            Ok(v) => NativeCallResult::Done(v),\n");
-    out.push_str("            Err(e) => NativeCallResult::Error(e),\n");
-    out.push_str("        }\n");
-    out.push_str("    }\n");
+    work
 }
 
 // ============================================================================
@@ -1590,10 +1881,12 @@ fn emit_immut_receiver_extraction_indented(
         // matching `receiver_input_type_with_vm_usage`.
         _ if recv.instance_backed && !needs_owned => {
             let view_path = receiver_view_path(recv);
-            let as_instance = if recv.rust_type.is_some() {
-                "as_rust_instance"
+            // A `@@rust_type` instance is read by reference; a field-backed
+            // one is an `InstanceRef`, which its view borrows.
+            let (as_instance, borrow) = if recv.rust_type.is_some() {
+                ("as_rust_instance", "")
             } else {
-                "as_instance"
+                ("as_instance", "&")
             };
             writeln!(
                 out,
@@ -1602,7 +1895,7 @@ fn emit_immut_receiver_extraction_indented(
             .unwrap();
             writeln!(
                 out,
-                "{indent}let {name} = {view_path} {{ instance: __instance }};"
+                "{indent}let {name} = {view_path} {{ instance: {borrow}__instance }};"
             )
             .unwrap();
         }
@@ -1750,11 +2043,9 @@ fn receiver_immut_extraction_expr(
         "Float" => format!(
             "{{ \
                 let __v = {val}; \
-                let Some(ptr) = __v.as_object_ptr() \
+                let Some(f) = __v.as_float() \
                     else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
-                let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
-                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
-                *f \
+                f \
             }}"
         ),
         // Bigint is heap-allocated behind an Arc; always clone the Arc so the
@@ -1802,11 +2093,9 @@ fn extraction_expr(
         BamlType::Float => format!(
             "{{ \
                 let __v = {val}; \
-                let Some(ptr) = __v.as_object_ptr() \
+                let Some(f) = __v.as_float() \
                     else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
-                let bex_vm_types::Object::Float(f) = (unsafe {{ ptr.get() }}) \
-                    else {{ return Err(VmInternalError::TypeError {{ expected: Type::Float, got: vm.type_of(__v) }}.into()); }}; \
-                *f \
+                f \
             }}"
         ),
         BamlType::Bool => format!(
@@ -2027,12 +2316,19 @@ fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) 
         return;
     }
     // List(String) needs two steps to avoid double-borrow of vm:
-    // first map+collect into Value vec, then alloc_array.
+    // first fill a Value vec, then alloc_array. The vec is sized up front:
+    // collecting in place from the wider `BexStr` buffer would shrink it with
+    // a realloc on every call.
     if matches!(&b.return_type, BamlType::List(inner) if matches!(inner.as_ref(), BamlType::String))
     {
         writeln!(
             out,
-            "{indent}let result_values: Vec<Value> = result.into_iter().map(|s| Value::object(vm.alloc_string(s))).collect();"
+            "{indent}let mut result_values: Vec<Value> = Vec::with_capacity(result.len());"
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "{indent}for s in result {{ result_values.push(Value::object(vm.alloc_string(s))); }}"
         )
         .unwrap();
         writeln!(
@@ -2226,7 +2522,7 @@ fn result_conversion_expr(name: &str, ty: &BamlType, generics: &[String]) -> Str
             }})?"
         ),
         BamlType::Bigint => format!("vm.try_alloc_bigint({name})?"),
-        BamlType::Float => format!("Value::object(vm.alloc_float({name}))"),
+        BamlType::Float => format!("vm.float_value({name})"),
         BamlType::Bool => format!("Value::bool({name})"),
         BamlType::Null => "Value::NULL".to_string(),
         BamlType::List(inner) => {
@@ -2659,6 +2955,7 @@ mod tests {
     fn test_array_push_mut_receiver() {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
+        let (output, _) = output.split_once("pub mod builtins").unwrap();
 
         assert!(
             output.contains("fn push(array: &mut Vec<Value>, item: &Value)"),
@@ -2667,6 +2964,38 @@ mod tests {
         assert!(
             !output.contains("fn push(vm: &mut BexVm,"),
             "Array.push should NOT have vm as first param:\n{output}"
+        );
+    }
+
+    /// Each builtin's entry point is a plain function at its BAML path, under
+    /// the path `NativeEntry` gives the Rust emitter, calling the builtin's glue.
+    #[test]
+    fn entry_points_live_at_their_baml_path() {
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
+        let output = generate_native_trait(&builtins, &class_defs);
+        let (_, entries) = output.split_once("pub mod builtins").unwrap();
+        assert!(
+            entries.contains(
+                "pub mod Array {\n        #[allow(unused_imports)]\n        use super::*;"
+            )
+        );
+        assert!(entries.contains(
+            "pub fn push(vm: &mut BexVm, array: Value, item: Value) -> NativeFunctionResult {\n            \
+             <PackageBamlImpl as BamlClassArray>::__body_push(vm, [array, item])"
+        ));
+        assert!(entries.contains("pub fn push_local(vm: &mut BexVm, array: Value, item: Value)"));
+        let push = builtins
+            .iter()
+            .find(|b| b.path == "baml.Array.push")
+            .unwrap();
+        let entry = NativeEntry::of(push, "baml");
+        assert_eq!(entry.path, "bex_vm::package_baml::builtins::Array::push");
+        assert_eq!(entry.arity, 2);
+        assert!(entry.local_twin);
+        assert!(!entry.may_yield);
+        assert!(
+            !entry.reads_type_args,
+            "push's body takes no vm and its glue reads no type args"
         );
     }
 

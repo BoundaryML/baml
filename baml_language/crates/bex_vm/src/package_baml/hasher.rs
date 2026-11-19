@@ -18,10 +18,22 @@ pub(super) fn finish_state(vm: &BexVm, hasher: Value) -> Result<u64, VmInternalE
         .finish())
 }
 
-/// A fresh `baml.hash.DefaultHasher`, with nothing written to it.
+/// A fresh `baml.hash.DefaultHasher`, with nothing written to it: the same
+/// results in every process.
 pub(super) fn new_state(vm: &mut BexVm) -> Value {
+    with_hasher(vm, DefaultHasher::new())
+}
+
+/// A `baml.hash.DefaultHasher` that computes a map's key hash, for a key
+/// whose `Hash` runs BAML code: keyed per process like a native key's hash
+/// ([`bex_vm_types::map_key_hasher`]), so both land in the same bucket.
+pub(super) fn new_map_key_state(vm: &mut BexVm) -> Value {
+    with_hasher(vm, bex_vm_types::map_key_hasher())
+}
+
+fn with_hasher(vm: &mut BexVm, hasher: DefaultHasher) -> Value {
     copy::hash::DefaultHasher {
-        payload: Box::new(OwnedState::new(DefaultHasher::new())),
+        payload: Box::new(OwnedState::new(hasher)),
     }
     .to_value(vm)
 }

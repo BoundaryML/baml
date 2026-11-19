@@ -146,3 +146,5 @@ pub(super) fn has_blank_line(gap: &str) -> bool {
             .iter()
             .any(|line| line.trim().is_empty())
 }
+
+mod tuples;

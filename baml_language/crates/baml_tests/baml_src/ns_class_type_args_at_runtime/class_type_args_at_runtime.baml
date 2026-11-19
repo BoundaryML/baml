@@ -150,3 +150,43 @@ function closure_inside_method_survives_gc_fn() -> string {
 test "closure_inside_method_survives_gc" {
     assert.equal(closure_inside_method_survives_gc_fn(), "int")
 }
+
+// ─── Repeated interface calls into a generic impl ────────────────────────────
+// After its first call, a dispatch site remembers the callee, and later calls'
+// frames share the impl's type arguments with that memo. A `let type` in the
+// body writes the frame's type arguments; the write must stay in that call.
+// Two instantiations alternate at one site, and allocation in between gives
+// the collector chances to run while frames hold shared arguments.
+
+interface DescribesWith {
+    function describe_with(self, extra: reflect.Type) -> string throws never
+}
+
+class Tagged<T> {
+    value T
+
+    implements DescribesWith {
+        function describe_with(self, extra: reflect.Type) -> string {
+            let before = reflect.Type.of<T>().to_string();
+            let type X = extra;
+            let tmp = [before, before];
+            before + "/" + reflect.Type.of<X>().to_string() + "/" + reflect.Type.of<T>().to_string()
+        }
+    }
+}
+
+function repeated_generic_impl_calls_fn() -> string {
+    let items: DescribesWith[] = [Tagged<int> { value: 1 }, Tagged<string> { value: "a" }];
+    let out = "";
+    for (let i = 0; i < 6; i += 1) {
+        out += items[i % 2].describe_with(bool.type()) + ";";
+    }
+    out
+}
+
+test "repeated_generic_impl_calls_keep_their_type_args" {
+    assert.equal(
+        repeated_generic_impl_calls_fn(),
+        "int/bool/int;string/bool/string;int/bool/int;string/bool/string;int/bool/int;string/bool/string;",
+    )
+}

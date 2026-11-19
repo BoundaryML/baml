@@ -20,7 +20,11 @@ pub(crate) struct CompiledState {
     )]
     pub(crate) yielder: Option<YielderPtr>,
     pub(crate) on_fiber: bool,
-    pub(crate) builtin_type_args: Vec<RealizedTy>,
+    /// The type arguments compiled code lends a builtin it calls directly,
+    /// for that call only ([`BexVm::with_call_type_args`]). Rooted through
+    /// the pointer, so a collection during the call updates the lender's
+    /// array in place.
+    pub(crate) lent_type_args: Option<LentTypeArgs>,
     pub(crate) call_type_args: Vec<RealizedTy>,
     pub(crate) saved_call_types: Vec<SavedCallTypes>,
     pub(crate) delivery: Option<Box<VmError>>,
@@ -34,6 +38,18 @@ pub(crate) struct CompiledState {
     pub(crate) direct_calls: bool,
 }
 
+/// A loan of type arguments from compiled code to the builtin it is calling.
+#[derive(Clone, Copy)]
+pub(crate) struct LentTypeArgs(pub(crate) std::ptr::NonNull<[RealizedTy]>);
+
+// SAFETY: a loan lives only for one synchronous builtin call on the thread
+// running the VM (`with_call_type_args` sets and clears it around the call),
+// so it never crosses a suspension or another thread while set.
+#[allow(unsafe_code)]
+unsafe impl Send for LentTypeArgs {}
+#[allow(unsafe_code)]
+unsafe impl Sync for LentTypeArgs {}
+
 impl Default for CompiledState {
     fn default() -> Self {
         Self {
@@ -41,7 +57,7 @@ impl Default for CompiledState {
             fiber_floor: 0,
             yielder: None,
             on_fiber: false,
-            builtin_type_args: Vec::new(),
+            lent_type_args: None,
             call_type_args: Vec::new(),
             saved_call_types: Vec::new(),
             delivery: None,
@@ -68,7 +84,7 @@ impl RootHaver for CompiledState {
             fiber_floor: _,
             yielder: _,
             on_fiber: _,
-            builtin_type_args,
+            lent_type_args,
             call_type_args,
             saved_call_types,
             delivery,
@@ -78,7 +94,12 @@ impl RootHaver for CompiledState {
         } = self;
         static_type_cache.retain(|_, ty| ty.visit(visitor));
         records.visit_roots(visitor);
-        builtin_type_args.visit_roots(visitor);
+        if let Some(LentTypeArgs(lent)) = lent_type_args {
+            // SAFETY: set only while `with_call_type_args` runs a call with
+            // the lender's array exclusively borrowed for it.
+            #[allow(unsafe_code)]
+            unsafe { lent.as_mut() }.visit_roots(visitor);
+        }
         call_type_args.visit_roots(visitor);
         for SavedCallTypes { args } in saved_call_types {
             args.visit_roots(visitor);

@@ -445,10 +445,21 @@ public final class BamlFfi {
                     ProtoWriter.encodeNamedCallFunctionArgs(
                             fqn, names, args, callId, typeArgs, prepareInvocation(callId, ctx));
             byte[] response = nativeCallSync(request); encoding.submitted();
-            return decodeResult(response, returnDesc);
+            return decodeResult(response, boundReturn(returnDesc, typeArgs));
         } finally {
             nativeReleaseCallId(callId);
         }
+    }
+
+    /**
+     * The declared return type with the call's explicit type arguments bound,
+     * so a `T` result decodes as what the caller named it (a tuple as its
+     * record, a union as its arm) rather than wire-driven.
+     */
+    private static BamlType boundReturn(BamlType returnDesc, BamlTypes typeArgs) {
+        return returnDesc == null || typeArgs == null || typeArgs.isEmpty()
+                ? returnDesc
+                : returnDesc.substitute(typeArgs.asMap());
     }
 
     /**
@@ -518,6 +529,7 @@ public final class BamlFfi {
         CompletableFuture<byte[]> raw = new CompletableFuture<>();
         PENDING.put(callId, raw);
         CancellableCall result = new CancellableCall(callId);
+        BamlType boundReturn = boundReturn(returnDesc, typeArgs);
         try (var encoding = new baml_bridge.internal.EncodingScope()) {
             byte[] request =
                     ProtoWriter.encodeNamedCallFunctionArgs(
@@ -545,7 +557,7 @@ public final class BamlFfi {
                         result.completeExceptionally(err);
                     } else {
                         try {
-                            result.complete(decodeResult(bytes, returnDesc));
+                            result.complete(decodeResult(bytes, boundReturn));
                         } catch (Throwable t) {
                             result.completeExceptionally(mapAsyncFailure(t));
                         }
