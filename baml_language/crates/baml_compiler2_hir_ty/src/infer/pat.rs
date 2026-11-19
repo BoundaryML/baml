@@ -575,7 +575,7 @@ impl<'db> InferenceContext<'db> {
             // A pattern that writes no type matches what reaches it. Its
             // matrix row is still a wildcard over the whole column.
             Pattern::Wildcard => PatternOutcome {
-                dpat: DPat::wildcard(dpat_ty(scrut)),
+                dpat: DPat::wildcard(self.dpat_ty(scrut)),
                 matched_ty: reaching.clone(),
                 recorded_ty: None,
                 covers_type: true,
@@ -585,7 +585,7 @@ impl<'db> InferenceContext<'db> {
                 let inner = match subpat {
                     Some(sub) => self.lower_pattern_reaching(body, *sub, scrut, reaching),
                     None => PatternOutcome {
-                        dpat: DPat::wildcard(dpat_ty(scrut)),
+                        dpat: DPat::wildcard(self.dpat_ty(scrut)),
                         matched_ty: reaching.clone(),
                         recorded_ty: None,
                         covers_type: true,
@@ -700,7 +700,7 @@ impl<'db> InferenceContext<'db> {
                     consumes_matched: outcomes.iter().all(|outcome| outcome.consumes_matched),
                     dpat: DPat::or(
                         outcomes.into_iter().map(|outcome| outcome.dpat).collect(),
-                        dpat_ty(scrut),
+                        self.dpat_ty(scrut),
                     ),
                     matched_ty: matched,
                     recorded_ty: None,
@@ -924,7 +924,7 @@ impl<'db> InferenceContext<'db> {
                     )
                     .map(|member| self.reduced_for_pattern(&member.ty))
                     .unwrap_or_else(Ty::error);
-                    DPat::wildcard(dpat_ty(&field_ty))
+                    DPat::wildcard(self.dpat_ty(&field_ty))
                 })
             })
             .collect();
@@ -935,7 +935,7 @@ impl<'db> InferenceContext<'db> {
         // sub-patterns decompose, so refutable field arms COMPOSE to
         // coverage (`{ active: true }` + `{ active: false }`).
         let dpat = {
-            let iface_dpat = DPat::interface(dpat_ty(&head), fields, dpat_ty(scrut));
+            let iface_dpat = DPat::interface(self.dpat_ty(&head), fields, self.dpat_ty(scrut));
             match scrut.kind() {
                 InferTy::Union(members) => {
                     let claimed: Vec<&Ty> = members
@@ -945,7 +945,11 @@ impl<'db> InferenceContext<'db> {
                         })
                         .collect();
                     match claimed.as_slice() {
-                        [member] => DPat::union_member(dpat_ty(member), iface_dpat, dpat_ty(scrut)),
+                        [member] => DPat::union_member(
+                            self.dpat_ty(member),
+                            iface_dpat,
+                            self.dpat_ty(scrut),
+                        ),
                         _ => iface_dpat,
                     }
                 }
@@ -1172,7 +1176,7 @@ impl<'db> InferenceContext<'db> {
             // keeps its shape - the replace-with-error discipline,
             // never poison-to-top).
             return PatternOutcome {
-                dpat: DPat::wildcard(dpat_ty(scrut)),
+                dpat: DPat::wildcard(self.dpat_ty(scrut)),
                 matched_ty: pat_ty.clone(),
                 recorded_ty: None,
                 covers_type: false,
@@ -1191,16 +1195,16 @@ impl<'db> InferenceContext<'db> {
                 })
                 .collect();
             if !claimed.is_empty() {
-                let scrut_plain = dpat_ty(scrut);
+                let scrut_plain = self.dpat_ty(scrut);
                 let alts: Vec<DPat> = claimed
                     .iter()
                     .map(|member| {
                         let inner = if self.provable_subtype(member, pat_ty) {
-                            DPat::wildcard(dpat_ty(member))
+                            DPat::wildcard(self.dpat_ty(member))
                         } else {
                             self.dpat_for_type(pat_ty, member)
                         };
-                        DPat::union_member(dpat_ty(member), inner, scrut_plain.clone())
+                        DPat::union_member(self.dpat_ty(member), inner, scrut_plain.clone())
                     })
                     .collect();
                 let dpat = if alts.len() == 1 {
@@ -1220,7 +1224,7 @@ impl<'db> InferenceContext<'db> {
             }
             // Nothing provably claimed: possible-but-not-covering.
             return PatternOutcome {
-                dpat: DPat::type_test(dpat_ty(pat_ty), dpat_ty(scrut)),
+                dpat: DPat::type_test(self.dpat_ty(pat_ty), self.dpat_ty(scrut)),
                 matched_ty: pat_ty.clone(),
                 recorded_ty: None,
                 covers_type: false,
@@ -1257,8 +1261,8 @@ impl<'db> InferenceContext<'db> {
     /// five regimes): singletons, finite alphabets, classes, rigid vars,
     /// and the subtype fallback. Deliberately stricter than arm validity.
     fn dpat_for_type(&self, pat_ty: &Ty, col: &Ty) -> DPat {
-        let col_plain = dpat_ty(col);
-        let pat_plain = dpat_ty(pat_ty);
+        let col_plain = self.dpat_ty(col);
+        let pat_plain = self.dpat_ty(pat_ty);
         // The universal coverage rule first: a pattern the whole column
         // provably fits is a wildcard at this column, whatever its shape
         // (a same-union pattern must not decompose into per-member
@@ -1311,10 +1315,10 @@ impl<'db> InferenceContext<'db> {
                 let fields = self.class_pattern_field_types(qtn, args);
                 DPat::class_inst(
                     qtn.clone(),
-                    args.iter().map(dpat_ty).collect(),
+                    args.iter().map(|arg| self.dpat_ty(arg)).collect(),
                     fields
                         .iter()
-                        .map(|field_ty| DPat::wildcard(dpat_ty(field_ty)))
+                        .map(|field_ty| DPat::wildcard(self.dpat_ty(field_ty)))
                         .collect(),
                     pat_plain,
                 )
@@ -1361,7 +1365,7 @@ impl<'db> InferenceContext<'db> {
                 self.lower_pattern(body, field_pat, &Ty::error());
             }
             return PatternOutcome {
-                dpat: DPat::wildcard(dpat_ty(scrut)),
+                dpat: DPat::wildcard(self.dpat_ty(scrut)),
                 matched_ty: Ty::error(),
                 recorded_ty: None,
                 covers_type: false,
@@ -1403,7 +1407,7 @@ impl<'db> InferenceContext<'db> {
                 self.lower_pattern(body, field_pat, &Ty::error());
             }
             return PatternOutcome {
-                dpat: DPat::wildcard(dpat_ty(scrut)),
+                dpat: DPat::wildcard(self.dpat_ty(scrut)),
                 matched_ty: Ty::error(),
                 recorded_ty: None,
                 covers_type: false,
@@ -1486,7 +1490,7 @@ impl<'db> InferenceContext<'db> {
             .zip(sub_dpats)
             .map(|((_, field_ty), sub)| {
                 sub.unwrap_or_else(|| {
-                    DPat::wildcard(dpat_ty(
+                    DPat::wildcard(self.dpat_ty(
                         &self.pattern_field_ty(&crate::impls::interned_ty(field_ty), &args),
                     ))
                 })
@@ -1498,9 +1502,9 @@ impl<'db> InferenceContext<'db> {
         let dpat = {
             let class_dpat = DPat::class_inst(
                 qtn.clone(),
-                args.iter().map(dpat_ty).collect(),
+                args.iter().map(|arg| self.dpat_ty(arg)).collect(),
                 fields,
-                dpat_ty(&head),
+                self.dpat_ty(&head),
             );
             match scrut.kind() {
                 InferTy::Union(members) => {
@@ -1533,7 +1537,11 @@ impl<'db> InferenceContext<'db> {
                         })
                         .collect();
                     match claimed.as_slice() {
-                        [member] => DPat::union_member(dpat_ty(member), class_dpat, dpat_ty(scrut)),
+                        [member] => DPat::union_member(
+                            self.dpat_ty(member),
+                            class_dpat,
+                            self.dpat_ty(scrut),
+                        ),
                         _ => class_dpat,
                     }
                 }
@@ -1595,7 +1603,7 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             if !claimed.is_empty() {
-                let scrut_plain = dpat_ty(scrut);
+                let scrut_plain = self.dpat_ty(scrut);
                 let mut alts = Vec::new();
                 let mut matched = Vec::new();
                 let mut consumes = true;
@@ -1611,7 +1619,7 @@ impl<'db> InferenceContext<'db> {
                     consumes &= outcome.consumes_matched && !tuple_pattern_is_open(member);
                     matched.push(outcome.matched_ty);
                     alts.push(DPat::union_member(
-                        dpat_ty(member),
+                        self.dpat_ty(member),
                         outcome.dpat,
                         scrut_plain.clone(),
                     ));
@@ -1653,7 +1661,7 @@ impl<'db> InferenceContext<'db> {
             });
         }
         PatternOutcome {
-            dpat: DPat::wildcard(dpat_ty(scrut)),
+            dpat: DPat::wildcard(self.dpat_ty(scrut)),
             matched_ty: Ty::error(),
             recorded_ty: None,
             covers_type: false,
@@ -1677,7 +1685,7 @@ impl<'db> InferenceContext<'db> {
         PatternOutcome {
             dpat: DPat::tuple(
                 outcomes.into_iter().map(|outcome| outcome.dpat).collect(),
-                dpat_ty(tuple_ty),
+                self.dpat_ty(tuple_ty),
             ),
             matched_ty: tuple_ty.clone(),
             recorded_ty: None,
@@ -1853,7 +1861,7 @@ impl<'db> InferenceContext<'db> {
         // `UnionMember` each; any other column (or a claim that is not made of
         // the column's own members, after an ascription narrowed it) takes
         // the slice directly.
-        let slice_dpat = |ty: &Ty| DPat::slice(shape.clone(), sub_dpats.clone(), dpat_ty(ty));
+        let slice_dpat = |ty: &Ty| DPat::slice(shape.clone(), sub_dpats.clone(), self.dpat_ty(ty));
         let dpat = match scrut_structure.kind() {
             InferTy::Union(members)
                 if !claimed.is_empty()
@@ -1862,13 +1870,17 @@ impl<'db> InferenceContext<'db> {
                 let mut branches: Vec<DPat> = claimed
                     .iter()
                     .map(|(member, _)| {
-                        DPat::union_member(dpat_ty(member), slice_dpat(member), dpat_ty(scrut))
+                        DPat::union_member(
+                            self.dpat_ty(member),
+                            slice_dpat(member),
+                            self.dpat_ty(scrut),
+                        )
                     })
                     .collect();
                 if branches.len() == 1 {
                     branches.remove(0)
                 } else {
-                    DPat::or(branches, dpat_ty(scrut))
+                    DPat::or(branches, self.dpat_ty(scrut))
                 }
             }
             _ => slice_dpat(&matched_ty),
@@ -2116,34 +2128,30 @@ impl<'db> InferenceContext<'db> {
             Ok(_) | Err(baml_type::interned::OpenTy) => ty.clone(),
         }
     }
-}
 
-/// The legal shapes of a rest sub-pattern: the wildcard, a bare
-/// binding, or a bind chain whose tail is at most a type ascription
-/// (`..let name: T[]`). A chain ending in a STRUCTURAL link (array,
-/// class, or-pattern) has no sliced-middle semantics.
-/// Materialize a (possibly in-flight) type as a `DPat` column type.
-///
-/// Pattern lowering runs mid-inference, so a scrutinee (or a field/member
-/// instantiated at its arguments) can still carry unsolved variables or
-/// holes — which the finalized plain `Ty` cannot represent. An open column
-/// poisons as `Ty::Error`, the same suppression `check_match` applies before
-/// usefulness (`has_infer()` gate) and the vocabulary the exhaustiveness
-/// machinery already keys on (`contains_error`): verdicts over an
-/// open column are noise. Coarser than the retired lossy materialization
-/// (which kept the closed spine around per-node holes), in the conservative
-/// direction — fewer verdicts, never wrong ones. Recorded pattern FACTS are
-/// unaffected: `type_of_pat` stores the interned type, resolved at finalize.
-fn dpat_ty(ty: &Ty) -> baml_type::Ty {
-    match baml_type::interned::ClosedTy::try_from(ty) {
-        Ok(closed) => closed.to_plain(),
-        // SUPPRESSION disposition: an open column takes the Error sentinel
-        // because exhaustiveness exclusively WITHHOLDS verdicts on Error —
-        // it never derives from it — so this is conservative, not laundered
-        // compatibility. (An explicit unjudgeable `DPat` ctor could replace
-        // the sentinel reuse; today recovery-Error and open-Error want the
-        // same suppression.)
-        Err(baml_type::interned::OpenTy) => baml_type::Ty::Error,
+    /// Materialize a (possibly in-flight) type as a `DPat` column type, in
+    /// canonical form. Every type a `DPat` or `Ctor` carries passes through
+    /// here, so ctor identity agrees with the canonical scrutinee
+    /// (`matrix_scrut`): `Box<B | A>` and `Box<A | B>` name one ctor.
+    ///
+    /// Pattern lowering runs mid-inference, so a scrutinee (or a field/member
+    /// instantiated at its arguments) can still carry unsolved variables or
+    /// holes, which the finalized plain `Ty` cannot represent. An open column
+    /// poisons as `Ty::Error`, the same suppression `check_match` applies
+    /// before usefulness (`has_infer()` gate) and the vocabulary the
+    /// exhaustiveness machinery already keys on (`contains_error`): verdicts
+    /// over an open column are noise. Recorded pattern FACTS are unaffected:
+    /// `type_of_pat` stores the interned type, resolved at finalize.
+    fn dpat_ty(&self, ty: &Ty) -> baml_type::Ty {
+        match baml_type::interned::ClosedTy::try_from(ty) {
+            // Errored types skip the normalizer, as `matrix_scrut` does.
+            Ok(closed) if ty.has_error() => closed.to_plain(),
+            Ok(closed) => normalize_interned(&closed, &self.facts).to_plain(),
+            // SUPPRESSION disposition: an open column takes the Error
+            // sentinel because exhaustiveness exclusively WITHHOLDS verdicts
+            // on Error; it never derives from it.
+            Err(baml_type::interned::OpenTy) => baml_type::Ty::Error,
+        }
     }
 }
 
@@ -2187,6 +2195,10 @@ pub(super) fn takes_every_value(body: &ExprBody, pat: PatId) -> bool {
     }
 }
 
+/// The legal shapes of a rest sub-pattern: the wildcard, a bare
+/// binding, or a bind chain whose tail is at most a type ascription
+/// (`..let name: T[]`). A chain ending in a STRUCTURAL link (array,
+/// class, or-pattern) has no sliced-middle semantics.
 fn rest_pattern_shape_ok(body: &ExprBody, pat: PatId) -> bool {
     match &body.patterns[pat] {
         Pattern::Wildcard => true,
@@ -2443,15 +2455,9 @@ impl PatCtx for HirPatCtx<'_, '_> {
                     field,
                     true,
                 )
-                // Instantiation of a closed scrutinee head is closed; an
-                // open escape poisons the column, the file's suppression
-                // discipline (`dpat_ty`).
-                .and_then(|member| {
-                    baml_type::interned::ClosedTy::try_from(&member.ty)
-                        .ok()
-                        .map(|closed| closed.to_plain())
+                .map_or(baml_type::Ty::Error, |member| {
+                    self.infer.dpat_ty(&member.ty)
                 })
-                .unwrap_or(baml_type::Ty::Error)
             })
             .collect()
     }
@@ -2471,13 +2477,7 @@ impl PatCtx for HirPatCtx<'_, '_> {
         self.infer
             .class_pattern_field_types(qtn, &args)
             .iter()
-            // Substitution of closed args into declaration types is
-            // closed; an open escape poisons the column (`dpat_ty`).
-            .map(|ty| {
-                baml_type::interned::ClosedTy::try_from(ty)
-                    .map(|closed| closed.to_plain())
-                    .unwrap_or_else(|_| baml_type::Ty::Error)
-            })
+            .map(|ty| self.infer.dpat_ty(ty))
             .collect()
     }
 
@@ -2498,13 +2498,17 @@ impl PatCtx for HirPatCtx<'_, '_> {
 }
 
 impl HirPatCtx<'_, '_> {
+    /// Unfolds a (recursive) alias column to its target, canonicalized like
+    /// every other column type: a declared target is a source spelling.
     fn peel_aliases(&self, ty: baml_type::Ty, fuel: u32) -> baml_type::Ty {
         if fuel == 0 {
             return ty;
         }
         match &ty {
             baml_type::Ty::TypeAlias(qtn) => match self.infer.facts.alias_def(qtn) {
-                Some(target) => self.peel_aliases(target, fuel - 1),
+                Some(target) => {
+                    self.peel_aliases(self.infer.dpat_ty(&Ty::from_plain(&target)), fuel - 1)
+                }
                 None => ty,
             },
             _ => ty,
