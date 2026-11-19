@@ -1313,9 +1313,9 @@ impl<'db> InferenceContext<'db> {
             ),
             InferTy::Class(qtn, args) => {
                 let fields = self.class_pattern_field_types(qtn, args);
-                DPat::class_inst(
-                    qtn.clone(),
-                    args.iter().map(|arg| self.dpat_ty(arg)).collect(),
+                class_inst_dpat(
+                    qtn,
+                    args.len(),
                     fields
                         .iter()
                         .map(|field_ty| DPat::wildcard(self.dpat_ty(field_ty)))
@@ -1500,12 +1500,7 @@ impl<'db> InferenceContext<'db> {
 
         // Union scrutinee: claim the same-class member.
         let dpat = {
-            let class_dpat = DPat::class_inst(
-                qtn.clone(),
-                args.iter().map(|arg| self.dpat_ty(arg)).collect(),
-                fields,
-                self.dpat_ty(&head),
-            );
+            let class_dpat = class_inst_dpat(&qtn, args.len(), fields, self.dpat_ty(&head));
             match scrut.kind() {
                 InferTy::Union(members) => {
                     // Same class AND agreeing instantiation: against
@@ -2193,6 +2188,25 @@ pub(super) fn takes_every_value(body: &ExprBody, pat: PatId) -> bool {
             false
         }
     }
+}
+
+/// A class destructure over its canonical head (`head_plain`, from
+/// `dpat_ty`). The ctor args are read off that head, never canonicalized
+/// one by one: canonicalization unfolds a recursive alias at the root
+/// once, so `R` alone becomes `int | R[]` while `Box<R>` keeps it folded,
+/// and the column's args come from its canonical head. An open head
+/// (`Ty::Error`) gets Error args, the same suppression.
+fn class_inst_dpat(
+    qtn: &baml_type::DeclName,
+    arity: usize,
+    fields: Vec<DPat>,
+    head_plain: baml_type::Ty,
+) -> DPat {
+    let args = match &head_plain {
+        baml_type::Ty::Class(_, args) => args.clone(),
+        _ => vec![baml_type::Ty::Error; arity].into_boxed_slice(),
+    };
+    DPat::class_inst(qtn.clone(), args, fields, head_plain)
 }
 
 /// The legal shapes of a rest sub-pattern: the wildcard, a bare

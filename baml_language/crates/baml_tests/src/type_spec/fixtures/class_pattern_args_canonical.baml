@@ -125,3 +125,64 @@ function ca_still_missing(b: CaBox<CaB | CaA> | CaBox<int>) -> string throws nev
 //          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ non-exhaustive
     r
 }
+
+// Recursive alias args: the canonical form unfolds a root alias once, but
+// inside a canonical head the arg stays folded. Ctor args come from the
+// canonical head, never from each arg canonicalized on its own.
+type CaR = int | CaR[]
+
+type CaJ = CaA | CaB | CaJ[]
+
+interface CaHas<T> {
+    v T
+}
+
+function ca_rec(b: CaBox<CaR>) -> string throws never {
+    let r = match (b) {
+     // ^ string
+        CaBox<CaR> { v: _ } => "any",
+    };
+    r
+}
+
+function ca_rec_optional(b: CaBox<CaR> | null) -> string throws never {
+    let r = match (b) {
+     // ^ string
+        null => "none",
+        CaBox<CaR> { v: _ } => "any",
+    };
+    r
+}
+
+function ca_rec_union(b: CaBox<CaJ>) -> string throws never {
+    let r = match (b) {
+     // ^ string
+        CaBox<CaJ> { v: _ } => "any",
+    };
+    r
+}
+
+function ca_rec_multi_arg(b: CaTwo<CaR, CaJ>) -> string throws never {
+    let r = match (b) {
+     // ^ string
+        CaTwo<CaR, CaJ> { t: _, u: _ } => "any",
+    };
+    r
+}
+
+function ca_rec_nested(b: CaBox<CaBox<CaR>>) -> string throws never {
+    let r = match (b) {
+     // ^ string
+        CaBox<CaBox<CaR>> { v: CaBox<CaR> { v: _ } } => "any",
+    };
+    r
+}
+
+function ca_rec_interface(h: CaHas<CaR> | null) -> string throws never {
+    let r = match (h) {
+     // ^ string
+        null => "none",
+        CaHas<CaR> { v: _ } => "any",
+    };
+    r
+}
