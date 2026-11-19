@@ -1330,13 +1330,13 @@ impl WitnessMatrix {
     fn apply_missing(&mut self, missing: &[Ctor], ty: &Ty, cx: &dyn PatCtx) {
         let original = std::mem::take(&mut self.0);
         for ctor in missing {
+            if ctor_is_empty(cx, ctor, ty) {
+                continue;
+            }
             // Sub-pattern types come from the ctor's own slot types, NOT
             // the parent column type. For `Class(Node)`, fields are typed
             // by the class's declared field types.
             let field_tys = ctor_sub_tys(cx, ctor, ty);
-            if field_tys.iter().any(|t| !cx.is_inhabited(t)) {
-                continue;
-            }
             let fields: Vec<WitnessPat> = field_tys.into_iter().map(WitnessPat::wildcard).collect();
             let pat = WitnessPat::new(ctor.clone(), fields, ty.clone());
             for stack in &original {
@@ -1472,12 +1472,26 @@ impl CtorSplit {
     }
 }
 
+/// Whether no value has the shape `ctor` in a column of type `ty`, because
+/// one of its fields is uninhabited. rustc's `missing_empty` ctors: such a
+/// ctor is never a missing case.
+fn ctor_is_empty(cx: &dyn PatCtx, ctor: &Ctor, ty: &Ty) -> bool {
+    ctor_sub_tys(cx, ctor, ty)
+        .iter()
+        .any(|t| !cx.is_inhabited(t))
+}
+
 /// rustc's `report_individual_missing_ctors` rule, for a column in which no
 /// ctor is present: report a single `_` instead of every missing ctor, unless
 /// the place names its missing ctors (the scrutinee, where listing them reads
 /// better). Enumerating per column would make the witnesses the cartesian
-/// product of every unmatched field.
-fn report_missing_ctors(place: &PlaceInfo, missing: Vec<Ctor>) -> Vec<Ctor> {
+/// product of every unmatched field. Empty ctors are dropped first, so an
+/// uninhabited column reports nothing rather than `_`.
+fn report_missing_ctors(cx: &dyn PatCtx, place: &PlaceInfo, missing: Vec<Ctor>) -> Vec<Ctor> {
+    let missing: Vec<Ctor> = missing
+        .into_iter()
+        .filter(|ctor| !ctor_is_empty(cx, ctor, &place.ty))
+        .collect();
     if place.names_missing_ctors || missing.is_empty() {
         missing
     } else {
@@ -1506,15 +1520,12 @@ fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorS
     // synthetic `Missing` ctor that drops the column without descending.
     // The unspecialize step (`apply_missing`) wraps the witness with one
     // wildcard-filled pat per missing ctor of `col_ty`, or with a single `_`
-    // per `report_missing_ctors`.
+    // per `report_missing_ctors`. An uninhabited column reports nothing:
+    // `report_missing_ctors` drops ctors with an uninhabited field, which
+    // catches transitively-uninhabited classes (e.g. `class A { x: Never }`
+    // or `class A { x: B }` where `B` is uninhabited) that `enumerate_ctors`
+    // alone can't detect (it returns `[Class(A)]`).
     if matrix.rows.is_empty() {
-        // Empty matrix on an uninhabited column type → vacuously exhaustive.
-        // Catches transitively-uninhabited classes (e.g. `class A { x: Never }`
-        // or `class A { x: B }` where `B` is uninhabited) that
-        // `enumerate_ctors` alone can't detect (it returns `[Class(A)]`).
-        if !cx.is_inhabited(col_ty) {
-            return CtorSplit::alphabet(vec![], vec![]);
-        }
         // Lists: a single open-ended `[..]` witness covers "any list".
         // Check this *before* `enumerate_ctors` because List's `enumerate`
         // returns empty (slice splitting normally handles it). Without
@@ -1537,7 +1548,10 @@ fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorS
                 dedup_ctors(all)
             }
         };
-        return CtorSplit::alphabet(vec![Ctor::Missing], report_missing_ctors(place, missing));
+        return CtorSplit::alphabet(
+            vec![Ctor::Missing],
+            report_missing_ctors(cx, place, missing),
+        );
     }
 
     let present: Vec<Ctor> = collect_column_ctors(matrix);
@@ -1552,7 +1566,7 @@ fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorS
     if matches!(col_ty, Ty::List(_)) {
         let mut split = split_slice_ctors(&present_no_wild, has_wildcard);
         if !present_no_wild.iter().any(|c| matches!(c, Ctor::Slice(_))) {
-            split.missing = report_missing_ctors(place, split.missing);
+            split.missing = report_missing_ctors(cx, place, split.missing);
         }
         return split;
     }
@@ -1635,7 +1649,7 @@ fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorS
             // reported per `report_missing_ctors`.
             return CtorSplit {
                 split: vec![Ctor::Missing],
-                missing: report_missing_ctors(place, missing),
+                missing: report_missing_ctors(cx, place, missing),
                 reachability_only,
             };
         }
@@ -5477,6 +5491,35 @@ mod tests {
             render_missing(&report)
         );
         assert!(report.unreachable_arms.is_empty());
+    }
+
+    #[test]
+    fn witness_collapse_skips_uninhabited_column_with_only_reachability_rows() {
+        // `match (o: Outer | null) { Outer { d: let t: T } =>, null => }` with
+        // `class Outer { d: Dead }` and `class Dead { x: never }`. `Outer` has
+        // no values, so nothing is missing even though the rigid row covers
+        // no ctor of the `Dead` column.
+        let mut cx = TestingCtx::new();
+        let outer = qtn("Outer");
+        let dead = qtn("Dead");
+        let outer_ty = class_ty(&outer);
+        let dead_ty = class_ty(&dead);
+        cx.register(dead.clone(), vec![never_ty()]);
+        cx.register(outer.clone(), vec![dead_ty.clone()]);
+        let scrut = union_of(vec![outer_ty.clone(), null_ty()]);
+        let rigid = DPat::class(
+            outer.clone(),
+            vec![DPat::type_test(type_var_ty("T"), dead_ty)],
+            outer_ty,
+        );
+        let null = DPat::type_test(null_ty(), scrut.clone());
+
+        let report = compute_match_usefulness(&cx, &[rigid, null], scrut);
+        assert!(
+            report.missing.is_empty(),
+            "got {:?}",
+            render_missing(&report)
+        );
     }
 
     #[test]

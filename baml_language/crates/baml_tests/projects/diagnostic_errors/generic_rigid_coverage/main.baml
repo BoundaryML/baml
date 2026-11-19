@@ -33,3 +33,20 @@ function concrete_only_arm_over_rigid_is_not_exhaustive<T>(x: T) -> string {
         let s: string => s,
     }
 }
+
+// A rigid arm in a field column whose type is uninhabited: `RigidOuter` has no
+// values, so the match is exhaustive. No `RigidOuter { d: _ }` witness.
+class RigidDead {
+    x: never
+}
+
+class RigidOuter {
+    d: RigidDead
+}
+
+function rigid_arm_in_uninhabited_field_is_exhaustive<T>(o: RigidOuter | null) -> int {
+    match (o) {
+        RigidOuter { d: let t: T } => 1,
+        null => 0,
+    }
+}
