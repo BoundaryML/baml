@@ -38,7 +38,7 @@ runs:
         path: |
           ${{ inputs.workspace }}/target
           ${{ steps.inputs.outputs.directory }}
-        key: target-v1-${{ inputs.key }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/Cargo.lock', inputs.workspace), format('{0}/rust-toolchain.toml', inputs.workspace)) }}
+        key: target-v2-${{ inputs.key }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/Cargo.lock', inputs.workspace), format('{0}/rust-toolchain.toml', inputs.workspace)) }}
 
     - uses: astral-sh/github-actions/rust-workspace-cache/inputs@61a5a2c7e0df1c0caf46fe5d1e74a4cb8a7205f8 # 2026.11.16.1
       with:
