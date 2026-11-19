@@ -955,10 +955,10 @@ pub trait PatCtx {
     /// [`PatCtx::slice_field_types`].
     fn list_element_type(&self, ty: &Ty) -> Ty;
 
-    /// Is this type inhabited (does it admit at least one value)?
+    /// Is this column inhabited (does it admit at least one value)?
     ///
-    /// Default impl: structurally walks the type using `class_field_types`
-    /// for class definitions, with cycle protection (recursive types like
+    /// Default impl: structurally walks the column's canonical sub-columns
+    /// (class fields through `ctor_sub_tys`), with cycle protection (recursive types like
     /// `class Node { next: Optional<Node> }` are inhabited via the null
     /// branch; direct cycles default to *inhabited*, since uninhabitedness
     /// is anti-monotone).
@@ -966,37 +966,58 @@ pub trait PatCtx {
     /// Real implementations should override with a Salsa-cached query — the
     /// algorithm calls this on every column and every missing-ctor field
     /// during exhaustiveness, so caching pays off quickly.
-    fn is_inhabited(&self, ty: &Ty) -> bool {
-        is_inhabited_default(ty, self, &mut FxHashSet::default())
+    fn is_inhabited(&self, col: &ColumnTy) -> bool {
+        is_inhabited_default(col, self, &mut InhabitedSeen::default())
     }
 }
 
+/// The types on the current path of an inhabitedness walk. Classes are
+/// keyed by name so a class whose args grow on every level
+/// (`class G<T> { v: G<T[]> }`) still closes a cycle; every other column
+/// is keyed by its type, which closes a recursive alias.
+#[derive(Default)]
+struct InhabitedSeen {
+    classes: FxHashSet<DeclName>,
+    cols: FxHashSet<Ty>,
+}
+
+/// Walks canonical columns: every nested type is derived the way the
+/// matrix specializes (`ctor_sub_tys`, `PatCtx::column`), so an alias that
+/// names an uninhabited type is seen as that type.
 fn is_inhabited_default<C: PatCtx + ?Sized>(
-    ty: &Ty,
+    col: &ColumnTy,
     cx: &C,
-    seen: &mut FxHashSet<DeclName>,
+    seen: &mut InhabitedSeen,
 ) -> bool {
-    match ty {
-        Ty::Never => false,
-        Ty::Class(qtn, _) => {
-            if !seen.insert(qtn.clone()) {
-                // Cycle: assume inhabited. Uninhabitedness is only
-                // *proven* by reaching a Never; we never assume it.
-                return true;
-            }
-            let r = cx
-                .class_field_types(qtn, ty)
-                .iter()
-                .all(|f| is_inhabited_default(f, cx, seen));
-            seen.remove(qtn);
-            r
-        }
-        Ty::Union(members) => members.iter().any(|m| is_inhabited_default(m, cx, seen)),
-        Ty::Tuple(elements) => elements.iter().all(|e| is_inhabited_default(e, cx, seen)),
-        // `T[]` always inhabits `[]`, so it is inhabited regardless of T.
-        Ty::List(_) => true,
-        _ => true,
+    let ty = col.ty();
+    let fresh = match ty {
+        Ty::Class(qtn, _) => seen.classes.insert(qtn.clone()),
+        _ => seen.cols.insert(ty.clone()),
+    };
+    if !fresh {
+        // Cycle: assume inhabited. Uninhabitedness is only *proven* by
+        // reaching a Never; it is never assumed.
+        return true;
     }
+    let inhabited = match ty {
+        Ty::Never => false,
+        Ty::Class(qtn, args) => ctor_sub_tys(cx, &Ctor::Class(qtn.clone(), args.clone()), col)
+            .iter()
+            .all(|field| is_inhabited_default(field, cx, seen)),
+        Ty::Union(members) => members
+            .iter()
+            .any(|member| is_inhabited_default(&cx.column(member), cx, seen)),
+        Ty::Tuple(elements) => elements
+            .iter()
+            .all(|element| is_inhabited_default(&cx.column(element), cx, seen)),
+        // `T[]` always inhabits `[]`, so it is inhabited regardless of T.
+        _ => true,
+    };
+    match ty {
+        Ty::Class(qtn, _) => seen.classes.remove(qtn),
+        _ => seen.cols.remove(ty),
+    };
+    inhabited
 }
 
 // ── Matrix and rows ──────────────────────────────────────────────────────────
@@ -1223,7 +1244,7 @@ pub fn compute_match_usefulness(
     // Uninhabited scrutinee: no values to match. The match is vacuously
     // exhaustive and every arm is unreachable. Mirrors rustc's notion of
     // "the place being matched is irrelevant" when no inhabitant exists.
-    if !cx.is_inhabited(scrut_ty.ty()) {
+    if !cx.is_inhabited(&scrut_ty) {
         return UsefulnessReport {
             missing: vec![],
             unreachable_arms: (0..arms.len()).map(ArmId).collect(),
@@ -1334,7 +1355,7 @@ impl WitnessMatrix {
             // the parent column type. For `Class(Node)`, fields are typed
             // by the class's declared field types.
             let field_tys = ctor_sub_tys(cx, ctor, col);
-            if field_tys.iter().any(|t| !cx.is_inhabited(t.ty())) {
+            if field_tys.iter().any(|t| !cx.is_inhabited(t)) {
                 continue;
             }
             let fields: Vec<WitnessPat> = field_tys
@@ -1500,7 +1521,7 @@ fn split_ctors(cx: &dyn PatCtx, col: &ColumnTy, matrix: &Matrix<'_>) -> CtorSpli
         // Catches transitively-uninhabited classes (e.g. `class A { x: Never }`
         // or `class A { x: B }` where `B` is uninhabited) that
         // `enumerate_ctors` alone can't detect (it returns `[Class(A)]`).
-        if !cx.is_inhabited(col_ty) {
+        if !cx.is_inhabited(col) {
             return CtorSplit::alphabet(vec![], vec![]);
         }
         // Lists: a single open-ended `[..]` witness covers "any list".
@@ -1775,7 +1796,7 @@ fn dedup_equivalent_type_tests(cx: &dyn PatCtx, ctors: Vec<Ctor>) -> Vec<Ctor> {
 /// The sub-columns of `ctor` at column `col`: the single place a nested
 /// column is derived. The matrix specializes with these, and coverage
 /// lowering lowers sub-patterns against them.
-pub fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col: &ColumnTy) -> Vec<ColumnTy> {
+pub fn ctor_sub_tys<C: PatCtx + ?Sized>(cx: &C, ctor: &Ctor, col: &ColumnTy) -> Vec<ColumnTy> {
     let col_ty = col.ty();
     let sub_tys = match ctor {
         Ctor::Class(qtn, args) => cx.class_field_types(qtn, &class_ty_for_ctor(qtn, args, col_ty)),

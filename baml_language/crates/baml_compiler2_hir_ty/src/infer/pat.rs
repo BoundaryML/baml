@@ -234,6 +234,11 @@ impl<'db> InferenceContext<'db> {
             }
             return self.join(&arm_tys);
         };
+        // Holes in written types may have solved in the arm bodies; rows read
+        // the solved heads.
+        for &pat in &matrix_pats {
+            self.resolve_pattern_heads(body, pat);
+        }
         let ctx = HirPatCtx { infer: self };
         let col = ctx.column(&scrut_closed.to_plain());
         let rows: Vec<_> = matrix_pats
@@ -274,6 +279,37 @@ impl<'db> InferenceContext<'db> {
             self.unjudged_units.insert(match_expr, units);
         }
         self.join(&arm_tys)
+    }
+
+    /// Substitutes the solved variables into the heads recorded for `pat`
+    /// and every pattern under it.
+    fn resolve_pattern_heads(&mut self, body: &ExprBody, pat: PatId) {
+        if let Some(head) = self.pattern_heads.get(&pat) {
+            let resolved = head.resolved(&mut self.table);
+            self.pattern_heads.insert(pat, resolved);
+        }
+        let children: Vec<PatId> = match &body.patterns[pat] {
+            Pattern::Wildcard | Pattern::Type(_) | Pattern::Bind { subpat: None, .. } => Vec::new(),
+            Pattern::Bind {
+                subpat: Some(sub), ..
+            } => vec![*sub],
+            Pattern::Or(alts) | Pattern::Tuple(alts) => alts.clone(),
+            Pattern::Class { fields, .. } => fields.iter().map(|field| field.pat).collect(),
+            Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ..
+            } => prefix
+                .iter()
+                .chain(rest.as_ref().and_then(|rest| rest.pat.as_ref()))
+                .chain(suffix)
+                .copied()
+                .collect(),
+        };
+        for child in children {
+            self.resolve_pattern_heads(body, child);
+        }
     }
 
     /// The scrutinee demand every pattern site shares (the
@@ -556,6 +592,9 @@ impl<'db> InferenceContext<'db> {
         scrut: &Ty,
         reaching: &Ty,
     ) -> PatternOutcome {
+        // A pattern lowered again (once per claimed union member) records
+        // only what its last lowering wrote.
+        self.pattern_heads.remove(&pat);
         let mut written_refs = Vec::new();
         written_refs.extend(self.type_refs.pattern_types.get(&pat).copied());
         written_refs.extend(self.type_refs.array_ascriptions.get(&pat).copied());
@@ -1008,7 +1047,7 @@ impl<'db> InferenceContext<'db> {
     /// scrutinee of type `scrut`: the one judgement the dead-arm report and
     /// a union claim's candidate test read. An erroneous or still-open pair
     /// is undecidable here, so never provably disjoint.
-    fn provably_disjoint(&self, scrut: &Ty, pat_ty: &Ty) -> bool {
+    pub(super) fn provably_disjoint(&self, scrut: &Ty, pat_ty: &Ty) -> bool {
         if pat_ty.has_error() || scrut.has_error() {
             return false;
         }
@@ -1439,6 +1478,9 @@ impl<'db> InferenceContext<'db> {
                 expected: scrut.clone(),
                 found: Ty::tuple(vec![Ty::intern(InferTy::Unknown); arity]),
             });
+            self.pattern_heads.insert(pat, PatternHead::Recovery);
+        } else if structure.has_error() {
+            self.pattern_heads.insert(pat, PatternHead::Recovery);
         }
         PatternOutcome {
             matched_ty: Ty::error(),

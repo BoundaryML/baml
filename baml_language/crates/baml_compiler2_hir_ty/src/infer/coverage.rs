@@ -42,6 +42,33 @@ pub(super) enum PatternHead {
     },
     /// A list pattern's written ascription.
     Array { ascription: Option<Ty> },
+    /// A structural pattern typing reported as never matching its
+    /// scrutinee: its row is a wildcard, so no coverage verdict stacks on
+    /// that report.
+    Recovery,
+}
+
+impl PatternHead {
+    /// The head with every inference variable typing has solved since it
+    /// was recorded substituted.
+    pub(super) fn resolved(&self, table: &mut super::unify::InferenceTable) -> Self {
+        match self {
+            Self::Type(ty) => Self::Type(table.resolve_completely(ty)),
+            Self::Class { qtn, head, fields } => Self::Class {
+                qtn: qtn.clone(),
+                head: table.resolve_completely(head),
+                fields: fields.clone(),
+            },
+            Self::Interface { head, fields } => Self::Interface {
+                head: table.resolve_completely(head),
+                fields: fields.clone(),
+            },
+            Self::Array { ascription } => Self::Array {
+                ascription: ascription.as_ref().map(|ty| table.resolve_completely(ty)),
+            },
+            Self::Recovery => Self::Recovery,
+        }
+    }
 }
 
 /// The `PatCtx` backing the usefulness matrix and coverage lowering, over
@@ -53,38 +80,41 @@ pub(super) struct HirPatCtx<'a, 'db> {
 impl HirPatCtx<'_, '_> {
     /// The row for `pat` against column `col`.
     pub(super) fn coverage_dpat(&self, body: &ExprBody, pat: PatId, col: &ColumnTy) -> DPat {
+        if matches!(
+            self.infer.pattern_heads.get(&pat),
+            Some(PatternHead::Recovery)
+        ) {
+            return DPat::wildcard(col.clone());
+        }
         match &body.patterns[pat] {
             Pattern::Wildcard | Pattern::Bind { subpat: None, .. } => DPat::wildcard(col.clone()),
             Pattern::Bind {
                 subpat: Some(sub), ..
             } => self.coverage_dpat(body, *sub, col),
-            Pattern::Or(alts) => DPat::or(
+            Pattern::Or(alts) => any_of(
                 alts.iter()
                     .map(|&alt| self.coverage_dpat(body, alt, col))
                     .collect(),
-                col.clone(),
+                col,
+                || proves_nothing(col),
             ),
-            Pattern::Tuple(elements) => self.tuple_dpat(body, elements, col),
+            Pattern::Tuple(elements) => self.tuple_dpat(body, pat, elements, col),
             Pattern::Array {
                 prefix,
                 rest,
                 suffix,
                 ..
-            } => {
-                let ascription = match self.infer.pattern_heads.get(&pat) {
-                    Some(PatternHead::Array { ascription }) => ascription.as_ref(),
-                    _ => None,
-                };
-                self.slice_dpat(body, prefix, rest.as_ref(), suffix, ascription, col)
-            }
+            } => self.slice_dpat(body, pat, prefix, rest.as_ref(), suffix, col),
             Pattern::Type(_) | Pattern::Class { .. } => match self.infer.pattern_heads.get(&pat) {
                 Some(PatternHead::Type(written)) => match self.written(written) {
-                    Some(written) if !baml_type::contains_error(&written) => {
-                        self.type_dpat(&written, col)
+                    Some(written) if baml_type::contains_error(&written) => {
+                        // An erroneous written type was reported where it
+                        // was written; its row does not stack a coverage
+                        // verdict on that report.
+                        DPat::wildcard(col.clone())
                     }
-                    // An erroneous written type stays local to its pattern:
-                    // the row covers nothing it cannot prove.
-                    _ => DPat::wildcard(col.clone()),
+                    Some(written) => self.type_dpat(&written, col),
+                    None => proves_nothing(col),
                 },
                 Some(PatternHead::Class { qtn, head, fields }) => {
                     self.class_dpat(body, qtn, head, fields, col)
@@ -92,7 +122,9 @@ impl HirPatCtx<'_, '_> {
                 Some(PatternHead::Interface { head, fields }) => {
                     self.interface_dpat(body, head, fields, col)
                 }
-                Some(PatternHead::Array { .. }) | None => DPat::wildcard(col.clone()),
+                Some(PatternHead::Array { .. } | PatternHead::Recovery) | None => {
+                    DPat::wildcard(col.clone())
+                }
             },
         }
     }
@@ -105,40 +137,36 @@ impl HirPatCtx<'_, '_> {
         Some(self.canonicalize(&closed.to_plain()))
     }
 
-    /// A type test (`let x: T`, a literal, an enum variant, `null`). A union
-    /// column projects onto every member the written type provably overlaps
-    /// in either direction (the B-633 rule: undecidable rigid-vs-concrete
+    /// A type test (`let x: T`, a literal, an enum variant, `null`). A
+    /// written union tests each of its alternatives. A union column
+    /// projects onto every member the written type provably overlaps in
+    /// either direction (the B-633 rule: undecidable rigid-vs-concrete
     /// pairs stay unclaimed and therefore uncovered).
     fn type_dpat(&self, written: &baml_type::Ty, col: &ColumnTy) -> DPat {
         if self.is_subtype(col.ty(), written) {
             return DPat::wildcard(col.clone());
         }
+        if let baml_type::Ty::Union(alternatives) = written {
+            return any_of(
+                alternatives
+                    .iter()
+                    .map(|alternative| self.type_dpat(alternative, col))
+                    .collect(),
+                col,
+                || proves_nothing(col),
+            );
+        }
         if !matches!(col.ty(), baml_type::Ty::Union(_)) {
             return self.type_dpat_in(written, col);
         }
-        let mut branches = Vec::new();
-        for ctor in self.enumerate_ctors(col) {
-            let Ctor::UnionMember(member) = &ctor else {
-                continue;
-            };
-            let [member_col] = <[ColumnTy; 1]>::try_from(ctor_sub_tys(self, &ctor, col))
-                .expect("a union member has one sub-column");
-            if self.is_subtype(member_col.ty(), written)
-                || self.is_subtype(written, member_col.ty())
-            {
-                branches.push(DPat::union_member(
-                    member.clone(),
-                    self.type_dpat(written, &member_col),
-                    col.clone(),
-                ));
-            }
-        }
-        match branches.len() {
-            // Possible-but-not-covering.
-            0 => DPat::type_test(written.clone(), col.clone()),
-            1 => branches.pop().expect("one branch"),
-            _ => DPat::or(branches, col.clone()),
-        }
+        let claims = self.claims(col, &|member_col| {
+            (self.is_subtype(member_col.ty(), written) || self.is_subtype(written, member_col.ty()))
+                .then(|| self.type_dpat(written, member_col))
+        });
+        // No claim: possible-but-not-covering.
+        any_of(claims, col, || {
+            DPat::type_test(written.clone(), col.clone())
+        })
     }
 
     /// A type test against a column that is not a union (TIR's
@@ -146,37 +174,31 @@ impl HirPatCtx<'_, '_> {
     /// rigid variables, and the subtype fallback.
     fn type_dpat_in(&self, written: &baml_type::Ty, col: &ColumnTy) -> DPat {
         use baml_type::Ty as P;
+        let singletons = |values: Vec<P>| {
+            any_of(
+                values
+                    .into_iter()
+                    .map(|value| DPat::type_test(value, col.clone()))
+                    .collect(),
+                col,
+                || DPat::type_test(written.clone(), col.clone()),
+            )
+        };
         match written {
-            P::Bool => DPat::or(
+            P::Bool => singletons(
                 [true, false]
                     .into_iter()
-                    .map(|value| {
-                        DPat::type_test(
-                            P::Literal(baml_base::Literal::Bool(value), Freshness::Regular),
-                            col.clone(),
-                        )
-                    })
+                    .map(|value| P::Literal(baml_base::Literal::Bool(value), Freshness::Regular))
                     .collect(),
-                col.clone(),
             ),
-            P::Enum(qtn) => DPat::or(
+            P::Enum(qtn) => singletons(
                 self.infer
                     .facts
                     .enum_variants(qtn)
                     .unwrap_or_default()
                     .into_iter()
-                    .map(|variant| {
-                        DPat::type_test(P::EnumVariant(qtn.clone(), variant), col.clone())
-                    })
+                    .map(|variant| P::EnumVariant(qtn.clone(), variant))
                     .collect(),
-                col.clone(),
-            ),
-            P::Union(members) => DPat::or(
-                members
-                    .iter()
-                    .map(|member| self.type_dpat(member, col))
-                    .collect(),
-                col.clone(),
             ),
             P::Class(qtn, args) => {
                 let ctor = Ctor::Class(qtn.clone(), args.clone());
@@ -206,8 +228,11 @@ impl HirPatCtx<'_, '_> {
     ) -> DPat {
         // Args come off the canonical head as a whole: canonicalizing each
         // arg alone would unfold a recursive alias the head keeps folded.
-        let args: Box<[baml_type::Ty]> = match self.written(head) {
-            Some(baml_type::Ty::Class(_, args)) => args,
+        let Some(written) = self.written(head) else {
+            return proves_nothing(col);
+        };
+        let args: Box<[baml_type::Ty]> = match written {
+            baml_type::Ty::Class(_, args) => args,
             _ => match head.kind() {
                 baml_type::interned::InferTy::Class(_, args) => {
                     vec![baml_type::Ty::Error; args.len()].into_boxed_slice()
@@ -221,24 +246,27 @@ impl HirPatCtx<'_, '_> {
             let rows = self.field_rows(body, fields, &sub_cols);
             DPat::class_inst(qtn.clone(), args.clone(), rows, col.clone())
         };
-        let applies = |member: &baml_type::Ty| match member {
-            baml_type::Ty::Class(member_qtn, member_args) => {
-                member_qtn == qtn
+        let mut claims = self.claims(col, &|member_col| match member_col.ty() {
+            baml_type::Ty::Class(member_qtn, member_args)
+                if member_qtn == qtn
                     && (args.iter().any(baml_type::contains_error)
-                        || Ctor::Class(member_qtn.clone(), member_args.clone()) == ctor)
+                        || Ctor::Class(member_qtn.clone(), member_args.clone()) == ctor) =>
+            {
+                Some(build(member_col))
             }
-            _ => false,
-        };
-        let mut branches = self.member_branches(col, &applies, &build);
-        if branches.len() == 1 {
-            branches.pop().expect("one branch")
+            _ => None,
+        });
+        if claims.len() == 1 {
+            claims.pop().expect("one claim")
         } else {
             build(col)
         }
     }
 
     /// An interface destructure: the existential's single-ctor struct view.
-    /// In a union column it claims the one member of the same interface.
+    /// It claims the members of the same interface, and each implementing
+    /// class member as that class, its written fields carried to the class
+    /// slots that supply them.
     fn interface_dpat(
         &self,
         body: &ExprBody,
@@ -247,7 +275,7 @@ impl HirPatCtx<'_, '_> {
         col: &ColumnTy,
     ) -> DPat {
         let Some(head) = self.written(head) else {
-            return DPat::wildcard(col.clone());
+            return proves_nothing(col);
         };
         let baml_type::Ty::Interface(qtn, ..) = &head else {
             return DPat::wildcard(col.clone());
@@ -258,21 +286,37 @@ impl HirPatCtx<'_, '_> {
             let rows = self.field_rows(body, fields, &sub_cols);
             DPat::interface(head.clone(), rows, col.clone())
         };
-        let applies = |member: &baml_type::Ty| matches!(member, baml_type::Ty::Interface(member_qtn, ..) if member_qtn == qtn);
-        let mut branches = self.member_branches(col, &applies, &build);
-        if branches.len() == 1 {
-            branches.pop().expect("one branch")
-        } else {
-            build(col)
-        }
+        let claims = self.claims(col, &|member_col| match member_col.ty() {
+            baml_type::Ty::Interface(member_qtn, ..) if member_qtn == qtn => {
+                Some(build(member_col))
+            }
+            baml_type::Ty::Class(class_qtn, class_args) => {
+                let projection =
+                    self.interface_field_projection_for_class(&head, class_qtn, class_args)?;
+                let class_ctor = Ctor::Class(class_qtn.clone(), class_args.clone());
+                let class_fields: Vec<(usize, PatId)> = fields
+                    .iter()
+                    .map(|&(slot, field_pat)| (projection[slot], field_pat))
+                    .collect();
+                let sub_cols = ctor_sub_tys(self, &class_ctor, member_col);
+                Some(DPat::class_inst(
+                    class_qtn.clone(),
+                    class_args.clone(),
+                    self.field_rows(body, &class_fields, &sub_cols),
+                    member_col.clone(),
+                ))
+            }
+            _ => None,
+        });
+        any_of(claims, col, || build(col))
     }
 
-    /// A tuple: claims the members of its arity, and those that may hold a
-    /// tuple of any slot types (`unknown`, a type parameter, an
-    /// existential).
-    fn tuple_dpat(&self, body: &ExprBody, elements: &[PatId], col: &ColumnTy) -> DPat {
-        let arity = elements.len();
-        let ctor = Ctor::Tuple(arity);
+    /// A tuple: claims the members its shape may fit (the members of its
+    /// arity whose slots its sub-patterns may match, and those that may
+    /// hold a tuple of any slot types). Where it fits nothing it covers
+    /// nothing.
+    fn tuple_dpat(&self, body: &ExprBody, pat: PatId, elements: &[PatId], col: &ColumnTy) -> DPat {
+        let ctor = Ctor::Tuple(elements.len());
         let build = |col: &ColumnTy| {
             let sub_cols = ctor_sub_tys(self, &ctor, col);
             let rows = elements
@@ -282,35 +326,23 @@ impl HirPatCtx<'_, '_> {
                 .collect();
             DPat::tuple(rows, col.clone())
         };
-        let applies = |member: &baml_type::Ty| match member {
-            baml_type::Ty::Tuple(slots) => slots.len() == arity,
-            other => holds_any_shape(other),
-        };
-        if !matches!(col.ty(), baml_type::Ty::Union(_)) {
-            return if applies(col.ty()) {
-                build(col)
-            } else {
-                // A dead tuple pattern: typing reported it.
-                DPat::wildcard(col.clone())
-            };
-        }
-        let mut branches = self.member_branches(col, &applies, &build);
-        match branches.len() {
-            0 => DPat::wildcard(col.clone()),
-            1 => branches.pop().expect("one branch"),
-            _ => DPat::or(branches, col.clone()),
-        }
+        let claims = self.claims(col, &|member_col| {
+            self.may_fit(body, pat, member_col)
+                .then(|| build(member_col))
+        });
+        any_of(claims, col, || build(col))
     }
 
-    /// A list pattern: claims the members that hold lists (a written
-    /// ascription narrows that to the list types inside it).
+    /// A list pattern: claims the members that hold lists its shape may
+    /// fit. A written ascription, on the list or on its rest, narrows that
+    /// to the members inside every one of them.
     fn slice_dpat(
         &self,
         body: &ExprBody,
+        pat: PatId,
         prefix: &[PatId],
         rest: Option<&ArrayRestPat>,
         suffix: &[PatId],
-        ascription: Option<&Ty>,
         col: &ColumnTy,
     ) -> DPat {
         let shape = match rest {
@@ -331,36 +363,155 @@ impl HirPatCtx<'_, '_> {
                 .collect();
             DPat::slice(shape.clone(), rows, col.clone())
         };
-        let ascription = ascription.and_then(|ascription| self.written(ascription));
-        let applies = |member: &baml_type::Ty| match &ascription {
-            Some(ascription) => {
-                matches!(member, baml_type::Ty::List(_)) && self.is_subtype(member, ascription)
-            }
-            None => matches!(member, baml_type::Ty::List(_)) || holds_any_shape(member),
+        let Some(ascriptions) = self.slice_ascriptions(body, pat, rest) else {
+            return proves_nothing(col);
         };
-        let mut branches = self.member_branches(col, &applies, &build);
-        match branches.len() {
-            // Not a union, or a union whose lists the pattern does not
-            // claim: the slice stands in the column itself.
-            0 => build(col),
-            1 => branches.pop().expect("one branch"),
-            _ => DPat::or(branches, col.clone()),
+        let within_ascriptions = |member: &baml_type::Ty| {
+            ascriptions
+                .iter()
+                .all(|ascription| self.is_subtype(member, ascription))
+        };
+        let claims = self.claims(col, &|member_col| {
+            let member = member_col.ty();
+            let holds = if ascriptions.is_empty() {
+                matches!(member, baml_type::Ty::List(_)) || holds_any_shape(member)
+            } else {
+                matches!(member, baml_type::Ty::List(_)) && within_ascriptions(member)
+            };
+            (holds && self.may_fit(body, pat, member_col)).then(|| build(member_col))
+        });
+        if !claims.is_empty() || matches!(col.ty(), baml_type::Ty::Union(_)) {
+            // A union whose lists the pattern does not claim: the slice
+            // stands in the column itself, covering none of its members.
+            return any_of(claims, col, || build(col));
+        }
+        if within_ascriptions(col.ty()) {
+            build(col)
+        } else {
+            // A list the ascriptions do not contain: the pattern matches
+            // some of its values (or none) and covers none of them.
+            proves_nothing(col)
         }
     }
 
-    /// The `UnionMember` branches of a union column for a structural
-    /// pattern: one per member it `applies` to, each built against that
-    /// member's own column. A member whose column is itself a union (a
-    /// recursive alias the canonical form keeps folded) is searched in turn.
-    /// Empty for a column that is not a union.
-    fn member_branches(
+    /// The canonical written ascriptions of a list pattern: its own, and
+    /// its rest binding's. `None` while one is still open.
+    fn slice_ascriptions(
         &self,
-        col: &ColumnTy,
-        applies: &dyn Fn(&baml_type::Ty) -> bool,
-        build: &dyn Fn(&ColumnTy) -> DPat,
-    ) -> Vec<DPat> {
+        body: &ExprBody,
+        pat: PatId,
+        rest: Option<&ArrayRestPat>,
+    ) -> Option<Vec<baml_type::Ty>> {
+        let own = match self.infer.pattern_heads.get(&pat) {
+            Some(PatternHead::Array { ascription }) => ascription.as_ref(),
+            _ => None,
+        };
+        let rest = rest
+            .and_then(|rest| rest.pat)
+            .and_then(|rest_pat| rest_ascription(body, rest_pat))
+            .and_then(|type_pat| match self.infer.pattern_heads.get(&type_pat) {
+                Some(PatternHead::Type(written)) => Some(written),
+                _ => None,
+            });
+        own.into_iter()
+            .chain(rest)
+            .map(|ascription| self.written(ascription))
+            .filter(|ascription| {
+                ascription
+                    .as_ref()
+                    .is_none_or(|ascription| !baml_type::contains_error(ascription))
+            })
+            .collect()
+    }
+
+    /// Whether `pat` may match some value of `col`: false only on a
+    /// provable misfit (a written type provably disjoint from the column, a
+    /// shape the column cannot hold), so "cannot tell" keeps a claim
+    /// (B-633's direction). Columns whose values may be of several shapes
+    /// are never a provable misfit as a whole.
+    fn may_fit(&self, body: &ExprBody, pat: PatId, col: &ColumnTy) -> bool {
+        let ty = col.ty();
+        if matches!(ty, baml_type::Ty::Union(_)) || holds_any_shape(ty) {
+            return true;
+        }
+        let head = self.infer.pattern_heads.get(&pat);
+        if matches!(head, Some(PatternHead::Recovery)) {
+            return true;
+        }
+        match &body.patterns[pat] {
+            Pattern::Wildcard | Pattern::Bind { subpat: None, .. } => true,
+            Pattern::Bind {
+                subpat: Some(sub), ..
+            } => self.may_fit(body, *sub, col),
+            Pattern::Or(alts) => alts.iter().any(|&alt| self.may_fit(body, alt, col)),
+            Pattern::Tuple(elements) => match ty {
+                baml_type::Ty::Tuple(slots) if slots.len() == elements.len() => elements
+                    .iter()
+                    .zip(ctor_sub_tys(self, &Ctor::Tuple(elements.len()), col))
+                    .all(|(&element, slot)| self.may_fit(body, element, &slot)),
+                _ => false,
+            },
+            Pattern::Array {
+                prefix,
+                rest,
+                suffix,
+                ..
+            } => {
+                let baml_type::Ty::List(_) = ty else {
+                    return false;
+                };
+                let disjoint = |written: &Ty| {
+                    self.written(written).is_some_and(|written| {
+                        self.infer
+                            .provably_disjoint(&Ty::from_plain(ty), &Ty::from_plain(&written))
+                    })
+                };
+                if let Some(PatternHead::Array {
+                    ascription: Some(ascription),
+                }) = head
+                    && disjoint(ascription)
+                {
+                    return false;
+                }
+                let element = ctor_sub_tys(self, &Ctor::Slice(SliceShape::Fixed(1)), col)
+                    .pop()
+                    .expect("a one-element slice has one sub-column");
+                prefix
+                    .iter()
+                    .chain(suffix)
+                    .all(|&element_pat| self.may_fit(body, element_pat, &element))
+                    && rest
+                        .as_ref()
+                        .and_then(|rest| rest.pat)
+                        .is_none_or(|rest_pat| self.may_fit(body, rest_pat, col))
+            }
+            Pattern::Type(_) | Pattern::Class { .. } => match head {
+                Some(PatternHead::Type(written)) => self.written(written).is_none_or(|written| {
+                    !self
+                        .infer
+                        .provably_disjoint(&Ty::from_plain(ty), &Ty::from_plain(&written))
+                }),
+                Some(PatternHead::Class { qtn, .. }) => {
+                    matches!(ty, baml_type::Ty::Class(col_qtn, _) if col_qtn == qtn)
+                }
+                Some(
+                    PatternHead::Interface { .. }
+                    | PatternHead::Array { .. }
+                    | PatternHead::Recovery,
+                )
+                | None => true,
+            },
+        }
+    }
+
+    /// The rows a structural pattern claims in `col`: in a union column one
+    /// `UnionMember` branch per member `claim` accepts, each built against
+    /// that member's own column (a member whose column is itself a union, a
+    /// recursive alias the canonical form keeps folded, is searched in
+    /// turn); in any other column, the claim of the column itself.
+    fn claims(&self, col: &ColumnTy, claim: &dyn Fn(&ColumnTy) -> Option<DPat>) -> Vec<DPat> {
         if !matches!(col.ty(), baml_type::Ty::Union(_)) {
-            return Vec::new();
+            return claim(col).into_iter().collect();
         }
         let mut branches = Vec::new();
         for ctor in self.enumerate_ctors(col) {
@@ -369,17 +520,11 @@ impl HirPatCtx<'_, '_> {
             };
             let [member_col] = <[ColumnTy; 1]>::try_from(ctor_sub_tys(self, &ctor, col))
                 .expect("a union member has one sub-column");
-            let inner = if matches!(member_col.ty(), baml_type::Ty::Union(_)) {
-                let mut nested = self.member_branches(&member_col, applies, build);
-                match nested.len() {
-                    0 => continue,
-                    1 => nested.pop().expect("one branch"),
-                    _ => DPat::or(nested, member_col.clone()),
-                }
-            } else if applies(member_col.ty()) {
-                build(&member_col)
-            } else {
-                continue;
+            let mut nested = self.claims(&member_col, claim);
+            let inner = match nested.len() {
+                0 => continue,
+                1 => nested.pop().expect("one claim"),
+                _ => DPat::or(nested, member_col.clone()),
             };
             branches.push(DPat::union_member(member.clone(), inner, col.clone()));
         }
@@ -407,6 +552,33 @@ impl HirPatCtx<'_, '_> {
                 }
             })
             .collect()
+    }
+}
+
+/// The row matching any of `alts`: an `or` of two or more, the one
+/// alternative itself, and `empty` for none.
+fn any_of(mut alts: Vec<DPat>, col: &ColumnTy, empty: impl FnOnce() -> DPat) -> DPat {
+    match alts.len() {
+        0 => empty(),
+        1 => alts.pop().expect("one alternative"),
+        _ => DPat::or(alts, col.clone()),
+    }
+}
+
+/// A row that covers no value of `col`: what a pattern contributes when
+/// nothing proves which values it matches.
+fn proves_nothing(col: &ColumnTy) -> DPat {
+    DPat::type_test(baml_type::Ty::Never, col.clone())
+}
+
+/// The type pattern a rest binding's chain ends in (`..let rest: T`).
+fn rest_ascription(body: &ExprBody, pat: PatId) -> Option<PatId> {
+    match &body.patterns[pat] {
+        Pattern::Type(_) => Some(pat),
+        Pattern::Bind {
+            subpat: Some(sub), ..
+        } => rest_ascription(body, *sub),
+        _ => None,
     }
 }
 
