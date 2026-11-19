@@ -20,6 +20,7 @@ fn abi_param(ty: &Ty) -> Option<AbiParam> {
         Ty::Int
         | Ty::String
         | Ty::Bigint
+        | Ty::Bytes
         | Ty::Array(_)
         | Ty::Map
         | Ty::Optional(_)
@@ -206,6 +207,7 @@ impl<'db> Translator<'_, 'db> {
                 Ty::Int
                 | Ty::String
                 | Ty::Bigint
+                | Ty::Bytes
                 | Ty::Array(_)
                 | Ty::Map
                 | Ty::Optional(_)

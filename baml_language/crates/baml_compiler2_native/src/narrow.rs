@@ -114,6 +114,7 @@ impl<'db> TestKind<'db> {
             TyTemplate::Bool => NativeTy::Bool,
             TyTemplate::String => NativeTy::String,
             TyTemplate::Bigint => NativeTy::Bigint,
+            TyTemplate::Uint8Array => NativeTy::Bytes,
             TyTemplate::Null => NativeTy::Null,
             TyTemplate::Literal(baml_type::Literal::String(text), _) => {
                 return Some(Self::Is(Value::String(text.clone())));
@@ -183,6 +184,7 @@ impl<'db> TestKind<'db> {
             typetag::BOOL => Self::Exactly(NativeTy::Bool),
             typetag::STRING => Self::Exactly(NativeTy::String),
             typetag::BIGINT => Self::Exactly(NativeTy::Bigint),
+            typetag::UINT8ARRAY => Self::Exactly(NativeTy::Bytes),
             typetag::NULL => Self::Exactly(NativeTy::Null),
             typetag::LIST => Self::AnyArray,
             typetag::PANIC => Self::Panic,

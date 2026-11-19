@@ -125,6 +125,9 @@ impl Intrinsic {
             {
                 Some(NativeTy::Bool)
             }
+            (Self::EnumEq | Self::EnumNe, [NativeTy::Bytes, NativeTy::Bytes]) => {
+                Some(NativeTy::Bool)
+            }
             // Two maps the runtime compares itself.
             (
                 Self::EnumEq | Self::EnumNe,
@@ -1105,12 +1108,13 @@ pub(crate) fn rvalue_ty<'db>(
             )),
         },
         Rvalue::Len(place) => match narrowed(place_ty(db, body, place)?) {
-            NativeTy::Array(_) | NativeTy::Map(..) => Ok(NativeTy::Int),
+            NativeTy::Array(_) | NativeTy::Map(..) | NativeTy::Bytes => Ok(NativeTy::Int),
             other => Err(Blocker::new(
                 "length of a non-array value",
                 describe(&other),
             )),
         },
+        Rvalue::Uint8Array(_) => Ok(NativeTy::Bytes),
         Rvalue::Map(_, _, entries) => {
             let map = match expected {
                 NativeTy::Optional(inner) => inner,

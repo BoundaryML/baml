@@ -1,13 +1,13 @@
 //! `baml.String`.
 
 use super::{
-    Arr, Int, NativeBamlString, Natives, Root, Scope, Str, StrRef, Thrown, array_size, part_size,
-    str_size,
+    Arr, Bytes, Int, NativeBamlString, Natives, Root, Scope, Str, StrRef, Thrown, array_size,
+    part_size, str_size,
 };
 
 /// The position a `slice` bound names in a sequence of `length`: counted
 /// back from the end when negative, then clamped into `[0, length]`.
-fn slice_bound(bound: i64, length: usize) -> usize {
+pub(super) fn slice_bound(bound: i64, length: usize) -> usize {
     let length = i64::try_from(length).unwrap_or(i64::MAX);
     let resolved = if bound < 0 { bound + length } else { bound };
     usize::try_from(resolved.clamp(0, length)).unwrap_or_default()
@@ -23,7 +23,7 @@ fn char_to_byte(text: &str, index: usize) -> usize {
 
 /// The position an index names in a sequence of `length`: counted back from
 /// the end when negative, and `None` outside `[0, length)`.
-fn index_in(index: i64, length: usize) -> Option<usize> {
+pub(super) fn index_in(index: i64, length: usize) -> Option<usize> {
     let resolved = if index < 0 {
         index.checked_add(i64::try_from(length).ok()?)?
     } else {
@@ -727,6 +727,31 @@ impl NativeBamlString for Natives {
         let from = leading_space(text);
         let to = before_trailing_space(text).max(from);
         substring(scope, string, from, to, None)
+    }
+
+    fn to_utf8<'s>(scope: &mut Scope<'s>, string: Root<'s, Str>) -> Root<'s, Bytes> {
+        let length = string.get(scope).byte_len();
+        let bytes = scope.alloc_zeroed_bytes(length);
+        bytes
+            .get(scope)
+            .copy_from(0, string.get(scope).as_str().as_bytes());
+        bytes
+    }
+
+    fn from_utf8<'s>(
+        scope: &mut Scope<'s>,
+        utf8: Root<'s, Bytes>,
+    ) -> Result<Root<'s, Str>, Thrown<'s>> {
+        match String::from_utf8(utf8.get(scope).to_vec()) {
+            Ok(text) => Ok(scope.alloc_str(&text)),
+            Err(error) => {
+                let error = error.utf8_error();
+                Err(scope.invalid_argument(&format!(
+                    "string.from_utf8: invalid UTF-8 at byte {}: {error}",
+                    error.valid_up_to()
+                )))
+            }
+        }
     }
 
     fn to_code_points<'s>(scope: &mut Scope<'s>, string: Root<'s, Str>) -> Root<'s, Arr<Int>> {

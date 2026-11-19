@@ -27,10 +27,11 @@ use std::{cell::Cell, marker::PhantomData, mem::MaybeUninit, ptr::NonNull};
 use crate::{
     heap::{Mutator, load, store},
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, SLICE_MIN_BYTES, SLICE_OFFSET, SLICE_PARENT,
-        SLICE_SIZE, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS,
-        STRING_TEXT, TYPE_ARRAY_OF_REFS, TYPE_ARRAY_OF_VALUES, TYPE_ID_MASK, TYPE_STRING,
-        TYPE_STRING_SLICE, WORD, field_offset, instance_size, words,
+        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, BYTES_DATA, BYTES_LENGTH, SLICE_MIN_BYTES,
+        SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, STORAGE_CAPACITY, STORAGE_ELEMENTS,
+        STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT, TYPE_ARRAY_OF_REFS,
+        TYPE_ARRAY_OF_VALUES, TYPE_ID_MASK, TYPE_STRING, TYPE_STRING_SLICE, WORD, field_offset,
+        instance_size, words,
     },
 };
 
@@ -73,6 +74,8 @@ pub struct Str;
 pub struct Big;
 /// An array of `E`.
 pub struct Arr<E>(PhantomData<E>);
+/// A `uint8array`.
+pub struct Bytes;
 /// A class instance.
 pub struct Obj;
 /// A map, of whatever key and value types a call names.
@@ -98,6 +101,9 @@ impl Managed for Str {
 }
 impl Managed for Big {
     type View<'a> = BigRef<'a>;
+}
+impl Managed for Bytes {
+    type View<'a> = BytesRef<'a>;
 }
 impl<E: Element> Managed for Arr<E> {
     type View<'a> = ArrRef<'a, E>;
@@ -323,6 +329,185 @@ impl<'a> ArrRef<'a, Float> {
         let words = self.words();
         // SAFETY: a `float` element is the word's bits.
         unsafe { std::slice::from_raw_parts(words.as_ptr().cast(), words.len()) }
+    }
+}
+
+/// A view of a `uint8array`.
+///
+/// The array can be written, by compiled code and by natives, so its bytes
+/// are reached here through a raw address and a length, and read and
+/// written by copying: [`Self::get`], [`Self::to_vec`], [`Self::copy_to`],
+/// [`Self::copy_from`], [`Self::copy_from_bytes`]. A native that stops
+/// takes them with [`Self::hold`]. The two methods that lend the bytes as
+/// a Rust slice instead, [`Self::as_slice`] and [`Self::as_mut_slice`], are
+/// the only places a slice is made of bytes in the heap, and both rely on a
+/// single worker.
+#[derive(Clone, Copy)]
+pub struct BytesRef<'a>(usize, PhantomData<&'a ()>);
+
+impl<'a> View<'a> for BytesRef<'a> {
+    unsafe fn from_raw(raw: usize) -> Self {
+        Self(raw, PhantomData)
+    }
+    fn raw(self) -> usize {
+        self.0
+    }
+}
+
+impl<'a> BytesRef<'a> {
+    pub fn len(self) -> usize {
+        // SAFETY: a view is of a live `uint8array`.
+        unsafe { load(self.0 + BYTES_LENGTH) }
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// The address of the first byte: null while the array has never held
+    /// one.
+    fn data(self) -> *mut u8 {
+        // SAFETY: a view is of a live `uint8array`.
+        unsafe { load(self.0 + BYTES_DATA) as *mut u8 }
+    }
+
+    /// The byte at `index`.
+    pub fn get(self, index: usize) -> Option<u8> {
+        // SAFETY: the storage holds the length in bytes, checked here.
+        (index < self.len()).then(|| unsafe { self.data().add(index).read() })
+    }
+
+    /// A copy of the bytes: what a native that stops takes with it, and
+    /// what any native reads the whole array by.
+    pub fn to_vec(self) -> Vec<u8> {
+        let length = self.len();
+        let mut copy = Vec::with_capacity(length);
+        // SAFETY: the storage holds `length` bytes, the vector has room
+        // for them, and every byte is initialized.
+        unsafe {
+            if length != 0 {
+                std::ptr::copy_nonoverlapping(self.data(), copy.as_mut_ptr(), length);
+            }
+            copy.set_len(length);
+        }
+        copy
+    }
+
+    /// The bytes, for a native to take across a stop: the job of
+    /// `scope.io`, the work of `scope.off_heap`, or its own code after an
+    /// `await`. Every native that stops with an array's bytes takes them
+    /// here and nowhere else.
+    ///
+    /// Today this is a copy, so what is written into the array during the
+    /// stop is not seen. It is the one place that changes when a stop can
+    /// instead keep the array's storage block alive and in place: what is
+    /// held is the storage's bytes as they are now, never the array, whose
+    /// storage a `push` replaces.
+    pub fn hold(self) -> HeldBytes {
+        HeldBytes(self.to_vec())
+    }
+
+    /// Copy the bytes from `from` on into `into`, all of it.
+    pub fn copy_to(self, from: usize, into: &mut [u8]) {
+        assert!(
+            from <= self.len() && into.len() <= self.len() - from,
+            "past the uint8array's end"
+        );
+        // SAFETY: the range is inside the array, checked here, and `into`
+        // is not in the heap.
+        unsafe {
+            if !into.is_empty() {
+                std::ptr::copy_nonoverlapping(self.data().add(from), into.as_mut_ptr(), into.len());
+            }
+        }
+    }
+
+    /// Write `bytes` over the array's from `at` on.
+    pub fn copy_from(self, at: usize, bytes: &[u8]) {
+        assert!(
+            at <= self.len() && bytes.len() <= self.len() - at,
+            "past the uint8array's end"
+        );
+        // SAFETY: the range is inside the array, checked here, and `bytes`
+        // is not in the heap.
+        unsafe {
+            if !bytes.is_empty() {
+                std::ptr::copy_nonoverlapping(bytes.as_ptr(), self.data().add(at), bytes.len());
+            }
+        }
+    }
+
+    /// Write `count` bytes of `source`, from `from` on, over the array's
+    /// from `at` on. The two may be the same array.
+    pub fn copy_from_bytes(self, at: usize, source: BytesRef<'_>, from: usize, count: usize) {
+        assert!(
+            at <= self.len()
+                && count <= self.len() - at
+                && from <= source.len()
+                && count <= source.len() - from,
+            "past a uint8array's end"
+        );
+        // SAFETY: both ranges are inside their arrays, checked here.
+        unsafe {
+            if count != 0 {
+                std::ptr::copy(source.data().add(from), self.data().add(at), count);
+            }
+        }
+    }
+
+    /// Remove the last byte and return it.
+    pub fn pop(self) -> Option<u8> {
+        let last = self.len().checked_sub(1)?;
+        let byte = self.get(last);
+        // SAFETY: a view is of a live `uint8array`, which keeps its
+        // storage.
+        unsafe { store(self.0 + BYTES_LENGTH, last) };
+        byte
+    }
+
+    /// The bytes, lent in place: for a native that only scans them and
+    /// would otherwise copy the whole array to do it.
+    ///
+    /// This is the one place a shared slice is made of bytes in the heap.
+    /// It relies on a single worker: nothing else runs while a native
+    /// that has not stopped does, so nothing writes the bytes while the
+    /// slice is alive. With several workers on one heap another could,
+    /// and every caller of this has to be looked at again then.
+    pub fn as_slice(self) -> &'a [u8] {
+        match self.len() {
+            0 => &[],
+            // SAFETY: the storage holds `length` bytes, which do not move
+            // for `'a`, and see above for why nothing writes them.
+            length => unsafe { std::slice::from_raw_parts(self.data(), length) },
+        }
+    }
+
+    /// The bytes, lent in place to change.
+    ///
+    /// This is the one place an exclusive slice is made of bytes in the
+    /// heap. It relies on a single worker, as [`Self::as_slice`] does.
+    ///
+    /// # Safety
+    ///
+    /// No other slice of this array is alive while this one is.
+    pub unsafe fn as_mut_slice(self) -> &'a mut [u8] {
+        match self.len() {
+            0 => &mut [],
+            // SAFETY: as in `Self::as_slice`, and the caller's contract.
+            length => unsafe { std::slice::from_raw_parts_mut(self.data(), length) },
+        }
+    }
+}
+
+/// The bytes of a `uint8array` as a native holds them across a stop: see
+/// [`BytesRef::hold`]. It is `'static` and `Send`, so a job can own it.
+pub struct HeldBytes(Vec<u8>);
+
+impl std::ops::Deref for HeldBytes {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &self.0
     }
 }
 
@@ -892,6 +1077,28 @@ impl<'s> Scope<'s> {
         unsafe { self.root_raw(string) }
     }
 
+    /// A new `uint8array` holding a copy of `bytes`. May collect.
+    pub fn alloc_bytes(&mut self, bytes: &[u8]) -> Root<'s, Bytes> {
+        let object = crate::bytes::make(self.mutator(), bytes);
+        // SAFETY: just made.
+        unsafe { self.root_raw(object) }
+    }
+
+    /// A new `uint8array` of `length` zero bytes, to be written through a
+    /// view. May collect.
+    pub fn alloc_zeroed_bytes(&mut self, length: usize) -> Root<'s, Bytes> {
+        let object = crate::bytes::zeroed(self.mutator(), length);
+        // SAFETY: just made.
+        unsafe { self.root_raw(object) }
+    }
+
+    /// Append `byte` to `bytes` and return the new length. May collect.
+    pub fn push_byte(&mut self, bytes: Root<'s, Bytes>, byte: u8) -> usize {
+        let object = bytes.raw(self);
+        // SAFETY: a root holds a live `uint8array`.
+        unsafe { crate::bytes::push(self.mutator(), object, byte) }
+    }
+
     /// A new `bigint` holding `value`, or the `baml.panics.AllocFailure` of
     /// one past the limit. May collect.
     pub fn alloc_big(&mut self, value: &num_bigint::BigInt) -> Result<Root<'s, Big>, Thrown<'s>> {
@@ -1404,6 +1611,7 @@ mod regex;
 mod root;
 mod state;
 mod string;
+mod uint8array;
 
 pub use build::{Build, Class, Value};
 pub use state::{Opaque, OpaqueRef};
@@ -1419,9 +1627,9 @@ mod generated {
     use super::drive::{Head, start};
     #[allow(unused_imports, reason = "what the listed natives need varies")]
     use super::{
-        Arr, ArrRef, Big, BigRef, Bool, Elem, Float, Int, Map, MapRef, Natives, Obj, ObjRef,
-        Opaque, OpaqueRef, OptionalScalar, Root, RootSlots, RtResult, Scope, Slot, Str, StrRef,
-        Thrown, TypeId, View,
+        Arr, ArrRef, Big, BigRef, Bool, Bytes, BytesRef, Elem, Float, Int, Map, MapRef, Natives,
+        Obj, ObjRef, Opaque, OpaqueRef, OptionalScalar, Root, RootSlots, RtResult, Scope, Slot,
+        Str, StrRef, Thrown, TypeId, View,
     };
     use crate::{heap::Mutator, stubs::anchored};
 

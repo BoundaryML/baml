@@ -64,6 +64,9 @@ pub(crate) enum NativeTy<'db> {
     /// A reference to an immutable `bigint` object, whose header says that
     /// it is one: a union holds it as it is.
     Bigint,
+    /// A reference to a `uint8array`: a growable array of bytes, whose
+    /// header says that it is one.
+    Bytes,
     /// A reference to an instance of a class at these type arguments.
     /// Instantiations whose arguments are the same under [`type_argument`]
     /// are laid out alike and share a type id.
@@ -105,6 +108,7 @@ impl NativeTy<'_> {
         match self {
             Self::String
             | Self::Bigint
+            | Self::Bytes
             | Self::Class(..)
             | Self::Tuple(_)
             | Self::Array(_)
@@ -199,6 +203,7 @@ macro_rules! native_type_of {
                 }
                 $family::String | $family::Literal(Literal::String(_), _) => NativeTy::String,
                 $family::Bigint | $family::Literal(Literal::Bigint(_), _) => NativeTy::Bigint,
+                $family::Uint8Array => NativeTy::Bytes,
                 $parameter => arguments.get($slot)?.clone()?,
                 // What the type `Self` is, where the function is compiled
                 // for one, binds the associated type to.
@@ -993,6 +998,8 @@ pub(crate) fn place_ty<'db>(
             }
             match narrowed(place_ty(db, body, base)?) {
                 NativeTy::Array(element) => Ok(*element),
+                // A byte, read and written as the `int` it is.
+                NativeTy::Bytes => Ok(NativeTy::Int),
                 _ => Err(Blocker::new(
                     "index access on a non-array value",
                     place.to_string(),
@@ -1211,6 +1218,8 @@ pub(crate) enum BinaryMode {
     /// At least one `bigint`, the other one too or an `int`: the runtime's
     /// arithmetic, which gives a `bigint`.
     Bigint,
+    /// Two `uint8array`s, compared byte by byte; only `==` and `!=`.
+    Bytes,
 }
 
 pub(crate) fn is_comparison(op: BinOp) -> bool {
@@ -1247,6 +1256,7 @@ pub(crate) fn binary_typing<'db>(
         (NativeTy::Bigint, NativeTy::Bigint | NativeTy::Int)
         | (NativeTy::Int, NativeTy::Bigint) => BinaryMode::Bigint,
         (NativeTy::Bool, NativeTy::Bool) if equality => BinaryMode::Bool,
+        (NativeTy::Bytes, NativeTy::Bytes) if equality => BinaryMode::Bytes,
         (NativeTy::Null, NativeTy::Null) if equality => BinaryMode::Null,
         (NativeTy::String, NativeTy::String) if is_comparison(op) || op == BinOp::Add => {
             BinaryMode::String
@@ -1285,7 +1295,11 @@ pub(crate) fn binary_typing<'db>(
             BinaryMode::Float => NativeTy::Float,
             BinaryMode::String => NativeTy::String,
             BinaryMode::Bigint => NativeTy::Bigint,
-            BinaryMode::Bool | BinaryMode::Null | BinaryMode::NullTest { .. } | BinaryMode::Map => {
+            BinaryMode::Bool
+            | BinaryMode::Null
+            | BinaryMode::NullTest { .. }
+            | BinaryMode::Map
+            | BinaryMode::Bytes => {
                 return Err(unsupported());
             }
         }
@@ -1305,6 +1319,7 @@ pub(crate) fn describe(ty: &NativeTy<'_>) -> &'static str {
         NativeTy::Unknown => "unknown",
         NativeTy::String => "string",
         NativeTy::Bigint => "bigint",
+        NativeTy::Bytes => "uint8array",
         NativeTy::Class(..) => "class",
         NativeTy::Tuple(_) => "tuple",
         NativeTy::Array(_) => "array",

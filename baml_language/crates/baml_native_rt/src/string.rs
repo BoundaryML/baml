@@ -8,6 +8,7 @@ use crate::{
         STRING_TEXT, STRING_TYPES_END, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ID_MASK,
         TYPE_STRING, WORD, words,
     },
+    native::View as _,
 };
 
 /// The text of the string object at `string`: the one place that tells a
@@ -293,6 +294,14 @@ unsafe extern "C" fn string_from_any(mutator: &mut Mutator, value: usize) -> usi
             from_str(mutator, &text)
         }
         TYPE_BOX_BOOL => from_str(mutator, if held & 0xFF != 0 { "true" } else { "false" }),
+        // A `uint8array` has a `to_string` of its own, which is what a
+        // union that holds one is written by: its bytes as UTF-8, each
+        // sequence that is not replaced.
+        crate::layout::TYPE_BYTES => {
+            // SAFETY: the header says it is one.
+            let bytes = unsafe { crate::native::BytesRef::from_raw(value) }.to_vec();
+            from_str(mutator, &String::from_utf8_lossy(&bytes))
+        }
         enum_type if !mutator.is_reference(enum_type) => {
             let name = mutator.variant_name(enum_type, held);
             from_str(mutator, name)

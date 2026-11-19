@@ -40,3 +40,5 @@ baml.String.is_ascii_graphic
 baml.String.is_ascii_hex
 baml.String.to_code_points allocates
 baml.String.from_code_points allocates
+baml.String.to_utf8 allocates
+baml.String.from_utf8 allocates

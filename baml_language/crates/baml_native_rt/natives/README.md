@@ -13,6 +13,27 @@ baml.String.repeat allocates
 baml.json._stringify async
 ```
 
+## Passing a `uint8array`
+
+A `uint8array` can be written, by compiled code and by natives, and the
+collector moves it. So a native reads one by copying: a byte
+(`BytesRef::get`), all of it (`to_vec`), or a range into a buffer or
+another array (`copy_to`, `copy_from`, `copy_from_bytes`). A native that
+stops, which is any `async` one before its first `scope.io` or
+`scope.call_baml`, takes the bytes with `BytesRef::hold` first: the view
+cannot be held across the stop, and what compiled code writes into the
+array meanwhile is not seen. `hold` copies today, and is the one place
+that changes when a stop can keep the array's storage block alive and in
+place instead. What it holds is the storage's bytes, never the array: a
+`push` gives the array new storage. A result is made through the scope
+(`alloc_bytes`, `alloc_zeroed_bytes`).
+
+`BytesRef::as_slice` and `as_mut_slice` lend the bytes in place instead.
+They are the only two places a Rust slice is made of bytes in the heap, and
+both rely on a single worker: with several workers on one heap another
+could write the bytes while the slice is alive. A native uses one only
+where it says why a copy would not do.
+
 ## What a flag promises
 
 A flag is a promise the native's author makes. The generated signature

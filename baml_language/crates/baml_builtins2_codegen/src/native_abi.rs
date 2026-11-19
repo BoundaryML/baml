@@ -95,6 +95,8 @@ enum AbiTy {
     Null,
     String,
     Bigint,
+    /// A `uint8array`.
+    Bytes,
     Array(Box<AbiTy>),
     /// A map from the builtin's first type parameter to its second: the
     /// receiver of a method of `Map`.
@@ -212,6 +214,7 @@ impl AbiTy {
             BamlType::Null => Some(Self::Null),
             BamlType::String => Some(Self::String),
             BamlType::Bigint => Some(Self::Bigint),
+            BamlType::Uint8Array => Some(Self::Bytes),
             BamlType::List(element) => match Self::of(element, scope)? {
                 Self::Null | Self::Optional(_) => None,
                 element => Some(Self::Array(Box::new(element))),
@@ -228,6 +231,7 @@ impl AbiTy {
         match self {
             Self::String
             | Self::Bigint
+            | Self::Bytes
             | Self::Array(_)
             | Self::Map
             | Self::Class(..)
@@ -252,6 +256,7 @@ impl AbiTy {
             Self::Null => "Ty::Null".to_owned(),
             Self::String => "Ty::String".to_owned(),
             Self::Bigint => "Ty::Bigint".to_owned(),
+            Self::Bytes => "Ty::Bytes".to_owned(),
             Self::Array(element) => format!("Ty::Array(&{})", element.table()),
             Self::Map => "Ty::Map".to_owned(),
             Self::Optional(inner) => format!("Ty::Optional(&{})", inner.table()),
@@ -288,6 +293,7 @@ impl AbiTy {
             Self::Optional(inner) if !inner.is_ref() => "OptionalScalar",
             Self::String
             | Self::Bigint
+            | Self::Bytes
             | Self::Array(_)
             | Self::Map
             | Self::Optional(_)
@@ -321,6 +327,7 @@ impl AbiTy {
             Self::Null => "()".to_owned(),
             Self::String => "Str".to_owned(),
             Self::Bigint => "Big".to_owned(),
+            Self::Bytes => "Bytes".to_owned(),
             Self::Array(element) => format!("Arr<{}>", element.marker()),
             Self::Map => "Map".to_owned(),
             Self::Class(..) => "Obj".to_owned(),
@@ -350,6 +357,7 @@ impl AbiTy {
             (Self::Null, _) => "()".to_owned(),
             (Self::String, false) => "StrRef<'_>".to_owned(),
             (Self::Bigint, false) => "BigRef<'_>".to_owned(),
+            (Self::Bytes, false) => "BytesRef<'_>".to_owned(),
             (Self::Array(element), false) => {
                 format!("ArrRef<'_, {}>", element.marker())
             }
@@ -404,6 +412,7 @@ impl AbiTy {
             Self::Null => format!("{{ let () = {value}; 0 }}"),
             Self::String
             | Self::Bigint
+            | Self::Bytes
             | Self::Array(_)
             | Self::Map
             | Self::Class(..)
@@ -432,6 +441,7 @@ impl AbiTy {
             Self::Bool => format!("u8::from({value})"),
             Self::String
             | Self::Bigint
+            | Self::Bytes
             | Self::Array(_)
             | Self::Map
             | Self::Class(..)
@@ -490,6 +500,7 @@ fn abi_of(builtin: &NativeBuiltin, classes: &Classes<'_>) -> Option<Abi> {
             let ty = match receiver.builtin_name() {
                 "String" => AbiTy::String,
                 "Bigint" => AbiTy::Bigint,
+                "Uint8Array" => AbiTy::Bytes,
                 "Array" => AbiTy::Array(Box::new(AbiTy::Elem(0))),
                 "Map" => AbiTy::Map,
                 "Float" => AbiTy::Float,

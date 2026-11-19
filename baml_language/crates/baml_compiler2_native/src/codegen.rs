@@ -120,6 +120,7 @@ fn clif_type(ty: &NativeTy<'_>) -> ir::Type {
         NativeTy::Bool | NativeTy::Null => types::I8,
         NativeTy::String
         | NativeTy::Bigint
+        | NativeTy::Bytes
         | NativeTy::Class(..)
         | NativeTy::Tuple(_)
         | NativeTy::Array(_)
@@ -195,6 +196,8 @@ enum Runtime {
     ArrayNew,
     ArrayPushSlow,
     ArraySort,
+    BytesNew,
+    BytesEq,
     StringConcat,
     StringEq,
     StringCmp,
@@ -247,6 +250,8 @@ impl Runtime {
             Self::ArrayNew => "baml_rt_array_new",
             Self::ArrayPushSlow => "baml_rt_array_push_slow",
             Self::ArraySort => "baml_rt_array_sort",
+            Self::BytesNew => "baml_rt_bytes_new",
+            Self::BytesEq => "baml_rt_bytes_eq",
             Self::StringConcat => "baml_rt_string_concat",
             Self::StringEq => "baml_rt_string_eq",
             Self::StringCmp => "baml_rt_string_cmp",
@@ -315,12 +320,12 @@ impl Runtime {
                 (vec![word, word], vec![word])
             }
             Self::StringFromFloat => (vec![word, float], vec![word]),
-            Self::ArrayNew | Self::StringConcat | Self::StringFromEnum => {
+            Self::ArrayNew | Self::BytesNew | Self::StringConcat | Self::StringFromEnum => {
                 (vec![word, word, word], vec![word])
             }
             Self::PrintEnum => (vec![word, word, word], vec![]),
             Self::ArrayPushSlow => (vec![word, word, word], vec![]),
-            Self::StringEq => (vec![word, word], vec![AbiParam::new(types::I8)]),
+            Self::StringEq | Self::BytesEq => (vec![word, word], vec![AbiParam::new(types::I8)]),
             Self::StringCmp => (vec![word, word], vec![word]),
         };
         // A slow path is a stub that preserves every register, so that
@@ -386,6 +391,8 @@ struct Backend<'db> {
     /// The method table, once a call dispatches through it.
     methods: Option<DataId>,
     strings: HashMap<String, DataId>,
+    /// The bytes of the byte string literals emitted so far.
+    byte_strings: HashMap<Vec<u8>, DataId>,
     /// The `bigint` constants emitted so far.
     bigints: HashMap<num_bigint::BigInt, DataId>,
     stack_maps: Vec<(FuncId, FunctionStackMaps)>,
@@ -449,6 +456,7 @@ impl<'db> Backend<'db> {
             methods: None,
             strings: HashMap::new(),
             bigints: HashMap::new(),
+            byte_strings: HashMap::new(),
             stack_maps: Vec::new(),
             functions: Vec::new(),
             unwind: unwind::Tables::default(),
@@ -551,6 +559,7 @@ impl<'db> Backend<'db> {
             NativeTy::Bool => layout::TYPE_BOX_BOOL,
             NativeTy::String => layout::TYPE_STRING,
             NativeTy::Bigint => layout::TYPE_BIGINT,
+            NativeTy::Bytes => layout::TYPE_BYTES,
             NativeTy::Enum(enum_ref) => self.enum_type(db, *enum_ref),
             NativeTy::Class(class, arguments) => {
                 let fields = class_layout(db, *class, arguments).map_err(internal)?;
@@ -836,6 +845,25 @@ impl<'db> Backend<'db> {
             .map_err(internal)?;
         self.define_data(id, DataDescription::new(), bytes)?;
         self.strings.insert(text.to_owned(), id);
+        Ok(id)
+    }
+
+    /// The bytes of a byte string literal in the executable's data, which
+    /// the runtime copies into a new `uint8array` each time the literal is
+    /// evaluated.
+    fn bytes_constant(&mut self, bytes: &[u8]) -> Result<DataId, CompileError> {
+        if let Some(id) = self.byte_strings.get(bytes) {
+            return Ok(*id);
+        }
+        let id = self
+            .module
+            .declare_anonymous_data(false, false)
+            .map_err(internal)?;
+        // Never empty: a symbol needs a byte to be the address of.
+        let mut data = bytes.to_vec();
+        data.resize(bytes.len().max(1), 0);
+        self.define_data(id, DataDescription::new(), data)?;
+        self.byte_strings.insert(bytes.to_vec(), id);
         Ok(id)
     }
 
@@ -1128,6 +1156,7 @@ pub(crate) fn generate<'db>(
         NativeTy::Enum(_)
         | NativeTy::Union(_)
         | NativeTy::Unknown
+        | NativeTy::Bytes
         | NativeTy::Class(..)
         | NativeTy::Tuple(_)
         | NativeTy::Array(_)
@@ -2236,8 +2265,14 @@ impl<'a, 'db> Translator<'a, 'db> {
     }
 
     /// The address of element `index` of `array`, after checking the index.
-    /// Every element access goes through here.
-    fn element(&mut self, array: ir::Value, index: ir::Value) -> Result<ir::Value, CompileError> {
+    /// Every element access goes through here. An element is `1 << shift`
+    /// bytes: a word, or a byte of a `uint8array`.
+    fn element(
+        &mut self,
+        array: ir::Value,
+        index: ir::Value,
+        shift: i64,
+    ) -> Result<ir::Value, CompileError> {
         let (length, data) = self.array_view(array);
         let index = self.builder.func.dfg.resolve_aliases(index);
         // An index already checked against this length, with nothing since
@@ -2250,28 +2285,31 @@ impl<'a, 'db> Translator<'a, 'db> {
                 position
             }
         };
-        let scaled = self.builder.ins().ishl_imm(index, 3);
+        let scaled = self.builder.ins().ishl_imm(index, shift);
         Ok(self.builder.ins().iadd(data, scaled))
     }
 
     /// The address of the element of `array`, read from `base`, that the
-    /// local `index` names.
+    /// local `index` names, and whether the element is a byte: `base` is a
+    /// `uint8array`.
     fn indexed(
         &mut self,
         base: &Place,
         array: ir::Value,
         index: Local,
-    ) -> Result<ir::Value, CompileError> {
+    ) -> Result<(ir::Value, bool), CompileError> {
+        let is_byte = narrowed(self.place_ty(base)?) == NativeTy::Bytes;
+        let shift = if is_byte { 0 } else { 3 };
         let position = self.read_local(index);
         if let Place::Local(base) = base
             && self.proven.holds(self.current, *base, index)
         {
             // A counted loop over this array: the index names an element.
             let (_, data) = self.array_view(array);
-            let scaled = self.builder.ins().ishl_imm(position, 3);
-            return Ok(self.builder.ins().iadd(data, scaled));
+            let scaled = self.builder.ins().ishl_imm(position, shift);
+            return Ok((self.builder.ins().iadd(data, scaled), is_byte));
         }
-        self.element(array, position)
+        Ok((self.element(array, position, shift)?, is_byte))
     }
 
     fn read_place(&mut self, place: &Place) -> Result<ir::Value, CompileError> {
@@ -2312,7 +2350,13 @@ impl<'a, 'db> Translator<'a, 'db> {
             Place::Index { base, index, .. } => {
                 let ty = self.place_ty(place)?;
                 let array = self.read_place(base)?;
-                let element = self.indexed(base, array, *index)?;
+                let (element, is_byte) = self.indexed(base, array, *index)?;
+                if is_byte {
+                    return Ok(self
+                        .builder
+                        .ins()
+                        .uload8(types::I64, slot_access(), element, 0));
+                }
                 Ok(self.load_slot(&ty, element, 0))
             }
             Place::Capture(index) => {
@@ -2441,8 +2485,14 @@ impl<'a, 'db> Translator<'a, 'db> {
             Place::Index { base, index, .. } => {
                 let ty = self.place_ty(place)?;
                 let array = self.read_place(base)?;
-                let element = self.indexed(base, array, *index)?;
-                self.store_slot(&ty, value, element, 0);
+                let (element, is_byte) = self.indexed(base, array, *index)?;
+                if is_byte {
+                    // The low eight bits, as assigning into a typed array
+                    // keeps.
+                    self.builder.ins().istore8(slot_access(), value, element, 0);
+                } else {
+                    self.store_slot(&ty, value, element, 0);
+                }
             }
             Place::Capture(_) => return Err(internal("a capture is never assigned")),
             Place::Deref(cell) => {
@@ -2615,6 +2665,14 @@ impl<'a, 'db> Translator<'a, 'db> {
                 } else {
                     self.array_view(array).0
                 }
+            }
+            Rvalue::Uint8Array(bytes) => {
+                let data = self.backend.bytes_constant(bytes)?;
+                let data = self.data_address(data);
+                let length = self.word_const(bytes.len());
+                let mutator = self.mutator();
+                self.call_runtime(Runtime::BytesNew, &[mutator, data, length])?
+                    .ok_or_else(|| internal("byte array construction returns the array"))?
             }
             Rvalue::Map(_, _, entries) => self.map_literal(ty, entries)?,
             Rvalue::Array(_, elements)
@@ -3223,6 +3281,16 @@ impl<'a, 'db> Translator<'a, 'db> {
                     self.builder.ins().bxor_imm(equal, 1)
                 })
             }
+            BinaryMode::Bytes => {
+                let equal = self
+                    .call_runtime(Runtime::BytesEq, &[left_value, right_value])?
+                    .ok_or_else(|| internal("byte array equality returns a bool"))?;
+                Ok(if op == BinOp::Eq {
+                    equal
+                } else {
+                    self.builder.ins().bxor_imm(equal, 1)
+                })
+            }
             BinaryMode::Bigint => {
                 let mut flags = 0;
                 if left_ty == NativeTy::Int {
@@ -3615,6 +3683,16 @@ impl<'a, 'db> Translator<'a, 'db> {
                 } else {
                     self.builder.ins().bxor_imm(equal, 1)
                 })
+            }
+            (Intrinsic::EnumEq | Intrinsic::EnumNe, [left, right])
+                if self.operand_ty(left)? == NativeTy::Bytes =>
+            {
+                let op = if intrinsic == Intrinsic::EnumEq {
+                    BinOp::Eq
+                } else {
+                    BinOp::Ne
+                };
+                self.binary(op, left, right)
             }
             (Intrinsic::EnumEq | Intrinsic::EnumNe, [left, right]) => {
                 let (left, right) = (self.operand(left)?, self.operand(right)?);

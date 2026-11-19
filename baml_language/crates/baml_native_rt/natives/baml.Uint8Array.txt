@@ -1,0 +1,20 @@
+# Natives of `baml.Uint8Array`, implemented in `src/native/uint8array.rs`.
+# Compiled code reads the length and reads and writes one byte itself.
+baml.Uint8Array.length
+baml.Uint8Array.at
+baml.Uint8Array.push allocates
+baml.Uint8Array.pop
+baml.Uint8Array.concat allocates
+baml.Uint8Array.includes
+baml.Uint8Array.index_of
+baml.Uint8Array.reverse allocates
+baml.Uint8Array.slice allocates
+baml.Uint8Array.zeroes allocates
+baml.Uint8Array.from_array allocates
+baml.Uint8Array.to_array allocates
+baml.Uint8Array.from_hex allocates
+baml.Uint8Array.to_hex allocates
+baml.Uint8Array.from_base64 allocates
+baml.Uint8Array.to_base64 allocates
+baml.Uint8Array._to_string_impl allocates
+baml.Uint8Array.sort

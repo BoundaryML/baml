@@ -159,6 +159,9 @@ pub(crate) unsafe fn write_value(
             } else {
                 "false"
             }),
+            crate::layout::TYPE_BYTES => {
+                let _ = write!(out, "<bytes:{}>", load(value + crate::layout::BYTES_LENGTH));
+            }
             TYPE_ARRAY_OF_REFS | TYPE_ARRAY_OF_VALUES => {
                 let element = ty.filter(|ty| ty.kind() == KIND_ARRAY).map(Desc::of_a);
                 let is_ref = type_id == TYPE_ARRAY_OF_REFS;

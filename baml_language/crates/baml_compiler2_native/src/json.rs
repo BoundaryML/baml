@@ -401,6 +401,7 @@ impl<'db> JsonTypes<'db> {
             RuntimeTy::Bigint | RuntimeTy::Literal(Literal::Bigint(_), _) => {
                 return Err(blocked("bigint", ty));
             }
+            RuntimeTy::Uint8Array => return Err(blocked("uint8array", ty)),
             RuntimeTy::Tuple(_) => return Err(blocked("tuple", ty)),
             RuntimeTy::Interface(..) => return Err(blocked("value of an interface type", ty)),
             RuntimeTy::TypeAlias(_) => return Err(blocked("recursive alias", ty)),
@@ -471,6 +472,7 @@ impl<'db> JsonTypes<'db> {
             }
             NativeTy::Tuple(_) => return Err(unsupported("tuple")),
             NativeTy::Bigint => return Err(unsupported("bigint")),
+            NativeTy::Bytes => return Err(unsupported("uint8array")),
             NativeTy::Function(_) | NativeTy::Cell(_) => return Err(unsupported("function")),
             NativeTy::Future(_) => return Err(unsupported("future")),
         })

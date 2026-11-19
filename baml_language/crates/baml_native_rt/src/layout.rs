@@ -188,8 +188,23 @@ pub const TYPE_OWNED: usize = 352;
 /// when the value is `Copy`. See [`PLAIN_KIND`]. The collector copies it
 /// as it does an array's storage of values.
 pub const TYPE_PLAIN: usize = 368;
+/// A `uint8array`: see [`BYTES_LENGTH`]. The collector copies it as it
+/// does an array, whose storage it finds from the data address.
+pub const TYPE_BYTES: usize = 384;
 /// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 384;
+pub const FIRST_CLASS_TYPE: usize = 400;
+
+/// A `uint8array` is laid out as an array is: its length, in bytes, and the
+/// address of its first byte, zero while it has never held one. The bytes
+/// are packed in a storage object of values, whose capacity is in words as
+/// any storage's is, so the array holds eight times that many bytes before
+/// it grows. The bytes of the storage past the length are whatever was
+/// there.
+pub const BYTES_LENGTH: usize = ARRAY_LENGTH;
+pub const BYTES_DATA: usize = ARRAY_DATA;
+pub const BYTES_SIZE: usize = ARRAY_SIZE;
+/// The most bytes a `uint8array` holds: what a string's text may be.
+pub const BYTES_MAX: usize = u32::MAX as usize;
 
 /// An owned Rust value is a header and two words: the address of the
 /// value, which is the raw form of an `Arc`, and the address of what the
@@ -376,6 +391,10 @@ pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
     0,
     0,
     0,
+    KIND_ARRAY,
+    BYTES_SIZE as u32,
+    0,
+    TYPE_VALUES as u32,
 ];
 
 const _: () = {
@@ -403,7 +422,10 @@ const _: () = {
     assert!(RUNTIME_TYPES[TYPE_OWNED / 4] == KIND_OWNED);
     assert!(RUNTIME_TYPES[TYPE_OWNED / 4 + 1] == OWNED_SIZE as u32);
     assert!(RUNTIME_TYPES[TYPE_PLAIN / 4] == KIND_VALUES);
-    assert!(TYPE_PLAIN + TYPE_HEADER == FIRST_CLASS_TYPE);
+    assert!(TYPE_PLAIN + TYPE_HEADER == TYPE_BYTES);
+    assert!(RUNTIME_TYPES[TYPE_BYTES / 4] == KIND_ARRAY);
+    assert!(RUNTIME_TYPES[TYPE_BYTES / 4 + 3] == TYPE_VALUES as u32);
+    assert!(TYPE_BYTES + TYPE_HEADER == FIRST_CLASS_TYPE);
     // A string's cached hash is in the bits every object has free, below
     // the flags.
     assert!((STRING_HASH_MASK as usize) << 32 & (HEADER_FLAGS | TYPE_ID_MASK | 7) == 0);
