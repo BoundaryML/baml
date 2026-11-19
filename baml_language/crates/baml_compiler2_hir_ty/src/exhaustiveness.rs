@@ -497,6 +497,21 @@ fn write_literal_identity(out: &mut String, lit: &Literal) {
 
 // ── Deconstructed pattern ────────────────────────────────────────────────────
 
+/// The type of one matrix column, in the context's canonical form.
+///
+/// Only [`PatCtx::column`] builds one, so every column the matrix
+/// specializes on and every column a pattern is lowered against went
+/// through the same canonicalization: ctor identity (a string key) then
+/// agrees on both sides, whatever spelling the source used.
+#[derive(Debug, Clone)]
+pub struct ColumnTy(Ty);
+
+impl ColumnTy {
+    pub fn ty(&self) -> &Ty {
+        &self.0
+    }
+}
+
 /// A pattern in the form the usefulness algorithm consumes. `fields.len() ==
 /// arity`. Wildcards are filled in for elided positions during lowering.
 #[derive(Debug, Clone)]
@@ -504,11 +519,11 @@ pub struct DPat {
     pub ctor: Ctor,
     pub fields: Vec<DPat>,
     pub arity: usize,
-    pub ty: Ty,
+    pub ty: ColumnTy,
 }
 
 impl DPat {
-    pub fn wildcard(ty: Ty) -> Self {
+    pub fn wildcard(ty: ColumnTy) -> Self {
         Self {
             ctor: Ctor::Wildcard,
             fields: vec![],
@@ -516,7 +531,7 @@ impl DPat {
             ty,
         }
     }
-    pub fn type_test(ty: Ty, scrutinee_ty: Ty) -> Self {
+    pub fn type_test(ty: Ty, scrutinee_ty: ColumnTy) -> Self {
         Self {
             ctor: Ctor::Type(ty),
             fields: vec![],
@@ -524,7 +539,7 @@ impl DPat {
             ty: scrutinee_ty,
         }
     }
-    pub fn class(qtn: DeclName, fields: Vec<DPat>, ty: Ty) -> Self {
+    pub fn class(qtn: DeclName, fields: Vec<DPat>, ty: ColumnTy) -> Self {
         Self {
             ctor: Ctor::Class(qtn, Box::new([])),
             arity: fields.len(),
@@ -532,7 +547,7 @@ impl DPat {
             ty,
         }
     }
-    pub fn class_inst(qtn: DeclName, args: Box<[Ty]>, fields: Vec<DPat>, ty: Ty) -> Self {
+    pub fn class_inst(qtn: DeclName, args: Box<[Ty]>, fields: Vec<DPat>, ty: ColumnTy) -> Self {
         Self {
             ctor: Ctor::Class(qtn, args),
             arity: fields.len(),
@@ -540,7 +555,7 @@ impl DPat {
             ty,
         }
     }
-    pub fn interface(iface_ty: Ty, fields: Vec<DPat>, ty: Ty) -> Self {
+    pub fn interface(iface_ty: Ty, fields: Vec<DPat>, ty: ColumnTy) -> Self {
         Self {
             ctor: Ctor::Interface(iface_ty),
             arity: fields.len(),
@@ -548,7 +563,7 @@ impl DPat {
             ty,
         }
     }
-    pub fn tuple(fields: Vec<DPat>, ty: Ty) -> Self {
+    pub fn tuple(fields: Vec<DPat>, ty: ColumnTy) -> Self {
         Self {
             ctor: Ctor::Tuple(fields.len()),
             arity: fields.len(),
@@ -556,7 +571,7 @@ impl DPat {
             ty,
         }
     }
-    pub fn slice(shape: SliceShape, fields: Vec<DPat>, ty: Ty) -> Self {
+    pub fn slice(shape: SliceShape, fields: Vec<DPat>, ty: ColumnTy) -> Self {
         debug_assert_eq!(shape.arity(), fields.len());
         Self {
             ctor: Ctor::Slice(shape),
@@ -568,7 +583,7 @@ impl DPat {
     /// Or-pattern: `pat1 | pat2 | ...`. Alternatives are stored in `fields`
     /// and must each have type `ty`. At least 2 alternatives required by
     /// convention (one alt is just that alt directly).
-    pub fn or(alts: Vec<DPat>, ty: Ty) -> Self {
+    pub fn or(alts: Vec<DPat>, ty: ColumnTy) -> Self {
         debug_assert!(alts.len() >= 2, "Or pattern needs ≥2 alternatives");
         Self {
             ctor: Ctor::Or,
@@ -580,7 +595,7 @@ impl DPat {
     /// Union-member tag: marks the pattern as targeting one specific
     /// member of a union scrutinee. The single sub-pat is the
     /// pattern as it would have been against the member type directly.
-    pub fn union_member(member_ty: Ty, inner: DPat, scrut_ty: Ty) -> Self {
+    pub fn union_member(member_ty: Ty, inner: DPat, scrut_ty: ColumnTy) -> Self {
         Self {
             ctor: Ctor::UnionMember(member_ty),
             arity: 1,
@@ -867,6 +882,17 @@ fn write_member_ty_witness(f: &mut String, vp: &Viewpoint<'_>, ty: &Ty) -> fmt::
 /// implements this. Keeping the algorithm trait-bound lets it stay in this
 /// module without depending on builder internals.
 pub trait PatCtx {
+    /// The canonical form of a type: two spellings of one type must
+    /// canonicalize identically. [`PatCtx::column`] applies it to columns;
+    /// ctor payloads built from written pattern types take it too, so they
+    /// compare equal to the column members they name.
+    fn canonicalize(&self, ty: &Ty) -> Ty;
+
+    /// The column for `ty`: the only way to build a [`ColumnTy`].
+    fn column(&self, ty: &Ty) -> ColumnTy {
+        ColumnTy(self.canonicalize(ty))
+    }
+
     /// Enumerate the ctors that inhabit `ty`. This is the merge point with
     /// "literals are types": for finite-alphabet types we list every singleton
     /// (`Type(EnumVariant)` per variant, `Type(Bool(true))` and
@@ -874,7 +900,7 @@ pub trait PatCtx {
     /// `int`/`string`/`float`) and opaque types (generics, maps, functions) we
     /// return `[NonExhaustive]`. For `Never`, the empty list (vacuously
     /// exhaustive). Type aliases are expanded.
-    fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor>;
+    fn enumerate_ctors(&self, col: &ColumnTy) -> Vec<Ctor>;
 
     /// For a class ctor applied at column type `ty` (which may carry generic
     /// type arguments), return the ordered field types after substitution. The
@@ -994,11 +1020,11 @@ struct Matrix<'p> {
     /// Column types. Length = width of the matrix. As we specialize on a
     /// column-0 ctor, this shifts — column 0's sub-pattern types take its
     /// place.
-    col_tys: Vec<Ty>,
+    col_tys: Vec<ColumnTy>,
 }
 
 impl<'p> Matrix<'p> {
-    fn new(arms: &'p [DPat], scrut_ty: Ty) -> Self {
+    fn new(arms: &'p [DPat], scrut_ty: ColumnTy) -> Self {
         let rows = arms
             .iter()
             .enumerate()
@@ -1017,7 +1043,7 @@ impl<'p> Matrix<'p> {
     fn col_count(&self) -> usize {
         self.col_tys.len()
     }
-    fn first_col_ty(&self) -> &Ty {
+    fn first_col_ty(&self) -> &ColumnTy {
         &self.col_tys[0]
     }
 
@@ -1035,7 +1061,7 @@ impl<'p> Matrix<'p> {
         &self,
         cx: &dyn PatCtx,
         ctor: &Ctor,
-        sub_tys: &[Ty],
+        sub_tys: &[ColumnTy],
         wild_pad: &'a [DPat],
     ) -> Matrix<'a>
     where
@@ -1189,11 +1215,15 @@ pub struct UsefulnessReport {
 /// `Ctor::Or` nodes and expanded by the algorithm during specialization;
 /// usefulness aggregates back to the original source arm via shared
 /// `ArmId`, so an or-pattern arm is "useful" if any of its alternatives is.
-pub fn compute_match_usefulness(cx: &dyn PatCtx, arms: &[DPat], scrut_ty: Ty) -> UsefulnessReport {
+pub fn compute_match_usefulness(
+    cx: &dyn PatCtx,
+    arms: &[DPat],
+    scrut_ty: ColumnTy,
+) -> UsefulnessReport {
     // Uninhabited scrutinee: no values to match. The match is vacuously
     // exhaustive and every arm is unreachable. Mirrors rustc's notion of
     // "the place being matched is irrelevant" when no inhabitant exists.
-    if !cx.is_inhabited(&scrut_ty) {
+    if !cx.is_inhabited(scrut_ty.ty()) {
         return UsefulnessReport {
             missing: vec![],
             unreachable_arms: (0..arms.len()).map(ArmId).collect(),
@@ -1297,18 +1327,21 @@ impl WitnessMatrix {
     /// uninhabited (`Ty::Never`), no value can match this ctor, so it is
     /// not a real "missing case" — e.g., `Array<Never>` cannot inhabit
     /// length ≥ 1, so the `[Never, ..]` witness must not be reported.
-    fn apply_missing(&mut self, missing: &[Ctor], ty: &Ty, cx: &dyn PatCtx) {
+    fn apply_missing(&mut self, missing: &[Ctor], col: &ColumnTy, cx: &dyn PatCtx) {
         let original = std::mem::take(&mut self.0);
         for ctor in missing {
             // Sub-pattern types come from the ctor's own slot types, NOT
             // the parent column type. For `Class(Node)`, fields are typed
             // by the class's declared field types.
-            let field_tys = ctor_sub_tys(cx, ctor, ty);
-            if field_tys.iter().any(|t| !cx.is_inhabited(t)) {
+            let field_tys = ctor_sub_tys(cx, ctor, col);
+            if field_tys.iter().any(|t| !cx.is_inhabited(t.ty())) {
                 continue;
             }
-            let fields: Vec<WitnessPat> = field_tys.into_iter().map(WitnessPat::wildcard).collect();
-            let pat = WitnessPat::new(ctor.clone(), fields, ty.clone());
+            let fields: Vec<WitnessPat> = field_tys
+                .iter()
+                .map(|t| WitnessPat::wildcard(t.ty().clone()))
+                .collect();
+            let pat = WitnessPat::new(ctor.clone(), fields, col.ty().clone());
             for stack in &original {
                 let mut new_stack = stack.clone();
                 new_stack.push(pat.clone());
@@ -1399,8 +1432,8 @@ fn compute_exhaustiveness(cx: &dyn PatCtx, matrix: &mut Matrix<'_>, witnesses: &
             // The original or-pattern doesn't contribute its own ctor to
             // the witness — alternatives stand on their own.
         } else {
-            let arity = ctor.arity(&col_ty, cx);
-            sub_witnesses.apply_ctor(ctor, arity, &col_ty);
+            let arity = ctor.arity(col_ty.ty(), cx);
+            sub_witnesses.apply_ctor(ctor, arity, col_ty.ty());
         }
         witnesses.extend(sub_witnesses);
     }
@@ -1443,7 +1476,8 @@ impl CtorSplit {
 
 /// Decide which ctors to specialize on. See [`CtorSplit`] for how the
 /// returned branches participate in the verdict.
-fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> CtorSplit {
+fn split_ctors(cx: &dyn PatCtx, col: &ColumnTy, matrix: &Matrix<'_>) -> CtorSplit {
+    let col_ty = col.ty();
     // If any row has an Or-pattern at column 0, force expansion via the
     // `Or` ctor before any other split logic. Or-rows can't participate in
     // a normal `head.ctor.covers(ctor)` check; they need to explode first.
@@ -1483,7 +1517,7 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> CtorSplit {
                 })],
             );
         }
-        let all = cx.enumerate_ctors(col_ty);
+        let all = cx.enumerate_ctors(col);
         if all.is_empty() {
             // Vacuously exhaustive (e.g. `Ty::Never` directly).
             return CtorSplit::alphabet(vec![], vec![]);
@@ -1509,7 +1543,7 @@ fn split_ctors(cx: &dyn PatCtx, col_ty: &Ty, matrix: &Matrix<'_>) -> CtorSplit {
         return split_slice_ctors(&present_no_wild, has_wildcard);
     }
 
-    let all = cx.enumerate_ctors(col_ty);
+    let all = cx.enumerate_ctors(col);
 
     if all.iter().any(|c| matches!(c, Ctor::NonExhaustive)) {
         if matches!(col_ty, Ty::Interface(..))
@@ -1738,8 +1772,12 @@ fn dedup_equivalent_type_tests(cx: &dyn PatCtx, ctors: Vec<Ctor>) -> Vec<Ctor> {
     kept
 }
 
-fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col_ty: &Ty) -> Vec<Ty> {
-    match ctor {
+/// The sub-columns of `ctor` at column `col`: the single place a nested
+/// column is derived. The matrix specializes with these, and coverage
+/// lowering lowers sub-patterns against them.
+pub fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col: &ColumnTy) -> Vec<ColumnTy> {
+    let col_ty = col.ty();
+    let sub_tys = match ctor {
         Ctor::Class(qtn, args) => cx.class_field_types(qtn, &class_ty_for_ctor(qtn, args, col_ty)),
         Ctor::Interface(iface_ty) => cx.interface_field_types(iface_ty),
         Ctor::Slice(shape) => cx.slice_field_types(shape, col_ty),
@@ -1753,7 +1791,8 @@ fn ctor_sub_tys(cx: &dyn PatCtx, ctor: &Ctor, col_ty: &Ty) -> Vec<Ty> {
         // member type. Specialise recurses with that single sub-column.
         Ctor::UnionMember(member_ty) => vec![member_ty.clone()],
         _ => vec![],
-    }
+    };
+    sub_tys.iter().map(|ty| cx.column(ty)).collect()
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -1778,12 +1817,22 @@ mod tests {
 
     use super::*;
 
+    /// Test contexts canonicalize as the identity, so the column `StubCtx`
+    /// builds for a type is the one any of them would build.
+    fn col(ty: &Ty) -> ColumnTy {
+        StubCtx.column(ty)
+    }
+
     /// A trivial `PatCtx` for unit tests. No real class/list lookup; tests
     /// either avoid those types or stub them.
     struct StubCtx;
 
     impl PatCtx for StubCtx {
-        fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
+        fn canonicalize(&self, ty: &Ty) -> Ty {
+            ty.clone()
+        }
+        fn enumerate_ctors(&self, col: &ColumnTy) -> Vec<Ctor> {
+            let ty = col.ty();
             match ty {
                 Ty::Bool => {
                     vec![Ctor::Type(bool_lit(true)), Ctor::Type(bool_lit(false))]
@@ -1792,7 +1841,7 @@ mod tests {
                 Ty::Null => vec![Ctor::Type(ty.clone())],
                 Ty::Union(members) => members
                     .iter()
-                    .flat_map(|m| self.enumerate_ctors(m))
+                    .flat_map(|m| self.enumerate_ctors(&self.column(m)))
                     .collect(),
                 Ty::Literal(_, _) | Ty::EnumVariant(_, _) => vec![Ctor::Type(ty.clone())],
                 Ty::Never => vec![],
@@ -1834,10 +1883,10 @@ mod tests {
         let shape = |first| {
             DPat::tuple(
                 vec![
-                    DPat::type_test(first, Ty::Unknown),
-                    DPat::wildcard(Ty::Unknown),
+                    DPat::type_test(first, col(&Ty::Unknown)),
+                    DPat::wildcard(col(&Ty::Unknown)),
                 ],
-                Ty::Unknown,
+                col(&Ty::Unknown),
             )
         };
         let arms = vec![
@@ -1845,13 +1894,13 @@ mod tests {
             shape(bool_lit(true)),
             shape(bool_lit(false)),
         ];
-        let report = compute_match_usefulness(&StubCtx, &arms, Ty::Unknown);
+        let report = compute_match_usefulness(&StubCtx, &arms, col(&Ty::Unknown));
         assert_eq!(report.unreachable_arms, vec![ArmId(1)]);
         assert!(!report.missing.is_empty(), "non-tuples still need coverage");
 
         let mut arms = arms;
-        arms.push(DPat::wildcard(Ty::Unknown));
-        let report = compute_match_usefulness(&StubCtx, &arms, Ty::Unknown);
+        arms.push(DPat::wildcard(col(&Ty::Unknown)));
+        let report = compute_match_usefulness(&StubCtx, &arms, col(&Ty::Unknown));
         assert_eq!(report.unreachable_arms, vec![ArmId(1)]);
         assert!(report.missing.is_empty());
     }
@@ -1859,10 +1908,10 @@ mod tests {
     #[test]
     fn bool_exhaustive_with_both_arms() {
         let arms = vec![
-            DPat::type_test(bool_lit(true), bool_ty()),
-            DPat::type_test(bool_lit(false), bool_ty()),
+            DPat::type_test(bool_lit(true), col(&bool_ty())),
+            DPat::type_test(bool_lit(false), col(&bool_ty())),
         ];
-        let report = compute_match_usefulness(&StubCtx, &arms, bool_ty());
+        let report = compute_match_usefulness(&StubCtx, &arms, col(&bool_ty()));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive: {:?}",
@@ -1873,8 +1922,8 @@ mod tests {
 
     #[test]
     fn bool_non_exhaustive_missing_false() {
-        let arms = vec![DPat::type_test(bool_lit(true), bool_ty())];
-        let report = compute_match_usefulness(&StubCtx, &arms, bool_ty());
+        let arms = vec![DPat::type_test(bool_lit(true), col(&bool_ty()))];
+        let report = compute_match_usefulness(&StubCtx, &arms, col(&bool_ty()));
         assert_eq!(report.missing.len(), 1);
         assert!(matches!(report.missing[0].ctor, Ctor::Type(_)));
     }
@@ -1882,37 +1931,37 @@ mod tests {
     #[test]
     fn bool_wildcard_makes_exhaustive() {
         let arms = vec![
-            DPat::type_test(bool_lit(true), bool_ty()),
-            DPat::wildcard(bool_ty()),
+            DPat::type_test(bool_lit(true), col(&bool_ty())),
+            DPat::wildcard(col(&bool_ty())),
         ];
-        let report = compute_match_usefulness(&StubCtx, &arms, bool_ty());
+        let report = compute_match_usefulness(&StubCtx, &arms, col(&bool_ty()));
         assert!(report.missing.is_empty());
     }
 
     #[test]
     fn int_requires_wildcard() {
-        let arms = vec![DPat::type_test(int_lit(1), int_ty())];
-        let report = compute_match_usefulness(&StubCtx, &arms, int_ty());
+        let arms = vec![DPat::type_test(int_lit(1), col(&int_ty()))];
+        let report = compute_match_usefulness(&StubCtx, &arms, col(&int_ty()));
         assert_eq!(report.missing.len(), 1);
     }
 
     #[test]
     fn int_with_wildcard_is_exhaustive() {
         let arms = vec![
-            DPat::type_test(int_lit(1), int_ty()),
-            DPat::wildcard(int_ty()),
+            DPat::type_test(int_lit(1), col(&int_ty())),
+            DPat::wildcard(col(&int_ty())),
         ];
-        let report = compute_match_usefulness(&StubCtx, &arms, int_ty());
+        let report = compute_match_usefulness(&StubCtx, &arms, col(&int_ty()));
         assert!(report.missing.is_empty());
     }
 
     #[test]
     fn unreachable_after_wildcard() {
         let arms = vec![
-            DPat::wildcard(bool_ty()),
-            DPat::type_test(bool_lit(true), bool_ty()),
+            DPat::wildcard(col(&bool_ty())),
+            DPat::type_test(bool_lit(true), col(&bool_ty())),
         ];
-        let report = compute_match_usefulness(&StubCtx, &arms, bool_ty());
+        let report = compute_match_usefulness(&StubCtx, &arms, col(&bool_ty()));
         assert!(report.missing.is_empty());
         assert!(
             report.unreachable_arms.contains(&ArmId(1)),
@@ -1924,8 +1973,8 @@ mod tests {
     #[test]
     fn typevar_requires_wildcard() {
         let tv = Ty::type_var("T");
-        let arms = vec![DPat::wildcard(tv.clone())];
-        let report = compute_match_usefulness(&StubCtx, &arms, tv);
+        let arms = vec![DPat::wildcard(col(&tv.clone()))];
+        let report = compute_match_usefulness(&StubCtx, &arms, col(&tv));
         assert!(report.missing.is_empty());
     }
 
@@ -1933,7 +1982,7 @@ mod tests {
     fn never_is_vacuously_exhaustive() {
         let never = Ty::Never;
         let arms: Vec<DPat> = vec![];
-        let report = compute_match_usefulness(&StubCtx, &arms, never);
+        let report = compute_match_usefulness(&StubCtx, &arms, col(&never));
         assert!(report.missing.is_empty());
     }
 
@@ -1955,24 +2004,28 @@ mod tests {
         let arm1 = DPat::slice(
             SliceShape::Fixed(2),
             vec![
-                DPat::type_test(bool_lit(true), bool_ty()),
-                DPat::wildcard(bool_ty()),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+                DPat::wildcard(col(&bool_ty())),
             ],
-            array_bool.clone(),
+            col(&array_bool.clone()),
         );
         let arm2 = DPat::slice(
             SliceShape::Fixed(2),
             vec![
-                DPat::type_test(bool_lit(false), bool_ty()),
-                DPat::type_test(bool_lit(true), bool_ty()),
+                DPat::type_test(bool_lit(false), col(&bool_ty())),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
             ],
-            array_bool.clone(),
+            col(&array_bool.clone()),
         );
 
         // The stub must enumerate Array<bool> ctors. We override below.
         struct ArrayCtx;
         impl PatCtx for ArrayCtx {
-            fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
+            fn canonicalize(&self, ty: &Ty) -> Ty {
+                ty.clone()
+            }
+            fn enumerate_ctors(&self, col: &ColumnTy) -> Vec<Ctor> {
+                let ty = col.ty();
                 match ty {
                     Ty::Bool => vec![
                         Ctor::Type(Ty::Literal(Literal::Bool(true), Freshness::Regular)),
@@ -2005,7 +2058,7 @@ mod tests {
             }
         }
 
-        let report = compute_match_usefulness(&ArrayCtx, &[arm1, arm2], array_bool);
+        let report = compute_match_usefulness(&ArrayCtx, &[arm1, arm2], col(&array_bool));
         // Many length-classes are still missing (length 0, 1, 3, variable),
         // but `[false, false]` must be among them.
         let missing_strings: Vec<String> = report
@@ -2027,25 +2080,32 @@ mod tests {
         let array_bool = Ty::List(Box::new(bool_ty()));
 
         let arms = vec![
-            DPat::slice(SliceShape::Fixed(0), vec![], array_bool.clone()),
+            DPat::slice(SliceShape::Fixed(0), vec![], col(&array_bool.clone())),
             DPat::slice(
                 SliceShape::Fixed(1),
-                vec![DPat::wildcard(bool_ty())],
-                array_bool.clone(),
+                vec![DPat::wildcard(col(&bool_ty()))],
+                col(&array_bool.clone()),
             ),
             DPat::slice(
                 SliceShape::Variable {
                     prefix: 2,
                     suffix: 0,
                 },
-                vec![DPat::wildcard(bool_ty()), DPat::wildcard(bool_ty())],
-                array_bool.clone(),
+                vec![
+                    DPat::wildcard(col(&bool_ty())),
+                    DPat::wildcard(col(&bool_ty())),
+                ],
+                col(&array_bool.clone()),
             ),
         ];
 
         struct ArrayCtx;
         impl PatCtx for ArrayCtx {
-            fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
+            fn canonicalize(&self, ty: &Ty) -> Ty {
+                ty.clone()
+            }
+            fn enumerate_ctors(&self, col: &ColumnTy) -> Vec<Ctor> {
+                let ty = col.ty();
                 match ty {
                     Ty::Bool => vec![
                         Ctor::Type(Ty::Literal(Literal::Bool(true), Freshness::Regular)),
@@ -2078,7 +2138,7 @@ mod tests {
             }
         }
 
-        let report = compute_match_usefulness(&ArrayCtx, &arms, array_bool);
+        let report = compute_match_usefulness(&ArrayCtx, &arms, col(&array_bool));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive, got missing {:?}",
@@ -2135,7 +2195,11 @@ mod tests {
         }
     }
     impl PatCtx for TestingCtx {
-        fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
+        fn canonicalize(&self, ty: &Ty) -> Ty {
+            ty.clone()
+        }
+        fn enumerate_ctors(&self, col: &ColumnTy) -> Vec<Ctor> {
+            let ty = col.ty();
             // Peel aliases first, the same way the real builder will.
             let ty = self.expand_alias(ty);
             match &ty {
@@ -2146,7 +2210,7 @@ mod tests {
                 Ty::Null => vec![Ctor::Type(ty.clone())],
                 Ty::Union(members) => members
                     .iter()
-                    .flat_map(|m| self.enumerate_ctors(m))
+                    .flat_map(|m| self.enumerate_ctors(&self.column(m)))
                     .collect(),
                 Ty::Literal(_, _) | Ty::EnumVariant(_, _) => {
                     vec![Ctor::Type(ty.clone())]
@@ -2215,15 +2279,21 @@ mod tests {
         cx.register(b.clone(), vec![bool_ty()]);
         cx.register(pair.clone(), vec![e_ty.clone(), e_ty.clone()]);
 
-        let variant =
-            |q: &DeclName| DPat::class(q.clone(), vec![DPat::wildcard(bool_ty())], class_ty(q));
-        let mk_pair =
-            |left: DPat, right: DPat| DPat::class(pair.clone(), vec![left, right], pair_ty.clone());
+        let variant = |q: &DeclName| {
+            DPat::class(
+                q.clone(),
+                vec![DPat::wildcard(col(&bool_ty()))],
+                col(&class_ty(q)),
+            )
+        };
+        let mk_pair = |left: DPat, right: DPat| {
+            DPat::class(pair.clone(), vec![left, right], col(&pair_ty.clone()))
+        };
 
         let report = compute_match_usefulness(
             &cx,
-            &[mk_pair(variant(&a), DPat::wildcard(e_ty.clone()))],
-            pair_ty.clone(),
+            &[mk_pair(variant(&a), DPat::wildcard(col(&e_ty.clone())))],
+            col(&pair_ty.clone()),
         );
         assert!(
             !report.missing.is_empty(),
@@ -2233,10 +2303,10 @@ mod tests {
         let report = compute_match_usefulness(
             &cx,
             &[
-                mk_pair(variant(&a), DPat::wildcard(e_ty.clone())),
-                mk_pair(variant(&b), DPat::wildcard(e_ty.clone())),
+                mk_pair(variant(&a), DPat::wildcard(col(&e_ty.clone()))),
+                mk_pair(variant(&b), DPat::wildcard(col(&e_ty.clone()))),
             ],
-            pair_ty.clone(),
+            col(&pair_ty.clone()),
         );
         assert!(
             report.missing.is_empty(),
@@ -2246,10 +2316,10 @@ mod tests {
         let report = compute_match_usefulness(
             &cx,
             &[
-                mk_pair(variant(&a), DPat::wildcard(e_ty.clone())),
-                mk_pair(DPat::wildcard(e_ty.clone()), variant(&a)),
+                mk_pair(variant(&a), DPat::wildcard(col(&e_ty.clone()))),
+                mk_pair(DPat::wildcard(col(&e_ty.clone())), variant(&a)),
             ],
-            pair_ty.clone(),
+            col(&pair_ty.clone()),
         );
         assert!(
             !report.missing.is_empty(),
@@ -2259,11 +2329,11 @@ mod tests {
         let report = compute_match_usefulness(
             &cx,
             &[
-                mk_pair(variant(&a), DPat::wildcard(e_ty.clone())),
-                mk_pair(DPat::wildcard(e_ty.clone()), variant(&a)),
+                mk_pair(variant(&a), DPat::wildcard(col(&e_ty.clone()))),
+                mk_pair(DPat::wildcard(col(&e_ty.clone())), variant(&a)),
                 mk_pair(variant(&b), variant(&b)),
             ],
-            pair_ty,
+            col(&pair_ty),
         );
         assert!(
             report.missing.is_empty(),
@@ -2284,10 +2354,11 @@ mod tests {
         let pair_ty = class_ty(&pair);
         cx.register(pair.clone(), vec![opt_bool.clone(), opt_bool.clone()]);
 
-        let mk_pair =
-            |left: DPat, right: DPat| DPat::class(pair.clone(), vec![left, right], pair_ty.clone());
+        let mk_pair = |left: DPat, right: DPat| {
+            DPat::class(pair.clone(), vec![left, right], col(&pair_ty.clone()))
+        };
 
-        let report = compute_match_usefulness(&cx, &[], pair_ty.clone());
+        let report = compute_match_usefulness(&cx, &[], col(&pair_ty.clone()));
         let witnesses: Vec<String> = report
             .missing
             .iter()
@@ -2305,10 +2376,10 @@ mod tests {
         );
 
         let false_false = mk_pair(
-            DPat::type_test(bool_lit(false), opt_bool.clone()),
-            DPat::type_test(bool_lit(false), opt_bool.clone()),
+            DPat::type_test(bool_lit(false), col(&opt_bool.clone())),
+            DPat::type_test(bool_lit(false), col(&opt_bool.clone())),
         );
-        let report = compute_match_usefulness(&cx, &[false_false], pair_ty.clone());
+        let report = compute_match_usefulness(&cx, &[false_false], col(&pair_ty.clone()));
         let witnesses: Vec<String> = report
             .missing
             .iter()
@@ -2337,10 +2408,10 @@ mod tests {
         }
 
         let any_false = mk_pair(
-            DPat::wildcard(opt_bool.clone()),
-            DPat::type_test(bool_lit(false), opt_bool.clone()),
+            DPat::wildcard(col(&opt_bool.clone())),
+            DPat::type_test(bool_lit(false), col(&opt_bool.clone())),
         );
-        let report = compute_match_usefulness(&cx, &[any_false], pair_ty);
+        let report = compute_match_usefulness(&cx, &[any_false], col(&pair_ty));
         let witnesses: Vec<String> = report
             .missing
             .iter()
@@ -2378,9 +2449,15 @@ mod tests {
         cx.register(err.clone(), vec![never_ty()]);
         cx.register(pair.clone(), vec![bool_ty(), result_ty.clone()]);
 
-        let ok_any = || DPat::class(ok.clone(), vec![DPat::wildcard(bool_ty())], ok_ty.clone());
+        let ok_any = || {
+            DPat::class(
+                ok.clone(),
+                vec![DPat::wildcard(col(&bool_ty()))],
+                col(&ok_ty.clone()),
+            )
+        };
 
-        let report = compute_match_usefulness(&cx, &[ok_any()], result_ty.clone());
+        let report = compute_match_usefulness(&cx, &[ok_any()], col(&result_ty.clone()));
         assert!(
             report.missing.is_empty(),
             "Ok(_) should exhaust Result<bool, Never>; got {:?}",
@@ -2394,11 +2471,11 @@ mod tests {
         let mk_pair = |b: bool| {
             DPat::class(
                 pair.clone(),
-                vec![DPat::type_test(bool_lit(b), bool_ty()), ok_any()],
-                pair_ty.clone(),
+                vec![DPat::type_test(bool_lit(b), col(&bool_ty())), ok_any()],
+                col(&pair_ty.clone()),
             )
         };
-        let report = compute_match_usefulness(&cx, &[mk_pair(true), mk_pair(false)], pair_ty);
+        let report = compute_match_usefulness(&cx, &[mk_pair(true), mk_pair(false)], col(&pair_ty));
         assert!(
             report.missing.is_empty(),
             "covering bool with Ok(_) should exhaust (bool, Result<bool, Never>)"
@@ -2410,7 +2487,7 @@ mod tests {
     #[test]
     fn rustc_port_bool_empty_match_witnesses() {
         let cx = TestingCtx::new();
-        let report = compute_match_usefulness(&cx, &[], bool_ty());
+        let report = compute_match_usefulness(&cx, &[], col(&bool_ty()));
         let witnesses: Vec<String> = report
             .missing
             .iter()
@@ -2439,14 +2516,14 @@ mod tests {
             .map(|variant| {
                 DPat::class(
                     variant.clone(),
-                    vec![DPat::wildcard(bool_ty())],
-                    class_ty(variant),
+                    vec![DPat::wildcard(col(&bool_ty()))],
+                    col(&class_ty(variant)),
                 )
             })
             .collect();
-        arms.push(DPat::wildcard(scrut.clone()));
+        arms.push(DPat::wildcard(col(&scrut.clone())));
 
-        let report = compute_match_usefulness(&cx, &arms, scrut);
+        let report = compute_match_usefulness(&cx, &arms, col(&scrut));
         assert!(report.missing.is_empty());
         assert_eq!(report.unreachable_arms, vec![ArmId(20)]);
     }
@@ -2462,12 +2539,12 @@ mod tests {
                 prefix: 1,
                 suffix: 0,
             },
-            vec![DPat::wildcard(bool_ty())],
-            scrut.clone(),
+            vec![DPat::wildcard(col(&bool_ty()))],
+            col(&scrut.clone()),
         );
-        let wildcard = DPat::wildcard(scrut.clone());
+        let wildcard = DPat::wildcard(col(&scrut.clone()));
 
-        let report = compute_match_usefulness(&cx, &[non_empty, wildcard], scrut);
+        let report = compute_match_usefulness(&cx, &[non_empty, wildcard], col(&scrut));
         assert!(report.missing.is_empty());
         assert!(
             report.unreachable_arms.is_empty(),
@@ -2490,12 +2567,12 @@ mod tests {
             DPat::class(
                 q.clone(),
                 vec![
-                    DPat::type_test(bool_lit(a), bool_ty()),
-                    DPat::type_test(bool_lit(b), bool_ty()),
-                    DPat::type_test(bool_lit(c), bool_ty()),
-                    DPat::type_test(bool_lit(d), bool_ty()),
+                    DPat::type_test(bool_lit(a), col(&bool_ty())),
+                    DPat::type_test(bool_lit(b), col(&bool_ty())),
+                    DPat::type_test(bool_lit(c), col(&bool_ty())),
+                    DPat::type_test(bool_lit(d), col(&bool_ty())),
                 ],
-                qty.clone(),
+                col(&qty.clone()),
             )
         };
 
@@ -2504,7 +2581,7 @@ mod tests {
         for i in 0..16 {
             arms.push(combo(i & 1 != 0, i & 2 != 0, i & 4 != 0, i & 8 != 0));
         }
-        let report = compute_match_usefulness(&cx, &arms, qty.clone());
+        let report = compute_match_usefulness(&cx, &arms, col(&qty.clone()));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive, got {:?}",
@@ -2523,7 +2600,7 @@ mod tests {
             }
             arms.push(combo(i & 1 != 0, i & 2 != 0, i & 4 != 0, i & 8 != 0));
         }
-        let report = compute_match_usefulness(&cx, &arms, qty.clone());
+        let report = compute_match_usefulness(&cx, &arms, col(&qty.clone()));
         assert_eq!(report.missing.len(), 1, "expected one missing case");
         let w = report.missing[0].render(&crate::test_heads::viewpoint());
         assert!(
@@ -2546,22 +2623,22 @@ mod tests {
         let arm1 = DPat::class(
             q.clone(),
             vec![
-                DPat::type_test(bool_lit(true), bool_ty()),
-                DPat::wildcard(bool_ty()),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+                DPat::wildcard(col(&bool_ty())),
             ],
-            qty.clone(),
+            col(&qty.clone()),
         );
         // arm covers (false, true) and (false, false).
         let arm2 = DPat::class(
             q.clone(),
             vec![
-                DPat::type_test(bool_lit(false), bool_ty()),
-                DPat::wildcard(bool_ty()),
+                DPat::type_test(bool_lit(false), col(&bool_ty())),
+                DPat::wildcard(col(&bool_ty())),
             ],
-            qty.clone(),
+            col(&qty.clone()),
         );
 
-        let report = compute_match_usefulness(&cx, &[arm1, arm2], qty);
+        let report = compute_match_usefulness(&cx, &[arm1, arm2], col(&qty));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive: {:?}",
@@ -2587,10 +2664,10 @@ mod tests {
                 suffix: 1,
             },
             vec![
-                DPat::type_test(bool_lit(true), bool_ty()),
-                DPat::type_test(bool_lit(false), bool_ty()),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+                DPat::type_test(bool_lit(false), col(&bool_ty())),
             ],
-            arr.clone(),
+            col(&arr.clone()),
         );
         let arm2 = DPat::slice(
             SliceShape::Variable {
@@ -2598,10 +2675,10 @@ mod tests {
                 suffix: 0,
             },
             vec![],
-            arr.clone(),
+            col(&arr.clone()),
         );
 
-        let report = compute_match_usefulness(&cx, &[arm1, arm2], arr);
+        let report = compute_match_usefulness(&cx, &[arm1, arm2], col(&arr));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive: {:?}",
@@ -2627,16 +2704,19 @@ mod tests {
         let cx = TestingCtx::new();
         let arr = list_of(int_ty());
 
-        let arm0 = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
+        let arm0 = DPat::slice(SliceShape::Fixed(0), vec![], col(&arr.clone()));
         let arm1 = DPat::slice(
             SliceShape::Fixed(1),
-            vec![DPat::wildcard(int_ty())],
-            arr.clone(),
+            vec![DPat::wildcard(col(&int_ty()))],
+            col(&arr.clone()),
         );
         let arm2 = DPat::slice(
             SliceShape::Fixed(2),
-            vec![DPat::wildcard(int_ty()), DPat::wildcard(int_ty())],
-            arr.clone(),
+            vec![
+                DPat::wildcard(col(&int_ty())),
+                DPat::wildcard(col(&int_ty())),
+            ],
+            col(&arr.clone()),
         );
         let arm3plus = DPat::slice(
             SliceShape::Variable {
@@ -2644,18 +2724,18 @@ mod tests {
                 suffix: 0,
             },
             vec![
-                DPat::wildcard(int_ty()),
-                DPat::wildcard(int_ty()),
-                DPat::wildcard(int_ty()),
+                DPat::wildcard(col(&int_ty())),
+                DPat::wildcard(col(&int_ty())),
+                DPat::wildcard(col(&int_ty())),
             ],
-            arr.clone(),
+            col(&arr.clone()),
         );
 
         // (a) All four — exhaustive.
         let report = compute_match_usefulness(
             &cx,
             &[arm0.clone(), arm1.clone(), arm2.clone(), arm3plus.clone()],
-            arr.clone(),
+            col(&arr.clone()),
         );
         assert!(
             report.missing.is_empty(),
@@ -2671,7 +2751,7 @@ mod tests {
         let report = compute_match_usefulness(
             &cx,
             &[arm0.clone(), arm1.clone(), arm3plus.clone()],
-            arr.clone(),
+            col(&arr.clone()),
         );
         assert!(
             !report.missing.is_empty(),
@@ -2682,12 +2762,13 @@ mod tests {
         let arm_lit = DPat::slice(
             SliceShape::Fixed(2),
             vec![
-                DPat::type_test(int_lit(1), int_ty()),
-                DPat::type_test(int_lit(2), int_ty()),
+                DPat::type_test(int_lit(1), col(&int_ty())),
+                DPat::type_test(int_lit(2), col(&int_ty())),
             ],
-            arr.clone(),
+            col(&arr.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[arm0, arm1, arm2, arm_lit, arm3plus], arr);
+        let report =
+            compute_match_usefulness(&cx, &[arm0, arm1, arm2, arm_lit, arm3plus], col(&arr));
         assert!(
             report.unreachable_arms.contains(&ArmId(3)),
             "arm 3 (literal pair after wildcard pair) should be unreachable, got {:?}",
@@ -2712,26 +2793,26 @@ mod tests {
             DPat::class(
                 r.clone(),
                 vec![
-                    DPat::type_test(bool_lit(ok), bool_ty()),
+                    DPat::type_test(bool_lit(ok), col(&bool_ty())),
                     match val {
-                        Some(v) => DPat::type_test(bool_lit(v), bool_ty()),
-                        None => DPat::wildcard(bool_ty()),
+                        Some(v) => DPat::type_test(bool_lit(v), col(&bool_ty())),
+                        None => DPat::wildcard(col(&bool_ty())),
                     },
                 ],
-                result_ty.clone(),
+                col(&result_ty.clone()),
             )
         };
 
-        let len0 = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
+        let len0 = DPat::slice(SliceShape::Fixed(0), vec![], col(&arr.clone()));
         let len1_ok = DPat::slice(
             SliceShape::Fixed(1),
             vec![make_class(true, None)],
-            arr.clone(),
+            col(&arr.clone()),
         );
         let len1_err = DPat::slice(
             SliceShape::Fixed(1),
             vec![make_class(false, None)],
-            arr.clone(),
+            col(&arr.clone()),
         );
         let len2plus = DPat::slice(
             SliceShape::Variable {
@@ -2739,10 +2820,10 @@ mod tests {
                 suffix: 0,
             },
             vec![
-                DPat::wildcard(result_ty.clone()),
-                DPat::wildcard(result_ty.clone()),
+                DPat::wildcard(col(&result_ty.clone())),
+                DPat::wildcard(col(&result_ty.clone())),
             ],
-            arr.clone(),
+            col(&arr.clone()),
         );
 
         // Full coverage — exhaustive.
@@ -2754,7 +2835,7 @@ mod tests {
                 len1_err.clone(),
                 len2plus.clone(),
             ],
-            arr.clone(),
+            col(&arr.clone()),
         );
         assert!(
             report.missing.is_empty(),
@@ -2768,7 +2849,7 @@ mod tests {
 
         // Drop the false-ok branch — witness must mention `ok: false` inside
         // a length-1 slice.
-        let report = compute_match_usefulness(&cx, &[len0, len1_ok, len2plus], arr);
+        let report = compute_match_usefulness(&cx, &[len0, len1_ok, len2plus], col(&arr));
         assert!(
             !report.missing.is_empty(),
             "expected missing when len-1 false-ok arm dropped"
@@ -2800,11 +2881,14 @@ mod tests {
         let cont = |tag: bool, items: DPat| {
             DPat::class(
                 c.clone(),
-                vec![DPat::type_test(bool_lit(tag), bool_ty()), items],
-                cty.clone(),
+                vec![DPat::type_test(bool_lit(tag), col(&bool_ty())), items],
+                col(&cty.clone()),
             )
         };
-        let true_empty = cont(true, DPat::slice(SliceShape::Fixed(0), vec![], arr.clone()));
+        let true_empty = cont(
+            true,
+            DPat::slice(SliceShape::Fixed(0), vec![], col(&arr.clone())),
+        );
         let true_nonempty = cont(
             true,
             DPat::slice(
@@ -2812,17 +2896,17 @@ mod tests {
                     prefix: 1,
                     suffix: 0,
                 },
-                vec![DPat::wildcard(bool_ty())],
-                arr.clone(),
+                vec![DPat::wildcard(col(&bool_ty()))],
+                col(&arr.clone()),
             ),
         );
-        let false_any = cont(false, DPat::wildcard(arr.clone()));
+        let false_any = cont(false, DPat::wildcard(col(&arr.clone())));
 
         // (a) All three — exhaustive.
         let report = compute_match_usefulness(
             &cx,
             &[true_empty.clone(), true_nonempty.clone(), false_any.clone()],
-            cty.clone(),
+            col(&cty.clone()),
         );
         assert!(
             report.missing.is_empty(),
@@ -2836,7 +2920,7 @@ mod tests {
 
         // (b) Drop `true_empty` — witness must mention `tag: true` and an
         // empty list shape.
-        let report = compute_match_usefulness(&cx, &[true_nonempty, false_any], cty);
+        let report = compute_match_usefulness(&cx, &[true_nonempty, false_any], col(&cty));
         assert!(
             !report.missing.is_empty(),
             "expected missing when (tag: true, items: []) dropped"
@@ -2853,10 +2937,10 @@ mod tests {
         let inner = opt_of(bool_ty());
         let outer = opt_of(inner.clone());
 
-        let null = DPat::type_test(null_ty(), outer.clone());
-        let inner_null = DPat::type_test(null_ty(), outer.clone());
-        let bool_true = DPat::type_test(bool_lit(true), outer.clone());
-        let bool_false = DPat::type_test(bool_lit(false), outer.clone());
+        let null = DPat::type_test(null_ty(), col(&outer.clone()));
+        let inner_null = DPat::type_test(null_ty(), col(&outer.clone()));
+        let bool_true = DPat::type_test(bool_lit(true), col(&outer.clone()));
+        let bool_false = DPat::type_test(bool_lit(false), col(&outer.clone()));
 
         // The current enumerate_ctors for Optional<Optional<bool>> returns
         // ctors of inner (true, false, null) plus null. The two `null`s
@@ -2867,7 +2951,7 @@ mod tests {
         let report = compute_match_usefulness(
             &cx,
             &[null.clone(), bool_true.clone(), bool_false.clone()],
-            outer.clone(),
+            col(&outer.clone()),
         );
         assert!(
             report.missing.is_empty(),
@@ -2881,7 +2965,7 @@ mod tests {
         // The duplicate-null arm `inner_null` covering the same case as
         // `null` is reported as unreachable.
         let report =
-            compute_match_usefulness(&cx, &[null, inner_null, bool_true, bool_false], outer);
+            compute_match_usefulness(&cx, &[null, inner_null, bool_true, bool_false], col(&outer));
         assert!(
             report.unreachable_arms.contains(&ArmId(1)),
             "duplicate null arm should be unreachable, got {:?}",
@@ -2898,17 +2982,17 @@ mod tests {
         let cx = TestingCtx::new();
         let scrut = union_of(vec![int_lit(1), int_lit(2), int_lit(3)]);
 
-        let arm0_a = DPat::type_test(int_lit(1), scrut.clone());
-        let arm0_b = DPat::type_test(int_lit(2), scrut.clone());
-        let arm1 = DPat::type_test(int_lit(2), scrut.clone()); // unreachable
-        let arm2 = DPat::type_test(int_lit(3), scrut.clone());
+        let arm0_a = DPat::type_test(int_lit(1), col(&scrut.clone()));
+        let arm0_b = DPat::type_test(int_lit(2), col(&scrut.clone()));
+        let arm1 = DPat::type_test(int_lit(2), col(&scrut.clone())); // unreachable
+        let arm2 = DPat::type_test(int_lit(3), col(&scrut.clone()));
 
         // To use ArmId for arms_for_user, we need a way to share arm-id
         // across or-pattern rows. compute_match_usefulness assigns one ArmId
         // per row, so we lose source-arm grouping here. Verify behavior at
         // the row level: rows 0,1 useful (covering 1,2); row 2 unreachable
         // (matches 2 already covered); row 3 useful (covers 3).
-        let report = compute_match_usefulness(&cx, &[arm0_a, arm0_b, arm1, arm2], scrut);
+        let report = compute_match_usefulness(&cx, &[arm0_a, arm0_b, arm1, arm2], col(&scrut));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive: {:?}",
@@ -2943,17 +3027,21 @@ mod tests {
         let mk_ok = |v: bool| {
             DPat::class(
                 ok.clone(),
-                vec![DPat::type_test(bool_lit(v), bool_ty())],
-                ok_ty.clone(),
+                vec![DPat::type_test(bool_lit(v), col(&bool_ty()))],
+                col(&ok_ty.clone()),
             )
         };
-        let any_err = DPat::class(err.clone(), vec![DPat::wildcard(int_ty())], err_ty.clone());
+        let any_err = DPat::class(
+            err.clone(),
+            vec![DPat::wildcard(col(&int_ty()))],
+            col(&err_ty.clone()),
+        );
 
         // (a) Full coverage exhaustive.
         let report = compute_match_usefulness(
             &cx,
             &[mk_ok(true), mk_ok(false), any_err.clone()],
-            scrut.clone(),
+            col(&scrut.clone()),
         );
         assert!(
             report.missing.is_empty(),
@@ -2966,7 +3054,7 @@ mod tests {
         );
 
         // (b) Drop `Ok{val:false}` → witness mentions Ok and false.
-        let report = compute_match_usefulness(&cx, &[mk_ok(true), any_err], scrut);
+        let report = compute_match_usefulness(&cx, &[mk_ok(true), any_err], col(&scrut));
         let strs: Vec<String> = report
             .missing
             .iter()
@@ -2997,10 +3085,10 @@ mod tests {
         let scrut = class_ty(&w_int);
         let arms = vec![DPat::class(
             w_int.clone(),
-            vec![DPat::wildcard(int_ty())],
-            scrut.clone(),
+            vec![DPat::wildcard(col(&int_ty()))],
+            col(&scrut.clone()),
         )];
-        let report = compute_match_usefulness(&cx, &arms, scrut);
+        let report = compute_match_usefulness(&cx, &arms, col(&scrut));
         assert!(
             report.missing.is_empty(),
             "wildcard inner should be exhaustive: {:?}",
@@ -3016,16 +3104,16 @@ mod tests {
         let arms = vec![
             DPat::class(
                 w_bool.clone(),
-                vec![DPat::type_test(bool_lit(true), bool_ty())],
-                scrut.clone(),
+                vec![DPat::type_test(bool_lit(true), col(&bool_ty()))],
+                col(&scrut.clone()),
             ),
             DPat::class(
                 w_bool.clone(),
-                vec![DPat::type_test(bool_lit(false), bool_ty())],
-                scrut.clone(),
+                vec![DPat::type_test(bool_lit(false), col(&bool_ty()))],
+                col(&scrut.clone()),
             ),
         ];
-        let report = compute_match_usefulness(&cx, &arms, scrut);
+        let report = compute_match_usefulness(&cx, &arms, col(&scrut));
         assert!(
             report.missing.is_empty(),
             "bool inner with both literals should be exhaustive: {:?}",
@@ -3050,12 +3138,12 @@ mod tests {
         let arm = DPat::class(
             p.clone(),
             vec![
-                DPat::type_test(bool_lit(true), bool_ty()),
-                DPat::type_test(bool_lit(true), bool_ty()),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
             ],
-            pty.clone(),
+            col(&pty.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[arm], pty);
+        let report = compute_match_usefulness(&cx, &[arm], col(&pty));
         let strs: Vec<String> = report
             .missing
             .iter()
@@ -3098,13 +3186,13 @@ mod tests {
                 vec![DPat::slice(
                     SliceShape::Fixed(0),
                     vec![],
-                    list_of(c_ty.clone()),
+                    col(&list_of(c_ty.clone())),
                 )],
-                b_ty.clone(),
+                col(&b_ty.clone()),
             )],
-            a_ty.clone(),
+            col(&a_ty.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[arm], a_ty);
+        let report = compute_match_usefulness(&cx, &[arm], col(&a_ty));
         // Many missing — at least one length-1 nested case should appear.
         assert!(
             !report.missing.is_empty(),
@@ -3119,8 +3207,8 @@ mod tests {
     fn testing_12a_empty_only_arm_for_list() {
         let cx = TestingCtx::new();
         let arr = list_of(int_ty());
-        let arm = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
-        let report = compute_match_usefulness(&cx, &[arm], arr);
+        let arm = DPat::slice(SliceShape::Fixed(0), vec![], col(&arr.clone()));
+        let report = compute_match_usefulness(&cx, &[arm], col(&arr));
         assert!(
             !report.missing.is_empty(),
             "non-empty arrays should be missing"
@@ -3132,7 +3220,7 @@ mod tests {
     fn testing_12b_never_zero_arms_exhaustive() {
         let cx = TestingCtx::new();
         let never = Ty::Never;
-        let report = compute_match_usefulness(&cx, &[], never);
+        let report = compute_match_usefulness(&cx, &[], col(&never));
         assert!(report.missing.is_empty());
     }
 
@@ -3150,15 +3238,15 @@ mod tests {
                 suffix: 0,
             },
             vec![],
-            arr.clone(),
+            col(&arr.clone()),
         );
         let one_true = DPat::slice(
             SliceShape::Fixed(1),
-            vec![DPat::type_test(bool_lit(true), bool_ty())],
-            arr.clone(),
+            vec![DPat::type_test(bool_lit(true), col(&bool_ty()))],
+            col(&arr.clone()),
         );
 
-        let report = compute_match_usefulness(&cx, &[any, one_true], arr);
+        let report = compute_match_usefulness(&cx, &[any, one_true], col(&arr));
         assert!(report.missing.is_empty(), "expected exhaustive");
         assert!(
             report.unreachable_arms.contains(&ArmId(1)),
@@ -3182,19 +3270,19 @@ mod tests {
                 prefix: 1,
                 suffix: 0,
             },
-            vec![DPat::wildcard(bool_ty())],
-            arr.clone(),
+            vec![DPat::wildcard(col(&bool_ty()))],
+            col(&arr.clone()),
         );
         let suf = DPat::slice(
             SliceShape::Variable {
                 prefix: 0,
                 suffix: 1,
             },
-            vec![DPat::wildcard(bool_ty())],
-            arr.clone(),
+            vec![DPat::wildcard(col(&bool_ty()))],
+            col(&arr.clone()),
         );
 
-        let report = compute_match_usefulness(&cx, &[pre, suf], arr);
+        let report = compute_match_usefulness(&cx, &[pre, suf], col(&arr));
         let strs: Vec<String> = report
             .missing
             .iter()
@@ -3225,10 +3313,10 @@ mod tests {
                 prefix: 1,
                 suffix: 0,
             },
-            vec![DPat::wildcard(bool_ty())],
-            arr.clone(),
+            vec![DPat::wildcard(col(&bool_ty()))],
+            col(&arr.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[arm], arr);
+        let report = compute_match_usefulness(&cx, &[arm], col(&arr));
         let strs: Vec<String> = report
             .missing
             .iter()
@@ -3253,10 +3341,13 @@ mod tests {
                 prefix: 2,
                 suffix: 0,
             },
-            vec![DPat::wildcard(bool_ty()), DPat::wildcard(bool_ty())],
-            arr.clone(),
+            vec![
+                DPat::wildcard(col(&bool_ty())),
+                DPat::wildcard(col(&bool_ty())),
+            ],
+            col(&arr.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[arm], arr);
+        let report = compute_match_usefulness(&cx, &[arm], col(&arr));
         let strs: Vec<String> = report
             .missing
             .iter()
@@ -3297,14 +3388,17 @@ mod tests {
                 suffix: 0,
             },
             vec![],
-            arr.clone(),
+            col(&arr.clone()),
         );
         let pair = DPat::slice(
             SliceShape::Fixed(2),
-            vec![DPat::wildcard(int_ty()), DPat::wildcard(int_ty())],
-            arr.clone(),
+            vec![
+                DPat::wildcard(col(&int_ty())),
+                DPat::wildcard(col(&int_ty())),
+            ],
+            col(&arr.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[any, pair], arr);
+        let report = compute_match_usefulness(&cx, &[any, pair], col(&arr));
         assert!(report.missing.is_empty());
         assert!(
             report.unreachable_arms.contains(&ArmId(1)),
@@ -3327,14 +3421,14 @@ mod tests {
                 suffix: 1,
             },
             vec![
-                DPat::wildcard(bool_ty()),
-                DPat::wildcard(bool_ty()),
-                DPat::wildcard(bool_ty()),
-                DPat::wildcard(bool_ty()),
+                DPat::wildcard(col(&bool_ty())),
+                DPat::wildcard(col(&bool_ty())),
+                DPat::wildcard(col(&bool_ty())),
+                DPat::wildcard(col(&bool_ty())),
             ],
-            arr.clone(),
+            col(&arr.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[var31.clone()], arr.clone());
+        let report = compute_match_usefulness(&cx, &[var31.clone()], col(&arr.clone()));
         assert!(
             !report.missing.is_empty(),
             "Var{{3,1}} alone should leave shorter lengths missing"
@@ -3347,9 +3441,9 @@ mod tests {
                 suffix: 0,
             },
             vec![],
-            arr.clone(),
+            col(&arr.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[var31, any], arr);
+        let report = compute_match_usefulness(&cx, &[var31, any], col(&arr));
         assert!(
             report.missing.is_empty(),
             "with `[..r]` added, should be exhaustive: {:?}",
@@ -3372,19 +3466,24 @@ mod tests {
         let inner_ty = list_of(bool_ty());
         let outer_ty = list_of(inner_ty.clone());
 
-        let outer_one_inner =
-            |inner_pat: DPat| DPat::slice(SliceShape::Fixed(1), vec![inner_pat], outer_ty.clone());
+        let outer_one_inner = |inner_pat: DPat| {
+            DPat::slice(
+                SliceShape::Fixed(1),
+                vec![inner_pat],
+                col(&outer_ty.clone()),
+            )
+        };
         let inner_pat = |a: bool, b: Option<bool>| {
             DPat::slice(
                 SliceShape::Fixed(2),
                 vec![
-                    DPat::type_test(bool_lit(a), bool_ty()),
+                    DPat::type_test(bool_lit(a), col(&bool_ty())),
                     match b {
-                        Some(v) => DPat::type_test(bool_lit(v), bool_ty()),
-                        None => DPat::wildcard(bool_ty()),
+                        Some(v) => DPat::type_test(bool_lit(v), col(&bool_ty())),
+                        None => DPat::wildcard(col(&bool_ty())),
                     },
                 ],
-                inner_ty.clone(),
+                col(&inner_ty.clone()),
             )
         };
         let arm1 = outer_one_inner(inner_pat(true, None));
@@ -3395,10 +3494,10 @@ mod tests {
                 suffix: 0,
             },
             vec![],
-            outer_ty.clone(),
+            col(&outer_ty.clone()),
         );
 
-        let report = compute_match_usefulness(&cx, &[arm1, arm2, arm3], outer_ty);
+        let report = compute_match_usefulness(&cx, &[arm1, arm2, arm3], col(&outer_ty));
         // arm3 (Var{0,0}) covers everything missed; whole match is exhaustive.
         // But arms 1 & 2 are *not* unreachable — they were covered before
         // arm3, so they're useful.
@@ -3438,22 +3537,25 @@ mod tests {
             DPat::class(
                 p.clone(),
                 vec![
-                    DPat::type_test(bool_lit(a), bool_ty()),
-                    DPat::wildcard(bool_ty()),
+                    DPat::type_test(bool_lit(a), col(&bool_ty())),
+                    DPat::wildcard(col(&bool_ty())),
                 ],
-                pty.clone(),
+                col(&pty.clone()),
             )
         };
-        let len0 = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
-        let len1_true = DPat::slice(SliceShape::Fixed(1), vec![pair(true)], arr.clone());
-        let len1_false = DPat::slice(SliceShape::Fixed(1), vec![pair(false)], arr.clone());
+        let len0 = DPat::slice(SliceShape::Fixed(0), vec![], col(&arr.clone()));
+        let len1_true = DPat::slice(SliceShape::Fixed(1), vec![pair(true)], col(&arr.clone()));
+        let len1_false = DPat::slice(SliceShape::Fixed(1), vec![pair(false)], col(&arr.clone()));
         let len2plus = DPat::slice(
             SliceShape::Variable {
                 prefix: 2,
                 suffix: 0,
             },
-            vec![DPat::wildcard(pty.clone()), DPat::wildcard(pty.clone())],
-            arr.clone(),
+            vec![
+                DPat::wildcard(col(&pty.clone())),
+                DPat::wildcard(col(&pty.clone())),
+            ],
+            col(&arr.clone()),
         );
 
         // Full: exhaustive.
@@ -3465,7 +3567,7 @@ mod tests {
                 len1_false.clone(),
                 len2plus.clone(),
             ],
-            arr.clone(),
+            col(&arr.clone()),
         );
         assert!(
             report.missing.is_empty(),
@@ -3478,7 +3580,7 @@ mod tests {
         );
 
         // Drop length-1-a=false: missing length-1 with a=false.
-        let report = compute_match_usefulness(&cx, &[len0, len1_true, len2plus], arr);
+        let report = compute_match_usefulness(&cx, &[len0, len1_true, len2plus], col(&arr));
         let strs: Vec<String> = report
             .missing
             .iter()
@@ -3511,11 +3613,11 @@ mod tests {
                     suffix: 0,
                 },
                 vec![],
-                arr,
+                col(&arr),
             )],
-            hty.clone(),
+            col(&hty.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[arm], hty);
+        let report = compute_match_usefulness(&cx, &[arm], col(&hty));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive: {:?}",
@@ -3537,8 +3639,8 @@ mod tests {
         cx.register(e.clone(), vec![]);
         let ety = class_ty(&e);
 
-        let arm = DPat::class(e.clone(), vec![], ety.clone());
-        let report = compute_match_usefulness(&cx, &[arm], ety);
+        let arm = DPat::class(e.clone(), vec![], col(&ety.clone()));
+        let report = compute_match_usefulness(&cx, &[arm], col(&ety));
         assert!(report.missing.is_empty());
     }
 
@@ -3560,8 +3662,8 @@ mod tests {
         let mk_inner = |v: bool| {
             DPat::class(
                 inner.clone(),
-                vec![DPat::type_test(bool_lit(v), bool_ty())],
-                inner_ty.clone(),
+                vec![DPat::type_test(bool_lit(v), col(&bool_ty()))],
+                col(&inner_ty.clone()),
             )
         };
         let arm = DPat::class(
@@ -3569,11 +3671,11 @@ mod tests {
             vec![DPat::slice(
                 SliceShape::Fixed(1),
                 vec![mk_inner(true)],
-                inner_arr.clone(),
+                col(&inner_arr.clone()),
             )],
-            outer_ty.clone(),
+            col(&outer_ty.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[arm], outer_ty);
+        let report = compute_match_usefulness(&cx, &[arm], col(&outer_ty));
         // Several length-classes missing; at minimum a length-1 inner-false
         // case should appear.
         assert!(
@@ -3592,16 +3694,16 @@ mod tests {
         cx.register(p.clone(), vec![bool_ty(), bool_ty()]);
         let pty = class_ty(&p);
 
-        let any = DPat::wildcard(pty.clone());
+        let any = DPat::wildcard(col(&pty.clone()));
         let specific = DPat::class(
             p.clone(),
             vec![
-                DPat::type_test(bool_lit(true), bool_ty()),
-                DPat::type_test(bool_lit(false), bool_ty()),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+                DPat::type_test(bool_lit(false), col(&bool_ty())),
             ],
-            pty.clone(),
+            col(&pty.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[any, specific], pty);
+        let report = compute_match_usefulness(&cx, &[any, specific], col(&pty));
         assert!(report.missing.is_empty());
         assert!(
             report.unreachable_arms.contains(&ArmId(1)),
@@ -3625,13 +3727,13 @@ mod tests {
             DPat::class(
                 p.clone(),
                 vec![
-                    DPat::type_test(bool_lit(a), bool_ty()),
-                    DPat::wildcard(bool_ty()),
+                    DPat::type_test(bool_lit(a), col(&bool_ty())),
+                    DPat::wildcard(col(&bool_ty())),
                 ],
-                pty.clone(),
+                col(&pty.clone()),
             )
         };
-        let report = compute_match_usefulness(&cx, &[mk(true), mk(false)], pty);
+        let report = compute_match_usefulness(&cx, &[mk(true), mk(false)], col(&pty));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive: {:?}",
@@ -3659,15 +3761,15 @@ mod tests {
             DPat::class(
                 q.clone(),
                 (0..8)
-                    .map(|i| DPat::type_test(bool_lit((bits >> i) & 1 != 0), bool_ty()))
+                    .map(|i| DPat::type_test(bool_lit((bits >> i) & 1 != 0), col(&bool_ty())))
                     .collect(),
-                qty.clone(),
+                col(&qty.clone()),
             )
         };
 
         // All 256 → exhaustive.
         let arms: Vec<DPat> = (0u8..=255).map(combo).collect();
-        let report = compute_match_usefulness(&cx, &arms, qty.clone());
+        let report = compute_match_usefulness(&cx, &arms, col(&qty.clone()));
         assert!(
             report.missing.is_empty(),
             "256 arms should be exhaustive: {} missing",
@@ -3677,7 +3779,7 @@ mod tests {
 
         // Drop combo 0b10110100 (180) → exactly one missing.
         let arms: Vec<DPat> = (0u8..=255).filter(|b| *b != 180).map(combo).collect();
-        let report = compute_match_usefulness(&cx, &arms, qty);
+        let report = compute_match_usefulness(&cx, &arms, col(&qty));
         assert_eq!(
             report.missing.len(),
             1,
@@ -3702,16 +3804,19 @@ mod tests {
         // Scrutinee: Optional<Node>.
         let scrut = opt_n.clone();
 
-        let null_top = DPat::type_test(null_ty(), scrut.clone());
+        let null_top = DPat::type_test(null_ty(), col(&scrut.clone()));
         // Some(node) with any val and any next.
         let some_any = DPat::class(
             n.clone(),
-            vec![DPat::wildcard(bool_ty()), DPat::wildcard(opt_n.clone())],
-            n_ty.clone(),
+            vec![
+                DPat::wildcard(col(&bool_ty())),
+                DPat::wildcard(col(&opt_n.clone())),
+            ],
+            col(&n_ty.clone()),
         );
         let arms = vec![null_top.clone(), some_any.clone()];
 
-        let report = compute_match_usefulness(&cx, &arms, scrut.clone());
+        let report = compute_match_usefulness(&cx, &arms, col(&scrut.clone()));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive (null + Some(_)): {:?}",
@@ -3723,7 +3828,7 @@ mod tests {
         );
 
         // Drop `some_any` → witness must mention the Node class.
-        let report = compute_match_usefulness(&cx, &[null_top], scrut);
+        let report = compute_match_usefulness(&cx, &[null_top], col(&scrut));
         let strs: Vec<String> = report
             .missing
             .iter()
@@ -3770,21 +3875,21 @@ mod tests {
                             d.clone(),
                             vec![DPat::class(
                                 e.clone(),
-                                vec![DPat::type_test(bool_lit(v), bool_ty())],
-                                e_ty.clone(),
+                                vec![DPat::type_test(bool_lit(v), col(&bool_ty()))],
+                                col(&e_ty.clone()),
                             )],
-                            d_ty.clone(),
+                            col(&d_ty.clone()),
                         )],
-                        c_ty.clone(),
+                        col(&c_ty.clone()),
                     )],
-                    b_ty.clone(),
+                    col(&b_ty.clone()),
                 )],
-                a_ty.clone(),
+                col(&a_ty.clone()),
             )
         };
 
         // Both bool inner values → exhaustive.
-        let report = compute_match_usefulness(&cx, &[mk(true), mk(false)], a_ty.clone());
+        let report = compute_match_usefulness(&cx, &[mk(true), mk(false)], col(&a_ty.clone()));
         assert!(
             report.missing.is_empty(),
             "both leaf bools should be exhaustive: {:?}",
@@ -3796,7 +3901,7 @@ mod tests {
         );
 
         // Drop false → witness mentions full chain and `false`.
-        let report = compute_match_usefulness(&cx, &[mk(true)], a_ty);
+        let report = compute_match_usefulness(&cx, &[mk(true)], col(&a_ty));
         assert_eq!(
             report.missing.len(),
             1,
@@ -3833,11 +3938,11 @@ mod tests {
         // Specific deep arm: [[[true]]] (length 1 / 1 / 1).
         let inner_true = DPat::slice(
             SliceShape::Fixed(1),
-            vec![DPat::type_test(bool_lit(true), bool_ty())],
-            lvl1.clone(),
+            vec![DPat::type_test(bool_lit(true), col(&bool_ty()))],
+            col(&lvl1.clone()),
         );
-        let mid = DPat::slice(SliceShape::Fixed(1), vec![inner_true], lvl2.clone());
-        let outer = DPat::slice(SliceShape::Fixed(1), vec![mid], lvl3.clone());
+        let mid = DPat::slice(SliceShape::Fixed(1), vec![inner_true], col(&lvl2.clone()));
+        let outer = DPat::slice(SliceShape::Fixed(1), vec![mid], col(&lvl3.clone()));
 
         // Catch-all.
         let any = DPat::slice(
@@ -3846,10 +3951,10 @@ mod tests {
                 suffix: 0,
             },
             vec![],
-            lvl3.clone(),
+            col(&lvl3.clone()),
         );
 
-        let report = compute_match_usefulness(&cx, &[outer, any], lvl3.clone());
+        let report = compute_match_usefulness(&cx, &[outer, any], col(&lvl3.clone()));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive with `[..]` catch-all: {:?}",
@@ -3864,12 +3969,12 @@ mod tests {
         // Without the catch-all, MANY missing cases.
         let inner_true2 = DPat::slice(
             SliceShape::Fixed(1),
-            vec![DPat::type_test(bool_lit(true), bool_ty())],
-            lvl1.clone(),
+            vec![DPat::type_test(bool_lit(true), col(&bool_ty()))],
+            col(&lvl1.clone()),
         );
-        let mid2 = DPat::slice(SliceShape::Fixed(1), vec![inner_true2], lvl2.clone());
-        let outer2 = DPat::slice(SliceShape::Fixed(1), vec![mid2], lvl3.clone());
-        let report = compute_match_usefulness(&cx, &[outer2], lvl3);
+        let mid2 = DPat::slice(SliceShape::Fixed(1), vec![inner_true2], col(&lvl2.clone()));
+        let outer2 = DPat::slice(SliceShape::Fixed(1), vec![mid2], col(&lvl3.clone()));
+        let report = compute_match_usefulness(&cx, &[outer2], col(&lvl3));
         assert!(!report.missing.is_empty());
     }
 
@@ -3891,14 +3996,14 @@ mod tests {
             DPat::class(
                 p.clone(),
                 vec![
-                    a.map_or(DPat::wildcard(bool_ty()), |v| {
-                        DPat::type_test(bool_lit(v), bool_ty())
+                    a.map_or(DPat::wildcard(col(&bool_ty())), |v| {
+                        DPat::type_test(bool_lit(v), col(&bool_ty()))
                     }),
-                    b.map_or(DPat::wildcard(bool_ty()), |v| {
-                        DPat::type_test(bool_lit(v), bool_ty())
+                    b.map_or(DPat::wildcard(col(&bool_ty())), |v| {
+                        DPat::type_test(bool_lit(v), col(&bool_ty()))
                     }),
                 ],
-                pty.clone(),
+                col(&pty.clone()),
             )
         };
         let a_true_any = mk(Some(true), None);
@@ -3907,8 +4012,11 @@ mod tests {
         let f_t = mk(Some(false), Some(true));
 
         // (a) After two arms, `(F, T)` is missing.
-        let report =
-            compute_match_usefulness(&cx, &[a_true_any.clone(), any_b_false.clone()], pty.clone());
+        let report = compute_match_usefulness(
+            &cx,
+            &[a_true_any.clone(), any_b_false.clone()],
+            col(&pty.clone()),
+        );
         assert_eq!(report.missing.len(), 1);
         let s = report.missing[0].render(&crate::test_heads::viewpoint());
         assert!(s.contains("false") && s.contains("true"), "got {}", s);
@@ -3917,7 +4025,7 @@ mod tests {
         let report = compute_match_usefulness(
             &cx,
             &[a_true_any.clone(), any_b_false.clone(), t_f.clone()],
-            pty.clone(),
+            col(&pty.clone()),
         );
         assert!(
             report.unreachable_arms.contains(&ArmId(2)),
@@ -3926,7 +4034,7 @@ mod tests {
         );
 
         // (c) Adding `(F, T)` plugs the missing hole — exhaustive.
-        let report = compute_match_usefulness(&cx, &[a_true_any, any_b_false, f_t], pty);
+        let report = compute_match_usefulness(&cx, &[a_true_any, any_b_false, f_t], col(&pty));
         assert!(report.missing.is_empty());
     }
 
@@ -3948,18 +4056,18 @@ mod tests {
 
         let arms_all: Vec<_> = qtns
             .iter()
-            .map(|q| DPat::class(q.clone(), vec![], class_ty(q)))
+            .map(|q| DPat::class(q.clone(), vec![], col(&class_ty(q))))
             .collect();
-        let report = compute_match_usefulness(&cx, &arms_all, scrut.clone());
+        let report = compute_match_usefulness(&cx, &arms_all, col(&scrut.clone()));
         assert!(report.missing.is_empty());
 
         // Drop "G" → exactly G missing.
         let arms: Vec<_> = qtns
             .iter()
             .filter(|q| q.name().as_str() != "G")
-            .map(|q| DPat::class(q.clone(), vec![], class_ty(q)))
+            .map(|q| DPat::class(q.clone(), vec![], col(&class_ty(q))))
             .collect();
-        let report = compute_match_usefulness(&cx, &arms, scrut);
+        let report = compute_match_usefulness(&cx, &arms, col(&scrut));
         assert_eq!(report.missing.len(), 1);
         let s = report.missing[0].render(&crate::test_heads::viewpoint());
         assert!(s.contains("G"), "expected G in missing witness, got {}", s);
@@ -3987,15 +4095,15 @@ mod tests {
         // Single arm at the deepest specific case: O { rows: [M { items: [I{v:true}] }] }
         let inner = DPat::class(
             i.clone(),
-            vec![DPat::type_test(bool_lit(true), bool_ty())],
-            i_ty.clone(),
+            vec![DPat::type_test(bool_lit(true), col(&bool_ty()))],
+            col(&i_ty.clone()),
         );
-        let inner_arr_one = DPat::slice(SliceShape::Fixed(1), vec![inner], i_arr.clone());
-        let mid = DPat::class(m.clone(), vec![inner_arr_one], m_ty.clone());
-        let mid_arr_one = DPat::slice(SliceShape::Fixed(1), vec![mid], m_arr.clone());
-        let outer = DPat::class(o.clone(), vec![mid_arr_one], o_ty.clone());
+        let inner_arr_one = DPat::slice(SliceShape::Fixed(1), vec![inner], col(&i_arr.clone()));
+        let mid = DPat::class(m.clone(), vec![inner_arr_one], col(&m_ty.clone()));
+        let mid_arr_one = DPat::slice(SliceShape::Fixed(1), vec![mid], col(&m_arr.clone()));
+        let outer = DPat::class(o.clone(), vec![mid_arr_one], col(&o_ty.clone()));
 
-        let report = compute_match_usefulness(&cx, &[outer], o_ty);
+        let report = compute_match_usefulness(&cx, &[outer], col(&o_ty));
         assert!(
             !report.missing.is_empty(),
             "single deep arm should leave many missing"
@@ -4015,8 +4123,8 @@ mod tests {
                 prefix: 5,
                 suffix: 3,
             },
-            (0..8).map(|_| DPat::wildcard(bool_ty())).collect(),
-            arr.clone(),
+            (0..8).map(|_| DPat::wildcard(col(&bool_ty()))).collect(),
+            col(&arr.clone()),
         );
         let any = DPat::slice(
             SliceShape::Variable {
@@ -4024,9 +4132,9 @@ mod tests {
                 suffix: 0,
             },
             vec![],
-            arr.clone(),
+            col(&arr.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[var53, any], arr);
+        let report = compute_match_usefulness(&cx, &[var53, any], col(&arr));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive: {:?}",
@@ -4054,11 +4162,11 @@ mod tests {
             DPat::class(
                 t.clone(),
                 vec![
-                    DPat::type_test(bool_lit(a), bool_ty()),
-                    DPat::type_test(bool_lit(b), bool_ty()),
-                    DPat::wildcard(bool_ty()),
+                    DPat::type_test(bool_lit(a), col(&bool_ty())),
+                    DPat::type_test(bool_lit(b), col(&bool_ty())),
+                    DPat::wildcard(col(&bool_ty())),
                 ],
-                tty.clone(),
+                col(&tty.clone()),
             )
         };
         let arms = vec![
@@ -4067,7 +4175,7 @@ mod tests {
             mk(false, true),
             mk(false, false),
         ];
-        let report = compute_match_usefulness(&cx, &arms, tty);
+        let report = compute_match_usefulness(&cx, &arms, col(&tty));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive: {:?}",
@@ -4094,13 +4202,13 @@ mod tests {
             DPat::class(
                 q.clone(),
                 (0..6)
-                    .map(|i| DPat::type_test(bool_lit((bits >> i) & 1 != 0), bool_ty()))
+                    .map(|i| DPat::type_test(bool_lit((bits >> i) & 1 != 0), col(&bool_ty())))
                     .collect(),
-                qty.clone(),
+                col(&qty.clone()),
             )
         };
         let arms: Vec<DPat> = (0u8..64).map(combo).collect();
-        let report = compute_match_usefulness(&cx, &arms, qty);
+        let report = compute_match_usefulness(&cx, &arms, col(&qty));
         assert!(report.missing.is_empty());
         assert!(report.unreachable_arms.is_empty());
     }
@@ -4119,14 +4227,14 @@ mod tests {
             DPat::class(
                 p.clone(),
                 vec![
-                    DPat::type_test(bool_lit(a), bool_ty()),
-                    DPat::type_test(bool_lit(b), bool_ty()),
+                    DPat::type_test(bool_lit(a), col(&bool_ty())),
+                    DPat::type_test(bool_lit(b), col(&bool_ty())),
                 ],
-                pty.clone(),
+                col(&pty.clone()),
             )
         };
         let arms = vec![mk(true, true), mk(true, false), mk(false, true)];
-        let report = compute_match_usefulness(&cx, &arms, pty);
+        let report = compute_match_usefulness(&cx, &arms, col(&pty));
         assert_eq!(
             report.missing.len(),
             1,
@@ -4159,10 +4267,10 @@ mod tests {
             DPat::class(
                 b.clone(),
                 vec![
-                    DPat::type_test(bool_lit(p), bool_ty()),
-                    DPat::type_test(bool_lit(q), bool_ty()),
+                    DPat::type_test(bool_lit(p), col(&bool_ty())),
+                    DPat::type_test(bool_lit(q), col(&bool_ty())),
                 ],
-                b_ty.clone(),
+                col(&b_ty.clone()),
             )
         };
         // Cover all 64 = 4^3 combos.
@@ -4174,13 +4282,13 @@ mod tests {
                     arms.push(DPat::class(
                         a.clone(),
                         vec![mk_b_n(px), mk_b_n(py), mk_b_n(pz)],
-                        a_ty.clone(),
+                        col(&a_ty.clone()),
                     ));
                 }
             }
         }
         assert_eq!(arms.len(), 64);
-        let report = compute_match_usefulness(&cx, &arms, a_ty);
+        let report = compute_match_usefulness(&cx, &arms, col(&a_ty));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive over all 64 combos: {} missing",
@@ -4205,18 +4313,18 @@ mod tests {
                 prefix: 0,
                 suffix: 1,
             },
-            vec![DPat::type_test(bool_lit(true), bool_ty())],
-            arr.clone(),
+            vec![DPat::type_test(bool_lit(true), col(&bool_ty()))],
+            col(&arr.clone()),
         );
         let true_false = DPat::slice(
             SliceShape::Fixed(2),
             vec![
-                DPat::type_test(bool_lit(true), bool_ty()),
-                DPat::type_test(bool_lit(false), bool_ty()),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+                DPat::type_test(bool_lit(false), col(&bool_ty())),
             ],
-            arr.clone(),
+            col(&arr.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[ends_true, true_false], arr);
+        let report = compute_match_usefulness(&cx, &[ends_true, true_false], col(&arr));
         assert!(
             !report.unreachable_arms.contains(&ArmId(1)),
             "`[true, false]` ends in false; `[..rest, true]` cannot cover it. \
@@ -4238,14 +4346,14 @@ mod tests {
 
         let arm0 = DPat::or(
             vec![
-                DPat::type_test(int_lit(1), scrut.clone()),
-                DPat::type_test(int_lit(2), scrut.clone()),
+                DPat::type_test(int_lit(1), col(&scrut.clone())),
+                DPat::type_test(int_lit(2), col(&scrut.clone())),
             ],
-            scrut.clone(),
+            col(&scrut.clone()),
         );
-        let arm1 = DPat::type_test(int_lit(2), scrut.clone());
+        let arm1 = DPat::type_test(int_lit(2), col(&scrut.clone()));
 
-        let report = compute_match_usefulness(&cx, &[arm0, arm1], scrut);
+        let report = compute_match_usefulness(&cx, &[arm0, arm1], col(&scrut));
         assert_eq!(
             report.unreachable_arms,
             vec![ArmId(1)],
@@ -4275,12 +4383,12 @@ mod tests {
             cx.register(qs[i].clone(), vec![field]);
         }
 
-        let mut pat = DPat::type_test(bool_lit(true), bool_ty());
+        let mut pat = DPat::type_test(bool_lit(true), col(&bool_ty()));
         for q in qs.iter().rev() {
-            pat = DPat::class(q.clone(), vec![pat], class_ty(q));
+            pat = DPat::class(q.clone(), vec![pat], col(&class_ty(q)));
         }
 
-        let report = compute_match_usefulness(&cx, &[pat], class_ty(&qs[0]));
+        let report = compute_match_usefulness(&cx, &[pat], col(&class_ty(&qs[0])));
         assert!(
             !report.missing.is_empty(),
             "deep missing leaf must surface; depth guard must not silently \
@@ -4300,9 +4408,9 @@ mod tests {
         let cx = TestingCtx::new();
         let never = Ty::Never;
         let arr = list_of(never);
-        let empty = DPat::slice(SliceShape::Fixed(0), vec![], arr.clone());
+        let empty = DPat::slice(SliceShape::Fixed(0), vec![], col(&arr.clone()));
 
-        let report = compute_match_usefulness(&cx, &[empty], arr);
+        let report = compute_match_usefulness(&cx, &[empty], col(&arr));
         assert!(
             report.missing.is_empty(),
             "Array<Never> only inhabits []; got missing: {:?}",
@@ -4326,11 +4434,11 @@ mod tests {
         let outer = opt_of(opt_of(bool_ty()));
 
         let arms = vec![
-            DPat::type_test(bool_lit(true), outer.clone()),
-            DPat::type_test(bool_lit(false), outer.clone()),
+            DPat::type_test(bool_lit(true), col(&outer.clone())),
+            DPat::type_test(bool_lit(false), col(&outer.clone())),
         ];
 
-        let report = compute_match_usefulness(&cx, &arms, outer);
+        let report = compute_match_usefulness(&cx, &arms, col(&outer));
         assert_eq!(
             report.missing.len(),
             1,
@@ -4361,7 +4469,7 @@ mod tests {
         cx.register(inner.clone(), vec![Ty::Never]);
         cx.register(outer.clone(), vec![class_ty(&inner)]);
 
-        let report = compute_match_usefulness(&cx, &[], class_ty(&outer));
+        let report = compute_match_usefulness(&cx, &[], col(&class_ty(&outer)));
         assert!(
             report.missing.is_empty(),
             "Outer is uninhabited via Inner; got missing {:?}",
@@ -4382,7 +4490,7 @@ mod tests {
         let empty = qtn("Empty");
         cx.register(empty.clone(), vec![Ty::Never]);
         let ty = class_ty(&empty);
-        let report = compute_match_usefulness(&cx, &[DPat::wildcard(ty.clone())], ty);
+        let report = compute_match_usefulness(&cx, &[DPat::wildcard(col(&ty.clone()))], col(&ty));
         assert!(
             report.missing.is_empty(),
             "got missing {:?}",
@@ -4413,7 +4521,11 @@ mod tests {
         }
     }
     impl PatCtx for UnionCtx {
-        fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
+        fn canonicalize(&self, ty: &Ty) -> Ty {
+            ty.clone()
+        }
+        fn enumerate_ctors(&self, col: &ColumnTy) -> Vec<Ctor> {
+            let ty = col.ty();
             match ty {
                 Ty::Bool => {
                     vec![Ctor::Type(bool_lit(true)), Ctor::Type(bool_lit(false))]
@@ -4462,8 +4574,8 @@ mod tests {
 
         let class_arm = DPat::union_member(
             cls_ty.clone(),
-            DPat::class(cls.clone(), vec![], cls_ty.clone()),
-            scrut.clone(),
+            DPat::class(cls.clone(), vec![], col(&cls_ty.clone())),
+            col(&scrut.clone()),
         );
         let slice_arm = DPat::union_member(
             arr.clone(),
@@ -4473,12 +4585,12 @@ mod tests {
                     suffix: 0,
                 },
                 vec![],
-                arr.clone(),
+                col(&arr.clone()),
             ),
-            scrut.clone(),
+            col(&scrut.clone()),
         );
 
-        let report = compute_match_usefulness(&cx, &[class_arm, slice_arm], scrut);
+        let report = compute_match_usefulness(&cx, &[class_arm, slice_arm], col(&scrut));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive: {:?}",
@@ -4506,20 +4618,20 @@ mod tests {
 
         let class_arm = DPat::union_member(
             cls_ty.clone(),
-            DPat::class(cls.clone(), vec![], cls_ty.clone()),
-            scrut.clone(),
+            DPat::class(cls.clone(), vec![], col(&cls_ty.clone())),
+            col(&scrut.clone()),
         );
         let slice_arm = DPat::union_member(
             arr.clone(),
             DPat::slice(
                 SliceShape::Fixed(1),
-                vec![DPat::wildcard(int_ty())],
-                arr.clone(),
+                vec![DPat::wildcard(col(&int_ty()))],
+                col(&arr.clone()),
             ),
-            scrut.clone(),
+            col(&scrut.clone()),
         );
 
-        let report = compute_match_usefulness(&cx, &[class_arm, slice_arm], scrut);
+        let report = compute_match_usefulness(&cx, &[class_arm, slice_arm], col(&scrut));
         assert!(
             !report.missing.is_empty(),
             "expected non-exhaustive: only length-1 covered on list branch"
@@ -4542,13 +4654,13 @@ mod tests {
 
         let class_arm = DPat::union_member(
             cls_ty.clone(),
-            DPat::class(cls.clone(), vec![], cls_ty.clone()),
-            scrut.clone(),
+            DPat::class(cls.clone(), vec![], col(&cls_ty.clone())),
+            col(&scrut.clone()),
         );
         let empty_arm = DPat::union_member(
             arr.clone(),
-            DPat::slice(SliceShape::Fixed(0), vec![], arr.clone()),
-            scrut.clone(),
+            DPat::slice(SliceShape::Fixed(0), vec![], col(&arr.clone())),
+            col(&scrut.clone()),
         );
         let nonempty_arm = DPat::union_member(
             arr.clone(),
@@ -4557,13 +4669,14 @@ mod tests {
                     prefix: 1,
                     suffix: 0,
                 },
-                vec![DPat::wildcard(int_ty())],
-                arr.clone(),
+                vec![DPat::wildcard(col(&int_ty()))],
+                col(&arr.clone()),
             ),
-            scrut.clone(),
+            col(&scrut.clone()),
         );
 
-        let report = compute_match_usefulness(&cx, &[class_arm, empty_arm, nonempty_arm], scrut);
+        let report =
+            compute_match_usefulness(&cx, &[class_arm, empty_arm, nonempty_arm], col(&scrut));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive (Class + len-0 + len-≥1 covers all): {:?}",
@@ -4589,11 +4702,11 @@ mod tests {
 
         let class_arm = DPat::union_member(
             cls_ty.clone(),
-            DPat::class(cls.clone(), vec![], cls_ty.clone()),
-            scrut.clone(),
+            DPat::class(cls.clone(), vec![], col(&cls_ty.clone())),
+            col(&scrut.clone()),
         );
 
-        let report = compute_match_usefulness(&cx, &[class_arm], scrut);
+        let report = compute_match_usefulness(&cx, &[class_arm], col(&scrut));
         assert!(!report.missing.is_empty());
     }
 
@@ -4607,7 +4720,8 @@ mod tests {
         let arr = list_of(int_ty());
         let scrut = union_of(vec![cls_ty, arr]);
 
-        let report = compute_match_usefulness(&cx, &[DPat::wildcard(scrut.clone())], scrut);
+        let report =
+            compute_match_usefulness(&cx, &[DPat::wildcard(col(&scrut.clone()))], col(&scrut));
         assert!(report.missing.is_empty());
     }
 
@@ -4625,7 +4739,7 @@ mod tests {
         // No arms — without the cycle guard would either loop or, with
         // a strict "uninhabited via cycle" rule, report exhaustive.
         // Conservative treatment: A is "inhabited," so missing is reported.
-        let report = compute_match_usefulness(&cx, &[], a_ty);
+        let report = compute_match_usefulness(&cx, &[], col(&a_ty));
         assert!(
             !report.missing.is_empty(),
             "self-recursive class is conservatively treated as inhabited"
@@ -4653,10 +4767,10 @@ mod tests {
 
         // Both branches → exhaustive.
         let arms = vec![
-            DPat::type_test(bool_lit(true), alias_ty.clone()),
-            DPat::type_test(bool_lit(false), alias_ty.clone()),
+            DPat::type_test(bool_lit(true), col(&alias_ty.clone())),
+            DPat::type_test(bool_lit(false), col(&alias_ty.clone())),
         ];
-        let report = compute_match_usefulness(&cx, &arms, alias_ty.clone());
+        let report = compute_match_usefulness(&cx, &arms, col(&alias_ty.clone()));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive once alias expands; got {:?}",
@@ -4668,8 +4782,8 @@ mod tests {
         );
 
         // Only `true` → `false` missing.
-        let arms = vec![DPat::type_test(bool_lit(true), alias_ty.clone())];
-        let report = compute_match_usefulness(&cx, &arms, alias_ty);
+        let arms = vec![DPat::type_test(bool_lit(true), col(&alias_ty.clone()))];
+        let report = compute_match_usefulness(&cx, &arms, col(&alias_ty));
         assert_eq!(report.missing.len(), 1);
         assert!(
             report.missing[0]
@@ -4693,11 +4807,11 @@ mod tests {
         let tri_ty = Ty::TypeAlias(tri);
 
         let arms = vec![
-            DPat::type_test(int_lit(1), tri_ty.clone()),
-            DPat::type_test(int_lit(2), tri_ty.clone()),
-            DPat::type_test(int_lit(3), tri_ty.clone()),
+            DPat::type_test(int_lit(1), col(&tri_ty.clone())),
+            DPat::type_test(int_lit(2), col(&tri_ty.clone())),
+            DPat::type_test(int_lit(3), col(&tri_ty.clone())),
         ];
-        let report = compute_match_usefulness(&cx, &arms, tri_ty);
+        let report = compute_match_usefulness(&cx, &arms, col(&tri_ty));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive: {:?}",
@@ -4722,15 +4836,18 @@ mod tests {
         cx.register_alias(alias.clone(), opt_n.clone());
         let alias_ty = Ty::TypeAlias(alias);
 
-        let null_top = DPat::type_test(null_ty(), alias_ty.clone());
+        let null_top = DPat::type_test(null_ty(), col(&alias_ty.clone()));
         let some_any = DPat::class(
             n.clone(),
-            vec![DPat::wildcard(bool_ty()), DPat::wildcard(opt_n.clone())],
-            n_ty.clone(),
+            vec![
+                DPat::wildcard(col(&bool_ty())),
+                DPat::wildcard(col(&opt_n.clone())),
+            ],
+            col(&n_ty.clone()),
         );
         let arms = vec![null_top, some_any];
 
-        let report = compute_match_usefulness(&cx, &arms, alias_ty);
+        let report = compute_match_usefulness(&cx, &arms, col(&alias_ty));
         assert!(
             report.missing.is_empty(),
             "expected exhaustive (null + Some(_)); got {:?}",
@@ -4781,15 +4898,15 @@ mod tests {
             DPat::slice(
                 SliceShape::Fixed(2),
                 vec![
-                    DPat::type_test(int_lit(v), int_ty()),
-                    DPat::wildcard(int_ty()),
+                    DPat::type_test(int_lit(v), col(&int_ty())),
+                    DPat::wildcard(col(&int_ty())),
                 ],
-                arr.clone(),
+                col(&arr.clone()),
             )
         };
         // Two rows simulating `[1 | 2, _]`.
-        let arms = vec![arm(1), arm(2), arm(3), DPat::wildcard(arr.clone())];
-        let report = compute_match_usefulness(&cx, &arms, arr);
+        let arms = vec![arm(1), arm(2), arm(3), DPat::wildcard(col(&arr.clone()))];
+        let report = compute_match_usefulness(&cx, &arms, col(&arr));
         assert!(report.missing.is_empty());
         // None unreachable.
         assert!(
@@ -4809,23 +4926,27 @@ mod tests {
         let arm1 = DPat::class(
             qtn.clone(),
             vec![
-                DPat::type_test(bool_lit(true), bool_ty()),
-                DPat::wildcard(bool_ty()),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
+                DPat::wildcard(col(&bool_ty())),
             ],
-            pair_ty.clone(),
+            col(&pair_ty.clone()),
         );
         let arm2 = DPat::class(
             qtn.clone(),
             vec![
-                DPat::type_test(bool_lit(false), bool_ty()),
-                DPat::type_test(bool_lit(true), bool_ty()),
+                DPat::type_test(bool_lit(false), col(&bool_ty())),
+                DPat::type_test(bool_lit(true), col(&bool_ty())),
             ],
-            pair_ty.clone(),
+            col(&pair_ty.clone()),
         );
 
         struct PairCtx(DeclName);
         impl PatCtx for PairCtx {
-            fn enumerate_ctors(&self, ty: &Ty) -> Vec<Ctor> {
+            fn canonicalize(&self, ty: &Ty) -> Ty {
+                ty.clone()
+            }
+            fn enumerate_ctors(&self, col: &ColumnTy) -> Vec<Ctor> {
+                let ty = col.ty();
                 match ty {
                     Ty::Bool => vec![
                         Ctor::Type(Ty::Literal(Literal::Bool(true), Freshness::Regular)),
@@ -4845,7 +4966,7 @@ mod tests {
         }
 
         let cx = PairCtx(qtn);
-        let report = compute_match_usefulness(&cx, &[arm1, arm2], pair_ty);
+        let report = compute_match_usefulness(&cx, &[arm1, arm2], col(&pair_ty));
         let missing_strings: Vec<String> = report
             .missing
             .iter()
@@ -4910,9 +5031,12 @@ mod tests {
         // is required) — but it must still get its own split branch so it is
         // specialized and not falsely flagged unreachable.
         let cx = TestingCtx::new();
-        let rigid = DPat::type_test(type_var_ty("T"), bool_ty());
-        let report =
-            compute_match_usefulness(&cx, &[rigid.clone(), DPat::wildcard(bool_ty())], bool_ty());
+        let rigid = DPat::type_test(type_var_ty("T"), col(&bool_ty()));
+        let report = compute_match_usefulness(
+            &cx,
+            &[rigid.clone(), DPat::wildcard(col(&bool_ty()))],
+            col(&bool_ty()),
+        );
         assert!(report.missing.is_empty(), "wildcard completes the match");
         assert!(
             report.unreachable_arms.is_empty(),
@@ -4921,7 +5045,7 @@ mod tests {
         );
 
         // Without the wildcard the rigid row proves no coverage at all.
-        let report = compute_match_usefulness(&cx, &[rigid], bool_ty());
+        let report = compute_match_usefulness(&cx, &[rigid], col(&bool_ty()));
         assert!(
             !report.missing.is_empty(),
             "a rigid row alone never covers a concrete column"
@@ -4935,11 +5059,11 @@ mod tests {
         // decide exhaustiveness; the rigid row stays a live possible row.
         let cx = TestingCtx::new();
         let arms = vec![
-            DPat::type_test(type_var_ty("T"), bool_ty()),
-            DPat::type_test(bool_lit(true), bool_ty()),
-            DPat::type_test(bool_lit(false), bool_ty()),
+            DPat::type_test(type_var_ty("T"), col(&bool_ty())),
+            DPat::type_test(bool_lit(true), col(&bool_ty())),
+            DPat::type_test(bool_lit(false), col(&bool_ty())),
         ];
-        let report = compute_match_usefulness(&cx, &arms, bool_ty());
+        let report = compute_match_usefulness(&cx, &arms, col(&bool_ty()));
         assert!(report.missing.is_empty());
         assert!(
             report.unreachable_arms.is_empty(),
@@ -4954,12 +5078,12 @@ mod tests {
         // class is covered (the wildcard is required), but the row gets its
         // own split branch and stays reachable.
         let cx = TestingCtx::new();
-        let col = list_of(Ty::String);
-        let rigid = DPat::type_test(list_of(type_var_ty("T")), col.clone());
+        let list = list_of(Ty::String);
+        let rigid = DPat::type_test(list_of(type_var_ty("T")), col(&list.clone()));
         let report = compute_match_usefulness(
             &cx,
-            &[rigid.clone(), DPat::wildcard(col.clone())],
-            col.clone(),
+            &[rigid.clone(), DPat::wildcard(col(&list.clone()))],
+            col(&list.clone()),
         );
         assert!(report.missing.is_empty());
         assert!(
@@ -4968,7 +5092,7 @@ mod tests {
             report.unreachable_arms
         );
 
-        let report = compute_match_usefulness(&cx, &[rigid], col);
+        let report = compute_match_usefulness(&cx, &[rigid], col(&list));
         assert!(!report.missing.is_empty());
         assert!(report.unreachable_arms.is_empty());
     }
@@ -4987,13 +5111,13 @@ mod tests {
         let rigid_row = DPat::class_inst(
             box_q.clone(),
             Box::new([type_var_ty("T")]),
-            vec![DPat::wildcard(int_ty())],
-            box_int.clone(),
+            vec![DPat::wildcard(col(&int_ty()))],
+            col(&box_int.clone()),
         );
         let report = compute_match_usefulness(
             &cx,
-            &[rigid_row.clone(), DPat::wildcard(box_int.clone())],
-            box_int.clone(),
+            &[rigid_row.clone(), DPat::wildcard(col(&box_int.clone()))],
+            col(&box_int.clone()),
         );
         assert!(report.missing.is_empty());
         assert!(
@@ -5002,7 +5126,7 @@ mod tests {
             report.unreachable_arms
         );
 
-        let report = compute_match_usefulness(&cx, &[rigid_row], box_int);
+        let report = compute_match_usefulness(&cx, &[rigid_row], col(&box_int));
         assert!(
             !report.missing.is_empty(),
             "an arg-mismatched class row never covers a concrete column"
@@ -5013,10 +5137,10 @@ mod tests {
         let reflexive_row = DPat::class_inst(
             box_q.clone(),
             Box::new([type_var_ty("T")]),
-            vec![DPat::wildcard(int_ty())],
-            box_t.clone(),
+            vec![DPat::wildcard(col(&int_ty()))],
+            col(&box_t.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[reflexive_row], box_t);
+        let report = compute_match_usefulness(&cx, &[reflexive_row], col(&box_t));
         assert!(
             report.missing.is_empty(),
             "identical rigid args cover reflexively: {:?}",
@@ -5044,19 +5168,19 @@ mod tests {
         let rigid_refutable = DPat::class_inst(
             box_q.clone(),
             Box::new([type_var_ty("T")]),
-            vec![DPat::type_test(int_lit(1), int_ty())],
-            box_int.clone(),
+            vec![DPat::type_test(int_lit(1), col(&int_ty()))],
+            col(&box_int.clone()),
         );
         let concrete_cover = DPat::class_inst(
             box_q.clone(),
             Box::new([int_ty()]),
-            vec![DPat::wildcard(int_ty())],
-            box_int.clone(),
+            vec![DPat::wildcard(col(&int_ty()))],
+            col(&box_int.clone()),
         );
         let report = compute_match_usefulness(
             &cx,
             &[rigid_refutable.clone(), concrete_cover],
-            box_int.clone(),
+            col(&box_int.clone()),
         );
         assert!(
             report.missing.is_empty(),
@@ -5076,7 +5200,7 @@ mod tests {
         // Sole rigid arm: genuinely non-exhaustive, and the missing case is
         // reported exactly once — the reachability-only branch does not
         // duplicate the alphabet branch's witness.
-        let report = compute_match_usefulness(&cx, &[rigid_refutable], box_int);
+        let report = compute_match_usefulness(&cx, &[rigid_refutable], col(&box_int));
         let missing: Vec<String> = report
             .missing
             .iter()
@@ -5103,10 +5227,10 @@ mod tests {
         let rigid_row = DPat::class(
             holder_q.clone(),
             vec![
-                DPat::type_test(list_of(type_var_ty("T")), strings.clone()),
-                DPat::type_test(int_lit(1), int_ty()),
+                DPat::type_test(list_of(type_var_ty("T")), col(&strings.clone())),
+                DPat::type_test(int_lit(1), col(&int_ty())),
             ],
-            holder.clone(),
+            col(&holder.clone()),
         );
         let cover_row = DPat::class(
             holder_q.clone(),
@@ -5117,13 +5241,13 @@ mod tests {
                         suffix: 0,
                     },
                     vec![],
-                    strings.clone(),
+                    col(&strings.clone()),
                 ),
-                DPat::wildcard(int_ty()),
+                DPat::wildcard(col(&int_ty())),
             ],
-            holder.clone(),
+            col(&holder.clone()),
         );
-        let report = compute_match_usefulness(&cx, &[rigid_row, cover_row], holder);
+        let report = compute_match_usefulness(&cx, &[rigid_row, cover_row], col(&holder));
         assert!(
             report.missing.is_empty(),
             "the slice arm covers everything; false witnesses: {:?}",

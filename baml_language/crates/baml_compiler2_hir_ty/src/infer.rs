@@ -16,6 +16,7 @@
 //! table under the lambda's scope. Constructs the engine does not handle
 //! yet still record the `Error` sentinel and upgrade slice by slice.
 
+mod coverage;
 pub(crate) mod flow;
 mod frames;
 pub(crate) mod obligations;
@@ -2362,6 +2363,9 @@ struct InferenceContext<'db> {
     /// unit values carries its branches'. [`Self::join_units`] reports one
     /// that joins any other value.
     unjudged_units: FxHashMap<ExprId, Vec<UnitSite>>,
+    /// What each typed pattern wrote, as typing resolved it: the input of
+    /// coverage lowering (`coverage::HirPatCtx::coverage_dpat`).
+    pattern_heads: FxHashMap<PatId, coverage::PatternHead>,
     /// The file whose body this context infers: the viewer every visibility
     /// question is asked from, and the home of package-scoped lookups (the
     /// overlap oracle's alias map enumerates its package plus the
@@ -2432,6 +2436,7 @@ impl<'db> InferenceContext<'db> {
             pending_truthy_conditions: Vec::new(),
             unit_positions: FxHashMap::default(),
             unjudged_units: FxHashMap::default(),
+            pattern_heads: FxHashMap::default(),
             owner_file,
             overlap_aliases: std::cell::OnceCell::new(),
             wf_scope_env: std::cell::OnceCell::new(),

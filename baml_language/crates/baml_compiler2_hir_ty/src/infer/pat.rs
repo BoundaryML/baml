@@ -23,19 +23,20 @@
 
 use baml_compiler2_ast::{ExprBody, ExprId, MatchArmId, PatId, Pattern};
 use baml_type::{
-    Freshness,
     interned::{InferInterface, InferTy, Ty},
-    normalize::{TypeContext as _, normalize_interned},
+    normalize::normalize_interned,
 };
 
 use super::{
     Expectation, InferenceContext, Suppress,
+    coverage::{HirPatCtx, PatternHead},
     flow::{CondFacts, TestPosition},
 };
-use crate::exhaustiveness::{Ctor, DPat, PatCtx, compute_match_usefulness};
+use crate::exhaustiveness::{PatCtx, compute_match_usefulness};
 
-/// One lowered pattern: the matrix row piece, the refined scrutinee type
-/// the arm body sees, and two type-only verdicts:
+/// One typed pattern: the refined scrutinee type the arm body sees, and two
+/// type-only verdicts (the matrix row is built separately, by
+/// `HirPatCtx::coverage_dpat`):
 ///
 /// - `covers_type`: the pattern matches EVERY scrutinee value
 ///   (irrefutability - the S17 refutable-let check).
@@ -45,7 +46,6 @@ use crate::exhaustiveness::{Ctor, DPat, PatCtx, compute_match_usefulness};
 ///   accumulation (B-1069): a `Foo { x: 1 }` failing says nothing
 ///   type-shaped about the scrutinee.
 pub(super) struct PatternOutcome {
-    pub dpat: DPat,
     pub matched_ty: Ty,
     /// The WRITTEN form to record when it differs from `matched_ty` -
     /// ruling 3 (bindings record what the user wrote; rustc's
@@ -136,7 +136,7 @@ impl<'db> InferenceContext<'db> {
 
         let entry_diverges = self.diverges();
         let mut arm_tys = Vec::new();
-        let mut matrix_arms: Vec<DPat> = Vec::new();
+        let mut matrix_pats: Vec<PatId> = Vec::new();
         let mut matrix_arm_bodies: Vec<ExprId> = Vec::new();
         let mut any_pattern_error = false;
         let mut all_diverge = super::Diverges::Always;
@@ -180,7 +180,7 @@ impl<'db> InferenceContext<'db> {
                 if outcome.consumes_matched {
                     residual = self.subtract_narrow(&residual, &outcome.matched_ty);
                 }
-                matrix_arms.push(outcome.dpat);
+                matrix_pats.push(arm.pattern);
                 matrix_arm_bodies.push(arm.body);
             }
         }
@@ -234,9 +234,13 @@ impl<'db> InferenceContext<'db> {
             }
             return self.join(&arm_tys);
         };
-        let col_ty = scrut_closed.to_plain();
         let ctx = HirPatCtx { infer: self };
-        let report = compute_match_usefulness(&ctx, &matrix_arms, col_ty);
+        let col = ctx.column(&scrut_closed.to_plain());
+        let rows: Vec<_> = matrix_pats
+            .iter()
+            .map(|&pat| ctx.coverage_dpat(body, pat, &col))
+            .collect();
+        let report = compute_match_usefulness(&ctx, &rows, col);
         // An errored arm pattern makes the reachability verdicts noise
         // (TIR's pattern_had_error suppression).
         for arm in &report.unreachable_arms {
@@ -575,7 +579,6 @@ impl<'db> InferenceContext<'db> {
             // A pattern that writes no type matches what reaches it. Its
             // matrix row is still a wildcard over the whole column.
             Pattern::Wildcard => PatternOutcome {
-                dpat: DPat::wildcard(self.dpat_ty(scrut)),
                 matched_ty: reaching.clone(),
                 recorded_ty: None,
                 covers_type: true,
@@ -585,7 +588,6 @@ impl<'db> InferenceContext<'db> {
                 let inner = match subpat {
                     Some(sub) => self.lower_pattern_reaching(body, *sub, scrut, reaching),
                     None => PatternOutcome {
-                        dpat: DPat::wildcard(self.dpat_ty(scrut)),
                         matched_ty: reaching.clone(),
                         recorded_ty: None,
                         covers_type: true,
@@ -610,6 +612,8 @@ impl<'db> InferenceContext<'db> {
                     .copied()
                     .map(|type_ref| self.lower_body_annotation(type_ref))
                     .unwrap_or_else(Ty::error);
+                self.pattern_heads
+                    .insert(pat, PatternHead::Type(pat_ty.clone()));
                 self.type_pattern_outcome(pat, scrut, &pat_ty)
             }
             Pattern::Class { class, fields, .. } => {
@@ -698,10 +702,6 @@ impl<'db> InferenceContext<'db> {
                 PatternOutcome {
                     covers_type: outcomes.iter().any(|outcome| outcome.covers_type),
                     consumes_matched: outcomes.iter().all(|outcome| outcome.consumes_matched),
-                    dpat: DPat::or(
-                        outcomes.into_iter().map(|outcome| outcome.dpat).collect(),
-                        self.dpat_ty(scrut),
-                    ),
                     matched_ty: matched,
                     recorded_ty: None,
                 }
@@ -871,16 +871,12 @@ impl<'db> InferenceContext<'db> {
             args.clone().into_boxed_slice(),
             pins.clone().into_boxed_slice(),
         ));
-        let target = InferInterface::new(
-            qtn.clone(),
-            args.into_boxed_slice(),
-            pins.into_boxed_slice(),
-        );
+        let target = InferInterface::new(qtn, args.into_boxed_slice(), pins.into_boxed_slice());
 
         let declared: Vec<baml_type::Name> =
             data.fields.iter().map(|field| field.name.clone()).collect();
         let mut field_covers = true;
-        let mut sub_dpats: Vec<Option<DPat>> = vec![None; declared.len()];
+        let mut slots: Vec<(usize, PatId)> = Vec::new();
         for (name, field_pat) in field_pats {
             let field_ty = crate::method_resolution::member_on_interface(
                 self.db,
@@ -898,7 +894,7 @@ impl<'db> InferenceContext<'db> {
                     let outcome = self.lower_pattern(body, *field_pat, &field_ty);
                     field_covers &= outcome.covers_type;
                     if let Some(index) = index {
-                        sub_dpats[index] = Some(outcome.dpat);
+                        slots.push((index, *field_pat));
                     }
                 }
                 None => {
@@ -909,55 +905,16 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
-        let fields: Vec<DPat> = declared
-            .iter()
-            .zip(sub_dpats)
-            .map(|(name, sub)| {
-                sub.unwrap_or_else(|| {
-                    let field_ty = crate::method_resolution::member_on_interface(
-                        self.db,
-                        &self.facts,
-                        &target,
-                        &head,
-                        name,
-                        true,
-                    )
-                    .map(|member| self.reduced_for_pattern(&member.ty))
-                    .unwrap_or_else(Ty::error);
-                    DPat::wildcard(self.dpat_ty(&field_ty))
-                })
-            })
-            .collect();
         let head_covers = self.provable_subtype(scrut, &head);
 
-        // The matrix's single-ctor STRUCT VIEW of an existential
-        // (`Ctor::Interface`, rustc's non-enum struct treatment): field
-        // sub-patterns decompose, so refutable field arms COMPOSE to
-        // coverage (`{ active: true }` + `{ active: false }`).
-        let dpat = {
-            let iface_dpat = DPat::interface(self.dpat_ty(&head), fields, self.dpat_ty(scrut));
-            match scrut.kind() {
-                InferTy::Union(members) => {
-                    let claimed: Vec<&Ty> = members
-                        .iter()
-                        .filter(|member| {
-                            matches!(member.kind(), InferTy::Interface(member_qtn, _, _) if *member_qtn == qtn)
-                        })
-                        .collect();
-                    match claimed.as_slice() {
-                        [member] => DPat::union_member(
-                            self.dpat_ty(member),
-                            iface_dpat,
-                            self.dpat_ty(scrut),
-                        ),
-                        _ => iface_dpat,
-                    }
-                }
-                _ => iface_dpat,
-            }
-        };
+        self.pattern_heads.insert(
+            pat,
+            PatternHead::Interface {
+                head: head.clone(),
+                fields: slots,
+            },
+        );
         PatternOutcome {
-            dpat,
             // A head the scrutinee provably inhabits narrows nothing; the
             // pattern still records the interface it names, which its test
             // and field views dispatch through whatever the scrutinee is (a
@@ -1176,7 +1133,6 @@ impl<'db> InferenceContext<'db> {
             // keeps its shape - the replace-with-error discipline,
             // never poison-to-top).
             return PatternOutcome {
-                dpat: DPat::wildcard(self.dpat_ty(scrut)),
                 matched_ty: pat_ty.clone(),
                 recorded_ty: None,
                 covers_type: false,
@@ -1195,27 +1151,9 @@ impl<'db> InferenceContext<'db> {
                 })
                 .collect();
             if !claimed.is_empty() {
-                let scrut_plain = self.dpat_ty(scrut);
-                let alts: Vec<DPat> = claimed
-                    .iter()
-                    .map(|member| {
-                        let inner = if self.provable_subtype(member, pat_ty) {
-                            DPat::wildcard(self.dpat_ty(member))
-                        } else {
-                            self.dpat_for_type(pat_ty, member)
-                        };
-                        DPat::union_member(self.dpat_ty(member), inner, scrut_plain.clone())
-                    })
-                    .collect();
-                let dpat = if alts.len() == 1 {
-                    alts.into_iter().next().expect("checked len")
-                } else {
-                    DPat::or(alts, scrut_plain)
-                };
                 let matched =
                     self.union_of(&claimed.iter().map(|&ty| ty.clone()).collect::<Vec<_>>());
                 return PatternOutcome {
-                    dpat,
                     matched_ty: self.narrow_to(&matched, pat_ty),
                     recorded_ty: None,
                     covers_type: false,
@@ -1224,7 +1162,6 @@ impl<'db> InferenceContext<'db> {
             }
             // Nothing provably claimed: possible-but-not-covering.
             return PatternOutcome {
-                dpat: DPat::type_test(self.dpat_ty(pat_ty), self.dpat_ty(scrut)),
                 matched_ty: pat_ty.clone(),
                 recorded_ty: None,
                 covers_type: false,
@@ -1232,7 +1169,6 @@ impl<'db> InferenceContext<'db> {
             };
         }
         PatternOutcome {
-            dpat: self.dpat_for_type(pat_ty, scrut),
             matched_ty: if covers {
                 scrut.clone()
             } else {
@@ -1257,93 +1193,6 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// The coverage-side lowering of a type pattern (TIR's `dpat_for_type`
-    /// five regimes): singletons, finite alphabets, classes, rigid vars,
-    /// and the subtype fallback. Deliberately stricter than arm validity.
-    fn dpat_for_type(&self, pat_ty: &Ty, col: &Ty) -> DPat {
-        let col_plain = self.dpat_ty(col);
-        let pat_plain = self.dpat_ty(pat_ty);
-        // The universal coverage rule first: a pattern the whole column
-        // provably fits is a wildcard at this column, whatever its shape
-        // (a same-union pattern must not decompose into per-member
-        // singles that no longer align with UnionMember ctors).
-        if self.provable_subtype(col, pat_ty) {
-            return DPat::wildcard(col_plain);
-        }
-        match pat_ty.kind() {
-            InferTy::Literal(..) | InferTy::EnumVariant(..) | InferTy::Null => {
-                DPat::type_test(pat_plain, col_plain)
-            }
-            InferTy::Bool => DPat::or(
-                [true, false]
-                    .into_iter()
-                    .map(|value| {
-                        DPat::type_test(
-                            baml_type::Ty::Literal(
-                                baml_base::Literal::Bool(value),
-                                Freshness::Regular,
-                            ),
-                            col_plain.clone(),
-                        )
-                    })
-                    .collect(),
-                col_plain,
-            ),
-            InferTy::Enum(qtn) => {
-                let variants = self.facts.enum_variants(qtn).unwrap_or_default();
-                DPat::or(
-                    variants
-                        .into_iter()
-                        .map(|variant| {
-                            DPat::type_test(
-                                baml_type::Ty::EnumVariant(qtn.clone(), variant),
-                                col_plain.clone(),
-                            )
-                        })
-                        .collect(),
-                    col_plain,
-                )
-            }
-            InferTy::Union(members) => DPat::or(
-                members
-                    .iter()
-                    .map(|member| self.dpat_for_type(member, col))
-                    .collect(),
-                col_plain,
-            ),
-            InferTy::Class(qtn, args) => {
-                let fields = self.class_pattern_field_types(qtn, args);
-                class_inst_dpat(
-                    qtn,
-                    args.len(),
-                    fields
-                        .iter()
-                        .map(|field_ty| DPat::wildcard(self.dpat_ty(field_ty)))
-                        .collect(),
-                    pat_plain,
-                )
-            }
-            InferTy::Tuple(_) => DPat::type_test(pat_plain, col_plain),
-            InferTy::TypeVar(..) => {
-                // Rigid: covers only a column of the SAME variable;
-                // otherwise possible-but-not-covering (never a blanket
-                // claim - the B-633 rule).
-                if pat_ty == col {
-                    DPat::wildcard(col_plain)
-                } else {
-                    DPat::type_test(pat_plain, col_plain)
-                }
-            }
-            _ => {
-                if self.provable_subtype(col, pat_ty) {
-                    DPat::wildcard(col_plain)
-                } else {
-                    DPat::type_test(pat_plain, col_plain)
-                }
-            }
-        }
-    }
-
     /// Class destructure. Generic args: written turbofish wins; otherwise
     /// ADOPTED from the scrutinee when exactly one same-class member
     /// determines them (B-919 - the adoption TIR implemented only for
@@ -1365,7 +1214,6 @@ impl<'db> InferenceContext<'db> {
                 self.lower_pattern(body, field_pat, &Ty::error());
             }
             return PatternOutcome {
-                dpat: DPat::wildcard(self.dpat_ty(scrut)),
                 matched_ty: Ty::error(),
                 recorded_ty: None,
                 covers_type: false,
@@ -1407,7 +1255,6 @@ impl<'db> InferenceContext<'db> {
                 self.lower_pattern(body, field_pat, &Ty::error());
             }
             return PatternOutcome {
-                dpat: DPat::wildcard(self.dpat_ty(scrut)),
                 matched_ty: Ty::error(),
                 recorded_ty: None,
                 covers_type: false,
@@ -1461,7 +1308,7 @@ impl<'db> InferenceContext<'db> {
             crate::lower::class_field_types(self.db, class)
         };
         let mut field_covers = true;
-        let mut sub_dpats: Vec<Option<DPat>> = vec![None; declared.len()];
+        let mut slots: Vec<(usize, PatId)> = Vec::new();
         for (name, field_pat) in field_pats {
             let index = declared.iter().position(|(field, _)| field == name);
             match index {
@@ -1470,7 +1317,7 @@ impl<'db> InferenceContext<'db> {
                         .pattern_field_ty(&crate::impls::interned_ty(&declared[index].1), &args);
                     let outcome = self.lower_pattern(body, *field_pat, &field_ty);
                     field_covers &= outcome.covers_type;
-                    sub_dpats[index] = Some(outcome.dpat);
+                    slots.push((index, *field_pat));
                 }
                 None => {
                     // Unknown field (E0007); sub-bindings still record
@@ -1485,66 +1332,17 @@ impl<'db> InferenceContext<'db> {
                 }
             }
         }
-        let fields: Vec<DPat> = declared
-            .iter()
-            .zip(sub_dpats)
-            .map(|((_, field_ty), sub)| {
-                sub.unwrap_or_else(|| {
-                    DPat::wildcard(self.dpat_ty(
-                        &self.pattern_field_ty(&crate::impls::interned_ty(field_ty), &args),
-                    ))
-                })
-            })
-            .collect();
         let head_covers = self.provable_subtype(scrut, &head);
 
-        // Union scrutinee: claim the same-class member.
-        let dpat = {
-            let class_dpat = class_inst_dpat(&qtn, args.len(), fields, self.dpat_ty(&head));
-            match scrut.kind() {
-                InferTy::Union(members) => {
-                    // Same class AND agreeing instantiation: against
-                    // `Box<int> | Box<string>`, `Box<int> { .. }` claims
-                    // exactly the `Box<int>` member, so
-                    // per-instantiation arms compose to full coverage -
-                    // the member attribution bare type patterns already
-                    // get. Without written/adopted args the name alone
-                    // decides (a multi-instantiation scrutinee then
-                    // stays unclaimed, as before).
-                    let claimed: Vec<&Ty> = members
-                        .iter()
-                        .filter(|member| match member.kind() {
-                            InferTy::Class(member_qtn, member_args) => {
-                                *member_qtn == qtn
-                                    && (args.is_empty()
-                                        || (member_args.len() == args.len()
-                                            && member_args.iter().zip(args.iter()).all(
-                                                |(member_arg, arg)| {
-                                                    crate::impls::eq_admitted(
-                                                        member_arg,
-                                                        arg,
-                                                        &self.facts,
-                                                    )
-                                                },
-                                            )))
-                            }
-                            _ => false,
-                        })
-                        .collect();
-                    match claimed.as_slice() {
-                        [member] => DPat::union_member(
-                            self.dpat_ty(member),
-                            class_dpat,
-                            self.dpat_ty(scrut),
-                        ),
-                        _ => class_dpat,
-                    }
-                }
-                _ => class_dpat,
-            }
-        };
+        self.pattern_heads.insert(
+            pat,
+            PatternHead::Class {
+                qtn,
+                head: head.clone(),
+                fields: slots,
+            },
+        );
         PatternOutcome {
-            dpat,
             matched_ty: if head_covers { scrut.clone() } else { head },
             recorded_ty: None,
             covers_type: head_covers && field_covers,
@@ -1598,8 +1396,6 @@ impl<'db> InferenceContext<'db> {
                 }
             }
             if !claimed.is_empty() {
-                let scrut_plain = self.dpat_ty(scrut);
-                let mut alts = Vec::new();
                 let mut matched = Vec::new();
                 let mut consumes = true;
                 let single = claimed.len() == 1;
@@ -1613,11 +1409,6 @@ impl<'db> InferenceContext<'db> {
                     };
                     consumes &= outcome.consumes_matched && !tuple_pattern_is_open(member);
                     matched.push(outcome.matched_ty);
-                    alts.push(DPat::union_member(
-                        self.dpat_ty(member),
-                        outcome.dpat,
-                        scrut_plain.clone(),
-                    ));
                 }
                 if !single {
                     let joined: Vec<Ty> = (0..arity)
@@ -1630,13 +1421,7 @@ impl<'db> InferenceContext<'db> {
                     let joined_ty = Ty::tuple(joined.clone());
                     self.lower_tuple_elements(body, elements, &joined, &joined_ty);
                 }
-                let dpat = if single {
-                    alts.pop().expect("one claim")
-                } else {
-                    DPat::or(alts, scrut_plain)
-                };
                 return PatternOutcome {
-                    dpat,
                     matched_ty: self.union_of(&matched),
                     recorded_ty: None,
                     covers_type: false,
@@ -1656,7 +1441,6 @@ impl<'db> InferenceContext<'db> {
             });
         }
         PatternOutcome {
-            dpat: DPat::wildcard(self.dpat_ty(scrut)),
             matched_ty: Ty::error(),
             recorded_ty: None,
             covers_type: false,
@@ -1678,10 +1462,6 @@ impl<'db> InferenceContext<'db> {
             .collect();
         let covers = outcomes.iter().all(|outcome| outcome.covers_type);
         PatternOutcome {
-            dpat: DPat::tuple(
-                outcomes.into_iter().map(|outcome| outcome.dpat).collect(),
-                self.dpat_ty(tuple_ty),
-            ),
             matched_ty: tuple_ty.clone(),
             recorded_ty: None,
             covers_type: covers,
@@ -1730,7 +1510,6 @@ impl<'db> InferenceContext<'db> {
         // provable-overlap conservatism: "cannot tell" keeps the member. A
         // pattern no holder fits is dead, and its sub-patterns report that
         // against every holder's elements.
-        let scrut_structure = self.structurally_resolve(scrut);
         let erroneous = effective.has_error();
         let mut holders: Vec<(Ty, ListHolding)> = Vec::new();
         let mut scrutinee_is_lists = !erroneous;
@@ -1806,9 +1585,14 @@ impl<'db> InferenceContext<'db> {
             && claimed
                 .iter()
                 .all(|(_, holding)| matches!(holding, ListHolding::Elements(_)));
-        let mut sub_dpats = Vec::new();
+        self.pattern_heads.insert(
+            pat,
+            PatternHead::Array {
+                ascription: ascribed.clone(),
+            },
+        );
         for &sub in prefix {
-            sub_dpats.push(self.lower_pattern(body, sub, &element).dpat);
+            self.lower_pattern(body, sub, &element);
         }
         if let Some(rest) = rest
             && let Some(rest_pat) = rest.pat
@@ -1836,7 +1620,7 @@ impl<'db> InferenceContext<'db> {
             }
         }
         for &sub in suffix {
-            sub_dpats.push(self.lower_pattern(body, sub, &element).dpat);
+            self.lower_pattern(body, sub, &element);
         }
         let shape = match rest {
             Some(_) => crate::exhaustiveness::SliceShape::Variable {
@@ -1852,36 +1636,7 @@ impl<'db> InferenceContext<'db> {
                 suffix: 0
             }
         );
-        // A union column takes the claimed members as its branches, one
-        // `UnionMember` each; any other column (or a claim that is not made of
-        // the column's own members, after an ascription narrowed it) takes
-        // the slice directly.
-        let slice_dpat = |ty: &Ty| DPat::slice(shape.clone(), sub_dpats.clone(), self.dpat_ty(ty));
-        let dpat = match scrut_structure.kind() {
-            InferTy::Union(members)
-                if !claimed.is_empty()
-                    && claimed.iter().all(|(member, _)| members.contains(member)) =>
-            {
-                let mut branches: Vec<DPat> = claimed
-                    .iter()
-                    .map(|(member, _)| {
-                        DPat::union_member(
-                            self.dpat_ty(member),
-                            slice_dpat(member),
-                            self.dpat_ty(scrut),
-                        )
-                    })
-                    .collect();
-                if branches.len() == 1 {
-                    branches.remove(0)
-                } else {
-                    DPat::or(branches, self.dpat_ty(scrut))
-                }
-            }
-            _ => slice_dpat(&matched_ty),
-        };
         PatternOutcome {
-            dpat,
             matched_ty,
             recorded_ty: None,
             // `[..]` accepts every value of a type made of lists only, and
@@ -2082,7 +1837,11 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn class_pattern_field_types(&self, qtn: &baml_type::DeclName, args: &[Ty]) -> Vec<Ty> {
+    pub(super) fn class_pattern_field_types(
+        &self,
+        qtn: &baml_type::DeclName,
+        args: &[Ty],
+    ) -> Vec<Ty> {
         if let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
             self.facts.definition_of(qtn)
         {
@@ -2121,31 +1880,6 @@ impl<'db> InferenceContext<'db> {
                 .reduce_projections(&closed, super::PROJECTION_FINALIZE_FUEL)
                 .into_ty(),
             Ok(_) | Err(baml_type::interned::OpenTy) => ty.clone(),
-        }
-    }
-
-    /// Materialize a (possibly in-flight) type as a `DPat` column type, in
-    /// canonical form. Every type a `DPat` or `Ctor` carries passes through
-    /// here, so ctor identity agrees with the canonical scrutinee
-    /// (`matrix_scrut`): `Box<B | A>` and `Box<A | B>` name one ctor.
-    ///
-    /// Pattern lowering runs mid-inference, so a scrutinee (or a field/member
-    /// instantiated at its arguments) can still carry unsolved variables or
-    /// holes, which the finalized plain `Ty` cannot represent. An open column
-    /// poisons as `Ty::Error`, the same suppression `check_match` applies
-    /// before usefulness (`has_infer()` gate) and the vocabulary the
-    /// exhaustiveness machinery already keys on (`contains_error`): verdicts
-    /// over an open column are noise. Recorded pattern FACTS are unaffected:
-    /// `type_of_pat` stores the interned type, resolved at finalize.
-    fn dpat_ty(&self, ty: &Ty) -> baml_type::Ty {
-        match baml_type::interned::ClosedTy::try_from(ty) {
-            // Errored types skip the normalizer, as `matrix_scrut` does.
-            Ok(closed) if ty.has_error() => closed.to_plain(),
-            Ok(closed) => normalize_interned(&closed, &self.facts).to_plain(),
-            // SUPPRESSION disposition: an open column takes the Error
-            // sentinel because exhaustiveness exclusively WITHHOLDS verdicts
-            // on Error; it never derives from it.
-            Err(baml_type::interned::OpenTy) => baml_type::Ty::Error,
         }
     }
 }
@@ -2188,25 +1922,6 @@ pub(super) fn takes_every_value(body: &ExprBody, pat: PatId) -> bool {
             false
         }
     }
-}
-
-/// A class destructure over its canonical head (`head_plain`, from
-/// `dpat_ty`). The ctor args are read off that head, never canonicalized
-/// one by one: canonicalization unfolds a recursive alias at the root
-/// once, so `R` alone becomes `int | R[]` while `Box<R>` keeps it folded,
-/// and the column's args come from its canonical head. An open head
-/// (`Ty::Error`) gets Error args, the same suppression.
-fn class_inst_dpat(
-    qtn: &baml_type::DeclName,
-    arity: usize,
-    fields: Vec<DPat>,
-    head_plain: baml_type::Ty,
-) -> DPat {
-    let args = match &head_plain {
-        baml_type::Ty::Class(_, args) => args.clone(),
-        _ => vec![baml_type::Ty::Error; arity].into_boxed_slice(),
-    };
-    DPat::class_inst(qtn.clone(), args, fields, head_plain)
 }
 
 /// The legal shapes of a rest sub-pattern: the wildcard, a bare
@@ -2298,235 +2013,6 @@ fn list_holding(ty: &Ty) -> Option<ListHolding> {
         | InferTy::Resource
         | InferTy::PromptAst
         | InferTy::Never => None,
-    }
-}
-
-/// The `PatCtx` impl backing the usefulness matrix, over plain resolved
-/// types (TIR's impl transcribed; interface projections join with the I
-/// cluster).
-struct HirPatCtx<'a, 'db> {
-    infer: &'a InferenceContext<'db>,
-}
-
-impl PatCtx for HirPatCtx<'_, '_> {
-    fn interface_field_projection_for_class(
-        &self,
-        iface_ty: &baml_type::Ty,
-        class_qtn: &baml_type::DeclName,
-        class_type_args: &[baml_type::Ty],
-    ) -> Option<Vec<usize>> {
-        use baml_compiler2_hir::contributions::Definition;
-        let baml_type::Ty::Interface(iface_qtn, iface_args, iface_assoc) = iface_ty else {
-            return None;
-        };
-        let db = self.infer.db;
-        let facts = &self.infer.facts;
-        let Some(Definition::Class(class)) = facts.definition_of(class_qtn) else {
-            return None;
-        };
-        // The interface's declared field list, whichever lane declares it.
-        let iface_fields: Vec<baml_type::Name> = match facts.definition_of(iface_qtn) {
-            Some(Definition::Interface(iface_loc)) => {
-                baml_compiler2_hir::item_data::interface_data(db, iface_loc)
-                    .fields
-                    .iter()
-                    .map(|field| field.name.clone())
-                    .collect()
-            }
-            _ => {
-                let interface = crate::extern_loc::mounted_interface_loc(db, iface_qtn)?;
-                crate::extern_loc::extern_interface_row(db, interface)
-                    .fields
-                    .iter()
-                    .map(|(name, ..)| name.clone())
-                    .collect()
-            }
-        };
-        // The impl by which THIS realized class type implements THIS realized
-        // interface — selected like every other impl goal, so a class that
-        // implements one interface at several argument lists (`Foo<int>` and
-        // `Foo<string>`) gets the links of the matching block, not the first
-        // block of that name.
-        let concrete = crate::impls::try_interned_ty(&baml_type::Ty::Class(
-            class_qtn.clone(),
-            class_type_args.into(),
-        ))?;
-        let goal = baml_type::interned::InferInterface::from_constraint(
-            &baml_type::Interface::new(iface_qtn.clone(), iface_args.clone(), iface_assoc.clone()),
-        );
-        let resolved = crate::impls::resolve_impl(db, &concrete, &goal)?;
-        // Field links are source data (an interface with fields is implemented
-        // in-body, so the block is in this compilation).
-        let crate::impls::ResolvedImplFacts::Source { block, .. } = resolved.facts else {
-            return None;
-        };
-        let block = baml_compiler2_hir::item_data::impl_block_data(db, block);
-        let class_data = baml_compiler2_hir::item_data::class_data(db, class);
-        iface_fields
-            .iter()
-            .map(|field| {
-                let class_field = block
-                    .field_links
-                    .iter()
-                    .find(|link| link.interface_field == *field)
-                    .map(|link| link.class_field.clone())
-                    .unwrap_or_else(|| field.clone());
-                class_data
-                    .fields
-                    .iter()
-                    .position(|candidate| candidate.name == class_field)
-            })
-            .collect()
-    }
-
-    fn enumerate_ctors(&self, ty: &baml_type::Ty) -> Vec<Ctor> {
-        use baml_type::Ty as P;
-        let ty = self.peel_aliases(ty.clone(), 8);
-        match &ty {
-            P::Bool => vec![
-                Ctor::Type(P::Literal(
-                    baml_base::Literal::Bool(true),
-                    Freshness::Regular,
-                )),
-                Ctor::Type(P::Literal(
-                    baml_base::Literal::Bool(false),
-                    Freshness::Regular,
-                )),
-            ],
-            P::Null | P::Literal(..) | P::EnumVariant(..) => vec![Ctor::Type(ty.clone())],
-            P::Never => vec![],
-            P::Union(members) => members
-                .iter()
-                .map(|member| Ctor::UnionMember(self.peel_aliases(member.clone(), 8)))
-                .collect(),
-            P::Enum(qtn) => self
-                .infer
-                .facts
-                .enum_variants(qtn)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|variant| Ctor::Type(P::EnumVariant(qtn.clone(), variant)))
-                .collect(),
-            P::Class(qtn, args) => vec![Ctor::Class(qtn.clone(), args.clone())],
-            // An existential column is a single-constructor STRUCT VIEW
-            // over its declared fields (rustc's non-enum struct shape).
-            P::Interface(..) => vec![Ctor::Interface(ty.clone())],
-            // Slice splitting owns list columns; empty defers to it.
-            P::List(..) => vec![],
-            P::Tuple(elements) => vec![Ctor::Tuple(elements.len())],
-            // Everything else is an infinite or open alphabet.
-            _ => vec![Ctor::NonExhaustive],
-        }
-    }
-
-    /// The struct-view field types of an existential column, in declared
-    /// order - the same member instantiation field access uses.
-    fn interface_field_types(&self, iface_ty: &baml_type::Ty) -> Vec<baml_type::Ty> {
-        use baml_compiler2_hir::contributions::Definition;
-        let baml_type::Ty::Interface(qtn, args, pins) = iface_ty else {
-            return Vec::new();
-        };
-        // The interface's declared field list, whichever lane declares it;
-        // each field's type comes from the same member lookup either way.
-        let field_names: Vec<baml_type::Name> = match self.infer.facts.definition_of(qtn) {
-            Some(Definition::Interface(interface)) => {
-                baml_compiler2_hir::item_data::interface_data(self.infer.db, interface)
-                    .fields
-                    .iter()
-                    .map(|field| field.name.clone())
-                    .collect()
-            }
-            _ => match crate::extern_loc::mounted_interface_loc(self.infer.db, qtn) {
-                Some(interface) => {
-                    crate::extern_loc::extern_interface_row(self.infer.db, interface)
-                        .fields
-                        .iter()
-                        .map(|(name, ..)| name.clone())
-                        .collect()
-                }
-                None => return Vec::new(),
-            },
-        };
-        let head = Ty::from_plain(iface_ty);
-        let target = InferInterface::new(
-            qtn.clone(),
-            args.iter()
-                .map(Ty::from_plain)
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
-            pins.iter()
-                .map(|(name, ty)| (name.clone(), Ty::from_plain(ty)))
-                .collect(),
-        );
-        field_names
-            .iter()
-            .map(|field| {
-                crate::method_resolution::member_on_interface(
-                    self.infer.db,
-                    &self.infer.facts,
-                    &target,
-                    &head,
-                    field,
-                    true,
-                )
-                .map_or(baml_type::Ty::Error, |member| {
-                    self.infer.dpat_ty(&member.ty)
-                })
-            })
-            .collect()
-    }
-
-    fn class_field_types(
-        &self,
-        qtn: &baml_type::DeclName,
-        ty: &baml_type::Ty,
-    ) -> Vec<baml_type::Ty> {
-        let args: Vec<Ty> = match ty {
-            baml_type::Ty::Class(_, args) => args
-                .iter()
-                .map(baml_type::interned::Ty::from_plain)
-                .collect(),
-            _ => Vec::new(),
-        };
-        self.infer
-            .class_pattern_field_types(qtn, &args)
-            .iter()
-            .map(|ty| self.infer.dpat_ty(ty))
-            .collect()
-    }
-
-    fn is_subtype(&self, sub: &baml_type::Ty, sup: &baml_type::Ty) -> bool {
-        // Error is compatible with everything in the subtype relation; here
-        // it must prove nothing (the `dpat_ty` suppression discipline).
-        !baml_type::contains_error(sub)
-            && !baml_type::contains_error(sup)
-            && baml_type::normalize::is_subtype(sub, sup, &self.infer.facts)
-    }
-
-    fn list_element_type(&self, ty: &baml_type::Ty) -> baml_type::Ty {
-        match self.peel_aliases(ty.clone(), 8) {
-            baml_type::Ty::List(element) => *element,
-            other => other,
-        }
-    }
-}
-
-impl HirPatCtx<'_, '_> {
-    /// Unfolds a (recursive) alias column to its target, canonicalized like
-    /// every other column type: a declared target is a source spelling.
-    fn peel_aliases(&self, ty: baml_type::Ty, fuel: u32) -> baml_type::Ty {
-        if fuel == 0 {
-            return ty;
-        }
-        match &ty {
-            baml_type::Ty::TypeAlias(qtn) => match self.infer.facts.alias_def(qtn) {
-                Some(target) => {
-                    self.peel_aliases(self.infer.dpat_ty(&Ty::from_plain(&target)), fuel - 1)
-                }
-                None => ty,
-            },
-            _ => ty,
-        }
     }
 }
 
