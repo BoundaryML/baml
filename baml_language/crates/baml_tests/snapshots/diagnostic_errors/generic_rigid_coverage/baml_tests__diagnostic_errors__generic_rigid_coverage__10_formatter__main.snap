@@ -53,3 +53,13 @@ function rigid_arm_in_uninhabited_field_is_exhaustive<T>(o: RigidOuter | null) -
         null => 0,
     }
 }
+
+// Beside the rigid arm, a wildcard arm in the same uninhabited field column
+// matches no value either, so it is unreachable.
+function wildcard_arm_in_uninhabited_field_is_unreachable<T>(o: RigidOuter | null) -> int {
+    match (o) {
+        RigidOuter { d: let t: T } => 1,
+        RigidOuter { d: _ } => 2,
+        null => 0,
+    }
+}
