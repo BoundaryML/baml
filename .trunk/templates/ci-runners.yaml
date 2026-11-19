@@ -6,6 +6,10 @@ name: CI runners
 env:
   # jdx/mise-action finds the baked mise binary and tools here.
   MISE_DATA_DIR: /cache/mise
+  # Keep the mise cache out of MISE_DATA_DIR. The runner sets XDG_CACHE_HOME=/cache, so
+  # the default cache folder is /cache/mise too, and mise's automatic cache prune (1% of
+  # mise commands) then deletes installed binaries older than 30 days.
+  MISE_CACHE_DIR: /cache/mise-cache
   # No job checks out LFS objects, so the bake does not download them.
   GIT_LFS_SKIP_SMUDGE: "1"
 
