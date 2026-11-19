@@ -64,11 +64,6 @@ env:
   # windows job.
   CARGO_PROFILE_DEV_OPT_LEVEL: "1"
   CARGO_PROFILE_TEST_OPT_LEVEL: "1"
-  # No job attaches a debugger or prints backtraces, so debug info only costs
-  # compile time, link time, and target/ size. Panic messages keep their file
-  # and line without it.
-  CARGO_PROFILE_DEV_DEBUG: "0"
-  CARGO_PROFILE_TEST_DEBUG: "0"
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
@@ -77,6 +72,12 @@ jobs:
     name: "cargo test (x86_64-unknown-linux-gnu)"
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 25
+    env:
+      # No Blacksmith job attaches a debugger or prints backtraces, so debug
+      # info only costs compile time, link time, and target/ size. Set per job
+      # so the Trunk-hosted sdk-tests job keeps the profile its warm tree uses.
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -189,6 +190,11 @@ jobs:
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 35
     env:
+      # No Blacksmith job attaches a debugger or prints backtraces, so debug
+      # info only costs compile time, link time, and target/ size. Set per job
+      # so the Trunk-hosted sdk-tests job keeps the profile its warm tree uses.
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
       CARGO_BUILD_TARGET: x86_64-unknown-linux-musl
     steps:
       - uses: useblacksmith/checkout@v1
@@ -390,6 +396,11 @@ jobs:
     # native Windows Rust builds (build-caching/04 Exp 7/9).
     runs-on: blacksmith-8vcpu-windows-2025
     env:
+      # No Blacksmith job attaches a debugger or prints backtraces, so debug
+      # info only costs compile time, link time, and target/ size. Set per job
+      # so the Trunk-hosted sdk-tests job keeps the profile its warm tree uses.
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
       CARGO_BUILD_JOBS: "16"
       # EXPERIMENT (do not merge): Cargo's unstable checksum-based freshness
       # lets a fresh checkout reuse cached workspace crates. It needs
@@ -1211,14 +1222,6 @@ jobs:
         run: |
           "$(command -v python3 || command -v python)" .github/scripts/csharp-mtime-cache.py restore
 
-      # EXPERIMENT (do not merge): sizes the target directory to estimate how
-      # much cache storage whole-target caching would need.
-      - name: "Report target size"
-        if: always()
-        run: |
-          du -sh baml_language/target 2>/dev/null || true
-          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
-
       - name: "Show sccache stats"
         if: always()
         run: sccache --show-stats
@@ -1287,14 +1290,6 @@ jobs:
             baml_language/target/nextest/
           if-no-files-found: ignore
 
-      # EXPERIMENT (do not merge): sizes the target directory to estimate how
-      # much cache storage whole-target caching would need.
-      - name: "Report target size"
-        if: always()
-        run: |
-          du -sh baml_language/target 2>/dev/null || true
-          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
-
       - name: "Show sccache stats"
         if: always()
         run: sccache --show-stats
@@ -1327,6 +1322,12 @@ jobs:
     name: "cargo test (wasm32-unknown-unknown)"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 45
+    env:
+      # No Blacksmith job attaches a debugger or prints backtraces, so debug
+      # info only costs compile time, link time, and target/ size. Set per job
+      # so the Trunk-hosted sdk-tests job keeps the profile its warm tree uses.
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -1445,6 +1446,12 @@ jobs:
     name: "cargo doc"
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
+    env:
+      # No Blacksmith job attaches a debugger or prints backtraces, so debug
+      # info only costs compile time, link time, and target/ size. Set per job
+      # so the Trunk-hosted sdk-tests job keeps the profile its warm tree uses.
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - uses: useblacksmith/checkout@v1
         with:
