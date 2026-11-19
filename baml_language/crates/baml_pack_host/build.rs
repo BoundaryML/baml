@@ -1,4 +1,5 @@
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
     // libsui inserts a new Mach-O segment load command into the header when
     // embedding data. The default header padding the linker leaves is often
     // too small, causing the new command to overflow into __text. Ask the
