@@ -2,6 +2,11 @@ name: Trunk Kiln shadow
 
 on:
   workflow_dispatch:
+    inputs:
+      template:
+        description: "Template label suffix, empty for the live template"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -11,118 +16,32 @@ defaults:
     shell: bash
 
 jobs:
-  probe:
-    strategy:
-      fail-fast: false
-      matrix:
-        i: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100]
-    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=large..memory=low
+  prune-test:
+    runs-on: trunk-kiln=${{ github.run_id }}-${{ github.run_attempt }}..size=small..memory=low${{ inputs.template }}
     steps:
-      - name: "Checkout Branch"
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           clean: false
           persist-credentials: false
-      - name: "Backdate the git refs baml_artifact tracks"
-        run: |
-          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
-          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
-          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
-          p=("$(git rev-parse --git-path HEAD)")
-          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
-          if ! git show-ref --verify --quiet refs/heads/canary; then
-            b="${basis:-$(git rev-parse HEAD)}"
-            git update-ref refs/heads/canary "${b}"
-            echo "recreated refs/heads/canary at ${b}"
-          fi
-          p+=("$(git rev-parse --git-path refs/heads/canary)")
-          touch -t 197001010000 "${p[@]}"
-          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
-          if [ -n "${basis}" ]; then
-            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
-            echo "stamping BAML_GIT_SHA=${basis}"
-          else
-            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
-          fi
-
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
-      - name: "Install Rust toolchain"
-        run: |
-          rustup toolchain install
-          rustup toolchain install 1.97.1 --profile minimal --component rustc-dev
-        working-directory: baml_language
-
-      # prek hooks invoke cargo (from rustup), mise tasks that shell out
-      # to cargo, and python scripts that begin with `#!/usr/bin/env -S
-      # uv run --script` (e.g. validate-markdown). We don't
-      # need go/ruby/etc here, just the prek binary, a python/uv pair
-      # for hook scripts, node for the grammar check, and clang-format.
-      - name: "Check every mise bin folder (before mise)"
-        run: |
-          missing=()
-          for d in /cache/mise/installs/*/*/bin /cache/mise/installs/*/*/.mise-bins; do
-            [[ -L ${d%/*} ]] && continue
-            [[ -n $(find -L "$d" -maxdepth 1 -type f -perm -u+x -print -quit 2>/dev/null) ]] || missing+=("$d")
-          done
-          for v in /cache/mise/installs/cargo-*/*.*; do
-            [[ -L $v ]] && continue
-            [[ -d $v/bin ]] || missing+=("$v/bin")
-          done
-          if [[ ${#missing[@]} -eq 0 ]]; then echo "before mise: all bin folders present"; exit 0; fi
-          printf 'before mise MISSING %s\n' "${missing[@]}"
-          for m in "${missing[@]}"; do ls -la --time-style=full-iso "${m%/bin}" || true; done
-          ls -la --time-style=full-iso /cache/mise/installs/ || true
-          exit 1
-
-      - name: "Install mise"
+      - name: Install mise
         uses: ./.github/actions/setup-mise
         with:
           cache: "false"
-          # Temporarily omit Hawk while its CI check is disabled.
-          # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
           install_args: "sccache cargo:prek python uv node clang-format"
-
-      - name: "Check every mise bin folder (after mise)"
+      - name: Prune the mise cache, then check the bin folders
         run: |
-          missing=()
-          for d in /cache/mise/installs/*/*/bin /cache/mise/installs/*/*/.mise-bins; do
-            [[ -L ${d%/*} ]] && continue
-            [[ -n $(find -L "$d" -maxdepth 1 -type f -perm -u+x -print -quit 2>/dev/null) ]] || missing+=("$d")
-          done
-          for v in /cache/mise/installs/cargo-*/*.*; do
-            [[ -L $v ]] && continue
-            [[ -d $v/bin ]] || missing+=("$v/bin")
-          done
-          if [[ ${#missing[@]} -eq 0 ]]; then echo "after mise: all bin folders present"; exit 0; fi
-          printf 'after mise MISSING %s\n' "${missing[@]}"
-          for m in "${missing[@]}"; do ls -la --time-style=full-iso "${m%/bin}" || true; done
-          ls -la --time-style=full-iso /cache/mise/installs/ || true
-          exit 1
-
-      - name: "Cache prek"
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-
-      # Separate step so if fetch is slow, build is fast.
-      - name: "Fetch cargo dependencies"
-        run: cargo fetch
-        working-directory: baml_language
-
-      - name: "Check every mise bin folder (after cargo fetch)"
-        run: |
-          missing=()
-          for d in /cache/mise/installs/*/*/bin /cache/mise/installs/*/*/.mise-bins; do
-            [[ -L ${d%/*} ]] && continue
-            [[ -n $(find -L "$d" -maxdepth 1 -type f -perm -u+x -print -quit 2>/dev/null) ]] || missing+=("$d")
-          done
-          for v in /cache/mise/installs/cargo-*/*.*; do
-            [[ -L $v ]] && continue
-            [[ -d $v/bin ]] || missing+=("$v/bin")
-          done
-          if [[ ${#missing[@]} -eq 0 ]]; then echo "after cargo fetch: all bin folders present"; exit 0; fi
-          printf 'after cargo fetch MISSING %s\n' "${missing[@]}"
-          for m in "${missing[@]}"; do ls -la --time-style=full-iso "${m%/bin}" || true; done
-          ls -la --time-style=full-iso /cache/mise/installs/ || true
-          exit 1
+          cat /cache/trunk-template-variant || true
+          echo "MISE_DATA_DIR=${MISE_DATA_DIR:-} MISE_CACHE_DIR=${MISE_CACHE_DIR:-} XDG_CACHE_HOME=${XDG_CACHE_HOME:-}"
+          mise cache path || true
+          check() {
+            missing=()
+            for v in /cache/mise/installs/cargo-*/*.*; do
+              [[ -L $v ]] && continue
+              [[ -d $v/bin ]] || missing+=("$v/bin")
+            done
+            if [[ ${#missing[@]} -eq 0 ]]; then echo "$1: all cargo bin folders present"; else printf "$1: MISSING %s\n" "${missing[@]}"; fi
+          }
+          check "before prune"
+          mise cache prune --verbose 2>&1 | grep -c -E 'installs/' | sed 's/^/install files named by the prune: /' || true
+          check "after prune"
+          [[ ${#missing[@]} -eq 0 ]]
