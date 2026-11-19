@@ -73,12 +73,19 @@ jobs:
       # EXPERIMENT (do not merge): cache the whole target directory. No git
       # stamp pin here: this test packs against the workspace, and the CLI
       # refuses a workspace whose commit differs from the one it was built from.
-      - uses: astral-sh/github-actions/rust-workspace-cache@61a5a2c7e0df1c0caf46fe5d1e74a4cb8a7205f8 # 2026.11.16.1
+      # Registry and git checkouts only, read-only, as on canary.
+      - uses: Swatinem/rust-cache@v2
         with:
-          workspace: baml_language
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: false
+          shared-key: "linux-cargo"
+
+      - uses: ./.github/actions/workspace-target-cache
+        with:
           profile: debug
-          prefix-key: v1-rust-differential-workspace-experiment
-          save-if: "true"
+          key: rust-differential-debug0-opt1
 
       - name: "Load .envrc with direnv"
         run: |
@@ -129,12 +136,19 @@ jobs:
         with:
           sha: ${{ github.event.pull_request.base.sha || github.sha }}
 
-      - uses: astral-sh/github-actions/rust-workspace-cache@61a5a2c7e0df1c0caf46fe5d1e74a4cb8a7205f8 # 2026.11.16.1
+      # Registry and git checkouts only, read-only, as on canary.
+      - uses: Swatinem/rust-cache@v2
         with:
-          workspace: baml_language
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: false
+          shared-key: "linux-cargo"
+
+      - uses: ./.github/actions/workspace-target-cache
+        with:
           profile: debug
-          prefix-key: v1-snapshot-tests-workspace-experiment
-          save-if: "true"
+          key: snapshot-tests-debug0-opt1
 
       - name: "Load .envrc with direnv"
         run: |

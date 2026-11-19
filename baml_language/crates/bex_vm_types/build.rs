@@ -1,4 +1,7 @@
 fn main() {
+    // Without a `rerun-if-changed` line Cargo reruns this script whenever any
+    // file in the package has a newer mtime, which is every fresh checkout.
+    println!("cargo:rerun-if-changed=build.rs");
     let (_vm_builtins, io_builtins, class_defs) =
         baml_builtins2_codegen::extract_native_builtins().unwrap_or_else(|e| panic!("{e}"));
     let out_dir = std::env::var("OUT_DIR").unwrap();

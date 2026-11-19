@@ -108,12 +108,19 @@ jobs:
         with:
           sha: ${{ github.event.pull_request.base.sha || github.sha }}
 
-      - uses: astral-sh/github-actions/rust-workspace-cache@61a5a2c7e0df1c0caf46fe5d1e74a4cb8a7205f8 # 2026.11.16.1
+      # Registry and git checkouts only, read-only, as on canary.
+      - uses: Swatinem/rust-cache@v2
         with:
-          workspace: baml_language
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: false
+          shared-key: "linux-cargo"
+
+      - uses: ./.github/actions/workspace-target-cache
+        with:
           profile: debug
-          prefix-key: v1-cargo-test-linux-workspace-experiment
-          save-if: "true"
+          key: cargo-test-linux-debug0-opt1
 
       - name: "Load .envrc with direnv"
         run: |
@@ -245,14 +252,21 @@ jobs:
         with:
           sha: ${{ github.event.pull_request.base.sha || github.sha }}
 
-      - uses: astral-sh/github-actions/rust-workspace-cache@61a5a2c7e0df1c0caf46fe5d1e74a4cb8a7205f8 # 2026.11.16.1
+      # Registry and git checkouts only, read-only, as on canary.
+      - uses: Swatinem/rust-cache@v2
         with:
-          workspace: baml_language
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: false
+          shared-key: "linux-cargo"
+
+      - uses: ./.github/actions/workspace-target-cache
+        with:
           profile: |
             debug
             x86_64-unknown-linux-musl/debug
-          prefix-key: v1-cargo-test-linux-musl-workspace-experiment
-          save-if: "true"
+          key: cargo-test-linux-musl-debug0-opt1
 
       - name: "Load .envrc with direnv"
         run: |
@@ -465,12 +479,19 @@ jobs:
       # EXPERIMENT (do not merge): cache the whole target directory, our own
       # crates included, and save from this PR so its second run can restore
       # it. Wraps Swatinem/rust-cache and restores build-input timestamps.
-      - uses: astral-sh/github-actions/rust-workspace-cache@61a5a2c7e0df1c0caf46fe5d1e74a4cb8a7205f8 # 2026.11.16.1
+      # Registry and git checkouts only, read-only, as on canary.
+      - uses: Swatinem/rust-cache@v2
         with:
-          workspace: baml_language
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: false
+          shared-key: "windows-cargo"
+
+      - uses: ./.github/actions/workspace-target-cache
+        with:
           profile: debug
-          prefix-key: v1-windows-workspace-experiment
-          save-if: "true"
+          key: cargo-test-windows-debug0-opt1
 
       - name: "Load .envrc with direnv"
         run: |

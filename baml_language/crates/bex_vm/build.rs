@@ -1,4 +1,5 @@
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
     let out_dir = std::env::var("OUT_DIR").unwrap();
     // One generated dispatch surface per stdlib package with Rust-implemented
     // builtins. Adding a `$rust_function` to a package's `.baml` source adds a
