@@ -118,7 +118,6 @@ pub struct RecordingBuilder {
     pending_span_reservation: usize,
     span_credit: usize,
     metadata_replay: bool,
-    package_identity: bool,
     ended: bool,
 }
 impl RecordingBuilder {
@@ -142,7 +141,6 @@ impl RecordingBuilder {
             pending_span_reservation: 0,
             span_credit: 0,
             metadata_replay: false,
-            package_identity: true,
             ended: false,
         })
     }
@@ -150,16 +148,6 @@ impl RecordingBuilder {
     #[must_use]
     pub fn with_metadata_replay(mut self) -> Self {
         self.metadata_replay = true;
-        self
-    }
-
-    /// Leave out what format minor 14 added: the program identity, the
-    /// build, and each function's package hash. The files then read as
-    /// minor 13 or lower, for a destination that has not adopted 14.
-    #[must_use]
-    pub fn without_package_identity(mut self) -> Self {
-        self.package_identity = false;
-        self.buffer.functions.omit_package_identity();
         self
     }
 
@@ -264,8 +252,8 @@ impl RecordingBuilder {
         let process_exit = end
             .then(|| self.process.as_ref().and_then(|p| p.exit.get()))
             .flatten();
-        // The process, when the recording names its program and build.
-        let identity = self.process.as_ref().filter(|_| self.package_identity);
+        let identity = self.process.as_ref();
+        let platform = identity.filter(|p| !p.info.os.is_empty() || !p.info.arch.is_empty());
         let mut file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
                 format_major: encoding::FORMAT_MAJOR,
@@ -300,7 +288,12 @@ impl RecordingBuilder {
                         } else {
                             0
                         },
-                    ),
+                    )
+                    .max(if platform.is_some() || defines_build(&ready.definitions) {
+                        btel_settings::encoding::BUILD_PROVENANCE_FORMAT_MINOR
+                    } else {
+                        0
+                    }),
                 recording_id: self.id.as_bytes().to_vec(),
                 source_snapshot_id: self.source_snapshot_id.map(|id| id.to_vec()),
                 process_id: self.process.as_ref().map(|p| p.info.process_id.to_vec()),
@@ -319,6 +312,8 @@ impl RecordingBuilder {
                 initial_context_cas_id: self.process.as_ref().and_then(|p| p.context),
                 program_id: identity.and_then(|p| p.program_id).map(|id| id.to_vec()),
                 build: identity.and_then(|p| p.build.clone()),
+                os: platform.map(|p| p.info.os.clone()),
+                arch: platform.map(|p| p.info.arch.clone()),
             }),
             sequence: sequence.get(),
             definitions: Some(ready.definitions),
@@ -578,13 +573,6 @@ impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> RecordingPublisher<F, C> {
             receive_snapshot,
         })
     }
-    /// See [`RecordingBuilder::without_package_identity`].
-    #[must_use]
-    pub fn without_package_identity(mut self) -> Self {
-        self.builder = self.builder.without_package_identity();
-        self
-    }
-
     #[must_use]
     pub fn with_source_snapshot(mut self, source_snapshot_id: Option<[u8; 32]>) -> Self {
         self.builder = self.builder.with_source_snapshot(source_snapshot_id);
@@ -709,11 +697,23 @@ fn build(record: &btel_types::BuildRecord) -> proto::Build {
 }
 
 fn defines_package_identity(definitions: &proto::Definitions) -> bool {
+    defines(definitions, |metadata| {
+        metadata.compilation_unit_hash.is_some()
+    })
+}
+
+fn defines_build(definitions: &proto::Definitions) -> bool {
+    defines(definitions, |metadata| metadata.build_id.is_some())
+}
+
+fn defines(
+    definitions: &proto::Definitions,
+    has: impl Fn(&proto::FunctionMetadata) -> bool,
+) -> bool {
     definitions.functions.iter().any(|function| {
         matches!(
             &function.resolution,
-            Some(proto::function_definition::Resolution::Metadata(metadata))
-                if metadata.compilation_unit_hash.is_some()
+            Some(proto::function_definition::Resolution::Metadata(metadata)) if has(metadata)
         )
     })
 }

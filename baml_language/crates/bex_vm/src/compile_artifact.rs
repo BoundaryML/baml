@@ -20,6 +20,10 @@ pub struct RuntimeCompileArtifact {
     /// Non-error diagnostics produced by the successful compilation.
     pub diagnostics: Vec<RuntimeCompileDiagnostic>,
     pub kind: ArtifactKind,
+    /// The compile as a build, when the request asked for one
+    /// (`RuntimeCompileRequest::record_build`) and the package is a whole
+    /// one: its functions' spans name `build.build_id`.
+    pub build: Option<Box<btel_types::BuildRegistration>>,
 }
 
 /// Which runtime compilation door produced an artifact.
@@ -251,6 +255,7 @@ mod memory_tests {
                     record: baml_linker_types::PackageRecord::default(),
                     tail: None,
                 },
+                build: None,
                 interface_blob: Vec::new(),
                 diagnostics: vec![RuntimeCompileDiagnostic {
                     code: "warning".into(),

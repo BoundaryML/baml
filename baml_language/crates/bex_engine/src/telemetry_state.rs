@@ -77,6 +77,7 @@ impl GcTelemetry {
                         definition_key: None,
                         package_name: Some("baml".into()),
                         compilation_unit_hash: None,
+                        build_id: None,
                         namespace: vec![],
                         argument_layout: None,
                         source_map: None,

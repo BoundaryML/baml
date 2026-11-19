@@ -206,7 +206,17 @@ impl PackArgs {
             btel_settings::artifact::ArtifactKind::Pack,
         )?;
 
-        let (db, root, program, needs_format_hint) = self.load_and_compile()?;
+        let (db, root, mut program, needs_format_hint) = self.load_and_compile()?;
+        // The build registers before the artifact is written, so the
+        // artifact carries its ID to every process that runs it.
+        crate::build_record::register(
+            &db,
+            root,
+            &mut program,
+            btel_types::BuildOrigin::Pack,
+            &telemetry,
+            root.path(&db),
+        );
         // Mirror `baml run`'s format advisory: if any source file
         // round-trips through `baml fmt` differently, surface a
         // non-fatal warning so users learn to keep packaged

@@ -99,6 +99,10 @@ pub struct FunctionMetadata {
     /// function ran. `None` for a function no compiled package owns (host
     /// and native functions, named spans).
     pub compilation_unit_hash: Option<[u8; 32]>,
+    /// The build that produced the function's package (BEP-088). `None`
+    /// when no recorded build did: a precompiled standard library, or a
+    /// program whose host named no build.
+    pub build_id: Option<[u8; 16]>,
     pub namespace: Vec<String>,
     /// Slot names for captured inputs; `None` when they cannot be determined.
     pub argument_layout: Option<ArgumentLayout>,

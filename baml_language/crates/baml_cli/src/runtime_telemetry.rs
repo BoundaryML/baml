@@ -69,6 +69,7 @@ pub(crate) fn create_engine_with_context(
         )
     })
     .with_host("baml")
+    .with_source_upload(boundary.upload_source)
     .with_sources(sources);
     let recording = match build {
         Some(build) => recording.with_build(build),

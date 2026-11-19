@@ -40,6 +40,7 @@ bex_heap = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
 btel_settings = { workspace = true }
+btel_types = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 async-trait = { workspace = true }
@@ -55,7 +56,9 @@ sha2 = { workspace = true }
 text-size = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+uuid = { workspace = true }
 vfs = { workspace = true }
+web-time = { workspace = true }
 
 [build-dependencies]
 baml_compiler2_emit = { workspace = true }

@@ -235,7 +235,10 @@ use sha2::{Digest, Sha256};
 /// `$rust_type` type is gone, so a type no longer encodes the `RustType`
 /// head (its discriminant, 18, is unused), and `ClassCrossing` gained the
 /// appended `HostValue`.
-pub const FORMAT_VERSION: u32 = 29;
+///
+/// Version 30: a `ProgramPackage` carries the `build_id` of the build that
+/// produced it (BEP-088). A cached program names none.
+pub const FORMAT_VERSION: u32 = 30;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

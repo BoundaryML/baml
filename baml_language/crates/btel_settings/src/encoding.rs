@@ -71,3 +71,8 @@ pub const LOG_LINE_FORMAT_MINOR: u32 = 15;
 /// (`ThreadCompletion.error_cas_id`), so a failed future, a failed root call
 /// among them, says what it failed with as a failed function span does.
 pub const THREAD_ERROR_FORMAT_MINOR: u32 = 15;
+
+/// Function metadata names the build that produced the function's package
+/// (`FunctionMetadata.build_id`), and the header names the operating system
+/// and architecture of the process (`RecordingHeader.os`, `.arch`).
+pub const BUILD_PROVENANCE_FORMAT_MINOR: u32 = 16;

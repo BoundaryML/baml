@@ -157,6 +157,16 @@ impl Program {
         Some(crate::identity::linked_program_id(self.root, &packages))
     }
 
+    /// Names `build_id` as the build that produced the root package, and no
+    /// build for any other: one run of the compiler builds one package
+    /// (BEP-088). `None` clears what a cached or decoded program carried.
+    pub fn set_build(&mut self, build_id: Option<[u8; 16]>) {
+        let root = self.root as usize;
+        for (ordinal, package) in self.packages.iter_mut().enumerate() {
+            package.build_id = build_id.filter(|_| ordinal == root);
+        }
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

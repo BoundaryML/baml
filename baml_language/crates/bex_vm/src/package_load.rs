@@ -524,6 +524,7 @@ fn fill_package_slots(
                 })
                 .collect(),
             metadata: pkg.metadata.clone(),
+            build_id: pkg.build_id,
             classes: resolve_members(heap, &pkg.classes),
             enums: resolve_members(heap, &pkg.enums),
             interfaces: resolve_members(heap, &pkg.interfaces),

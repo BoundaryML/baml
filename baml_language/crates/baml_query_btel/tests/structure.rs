@@ -46,6 +46,8 @@ impl Recording {
             initial_context_cas_id: None,
             program_id: None,
             build: None,
+            os: None,
+            arch: None,
         });
         file.sequence = sequence;
         let part = self.dir.join(format!("{sequence:020}.btel.part"));

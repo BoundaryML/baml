@@ -155,7 +155,7 @@ impl DeliveryConfig {
     }
 
     /// The time one PUT of `body_bytes` is given.
-    fn put_timeout(&self, body_bytes: usize) -> Duration {
+    pub(crate) fn put_timeout(&self, body_bytes: usize) -> Duration {
         let millis = (body_bytes as u128).saturating_mul(1000)
             / (self.min_upload_bytes_per_second as u128).max(1);
         self.request_timeout.saturating_add(Duration::from_millis(
@@ -165,7 +165,7 @@ impl DeliveryConfig {
 
     /// The longest a body of `body_bytes` holds its lane: every attempt at
     /// its full timeout, and the delays between them.
-    fn put_window(&self, body_bytes: usize) -> Option<Duration> {
+    pub(crate) fn put_window(&self, body_bytes: usize) -> Option<Duration> {
         self.put_timeout(body_bytes)
             .checked_mul(self.max_attempts)
             .and_then(|v| {
@@ -180,7 +180,7 @@ impl DeliveryConfig {
         self.put_window(0).ok_or(DeliveryError::InvalidConfig)
     }
 
-    fn validate(&self) -> Result<(), DeliveryError> {
+    pub(crate) fn validate(&self) -> Result<(), DeliveryError> {
         let base = &self.prepare_base_url;
         validate_url(base, true).map_err(|_| DeliveryError::InvalidConfig)?;
         if base.query().is_some() || base.as_str().len() > 8192 {
@@ -231,6 +231,7 @@ impl DeliveryConfig {
 #[derive(Default)]
 struct State {
     sender: Option<mpsc::Sender<Work>>,
+    builds: Option<mpsc::Sender<crate::build::Registration>>,
     failure: Option<DeliveryError>,
     last_error: Option<DeliveryError>,
     loss_count: u64,
@@ -669,6 +670,19 @@ impl BcsDeliveryHandle {
         }
     }
 
+    /// Register `build` with BCS in the background (BEP-088). Never waits:
+    /// a build past what the worker has queued, or after delivery stopped,
+    /// is not registered.
+    pub fn register_build(&self, build: &btel_types::BuildRegistration) {
+        let state = self.shared.state.lock().unwrap();
+        if state.failure.is_some() {
+            return;
+        }
+        if let Some(builds) = &state.builds {
+            let _ = builds.try_send(crate::build::Registration::new(build));
+        }
+    }
+
     pub fn is_disabled(&self) -> bool {
         self.shared.state.lock().unwrap().failure.is_some()
     }
@@ -1047,6 +1061,31 @@ impl BcsDeliveryHandle {
 }
 
 /// Owns the worker. Finish after the processor seals its last file.
+/// Builds waiting to register. One past it is not registered: its spans
+/// still name it, and BCS has no row for it.
+const MAX_PENDING_BUILDS: usize = 16;
+
+/// A runtime for one thread's requests and the client they share.
+pub(crate) fn runtime_and_client(
+    config: &DeliveryConfig,
+) -> Result<(tokio::runtime::Runtime, Client), DeliveryError> {
+    #[cfg(feature = "ring-crypto")]
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|_| DeliveryError::Worker)?;
+    let client = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .retry(reqwest::retry::never())
+        .timeout(config.request_timeout)
+        .build()
+        .map_err(|_| DeliveryError::Http)?;
+    Ok((runtime, client))
+}
+
 pub struct BcsDelivery {
     handle: BcsDeliveryHandle,
     worker: Mutex<Option<thread::JoinHandle<()>>>,
@@ -1058,14 +1097,12 @@ impl BcsDelivery {
         on_failure: impl Fn(DeliveryError) + Send + Sync + 'static,
     ) -> Result<Self, DeliveryError> {
         config.validate()?;
-        #[cfg(feature = "ring-crypto")]
-        if rustls::crypto::CryptoProvider::get_default().is_none() {
-            let _ = rustls::crypto::ring::default_provider().install_default();
-        }
         let (sender, receiver) = mpsc::channel(config.max_pending_plans);
+        let (builds, build_receiver) = mpsc::channel(MAX_PENDING_BUILDS);
         let shared = Arc::new(Shared {
             state: Mutex::new(State {
                 sender: Some(sender),
+                builds: Some(builds),
                 authorization: if config.initial_recording_id.is_some() {
                     InitialAuthorization::Pending
                 } else {
@@ -1089,17 +1126,13 @@ impl BcsDelivery {
             .name("btel-bcs".into())
             .spawn(move || {
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let runtime = tokio::runtime::Builder::new_current_thread()
-                        .enable_all()
-                        .build()
-                        .map_err(|_| DeliveryError::Worker)?;
-                    let client = Client::builder()
-                        .redirect(reqwest::redirect::Policy::none())
-                        .retry(reqwest::retry::never())
-                        .timeout(worker_shared.config.request_timeout)
-                        .build()
-                        .map_err(|_| DeliveryError::Http)?;
-                    runtime.block_on(run_cancellable(client, worker_shared.clone(), receiver));
+                    let (runtime, client) = runtime_and_client(&worker_shared.config)?;
+                    runtime.block_on(run_cancellable(
+                        client,
+                        worker_shared.clone(),
+                        receiver,
+                        build_receiver,
+                    ));
                     // Dropping the runtime would wait for its blocking tasks, so
                     // a hung DNS lookup would hold shutdown past its timeout. Its
                     // thread still ends by itself when the system resolver returns.
@@ -1141,7 +1174,7 @@ impl BcsDelivery {
                     .heartbeat
                     .set_state(ProducerState::Draining);
             }
-            state.sender.take()
+            (state.sender.take(), state.builds.take())
         };
         drop(sender);
         self.handle.shared.capacity.notify_all();
@@ -1270,7 +1303,7 @@ impl Write for LimitedWriter {
     }
 }
 
-fn now_ms() -> Result<u64, DeliveryError> {
+pub(crate) fn now_ms() -> Result<u64, DeliveryError> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .ok()
@@ -1278,7 +1311,7 @@ fn now_ms() -> Result<u64, DeliveryError> {
         .ok_or(DeliveryError::Expired)
 }
 
-fn retryable(status: StatusCode) -> bool {
+pub(crate) fn retryable(status: StatusCode) -> bool {
     status.is_server_error()
         || status == StatusCode::TOO_MANY_REQUESTS
         || status == StatusCode::REQUEST_TIMEOUT
@@ -1378,7 +1411,7 @@ async fn prepare(
         .map_or(DeliveryError::Http, DeliveryError::Api))
 }
 
-async fn read_response(
+pub(crate) async fn read_response(
     mut response: reqwest::Response,
     limit: usize,
 ) -> Result<Vec<u8>, DeliveryError> {
@@ -1745,7 +1778,12 @@ async fn authorize_initial(
     Err(last_failure.map_or(DeliveryError::Http, DeliveryError::Api))
 }
 
-async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Receiver<Work>) {
+async fn run_cancellable(
+    client: Client,
+    shared: Arc<Shared>,
+    receiver: mpsc::Receiver<Work>,
+    builds: mpsc::Receiver<crate::build::Registration>,
+) {
     let mut cancel = shared.cancel.subscribe();
     if *cancel.borrow() {
         return;
@@ -1761,7 +1799,7 @@ async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Re
     tokio::select! {
         _ = cancel.changed() => {}
         () = out_of_time => {}
-        result = std::panic::AssertUnwindSafe(run_worker(client, shared.clone(), receiver)).catch_unwind() => {
+        result = std::panic::AssertUnwindSafe(run_worker(client, shared.clone(), receiver, builds)).catch_unwind() => {
             if result.is_err() {
                 shared.fail(DeliveryError::Worker);
             }
@@ -1770,7 +1808,12 @@ async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Re
     shared.heartbeat.stop();
 }
 
-async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Receiver<Work>) {
+async fn run_worker(
+    client: Client,
+    shared: Arc<Shared>,
+    mut receiver: mpsc::Receiver<Work>,
+    mut builds: mpsc::Receiver<crate::build::Registration>,
+) {
     if let Some(id) = shared.config.initial_recording_id {
         match authorize_initial(&client, &shared, &hex::encode(id.as_bytes())).await {
             Ok(()) => shared.authorized(),
@@ -1795,16 +1838,37 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
     let mut recordings = tokio::task::JoinSet::new();
     let mut bodies = tokio::task::JoinSet::new();
     let mut heartbeats = tokio::task::JoinSet::new();
+    // Builds register beside the recording, and nothing of it waits on them.
+    let mut registrations = tokio::task::JoinSet::new();
     let mut heartbeat_started = false;
     let mut open = true;
+    let mut builds_open = true;
     loop {
         if shared.state.lock().unwrap().failure.is_some() {
             break;
         }
-        if !open && prepares.is_empty() {
+        if !open && !builds_open && prepares.is_empty() {
             break;
         }
         tokio::select! {
+            completed = registrations.join_next(), if !registrations.is_empty() => {
+                if completed.is_some_and(|result| result.is_err()) {
+                    shared.fail(DeliveryError::Worker);
+                }
+            }
+            build = builds.recv(), if builds_open => {
+                let Some(build) = build else {
+                    builds_open = false;
+                    continue;
+                };
+                let client = client.clone();
+                let shared = shared.clone();
+                registrations.spawn(async move {
+                    if let Err(error) = build.send(&client, &shared.config).await {
+                        tracing::warn!(%error, "a build was not registered with Boundary");
+                    }
+                });
+            }
             completed = recordings.join_next(), if !recordings.is_empty() => {
                 if completed.is_some_and(|result| result.is_err()) {
                     shared.fail(DeliveryError::Worker);
@@ -1881,17 +1945,20 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
         }
     }
     drop(receiver);
+    drop(builds);
     // Drain what was admitted, unless delivery failed.
     loop {
         if shared.state.lock().unwrap().failure.is_some() {
             prepares.abort_all();
             recordings.abort_all();
             bodies.abort_all();
+            registrations.abort_all();
         }
         let result = tokio::select! {
             Some(result) = prepares.join_next() => result.map(|_| ()),
             Some(result) = recordings.join_next() => result,
             Some(result) = bodies.join_next() => result,
+            Some(result) = registrations.join_next() => result,
             else => break,
         };
         if result.is_err_and(|error| !error.is_cancelled()) {

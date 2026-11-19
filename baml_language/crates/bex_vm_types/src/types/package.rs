@@ -137,6 +137,10 @@ pub struct Package {
     /// runtime never keys or compares packages by it; `None` for a package
     /// no compile produced.
     pub metadata: Option<crate::identity::PackageMetadata>,
+    /// The build that produced the package (BEP-088): the run of the
+    /// compiler its spans are attributed to. `None` when no recorded build
+    /// did.
+    pub build_id: Option<[u8; 16]>,
     /// Classes defined in the package.
     pub classes: IndexMap<LocalName, HeapPtr>,
     /// Enums defined in the package.
@@ -305,6 +309,7 @@ impl Package {
             kind: PackageKind::Ordinary,
             edges: IndexMap::new(),
             metadata: None,
+            build_id: None,
             classes: IndexMap::new(),
             enums: IndexMap::new(),
             interfaces: IndexMap::new(),
@@ -429,6 +434,11 @@ pub struct ProgramPackage {
     pub interface_blob: Vec<u8>,
     /// What the compile recorded about the package ([`Package::metadata`]).
     pub metadata: Option<crate::identity::PackageMetadata>,
+    /// The build that produced the package ([`Package::build_id`]). Unlike
+    /// the metadata it is not a function of the package: whoever ran the
+    /// compiler stamps it ([`Program::set_build`](crate::Program::set_build)),
+    /// and an artifact written from the program carries it to its runtime.
+    pub build_id: Option<[u8; 16]>,
     /// The package's synthesized `$init_test`, if present.
     pub test_init: Option<ObjectIndex>,
     /// The package's synthesized `$init`, if it has `let`s.

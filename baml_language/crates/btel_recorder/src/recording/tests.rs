@@ -1379,6 +1379,7 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
         definition_key: None,
         package_name: Some("user".into()),
         compilation_unit_hash: None,
+        build_id: None,
         namespace: Vec::new(),
         argument_layout: Some(btel_types::ArgumentLayout {
             slots: vec![btel_types::ArgumentSlot {
@@ -1824,14 +1825,14 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     assert_eq!(done.exited_at_ticks, 9);
 }
 
-/// A recording that leaves package identity out names no program, build or
-/// package hash, and so reads as the minor it had before those were added.
+/// A recording names its program, its process's platform, and each
+/// function's package and build; only one given no build writes none.
 #[test]
-fn package_identity_is_recorded_unless_the_destination_declines_it() {
+fn package_identity_and_build_provenance_are_recorded() {
     use proto::function_definition::Resolution;
     let allocator = FunctionIdAllocator::default();
     let function = allocator.allocate().unwrap();
-    let record = |with_identity: bool| {
+    let record = |with_build: bool| {
         let files = RefCell::new(Vec::new());
         let table = std::sync::Arc::new(btel_types::FunctionMetadataTable {
             functions: vec![btel_types::FunctionMetadata {
@@ -1848,6 +1849,7 @@ fn package_identity_is_recorded_unless_the_destination_declines_it() {
                 definition_key: None,
                 package_name: Some("user".into()),
                 compilation_unit_hash: Some([7; 32]),
+                build_id: with_build.then_some([1; 16]),
                 namespace: Vec::new(),
                 argument_layout: None,
                 source_map: None,
@@ -1857,31 +1859,36 @@ fn package_identity_is_recorded_unless_the_destination_declines_it() {
         let mut publisher = RecordingPublisher::new(RecordingId::generate(), config(), |file| {
             files.borrow_mut().push(file);
         })
-        .unwrap();
-        if !with_identity {
-            publisher = publisher.without_package_identity();
-        }
-        let mut publisher =
-            publisher
-                .with_function_metadata(table)
-                .with_process(ProcessRecording {
-                    info: btel_types::ProcessInfo {
-                        process_id: [9; 16],
-                        ..Default::default()
-                    },
-                    sources: None,
-                    context: None,
-                    exit: Arc::default(),
-                    program_id: Some([4; 16]),
-                    build: Some(btel_types::BuildRecord {
-                        build_id: [1; 16],
-                        timestamp_unix_ns: 7,
-                        origin: btel_types::BuildOrigin::Run,
-                        git: None,
-                        source_hash: [2; 32],
-                        compilation_unit_hash: [7; 32],
-                    }),
-                });
+        .unwrap()
+        .with_function_metadata(table)
+        .with_process(ProcessRecording {
+            info: btel_types::ProcessInfo {
+                process_id: [9; 16],
+                os: if with_build {
+                    "linux".into()
+                } else {
+                    String::new()
+                },
+                arch: if with_build {
+                    "aarch64".into()
+                } else {
+                    String::new()
+                },
+                ..Default::default()
+            },
+            sources: None,
+            context: None,
+            exit: Arc::default(),
+            program_id: Some([4; 16]),
+            build: with_build.then_some(btel_types::BuildRecord {
+                build_id: [1; 16],
+                timestamp_unix_ns: 7,
+                origin: btel_types::BuildOrigin::Run,
+                git: None,
+                source_hash: [2; 32],
+                compilation_unit_hash: [7; 32],
+            }),
+        });
         publisher.span(
             allocate_telemetry_id(),
             &mut SpanRecord::CallPathDefined {
@@ -1901,23 +1908,31 @@ fn package_identity_is_recorded_unless_the_destination_declines_it() {
         else {
             panic!("the function is defined")
         };
-        (header, definition.compilation_unit_hash)
+        (header, definition)
     };
 
-    let (header, unit) = record(true);
+    let (header, definition) = record(true);
     assert_eq!(header.program_id, Some(vec![4; 16]));
     assert_eq!(header.build.unwrap().origin, "run");
-    assert_eq!(unit, Some(vec![7; 32]));
+    assert_eq!(header.os.as_deref(), Some("linux"));
+    assert_eq!(header.arch.as_deref(), Some("aarch64"));
+    assert_eq!(definition.compilation_unit_hash, Some(vec![7; 32]));
+    assert_eq!(definition.build_id, Some(vec![1; 16]));
+    assert_eq!(
+        header.format_minor,
+        btel_settings::encoding::BUILD_PROVENANCE_FORMAT_MINOR
+    );
+
+    let (header, definition) = record(false);
+    assert_eq!(header.program_id, Some(vec![4; 16]));
+    assert_eq!(header.build, None);
+    assert_eq!((header.os, header.arch), (None, None));
+    assert_eq!(definition.compilation_unit_hash, Some(vec![7; 32]));
+    assert_eq!(definition.build_id, None);
     assert_eq!(
         header.format_minor,
         btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR
     );
-
-    let (header, unit) = record(false);
-    assert_eq!(header.program_id, None);
-    assert_eq!(header.build, None);
-    assert_eq!(unit, None);
-    assert!(header.format_minor < btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR);
 }
 
 #[test]
@@ -1945,6 +1960,7 @@ fn a_log_carries_its_line_and_raises_the_file_minor_only_with_one() {
         definition_key: None,
         package_name: Some("user".into()),
         compilation_unit_hash: None,
+        build_id: None,
         namespace: Vec::new(),
         argument_layout: None,
         source_map,
