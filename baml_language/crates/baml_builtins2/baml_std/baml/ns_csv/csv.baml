@@ -225,8 +225,6 @@ class _Headers {
 /// asymmetry: an empty cell read as `T = string` is `""`, not `null`, since an
 /// empty string is a perfectly good string and CSV cannot tell the two apart.
 class Record {
-    _handle: $rust_type,
-
     /// Converts the cell under header `column` to `T`.
     ///
     /// # Returns
@@ -323,6 +321,18 @@ class Record {
     function to_map(self) -> map<string, string> throws Error {
         $rust_function
     }
+
+    @@rust_type("CsvRecord")
+}
+
+/// (internal) A `Reader`'s state: its options, its input and its position.
+class _ReaderState {
+    @@rust_type("CsvReader")
+}
+
+/// (internal) A `Writer`'s state: its options, its counts and its buffer.
+class _WriterState {
+    @@rust_type("CsvWriter")
 }
 
 /// A streaming CSV reader. Create one with `baml.csv.open` or
@@ -349,7 +359,7 @@ class Record {
 /// before the throw, so a caller that swallows it gets `baml.iter.Done` rather
 /// than an infinite retry.
 class Reader {
-    _handle: $rust_type,
+    _state: _ReaderState,
     _file: root.fs.File?,
     _on_skip: ((Error) -> null throws never)?,
     _owns_file: bool,
@@ -651,7 +661,7 @@ class Rows<T> {
 /// `baml.errors.Io`. A write after `close()` throws `Error { kind: Closed }`,
 /// while `records_written()` stays valid.
 class Writer {
-    _handle: $rust_type,
+    _state: _WriterState,
     _file: root.fs.File?,
     _owns_file: bool,
 

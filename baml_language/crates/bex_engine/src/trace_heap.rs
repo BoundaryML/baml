@@ -13,7 +13,7 @@ use std::{
     },
 };
 
-use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, try_convert_rust_data};
+use bex_external_types::ConcreteMediaKind;
 use bex_heap::{BexHeap, PermitProof};
 use bex_vm_types::{
     Field, HeapPtr, InstanceRef, MediaContent, MediaValue, Object, Value, ValueKind,
@@ -80,7 +80,7 @@ pub enum TraceValue {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraceMediaValue {
-    pub kind: MediaKind,
+    pub kind: ConcreteMediaKind,
     pub mime_type: Option<String>,
     pub content: TraceMediaContent,
 }
@@ -288,6 +288,17 @@ impl TraceSnapshotBuilder {
         Ok(values)
     }
 
+    /// An instance's type arguments as a snapshot shows them: a compiled
+    /// declaration by name, a runtime declaration by its label; one with no
+    /// annotation form is left out.
+    fn trace_type_args(
+        class_type_args: &[bex_vm_types::RealizedTy],
+    ) -> Result<Vec<baml_type::RuntimeTy>, CopyError> {
+        let mut type_args = Self::vec_with_capacity(class_type_args.len())?;
+        type_args.extend(class_type_args.iter().filter_map(display_ty));
+        Ok(type_args)
+    }
+
     fn copy_str(value: &str) -> Result<String, CopyError> {
         let mut output = String::new();
         output
@@ -413,8 +424,8 @@ impl TraceSnapshotBuilder {
             Object::Instance => {
                 let instance = unsafe { InstanceRef::of(ptr) }.expect("an instance pointer");
                 let class = instance.class_object();
-                let mut fields = Self::vec_with_capacity(class.fields.len())?;
-                for (field, value) in class.fields.iter().zip(instance.fields()) {
+                let mut fields = Self::vec_with_capacity(class.instance_fields().len())?;
+                for (field, value) in class.instance_fields().iter().zip(instance.fields()) {
                     let name = Self::copy_str(&field.name)?;
                     let value = match value {
                         Field::Value(value) => self.copy_value(heap, permit, value)?,
@@ -422,14 +433,7 @@ impl TraceSnapshotBuilder {
                     };
                     fields.push((name, value));
                 }
-                let instance_args = instance.type_args();
-                let mut type_args = Self::vec_with_capacity(instance_args.len())?;
-                for type_arg in instance_args {
-                    let Some(type_arg) = display_ty(type_arg) else {
-                        continue;
-                    };
-                    type_args.push(type_arg);
-                }
+                let type_args = Self::trace_type_args(instance.type_args())?;
                 let type_name = Self::copy_str(&class.name().to_string())?;
                 self.alloc(TraceValue::Instance {
                     type_name,
@@ -437,6 +441,79 @@ impl TraceSnapshotBuilder {
                     fields,
                 })
             }
+            // Media is traced as the value it is; a rendered prompt and a
+            // host's value are omitted. Any other instance is its declaration
+            // and type arguments, with no fields: the payload records nothing
+            // a reader could use.
+            Object::RustInstance(instance) => match &instance.payload {
+                bex_vm_types::RustPayload::Image(media)
+                | bex_vm_types::RustPayload::Audio(media)
+                | bex_vm_types::RustPayload::Pdf(media)
+                | bex_vm_types::RustPayload::Video(media) => self.copy_media(media),
+                bex_vm_types::RustPayload::Prompt(_) => {
+                    self.omitted(TraceOmissionReason::UnsupportedValue, "prompt AST")
+                }
+                bex_vm_types::RustPayload::HostValue(host) => self.omitted(
+                    TraceOmissionReason::HostOwnedValue,
+                    match host.kind {
+                        bex_external_types::HostValueKind::Callable => "host-owned callable",
+                        bex_external_types::HostValueKind::Opaque => "host-owned opaque value",
+                    },
+                ),
+                bex_vm_types::RustPayload::Foreign(_)
+                | bex_vm_types::RustPayload::DefaultHasher(_)
+                | bex_vm_types::RustPayload::Sha256(_)
+                | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+                | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+                | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+                | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+                | bex_vm_types::RustPayload::Regex(_)
+                | bex_vm_types::RustPayload::CsvRecord(_)
+                | bex_vm_types::RustPayload::Semaphore(_)
+                | bex_vm_types::RustPayload::Permit(_)
+                | bex_vm_types::RustPayload::Ticket(_)
+                | bex_vm_types::RustPayload::CancelToken(_)
+                | bex_vm_types::RustPayload::SpanId(_)
+                | bex_vm_types::RustPayload::TraceOptions(_)
+                | bex_vm_types::RustPayload::ReservedSpan(_)
+                | bex_vm_types::RustPayload::File(_)
+                | bex_vm_types::RustPayload::Glob(_)
+                | bex_vm_types::RustPayload::OutputFormat(_)
+                | bex_vm_types::RustPayload::Lock(_)
+                | bex_vm_types::RustPayload::TcpStream(_)
+                | bex_vm_types::RustPayload::TcpListener(_)
+                | bex_vm_types::RustPayload::UdpSocket(_)
+                | bex_vm_types::RustPayload::Xoshiro256PlusPlus(_)
+                | bex_vm_types::RustPayload::ChaCha20(_)
+                | bex_vm_types::RustPayload::InterfaceWitness(_)
+                | bex_vm_types::RustPayload::CsvReader(_)
+                | bex_vm_types::RustPayload::CsvWriter(_)
+                | bex_vm_types::RustPayload::ClassBuilder(_)
+                | bex_vm_types::RustPayload::ChildProcess(_)
+                | bex_vm_types::RustPayload::ReadPipe(_)
+                | bex_vm_types::RustPayload::WritePipe(_)
+                | bex_vm_types::RustPayload::WebSocket(_)
+                | bex_vm_types::RustPayload::HttpBody(_)
+                | bex_vm_types::RustPayload::SseStream(_)
+                | bex_vm_types::RustPayload::HttpServer(_)
+                | bex_vm_types::RustPayload::TlsKeys(_) => {
+                    let class_object = unsafe { instance.class.get() };
+                    if let Object::Class(class) = class_object {
+                        let type_args = Self::trace_type_args(&instance.class_type_args)?;
+                        let type_name = Self::copy_str(&class.name().to_string())?;
+                        self.alloc(TraceValue::Instance {
+                            type_name,
+                            type_args,
+                            fields: Vec::new(),
+                        })
+                    } else {
+                        self.omitted(
+                            TraceOmissionReason::InvalidRuntimeValue,
+                            "rust instance class pointer did not point at a class",
+                        )
+                    }
+                }
+            },
             Object::Variant(variant) => {
                 let enum_object = unsafe { variant.enm.get() };
                 let Object::Enum(enum_) = enum_object else {
@@ -475,13 +552,6 @@ impl TraceSnapshotBuilder {
                 TraceOmissionReason::HostOwnedValue,
                 unsupported_object_message(object),
             ),
-            Object::RustData(data) => match try_convert_rust_data(data) {
-                Some(value) => self.copy_external_value(value),
-                None => self.omitted(
-                    TraceOmissionReason::HostOwnedValue,
-                    unsupported_object_message(object),
-                ),
-            },
             Object::Tombstone => Object::tombstone_reached(),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => self.omitted(
@@ -496,29 +566,6 @@ impl TraceSnapshotBuilder {
             debug_assert_eq!(popped, Some(ptr));
         }
         value_ref
-    }
-
-    fn copy_external_value(&mut self, value: BexExternalValue) -> Result<TraceValueRef, CopyError> {
-        match value {
-            BexExternalValue::Adt(BexExternalAdt::Media(media)) => self.copy_media(&media),
-            BexExternalValue::HostValue(host) => self.omitted(
-                TraceOmissionReason::HostOwnedValue,
-                match host.kind {
-                    bex_external_types::HostValueKind::Callable => "host-owned callable",
-                    bex_external_types::HostValueKind::Opaque => "host-owned opaque value",
-                },
-            ),
-            BexExternalValue::RustData(_) => {
-                self.omitted(TraceOmissionReason::HostOwnedValue, "host-owned rust data")
-            }
-            BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
-                self.omitted(TraceOmissionReason::UnsupportedValue, "prompt AST")
-            }
-            _ => self.omitted(
-                TraceOmissionReason::UnsupportedValue,
-                "unsupported rust data conversion",
-            ),
-        }
     }
 
     fn copy_media(&mut self, media: &MediaValue) -> Result<TraceValueRef, CopyError> {
@@ -567,7 +614,6 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         Object::HostClosure(_) => "host-owned callable",
         Object::Cell(_) => "cell",
         Object::Future(_) => "future",
-        Object::RustData(_) => "host-owned rust data",
         Object::Type(_) => "type descriptor",
         Object::Tombstone => Object::tombstone_reached(),
         #[cfg(feature = "heap_debug")]
@@ -579,6 +625,7 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         | Object::Tuple(_)
         | Object::Map(_)
         | Object::Instance
+        | Object::RustInstance(_)
         | Object::Variant(_)
         | Object::Float(_) => "unsupported value",
     }
@@ -601,7 +648,7 @@ fn display_ty(ty: &bex_vm_types::RealizedTy) -> Option<baml_type::RuntimeTy> {
 mod tests {
     use std::sync::Arc;
 
-    use bex_external_types::MediaKind;
+    use bex_external_types::ConcreteMediaKind;
     use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
     use bex_vm_types::{MediaValue, Object, RootHaver, Value};
 
@@ -816,11 +863,41 @@ mod tests {
             .await
             .acquire()
             .await;
-        let host_owned = permit
+        // A host's own value: the trace reads only the payload, so the class
+        // is bare.
+        let class = permit
             .tlab_mut()
-            .alloc(Object::RustData(std::sync::Arc::new(
-                bex_vm_types::TestRustData(1),
-            )));
+            .alloc(Object::Class(Box::new(bex_vm_types::Class {
+                declared_crossing: baml_type::ClassCrossing::HostValue,
+                path: bex_vm_types::types::LocalName::new(
+                    Vec::new(),
+                    baml_type::Name::new("Value"),
+                ),
+                body: bex_vm_types::ClassBody::RustType(baml_base::RustPayloadKind::HostValue),
+                description: None,
+                alias: None,
+                docstring: None,
+                other: indexmap::IndexMap::default(),
+                type_tag: baml_type::typetag::TypeTag::from_i64(301),
+                stream_done: false,
+                cleanup: None,
+                methods: indexmap::IndexMap::new(),
+                generic_param_count: 0,
+                owner: bex_vm_types::types::Owner::anonymous(),
+                telemetry_definition: bex_vm_types::DefinitionCell::default(),
+                redact: false,
+            })));
+        let host_owned =
+            permit
+                .tlab_mut()
+                .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
+                    class,
+                    bex_vm_types::ThinVec::new(),
+                    bex_vm_types::RustPayload::HostValue(bex_resource_types::HostValueArc::new(
+                        bex_resource_types::HostKey::new(1).expect("nonzero"),
+                        bex_resource_types::HostValueKind::Opaque,
+                    )),
+                )));
         let trace_heap = TraceHeap::new();
 
         let handle = trace_heap.copy_values_from_bex_heap(
@@ -845,7 +922,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn trace_heap_snapshots_media_rust_data() {
+    async fn trace_heap_snapshots_a_media_instance() {
         let heap = BexHeap::new(Vec::new());
         let manager = HeapPermitManager::new();
         let mut permit = manager
@@ -856,11 +933,41 @@ mod tests {
             .acquire()
             .await;
         let media = MediaValue::from_base64(
-            MediaKind::Image,
+            ConcreteMediaKind::Image,
             "aW1hZ2UtYnl0ZXM=".into(),
             Some("image/png"),
         );
-        let media_ptr = permit.tlab_mut().alloc(Object::RustData(media));
+        // The trace reads only the payload, so the class is bare.
+        let class = permit
+            .tlab_mut()
+            .alloc(Object::Class(Box::new(bex_vm_types::Class {
+                declared_crossing: baml_type::ClassCrossing::Media(ConcreteMediaKind::Image),
+                path: bex_vm_types::types::LocalName::new(
+                    Vec::new(),
+                    baml_type::Name::new("Image"),
+                ),
+                body: bex_vm_types::ClassBody::RustType(baml_base::RustPayloadKind::Image),
+                description: None,
+                alias: None,
+                docstring: None,
+                other: indexmap::IndexMap::default(),
+                type_tag: baml_type::typetag::TypeTag::from_i64(300),
+                stream_done: false,
+                cleanup: None,
+                methods: indexmap::IndexMap::new(),
+                generic_param_count: 0,
+                owner: bex_vm_types::types::Owner::anonymous(),
+                telemetry_definition: bex_vm_types::DefinitionCell::default(),
+                redact: false,
+            })));
+        let media_ptr =
+            permit
+                .tlab_mut()
+                .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
+                    class,
+                    bex_vm_types::ThinVec::new(),
+                    bex_vm_types::RustPayload::media(media),
+                )));
         let trace_heap = TraceHeap::new();
 
         let handle =
@@ -870,7 +977,7 @@ mod tests {
         let Some(TraceValue::Media(media)) = snapshot.value(snapshot.root()) else {
             panic!("root should be media");
         };
-        assert_eq!(media.kind, MediaKind::Image);
+        assert_eq!(media.kind, ConcreteMediaKind::Image);
         assert_eq!(media.mime_type.as_deref(), Some("image/png"));
         assert_eq!(
             media.content,

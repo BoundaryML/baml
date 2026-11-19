@@ -15,8 +15,8 @@ use bex_vm::{
     BexVm,
     telemetry::{ClockInstant, InvocationOutcome, TelemetryId},
 };
-use bex_vm_types::{BexRustData, Object, SysOp, Value};
-use sys_types::network::{NetworkContext, NetworkEventKind, NetworkRequest, NetworkTraced};
+use bex_vm_types::{Object, SysOp, Value};
+use sys_types::network::{NetworkContext, NetworkEventKind, NetworkRequest};
 
 use crate::{BexEngine, thread::BexThread};
 
@@ -29,12 +29,11 @@ pub(crate) enum NetworkOp {
         context: NetworkContext,
         url: String,
     },
-    /// `Response.text`/`bytes` or `SseStream.next`/`close` on `traced` data,
-    /// whose response came from `url`.
+    /// `Response.text`/`bytes` or `SseStream.next`/`close` on a body or
+    /// stream from the traced request `network`.
     Reads {
         operation: SysOp,
-        traced: Arc<dyn BexRustData>,
-        url: Option<String>,
+        network: NetworkContext,
     },
 }
 
@@ -60,9 +59,9 @@ impl NetworkOp {
                 span: *span,
                 urls: quoted_forms(url),
             }),
-            Self::Reads { traced, url, .. } => Some(NetworkClose {
-                span: take_span(traced)?,
-                urls: url.as_deref().map(quoted_forms).unwrap_or_default(),
+            Self::Reads { network, .. } => Some(NetworkClose {
+                span: take_span(network)?,
+                urls: network.response_url().map(quoted_forms).unwrap_or_default(),
             }),
         }
     }
@@ -82,9 +81,11 @@ fn quoted_forms(url: &str) -> Vec<String> {
     forms
 }
 
-fn take_span(traced: &Arc<dyn BexRustData>) -> Option<TelemetryId> {
-    NetworkTraced::of(traced.as_ref())?
-        .take_span()
+/// The span of `network`'s request, ending it: once, then `None`.
+fn take_span(network: &NetworkContext) -> Option<TelemetryId> {
+    network
+        .close()
+        .then_some(network.span)
         .and_then(TelemetryId::from_raw)
 }
 
@@ -119,12 +120,10 @@ impl BexEngine {
                     url: request.url,
                 })
             }
-            SysOp::BamlHttpResponseText | SysOp::BamlHttpResponseBytes => {
-                reads(&thread.vm, operation, *args.first()?, "_body")
-            }
-            SysOp::BamlHttpSseStreamNext | SysOp::BamlHttpSseStreamClose => {
-                reads(&thread.vm, operation, *args.first()?, "_handle")
-            }
+            SysOp::BamlHttpResponseBodyText
+            | SysOp::BamlHttpResponseBodyBytes
+            | SysOp::BamlHttpSseStateNext
+            | SysOp::BamlHttpSseStateClose => reads(&thread.vm, operation, *args.first()?),
             _ => None,
         }
     }
@@ -206,7 +205,7 @@ impl BexEngine {
     /// After an HTTP sys-op succeeded: end the span a finished read or a
     /// `close()` ends. A response its IO side did not trace has no read to
     /// wait for, so its span ends now.
-    pub(crate) fn network_after_ok(vm: &mut BexVm, op: &NetworkOp, result: &BexExternalValue) {
+    pub(crate) fn network_after_ok(vm: &mut BexVm, op: &NetworkOp, result: &sys_types::OpValue) {
         let Some(at) = now(vm) else {
             return;
         };
@@ -216,26 +215,29 @@ impl BexEngine {
                     vm.close_network_span(*span, at, InvocationOutcome::Ok, None, &[]);
                 }
             }
-            NetworkOp::Reads {
-                operation, traced, ..
-            } => {
+            NetworkOp::Reads { operation, network } => {
+                // An application read stays observable even when the native
+                // reader already completed the transfer at EOF.
                 if matches!(
                     operation,
-                    SysOp::BamlHttpResponseText | SysOp::BamlHttpResponseBytes
+                    SysOp::BamlHttpResponseBodyText | SysOp::BamlHttpResponseBodyBytes
                 ) {
-                    if let Some(traced) = NetworkTraced::of(traced.as_ref()) {
-                        traced.network().application_await();
-                    }
+                    network.application_await();
                 }
                 let end = match operation {
-                    SysOp::BamlHttpSseStreamClose => NetworkEventKind::Close,
+                    SysOp::BamlHttpSseStateClose => NetworkEventKind::Close,
                     // A stream is read to its end when `next()` finds it done.
-                    SysOp::BamlHttpSseStreamNext if !matches!(result, BexExternalValue::Null) => {
+                    SysOp::BamlHttpSseStateNext
+                        if !matches!(
+                            result,
+                            sys_types::OpValue::External(BexExternalValue::Null)
+                        ) =>
+                    {
                         return;
                     }
                     _ => NetworkEventKind::Await,
                 };
-                if let Some(span) = take_span(traced) {
+                if let Some(span) = take_span(network) {
                     vm.network_event(span, at, &end);
                     vm.close_network_span(span, at, InvocationOutcome::Ok, None, &[]);
                 }
@@ -296,40 +298,27 @@ fn text(value: &BexExternalValue) -> Option<String> {
     }
 }
 
-/// Whether a `Response` or `SseStream` carries `span`.
-fn carries(result: &BexExternalValue, span: TelemetryId) -> bool {
-    let BexExternalValue::Instance { fields, .. } = result else {
+/// Whether a `Response` or `SseStream` carries `span`: the body or stream it
+/// holds belongs to the request.
+fn carries(result: &sys_types::OpValue, span: TelemetryId) -> bool {
+    let sys_types::OpValue::Instance { fields, .. } = result else {
         return false;
     };
-    fields.values().any(|field| {
-        matches!(field, BexExternalValue::RustData(data)
-            if NetworkTraced::of(data.as_ref()).is_some_and(|traced| traced.network().span == span.get()))
+    fields.iter().any(|field| {
+        matches!(field, sys_types::OpValue::RustInstance { payload, .. }
+            if payload.network().is_some_and(|network| network.span == span.get()))
     })
 }
 
-/// A read on a `Response` or `SseStream` whose `field` is traced data.
-fn reads(vm: &BexVm, operation: SysOp, receiver: Value, field: &str) -> Option<NetworkOp> {
-    let data = instance_field(vm, receiver, field)?.as_object_ptr()?;
-    let Object::RustData(data) = vm.get_object(data) else {
+/// A read on a body or stream that belongs to a traced request.
+fn reads(vm: &BexVm, operation: SysOp, receiver: Value) -> Option<NetworkOp> {
+    let Object::RustInstance(instance) = vm.get_object(receiver.as_object_ptr()?) else {
         return None;
     };
-    NetworkTraced::of(data.as_ref())?;
-    let url = instance_field(vm, receiver, "url")
-        .and_then(|url| vm.as_string(&url).ok())
-        .map(|url| url.as_str().to_owned());
     Some(NetworkOp::Reads {
         operation,
-        traced: Arc::clone(data),
-        url,
+        network: instance.payload.network()?.clone(),
     })
-}
-
-/// An instance's field, by name.
-fn instance_field(vm: &BexVm, value: Value, name: &str) -> Option<Value> {
-    let instance = vm.as_instance(&value).ok()?;
-    let class = instance.class_object();
-    let index = class.fields.iter().position(|field| field.name == name)?;
-    Some(instance.load_value(index))
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

@@ -526,7 +526,6 @@ impl Builder {
             | NormalTy::Null
             | NormalTy::Uint8Array
             | NormalTy::Media(_)
-            | NormalTy::RustType
             | NormalTy::Type
             | NormalTy::Resource
             | NormalTy::PromptAst

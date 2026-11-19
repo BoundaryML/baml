@@ -9,7 +9,7 @@
 // only after synchronous exit or native Promise settlement.
 import * as util from 'node:util';
 import { createHash } from 'node:crypto';
-import { BamlHandle, _defineHostMarker, _beginHostInvocation, _validateHostOptions } from './native.js';
+import { _defineHostMarker, _beginHostInvocation, _validateHostOptions } from './native.js';
 import { current, ExecutionContext } from './execution_context.js';
 import { getTypeMap } from './typemap.js';
 import { capture, failureOutcome, diagnostic } from './host_capture.js';
@@ -32,10 +32,8 @@ function optionsHandle(options) {
     if (typeof options !== 'object' || util.types.isProxy(options) || !(options instanceof Options)) {
         throw new TraceUsageError('instrument accepts generated trace.Options or null');
     }
-    const handle = Object.getOwnPropertyDescriptor(options, '_handle')?.value;
-    if (!(handle instanceof BamlHandle))
-        throw new TraceUsageError('invalid host trace options handle');
-    return handle;
+    // The options are a reference to the runtime's instance.
+    return options._toHandle();
 }
 export function instrument(optionsOrBody, body, display) {
     const target = body ?? optionsOrBody;
@@ -66,14 +64,14 @@ export function instrument(optionsOrBody, body, display) {
         sourceFile: site.sourceFile, definitionLine: site.line,
         wrapperLine: site.line, displayName: display?.name ?? name ?? '<anonymous>',
     };
-    const marker = { handle: _defineHostMarker(definition, options), identity: {} };
+    const marker = { marker: _defineHostMarker(definition, options), identity: {} };
     const wrapped = function (...args) {
         if (consumeHostAdoption(marker.identity))
             return Reflect.apply(target, this, args);
         let execution;
         let active;
         try {
-            const entered = _beginHostInvocation(definition, current()?.state, options, callerSite(), requests[0] ? capture(args) : undefined);
+            const entered = _beginHostInvocation(marker.marker, current()?.state, callerSite(), requests[0] ? capture(args) : undefined);
             execution = entered[0];
             active = new ExecutionContext(entered[1], entered[2]);
         }

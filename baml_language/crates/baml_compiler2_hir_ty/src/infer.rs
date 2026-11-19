@@ -1222,11 +1222,10 @@ enum PendingDiag<'db> {
         class_name: baml_type::DeclName,
         companion: baml_type::type_kind::BuiltinCompanion,
     },
-    /// A class literal for a class holding `$rust_type` state in `field`.
+    /// A class literal for a `@@rust_type` class.
     CannotConstructOpaqueClass {
         expr: ExprId,
         class_name: baml_type::DeclName,
-        field: baml_type::Name,
     },
     /// A builtin lowered at its call site, referenced other than as a
     /// direct call's callee.
@@ -1248,9 +1247,6 @@ enum PendingDiag<'db> {
         name: baml_type::Name,
     },
     TraceUnsupportedCall {
-        expr: ExprId,
-    },
-    TraceOpaqueValue {
         expr: ExprId,
     },
     RefutableLet {
@@ -1986,7 +1982,10 @@ fn infer_body_impl<'db>(
             // Its body, run-once guard included, is written for the
             // finalizer's unit return and owes the declared one nothing.
             let return_ty = match crate::cleanup::cleanup_method(db, function) {
-                Some(crate::cleanup::CleanupMethod::Malformed) => Ty::error(),
+                Some(
+                    crate::cleanup::CleanupMethod::Malformed
+                    | crate::cleanup::CleanupMethod::Native,
+                ) => Ty::error(),
                 Some(crate::cleanup::CleanupMethod::Finalizer) | None => {
                     crate::impls::interned_ty(&signature.ret)
                 }
@@ -9894,10 +9893,6 @@ impl<'db> InferenceContext<'db> {
     ) -> Ty {
         let db = self.db;
         let class_name = crate::lower::class_qualified_name(db, class);
-        if self.is_opaque_trace_type(&class_name) {
-            self.report(PendingDiag::TraceOpaqueValue { expr: object });
-            return Ty::error();
-        }
         if baml_type::type_kind::is_type_kind_class_decl(self.lang(), &class_name) {
             for field in fields {
                 self.infer_expr(body, field.value, &Expectation::None);
@@ -9927,23 +9922,12 @@ impl<'db> InferenceContext<'db> {
             });
             return Ty::error();
         }
-        let field_types = crate::lower::class_field_types(db, class);
-        if let Some((field, _)) = field_types
-            .iter()
-            .find(|(_, field_ty)| matches!(field_ty, baml_type::Ty::RustType))
-        {
-            return self.refuse_opaque_construction(
-                body,
-                object,
-                class_name,
-                field.clone(),
-                fields,
-                spreads,
-            );
+        let class_data = baml_compiler2_hir::item_data::class_data(db, class);
+        if class_data.attrs.rust_type.is_some() {
+            return self.refuse_opaque_construction(body, object, class_name, fields, spreads);
         }
-        let generic_count = baml_compiler2_hir::item_data::class_data(db, class)
-            .generic_params
-            .len();
+        let field_types = crate::lower::class_field_types(db, class);
+        let generic_count = class_data.generic_params.len();
         let generic_names: Vec<baml_type::ParamTy> = crate::lower::class_generic_frame(db, class);
         let through_alias = pinned.is_some();
         let mut instantiation = match pinned {
@@ -10049,19 +10033,14 @@ impl<'db> InferenceContext<'db> {
         object_ty
     }
 
-    /// A class literal for a class that holds `$rust_type` state in `field`.
-    /// Only the class's own native functions create that state, so a literal
-    /// could only copy a handle out of another value - relabelling what it
-    /// means: `Plan<string, never> { _handle: int_plan._handle }` would type
-    /// an `int` task as `string`, and `Limit { _handle: token._handle }`
-    /// would hand a limit's functions a cancel token. The members are still
-    /// walked, so their own errors report.
+    /// A class literal for a `@@rust_type` class. Only the class's own native
+    /// functions create its state, so the literal is refused. The members are
+    /// still walked, so their own errors report.
     fn refuse_opaque_construction(
         &mut self,
         body: &ExprBody,
         object: ExprId,
         class_name: baml_type::DeclName,
-        field: baml_type::Name,
         fields: &[ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
     ) -> Ty {
@@ -10074,7 +10053,6 @@ impl<'db> InferenceContext<'db> {
         self.report(PendingDiag::CannotConstructOpaqueClass {
             expr: object,
             class_name,
-            field,
         });
         Ty::error()
     }
@@ -10096,11 +10074,6 @@ impl<'db> InferenceContext<'db> {
         let db = self.db;
         let row = crate::extern_loc::extern_class_row(db, class);
         let class_name = class.head(db).clone();
-        if self.is_opaque_trace_type(&class_name) {
-            self.report(PendingDiag::TraceOpaqueValue { expr: object });
-            return Ty::error();
-        }
-        let exported_fields = row.fields;
         let generic_params = row.generic_params;
         let generic_param_bounds = row.generic_param_bounds;
         if baml_type::type_kind::is_type_kind_class_decl(self.lang(), &class_name) {
@@ -10132,19 +10105,12 @@ impl<'db> InferenceContext<'db> {
             });
             return Ty::error();
         }
-        if let Some((field, ..)) = exported_fields
-            .iter()
-            .find(|(_, field_ty, _)| matches!(field_ty, baml_type::Ty::RustType))
-        {
-            return self.refuse_opaque_construction(
-                body,
-                object,
-                class_name,
-                field.clone(),
-                fields,
-                spreads,
-            );
-        }
+        let exported_fields = match row.body {
+            crate::extern_loc::ClassRowBody::RustType(_) => {
+                return self.refuse_opaque_construction(body, object, class_name, fields, spreads);
+            }
+            crate::extern_loc::ClassRowBody::Fields(fields) => fields,
+        };
         let mut instantiation = match pinned {
             Some(pinned) => pinned,
             None => self.instantiation_args(object, generic_params, None),
@@ -10257,26 +10223,15 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn is_opaque_trace_type(&self, name: &baml_type::DeclName) -> bool {
-        self.lang().is(baml_base::LangPackage::Trace, name.root())
-            && name.namespace().is_empty()
-            && matches!(name.name().as_str(), "Options" | "ReservedSpan" | "SpanId")
-    }
-
     /// Class-owned fields have the same precedence in value and callee position.
     fn class_field_access(
         &mut self,
-        at: ExprId,
         receiver: &Ty,
         member: &baml_type::Name,
     ) -> Option<(Ty, Option<MemberResolution<'db, Ty>>)> {
         let InferTy::Class(qtn, args) = receiver.kind() else {
             return None;
         };
-        if member.as_str() == "_handle" && self.is_opaque_trace_type(qtn) {
-            self.report(PendingDiag::TraceOpaqueValue { expr: at });
-            return Some((Ty::error(), None));
-        }
         if let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
             self.facts.definition_of(qtn)
             && let Some((_, field_ty)) = crate::lower::class_field_types(self.db, class)
@@ -10293,7 +10248,8 @@ impl<'db> InferenceContext<'db> {
         }
         if let Some(class) = mounted_class_loc(self.db, qtn)
             && let Some((_, field_ty, _)) = extern_class_row(self.db, class)
-                .fields
+                .body
+                .fields()
                 .iter()
                 .find(|(field, ..)| field == member)
         {
@@ -10337,7 +10293,7 @@ impl<'db> InferenceContext<'db> {
                 return (Ty::error(), None);
             }
         }
-        if let Some(field) = self.class_field_access(at, &resolved, member) {
+        if let Some(field) = self.class_field_access(&resolved, member) {
             return field;
         }
         // A union behaves as the intersection existential over the
@@ -13808,12 +13764,8 @@ impl<'db> InferenceContext<'db> {
                         TirTypeError::CannotConstructReflectionKind { class_name },
                         expr,
                     ),
-                    PendingDiag::CannotConstructOpaqueClass {
-                        expr,
-                        class_name,
-                        field,
-                    } => (
-                        TirTypeError::CannotConstructOpaqueClass { class_name, field },
+                    PendingDiag::CannotConstructOpaqueClass { expr, class_name } => (
+                        TirTypeError::CannotConstructOpaqueClass { class_name },
                         expr,
                     ),
                     PendingDiag::CallSiteBuiltinValue { expr, reference } => {
@@ -13846,9 +13798,6 @@ impl<'db> InferenceContext<'db> {
                     }
                     PendingDiag::TraceUnsupportedCall { expr } => {
                         (TirTypeError::TraceUnsupportedCall, expr)
-                    }
-                    PendingDiag::TraceOpaqueValue { expr } => {
-                        (TirTypeError::TraceOpaqueValue, expr)
                     }
                     PendingDiag::OperatorNotApplicable {
                         expr,
@@ -15992,7 +15941,6 @@ fn nearest_scoped_relaxation(ty: &baml_type::Ty, variance: RelaxationVariance) -
         | Plain::Literal(..)
         | Plain::Enum(..)
         | Plain::EnumVariant(..)
-        | Plain::RustType
         | Plain::Type
         | Plain::Resource
         | Plain::PromptAst
@@ -16354,7 +16302,6 @@ fn may_become_unit(ty: &Ty) -> bool {
         | InferTy::Map { .. }
         | InferTy::Function { .. }
         | InferTy::Future(..)
-        | InferTy::RustType
         | InferTy::Type
         | InferTy::Resource
         | InferTy::PromptAst

@@ -21,28 +21,23 @@ import { type HandleKey } from './native.js';
  * encode correctly through the `IInboundValue.handle.key` field).
  */
 export declare function registerHostOpaque(value: unknown): HandleKey;
-/** Roll back an opaque registration that was never transferred to Rust. */
+/**
+ * Roll back an opaque registration whose send never reached the engine: give
+ * back the reference it was minted with. The map entry goes with the key's
+ * last reference.
+ */
 export declare function releaseHostOpaque(key: HandleKey): void;
 /**
  * Look up a host-registered JS value by key. Returns `undefined` when:
  * - the key is the reserved sentinel `0n` (no real value was registered);
- * - the engine has already released the entry (last `HostValueArc` clone
- *   dropped → Rust `host_release_callback` fired → `_releaseHostValue`
- *   removed the entry);
+ * - every reference to the key has been given back, so the entry is gone;
  * - the key was minted by a different Node process (cross-runtime handle).
  *
  * Callers should fall back to a metadata-built exception in those cases.
  *
- * GC/decode race: a release notification and a rehydrating decode can be
- * scheduled on the libuv loop concurrently in principle, but in practice
- * the same `HostValueArc` cannot drop *while* the engine is actively
- * emitting an outbound proto referencing its key — the outbound encode
- * holds a strong handle through proto serialization, and the release tsfn
- * isn't fired until that strong handle drops. By the time the TS decoder
- * runs `tryRehydrateHostValueByKey`, the only way the map entry is gone is if
- * a *prior* outbound completed and the engine has since dropped its last
- * Arc; in that case the user has already observed the original throw at
- * least once, so a second lookup-miss → metadata-fallback is acceptable.
+ * A key the engine sends out comes with a pin that holds the engine's
+ * references to it until the decode that carried it is done, so a key
+ * decoded from a result of this process always resolves here.
  */
 export declare function lookupHostValue(key: bigint): unknown;
 /**

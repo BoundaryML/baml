@@ -10,11 +10,11 @@
 //! parser reads, typed at one instantiation. An enum leaves out skipped
 //! variants, which no consumer reads.
 
-use bex_sap::sap_model::{ParseClass, ParseField, ParseTy};
+use bex_sap::sap_model::{ParseClass, ParseClassFields, ParseField, ParseTy};
 use bex_vm_types::{Class, Enum, RealizedTy, RuntimeTy, TyTemplate, TypeHead};
 use sys_types::{
-    ClassDefinition, ClassFieldDefinition, EnumDefinition, EnumVariantDefinition, SapTy,
-    SapTyTemplate,
+    ClassDefinition, ClassDefinitionBody, ClassFieldDefinition, EnumDefinition,
+    EnumVariantDefinition, SapTy, SapTyTemplate,
 };
 
 /// The definition of `class`, every field included.
@@ -26,24 +26,28 @@ pub fn class_definition(class: &Class) -> ClassDefinition {
         docstring: class.docstring.clone(),
         alias: class.alias.clone(),
         stream_done: class.stream_done,
-        fields: class
-            .fields
-            .iter()
-            .map(|field| ClassFieldDefinition {
-                name: field.name.clone(),
-                field_type: lane_ty(&field.field_type),
-                field_template: Some(lane_template(&field.field_template)),
-                description: field.description.clone(),
-                docstring: field.docstring.clone(),
-                alias: field.alias.clone(),
-                skip: field.skip,
-                json_rename: field.json_rename.clone(),
-                json_flatten: field.json_flatten,
-                json_fallback: field.json_fallback,
-                stream_done: field.stream_done,
-                must_exist: field.must_exist,
-            })
-            .collect(),
+        body: match class.buildable_fields() {
+            Err(_) => ClassDefinitionBody::RuntimeOwned,
+            Ok(fields) => ClassDefinitionBody::Fields(
+                fields
+                    .iter()
+                    .map(|field| ClassFieldDefinition {
+                        name: field.name.clone(),
+                        field_type: lane_ty(&field.field_type),
+                        field_template: Some(lane_template(&field.field_template)),
+                        description: field.description.clone(),
+                        docstring: field.docstring.clone(),
+                        alias: field.alias.clone(),
+                        skip: field.skip,
+                        json_rename: field.json_rename.clone(),
+                        json_flatten: field.json_flatten,
+                        json_fallback: field.json_fallback,
+                        stream_done: field.stream_done,
+                        must_exist: field.must_exist,
+                    })
+                    .collect(),
+            ),
+        },
     }
 }
 
@@ -58,14 +62,14 @@ pub fn parse_class(
     unfillable: Option<String>,
 ) -> ParseClass {
     debug_assert_eq!(
-        class.fields.len(),
+        class.instance_fields().len(),
         field_types.len(),
         "an instantiation of `{}` realizes every field",
         class.name().display_name()
     );
-    ParseClass {
+    ParseClass::Fields(ParseClassFields {
         fields: class
-            .fields
+            .instance_fields()
             .iter()
             .zip(field_types)
             .filter(|(field, _)| !field.skip)
@@ -80,7 +84,7 @@ pub fn parse_class(
             .collect(),
         stream_done: class.stream_done,
         unfillable,
-    }
+    })
 }
 
 /// The definition of `enm`, its skipped variants included and marked.
@@ -190,10 +194,10 @@ mod tests {
         let class = Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: LocalName::new(Vec::new(), Name::new("Person")),
-            fields: vec![
+            body: bex_vm_types::ClassBody::Fields(vec![
                 field("name", RuntimeTy::String, TyTemplate::String, false),
                 field("age", RuntimeTy::Int, TyTemplate::Int, true),
-            ],
+            ]),
             description: None,
             alias: None,
             docstring: None,
@@ -209,14 +213,16 @@ mod tests {
         };
 
         let definition = class_definition(&class);
+        let ClassDefinitionBody::Fields(definition_fields) = &definition.body else {
+            panic!("a class with fields describes its fields");
+        };
 
-        let fields: Vec<(&str, bool)> = definition
-            .fields
+        let fields: Vec<(&str, bool)> = definition_fields
             .iter()
             .map(|field| (field.name.as_str(), field.skip))
             .collect();
         assert_eq!(fields, [("name", false), ("age", true)]);
-        assert_eq!(definition.fields[1].field_type, SapTy::Int);
+        assert_eq!(definition_fields[1].field_type, SapTy::Int);
     }
 
     #[test]

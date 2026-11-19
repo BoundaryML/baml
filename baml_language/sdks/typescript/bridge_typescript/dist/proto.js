@@ -113,22 +113,30 @@ const REFERENCE_TOKEN = Symbol('baml.reference');
  * generated class extends this one with the class's methods alone, and the
  * decoder makes it from the reference the instance crosses as.
  *
- * Each instance owns its reference outright, so two are the same instance
- * exactly when they are the same object.
+ * One engine instance is one wrapper for as long as the wrapper lives (the
+ * decoder reuses it), so two are the same instance exactly when they are the
+ * same object.
  */
 export class BamlReference {
     _handle;
+    /**
+     * The class's type arguments, by parameter name, for an instance of a
+     * generic class: what the engine says the instance is, which an instance
+     * method binds the class's parameters from.
+     */
+    $types;
     // Public only so the class stays a type token (`$types: { T: Package }`):
     // no caller outside this module can name the token, and a forged one throws.
-    constructor(token, handle) {
+    constructor(token, handle, types) {
         if (token !== REFERENCE_TOKEN) {
             throw new TypeError(`${new.target.name} is the runtime's own; pass the instance you received`);
         }
         this._handle = handle;
+        this.$types = types;
     }
     /** Internal: wrap a decoded `ADT_RUNTIME_VALUE` handle. Used by proto decode. */
-    static _fromHandle(handle) {
-        return new this(REFERENCE_TOKEN, handle);
+    static _fromHandle(handle, types) {
+        return new this(REFERENCE_TOKEN, handle, types);
     }
     /** Internal: expose the inner handle for inbound encoding. */
     _toHandle() {
@@ -222,13 +230,14 @@ const HOST_VALUE_HANDLE_TYPES = new Set([
     baml_bridge.cffi.v1.BamlHandleType.HOST_VALUE_OPAQUE,
 ]);
 function handleLeaf(handle) {
+    // A host value is the engine's reference to the host's own object: its key
+    // goes as it is, taking one more of its references (refused once the key
+    // is no longer registered). An engine handle goes as a clone. Either is
+    // the bridge's to give back if the call never goes out.
     const key = handle._cloneKeyForWire();
     const bytes = InboundValue.encode(InboundValue.create({ handle: { key, handleType: handle.handleType } })).finish();
-    // A host value is the engine's reference to the host's own object: its key
-    // goes as it is, nothing was cloned and nothing is owed if the call never
-    // goes out. An engine handle's clone is the bridge's to release.
     if (HOST_VALUE_HANDLE_TYPES.has(handle.handleType))
-        return { bytes };
+        return { bytes, sentAgain: keyToDecimal(key) };
     return { bytes, cloned: keyToDecimal(key) };
 }
 /** The engine handle a runtime-owned value wraps, if it wraps one. */
@@ -356,7 +365,7 @@ export const hostAdapter = {
     },
     /** Bind a user function as a host callable; what comes back is the platform's (see `registerCallableDispatch`). */
     dispatchFor(fn) {
-        return registerCallableDispatch(makeHostCallableDispatch(fn), hostMarker(fn)?.handle);
+        return registerCallableDispatch(makeHostCallableDispatch(fn), hostMarker(fn)?.marker);
     },
     /** A short rendering for error messages, bounded in work as in length: a container by its size, never stringified whole. */
     describe(value) {
@@ -406,10 +415,8 @@ function snapshotInvocation(options, callId) {
         const Reserved = typeMap.getClass('trace.ReservedSpan');
         if (!(snapshot.trace instanceof Options) && !(snapshot.trace instanceof Reserved))
             throw new TypeError('trace must be generated trace.Options or trace.ReservedSpan');
-        const handle = snapshot.trace._handle;
-        if (!(handle instanceof BamlHandle))
-            throw new TypeError('trace value must contain a live generated handle');
-        const [selection, reservation] = _traceSelection(handle, callId.toString());
+        // The selection is a reference to the runtime's instance.
+        const [selection, reservation] = _traceSelection(snapshot.trace._toHandle(), callId.toString());
         wire.trace = baml_bridge.cffi.v1.TraceSelection.decode(selection);
         retained.push(snapshot.trace, reservation);
     }
@@ -588,7 +595,7 @@ function decodeValueHolder(holder, typeMap, ownership) {
         if (ht === BamlHandleType.ADT_RUNTIME_VALUE) {
             return decodeRuntimeValue(handle, holder.handleValue.ty, typeMap);
         }
-        // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
+        // Every other handle type has no typed wrapper — stays a bare BamlHandle.
         return handle;
     }
     if (holder.mediaValue) {
@@ -619,6 +626,20 @@ function decodeValueHolder(holder, typeMap, ownership) {
     // Any remaining unset oneof is a legitimate null: an all-default holder is a
     // null BAML result.
     return null;
+}
+/**
+ * The reference wrappers alive, by handle key. The engine sends one key per
+ * instance, so reusing the live wrapper for a key makes `===` the identity
+ * of the engine's instance.
+ */
+const LIVE_REFERENCES = new Map();
+const FORGET_REFERENCE = new FinalizationRegistry((key) => {
+    if (LIVE_REFERENCES.get(key)?.deref() === undefined) {
+        LIVE_REFERENCES.delete(key);
+    }
+});
+function referenceKey(handle) {
+    return `${handle.key.high}:${handle.key.low}`;
 }
 /**
  * The carried (instantiated) type of each array decoded from a BAML tuple,
@@ -654,9 +675,37 @@ function decodeRuntimeValue(handle, ty, typeMap) {
         return handle;
     }
     if (typeof Cls === 'function' && Cls.prototype instanceof BamlReference) {
-        return Cls._fromHandle(handle);
+        // A wrapper still alive for this instance is the instance; this
+        // handle's ownership is released when the handle is collected.
+        const key = referenceKey(handle);
+        const live = LIVE_REFERENCES.get(key)?.deref();
+        if (live !== undefined)
+            return live;
+        const reference = wrapReference(Cls, handle, ty, fqn);
+        LIVE_REFERENCES.set(key, new WeakRef(reference));
+        FORGET_REFERENCE.register(reference, key);
+        return reference;
     }
     throw new BamlError(`a runtime value of the class ${fqn} has no reference wrapper`);
+}
+/** The generated wrapper of a reference, with its class's type arguments. */
+function wrapReference(Cls, handle, ty, fqn) {
+    const Reference = Cls;
+    const params = Reference.$generic;
+    if (!params)
+        return Reference._fromHandle(handle);
+    // A generic class's instance comes with its type arguments: the class type
+    // the engine sends names them, in the class's parameter order.
+    const args = ty?.classTy?.typeArgs ?? [];
+    if (args.length !== params.length) {
+        throw new BamlError(`a runtime value of the class ${fqn} came with ${args.length} type argument(s); ` +
+            `the class takes ${params.length}`);
+    }
+    const types = {};
+    params.forEach((name, index) => {
+        types[name] = BamlType._fromWire(args[index]);
+    });
+    return Reference._fromHandle(handle, types);
 }
 function decodeBamlClosure(handle, functionTy) {
     const params = functionTy?.params ?? [];
@@ -808,11 +857,33 @@ export function decodeOutboundValue(data) {
         return decodeValueHolder(msg, getTypeMap(), ownership);
     }
     finally {
-        for (const handle of ownership) {
-            try {
-                _releaseWireHandle(handle.key);
-            }
-            catch { /* Preserve decoding failure. */ }
+        releaseOwnership(ownership);
+    }
+}
+/**
+ * The pin a host value arrived with, as an ownership record: the engine's
+ * hold on the key while the host reads it, released with the value that
+ * carried it. `undefined` for a host value sent without one.
+ */
+function pinRecord(handle) {
+    const pin = handle.pin;
+    if (pin == null)
+        return undefined;
+    if (typeof pin === 'number' ? pin === 0 : (pin.low === 0 && pin.high === 0))
+        return undefined;
+    return { key: pin, handleType: BamlHandleType.HOST_VALUE_PIN };
+}
+/**
+ * Release every engine row `ownership` still records, keeping the first
+ * failure from being masked by cleanup.
+ */
+function releaseOwnership(ownership) {
+    for (const handle of ownership) {
+        try {
+            _releaseWireHandle(handle.key);
+        }
+        catch {
+            // Cleanup must preserve the original decode failure.
         }
     }
 }
@@ -821,37 +892,74 @@ export function decodeOutboundValue(data) {
  * records, so a failed decode releases them like any other handle.
  */
 const liveRecords = new WeakMap();
-function collectHostCallHandles(holder, ownership) {
-    if (holder.handleValue) {
-        const ht = holder.handleValue.handleType;
-        if (ht !== BamlHandleType.HOST_VALUE_CALLABLE && ht !== BamlHandleType.HOST_VALUE_OPAQUE) {
-            ownership.add(holder.handleValue);
-        }
+/**
+ * Visit every holder of `holder`'s tree that carries an engine row: a handle
+ * or a type value.
+ */
+function forEachReference(holder, visit) {
+    if (holder.handleValue || holder.tyValue) {
+        visit(holder);
     }
     else if (holder.listValue) {
         for (const item of holder.listValue.items ?? [])
-            collectHostCallHandles(item, ownership);
+            forEachReference(item, visit);
     }
     else if (holder.tupleValue) {
         for (const item of holder.tupleValue.items ?? [])
-            collectHostCallHandles(item, ownership);
+            forEachReference(item, visit);
     }
     else if (holder.mapValue || holder.classValue) {
         const entries = holder.mapValue?.entries ?? holder.classValue?.fields ?? [];
         for (const entry of entries) {
             if (entry.value)
-                collectHostCallHandles(entry.value, ownership);
+                forEachReference(entry.value, visit);
         }
     }
     else if (holder.unionVariantValue?.value) {
-        collectHostCallHandles(holder.unionVariantValue.value, ownership);
+        forEachReference(holder.unionVariantValue.value, visit);
     }
-    else if (holder.tyValue) {
-        const records = liveKeys(holder.tyValue).map((key) => ({ key }));
-        liveRecords.set(holder.tyValue, records);
-        for (const record of records)
-            ownership.add(record);
-    }
+}
+/**
+ * Record every engine row `holder` carries in `ownership`, for a decode that
+ * hands each to the wrapper that takes it and releases the rest.
+ */
+function collectHostCallHandles(holder, ownership) {
+    forEachReference(holder, (found) => {
+        if (found.handleValue) {
+            if (HOST_VALUE_HANDLE_TYPES.has(found.handleValue.handleType ?? 0)) {
+                // The host owns the value itself; the engine's pin on it is
+                // released once the decode is done, whatever the decode keeps.
+                const pin = pinRecord(found.handleValue);
+                if (pin)
+                    ownership.add(pin);
+            }
+            else {
+                ownership.add(found.handleValue);
+            }
+        }
+        else if (found.tyValue) {
+            const records = liveKeys(found.tyValue).map((key) => ({ key }));
+            liveRecords.set(found.tyValue, records);
+            for (const record of records)
+                ownership.add(record);
+        }
+    });
+}
+/**
+ * The pins of every host value `holder` carries. A call result's engine rows
+ * belong to the wrappers decoded from them; its pins are released once the
+ * result has been read.
+ */
+function collectPins(holder, pins) {
+    if (!holder)
+        return;
+    forEachReference(holder, (found) => {
+        if (found.handleValue && HOST_VALUE_HANDLE_TYPES.has(found.handleValue.handleType ?? 0)) {
+            const pin = pinRecord(found.handleValue);
+            if (pin)
+                pins.push(pin);
+        }
+    });
 }
 /**
  * Decode the engine→host `BamlToHostCall`. The engine has already resolved the
@@ -885,14 +993,7 @@ export function decodeHostCall(data) {
         return { positional, optional };
     }
     finally {
-        for (const handle of ownership) {
-            try {
-                _releaseWireHandle(handle.key);
-            }
-            catch {
-                // Cleanup must preserve the original decode failure.
-            }
-        }
+        releaseOwnership(ownership);
     }
 }
 /**
@@ -994,6 +1095,20 @@ function errorForClassName(formatted, detail) {
 export function decodeCallResult(data) {
     const buf = data instanceof Buffer ? data : Buffer.from(data);
     const result = BamlOutboundResult.decode(buf);
+    // The host values the result carries stay pinned until it has been read,
+    // including the rehydration of a host error from its key.
+    const pins = [];
+    collectPins(result.ok, pins);
+    collectPins(result.error?.value, pins);
+    collectPins(result.panic?.value, pins);
+    try {
+        return decodeCallResultBody(result);
+    }
+    finally {
+        releaseOwnership(pins);
+    }
+}
+function decodeCallResultBody(result) {
     switch (result.result) {
         case 'error': {
             const { value, className, message } = decodeThrown(result.error?.value);

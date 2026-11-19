@@ -431,6 +431,15 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
             None => "<instance>".to_string(),
         },
 
+        Object::RustInstance(instance) => {
+            // SAFETY: During debug display, we assume the pointer is valid
+            let class = unsafe { instance.class.get() };
+            match class {
+                Object::Class(class) => format!("<{} rust instance>", class.name()),
+                other => format!("<{other} rust instance>"),
+            }
+        }
+
         Object::Variant(variant) => {
             // SAFETY: During debug display, we assume the pointer is valid
             let enm = unsafe { variant.enm.get() };

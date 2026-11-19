@@ -70,14 +70,21 @@ declare const REFERENCE_TOKEN: unique symbol;
  * generated class extends this one with the class's methods alone, and the
  * decoder makes it from the reference the instance crosses as.
  *
- * Each instance owns its reference outright, so two are the same instance
- * exactly when they are the same object.
+ * One engine instance is one wrapper for as long as the wrapper lives (the
+ * decoder reuses it), so two are the same instance exactly when they are the
+ * same object.
  */
 export declare class BamlReference {
     private readonly _handle;
-    constructor(token: typeof REFERENCE_TOKEN, handle: BamlHandle);
+    /**
+     * The class's type arguments, by parameter name, for an instance of a
+     * generic class: what the engine says the instance is, which an instance
+     * method binds the class's parameters from.
+     */
+    readonly $types: Readonly<Record<string, BamlType>> | undefined;
+    constructor(token: typeof REFERENCE_TOKEN, handle: BamlHandle, types?: Readonly<Record<string, BamlType>>);
     /** Internal: wrap a decoded `ADT_RUNTIME_VALUE` handle. Used by proto decode. */
-    static _fromHandle(handle: BamlHandle): BamlReference;
+    static _fromHandle(handle: BamlHandle, types?: Readonly<Record<string, BamlType>>): BamlReference;
     /** Internal: expose the inner handle for inbound encoding. */
     _toHandle(): BamlHandle;
 }
@@ -103,12 +110,24 @@ export interface EncodedCall {
  * path blocks the event loop the callback would need.
  */
 export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): EncodedCall;
-/** A leaf's payload as the bridge takes it from {@link hostAdapter.leafOf}: an `InboundValue`. */
-interface HostLeaf {
+/**
+ * A leaf's payload as the bridge takes it from {@link hostAdapter.leafOf}: an
+ * `InboundValue`, and what its wire occurrence took, so the bridge can give it
+ * back if the call never goes out.
+ */
+type HostLeaf = {
     bytes: Uint8Array;
-    /** The handle key cloned for the wire, as a decimal string, so the bridge can release it if the call never goes out. */
-    cloned?: string;
 }
+/** The engine handle key cloned for the wire, as a decimal string. */
+ | {
+    bytes: Uint8Array;
+    cloned: string;
+}
+/** The host-value key sent again, which took one of its references, as a decimal string. */
+ | {
+    bytes: Uint8Array;
+    sentAgain: string;
+};
 export declare const hostAdapter: {
     /**
      * Is `value` a plain object: one whose prototype is `Object.prototype` or

@@ -67,15 +67,19 @@ macro_rules! walk_object_heads {
         /// Call `f` on every head `object` reaches.
         pub fn $name(object: &$($mut)? Object, f: &mut impl FnMut(&$($mut)? TypeHead)) {
             match object {
-                Object::Class(class) => {
-                    for field in &$($mut)? class.fields {
-                        field.field_type.$visit(f);
-                        field.field_template.$visit(f);
-                        if let Some(exact) = &$($mut)? field.runtime_type {
-                            exact.ty.$visit(f);
+                Object::Class(class) => match &$($mut)? class.body {
+                    crate::ClassBody::Fields(fields) => {
+                        for field in fields {
+                            field.field_type.$visit(f);
+                            field.field_template.$visit(f);
+                            if let Some(exact) = &$($mut)? field.runtime_type {
+                                exact.ty.$visit(f);
+                            }
                         }
                     }
-                }
+                    // A kind names no type.
+                    crate::ClassBody::RustType(_) => {}
+                },
                 Object::Interface(iface) => {
                     for (_, bounds) in &$($mut)? iface.args {
                         for bound in bounds {
@@ -130,6 +134,61 @@ macro_rules! walk_object_heads {
                 Object::Function(func) => $func_walk(func, f),
                 Object::TypeAlias(alias) => alias.definition.$visit(f),
                 Object::Type(value) => value.ty.$visit(f),
+                // A payload's element type, where it has one, is the
+                // instance's type argument; an interface witness also holds
+                // the type it is witnessed at.
+                Object::RustInstance(instance) => {
+                    for arg in &$($mut)? *instance.class_type_args {
+                        arg.$visit(f);
+                    }
+                    match &$($mut)? instance.payload {
+                        crate::RustPayload::InterfaceWitness(witness) => {
+                            witness.interface_ty.$visit(f);
+                        }
+                        crate::RustPayload::Foreign(_)
+                        | crate::RustPayload::DefaultHasher(_)
+                        | crate::RustPayload::Sha256(_)
+                        | crate::RustPayload::Aes256GcmSiv(_)
+                        | crate::RustPayload::Aes128GcmSiv(_)
+                        | crate::RustPayload::ChaCha20Poly1305(_)
+                        | crate::RustPayload::XChaCha20Poly1305(_)
+                        | crate::RustPayload::Regex(_)
+                        | crate::RustPayload::CsvRecord(_)
+                        | crate::RustPayload::Semaphore(_)
+                        | crate::RustPayload::Permit(_)
+                        | crate::RustPayload::Ticket(_)
+                        | crate::RustPayload::CancelToken(_)
+                        | crate::RustPayload::SpanId(_)
+                        | crate::RustPayload::TraceOptions(_)
+                        | crate::RustPayload::ReservedSpan(_)
+                        | crate::RustPayload::File(_)
+                        | crate::RustPayload::Glob(_)
+                        | crate::RustPayload::OutputFormat(_)
+                        | crate::RustPayload::Lock(_)
+                        | crate::RustPayload::TcpStream(_)
+                        | crate::RustPayload::TcpListener(_)
+                        | crate::RustPayload::UdpSocket(_)
+                        | crate::RustPayload::Xoshiro256PlusPlus(_)
+                        | crate::RustPayload::ChaCha20(_)
+                        | crate::RustPayload::CsvReader(_)
+                        | crate::RustPayload::CsvWriter(_)
+                        | crate::RustPayload::ClassBuilder(_)
+                        | crate::RustPayload::ChildProcess(_)
+                        | crate::RustPayload::ReadPipe(_)
+                        | crate::RustPayload::WritePipe(_)
+                        | crate::RustPayload::WebSocket(_)
+                        | crate::RustPayload::HttpBody(_)
+                        | crate::RustPayload::SseStream(_)
+                        | crate::RustPayload::HttpServer(_)
+                        | crate::RustPayload::TlsKeys(_)
+                        | crate::RustPayload::HostValue(_)
+                        | crate::RustPayload::Image(_)
+                        | crate::RustPayload::Audio(_)
+                        | crate::RustPayload::Pdf(_)
+                        | crate::RustPayload::Video(_)
+                        | crate::RustPayload::Prompt(_) => {}
+                    }
+                }
                 Object::Closure(closure) => {
                     for arg in &$($mut)? *closure.captured_type_args {
                         arg.$visit(f);
@@ -172,7 +231,6 @@ macro_rules! walk_object_heads {
                 | Object::String(_)
                 | Object::Bigint(_)
                 | Object::Uint8Array(_)
-                | Object::RustData(_)
                 | Object::Tombstone
                 | Object::Instance
                 | Object::Float(_) => {}

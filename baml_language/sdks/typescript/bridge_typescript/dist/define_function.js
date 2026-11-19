@@ -56,7 +56,7 @@ function resolveTypesOption(typesOpt, typeParams) {
 }
 /** The `$types` field of a generic receiver instance (its class TypeVar
  * bindings), or `undefined` when the receiver carries none. The TS analog of
- * Python's `pydantic_instance_type_args(self)`. */
+ * Python's `receiver_type_args(self)`. */
 function receiverTypes(self) {
     if (self != null && typeof self === 'object') {
         const t = self.$types;

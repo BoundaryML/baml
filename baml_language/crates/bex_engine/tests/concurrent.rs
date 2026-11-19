@@ -499,7 +499,8 @@ async fn runtime_io_preserves_concurrent_invocation_contexts() {
                     1 => BexExternalValue::String("environment-project".into()),
                     2 => BexExternalValue::Null,
                     _ => panic!("wrong invocation environment: {environment}"),
-                })
+                }
+                .into())
             }))
         })
     };

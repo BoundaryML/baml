@@ -7,7 +7,7 @@
 //! emits an `InboundValue::Handle { key, handleType: HOST_VALUE_CALLABLE }`.
 //!
 //! When BAML invokes the host value, the [`WasmHost`] impl of
-//! [`IoNamespaceHost::call_host_value`] encodes the call arguments as a
+//! [`IoNamespaceHost::_call_host_value`] encodes the call arguments as a
 //! protobuf-encoded `BamlOutboundValue` list, allocates a call id, installs
 //! a `CompletionHandle` in the in-flight call table, and fires *this
 //! runtime's* JS-supplied `host_dispatch` callback with `(key, callId,
@@ -17,17 +17,20 @@
 //! a returned Promise if any), encodes the result, and calls the wasm-exported
 //! [`complete_host_call`] which resolves the `CompletionHandle`.
 //!
-//! When the engine drops the last Rust clone of the corresponding
-//! `HostValueArc`, the global `host_release_dispatch` fires
-//! [`host_release_callback`] which removes the registry entry — the user's
-//! JS callable becomes GC-eligible.
+//! The registry counts the references to each key handed to the engine: one
+//! for the send a key is registered for, one more for each later send of a
+//! key the host still holds ([`send_host_value_again`]). The engine gives
+//! references back through the global `host_release_dispatch`, which fires
+//! [`host_release_callback`]; a send rolled back before it reached the engine
+//! gives back its own ([`release_host_value`]). At the last one the entry is
+//! removed — the user's JS callable becomes GC-eligible.
 //!
 //! ## Per-runtime dispatch, global registry
 //!
 //! Dispatch is per-runtime: the JS `host_dispatch` callback — supplied *per*
 //! [`BamlWasmRuntime`] at `create` time — lives on the per-runtime [`WasmHost`]
 //! (one instance per `BamlWasmRuntime`, wired into its `SysOps`).
-//! `IoNamespaceHost::call_host_value` runs on the `WasmHost` that owns the
+//! `IoNamespaceHost::_call_host_value` runs on the `WasmHost` that owns the
 //! originating runtime, so the dispatch always fires through *that* runtime's
 //! wrapper. This is the engine→host path and it is unambiguous because the impl
 //! already knows its own runtime; no global routing is needed in this
@@ -40,10 +43,10 @@
 //! and are routed purely by id (mirroring the Node bridge's process-global
 //! registry):
 //!
-//! * The `callables` map only keeps the JS `Function` alive and is consulted
-//!   solely to *drop* it on release. Keys are minted by a process-global
-//!   atomic and are therefore **globally unique**, so releasing by key drops
-//!   exactly the right entry regardless of which runtime registered it. There
+//! * The [`HOST_VALUES`] registry keeps each JS `Function` alive and counts its
+//!   references. Keys are minted by the process-global registry and are
+//!   therefore **globally unique**, so releasing by key drops exactly the
+//!   right entry regardless of which runtime registered it. There
 //!   is no per-runtime ambiguity to resolve. (In WASM, `registerHostCallable`
 //!   is a free function the JS encoder calls *while building the proto args*,
 //!   before a `RunStore` start command is invoked — there is no runtime receiver to
@@ -74,13 +77,14 @@ use std::{
 };
 
 use bex_project::{HostKey, HostValueArc, HostValueKind, host_release_dispatch};
-use bridge_ctypes::{CffiHandleTableOptions, HANDLE_TABLE, decode_host_call_completion};
+use bridge_ctypes::{
+    CffiHandleTableOptions, DeadHostKey, HANDLE_TABLE, HostValueRegistry, Released,
+    decode_host_call_completion,
+};
 use indexmap::IndexMap;
 use js_sys::Function;
 use prost::Message;
-use sys_ops::io::{
-    self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult,
-};
+use sys_ops::io::{self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput};
 use sys_types::{BexHeap, CompletionHandle, SysOp};
 use wasm_bindgen::prelude::*;
 
@@ -90,7 +94,7 @@ use crate::send_wrapper::SendWrapper;
 // Process-global, id-routed WASM host-value state
 // ============================================================================
 //
-// Keyed by globally-unique ids (see `next_key` / `next_call_id`), so neither
+// Keyed by globally-unique ids (see [`HOST_VALUES`] / `next_call_id`), so neither
 // table needs a per-runtime split to route correctly: a key/call-id maps to at
 // most one entry across the whole process. Only the *dispatch callback* is
 // per-runtime (see `WasmHost`).
@@ -107,17 +111,20 @@ struct HostExecution {
 }
 
 thread_local! {
-    /// `u64 → user JS callable`. Populated by [`register_host_callable`] from
-    /// the JS encoder; removed by [`host_release_callback`] when the Rust
-    /// runtime drops the last clone of the corresponding `HostValueArc`. Keys
-    /// are globally unique, so release-by-key is unambiguous across runtimes.
-    static CALLABLES: RefCell<HashMap<HostKey, SendWrapper<Function>>> = RefCell::new(HashMap::new());
+    /// Host key → user JS callable, with the references to each key handed to
+    /// the engine. Populated by [`register_host_callable`] from the JS
+    /// encoder; an opaque value's key ([`mint_host_value_key`]) is registered
+    /// with no value, as its value lives in the SDK's JS-side registry. An
+    /// entry is removed when its last reference is given back. Keys are
+    /// globally unique, so release-by-key is unambiguous across runtimes.
+    static HOST_VALUES: HostValueRegistry<SendWrapper<Function>> = HostValueRegistry::default();
 
-    /// Optional SDK callback used to release host-owned opaque values kept in
-    /// a JS-side registry. Playground consumers do not need to install one.
+    /// Optional SDK callback told of every key whose last reference was given
+    /// back, so it can drop what it keeps for the key (an opaque value in its
+    /// JS-side registry). Playground consumers do not need to install one.
     static HOST_VALUE_RELEASE_CALLBACK: RefCell<Option<SendWrapper<Function>>> = const { RefCell::new(None) };
 
-    /// `call_id → CompletionHandle`. Populated by [`WasmHost::call_host_value`]
+    /// `call_id → CompletionHandle`. Populated by [`WasmHost::_call_host_value`]
     /// before firing `host_dispatch`; removed by [`complete_host_call`] when
     /// the JS dispatch wrapper completes the invocation. Call ids are globally
     /// unique, so a completion can never resolve a different runtime's call.
@@ -125,10 +132,6 @@ thread_local! {
     static EXECUTIONS: RefCell<HashMap<u32, HostExecution>> = RefCell::new(HashMap::new());
 
     static IN_FLIGHT: RefCell<HashMap<u32, InFlightHostCall>> = RefCell::new(HashMap::new());
-
-    /// Process-global key minter. Globally unique so release-by-key routing is
-    /// unambiguous. Zero is reserved as "invalid"; wrap-around skips 0.
-    static NEXT_KEY: RefCell<u64> = const { RefCell::new(1) };
 
     /// Process-global call-id minter. Globally unique so completion routing is
     /// unambiguous. Zero is reserved as "invalid"; wrap-around skips 0.
@@ -171,19 +174,6 @@ fn web_sync_failure(operation: SysOp, reason: &str) -> sys_types::VmInternalErro
 struct InFlightHostCall {
     operation: SysOp,
     completion: CompletionHandle,
-}
-
-fn next_key() -> HostKey {
-    NEXT_KEY.with(|cell| {
-        let mut next = cell.borrow_mut();
-        loop {
-            let k = *next;
-            *next = next.wrapping_add(1);
-            if let Some(key) = HostKey::new(k) {
-                return key;
-            }
-        }
-    })
 }
 
 fn next_call_id() -> u32 {
@@ -306,34 +296,38 @@ impl Drop for WasmInflightGuard {
 /// fit into JS's safe-integer range.
 #[wasm_bindgen(js_name = registerHostCallable)]
 pub fn register_host_callable(callable: Function) -> u64 {
-    let key = next_key();
-    CALLABLES.with(|cell| {
-        cell.borrow_mut().insert(key, SendWrapper::new(callable));
-    });
-    key.get()
+    HOST_VALUES
+        .with(|registry| registry.insert(SendWrapper::new(callable)))
+        .get()
 }
 
-/// Retain an existing registered callable as an engine host value.
+/// Retain an existing registered callable as an engine host value, taking one
+/// more of its references for the identity that holds it.
 pub(crate) fn retain_host_callable(key: u64) -> Result<Arc<HostValueArc>, String> {
     let key = HostKey::new(key).ok_or_else(|| "host callable key 0 names nothing".to_string())?;
-    let registered = CALLABLES.with(|cell| cell.borrow().contains_key(&key));
+    let registered = HOST_VALUES.with(|registry| registry.with(key, |_| ()).is_some());
     if !registered {
         return Err(format!("host callable key {key} is not registered"));
     }
+    send_host_value_again(key).map_err(|dead| dead.to_string())?;
     ensure_release_dispatch_installed();
-    HostValueArc::try_intern(key, HostValueKind::Callable)
-        .map_err(|_live| format!("host value key {key} is live as an opaque value"))
+    HostValueArc::try_intern(key, HostValueKind::Callable).map_err(|_live| {
+        // The engine refused the reference this retain took: give it back.
+        release_host_value(key, 1);
+        format!("host value key {key} is live as an opaque value")
+    })
 }
 
 /// Mint a key for a JS-owned opaque value from the same keyspace used by
 /// callable host values: both are the engine's references to host objects.
+/// The key holds the one reference the send it is minted for takes.
 #[wasm_bindgen(js_name = mintHostValueKey)]
 pub fn mint_host_value_key() -> u64 {
-    next_key().get()
+    HOST_VALUES.with(HostValueRegistry::mint_key).get()
 }
 
-/// Register the JS callback that releases opaque values from the SDK's local
-/// registry when the engine drops its last corresponding `HostValueArc`.
+/// Register the JS callback told of every key whose last reference was given
+/// back, so the SDK can drop what it keeps for the key.
 #[wasm_bindgen(js_name = registerHostValueReleaseCallback)]
 pub fn register_host_value_release_callback(callback: Function) -> bool {
     HOST_VALUE_RELEASE_CALLBACK.with(|cell| {
@@ -347,19 +341,57 @@ pub fn register_host_value_release_callback(callback: Function) -> bool {
     })
 }
 
-/// Remove a callable that was registered but never transferred to the engine.
-#[wasm_bindgen(js_name = releaseHostCallable)]
-pub fn release_host_callable(key: u64) {
-    if let Some(key) = HostKey::new(key) {
-        CALLABLES.with(|cell| {
-            cell.borrow_mut().remove(&key);
-        });
+/// Take one more reference to `key` for sending it to the engine again (a key
+/// the host received back and passes in). Refused when every reference has
+/// been given back: the key names nothing any more.
+pub fn send_host_value_again(key: HostKey) -> Result<(), DeadHostKey> {
+    HOST_VALUES.with(|registry| registry.send_again(key))
+}
+
+/// Give back `count` references to `key`: the engine's release, or a send
+/// rolled back before it reached the engine. Returns whether that was the
+/// last one, in which case the entry is removed and the SDK's release
+/// callback is told.
+pub fn release_host_value(key: HostKey, count: u64) -> bool {
+    match HOST_VALUES.with(|registry| registry.release(key, count)) {
+        Released::Held => false,
+        Released::Last(value) => {
+            // The callable drops before the SDK hears of it, outside any lock.
+            drop(value);
+            notify_released(key);
+            true
+        }
+        Released::Unknown => {
+            log::warn!("host value {key} released {count} more time(s) than it was sent");
+            false
+        }
     }
 }
 
+/// Tell the SDK's release callback, if one is installed, that `key` is gone.
+fn notify_released(key: HostKey) {
+    let callback = HOST_VALUE_RELEASE_CALLBACK.with(|cell| {
+        cell.borrow()
+            .as_ref()
+            .map(|callback| callback.inner().clone())
+    });
+    if let Some(callback) = callback
+        && let Err(error) = callback.call1(&JsValue::NULL, &JsValue::from(key.get()))
+    {
+        log::warn!("host-value release callback threw: {error:?}");
+    }
+}
+
+/// How many host-value keys (callable and opaque) are registered.
 #[doc(hidden)]
-pub fn test_host_callable_count() -> u32 {
-    CALLABLES.with(|cell| cell.borrow().len().try_into().unwrap_or(u32::MAX))
+pub fn test_host_value_count() -> u32 {
+    HOST_VALUES.with(|registry| registry.len().try_into().unwrap_or(u32::MAX))
+}
+
+/// Whether `key` is registered.
+#[doc(hidden)]
+pub fn test_host_value_registered(key: u64) -> bool {
+    HostKey::new(key).is_some_and(|key| HOST_VALUES.with(|registry| registry.contains(key)))
 }
 
 #[doc(hidden)]
@@ -374,7 +406,7 @@ pub fn test_host_release_callback_installed() -> bool {
 
 #[doc(hidden)]
 pub fn test_fire_host_release(key: u64) {
-    host_release_callback(key);
+    host_release_callback(key, 1);
 }
 
 #[doc(hidden)]
@@ -459,31 +491,21 @@ pub fn complete_host_call(call_id: u32, content: &[u8]) -> bool {
 /// `HostReleaseFn` C-ABI handler installed via [`host_release_dispatch::install`].
 ///
 /// Fires (via the engine's `host_release_dispatch::drain()` at a safepoint)
-/// when the last Rust clone of the corresponding `HostValueArc` is dropped —
-/// see `bex_project::host_release_dispatch`. Dropping the
+/// when the engine gives back `count` references to `key` — see
+/// `bex_project::host_release_dispatch`. At the last one, dropping the
 /// [`SendWrapper<Function>`] releases the underlying `js_sys::Function`,
 /// allowing the user's JS callable to become GC-eligible.
 ///
-/// Routes by the bare `key` against the process-global [`CALLABLES`] table.
-/// Keys are globally unique, so this removes exactly the right entry regardless
-/// of which runtime registered the callable.
-extern "C" fn host_release_callback(key: u64) {
-    if let Some(key) = HostKey::new(key) {
-        CALLABLES.with(|cell| {
-            cell.borrow_mut().remove(&key);
-        });
-    }
-    HOST_VALUE_RELEASE_CALLBACK.with(|cell| {
-        let callback = cell
-            .borrow()
-            .as_ref()
-            .map(|callback| callback.inner().clone());
-        if let Some(callback) = callback {
-            if let Err(error) = callback.call1(&JsValue::NULL, &JsValue::from(key)) {
-                log::warn!("host-value release callback threw: {error:?}");
-            }
+/// Routes by the bare `key` against the process-global [`HOST_VALUES`] table.
+/// Keys are globally unique, so this releases exactly the right entry
+/// regardless of which runtime registered the callable.
+extern "C" fn host_release_callback(key: u64, count: u64) {
+    match HostKey::new(key) {
+        Some(key) => {
+            release_host_value(key, count);
         }
-    });
+        None => log::warn!("host value release for the reserved key 0"),
+    }
 }
 
 /// Install the global release-dispatch callback. Idempotent (first call wins).
@@ -504,7 +526,7 @@ fn ensure_release_dispatch_installed() {
 ///
 /// One instance per `BamlWasmRuntime`, wired into its `SysOps`. Holds *this*
 /// runtime's JS `host_dispatch` callback (supplied at `BamlWasmRuntime::create`).
-/// Implements [`IoNamespaceHost::call_host_value`] by encoding the inbound BAML
+/// Implements [`IoNamespaceHost::_call_host_value`] by encoding the inbound BAML
 /// args to a `BamlOutboundValue` list, allocating a fresh (globally-unique)
 /// call id, installing a `CompletionHandle`, and firing *this runtime's* JS
 /// dispatch callback. Because the impl runs on the `WasmHost` that owns the
@@ -534,7 +556,7 @@ impl WasmHost {
         Self { dispatch }
     }
 
-    /// Construct an SDK host that dispatches only callables in [`CALLABLES`].
+    /// Construct an SDK host that dispatches only callables in [`HOST_VALUES`].
     #[allow(dead_code)]
     pub(crate) fn direct() -> Self {
         ensure_release_dispatch_installed();
@@ -615,7 +637,7 @@ impl WasmHost {
         let encoded = frame
             .as_ref()
             .map_or(application_args, |frame| frame.0.encode_to_vec());
-        let (result, completion) = SysOpResult::pending(originating_sysop);
+        let (result, completion) = CompletionHandle::pending(originating_sysop);
         let inserted = insert_in_flight(call_id, originating_sysop, completion);
         if inserted {
             let callback = HOST_CANCEL_CALLBACK.with(|slot| slot.borrow().clone());
@@ -647,10 +669,8 @@ impl WasmHost {
 
             let dispatched = match &self.dispatch {
                 WasmHostDispatch::DirectRegistry => {
-                    let registered = CALLABLES.with(|cell| {
-                        cell.borrow()
-                            .get(&callable.key)
-                            .map(|callable| callable.inner().clone())
+                    let registered = HOST_VALUES.with(|registry| {
+                        registry.with(callable.key, |callable| callable.inner().clone())
                     });
                     match registered {
                         Some(registered) => {
@@ -716,7 +736,7 @@ impl WasmHost {
 }
 
 impl io::IoNamespaceHost for WasmHost {
-    fn call_host_value(
+    fn _call_host_value(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -744,7 +764,7 @@ impl io::IoNamespaceHost for WasmHost {
         // packed them as `[positional_array, optional_map]` (see
         // `host_closure_call_sysop`). Unpack and encode them into the
         // `BamlToHostCall`'s flat `args` list (mirrors
-        // `sys_native::host_impls::call_host_value`): required args first, then
+        // `sys_native::host_impls::_call_host_value`): required args first, then
         // the supplied optionals (tagged + keyed by name). The JS dispatch
         // wrapper applies its calling convention.
         let mut pack = args.into_iter();
@@ -780,10 +800,9 @@ impl io::IoNamespaceHost for WasmHost {
     }
 }
 
-/// Convert a `SysOpResult` from `SysOpResult::pending` into a `SysOpOutput`
-/// suitable for the trait return type. The host's result lands as a
-/// `BexExternalValue`; on error we strip the `SysOp` wrapper to expose only
-/// the kind (the trait's contract).
+/// Convert a host completion from `CompletionHandle::pending` into a
+/// `SysOpOutput` suitable for the trait return type. The host's result lands
+/// as a `BexExternalValue`.
 ///
 /// The returned value is not judged here: the engine admits it to the
 /// declared return type where it lands.
@@ -793,39 +812,24 @@ impl io::IoNamespaceHost for WasmHost {
 /// future so that cancellation (the future being dropped before completion)
 /// evicts the dangling entry. `install_guard` is `false` on the id-collision
 /// path, where the live entry under `call_id` belongs to another call — guarding
-/// it would evict that entry, so no guard is built and `result` simply resolves
-/// to the collision error. The `Ready` arms drop the guard inline — also
-/// correct, just not reached in practice since `SysOpResult::pending` always
-/// yields `Async`.
+/// it would evict that entry, so no guard is built and `completion` simply
+/// resolves to the collision error.
 fn drain_pending_unvalidated(
-    result: SysOpResult,
+    completion: sys_types::HostCompletion,
     call_id: u32,
     install_guard: bool,
 ) -> SysOpOutput<BexExternalValue> {
     let guard = install_guard.then_some(WasmInflightGuard { call_id });
-    match result {
-        SysOpResult::Ready(Ok(value)) => SysOpOutput::ok(value),
-        SysOpResult::Ready(Err(err)) => match err.payload {
-            sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
-            // `SysOpResult::pending` always yields `Async`, so a Ready(Err)
-            // here can't actually originate from a thrown value.
-            sys_types::OpErrorPayload::Engine(_) | sys_types::OpErrorPayload::Host(_) => {
-                unreachable!("Ready(Err) is never produced for the host-callable sysop")
-            }
-        },
-        SysOpResult::Async(fut) => {
-            SysOpOutput::Async(Box::pin(crate::send_wrapper::SendFuture(async move {
-                // Move the guard into the future so cancellation (future drop)
-                // evicts the in-flight entry. `None` on the collision path —
-                // there is no entry of ours to evict and `fut` resolves to the
-                // collision error.
-                let _guard = guard;
-                // `?` propagates `OpError → VmRustFnError` via the `From`
-                // impl in `sys_types` while preserving host-thrown payloads.
-                Ok(fut.await?)
-            })))
-        }
-    }
+    SysOpOutput::Async(Box::pin(crate::send_wrapper::SendFuture(async move {
+        // Move the guard into the future so cancellation (future drop)
+        // evicts the in-flight entry. `None` on the collision path — there is
+        // no entry of ours to evict and `completion` resolves to the
+        // collision error.
+        let _guard = guard;
+        // `?` propagates `OpError → OpErrorBody` while preserving
+        // host-thrown payloads.
+        Ok(completion.await?)
+    })))
 }
 
 #[cfg(test)]
@@ -858,9 +862,9 @@ mod tests {
         .encode_to_vec()
     }
 
-    fn insert_pending_call() -> (u32, SysOpResult) {
+    fn insert_pending_call() -> (u32, sys_types::HostCompletion) {
         let call_id = next_call_id();
-        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (result, completion) = CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         assert!(insert_in_flight(
             call_id,
             SysOp::BamlHostCallHostValue,
@@ -869,14 +873,15 @@ mod tests {
         (call_id, result)
     }
 
-    /// Minted keys must be unique (a `HostKey` is nonzero by type).
+    /// Minted keys must be unique and nonzero.
     /// Globally-unique keys are what make release-by-key routing unambiguous
     /// across runtimes.
     #[test]
-    fn next_key_is_unique() {
+    fn minted_keys_are_unique() {
         let mut seen = HashSet::new();
         for _ in 0..1000 {
-            let k = next_key();
+            let k = mint_host_value_key();
+            assert_ne!(k, 0, "the reserved key 0 was minted");
             assert!(seen.insert(k), "minted key {k} was handed out twice");
         }
     }
@@ -903,8 +908,8 @@ mod tests {
         // Two pending calls standing in for two different runtimes.
         let id_a = next_call_id();
         let id_b = next_call_id();
-        let (result_a, completion_a) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
-        let (result_b, completion_b) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (result_a, completion_a) = CompletionHandle::pending(SysOp::BamlHostCallHostValue);
+        let (result_b, completion_b) = CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         IN_FLIGHT.with(|cell| {
             let mut t = cell.borrow_mut();
             t.insert(
@@ -923,12 +928,8 @@ mod tests {
             );
         });
 
-        let SysOpResult::Async(fut_a) = result_a else {
-            panic!("pending() must produce an async result");
-        };
-        let SysOpResult::Async(mut fut_b) = result_b else {
-            panic!("pending() must produce an async result");
-        };
+        let fut_a = result_a;
+        let mut fut_b = result_b;
 
         // Complete A with a null return. B must stay pending.
         complete_host_call(id_a, &returned_null());
@@ -970,7 +971,7 @@ mod tests {
     #[test]
     fn guard_drop_evicts_in_flight_entry_on_cancel() {
         let call_id = next_call_id();
-        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (result, completion) = CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         assert!(
             insert_in_flight(call_id, SysOp::BamlHostCallHostValue, completion),
             "fresh id must insert cleanly"
@@ -999,7 +1000,7 @@ mod tests {
     #[test]
     fn guard_drop_after_normal_completion_is_noop() {
         let call_id = next_call_id();
-        let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (result, completion) = CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         assert!(
             insert_in_flight(call_id, SysOp::BamlHostCallHostValue, completion),
             "fresh id must insert cleanly"
@@ -1031,9 +1032,7 @@ mod tests {
         complete_host_call(call_id, &[0xff]);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
-        let SysOpResult::Async(future) = result else {
-            panic!("pending() must produce an async result");
-        };
+        let future = result;
         let error = futures::executor::block_on(future).expect_err("malformed bytes must fail");
         assert!(matches!(
             error.payload,
@@ -1049,9 +1048,7 @@ mod tests {
         assert!(complete_host_call(call_id, &[]));
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
-        let SysOpResult::Async(future) = result else {
-            panic!("pending() must produce an async result");
-        };
+        let future = result;
         let error = futures::executor::block_on(future).expect_err("no outcome must fail");
         assert!(matches!(
             error.payload,
@@ -1064,14 +1061,16 @@ mod tests {
     #[test]
     fn colliding_call_id_is_bridge_failure_without_replacing_live_call() {
         let call_id = next_call_id();
-        let (first_result, first_completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (first_result, first_completion) =
+            CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         assert!(insert_in_flight(
             call_id,
             SysOp::BamlHostCallHostValue,
             first_completion
         ));
 
-        let (second_result, second_completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
+        let (second_result, second_completion) =
+            CompletionHandle::pending(SysOp::BamlHostCallHostValue);
         assert!(!insert_in_flight(
             call_id,
             SysOp::BamlHostCallHostValue,
@@ -1079,9 +1078,7 @@ mod tests {
         ));
         assert!(IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
-        let SysOpResult::Async(second_future) = second_result else {
-            panic!("pending() must produce an async result");
-        };
+        let second_future = second_result;
         let error = futures::executor::block_on(second_future)
             .expect_err("colliding call id must fail the new call");
         assert!(matches!(
@@ -1092,9 +1089,7 @@ mod tests {
         ));
 
         assert!(complete_host_call(call_id, &returned_null()));
-        let SysOpResult::Async(first_future) = first_result else {
-            panic!("pending() must produce an async result");
-        };
+        let first_future = first_result;
         let value = futures::executor::block_on(first_future)
             .expect("the original live call must remain completable");
         assert!(matches!(value, BexExternalValue::Null));
@@ -1113,9 +1108,7 @@ mod tests {
         complete_host_call(call_id, &payload);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
-        let SysOpResult::Async(future) = result else {
-            panic!("pending() must produce an async result");
-        };
+        let future = result;
         let error = futures::executor::block_on(future).expect_err("throw must fail the sysop");
         assert!(matches!(
             error.payload,
@@ -1131,9 +1124,7 @@ mod tests {
         complete_host_call(call_id, &[0xff]);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
-        let SysOpResult::Async(future) = result else {
-            panic!("pending() must produce an async result");
-        };
+        let future = result;
         let value = futures::executor::block_on(future).expect("first completion wins");
         assert!(matches!(value, BexExternalValue::Null));
     }

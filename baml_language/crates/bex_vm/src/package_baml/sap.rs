@@ -43,15 +43,16 @@ use sys_types::DefKey;
 
 use super::{
     BamlNamespaceSap, BamlNamespaceSap_ParseCache, Continuation, NativeCallResult, PackageBamlImpl,
+    copy,
 };
 use crate::{
     BexVm, definitions,
     errors::{VmBamlError, VmInternalError, VmPanic, VmRustFnError},
 };
 
-/// The `_data` of a `baml.sap._ParseCache<T>`: the parse model for `T`.
+/// The state of a `baml.sap._ParseCache<T>`: the parse model for `T`.
 ///
-/// A `RustData` payload is a GC leaf, so the model holds no heap pointers: it
+/// A foreign payload is a GC leaf, so the model holds no heap pointers: it
 /// names declarations by tagged name, and each parse maps those names back to
 /// the declarations through [`Declarations`].
 struct ParseCache {
@@ -76,13 +77,9 @@ impl BamlNamespaceSap for PackageBamlImpl {
                 "schema-aligned parsing cannot model this type: {e}"
             ))
         })?;
-        let data: Arc<dyn bex_vm_types::BexRustData> = Arc::new(ParseCache { model, has_shapes });
-        let data = Value::object(vm.alloc_rust_data(data));
-        let class = vm.lang_object(crate::lang_items::BAML_SAP_PARSE_CACHE);
-        let cache = vm
-            .tlab
-            .alloc_instance_with_type_args(class, Box::new([target]), vec![data]);
-        Ok(Value::object(cache))
+        let payload: Arc<dyn bex_vm_types::BexRustData> =
+            Arc::new(ParseCache { model, has_shapes });
+        Ok(copy::sap::ParseCache { payload }.to_value(vm, bex_vm_types::ThinVec::from([target])))
     }
 
     fn _reads_shapes(vm: &BexVm) -> Result<bool, VmRustFnError> {
@@ -105,7 +102,14 @@ impl BamlNamespaceSap for PackageBamlImpl {
             }
         };
         let model = Arc::new(model);
-        let json = super::json::json_value_to_serde(vm, *value);
+        let json = match super::json::json_value_to_serde(vm, *value) {
+            Ok(json) => json,
+            Err(unrepresentable) => {
+                return NativeCallResult::Error(parse_error(format!(
+                    "schema-aligned parsing cannot read this value: {unrepresentable}"
+                )));
+            }
+        };
         read(
             vm,
             &model,
@@ -134,7 +138,7 @@ impl BamlNamespaceSap_ParseCache for PackageBamlImpl {
 /// Parse `text` with the model in `cache`.
 fn text_read(vm: &mut BexVm, cache: Value, text: &BexStr, mode: Mode) -> NativeCallResult {
     let cache = vm
-        .rust_data_field::<ParseCache>(&cache, 0)
+        .foreign_payload::<ParseCache>(&cache)
         .map_err(VmRustFnError::from)
         .and_then(|cache| {
             // An unresolvable target is a schema bug, not an incomplete
@@ -417,8 +421,9 @@ struct ReachedClass {
     head: TypeHead,
     /// The instantiation's arguments, each union spelled flat.
     args: Box<[RealizedTy]>,
-    /// The type of every field, `@skip` ones included, realized at `args`.
-    fields: Vec<RealizedTy>,
+    /// The type of every field, `@skip` ones included, realized at `args`;
+    /// `None` for a class only the runtime builds, which no parse builds.
+    fields: Option<Vec<RealizedTy>>,
 }
 
 /// Why a target has no parse model.
@@ -590,7 +595,6 @@ impl ReachWalk<'_> {
             | RealizedTy::Media(_)
             | RealizedTy::Function { .. }
             | RealizedTy::Future(..)
-            | RealizedTy::RustType
             | RealizedTy::Type
             | RealizedTy::Resource
             | RealizedTy::PromptAst
@@ -635,14 +639,25 @@ impl ReachWalk<'_> {
                 });
             }
         }
-        let fields: Vec<RealizedTy> = class
-            .fields
+        // A class only the runtime builds is reached, but nothing past it:
+        // the JSON analysis gives it no JSON form.
+        let Ok(class_fields) = class.buildable_fields() else {
+            self.seen_classes.insert(identity.clone());
+            let (head, args) = identity;
+            self.reach.classes.push(ReachedClass {
+                head,
+                args,
+                fields: None,
+            });
+            return Ok(());
+        };
+        let fields: Vec<RealizedTy> = class_fields
             .iter()
             .map(|field| self.vm.realize_field_ty(&field.field_template, &identity.1))
             .collect();
         self.seen_classes.insert(identity.clone());
         self.ancestry.push(identity);
-        for (field, field_ty) in class.fields.iter().zip(&fields) {
+        for (field, field_ty) in class_fields.iter().zip(&fields) {
             if field.skip {
                 continue;
             }
@@ -663,7 +678,11 @@ impl ReachWalk<'_> {
             .ancestry
             .pop()
             .unwrap_or_else(|| unreachable!("this visit pushed its own frame"));
-        self.reach.classes.push(ReachedClass { head, args, fields });
+        self.reach.classes.push(ReachedClass {
+            head,
+            args,
+            fields: Some(fields),
+        });
         Ok(())
     }
 }
@@ -752,10 +771,16 @@ fn build_model(vm: &BexVm, target: &RealizedTy) -> Result<(CompiledSapModel, boo
     let defs = crate::json_defs::HeapDefs::output(vm);
     let classes = reach.classes.iter().map(|reached| {
         let class = reached_class(vm, reached.head);
+        let Some(fields) = &reached.fields else {
+            return (
+                model_name(class, &reached.args),
+                bex_sap::sap_model::ParseClass::RuntimeOwned,
+            );
+        };
         let unfillable = class
-            .fields
+            .instance_fields()
             .iter()
-            .zip(&reached.fields)
+            .zip(fields)
             .find(|(field, field_type)| {
                 field.skip
                     && !baml_type::json_inhabit::has_empty_value(&defs, field_type.as_runtime_ty())
@@ -764,7 +789,7 @@ fn build_model(vm: &BexVm, target: &RealizedTy) -> Result<(CompiledSapModel, boo
             .map(|(field, _)| field.name.clone());
         (
             model_name(class, &reached.args),
-            definitions::parse_class(class, &reached.fields, unfillable),
+            definitions::parse_class(class, fields, unfillable),
         )
     });
     let mut enums = IndexMap::new();
@@ -1345,8 +1370,11 @@ fn heap_instance(
     let Object::Class(declaration) = vm.get_object(class) else {
         return Err(invariant(format!("`{name}` is not a class")));
     };
-    let fields: Vec<(String, bool, TyTemplate)> = declaration
-        .fields
+    // A parse builds only a class the JSON analysis gave a JSON form.
+    let declared = declaration.buildable_fields().map_err(|unbuildable| {
+        invariant(format!("a parse built `{name}`, which is {unbuildable:?}"))
+    })?;
+    let fields: Vec<(String, bool, TyTemplate)> = declared
         .iter()
         .map(|field| (field.name.clone(), field.skip, field.field_template.clone()))
         .collect();
@@ -1696,8 +1724,11 @@ pub(super) fn empty_value(
             let Object::Class(declaration) = vm.get_object(class) else {
                 return Ok(None);
             };
-            let templates: Vec<_> = declaration
-                .fields
+            // A class only the runtime builds has no empty value.
+            let Ok(declared) = declaration.buildable_fields() else {
+                return Ok(None);
+            };
+            let templates: Vec<_> = declared
                 .iter()
                 .map(|field| field.field_template.clone())
                 .collect();
@@ -1735,7 +1766,6 @@ pub(super) fn empty_value(
         | RealizedTy::Function { .. }
         | RealizedTy::Future(..)
         | RealizedTy::Interface(..)
-        | RealizedTy::RustType
         | RealizedTy::Type
         | RealizedTy::Resource
         | RealizedTy::PromptAst

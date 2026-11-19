@@ -9,14 +9,13 @@ use std::{
     sync::Arc,
 };
 
-use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, LimitInner, MonitorTable, Object, PermitState, RootVisitor, RustDataArc as _,
+    HeapPtr, LimitInner, MonitorTable, Object, PermitState, RootVisitor,
     types::{Array, Value},
 };
 
 use super::{
-    BamlClassSyncPermit, BamlClassSyncSemaphore, BamlNamespaceSync, PackageBamlImpl,
+    BamlClassSyncPermit, BamlClassSyncSemaphore, BamlNamespaceSync, PackageBamlImpl, copy,
     spawn::{clamp_to_i64, limit_inner},
     view,
 };
@@ -145,7 +144,7 @@ impl BamlNamespaceSync for PackageBamlImpl {
             AtomicKey::Many(keys) => monitors.table.enter_all(keys, monitors.task),
         };
         monitors.unmatched += 1;
-        Ok(waiter.map(|waiter| Value::object(vm.alloc_rust_data(waiter))))
+        Ok(waiter.map(|payload| copy::sync::Ticket { payload }.to_value(vm)))
     }
 
     fn _exit(vm: &mut BexVm, key: &Value) -> Result<(), VmRustFnError> {
@@ -160,27 +159,11 @@ impl BamlNamespaceSync for PackageBamlImpl {
         Ok(())
     }
 
-    fn _admitted(vm: &BexVm, held: &Value) -> bool {
-        permit_state(vm, *held).is_admitted()
-    }
-
-    fn _permit(vm: &mut BexVm, held: &Value) -> Value {
-        let held = permit_state(vm, *held);
-        alloc_handle(vm, crate::lang_items::BAML_SYNC_PERMIT, held)
-    }
-
-    fn _release_permit(vm: &BexVm, held: &Value) {
-        permit_state(vm, *held).release();
-    }
-}
-
-/// The hold behind a `$rust_type` from `Semaphore._admit`.
-fn permit_state(vm: &BexVm, held: Value) -> Arc<PermitState> {
-    match held.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
-        Some(Object::RustData(data)) => Arc::clone(data)
-            .downcast_payload::<PermitState>()
-            .unwrap_or_else(|_| unreachable!("only `Semaphore._admit` makes a hold")),
-        _ => unreachable!("only `Semaphore._admit` makes a hold"),
+    fn _admitted(vm: &BexVm, permit: &Value) -> bool {
+        let instance = vm
+            .as_rust_instance(permit)
+            .unwrap_or_else(|_| unreachable!("`_admitted` takes a `Permit`"));
+        view::sync::Permit { instance }.payload().is_admitted()
     }
 }
 
@@ -197,47 +180,36 @@ impl BamlClassSyncSemaphore for PackageBamlImpl {
                     "baml.sync.Semaphore.new: capacity must be positive, got {capacity}"
                 ),
             })?;
-        Ok(alloc_handle(
-            vm,
-            crate::lang_items::BAML_SYNC_SEMAPHORE,
-            LimitInner::new(capacity),
-        ))
+        Ok(copy::sync::Semaphore {
+            payload: LimitInner::new(capacity),
+        }
+        .to_value(vm))
     }
 
-    fn capacity(vm: &BexVm, semaphore: &view::sync::Semaphore<'_>) -> i64 {
-        clamp_to_i64(semaphore._handle::<LimitInner>(vm).capacity().get())
+    fn capacity(_vm: &BexVm, semaphore: &view::sync::Semaphore<'_>) -> i64 {
+        clamp_to_i64(semaphore.payload().capacity().get())
     }
 
-    fn active_count(vm: &BexVm, semaphore: &view::sync::Semaphore<'_>) -> i64 {
-        clamp_to_i64(semaphore._handle::<LimitInner>(vm).active_count())
+    fn active_count(_vm: &BexVm, semaphore: &view::sync::Semaphore<'_>) -> i64 {
+        clamp_to_i64(semaphore.payload().active_count())
     }
 
-    fn queued_count(vm: &BexVm, semaphore: &view::sync::Semaphore<'_>) -> i64 {
-        clamp_to_i64(semaphore._handle::<LimitInner>(vm).queued_count())
+    fn queued_count(_vm: &BexVm, semaphore: &view::sync::Semaphore<'_>) -> i64 {
+        clamp_to_i64(semaphore.payload().queued_count())
     }
 
     fn _admit(vm: &mut BexVm, semaphore: &Value) -> Value {
         let limit = limit_inner(vm, *semaphore)
-            .unwrap_or_else(|_| unreachable!("only `Semaphore.new` sets its handle"));
-        let held = Arc::new(PermitState::admit(&limit));
-        Value::object(vm.alloc_rust_data(held))
+            .unwrap_or_else(|_| unreachable!("a `Semaphore` holds its admission state"));
+        copy::sync::Permit {
+            payload: Arc::new(PermitState::admit(&limit)),
+        }
+        .to_value(vm)
     }
 }
 
-#[allow(clippy::used_underscore_items)]
 impl BamlClassSyncPermit for PackageBamlImpl {
-    fn release(vm: &BexVm, permit: &view::sync::Permit<'_>) {
-        permit._handle::<PermitState>(vm).release();
+    fn release(_vm: &BexVm, permit: &view::sync::Permit<'_>) {
+        permit.payload().release();
     }
-}
-
-/// A native class instance (`class_item`) whose `_handle` field holds `data`.
-fn alloc_handle(
-    vm: &mut BexVm,
-    class_item: baml_base::LangItem,
-    data: Arc<impl bex_vm_types::BexRustData>,
-) -> Value {
-    let class = vm.lang_object(class_item);
-    let handle = Value::object(vm.alloc_rust_data(data));
-    Value::object(vm.alloc_instance(class, vec![handle]))
 }

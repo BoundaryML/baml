@@ -632,3 +632,13 @@ function root_survives_its_spawner() -> string {
 test "a root task is not cancelled with its spawner" {
     assert.equal(root_survives_its_spawner(), "rooted done:1:-1")
 }
+
+// A semaphore's admission state is what every holder shares, so a deep copy
+// shares it: the copy is the same semaphore.
+function semaphore_copy_capacity() -> int {
+    baml.deep_copy(semaphore_of(3)).capacity()
+}
+
+test "a deep copy of a semaphore is the same semaphore" {
+    assert.equal(semaphore_copy_capacity(), 3)
+}

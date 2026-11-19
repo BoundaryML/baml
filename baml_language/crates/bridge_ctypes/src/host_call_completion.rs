@@ -95,6 +95,8 @@ fn host_exception(raised: WireException) -> Result<HostException, HostCallComple
         )
     })?;
     let handle = HostValueArc::try_intern(key, HostValueKind::Opaque).map_err(|live| {
+        // The refused raise still handed the engine a reference: give it back.
+        bex_project::host_release_dispatch::fire(key, 1);
         HostCallCompletion::BridgeFailure(format!(
             "the host raised an exception under host key {key}, which is live as a {:?} value",
             live.kind

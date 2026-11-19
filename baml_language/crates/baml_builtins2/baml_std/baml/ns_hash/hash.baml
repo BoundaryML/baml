@@ -30,8 +30,6 @@ interface Hasher {
 /// let result = state.finish();
 /// ```
 class DefaultHasher {
-    _state: $rust_type,
-
     //baml:mut_vm
     function new() -> DefaultHasher throws never {
         $rust_function
@@ -48,4 +46,6 @@ class DefaultHasher {
             $rust_function
         }
     }
+
+    @@rust_type("DefaultHasher")
 }

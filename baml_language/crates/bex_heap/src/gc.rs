@@ -50,7 +50,8 @@
 use std::sync::atomic::AtomicU64;
 
 use bex_vm_types::{
-    ClassLayout, FutureRead, HeapPtr, InstanceRef, Meter, OBJECT_CELL_WORDS, Object, Value,
+    ClassLayout, CleanupSubject, FutureRead, HeapPtr, InstanceRef, Meter, OBJECT_CELL_WORDS,
+    Object, RustPayload, Value,
     types::{Future, Objects, Slots},
 };
 
@@ -320,14 +321,17 @@ impl BexHeap {
             let position = gens
                 .iter()
                 .enumerate()
-                .find_map(|(generation, space)| Some((generation, space.position(ptr.cell())?)))
+                .find_map(|(generation, space)| {
+                    Some((generation, space.position(ptr.cell_start())?))
+                })
                 .unwrap_or_else(|| unreachable!("finalizable entry {ptr:?} is outside from-space"));
             // SAFETY: a dead instance's cell is intact until its space is released.
-            let inst = unsafe { InstanceRef::of(ptr) }.expect("finalizable entries are instances");
-            if inst.is_cleaned() {
+            let subject =
+                unsafe { CleanupSubject::at(ptr) }.expect("finalizable entries are instances");
+            if subject.is_cleaned() {
                 continue; // explicit/`defer` already cleaned it — SuppressFinalize
             }
-            if self.class_declaration(inst.class()).cleanup().is_some() {
+            if self.class_declaration(subject.class()).cleanup().is_some() {
                 seeds.push((position, ptr));
             }
         }
@@ -351,9 +355,14 @@ impl BexHeap {
         for space in unsafe { [&*self.gen0.get(), &*self.gen2.get()] } {
             space.for_each_cell(|cell| {
                 // SAFETY: nothing has moved, so every cell and class is intact.
-                if let CellBody::Instance(instance) = unsafe { CellBody::at(cell) }
-                    && Self::needs_finalizer(instance)
-                {
+                let needs_finalizer = match unsafe { CellBody::at(cell) } {
+                    CellBody::Instance(instance) => Self::needs_finalizer(instance),
+                    // SAFETY: as above; a `@@rust_type` instance is an object cell.
+                    CellBody::Object(object) => unsafe {
+                        Self::needs_finalizer_registration(&*object)
+                    },
+                };
+                if needs_finalizer {
                     finalizable.instances.push(self.ptr_to(cell));
                 }
                 // SAFETY: as above.
@@ -387,9 +396,9 @@ impl BexHeap {
         self.scan(scan);
         for instance in instances {
             // SAFETY: the scan finished, so the copy names its class's copy.
-            let copy = unsafe { InstanceRef::of(instance) }.expect("a finalizable instance");
-            let cleanup = copy
-                .class_object()
+            let copy = unsafe { CleanupSubject::at(instance) }.expect("a finalizable instance");
+            let cleanup = self
+                .class_declaration(copy.class())
                 .cleanup()
                 .expect("its class has a finalizer");
             self.push_pending_finalizer(instance, cleanup);
@@ -681,13 +690,64 @@ pub(crate) fn visit_refs(obj: &mut Object, visit: &mut impl FnMut(&mut HeapPtr))
         | Object::ImplRule(_)
         | Object::Interface(_) => visit_callable_refs(obj, visit),
         Object::Class(_) | Object::Enum(_) | Object::TypeAlias(_) => visit_type_refs(obj, visit),
+        Object::RustInstance(instance) => {
+            visit(&mut instance.class);
+            match &mut instance.payload {
+                // The interface it witnesses; the heads of the type it is
+                // witnessed at are walked with the instance's heads.
+                RustPayload::InterfaceWitness(witness) => visit(&mut witness.interface_ptr),
+                // None of these kinds holds a heap edge. A kind whose state
+                // does (an `OrderedSet`'s members) walks it here.
+                RustPayload::Foreign(_)
+                | RustPayload::DefaultHasher(_)
+                | RustPayload::Sha256(_)
+                | RustPayload::Aes256GcmSiv(_)
+                | RustPayload::Aes128GcmSiv(_)
+                | RustPayload::ChaCha20Poly1305(_)
+                | RustPayload::XChaCha20Poly1305(_)
+                | RustPayload::Regex(_)
+                | RustPayload::CsvRecord(_)
+                | RustPayload::Semaphore(_)
+                | RustPayload::Permit(_)
+                | RustPayload::Ticket(_)
+                | RustPayload::CancelToken(_)
+                | RustPayload::SpanId(_)
+                | RustPayload::TraceOptions(_)
+                | RustPayload::ReservedSpan(_)
+                | RustPayload::File(_)
+                | RustPayload::Glob(_)
+                | RustPayload::OutputFormat(_)
+                | RustPayload::Lock(_)
+                | RustPayload::TcpStream(_)
+                | RustPayload::TcpListener(_)
+                | RustPayload::UdpSocket(_)
+                | RustPayload::Xoshiro256PlusPlus(_)
+                | RustPayload::ChaCha20(_)
+                | RustPayload::CsvReader(_)
+                | RustPayload::CsvWriter(_)
+                | RustPayload::ClassBuilder(_)
+                | RustPayload::ChildProcess(_)
+                | RustPayload::ReadPipe(_)
+                | RustPayload::WritePipe(_)
+                | RustPayload::WebSocket(_)
+                | RustPayload::HttpBody(_)
+                | RustPayload::SseStream(_)
+                | RustPayload::HttpServer(_)
+                | RustPayload::TlsKeys(_)
+                | RustPayload::HostValue(_)
+                | RustPayload::Image(_)
+                | RustPayload::Audio(_)
+                | RustPayload::Pdf(_)
+                | RustPayload::Video(_)
+                | RustPayload::Prompt(_) => {}
+            }
+        }
         Object::Instance
         | Object::HostClosure(_)
         | Object::Type(_)
         | Object::String(_)
         | Object::Bigint(_)
         | Object::Uint8Array(_)
-        | Object::RustData(_)
         | Object::Float(_)
         | Object::Tombstone => {}
         #[cfg(feature = "heap_debug")]
@@ -858,7 +918,7 @@ mod tests {
     use std::sync::Arc;
 
     use baml_type::RealizedTy;
-    use bex_vm_types::{Field, Object, Value};
+    use bex_vm_types::{Field, Object, Value, types::Future};
 
     use super::*;
     use crate::Tlab;
@@ -1025,7 +1085,7 @@ mod tests {
         Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("C")),
-            fields: vec![bex_vm_types::ClassField {
+            body: bex_vm_types::ClassBody::Fields(vec![bex_vm_types::ClassField {
                 name: "x".to_string(),
                 field_type: baml_type::RuntimeTy::Int,
                 field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
@@ -1042,7 +1102,7 @@ mod tests {
                 json_fallback: false,
                 json_omit_null: false,
                 redact: false,
-            }],
+            }]),
             description: None,
             alias: None,
             docstring: None,
@@ -1747,10 +1807,10 @@ mod tests {
         // Allocate a class (leaf), a string (leaf), then an instance referencing both
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("TestClass")),
-            fields: vec![
+            body: bex_vm_types::ClassBody::Fields(vec![
                 class_field("name", bex_vm_types::RuntimeTy::String),
                 class_field("count", bex_vm_types::RuntimeTy::Int),
-            ],
+            ]),
             description: None,
             alias: None,
             docstring: None,
@@ -1997,7 +2057,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("MyClass")),
-            fields: vec![],
+            body: bex_vm_types::ClassBody::Fields(vec![]),
             description: None,
             alias: None,
             docstring: None,
@@ -2133,7 +2193,7 @@ mod tests {
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: type_name.clone(),
-            fields: vec![ClassField {
+            body: bex_vm_types::ClassBody::Fields(vec![ClassField {
                 name: "height_cm".to_string(),
                 field_type: bex_vm_types::RuntimeTy::Int,
                 field_template: bex_vm_types::TyTemplate::from(RealizedTy::int()),
@@ -2150,7 +2210,7 @@ mod tests {
                 json_rename: None,
                 json_omit_null: false,
                 redact: false,
-            }],
+            }]),
             description: None,
             alias: None,
             docstring: None,
@@ -2191,9 +2251,9 @@ mod tests {
             panic!("the head did not land on a class")
         };
         assert_eq!(class.path, type_name);
-        assert_eq!(class.fields[0].name, "height_cm");
+        assert_eq!(class.instance_fields()[0].name, "height_cm");
         assert_eq!(
-            class.fields[0].description.as_deref(),
+            class.instance_fields()[0].description.as_deref(),
             Some("height in centimeters")
         );
     }
@@ -2552,7 +2612,10 @@ mod tests {
         // Instance requires a class pointer.
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("T")),
-            fields: vec![class_field("leaf", bex_vm_types::RuntimeTy::String)],
+            body: bex_vm_types::ClassBody::Fields(vec![class_field(
+                "leaf",
+                bex_vm_types::RuntimeTy::String,
+            )]),
             description: None,
             alias: None,
             docstring: None,
@@ -2806,7 +2869,7 @@ mod tests {
         Object::Class(Box::new(Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Resource")),
-            fields: vec![],
+            body: bex_vm_types::ClassBody::Fields(vec![]),
             description: None,
             alias: None,
             docstring: None,
@@ -2926,6 +2989,92 @@ mod tests {
         unsafe { heap.collect_garbage(&[]) };
         assert!(heap.take_pending_finalizers().is_empty());
         assert!(finalizable_entries(&heap).is_empty());
+    }
+
+    /// A `@@rust_type` instance's state, which this test never reads.
+    struct NoState;
+
+    impl bex_vm_types::BexRustData for NoState {
+        fn measure(&self, _: &mut bex_vm_types::Meter) {}
+    }
+
+    /// `class_object(finalizer)`, tagged `@@rust_type` with a foreign kind.
+    fn tagged_class_object(finalizer: Option<HeapPtr>) -> Object {
+        let Object::Class(mut class) = class_object(finalizer) else {
+            unreachable!("class_object builds a class")
+        };
+        class.body = bex_vm_types::ClassBody::RustType(baml_base::RustPayloadKind::Foreign);
+        class.declared_crossing = baml_type::ClassCrossing::Opaque;
+        Object::Class(class)
+    }
+
+    fn rust_instance(class: HeapPtr) -> Object {
+        Object::RustInstance(bex_vm_types::RustInstance::new(
+            class,
+            bex_vm_types::ThinVec::new(),
+            bex_vm_types::RustPayload::Foreign(Arc::new(NoState)),
+        ))
+    }
+
+    /// A `@@rust_type` instance of a class with a finalizer is registered,
+    /// finalized when it dies, and, once its own latch is set, neither
+    /// finalized again nor kept on the list: exactly as a plain instance.
+    #[test]
+    fn rust_instance_is_finalized_once() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let class = tlab.alloc(tagged_class_object(Some(finalizer)));
+        heap.note_finalizable_class();
+        let instance = tlab.alloc(rust_instance(class));
+        assert_eq!(finalizable_entries(&heap), vec![instance]);
+
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
+        let pending = heap.take_pending_finalizers();
+        assert_eq!(
+            pending,
+            vec![(
+                forwarding.get(instance).unwrap(),
+                forwarding.get(finalizer).unwrap()
+            )]
+        );
+        // The engine runs `cleanup`, whose guard latches the instance.
+        let Object::RustInstance(finalized) = (unsafe { pending[0].0.get() }) else {
+            panic!("the finalizer seed is the `@@rust_type` instance");
+        };
+        assert!(finalized.cleaned.begin());
+        assert!(!finalized.cleaned.begin(), "the latch runs `cleanup` once");
+
+        unsafe { heap.collect_garbage(&[]) };
+        assert!(heap.take_pending_finalizers().is_empty());
+        assert!(finalizable_entries(&heap).is_empty());
+    }
+
+    /// The walk that rebuilds an invalidated list finds `@@rust_type`
+    /// instances too.
+    #[test]
+    fn rebuilt_list_includes_rust_instances() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let class = tlab.alloc(tagged_class_object(None));
+        let older = tlab.alloc(rust_instance(class));
+        assert!(finalizable_entries(&heap).is_empty());
+
+        // SAFETY: single-threaded test; nothing else references the class object.
+        unsafe {
+            *class.get_mut() = tagged_class_object(Some(finalizer));
+        }
+        heap.invalidate_finalizable_instances();
+
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
+        assert_eq!(
+            heap.take_pending_finalizers(),
+            vec![(
+                forwarding.get(older).unwrap(),
+                forwarding.get(finalizer).unwrap()
+            )]
+        );
     }
 
     /// A class that gains a finalizer after an instance of it exists

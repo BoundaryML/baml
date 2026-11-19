@@ -74,7 +74,7 @@ impl<'a> ClassLayout<'a> {
     #[inline(always)]
     pub fn of(class: &'a Class) -> Self {
         Self {
-            fields: &class.fields,
+            fields: class.instance_fields(),
             generic: class.generic_param_count > 0,
         }
     }

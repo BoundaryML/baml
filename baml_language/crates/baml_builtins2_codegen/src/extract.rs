@@ -14,8 +14,8 @@ use baml_compiler2_ast::ast::{
 };
 
 use crate::types::{
-    BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
-    ReceiverType, VmUsage,
+    BamlType, BuiltinPipeline, IoCallers, NativeBuiltin, NativeClassBody, NativeClassDef,
+    NativeClassField, NativeEnum, Param, Receiver, ReceiverType, VmUsage,
 };
 
 /// Convert a byte offset in source text to a 1-based `(line, column)` pair.
@@ -118,12 +118,13 @@ fn extract_scoped(
     let mut vm_builtins = Vec::new();
     let mut io_builtins = Vec::new();
     let mut class_defs = Vec::new();
+    let mut enums = PackageEnums::new();
     let mut diagnostic_lines: Vec<String> = Vec::new();
 
-    for builtin_file in baml_builtins2::ALL
-        .iter()
-        .filter(|f| f.package == package && keep_file(f))
-    {
+    // Every file of the package is read for the enums it declares, which a
+    // kept file's signatures may name; only a kept file's builtins and
+    // classes are extracted.
+    for builtin_file in baml_builtins2::ALL.iter().filter(|f| f.package == package) {
         let path = builtin_file.virtual_path();
         // Real filesystem path for diagnostic messages (clickable in editors).
         let diag_path = format!(
@@ -178,6 +179,20 @@ fn extract_scoped(
             format!("{}.{}", builtin_file.package, ns_path.join("."))
         };
 
+        for item in &items {
+            if let Item::Enum(enum_def) = item {
+                let path = format!("{namespace_prefix}.{}", enum_def.name);
+                let variants = enum_def
+                    .variants
+                    .iter()
+                    .map(|variant| variant.name.to_string())
+                    .collect();
+                enums.insert(path.clone(), NativeEnum { path, variants });
+            }
+        }
+        if !keep_file(builtin_file) {
+            continue;
+        }
         for item in &items {
             match item {
                 Item::Class(class_def) => {
@@ -248,7 +263,81 @@ fn extract_scoped(
         });
     }
 
+    for builtin in vm_builtins.iter_mut().chain(io_builtins.iter_mut()) {
+        let scope = if builtin.namespace.is_empty() {
+            package.to_string()
+        } else {
+            format!("{package}.{}", builtin.namespace)
+        };
+        for param in &mut builtin.params {
+            resolve_enums(&mut param.ty, package, &scope, &enums);
+        }
+        resolve_enums(&mut builtin.return_type, package, &scope, &enums);
+    }
+    for class_def in &mut class_defs {
+        if let NativeClassBody::Fields(fields) = &mut class_def.body {
+            for field in fields {
+                resolve_enums(
+                    &mut field.field_type,
+                    package,
+                    &class_def.namespace_prefix,
+                    &enums,
+                );
+            }
+        }
+    }
+
     Ok((vm_builtins, io_builtins, class_defs))
+}
+
+/// Every enum a package declares, by its dotted path.
+type PackageEnums = std::collections::BTreeMap<String, NativeEnum>;
+
+/// Turn each path in `ty` that names one of the package's `enums` into that
+/// enum. `scope` is the dotted namespace the type is written in.
+fn resolve_enums(ty: &mut BamlType, package: &str, scope: &str, enums: &PackageEnums) {
+    match ty {
+        BamlType::Named(written) => {
+            if let Some(enm) = enums.get(&written_path(written, package, scope)) {
+                *ty = BamlType::Enum(enm.clone());
+            }
+        }
+        BamlType::Optional(inner) | BamlType::List(inner) => {
+            resolve_enums(inner, package, scope, enums);
+        }
+        BamlType::Map(key, value) => {
+            resolve_enums(key, package, scope, enums);
+            resolve_enums(value, package, scope, enums);
+        }
+        BamlType::Union(members) => {
+            for member in members {
+                resolve_enums(member, package, scope, enums);
+            }
+        }
+        BamlType::String
+        | BamlType::Int
+        | BamlType::Bigint
+        | BamlType::Float
+        | BamlType::Bool
+        | BamlType::Null
+        | BamlType::Generic(_)
+        | BamlType::Uint8Array
+        | BamlType::Media(_)
+        | BamlType::Enum(_)
+        | BamlType::StringLiteral(_) => {}
+    }
+}
+
+/// The dotted path a type path written in `scope` names: a written `root.`
+/// is the package, and a bare name is in `scope`.
+pub(crate) fn written_path(written: &str, package: &str, scope: &str) -> String {
+    if let Some(rest) = written.strip_prefix("root.") {
+        format!("{package}.{rest}")
+    } else if written.contains('.') {
+        written.to_string()
+    } else {
+        format!("{scope}.{written}")
+    }
 }
 
 /// Extract `$rust_function` and `$rust_io_function` methods from a class definition.
@@ -379,6 +468,7 @@ fn extract_from_class(
                 .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
             instance_backed: class_is_instance_backed(class_def, namespace_prefix),
+            rust_type: rust_type_of(class_def),
             class_generics: class_generics.clone(),
             receiver_type,
             builtin: package_of(namespace_prefix) == baml_builtins2::PACKAGE_BAML,
@@ -427,24 +517,52 @@ fn extract_from_class(
 
         match pipeline {
             BuiltinPipeline::Vm => vm_builtins.push(builtin),
-            BuiltinPipeline::Io => io_builtins.push(builtin),
+            BuiltinPipeline::Io(_) => io_builtins.push(builtin),
         }
     }
 }
 
-/// Whether `class_def`'s values are `Object::Instance`s with a generated `view::`
-/// struct. The `baml` package's classes that keep dedicated `Object` variants
-/// (Array, Map, String, `Uint8Array`) are not, and neither are field-less
-/// classes (pure namespace markers, method-only and opaque classes). The ONE
-/// rule behind [`extract_class_fields`] and every receiver built for the class,
-/// so a receiver can never promise a view struct that was not generated.
+/// Whether `class_def`'s values are instances with a generated `view::` struct:
+/// an `Object::Instance` of its fields, or the `Object::RustInstance` of a
+/// `@@rust_type` class. The `baml` package's classes that keep dedicated
+/// `Object` variants (Array, Map, String, `Uint8Array`) are not, and neither
+/// are field-less untagged classes (pure namespace markers, method-only
+/// classes). The ONE rule behind [`extract_class_fields`] and every receiver
+/// built for the class, so a receiver can never promise a view struct that was
+/// not generated.
 fn class_is_instance_backed(class_def: &ClassDef, namespace_prefix: &str) -> bool {
     let dedicated_variant = package_of(namespace_prefix) == baml_builtins2::PACKAGE_BAML
         && matches!(
             class_def.name.as_str(),
             "Array" | "Map" | "String" | "Uint8Array"
         );
-    !dedicated_variant && !class_def.fields.is_empty()
+    !dedicated_variant && (!class_def.fields.is_empty() || rust_type_of(class_def).is_some())
+}
+
+/// The `@@rust_type` kind of `class_def`, if it is tagged. The compiler has
+/// already checked the attribute, so a spelling it does not know is a build
+/// error here, never a guess.
+fn rust_type_of(class_def: &ClassDef) -> Option<baml_base::RustPayloadKind> {
+    let attr = class_def
+        .attributes
+        .iter()
+        .find(|attr| attr.name.as_str() == "rust_type")?;
+    Some(match attr.args.as_slice() {
+        [] => baml_base::RustPayloadKind::Foreign,
+        [arg] => {
+            let spelling =
+                baml_compiler2_ast::parse_string_attr_value(&arg.value).unwrap_or_else(|| {
+                    panic!("`@@rust_type` argument `{}` is not a string", arg.value)
+                });
+            baml_base::RustPayloadKind::from_spelling(&spelling).unwrap_or_else(|| {
+                panic!("`@@rust_type(\"{spelling}\")` names no kind of Rust state")
+            })
+        }
+        _ => panic!(
+            "`@@rust_type` on `{}` takes at most one argument",
+            class_def.name.as_str()
+        ),
+    })
 }
 
 /// Extract field definitions from a class, producing a `NativeClassDef`.
@@ -468,25 +586,36 @@ fn extract_class_fields(
         .map(|param| param.name.as_str().to_string())
         .collect();
 
-    let fields: Vec<NativeClassField> = class_def
-        .fields
-        .iter()
-        .enumerate()
-        .map(|(index, field)| {
-            let field_type = type_expr_to_baml_type(&field.type_expr, &generic_params);
-            NativeClassField {
-                name: field.name.as_str().to_string(),
-                field_type,
-                index,
-            }
-        })
-        .collect();
+    let body = match rust_type_of(class_def) {
+        Some(kind) => {
+            assert!(
+                class_def.fields.is_empty(),
+                "`@@rust_type` class `{class_name}` declares fields"
+            );
+            NativeClassBody::RustType(kind)
+        }
+        None => NativeClassBody::Fields(
+            class_def
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(index, field)| {
+                    let field_type = type_expr_to_baml_type(&field.type_expr, &generic_params);
+                    NativeClassField {
+                        name: field.name.as_str().to_string(),
+                        field_type,
+                        index,
+                    }
+                })
+                .collect(),
+        ),
+    };
 
     Some(NativeClassDef {
         name: class_name.to_string(),
         namespace_prefix: namespace_prefix.to_string(),
         generic_params,
-        fields,
+        body,
         source_file: source_file.to_string(),
     })
 }
@@ -577,7 +706,7 @@ fn extract_from_free_function(
 
     match pipeline {
         BuiltinPipeline::Vm => vm_builtins.push(builtin),
-        BuiltinPipeline::Io => io_builtins.push(builtin),
+        BuiltinPipeline::Io(_) => io_builtins.push(builtin),
     }
 }
 
@@ -712,6 +841,7 @@ fn extract_from_implements_for(
                 .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
             instance_backed: impl_receiver.is_instance_backed(namespace_prefix),
+            rust_type: impl_receiver.rust_type(),
             class_generics: impl_generics.clone(),
             receiver_type: ReceiverType::RefSelf,
             builtin: match impl_receiver {
@@ -763,7 +893,7 @@ fn extract_from_implements_for(
 
         match pipeline {
             BuiltinPipeline::Vm => vm_builtins.push(builtin),
-            BuiltinPipeline::Io => io_builtins.push(builtin),
+            BuiltinPipeline::Io(_) => io_builtins.push(builtin),
         }
     }
 }
@@ -823,6 +953,13 @@ impl<'a> ImplReceiver<'a> {
             Self::Class(class_def) => class_is_instance_backed(class_def, namespace_prefix),
         }
     }
+
+    fn rust_type(self) -> Option<baml_base::RustPayloadKind> {
+        match self {
+            Self::Builtin(_) => None,
+            Self::Class(class_def) => rust_type_of(class_def),
+        }
+    }
 }
 
 /// Like [`type_expr_to_baml_type`] but resolves a `Self` path to `self_baml`
@@ -859,7 +996,7 @@ fn type_expr_to_baml_type_with_self(
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(recurse(non_null[0])))
             } else {
-                BamlType::Named("union".to_string())
+                union_type(variants, &recurse)
             }
         }
         _ => type_expr_to_baml_type(ty, generics),
@@ -867,10 +1004,29 @@ fn type_expr_to_baml_type_with_self(
 }
 
 /// Returns the pipeline kind if the function body is a Rust builtin, or None otherwise.
+///
+/// Panics for a `$rust_function` marked `//baml:runtime_only`: only an IO
+/// builtin is reached from outside the VM, so only one can be reached by the
+/// running engine alone.
 fn extract_builtin_pipeline(func: &FunctionDef) -> Option<BuiltinPipeline> {
+    let runtime_only = func.directives.has(NativeDirective::RuntimeOnly);
     match &func.body {
-        Some(FunctionBodyDef::Builtin(BuiltinKind::Vm)) => Some(BuiltinPipeline::Vm),
-        Some(FunctionBodyDef::Builtin(BuiltinKind::Io)) => Some(BuiltinPipeline::Io),
+        Some(FunctionBodyDef::Builtin(BuiltinKind::Vm)) => {
+            assert!(
+                !runtime_only,
+                "baml codegen error: `{}` is a `$rust_function` marked `//baml:runtime_only`, \
+                 which only a `$rust_io_function` can be",
+                func.name
+            );
+            Some(BuiltinPipeline::Vm)
+        }
+        Some(FunctionBodyDef::Builtin(BuiltinKind::Io)) => {
+            Some(BuiltinPipeline::Io(if runtime_only {
+                IoCallers::RuntimeOnly
+            } else {
+                IoCallers::Hosts
+            }))
+        }
         _ => None,
     }
 }
@@ -980,6 +1136,21 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
         .collect()
 }
 
+/// A union that is not `T?`: its members, a string literal member as itself.
+fn union_type(variants: &[TypeExpr], member: &dyn Fn(&TypeExpr) -> BamlType) -> BamlType {
+    BamlType::Union(
+        variants
+            .iter()
+            .map(|variant| match &variant.kind {
+                TypeExprKind::Literal {
+                    value: baml_base::Literal::String(choice),
+                } => BamlType::StringLiteral(choice.clone()),
+                _ => member(variant),
+            })
+            .collect(),
+    )
+}
+
 /// Convert a `TypeExpr` from the AST to a `BamlType`.
 ///
 /// `generics` is the combined set of type parameter names in scope (class + method).
@@ -1034,7 +1205,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
                 // Multi-segment path (e.g. `baml.errors.Io`) — treat as Named.
                 let name = path
                     .iter()
-                    .map(|s| s.as_str())
+                    .map(baml_base::Name::as_str)
                     .collect::<Vec<_>>()
                     .join(".");
                 BamlType::Named(name)
@@ -1049,7 +1220,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(type_expr_to_baml_type(non_null[0], generics)))
             } else {
-                BamlType::Named("union".to_string())
+                union_type(variants, &|member| type_expr_to_baml_type(member, generics))
             }
         }
         TypeExprKind::Literal { .. } => BamlType::Named("literal".to_string()),
@@ -1061,7 +1232,6 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         | TypeExprKind::Error
         | TypeExprKind::Infer => BamlType::Named("unknown".to_string()),
         TypeExprKind::Type => BamlType::Named("type".to_string()),
-        TypeExprKind::Rust => BamlType::RustType,
     }
 }
 
@@ -1088,10 +1258,11 @@ mod tests {
             .find(|c| c.name == "Pdf")
             .expect("missing Pdf");
         assert_eq!(pdf.namespace_prefix, "baml.media");
-        assert_eq!(pdf.fields.len(), 1);
-        assert_eq!(pdf.fields[0].name, "_data");
-        assert_eq!(pdf.fields[0].index, 0);
-        assert!(matches!(pdf.fields[0].field_type, BamlType::RustType));
+        assert!(pdf.fields().is_empty());
+        assert!(matches!(
+            pdf.body,
+            crate::types::NativeClassBody::RustType(baml_base::RustPayloadKind::Pdf)
+        ));
 
         assert!(
             class_defs.iter().any(|c| c.name == "Audio"),
@@ -1125,18 +1296,20 @@ mod tests {
             .find(|c| c.name == "File")
             .expect("missing File");
         assert_eq!(file.namespace_prefix, "baml.fs");
-        assert_eq!(file.fields.len(), 1);
-        assert_eq!(file.fields[0].name, "_handle");
-        assert!(matches!(file.fields[0].field_type, BamlType::RustType));
+        assert!(matches!(
+            file.body,
+            NativeClassBody::RustType(baml_base::RustPayloadKind::File)
+        ));
 
         let socket = class_defs
             .iter()
             .find(|c| c.name == "TcpStream")
             .expect("missing TcpStream");
         assert_eq!(socket.namespace_prefix, "baml.net");
-        assert_eq!(socket.fields.len(), 1);
-        assert_eq!(socket.fields[0].name, "_handle");
-        assert!(matches!(socket.fields[0].field_type, BamlType::RustType));
+        assert!(matches!(
+            socket.body,
+            NativeClassBody::RustType(baml_base::RustPayloadKind::TcpStream)
+        ));
 
         // UDP datagram is a plain data class (payload + sender address).
         let datagram = class_defs
@@ -1144,29 +1317,35 @@ mod tests {
             .find(|c| c.name == "Datagram")
             .expect("missing Datagram");
         assert_eq!(datagram.namespace_prefix, "baml.net");
-        assert_eq!(datagram.fields.len(), 2);
-        assert_eq!(datagram.fields[0].name, "data");
+        assert_eq!(datagram.fields().len(), 2);
+        assert_eq!(datagram.fields()[0].name, "data");
         assert!(matches!(
-            datagram.fields[0].field_type,
+            datagram.fields()[0].field_type,
             BamlType::Uint8Array
         ));
-        assert_eq!(datagram.fields[1].name, "addr");
-        assert!(matches!(datagram.fields[1].field_type, BamlType::String));
+        assert_eq!(datagram.fields()[1].name, "addr");
+        assert!(matches!(datagram.fields()[1].field_type, BamlType::String));
 
         let response = class_defs
             .iter()
             .find(|c| c.name == "Response")
             .expect("missing Response");
         assert_eq!(response.namespace_prefix, "baml.http");
-        assert_eq!(response.fields.len(), 4);
-        assert_eq!(response.fields[0].name, "status_code");
-        assert!(matches!(response.fields[0].field_type, BamlType::Int));
-        assert_eq!(response.fields[1].name, "headers");
-        assert!(matches!(response.fields[1].field_type, BamlType::Map(_, _)));
-        assert_eq!(response.fields[2].name, "url");
-        assert!(matches!(response.fields[2].field_type, BamlType::String));
-        assert_eq!(response.fields[3].name, "_body");
-        assert!(matches!(response.fields[3].field_type, BamlType::RustType));
+        assert_eq!(response.fields().len(), 4);
+        assert_eq!(response.fields()[0].name, "status_code");
+        assert!(matches!(response.fields()[0].field_type, BamlType::Int));
+        assert_eq!(response.fields()[1].name, "headers");
+        assert!(matches!(
+            response.fields()[1].field_type,
+            BamlType::Map(_, _)
+        ));
+        assert_eq!(response.fields()[2].name, "url");
+        assert!(matches!(response.fields()[2].field_type, BamlType::String));
+        assert_eq!(response.fields()[3].name, "_body");
+        assert!(matches!(
+            &response.fields()[3].field_type,
+            BamlType::Named(name) if name == "_ResponseBody"
+        ));
 
         let request = class_defs
             .iter()
@@ -1174,7 +1353,7 @@ mod tests {
             .expect("missing Request");
         assert_eq!(request.namespace_prefix, "baml.http");
         // method, url, headers, body, timeout, connect_timeout
-        assert_eq!(request.fields.len(), 6);
+        assert_eq!(request.fields().len(), 6);
 
         // The structural prompt lives in the ai package.
         let (_ai_vm, _ai_io, ai_class_defs) = extract_native_builtins_for("ai").unwrap();
@@ -1183,8 +1362,11 @@ mod tests {
             .find(|c| c.name == "Prompt")
             .expect("missing ai.Prompt");
         assert_eq!(prompt.namespace_prefix, "ai");
-        assert_eq!(prompt.fields.len(), 1);
-        assert!(matches!(prompt.fields[0].field_type, BamlType::RustType));
+        assert!(prompt.fields().is_empty());
+        assert!(matches!(
+            prompt.body,
+            crate::types::NativeClassBody::RustType(baml_base::RustPayloadKind::Prompt)
+        ));
     }
 
     #[test]
@@ -1211,7 +1393,7 @@ mod tests {
             may_yield: false,
             fallible: false,
             local_twin: false,
-            pipeline: BuiltinPipeline::Io,
+            pipeline: BuiltinPipeline::Io(IoCallers::Hosts),
             throws: Some(vec![]),
             source_file: String::new(),
         };
@@ -1330,10 +1512,15 @@ mod tests {
 
         assert_eq!(deep_copy.vm_usage, VmUsage::MutRef);
 
-        // `//baml:vm` on a non-container receiver: `Array`/`Map` methods default to
-        // `Ref` without the directive, so a media method is what actually pins the
-        // directive being read.
-        assert_eq!(pdf_url.vm_usage, VmUsage::Ref);
+        // `Array`/`Map` methods default to `Ref` without the directive, so a free
+        // function is what pins `//baml:vm` being read; a media accessor reads
+        // its payload and needs no VM.
+        let to_string_primitive = vm_builtins
+            .iter()
+            .find(|b| b.path == "baml._to_string_primitive")
+            .expect("missing baml._to_string_primitive");
+        assert_eq!(to_string_primitive.vm_usage, VmUsage::Ref);
+        assert_eq!(pdf_url.vm_usage, VmUsage::None);
 
         assert_eq!(array_length.vm_usage, VmUsage::None);
         assert_eq!(array_push.vm_usage, VmUsage::None);
@@ -1358,7 +1545,7 @@ interface Modifier<T, E> {
 }
 
 class Limit {
-    _handle: $rust_type,
+    _handle: int,
 }
 
 class Root {}

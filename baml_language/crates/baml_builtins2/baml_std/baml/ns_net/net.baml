@@ -3,9 +3,6 @@
 ///
 /// Implements `baml.io.Read` and `baml.io.Write`.
 class TcpStream {
-    /// (internal)
-    _handle: $rust_type,
-
     /// Opens a TCP connection to `addr` (e.g. `"127.0.0.1:8080"`) and returns the stream.
     ///
     /// `timeout` bounds how long to wait for the connection to be established;
@@ -49,6 +46,8 @@ class TcpStream {
     function close(self) -> null throws root.errors.Io {
         $rust_io_function
     }
+
+    @@rust_type("TcpStream")
 }
 
 /// A bound TCP listener. Created by `baml.net.TcpListener.bind`. Calling `accept`
@@ -67,9 +66,6 @@ class TcpStream {
 /// }
 /// ```
 class TcpListener {
-    /// (internal)
-    _handle: $rust_type,
-
     /// Binds to `addr` (e.g. `"127.0.0.1:8080"`) and returns a listener ready to
     /// accept incoming connections.
     function bind(addr: string) -> TcpListener throws root.errors.Io {
@@ -84,14 +80,13 @@ class TcpListener {
     function close(self) -> null throws root.errors.Io {
         $rust_io_function
     }
+
+    @@rust_type("TcpListener")
 }
 
 /// A UDP socket. Created by `baml.net.UdpSocket.bind`. UDP is connectionless and
 /// message-oriented: every `send_to` / `recv_from` carries a single datagram.
 class UdpSocket {
-    /// (internal)
-    _handle: $rust_type,
-
     /// Binds to `addr` (e.g. `"0.0.0.0:0"` for an OS-assigned ephemeral port) and
     /// returns the socket.
     function bind(addr: string) -> UdpSocket throws root.errors.Io {
@@ -146,6 +141,8 @@ class UdpSocket {
     function close(self) -> null throws root.errors.Io {
         $rust_io_function
     }
+
+    @@rust_type("UdpSocket")
 }
 
 /// A received UDP datagram: the payload bytes and the address of the sender.

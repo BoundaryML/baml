@@ -230,7 +230,12 @@ use sha2::{Digest, Sha256};
 /// and the compiler version, a `PackageRecord` carries the package's
 /// `metadata` (its content hashes and claim, BEP-085), and a
 /// `ProgramPackage` carries it into the executable.
-pub const FORMAT_VERSION: u32 = 28;
+///
+/// Version 29: classes whose state Rust holds are `@@rust_type` classes. The
+/// `$rust_type` type is gone, so a type no longer encodes the `RustType`
+/// head (its discriminant, 18, is unused), and `ClassCrossing` gained the
+/// appended `HostValue`.
+pub const FORMAT_VERSION: u32 = 29;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

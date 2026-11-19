@@ -135,52 +135,29 @@ impl LeafBody {
     }
 
     /// True when any class field, function/method param, or return type
-    /// in this leaf is `Ty::RustType` — i.e. needs the
+    /// in this leaf is a host's own value — i.e. needs the
     /// `from baml_bridge import BamlPyHandle as _BamlPyHandle` line.
     pub(crate) fn needs_baml_pyhandle(&self) -> bool {
-        fn ty_uses_rust_type(ty: &Ty) -> bool {
-            match ty {
-                Ty::RustType => true,
-                Ty::List(inner) => ty_uses_rust_type(inner),
-                Ty::Map { key, value, .. } => ty_uses_rust_type(key) || ty_uses_rust_type(value),
-                Ty::Union(items) | Ty::Tuple(items) => items.iter().any(ty_uses_rust_type),
-                Ty::Class(_, args) => args.iter().any(ty_uses_rust_type),
-                Ty::Interface(_, generics, associated_types) => {
-                    generics.iter().any(ty_uses_rust_type)
-                        || associated_types.iter().any(|(_, ty)| ty_uses_rust_type(ty))
-                }
-                Ty::Function {
-                    params,
-                    ret,
-                    throws,
-                    ..
-                } => {
-                    params.iter().any(|param| ty_uses_rust_type(&param.ty))
-                        || ty_uses_rust_type(ret)
-                        || ty_uses_rust_type(throws)
-                }
-                Ty::Future(value, error) => ty_uses_rust_type(value) || ty_uses_rust_type(error),
-                _ => false,
-            }
-        }
+        let names = self.names.as_deref();
+        let ty_uses_handle = |ty: &Ty| ty_uses_baml_pyhandle(ty, names);
         self.symbols.iter().any(|(s, _)| match s {
             EmittedSymbol::Class(c) => {
-                c.properties().iter().any(|p| ty_uses_rust_type(&p.ty))
+                c.properties().iter().any(|p| ty_uses_handle(&p.ty))
                     || c.static_methods.iter().any(|m| {
-                        m.required_args.iter().any(|arg| ty_uses_rust_type(&arg.ty))
-                            || m.optional_args.iter().any(|arg| ty_uses_rust_type(&arg.ty))
-                            || ty_uses_rust_type(&m.return_ty)
+                        m.required_args.iter().any(|arg| ty_uses_handle(&arg.ty))
+                            || m.optional_args.iter().any(|arg| ty_uses_handle(&arg.ty))
+                            || ty_uses_handle(&m.return_ty)
                     })
                     || c.instance_methods.iter().any(|m| {
-                        m.required_args.iter().any(|arg| ty_uses_rust_type(&arg.ty))
-                            || m.optional_args.iter().any(|arg| ty_uses_rust_type(&arg.ty))
-                            || ty_uses_rust_type(&m.return_ty)
+                        m.required_args.iter().any(|arg| ty_uses_handle(&arg.ty))
+                            || m.optional_args.iter().any(|arg| ty_uses_handle(&arg.ty))
+                            || ty_uses_handle(&m.return_ty)
                     })
             }
             EmittedSymbol::Function(f) => {
-                f.arg_tys.iter().any(ty_uses_rust_type) || ty_uses_rust_type(&f.return_ty)
+                f.arg_tys.iter().any(ty_uses_handle) || ty_uses_handle(&f.return_ty)
             }
-            EmittedSymbol::TypeAlias(a) => ty_uses_rust_type(&a.resolves_to),
+            EmittedSymbol::TypeAlias(a) => ty_uses_handle(&a.resolves_to),
             EmittedSymbol::Enum(_) => false,
         })
     }
@@ -658,6 +635,31 @@ impl ProtocolCallables {
     }
 }
 
+/// Whether `ty` renders through the runtime's `_BamlPyHandle`, which needs
+/// the `from baml_bridge import BamlPyHandle as _BamlPyHandle` line.
+fn ty_uses_baml_pyhandle(ty: &Ty, names: Option<&PythonNames>) -> bool {
+    let recurse = |ty: &Ty| ty_uses_baml_pyhandle(ty, names);
+    match ty {
+        Ty::List(inner) => recurse(inner),
+        Ty::Map { key, value, .. } => recurse(key) || recurse(value),
+        Ty::Union(items) | Ty::Tuple(items) => items.iter().any(recurse),
+        Ty::Class(name, args) => {
+            crate::translate_ty::is_host_value(name, names) || args.iter().any(recurse)
+        }
+        Ty::Interface(_, generics, associated_types) => {
+            generics.iter().any(recurse) || associated_types.iter().any(|(_, ty)| recurse(ty))
+        }
+        Ty::Function {
+            params,
+            ret,
+            throws,
+            ..
+        } => params.iter().any(|param| recurse(&param.ty)) || recurse(ret) || recurse(throws),
+        Ty::Future(value, error) => recurse(value) || recurse(error),
+        _ => false,
+    }
+}
+
 /// Whether the Python type of `ty` names a type variable. The `throws` of a
 /// function type is not part of that type.
 fn mentions_type_var(ty: &Ty) -> bool {
@@ -691,8 +693,7 @@ fn mentions_type_var(ty: &Ty) -> bool {
         | Ty::TypeAlias(_)
         | Ty::Type
         | Ty::Resource
-        | Ty::PromptAst
-        | Ty::RustType => false,
+        | Ty::PromptAst => false,
     }
 }
 
@@ -703,6 +704,9 @@ fn collect_root_imports(
     names: Option<&PythonNames>,
 ) {
     match ty {
+        // A host's own value renders as `_BamlPyHandle`, imported on its own
+        // line via `needs_baml_pyhandle`.
+        Ty::Class(name, _) if crate::translate_ty::is_host_value(name, names) => {}
         Ty::Class(name, args) => {
             record_name_routing(name, current, out, names);
             for a in args {
@@ -735,10 +739,6 @@ fn collect_root_imports(
         // `baml/__init__.py` (`from . import media, http, …`) binds
         // `media` as an attribute of `baml` for the dotted access.
         //
-        // `Ty::RustType` renders as `_BamlPyHandle` and gets its own
-        // `from baml_bridge import BamlPyHandle as _BamlPyHandle`
-        // line via `needs_baml_pyhandle` — it does *not* go through
-        // the cross-leaf segment set.
         Ty::Media(..) => {
             // Skip when current leaf IS `baml/media` (same-leaf ref).
             let target: &[&str] = &["baml", "media"];
@@ -769,7 +769,6 @@ fn collect_root_imports(
         | Ty::Literal(..)
         | Ty::Uint8Array
         | Ty::TypeVar(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
@@ -1094,7 +1093,6 @@ fn collect_alias_dependencies(
         | Ty::Enum(..)
         | Ty::EnumVariant(..)
         | Ty::TypeVar(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
@@ -2092,7 +2090,6 @@ fn walk_generic_inference_positions(
         | Ty::Interface(..)
         | Ty::Enum(..)
         | Ty::EnumVariant(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
@@ -2728,7 +2725,7 @@ pub(crate) fn render_leaf_body_pyi(
     .unwrap();
 
     // `_BamlOpaque` and `_BamlPyHandle` aliases mirror the `.py` imports so
-    // type checkers can resolve opaque bases and `$rust_type` field
+    // type checkers can resolve opaque bases and handle-typed field
     // annotations.
     if body.needs_baml_opaque() {
         out.push('\n');

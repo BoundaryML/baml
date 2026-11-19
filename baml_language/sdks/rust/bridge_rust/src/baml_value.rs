@@ -42,6 +42,16 @@ pub mod internal {
     /// Public only to allow generated SDK to reference it.
     /// Do NOT implement it yourself.
     ///
+    /// The generated wrapper of a class that crosses by reference: the
+    /// engine's instance it holds, which an invocation control (a trace
+    /// selection) hands the runtime as itself.
+    pub trait Reference {
+        fn reference(&self) -> &RuntimeInstance;
+    }
+
+    /// Public only to allow generated SDK to reference it.
+    /// Do NOT implement it yourself.
+    ///
     /// Carries the actual conversion methods so the wire types stay off
     /// the public [`BamlValue`](super::BamlValue) trait.
     pub trait __BamlValuePrivate: Sized {

@@ -16,8 +16,6 @@ class ScanOptions {
 
 /// A compiled glob pattern. Create one with `baml.glob.new(pattern)`.
 class Glob {
-    _handle: $rust_type,
-
     /// Scans the filesystem and returns all paths matching this glob pattern.
     /// Pass a `string` start path or a `ScanOptions` object for more control.
     function scan(self, start: string | ScanOptions) -> string[] throws root.errors.Io {
@@ -31,6 +29,8 @@ class Glob {
     function matches(self, path: string) -> bool throws never {
         $rust_io_function
     }
+
+    @@rust_type("Glob")
 }
 
 /// Compiles a glob `pattern` and returns a `Glob` object for scanning or matching.

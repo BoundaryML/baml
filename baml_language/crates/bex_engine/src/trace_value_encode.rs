@@ -144,14 +144,15 @@ enum MediaTypeEnum {
     Audio = 2,
     Pdf = 3,
     Video = 4,
-    Other = 5,
+    // 5 is reserved: no media value has a generic kind.
 }
 
 #[derive(Clone, PartialEq, Message)]
 struct BamlTy {
+    // Tags 16 and 20 are reserved; 21 is unused.
     #[prost(
         oneof = "BamlTyVariant",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24, 25"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 22, 23, 24, 25"
     )]
     ty: Option<BamlTyVariant>,
 }
@@ -188,8 +189,6 @@ enum BamlTyVariant {
     Function(BamlTyFunction),
     #[prost(message, tag = "15")]
     Future(BamlTyFuture),
-    #[prost(message, tag = "16")]
-    RustType(BamlTyRustType),
     #[prost(message, tag = "17")]
     MetaType(BamlTyMetaType),
     #[prost(message, tag = "18")]
@@ -414,13 +413,6 @@ enum BamlTyLiteralVariant {
     clippy::empty_structs_with_brackets,
     reason = "Empty message mirrors the outbound protobuf shape."
 )]
-struct BamlTyRustType {}
-
-#[derive(Clone, PartialEq, Message)]
-#[allow(
-    clippy::empty_structs_with_brackets,
-    reason = "Empty message mirrors the outbound protobuf shape."
-)]
 struct BamlTyMetaType {}
 
 #[derive(Clone, PartialEq, Message)]
@@ -547,13 +539,12 @@ fn media_to_proto(media: &TraceMediaValue) -> BamlValueMedia {
     }
 }
 
-fn media_kind_to_proto_enum(kind: bex_external_types::MediaKind) -> MediaTypeEnum {
+fn media_kind_to_proto_enum(kind: bex_external_types::ConcreteMediaKind) -> MediaTypeEnum {
     match kind {
-        bex_external_types::MediaKind::Image => MediaTypeEnum::Image,
-        bex_external_types::MediaKind::Audio => MediaTypeEnum::Audio,
-        bex_external_types::MediaKind::Pdf => MediaTypeEnum::Pdf,
-        bex_external_types::MediaKind::Video => MediaTypeEnum::Video,
-        bex_external_types::MediaKind::Generic => MediaTypeEnum::Other,
+        bex_external_types::ConcreteMediaKind::Image => MediaTypeEnum::Image,
+        bex_external_types::ConcreteMediaKind::Audio => MediaTypeEnum::Audio,
+        bex_external_types::ConcreteMediaKind::Pdf => MediaTypeEnum::Pdf,
+        bex_external_types::ConcreteMediaKind::Video => MediaTypeEnum::Video,
     }
 }
 
@@ -689,7 +680,6 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             value: Some(Box::new(runtime_ty_to_proto_ty(value))),
             error: Some(Box::new(runtime_ty_to_proto_ty(error))),
         }),
-        RuntimeTy::RustType => BamlTyVariant::RustType(BamlTyRustType {}),
         RuntimeTy::Type => BamlTyVariant::MetaType(BamlTyMetaType {}),
         RuntimeTy::Resource => BamlTyVariant::Resource(BamlTyResource {}),
         RuntimeTy::PromptAst => BamlTyVariant::PromptAst(BamlTyPromptAst {}),
@@ -858,7 +848,7 @@ fn render_media_value(media: &BamlValueMedia) -> String {
         MediaTypeEnum::Audio => "audio",
         MediaTypeEnum::Pdf => "pdf",
         MediaTypeEnum::Video => "video",
-        MediaTypeEnum::Unspecified | MediaTypeEnum::Other => "media",
+        MediaTypeEnum::Unspecified => "media",
     });
     let mime = media
         .mime_type
@@ -987,7 +977,7 @@ mod tests {
         let snapshot = TraceSnapshot::for_test(
             TraceValueRef::for_test(0),
             vec![TraceValue::Media(crate::trace_heap::TraceMediaValue {
-                kind: bex_external_types::MediaKind::Image,
+                kind: bex_external_types::ConcreteMediaKind::Image,
                 mime_type: Some("image/png".to_string()),
                 content: crate::trace_heap::TraceMediaContent::Base64 {
                     base64: "aW1hZ2UtYnl0ZXM=".to_string(),

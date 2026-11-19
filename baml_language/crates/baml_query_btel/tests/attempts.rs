@@ -113,7 +113,7 @@ async fn each_retry_attempt_is_a_span_with_its_own_request() {
         function main(n: int) -> int {
             let server = flaky([429]);
             let task = spawn { server.server.serve(server.handle) };
-            let answer = Ask("http://" + server.server.addr, $trace = trace.span());
+            let answer = Ask("http://" + server.server.addr(), $trace = trace.span());
             task.cancel();
             answer.length()
         }
@@ -197,7 +197,7 @@ async fn each_fallback_member_try_is_a_span() {
         function main(n: int) -> int {
             let server = flaky([500]);
             let task = spawn { server.server.serve(server.handle) };
-            let answer = Fall("http://" + server.server.addr, $trace = trace.span());
+            let answer = Fall("http://" + server.server.addr(), $trace = trace.span());
             task.cancel();
             answer.length()
         }
@@ -260,7 +260,7 @@ async fn a_streamed_retry_has_an_attempt_span_for_each_open() {
         function main(n: int) -> int {
             let server = flaky([429]);
             let task = spawn { server.server.serve(server.handle) };
-            let text = Stream("http://" + server.server.addr, $trace = trace.span());
+            let text = Stream("http://" + server.server.addr(), $trace = trace.span());
             task.cancel();
             text.length()
         }
@@ -312,8 +312,8 @@ async fn parallel_retries_keep_their_attempts_apart() {
                 let two = flaky([429]);
                 let serving_one = spawn { one.server.serve(one.handle) };
                 let serving_two = spawn { two.server.serve(two.handle) };
-                let first = spawn "first" { Ask("http://" + one.server.addr) };
-                let second = spawn "second" { Ask("http://" + two.server.addr) };
+                let first = spawn "first" { Ask("http://" + one.server.addr()) };
+                let second = spawn "second" { Ask("http://" + two.server.addr()) };
                 let a = await first;
                 let b = await second;
                 serving_one.cancel();

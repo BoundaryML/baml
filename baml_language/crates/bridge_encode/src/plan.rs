@@ -11,7 +11,7 @@
 
 use std::{collections::HashMap, rc::Rc};
 
-use baml_type::{ClassCrossing, Literal, MediaKind, Name, ParamTy, WireHead};
+use baml_type::{ClassCrossing, Literal, Name, ParamTy, WireHead};
 use bridge_ctypes::Bounded;
 use indexmap::IndexMap;
 
@@ -131,7 +131,7 @@ impl<V> Node<'_, V> {
             }
             Node::Leaf { kind, .. } => match kind {
                 LeafKind::Handle => opaque(),
-                LeafKind::Media(kind) => SlotTy::Media(*kind),
+                LeafKind::Media(kind) => SlotTy::Media((*kind).into()),
                 LeafKind::Prompt => SlotTy::PromptAst,
                 LeafKind::TypeValue => SlotTy::Type,
             },
@@ -473,7 +473,6 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             | SlotTy::PromptAst
             | SlotTy::Type
             | SlotTy::Resource
-            | SlotTy::RustType
             | SlotTy::Future(..)
             | SlotTy::Never
             | SlotTy::AssociatedTypeProjection { .. }
@@ -913,7 +912,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             (Shape::Callable, _) => None,
             (Shape::Leaf(LeafKind::Handle), _) => Some(Rank::Open),
             (Shape::Leaf(LeafKind::Media(kind)), SlotTy::Media(declared))
-                if *declared == MediaKind::Generic || declared == kind =>
+                if declared.admits(*kind) =>
             {
                 Some(Rank::Identity)
             }
@@ -924,8 +923,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                     && self.facts.class(name).is_some_and(|class| {
                         matches!(
                             class.crossing,
-                            ClassCrossing::Media(wrapper)
-                                if wrapper == MediaKind::Generic || wrapper == *kind
+                            ClassCrossing::Media(wrapper) if wrapper == *kind
                         )
                     }) =>
             {
@@ -1560,7 +1558,6 @@ impl Solution {
             | SlotTy::TypeAlias(_)
             | SlotTy::Interface(..)
             | SlotTy::AssociatedTypeProjection { .. }
-            | SlotTy::RustType
             | SlotTy::Type
             | SlotTy::Resource
             | SlotTy::PromptAst

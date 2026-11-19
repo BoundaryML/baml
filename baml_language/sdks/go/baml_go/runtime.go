@@ -149,13 +149,15 @@ type inputEncoder struct {
 
 // inputTransaction owns what one request transfers to the engine while it is
 // encoded: native handle clones (one per occurrence, including each live head
-// of a stated type) and host-value registrations. A request that never
+// of a stated type) and host-key references (one per occurrence: a fresh
+// registration or a key sent again). A request that never
 // reaches the engine rolls them back. Once it does, the engine consumes every
 // transfer it carries, on success and on every failure, so the transaction is
 // committed: releasing a clone then would release the reference Go kept,
 // since an identity-bearing row clones to its own key.
 type inputTransaction struct {
-	keys          []uint64
+	keys []uint64
+	// hostValueKeys holds one entry per host-key reference the request took.
 	hostValueKeys []uint64
 	// classDepth is how many generated classes enclose the value being
 	// encoded; GeneratedClass bounds it so a cyclic Go value is refused.
@@ -170,8 +172,9 @@ func (transaction *inputTransaction) ownHostValue(key uint64) {
 	transaction.hostValueKeys = append(transaction.hostValueKeys, key)
 }
 
-// commit hands every transfer to the engine once it has the request. Host
-// values are then released by the registered host-release callback.
+// commit hands every transfer to the engine once it has the request. The
+// engine gives the host-key references back through the host-release
+// callback.
 func (transaction *inputTransaction) commit() {
 	if transaction != nil {
 		transaction.keys = nil
@@ -190,7 +193,7 @@ func (transaction *inputTransaction) rollback() {
 	}
 	transaction.keys = nil
 	for _, key := range transaction.hostValueKeys {
-		unregisterHostValue(key)
+		releaseHostValue(key, 1)
 	}
 	transaction.hostValueKeys = nil
 }
@@ -408,8 +411,9 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	}
 	defer nativeReleaseFunctionCall(engineCallID)
 	defer runtime.KeepAlive(ctx)
-	options, controlTransaction, err := prepareInvocation(waitContext, engineCallID, controls)
+	options, controlTransaction, cancelTransaction, err := prepareInvocation(waitContext, engineCallID, controls)
 	defer controlTransaction.rollback()
+	defer cancelTransaction.rollback()
 	if err != nil {
 		return Value{}, err
 	}
@@ -430,6 +434,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	defer transaction.rollback()
 	nativeCall(encoded, callbackID)
 	transaction.commit()
+	cancelTransaction.commit()
 
 	payload, err := waitForCallResult(waitContext, call.result)
 	if err != nil {
@@ -461,8 +466,9 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input, co
 	}
 	defer nativeReleaseFunctionCall(engineCallID)
 	defer runtime.KeepAlive(ctx)
-	options, controlTransaction, err := prepareInvocation(ctx, engineCallID, controls)
+	options, controlTransaction, cancelTransaction, err := prepareInvocation(ctx, engineCallID, controls)
 	defer controlTransaction.rollback()
+	defer cancelTransaction.rollback()
 	if err != nil {
 		return Value{}, err
 	}
@@ -482,6 +488,7 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input, co
 	defer transaction.rollback()
 	nativeCall(encoded, callbackID)
 	transaction.commit()
+	cancelTransaction.commit()
 
 	payload, err := waitForCallResult(ctx, call.result)
 	if err != nil {
@@ -665,7 +672,6 @@ func decodeResultEnvelope(result *cffi.BamlOutboundResult) (Value, error) {
 			return Value{}, errors.New("BAML returned an empty error payload")
 		}
 		failure := outboundFailure("error", item.Error.GetValue(), item.Error.GetTrace())
-		releaseOutboundOpaqueHostValues(item.Error.GetValue())
 		return Value{}, failure
 	case *cffi.BamlOutboundResult_Panic:
 		if item.Panic == nil {
@@ -673,12 +679,10 @@ func decodeResultEnvelope(result *cffi.BamlOutboundResult) (Value, error) {
 		}
 		if item.Panic.GetIsExitPanic() {
 			releaseOutboundHandles(item.Panic.GetValue())
-			releaseOutboundOpaqueHostValues(item.Panic.GetValue())
 			processExit(processExitCode(item.Panic.GetExitCode()))
 			return Value{}, errors.New("BAML process-exit handler returned unexpectedly")
 		}
 		failure := outboundFailure("panic", item.Panic.GetValue(), item.Panic.GetTrace())
-		releaseOutboundOpaqueHostValues(item.Panic.GetValue())
 		return Value{}, failure
 	default:
 		return Value{}, errors.New("BAML returned an empty result envelope")

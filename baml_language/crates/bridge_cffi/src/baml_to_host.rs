@@ -546,7 +546,7 @@ pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, Brid
                 .ok_or_else(|| {
                     BridgeError::Internal("callable handle is no longer live".to_string())
                 })?;
-            let CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+            let CffiHandleTableEntry::Adt(bridge_ctypes::TableAdt::TaggedHeapHandle {
                 kind: bex_project::TaggedHeapHandleKind::Callable,
                 ty: bex_project::AnnotationTy::Function { params, .. },
                 heap_handle,

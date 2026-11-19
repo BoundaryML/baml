@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 
 use baml_base::{Literal, MediaKind, qualified_name::AI_STREAM_STREAM};
-use baml_sdkgen_types::{Name, Ty};
+use baml_sdkgen_types::{ClassCrossing, Name, Ty};
 use indexmap::IndexMap;
 
 use crate::{
@@ -149,6 +149,10 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
         Ty::Media(MediaKind::Pdf) => media_ref("Pdf", ctx),
         Ty::Media(MediaKind::Generic) => "typing.Any".to_string(),
         Ty::Class(name, args) => {
+            if is_host_value(name, ctx.names.as_deref()) {
+                debug_assert!(args.is_empty(), "`{name}` takes no type arguments");
+                return "_BamlPyHandle".to_string();
+            }
             if ctx.type_stream_accessors
                 && is_ai_stream_type(name)
                 && let [value] = &**args
@@ -270,14 +274,25 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
             }
         }
         Ty::Never => "None".to_string(),
-        // `$rust_type` fields in stdlib stubs (Response._body, SseStream._handle, …).
-        // The host-language opaque-handle wrapper is `BamlPyHandle` from the
-        // bridge runtime, imported as `_BamlPyHandle` to keep `baml` (the
-        // local relative module) from shadowing it. The single-underscore
-        // field name still triggers Pydantic v2's private-attribute handling
-        // regardless of the annotation; `_decode_class` injects the value
-        // into `__pydantic_private__` post-construction.
-        Ty::RustType => "_BamlPyHandle".to_string(),
+    }
+}
+
+/// Whether the class `name` is a host's own value, which crosses as the
+/// host's handle to it and so renders as the runtime's `_BamlPyHandle`.
+/// Without the declaration projection (translator-only unit tests) no class
+/// is.
+pub(crate) fn is_host_value(name: &Name, names: Option<&PythonNames>) -> bool {
+    match names.and_then(|names| names.crossing(name)) {
+        Some(ClassCrossing::HostValue) => true,
+        Some(
+            ClassCrossing::Fields
+            | ClassCrossing::Opaque
+            | ClassCrossing::Stream
+            | ClassCrossing::FunctionSpec
+            | ClassCrossing::Media(_)
+            | ClassCrossing::Prompt,
+        )
+        | None => false,
     }
 }
 
@@ -568,7 +583,6 @@ mod tests {
             | Ty::Function { .. }
             | Ty::Future(..)
             | Ty::Never
-            | Ty::RustType
             | Ty::Type
             | Ty::Resource
             | Ty::PromptAst => {}

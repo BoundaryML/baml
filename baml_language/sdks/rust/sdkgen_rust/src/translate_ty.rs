@@ -238,9 +238,16 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                 (Some(ClassCrossing::Prompt), []) => {
                     return Ok(quote! { ::baml_bridge::Prompt });
                 }
+                // A host's own value is the host's handle to it.
+                (Some(ClassCrossing::HostValue), []) => {
+                    return Ok(quote! { ::baml_bridge::HostValue });
+                }
                 (
                     Some(
-                        ClassCrossing::FunctionSpec | ClassCrossing::Stream | ClassCrossing::Prompt,
+                        ClassCrossing::FunctionSpec
+                        | ClassCrossing::Stream
+                        | ClassCrossing::Prompt
+                        | ClassCrossing::HostValue,
                     ),
                     _,
                 ) => {
@@ -374,7 +381,6 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
         // The uninhabited type: never appears as a field/param/return type
         // (throws-nothing is `throws: None`, handled before translation).
         Ty::Never => Err(unsupported("never")),
-        Ty::RustType => Ok(quote! { ::baml_bridge::RustType }),
     }
 }
 

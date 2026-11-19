@@ -147,9 +147,34 @@ fn own<T: BamlValue>(
 // ---------------------------------------------------------------------------
 
 /// A class crossing by reference (`reflect.Package`): the engine's instance
-/// behind a private handle.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// behind a private handle, equal and hashed as that instance.
 struct Package(RuntimeInstance);
+
+impl Clone for Package {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl PartialEq for Package {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for Package {}
+
+impl std::hash::Hash for Package {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl std::fmt::Debug for Package {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_tuple("Package").field(&self.0).finish()
+    }
+}
 
 impl __BamlValuePrivate for Package {
     fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
@@ -1557,6 +1582,9 @@ fn a_union_arm_failing_partway_keeps_the_next_arms_references() {
         Ok(())
     });
     assert!(has_point);
+    // An engine object has one key, whose ownership the decoded value holds:
+    // once it goes, nothing the failed arm took is left.
+    drop(package);
     assert!(!still_held(&original[0]));
     let raw: Raw = call("user.package_and_string", |_| Ok(()));
     let original = raw.handles();

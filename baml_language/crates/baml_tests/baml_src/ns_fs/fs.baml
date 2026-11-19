@@ -837,3 +837,24 @@ function fs_symlink_onto_existing_path_errors_fn() -> bool {
 test "fs_symlink_onto_existing_path_errors" {
     assert.is_true(fs_symlink_onto_existing_path_errors_fn())
 }
+
+// ============================================================================
+// a file's state is the platform's: a copy shares it
+// ============================================================================
+
+function fs_deep_copy_shares_the_open_file_fn() -> string {
+    let path = fs_tmp("deep_copy.txt");
+    baml.fs.write(path, "Hello from BAML!");
+    let file = baml.fs.open(path, "r");
+    let copy = baml.deep_copy(file);
+    copy.seek_from("start", 6);
+    let through_original = file.text();
+    // Negative control: a second open has a cursor of its own.
+    let separate = baml.fs.open(path, "r").text();
+    baml.fs.remove(path);
+    `${through_original}|${separate}`
+}
+
+test "fs_deep_copy_shares_the_open_file" {
+    assert.equal(fs_deep_copy_shares_the_open_file_fn(), "from BAML!|Hello from BAML!")
+}

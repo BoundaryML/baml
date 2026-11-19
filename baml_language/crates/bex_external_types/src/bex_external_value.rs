@@ -94,6 +94,53 @@ impl UnionMetadata {
     }
 }
 
+/// A `baml.spawn.CancelToken` the runtime issued to a host body without
+/// building one on its heap: the token's state, which every holder shares, and
+/// the heap of the runtime that issued it. It crosses to the host as a
+/// reference to a `CancelToken` (`ty` names the class); sent back into BAML,
+/// the issuing runtime builds the instance, and any other refuses it.
+#[derive(Clone)]
+pub struct CancelTokenCapability {
+    pub state: std::sync::Arc<bex_vm_types::cancellation::CancelTokenState>,
+    pub ty: AnnotationTy,
+    issuer: std::sync::Weak<dyn crate::WeakHeapRef>,
+}
+
+impl CancelTokenCapability {
+    pub fn new(
+        state: std::sync::Arc<bex_vm_types::cancellation::CancelTokenState>,
+        ty: AnnotationTy,
+        issuer: &std::sync::Arc<dyn crate::WeakHeapRef>,
+    ) -> Self {
+        Self {
+            state,
+            ty,
+            issuer: std::sync::Arc::downgrade(issuer),
+        }
+    }
+
+    /// Whether `heap`'s runtime issued this token.
+    pub fn issued_by(&self, heap: &std::sync::Arc<dyn crate::WeakHeapRef>) -> bool {
+        std::ptr::addr_eq(self.issuer.as_ptr(), std::sync::Arc::as_ptr(heap))
+    }
+}
+
+impl std::fmt::Debug for CancelTokenCapability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CancelTokenCapability")
+            .field("ty", &self.ty)
+            .finish_non_exhaustive()
+    }
+}
+
+/// One token: the same shared state, issued by the same runtime.
+impl PartialEq for CancelTokenCapability {
+    fn eq(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.state, &other.state)
+            && std::ptr::addr_eq(self.issuer.as_ptr(), other.issuer.as_ptr())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum BexExternalAdt {
     /// A reflected type, carried at the sys-op lane's head so a definition
@@ -113,14 +160,19 @@ pub enum BexExternalAdt {
     PromptAst(std::sync::Arc<bex_vm_types::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
     Media(std::sync::Arc<bex_vm_types::MediaValue>),
-    /// GC-rooted reference to an engine-owned heap value with a trusted
-    /// boundary kind and optional host-facing type decoration.
+    /// A host body's `baml.spawn.CancelToken`, which the runtime issues
+    /// without a heap object.
+    CancelToken(CancelTokenCapability),
+    /// GC-rooted reference to an engine-owned heap value, with its boundary
+    /// kind and the engine's statement of its type.
     ///
-    /// `kind` is the only boundary discriminator. `ty` is diagnostic metadata
-    /// for host annotations and must never select a wrapper or drive generic
-    /// substitution: live nominal identity and type arguments come from the
-    /// resolved heap object. `heap_handle` keeps that object alive so the
-    /// engine can re-enter it for method calls.
+    /// `kind` selects the host's family of wrapper. `ty` is the object's type
+    /// as the engine sends it: a host may pick the compiled class's wrapper by
+    /// it and keep its type arguments to state a generic receiver's type in
+    /// later calls. It flows one way only. A handle a host sends back carries
+    /// no statement, and the engine judges the live object it resolves to, so
+    /// nothing a host says about a reference is trusted. `heap_handle` keeps
+    /// the object alive so the engine can re-enter it for method calls.
     TaggedHeapHandle {
         kind: TaggedHeapHandleKind,
         ty: AnnotationTy,
@@ -133,13 +185,95 @@ pub enum BexExternalAdt {
 /// This is deliberately independent of [`RuntimeTy`]. A runtime-created type
 /// may share a display name with a compiled type, so a name-shaped wire type
 /// can describe a value but cannot establish its identity or behavior.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TaggedHeapHandleKind {
     Callable,
     Stream,
     FunctionSpec,
     RuntimeValue,
+    /// A runtime value a host hands back to configure a call. A host holds
+    /// it as it holds any [`Self::RuntimeValue`].
+    TraceControl(TraceControl),
 }
+
+/// The payload of a `trace.Options` or `trace.ReservedSpan` instance. Both
+/// are shared and never change, so the reference carries the payload itself
+/// and reading it never waits on the heap.
+#[derive(Clone, Debug)]
+pub enum TraceControl {
+    Options(bex_vm_types::payload::TraceOptions),
+    Reservation(bex_vm_types::payload::ReservedSpan),
+}
+
+impl TraceControl {
+    /// The control `payload` holds, if it holds one.
+    pub fn of(payload: &bex_vm_types::RustPayload) -> Option<Self> {
+        use bex_vm_types::RustPayload;
+        match payload {
+            RustPayload::TraceOptions(options) => {
+                Some(Self::Options(std::sync::Arc::clone(options)))
+            }
+            RustPayload::ReservedSpan(reservation) => {
+                Some(Self::Reservation(std::sync::Arc::clone(reservation)))
+            }
+            RustPayload::Foreign(_)
+            | RustPayload::DefaultHasher(_)
+            | RustPayload::Sha256(_)
+            | RustPayload::Aes256GcmSiv(_)
+            | RustPayload::Aes128GcmSiv(_)
+            | RustPayload::ChaCha20Poly1305(_)
+            | RustPayload::XChaCha20Poly1305(_)
+            | RustPayload::Regex(_)
+            | RustPayload::CsvRecord(_)
+            | RustPayload::Semaphore(_)
+            | RustPayload::Permit(_)
+            | RustPayload::Ticket(_)
+            | RustPayload::CancelToken(_)
+            | RustPayload::SpanId(_)
+            | RustPayload::File(_)
+            | RustPayload::Glob(_)
+            | RustPayload::TcpStream(_)
+            | RustPayload::TcpListener(_)
+            | RustPayload::UdpSocket(_)
+            | RustPayload::Xoshiro256PlusPlus(_)
+            | RustPayload::ChaCha20(_)
+            | RustPayload::InterfaceWitness(_)
+            | RustPayload::CsvReader(_)
+            | RustPayload::CsvWriter(_)
+            | RustPayload::ClassBuilder(_)
+            | RustPayload::ChildProcess(_)
+            | RustPayload::ReadPipe(_)
+            | RustPayload::WritePipe(_)
+            | RustPayload::WebSocket(_)
+            | RustPayload::HttpBody(_)
+            | RustPayload::SseStream(_)
+            | RustPayload::HttpServer(_)
+            | RustPayload::TlsKeys(_)
+            | RustPayload::HostValue(_)
+            | RustPayload::Image(_)
+            | RustPayload::Audio(_)
+            | RustPayload::Pdf(_)
+            | RustPayload::Video(_)
+            | RustPayload::Prompt(_)
+            | RustPayload::OutputFormat(_)
+            | RustPayload::Lock(_) => None,
+        }
+    }
+}
+
+/// One control: the same shared payload.
+impl PartialEq for TraceControl {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Options(lhs), Self::Options(rhs)) => std::sync::Arc::ptr_eq(lhs, rhs),
+            (Self::Options(_), _) => false,
+            (Self::Reservation(lhs), Self::Reservation(rhs)) => std::sync::Arc::ptr_eq(lhs, rhs),
+            (Self::Reservation(_), _) => false,
+        }
+    }
+}
+
+impl Eq for TraceControl {}
 
 /// A deep-copied value tree with no heap references.
 ///
@@ -242,10 +376,6 @@ pub enum BexExternalValue {
     /// Binary data (byte array).
     Uint8Array(Vec<u8>),
 
-    /// Opaque Rust data for `$rust_type` fields.
-    /// Engine converts to `Object::RustData` on the VM heap.
-    RustData(std::sync::Arc<dyn bex_vm_types::BexRustData>),
-
     Handle(crate::Handle),
 
     // This is a tagged union.
@@ -256,7 +386,7 @@ pub enum BexExternalValue {
 
     /// Reference to a value owned by the host language, by its key and kind.
     ///
-    /// Inbound, an opaque host value: it lands as `$rust_type` data. A host
+    /// Inbound, an opaque host value: it lands as a `baml.host.Value`. A host
     /// callable arrives as [`HostCallable`](Self::HostCallable) with the
     /// function type it inhabits; outbound, the engine hands a bound callable
     /// back to its host's dispatch as this variant, since the host identifies
@@ -338,7 +468,6 @@ impl std::fmt::Debug for BexExternalValue {
                 .field("metadata", metadata)
                 .finish(),
             Self::Uint8Array(v) => f.debug_tuple("Uint8Array").field(v).finish(),
-            Self::RustData(_) => write!(f, "RustData(...)"),
             Self::Handle(v) => f.debug_tuple("Handle").field(v).finish(),
             Self::Adt(v) => f.debug_tuple("Adt").field(v).finish(),
             Self::HostValue(v) => f
@@ -436,7 +565,6 @@ impl PartialEq for BexExternalValue {
                 },
             ) => v1 == v2 && m1 == m2,
             (Self::Uint8Array(a), Self::Uint8Array(b)) => a == b,
-            (Self::RustData(a), Self::RustData(b)) => std::sync::Arc::ptr_eq(a, b),
             (Self::Handle(a), Self::Handle(b)) => a == b,
             (Self::Adt(a), Self::Adt(b)) => a == b,
             (Self::HostValue(a), Self::HostValue(b)) => a.key == b.key && a.kind == b.kind,
@@ -471,17 +599,11 @@ impl BexExternalAdt {
             BexExternalAdt::Type(_) | BexExternalAdt::WireType(_) => "type",
             BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Media(_) => "media",
+            BexExternalAdt::CancelToken(_) => "cancel_token",
             BexExternalAdt::TaggedHeapHandle { .. } => "tagged_heap_handle",
         }
     }
 }
-
-/// Field of the stdlib media and prompt wrapper classes (`baml.media.*`,
-/// `ai.Prompt`) that holds the Rust-backed payload. The wrapper layout is
-/// private to the stdlib: the engine flattens a wrapper instance to its
-/// payload on the way out and builds one around a payload on the way in, so
-/// no host ever names this field.
-pub const MEDIA_WRAPPER_DATA_FIELD: &str = "_data";
 
 impl BexExternalValue {
     /// Construct a union value (`A | B | ...`) with metadata.
@@ -551,7 +673,6 @@ impl BexExternalValue {
             BexExternalValue::Variant { .. } => "variant",
             BexExternalValue::Union { .. } => "union",
             BexExternalValue::Uint8Array(_) => "uint8array",
-            BexExternalValue::RustData(_) => "rust_data",
             BexExternalValue::Adt(adt) => adt.type_name(),
             BexExternalValue::Handle(_) => "handle",
             BexExternalValue::HostValue(_) => "host_value",
@@ -615,7 +736,6 @@ impl BexExternalValue {
             | BexExternalValue::String(_)
             | BexExternalValue::Variant { .. }
             | BexExternalValue::Uint8Array(_)
-            | BexExternalValue::RustData(_)
             | BexExternalValue::Handle(_)
             | BexExternalValue::Adt(_)
             | BexExternalValue::HostValue(_)
@@ -872,56 +992,62 @@ impl AsBexExternalValue for Vec<u8> {
     }
 }
 
-/// Trait for opaque Rust data stored in `Object::RustData` that knows how to
-/// convert itself to a [`BexExternalValue`].
-///
-/// Implement this for any type that is stored as `RustData` on the VM heap and
-/// needs to survive the VM-to-external conversion boundary (e.g. `PromptAst`,
-/// `MediaValue`).
-pub trait ToBexExternalValue: bex_vm_types::BexRustData {
-    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue;
-}
-
-impl ToBexExternalValue for bex_vm_types::PromptAst {
-    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
+/// The value a `@@rust_type` instance's payload stands for on its own,
+/// copied out of the VM: a media value, a rendered prompt, or a host's value.
+/// `None` for state that has no form outside the VM.
+pub fn payload_value(payload: &bex_vm_types::RustPayload) -> Option<BexExternalValue> {
+    use bex_vm_types::RustPayload;
+    match payload {
+        RustPayload::Image(media)
+        | RustPayload::Audio(media)
+        | RustPayload::Pdf(media)
+        | RustPayload::Video(media) => Some(BexExternalValue::Adt(BexExternalAdt::Media(
+            std::sync::Arc::clone(media),
+        ))),
+        RustPayload::Prompt(prompt) => Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(
+            std::sync::Arc::clone(prompt),
+        ))),
+        RustPayload::HostValue(host) => {
+            Some(BexExternalValue::HostValue(std::sync::Arc::clone(host)))
+        }
+        RustPayload::Foreign(_)
+        | RustPayload::DefaultHasher(_)
+        | RustPayload::Sha256(_)
+        | RustPayload::Aes256GcmSiv(_)
+        | RustPayload::Aes128GcmSiv(_)
+        | RustPayload::ChaCha20Poly1305(_)
+        | RustPayload::XChaCha20Poly1305(_)
+        | RustPayload::Regex(_)
+        | RustPayload::CsvRecord(_)
+        | RustPayload::Semaphore(_)
+        | RustPayload::Permit(_)
+        | RustPayload::Ticket(_)
+        | RustPayload::CancelToken(_)
+        | RustPayload::SpanId(_)
+        | RustPayload::TraceOptions(_)
+        | RustPayload::ReservedSpan(_)
+        | RustPayload::File(_)
+        | RustPayload::Glob(_)
+        | RustPayload::OutputFormat(_)
+        | RustPayload::Lock(_)
+        | RustPayload::TcpStream(_)
+        | RustPayload::TcpListener(_)
+        | RustPayload::UdpSocket(_)
+        | RustPayload::Xoshiro256PlusPlus(_)
+        | RustPayload::ChaCha20(_)
+        | RustPayload::InterfaceWitness(_)
+        | RustPayload::CsvReader(_)
+        | RustPayload::CsvWriter(_)
+        | RustPayload::ClassBuilder(_)
+        | RustPayload::ChildProcess(_)
+        | RustPayload::ReadPipe(_)
+        | RustPayload::WritePipe(_)
+        | RustPayload::WebSocket(_)
+        | RustPayload::HttpBody(_)
+        | RustPayload::SseStream(_)
+        | RustPayload::HttpServer(_)
+        | RustPayload::TlsKeys(_) => None,
     }
-}
-
-impl ToBexExternalValue for bex_vm_types::MediaValue {
-    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
-        BexExternalValue::Adt(BexExternalAdt::Media(self))
-    }
-}
-
-/// Try to convert the payload of an `Object::RustData` to a
-/// [`BexExternalValue`] by attempting downcast to known [`ToBexExternalValue`]
-/// implementors.
-///
-/// Returns `None` if the concrete type is not recognised.
-pub fn try_convert_rust_data(
-    arc: &std::sync::Arc<dyn bex_vm_types::BexRustData>,
-) -> Option<BexExternalValue> {
-    use bex_vm_types::RustDataArc;
-    if let Ok(typed) = arc.clone().downcast_payload::<bex_vm_types::PromptAst>() {
-        return Some(typed.to_bex_external_value());
-    }
-    if let Ok(typed) = arc.clone().downcast_payload::<bex_vm_types::MediaValue>() {
-        return Some(typed.to_bex_external_value());
-    }
-    // A `HostValueArc` wrapped into `Object::RustData` (e.g. the `_handle`
-    // slot of a `baml.errors.HostCallable` inbound from the host bridge):
-    // convert back to a `BexExternalValue::HostValue` so the outbound
-    // encoder emits a `Handle(HOST_VALUE_{CALLABLE,ERROR})` carrying the
-    // same `(key, kind)` — letting the originating bridge resolve the
-    // handle back to the original native object on round-trip.
-    if let Ok(typed) = arc
-        .clone()
-        .downcast_payload::<bex_resource_types::HostValueArc>()
-    {
-        return Some(BexExternalValue::HostValue(typed));
-    }
-    None
 }
 
 #[cfg(test)]
@@ -980,7 +1106,7 @@ mod render_readable_tests {
         }
     }
 
-    /// A rendered-prompt handle (`ai.Prompt`'s `_data`) renders as its
+    /// A rendered prompt (an `ai.Prompt`'s payload) renders as its
     /// readable prompt text, not the `Adt(PromptAst(Message { .. }))` Rust
     /// `Debug` dump. This is the B-627 repro for the CLI value print.
     #[test]

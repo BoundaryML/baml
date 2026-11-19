@@ -33,25 +33,43 @@ class value {
  private:
   struct owner {
     detail::pb::BamlOutboundValue wire;
-    // Takes the wire's handles; its type values are only borrowed, so the
-    // value holds a reference of its own per `live` head. Every restatement
-    // is made before any is stored, so a failed clone leaves none behind.
+    // Takes the wire's handles; its type values and pins are only borrowed,
+    // so the value holds a reference of its own per `live` head and per host
+    // key, which keeps each key registered while the value lives. Every
+    // reference is taken before any is stored, so a failure leaves none
+    // behind.
     explicit owner(const detail::pb::BamlOutboundValue& borrowed)
         : wire(borrowed) {
+      auto& registry = detail::host_value_registry::instance();
       std::vector<detail::pb::BamlTy> restated;
+      std::vector<uint64_t> held;
       try {
         detail::for_each_type_value(wire, [&](detail::pb::BamlTy& ty) {
           restated.emplace_back() = detail::restate_live_heads(ty);
         });
+        detail::for_each_host_handle(
+            wire, [&](const detail::pb::BamlOutboundHandle& host) {
+              registry.send_again(host.key());
+              held.push_back(host.key());
+            });
       } catch (...) {
         for (const auto& ty : restated) detail::release_live_heads(ty);
+        for (const uint64_t key : held) registry.release(key, 1);
         throw;
       }
       auto next = restated.begin();
       detail::for_each_type_value(
           wire, [&](detail::pb::BamlTy& ty) { ty.Swap(&*next++); });
+      detail::for_each_host_handle(
+          wire, [](detail::pb::BamlOutboundHandle& host) { host.clear_pin(); });
     }
-    ~owner() { detail::release_control_value(wire); }
+    ~owner() {
+      detail::release_control_value(wire);
+      detail::for_each_host_handle(
+          wire, [](const detail::pb::BamlOutboundHandle& host) {
+            detail::host_value_registry::instance().release(host.key(), 1);
+          });
+    }
   };
   explicit value(const detail::pb::BamlOutboundValue& wire)
       : owner_(std::make_shared<owner>(wire)) {}

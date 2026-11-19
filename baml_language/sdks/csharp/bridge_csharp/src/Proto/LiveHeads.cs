@@ -39,7 +39,6 @@ internal static class LiveHeads
             case BamlTy.TyOneofCase.Literal:
             case BamlTy.TyOneofCase.Unknown:
             case BamlTy.TyOneofCase.Media:
-            case BamlTy.TyOneofCase.RustType:
             case BamlTy.TyOneofCase.MetaType:
             case BamlTy.TyOneofCase.Resource:
             case BamlTy.TyOneofCase.PromptAst:

@@ -130,11 +130,13 @@ impl BexVm {
         class: HeapPtr,
         type_args: &[RealizedTy],
     ) -> bool {
-        let Some(instance) = value.as_object_ptr().and_then(|ptr| self.get_instance(ptr)) else {
+        let Some((instance_class, actual)) = value
+            .as_object_ptr()
+            .and_then(|ptr| self.class_instance(ptr))
+        else {
             return false;
         };
-        let actual = instance.type_args();
-        instance.class() == class
+        instance_class == class
             && actual.len() == type_args.len()
             && actual.iter().zip(type_args).all(|(actual, expected)| {
                 baml_type::normalize::equivalent(actual.as_ty(), expected.as_ty(), self)

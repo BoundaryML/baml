@@ -29,10 +29,12 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_bridge.BamlCancelledError;
 import baml_bridge.BamlError;
 import baml_bridge.BamlPanic;
+import baml_bridge.HostCalls;
 import baml_sdk.baml.panics.Cancelled;
 import baml_sdk.baml.panics.UserPanic;
 import baml_sdk.host_callable_tests.Fns;
@@ -53,7 +55,6 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -407,15 +408,44 @@ class TestHostCallables {
         }
     }
 
-    @Disabled(
-            "java-port note: mirrors Python's xfail (strict=False). Host-callable "
-                    + "release fires only when the engine GCs the Object::HostClosure on "
-                    + "its heap; one BAML call rarely triggers the GC heuristic. Java's "
-                    + "WeakReference + System.gc() is non-deterministic too, so this is "
-                    + "skipped (TS uses it.skip for the same reason).")
+    /**
+     * Wait until the host-value registry no longer holds {@code value}: BAML
+     * gives a key's references back once it collects the values holding them.
+     */
+    static void awaitReleased(Object value) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        while (HostCalls.holds(value)) {
+            assertTrue(System.nanoTime() < deadline, "the host value was never released");
+            baml_sdk.baml.sys.Fns.collect_garbage();
+            Thread.sleep(10);
+        }
+    }
+
     @Test
-    void test_host_callables_release_fires_on_drop_of_callable() {
-        // Intentionally empty — see @Disabled reason.
+    @Timeout(value = 60, unit = TimeUnit.SECONDS)
+    void test_host_callables_release_fires_on_drop_of_callable() throws InterruptedException {
+        Function<Long, String> cb = x -> "seen:" + x;
+        assertEquals("seen:1", Fns.call_with_callback(cb, 1L));
+        awaitReleased(cb);
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS)
+    void test_host_callables_raised_exception_is_released_after_its_round_trip() throws InterruptedException {
+        // The raised exception crosses back inside the error envelope with a
+        // pin the bridge gives back once it has rehydrated the original; then
+        // BAML's collection gives back the key, and the registry lets it go.
+        RuntimeException raised = new RuntimeException("released");
+        Function<Long, String> cb = x -> {
+            throw raised;
+        };
+        for (int i = 0; i < 8; i++) {
+            RuntimeException caught =
+                    assertThrows(RuntimeException.class, () -> Fns.propagate_throwing_callback(cb, 1L));
+            assertSame(raised, caught);
+        }
+        awaitReleased(raised);
+        awaitReleased(cb);
     }
 
     @Test
