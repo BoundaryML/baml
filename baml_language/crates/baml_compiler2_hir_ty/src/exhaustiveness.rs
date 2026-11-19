@@ -994,7 +994,7 @@ pub struct ArmId(pub usize);
 struct PlaceInfo {
     ty: Ty,
     /// Whether a column with no present ctor still names each missing ctor
-    /// instead of reporting `_`; see [`report_missing_ctors`]. rustc's
+    /// instead of reporting `_`; see [`CtorSplit::with_missing`]. rustc's
     /// `is_scrutinee`: true for the scrutinee itself, false for field
     /// sub-places. Also true for the place under a `UnionMember`, which
     /// narrows its parent instead of projecting a field: the member tag and
@@ -1321,18 +1321,12 @@ impl WitnessMatrix {
     }
     /// For each missing ctor, clone the witness matrix and prepend a
     /// wildcard-filled pat for that ctor at top. Used for the synthetic
-    /// `Missing` ctor case.
-    ///
-    /// Skips ctors whose value-set is empty: if any sub-field type is
-    /// uninhabited (`Ty::Never`), no value can match this ctor, so it is
-    /// not a real "missing case" — e.g., `Array<Never>` cannot inhabit
-    /// length ≥ 1, so the `[Never, ..]` witness must not be reported.
+    /// `Missing` ctor case. `missing` never holds an empty ctor (one with an
+    /// uninhabited field, e.g. `[Never, ..]`): `CtorSplit::with_missing`
+    /// drops those.
     fn apply_missing(&mut self, missing: &[Ctor], ty: &Ty, cx: &dyn PatCtx) {
         let original = std::mem::take(&mut self.0);
         for ctor in missing {
-            if ctor_is_empty(cx, ctor, ty) {
-                continue;
-            }
             // Sub-pattern types come from the ctor's own slot types, NOT
             // the parent column type. For `Class(Node)`, fields are typed
             // by the class's declared field types.
@@ -1470,33 +1464,50 @@ impl CtorSplit {
             reachability_only: vec![],
         }
     }
+
+    /// The branches `split` plus one synthetic `Missing` branch standing for
+    /// the ctors in `missing`, derived together so that the branch exists
+    /// exactly when some missing ctor has a value. Mirrors rustc's
+    /// `split_column_ctors`:
+    /// - Empty ctors (an uninhabited field) are never missing (rustc's
+    ///   `missing_empty`); without any other, there is no `Missing` branch,
+    ///   so no wildcard row is marked useful through it.
+    /// - `all_missing` (no ctor of the column is present) reports `_` instead
+    ///   of each ctor unless the place names its missing ctors (rustc's
+    ///   `report_individual_missing_ctors`). Enumerating per column would make
+    ///   the witnesses the cartesian product of every unmatched field.
+    fn with_missing(
+        cx: &dyn PatCtx,
+        place: &PlaceInfo,
+        mut split: Vec<Ctor>,
+        missing: Vec<Ctor>,
+        all_missing: bool,
+        reachability_only: Vec<Ctor>,
+    ) -> Self {
+        let mut missing: Vec<Ctor> = missing
+            .into_iter()
+            .filter(|ctor| !ctor_is_empty(cx, ctor, &place.ty))
+            .collect();
+        if !missing.is_empty() {
+            split.push(Ctor::Missing);
+            if all_missing && !place.names_missing_ctors {
+                missing = vec![Ctor::Wildcard];
+            }
+        }
+        Self {
+            split,
+            missing,
+            reachability_only,
+        }
+    }
 }
 
 /// Whether no value has the shape `ctor` in a column of type `ty`, because
-/// one of its fields is uninhabited. rustc's `missing_empty` ctors: such a
-/// ctor is never a missing case.
+/// one of its fields is uninhabited.
 fn ctor_is_empty(cx: &dyn PatCtx, ctor: &Ctor, ty: &Ty) -> bool {
     ctor_sub_tys(cx, ctor, ty)
         .iter()
         .any(|t| !cx.is_inhabited(t))
-}
-
-/// rustc's `report_individual_missing_ctors` rule, for a column in which no
-/// ctor is present: report a single `_` instead of every missing ctor, unless
-/// the place names its missing ctors (the scrutinee, where listing them reads
-/// better). Enumerating per column would make the witnesses the cartesian
-/// product of every unmatched field. Empty ctors are dropped first, so an
-/// uninhabited column reports nothing rather than `_`.
-fn report_missing_ctors(cx: &dyn PatCtx, place: &PlaceInfo, missing: Vec<Ctor>) -> Vec<Ctor> {
-    let missing: Vec<Ctor> = missing
-        .into_iter()
-        .filter(|ctor| !ctor_is_empty(cx, ctor, &place.ty))
-        .collect();
-    if place.names_missing_ctors || missing.is_empty() {
-        missing
-    } else {
-        vec![Ctor::Wildcard]
-    }
 }
 
 /// Decide which ctors to specialize on. See [`CtorSplit`] for how the
@@ -1520,10 +1531,10 @@ fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorS
     // synthetic `Missing` ctor that drops the column without descending.
     // The unspecialize step (`apply_missing`) wraps the witness with one
     // wildcard-filled pat per missing ctor of `col_ty`, or with a single `_`
-    // per `report_missing_ctors`. An uninhabited column reports nothing:
-    // `report_missing_ctors` drops ctors with an uninhabited field, which
-    // catches transitively-uninhabited classes (e.g. `class A { x: Never }`
-    // or `class A { x: B }` where `B` is uninhabited) that `enumerate_ctors`
+    // (see `CtorSplit::with_missing`). An uninhabited column gets no branch:
+    // `with_missing` drops ctors with an uninhabited field, which catches
+    // transitively-uninhabited classes (e.g. `class A { x: Never }` or
+    // `class A { x: B }` where `B` is uninhabited) that `enumerate_ctors`
     // alone can't detect (it returns `[Class(A)]`).
     if matrix.rows.is_empty() {
         // Lists: a single open-ended `[..]` witness covers "any list".
@@ -1537,21 +1548,16 @@ fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorS
                 suffix: 0,
             })]
         } else {
+            // An empty alphabet (`Ty::Never`) leaves no branch: vacuously
+            // exhaustive.
             let all = cx.enumerate_ctors(col_ty);
-            if all.is_empty() {
-                // Vacuously exhaustive (e.g. `Ty::Never` directly).
-                return CtorSplit::alphabet(vec![], vec![]);
-            }
             if all.iter().any(|c| matches!(c, Ctor::NonExhaustive)) {
                 vec![Ctor::NonExhaustive]
             } else {
                 dedup_ctors(all)
             }
         };
-        return CtorSplit::alphabet(
-            vec![Ctor::Missing],
-            report_missing_ctors(cx, place, missing),
-        );
+        return CtorSplit::with_missing(cx, place, vec![], missing, true, vec![]);
     }
 
     let present: Vec<Ctor> = collect_column_ctors(matrix);
@@ -1564,11 +1570,7 @@ fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorS
     // Slice types need a special split that treats variable-length patterns
     // as covering open-ended length classes — set membership isn't enough.
     if matches!(col_ty, Ty::List(_)) {
-        let mut split = split_slice_ctors(&present_no_wild, has_wildcard);
-        if !present_no_wild.iter().any(|c| matches!(c, Ctor::Slice(_))) {
-            split.missing = report_missing_ctors(cx, place, split.missing);
-        }
-        return split;
+        return split_slice_ctors(cx, place, &present_no_wild);
     }
 
     let all = cx.enumerate_ctors(col_ty);
@@ -1586,16 +1588,15 @@ fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorS
         }
         // Infinite alphabet (raw int/string/float, generics, opaque types).
         let mut split: Vec<Ctor> = dedup_equivalent_type_tests(cx, present_no_wild);
-        let missing = vec![Ctor::NonExhaustive];
         if has_wildcard {
             // Wildcard rows must be specialized through. NonExhaustive as a
             // pass-through ctor: concrete heads don't cover it (they get
             // skipped), but wildcard rows pad and take.
             split.push(Ctor::NonExhaustive);
+            CtorSplit::alphabet(split, vec![])
         } else {
-            split.push(Ctor::Missing);
+            CtorSplit::with_missing(cx, place, split, vec![Ctor::NonExhaustive], false, vec![])
         }
-        CtorSplit::alphabet(split, missing)
     } else if all.is_empty() {
         // Vacuously exhaustive (e.g., Never).
         CtorSplit::alphabet(vec![], vec![])
@@ -1645,13 +1646,8 @@ fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorS
         if missing.len() == all.len() {
             // Only reachability-only heads (and wildcards) are present. The
             // wildcard rows are all that join any alphabet branch, so one
-            // `Missing` branch stands for every ctor and the column is
-            // reported per `report_missing_ctors`.
-            return CtorSplit {
-                split: vec![Ctor::Missing],
-                missing: report_missing_ctors(cx, place, missing),
-                reachability_only,
-            };
+            // `Missing` branch stands for every ctor.
+            return CtorSplit::with_missing(cx, place, vec![], missing, true, reachability_only);
         }
         CtorSplit {
             split: all,
@@ -1666,7 +1662,7 @@ fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorS
 /// into a finite set of `Fixed` lengths plus one open-ended `Variable` that
 /// covers all longer lengths. Each output slice is tagged as seen/unseen by
 /// the column.
-fn split_slice_ctors(present: &[Ctor], _has_wildcard: bool) -> CtorSplit {
+fn split_slice_ctors(cx: &dyn PatCtx, place: &PlaceInfo, present: &[Ctor]) -> CtorSplit {
     let column: Vec<&SliceShape> = present
         .iter()
         .filter_map(|c| {
@@ -1754,14 +1750,9 @@ fn split_slice_ctors(present: &[Ctor], _has_wildcard: bool) -> CtorSplit {
         .cloned()
         .collect();
 
-    if !missing.is_empty() {
-        split.push(Ctor::Missing);
-    }
-    CtorSplit {
-        split,
-        missing,
-        reachability_only,
-    }
+    // No slice ctor present means every length class is missing.
+    let all_missing = column.is_empty();
+    CtorSplit::with_missing(cx, place, split, missing, all_missing, reachability_only)
 }
 
 fn collect_column_ctors(matrix: &Matrix<'_>) -> Vec<Ctor> {
@@ -5520,6 +5511,50 @@ mod tests {
             "got {:?}",
             render_missing(&report)
         );
+    }
+
+    /// `match (o: Outer | null) { Outer { d: let t: T } =>, Outer { d: _ } =>, null => }`
+    /// with `class Outer { d: Dead }`. Arm 1 is the reachability-only rigid
+    /// row; arm 2 is the wildcard row under test.
+    fn rigid_then_wildcard_in_dead_field(dead_field: Ty) -> UsefulnessReport {
+        let mut cx = TestingCtx::new();
+        let outer = qtn("Outer");
+        let dead = qtn("Dead");
+        let outer_ty = class_ty(&outer);
+        let dead_ty = class_ty(&dead);
+        cx.register(dead.clone(), vec![dead_field]);
+        cx.register(outer.clone(), vec![dead_ty.clone()]);
+        let scrut = union_of(vec![outer_ty.clone(), null_ty()]);
+        let rigid = DPat::class(
+            outer.clone(),
+            vec![DPat::type_test(type_var_ty("T"), dead_ty.clone())],
+            outer_ty.clone(),
+        );
+        let wild = DPat::class(outer.clone(), vec![DPat::wildcard(dead_ty)], outer_ty);
+        let null = DPat::type_test(null_ty(), scrut.clone());
+        compute_match_usefulness(&cx, &[rigid, wild, null], scrut)
+    }
+
+    #[test]
+    fn wildcard_row_in_uninhabited_column_beside_rigid_row_is_unreachable() {
+        let report = rigid_then_wildcard_in_dead_field(never_ty());
+        assert!(
+            report.missing.is_empty(),
+            "got {:?}",
+            render_missing(&report)
+        );
+        assert_eq!(report.unreachable_arms, vec![ArmId(1)]);
+    }
+
+    #[test]
+    fn wildcard_row_in_inhabited_column_beside_rigid_row_is_useful() {
+        let report = rigid_then_wildcard_in_dead_field(bool_ty());
+        assert!(
+            report.missing.is_empty(),
+            "got {:?}",
+            render_missing(&report)
+        );
+        assert!(report.unreachable_arms.is_empty());
     }
 
     #[test]
