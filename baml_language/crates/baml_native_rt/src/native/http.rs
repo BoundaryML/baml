@@ -13,8 +13,8 @@ use std::{
 use num_bigint::{BigInt, Sign};
 
 use super::{
-    Big, Map, NativeBamlHttp, NativeBamlHttpResponse, Natives, Obj, Opaque, Root, Scope, Str,
-    Thrown,
+    Big, Bytes, Map, NativeBamlHttp, NativeBamlHttpResponse, Natives, Obj, Opaque, Root, Scope,
+    Str, Thrown,
 };
 use crate::layout::{NAMED_HTTP_RESPONSE, NAMED_TIMEOUT};
 
@@ -260,33 +260,47 @@ impl NativeBamlHttp for Natives {
     }
 }
 
+/// Read the body of `response`, which can be read once.
+async fn read_body<'s>(scope: &mut Scope<'s>, response: Root<'s, Obj>) -> Result<Vec<u8>, Failure> {
+    // SAFETY: a `Response` has its body at that position.
+    let body = unsafe { response.get(scope).field::<Opaque>(RESPONSE_BODY) }.share::<Body>();
+    scope
+        .io(async move {
+            let unread = body
+                .unread
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .take();
+            match unread {
+                Some(unread) => unread.bytes().await.map(Vec::from).map_err(|error| {
+                    Failure::of("failed to read response body", &error, body.limits)
+                }),
+                None => Err(Failure::Io(
+                    "Response body has already been consumed".to_owned(),
+                )),
+            }
+        })
+        .await
+}
+
 impl NativeBamlHttpResponse for Natives {
     async fn text<'s>(
         scope: &mut Scope<'s>,
         response: Root<'s, Obj>,
     ) -> Result<Root<'s, Str>, Thrown<'s>> {
-        // SAFETY: a `Response` has its body at that position.
-        let body = unsafe { response.get(scope).field::<Opaque>(RESPONSE_BODY) }.share::<Body>();
-        let read = scope
-            .io(async move {
-                let unread = body
-                    .unread
-                    .lock()
-                    .unwrap_or_else(PoisonError::into_inner)
-                    .take();
-                match unread {
-                    Some(unread) => unread.bytes().await.map_err(|error| {
-                        Failure::of("failed to read response body", &error, body.limits)
-                    }),
-                    None => Err(Failure::Io(
-                        "Response body has already been consumed".to_owned(),
-                    )),
-                }
-            })
-            .await;
-        match read {
+        match read_body(scope, response).await {
             // Bytes that are not UTF-8 are replaced, as `reqwest` reads text.
             Ok(bytes) => Ok(scope.alloc_str(&String::from_utf8_lossy(&bytes))),
+            Err(failure) => Err(Failure::throw(failure, scope)),
+        }
+    }
+
+    async fn bytes<'s>(
+        scope: &mut Scope<'s>,
+        response: Root<'s, Obj>,
+    ) -> Result<Root<'s, Bytes>, Thrown<'s>> {
+        match read_body(scope, response).await {
+            Ok(bytes) => Ok(scope.alloc_bytes(&bytes)),
             Err(failure) => Err(Failure::throw(failure, scope)),
         }
     }

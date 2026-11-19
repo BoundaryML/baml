@@ -1597,6 +1597,7 @@ pub struct Natives;
 mod array;
 mod bigint;
 pub(crate) mod build;
+mod crypto;
 pub(crate) mod drive;
 mod env;
 mod float;

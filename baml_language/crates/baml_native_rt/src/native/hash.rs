@@ -1,8 +1,8 @@
 //! `baml.hash`: the built-in hasher, whose state is plain data in the heap.
 
 use super::{
-    NativeBamlHashDefaultHasher, NativeBamlHashHasherForDefaultHasher, Natives, Obj, ObjRef,
-    Opaque, Root, Scope,
+    BytesRef, NativeBamlHashDefaultHasher, NativeBamlHashHasherForDefaultHasher, Natives, Obj,
+    ObjRef, Opaque, Root, Scope,
 };
 use crate::layout::NAMED_DEFAULT_HASHER;
 
@@ -18,10 +18,6 @@ pub(crate) struct Sip13 {
     /// The bytes written that do not yet fill a word, low byte first.
     tail: u64,
     /// How many of them there are.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "read when bytes are written: see `Self::write`")
-    )]
     pending: usize,
     /// How many bytes were written in all.
     length: usize,
@@ -60,13 +56,6 @@ impl Sip13 {
     }
 
     /// Append `bytes`. Writing a stream in pieces is writing it whole.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "`Hasher.write` takes a `uint8array`, which no native can be passed yet"
-        )
-    )]
     pub(crate) fn write(&mut self, bytes: &[u8]) {
         self.length += bytes.len();
         for &byte in bytes {
@@ -103,6 +92,16 @@ impl NativeBamlHashDefaultHasher for Natives {
 }
 
 impl NativeBamlHashHasherForDefaultHasher for Natives {
+    fn write(defaulthasher: ObjRef<'_>, bytes: BytesRef<'_>) {
+        // SAFETY: a `DefaultHasher` has one field, its state.
+        let state = unsafe { defaulthasher.field::<Opaque>(0) }.plain::<Sip13>();
+        let mut hasher = state.get();
+        // The bytes are read once, front to back, into a state of a few
+        // words: a copy of them would be made only to be thrown away.
+        hasher.write(bytes.as_slice());
+        state.set(hasher);
+    }
+
     fn finish(defaulthasher: ObjRef<'_>) -> i64 {
         // SAFETY: a `DefaultHasher` has one field, its state.
         let state = unsafe { defaulthasher.field::<Opaque>(0) }.plain::<Sip13>();

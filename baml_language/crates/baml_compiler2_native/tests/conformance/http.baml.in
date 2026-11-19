@@ -73,3 +73,22 @@ function http_tasks() -> string {
   let c = spawn { let kept = http_spin(20); baml.http.fetch("{open}/hello").headers["x-asked"] + `${kept}` };
   `${await a} ${await b} ${await c}`
 }
+// The body as it came, bytes that are not UTF-8 included.
+function http_response_bytes() -> string {
+  let response = baml.http.fetch("{open}/bytes");
+  let moved = http_spin(30);
+  let body = response.bytes();
+  `${body.length()} ${body.to_hex()} ${moved}`
+}
+function http_response_bytes_empty_path() -> string {
+  baml.http.fetch("{open}/hello").bytes().to_string()
+}
+function http_bytes_after_text() -> string {
+  let response = baml.http.fetch("{open}/hello");
+  let first = response.text();
+  let second = response.bytes() catch (e) {
+    baml.errors.Io => { return `${first.length()} ${e.message}`; },
+    baml.errors.Timeout => { return "timeout"; },
+  };
+  `${second.length()}`
+}

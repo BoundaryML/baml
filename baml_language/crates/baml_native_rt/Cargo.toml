@@ -33,12 +33,15 @@ ring-crypto = [ "http", "reqwest/rustls-no-provider", "rustls/ring", "rustls/std
 [dependencies]
 btel_settings = { workspace = true, optional = true }
 sys_regex = { workspace = true }
+aes-gcm-siv = { workspace = true }
 base64 = { workspace = true }
+chacha20poly1305 = { workspace = true }
 num-bigint = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rustls = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 tokio = { workspace = true, features = [ "fs", "rt-multi-thread", "time" ] }
 zmij = { workspace = true }
 

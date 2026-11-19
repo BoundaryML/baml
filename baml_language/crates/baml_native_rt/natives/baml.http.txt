@@ -2,3 +2,4 @@
 # owns the body it has not read yet as Rust state.
 baml.http._fetch async
 baml.http.Response.text async
+baml.http.Response.bytes async
