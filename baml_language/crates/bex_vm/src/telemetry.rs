@@ -1681,7 +1681,19 @@ impl TelemetryState {
     /// Write the usage charged to `node` and its total, just before its
     /// completion, and hand the total to `parent`: a node of this thread, or
     /// for the thread itself (`None`) the node that spawned it.
+    #[inline(always)]
     fn flush_model_usage(&mut self, node: TelemetryId, parent: Option<TelemetryId>) {
+        // A completion whose thread reported no usage and spawned nothing
+        // pays these two checks and no call.
+        if self.usage.is_empty() && self.shared_usage.is_empty() {
+            return;
+        }
+        self.flush_model_usage_slow(node, parent);
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn flush_model_usage_slow(&mut self, node: TelemetryId, parent: Option<TelemetryId>) {
         if !self.shared_usage.is_empty() {
             self.collect_shared_usage(node);
         }
