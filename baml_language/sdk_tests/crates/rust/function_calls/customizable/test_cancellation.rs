@@ -13,9 +13,9 @@ const _MAX_CANCELLATION_SECONDS: f64 = 5.0;
 /// carries only the rendered message + trace, so the class check adapts to
 /// the message naming the `Cancelled` panic class (provisional until
 /// structured panic payloads are pinned).
-fn _assert_cancelled_panic<E: std::fmt::Debug>(exc: baml_bridge::Error<E>) {
+fn _assert_cancelled_panic<E: std::fmt::Debug>(exc: baml_sdk::baml_bridge::Error<E>) {
     match exc {
-        baml_bridge::Error::Panic { message, .. } => {
+        baml_sdk::baml_bridge::Error::Panic { message, .. } => {
             assert!(message.to_lowercase().contains("cancel"), "{message}");
         }
         other => panic!("expected Error::Panic, got {other:?}"),
@@ -26,7 +26,7 @@ fn _assert_cancelled_panic<E: std::fmt::Debug>(exc: baml_bridge::Error<E>) {
 /// whose `reason` wraps the `Cancelled` panic; tokio has no cross-task
 /// exception injection, so the aborted call itself returns the cancellation
 /// panic and the reason check collapses onto [`_assert_cancelled_panic`].
-fn _assert_cancelled_reason<E: std::fmt::Debug>(exc: baml_bridge::Error<E>) {
+fn _assert_cancelled_reason<E: std::fmt::Debug>(exc: baml_sdk::baml_bridge::Error<E>) {
     _assert_cancelled_panic(exc);
 }
 

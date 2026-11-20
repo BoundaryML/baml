@@ -1,6 +1,6 @@
 //! BEP-81 conformance through the public generated SDK.
-use baml_bridge::OptionalArg::Unset;
 use baml_sdk::baml::spawn::CancelToken;
+use baml_sdk::baml_bridge::OptionalArg::Unset;
 use baml_sdk::host_callable_tests as baml;
 use baml_sdk::{
     BamlOptions, hello_world_sync, hello_world_sync_with_options, hello_world_with_options,
@@ -442,7 +442,9 @@ mod invocation_inheritance {
 
 mod invocation_dynamic {
     use super::*;
-    use baml_sdk::{Arguments, Input, Target, Type, TypeBindings, invoke, invoke_sync};
+    use baml_sdk::experimental::{
+        Arguments, Input, Target, Type, TypeBindings, invoke, invoke_sync,
+    };
     #[test]
     fn test_dynamic_name_and_handle_accept_controls() {
         let result = invoke_sync(

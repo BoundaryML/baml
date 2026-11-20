@@ -1,5 +1,6 @@
 use baml_sdk::{
-    Arguments, BamlOptions, Input, Target, Type, TypeBindings, Value, invoke_sync,
+    BamlOptions,
+    experimental::{Arguments, Input, Target, Type, TypeBindings, Value, invoke_sync},
     tuples::{
         IntOrString,
         IntStringIntStringIntStringIntStringIntStringIntStringIntTupleOrString as WideOrString,
@@ -28,7 +29,7 @@ fn try_call(
     name: &str,
     args: Vec<(&str, Input)>,
     types: Vec<(&str, Type)>,
-) -> Result<Value, baml_bridge::Error<Value>> {
+) -> Result<Value, baml_sdk::baml_bridge::Error<Value>> {
     invoke_sync(
         Target::named(format!("user.tuples.{name}")),
         args.into_iter()
@@ -281,7 +282,7 @@ fn test_tuples_round_trip_containers() {
         round_trip_tuple_list_sync(vec![(s("a"), 1), (s("b"), 2)]).unwrap(),
         vec![(s("a"), 1), (s("b"), 2)]
     );
-    let map = baml_bridge::Map::from_iter([(s("k"), (1, true))]);
+    let map = baml_sdk::baml_bridge::Map::from_iter([(s("k"), (1, true))]);
     assert_eq!(round_trip_tuple_map_sync(map.clone()).unwrap(), map);
 }
 
@@ -362,7 +363,7 @@ fn test_tuples_host_callback_args_and_results() {
 #[test]
 fn test_tuples_thrown_value() {
     let error = throw_pair_sync((1, s("a"))).unwrap_err();
-    let baml_bridge::Error::Thrown { value, .. } = error else {
+    let baml_sdk::baml_bridge::Error::Thrown { value, .. } = error else {
         panic!("expected the thrown tuple, got {error}");
     };
     assert_eq!(*value, (1, s("a")));

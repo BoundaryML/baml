@@ -7,13 +7,14 @@
 //! `naming_convention = "language"` modules, functions, methods, fields and
 //! parameters are `snake_case` and types and enum variants are `UpperCamelCase`;
 //! a spelling taken twice in one Rust namespace is de-collided with trailing
-//! underscores, the authored spelling keeping its name.
+//! underscores, the authored spelling keeping its name. At the crate root,
+//! BAML names also yield to the items the SDK declares there itself.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use baml_sdkgen_types::{
     Candidate, Case, Function, Name, NamingConvention, Symbol, SymbolPool, allocate_distinct,
-    allocate_one, namespace_segments,
+    allocate_one, dependency_root_segments, namespace_segments,
 };
 
 use crate::idents;
@@ -28,9 +29,47 @@ pub(crate) enum CallableId {
     },
 }
 
-/// Functions the generated crate root declares itself (the dynamic
-/// `invoke` facade), reserved against root-level BAML functions.
-const ROOT_FUNCTIONS: &[&str] = &["invoke", "invoke_sync"];
+/// Names in Rust's type namespace (types, modules, crates) that the
+/// generated crate root declares itself: its runtime modules, the
+/// `baml_bridge` re-export, `BamlOptions`, and the modules of the
+/// invocation API. The last four are declared only when the program has the
+/// stdlib's invocation types, as every program outside unit tests does, and
+/// are reserved either way. Root BAML types and namespaces are named around
+/// these.
+pub(crate) const ROOT_TYPE_NAMES: &[&str] = &[
+    "_inlinedbaml",
+    "_runtime",
+    "baml_bridge",
+    "BamlOptions",
+    "_invocation",
+    "trace",
+    "invocation",
+    "experimental",
+];
+
+/// Names in Rust's value namespace (functions) that the generated crate root
+/// declares itself. Root BAML functions are named around them.
+pub(crate) const ROOT_VALUE_NAMES: &[&str] = &["init"];
+
+/// Root module names rustc treats specially: `mod lib;` finds both
+/// `src/lib.rs`, the crate root itself, and `src/lib/mod.rs` (E0761), and
+/// `mod main;` trips the `special_module_name` lint. Root BAML namespaces
+/// are named around them.
+pub(crate) const ROOT_SPECIAL_MODULES: &[&str] = &["lib", "main"];
+
+/// The spellings no root BAML type may take: the crate root's own
+/// [`ROOT_TYPE_NAMES`], and the root modules dependencies live in (`baml`,
+/// `ai`, `reflect`, `vendor`). The SDK's paths into those modules are
+/// fixed, so a root type spelled like one is renamed instead. They are
+/// reserved whether or not the program uses the dependency, so a root
+/// type's name never depends on which packages the program uses.
+fn root_reserved_types(convention: NamingConvention) -> Vec<String> {
+    ROOT_TYPE_NAMES
+        .iter()
+        .map(|name| (*name).to_string())
+        .chain(dependency_root_segments().map(|segment| spell(segment, Case::Snake, convention)))
+        .collect()
+}
 
 /// One of the Rust functions generated for a BAML callable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -131,6 +170,7 @@ impl RustNames {
         // Rust puts types and modules in one namespace: the types a module
         // declares are reserved against its child modules.
         let mut emitted_types: HashMap<Vec<String>, HashSet<String>> = HashMap::new();
+        let root_types = root_reserved_types(convention);
         for (path, members) in &by_path {
             let (declared, skipped): (Vec<_>, Vec<_>) = members
                 .iter()
@@ -138,13 +178,14 @@ impl RustNames {
                     !matches!(symbol, Symbol::Function(_)) && !name.name().as_str().contains('$')
                 })
                 .partition(|(name, _)| emitted.contains(*name));
+            let reserved_types: &[String] = if path.is_empty() { &root_types } else { &[] };
             let types = allocate(
                 declared
                     .iter()
                     .chain(&skipped)
                     .map(|(name, _)| ((*name).clone(), name.name().as_str(), Case::UpperCamel)),
                 convention,
-                [],
+                reserved_types.iter().map(String::as_str),
             );
             emitted_types.insert(
                 path.clone(),
@@ -163,9 +204,11 @@ impl RustNames {
                 )),
                 Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_) => None,
             });
-            // The crate root also declares the `invoke` / `invoke_sync`
-            // facade; no BAML function may take those spellings.
-            let reserved: &[&str] = if path.is_empty() { ROOT_FUNCTIONS } else { &[] };
+            let reserved: &[&str] = if path.is_empty() {
+                ROOT_VALUE_NAMES
+            } else {
+                &[]
+            };
             names.allocate_callables(functions, convention, reserved);
         }
         names.allocate_modules(by_path.keys(), &emitted_types, convention);
@@ -337,7 +380,12 @@ impl RustNames {
     }
 
     /// Name every module, parents before children. A module avoids its
-    /// siblings and the types its parent declares.
+    /// siblings and the types its parent declares, and a root module also
+    /// the crate root's own items and the names rustc treats specially.
+    // BUG: spellings are compared case-sensitively, but on a case-insensitive
+    // file system (macOS, Windows) a preserve-case root namespace `_Runtime`
+    // or `Lib` also finds `src/_runtime.rs` or `src/lib.rs` (E0761), and
+    // sibling namespaces `Baml` and `baml` share one directory.
     fn allocate_modules<'a>(
         &mut self,
         leaves: impl Iterator<Item = &'a Vec<String>>,
@@ -358,7 +406,17 @@ impl RustNames {
         // Sorted, so every parent is named before its children.
         for (parent, child_names) in children {
             let projected_parent = self.modules[&parent].clone();
-            let reserved = emitted_types.get(&parent).into_iter().flatten();
+            let root_items = ROOT_TYPE_NAMES
+                .iter()
+                .chain(ROOT_SPECIAL_MODULES)
+                .copied()
+                .filter(|_| parent.is_empty());
+            let reserved = emitted_types
+                .get(&parent)
+                .into_iter()
+                .flatten()
+                .map(String::as_str)
+                .chain(root_items);
             let allocated = allocate(
                 child_names.iter().map(|child| {
                     let mut path = parent.clone();
@@ -366,7 +424,7 @@ impl RustNames {
                     (path, child.as_str(), Case::Snake)
                 }),
                 convention,
-                reserved.map(String::as_str),
+                reserved,
             );
             for (path, segment) in allocated {
                 let mut projected = projected_parent.clone();
@@ -377,8 +435,8 @@ impl RustNames {
     }
 }
 
-/// Spell each name in one Rust namespace: cased by `convention`, made a
-/// legal identifier, and de-collided from the others and from `reserved`.
+/// Spell each name in one Rust namespace ([`spell`]), de-collided from the
+/// others and from `reserved`.
 fn allocate<'a, 'r, K: Eq + std::hash::Hash>(
     names: impl Iterator<Item = (K, &'a str, Case)>,
     convention: NamingConvention,
@@ -386,8 +444,7 @@ fn allocate<'a, 'r, K: Eq + std::hash::Hash>(
 ) -> HashMap<K, String> {
     let candidates = names
         .map(|(key, raw, case)| {
-            // A companion's `@` is no identifier character.
-            let spelling = idents::dir_segment(&convention.spell(raw, case).replace('@', "_"));
+            let spelling = spell(raw, case, convention);
             Candidate {
                 key,
                 authored: spelling == raw,
@@ -396,6 +453,14 @@ fn allocate<'a, 'r, K: Eq + std::hash::Hash>(
         })
         .collect();
     allocate_distinct(candidates, reserved)
+}
+
+/// The spelling `raw` asks for as a `case` binding: cased by `convention`,
+/// with the keywords no raw identifier can spell (`self`, `crate`, ...)
+/// renamed.
+fn spell(raw: &str, case: Case, convention: NamingConvention) -> String {
+    // A companion's `@` is no identifier character.
+    idents::dir_segment(&convention.spell(raw, case).replace('@', "_"))
 }
 
 #[cfg(test)]
@@ -481,27 +546,32 @@ mod tests {
         (pool, emitted)
     }
 
+    /// Allocate `symbols`, every class among them emitted.
+    fn build(
+        symbols: impl IntoIterator<Item = (Name, Symbol)>,
+        convention: NamingConvention,
+    ) -> RustNames {
+        let pool: SymbolPool = symbols.into_iter().collect();
+        let emitted = pool
+            .iter()
+            .filter(|(_, symbol)| matches!(symbol, Symbol::Class(_)))
+            .map(|(name, _)| name.clone())
+            .collect();
+        RustNames::build(&pool, &emitted, convention)
+    }
+
     #[test]
-    fn sync_twins_never_displace_authored_methods_or_root_facade() {
-        // Methods `bump` and `bump_sync` on one class, and root functions
-        // spelled like the crate's own `invoke` / `invoke_sync` facade.
-        let mut pool = SymbolPool::new();
+    fn sync_twins_never_displace_authored_methods() {
+        // Methods `bump` and `bump_sync` on one class.
         let counter = name("user", &[], "Counter");
         let Symbol::Class(mut class) = class(&counter, &[]) else {
             unreachable!("`class` builds a class");
         };
         class.instance_methods = vec![function("bump", &[]), function("bump_sync", &[])];
-        pool.insert(counter.clone(), Symbol::Class(class));
-        pool.insert(
-            name("user", &[], "invoke"),
-            Symbol::Function(function("invoke", &[])),
+        let names = build(
+            [(counter.clone(), Symbol::Class(class))],
+            NamingConvention::PreserveCase,
         );
-        pool.insert(
-            name("user", &[], "invoke_sync"),
-            Symbol::Function(function("invoke_sync", &[])),
-        );
-        let emitted = HashSet::from([counter.clone()]);
-        let names = RustNames::build(&pool, &emitted, NamingConvention::PreserveCase);
 
         let method = |raw: &str| CallableId::Method {
             class: counter.clone(),
@@ -517,14 +587,125 @@ mod tests {
             names.binding(&method("bump_sync"), Binding::Sync),
             "bump_sync_sync"
         );
+    }
 
-        let root = |raw: &str| CallableId::Function(name("user", &[], raw));
-        assert_eq!(names.binding(&root("invoke"), Binding::Async), "invoke_");
-        assert_eq!(
-            names.binding(&root("invoke_sync"), Binding::Async),
-            "invoke_sync_"
+    /// What the generated crate root binds itself, written out here rather
+    /// than read from the tables under test: type-namespace names, the
+    /// dependency modules, and the module names rustc treats specially.
+    const ROOT_TYPES: [&str; 8] = [
+        "_inlinedbaml",
+        "_runtime",
+        "baml_bridge",
+        "BamlOptions",
+        "_invocation",
+        "trace",
+        "invocation",
+        "experimental",
+    ];
+    const DEPENDENCY_ROOTS: [&str; 4] = ["baml", "ai", "reflect", "vendor"];
+    const SPECIAL_MODULES: [&str; 2] = ["lib", "main"];
+
+    #[test]
+    fn root_symbols_yield_to_the_crate_roots_own_names() {
+        let convention = NamingConvention::PreserveCase;
+        let class_named = |ns: &[&str], leaf: &str| {
+            let class_name = name("user", ns, leaf);
+            let symbol = class(&class_name, &[]);
+            (class_name, symbol)
+        };
+        let function_named = |ns: &[&str], leaf: &str| {
+            let function_name = name("user", ns, leaf);
+            (function_name, Symbol::Function(function(leaf, &[])))
+        };
+        let binding = |names: &RustNames, ns: &[&str], leaf: &str| {
+            let id = CallableId::Function(name("user", ns, leaf));
+            names.binding(&id, Binding::Async).to_string()
+        };
+
+        // The dependency modules are reserved even when the program has none
+        // of their packages, as here.
+        for &leaf in ROOT_TYPES.iter().chain(&DEPENDENCY_ROOTS) {
+            let (class, symbol) = class_named(&[], leaf);
+            let names = build([(class.clone(), symbol)], convention);
+            assert_eq!(names.type_name(&class), format!("{leaf}_"));
+        }
+        for &ns in ROOT_TYPES.iter().chain(&SPECIAL_MODULES) {
+            let (thing, symbol) = class_named(&[ns], "Thing");
+            let names = build([(thing.clone(), symbol)], convention);
+            assert_eq!(names.module_path(&thing), [format!("{ns}_")]);
+        }
+        let names = build([function_named(&[], "init")], convention);
+        assert_eq!(binding(&names, &[], "init"), "init_");
+
+        // Functions live apart from types and modules, in Rust's value
+        // namespace: each keeps a type-namespace name, and a class keeps
+        // `init` and the special module names. The dynamic `invoke` lives
+        // in `experimental`, leaving the root's `invoke` free.
+        for &leaf in ROOT_TYPES
+            .iter()
+            .chain(&DEPENDENCY_ROOTS)
+            .chain(&SPECIAL_MODULES)
+            .chain(&["invoke", "invoke_sync"])
+        {
+            let names = build([function_named(&[], leaf)], convention);
+            assert_eq!(binding(&names, &[], leaf), leaf);
+        }
+        for &leaf in SPECIAL_MODULES.iter().chain(&["init"]) {
+            let (class, symbol) = class_named(&[], leaf);
+            let names = build([(class.clone(), symbol)], convention);
+            assert_eq!(names.type_name(&class), leaf);
+        }
+
+        // Only the root is reserved: one namespace down, every name is free.
+        for &leaf in ROOT_TYPES.iter().chain(&DEPENDENCY_ROOTS) {
+            let (class, symbol) = class_named(&["ns"], leaf);
+            let names = build([(class.clone(), symbol)], convention);
+            assert_eq!(names.type_name(&class), leaf);
+        }
+        for &ns in ROOT_TYPES.iter().chain(&SPECIAL_MODULES) {
+            let (thing, symbol) = class_named(&["ns", ns], "Thing");
+            let names = build([(thing.clone(), symbol)], convention);
+            assert_eq!(names.module_path(&thing), ["ns", ns]);
+        }
+        let names = build([function_named(&["ns"], "init")], convention);
+        assert_eq!(binding(&names, &["ns"], "init"), "init");
+
+        // The stdlib's module keeps its path beside a root class named like it.
+        let (baml, baml_class) = class_named(&[], "baml");
+        let cancel = name("baml", &["spawn"], "CancelToken");
+        let cancel_class = class(&cancel, &[]);
+        let names = build(
+            [(baml.clone(), baml_class), (cancel.clone(), cancel_class)],
+            convention,
         );
-        assert_ne!(names.binding(&root("invoke"), Binding::Sync), "invoke_sync");
+        assert_eq!(names.type_name(&baml), "baml_");
+        assert_eq!(names.module_path(&cancel), ["baml", "spawn"]);
+        assert_eq!(names.type_name(&cancel), "CancelToken");
+    }
+
+    #[test]
+    fn root_projections_yield_to_the_crate_roots_own_names() {
+        let options = name("user", &[], "baml_options");
+        let experimental = name("user", &["Experimental"], "Thing");
+        let lib = name("user", &["Lib"], "Thing");
+        let init = name("user", &[], "Init");
+        let names = build(
+            [
+                (options.clone(), class(&options, &[])),
+                (experimental.clone(), class(&experimental, &[])),
+                (lib.clone(), class(&lib, &[])),
+                (init.clone(), Symbol::Function(function("Init", &[]))),
+            ],
+            NamingConvention::Language,
+        );
+
+        assert_eq!(names.type_name(&options), "BamlOptions_");
+        assert_eq!(names.module_path(&experimental), ["experimental_"]);
+        assert_eq!(names.module_path(&lib), ["lib_"]);
+        assert_eq!(
+            names.binding(&CallableId::Function(init), Binding::Async),
+            "init_"
+        );
     }
 
     #[test]
