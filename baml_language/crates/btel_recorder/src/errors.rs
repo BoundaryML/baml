@@ -7,6 +7,7 @@
 //! in one synchronous step on one producer. Other threads' records can be
 //! interleaved between them (other producers' chunks), so state is kept per
 //! thread, never as one global "current error".
+use btel_core::recording::field;
 use btel_records::{
     NO_PC, OriginVia, RaiseKind, RaiseOrigin, RaiseStack, SpanRecord, UnresolvedOrigin,
     UnwindResult,
@@ -117,7 +118,7 @@ impl ConversionBuffer {
 
     fn link(&mut self, raise: TelemetryId, call: TelemetryId, role: proto::ErrorLinkRole) {
         self.push_error(
-            2,
+            field::error_batch::CALL_LINKS,
             &proto::ErrorCallLink {
                 raise_id: raise.get(),
                 call_id: call.get(),
@@ -277,7 +278,7 @@ impl ConversionBuffer {
             message.inherited_frames = pending.inherited;
             message.inherited_frame_count = pending.inherited_count;
         }
-        self.push_error(1, &message);
+        self.push_error(field::error_batch::RAISES, &message);
         if let Some(call) = raise_call {
             self.link(raise_id, call, proto::ErrorLinkRole::RaiseFrame);
         }
@@ -321,7 +322,7 @@ impl ConversionBuffer {
             self.define_function(function);
         }
         self.push_error(
-            3,
+            field::error_batch::UNWIND_ENDS,
             &proto::ErrorUnwindEnd {
                 raise_id: raise.get(),
                 result: match result {
@@ -402,7 +403,7 @@ mod tests {
     use prost::Message as _;
 
     use super::*;
-    use crate::{RecordingBuilder, RecordingConfig, RecordingId};
+    use crate::{RecordingBuilder, RecordingConfig};
 
     type Record = SpanRecord<Snapshot, Snapshot>;
 
@@ -477,7 +478,8 @@ mod tests {
     #[test]
     fn completions_link_only_to_their_own_threads_active_raise() {
         let mut builder =
-            RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default()).unwrap();
+            RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
+                .unwrap();
         let [a, b] = [allocate_telemetry_id(), allocate_telemetry_id()];
         let [ra, rb] = [allocate_telemetry_id(), allocate_telemetry_id()];
         let calls: Vec<TelemetryId> = (0..6).map(|_| allocate_telemetry_id()).collect();
@@ -516,7 +518,8 @@ mod tests {
     #[test]
     fn a_raise_without_an_end_claims_nothing_after_its_thread_or_a_new_raise() {
         let mut builder =
-            RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default()).unwrap();
+            RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
+                .unwrap();
         let thread = allocate_telemetry_id();
         let [first, second] = [allocate_telemetry_id(), allocate_telemetry_id()];
         let calls: Vec<TelemetryId> = (0..3).map(|_| allocate_telemetry_id()).collect();
@@ -554,7 +557,8 @@ mod tests {
     #[test]
     fn a_promoted_raise_frame_is_named_by_its_marker() {
         let mut builder =
-            RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default()).unwrap();
+            RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
+                .unwrap();
         let thread = allocate_telemetry_id();
         let [promoted, plain] = [allocate_telemetry_id(), allocate_telemetry_id()];
         let [late, outer, other] = [
@@ -595,7 +599,8 @@ mod tests {
     #[test]
     fn an_error_free_file_has_no_error_section_and_origins_encode() {
         let mut builder =
-            RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default()).unwrap();
+            RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
+                .unwrap();
         let thread = allocate_telemetry_id();
         builder.span_reference(thread, &failed(allocate_telemetry_id(), thread, false));
         assert!(file(&mut builder).errors.is_none());
@@ -627,7 +632,8 @@ mod tests {
     #[test]
     fn preceding_evidence_joins_only_its_own_raise() {
         let mut builder =
-            RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default()).unwrap();
+            RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
+                .unwrap();
         let [a, b] = [allocate_telemetry_id(), allocate_telemetry_id()];
         let [stale, listed, other] = [
             allocate_telemetry_id(),
@@ -686,7 +692,8 @@ mod tests {
     #[test]
     fn a_raise_and_its_end_in_one_record_encode_like_two() {
         let mut builder =
-            RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default()).unwrap();
+            RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
+                .unwrap();
         let thread = allocate_telemetry_id();
         let raise_id = allocate_telemetry_id();
         builder.span_reference(

@@ -39,7 +39,7 @@ use crate::{
         ObjectId, OwnedType, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, Type,
         TypeId, Uint8ArrayData,
     },
-    hash::{self, Absorb as _},
+    hash,
     pool::{Lease, Limits, Storage},
     tags,
     walk::bigint_limb_bytes,
@@ -246,7 +246,7 @@ impl Leaves<'_> {
         if !carried.carries(&definition.group) {
             carry(self.definitions, carried, self.meter, &definition.group);
         }
-        DefinitionRef::of(definition)
+        crate::describe::definition_ref(definition)
     }
     /// An object's identity, for what will hold it to name before its
     /// content is known. `None` once the object limit is reached.
@@ -585,7 +585,7 @@ impl Builder {
             let Storage { graph, meter, .. } = &mut *self.0;
             carry(&mut graph.definitions, carried, meter, &definition.group);
         }
-        DefinitionRef::of(definition)
+        crate::describe::definition_ref(definition)
     }
     /// A class or enum declaration. Its name is held beside the objects.
     /// With its recorded definition (from [`Leaves::define`]), the

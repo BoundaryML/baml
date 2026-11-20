@@ -2,15 +2,18 @@ use std::{num::NonZeroUsize, sync::Arc};
 
 use bex_chunkedringbuffer::{ChunkPool, Config};
 use btel_clock::{ClockMode, ClockRuntime};
+use btel_core::{
+    cas::{DecodedObject, DecodedRoot, DecodedValue},
+    reader::{
+        context::{ContextReference, reference},
+        store::{CasLimits, CasStore, CasUnavailable},
+    },
+};
 use btel_file::{LocalDelivery, LocalDeliveryConfig, LocalPublisher};
 use btel_processor::Processor;
-use btel_reader::{
-    cas::{CasLimits, CasStore, CasUnavailable},
-    context::{ContextReference, reference},
-};
-use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingId};
+use btel_recorder::{RecordingBuilder, RecordingConfig};
 use btel_records::{SpanRecord, TimingRecord};
-use btel_snapshot::{DecodedObject, DecodedRoot, DecodedValue, Limits, Snapshot, SnapshotPool};
+use btel_snapshot::{Limits, Snapshot, SnapshotPool};
 use btel_types::{
     CallPathId, ClockInstant, allocate_telemetry_id,
     context::{Context, ContextPatch, ContextValue},
@@ -24,7 +27,7 @@ fn nz(value: usize) -> NonZeroUsize {
 #[test]
 fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer() {
     let root = tempfile::tempdir().unwrap();
-    let recording = RecordingId::generate();
+    let recording = btel_types::new_recording_id();
     let delivery =
         LocalDelivery::create(root.path(), recording, LocalDeliveryConfig::default()).unwrap();
     let directory = btel_file::recording_directory(root.path(), recording);
@@ -132,7 +135,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
     assert!(processor.process_available().complete);
     delivery.finish().unwrap();
 
-    let read = btel_file::read_directory(&directory).unwrap();
+    let read = btel_core::recording::read_directory(&directory).unwrap();
     assert!(read.issues.is_empty(), "{:?}", read.issues);
     let sections: Vec<_> = read
         .files
@@ -153,12 +156,12 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
                 .any(|section| section.context.is_some())
         });
         let required = if has_context {
-            btel_settings::encoding::CONTEXT_FORMAT_MINOR
+            btel_core::recording::minor::CONTEXT
         } else {
             0
         };
         file.header.as_ref().unwrap().format_minor
-            == btel_settings::encoding::FORMAT_MINOR.max(required)
+            == btel_core::recording::minor::BASE.max(required)
     }));
 
     let cas = CasStore::new(root.path().join("cas"), CasLimits::default());
@@ -204,7 +207,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
         btel_recorder::proto::thread_section::Context::EmptyContext(false),
     );
     assert_eq!(
-        btel_file::validate_file(&invalid.encode_to_vec(), recording, invalid.sequence)
+        btel_core::recording::validate_file(&invalid.encode_to_vec(), recording, invalid.sequence)
             .unwrap_err(),
         "invalid empty context marker"
     );

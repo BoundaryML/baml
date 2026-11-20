@@ -1,14 +1,20 @@
 # BCS API
 
-Cloud wire contracts and native clients shared by the CLI, bridges, packed programs, and telemetry delivery.
+The BCS client as BAML hosts use it: the CLI, bridges, packed programs, and telemetry delivery. The client is `bcs-sdk`, which BCS publishes; this crate re-exports its modules and adds what is BAML's own: the environment BAML reads and how it words a failure.
+
+- `endpoint`: the Boundary API endpoint, `BOUNDARY_API_URL` before a configured URL before BCS's own.
+- `store`: the saved logins under `$BAML_HOME` (default `~/.baml`).
+- `diagnostics`: credential-safe wording of each failure for BAML's users; a host chooses the operation's outcome.
+
+From `bcs-sdk`:
 
 - `auth`: device login and endpoint selection.
 - `api_keys`: read-only API-key identity and permission introspection.
-- `store` (exposed through `auth::Store`): an AWS-style JSON login cache under `$BAML_HOME/login/cache/` (default `~/.baml/login/cache/`), with one owner-only file per canonical Boundary API endpoint. CLI, bridges and packed programs share the same file format. Files contain the persistent session credential and caller profile; writes replace the file atomically. These files are plaintext and readable by processes running as the same OS user.
+- `Store`: an AWS-style JSON login cache under `<home>/login/cache/`, with one owner-only file per canonical Boundary API endpoint. CLI, bridges and packed programs share the same file format. Files contain the persistent session credential and caller profile; writes replace the file atomically. These files are plaintext and readable by processes running as the same OS user.
 - `credentials`: redacted credentials, optional request targets, and shared process-local access-token state.
 - `query`: blocking NDJSON queries and cancellation.
 - `telemetry`: asynchronous upload preparation and heartbeat, plus protobuf uploads authorized by the upload plan.
-- `wire` and `proto`: telemetry control contracts and the existing `cloud.proto` envelope.
+- `upload`: the upload contract and its envelope, `btel-core`'s (`btel_core::upload`).
 
 Windows cache operations use an owner-only empty `<endpoint-hash>.lock` file to coordinate readers, atomic replacement and logout across hosts. The lock file stays after logout and contains no credentials. Locks cover only local file operations, never HTTP requests. A blocked cache-directory path is a storage error, not an absent login.
 

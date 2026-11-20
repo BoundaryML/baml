@@ -12,13 +12,12 @@ use std::{
     time::Duration,
 };
 
+use btel_core::upload::{HeartbeatPolicy, Liveness, PrepareUploadsRequest, ProducerState};
 use tokio::{
     sync::{Notify, watch},
     time::Instant,
 };
 use uuid::Uuid;
-
-use crate::wire::{HeartbeatPolicy, Liveness, PrepareUploadsRequest, ProducerState};
 
 static SESSION: OnceLock<Uuid> = OnceLock::new();
 static SEQUENCE: AtomicU64 = AtomicU64::new(0);

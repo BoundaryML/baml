@@ -16,18 +16,17 @@ use std::{
     time::Instant,
 };
 
-use btel_reader::{
-    cas::{CasStore, CasUnavailable},
-    evidence::ArgumentNames,
-    timing::{Clock, Conversion, EpochStatus, TimingState, UtcAnchor, format_unix_ns},
-    value::{
-        self, BlobSource, CmpOp, Kind, Nav, Operand, RenderLimits, Root, Scalar, Segment,
-        Unavailable, equality,
+use btel_core::{
+    cas::{CasId, DecodedBlob, DecodedValue},
+    reader::{
+        evidence::ArgumentNames,
+        store::{CasStore, CasUnavailable},
+        timing::{Clock, Conversion, EpochStatus, TimingState, UtcAnchor, format_unix_ns},
+        value::{
+            self, BlobSource, CmpOp, Composer, Kind, Nav, Operand, RenderLimits, Root, Scalar,
+            Segment, equality,
+        },
     },
-};
-use btel_snapshot::{
-    CasId, ChildIndex, DecodedMedia, DecodedMediaSource, DecodedObject, DecodedRoot,
-    DecodedSnapshot, DecodedValue, Limit, MediaPayload, NodeId, TypeDescription,
 };
 use rusqlite::{
     Connection, Error as SqlError,
@@ -80,7 +79,7 @@ pub struct ValueMetrics {
 }
 
 struct CacheState {
-    blobs: HashMap<[u8; 16], Result<Arc<DecodedSnapshot>, CasUnavailable>>,
+    blobs: HashMap<[u8; 16], Result<Arc<DecodedBlob>, CasUnavailable>>,
     blob_bytes: u64,
     results: HashMap<Vec<u8>, (Scalar, Kind)>,
     result_bytes: usize,
@@ -135,7 +134,7 @@ impl QueryContext {
             return self.events(handle);
         }
         let snapshot = match &handle.inline {
-            Some(blob) => btel_snapshot::decode_blob(blob, &self.cas.limits().decode)
+            Some(blob) => btel_core::cas::decode_blob(blob, &self.cas.limits().decode)
                 .map(Arc::new)
                 .map_err(CasUnavailable::Corrupt),
             None => BlobSource::load(self, CasId::from_bytes(handle.cas)),
@@ -195,7 +194,7 @@ impl QueryContext {
             let rest = path.split_off(2);
             let snapshot = match events[at].payload {
                 Some(cas) => load(cas)?,
-                None => Arc::new(Composer::default().finish(id, DecodedValue::Null)),
+                None => Composer::default().finish(id, DecodedValue::Null),
             };
             return Ok((snapshot, Cow::Owned(rest)));
         }
@@ -221,7 +220,7 @@ impl QueryContext {
             ])?);
         }
         let list = composer.list(items)?;
-        Ok((Arc::new(composer.finish(id, list)), Cow::Owned(path)))
+        Ok((composer.finish(id, list), Cow::Owned(path)))
     }
 
     /// Report `code` once per distinct `key` (a handle, or a handle plus an
@@ -366,7 +365,7 @@ impl QueryContext {
 /// The state lock is held for bookkeeping only, never while reading a blob
 /// or walking a value.
 impl BlobSource for QueryContext {
-    fn load(&self, id: CasId) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
+    fn load(&self, id: CasId) -> Result<Arc<DecodedBlob>, CasUnavailable> {
         let key = *id.as_bytes();
         {
             let mut state = self.state.lock().expect("value state");
@@ -439,202 +438,7 @@ fn comparison_result(
 
 /// What a handle reads: a snapshot and the path to follow in it, or the
 /// code of why it is unavailable.
-type Loaded<'h> = Result<(Arc<DecodedSnapshot>, Cow<'h, [Segment]>), &'static str>;
-
-/// A snapshot assembled in memory: values the index builds, around
-/// payload graphs copied in from their own blobs.
-#[derive(Default)]
-struct Composer {
-    objects: Vec<DecodedObject>,
-    children: Vec<CasId>,
-}
-
-impl Composer {
-    /// Reading never looks at a built container's types.
-    fn untyped() -> TypeDescription {
-        TypeDescription {
-            encoded: Box::new([]),
-            decoded: None,
-        }
-    }
-
-    fn push(&mut self, object: DecodedObject) -> Result<DecodedValue, &'static str> {
-        let id = u32::try_from(self.objects.len())
-            .map_err(|_| Unavailable::Truncated(Limit::Objects).code())?;
-        self.objects.push(object);
-        Ok(DecodedValue::Object(NodeId(id)))
-    }
-
-    fn map(&mut self, entries: Vec<(&str, DecodedValue)>) -> Result<DecodedValue, &'static str> {
-        let original_len = entries.len() as u64;
-        self.push(DecodedObject::Map {
-            key_type: Self::untyped(),
-            value_type: Self::untyped(),
-            entries: entries
-                .into_iter()
-                .map(|(key, value)| (DecodedValue::String(key.into()), value))
-                .collect(),
-            original_len,
-        })
-    }
-
-    fn list(&mut self, items: Vec<DecodedValue>) -> Result<DecodedValue, &'static str> {
-        let original_len = items.len() as u64;
-        self.push(DecodedObject::List {
-            element_type: Self::untyped(),
-            items,
-            original_len,
-        })
-    }
-
-    /// Copy a value blob's graph in, numbering its objects after the ones
-    /// already here and the blobs it continues in after the ones already
-    /// named; returns its root. Each copy is a value of its own: two events
-    /// with one payload both show it.
-    fn embed(&mut self, snapshot: &DecodedSnapshot) -> Result<DecodedValue, &'static str> {
-        let DecodedRoot::Value(root) = &snapshot.root else {
-            return Err(Unavailable::WrongRoot.code());
-        };
-        let too_many = Unavailable::Truncated(Limit::Objects).code();
-        let offset = |here: usize, added: usize| {
-            u32::try_from(here + added).map_err(|_| too_many)?;
-            u32::try_from(here).map_err(|_| too_many)
-        };
-        let objects = offset(self.objects.len(), snapshot.objects.len())?;
-        let children = offset(self.children.len(), snapshot.children.len())?;
-        let node = |id: &NodeId| NodeId(id.0 + objects);
-        let child = |index: &ChildIndex| ChildIndex(index.0 + children);
-        let shift = |value: &DecodedValue| match value {
-            DecodedValue::Object(id) => DecodedValue::Object(node(id)),
-            DecodedValue::Enum {
-                declaration,
-                variant,
-                name,
-            } => DecodedValue::Enum {
-                declaration: node(declaration),
-                variant: *variant,
-                name: name.clone(),
-            },
-            DecodedValue::External(index) => DecodedValue::External(child(index)),
-            // The object named is in the other blob, which is not copied.
-            DecodedValue::ExternalNode { child: index, node } => DecodedValue::ExternalNode {
-                child: child(index),
-                node: *node,
-            },
-            DecodedValue::Null
-            | DecodedValue::OmittedArg
-            | DecodedValue::Redacted(_)
-            | DecodedValue::Bool(_)
-            | DecodedValue::Int(_)
-            | DecodedValue::Float(_)
-            | DecodedValue::String(_)
-            | DecodedValue::Bigint(_)
-            | DecodedValue::Type(_)
-            | DecodedValue::Truncated(_) => value.clone(),
-        };
-        let entries = |entries: &btel_snapshot::Entries| -> btel_snapshot::Entries {
-            entries
-                .iter()
-                .map(|(key, value)| (shift(key), shift(value)))
-                .collect()
-        };
-        let content = |payload: &MediaPayload| match payload {
-            MediaPayload::Inline(_) => payload.clone(),
-            MediaPayload::External {
-                child: index,
-                text_len,
-            } => MediaPayload::External {
-                child: child(index),
-                text_len: *text_len,
-            },
-        };
-        self.children.extend_from_slice(&snapshot.children);
-        for object in &snapshot.objects {
-            self.objects.push(match object {
-                DecodedObject::List {
-                    element_type,
-                    items,
-                    original_len,
-                } => DecodedObject::List {
-                    element_type: element_type.clone(),
-                    items: items.iter().map(shift).collect(),
-                    original_len: *original_len,
-                },
-                DecodedObject::Tuple {
-                    element_types,
-                    items,
-                    original_len,
-                } => DecodedObject::Tuple {
-                    element_types: element_types.clone(),
-                    items: items.iter().map(shift).collect(),
-                    original_len: *original_len,
-                },
-                DecodedObject::Map {
-                    key_type,
-                    value_type,
-                    entries: map,
-                    original_len,
-                } => DecodedObject::Map {
-                    key_type: key_type.clone(),
-                    value_type: value_type.clone(),
-                    entries: entries(map),
-                    original_len: *original_len,
-                },
-                DecodedObject::Instance {
-                    type_arguments,
-                    declaration,
-                    fields,
-                    original_len,
-                } => DecodedObject::Instance {
-                    type_arguments: type_arguments.clone(),
-                    declaration: node(declaration),
-                    fields: fields
-                        .iter()
-                        .map(|(key, value)| (key.clone(), shift(value)))
-                        .collect(),
-                    original_len: *original_len,
-                },
-                DecodedObject::Cell(value) => DecodedObject::Cell(shift(value)),
-                DecodedObject::Media(media) => DecodedObject::Media(DecodedMedia {
-                    kind: media.kind,
-                    mime_type: media.mime_type.clone(),
-                    source: match &media.source {
-                        DecodedMediaSource::Url { url, data } => DecodedMediaSource::Url {
-                            url: url.clone(),
-                            data: data.as_ref().map(content),
-                        },
-                        DecodedMediaSource::File { path, data } => DecodedMediaSource::File {
-                            path: path.clone(),
-                            data: data.as_ref().map(content),
-                        },
-                        DecodedMediaSource::Base64 { data } => DecodedMediaSource::Base64 {
-                            data: content(data),
-                        },
-                    },
-                }),
-                DecodedObject::Uint8Array { .. }
-                | DecodedObject::Declaration { .. }
-                | DecodedObject::NonSnapshotable
-                | DecodedObject::Descriptive { .. }
-                | DecodedObject::Truncated(_) => object.clone(),
-            });
-        }
-        Ok(shift(root))
-    }
-
-    /// `id` names what was built: a reader that walks several values at
-    /// once tells their blobs apart by ID, so two different compositions
-    /// must not share one.
-    fn finish(self, id: CasId, root: DecodedValue) -> DecodedSnapshot {
-        DecodedSnapshot {
-            id,
-            encoded_len: 0,
-            children: self.children,
-            root: DecodedRoot::Value(root),
-            objects: self.objects,
-        }
-    }
-}
+type Loaded<'h> = Result<(Arc<DecodedBlob>, Cow<'h, [Segment]>), &'static str>;
 
 /// Where the functions find the current query's context.
 pub type ContextSlot = Arc<Mutex<Option<Arc<QueryContext>>>>;
@@ -919,7 +723,7 @@ fn u64_from_blob(bytes: &[u8]) -> Option<u64> {
 }
 
 fn hex(bytes: &[u8]) -> String {
-    btel_reader::discovery::hex(bytes)
+    btel_core::reader::discovery::hex(bytes)
 }
 
 /// Clock facts from view columns: conversion (NULL multiplier means the
@@ -1236,24 +1040,6 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
     register_final_tables(conn)?;
     let _ = Null;
     Ok(())
-}
-
-/// A profiler node's identity: its parent's, the name of the function it
-/// reached and the edge that reached it (1 call, 2 spawn). The same code
-/// reached the same way has the same node in every process.
-pub(crate) fn node_hash(parent: Option<i64>, name: &str, edge: i64) -> i64 {
-    let mut hasher = xxhash_rust::xxh3::Xxh3::new();
-    match parent {
-        None => hasher.update(&[0]),
-        Some(parent) => {
-            hasher.update(&[1]);
-            hasher.update(&parent.to_be_bytes());
-        }
-    }
-    hasher.update(&(name.len() as u64).to_be_bytes());
-    hasher.update(name.as_bytes());
-    hasher.update(&edge.to_be_bytes());
-    hasher.digest().cast_signed()
 }
 
 /// A stored usage entry as a column value's map.

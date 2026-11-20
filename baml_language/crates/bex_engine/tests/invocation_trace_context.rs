@@ -168,7 +168,7 @@ async fn retained_callback_context_and_ancestry_survive_parent_completion() {
         let mut functions = HashMap::new();
         let mut paths = HashMap::new();
         let mut threads = HashMap::new();
-        for file in btel_file::read_directory(path).unwrap().files {
+        for file in btel_core::recording::read_directory(path).unwrap().files {
             let definitions = file.definitions.unwrap();
             for function in definitions.functions {
                 if let Some(proto::function_definition::Resolution::Metadata(metadata)) =

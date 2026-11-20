@@ -11,7 +11,6 @@ use std::{
 };
 
 use btel_bcs::delivery::{BcsDelivery, DeliveryConfig, DeliveryError, InitialAuthorization};
-use btel_recorder::RecordingId;
 
 /// A forward proxy that answers every request itself with 204 and records
 /// each request line.
@@ -54,7 +53,7 @@ fn proxy() -> (String, Arc<Mutex<Vec<String>>>) {
 fn finish_first_connection(endpoint: &str) -> (Result<(), DeliveryError>, InitialAuthorization) {
     let delivery = BcsDelivery::new(
         DeliveryConfig {
-            initial_recording_id: Some(RecordingId::generate()),
+            initial_recording_id: Some(btel_types::new_recording_id()),
             terminal_initial_connection: true,
             max_attempts: 1,
             request_timeout: Duration::from_secs(5),

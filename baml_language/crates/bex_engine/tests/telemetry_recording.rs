@@ -73,9 +73,10 @@ async fn trace_capture_reaches_cas_with_exact_values() {
     let mut completions = HashMap::new();
     let mut paths = HashMap::new();
     let mut threads = HashMap::new();
-    for file in btel_file::read_directory(engine.telemetry_recording_directory().unwrap())
-        .unwrap()
-        .files
+    for file in
+        btel_core::recording::read_directory(engine.telemetry_recording_directory().unwrap())
+            .unwrap()
+            .files
     {
         let header = file.header.unwrap();
         assert_eq!(header.recording_id, id.as_bytes());
@@ -158,12 +159,13 @@ async fn trace_capture_reaches_cas_with_exact_values() {
 
 /// The `error` of a captured `baml.errors.Context`, which must be a string.
 fn read_error_capture(root: &std::path::Path, id: proto::CasId) -> String {
-    use btel_snapshot::{DecodeLimits, DecodedObject, DecodedRoot, DecodedValue, decode_blob};
+    use btel_core::cas::{DecodeLimits, DecodedObject, DecodedRoot, DecodedValue, decode_blob};
 
     let mut digest = [0; 16];
     digest[..8].copy_from_slice(&id.low.to_le_bytes());
     digest[8..].copy_from_slice(&id.high.to_le_bytes());
-    let path = btel_file::cas_path(&root.join("cas"), btel_snapshot::CasId::from_bytes(digest));
+    let path =
+        btel_core::cas::cas_path(&root.join("cas"), btel_snapshot::CasId::from_bytes(digest));
     let snapshot = decode_blob(&std::fs::read(path).unwrap(), &DecodeLimits::default()).unwrap();
     let DecodedRoot::Value(DecodedValue::Object(context)) = snapshot.root else {
         panic!("expected a captured context object");
@@ -180,12 +182,13 @@ fn read_error_capture(root: &std::path::Path, id: proto::CasId) -> String {
 }
 
 fn read_string_capture(root: &std::path::Path, id: proto::CasId, args: bool) -> String {
-    use btel_snapshot::{DecodeLimits, DecodedRoot, DecodedValue, decode_blob};
+    use btel_core::cas::{DecodeLimits, DecodedRoot, DecodedValue, decode_blob};
 
     let mut digest = [0; 16];
     digest[..8].copy_from_slice(&id.low.to_le_bytes());
     digest[8..].copy_from_slice(&id.high.to_le_bytes());
-    let path = btel_file::cas_path(&root.join("cas"), btel_snapshot::CasId::from_bytes(digest));
+    let path =
+        btel_core::cas::cas_path(&root.join("cas"), btel_snapshot::CasId::from_bytes(digest));
     let bytes = std::fs::read(path).unwrap();
     let snapshot = decode_blob(&bytes, &DecodeLimits::default()).unwrap();
     assert_eq!(snapshot.id.as_bytes(), &digest);
@@ -282,7 +285,7 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
     .expect("shutdown must drain without a heap-permit deadlock");
     assert_eq!(engine.telemetry_result(), Some(Ok(())));
     let directory = engine.telemetry_recording_directory().unwrap();
-    let read = btel_file::read_directory(directory).unwrap();
+    let read = btel_core::recording::read_directory(directory).unwrap();
     // No gap, unfinished file, invalid file or file after the end.
     assert!(read.issues.is_empty(), "{:?}", read.issues);
     let written = recording_bytes(directory);
@@ -435,7 +438,7 @@ fn telemetry_environment_modes() {
         }
         assert_eq!(engine.telemetry_result(), Some(Ok(())));
         let (mut aggregates, mut spans, mut announcements, mut threads) = (0, 0, 0, 0);
-        for file in btel_file::read_directory(engine.telemetry_recording_directory().unwrap()).unwrap().files {
+        for file in btel_core::recording::read_directory(engine.telemetry_recording_directory().unwrap()).unwrap().files {
             if let Some(batch) = file.aggregates {
                 aggregates += batch.entries.iter().map(|row| row.count).sum::<u64>();
             }
@@ -529,9 +532,10 @@ async fn user_recordings_honor_baml_home() {
         .unwrap();
     assert_eq!(engine.telemetry_result(), Some(Ok(())));
     let mut found_output = false;
-    for file in btel_file::read_directory(engine.telemetry_recording_directory().unwrap())
-        .unwrap()
-        .files
+    for file in
+        btel_core::recording::read_directory(engine.telemetry_recording_directory().unwrap())
+            .unwrap()
+            .files
     {
         for section in file.spans.unwrap().sections {
             for event in section.events {

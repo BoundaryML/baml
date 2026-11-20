@@ -111,7 +111,7 @@ impl MetadataJournal {
 #[cfg(test)]
 mod tests {
     use btel_processor::AggregateDelta;
-    use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingId, proto};
+    use btel_recorder::{RecordingBuilder, RecordingConfig, proto};
     use btel_records::SpanRecord;
     use btel_types::{CallPathEdge, CallPathId, FunctionIdAllocator, allocate_telemetry_id};
     use prost::Message;
@@ -119,7 +119,7 @@ mod tests {
     use super::*;
 
     fn builder() -> RecordingBuilder {
-        RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default())
+        RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
             .unwrap()
             .with_metadata_replay()
     }

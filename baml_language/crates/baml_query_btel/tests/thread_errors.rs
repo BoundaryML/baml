@@ -128,7 +128,7 @@ async fn a_failed_future_carries_its_error_in_the_recording() {
     for (minor, done) in &failed {
         assert!(done.error_cas_id.is_some(), "{done:?}");
         assert!(
-            *minor >= btel_settings::encoding::THREAD_ERROR_FORMAT_MINOR,
+            *minor >= btel_core::recording::minor::THREAD_ERROR,
             "a file with a thread error is minor {minor}"
         );
     }

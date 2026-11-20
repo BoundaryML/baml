@@ -65,6 +65,7 @@ tempfile = { workspace = true }
 baml_artifact = { workspace = true, features = [ "test-support" ] }
 baml_test_support = { workspace = true }
 baml_type = { workspace = true }
+btel-core = { workspace = true, features = [ "reader" ] }
 cc = { workspace = true }
 divan = { workspace = true }
 wiremock = { workspace = true }

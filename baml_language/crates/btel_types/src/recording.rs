@@ -1,19 +1,11 @@
-/// The UUID scope shared by a recording and its public span identities.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct RecordingId([u8; 16]);
+/// The UUID scope shared by a recording and its public span identities, as `btel-core`
+/// defines it.
+pub use btel_core::recording::RecordingId;
 
-impl RecordingId {
-    pub fn generate() -> Self {
-        Self(*uuid::Uuid::new_v4().as_bytes())
-    }
-
-    pub fn from_bytes(bytes: [u8; 16]) -> Option<Self> {
-        (bytes != [0; 16]).then_some(Self(bytes))
-    }
-
-    pub fn as_bytes(&self) -> &[u8; 16] {
-        &self.0
-    }
+/// A new recording's identity: a random UUID.
+pub fn new_recording_id() -> RecordingId {
+    RecordingId::from_bytes(*uuid::Uuid::new_v4().as_bytes())
+        .expect("a version 4 UUID has its version bits set, so it is never all zero")
 }
 
 /// The OS process a recording's engine ran in. Every engine of one process

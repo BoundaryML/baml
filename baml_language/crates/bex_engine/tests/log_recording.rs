@@ -10,13 +10,17 @@ use bex_engine::{
     BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording,
     logger::TraceLogger,
 };
-use btel_bcs::{CloudPublisherConfig, delivery::DeliveryConfig, proto::CloudUploadEnvelope};
-use btel_reader::{
-    cas::{CasLimits, CasStore},
-    context::{ContextReference, reference},
+use btel_bcs::{CloudPublisherConfig, delivery::DeliveryConfig};
+use btel_core::{
+    cas::{DecodedBlob, DecodedObject, DecodedRoot, DecodedValue},
+    reader::{
+        context::{ContextReference, reference},
+        store::{CasLimits, CasStore},
+    },
+    upload::envelope::UploadEnvelope,
 };
 use btel_recorder::{RecordingConfig, proto};
-use btel_snapshot::{CasId, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue};
+use btel_snapshot::CasId;
 use prost::Message as _;
 use sys_native::SysOpsExt;
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::method};
@@ -79,21 +83,21 @@ async fn execute(recording: TelemetryRecording, name: &str, live: bool) -> Arc<B
     engine
 }
 
-fn root(snapshot: &DecodedSnapshot) -> &DecodedValue {
+fn root(snapshot: &DecodedBlob) -> &DecodedValue {
     let DecodedRoot::Value(value) = &snapshot.root else {
         panic!("log snapshots are values")
     };
     value
 }
 
-fn object(snapshot: &DecodedSnapshot) -> &DecodedObject {
+fn object(snapshot: &DecodedBlob) -> &DecodedObject {
     let DecodedValue::Object(id) = root(snapshot) else {
         panic!("expected an object")
     };
     snapshot.object(*id)
 }
 
-fn fields(entries: &btel_snapshot::Entries) -> BTreeMap<&str, &DecodedValue> {
+fn fields(entries: &btel_core::cas::Entries) -> BTreeMap<&str, &DecodedValue> {
     entries
         .iter()
         .map(|(key, value)| {
@@ -108,7 +112,7 @@ fn fields(entries: &btel_snapshot::Entries) -> BTreeMap<&str, &DecodedValue> {
 fn assert_logs(
     files: &[proto::RecordingFile],
     name: &str,
-    mut load: impl FnMut(CasId) -> DecodedSnapshot,
+    mut load: impl FnMut(CasId) -> DecodedBlob,
 ) {
     use proto::span_event::Event;
     let functions: BTreeMap<_, _> = files
@@ -139,7 +143,7 @@ fn assert_logs(
                 };
                 assert!(
                     file.header.as_ref().unwrap().format_minor
-                        >= btel_settings::encoding::LOG_LINE_FORMAT_MINOR
+                        >= btel_core::recording::minor::LOG_LINE
                 );
                 let ContextReference::Snapshot(context) = reference(section) else {
                     panic!("missing log context")
@@ -178,7 +182,7 @@ fn assert_logs(
                 // The event carries the line a reader resolves from the definition's line
                 // table, so a file without the definition still places it.
                 let own_file = function.source_span.as_ref().map(|span| span.file_id);
-                let resolved = btel_reader::source_map::SourceMap::from_wire(
+                let resolved = btel_core::reader::source_map::SourceMap::from_wire(
                     function.source_map.as_ref().unwrap(),
                     own_file,
                 )
@@ -208,11 +212,9 @@ fn assert_logs(
                 }
                 logs.push((
                     log,
-                    load(
-                        log.data_cas_id
-                            .expect("null data is captured, not absent")
-                            .into(),
-                    ),
+                    load(btel_core::recording::cas_id(
+                        log.data_cas_id.expect("null data is captured, not absent"),
+                    )),
                 ));
             }
         }
@@ -290,7 +292,9 @@ async fn log_data_and_event_time_context_reach_local_cas() {
     )
     .await;
     assert_eq!(engine.telemetry_result(), Some(Ok(())));
-    let read = btel_file::read_directory(engine.telemetry_recording_directory().unwrap()).unwrap();
+    let read =
+        btel_core::recording::read_directory(engine.telemetry_recording_directory().unwrap())
+            .unwrap();
     assert!(read.issues.is_empty(), "{:?}", read.issues);
     let cas = CasStore::new(directory.path().join("cas"), CasLimits::default());
     assert_logs(&read.files, &name, |id| {
@@ -353,13 +357,13 @@ async fn log_data_and_context_use_existing_cloud_uploads() {
         .iter()
         .filter(|request| request.method == "PUT")
     {
-        let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+        let envelope = UploadEnvelope::decode(request.body.as_slice()).unwrap();
         if let Some(bytes) = envelope.recording_file {
             files.push(proto::RecordingFile::decode(bytes.as_slice()).unwrap());
         }
-        for object in envelope.cas_objects {
+        for object in envelope.blobs {
             let snapshot =
-                btel_snapshot::decode_blob(&object.blob, &btel_snapshot::DecodeLimits::default())
+                btel_core::cas::decode_blob(&object.blob, &btel_core::cas::DecodeLimits::default())
                     .unwrap();
             assert_eq!(snapshot.id.as_bytes().as_slice(), object.snapshot_id);
             snapshots.insert(*snapshot.id.as_bytes(), snapshot);

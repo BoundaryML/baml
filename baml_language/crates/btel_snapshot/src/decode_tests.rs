@@ -1,12 +1,17 @@
 use std::sync::Arc;
 
 use baml_type::{DeclarationName, RealizedTy, TypeName, typetag::TypeTag};
+use btel_core::cas::{
+    BlobError, DecodeLimits, DecodedBlob, DecodedMedia, DecodedMediaSource, DecodedObject,
+    DecodedRoot, DecodedValue, MAX_DECODED_DEPTH, MediaKind, MediaPayload, NodeId, Redaction,
+    RuntimeTag, decode_blob,
+};
 use num_bigint::BigInt;
 
 use super::*;
 use crate::{
     BlobScratch, Limits, MapEntry, Shaper, Snapshot, SnapshotObject as O, SnapshotPool,
-    SnapshotValue as V,
+    SnapshotValue as V, describe::described,
 };
 
 fn int_type() -> OwnedType {
@@ -26,12 +31,12 @@ fn encode(snapshot: &Snapshot) -> Vec<u8> {
 }
 /// A hand-built header: zero ID, the given child IDs, and an object count.
 fn header(children: &[[u8; 16]], objects: u32) -> Vec<u8> {
-    header_at(crate::BLOB_VERSION, children, objects)
+    header_at(btel_core::cas::VERSION, children, objects)
 }
 /// [`header`] for format `version`.
 fn header_at(version: u32, children: &[[u8; 16]], objects: u32) -> Vec<u8> {
     let mut bytes = Vec::new();
-    bytes.extend_from_slice(&crate::BLOB_MAGIC);
+    bytes.extend_from_slice(&btel_core::cas::MAGIC);
     bytes.extend_from_slice(&version.to_le_bytes());
     bytes.extend_from_slice(&[0; 16]);
     bytes.extend_from_slice(&u32::try_from(children.len()).unwrap().to_le_bytes());
@@ -41,7 +46,7 @@ fn header_at(version: u32, children: &[[u8; 16]], objects: u32) -> Vec<u8> {
     bytes.extend_from_slice(&objects.to_le_bytes());
     bytes
 }
-fn decode(bytes: &[u8]) -> Result<DecodedSnapshot, BlobError> {
+fn decode(bytes: &[u8]) -> Result<DecodedBlob, BlobError> {
     decode_blob(bytes, &DecodeLimits::default())
 }
 
@@ -183,7 +188,7 @@ fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
     };
     assert!(matches!(
         decoded.object(*declaration),
-        DecodedObject::Declaration { tag, .. } if *tag == Some(TypeTag::from_i64(42))
+        DecodedObject::Declaration { tag, .. } if *tag == Some(RuntimeTag(42))
     ));
     let field = |name: &str| &fields.iter().find(|(key, _)| &**key == name).unwrap().1;
     assert_eq!(field("name"), &DecodedValue::String("hello λ".into()));
@@ -213,7 +218,7 @@ fn value_roots_and_limited_captures_verify() {
     let decoded = decode(&encode(&snapshot)).unwrap();
     assert_eq!(
         decoded.root,
-        DecodedRoot::Value(DecodedValue::Truncated(crate::Limit::Bytes))
+        DecodedRoot::Value(DecodedValue::Truncated(btel_core::cas::Limit::Bytes))
     );
     drop(snapshot);
     let empty = pool
@@ -259,7 +264,7 @@ fn malformed_blobs_fail_without_panicking() {
     // Earlier formats (attribute-carrying types; discovery-order numbering)
     // and any after the newest readable one are rejected by version, before
     // their content is read.
-    let newest = btel_settings::snapshot::READABLE_BLOB_VERSIONS
+    let newest = btel_core::cas::READABLE_VERSIONS
         .iter()
         .max()
         .copied()
@@ -348,69 +353,53 @@ fn type_blob(ty: OwnedType) -> Vec<u8> {
     encode(&b.finish(V::Type(id), &mut Shaper::default()))
 }
 
+/// What `btel-core` makes of the writer's types by depth and size: a description at most
+/// [`MAX_DECODED_DEPTH`] deep is decoded, a deeper one stays encoded, and one past
+/// `max_type_bytes` is refused; and none of it recurses deeply on the caller's stack.
 #[test]
 fn type_descriptions_are_bounded_and_large_ones_never_recurse_on_the_caller() {
     let limits = DecodeLimits::default();
+    // A list of an int is one level per list and one for the int.
+    let deepest_decoded = MAX_DECODED_DEPTH - 1;
     // Serializing and dropping deep types recurses too: build them elsewhere.
-    // Attribute-free types spend one byte per list level, so the in-place
-    // bound admits the most nesting it ever has: check that worst case too.
-    let int_bytes = borsh::to_vec(&int_type()).unwrap().len();
-    let per_level = borsh::to_vec(&nested_list(1)).unwrap().len() - int_bytes;
-    let deepest_shallow = (SHALLOW_TYPE_BYTES - int_bytes) / per_level;
-    let (shallow, deepest_in_place, deep, too_deep) = on_large_stack(move || {
-        let deepest = (limits.max_type_bytes - 16) / per_level;
+    let (shallow, deepest, too_deep, too_long) = on_large_stack(move || {
         (
             type_blob(nested_list(3)),
-            type_blob(nested_list(deepest_shallow)),
-            type_blob(nested_list(deepest)),
+            type_blob(nested_list(deepest_decoded)),
+            type_blob(nested_list(deepest_decoded + 1)),
             type_blob(nested_list(limits.max_type_bytes)),
         )
     });
+    let expected = on_large_stack(move || {
+        [3, deepest_decoded, deepest_decoded + 1].map(|depth| described(&nested_list(depth)))
+    });
     // Decode on a thread with the default 2 MiB stack, in debug builds too.
-    let (shallow, deepest_in_place, deep, too_deep) = std::thread::Builder::new()
+    let decoded = std::thread::Builder::new()
         .stack_size(2 << 20)
         .spawn(move || {
-            let decoded = (
-                decode(&shallow),
-                decode(&deepest_in_place),
-                decode(&deep),
-                decode(&too_deep),
-            );
-            // The in-place type is deep too: measure it and drop it here.
-            let in_place = decoded
-                .1
-                .as_ref()
-                .map(|decoded| match &decoded.root {
-                    DecodedRoot::Value(DecodedValue::Type(ty)) => {
-                        (ty.encoded.len(), ty.decoded.is_some())
-                    }
-                    other => panic!("type root: {other:?}"),
-                })
-                .map_err(Clone::clone);
-            (decoded.0, in_place, decoded.2, decoded.3)
+            let description = |bytes: &[u8]| match decode(bytes).map(|decoded| decoded.root) {
+                Ok(DecodedRoot::Value(DecodedValue::Type(ty))) => {
+                    (ty.encoded.clone(), ty.decoded.is_some())
+                }
+                other => panic!("type root: {other:?}"),
+            };
+            (
+                [&shallow, &deepest, &too_deep].map(|bytes| description(bytes)),
+                decode(&too_long).map(|_| ()),
+            )
         })
         .unwrap()
         .join()
         .expect("type decoding must not exhaust a 2 MiB stack");
-    let description = |decoded: DecodedSnapshot| match decoded.root {
-        DecodedRoot::Value(DecodedValue::Type(ty)) => ty,
-        other => panic!("type root: {other:?}"),
-    };
-    let shallow = description(shallow.unwrap());
-    assert!(shallow.encoded.len() <= SHALLOW_TYPE_BYTES);
-    assert_eq!(shallow.decoded.as_deref(), Some(&nested_list(3)));
-    let (in_place_bytes, in_place_decoded) = deepest_in_place.unwrap();
-    assert!(
-        in_place_bytes <= SHALLOW_TYPE_BYTES && in_place_bytes > SHALLOW_TYPE_BYTES - per_level
-    );
-    assert!(
-        in_place_decoded,
-        "the deepest shallow description decodes in place"
-    );
-    let deep = description(deep.unwrap());
-    assert!(deep.encoded.len() > SHALLOW_TYPE_BYTES);
-    assert!(deep.decoded.is_none(), "deep descriptions stay encoded");
-    assert_eq!(too_deep, Err(BlobError::Limit("type description bytes")));
+    let (described_types, too_long) = decoded;
+    for ((encoded, is_decoded), (expected, decodes)) in described_types
+        .into_iter()
+        .zip(expected.into_iter().zip([true, true, false]))
+    {
+        assert_eq!(encoded, expected, "the bytes are btel-core's description");
+        assert_eq!(is_decoded, decodes);
+    }
+    assert_eq!(too_long, Err(BlobError::Limit("type description bytes")));
 }
 
 /// A long but shallow type, such as a union of classes named by their
@@ -443,7 +432,10 @@ fn long_shallow_types_decode_whole() {
         })
         .collect();
     let ty = RealizedTy::Union(members);
-    assert!(borsh::to_vec(&ty).unwrap().len() > SHALLOW_TYPE_BYTES);
+    assert!(
+        described(&ty).len() > MAX_DECODED_DEPTH,
+        "longer than it is deep"
+    );
     let id = b.leaves().ty(ty.clone());
     let snapshot = b.finish(V::Type(id), &mut Shaper::default());
     let mut bytes = Vec::new();
@@ -461,42 +453,13 @@ fn long_shallow_types_decode_whole() {
     let DecodedRoot::Value(DecodedValue::Type(description)) = &decoded.root else {
         panic!("type root: {:?}", decoded.root);
     };
-    assert_eq!(description.decoded.as_deref(), Some(&ty));
+    assert_eq!(description.encoded, described(&ty));
+    assert!(description.decoded.is_some(), "decoded whole");
     let groups: Vec<_> = definitions
         .iter()
         .map(|defined| CasId::from_bytes(defined.group.id()))
         .collect();
     assert_eq!(decoded.children, groups);
-}
-
-#[test]
-fn one_helper_thread_measures_every_large_description_in_a_blob() {
-    let blob = on_large_stack(|| {
-        let pool = SnapshotPool::unbounded(Limits::default());
-        let mut b = pool.try_acquire().unwrap();
-        let types: Vec<_> = (0..3)
-            .map(|extra| b.leaves().ty(nested_list(SHALLOW_TYPE_BYTES + extra)))
-            .collect();
-        let root = b.arguments(types.into_iter(), |_, ty| V::Type(ty));
-        encode(&b.finish(root, &mut Shaper::default()))
-    });
-    let (decoded, helpers) = std::thread::Builder::new()
-        .stack_size(2 << 20)
-        .spawn(move || (decode(&blob), TYPE_HELPERS_STARTED.get()))
-        .unwrap()
-        .join()
-        .unwrap();
-    let DecodedRoot::FunctionArgs { slots, .. } = decoded.unwrap().root else {
-        panic!("argument root");
-    };
-    for slot in &slots {
-        let DecodedValue::Type(ty) = slot else {
-            panic!("type slot: {slot:?}");
-        };
-        assert!(ty.encoded.len() > SHALLOW_TYPE_BYTES && ty.decoded.is_none());
-    }
-    assert_eq!(slots.len(), 3);
-    assert_eq!(helpers, 1);
 }
 
 #[test]
@@ -532,43 +495,6 @@ fn entries_range(snapshot: &Snapshot) -> crate::Range<MapEntry> {
     match snapshot.object(crate::ObjectId(0)) {
         O::Map { entries, .. } => *entries,
         _ => unreachable!(),
-    }
-}
-
-#[test]
-#[ignore = "measurement"]
-#[allow(clippy::print_stderr, reason = "prints the measured stack cost")]
-fn measure_type_decode_stack_per_level() {
-    // A stack overflow aborts the process, so each probe runs in a child.
-    if let (Ok(depth), Ok(stack)) = (std::env::var("PROBE_DEPTH"), std::env::var("PROBE_STACK")) {
-        let bytes = borsh::to_vec(&nested_list(depth.parse().unwrap())).unwrap();
-        std::thread::Builder::new()
-            .stack_size(stack.parse::<usize>().unwrap() << 10)
-            .spawn(move || std::mem::forget(OwnedType::deserialize_reader(&mut bytes.as_slice())))
-            .unwrap()
-            .join()
-            .unwrap();
-        return;
-    }
-    for depth in [64usize, 128, 256, 512, 1024, 2048] {
-        for stack_kib in [32usize, 64, 128, 256, 512, 1024, 2048, 4096] {
-            let ok = std::process::Command::new(std::env::current_exe().unwrap())
-                .args([
-                    "--exact",
-                    "decode::tests::measure_type_decode_stack_per_level",
-                    "--ignored",
-                ])
-                .env("PROBE_DEPTH", depth.to_string())
-                .env("PROBE_STACK", stack_kib.to_string())
-                .output()
-                .unwrap()
-                .status
-                .success();
-            if ok {
-                eprintln!("depth {depth}: fits in {stack_kib} KiB");
-                break;
-            }
-        }
     }
 }
 
@@ -894,7 +820,7 @@ fn tuple_snapshot(
     limits: Limits,
     element_types: Vec<OwnedType>,
     items: Vec<V>,
-) -> (Snapshot, DecodedSnapshot) {
+) -> (Snapshot, DecodedBlob) {
     let pool = SnapshotPool::new(1, limits);
     let mut b = pool.try_acquire().unwrap();
     let tuple = b.tuple(element_types, items.into_iter(), |_, item| item);
@@ -904,7 +830,7 @@ fn tuple_snapshot(
     assert_eq!(decoded.id, snapshot.root_id(), "identity verifies");
     (snapshot, decoded)
 }
-fn decoded_tuple(decoded: &DecodedSnapshot) -> (Vec<OwnedType>, &[DecodedValue], u64) {
+fn decoded_tuple(decoded: &DecodedBlob) -> (Vec<Box<[u8]>>, &[DecodedValue], u64) {
     let DecodedRoot::Value(DecodedValue::Object(id)) = &decoded.root else {
         panic!("object root")
     };
@@ -918,7 +844,10 @@ fn decoded_tuple(decoded: &DecodedSnapshot) -> (Vec<OwnedType>, &[DecodedValue],
     };
     let element_types = element_types
         .iter()
-        .map(|ty| *ty.decoded.clone().expect("a shallow type"))
+        .map(|ty| {
+            assert!(ty.decoded.is_some(), "a shallow type");
+            ty.encoded.clone()
+        })
         .collect();
     (element_types, items, *original_len)
 }
@@ -932,7 +861,10 @@ fn a_tuple_round_trips_its_carried_slot_types() {
     let types = vec![inner, RealizedTy::optional(RealizedTy::Bool)];
     let (_, decoded) = tuple_snapshot(Limits::default(), types.clone(), vec![V::Int(1), V::Null]);
     let (element_types, items, original_len) = decoded_tuple(&decoded);
-    assert_eq!(element_types, types);
+    assert_eq!(
+        element_types,
+        types.iter().map(described).collect::<Vec<_>>()
+    );
     assert_eq!(items, [DecodedValue::Int(1), DecodedValue::Null]);
     assert_eq!(original_len, 2);
 }
@@ -955,7 +887,11 @@ fn a_truncated_tuple_keeps_its_arity_and_every_slot_type() {
     let (element_types, items, original_len) = decoded_tuple(&decoded);
     assert_eq!(items.len(), 2, "the value limit cuts the elements");
     assert_eq!(original_len, 3);
-    assert_eq!(element_types, types, "not just the captured prefix's types");
+    assert_eq!(
+        element_types,
+        types.iter().map(described).collect::<Vec<_>>(),
+        "not just the captured prefix's types"
+    );
 }
 
 #[test]
@@ -975,7 +911,7 @@ fn equal_contents_carrying_different_slot_types_have_different_ids() {
 fn a_tuple_whose_slot_types_miss_its_arity_is_invalid() {
     let (snapshot, _) = tuple_snapshot(Limits::default(), vec![int_type()], vec![V::Int(1)]);
     let mut bytes = encode(&snapshot);
-    let int = borsh::to_vec(&int_type()).unwrap();
+    let int = described(&int_type());
     let mut pattern = vec![crate::tags::ObjectTag::Tuple as u8];
     pattern.extend_from_slice(&1u32.to_le_bytes());
     pattern.extend_from_slice(&int);

@@ -97,7 +97,9 @@ function main() -> int { target() }
         );
     }
     engine.shutdown().await;
-    let files = btel_file::read_directory(engine.telemetry_recording_directory().unwrap()).unwrap();
+    let files =
+        btel_core::recording::read_directory(engine.telemetry_recording_directory().unwrap())
+            .unwrap();
     assert!(files.issues.is_empty(), "{:?}", files.issues);
     let definitions: Vec<_> = files
         .files

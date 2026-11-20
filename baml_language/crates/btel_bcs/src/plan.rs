@@ -1,14 +1,12 @@
 use std::collections::HashSet;
 
+use btel_core::upload::{Disposition, PrepareUploadsRequest, PrepareUploadsResponse, UploadKind};
 use reqwest::{
     Url,
     header::{HeaderName, HeaderValue},
 };
 
-use crate::{
-    delivery::DeliveryError,
-    wire::{Disposition, PrepareUploadsRequest, PrepareUploadsResponse, UploadKind},
-};
+use crate::delivery::DeliveryError;
 
 pub(crate) fn validate_proposal(request: &PrepareUploadsRequest) -> Result<(), DeliveryError> {
     let mut ids = HashSet::new();

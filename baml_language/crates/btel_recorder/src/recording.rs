@@ -3,7 +3,7 @@ use std::{fmt, num::NonZeroU64};
 
 use btel_processor::{AggregateDelta, Publisher};
 use btel_records::SpanRecord;
-use btel_settings::{encoding, publisher as settings};
+use btel_settings::publisher as settings;
 use btel_snapshot::Snapshot;
 pub use btel_types::RecordingId;
 use btel_types::TelemetryId;
@@ -12,9 +12,6 @@ pub use settings::RecordingConfig;
 use web_time::Instant;
 
 use crate::{ConversionBuffer, proto};
-
-/// `RecordingFile.errors`, written from pre-encoded bytes after the rest.
-const ERRORS_FIELD: u32 = 8;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RecordingError {
@@ -232,7 +229,7 @@ impl RecordingBuilder {
         // allocate a worst-case span buffer. Reserve once for the whole batch.
         let records = self.pending_span_reservation.max(1);
         let bytes = records
-            .checked_mul(encoding::MAX_EVENT_BYTES)
+            .checked_mul(btel_core::recording::frame::MAX_EVENT_BYTES)
             .ok_or(RecordingError::EncodingTooLarge)?;
         self.reserve_encoding(bytes)?;
         self.span_credit = records;
@@ -268,13 +265,13 @@ impl RecordingBuilder {
         let identity = self.process.as_ref().filter(|_| self.package_identity);
         let mut file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
-                format_major: encoding::FORMAT_MAJOR,
+                format_major: btel_core::recording::FORMAT_MAJOR,
                 format_minor: self
                     .buffer
                     .spans
                     .format_minor()
                     .max(if self.process.is_some() {
-                        btel_settings::encoding::PROCESS_CONTEXT_FORMAT_MINOR
+                        btel_core::recording::minor::PROCESS_CONTEXT
                     } else {
                         0
                     })
@@ -282,13 +279,13 @@ impl RecordingBuilder {
                         if process_exit
                             .is_some_and(|exit| exit.status == btel_types::ProcessStatus::Unknown)
                         {
-                            btel_settings::encoding::UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR
+                            btel_core::recording::minor::UNKNOWN_PROCESS_OUTCOME
                         } else {
                             0
                         },
                     )
                     .max(if defines_model_invoke(&ready.definitions) {
-                        btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR
+                        btel_core::recording::minor::MODEL_USAGE
                     } else {
                         0
                     })
@@ -296,7 +293,7 @@ impl RecordingBuilder {
                         if identity.is_some_and(|p| p.program_id.is_some() || p.build.is_some())
                             || defines_package_identity(&ready.definitions)
                         {
-                            btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR
+                            btel_core::recording::minor::PACKAGE_IDENTITY
                         } else {
                             0
                         },
@@ -343,7 +340,7 @@ impl RecordingBuilder {
         let errors_len = if ready.errors.is_empty() {
             0
         } else {
-            prost::encoding::key_len(ERRORS_FIELD)
+            prost::encoding::key_len(btel_core::recording::field::recording_file::ERRORS)
                 + prost::encoding::encoded_len_varint(ready.errors.len() as u64)
                 + ready.errors.len()
         };
@@ -369,7 +366,7 @@ impl RecordingBuilder {
         file.encode_raw(&mut bytes);
         if errors_len != 0 {
             prost::encoding::encode_key(
-                ERRORS_FIELD,
+                btel_core::recording::field::recording_file::ERRORS,
                 prost::encoding::WireType::LengthDelimited,
                 &mut bytes,
             );
@@ -470,7 +467,7 @@ impl RecordingBuilder {
             // variable-length strings; later completion writes use that credit.
             let bytes = self
                 .span_credit
-                .checked_mul(encoding::MAX_EVENT_BYTES)
+                .checked_mul(btel_core::recording::frame::MAX_EVENT_BYTES)
                 .and_then(|bytes| bytes.checked_add(strings))
                 .ok_or(RecordingError::EncodingTooLarge);
             let bytes = terminal(bytes);

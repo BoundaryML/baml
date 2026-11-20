@@ -78,18 +78,3 @@ pub const RECENT_CAPTURE_IDS: usize = 4096;
 /// Definition groups one stream of captures remembers carrying. Past this the
 /// stream forgets them all and carries each again once.
 pub const CARRIED_GROUPS: usize = 4096;
-
-/// CAS blob envelope. Change with the binary codec, never as a tuning knob.
-///
-/// One narrowing was made in place, under no version of its own: a blob no
-/// longer carries the type family's retired `Void` (discriminant 22; `void`
-/// is a spelling of `null`). Nothing writes it, so every blob written since
-/// reads under either codec, but a blob of either readable version written
-/// before that and naming a `void` type no longer decodes.
-pub const BLOB_MAGIC: [u8; 8] = *b"BTELCAS\0";
-pub const BLOB_VERSION: u32 = 6;
-/// Supported read formats, newest first, for decoding and on-disk lookup.
-///
-/// A format is read before any runtime writes it: every reader of a
-/// runtime's blobs must read its format first. Format 6 adds redacted values.
-pub const READABLE_BLOB_VERSIONS: &[u32] = &[BLOB_VERSION, 5, 4, 3];

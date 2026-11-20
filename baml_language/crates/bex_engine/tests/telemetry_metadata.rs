@@ -39,14 +39,14 @@ fn captured_slots(root: &std::path::Path, id: proto::CasId) -> u64 {
     let mut bytes = [0; 16];
     bytes[..8].copy_from_slice(&id.low.to_le_bytes());
     bytes[8..].copy_from_slice(&id.high.to_le_bytes());
-    let path = btel_file::cas_path(
+    let path = btel_core::cas::cas_path(
         &root.join(".baml/btel/cas"),
         btel_snapshot::CasId::from_bytes(bytes),
     );
     let blob = std::fs::read(path).unwrap();
     let decoded =
-        btel_snapshot::decode_blob(&blob, &btel_snapshot::DecodeLimits::default()).unwrap();
-    let btel_snapshot::DecodedRoot::FunctionArgs {
+        btel_core::cas::decode_blob(&blob, &btel_core::cas::DecodeLimits::default()).unwrap();
+    let btel_core::cas::DecodedRoot::FunctionArgs {
         parameter_count, ..
     } = decoded.root
     else {
@@ -94,17 +94,16 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
     engine.shutdown().await;
     assert_eq!(engine.telemetry_result(), Some(Ok(())));
 
-    let read = btel_file::read_directory(&directory).unwrap();
+    let read = btel_core::recording::read_directory(&directory).unwrap();
     let mut functions = HashMap::new();
     let mut unavailable = 0;
     let mut paths = HashMap::new();
     let mut inputs = Vec::new();
     for file in &read.files {
         let header = file.header.as_ref().unwrap();
-        let mut expected_minor = btel_settings::encoding::FORMAT_MINOR;
+        let mut expected_minor = btel_core::recording::minor::BASE;
         if header.process_id.is_some() {
-            expected_minor =
-                expected_minor.max(btel_settings::encoding::PROCESS_CONTEXT_FORMAT_MINOR);
+            expected_minor = expected_minor.max(btel_core::recording::minor::PROCESS_CONTEXT);
         }
         if file.spans.as_ref().is_some_and(|spans| {
             spans
@@ -112,11 +111,10 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
                 .iter()
                 .any(|section| section.context.is_some())
         }) {
-            expected_minor = expected_minor.max(btel_settings::encoding::CONTEXT_FORMAT_MINOR);
+            expected_minor = expected_minor.max(btel_core::recording::minor::CONTEXT);
         }
         if header.program_id.is_some() {
-            expected_minor =
-                expected_minor.max(btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR);
+            expected_minor = expected_minor.max(btel_core::recording::minor::PACKAGE_IDENTITY);
         }
         assert_eq!(header.format_minor, expected_minor);
         let definitions = file.definitions.as_ref().unwrap();

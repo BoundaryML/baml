@@ -8,6 +8,11 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use btel_core::upload::{
+    CasCandidate, CasSizeClass, Disposition, PrepareUploadsRequest, PrepareUploadsResponse,
+    ProducerState, ProposedUploadTarget, RecordingDescriptor, UploadKind, UploadTarget, limits,
+    path,
+};
 use btel_recorder::SealedFile;
 use btel_snapshot::{BlobIndex, BlobScratch, CasId, Leaf, Snapshot, Split, Structure};
 use bytes::Bytes;
@@ -20,10 +25,6 @@ use crate::{
     body::{self, Body},
     liveness::{Heartbeat, HeartbeatError},
     plan::{validate_proposal, validate_response, validate_url},
-    wire::{
-        CasCandidate, CasSizeClass, Disposition, PrepareUploadsRequest, PrepareUploadsResponse,
-        ProducerState, ProposedUploadTarget, RecordingDescriptor, UploadKind, UploadTarget,
-    },
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -119,7 +120,9 @@ pub struct DeliveryConfig {
 }
 
 impl DeliveryConfig {
-    /// Configure a parsed BCS endpoint with default delivery limits.
+    /// Configure a parsed BCS endpoint with default delivery limits. The contract's limits are
+    /// `btel-core`'s (`btel_core::upload::limits`), the ones a data plane enforces; the rest
+    /// is this publisher's own.
     pub fn new(prepare_base_url: Url) -> Self {
         Self {
             prepare_base_url,
@@ -133,12 +136,12 @@ impl DeliveryConfig {
             cas_reserved_bytes: 256 * 1024 * 1024,
             max_cas_uploads: 2,
             max_recording_uploads: 8,
-            max_request_bytes: 64 * 1024,
-            max_response_bytes: 64 * 1024,
-            max_candidates: 32,
-            max_targets: 33,
-            max_recording_body_bytes: 8 * 1024 * 1024,
-            request_timeout: Duration::from_secs(10),
+            max_request_bytes: limits::MAX_REQUEST_BYTES,
+            max_response_bytes: limits::MAX_RESPONSE_BYTES,
+            max_candidates: limits::MAX_CANDIDATES,
+            max_targets: limits::MAX_TARGETS,
+            max_recording_body_bytes: limits::MAX_RECORDING_BODY_BYTES,
+            request_timeout: limits::REQUEST_TIMEOUT,
             min_upload_bytes_per_second: 1024 * 1024,
             retry_delay: Duration::from_millis(200),
             max_attempts: 4,
@@ -150,7 +153,7 @@ impl DeliveryConfig {
         url.path_segments_mut()
             .map_err(|()| DeliveryError::InvalidConfig)?
             .pop_if_empty()
-            .extend(["v1", "recordings", recording_id, operation]);
+            .extend([path::VERSION, path::RECORDINGS, recording_id, operation]);
         Ok(url)
     }
 
@@ -189,7 +192,7 @@ impl DeliveryConfig {
         if let Some(authorization) = &self.authorization {
             if !authorization
                 .authentication
-                .accepts_url(&self.endpoint("0", "heartbeat")?)
+                .accepts_url(&self.endpoint("0", path::HEARTBEAT)?)
             {
                 return Err(DeliveryError::InvalidConfig);
             }
@@ -847,7 +850,7 @@ impl BcsDeliveryHandle {
                 .any(|p| p.kind == UploadKind::CasObject && p.candidate_indices.contains(&index));
             metadata.push(CasCandidate {
                 snapshot_id: hex::encode(candidate.id.as_bytes()),
-                snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
+                snapshot_format_version: btel_core::cas::VERSION,
                 size_class: standalone.then_some(CasSizeClass::Large),
             });
         }
@@ -1291,10 +1294,10 @@ async fn prepare(
     shared: &Shared,
 ) -> Result<PrepareUploadsResponse, DeliveryError> {
     let heartbeat = &shared.heartbeat;
-    let url = config.endpoint(&request.recording.recording_id, "uploads:prepare")?;
-    let key = format!(
-        "{}:{}",
-        request.recording.recording_id, request.recording.recording_file_sequence
+    let url = config.endpoint(&request.recording.recording_id, path::PREPARE)?;
+    let key = btel_core::upload::idempotency_key(
+        &request.recording.recording_id,
+        request.recording.recording_file_sequence,
     );
     let mut last_failure = None;
     for attempt in 0..config.max_attempts {
@@ -1676,7 +1679,7 @@ async fn authorize_initial(
     id: &str,
 ) -> Result<(), DeliveryError> {
     let config = &shared.config;
-    let endpoint = config.endpoint(id, "heartbeat")?;
+    let endpoint = config.endpoint(id, path::HEARTBEAT)?;
     let started = tokio::time::Instant::now();
     let window = config.retry_window()?;
     let mut last_failure = None;
@@ -1852,7 +1855,10 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                 };
                 if !heartbeat_started {
                     heartbeat_started = true;
-                    match shared.config.endpoint(&work.request.recording.recording_id, "heartbeat") {
+                    match shared
+                    .config
+                    .endpoint(&work.request.recording.recording_id, path::HEARTBEAT)
+                {
                         Ok(endpoint) => {
                             let heartbeat = shared.heartbeat.clone();
                             let client = client.clone();
@@ -1922,7 +1928,7 @@ mod tests {
                 .await;
             let delivery = BcsDelivery::new(
                 DeliveryConfig {
-                    initial_recording_id: Some(btel_types::RecordingId::generate()),
+                    initial_recording_id: Some(btel_types::new_recording_id()),
                     ..DeliveryConfig::new(server.uri().parse().unwrap())
                 },
                 |_| {},
@@ -1978,7 +1984,7 @@ mod tests {
             .await;
         let delivery = BcsDelivery::new(
             DeliveryConfig {
-                initial_recording_id: Some(btel_types::RecordingId::generate()),
+                initial_recording_id: Some(btel_types::new_recording_id()),
                 retry_delay: Duration::ZERO,
                 ..DeliveryConfig::new(server.uri().parse().unwrap())
             },
@@ -2026,7 +2032,7 @@ mod tests {
         let failed = failures.clone();
         let delivery = BcsDelivery::new(
             DeliveryConfig {
-                initial_recording_id: Some(btel_types::RecordingId::generate()),
+                initial_recording_id: Some(btel_types::new_recording_id()),
                 // Finishing waits out the 5 s pending state below.
                 shutdown_timeout: Duration::from_secs(30),
                 ..DeliveryConfig::new(server.uri().parse().unwrap())
@@ -2086,7 +2092,7 @@ mod tests {
             .await;
         let delivery = BcsDelivery::new(
             DeliveryConfig {
-                initial_recording_id: Some(btel_types::RecordingId::generate()),
+                initial_recording_id: Some(btel_types::new_recording_id()),
                 ..DeliveryConfig::new(server.uri().parse().unwrap())
             },
             |_| panic!("ordinary connection failure must retain its loss policy"),
@@ -2125,7 +2131,7 @@ mod tests {
             .await;
         let delivery = BcsDelivery::new(
             DeliveryConfig {
-                initial_recording_id: Some(btel_types::RecordingId::generate()),
+                initial_recording_id: Some(btel_types::new_recording_id()),
                 ..DeliveryConfig::new(server.uri().parse().unwrap())
             },
             |_| {},

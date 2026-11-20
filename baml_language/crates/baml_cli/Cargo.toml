@@ -90,6 +90,7 @@ baml_tests = { workspace = true }
 btel_bcs = { workspace = true }
 btel_file = { workspace = true }
 btel_recorder = { workspace = true }
+btel-core = { workspace = true }
 insta = { workspace = true }
 prost = { workspace = true }
 pulldown-cmark = { workspace = true }

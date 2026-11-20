@@ -21,7 +21,12 @@ bex_str = { workspace = true }
 btel_settings = { workspace = true }
 btel_types = { workspace = true }
 base64 = { workspace = true }
-borsh = { workspace = true }
+btel-core = { workspace = true }
 num-bigint = { workspace = true }
 rustc-hash = { workspace = true }
 xxhash-rust = { workspace = true }
+
+[dev-dependencies]
+baml_version = { workspace = true }
+borsh = { workspace = true }
+btel-core = { workspace = true, features = [ "reader" ] }

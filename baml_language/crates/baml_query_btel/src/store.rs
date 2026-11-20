@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use btel_reader::layout::SourceLayout;
+use btel_core::reader::layout::SourceLayout;
 use fs2::FileExt;
 use rusqlite::{Connection, OpenFlags, OptionalExtension as _};
 

@@ -1001,7 +1001,7 @@ pub(crate) mod tests {
                 #[cfg(not(target_arch = "wasm32"))]
                 crate::telemetry::test_runtime(),
             )),
-            trace_scope: btel_types::RecordingId::generate(),
+            trace_scope: btel_types::new_recording_id(),
             manual_activations: Vec::new(),
             pending_telemetry_wait: None,
             checkpoint_passed: false,
@@ -6213,7 +6213,7 @@ impl BexVm {
                     }
                 })?,
             )),
-            btel_types::RecordingId::generate(),
+            btel_types::new_recording_id(),
         ))
     }
 

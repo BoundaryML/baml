@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
 
-use btel_reader::context::{ContextReference, reference};
+use btel_core::{
+    cas::{DecodedBlob, DecodedObject, DecodedRoot, DecodedValue},
+    reader::context::{ContextReference, reference},
+};
 use btel_recorder::proto;
-use btel_snapshot::{DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue};
 
 pub(super) const SOURCE: &str =
     include_str!("../../../baml_tests/baml_src/ns_trace_context/recording.baml");
@@ -19,10 +21,7 @@ pub(super) fn program_with_version(source: &str, version: &str) -> bex_vm_types:
 }
 
 /// The entries of a context map, which must have been captured whole.
-fn whole_map(
-    snapshot: &DecodedSnapshot,
-    id: btel_snapshot::NodeId,
-) -> BTreeMap<&str, &DecodedValue> {
+fn whole_map(snapshot: &DecodedBlob, id: btel_core::cas::NodeId) -> BTreeMap<&str, &DecodedValue> {
     let DecodedObject::Map {
         entries,
         original_len,
@@ -55,9 +54,7 @@ fn whole_map(
 
 /// Decode an entire context snapshot into its identity and scalar metadata,
 /// rejecting truncated maps so propagation assertions cannot silently pass.
-pub(super) fn metadata(
-    snapshot: &DecodedSnapshot,
-) -> (Option<&str>, BTreeMap<&str, &DecodedValue>) {
+pub(super) fn metadata(snapshot: &DecodedBlob) -> (Option<&str>, BTreeMap<&str, &DecodedValue>) {
     let DecodedRoot::Value(DecodedValue::Object(root)) = snapshot.root else {
         panic!("context root must be a map");
     };
@@ -76,7 +73,7 @@ pub(super) fn metadata(
 /// Inspect uploaded/persisted bytes, not the producer's in-memory context.
 pub(super) fn assert_leaf_contexts(
     files: &[proto::RecordingFile],
-    snapshots: &BTreeMap<[u8; 16], DecodedSnapshot>,
+    snapshots: &BTreeMap<[u8; 16], DecodedBlob>,
     minimum: usize,
     app_version: Option<&str>,
 ) {
