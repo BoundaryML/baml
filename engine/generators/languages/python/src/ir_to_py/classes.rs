@@ -332,6 +332,40 @@ mod tests {
     }
 
     #[test]
+    fn test_class_description_escapes_quotes_and_backslashes() {
+        use askama::Template;
+
+        let render_description = |description: &str| {
+            let ir = make_test_ir(&format!(
+                "class Foo {{\n  bar string\n  @@description(##\"{description}\"##)\n}}"
+            ))
+            .expect("Valid IR");
+            let ir = std::sync::Arc::new(ir);
+            let class = ir.find_class("Foo").unwrap().item;
+            let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
+            ir_class_to_py(class, &pkg).render().expect("render class")
+        };
+
+        let triple = render_description(r#"say """ hi"#);
+        assert!(
+            triple.contains(r#""""say \"\"\" hi""""#),
+            "Triple quotes must not close the docstring, got:\n{triple}"
+        );
+
+        let trailing = render_description(r#"ends with a quote""#);
+        assert!(
+            trailing.contains(r#""""ends with a quote\"""""#),
+            "A trailing quote must not merge with the closing delimiter, got:\n{trailing}"
+        );
+
+        let backslash = render_description(r"a\sb");
+        assert!(
+            backslash.contains(r#""""a\\sb""""#),
+            "Backslashes must be escaped, got:\n{backslash}"
+        );
+    }
+
+    #[test]
     fn test_field_description_edge_cases() {
         use askama::Template;
 
