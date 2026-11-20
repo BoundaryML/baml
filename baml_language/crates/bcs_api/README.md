@@ -52,7 +52,7 @@ BAML_GC_GROWTH = "ACME_GC_GROWTH"         # optional, see [pack.gc]
 
 [pack.gc]
 growth = 2
-min_growth = "8MiB"
+min_growth = "4MiB"
 
 [bridge]
 on_initial_telemetry_failure = "warn"
@@ -62,7 +62,7 @@ embed_telemetry_api_key_from_env_var = "BAML_BRIDGE_BOUNDARY_API_KEY"
 embed_telemetry_env = "staging"
 ```
 
-`[pack.gc]` is not telemetry: it bakes the heap's collection policy into the packed binary (`growth`, a multiple of the data that survived a collection, `0.25` to `1000`, default `4`; `min_growth`, a size of at least `"1MiB"`, default `"32MiB"`). `BAML_GC_GROWTH` and `BAML_GC_MIN_GROWTH`, or the names `[pack.env_var_names]` gives them, override it at startup. There is no `[bridge.gc]`: generated SDKs read the variables. See [Memory in ENV_VARS.md](../../ENV_VARS.md#memory).
+`[pack.gc]` is not telemetry: it bakes the heap's collection policy into the packed binary (`growth`, a multiple of the data that survived a collection, `0.25` to `1000`, default `4`; `min_growth`, a size of at least `"1MiB"`, default `"8MiB"`). `BAML_GC_GROWTH` and `BAML_GC_MIN_GROWTH`, or the names `[pack.env_var_names]` gives them, override it at startup. There is no `[bridge.gc]`: generated SDKs read the variables. See [Memory in ENV_VARS.md](../../ENV_VARS.md#memory).
 
 Pack and bridge settings are independent. An unset, empty, or non-Unicode source variable makes the pack or generate command fail before writing the artifact. Without `--embed-telemetry`, no API key is embedded.
 

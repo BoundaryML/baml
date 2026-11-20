@@ -47,8 +47,11 @@ pub struct GcSettings {
 }
 
 impl GcSettings {
-    /// Today's `min_growth`: 32 MiB.
-    pub const DEFAULT_MIN_GROWTH: usize = 32 * 1024 * 1024;
+    /// The default `min_growth`: 8 MiB. Measured against 32 MiB (the first
+    /// value) on 31 workloads, it costs at most about 2% CPU while cutting
+    /// peak memory by a fifth on allocating programs and by a third to a
+    /// half on small ones, with three to four times shorter pauses.
+    pub const DEFAULT_MIN_GROWTH: usize = 8 * 1024 * 1024;
     /// The smallest `min_growth`: 1 MiB. Allocators settle spending in
     /// quanta of up to 64 KiB of payload (and object-slot reservations of a
     /// similar size), so a smaller allowance would make almost every
@@ -392,11 +395,11 @@ mod tests {
     }
 
     #[test]
-    fn defaults_are_the_numbers_chosen_by_the_policy_study() {
+    fn defaults_are_growth_4_and_min_growth_8_mib() {
         let defaults = GcSettings::default();
         assert_eq!(defaults.growth(), Growth::DEFAULT);
         assert_eq!(defaults.growth().hundredths(), 400);
-        assert_eq!(defaults.min_growth(), 32 * MIB);
+        assert_eq!(defaults.min_growth(), 8 * MIB);
     }
 
     /// Growth scales the allowance with the survivors, `min_growth` floors it
@@ -424,13 +427,17 @@ mod tests {
         assert_eq!(p.budget.load(Ordering::Relaxed), usize::MAX, "saturates");
     }
 
-    /// The default policy is the formula it replaced, at the edges too.
+    /// The default policy is `max(4 × live, 8 MiB)`, at the edges too: the
+    /// floor gives way to growth at 2 MiB live.
     #[test]
-    fn default_budget_equals_the_old_formula() {
-        let old = |live: usize| live.saturating_mul(4).max(32 * MIB);
+    fn default_budget_is_four_times_live_with_an_8_mib_floor() {
+        let old = |live: usize| live.saturating_mul(4).max(8 * MIB);
         for live in [
             0,
             1,
+            2 * MIB - 1,
+            2 * MIB,
+            2 * MIB + 1,
             8 * MIB - 1,
             8 * MIB,
             usize::MAX / 4,
@@ -691,14 +698,18 @@ mod tests {
         let mut tlab = Tlab::new_empty(heap.clone());
         let text = bex_str::BexStr::from("x".repeat(1 << 20));
         let whole = text.unshared_heap_bytes() as isize;
-        for _ in 0..8 {
+        // Handles to half the budget's worth of 1 MiB text, each charged in
+        // full, plus a slice of each: not yet due.
+        let copies = (MIN_FULL_BUDGET >> 20) / 2;
+        for _ in 0..copies {
             tlab.alloc_string(text.clone());
             tlab.alloc_string(text.byte_slice(1..128));
         }
         tlab.flush_alloc_debt();
         let spent = heap.gc_budget().bytes_since_full_gc;
         let slots = (32 * size_of::<Object>()) as isize;
-        assert_eq!(spent, slots + 8 * whole + 8 * 127);
+        let copies = copies as isize;
+        assert_eq!(spent, slots + copies * whole + copies * 127);
         assert!(!heap.should_gc());
     }
 

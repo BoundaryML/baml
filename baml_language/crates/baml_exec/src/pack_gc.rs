@@ -3,7 +3,7 @@
 //! ```toml
 //! [pack.gc]
 //! growth = 2          # a multiple of the data that survived; 0.25 to 1000
-//! min_growth = "8MiB" # B, KiB, MiB or GiB; at least 1MiB
+//! min_growth = "4MiB" # B, KiB, MiB or GiB; at least 1MiB
 //!
 //! [pack.env_var_names]  # optional: the names the program reads instead
 //! BAML_GC_GROWTH = "ACME_GC_GROWTH"
@@ -74,7 +74,7 @@ impl PackGc {
                 .ok_or_else(|| PackGcError("[pack.gc] must be a table.".into()))?;
             if let Some(field) = table.keys().find(|key| !GC_FIELDS.contains(&key.as_str())) {
                 return Err(PackGcError(format!(
-                    "Unknown setting `pack.gc.{field}` in baml.toml.\n\n  Valid [pack.gc] settings:\n    growth      a multiple of the data that survived, 0.25 to 1000 (default 4)\n    min_growth  a size such as \"32MiB\", at least 1MiB (default 32MiB)"
+                    "Unknown setting `pack.gc.{field}` in baml.toml.\n\n  Valid [pack.gc] settings:\n    growth      a multiple of the data that survived, 0.25 to 1000 (default 4)\n    min_growth  a size such as \"4MiB\", at least 1MiB (default 8MiB)"
                 )));
             }
             let fail = |key: &str, error: &dyn std::fmt::Display| {
@@ -358,7 +358,7 @@ mod tests {
     #[test]
     fn the_host_reads_baked_values_under_the_carried_names() {
         let gc = parse(
-            "[pack.gc]\ngrowth = 1.5\nmin_growth = \"8MiB\"\n[pack.env_var_names]\nBAML_GC_GROWTH = \"ACME_GC_GROWTH\"",
+            "[pack.gc]\ngrowth = 1.5\nmin_growth = \"16MiB\"\n[pack.env_var_names]\nBAML_GC_GROWTH = \"ACME_GC_GROWTH\"",
         )
         .unwrap();
         let decoded = borsh::from_slice::<PackGc>(&borsh::to_vec(&gc).unwrap()).unwrap();
@@ -377,7 +377,7 @@ mod tests {
         };
         let settings = resolve(&[("BAML_GC_GROWTH", "nonsense")]).unwrap();
         assert_eq!(settings.growth(), Growth::parse("1.5").unwrap());
-        assert_eq!(settings.min_growth(), 8 * 1024 * 1024);
+        assert_eq!(settings.min_growth(), 16 * 1024 * 1024);
         let settings = resolve(&[("ACME_GC_GROWTH", "3"), ("BAML_GC_MIN_GROWTH", "2MiB")]).unwrap();
         assert_eq!(settings.growth(), Growth::parse("3").unwrap());
         assert_eq!(settings.min_growth(), 2 * 1024 * 1024);

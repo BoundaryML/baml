@@ -7,7 +7,7 @@
 //!
 //! ```text
 //! BAML_GC_GROWTH=2.5          # growth: a multiple of the data that survived
-//! BAML_GC_MIN_GROWTH=8MiB     # min_growth: bytes, with B/KiB/MiB/GiB
+//! BAML_GC_MIN_GROWTH=2MiB     # min_growth: bytes, with B/KiB/MiB/GiB
 //! ```
 use std::ffi::OsString;
 
@@ -139,27 +139,27 @@ mod tests {
         let settings = GcConfig::default().resolve_with(env(&[])).unwrap();
         assert_eq!(settings, GcSettings::default());
         assert_eq!(settings.growth(), growth("4"));
-        assert_eq!(settings.min_growth(), 32 * MIB);
+        assert_eq!(settings.min_growth(), 8 * MIB);
     }
 
     #[test]
     fn environment_beats_baked_beats_default_per_setting() {
         let baked = GcConfig {
             growth: Some(growth("2")),
-            min_growth: Some(8 * MIB),
+            min_growth: Some(16 * MIB),
             ..GcConfig::default()
         };
         let settings = baked.resolve_with(env(&[])).unwrap();
         assert_eq!(
             (settings.growth(), settings.min_growth()),
-            (growth("2"), 8 * MIB)
+            (growth("2"), 16 * MIB)
         );
 
         // Each variable overrides only its own setting.
         let settings = baked.resolve_with(env(&[(GROWTH_ENV_VAR, "0.5")])).unwrap();
         assert_eq!(
             (settings.growth(), settings.min_growth()),
-            (growth("0.5"), 8 * MIB)
+            (growth("0.5"), 16 * MIB)
         );
         let settings = baked
             .resolve_with(env(&[(MIN_GROWTH_ENV_VAR, "2MiB")]))
@@ -186,7 +186,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             (settings.growth(), settings.min_growth()),
-            (growth("2"), 8 * MIB)
+            (growth("2"), 16 * MIB)
         );
     }
 
@@ -205,7 +205,7 @@ mod tests {
             ]))
             .unwrap();
         assert_eq!(settings.growth(), growth("1.5"));
-        assert_eq!(settings.min_growth(), 32 * MIB);
+        assert_eq!(settings.min_growth(), 8 * MIB);
     }
 
     #[test]
