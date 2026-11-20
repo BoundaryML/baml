@@ -30,6 +30,9 @@ use rustc_hash::FxHashMap;
 
 mod errors;
 pub(crate) use errors::{ErrorBook, LandingMatch};
+mod usage;
+use usage::NodeUsage;
+pub use usage::SharedUsage;
 mod network;
 mod policy;
 pub use policy::{TelemetryPolicies, TelemetryPolicy};
@@ -41,6 +44,12 @@ pub struct ThreadSpawnContext {
     pub parent_id: TelemetryId,
     pub spawn_call_path: CallPathId,
     pub clock: Arc<ClockEpoch>,
+    /// The child's identity, which the spawner named in its `ThreadSpawned`
+    /// record. `None` for an invocation the host starts under a span.
+    pub child_id: Option<TelemetryId>,
+    /// Where the child hands its total usage when it completes: the
+    /// spawner's node, open until that node completes.
+    usage: Option<Arc<SharedUsage>>,
 }
 
 impl PartialEq for ThreadSpawnContext {
@@ -299,6 +308,8 @@ pub struct ThreadTelemetry {
     /// The error that escaped the thread's outermost frame, until the thread's
     /// completion, which is written with it.
     error: Option<btel_snapshot::Snapshot>,
+    /// Where a spawned thread hands its total usage when it completes.
+    spawner_usage: Option<Arc<SharedUsage>>,
 }
 
 pub struct TelemetryState {
@@ -330,9 +341,13 @@ pub struct TelemetryState {
     runtime: Arc<btel_processor::TelemetryRuntime>,
     /// Exception-path bookkeeping, allocated by the first recorded raise.
     errors: Option<Box<ErrorBook>>,
-    /// Model usage charged to open spans (or the thread), one entry per model,
-    /// written just before the node completes. Empty without model calls.
-    usage: Vec<(TelemetryId, Vec<btel_records::ModelUsage>)>,
+    /// Model usage charged to open spans (or the thread), and the totals their
+    /// children handed up, written just before the node completes. Empty
+    /// without model calls.
+    usage: Vec<(TelemetryId, NodeUsage)>,
+    /// The nodes of this thread that spawned a future or started an owned
+    /// span, each with where those hand their totals. Empty without spawns.
+    shared_usage: Vec<(TelemetryId, Arc<SharedUsage>)>,
     /// Invocation timings not yet handed to the runtime: they go over in
     /// batches, so a call does not look up this thread's producer for each
     /// one. Empty outside an execution scope; see [`Self::flush_timing`].
@@ -511,6 +526,7 @@ impl TelemetryState {
                 completed: false,
                 name: None,
                 error: None,
+                spawner_usage: None,
             },
             call_paths: FxHashMap::default(),
             call_path_keys: FxHashMap::default(),
@@ -521,6 +537,7 @@ impl TelemetryState {
             runtime,
             errors: None,
             usage: Vec::new(),
+            shared_usage: Vec::new(),
             #[cfg(all(not(test), not(target_arch = "wasm32")))]
             pending_timing: Vec::new(),
             #[cfg(test)]
@@ -579,6 +596,33 @@ impl TelemetryState {
             parent_id: self.thread.active_id,
             spawn_call_path: self.thread.active_call_path,
             clock: Arc::clone(&self.clock),
+            child_id: None,
+            usage: None,
+        }
+    }
+
+    /// [`Self::hidden_spawn_context`] for a task this thread spawns now: the
+    /// child is named and placed under the active node, as
+    /// [`Self::spawn_context`] does.
+    pub fn hidden_spawn_context_for_task(&mut self) -> ThreadSpawnContext {
+        let spawn_call_path = self.thread.active_call_path;
+        self.spawned(spawn_call_path)
+    }
+
+    /// The context of a child spawned at `spawn_call_path` under the active
+    /// node: its identity, written in a `ThreadSpawned` record while that node
+    /// is open, and where it hands its usage.
+    fn spawned(&mut self, spawn_call_path: CallPathId) -> ThreadSpawnContext {
+        self.start_thread();
+        let child = allocate_telemetry_id();
+        let parent = self.thread.active_id;
+        self.write_span(SpanRecord::ThreadSpawned { child, parent });
+        ThreadSpawnContext {
+            parent_id: parent,
+            spawn_call_path,
+            clock: Arc::clone(&self.clock),
+            child_id: Some(child),
+            usage: Some(self.shared_usage()),
         }
     }
 
@@ -588,9 +632,14 @@ impl TelemetryState {
             "child must inherit parent clock"
         );
         assert!(!self.thread.started, "telemetry thread already started");
+        if let Some(child) = context.child_id {
+            self.thread.id = child;
+            self.thread.active_id = child;
+        }
         self.thread.parent_id = Some(context.parent_id);
         self.thread.spawn_call_path = context.spawn_call_path;
         self.thread.active_call_path = context.spawn_call_path;
+        self.thread.spawner_usage.clone_from(&context.usage);
     }
 
     /// Name this thread's future before it starts; its records carry it.
@@ -857,11 +906,7 @@ impl TelemetryState {
             },
             register,
         );
-        ThreadSpawnContext {
-            parent_id: self.thread.active_id,
-            spawn_call_path,
-            clock: Arc::clone(&self.clock),
-        }
+        self.spawned(spawn_call_path)
     }
 
     #[inline(always)]
@@ -1238,7 +1283,7 @@ impl TelemetryState {
                 capture_value.and_then(|value| self.capture(snapshot::Input::Value(value)));
             self.recorded_unwound_error(outcome, captured_value.is_some());
             let id = telemetry.span_id().expect("span frame owns its identity");
-            self.flush_model_usage(id);
+            self.flush_model_usage(id, Some(telemetry.saved_parent_id));
             match (
                 outcome,
                 telemetry.is_reentry(),
@@ -1534,38 +1579,90 @@ impl TelemetryState {
     #[cold]
     pub fn charge_model_usage(&mut self, entries: Vec<btel_records::ModelUsage>) {
         let node = self.thread.active_id;
+        merge_usage(&mut self.node_usage(node).own, entries);
+    }
+
+    /// The usage entry of `node`, made empty when it has none.
+    #[cold]
+    fn node_usage(&mut self, node: TelemetryId) -> &mut NodeUsage {
         let index = match self.usage.iter().position(|(id, _)| *id == node) {
             Some(index) => index,
             None => {
-                self.usage.push((node, Vec::new()));
+                self.usage.push((node, NodeUsage::default()));
                 self.usage.len() - 1
             }
         };
-        merge_usage(&mut self.usage[index].1, entries);
+        &mut self.usage[index].1
     }
 
-    /// Remove and return the usage charged to `node`, for a node whose
-    /// completion this thread does not write (an owned span).
-    pub(crate) fn take_model_usage(
-        &mut self,
-        node: TelemetryId,
-    ) -> Option<Vec<btel_records::ModelUsage>> {
+    /// Where children of the active node that run elsewhere, a spawned
+    /// future or an owned span, hand their totals: one per node, closed when
+    /// the node completes.
+    #[cold]
+    pub(crate) fn shared_usage(&mut self) -> Arc<SharedUsage> {
+        let node = self.thread.active_id;
+        if let Some((_, shared)) = self.shared_usage.iter().find(|(id, _)| *id == node) {
+            return Arc::clone(shared);
+        }
+        let shared = Arc::new(SharedUsage::default());
+        self.shared_usage.push((node, Arc::clone(&shared)));
+        shared
+    }
+
+    /// Close what children elsewhere handed `node`, into its entry.
+    #[cold]
+    fn collect_shared_usage(&mut self, node: TelemetryId) {
+        let Some(index) = self.shared_usage.iter().position(|(id, _)| *id == node) else {
+            return;
+        };
+        let (_, shared) = self.shared_usage.swap_remove(index);
+        let handed = shared.close();
+        if !handed.is_empty() {
+            merge_usage(&mut self.node_usage(node).below, handed);
+        }
+    }
+
+    /// Remove and return the usage charged to `node` and handed up to it on
+    /// this thread, for a node whose completion this thread does not write
+    /// (an owned span, as its scope leaves the thread).
+    pub(crate) fn take_model_usage(&mut self, node: TelemetryId) -> Option<NodeUsage> {
+        if !self.shared_usage.is_empty() {
+            self.collect_shared_usage(node);
+        }
         let index = self.usage.iter().position(|(id, _)| *id == node)?;
         Some(self.usage.swap_remove(index).1)
     }
 
-    /// Write the usage charged to `node`, just before its completion.
-    fn flush_model_usage(&mut self, node: TelemetryId) {
+    /// Write the usage charged to `node` and its total, just before its
+    /// completion, and hand the total to `parent`: a node of this thread, or
+    /// for the thread itself (`None`) the node that spawned it.
+    fn flush_model_usage(&mut self, node: TelemetryId, parent: Option<TelemetryId>) {
+        if !self.shared_usage.is_empty() {
+            self.collect_shared_usage(node);
+        }
         if self.usage.is_empty() {
             return;
         }
-        if let Some(index) = self.usage.iter().position(|(id, _)| *id == node) {
-            let (_, entries) = self.usage.swap_remove(index);
-            self.write_span(SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
-                node,
-                entries,
-            })));
+        let Some(index) = self.usage.iter().position(|(id, _)| *id == node) else {
+            return;
+        };
+        let (_, usage) = self.usage.swap_remove(index);
+        let total = usage.total();
+        if !total.is_empty() {
+            match parent {
+                Some(parent) => merge_usage(&mut self.node_usage(parent).below, total.clone()),
+                None => {
+                    if let Some(spawner) = &self.thread.spawner_usage {
+                        spawner.add(&total);
+                    }
+                }
+            }
         }
+        self.write_span(SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
+            node,
+            entries: usage.own,
+            total,
+        })));
     }
 
     /// Capture `error`, the value that escaped the thread's outermost frame,
@@ -1603,7 +1700,7 @@ impl TelemetryState {
             self.thread.running = true;
             self.write_span(SpanRecord::ThreadSpanRunning { at: completed_at });
         }
-        self.flush_model_usage(self.thread.id);
+        self.flush_model_usage(self.thread.id, None);
         // A thread that ended otherwise than with the error captured for it,
         // returning after a host resumed it or cancelled, says nothing of it.
         let error = self.thread.error.take();
@@ -1960,6 +2057,7 @@ impl ::bex_vm_types::RootHaver for TelemetryState {
                 runtime: _,
             errors: _,
             usage: _,
+            shared_usage: _,
             #[cfg(all(not(test), not(target_arch = "wasm32")))]
                 pending_timing: _,
             #[cfg(test)]
@@ -4327,8 +4425,15 @@ mod tests {
         });
 
         let mut child = test_state(Arc::clone(&parent.policies), Arc::clone(&parent.clock));
-        let child_id = child.active_id();
         child.configure_spawn(&context);
+        // The child takes the identity its spawner named while spawning it.
+        let child_id = child.active_id();
+        assert_eq!(Some(child_id), context.child_id);
+        assert!(parent.span_records().iter().any(|record| matches!(
+            record,
+            SpanRecord::ThreadSpawned { child, parent: spawner }
+                if *child == child_id && *spawner == context.parent_id
+        )));
         child.start_thread();
 
         assert_ne!(child_id, context.parent_id);
@@ -4355,5 +4460,112 @@ mod tests {
         }] if *id == child_id && *parent_id == context.parent_id && at == completed_at
             && *spawn_call_path == context.spawn_call_path && Arc::ptr_eq(clock, &context.clock))
         );
+    }
+
+    fn usage(calls: u64) -> btel_records::ModelUsage {
+        btel_records::ModelUsage {
+            provider: "anthropic".into(),
+            model: Some("claude".into()),
+            calls,
+            input_tokens: Some(10 * calls),
+            output_tokens: Some(calls),
+            cache_read_tokens: None,
+            cache_write_tokens: None,
+            reasoning_tokens: None,
+        }
+    }
+
+    fn enter_span(state: &mut TelemetryState, function: &Function) -> FrameTelemetry {
+        trace_entry(
+            state,
+            function,
+            Some(TraceConfig {
+                mode: Some(InvocationMode::Span),
+                ..TraceConfig::default()
+            }),
+        )
+        .expect("a span frame")
+    }
+
+    fn complete(state: &mut TelemetryState, frame: FrameTelemetry, function: &Function) {
+        // SAFETY: no value is captured.
+        unsafe { state.complete_invocation(frame, function, InvocationOutcome::Ok, None) };
+    }
+
+    /// Every usage record, as (node, own calls, total calls).
+    fn usage_records(state: &TelemetryState) -> Vec<(TelemetryId, u64, u64)> {
+        let calls = |entries: &[btel_records::ModelUsage]| entries.iter().map(|e| e.calls).sum();
+        state
+            .span_records()
+            .iter()
+            .filter_map(|record| match record {
+                SpanRecord::SpanUsage(usage) => {
+                    Some((usage.node, calls(&usage.entries), calls(&usage.total)))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn usage_rolls_up_to_each_parent_and_a_span_without_any_writes_none() {
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        state.start_thread();
+        let function = function(FunctionKind::Bytecode, None);
+        let outer = enter_span(&mut state, &function);
+        let quiet = enter_span(&mut state, &function);
+        complete(&mut state, quiet, &function);
+        let inner = enter_span(&mut state, &function);
+        state.charge_model_usage(vec![usage(2)]);
+        complete(&mut state, inner, &function);
+        state.charge_model_usage(vec![usage(1)]);
+        complete(&mut state, outer, &function);
+        state.complete_thread(InvocationOutcome::Ok);
+        let thread = state.thread.id;
+        assert_eq!(
+            usage_records(&state),
+            [
+                (inner.span_id().unwrap(), 2, 2),
+                (outer.span_id().unwrap(), 1, 3),
+                (thread, 0, 3),
+            ]
+        );
+        // Nothing is left behind once every node completed.
+        assert!(state.usage.is_empty() && state.shared_usage.is_empty());
+    }
+
+    #[test]
+    fn a_future_hands_its_total_to_its_spawner_only_until_the_spawner_completes() {
+        let mut parent = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        parent.start_thread();
+        let function = function(FunctionKind::Bytecode, None);
+        let spawner = enter_span(&mut parent, &function);
+        let spawn = |parent: &mut TelemetryState| {
+            let context = parent.spawn_context(None, 11, HeapPtr::null(), |_, _| {
+                (None, function.telemetry_function_id.unwrap())
+            });
+            let mut child = test_state(Arc::clone(&parent.policies), Arc::clone(&parent.clock));
+            child.configure_spawn(&context);
+            child
+        };
+        let mut early = spawn(&mut parent);
+        let mut late = spawn(&mut parent);
+        // On another thread, the early future completes before its spawner.
+        let early = std::thread::spawn(move || {
+            early.start_thread();
+            early.charge_model_usage(vec![usage(4)]);
+            early.complete_thread(InvocationOutcome::Ok);
+            early
+        })
+        .join()
+        .unwrap();
+        complete(&mut parent, spawner, &function);
+        // The late one completes after it: its total is not its spawner's.
+        late.start_thread();
+        late.charge_model_usage(vec![usage(8)]);
+        late.complete_thread(InvocationOutcome::Ok);
+        assert_eq!(usage_records(&early), [(early.thread.id, 4, 4)]);
+        assert_eq!(usage_records(&late), [(late.thread.id, 8, 8)]);
+        assert_eq!(usage_records(&parent), [(spawner.span_id().unwrap(), 0, 4)]);
     }
 }

@@ -124,13 +124,17 @@ pub(super) fn assert_leaf_contexts(
             }
         }
     }
+    // A recording for an upload writes no start record: its completions are
+    // the invocations; a local one's starts carry the same contexts.
     assert!(
-        entries.len() >= minimum,
-        "missing entry contexts: {}",
-        entries.len()
+        completions.len() >= minimum,
+        "missing completion contexts: {}",
+        completions.len()
     );
-    assert_eq!(
-        entries, completions,
-        "each invocation must retain the same scoped context at completion"
-    );
+    if !entries.is_empty() {
+        assert_eq!(
+            entries, completions,
+            "each invocation must retain the same scoped context at completion"
+        );
+    }
 }

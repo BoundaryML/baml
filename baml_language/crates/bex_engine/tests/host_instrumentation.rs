@@ -166,8 +166,10 @@ async fn host_context_and_recording_owner_have_independent_lifetimes() {
             .find(|(_, entry)| functions[&paths[&entry.call_path_id]] == "child")
             .unwrap();
         assert_eq!(threads[thread], Some(host.id));
-        assert!(host.inputs_cas_id.is_some());
         let parent_end = completions.iter().find(|done| done.id == host.id).unwrap();
+        // The start record is slim; the completion carries the inputs.
+        assert!(host.inputs_cas_id.is_none());
+        assert!(parent_end.inputs_cas_id.is_some());
         assert!(parent_end.value_cas_id.is_some());
         assert!(parent_end.exited_at_ticks <= child.entered_at_ticks);
     }
@@ -568,7 +570,7 @@ async fn callback_options_resolve_once_and_reserved_id_reaches_recording() {
             "Hidden/Timing emit no callback span; explicit Span and reservation do"
         );
         assert_eq!(completions.len(), 2);
-        assert!(entries.iter().all(|entry| entry.inputs_cas_id.is_some()));
+        assert!(completions.iter().all(|done| done.inputs_cas_id.is_some()));
         assert!(completions.iter().all(|done| done.value_cas_id.is_some()));
         assert!(
             entries

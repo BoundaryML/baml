@@ -332,7 +332,8 @@ fn completion_variants_roundtrip_without_losing_wire_semantics() {
         let flags = CompletionFlags::from_wire(completion.completion_flags, is_late).unwrap();
         assert_eq!(flags.outcome(), crate::flags::outcome(outcome));
         assert_eq!(completion.value_cas_id.is_some(), captured);
-        assert_eq!(flags.requires_announcement(), dependency);
+        // A completion carries what its announcement did: it never depends on it.
+        assert!(!flags.requires_announcement(), "{dependency}");
         assert_eq!(is_late, late);
         assert_eq!(
             completion.node,

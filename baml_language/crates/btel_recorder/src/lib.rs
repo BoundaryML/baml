@@ -18,6 +18,8 @@ mod errors;
 mod flags;
 mod functions;
 mod merge;
+mod needs;
+mod open;
 mod recording;
 pub use btel_core::recording::CompletionFlags;
 /// The recording format's messages, as `btel-core` defines them: the wire, never the VM's
@@ -25,7 +27,7 @@ pub use btel_core::recording::CompletionFlags;
 /// callback.
 pub use btel_core::recording::v2 as proto;
 pub use recording::{
-    ProcessRecording, RecordingBuilder, RecordingConfig, RecordingError, RecordingId,
+    Destination, ProcessRecording, RecordingBuilder, RecordingConfig, RecordingError, RecordingId,
     RecordingPublisher, SealedFile,
 };
 
@@ -43,7 +45,6 @@ struct PendingMessages {
 
 /// Worker-local conversion state. The recording publisher drains this after
 /// chunk release; no input references escape conversion.
-#[derive(Default)]
 struct ConversionBuffer {
     pending: PendingMessages,
     spans: encoding::EncodedSpans,
@@ -59,40 +60,49 @@ struct ConversionBuffer {
     // exception is being unwound, so ordinary completions pay one length check.
     unwinds: errors::ActiveUnwinds,
     // Model usage awaiting its node's completion, which the VM writes right
-    // after it; kept across files like `unwinds`. Empty without model calls.
-    usage: BTreeMap<u64, Vec<proto::ModelUsage>>,
+    // after it, its own and its total; kept across files like `unwinds`.
+    // Empty without model calls.
+    usage: BTreeMap<u64, (Vec<proto::ModelUsage>, Vec<proto::ModelUsage>)>,
+    /// What spans started and have not completed carry to their end records.
+    open: open::OpenSpans,
+    /// Where each definition was written, for the file's `definitions_from`.
+    needs: needs::Needs,
+    /// The sequence of the file being built: the home of what it defines.
+    sequence: u64,
+    /// The recording writes start records: a local one does, for a reader
+    /// that shows running and crashed calls; one for an upload does not.
+    starts: bool,
     /// The error each thread ended with, until the thread's completion, which carries it.
     thread_errors: BTreeMap<u64, proto::CasId>,
 }
+impl Default for ConversionBuffer {
+    fn default() -> Self {
+        Self {
+            pending: PendingMessages::default(),
+            spans: encoding::EncodedSpans::default(),
+            aggregates: merge::PendingAggregates::default(),
+            sysops: merge::PendingSysOps::default(),
+            functions: functions::FunctionDefinitions::default(),
+            unsettled_clocks: BTreeMap::new(),
+            pending_encoded_bytes: 0,
+            unwinds: errors::ActiveUnwinds::default(),
+            usage: BTreeMap::new(),
+            thread_errors: BTreeMap::new(),
+            open: open::OpenSpans::default(),
+            needs: needs::Needs::default(),
+            sequence: 1,
+            starts: true,
+        }
+    }
+}
+
 // Count each newly constructed metadata message once; never rescan the file.
 fn push_message<M: prost::Message>(output: &mut Vec<M>, bytes: &mut usize, tag: u32, value: M) {
     *bytes = bytes.saturating_add(prost::encoding::message::encoded_len(tag, &value));
     output.push(value);
 }
 impl ConversionBuffer {
-    fn event(&mut self, thread: TelemetryId, mut event: proto::span_event::Event) {
-        use proto::span_event::Event;
-        if let Event::ThreadCompletion(completion) = &mut event
-            && let Some(error) = self.thread_errors.remove(&thread.get())
-        {
-            completion.error_cas_id = Some(error);
-        }
-        if !self.usage.is_empty() {
-            match &mut event {
-                Event::FunctionCompletion(completion)
-                | Event::LateFunctionCompletion(completion) => {
-                    if let Some(usage) = self.usage.remove(&completion.id) {
-                        completion.usage = usage;
-                    }
-                }
-                Event::ThreadCompletion(completion) => {
-                    if let Some(usage) = self.usage.remove(&thread.get()) {
-                        completion.usage = usage;
-                    }
-                }
-                _ => {}
-            }
-        }
+    fn event(&mut self, thread: TelemetryId, event: proto::span_event::Event) {
         self.spans.event(thread, event);
     }
 
@@ -124,6 +134,11 @@ impl ConversionBuffer {
             field::definitions::CLOCK_EPOCHS,
             clock::definition(clock.metadata()),
         );
+        self.observe_clock(clock);
+    }
+
+    /// The current state of a thread's clock epoch, tracked until it settles.
+    fn observe_clock(&mut self, clock: &Arc<btel_clock::ClockEpoch>) {
         let state = clock::state(clock);
         if state.r#final {
             self.unsettled_clocks.remove(&state.epoch_id);
@@ -161,6 +176,7 @@ impl ConversionBuffer {
 impl ConversionBuffer {
     fn define_function(&mut self, function: btel_types::FunctionId) {
         if let Some(resolution) = self.functions.resolve(function) {
+            self.needs.function(function.get(), self.sequence);
             push_message(
                 &mut self.pending.definitions.functions,
                 &mut self.pending_encoded_bytes,
@@ -191,7 +207,7 @@ impl ConversionBuffer {
     }
 
     fn is_empty(&self) -> bool {
-        self.pending_encoded_bytes == 0 && self.spans.is_empty()
+        self.pending_encoded_bytes == 0 && self.spans.is_empty() && !self.open.has_parked()
     }
 
     fn encoded_size_hint(&self) -> usize {
@@ -209,6 +225,10 @@ impl ConversionBuffer {
         if !self.unwinds.is_empty() {
             self.link_unwound(thread, record);
         }
+        if let Some(done) = record.completion() {
+            self.function_completion(thread, &done);
+            return;
+        }
         match record {
             SpanRecord::HostFunctionDefined(metadata) => {
                 self.functions.register_host(metadata);
@@ -224,6 +244,7 @@ impl ConversionBuffer {
                 captured_data,
             } => {
                 self.define_function(*function);
+                self.needs.log(thread.get(), function.get());
                 let level = match level {
                     btel_records::LogLevel::Info => proto::LogLevel::Info,
                     btel_records::LogLevel::Debug => proto::LogLevel::Debug,
@@ -272,10 +293,8 @@ impl ConversionBuffer {
                 }
             }
             SpanRecord::SpanUsage(usage) => {
-                self.usage.insert(
-                    usage.node.get(),
-                    usage
-                        .entries
+                let wire = |entries: &[btel_records::ModelUsage]| {
+                    entries
                         .iter()
                         .map(|entry| proto::ModelUsage {
                             provider: entry.provider.to_string(),
@@ -287,8 +306,13 @@ impl ConversionBuffer {
                             cache_write_tokens: entry.cache_write_tokens,
                             reasoning_tokens: entry.reasoning_tokens,
                         })
-                        .collect(),
-                );
+                        .collect::<Vec<_>>()
+                };
+                self.usage
+                    .insert(usage.node.get(), (wire(&usage.entries), wire(&usage.total)));
+            }
+            SpanRecord::ThreadSpawned { child, parent } => {
+                self.open.spawned(child.get(), parent.get());
             }
             SpanRecord::ThreadSpanAnnouncement {
                 id,
@@ -307,10 +331,16 @@ impl ConversionBuffer {
                     clock,
                     name.as_ref().map(|name| &***name),
                 );
-                self.event(
-                    thread,
-                    Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
-                );
+                self.needs
+                    .thread(id.get(), spawn_call_path.get(), self.sequence);
+                self.open
+                    .thread_started(id.get(), parent_id.map(TelemetryId::get));
+                if self.starts {
+                    self.event(
+                        thread,
+                        Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
+                    );
+                }
             }
             SpanRecord::ThreadSpanCompletion {
                 id,
@@ -323,62 +353,122 @@ impl ConversionBuffer {
                 name,
             } => {
                 assert_eq!(thread, *id, "thread definition disagrees with selector");
-                self.thread_definition(
-                    *id,
-                    *parent_id,
-                    *spawn_call_path,
-                    *started_at,
-                    clock,
-                    name.as_ref().map(|name| &***name),
-                );
+                if self.open.thread_known(id.get()) {
+                    self.observe_clock(clock);
+                } else {
+                    // A thread that never announced itself is defined by its
+                    // completion, once.
+                    self.thread_definition(
+                        *id,
+                        *parent_id,
+                        *spawn_call_path,
+                        *started_at,
+                        clock,
+                        name.as_ref().map(|name| &***name),
+                    );
+                    self.needs
+                        .thread(id.get(), spawn_call_path.get(), self.sequence);
+                }
+                self.needs.span(id.get(), 0);
+                let (place, running_at) = self.open.thread_completed(id.get());
+                let (usage, total_usage) = self.usage.remove(&id.get()).unwrap_or_default();
+                let error_cas_id = self.thread_errors.remove(&id.get());
                 self.event(
                     thread,
                     Event::ThreadCompletion(proto::ThreadCompletion {
                         completed_at_ticks: completed_at.get(),
                         outcome: flags::outcome(*outcome) as i32,
                         panicked: *outcome == btel_types::InvocationOutcome::Panicked,
-                        usage: Vec::new(),
-                        error_cas_id: None,
+                        usage,
+                        error_cas_id,
+                        parent_id: parent_id.map(TelemetryId::get),
+                        spawn_call_path_id: spawn_call_path.get(),
+                        started_at_ticks: started_at.get(),
+                        clock_epoch_id: clock.metadata().epoch.get(),
+                        name: name.as_ref().map(ToString::to_string),
+                        running_at_ticks: running_at,
+                        total_usage,
+                        lineage: place.map(|place| place.wire()),
                     }),
                 );
                 // A raise that never ended cannot claim anything after its thread.
                 self.unwinds.clear_thread(thread);
             }
-            SpanRecord::ThreadSpanRunning { at } => self.event(
-                thread,
-                Event::ThreadRunning(proto::ThreadRunning { at_ticks: at.get() }),
-            ),
-            SpanRecord::NetworkSpanAnnouncement(span) => self.event(
-                thread,
-                Event::NetworkAnnouncement(proto::NetworkAnnouncement {
-                    id: span.id.get(),
-                    parent_id: span.parent_id.get(),
-                    call_path_id: span.call_path.get(),
-                    started_at_ticks: span.started_at.get(),
-                    method: span.method.to_string(),
-                    url: span.url.to_string(),
-                    request_cas_id: span.request.as_ref().map(cas_id),
-                }),
-            ),
-            SpanRecord::NetworkEvent(event) => self.event(
-                thread,
-                Event::NetworkEvent(proto::NetworkEvent {
-                    span_id: event.span.get(),
-                    name: event.name.as_str().to_owned(),
-                    at_ticks: event.at.get(),
-                    payload_cas_id: event.payload.as_ref().map(cas_id),
-                }),
-            ),
-            SpanRecord::NetworkSpanCompletion(done) => self.event(
-                thread,
-                Event::NetworkCompletion(proto::NetworkCompletion {
-                    span_id: done.span.get(),
-                    completed_at_ticks: done.completed_at.get(),
-                    outcome: flags::outcome(done.outcome) as i32,
-                    panicked: done.outcome == btel_types::InvocationOutcome::Panicked,
-                    error_cas_id: done.error.as_ref().map(cas_id),
-                }),
-            ),
+            SpanRecord::ThreadSpanRunning { at } => {
+                self.open.thread_running(thread.get(), at.get());
+            }
+            SpanRecord::NetworkSpanAnnouncement(span) => {
+                let context = self.spans.context_of(thread);
+                self.open.request_started(
+                    span.id.get(),
+                    thread.get(),
+                    context,
+                    span.parent_id.get(),
+                    span.call_path.get(),
+                    span.started_at.get(),
+                    span.method.to_string(),
+                    span.url.to_string(),
+                    span.request.as_ref().map(cas_id),
+                );
+                if self.starts {
+                    self.event(
+                        thread,
+                        Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+                            id: span.id.get(),
+                            parent_id: span.parent_id.get(),
+                            call_path_id: span.call_path.get(),
+                            started_at_ticks: span.started_at.get(),
+                            method: span.method.to_string(),
+                            url: span.url.to_string(),
+                            request_cas_id: None,
+                        }),
+                    );
+                }
+            }
+            SpanRecord::NetworkEvent(event) => {
+                if let Some(parked) = self.open.request_event(
+                    event.span.get(),
+                    proto::NetworkEvent {
+                        span_id: 0,
+                        name: event.name.as_str().to_owned(),
+                        at_ticks: event.at.get(),
+                        payload_cas_id: event.payload.as_ref().map(cas_id),
+                    },
+                ) {
+                    self.write_request(parked);
+                }
+            }
+            SpanRecord::NetworkSpanCompletion(done) => {
+                // A request whose start this recording never saw cannot be
+                // written whole.
+                if let Some(request) = self.open.request_completed(done.span.get()) {
+                    let done_with = request.events.iter().any(open::finishes);
+                    let parked = open::Parked {
+                        context: request.context,
+                        completion: proto::NetworkCompletion {
+                            span_id: done.span.get(),
+                            completed_at_ticks: done.completed_at.get(),
+                            outcome: flags::outcome(done.outcome) as i32,
+                            panicked: done.outcome == btel_types::InvocationOutcome::Panicked,
+                            error_cas_id: done.error.as_ref().map(cas_id),
+                            thread_id: request.thread,
+                            parent_id: request.parent,
+                            call_path_id: request.call_path,
+                            started_at_ticks: request.started_at,
+                            method: request.method,
+                            url: request.url,
+                            request_cas_id: request.request,
+                            events: request.events,
+                            lineage: request.place.map(|place| place.wire()),
+                        },
+                    };
+                    if done_with {
+                        self.write_request(parked);
+                    } else {
+                        self.open.park(parked);
+                    }
+                }
+            }
             SpanRecord::ErrorRaiseOrigin { raise_id, origin } => {
                 self.error_raise_origin(thread, *raise_id, *origin);
             }
@@ -426,18 +516,25 @@ impl ConversionBuffer {
                 entered_at,
                 captured_inputs,
                 captured_type_args,
-            } => {
-                self.event(
+            } => self.call_started(
+                thread,
+                *id,
+                *parent_id,
+                *call_path,
+                *entered_at,
+                captured_inputs.as_ref().map(cas_id),
+                captured_type_args.as_ref().map(cas_id),
+            ),
+            SpanRecord::ManualSpanAnnouncement(entry) => {
+                self.spans.require(btel_core::recording::minor::OWNED_SPAN);
+                self.call_started(
                     thread,
-                    Event::FunctionAnnouncement(proto::FunctionAnnouncement {
-                        manual: false,
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        call_path_id: call_path.get(),
-                        entered_at_ticks: entered_at.get(),
-                        inputs_cas_id: captured_inputs.as_ref().map(cas_id),
-                        type_args_cas_id: captured_type_args.as_ref().map(cas_id),
-                    }),
+                    entry.id,
+                    entry.parent_id,
+                    entry.call_path,
+                    entry.entered_at,
+                    entry.captured_inputs.as_ref().map(cas_id),
+                    entry.captured_type_args.as_ref().map(cas_id),
                 );
             }
             SpanRecord::CallPathDefined {
@@ -473,31 +570,25 @@ impl ConversionBuffer {
                 for function in [Some(*callee), *visible_caller].into_iter().flatten() {
                     self.define_function(function);
                 }
-            }
-            SpanRecord::ManualSpanAnnouncement(entry) => {
-                self.spans.require(btel_core::recording::minor::OWNED_SPAN);
-                self.event(
-                    thread,
-                    Event::FunctionAnnouncement(proto::FunctionAnnouncement {
-                        manual: false,
-                        id: entry.id.get(),
-                        parent_id: entry.parent_id.get(),
-                        call_path_id: entry.call_path.get(),
-                        entered_at_ticks: entry.entered_at.get(),
-                        inputs_cas_id: entry.captured_inputs.as_ref().map(cas_id),
-                        type_args_cas_id: entry.captured_type_args.as_ref().map(cas_id),
-                    }),
+                self.needs.path(
+                    call_path.get(),
+                    parent_call_path.get(),
+                    callee.get(),
+                    self.sequence,
                 );
             }
             SpanRecord::ManualSpanCompletion(done) => {
                 self.spans.require(btel_core::recording::minor::OWNED_SPAN);
                 // A span closed without an outcome is closed, not completed.
                 let completion_flags = match done.outcome {
-                    Some(outcome) => {
-                        flags::completed(flags::outcome(outcome), done.requires_announcement)
-                    }
-                    None => CompletionFlags::closed(done.requires_announcement, false).bits(),
+                    Some(outcome) => flags::completed(flags::outcome(outcome), false),
+                    None => CompletionFlags::closed(false, false).bits(),
                 };
+                let start = self
+                    .open
+                    .call_completed(done.id.get(), done.parent_id.get());
+                self.needs.span(thread.get(), done.call_path.get());
+                let (usage, total_usage) = self.usage.remove(&done.id.get()).unwrap_or_default();
                 self.event(
                     thread,
                     Event::FunctionCompletion(proto::FunctionCompletion {
@@ -510,659 +601,120 @@ impl ConversionBuffer {
                         completion_flags,
                         value_cas_id: done.captured_value.as_ref().map(cas_id),
                         panicked: done.outcome == Some(btel_types::InvocationOutcome::Panicked),
-                        usage: Vec::new(),
+                        usage,
+                        inputs_cas_id: start.inputs,
+                        type_args_cas_id: start.type_args,
+                        manual: false,
+                        total_usage,
+                        lineage: start.place.map(|place| place.wire()),
                     }),
                 );
             }
-            SpanRecord::FunctionSpanCompletionOk {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(proto::InvocationOutcome::Ok, false),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(proto::InvocationOutcome::Ok, true),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionOkReentry {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(proto::InvocationOutcome::Ok, false),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionOkReentryNeedsAnnouncement {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(proto::InvocationOutcome::Ok, true),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionErrored {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Errored,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionErroredNeedsAnnouncement {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(proto::InvocationOutcome::Errored, true),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionErroredReentry {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Errored,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionErroredReentryNeedsAnnouncement {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(proto::InvocationOutcome::Errored, true),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionCancelled {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Cancelled,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
+            // Every other completion is a function completion, handled above.
+            _ => unreachable!("a function completion is handled before the match"),
+        }
+    }
 
-            SpanRecord::FunctionSpanCompletionPanicked {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Errored,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: true,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionCancelledNeedsAnnouncement {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Cancelled,
-                            true,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionPanickedNeedsAnnouncement {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(proto::InvocationOutcome::Errored, true),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: true,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionCancelledReentry {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Cancelled,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
+    /// A request's end record, whole, in a section of the thread that made
+    /// it, under the context it started in.
+    fn write_request(&mut self, parked: open::Parked) {
+        let completion = parked.completion;
+        let thread = TelemetryId::from_raw(completion.thread_id)
+            .expect("a request's thread is a telemetry node");
+        self.needs
+            .span(completion.thread_id, completion.call_path_id);
+        self.spans.event_in(
+            thread,
+            parked.context,
+            proto::span_event::Event::NetworkCompletion(completion),
+        );
+    }
 
-            SpanRecord::FunctionSpanCompletionPanickedReentry {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Errored,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: true,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionCancelledReentryNeedsAnnouncement {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Cancelled,
-                            true,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::FunctionSpanCompletionPanickedReentryNeedsAnnouncement {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(proto::InvocationOutcome::Errored, true),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: true,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::LateFunctionSpanCompletionOk {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::LateFunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(proto::InvocationOutcome::Ok, false),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::LateFunctionSpanCompletionOkReentry {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::LateFunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(proto::InvocationOutcome::Ok, false),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::LateFunctionSpanCompletionErrored {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::LateFunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Errored,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::LateFunctionSpanCompletionErroredReentry {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::LateFunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Errored,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::LateFunctionSpanCompletionCancelled {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::LateFunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Cancelled,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-
-            SpanRecord::LateFunctionSpanCompletionPanicked {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::LateFunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, false).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Errored,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: true,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::LateFunctionSpanCompletionCancelledReentry {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::LateFunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Cancelled,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: false,
-                        usage: Vec::new(),
-                    }),
-                );
-            }
-            SpanRecord::LateFunctionSpanCompletionPanickedReentry {
-                id,
-                parent_id,
-                call_path,
-                entered_at,
-                exited_at,
-                await_time,
-                captured_value,
-            } => {
-                self.event(
-                    thread,
-                    Event::LateFunctionCompletion(proto::FunctionCompletion {
-                        id: id.get(),
-                        parent_id: parent_id.get(),
-                        node: CallPathNodeId::new(*call_path, true).get(),
-                        entered_at_ticks: entered_at.get(),
-                        exited_at_ticks: exited_at.get(),
-                        self_await_ticks: await_time.get().get(),
-                        completion_flags: flags::completed(
-                            proto::InvocationOutcome::Errored,
-                            false,
-                        ),
-                        value_cas_id: captured_value.as_ref().map(cas_id),
-                        panicked: true,
-                        usage: Vec::new(),
-                    }),
-                );
+    /// Write the requests that completed in the open file, before it seals.
+    fn write_parked(&mut self) {
+        if self.open.has_parked() {
+            for parked in self.open.take_parked() {
+                self.write_request(parked);
             }
         }
     }
 
+    /// A call starts: what its completion will carry, and in a local
+    /// recording a slim start record, so a reader can show it running.
+    #[allow(clippy::too_many_arguments, reason = "the start fields of one call")]
+    fn call_started(
+        &mut self,
+        thread: TelemetryId,
+        id: TelemetryId,
+        parent_id: TelemetryId,
+        call_path: btel_types::CallPathId,
+        entered_at: btel_types::ClockInstant,
+        inputs: Option<proto::CasId>,
+        type_args: Option<proto::CasId>,
+    ) {
+        self.open
+            .call_started(id.get(), parent_id.get(), inputs, type_args);
+        if self.starts {
+            self.event(
+                thread,
+                proto::span_event::Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                    id: id.get(),
+                    parent_id: parent_id.get(),
+                    call_path_id: call_path.get(),
+                    entered_at_ticks: entered_at.get(),
+                    inputs_cas_id: None,
+                    type_args_cas_id: None,
+                    manual: false,
+                }),
+            );
+        }
+    }
+
+    /// A function completion, whole: its start, its usage and its lineage.
+    fn function_completion(
+        &mut self,
+        thread: TelemetryId,
+        done: &btel_records::FunctionCompletionRef<'_, Snapshot>,
+    ) {
+        use proto::span_event::Event;
+        let start = self
+            .open
+            .call_completed(done.id.get(), done.parent_id.get());
+        self.needs.span(thread.get(), done.call_path.get());
+        let (usage, total_usage) = if self.usage.is_empty() {
+            (Vec::new(), Vec::new())
+        } else {
+            self.usage.remove(&done.id.get()).unwrap_or_default()
+        };
+        let completion = proto::FunctionCompletion {
+            id: done.id.get(),
+            parent_id: done.parent_id.get(),
+            node: CallPathNodeId::new(done.call_path, done.reentry).get(),
+            entered_at_ticks: done.entered_at.get(),
+            exited_at_ticks: done.exited_at.get(),
+            self_await_ticks: done.await_time.get().get(),
+            completion_flags: flags::completed(flags::outcome(done.outcome), false),
+            value_cas_id: done.captured_value.map(cas_id),
+            panicked: done.outcome == btel_types::InvocationOutcome::Panicked,
+            usage,
+            inputs_cas_id: start.inputs,
+            type_args_cas_id: start.type_args,
+            manual: false,
+            total_usage,
+            lineage: start.place.map(|place| place.wire()),
+        };
+        self.event(
+            thread,
+            if done.late {
+                Event::LateFunctionCompletion(completion)
+            } else {
+                Event::FunctionCompletion(completion)
+            },
+        );
+    }
+
     fn take(&mut self) -> PendingMessages {
+        self.write_parked();
         self.aggregates.drain_into(&mut self.pending.aggregates);
         self.sysops.drain_into(&mut self.pending.aggregates);
         // Reuse warm map capacity, trimming oversized allocations after bursts.

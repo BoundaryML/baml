@@ -168,6 +168,14 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
     /// before that node's completion, which carries it. Boxed so the model
     /// names never widen the slot.
     SpanUsage(Box<SpanUsage>),
+    /// A spawned future's identity, written by its spawner when it spawns
+    /// it, while `parent` (the spawner's innermost span, or its thread) is
+    /// open: the recorder places the future under it from this, whenever the
+    /// future's own records come.
+    ThreadSpawned {
+        child: TelemetryId,
+        parent: TelemetryId,
+    },
     /// Rare: the error that escaped the thread's outermost frame, written
     /// just before the thread's completion, which carries it. A record of its
     /// own keeps the capture out of `ThreadSpanCompletion`, which already
@@ -519,11 +527,14 @@ pub struct ManualSpanCompletion<V> {
     pub captured_value: Option<V>,
 }
 
-/// The model usage charged to one span or thread node, one entry per model.
+/// The model usage charged to one span or thread node, one entry per model:
+/// its own (`entries`), and its own with the totals of the spans under it that
+/// completed before it (`total`). Either may be empty, not both.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpanUsage {
     pub node: TelemetryId,
     pub entries: Vec<ModelUsage>,
+    pub total: Vec<ModelUsage>,
 }
 
 /// The tokens one model's calls reported, summed. A count is `None` when no
@@ -1404,6 +1415,7 @@ macro_rules! capture_slots {
             | Self::ThreadSpanCompletion { .. }
             | Self::ThreadSpanRunning { .. }
             | Self::SpanUsage(_)
+            | Self::ThreadSpawned { .. }
             | Self::CallPathDefined { .. }
             | Self::ErrorRaiseOrigin { .. }
             | Self::ErrorRaiseStack(_)

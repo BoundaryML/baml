@@ -96,17 +96,29 @@ fn finishing_resets_file_features_without_losing_context_selection() {
             ..Default::default()
         }),
     );
-    assert_eq!(writer.format_minor(), btel_core::recording::minor::LOG);
+    assert_eq!(
+        writer.format_minor(),
+        btel_core::recording::minor::WHOLE_SPAN
+    );
     assert_eq!(sections(&mut writer)[0].context, Some(context(7)));
-    assert_eq!(writer.format_minor(), btel_core::recording::minor::BASE);
+    assert_eq!(
+        writer.format_minor(),
+        btel_core::recording::minor::WHOLE_SPAN
+    );
 
     event(&mut writer, thread);
-    assert_eq!(writer.format_minor(), btel_core::recording::minor::CONTEXT);
+    assert_eq!(
+        writer.format_minor(),
+        btel_core::recording::minor::WHOLE_SPAN
+    );
     assert_eq!(sections(&mut writer)[0].context, Some(context(7)));
 
     writer.begin_chunk();
     event(&mut writer, thread);
-    assert_eq!(writer.format_minor(), btel_core::recording::minor::BASE);
+    assert_eq!(
+        writer.format_minor(),
+        btel_core::recording::minor::WHOLE_SPAN
+    );
     assert_eq!(sections(&mut writer)[0].context, None);
 }
 
@@ -173,7 +185,7 @@ fn largest_completion_and_context_fit_admitted_capacity() {
                 low: u64::MAX,
                 high: u64::MAX,
             }),
-            usage: Vec::new(),
+            ..proto::FunctionCompletion::default()
         }),
     );
     assert_eq!(writer.capacity(), capacity);
