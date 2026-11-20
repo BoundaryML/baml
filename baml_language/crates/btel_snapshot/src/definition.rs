@@ -35,158 +35,32 @@
 //! # Encoding (blob format 5, root tag 2)
 //!
 //! After the root tag: a u32 member count, then each member: its kind (0
-//! class, 1 enum), its Borsh `DeclarationName`, its metadata, then for a
-//! class a u32 generic parameter count, a `@@stream.done` byte and its
-//! fields, for an enum its variants, each sequence with a u32 count.
-//! Metadata is a Borsh `Option<String>` each for the description, alias and
-//! docstring, then a u32 count of `(key, value)` attribute strings. A field
-//! is its name, its type as Borsh `TyTemplate<DefinitionHead>`, its metadata,
-//! then `skip`, `@stream.done` and `@stream.must_exist` bytes; a variant its
-//! name, metadata and `skip` byte. Strings are a u32 length and UTF-8. A head
-//! is tag 0 and a u32 member position, tag 1, a `DeclarationName`, a 16-byte
-//! group ID and a u32 position, or tag 2 and a `DeclarationName` (an
-//! interface or type alias, which has no recorded definition). The child
-//! table lists the groups tag 1 heads name, in first-use order, and the
+//! class, 1 enum), its name, its metadata, then for a class a u32 generic
+//! parameter count, a `@@stream.done` byte and its fields, for an enum its
+//! variants, each sequence with a u32 count. Metadata is an optional string
+//! each for the description, alias and docstring, then a u32 count of
+//! `(key, value)` attribute strings. A field is its name, its type, its
+//! metadata, then `skip`, `@stream.done` and `@stream.must_exist` bytes; a
+//! variant its name, metadata and `skip` byte. A head in a field type is
+//! another member by its position, a definition made before by its name, its
+//! group's ID and its position, or a name alone (an interface or type alias,
+//! which has no recorded definition). Every piece of that is written by
+//! `btel_core::cas::encode`, whose layout `btel_core::cas::decode_blob` reads; the
+//! order of the members and the group's start are decided here. The child
+//! table lists the groups those heads name, in first-use order, and the
 //! object count is zero.
-use std::{
-    io::{self, Write},
-    sync::Arc,
-};
+use std::{borrow::Borrow, sync::Arc};
 
 use baml_type::{DeclarationName, TyTemplate};
-use borsh::{BorshDeserialize, BorshSerialize};
+pub use btel_core::cas::DefinitionRef;
+use btel_core::cas::{
+    encode::{self, encode_type, infallible},
+    hash::{Absorb, Hasher},
+    tags::{DefinitionKind, HashDomain, RootTag},
+};
 use btel_types::{Definition, DefinitionBlob};
 
-use crate::{
-    CasId,
-    encoding::{BLOB_MAGIC, BLOB_VERSION},
-    hash::{Absorb, Hasher},
-    tags::{DefinitionHeadTag, DefinitionKind, HashDomain, RootTag},
-};
-
-/// One definition: the blob of its group and its position there.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct DefinitionRef {
-    pub group: CasId,
-    pub member: u32,
-}
-
-impl DefinitionRef {
-    pub fn of(definition: &Definition) -> Self {
-        Self {
-            group: CasId::from_bytes(definition.group.id()),
-            member: definition.member,
-        }
-    }
-}
-
-impl BorshSerialize for DefinitionRef {
-    fn serialize<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        w.write_all(self.group.as_bytes())?;
-        self.member.serialize(w)
-    }
-}
-
-impl BorshDeserialize for DefinitionRef {
-    fn deserialize_reader<R: io::Read>(r: &mut R) -> io::Result<Self> {
-        let group = CasId::from_bytes(<[u8; 16]>::deserialize_reader(r)?);
-        let member = u32::deserialize_reader(r)?;
-        Ok(Self { group, member })
-    }
-}
-
-/// A class or enum named by its recorded definition, with its name for
-/// display. The definition is its identity; the name rides along.
-#[derive(Clone, Debug)]
-pub struct DefinedHead {
-    pub name: DeclarationName,
-    pub definition: DefinitionRef,
-}
-
-impl PartialEq for DefinedHead {
-    fn eq(&self, other: &Self) -> bool {
-        self.definition == other.definition
-    }
-}
-impl Eq for DefinedHead {}
-impl PartialOrd for DefinedHead {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for DefinedHead {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.definition.cmp(&other.definition)
-    }
-}
-impl std::hash::Hash for DefinedHead {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.definition.hash(state);
-    }
-}
-
-/// A head in a recorded definition's field type.
-#[derive(Clone, Debug)]
-pub enum DefinitionHead {
-    /// Another member of the same group, by its position.
-    Member(u32),
-    /// A class or enum of another group.
-    Defined(DefinedHead),
-    /// A head with no recorded definition: an interface or a type alias.
-    Named(DeclarationName),
-}
-
-impl PartialEq for DefinitionHead {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Member(a), Self::Member(b)) => a == b,
-            (Self::Defined(a), Self::Defined(b)) => a == b,
-            (Self::Named(a), Self::Named(b)) => a.to_string() == b.to_string(),
-            (Self::Member(_) | Self::Defined(_) | Self::Named(_), _) => false,
-        }
-    }
-}
-
-impl BorshSerialize for DefinitionHead {
-    fn serialize<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        match self {
-            Self::Member(position) => {
-                (DefinitionHeadTag::Member as u8).serialize(w)?;
-                position.serialize(w)
-            }
-            Self::Defined(head) => {
-                (DefinitionHeadTag::Defined as u8).serialize(w)?;
-                head.name.serialize(w)?;
-                head.definition.serialize(w)
-            }
-            Self::Named(name) => {
-                (DefinitionHeadTag::Named as u8).serialize(w)?;
-                name.serialize(w)
-            }
-        }
-    }
-}
-
-impl BorshDeserialize for DefinitionHead {
-    fn deserialize_reader<R: io::Read>(r: &mut R) -> io::Result<Self> {
-        match u8::deserialize_reader(r)? {
-            0 => Ok(Self::Member(u32::deserialize_reader(r)?)),
-            1 => {
-                let name = DeclarationName::deserialize_reader(r)?;
-                let definition = DefinitionRef::deserialize_reader(r)?;
-                Ok(Self::Defined(DefinedHead { name, definition }))
-            }
-            2 => Ok(Self::Named(DeclarationName::deserialize_reader(r)?)),
-            other => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("definition head tag {other}"),
-            )),
-        }
-    }
-}
-
-/// A field type as recorded.
-pub type DefinitionType = TyTemplate<DefinitionHead>;
+use crate::describe::{self, Placed, Placement};
 
 /// A head in a field type, as the runtime hands a group over, borrowed from
 /// the declarations it names.
@@ -199,29 +73,6 @@ pub enum Head<'a> {
     Defined(DeclarationName, &'a Definition),
     /// A head with no recorded definition: an interface or a type alias.
     Named(DeclarationName),
-}
-
-/// A head as its group's blob holds it, the [`DefinitionHead`] it decodes
-/// to. A member is written as the position it holds, which must be the
-/// member's place in the blob.
-impl BorshSerialize for Head<'_> {
-    fn serialize<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        match self {
-            Self::Member(position) => {
-                (DefinitionHeadTag::Member as u8).serialize(w)?;
-                position.serialize(w)
-            }
-            Self::Defined(name, definition) => {
-                (DefinitionHeadTag::Defined as u8).serialize(w)?;
-                name.serialize(w)?;
-                DefinitionRef::of(definition).serialize(w)
-            }
-            Self::Named(name) => {
-                (DefinitionHeadTag::Named as u8).serialize(w)?;
-                name.serialize(w)
-            }
-        }
-    }
 }
 
 /// Description, alias, docstring and other attributes, as declared. `S` is
@@ -326,8 +177,8 @@ const CONTENT_CAPACITY: usize = 256;
 /// Returns each member's definition, in the order given.
 pub fn group<S, N>(members: &[Member<'_, S, N>]) -> Vec<Definition>
 where
-    S: BorshSerialize,
-    N: BorshSerialize,
+    S: AsRef<str>,
+    N: Borrow<DeclarationName>,
 {
     assert!(!members.is_empty(), "a group has a member");
     // One member starts its group, at position 0: nothing to choose.
@@ -364,10 +215,7 @@ where
             children: Vec::new(),
             positions,
         };
-        put(
-            &mut encoding.content,
-            &u32::try_from(members.len()).expect("bounded group"),
-        );
+        infallible(encode::count(&mut encoding.content, members.len()));
         for &at in &order {
             encode(
                 &members[at],
@@ -409,12 +257,12 @@ where
 /// it back, so that a reference to a member is to itself, at position 0.
 pub fn single<S, N>(member: &Member<'_, S, N>) -> Definition
 where
-    S: BorshSerialize,
-    N: BorshSerialize,
+    S: AsRef<str>,
+    N: Borrow<DeclarationName>,
 {
     let mut content = Vec::with_capacity(CONTENT_CAPACITY);
     let mut children = Vec::new();
-    put(&mut content, &1_u32);
+    infallible(encode::u32(&mut content, 1));
     encode(member, Placement::At(&[0]), &mut content, &mut children);
     Definition {
         group: seal(&content, children),
@@ -425,27 +273,26 @@ where
 /// The blob of a group whose content is `content` and which names
 /// `children`.
 fn seal(content: &[u8], children: Vec<Arc<DefinitionBlob>>) -> Arc<DefinitionBlob> {
+    let ids = || {
+        children
+            .iter()
+            .map(|child| btel_core::cas::CasId::from_bytes(child.id()))
+    };
     let mut h = Hasher::new(HashDomain::Definitions);
     h.byte(RootTag::Definitions as u8);
     h.absorb(content);
-    h.size(children.len());
-    for child in &children {
-        h.absorb(&child.id());
-    }
-    h.size(0);
+    h.table(children.len(), ids(), 0);
     let id = h.finish().0;
 
-    let mut bytes =
-        Vec::with_capacity(8 + 4 + 16 + 4 + 16 * children.len() + 4 + 1 + content.len());
-    bytes.extend_from_slice(&BLOB_MAGIC);
-    bytes.extend_from_slice(&BLOB_VERSION.to_le_bytes());
-    bytes.extend_from_slice(&id);
-    let child_count = u32::try_from(children.len()).expect("bounded children");
-    bytes.extend_from_slice(&child_count.to_le_bytes());
-    for child in &children {
-        bytes.extend_from_slice(&child.id());
-    }
-    bytes.extend_from_slice(&0_u32.to_le_bytes());
+    let framing = usize::try_from(encode::framing_len(children.len())).expect("bounded children");
+    let mut bytes = Vec::with_capacity(framing + 1 + content.len());
+    infallible(encode::header(
+        &mut bytes,
+        btel_core::cas::CasId::from_bytes(id),
+        children.len(),
+        ids(),
+        0,
+    ));
     bytes.push(RootTag::Definitions as u8);
     bytes.extend_from_slice(content);
     Arc::new(DefinitionBlob::new(
@@ -498,19 +345,6 @@ fn first_reference<S, N>(members: &[Member<'_, S, N>], start: usize) -> (Vec<usi
     (order, positions)
 }
 
-fn put(out: &mut Vec<u8>, value: &impl BorshSerialize) {
-    value.serialize(out).expect("writing to memory");
-}
-
-/// How an encoding writes a reference to a member.
-#[derive(Clone, Copy)]
-enum Placement<'p> {
-    /// Left out, as the starting member is chosen: every one is the same.
-    Unplaced,
-    /// At the member's place in the blob: `positions[member]`.
-    At(&'p [u32]),
-}
-
 /// One member's encoding. Groups named for the first time are added to
 /// `children`.
 fn encode<S, N>(
@@ -519,54 +353,45 @@ fn encode<S, N>(
     out: &mut Vec<u8>,
     children: &mut Vec<Arc<DefinitionBlob>>,
 ) where
-    S: BorshSerialize,
-    N: BorshSerialize,
+    S: AsRef<str>,
+    N: Borrow<DeclarationName>,
 {
-    let meta = |out: &mut Vec<u8>, meta: &Meta<S>| {
-        put(out, &meta.description);
-        put(out, &meta.alias);
-        put(out, &meta.docstring);
-        put(
+    let text = |out: &mut Vec<u8>, text: &S| infallible(encode::string(out, text.as_ref()));
+    let optional = |out: &mut Vec<u8>, text: &Option<S>| {
+        infallible(encode::optional_string(
             out,
-            &u32::try_from(meta.attributes.len()).expect("bounded attributes"),
-        );
+            text.as_ref().map(AsRef::as_ref),
+        ));
+    };
+    let meta = |out: &mut Vec<u8>, meta: &Meta<S>| {
+        optional(out, &meta.description);
+        optional(out, &meta.alias);
+        optional(out, &meta.docstring);
+        infallible(encode::count(out, meta.attributes.len()));
         for (key, value) in &meta.attributes {
-            put(out, key);
-            put(out, value);
+            text(out, key);
+            text(out, value);
         }
     };
-    let count = |out: &mut Vec<u8>, n: usize| put(out, &u32::try_from(n).expect("bounded"));
+    let flag = |out: &mut Vec<u8>, value: bool| infallible(encode::flag(out, value));
+    let name = |out: &mut Vec<u8>, name: &N| infallible(describe::name(name.borrow()).write(out));
     match member {
         Declaration::Class(class) => {
-            // Members placed in the order handed over, as a group of one is,
-            // are written as they are held.
-            let in_place = match placement {
-                Placement::At(positions) => positions
-                    .iter()
-                    .enumerate()
-                    .all(|(at, position)| *position as usize == at),
-                Placement::Unplaced => false,
-            };
             out.push(DefinitionKind::Class as u8);
-            put(out, &class.name);
+            name(out, &class.name);
             meta(out, &class.meta);
-            put(out, &class.type_params);
-            put(out, &class.stream_done);
-            count(out, class.fields.len());
+            infallible(encode::u32(out, class.type_params));
+            flag(out, class.stream_done);
+            infallible(encode::count(out, class.fields.len()));
             for field in &class.fields {
-                put(out, &field.name);
-                if in_place {
-                    put(out, &field.ty);
-                } else {
-                    let placed = field.ty.map_heads(&mut |head| match head {
-                        Head::Member(member) => Head::Member(match placement {
-                            Placement::At(positions) => positions[*member as usize],
-                            Placement::Unplaced => u32::MAX,
-                        }),
-                        other => other.clone(),
-                    });
-                    put(out, &placed);
-                }
+                text(out, &field.name);
+                infallible(encode_type(
+                    Placed {
+                        ty: &field.ty,
+                        at: placement,
+                    },
+                    out,
+                ));
                 // The same walk as decoding's, so the child table's order is
                 // the one a reader checks.
                 field.ty.visit_heads(&mut |head| {
@@ -579,20 +404,20 @@ fn encode<S, N>(
                     }
                 });
                 meta(out, &field.meta);
-                put(out, &field.skip);
-                put(out, &field.stream_done);
-                put(out, &field.must_exist);
+                flag(out, field.skip);
+                flag(out, field.stream_done);
+                flag(out, field.must_exist);
             }
         }
         Declaration::Enum(enm) => {
             out.push(DefinitionKind::Enum as u8);
-            put(out, &enm.name);
+            name(out, &enm.name);
             meta(out, &enm.meta);
-            count(out, enm.variants.len());
+            infallible(encode::count(out, enm.variants.len()));
             for variant in &enm.variants {
-                put(out, &variant.name);
+                text(out, &variant.name);
                 meta(out, &variant.meta);
-                put(out, &variant.skip);
+                flag(out, variant.skip);
             }
         }
     }

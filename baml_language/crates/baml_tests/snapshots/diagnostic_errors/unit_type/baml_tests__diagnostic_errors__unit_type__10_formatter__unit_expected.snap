@@ -26,18 +26,14 @@ function nested_tail() -> void {
 }
 
 function lambda_tail() -> int {
-    let f = () -> void {
-        produce()
-    };
+    let f = () -> void { produce() };
     f();
     1
 }
 
 function match_arm_tail(x: int) -> void {
     match (x) {
-        1 => {
-            produce()
-        },
+        1 => { produce() },
         _ => null,
     }
 }
@@ -52,9 +48,7 @@ function if_else_tail(c: bool) -> void {
 
 // A block annotated with the unit type is no different from a body.
 function annotated_block() -> int {
-    let u: void = {
-        produce()
-    };
+    let u: void = { produce() };
     1
 }
 
@@ -106,12 +100,8 @@ function else_if_chain_tails(a: bool, b: bool) -> void {
 }
 
 function catch_arm_tails() -> void {
-    {
-        produce()
-    } catch (e) {
-        _ => {
-            produce()
-        },
+    { produce() } catch (e) {
+        _ => { produce() },
     }
 }
 

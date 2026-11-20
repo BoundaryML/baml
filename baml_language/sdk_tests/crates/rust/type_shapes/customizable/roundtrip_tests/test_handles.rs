@@ -11,10 +11,10 @@
 // `&self` and return `Result`, with plain data fields (`status_code`)
 // public, and that literal-union-typed params (`open`'s mode, `seek_from`'s
 // whence) surface as plain `String`.
-use baml_bridge::OptionalArg::Unset;
 use baml_sdk::baml::fs::{File, open_sync as baml_open};
 use baml_sdk::baml::http::fetch_sync;
 use baml_sdk::baml::media::Image;
+use baml_sdk::baml_bridge::OptionalArg::Unset;
 
 // 1x1 transparent PNG.
 const PNG_B64: &str = concat!(

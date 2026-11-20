@@ -19,7 +19,7 @@ class Text {
     text: string,
     implements Slot {
         type Out = string;
-        item as text
+        item as text,
         function take(self, p: string) -> string {
             p
         }
@@ -33,7 +33,7 @@ class Count {
     count: int,
     implements Slot {
         type Out = int;
-        item as count
+        item as count,
         function take(self, p: int) -> string {
             "count"
         }

@@ -26,7 +26,7 @@ fn engine_with_writer(
     .unwrap();
     let telemetry = engine.telemetry.as_mut().unwrap();
     telemetry.runtime.finish().unwrap();
-    let id = RecordingId::generate();
+    let id = btel_types::new_recording_id();
     let mut delivery = None;
     telemetry.runtime = btel_processor::TelemetryRuntime::with_publisher_factory(
         btel_settings::transport::ChunkConfig {

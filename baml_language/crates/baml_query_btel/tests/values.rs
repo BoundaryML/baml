@@ -13,8 +13,8 @@ fn blob_path(project: &std::path::Path, hex: &str) -> std::path::PathBuf {
         .step_by(2)
         .map(|at| u8::from_str_radix(&hex[at..at + 2], 16).unwrap())
         .collect();
-    btel_reader::layout::SourceLayout::for_project(project)
-        .blob_path(btel_reader::CasId::from_bytes(bytes.try_into().unwrap()))
+    btel_core::reader::layout::SourceLayout::for_project(project)
+        .blob_path(btel_core::cas::CasId::from_bytes(bytes.try_into().unwrap()))
 }
 
 /// Captured inputs and value CAS ids of a function's calls, oldest first.
@@ -103,7 +103,7 @@ async fn structured_comparisons_use_captured_content_across_blobs_and_queries() 
 
     let mut options = baml_query_btel::IndexOptions::default();
     options.values.render.max_depth = 0;
-    let layout = btel_reader::layout::SourceLayout::for_project(project.path());
+    let layout = btel_core::reader::layout::SourceLayout::for_project(project.path());
     let mut unrendered = baml_query_btel::Index::open(layout.clone(), options.clone()).unwrap();
     let independent = sql(
         &mut unrendered,
@@ -239,7 +239,7 @@ async fn missing_and_corrupt_blobs_are_reported_not_answered() {
 /// when it is a group of recorded definitions.
 fn blobs(project: &std::path::Path) -> Vec<(u64, Option<Vec<String>>)> {
     let mut blobs = Vec::new();
-    let mut pending = vec![btel_reader::layout::SourceLayout::for_project(project).cas];
+    let mut pending = vec![btel_core::reader::layout::SourceLayout::for_project(project).cas];
     while let Some(directory) = pending.pop() {
         for entry in std::fs::read_dir(directory).unwrap() {
             let entry = entry.unwrap();
@@ -249,10 +249,10 @@ fn blobs(project: &std::path::Path) -> Vec<(u64, Option<Vec<String>>)> {
             } else {
                 let bytes = std::fs::read(entry.path()).unwrap();
                 let decoded =
-                    btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+                    btel_core::cas::decode_blob(&bytes, &btel_core::cas::DecodeLimits::default())
                         .unwrap();
                 let members = match decoded.root {
-                    btel_snapshot::DecodedRoot::Definitions(members) => Some(
+                    btel_core::cas::DecodedRoot::Definitions(members) => Some(
                         members
                             .iter()
                             .map(|member| member.name().to_string())

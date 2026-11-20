@@ -145,7 +145,7 @@ pub(crate) fn emit(input: &TreeInput) -> TokenStream {
 
         #(
             impl ::baml_syntax::tree::NodeKindOf for #nodes {
-                const RAW: u16 = #raws;
+                const KIND: NodeKind = NodeKind::#nodes;
                 const NAME: &'static str = #node_names;
             }
         )*
@@ -413,28 +413,38 @@ pub(crate) fn emit(input: &TreeInput) -> TokenStream {
             #( #nodes(&'t #nodes), )*
         }
 
-        impl Arenas {
-            /// The kind of `id`.
-            pub fn kind(id: ::baml_syntax::tree::AnyNodeId) -> NodeKind {
-                NodeKind::from_raw(id.kind_raw())
-                    .unwrap_or_else(|| unreachable!("an AnyNodeId is only made from a listed node type"))
-            }
+        /// The typed id of a node of any type: an [`AnyNodeId`] with its
+        /// type back, for a match over every node type.
+        ///
+        /// [`AnyNodeId`]: ::baml_syntax::tree::AnyNodeId
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum AnyId {
+            #( #nodes(::baml_syntax::tree::Id<#nodes>), )*
+        }
 
+        impl ::baml_syntax::tree::AnyNodeId {
+            /// The typed id.
+            pub fn typed(self) -> AnyId {
+                match self.kind() {
+                    #( NodeKind::#nodes => AnyId::#nodes(self.as_typed::<#nodes>()), )*
+                }
+            }
+        }
+
+        impl Arenas {
             /// The node behind `id`.
             pub fn node(&self, id: ::baml_syntax::tree::AnyNodeId) -> AnyNodeRef<'_> {
-                match Self::kind(id) {
-                    #( NodeKind::#nodes => AnyNodeRef::#nodes(
-                        &::baml_syntax::tree::HasArena::<#nodes>::arena(self)[id.cast::<#nodes>()
-                            .unwrap_or_else(|| unreachable!("kind was just matched"))]
+                match id.typed() {
+                    #( AnyId::#nodes(id) => AnyNodeRef::#nodes(
+                        &::baml_syntax::tree::HasArena::<#nodes>::arena(self)[id]
                     ), )*
                 }
             }
 
             /// The token span of `id`.
             pub fn span(&self, id: ::baml_syntax::tree::AnyNodeId) -> ::baml_syntax::tree::TokenRange {
-                match Self::kind(id) {
-                    #( NodeKind::#nodes => ::baml_syntax::tree::HasArena::<#nodes>::arena(self)
-                        .span(id.cast::<#nodes>().unwrap_or_else(|| unreachable!("kind was just matched"))), )*
+                match id.typed() {
+                    #( AnyId::#nodes(id) => ::baml_syntax::tree::HasArena::<#nodes>::arena(self).span(id), )*
                 }
             }
 
@@ -448,7 +458,7 @@ pub(crate) fn emit(input: &TreeInput) -> TokenStream {
 
         impl ::baml_syntax::tree::TreeWalk for Arenas {
             fn kind_name(&self, id: ::baml_syntax::tree::AnyNodeId) -> &'static str {
-                Self::kind(id).name()
+                id.kind().name()
             }
             fn span(&self, id: ::baml_syntax::tree::AnyNodeId) -> ::baml_syntax::tree::TokenRange {
                 Arenas::span(self, id)

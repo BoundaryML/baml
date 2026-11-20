@@ -184,11 +184,10 @@ function _as_field_rows(
     let names = fields.keys();
     for (let i = 0; i < names.length(); i += 1) {
         let name = names[i];
-        rows[name]
-            = match (fields[name]) {
-                let view: root.TypeView => view.as_type(),
-                let row => row,
-            };
+        rows[name] = match (fields[name]) {
+            let view: root.TypeView => view.as_type(),
+            let row => row,
+        };
     }
     rows
 }
@@ -235,20 +234,22 @@ interface AnyClass {
     /// - `reflect.errors.NotFound` if this value's class declares no field
     ///   called `name`.
     /// - `reflect.errors.TypeMismatch` if the field's value is not a `T`.
-    function get<T>(
-        self,
-        name: string,
-    ) -> T throws root.errors.NotFound | root.errors.TypeMismatch {
+    function get<T>(self, name: string) -> T
+        throws root.errors.NotFound | root.errors.TypeMismatch
+    {
         if (!self.has_field(name)) {
             // NOTE: `_to_string_impl()`, not `to_string()`; see `name`.
             throw root.errors.NotFound {
-                message: "no field named " + name + " on " + root.Type.of_value(self)._to_string_impl(),
+                message: "no field named "
+                    + name
+                    + " on "
+                    + root.Type.of_value(self)._to_string_impl(),
             };
         }
         root.Class.get_field<T>(self, name) catch (e) {
             root.errors.CompilationError { message } => {
-                throw root.errors.TypeMismatch { message: message }
-            }
+                throw root.errors.TypeMismatch { message: message };
+            },
         }
     }
 
@@ -264,7 +265,7 @@ interface AnyClass {
             return null;
         }
         self.get<T>(name) catch (e) {
-            root.errors.NotFound => null
+            root.errors.NotFound => null,
         }
     }
 
@@ -279,7 +280,10 @@ interface AnyClass {
         let field: root.class.Field = self.find_field(name) else {
             // NOTE: `_to_string_impl()`, not `to_string()`; see `name`.
             throw root.errors.NotFound {
-                message: "no field named " + name + " on " + root.Type.of_value(self)._to_string_impl(),
+                message: "no field named "
+                    + name
+                    + " on "
+                    + root.Type.of_value(self)._to_string_impl(),
             };
         };
         field
@@ -339,14 +343,12 @@ interface AnyClass {
         let class_fields = class_type.fields();
         for (let i = 0; i < class_fields.length(); i += 1) {
             let field = class_fields[i];
-            fields.push(
-                root.class.Field {
-                    name: field.name,
-                    type: field.type,
-                    meta: field.meta,
-                    _owner: self,
-                },
-            )
+            fields.push(root.class.Field {
+                name: field.name,
+                type: field.type,
+                meta: field.meta,
+                _owner: self,
+            })
         }
         fields
     }
@@ -369,7 +371,13 @@ interface AnyClass {
     /// runtime type is not a class.
     function attributes(self) -> root.Meta throws never {
         let class_type: root.Class = root.Type.of_value(self).as_class() else {
-            return root.Meta { alias: null, description: null, docstring: null, other: {}, skip: false };
+            return root.Meta {
+                alias: null,
+                description: null,
+                docstring: null,
+                other: {},
+                skip: false,
+            };
         };
         class_type.metadata()
     }
@@ -438,27 +446,24 @@ class Package {
     /// - `reflect.errors.CompilationError` if the source does not compile.
     /// - anything the package's top-level initialization throws, which is why
     ///   the clause is `unknown`.
-    function compile(
-        files: map<string, string>,
-        packages: map<string, Package> = {},
-    ) -> Package throws unknown {
+    function compile(files: map<string, string>, packages: map<string, Package> = {}) -> Package
+        throws unknown
+    {
         let artifact = Package._compile(files, packages);
         Package._finish(artifact, packages)
     }
 
-    function _compile(
-        files: map<string, string>,
-        packages: map<string, Package>,
-    ) -> CompileArtifact throws root.errors.CompilationError {
+    function _compile(files: map<string, string>, packages: map<string, Package>) -> CompileArtifact
+        throws root.errors.CompilationError
+    {
         $rust_io_function
     }
 
     //baml:mut_vm
     //baml:may_yield
-    function _finish(
-        artifact: CompileArtifact,
-        packages: map<string, Package>,
-    ) -> Package throws unknown {
+    function _finish(artifact: CompileArtifact, packages: map<string, Package>) -> Package
+        throws unknown
+    {
         $rust_function
     }
 
@@ -528,10 +533,9 @@ class Package {
     /// one type), any other type is declared as an alias, and every
     /// declaration a mounted type reaches is exported under its own name. A
     /// name this package already exports is refused.
-    function with_types(
-        self,
-        types: map<string, root.TypeView>,
-    ) -> Package throws root.errors.CompilationError {
+    function with_types(self, types: map<string, root.TypeView>) -> Package
+        throws root.errors.CompilationError
+    {
         let mounted: map<string, root.Type> = {};
         // NOTE: an index loop, not `for ... in`; see `AnyClass.get_field`.
         let names = types.keys();
@@ -544,10 +548,9 @@ class Package {
     /// (internal) Internal native backing `with_types`; every type is a `type`
     /// value.
     //baml:mut_vm
-    function _with_types(
-        self,
-        types: map<string, root.Type>,
-    ) -> Package throws root.errors.CompilationError {
+    function _with_types(self, types: map<string, root.Type>) -> Package
+        throws root.errors.CompilationError
+    {
         $rust_function
     }
     //baml:mut_vm
@@ -563,10 +566,9 @@ class Package {
     ///   `name`.
     /// - `reflect.errors.CompilationError` if the function exists but is not
     ///   an `F`, or is an unspecialized generic.
-    function get_function<F>(
-        self,
-        name: string,
-    ) -> F throws root.errors.NotFound | root.errors.CompilationError {
+    function get_function<F>(self, name: string) -> F
+        throws root.errors.NotFound | root.errors.CompilationError
+    {
         $rust_function
     }
 
@@ -623,10 +625,9 @@ class Package {
     ///
     /// - `reflect.errors.NotFound` if the package has no global called `name`.
     /// - `reflect.errors.TypeMismatch` if the global's value is not a `T`.
-    function get_global<T>(
-        self,
-        name: string,
-    ) -> T throws root.errors.NotFound | root.errors.TypeMismatch {
+    function get_global<T>(self, name: string) -> T
+        throws root.errors.NotFound | root.errors.TypeMismatch
+    {
         $rust_function
     }
 
@@ -667,9 +668,9 @@ class Session {
     /// # Throws
     ///
     /// - `reflect.errors.CompilationError` if the dependencies do not resolve.
-    function new(
-        packages: map<string, Package> = {},
-    ) -> Session throws root.errors.CompilationError {
+    function new(packages: map<string, Package> = {}) -> Session
+        throws root.errors.CompilationError
+    {
         Session._new(packages)
     }
 
@@ -690,25 +691,23 @@ class Session {
     /// - `reflect.errors.CompilationError` if `source` does not compile.
     /// - `reflect.errors.EvaluationError` if it compiles but throws when run.
     /// - `reflect.errors.SessionBusy` if the session is already evaluating.
-    function eval<T>(
-        self,
-        source: string,
-    ) -> T throws root.errors.CompilationError | root.errors.EvaluationError | root.errors.SessionBusy {
+    function eval<T>(self, source: string) -> T
+        throws root.errors.CompilationError | root.errors.EvaluationError | root.errors.SessionBusy
+    {
         let artifact = self._compile<T>(source);
         self._finish<T>(artifact) catch (cause) {
             _ => {
                 throw root.errors.EvaluationError {
-          message: _render_cause(cause),
-          cause: cause,
-        }
-            }
+                    message: _render_cause(cause),
+                    cause: cause,
+                };
+            },
         }
     }
 
-    function _compile<T>(
-        self,
-        source: string,
-    ) -> CompileArtifact throws root.errors.CompilationError | root.errors.SessionBusy {
+    function _compile<T>(self, source: string) -> CompileArtifact
+        throws root.errors.CompilationError | root.errors.SessionBusy
+    {
         $rust_io_function
     }
 
@@ -758,9 +757,8 @@ function signature(f: AnyFunction) -> Signature throws never {
 /// `reflect.errors.CompilationError`).
 //baml:mut_vm
 //baml:may_yield
-function call_any<R, E>(
-    f: AnyFunction<Returns = R, Throws = E>,
-    args: map<string, unknown>,
-) -> R throws E | InvalidArgumentError | root.errors.CompilationError {
+function call_any<R, E>(f: AnyFunction<Returns = R, Throws = E>, args: map<string, unknown>) -> R
+    throws E | InvalidArgumentError | root.errors.CompilationError
+{
     $rust_function
 }

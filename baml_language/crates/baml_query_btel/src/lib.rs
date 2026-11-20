@@ -26,9 +26,9 @@ mod usage;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
-use btel_reader::{
-    cas::{CasLimits, CasStore},
+use btel_core::reader::{
     layout::SourceLayout,
+    store::{CasLimits, CasStore},
 };
 pub use ingest::{RefreshMetrics, RefreshOptions};
 pub use query::{Budgets, Outcome, QueryRequest, QueryResult, Status};
@@ -98,7 +98,7 @@ impl Index {
     /// if recordings exist. Without a recordings directory, nothing is
     /// created and queries answer from an empty in-memory index.
     pub fn open(layout: SourceLayout, options: IndexOptions) -> Result<Self, Error> {
-        let source_missing = !btel_reader::discovery::exists(&layout.recordings);
+        let source_missing = !btel_core::reader::discovery::exists(&layout.recordings);
         let conn = if source_missing {
             let mut conn = Connection::open_in_memory()?;
             store::ensure_schema(&mut conn)?;

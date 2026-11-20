@@ -2,8 +2,6 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function test_annotated() -> int {
-    let double = (x: int) -> int {
-        x * 2
-    };
+    let double = (x: int) -> int { x * 2 };
     double(21)
 }

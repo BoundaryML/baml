@@ -34,7 +34,7 @@ impl FunctionDefinitions {
 
     /// The one-based line of `pc` in `function`'s own source file, as the
     /// function's line table places it: what a reader resolves from the
-    /// published definition (`btel_reader::source_map`). `None` without a
+    /// published definition (`btel_core::reader::source_map`). `None` without a
     /// table, for a PC the table does not cover, and for code inlined from
     /// another file, whose line is not a line of this function's file.
     pub(crate) fn line(&self, function: FunctionId, pc: u32) -> Option<u32> {

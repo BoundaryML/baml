@@ -1,0 +1,5 @@
+function f(c: bool) -> int {
+    let within = if (c) { first_value } else { second_value_heree };
+    let past = if (c) { first_value } else { second_value_hereee };
+    0
+}

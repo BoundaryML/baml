@@ -1,0 +1,7 @@
+function run(self) -> int {
+    span.run(() -> {
+        let t: map<string, SomeLongTypeName> = make_the_map_please(alpha_value, beta_value, gamma_v);
+        let u = alpha.beta.gamma(one_argument).delta(two_argument).epsilon(three_argument).zeta(fourrr);
+        t
+    })
+}

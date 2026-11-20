@@ -20,10 +20,9 @@
 ///
 /// Tokens are cached process-wide until shortly before expiry, so repeated
 /// calls with the same credentials and scope do not re-mint.
-function _gcp_access_token(
-    credentials_json: string?,
-    scope: string,
-) -> string throws baml.errors.Io | baml.errors.AccessError {
+function _gcp_access_token(credentials_json: string?, scope: string) -> string
+    throws baml.errors.Io | baml.errors.AccessError
+{
     $rust_io_function
 }
 
@@ -60,9 +59,9 @@ function _describe_unreadable_credential_file(
 ///
 /// The project id, or `null` when it is not discoverable — the caller decides
 /// whether that is fatal.
-function _gcp_project_id(
-    credentials_json: string?,
-) -> string? throws baml.errors.Io | baml.errors.AccessError {
+function _gcp_project_id(credentials_json: string?) -> string?
+    throws baml.errors.Io | baml.errors.AccessError
+{
     $rust_io_function
 }
 

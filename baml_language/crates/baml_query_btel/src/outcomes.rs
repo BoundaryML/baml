@@ -24,7 +24,7 @@ pub(crate) struct Totals {
 impl Totals {
     pub(crate) fn from_wire(
         count: u64,
-        outcomes: Option<&btel_recorder::proto::AggregateOutcomes>,
+        outcomes: Option<&btel_core::recording::v2::AggregateOutcomes>,
     ) -> Self {
         let Some(outcomes) = outcomes else {
             return Self {

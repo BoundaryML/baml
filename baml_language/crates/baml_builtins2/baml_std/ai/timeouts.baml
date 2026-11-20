@@ -40,9 +40,9 @@ class LlmTimeoutOptions {
     /// (internal) A client's `timeout` argument as options: a bare `Duration`
     /// is the end-to-end total, and `null` leaves every deadline at its
     /// default.
-    function _resolve(
-        timeout: baml.time.Duration | LlmTimeoutOptions | null,
-    ) -> LlmTimeoutOptions throws never {
+    function _resolve(timeout: baml.time.Duration | LlmTimeoutOptions | null) -> LlmTimeoutOptions
+        throws never
+    {
         match (timeout) {
             let options: LlmTimeoutOptions => options,
             let total: baml.time.Duration => {

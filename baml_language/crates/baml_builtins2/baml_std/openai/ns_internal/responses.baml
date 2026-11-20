@@ -383,9 +383,15 @@ function _lower_block(
     match (block) {
         let text: ai.content.Text => {
             if (position == "assistant") {
-                OaOutputText { type: "output_text", text: text.text }
+                OaOutputText {
+                    type: "output_text",
+                    text: text.text,
+                }
             } else {
-                OaInputText { type: "input_text", text: text.text }
+                OaInputText {
+                    type: "input_text",
+                    text: text.text,
+                }
             }
         },
         let media: ai.content.Media => {
@@ -393,14 +399,15 @@ function _lower_block(
             match (media.media) {
                 let image: baml.media.Image => {
                     if (!user_input && position != "system") {
-                        throw _media_role_error("image", position)
+                        throw _media_role_error("image", position);
                     }
                     let resolved = if (preview) {
                         ai.wire.resolve_media_preview(image)
                     } else {
                         ai.wire.resolve_media(image, false)
                     };
-                    let image_url = resolved.url ?? `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`;
+                    let image_url = resolved.url
+                        ?? `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`;
                     OaInputImage {
                         type: "input_image",
                         image_url: image_url,
@@ -410,7 +417,7 @@ function _lower_block(
                 },
                 let audio: baml.media.Audio => {
                     if (!user_input) {
-                        throw _media_role_error("audio", position)
+                        throw _media_role_error("audio", position);
                     }
                     // audio has no URL form on the wire: always inline base64.
                     let resolved = if (preview) {
@@ -422,7 +429,7 @@ function _lower_block(
                         throw ai.errors.PreviewUnsupported {
                             provider: "openai",
                             detail: "OpenAI Responses audio input requires downloaded bytes during request preview",
-                        }
+                        };
                     }
                     OaInputAudio {
                         type: "input_audio",
@@ -434,7 +441,7 @@ function _lower_block(
                 },
                 let pdf: baml.media.Pdf => {
                     if (!user_input) {
-                        throw _media_role_error("PDF", position)
+                        throw _media_role_error("PDF", position);
                     }
                     let resolved = if (preview) {
                         ai.wire.resolve_media_preview(pdf)
@@ -466,7 +473,7 @@ function _lower_block(
                         status_code: null,
                         detail: "OpenAI Responses does not support video prompt input",
                         raw_body: null,
-                    }
+                    };
                 },
             }
         },
@@ -529,24 +536,29 @@ function lower_prompt(
                 },
                 let delimiter: ai.CacheDelimiter => {
                     if (content.length() > 0 && delimiter.args != null) {
-                        breakpoints.push(
-                            OaCacheBreakpoint {
-                                item: items.length(),
-                                part: content.length() - 1,
-                                args: delimiter.args,
-                            },
-                        );
+                        breakpoints.push(OaCacheBreakpoint {
+                            item: items.length(),
+                            part: content.length() - 1,
+                            args: delimiter.args,
+                        });
                     }
                     null
                 },
                 let media: ai.MediaPart => {
-                    let block = ai.content.Media { media: media, provider_id: null, revised_prompt: null };
+                    let block = ai.content.Media {
+                        media: media,
+                        provider_id: null,
+                        revised_prompt: null,
+                    };
                     content.push(_lower_block(block, role, preview = preview));
                     null
                 },
             };
         }
-        items.push(OaMessageItem { role: role, content: content });
+        items.push(OaMessageItem {
+            role: role,
+            content: content,
+        });
     }
     items
 }
@@ -625,7 +637,10 @@ function lower_journal(j: ai.Journal, preview: bool = false) -> OaInputItem[] {
             let u: ai.events.UserMessage => {
                 let content = _lower_blocks(u.content, "user", preview = preview);
                 if (content.length() > 0) {
-                    items.push(OaMessageItem { role: "user", content: content });
+                    items.push(OaMessageItem {
+                        role: "user",
+                        content: content,
+                    });
                 }
                 null
             },
@@ -633,23 +648,19 @@ function lower_journal(j: ai.Journal, preview: bool = false) -> OaInputItem[] {
                 for (let b in a.content) {
                     match (b) {
                         let content: ai.content.Block => {
-                            items.push(
-                                OaMessageItem {
-                                    role: "assistant",
-                                    content: [_lower_block(content, "assistant", preview = preview)],
-                                },
-                            );
+                            items.push(OaMessageItem {
+                                role: "assistant",
+                                content: [_lower_block(content, "assistant", preview = preview)],
+                            });
                             null
                         },
                         let use: ai.content.ToolUse => {
-                            items.push(
-                                OaFunctionCallItem {
-                                    type: "function_call",
-                                    call_id: use.id,
-                                    name: use.name,
-                                    arguments: baml.json.stringify(use.args),
-                                },
-                            );
+                            items.push(OaFunctionCallItem {
+                                type: "function_call",
+                                call_id: use.id,
+                                name: use.name,
+                                arguments: baml.json.stringify(use.args),
+                            });
                             null
                         },
                         // ai.Reasoning does not round-trip yet: the API wants
@@ -664,25 +675,23 @@ function lower_journal(j: ai.Journal, preview: bool = false) -> OaInputItem[] {
                 // `function_call_output.output` carries text, image and file
                 // parts inline; `ai.wire.degrade_tool_media` has already moved
                 // audio out of the result and behind the run of results.
-                items.push(
-                    OaFunctionCallOutputItem {
-                        type: "function_call_output",
-                        call_id: c.id,
-                        output: _tool_output(_lower_blocks(c.content, "tool_result", preview = preview)),
-                    },
-                );
+                items.push(OaFunctionCallOutputItem {
+                    type: "function_call_output",
+                    call_id: c.id,
+                    output: _tool_output(
+                        _lower_blocks(c.content, "tool_result", preview = preview),
+                    ),
+                });
                 null
             },
             let f: ai.events.ToolFailed => {
                 let err: map<string, unknown> = {};
                 let _ = err.set("error", f.message);
-                items.push(
-                    OaFunctionCallOutputItem {
-                        type: "function_call_output",
-                        call_id: f.id,
-                        output: baml.json.stringify(err),
-                    },
-                );
+                items.push(OaFunctionCallOutputItem {
+                    type: "function_call_output",
+                    call_id: f.id,
+                    output: baml.json.stringify(err),
+                });
                 null
             },
             _ => null,
@@ -706,18 +715,18 @@ function _wants_image(output_type: reflect.Type) -> bool {
 function _tools(toolbox: ai.tools.Toolbox, wants_image: bool) -> OaTool[]? {
     let tools: OaTool[] = [];
     for (let t in toolbox.list()) {
-        tools.push(
-            OaFunctionTool {
-                type: "function",
-                name: t.name,
-                description: t.description,
-                parameters: baml.json.from(t.input_schema),
-                strict: false,
-            },
-        );
+        tools.push(OaFunctionTool {
+            type: "function",
+            name: t.name,
+            description: t.description,
+            parameters: baml.json.from(t.input_schema),
+            strict: false,
+        });
     }
     if (wants_image) {
-        tools.push(OaBuiltinTool { type: "image_generation" });
+        tools.push(OaBuiltinTool {
+            type: "image_generation",
+        });
     }
     if (tools.length() == 0) {
         null
@@ -728,7 +737,9 @@ function _tools(toolbox: ai.tools.Toolbox, wants_image: bool) -> OaTool[]? {
 
 function _tool_choice(tools: OaTool[]?, wants_image: bool) -> (string | OaToolChoiceObject)? {
     if (wants_image) {
-        return OaToolChoiceObject { type: "image_generation" };
+        return OaToolChoiceObject {
+            type: "image_generation",
+        };
     }
     match (tools) {
         null => null,
@@ -740,7 +751,10 @@ function _reasoning(c: root.ResponsesClient) -> OaReasoningParams? {
     if (c.reasoning_effort == null && c.reasoning_summary == null) {
         null
     } else {
-        OaReasoningParams { effort: c.reasoning_effort, summary: c.reasoning_summary }
+        OaReasoningParams {
+            effort: c.reasoning_effort,
+            summary: c.reasoning_summary,
+        }
     }
 }
 
@@ -759,7 +773,10 @@ function _text(c: root.ResponsesClient, structured: StructuredOutput?) -> OaText
     if (c.verbosity == null && format == null) {
         null
     } else {
-        OaTextParams { verbosity: c.verbosity, format: format }
+        OaTextParams {
+            verbosity: c.verbosity,
+            format: format,
+        }
     }
 }
 
@@ -820,7 +837,9 @@ function _url(c: root.ResponsesClient) -> string {
     if let params: map<string, string> = c.query_params {
         let pairs: string[] = [];
         for (let key in params.keys()) {
-            pairs.push(`${_percent_encode(key)}=${_percent_encode(params.get(key) ?? "")}`);
+            pairs.push(
+                `${_percent_encode(key)}=${_percent_encode(params.get(key) ?? "")}`,
+            );
         }
         if (pairs.length() > 0) {
             return `${url}?${pairs.join("&")}`;
@@ -831,13 +850,25 @@ function _url(c: root.ResponsesClient) -> string {
 
 /// ai.ModelTurnInput -> one Responses API request.
 function render(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _request(c, input, _structured_output(c, input), false, preview = false)
+    _request(
+        c,
+        input,
+        _structured_output(c, input),
+        false,
+        preview = false,
+    )
 }
 
 /// The request one `render` would send. This path never downloads URLs;
 /// provider-unsupported URL forms return PreviewUnsupported.
 function preview(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _request(c, input, _structured_output(c, input), false, preview = true)
+    _request(
+        c,
+        input,
+        _structured_output(c, input),
+        false,
+        preview = true,
+    )
 }
 
 /// (internal) The shared request builder: identical body for both paths, plus the
@@ -851,7 +882,12 @@ function _request(
 ) -> baml.http.Request {
     let prompt = (input.prompt)(ai.internal.build_output_format(input.output_type));
     let breakpoints: OaCacheBreakpoint[] = [];
-    let items = lower_prompt(prompt, breakpoints, default_cache_args = c.default_cache_args(), preview = preview);
+    let items = lower_prompt(
+        prompt,
+        breakpoints,
+        default_cache_args = c.default_cache_args(),
+        preview = preview,
+    );
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.
     let journal = ai.wire.degrade_tool_media(
@@ -867,11 +903,7 @@ function _request(
         model: c.model,
         input: items,
         store: c.store,
-        stream: if (stream) {
-            true
-        } else {
-            null
-        },
+        stream: if (stream) { true } else { null },
         temperature: c.temperature,
         top_p: c.top_p,
         max_output_tokens: c.max_output_tokens,
@@ -884,8 +916,14 @@ function _request(
     // typed request -> json -> drop unset optionals -> put the open-ended JSON
     // back (tool schemas, the output type's schema, then the cache breakpoints
     // that ride on a content part) -> user passthrough LAST.
-    let pruned = _restore_format_schema(_restore_tool_schemas(_prune_nulls(baml.json.from(request)), tools), structured);
-    let body = ai.wire.merge_request_body(_apply_cache_breakpoints(pruned, breakpoints), c.request_body);
+    let pruned = _restore_format_schema(
+        _restore_tool_schemas(_prune_nulls(baml.json.from(request)), tools),
+        structured,
+    );
+    let body = ai.wire.merge_request_body(
+        _apply_cache_breakpoints(pruned, breakpoints),
+        c.request_body,
+    );
     baml.http.Request {
         method: "POST",
         url: _url(c),
@@ -923,12 +961,10 @@ function _response_failure(resp: OaResponse) -> ai.errors.Failure {
     match (resp.error) {
         let err: OaErrorBody => _error_failure(err),
         null => {
-            _error_failure(
-                OaErrorBody {
-                    code: null,
-                    message: `the response ended with status ${resp.status ?? "failed"}`,
-                },
-            )
+            _error_failure(OaErrorBody {
+                code: null,
+                message: `the response ended with status ${resp.status ?? "failed"}`,
+            })
         },
     }
 }
@@ -938,7 +974,7 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
     // A 200 whose response object failed (background mode, and every
     // `response.failed` stream event) is an error, not an empty turn.
     if ((resp.status ?? "") == "failed" || resp.error != null) {
-        throw _response_failure(resp)
+        throw _response_failure(resp);
     }
     let content: ai.content.ModelBlock[] = [];
     let has_call = false;
@@ -955,14 +991,18 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
                     // UnknownError, so it is classified like every other
                     // undecodable provider payload (ai.wire.send_as does the
                     // same for the response body).
-                    args
-                        = baml.json.decode<map<string, unknown>>(s) catch_all (e) {
-                            _ => throw ai.errors.ParseFailed { provider: "openai", raw_output: s },
-                        };
+                    args = baml.json.decode<map<string, unknown>>(s) catch_all (e) {
+                        _ => throw ai.errors.ParseFailed {
+                            provider: "openai",
+                            raw_output: s,
+                        },
+                    };
                 };
-                content.push(
-                    ai.content.ToolUse { id: item.call_id ?? "", name: item.name ?? "", args: args },
-                );
+                content.push(ai.content.ToolUse {
+                    id: item.call_id ?? "",
+                    name: item.name ?? "",
+                    args: args,
+                });
                 null
             },
             "message" => {
@@ -971,12 +1011,16 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
                     let kind = part.type ?? "";
                     match (kind) {
                         "output_text" => {
-                            content.push(ai.content.Text { text: part.text ?? "" });
+                            content.push(ai.content.Text {
+                                text: part.text ?? "",
+                            });
                             null
                         },
                         "refusal" => {
                             refused = true;
-                            content.push(ai.content.Text { text: part.refusal ?? "" });
+                            content.push(ai.content.Text {
+                                text: part.refusal ?? "",
+                            });
                             null
                         },
                         _ => null,
@@ -1001,13 +1045,11 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
                 // content, NOT a tool call the runner has to execute.
                 if let encoded: string = item.result {
                     let mime = _image_mime(item.output_format);
-                    content.push(
-                        ai.content.Media.new(
-                            baml.media.Image.from_base64(encoded, mime),
-                            provider_id = item.id,
-                            revised_prompt = item.revised_prompt,
-                        ),
-                    );
+                    content.push(ai.content.Media.new(
+                        baml.media.Image.from_base64(encoded, mime),
+                        provider_id = item.id,
+                        revised_prompt = item.revised_prompt,
+                    ));
                     null
                 } else {
                     null
@@ -1030,7 +1072,12 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
     } else {
         ai.content.StopReason.Complete
     };
-    ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop }
+    ai.ModelTurn {
+        calls: [],
+        child_turns: [],
+        content: content,
+        stop_reason: stop,
+    }
 }
 
 /// One decoded response's usage, null when it reported none.
@@ -1063,9 +1110,7 @@ function _accepts_any_text(t: reflect.Type) -> bool {
         return true;
     }
     if let union: reflect.Union = t.as_union() {
-        return union.member_types().some((member) -> {
-            member == text
-        });
+        return union.member_types().some((member) -> { member == text });
     }
     false
 }
@@ -1103,11 +1148,7 @@ function _commentary_output(resp: OaResponse, output_type: reflect.Type) -> ai.P
     }
     let output: OaOutputItem[] = resp.output ?? [];
     // With a native tool call, the commentary is the preamble to that call.
-    if (
-        output.some((item) -> {
-            item.type == "function_call"
-        })
-    ) {
+    if (output.some((item) -> { item.type == "function_call" })) {
         return null;
     }
     for (let item in output) {
@@ -1133,7 +1174,10 @@ function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTu
     );
     let sent = ai.wire.send_as_with_wire<OaResponse>(
         req,
-        ai.events.ModelKey { provider: c.provider(), model: c.model },
+        ai.events.ModelKey {
+            provider: c.provider(),
+            model: c.model,
+        },
         capture_wire = c.capture_wire,
     );
     let turn = parse(sent.value);
@@ -1149,7 +1193,13 @@ function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTu
             }
         },
     };
-    ai.internal.with_own_call(answered, sent.call, usage(sent.value), c.model, sent.value.model)
+    ai.internal.with_own_call(
+        answered,
+        sent.call,
+        usage(sent.value),
+        c.model,
+        sent.value.model,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -1194,7 +1244,11 @@ class OaStreamState {
     function new() -> OaStreamState {
         let started: map<string, bool> = {};
         let buffered: map<string, string> = {};
-        OaStreamState { model: null, text_started: started, call_arguments: buffered }
+        OaStreamState {
+            model: null,
+            text_started: started,
+            call_arguments: buffered,
+        }
     }
 }
 
@@ -1225,7 +1279,11 @@ function _stream_failure(event: OaStreamEvent) -> ai.errors.Failure {
     if let nested: OaErrorBody = event.error {
         return _error_failure(nested);
     };
-    _error_failure(OaErrorBody { code: event.code, message: event.message, type: null })
+    _error_failure(OaErrorBody {
+        code: event.code,
+        message: event.message,
+        type: null,
+    })
 }
 
 /// (internal) One decoded SSE event -> provider-agnostic stream events.
@@ -1280,7 +1338,8 @@ function _stream_events(
             // terminal event's response object.
             if let delta: string = event.delta {
                 let key = _event_key(event);
-                let _ = state.call_arguments.set(key, (state.call_arguments.get(key) ?? "") + delta);
+                let _ =
+                    state.call_arguments.set(key, (state.call_arguments.get(key) ?? "") + delta);
                 if (delta != "") {
                     out.push(ai.stream.ContentSeen {});
                 }
@@ -1289,9 +1348,8 @@ function _stream_events(
         },
         // Reasoning and refusal text: content with no TextDelta.
         "response.reasoning_summary_text.delta"
-            | "response.reasoning_text.delta"
-            | "response.refusal.delta" =>
-        {
+        | "response.reasoning_text.delta"
+        | "response.refusal.delta" => {
             if ((event.delta ?? "") != "") {
                 out.push(ai.stream.ContentSeen {});
             }
@@ -1307,13 +1365,11 @@ function _stream_events(
         "response.completed" | "response.incomplete" => {
             if let final_response: OaResponse = event.response {
                 let turn = parse(final_response);
-                out.push(
-                    ai.stream.TurnMeta {
-                        stop_reason: turn.stop_reason,
-                        usage: usage(final_response),
-                        resolved_model: final_response.model,
-                    },
-                );
+                out.push(ai.stream.TurnMeta {
+                    stop_reason: turn.stop_reason,
+                    usage: usage(final_response),
+                    resolved_model: final_response.model,
+                });
             };
             out.push(ai.stream.TurnDone {});
             null
@@ -1334,11 +1390,11 @@ function _decode_batch(batch: string, state: OaStreamState) -> ai.stream.Event[]
             let decoded = baml.json.decode<OaStreamEvent>(data) catch_all (e) {
                 let parse => {
                     throw ai.errors.InvalidResponse {
-                    provider: "openai",
-                    message: parse.to_string(),
-                    raw_body: data,
-                    status_code: null,
-                }
+                        provider: "openai",
+                        message: parse.to_string(),
+                        raw_body: data,
+                        status_code: null,
+                    };
                 },
             };
             if let event: OaStreamEvent = decoded {
@@ -1373,7 +1429,10 @@ function _stream_open_failure(
 /// wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
     if (c.structured_output) {
-        throw _reject(c.provider(), "structured outputs do not stream yet; call the function without streaming, or use a client without structured_output")
+        throw _reject(
+            c.provider(),
+            "structured outputs do not stream yet; call the function without streaming, or use a client without structured_output",
+        );
     }
     let limits = ai.LlmTimeoutOptions._resolve(c.timeout);
     let req = limits._apply(_request(c, input, null, true, preview = false));
@@ -1400,9 +1459,16 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
         dispatched = started,
     );
     let call = ai.events.ModelCall {
-        resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
+        resolved_model: ai.events.ModelKey {
+            provider: c.provider(),
+            model: c.model,
+        },
         usage: null,
-        timing: ai.events.Timing { start_time: started, duration: null, ttft: null },
+        timing: ai.events.Timing {
+            start_time: started,
+            duration: null,
+            ttft: null,
+        },
         http_request: if (c.capture_wire) {
             baml.http.Request {
                 method: req.method,
@@ -1413,12 +1479,12 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
         } else {
             null
         },
-        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
-        sse_responses: if (c.capture_wire) {
-            []
-        } else {
-            null
+        http_response: ai.events.HttpResponse {
+            status: sse.status_code,
+            headers: sse.headers,
+            body: null,
         },
+        sse_responses: if (c.capture_wire) { [] } else { null },
     };
     stream._wire_call = call;
     stream._requested_model = c.model;

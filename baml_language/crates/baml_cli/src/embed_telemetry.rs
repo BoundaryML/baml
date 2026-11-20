@@ -54,7 +54,7 @@ impl EmbedTelemetryArgs {
             .embedded
             .as_deref()
             .expect("embedding selects a credential");
-        let endpoint = bcs_api::Endpoint::with_default(candidate.api_url.as_deref())?;
+        let endpoint = bcs_api::endpoint(candidate.api_url.as_deref())?;
         let client = bcs_api::Client::new(endpoint.clone())?;
         let key = bcs_api::Secret::new(embedded.api_key.expose().to_owned());
         let verified = client

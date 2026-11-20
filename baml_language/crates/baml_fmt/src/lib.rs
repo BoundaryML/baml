@@ -1,20 +1,28 @@
-pub mod ast;
+//! The BAML formatter: a parsed file in, its canonical text out.
+//!
+//! The file's comments are attached to the nodes they belong to
+//! ([`comments`]), each node's rule builds a document ([`format`](mod@format)) on the
+//! document IR ([`ir`]), and the printer lays it out within the line width.
+//! The [`oracle`] states what every output must satisfy against its input.
+
+pub mod comments;
+pub mod format;
+pub mod ir;
 mod newline_style;
+pub mod oracle;
 pub mod package_source;
-pub mod printer;
-mod trivia_classifier;
 
 use baml_db::{ProjectDatabase, SourceRootSpec};
 use baml_parser::ParseError;
-use baml_syntax::{nodes::FileTree, token::TokenKind};
+use baml_syntax::{
+    complete::{CompleteTree, Incomplete},
+    nodes::FileTree,
+    token::TokenKind,
+};
+use bumpalo::Bump;
 use newline_style::apply_newline_style;
-use printer::{Printer, Shape};
-pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
-#[cfg(test)]
-mod formatter_scenario_tests;
-#[cfg(test)]
-mod tuple_tests;
+use crate::{comments::Comments, format::Formatter, ir::Docs};
 
 /// Runs the formatter on the given source code. The output keeps the line
 /// ending of `source`'s first line, `\n` or `\r\n`. A file that opts out with
@@ -23,7 +31,9 @@ mod tuple_tests;
 /// Also see [`format_salsa`] if you already have a [`salsa::Database`] with the source files in it.
 ///
 /// # Errors
-/// Errors can occur if the source code is invalid: the parser or AST errors will be returned.
+/// The parser's errors when the source does not parse; see
+/// [`FormatterError`] for the two formatter faults that are reported rather
+/// than written out.
 pub fn format(source: &str, options: &FormatOptions) -> Result<String, FormatterError> {
     let (db, source_file) = single_file_db("file.baml", source);
     Ok(format_salsa(&db, source_file, *options)?.apply_to(source))
@@ -71,7 +81,6 @@ impl Formatted {
 
 /// Formats `file` as the database holds it.
 #[salsa::tracked(returns(clone))]
-#[allow(clippy::drop_non_drop)] // salsa macro expands to drop() of the args tuple
 pub fn format_salsa(
     db: &dyn salsa::Database,
     file: baml_db::SourceFile,
@@ -94,19 +103,17 @@ pub fn format_salsa(
         return Err(FormatterError::ParseErrors(errors.to_vec()));
     }
 
-    let trivia = TriviaInfo::classify(tree.tokens());
-
-    let mut printer = Printer::new_empty(&tree, &options, &trivia);
-    printer.print(
-        tree.root(),
-        Shape {
-            width: options.line_width,
-            indent: 0,
-            first_line_offset: 0,
-        },
-    );
+    let complete = CompleteTree::try_from(&*tree).map_err(FormatterError::Incomplete)?;
+    let index = baml_parser::tree_index(db, file);
+    let comments = Comments::from_tree(&tree, &index);
+    let bump = Bump::new();
+    let formatter = Formatter::new(Docs::new(&bump), &complete, &index, &comments, options);
+    let output = formatter.file().print(options);
+    // Correct or an error, never a changed program: the output is checked
+    // against the input in every build before it is handed out.
+    oracle::check(&tree, &output).map_err(FormatterError::Violation)?;
     Ok(Formatted {
-        output: Some(printer.output),
+        output: Some(output),
     })
 }
 
@@ -134,7 +141,9 @@ fn comment_contains_ignore_directive(comment: &str) -> bool {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FormatOptions {
-    /// Maximum line width before wrapping kicks in. Default: `100`
+    /// Maximum line width before wrapping kicks in. Default: `100`. The
+    /// widths past which a construct breaks though it would fit — rustfmt's
+    /// small heuristics, see [`format::Heuristics`] — are shares of it.
     pub line_width: usize,
     /// Indent width. Default: `4`
     pub indent_width: usize,
@@ -155,6 +164,15 @@ pub const CANONICAL_INDENT_WIDTH: usize = 4;
 pub enum FormatterError {
     #[error("{0:?}")]
     ParseErrors(Vec<ParseError>),
+    /// The parser reported no error yet left the tree incomplete: a parser
+    /// bug, reported rather than formatted around.
+    #[error("the parse reported no errors but {} is incomplete", .0.node.kind().name())]
+    Incomplete(Incomplete),
+    /// The output failed the [`oracle`]: it would not parse, or would parse
+    /// to a different tree, or has a comment missing, duplicated or moved —
+    /// a formatter bug, reported rather than written out.
+    #[error("the formatter broke its oracle: {0}")]
+    Violation(oracle::Violation),
 }
 
 #[cfg(test)]
@@ -175,9 +193,32 @@ mod format_options_tests {
         let options = FormatOptions::default();
         assert_eq!(CANONICAL_INDENT_WIDTH, 4);
         assert_eq!(options.indent_width, CANONICAL_INDENT_WIDTH);
-        let formatted = format("function value() -> int {\n  result\n}\n", &options)
-            .expect("default formatter options should format a function body");
-        assert_eq!(formatted, "function value() -> int {\n    result\n}\n");
+        let formatted = format("function f() -> int {\n  result\n}\n", &options).unwrap();
+        assert_eq!(formatted, "function f() -> int {\n    result\n}\n");
+    }
+
+    /// A chain of operators nests one level per operator in the tree; the
+    /// rule walks that spine with a loop, so a generated chain of any
+    /// length formats, and in time proportional to it.
+    #[test]
+    fn a_long_operator_chain_formats() {
+        let terms = vec!["a"; 20_000].join(" + ");
+        let source = format!("function f() -> int {{\n    {terms}\n}}\n");
+        let options = FormatOptions::default();
+        let formatted = format(&source, &options).expect("the chain formats");
+        // One operand per line (the first line is `a`, which ends in no
+        // closing bracket, so rustfmt's orphan rule joins nothing to it),
+        // between the function's braces.
+        assert_eq!(formatted.lines().count(), 20_000 + 2);
+        assert_eq!(format(&formatted, &options).unwrap(), formatted);
+    }
+
+    /// The layout a file already has is kept: items one blank line apart.
+    #[test]
+    fn items_are_one_blank_line_apart() {
+        let source = "class A {}\n\n\nclass B {}\nclass C {}\n";
+        let formatted = format(source, &FormatOptions::default()).expect("the file formats");
+        assert_eq!(formatted, "class A {}\n\nclass B {}\n\nclass C {}\n");
     }
 }
 
@@ -197,22 +238,22 @@ mod ignore_directive_tests {
     /// ignore directive.
     #[test]
     fn doc_comment_is_not_an_ignore_directive() {
-        let source = "/// baml-format: ignore\nfunction f() -> int {1}\n";
+        let source = "/// baml-format: ignore\nfunction f() -> int { 1 }\n\n\nclass A {}\n";
         let formatted =
             format(source, &FormatOptions::default()).expect("a documented function formats");
         assert_eq!(
             formatted,
-            "/// baml-format: ignore\nfunction f() -> int {\n    1\n}\n"
+            "/// baml-format: ignore\nfunction f() -> int {\n    1\n}\n\nclass A {}\n"
         );
     }
 
     #[test]
     fn directive_text_inside_a_string_does_not_disable_formatting() {
-        let source = "function main() -> string {\n  let marker = \"// baml-format: ignore\";\n  marker\n}\n";
+        let source = "function main() -> string {\n  let marker = \"// baml-format: ignore\";\n  marker\n}\n\n\nclass A {}\n";
         let formatted = format(source, &FormatOptions::default())
             .expect("directive-like string content is ordinary source text");
         assert_ne!(formatted, source);
-        assert!(formatted.contains("    let marker = \"// baml-format: ignore\";"));
+        assert!(formatted.ends_with("}\n\nclass A {}\n"));
     }
 }
 

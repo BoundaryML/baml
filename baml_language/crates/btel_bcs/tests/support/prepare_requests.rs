@@ -1,4 +1,4 @@
-use btel_bcs::wire::PrepareUploadsRequest;
+use btel_core::upload::PrepareUploadsRequest;
 use wiremock::Request;
 
 /// The prepares the server received, by file sequence. Delivery prepares

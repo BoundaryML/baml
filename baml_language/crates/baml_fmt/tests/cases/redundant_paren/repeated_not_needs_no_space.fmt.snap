@@ -1,0 +1,8 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(x: bool) -> bool {
+    let a = !!x;
+    let b = !(!x);
+    a && b
+}

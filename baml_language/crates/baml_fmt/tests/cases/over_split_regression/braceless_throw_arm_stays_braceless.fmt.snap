@@ -8,5 +8,4 @@ function f(s: string) -> int throws Boom {
     }
 }
 
-class Boom {
-}
+class Boom {}

@@ -137,10 +137,9 @@ function parse(s: string) -> json throws ParseError {
 /// let user = baml.json.decode<User>(`{"name": "Ada", "age": 36}`);
 /// assert.equal(user.age, 36);
 /// ```
-function decode<T>(
-    s: string,
-    naming: Naming = Naming.Declared,
-) -> T throws ParseError | DecodeError {
+function decode<T>(s: string, naming: Naming = Naming.Declared) -> T
+    throws ParseError | DecodeError
+{
     _decode<T>(s, _aliased(naming))
 }
 
@@ -197,12 +196,9 @@ function stringify(
 /// `aliased` holds.
 //baml:mut_vm
 //baml:may_yield
-function _stringify(
-    value: unknown,
-    aliased: bool,
-    indent: int | string,
-    omit_nulls: bool,
-) -> string throws SerializationError {
+function _stringify(value: unknown, aliased: bool, indent: int | string, omit_nulls: bool) -> string
+    throws SerializationError
+{
     $rust_function
 }
 
@@ -241,11 +237,9 @@ function _stringify(
 ///   names which.
 /// - `baml.json.SerializationError` if `naming` is `Naming.Aliased` and the
 ///   value holds a `@skip` enum variant, which then has no name.
-function from(
-    value: unknown,
-    naming: Naming = Naming.Declared,
-    omit_nulls: bool = false,
-) -> json throws SerializationError {
+function from(value: unknown, naming: Naming = Naming.Declared, omit_nulls: bool = false) -> json
+    throws SerializationError
+{
     _from(value, _aliased(naming), omit_nulls)
 }
 
@@ -407,7 +401,7 @@ function path<T>(j: json, selector: string) -> T throws PathError {
             throw PathError {
                 message: "leaf does not coerce to the requested type",
                 selector: selector,
-            }
+            };
         },
     }
 }
@@ -498,10 +492,9 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 ///   instance.
 /// - `baml.errors.Unsupported` for a class, enum, or alias the reflection
 ///   context cannot resolve.
-function schema(
-    t: reflect.Type,
-    naming: Naming = Naming.Declared,
-) -> json throws root.errors.Unsupported {
+function schema(t: reflect.Type, naming: Naming = Naming.Declared) -> json
+    throws root.errors.Unsupported
+{
     _schema(t, _aliased(naming))
 }
 

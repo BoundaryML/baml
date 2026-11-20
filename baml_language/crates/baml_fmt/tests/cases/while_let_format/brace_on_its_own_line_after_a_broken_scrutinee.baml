@@ -1,0 +1,10 @@
+// fmt: line_width=50
+function f() -> int {
+    while let v: int = obj.call(aaaaa, bbbbb).other(aaaaa) {
+        g();
+    }
+    let x: int = obj.call(aaaaa, bbbbb).other(aaaaaa) else {
+        return 0;
+    };
+    0
+}

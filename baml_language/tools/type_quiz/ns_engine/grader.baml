@@ -76,8 +76,14 @@ class ProviderWords {
 /// holds. See the README's toolchain issues.
 function words_of(provider: Provider) -> ProviderWords throws never {
     match (provider) {
-        Provider.Anthropic => ProviderWords { name: "Anthropic", key_hint: "sk-ant-…" },
-        Provider.OpenAI => ProviderWords { name: "OpenAI", key_hint: "sk-…" },
+        Provider.Anthropic => ProviderWords {
+            name: "Anthropic",
+            key_hint: "sk-ant-…",
+        },
+        Provider.OpenAI => ProviderWords {
+            name: "OpenAI",
+            key_hint: "sk-…",
+        },
     }
 }
 
@@ -96,7 +102,12 @@ class Offer {
 
 /// One row of the table.
 function offer(id: string, label: string, provider: Provider) -> Offer throws never {
-    Offer { id, label, provider, words: words_of(provider) }
+    Offer {
+        id,
+        label,
+        provider,
+        words: words_of(provider),
+    }
 }
 
 /// The models a judgement may be asked of, best first for each provider.
@@ -123,10 +134,10 @@ function offered() -> Offer[] throws never {
 ///   this table, so a name it never showed anyone is a defect in it and not
 ///   something to absorb.
 function offer_of(id: string) -> Offer throws never {
-    offered().find((offer) -> {
-        offer.id == id
-    })
-        ?? throw baml.panics.Unreachable { message: `no such model: ${id}` }
+    offered().find((offer) -> { offer.id == id })
+        ?? throw baml.panics.Unreachable {
+            message: `no such model: ${id}`,
+        }
 }
 
 /// The client a judgement is made with: the model, and the learner's own key.
@@ -138,11 +149,9 @@ function judge_client(key: string, model: string) -> ai.Client throws never {
     let offer = offer_of(model);
     match (offer.provider) {
         Provider.Anthropic => {
-            anthropic.Client.new(
-                model = offer.id,
-                api_key = key,
-                headers = { "anthropic-dangerous-direct-browser-access": "true" },
-            )
+            anthropic.Client.new(model = offer.id, api_key = key, headers = {
+                "anthropic-dangerous-direct-browser-access": "true",
+            })
         },
         Provider.OpenAI => openai.ChatClient.new(model = offer.id, api_key = key),
     }
@@ -263,17 +272,18 @@ function judge_reasoning(
     reasoning: string,
 ) -> Judged throws never {
     let answer = said_of(said);
-    let programs = revealed.programs.map((program) -> {
-        source_of(program.files)
-    });
-    let compiles = revealed.programs.map((program) -> {
-        program.compiles
-    });
-    let claims = rubric(revealed, answer).map((claim) -> {
-        claim.instance
-    });
-    grade@spec(programs, compiles, claims, answer_sentence(answer), asked_sentence(answer), reasoning)
-        .call(client = judge_client(key, model)) catch (e) {
+    let programs = revealed.programs.map((program) -> { source_of(program.files) });
+    let compiles = revealed.programs.map((program) -> { program.compiles });
+    let claims = rubric(revealed, answer).map((claim) -> { claim.instance });
+    grade@spec(
+        programs,
+        compiles,
+        claims,
+        answer_sentence(answer),
+        asked_sentence(answer),
+        reasoning,
+    )
+    .call(client = judge_client(key, model)) catch (e) {
         ai.errors.Failure => Unjudged { why: `${e}` },
         baml.errors.InvalidArgument => Unjudged { why: `${e}` },
         baml.errors.Timeout => Unjudged { why: `${e}` },

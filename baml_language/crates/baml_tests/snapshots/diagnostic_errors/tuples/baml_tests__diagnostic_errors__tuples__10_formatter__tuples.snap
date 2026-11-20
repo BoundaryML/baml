@@ -93,7 +93,7 @@ function ambiguous_same_arity_literal() -> int {
 type TpZeroPair = (0, 0);
 
 function type_test_never_matches(t: (int, int), u: (int, int)) -> bool {
-    let nested = match (t, 1) {
+    let nested = match ((t, 1)) {
         ((0, 0), _) => true,
         _ => false,
     };

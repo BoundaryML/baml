@@ -137,14 +137,14 @@ class AzureClient {
             if (self.resource_name != null || self.deployment_id != null) {
                 throw root.internal._azure_reject(
                     "openai.AzureClient takes base_url OR resource_name/deployment_id, not both",
-                )
+                );
             }
             return explicit;
         }
         let deployment: string = self.deployment_id else {
             throw root.internal._azure_reject(
                 "openai.AzureClient needs a deployment: set deployment_id to the deployment's name, or base_url to its full URL",
-            )
+            );
         };
         if let resource_name: string = self.resource_name {
             return `https://${resource_name}.openai.azure.com/openai/deployments/${deployment}`;
@@ -161,7 +161,7 @@ class AzureClient {
         }
         throw root.internal._azure_reject(
             "openai.AzureClient needs the resource for deployment_id: set resource_name, or the AZURE_OPENAI_ENDPOINT environment variable, or base_url instead of deployment_id",
-        )
+        );
     }
 
     /// The provider record: everything the shared chat core needs to know
@@ -235,9 +235,10 @@ class AzureClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            root.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
-            }
+            root.internal
+                .chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
+                    _ => throw ai.errors.normalize(e),
+                }
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {

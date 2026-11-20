@@ -140,13 +140,13 @@ CREATE TABLE function_def (
   owner_type_key TEXT,
   parent_function_key TEXT,
   lambda_path TEXT,
-  -- btel_reader::evidence::ArgumentNames encoding; NULL = names unknown.
+  -- btel_core::reader::evidence::ArgumentNames encoding; NULL = names unknown.
   argument_names BLOB,
   -- Slot count of a recorded layout; NULL = layout unknown.
   parameter_count INTEGER,
   -- Encoded wire metadata, compared to detect conflicting definitions.
   metadata BLOB,
-  -- btel_reader::source_map::SourceMap encoding of the recorded line table.
+  -- btel_core::reader::source_map::SourceMap encoding of the recorded line table.
   -- source_map_state: NULL none recorded, 1 valid, 2 rejected as invalid.
   source_map BLOB,
   source_map_state INTEGER,

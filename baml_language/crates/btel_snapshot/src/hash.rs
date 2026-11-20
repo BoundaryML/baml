@@ -15,9 +15,8 @@
 //! capacities or string rope shape. Map and argument order matter. Cycles
 //! need no recursive Merkle dependencies. Every hashed input is either a byte
 //! of the blob or a digest recomputed from its bytes, so a blob verifies
-//! without its children. Borsh's attribute-free type encoding is part of
-//! version 5: changes to it require a hash-format version change. Hash
-//! equality is not proof of delivery.
+//! without its children. A type's digest is of its description as
+//! `btel_core::cas::encode` writes it. Hash equality is not proof of delivery.
 //!
 //! A class or enum named by its recorded definition carries that
 //! definition's blob ID in place, in a type head or a declaration, so its
@@ -29,113 +28,46 @@
 //! blob format's. The ID does not cover the blob's header, so a later blob
 //! format that writes definitions the same way gives each the same ID, and a
 //! `def_id` compares across BAML releases. Changing how a definition is
-//! encoded, the Borsh type encoding in its fields included, requires a new
+//! encoded, the type descriptions in its fields included, requires a new
 //! definition version.
-use std::{
-    cell::RefCell,
-    io::{self, Write},
-    sync::OnceLock,
-};
+//!
+//! The hasher, the prefixes and every digest's input are `btel-core`'s
+//! (`btel_core::cas::hash`); what is here is how this writer gathers and
+//! caches them.
+use std::{cell::RefCell, sync::OnceLock};
 
-use borsh::BorshSerialize;
+/// Content identity of one blob, as `btel-core` defines it.
+pub use btel_core::cas::CasId;
+pub(crate) use btel_core::cas::hash::{Absorb, Digest, Hasher};
+use btel_core::cas::{
+    self,
+    encode::{DefinitionIdentity, encode_type, infallible},
+    hash::start,
+};
 use num_bigint::BigInt;
 use xxhash_rust::xxh3::Xxh3;
 
-use super::{BexStr, OwnedType, TypeIdentity, tags::HashDomain};
+use super::{BexStr, OwnedType, describe::Segments, tags::HashDomain};
 
-/// What every leaf's hash input starts with, before its domain.
-const LEAF_PREFIX: &[u8] = b"baml.snapshot.xxh3-128.v3\0";
-/// What a definition group's hash input starts with: the definition
-/// encoding's version, which only a change to how definitions are encoded
-/// bumps.
-const DEFINITION_PREFIX: &[u8] = b"baml.definition.xxh3-128.v1\0";
-
-/// Content identity of one blob. A zero digest is a valid hash, never absence.
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CasId([u8; 16]);
-impl CasId {
-    pub const fn as_bytes(&self) -> &[u8; 16] {
-        &self.0
-    }
-    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
-        Self(bytes)
-    }
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Digest(pub(crate) [u8; 16]);
-
-/// A destination for hash input.
-pub(crate) trait Absorb {
-    fn absorb(&mut self, bytes: &[u8]);
-    fn byte(&mut self, n: u8) {
-        self.absorb(&[n]);
-    }
-    fn number(&mut self, n: u64) {
-        self.absorb(&n.to_le_bytes());
-    }
-    fn size(&mut self, n: usize) {
-        self.number(u64::try_from(n).expect("snapshot length"));
-    }
-    fn digest(&mut self, h: Digest) {
-        self.absorb(&h.0);
-    }
-}
-
-/// What a hash's input starts with, before its domain byte. Leaf encodings
-/// are unchanged since v3; only blob identities change in v4, v5 and v6. A
-/// definition group's identity follows the definition encoding instead, so
-/// a blob format version that leaves definitions alone keeps their IDs.
-fn prefix(domain: HashDomain, version: u32) -> &'static [u8] {
-    match domain {
-        HashDomain::Definitions => DEFINITION_PREFIX,
-        HashDomain::Blob if version >= 6 => b"baml.snapshot.xxh3-128.v6\0",
-        HashDomain::Blob if version == 5 => b"baml.snapshot.xxh3-128.v5\0",
-        HashDomain::Blob if version == 4 => b"baml.snapshot.xxh3-128.v4\0",
-        _ => LEAF_PREFIX,
-    }
-}
-
-pub(crate) struct Hasher(Xxh3);
-impl Hasher {
-    pub(crate) fn new(domain: HashDomain) -> Self {
-        Self::versioned(domain, crate::BLOB_VERSION)
-    }
-    pub(crate) fn versioned(domain: HashDomain, version: u32) -> Self {
-        let mut h = Self(Xxh3::new());
-        h.absorb(prefix(domain, version));
-        h.byte(domain as u8);
-        h
-    }
-    /// Absorb a value's Borsh encoding and return its length.
-    pub(crate) fn borsh(&mut self, value: &impl BorshSerialize) -> usize {
-        let mut counted = Counted {
-            hasher: self,
-            written: 0,
-        };
-        value
-            .serialize(&mut counted)
-            .expect("infallible hash writer");
-        counted.written
-    }
-    pub(crate) fn finish(&self) -> Digest {
-        Digest(self.0.digest128().to_le_bytes())
-    }
-}
-impl Absorb for Hasher {
-    fn absorb(&mut self, bytes: &[u8]) {
-        self.0.update(bytes);
-    }
-}
-
-/// A destination for a blob's hash input (see `walk`): its pieces, and
-/// Borsh encodings written as they are.
+/// A destination for a blob's hash input (see `walk`): its pieces, and a
+/// declaration's identity as `btel-core` encodes it.
 pub(crate) trait HashSink: Absorb {
-    fn borsh(&mut self, value: &impl BorshSerialize);
+    fn declaration(&mut self, identity: DefinitionIdentity<'_, Segments<'_>>);
 }
 impl HashSink for Hasher {
-    fn borsh(&mut self, value: &impl BorshSerialize) {
-        Hasher::borsh(self, value);
+    fn declaration(&mut self, identity: DefinitionIdentity<'_, Segments<'_>>) {
+        infallible(identity.write(&mut Absorbing(self)));
+    }
+}
+
+/// Hash input as an encoder's sink.
+struct Absorbing<'h, H>(&'h mut H);
+impl<H: Absorb> cas::encode::Sink for Absorbing<'_, H> {
+    type Error = std::convert::Infallible;
+    #[inline]
+    fn put(&mut self, bytes: &[u8]) -> Result<(), Self::Error> {
+        self.0.absorb(bytes);
+        Ok(())
     }
 }
 
@@ -155,8 +87,7 @@ impl<'a> BlobHasher<'a> {
     /// Hash a blob of the current format, gathering into `input`.
     pub(crate) fn new(input: &'a mut Vec<u8>) -> Self {
         input.clear();
-        input.extend_from_slice(prefix(HashDomain::Blob, crate::BLOB_VERSION));
-        input.push(HashDomain::Blob as u8);
+        start(input, HashDomain::Blob, cas::VERSION);
         Self {
             input,
             stream: None,
@@ -195,60 +126,13 @@ impl Absorb for BlobHasher<'_> {
 }
 impl HashSink for BlobHasher<'_> {
     /// Written straight into the gathered input, which is much faster than
-    /// piece by piece through [`Write`]; one such encoding (a declaration's
-    /// identity) may take the input past the bound before it streams.
+    /// piece by piece; one identity may take the input past the bound before
+    /// it streams.
     #[inline]
-    fn borsh(&mut self, value: &impl BorshSerialize) {
-        value
-            .serialize(&mut *self.input)
-            .expect("writing to memory");
+    fn declaration(&mut self, identity: DefinitionIdentity<'_, Segments<'_>>) {
+        infallible(identity.write(&mut *self.input));
         if self.input.len() > btel_settings::snapshot::GATHERED_HASH_BYTES {
             self.spill(&[]);
-        }
-    }
-}
-struct Counted<'a> {
-    hasher: &'a mut Hasher,
-    written: usize,
-}
-impl Write for Counted<'_> {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.hasher.0.update(bytes);
-        self.written += bytes.len();
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-/// A writer that only measures.
-pub(crate) struct Counter(pub(crate) usize);
-impl Write for Counter {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.0 += bytes.len();
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-impl BorshSerialize for TypeIdentity {
-    fn serialize<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        use super::tags::TypeIdentityTag;
-        match self {
-            Self::Resolved(head) => {
-                (TypeIdentityTag::Resolved as u8).serialize(w)?;
-                head.tag().serialize(w)?;
-                head.name().serialize(w)
-            }
-            Self::Unresolved(tag) => {
-                (TypeIdentityTag::Unresolved as u8).serialize(w)?;
-                tag.serialize(w)
-            }
-            Self::Defined(definition) => {
-                (TypeIdentityTag::Defined as u8).serialize(w)?;
-                definition.serialize(w)
-            }
         }
     }
 }
@@ -262,16 +146,14 @@ pub(crate) fn no_bytes() -> Digest {
     Hasher::new(HashDomain::Uint8Array).finish()
 }
 pub(crate) fn bigint(n: &BigInt) -> Digest {
-    let mut h = Hasher::new(HashDomain::Bigint);
-    h.byte(super::tags::bigint_sign(n.sign()));
-    h.number(n.bits());
-    for digit in n.iter_u64_digits() {
-        h.number(digit);
-    }
-    h.finish()
+    cas::hash::bigint(
+        super::tags::bigint_sign(n.sign()),
+        n.bits(),
+        n.iter_u64_digits(),
+    )
 }
 /// A type description's digest and the length of its encoding, both found by
-/// serializing it once.
+/// encoding it once.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct TypeLeaf {
     pub(crate) digest: Digest,
@@ -322,13 +204,12 @@ thread_local! {
 fn encoded(ty: &OwnedType) -> TypeLeaf {
     TYPE_INPUT.with_borrow_mut(|input| {
         input.clear();
-        input.extend_from_slice(LEAF_PREFIX);
-        input.push(HashDomain::Type as u8);
-        let start = input.len();
-        ty.serialize(input).expect("writing to memory");
+        start(input, HashDomain::Type, cas::VERSION);
+        let at = input.len();
+        infallible(encode_type(crate::describe::Value(ty), input));
         TypeLeaf {
-            digest: Digest(xxhash_rust::xxh3::xxh3_128(input).to_le_bytes()),
-            encoded_len: u32::try_from(input.len() - start).expect("type description exceeds u32"),
+            digest: cas::hash::digest(input),
+            encoded_len: u32::try_from(input.len() - at).expect("type description exceeds u32"),
         }
     })
 }
@@ -341,9 +222,9 @@ mod tests {
 
     /// Past the bound a blob hasher streams, and still digests what a
     /// streaming hasher does over the same pieces: small pieces that cross
-    /// the bound, one that nearly fills it, one larger than the bound, Borsh
-    /// encodings (one larger than the bound), and a remainder after the last
-    /// spill.
+    /// the bound, one that nearly fills it, one larger than the bound,
+    /// declaration identities (one larger than the bound), and a remainder
+    /// after the last spill.
     #[test]
     fn a_blob_hasher_past_its_bound_digests_as_one_stream() {
         let piece = |n: usize, seed: u8| -> Vec<u8> {
@@ -360,22 +241,23 @@ mod tests {
         .concat();
         let mut input = Vec::new();
         let mut gathered = BlobHasher::new(&mut input);
-        let mut streamed = Hasher::new(HashDomain::Blob);
-        let mut whole = prefix(HashDomain::Blob, crate::BLOB_VERSION).to_vec();
-        whole.push(HashDomain::Blob as u8);
+        let mut streamed = Hasher::versioned(HashDomain::Blob, cas::VERSION);
+        let mut whole = Vec::new();
+        start(&mut whole, HashDomain::Blob, cas::VERSION);
         for piece in &pieces {
             gathered.absorb(piece);
             streamed.absorb(piece);
             whole.extend_from_slice(piece);
             assert!(gathered.input.len() <= GATHERED_HASH_BYTES);
         }
-        // A Borsh encoding that takes the input past the bound streams too.
+        // An identity that takes the input past the bound streams too.
         let long = "n".repeat(GATHERED_HASH_BYTES);
         for name in [long.as_str(), "Person"] {
             let name = baml_type::DeclarationName::Anonymous(baml_type::Name::new(name));
-            HashSink::borsh(&mut gathered, &name);
-            HashSink::borsh(&mut streamed, &name);
-            name.serialize(&mut whole).unwrap();
+            let identity = || DefinitionIdentity::Tagged(7, crate::describe::name(&name));
+            HashSink::declaration(&mut gathered, identity());
+            HashSink::declaration(&mut streamed, identity());
+            infallible(identity().write(&mut whole));
             assert!(gathered.input.len() <= GATHERED_HASH_BYTES);
         }
         assert!(gathered.stream.is_some(), "the input passed the bound");
@@ -392,7 +274,7 @@ mod tests {
     fn a_small_blob_hasher_digests_in_one_call() {
         let mut input = Vec::new();
         let mut gathered = BlobHasher::new(&mut input);
-        let mut streamed = Hasher::new(HashDomain::Blob);
+        let mut streamed = Hasher::versioned(HashDomain::Blob, cas::VERSION);
         for n in 0..100_u64 {
             gathered.number(n);
             streamed.number(n);
@@ -410,16 +292,16 @@ mod tests {
             h.absorb(b"the same content");
             h.finish()
         };
-        let definition = digest(HashDomain::Definitions, crate::BLOB_VERSION);
+        let definition = digest(HashDomain::Definitions, cas::VERSION);
         assert_eq!(definition, digest(HashDomain::Definitions, 4));
         assert_eq!(
             definition,
-            digest(HashDomain::Definitions, crate::BLOB_VERSION + 1)
+            digest(HashDomain::Definitions, cas::VERSION + 1)
         );
-        assert_ne!(definition, digest(HashDomain::Blob, crate::BLOB_VERSION));
+        assert_ne!(definition, digest(HashDomain::Blob, cas::VERSION));
         assert_ne!(
             digest(HashDomain::Blob, 4),
-            digest(HashDomain::Blob, crate::BLOB_VERSION)
+            digest(HashDomain::Blob, cas::VERSION)
         );
     }
 }

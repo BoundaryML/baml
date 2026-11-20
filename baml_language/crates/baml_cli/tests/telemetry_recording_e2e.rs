@@ -43,7 +43,7 @@ fn assert_recordings(root: &Path, count: usize) {
         .collect();
     assert_eq!(directories.len(), count);
     for directory in directories {
-        let recording = btel_file::read_directory(&directory).unwrap();
+        let recording = btel_core::recording::read_directory(&directory).unwrap();
         assert!(!recording.files.is_empty(), "{}", directory.display());
         assert!(recording.issues.is_empty(), "{:?}", recording.issues);
         assert!(recording.files.iter().any(|file| {
@@ -135,7 +135,7 @@ fn recorded_builds(root: &Path) -> Vec<(btel_recorder::proto::RecordingHeader, O
     let mut builds: Vec<_> = std::fs::read_dir(root.join(RECORDINGS))
         .unwrap()
         .map(|entry| {
-            let recording = btel_file::read_directory(&entry.unwrap().path()).unwrap();
+            let recording = btel_core::recording::read_directory(&entry.unwrap().path()).unwrap();
             let header = recording.files[0].header.clone().unwrap();
             let main_unit = recording
                 .files

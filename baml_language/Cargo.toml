@@ -69,6 +69,11 @@ version = "0.0.0-beta"
 [workspace.dependencies]
 # BCS (bcs_*): shared cloud API contracts and clients.
 bcs_api = { path = "crates/bcs_api", default-features = false }
+# The formats BAML records and BCS stores, and the BCS client, as BCS publishes them. A format change
+# lands in BCS first, readers before writers, and reaches BAML by moving these pins together:
+# bcs-sdk takes exactly the btel-core published beside it.
+bcs-sdk = { version = "=0.1.0", default-features = false }
+btel-core = { version = "=0.1.0" }
 
 #  Internal dependencies (baml_*)
 btel_bcs = { path = "crates/btel_bcs", default-features = false }
@@ -136,7 +141,6 @@ btel_records = { path = "crates/btel_records" }
 btel_processor = { path = "crates/btel_processor" }
 btel_recorder = { path = "crates/btel_recorder" }
 btel_file = { path = "crates/btel_file" }
-btel_reader = { path = "crates/btel_reader" }
 btel_ringbuffer = { path = "crates/btel_ringbuffer" }
 bex_chunkedringbuffer = { path = "crates/bex_chunkedringbuffer" }
 quanta = { path = "vendor/quanta", version = "=0.12.6", default-features = false }
@@ -179,6 +183,7 @@ bitflags = "2"
 # derives for the four runtime-only types (Value, Object, FunctionKind,
 # HeapPtr) that need to refuse or proxy their on-disk form.
 borsh = { version = "1.5", features = [ "derive", "indexmap" ] }
+bumpalo = { version = "3", features = [ "collections" ] }
 bytes = "1"
 bytesize = "2.4.2"
 cargo_metadata = { version = "0.23.1" }
@@ -206,7 +211,6 @@ graphviz-rust = { version = "0.9" }
 # work-tree status. No network, no mutation.
 gix = { version = "0.90.0", default-features = false, features = [ "sha1", "sha256", "status" ] }
 hex = "0.4"
-httpdate = "1.0.3"
 hmac = "0.12"
 http-body-util = "0.1"
 hyper = { version = "1", features = [ "server", "http1", "http2" ] }
@@ -317,6 +321,7 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
   "fmt",
 ] }
 unicode-normalization = "0.1.25"
+unicode-width = { version = "0.2" }
 ureq = { version = "3", default-features = false, features = [ "rustls", "gzip" ] }
 url = "2.5"
 uuid = { version = "1", features = [ "serde", "v4" ] }
@@ -338,7 +343,6 @@ pyo3-stub-gen = { version = "0.22", default-features = false }
 napi = { version = "3.9.0", default-features = false }
 napi-derive = "3.5.6"
 napi-build = "2.3.2"
-windows-sys = "0.61.2"
 wiremock = "0.6"
 vfs = "0.12"
 wasm-logger = "0.2.0"

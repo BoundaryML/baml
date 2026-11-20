@@ -1,41 +1,22 @@
-//! Upload bodies. A body is a `btel.cloud.v1.CloudUploadEnvelope`, written
-//! here field by field so that a blob's bytes go into it once, and a string's
-//! content not at all: it is sent from the memory that already holds it. The
-//! bytes are exactly those of encoding the whole message.
+//! Upload bodies. A body is a `btel.upload.v1.UploadEnvelope`, whose framing `btel-core` writes
+//! (`btel_core::upload::envelope`); a blob's bytes go into it once, and a long string's content
+//! not at all: it is sent from the memory that already holds it. The bytes are exactly those of
+//! encoding the whole message.
 use std::sync::Arc;
 
+use btel_core::{
+    cas::{self, encode::infallible},
+    upload::envelope::{BlobFrame, EnvelopeHead},
+};
 use btel_snapshot::{BlobScratch, Leaf, Structure};
 use bytes::Bytes;
-use prost::{
-    Message,
-    encoding::{WireType, encode_key, encode_varint, encoded_len_varint, key_len, uint32},
-};
 use sha2::{Digest, Sha256};
 
-use crate::{
-    delivery::{Candidate, DeliveryError, Source},
-    proto::CloudUploadEnvelope,
-};
-
-/// Zero would be left out of the message, as the protobuf encoding of a
-/// default value: the version is written unconditionally here.
-const BLOB_VERSION: u32 = btel_settings::snapshot::BLOB_VERSION;
-const _: () = assert!(BLOB_VERSION != 0);
+use crate::delivery::{Candidate, DeliveryError, Source};
 
 /// A string at least this long is sent from where it is held. A shorter one
 /// is copied beside its framing, which costs less than a chunk of its own.
 pub(crate) const SHARED_CONTENT_BYTES: usize = 2 * 1024;
-
-/// Field numbers of `CloudUploadEnvelope` and `CasObject` in `cloud.proto`.
-mod field {
-    pub(super) const RECORDING_FILE: u32 = 4;
-    pub(super) const CAS_OBJECTS: u32 = 5;
-    pub(super) const SNAPSHOT_ID: u32 = 1;
-    pub(super) const SNAPSHOT_FORMAT_VERSION: u32 = 2;
-    pub(super) const BLOB: u32 = 3;
-    pub(super) const BLOB_SHA256: u32 = 4;
-    pub(super) const LOGICAL_BYTES_APPROX_V1: u32 = 5;
-}
 
 /// How much of a blob's `encoded_len` bytes a body holds in a buffer of its
 /// own: all of them, except the content of a string sent from where it is.
@@ -72,11 +53,6 @@ impl AsRef<[u8]> for Content {
     }
 }
 
-/// The length of a length-delimited field of `len` bytes.
-fn delimited_len(tag: u32, len: usize) -> usize {
-    key_len(tag) + encoded_len_varint(len as u64) + len
-}
-
 /// What an upload body starts with.
 pub(crate) struct Head<'a> {
     pub(crate) plan_id: &'a str,
@@ -86,17 +62,16 @@ pub(crate) struct Head<'a> {
     pub(crate) limit: usize,
 }
 
-/// The lengths of one `CasObject` field of a body, in the order written:
-/// buffered before the blob's content, the content when buffered or when
-/// sent from where it is held, and the digest and logical size that follow.
+/// One blob's field of a body, and the lengths of what is written for it in order: buffered
+/// before the blob's content, the content when buffered or when sent from where it is held, and
+/// what follows it.
 struct Piece {
-    object_len: usize,
+    frame: BlobFrame,
     blob_len: usize,
     before: usize,
     buffered: usize,
     shared: usize,
     after: usize,
-    logical_bytes_approx_v1: Option<u64>,
 }
 impl Piece {
     fn of(candidate: &Candidate, owners: &[Arc<Structure>]) -> Result<Self, DeliveryError> {
@@ -118,35 +93,26 @@ impl Piece {
         let shared = blob_len
             - usize::try_from(candidate.buffered_len())
                 .unwrap_or_else(|_| unreachable!("part of `blob_len`"));
-        let after = delimited_len(field::BLOB_SHA256, <Sha256 as Digest>::output_size())
-            + logical_bytes_approx_v1.map_or(0, |size| {
-                key_len(field::LOGICAL_BYTES_APPROX_V1) + encoded_len_varint(size)
-            });
-        let fields = delimited_len(field::SNAPSHOT_ID, candidate.id.as_bytes().len())
-            + uint32::encoded_len(field::SNAPSHOT_FORMAT_VERSION, &BLOB_VERSION)
-            + key_len(field::BLOB)
-            + encoded_len_varint(candidate.encoded_len);
-        let object_len = fields
-            .checked_add(blob_len)
-            .and_then(|len| len.checked_add(after))
-            .ok_or(DeliveryError::Capacity)?;
-        Ok(Self {
-            object_len,
+        let frame = BlobFrame::new(
+            candidate.id,
+            cas::VERSION,
             blob_len,
-            before: key_len(field::CAS_OBJECTS)
-                + encoded_len_varint(object_len as u64)
-                + fields
-                + header,
+            logical_bytes_approx_v1,
+        )
+        .ok_or(DeliveryError::Capacity)?;
+        Ok(Self {
+            before: frame.before_len() + header,
             buffered: blob_len - header - shared,
             shared,
-            after,
-            logical_bytes_approx_v1,
+            after: frame.after_len(),
+            frame,
+            blob_len,
         })
     }
 
     /// The length of the whole field.
     fn total(&self) -> usize {
-        self.before + self.buffered + self.shared + self.after
+        self.frame.encoded_len()
     }
 }
 
@@ -174,13 +140,7 @@ fn buffer(len: usize) -> Result<Vec<u8>, DeliveryError> {
     Ok(buffer)
 }
 
-/// The key and length of a length-delimited field.
-fn delimited(buffer: &mut Vec<u8>, tag: u32, len: usize) {
-    encode_key(tag, WireType::LengthDelimited, buffer);
-    encode_varint(len as u64, buffer);
-}
-
-/// Write one body: `head`, then each of `blobs` as a `CasObject`. Every
+/// Write one body: `head`, then each of `blobs` in a frame of its own. Every
 /// length is known before anything is written, so a body over its limit is
 /// refused first, and each stretch of buffered bytes is allocated once.
 pub(crate) fn build(
@@ -189,19 +149,12 @@ pub(crate) fn build(
     owners: &[Arc<Structure>],
     scratch: &mut BlobScratch,
 ) -> Result<Body, DeliveryError> {
-    // Every field before the blobs. The recording goes in by hand, so that
-    // it is copied once.
-    let start = CloudUploadEnvelope {
-        format_version: 1,
-        plan_id: head.plan_id.to_owned(),
-        upload_id: head.upload_id.to_owned(),
-        recording_file: None,
-        cas_objects: Vec::new(),
+    let start = EnvelopeHead {
+        plan_id: head.plan_id,
+        upload_id: head.upload_id,
+        recording_file: head.recording_file,
     };
-    let head_len = start.encoded_len()
-        + head
-            .recording_file
-            .map_or(0, |file| delimited_len(field::RECORDING_FILE, file.len()));
+    let head_len = start.encoded_len().ok_or(DeliveryError::Capacity)?;
     let pieces = blobs
         .iter()
         .map(|candidate| Piece::of(candidate, owners))
@@ -213,23 +166,9 @@ pub(crate) fn build(
         .ok_or(DeliveryError::Capacity)?;
     let mut chunks = Vec::new();
     let mut buffered = buffer(head_len + run(&pieces))?;
-    start
-        .encode(&mut buffered)
-        .map_err(|_| DeliveryError::Encoding)?;
-    if let Some(file) = head.recording_file {
-        delimited(&mut buffered, field::RECORDING_FILE, file.len());
-        buffered.extend_from_slice(file);
-    }
+    infallible(start.encode(&mut buffered));
     for (index, (candidate, piece)) in blobs.into_iter().zip(&pieces).enumerate() {
-        delimited(&mut buffered, field::CAS_OBJECTS, piece.object_len);
-        delimited(
-            &mut buffered,
-            field::SNAPSHOT_ID,
-            candidate.id.as_bytes().len(),
-        );
-        buffered.extend_from_slice(candidate.id.as_bytes());
-        uint32::encode(field::SNAPSHOT_FORMAT_VERSION, &BLOB_VERSION, &mut buffered);
-        delimited(&mut buffered, field::BLOB, piece.blob_len);
+        infallible(piece.frame.encode_before(&mut buffered));
         let digest = match candidate.source {
             Source::Leaf(leaf) => {
                 let digest = Sha256::new()
@@ -262,17 +201,7 @@ pub(crate) fn build(
             }
         };
         // The digest follows the blob, as it does in the message.
-        delimited(&mut buffered, field::BLOB_SHA256, digest.len());
-        buffered.extend_from_slice(&digest);
-        // Optional presence matters: a measured empty value emits zero too.
-        if let Some(size) = piece.logical_bytes_approx_v1 {
-            encode_key(
-                field::LOGICAL_BYTES_APPROX_V1,
-                WireType::Varint,
-                &mut buffered,
-            );
-            encode_varint(size, &mut buffered);
-        }
+        infallible(piece.frame.encode_after(&digest.into(), &mut buffered));
     }
     debug_assert_eq!(buffered.len(), buffered.capacity());
     if !buffered.is_empty() {
@@ -284,12 +213,13 @@ pub(crate) fn build(
 
 #[cfg(test)]
 mod tests {
+    use btel_core::upload::envelope::{EnvelopeBlob, UploadEnvelope};
     use btel_snapshot::{
         BexStr, Limits, ShapePolicy, Shaper, Snapshot, SnapshotPool, SnapshotValue, Split,
     };
+    use prost::Message;
 
     use super::*;
-    use crate::proto::CasObject;
 
     /// A list of these strings, each long enough to be a blob of its own,
     /// with some bytes stored alone beside them.
@@ -315,26 +245,26 @@ mod tests {
     /// The same envelope, encoded whole from copies of every blob.
     fn encoded_whole(snapshot: &Snapshot, recording_file: Option<&[u8]>) -> Vec<u8> {
         let mut scratch = BlobScratch::default();
-        let cas_objects = snapshot
+        let blobs = snapshot
             .blobs()
             .map(|blob| {
                 let mut bytes = Vec::new();
                 blob.write(&mut scratch, &mut bytes).unwrap();
-                CasObject {
+                EnvelopeBlob {
                     snapshot_id: blob.id().as_bytes().to_vec(),
-                    snapshot_format_version: btel_settings::snapshot::BLOB_VERSION,
+                    snapshot_format_version: cas::VERSION,
                     blob_sha256: Sha256::digest(&bytes).to_vec(),
                     blob: bytes,
                     logical_bytes_approx_v1: blob.logical_bytes_approx_v1(),
                 }
             })
             .collect();
-        CloudUploadEnvelope {
-            format_version: 1,
+        UploadEnvelope {
+            format_version: btel_core::upload::envelope::FORMAT_VERSION,
             plan_id: "plan".into(),
             upload_id: "upload".into(),
             recording_file: recording_file.map(<[u8]>::to_vec),
-            cas_objects,
+            blobs,
         }
         .encode_to_vec()
     }
@@ -394,10 +324,10 @@ mod tests {
             let body = body_of(capture(&pool, &texts), recording_file, usize::MAX).unwrap();
             assert_eq!(body.len(), expected.len());
             assert_eq!(body.chunks().concat(), expected);
-            let decoded = CloudUploadEnvelope::decode(body.chunks().concat().as_slice()).unwrap();
+            let decoded = UploadEnvelope::decode(body.chunks().concat().as_slice()).unwrap();
             assert_eq!(
                 decoded
-                    .cas_objects
+                    .blobs
                     .iter()
                     .map(|value| value.logical_bytes_approx_v1)
                     .collect::<Vec<_>>(),
@@ -433,9 +363,9 @@ mod tests {
         let expected = encoded_whole(&snapshot, None);
         let body = body_of(snapshot, None, usize::MAX).unwrap();
         assert_eq!(body.chunks().concat(), expected);
-        let decoded = CloudUploadEnvelope::decode(expected.as_slice()).unwrap();
-        assert_eq!(decoded.cas_objects.len(), 1);
-        assert_eq!(decoded.cas_objects[0].logical_bytes_approx_v1, Some(0));
+        let decoded = UploadEnvelope::decode(expected.as_slice()).unwrap();
+        assert_eq!(decoded.blobs.len(), 1);
+        assert_eq!(decoded.blobs[0].logical_bytes_approx_v1, Some(0));
     }
 
     #[test]

@@ -32,8 +32,14 @@ fn main() {
         "preserve_order is off"
     );
 
-    let sync = baml_sdk::rt_int_sync(7).expect("sync rt_int call");
+    // The bridge types in the SDK's signatures are named through the SDK's
+    // own re-export: the consumer pins no second `baml_bridge` (#4374).
+    let sync: Result<i64, baml_sdk::baml_bridge::Error> = baml_sdk::rt_int_sync(7);
+    let sync = sync.expect("sync rt_int call");
     assert_eq!(sync, 7, "sync roundtrip");
+    let defaulted = baml_sdk::rt_default_sync(baml_sdk::baml_bridge::OptionalArg::Unset)
+        .expect("rt_default call");
+    assert_eq!(defaulted, 3, "an unset argument takes its BAML default");
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()

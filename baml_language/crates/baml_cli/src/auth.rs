@@ -104,7 +104,7 @@ impl Command for LoginArgs {
         let project_dir = cx.project_dir.as_deref();
         // Check protected storage before asking the user to approve a login.
         let endpoint = crate::cloud_config::login_endpoint(project_dir)?;
-        let existing = bcs_api::Store::new(&endpoint)?.read()?;
+        let existing = bcs_api::store(&endpoint).read()?;
         // Only skip the flow when the stored session can still produce a
         // token; a session that can't refresh falls through to a fresh
         // login instead of dead-ending against "already logged in".
@@ -144,10 +144,10 @@ impl Command for LoginArgs {
 /// Errors when authorization can't be started or the poll ends in denial,
 /// expiry, or timeout.
 fn device_login(no_open: bool, project_dir: Option<&Path>) -> Result<String> {
-    use bcs_api::{Client, LoginPoll, Store, StoredSession};
+    use bcs_api::{Client, LoginPoll, StoredSession};
     let reporter = crate::reporter::Reporter::new();
     let endpoint = crate::cloud_config::login_endpoint(project_dir)?;
-    let store = Store::new(&endpoint)?;
+    let store = bcs_api::store(&endpoint);
     let client = Client::new(endpoint)?;
     let device = client.start().context("Failed to start Boundary login")?;
     reporter.status(
@@ -230,7 +230,7 @@ impl Command for Status<'_> {
         // Verify the active API key independently of the optional saved login.
         // A broken saved login remains fatal when it is the only credential.
         let login = (|| -> std::result::Result<Option<String>, bcs_api::Error> {
-            let store = bcs_api::Store::new(&endpoint)?;
+            let store = bcs_api::store(&endpoint);
             let Some(stored) = store.read()? else {
                 return Ok(None);
             };
@@ -303,10 +303,10 @@ impl Command for LogoutArgs {
     type Output = ();
 
     fn run(&self, cx: &CommandContext) -> Result<Outcome<()>> {
-        use bcs_api::{Client, Store};
+        use bcs_api::Client;
         let reporter = crate::reporter::Reporter::new();
         let endpoint = crate::cloud_config::login_endpoint(cx.project_dir.as_deref())?;
-        let store = Store::new(&endpoint)?;
+        let store = bcs_api::store(&endpoint);
         let revocation = match store.read() {
             Ok(Some(stored)) => {
                 Some(Client::new(endpoint).and_then(|client| client.logout(&stored)))
@@ -353,9 +353,9 @@ impl Command for TokenArgs {
 }
 
 fn boundary_session(project_dir: Option<&Path>) -> Result<bcs_api::Session> {
-    use bcs_api::{Client, Store, StoredSession};
+    use bcs_api::{Client, StoredSession};
     let endpoint = crate::cloud_config::login_endpoint(project_dir)?;
-    let store = Store::new(&endpoint)?;
+    let store = bcs_api::store(&endpoint);
     let stored = store
         .read()?
         .context("not logged in; run `baml cloud auth login`")?;

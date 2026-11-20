@@ -208,9 +208,8 @@ async fn ordinary_bridge_honors_telemetry_off() {
     const SCENARIO: &str = "BAML_TEST_BRIDGE_RECORDING_SWITCH";
     if let Some(scenario) = baml_env::raw_var(SCENARIO) {
         if scenario == "saved_login" {
-            let endpoint = bcs_api::Endpoint::from_env().unwrap();
-            bcs_api::Store::new(&endpoint)
-                .unwrap()
+            let endpoint = bcs_api::endpoint(None).unwrap();
+            bcs_api::store(&endpoint)
                 .write(&bcs_api::StoredSession {
                     refresh_token: bcs_api::Secret::new("bdry_session_bridge_test".into()),
                     caller: bcs_api::auth::Caller {
@@ -482,9 +481,8 @@ async fn generated_policy_opt_out_matrix() {
     const CHILD: &str = "BAML_TEST_POLICY_MATRIX";
     if let Some(policy_name) = baml_env::raw_var(CHILD) {
         if baml_env::raw_var("BAML_TEST_CREDENTIAL").as_deref() == Some("saved") {
-            let endpoint = bcs_api::Endpoint::from_env().unwrap();
-            bcs_api::Store::new(&endpoint)
-                .unwrap()
+            let endpoint = bcs_api::endpoint(None).unwrap();
+            bcs_api::store(&endpoint)
                 .write(&bcs_api::StoredSession {
                     refresh_token: bcs_api::Secret::new("bdry_session_matrix".into()),
                     caller: bcs_api::auth::Caller {

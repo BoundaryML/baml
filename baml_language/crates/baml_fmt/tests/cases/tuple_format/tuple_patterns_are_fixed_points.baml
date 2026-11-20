@@ -1,0 +1,11 @@
+function f(t: (int, string)) -> int {
+    let (let a, let b) = t;
+    let (let c,) = (1,);
+    match (t) {
+        (0, _) => 0,
+        (let x, "a" | "b") => x,
+        ((1, 2), let y) => 1,
+        (let z,) => z,
+        _ => 2,
+    }
+}

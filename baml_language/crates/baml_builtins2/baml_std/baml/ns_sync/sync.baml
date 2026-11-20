@@ -73,10 +73,9 @@
 ///     })
 /// }
 /// ```
-function atomic<R, E>(
-    key: reflect.AnyClass | reflect.AnyClass[],
-    fn: () -> R throws E,
-) -> R throws E {
+function atomic<R, E>(key: reflect.AnyClass | reflect.AnyClass[], fn: () -> R throws E) -> R
+    throws E
+{
     let held = _held(key);
     let ticket = _enter(held);
     // Armed before the wait, so a wait that ends in cancellation still runs
@@ -247,9 +246,12 @@ class Permit {
     @@rust_type("Permit")
 }
 
-implements<T, E> root.spawn.Modifier<T, E> for Semaphore {
+implement<T, E> root.spawn.Modifier<T, E> for Semaphore {
     function apply(self, plan: root.spawn.Plan<T, E>) -> root.spawn.Plan<T, E> throws never {
-        root.spawn.Plan { ...plan, semaphores: plan.semaphores.concat([self]) }
+        root.spawn.Plan {
+            ...plan,
+            semaphores: plan.semaphores.concat([self]),
+        }
     }
 }
 

@@ -116,12 +116,17 @@ function fee(cents: int) -> int {
 
 function checkout(account: Account) -> int {
     let paid = charge(account, 500);
-    let billing = trace.context(distinct_id = account.name, metadata = { "phase": "billing" });
+    let billing = trace.context(distinct_id = account.name, metadata = {
+        "phase": "billing",
+    });
     paid + fee(paid, $trace = billing.span())
 }
 
 test "checkout charges and adds the fee" {
-    let account = Account { name: "ann", api_key: "sk-1" };
+    let account = Account {
+        name: "ann",
+        api_key: "sk-1",
+    };
     assert.equal(checkout(account), 505);
 }
 ```
@@ -187,13 +192,14 @@ function Extract<T>(raw: string) -> T {
 
 test "Extract parses the recorded reply" {
     // Step 2's output: a block whose value is the recorded type.
-    let t = {
-        reflect.Type.of<Row>()
-    };
+    let t = { reflect.Type.of<Row>() };
     let type T = t;
     // Step 3's message text. `F@parse` replays it, so the test never calls the model.
     let row = Extract@parse<T>(`{"name": "widget", "qty": 3}`);
-    assert.equal(row, Row { name: "widget", qty: 3 })
+    assert.equal(row, Row {
+        name: "widget",
+        qty: 3,
+    })
 }
 ```
 
@@ -235,7 +241,9 @@ client Fast = openai.ResponsesClient.new(model = "gpt-6-luna", api_key = env.OPE
 // `Fallback` has no `.new`, so construct it as a class literal.
 client Reliable = ai.clients.Retry.new(inner = Fast, max_attempts = 3);
 
-client Safe = ai.clients.Fallback { members: [Reliable, anthropic.Client.new(model = "claude-sonnet-5-5")] };
+client Safe = ai.clients.Fallback {
+    members: [Reliable, anthropic.Client.new(model = "claude-sonnet-5-5")],
+};
 
 function Extract(raw: string) -> Invoice {
     client: Reliable // or shorthand: "openai/gpt-6-luna"
@@ -250,12 +258,7 @@ function high_total(inv: Invoice, min_amount: float = 0.0) -> float {
         .filter((i) -> {
             i.priority == Priority.High && i.amount >= min_amount
         })
-        .reduce(
-            (a, i) -> {
-                a + i.amount
-            },
-            0.0,
-        )
+        .reduce((a, i) -> { a + i.amount }, 0.0)
 }
 
 test "post-process a literal Invoice - no model call" {
@@ -264,14 +267,23 @@ test "post-process a literal Invoice - no model call" {
         status: "final",
         note: null,
         items: [
-            LineItem { name: "srv", amount: 900.0, priority: Priority.High },
-            LineItem { name: "mug", amount: 12.0, priority: Priority.Low },
+            LineItem {
+                name: "srv",
+                amount: 900.0,
+                priority: Priority.High,
+            },
+            LineItem {
+                name: "mug",
+                amount: 12.0,
+                priority: Priority.Low,
+            },
         ],
     };
     assert.equal(high_total(inv), 900.0); // default min_amount = 0.0
     assert.equal(high_total(inv, min_amount = 1000.0), 0.0); // keyword arg
     // `Extract@spec(...)` binds the call without running it; `.parse` reads a saved reply.
-    let parsed = Extract@spec("raw").parse(`{"seller":"Acme","status":"draft","items":[],"note":null}`);
+    let parsed =
+        Extract@spec("raw").parse(`{"seller":"Acme","status":"draft","items":[],"note":null}`);
     assert.equal(parsed.vendor, "Acme")
 }
 ```
@@ -292,7 +304,11 @@ class User {
 
     // static constructor (no self): called as `User.new(...)`
     function new(name: string, score: int) -> Self {
-        User { name: name, tier: Tier.Pro, score: score }
+        User {
+            name: name,
+            tier: Tier.Pro,
+            score: score,
+        }
     }
 
     // method (bare self) + ${} interpolation (implicit .to_string() on the int)
@@ -302,26 +318,23 @@ class User {
 
     // fields are MUTABLE like TS: assign / += on self in place; a side-effect method returns void
     function celebrate(self) -> void {
-        self.score += 100
+        self.score += 100;
     }
 }
 
 // inferred closures; sort_by_key; optional chaining + ?? over a possibly-null .at
 function top_label(us: User[]) -> string {
-    us
-        .sort_by_key((u) -> {
-            0 - u.score
-        })
-        .at(0)
-        ?.label()
-        ?? "none"
+    us.sort_by_key((u) -> { 0 - u.score }).at(0)?.label() ?? "none"
 }
 
 // map<string,int>: .get ?? default; explicit .to_string()
 function tier_counts(us: User[]) -> map<string, int> {
     let counts: map<string, int> = {};
     for (let u in us) {
-        counts.set(u.tier.to_string(), (counts.get(u.tier.to_string()) ?? 0) + 1);
+        counts.set(
+            u.tier.to_string(),
+            (counts.get(u.tier.to_string()) ?? 0) + 1,
+        );
     }
     counts
 }
@@ -338,7 +351,7 @@ function roundtrip(u: User) -> User {
 function parse_scores(texts: string[]) -> int[] {
     texts.filter_map((t) -> {
         baml.Int.parse(t) catch (e) {
-            baml.errors.ParseError => null
+            baml.errors.ParseError => null,
         }
     })
 }
@@ -360,7 +373,10 @@ test "lang" {
     kit.celebrate(); // mutate in place
     kit.tier = Tier.Free; // direct field assignment
     assert.equal(kit.score, 105);
-    let upgraded = User { ...kit, tier: Tier.Pro };
+    let upgraded = User {
+        ...kit,
+        tier: Tier.Pro,
+    };
     assert.is_type<User>(upgraded);
     assert.equal(upgraded.tier, Tier.Pro);
     assert.equal(285 / 100, 2);
@@ -421,11 +437,7 @@ class Cat {
 
 // an Animal[] holds any implementor; calls dispatch dynamically
 function chorus(animals: Animal[]) -> string {
-    animals
-        .map((a) -> {
-            a.describe()
-        })
-        .join(" ")
+    animals.map((a) -> { a.describe() }).join(" ")
 }
 
 test "interfaces" {
@@ -441,8 +453,7 @@ test "interfaces" {
 
 ```baml
 // One class per state; a union of them is matched exhaustively.
-class Queued {
-}
+class Queued {}
 
 class Retrying {
     attempt: int,
@@ -477,11 +488,7 @@ function classify(n: int) -> string {
 
 // `is` -> bool (and narrows)
 function finished(jobs: Job[]) -> int {
-    jobs
-        .filter((j) -> {
-            j is Done
-        })
-        .length()
+    jobs.filter((j) -> { j is Done }).length()
 }
 
 // `if let PATTERN = expr { } else { }` binds and narrows in one step
@@ -501,7 +508,10 @@ test "patterns" {
     assert.equal(status(Retrying { attempt: 1 }), "retry 1");
     assert.equal(classify(2), "small");
     assert.equal(classify(-5), "neg");
-    assert.equal(finished([Queued {}, Done { result: "a" }, Done { result: "b" }]), 2);
+    assert.equal(
+        finished([Queued {}, Done { result: "a" }, Done { result: "b" }]),
+        2,
+    );
     assert.equal(result_or_empty(Done { result: "ok" }), "ok");
     assert.equal(result_or_empty(Queued {}), "")
 }
@@ -530,11 +540,15 @@ function use_conn() -> string[] {
 }
 
 function fail_a() -> string {
-    throw baml.errors.Io { message: "disk full" }
+    throw baml.errors.Io {
+        message: "disk full",
+    };
 }
 
 function fail_b() -> string {
-    throw baml.errors.InvalidArgument { message: "bad retry config" }
+    throw baml.errors.InvalidArgument {
+        message: "bad retry config",
+    };
 }
 
 // `catch (e, ctx)` binds the error AND its baml.errors.Context; throwing while handling
@@ -548,9 +562,9 @@ function root_cause_demo() -> string {
                         let io: baml.errors.Io => io.message, // "disk full" - the original cause
                         _ => "unknown",
                     }
-                }
+                },
             }
-        }
+        },
     }
 }
 
@@ -558,20 +572,21 @@ function root_cause_demo() -> string {
 function concurrent_squares(xs: int[]) -> int {
     // all run concurrently
     let futures = xs.map((x) -> {
-        spawn { x * x }
+        spawn {
+            x * x
+        }
     });
     let squares = await baml.future.all(futures);
-    squares.reduce(
-        (a, b) -> {
-            a + b
-        },
-        0,
-    )
+    squares.reduce((a, b) -> { a + b }, 0)
 }
 
 // The same shape parallelizes HTTP and LLM calls: results come back in order.
 function fetch_all(urls: string[]) -> string[] {
-    await baml.future.all(urls.map((u) -> { spawn { baml.http.fetch(u).text() } }))
+    await baml.future.all(urls.map((u) -> {
+        spawn {
+            baml.http.fetch(u).text()
+        }
+    }))
 }
 
 // Each value after `with` is a `baml.spawn.Modifier`: a Semaphore caps concurrency (excess
@@ -651,9 +666,15 @@ class Result {
 
 function lookup(domain: string) -> Result {
     if (!domain.includes(".")) {
-        return Result { value: null, error: "bad domain" };
+        return Result {
+            value: null,
+            error: "bad domain",
+        };
     }
-    Result { value: domain, error: null }
+    Result {
+        value: domain,
+        error: null,
+    }
 }
 ```
 
@@ -662,7 +683,9 @@ Good:
 ```baml
 function lookup(domain: string) -> string throws baml.errors.InvalidArgument {
     if (!domain.includes(".")) {
-        throw baml.errors.InvalidArgument { message: "bad domain" }
+        throw baml.errors.InvalidArgument {
+            message: "bad domain",
+        };
     }
     domain
 }
@@ -701,13 +724,7 @@ class User {
 }
 
 function active_names(users: User[]) -> string[] {
-    users
-        .filter((u) -> {
-            u.active
-        })
-        .map((u) -> {
-            u.name
-        })
+    users.filter((u) -> { u.active }).map((u) -> { u.name })
 }
 ```
 
@@ -995,7 +1012,9 @@ class Score {
 
     function new(value: float) -> Self throws baml.errors.InvalidArgument {
         if (value < 0.0 || value > 1.0) {
-            throw baml.errors.InvalidArgument { message: "score out of range" }
+            throw baml.errors.InvalidArgument {
+                message: "score out of range",
+            };
         }
         Score { value: value }
     }
@@ -1041,15 +1060,13 @@ class NotFound {
 
 function lookup(id: string) -> string throws NotFound {
     if (!id) {
-        throw NotFound { id: id }
+        throw NotFound { id: id };
     }
     id
 }
 
 function lookup_all(ids: string[]) -> string[] throws NotFound {
-    ids.map((id) -> {
-        lookup(id)
-    })
+    ids.map((id) -> { lookup(id) })
 }
 ```
 
@@ -1062,7 +1079,7 @@ class NotFound {
 
 function lookup(id: string) -> string throws NotFound {
     if (!id) {
-        throw NotFound { id: id }
+        throw NotFound { id: id };
     }
     id
 }
@@ -1070,7 +1087,7 @@ function lookup(id: string) -> string throws NotFound {
 function lookup_all(ids: string[]) -> string[] {
     ids.filter_map((id) -> {
         lookup(id) catch (e) {
-            NotFound => null
+            NotFound => null,
         }
     })
 }
@@ -1214,8 +1231,7 @@ function describe(job: Job) -> string {
 Good:
 
 ```baml
-class Running {
-}
+class Running {}
 
 class Done {
     result: string,
@@ -1344,20 +1360,19 @@ class BadEmail {
     email: string,
 }
 
-function email_domain(
-    emails: map<string, string>,
-    id: string,
-) -> string throws UserNotFound | BadEmail {
+function email_domain(emails: map<string, string>, id: string) -> string
+    throws UserNotFound | BadEmail
+{
     let email = emails.get(id);
     if (email) {
         let domain = email.split("@").at(1);
         if (domain) {
             domain
         } else {
-            throw BadEmail { email: email }
+            throw BadEmail { email: email };
         }
     } else {
-        throw UserNotFound { id: id }
+        throw UserNotFound { id: id };
     }
 }
 ```
@@ -1373,10 +1388,9 @@ class BadEmail {
     email: string,
 }
 
-function email_domain(
-    emails: map<string, string>,
-    id: string,
-) -> string throws UserNotFound | BadEmail {
+function email_domain(emails: map<string, string>, id: string) -> string
+    throws UserNotFound | BadEmail
+{
     let email = emails.get(id) ?? throw UserNotFound { id: id };
     email.split("@").at(1) ?? throw BadEmail { email: email }
 }
@@ -1487,7 +1501,9 @@ class Tag {
 
     function new(name: string) -> Self throws baml.errors.InvalidArgument {
         if (!name) {
-            throw baml.errors.InvalidArgument { message: "tag name is empty" }
+            throw baml.errors.InvalidArgument {
+                message: "tag name is empty",
+            };
         }
         Tag { name: name }
     }

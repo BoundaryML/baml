@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use btel_reader::value::Kind;
+use btel_core::reader::value::Kind;
 use rusqlite::{
     Connection,
     hooks::{AuthAction, AuthContext, Authorization},

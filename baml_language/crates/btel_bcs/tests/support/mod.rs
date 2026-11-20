@@ -3,7 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use btel_bcs::wire::{
+use btel_core::upload::{
     CasDisposition, Disposition, PrepareUploadsRequest, PrepareUploadsResponse, UploadKind,
     UploadTarget,
 };

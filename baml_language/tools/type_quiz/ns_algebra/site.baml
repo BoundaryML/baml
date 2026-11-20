@@ -32,13 +32,10 @@ enum SiteKind {
 function compiles_when(site: SiteKind, relation: Relation) -> bool throws never {
     match (site) {
         SiteKind.Let
-            | SiteKind.CallArgument
-            | SiteKind.Return
-            | SiteKind.Field
-            | SiteKind.ArrayElement =>
-        {
-            flows(relation)
-        },
+        | SiteKind.CallArgument
+        | SiteKind.Return
+        | SiteKind.Field
+        | SiteKind.ArrayElement => { flows(relation) },
         SiteKind.Coherence => relation != Relation.Equiv,
     }
 }
@@ -52,13 +49,10 @@ function compiles_when(site: SiteKind, relation: Relation) -> bool throws never 
 function directed(site: SiteKind) -> bool throws never {
     match (site) {
         SiteKind.Let
-            | SiteKind.CallArgument
-            | SiteKind.Return
-            | SiteKind.Field
-            | SiteKind.ArrayElement =>
-        {
-            true
-        },
+        | SiteKind.CallArgument
+        | SiteKind.Return
+        | SiteKind.Field
+        | SiteKind.ArrayElement => { true },
         SiteKind.Coherence => false,
     }
 }
@@ -89,7 +83,11 @@ class Probe {
 /// `head`, `expr`, and `tail` in sequence, with the region of `expr`.
 function around(head: string, expr: string, tail: string) -> Probe throws never {
     let start = head.to_utf8().length();
-    Probe { source: `${head}${expr}${tail}`, start, end: start + expr.to_utf8().length() }
+    Probe {
+        source: `${head}${expr}${tail}`,
+        start,
+        end: start + expr.to_utf8().length(),
+    }
 }
 
 /// Whether the target's spelling sits inside the probe's own function, where
@@ -114,14 +112,20 @@ function binds_target(site: SiteKind) -> bool throws never {
 /// spelling parenthesises: `A | (B | C)`.
 function nests_union(ty: Ty) -> bool throws never {
     match (ty) {
-        let u: Union => {
-            u.members().some((m) -> {
-                m is Union
-            })
-        },
-        Prim | Never | Top | Lit | EnumLit | Array | Map | Fn | Class | Enum | Iface | Alias | Var => {
-            false
-        },
+        let u: Union => { u.members().some((m) -> { m is Union }) },
+        Prim
+        | Never
+        | Top
+        | Lit
+        | EnumLit
+        | Array
+        | Map
+        | Fn
+        | Class
+        | Enum
+        | Iface
+        | Alias
+        | Var => { false },
     }
 }
 
@@ -134,9 +138,7 @@ function sites_for(sites: SiteKind[], source: Ty, target: Ty) -> SiteKind[] thro
     let spellable = if (!mentions_var(source) && !mentions_var(target)) {
         sites
     } else {
-        sites.filter((site) -> {
-            binds_target(site)
-        })
+        sites.filter((site) -> { binds_target(site) })
     };
     // An annotated binding whose annotation is a union with a parenthesised
     // union member is checked the wrong way round: the compiler accepts
@@ -148,9 +150,7 @@ function sites_for(sites: SiteKind[], source: Ty, target: Ty) -> SiteKind[] thro
     // spell the same type as a parameter, a field, a return or an array
     // element, and answer correctly.
     let bindable = if (nests_union(source) || nests_union(target)) {
-        spellable.filter((site) -> {
-            site != SiteKind.Let
-        })
+        spellable.filter((site) -> { site != SiteKind.Let })
     } else {
         spellable
     };
@@ -166,9 +166,7 @@ function sites_for(sites: SiteKind[], source: Ty, target: Ty) -> SiteKind[] thro
     if (is_target(source) && is_target(target)) {
         bindable
     } else {
-        bindable.filter((site) -> {
-            site != SiteKind.Coherence
-        })
+        bindable.filter((site) -> { site != SiteKind.Coherence })
     }
 }
 
@@ -183,12 +181,12 @@ function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Prob
     if (mentions_var(target) && !binds_target(site)) {
         throw baml.panics.Unreachable {
             message: `${render(target)} mentions a type variable, and ${site_phrase(site)} declares it outside the probe`,
-        }
+        };
     }
     if (site == SiteKind.Coherence && (!is_target(source) || !is_target(target))) {
         throw baml.panics.Unreachable {
             message: `${render(source)} and ${render(target)} cannot both name an implementation target`,
-        }
+        };
     }
     let decls = render_decls(decls_of_all([source, target]));
     // The probe's own function binds every variable the pair mentions, so
@@ -242,7 +240,12 @@ function probe(site: SiteKind, source: Ty, target: Ty, names: SiteNames) -> Prob
             // up here too. It asks for nothing: what the case is about is
             // which types an implementation may be written for, never what
             // the interface wants of them.
-            let contract = render_decl(IfaceDecl { name: names.contract, params: [], assoc: [], bounds: [] });
+            let contract = render_decl(IfaceDecl {
+                name: names.contract,
+                params: [],
+                assoc: [],
+                bounds: [],
+            });
             around(
                 `${decls}${contract}\n\nimplement ${names.contract} for ${s} {}\n\n`,
                 `implement ${names.contract} for ${t} {}`,

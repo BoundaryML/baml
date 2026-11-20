@@ -21,8 +21,7 @@ enum Relation {
 
 /// Nothing is known by construction. Distinct from `Relation` so a case can
 /// never carry it.
-class Undecided {
-}
+class Undecided {}
 
 type Knowledge = Relation | Undecided;
 
@@ -86,12 +85,10 @@ class Derivation {
 function steps(d: Derivation) -> Step[] throws never {
     let head: Step[] = [d.head];
     // Arrays are invariant, so `Transferred[]` is widened member by member.
-    head.concat(
-        d.rest.map((t) -> {
-            let s: Step = t;
-            s
-        }),
-    )
+    head.concat(d.rest.map((t) -> {
+        let s: Step = t;
+        s
+    }))
 }
 
 /// The step whose pair `d` is about.
@@ -119,7 +116,12 @@ class Judged {
 /// reading is `judgments(d, null)`.
 function judgments(d: Derivation, model: Model?) -> Judged[] throws never {
     let first: Knowledge = believed(model, d.head) ?? d.head.relation;
-    let start: Judged[] = [Judged { step: d.head, after: first }];
+    let start: Judged[] = [
+        Judged {
+            step: d.head,
+            after: first,
+        },
+    ];
     d.rest.reduce(
         (acc, t) -> {
             let current = acc.at(-1)?.after ?? first;
@@ -132,9 +134,7 @@ function judgments(d: Derivation, model: Model?) -> Judged[] throws never {
 
 /// The knowledge after each step of `d`.
 function trajectory(d: Derivation, model: Model?) -> Knowledge[] throws never {
-    judgments(d, model).map((j) -> {
-        j.after
-    })
+    judgments(d, model).map((j) -> { j.after })
 }
 
 /// What the spec knows about `d`.
@@ -156,7 +156,10 @@ function under(d: Derivation, model: Model) -> Knowledge throws never {
 ///   defect here rather than a pair nothing is known about — and standing an
 ///   equivalence in for it would hand a caller a relation no step derived.
 function last_state(states: Knowledge[]) -> Knowledge throws never {
-    states.at(-1) ?? throw baml.panics.Unreachable { message: "a trajectory with no states" }
+    states.at(-1)
+        ?? throw baml.panics.Unreachable {
+            message: "a trajectory with no states",
+        }
 }
 
 /// How many times the trajectory turns a subtype into a supertype or back.
@@ -366,13 +369,18 @@ function flows(k: Relation) -> bool throws never {
 // ─── building derivations ────────────────────────────────────────────────────
 
 /// A pair whose relation a rule states directly.
-function pair(
-    left: Ty,
-    right: Ty,
-    relation: Relation,
-    rule: root.engine.Rule,
-) -> Derivation throws never {
-    Derivation { head: Asserted { rule, left, right, relation }, rest: [] }
+function pair(left: Ty, right: Ty, relation: Relation, rule: root.engine.Rule) -> Derivation
+    throws never
+{
+    Derivation {
+        head: Asserted {
+            rule,
+            left,
+            right,
+            relation,
+        },
+        rest: [],
+    }
 }
 
 /// Wrap both sides in a constructor whose effect on the relation is
@@ -384,26 +392,52 @@ function then(
     right: Ty,
     transfer: (Knowledge) -> Knowledge throws never,
 ) -> Derivation throws never {
-    Derivation { head: d.head, rest: d.rest.concat([Transferred { rule, left, right, transfer }]) }
+    Derivation {
+        head: d.head,
+        rest: d.rest.concat([
+            Transferred {
+                rule,
+                left,
+                right,
+                transfer,
+            },
+        ]),
+    }
 }
 
 /// `T[]` against `U[]`: invariant.
 function in_array(d: Derivation, rule: root.engine.Rule) -> Derivation throws never {
-    then(d, rule, Array.new(left_of(d)), Array.new(right_of(d)), invariant)
+    then(
+        d,
+        rule,
+        Array.new(left_of(d)),
+        Array.new(right_of(d)),
+        invariant,
+    )
 }
 
 /// `map<string, T>` against `map<string, U>`: invariant.
 function in_map_value(d: Derivation, rule: root.engine.Rule) -> Derivation throws never {
-    then(d, rule, Map.new(left_of(d)), Map.new(right_of(d)), invariant)
+    then(
+        d,
+        rule,
+        Map.new(left_of(d)),
+        Map.new(right_of(d)),
+        invariant,
+    )
 }
 
 /// `C<T>` against `C<U>` for a single-parameter class: invariant.
-function in_class_arg(
-    d: Derivation,
-    decl: ClassDecl,
-    rule: root.engine.Rule,
-) -> Derivation throws never {
-    then(d, rule, Class.new(decl, [left_of(d)]), Class.new(decl, [right_of(d)]), invariant)
+function in_class_arg(d: Derivation, decl: ClassDecl, rule: root.engine.Rule) -> Derivation
+    throws never
+{
+    then(
+        d,
+        rule,
+        Class.new(decl, [left_of(d)]),
+        Class.new(decl, [right_of(d)]),
+        invariant,
+    )
 }
 
 /// `(T) -> R` against `(U) -> R`: contravariant.
@@ -430,18 +464,22 @@ function in_fn_return(d: Derivation, rule: root.engine.Rule) -> Derivation throw
 
 /// `() -> R throws T` against `() -> R throws U`: covariant.
 function in_fn_error(d: Derivation, ret: Ty, rule: root.engine.Rule) -> Derivation throws never {
-    then(d, rule, Fn.new([], [], ret, left_of(d)), Fn.new([], [], ret, right_of(d)), covariant)
+    then(
+        d,
+        rule,
+        Fn.new([], [], ret, left_of(d)),
+        Fn.new([], [], ret, right_of(d)),
+        covariant,
+    )
 }
 
 /// `T | X` against `U | X`. The relation survives only when `X` is a leaf
 /// that shares no value with either side, so it can absorb no difference
 /// between them; otherwise the step is undecided and the derivation yields no
 /// case.
-function in_union_with(
-    d: Derivation,
-    extra: Ty,
-    rule: root.engine.Rule,
-) -> Derivation throws never {
+function in_union_with(d: Derivation, extra: Ty, rule: root.engine.Rule) -> Derivation
+    throws never
+{
     let l = left_of(d);
     let r = right_of(d);
     let transfer = if (is_leaf(extra) && !overlaps(l, extra) && !overlaps(r, extra)) {
@@ -449,7 +487,13 @@ function in_union_with(
     } else {
         undecided
     };
-    then(d, rule, Union.new([l, extra]), Union.new([r, extra]), transfer)
+    then(
+        d,
+        rule,
+        Union.new([l, extra]),
+        Union.new([r, extra]),
+        transfer,
+    )
 }
 
 /// A builtin concrete type, which the spec makes unrelated to every other.
@@ -483,15 +527,9 @@ function base_of(lit: Lit) -> Ty throws never {
 /// could have kept and cannot cost a case its key.
 function overlaps(ty: Ty, leaf: Ty) -> bool throws never {
     match (ty) {
-        let u: Union => {
-            u.members().some((m) -> {
-                overlaps(m, leaf)
-            })
-        },
+        let u: Union => { u.members().some((m) -> { overlaps(m, leaf) }) },
         let lit: Lit => base_of(lit) == leaf,
         Top | Alias => true,
-        Prim | Never | EnumLit | Array | Map | Fn | Class | Enum | Iface | Var => {
-            ty == leaf
-        },
+        Prim | Never | EnumLit | Array | Map | Fn | Class | Enum | Iface | Var => { ty == leaf },
     }
 }

@@ -151,12 +151,18 @@ class PlainTime {
                 string => {
                     PlainTime.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw root.json.DecodeError { message: message, path: "" }
+                            throw root.json.DecodeError {
+                                message: message,
+                                path: "",
+                            };
                         },
                     }
                 },
                 _ => {
-                    throw root.json.DecodeError { message: "Expected ISO 8601 time string", path: "" }
+                    throw root.json.DecodeError {
+                        message: "Expected ISO 8601 time string",
+                        path: "",
+                    };
                 },
             }
         }
@@ -173,7 +179,10 @@ class PlainTime {
         function from_llm_output(shape: string) -> Self throws root.json.DecodeError {
             PlainTime.parse(shape) catch (_) {
                 root.errors.ParseError { message } => {
-                    throw root.json.DecodeError { message: message, path: "" }
+                    throw root.json.DecodeError {
+                        message: message,
+                        path: "",
+                    };
                 },
             }
         }
@@ -197,7 +206,7 @@ class PlainTime {
 }
 
 implement root.ops.Add<Duration> for PlainTime {
-    type Output = PlainTime
+    type Output = PlainTime;
     /// Advances the time-of-day by `other`, wrapping around midnight.
     ///
     /// A `PlainTime` has no date, so there is no day to carry into: the result
@@ -219,7 +228,7 @@ implement root.ops.Add<Duration> for PlainTime {
 }
 
 implement root.ops.Subtract<Duration> for PlainTime {
-    type Output = PlainTime
+    type Output = PlainTime;
     /// Rewinds the time-of-day by `other`, wrapping around midnight.
     ///
     /// # Examples
@@ -237,7 +246,7 @@ implement root.ops.Subtract<Duration> for PlainTime {
 }
 
 implement root.ops.Subtract<PlainTime> for PlainTime {
-    type Output = Duration
+    type Output = Duration;
     /// The signed gap from `other` to `self`, as read off the same clock face.
     ///
     /// Does *not* wrap: the result is in `(-24h, +24h)`, and is negative
@@ -273,11 +282,11 @@ function _wrap_into_day(total_ns: bigint) -> int throws never {
     let day_ns = 86400000000000n;
     let wrapped = ((total_ns % day_ns) + day_ns) % day_ns;
     // `wrapped` is in `[0, 24h)`, i.e. under 2^47 ns, so it always fits an int.
-    {
-        wrapped.to_int()
-    } catch (e) {
+    { wrapped.to_int() } catch (e) {
         root.errors.InvalidArgument => {
-            root.sys.panic("unreachable: nanoseconds wrapped into [0, 24h) exceed int range")
-        }
+            root.sys.panic(
+                "unreachable: nanoseconds wrapped into [0, 24h) exceed int range",
+            )
+        },
     }
 }

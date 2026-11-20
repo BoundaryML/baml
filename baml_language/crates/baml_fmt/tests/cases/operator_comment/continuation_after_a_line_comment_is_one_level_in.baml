@@ -1,0 +1,23 @@
+type T = // c
+    int | string;
+function f(a: int) -> // c
+    string {
+    let x = // c
+        value;
+    x = // c
+        4;
+    match (x) {
+        true => // c
+            1,
+    }
+    user // c
+        ?.profile;
+    foo() // c
+        catch (e) {
+            _ => 0,
+        };
+    x // c
+        is int;
+    return // c
+        x;
+}

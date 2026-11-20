@@ -1,0 +1,18 @@
+function f(x: int, y: int) -> int {
+    let a = x - /* a */
+        /* b */ /* c */ y;
+    let b = x
+        /* a */ /* b */
+        /* c */ - y;
+    let c = x /* a */
+        /* b */ /* c */
+        + y;
+    let d = -
+        /* c */ /* d */ x;
+    let e = x - // a
+        /* b */ /* c */ y;
+    let g = x -
+        /* a */ /* b */
+        /* c */ y;
+    a + b + c + d + e + g
+}

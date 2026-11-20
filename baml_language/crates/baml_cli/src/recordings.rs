@@ -320,8 +320,8 @@ impl Query<'_> {
             Some(key) => Some(bcs_api::Secret::new(key)),
             // Only confirmed absence may select local recordings. An unreadable
             // credential store must not silently change the query's data source.
-            None => bcs_api::Store::new(&endpoint)
-                .and_then(|store| store.read())
+            None => bcs_api::store(&endpoint)
+                .read()
                 .map_err(|error| failed(Some(endpoint.clone()), source, error))?
                 .map(|session| session.refresh_token),
         };

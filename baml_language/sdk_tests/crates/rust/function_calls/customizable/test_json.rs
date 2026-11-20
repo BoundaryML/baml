@@ -12,7 +12,7 @@
 //! json> => ... }`, and therefore `baml.json.path` / `path_or` — treats
 //! them exactly like BAML-born `baml.json.parse` values.
 
-use baml_bridge::{ArgumentError, EncodeError, Json, Map, OptionalArg, serde_json::json};
+use baml_sdk::baml_bridge::{ArgumentError, EncodeError, Json, Map, OptionalArg, serde_json::json};
 use baml_sdk::go_json_tests::{
     JsonAlias, JsonBox, call_json_callback_sync, default_json_sync, json_callback_kind_sync,
     json_kind_sync, json_path_string_or_sync, json_path_string_sync, round_trip_json_alias_sync,
@@ -156,7 +156,7 @@ fn test_host_supplied_json_supports_typed_narrowing() {
     // "missing field".
     let err = json_path_string_sync(object, ".absent".to_string())
         .expect_err("the missing-field throw must surface to the caller");
-    let baml_bridge::Error::Thrown { value, .. } = err else {
+    let baml_sdk::baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the typed PathError throw, got {err}");
     };
     assert!(value.message.contains("missing field"), "{}", value.message);
@@ -187,7 +187,7 @@ fn test_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument() {
     // never a crash.
     for depth in [60, 1000] {
         let err = round_trip_json_sync(nested_json(depth)).expect_err("too deep for the wire");
-        let baml_bridge::Error::Argument(ArgumentError { name, error }) = &err else {
+        let baml_sdk::baml_bridge::Error::Argument(ArgumentError { name, error }) = &err else {
             panic!("expected an invalid-argument refusal at depth {depth}, got {err}");
         };
         assert_eq!(name, "value", "depth {depth}");
@@ -211,7 +211,7 @@ fn test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result
     // callable's broken contract, never a catchable error.
     for depth in [60, 200] {
         let result = call_json_callback_sync(move |_: Json| nested_json(depth), json!(null));
-        let Err(baml_bridge::Error::Panic { class_name, .. }) = &result else {
+        let Err(baml_sdk::baml_bridge::Error::Panic { class_name, .. }) = &result else {
             panic!("depth {depth}: expected a panic, got {result:?}");
         };
         assert_eq!(
@@ -230,7 +230,7 @@ fn test_linking_the_sdk_leaves_serde_json_features_alone() {
     // (#4377). This generated crate is its own workspace with only
     // `baml_bridge` as a dependency, so these assertions see exactly the
     // features the bridge asks for.
-    use baml_bridge::serde_json;
+    use baml_sdk::baml_bridge::serde_json;
 
     // Without `preserve_order`, `serde_json::Map` is a `BTreeMap`: keys
     // come back sorted, not in source order.

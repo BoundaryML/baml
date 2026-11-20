@@ -1,174 +1,57 @@
-//! Stable tag assignments shared by CAS blob and snapshot hash formats 1 to 6.
-//! Changing an assignment requires a format version change.
+//! The tag of every kind of thing a blob holds is `btel-core`'s (`btel_core::cas::tags`), the
+//! one assignment writers and readers share; changing one is a format version change there.
+//! What is here maps the writer's own enums onto those tags.
 
-use baml_type::{ConcreteMediaKind, MediaKind};
+use baml_type::ConcreteMediaKind;
+pub(super) use btel_core::cas::tags::{
+    BigintSignTag, DescriptionTag, HashDomain, LimitTag, MediaSourceTag, ObjectTag, RedactionTag,
+    RootTag, ValueTag,
+};
 
 use crate::{Description, Limit};
 
-#[repr(u8)]
-pub(super) enum RootTag {
-    Value = 0,
-    FunctionArgs = 1,
-    /// A group of class and enum definitions (format 5).
-    Definitions = 2,
-}
-
-#[repr(u8)]
-pub(super) enum ValueTag {
-    Null = 0,
-    OmittedArg = 1,
-    Bool = 2,
-    Int = 3,
-    Float = 4,
-    String = 5,
-    Bigint = 6,
-    Object = 7,
-    Type = 8,
-    Enum = 9,
-    Truncated = 10,
-    /// The root value of a child blob.
-    External = 11,
-    /// One object of a child blob that is not that blob's root.
-    ExternalNode = 12,
-    /// A value withheld from the capture, and why (format 6): a `u32` body
-    /// length, then the body, which opens with a [`RedactionTag`]. A reader
-    /// skips a body whose reason it does not know.
-    Redacted = 13,
-}
-
-/// Why a value was redacted: the first byte of a redacted value's body.
-#[repr(u8)]
-pub(super) enum RedactionTag {
-    /// Its field or parameter is declared redacted. Nothing follows.
-    Declared = 0,
-    /// It matched a secret pattern. The rest of the body is the rule's ID,
-    /// UTF-8 and nonempty.
-    Pattern = 1,
-}
-
-#[repr(u8)]
-pub(super) enum ObjectTag {
-    Uint8Array = 0,
-    List = 1,
-    Map = 2,
-    Instance = 3,
-    Declaration = 4,
-    Cell = 5,
-    NonSnapshotableValue = 6,
-    Descriptive = 7,
-    Truncated = 8,
-    Media = 9,
-    Tuple = 10,
-}
-
-#[repr(u8)]
-pub(super) enum MediaSourceTag {
-    Url = 0,
-    File = 1,
-    Base64 = 2,
-}
-
-#[repr(u8)]
-pub(super) enum TypeIdentityTag {
-    Unresolved = 0,
-    Resolved = 1,
-    /// A class or enum named by its recorded definition (format 5).
-    Defined = 2,
-}
-
-/// How a format 5 declaration identifies itself.
-#[repr(u8)]
-pub(super) enum DeclarationTag {
-    /// By its runtime type tag, as format 4 does.
-    Tagged = 0,
-    /// By its recorded definition.
-    Defined = 1,
-}
-
-/// A head in a recorded definition's field type.
-#[repr(u8)]
-pub(super) enum DefinitionHeadTag {
-    Member = 0,
-    Defined = 1,
-    Named = 2,
-}
-
-/// What a recorded definition is of.
-#[repr(u8)]
-pub(super) enum DefinitionKind {
-    Class = 0,
-    Enum = 1,
-}
-
-/// What a hash is of. Strings need none: their digest is their content hash.
-#[derive(Clone, Copy)]
-#[repr(u8)]
-pub(super) enum HashDomain {
-    Bigint = 2,
-    Type = 3,
-    Blob = 5,
-    /// `uint8array` contents, hashed while they are copied.
-    Uint8Array = 6,
-    /// One member of a cycle with its references left out, to choose the
-    /// cycle's root. Never stored.
-    CycleRoot = 7,
-    /// A definition group's blob, hashed under the definition encoding's
-    /// version rather than the blob format's (see `hash::prefix`).
-    Definitions = 8,
-}
-
 pub(super) fn limit(value: Limit) -> u8 {
-    match value {
-        Limit::Values => 0,
-        Limit::Objects => 1,
-        Limit::Bytes => 2,
-        Limit::Depth => 3,
-    }
+    (match value {
+        Limit::Values => LimitTag::Values,
+        Limit::Objects => LimitTag::Objects,
+        Limit::Bytes => LimitTag::Bytes,
+        Limit::Depth => LimitTag::Depth,
+    }) as u8
 }
 
 pub(super) fn description(value: Description) -> u8 {
-    match value {
-        Description::Function => 0,
-        Description::Closure => 1,
-        Description::BoundMethod => 2,
-        Description::GenericFunction => 3,
-        Description::HostFunction => 4,
-        Description::Future => 5,
-        Description::UnscheduledFuture => 6,
-        Description::Package => 7,
-        Description::Interface => 8,
-        Description::Implementation => 9,
-        Description::TypeAlias => 10,
-        Description::Sentinel => 11,
-    }
+    (match value {
+        Description::Function => DescriptionTag::Function,
+        Description::Closure => DescriptionTag::Closure,
+        Description::BoundMethod => DescriptionTag::BoundMethod,
+        Description::GenericFunction => DescriptionTag::GenericFunction,
+        Description::HostFunction => DescriptionTag::HostFunction,
+        Description::Future => DescriptionTag::Future,
+        Description::UnscheduledFuture => DescriptionTag::UnscheduledFuture,
+        Description::Package => DescriptionTag::Package,
+        Description::Interface => DescriptionTag::Interface,
+        Description::Implementation => DescriptionTag::Implementation,
+        Description::TypeAlias => DescriptionTag::TypeAlias,
+        Description::Sentinel => DescriptionTag::Sentinel,
+    }) as u8
 }
 
+/// A media value's kind. A value always has a concrete one; the type `media` (any of them) is
+/// written only in a type's description.
 pub(super) fn media_kind(value: ConcreteMediaKind) -> u8 {
     match value {
-        ConcreteMediaKind::Image => 0,
-        ConcreteMediaKind::Audio => 1,
-        ConcreteMediaKind::Video => 2,
-        ConcreteMediaKind::Pdf => 3,
+        ConcreteMediaKind::Image => btel_core::cas::MediaKind::Image,
+        ConcreteMediaKind::Audio => btel_core::cas::MediaKind::Audio,
+        ConcreteMediaKind::Video => btel_core::cas::MediaKind::Video,
+        ConcreteMediaKind::Pdf => btel_core::cas::MediaKind::Pdf,
     }
-}
-
-/// The kind [`media_kind`] writes as `tag`. Tag 4, `Generic`, is no longer
-/// written; blobs from earlier runtimes may hold it.
-pub(super) fn media_kind_of(tag: u8) -> Option<MediaKind> {
-    Some(match tag {
-        0 => MediaKind::Image,
-        1 => MediaKind::Audio,
-        2 => MediaKind::Video,
-        3 => MediaKind::Pdf,
-        4 => MediaKind::Generic,
-        _ => return None,
-    })
+    .tag()
 }
 
 pub(super) fn bigint_sign(value: num_bigint::Sign) -> u8 {
-    match value {
-        num_bigint::Sign::Minus => 0,
-        num_bigint::Sign::NoSign => 1,
-        num_bigint::Sign::Plus => 2,
-    }
+    (match value {
+        num_bigint::Sign::Minus => BigintSignTag::Negative,
+        num_bigint::Sign::NoSign => BigintSignTag::Zero,
+        num_bigint::Sign::Plus => BigintSignTag::Positive,
+    }) as u8
 }

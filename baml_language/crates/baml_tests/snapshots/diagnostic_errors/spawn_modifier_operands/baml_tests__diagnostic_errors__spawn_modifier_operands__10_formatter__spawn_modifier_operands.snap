@@ -5,17 +5,17 @@ source: crates/baml_tests/src/generated_tests.rs
 // applied to. Each failure reports at the operand, as the nominal verdict
 // (`does not implement`), with the pins nothing solved left out.
 
-class OnlyInts {
-}
+class OnlyInts {}
 
-implements baml.spawn.Modifier<int, never> for OnlyInts {
-    function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<int, never> throws never {
+implement baml.spawn.Modifier<int, never> for OnlyInts {
+    function apply(self, plan: baml.spawn.Plan<int, never>) -> baml.spawn.Plan<int, never>
+        throws never
+    {
         plan
     }
 }
 
-class NotAModifier {
-}
+class NotAModifier {}
 
 function helper(x: int) -> int throws never {
     x

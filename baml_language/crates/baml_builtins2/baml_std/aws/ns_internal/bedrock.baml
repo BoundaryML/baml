@@ -165,36 +165,60 @@ class ContentBlock {
     cachePoint: baml.json.json?,
 
     function of_text(text: string) -> ContentBlock {
-        ContentBlock { ..._empty_content_block(), text: text }
+        ContentBlock {
+            ..._empty_content_block(),
+            text: text,
+        }
     }
 
     function of_image(image: ImageBlock) -> ContentBlock {
-        ContentBlock { ..._empty_content_block(), image: image }
+        ContentBlock {
+            ..._empty_content_block(),
+            image: image,
+        }
     }
 
     function of_video(video: VideoBlock) -> ContentBlock {
-        ContentBlock { ..._empty_content_block(), video: video }
+        ContentBlock {
+            ..._empty_content_block(),
+            video: video,
+        }
     }
 
     function of_document(document: DocumentBlock) -> ContentBlock {
-        ContentBlock { ..._empty_content_block(), document: document }
+        ContentBlock {
+            ..._empty_content_block(),
+            document: document,
+        }
     }
 
     function of_audio(audio: AudioBlock) -> ContentBlock {
-        ContentBlock { ..._empty_content_block(), audio: audio }
+        ContentBlock {
+            ..._empty_content_block(),
+            audio: audio,
+        }
     }
 
     function of_tool_use(tool_use: ToolUseBlock) -> ContentBlock {
-        ContentBlock { ..._empty_content_block(), toolUse: tool_use }
+        ContentBlock {
+            ..._empty_content_block(),
+            toolUse: tool_use,
+        }
     }
 
     function of_tool_result(tool_result: ToolResultBlock) -> ContentBlock {
-        ContentBlock { ..._empty_content_block(), toolResult: tool_result }
+        ContentBlock {
+            ..._empty_content_block(),
+            toolResult: tool_result,
+        }
     }
 
     /// A `cachePoint` block carrying `args` exactly as the prompt wrote it.
     function of_cache_delimiter(args: baml.json.json) -> ContentBlock {
-        ContentBlock { ..._empty_content_block(), cachePoint: args }
+        ContentBlock {
+            ..._empty_content_block(),
+            cachePoint: args,
+        }
     }
 }
 
@@ -220,7 +244,10 @@ class SystemContentBlock {
     cachePoint: baml.json.json?,
 
     function of_text(text: string) -> SystemContentBlock {
-        SystemContentBlock { text: text, cachePoint: null }
+        SystemContentBlock {
+            text: text,
+            cachePoint: null,
+        }
     }
 
     function of_cache_point() -> SystemContentBlock {
@@ -229,7 +256,10 @@ class SystemContentBlock {
 
     /// A `cachePoint` block carrying `args` exactly as the prompt wrote it.
     function of_cache_delimiter(args: baml.json.json) -> SystemContentBlock {
-        SystemContentBlock { text: null, cachePoint: args }
+        SystemContentBlock {
+            text: null,
+            cachePoint: args,
+        }
     }
 }
 
@@ -280,11 +310,17 @@ class ToolEntry {
     cachePoint: CachePointBlock?,
 
     function of_spec(spec: ToolSpec) -> ToolEntry {
-        ToolEntry { toolSpec: spec, cachePoint: null }
+        ToolEntry {
+            toolSpec: spec,
+            cachePoint: null,
+        }
     }
 
     function of_cache_point() -> ToolEntry {
-        ToolEntry { toolSpec: null, cachePoint: CachePointBlock { type: "default" } }
+        ToolEntry {
+            toolSpec: null,
+            cachePoint: CachePointBlock { type: "default" },
+        }
     }
 }
 
@@ -484,21 +520,30 @@ function _media_source(
     preview: bool = false,
 ) -> MediaSource {
     if let data: string = resolved.base64 {
-        return MediaSource { bytes: data, s3Location: null };
+        return MediaSource {
+            bytes: data,
+            s3Location: null,
+        };
     }
     if let url: string = resolved.url {
         if (url.starts_with("s3://")) {
-            return MediaSource { bytes: null, s3Location: S3Location { uri: url, bucketOwner: null } };
+            return MediaSource {
+                bytes: null,
+                s3Location: S3Location {
+                    uri: url,
+                    bucketOwner: null,
+                },
+            };
         }
         if (preview) {
             throw ai.errors.PreviewUnsupported {
                 provider: "aws-bedrock",
                 detail: `Bedrock request preview only supports s3:// ${kind} URLs; it cannot download ${url}`,
-            }
+            };
         }
-        throw _reject(`Bedrock requires s3:// URIs for ${kind} URLs, got: ${url}`)
+        throw _reject(`Bedrock requires s3:// URIs for ${kind} URLs, got: ${url}`);
     }
-    throw _reject(`Bedrock ${kind} content could not be resolved`)
+    throw _reject(`Bedrock ${kind} content could not be resolved`);
 }
 
 function _image_block(image: baml.media.Image, preview: bool = false) -> ContentBlock {
@@ -507,12 +552,10 @@ function _image_block(image: baml.media.Image, preview: bool = false) -> Content
     } else {
         ai.wire.resolve_media(image, !_is_s3_url(image.url()))
     };
-    ContentBlock.of_image(
-        ImageBlock {
-            format: _image_format(resolved.mime_type),
-            source: _media_source(resolved, "image", preview = preview),
-        },
-    )
+    ContentBlock.of_image(ImageBlock {
+        format: _image_format(resolved.mime_type),
+        source: _media_source(resolved, "image", preview = preview),
+    })
 }
 
 function _video_block(video: baml.media.Video, preview: bool = false) -> ContentBlock {
@@ -523,12 +566,10 @@ function _video_block(video: baml.media.Video, preview: bool = false) -> Content
     } else {
         ai.wire.resolve_media(video, false)
     };
-    ContentBlock.of_video(
-        VideoBlock {
-            format: _video_format(resolved.mime_type),
-            source: _media_source(resolved, "video", preview = preview),
-        },
-    )
+    ContentBlock.of_video(VideoBlock {
+        format: _video_format(resolved.mime_type),
+        source: _media_source(resolved, "video", preview = preview),
+    })
 }
 
 function _document_block(pdf: baml.media.Pdf, preview: bool = false) -> ContentBlock {
@@ -538,17 +579,17 @@ function _document_block(pdf: baml.media.Pdf, preview: bool = false) -> ContentB
         ai.wire.resolve_media(pdf, !_is_s3_url(pdf.url()))
     };
     if (resolved.mime_type != "application/pdf") {
-        throw _reject(`unsupported document format for Bedrock: ${resolved.mime_type}`)
+        throw _reject(
+            `unsupported document format for Bedrock: ${resolved.mime_type}`,
+        );
     }
-    ContentBlock.of_document(
-        DocumentBlock {
-            format: "pdf",
-            // Bedrock requires a name; the SDK path used this constant too
-            // (`build_request/bedrock.rs:323`).
-            name: "document",
-            source: _media_source(resolved, "document", preview = preview),
-        },
-    )
+    ContentBlock.of_document(DocumentBlock {
+        format: "pdf",
+        // Bedrock requires a name; the SDK path used this constant too
+        // (`build_request/bedrock.rs:323`).
+        name: "document",
+        source: _media_source(resolved, "document", preview = preview),
+    })
 }
 
 function _audio_block(audio: baml.media.Audio, preview: bool = false) -> ContentBlock {
@@ -560,12 +601,10 @@ function _audio_block(audio: baml.media.Audio, preview: bool = false) -> Content
     } else {
         ai.wire.resolve_media(audio, !_is_s3_url(audio.url()))
     };
-    ContentBlock.of_audio(
-        AudioBlock {
-            format: _audio_format(resolved.mime_type),
-            source: _media_source(resolved, "audio", preview = preview),
-        },
-    )
+    ContentBlock.of_audio(AudioBlock {
+        format: _audio_format(resolved.mime_type),
+        source: _media_source(resolved, "audio", preview = preview),
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -642,14 +681,18 @@ function _prompt_system(
             },
             let delimiter: ai.CacheDelimiter => {
                 if (
-                    _takes_cache_point(blocks.at(blocks.length() - 1)?.cachePoint, blocks.length(), delimiter)
+                    _takes_cache_point(
+                        blocks.at(blocks.length() - 1)?.cachePoint,
+                        blocks.length(),
+                        delimiter,
+                    )
                 ) {
                     blocks.push(SystemContentBlock.of_cache_delimiter(delimiter.args));
                 }
                 null
             },
             let media: ai.MediaPart => {
-                throw _reject("Bedrock system messages do not support media content")
+                throw _reject("Bedrock system messages do not support media content");
             },
         };
     }
@@ -701,14 +744,22 @@ function _prompt_content(
             },
             let delimiter: ai.CacheDelimiter => {
                 if (
-                    _takes_cache_point(content.at(content.length() - 1)?.cachePoint, content.length(), delimiter)
+                    _takes_cache_point(
+                        content.at(content.length() - 1)?.cachePoint,
+                        content.length(),
+                        delimiter,
+                    )
                 ) {
                     content.push(ContentBlock.of_cache_delimiter(delimiter.args));
                 }
                 null
             },
             let media: ai.MediaPart => {
-                let block = ai.content.Media { media: media, provider_id: null, revised_prompt: null };
+                let block = ai.content.Media {
+                    media: media,
+                    provider_id: null,
+                    revised_prompt: null,
+                };
                 if let lowered: ContentBlock = _lower_block(block, preview = preview) {
                     content.push(lowered);
                 }
@@ -760,12 +811,18 @@ function _lower_prompt(
             // dropped: `content: []` is a ValidationException, and a lone
             // `cachePoint` with nothing to cache is no better.
             if (content.length() > 0) {
-                messages.push(Message { role: _conversation_role(message.role), content: content });
+                messages.push(Message {
+                    role: _conversation_role(message.role),
+                    content: content,
+                });
             }
             null
         };
     }
-    BedrockPrompt { system: system, messages: messages }
+    BedrockPrompt {
+        system: system,
+        messages: messages,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -826,7 +883,11 @@ function _push_tool_result(
     } else {
         "success"
     };
-    let block = ContentBlock.of_tool_result(ToolResultBlock { toolUseId: id, content: content, status: status });
+    let block = ContentBlock.of_tool_result(ToolResultBlock {
+        toolUseId: id,
+        content: content,
+        status: status,
+    });
     // `.at` is null on an empty list, which covers the no-messages case.
     if let last: PendingMessage = pending.at(pending.length() - 1) {
         if (last.tool_results) {
@@ -834,9 +895,13 @@ function _push_tool_result(
             return;
         }
     }
-    pending.push(
-        PendingMessage { message: Message { role: "user", content: [block] }, tool_results: true },
-    );
+    pending.push(PendingMessage {
+        message: Message {
+            role: "user",
+            content: [block],
+        },
+        tool_results: true,
+    });
 }
 
 /// (internal) `ai.RunStarted` / `ai.ToolRequested` / `ai.Usage` / `ai.FinalProduced` are
@@ -852,12 +917,13 @@ function _lower_journal(
             let user: ai.events.UserMessage => {
                 let content = _lower_blocks(user.content, preview = preview);
                 if (content.length() > 0) {
-                    pending.push(
-                        PendingMessage {
-                            message: Message { role: "user", content: content },
-                            tool_results: false,
+                    pending.push(PendingMessage {
+                        message: Message {
+                            role: "user",
+                            content: content,
                         },
-                    );
+                        tool_results: false,
+                    });
                 }
                 null
             },
@@ -872,15 +938,11 @@ function _lower_journal(
                             null
                         },
                         let use: ai.content.ToolUse => {
-                            content.push(
-                                ContentBlock.of_tool_use(
-                                    ToolUseBlock {
-                                        toolUseId: use.id,
-                                        name: use.name,
-                                        input: use.args,
-                                    },
-                                ),
-                            );
+                            content.push(ContentBlock.of_tool_use(ToolUseBlock {
+                                toolUseId: use.id,
+                                name: use.name,
+                                input: use.args,
+                            }));
                             null
                         },
                         // Dropped: Converse replays reasoning as
@@ -898,12 +960,13 @@ function _lower_journal(
                 // reasoning, so nothing upstream removes it. Mirrors the
                 // Anthropic client's guard in `_lower_journal`.
                 if (content.length() > 0) {
-                    pending.push(
-                        PendingMessage {
-                            message: Message { role: "assistant", content: content },
-                            tool_results: false,
+                    pending.push(PendingMessage {
+                        message: Message {
+                            role: "assistant",
+                            content: content,
                         },
-                    );
+                        tool_results: false,
+                    });
                 }
                 null
             },
@@ -921,7 +984,13 @@ function _lower_journal(
                 null
             },
             let failed: ai.events.ToolFailed => {
-                _push_tool_result(pending, failed.id, [ContentBlock.of_text(failed.message)], true, with_status);
+                _push_tool_result(
+                    pending,
+                    failed.id,
+                    [ContentBlock.of_text(failed.message)],
+                    true,
+                    with_status,
+                );
             },
             _ => null,
         };
@@ -942,9 +1011,21 @@ function _lower_journal(
 function _tool_choice(choice: string) -> ToolChoice {
     let empty: map<string, unknown> = {};
     match (choice) {
-        "auto" => ToolChoice { auto: empty, any: null, tool: null },
-        "any" | "required" => ToolChoice { auto: null, any: empty, tool: null },
-        _ => ToolChoice { auto: null, any: null, tool: SpecificToolChoice { name: choice } },
+        "auto" => ToolChoice {
+            auto: empty,
+            any: null,
+            tool: null,
+        },
+        "any" | "required" => ToolChoice {
+            auto: null,
+            any: empty,
+            tool: null,
+        },
+        _ => ToolChoice {
+            auto: null,
+            any: null,
+            tool: SpecificToolChoice { name: choice },
+        },
     }
 }
 
@@ -958,15 +1039,13 @@ function _tool_config(
     }
     let entries: ToolEntry[] = [];
     for (let tool in toolbox.list()) {
-        entries.push(
-            ToolEntry.of_spec(
-                ToolSpec {
-                    name: tool.name,
-                    description: tool.description,
-                    inputSchema: ToolInputSchema { json_schema: baml.json.from(tool.input_schema) },
-                },
-            ),
-        );
+        entries.push(ToolEntry.of_spec(ToolSpec {
+            name: tool.name,
+            description: tool.description,
+            inputSchema: ToolInputSchema {
+                json_schema: baml.json.from(tool.input_schema),
+            },
+        }));
     }
     if (cache_tools) {
         entries.push(ToolEntry.of_cache_point());
@@ -978,7 +1057,10 @@ function _tool_config(
         null => null,
         let choice: string => _tool_choice(choice),
     };
-    ToolConfig { tools: entries, toolChoice: selection }
+    ToolConfig {
+        tools: entries,
+        toolChoice: selection,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -993,7 +1075,7 @@ function _inference_config(client: root.BedrockClient) -> InferenceConfig? {
         if (limit > 2147483647 || limit < 0) {
             throw _reject(
                 `max_tokens value ${limit} is out of the supported range (0..=2147483647)`,
-            )
+            );
         }
     }
     let stops: string[]? = match (client.stop_sequences) {
@@ -1035,11 +1117,17 @@ function _system_as_user(system: SystemContentBlock[]) -> Message {
         } else {
             // A system block is `text` or `cachePoint`; the checkpoint moves
             // with the content it followed, value intact.
-            content.push(ContentBlock { ..._empty_content_block(), cachePoint: block.cachePoint });
+            content.push(ContentBlock {
+                ..._empty_content_block(),
+                cachePoint: block.cachePoint,
+            });
             null
         };
     }
-    Message { role: "user", content: content }
+    Message {
+        role: "user",
+        content: content,
+    }
 }
 
 /// (internal) Converse requires strict user/assistant alternation, and several paths here
@@ -1065,7 +1153,10 @@ function _merge_adjacent_roles(messages: Message[]) -> Message[] {
                 continue;
             }
         }
-        out.push(Message { role: message.role, content: message.content.concat([]) });
+        out.push(Message {
+            role: message.role,
+            content: message.content.concat([]),
+        });
     }
     out
 }
@@ -1110,19 +1201,23 @@ function converse_request(
     //     synthesize the leading user turn the API insists on. Without this
     //     the request is a guaranteed ValidationException.
     let synthesized = messages.length() > 0 && leading_role != "user" && system.length() == 0;
-    let wire_messages = _merge_adjacent_roles(
-        if (folded) {
-            [_system_as_user(system)].concat(messages)
-        } else if (synthesized) {
-            [Message { role: "user", content: [ContentBlock.of_text("(continue)")] }].concat(
-                messages,
-            )
-        } else {
-            messages
-        },
-    );
+    let wire_messages = _merge_adjacent_roles(if (folded) {
+        [_system_as_user(system)].concat(messages)
+    } else if (synthesized) {
+        [
+            Message {
+                role: "user",
+                content: [ContentBlock.of_text("(continue)")],
+            },
+        ]
+        .concat(messages)
+    } else {
+        messages
+    });
     if (wire_messages.length() == 0) {
-        throw _reject("the rendered prompt and journal produced no message content")
+        throw _reject(
+            "the rendered prompt and journal produced no message content",
+        );
     }
     let wire_system: SystemContentBlock[]? = if (folded || system.length() == 0) {
         null
@@ -1180,7 +1275,7 @@ function converse_url(
         status_code: null,
         detail: `no AWS region: set the client's \`region\` option, AWS_REGION, AWS_DEFAULT_REGION, or a \`region\` key on the active profile (or set \`endpoint_url\` to bypass region resolution)${_unset_location_note(client)}`,
         raw_body: null,
-    }
+    };
 }
 
 /// (internal) `base` with `extra` applied over it, header names lowercased so a user
@@ -1214,7 +1309,9 @@ function _apply_query(url: string, params: map<string, string>?) -> string {
         let query: map<string, string> => {
             let pairs: string[] = [];
             for (let name in query.keys()) {
-                pairs.push(`${encode_path_label(name)}=${encode_path_label(query.get(name) ?? "")}`);
+                pairs.push(
+                    `${encode_path_label(name)}=${encode_path_label(query.get(name) ?? "")}`,
+                );
             }
             if (pairs.length() == 0) {
                 url
@@ -1240,7 +1337,9 @@ function build_request(
     preview: bool = false,
     stream: bool = false,
 ) -> baml.http.Request {
-    let body = _prune_nulls(baml.json.from(converse_request(client, input, preview = preview)));
+    let body = _prune_nulls(
+        baml.json.from(converse_request(client, input, preview = preview)),
+    );
     let merged = ai.wire.merge_request_body(body, client.request_body);
     let accept = if (stream) {
         "application/vnd.amazon.eventstream"
@@ -1249,8 +1348,14 @@ function build_request(
     };
     baml.http.Request {
         method: "POST",
-        url: _apply_query(converse_url(client, preview = preview, stream = stream), client.query_params),
-        headers: _merge_headers({ "content-type": "application/json", "accept": accept }, client.headers),
+        url: _apply_query(
+            converse_url(client, preview = preview, stream = stream),
+            client.query_params,
+        ),
+        headers: _merge_headers(
+            { "content-type": "application/json", "accept": accept },
+            client.headers,
+        ),
         body: baml.json.stringify(merged),
     }
 }
@@ -1294,14 +1399,16 @@ function _static_keys(client: root.BedrockClient) -> StaticKeys {
         missing.push(_missing_option("access_key_id", client.access_key_id));
     }
     if (!has_secret) {
-        missing.push(_missing_option("secret_access_key", client.secret_access_key));
+        missing.push(
+            _missing_option("secret_access_key", client.secret_access_key),
+        );
     }
     throw ai.errors.InvalidRequest {
         provider: "aws-bedrock",
         status_code: null,
         detail: `AWS static credentials are incomplete: ${missing.join(", ")}. Set access_key_id and secret_access_key together (and session_token for temporary credentials), or none of them to use the AWS provider chain.`,
         raw_body: null,
-    }
+    };
 }
 
 /// (internal) How a static credential option that read nothing is named in the
@@ -1318,17 +1425,14 @@ function _missing_option(name: string, option: ai.Credential?) -> string {
 /// method, URL, headers and body exactly as built above.
 function sign(client: root.BedrockClient, request: baml.http.Request) -> baml.http.Request {
     let keys = _static_keys(client);
-    root.internal.sign_request(
-        request,
-        root.internal.SignOptions {
-            region: ai.wire.resolve_credential(client.region, null),
-            profile: ai.wire.resolve_credential(client.profile, null),
-            access_key_id: keys.access_key_id,
-            secret_access_key: keys.secret_access_key,
-            session_token: keys.session_token,
-            service: "bedrock",
-        },
-    ) catch_all (e) {
+    root.internal.sign_request(request, root.internal.SignOptions {
+        region: ai.wire.resolve_credential(client.region, null),
+        profile: ai.wire.resolve_credential(client.profile, null),
+        access_key_id: keys.access_key_id,
+        secret_access_key: keys.secret_access_key,
+        session_token: keys.session_token,
+        service: "bedrock",
+    }) catch_all (e) {
         // Signing fails when no credentials resolve, or when the credential
         // chain's own IO fails. Nothing was sent, so the failure is retry-safe
         // — but it is emphatically not a NetworkFailure, and a blanket
@@ -1345,7 +1449,7 @@ function sign(client: root.BedrockClient, request: baml.http.Request) -> baml.ht
                 status_code: null,
                 detail: `AWS SigV4 signing failed: ${message}${_unset_location_note(client)}`,
                 raw_body: null,
-            }
+            };
         },
     }
 }
@@ -1468,7 +1572,7 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
                 error_code: null,
                 raw_body: baml.json.stringify(response),
                 status_code: null,
-            }
+            };
         }
     }
     let message = response.output?.message;
@@ -1478,7 +1582,7 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
             message: "the Converse response is missing output.message",
             raw_body: baml.json.stringify(response),
             status_code: null,
-        }
+        };
     }
     let content: ai.content.ModelBlock[] = [];
     let blocks: ResponseContentBlock[] = message.content ?? [];
@@ -1488,13 +1592,11 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
             null
         } else if let use: ResponseToolUse = block.toolUse {
             let empty: map<string, unknown> = {};
-            content.push(
-                ai.content.ToolUse {
-                    id: use.toolUseId ?? "",
-                    name: use.name ?? "",
-                    args: use.input ?? empty,
-                },
-            );
+            content.push(ai.content.ToolUse {
+                id: use.toolUseId ?? "",
+                name: use.name ?? "",
+                args: use.input ?? empty,
+            });
             null
         } else if let reasoning: ReasoningContent = block.reasoningContent {
             if let summary: string = reasoning.reasoningText?.text {
@@ -1514,7 +1616,12 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
         let raw: string => stop_reason(raw),
     };
 
-    ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop }
+    ai.ModelTurn {
+        calls: [],
+        child_turns: [],
+        content: content,
+        stop_reason: stop,
+    }
 }
 
 /// A response's or stream metadata event's usage, null when it reported none.
@@ -1552,7 +1659,10 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
     );
     let sent = ai.wire.send_as_with_wire<ConverseResponse>(
         request,
-        ai.events.ModelKey { provider: client.provider(), model: client.model },
+        ai.events.ModelKey {
+            provider: client.provider(),
+            model: client.model,
+        },
         capture_wire = client.capture_wire,
     );
     ai.internal.with_own_call(
@@ -1798,11 +1908,11 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
         let decoded = decode_stream_event(name, data) catch_all (e) {
             let parse => {
                 throw ai.errors.InvalidResponse {
-                provider: "aws-bedrock",
-                message: parse.to_string(),
-                raw_body: data,
-                status_code: null,
-            }
+                    provider: "aws-bedrock",
+                    message: parse.to_string(),
+                    raw_body: data,
+                    status_code: null,
+                };
             },
         };
         match (decoded) {
@@ -1828,16 +1938,20 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
                             error_code: null,
                             raw_body: data,
                             status_code: null,
-                        }
+                        };
                     }
-                    out.push(ai.stream.TurnMeta { stop_reason: stop_reason(raw_stop), usage: null });
+                    out.push(ai.stream.TurnMeta {
+                        stop_reason: stop_reason(raw_stop),
+                        usage: null,
+                    });
                 }
                 null
             },
             let event: ConverseStreamMetadataEvent => {
-                out.push(
-                    ai.stream.TurnMeta { stop_reason: null, usage: converse_usage(event.usage) },
-                );
+                out.push(ai.stream.TurnMeta {
+                    stop_reason: null,
+                    usage: converse_usage(event.usage),
+                });
                 out.push(ai.stream.TurnDone {});
                 null
             },
@@ -1866,7 +1980,10 @@ function invoke_stream(
     input: ai.ModelTurnInput,
 ) -> ai.stream.TurnStream {
     let limits = ai.LlmTimeoutOptions._resolve(client.timeout);
-    let request = limits._apply(sign(client, build_request(client, input, preview = false, stream = true)));
+    let request = limits._apply(sign(
+        client,
+        build_request(client, input, preview = false, stream = true),
+    ));
     let started = baml.time.Instant.now();
     let sse = baml.http.send_sse(request) catch (e) {
         baml.errors.Io => _stream_open_failure(e),
@@ -1887,9 +2004,16 @@ function invoke_stream(
         dispatched = started,
     );
     let call = ai.events.ModelCall {
-        resolved_model: ai.events.ModelKey { provider: client.provider(), model: client.model },
+        resolved_model: ai.events.ModelKey {
+            provider: client.provider(),
+            model: client.model,
+        },
         usage: null,
-        timing: ai.events.Timing { start_time: started, duration: null, ttft: null },
+        timing: ai.events.Timing {
+            start_time: started,
+            duration: null,
+            ttft: null,
+        },
         http_request: if (client.capture_wire) {
             baml.http.Request {
                 method: request.method,
@@ -1900,12 +2024,12 @@ function invoke_stream(
         } else {
             null
         },
-        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
-        sse_responses: if (client.capture_wire) {
-            []
-        } else {
-            null
+        http_response: ai.events.HttpResponse {
+            status: sse.status_code,
+            headers: sse.headers,
+            body: null,
         },
+        sse_responses: if (client.capture_wire) { [] } else { null },
     };
     stream._wire_call = call;
     stream._requested_model = client.model;

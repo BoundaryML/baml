@@ -120,26 +120,27 @@ test "seed: seed_for is stable and distinct" {
 
 /// The region `needle` first occupies in `source`, in bytes: the character
 /// index BAML's string methods use is converted through the prefix's UTF-8.
-function region_of(
-    file: string,
-    source: string,
-    needle: string,
-) -> root.engine.Region throws never {
+function region_of(file: string, source: string, needle: string) -> root.engine.Region
+    throws never
+{
     let index = source.index_of(needle) ?? source.length();
     let start = source.slice(0, index).to_utf8().length();
-    root.engine.Region { file, start, end: start + needle.to_utf8().length() }
+    root.engine.Region {
+        file,
+        start,
+        end: start + needle.to_utf8().length(),
+    }
 }
 
 function compiling_case(test_body: string) -> root.engine.Case throws never {
     root.engine.Case {
-        files: root.engine.one_file(
-            "case.baml",
-            `
-                function double(n: int) -> int { n * 2 }
-                test "probe" { ${test_body} }
-            `,
-        ),
-        key: root.engine.Compiles { tests: ["root::probe"] },
+        files: root.engine.one_file("case.baml", `
+            function double(n: int) -> int { n * 2 }
+            test "probe" { ${test_body} }
+        `),
+        key: root.engine.Compiles {
+            tests: ["root::probe"],
+        },
         trace: [],
     }
 }
@@ -171,52 +172,55 @@ function verify_failing_test() -> root.engine.Outcome throws never {
 
 /// A failing test the key does not list still fails the case.
 function verify_unlisted_failing_test() -> root.engine.Outcome throws never {
-    root.engine.verify(
-        root.engine.Case {
-            files: root.engine.one_file(
-                "case.baml",
-                `
-                    test "listed" { assert.is_true(true) }
-                    test "unlisted" { assert.is_true(false) }
-                `,
-            ),
-            key: root.engine.Compiles { tests: ["root::listed"] },
-            trace: [],
+    root.engine.verify(root.engine.Case {
+        files: root.engine.one_file("case.baml", `
+            test "listed" { assert.is_true(true) }
+            test "unlisted" { assert.is_true(false) }
+        `),
+        key: root.engine.Compiles {
+            tests: ["root::listed"],
         },
-    )
+        trace: [],
+    })
 }
 
 function verify_missing_test() -> root.engine.Outcome throws never {
     let case = compiling_case("assert.is_true(true)");
-    root.engine.verify(
-        root.engine.Case { ...case, key: root.engine.Compiles { tests: ["root::absent"] } },
-    )
+    root.engine.verify(root.engine.Case {
+        ...case,
+        key: root.engine.Compiles {
+            tests: ["root::absent"],
+        },
+    })
 }
 
 function verify_expected_rejection() -> root.engine.Outcome throws never {
-    root.engine.verify(rejected_case("E0001", region_of("case.baml", mismatch_source(), "\"s\"")))
+    root.engine.verify(
+        rejected_case("E0001", region_of("case.baml", mismatch_source(), "\"s\"")),
+    )
 }
 
 function verify_wrong_code() -> root.engine.Outcome throws never {
-    root.engine.verify(rejected_case("E9999", region_of("case.baml", mismatch_source(), "\"s\"")))
+    root.engine.verify(
+        rejected_case("E9999", region_of("case.baml", mismatch_source(), "\"s\"")),
+    )
 }
 
 /// A region the compiler does not point inside: the function's name.
 function verify_wrong_region() -> root.engine.Outcome throws never {
-    root.engine.verify(
-        rejected_case("E0001", region_of("case.baml", mismatch_source(), "mismatch")),
-    )
+    root.engine.verify(rejected_case(
+        "E0001",
+        region_of("case.baml", mismatch_source(), "mismatch"),
+    ))
 }
 
 /// A key that says the case compiles when the compiler rejects it.
 function verify_unexpected_diagnostics() -> root.engine.Outcome throws never {
-    root.engine.verify(
-        root.engine.Case {
-            files: root.engine.one_file("case.baml", mismatch_source()),
-            key: root.engine.Compiles { tests: [] },
-            trace: [],
-        },
-    )
+    root.engine.verify(root.engine.Case {
+        files: root.engine.one_file("case.baml", mismatch_source()),
+        key: root.engine.Compiles { tests: [] },
+        trace: [],
+    })
 }
 
 /// Multi-byte characters before the offending expression: byte offsets and
@@ -232,17 +236,15 @@ function multibyte_source() -> string throws never {
 }
 
 function verify_region_after_multibyte() -> root.engine.Outcome throws never {
-    root.engine.verify(
-        root.engine.Case {
-            files: root.engine.one_file("case.baml", multibyte_source()),
-            key: root.engine.Rejected {
-                code: "E0001",
-                more: [],
-                at: region_of("case.baml", multibyte_source(), "\"s\""),
-            },
-            trace: [],
+    root.engine.verify(root.engine.Case {
+        files: root.engine.one_file("case.baml", multibyte_source()),
+        key: root.engine.Rejected {
+            code: "E0001",
+            more: [],
+            at: region_of("case.baml", multibyte_source(), "\"s\""),
         },
-    )
+        trace: [],
+    })
 }
 
 /// The multibyte case is only a test of bytes if the character index and
@@ -255,55 +257,45 @@ function multibyte_offsets_differ() -> bool throws never {
 
 function verify_unexpected_compile() -> root.engine.Outcome throws never {
     let case = compiling_case("assert.is_true(true)");
-    root.engine.verify(
-        root.engine.Case {
-            ...case,
-            key: root.engine.Rejected {
-                code: "E0001",
-                more: [],
-                at: root.engine.Region { file: "case.baml", start: 0, end: 1 },
+    root.engine.verify(root.engine.Case {
+        ...case,
+        key: root.engine.Rejected {
+            code: "E0001",
+            more: [],
+            at: root.engine.Region {
+                file: "case.baml",
+                start: 0,
+                end: 1,
             },
         },
-    )
+    })
 }
 
 function failed_names(outcome: root.engine.Outcome) -> string[] throws never {
     match (outcome) {
-        let f: root.engine.FailedTests => {
-            f.failures.map((failure) -> {
-                failure.name
-            })
-        },
+        let f: root.engine.FailedTests => { f.failures.map((failure) -> { failure.name }) },
         root.engine.Agrees
-            | root.engine.UnexpectedDiagnostics
-            | root.engine.UnexpectedCompile
-            | root.engine.OtherCodes
-            | root.engine.Mislocated
-            | root.engine.InitThrew
-            | root.engine.MissingTests =>
-        {
-            []
-        },
+        | root.engine.UnexpectedDiagnostics
+        | root.engine.UnexpectedCompile
+        | root.engine.OtherCodes
+        | root.engine.Mislocated
+        | root.engine.InitThrew
+        | root.engine.MissingTests => { [] },
     }
 }
 
 function failures_have_reasons(outcome: root.engine.Outcome) -> bool throws never {
     match (outcome) {
         let f: root.engine.FailedTests => {
-            f.failures.every((failure) -> {
-                failure.reason.length() > 0
-            })
+            f.failures.every((failure) -> { failure.reason.length() > 0 })
         },
         root.engine.Agrees
-            | root.engine.UnexpectedDiagnostics
-            | root.engine.UnexpectedCompile
-            | root.engine.OtherCodes
-            | root.engine.Mislocated
-            | root.engine.InitThrew
-            | root.engine.MissingTests =>
-        {
-            false
-        },
+        | root.engine.UnexpectedDiagnostics
+        | root.engine.UnexpectedCompile
+        | root.engine.OtherCodes
+        | root.engine.Mislocated
+        | root.engine.InitThrew
+        | root.engine.MissingTests => { false },
     }
 }
 
@@ -311,15 +303,12 @@ function reports_other_codes(outcome: root.engine.Outcome) -> bool throws never 
     match (outcome) {
         let o: root.engine.OtherCodes => o.expected == ["E9999"] && o.codes == ["E0001"],
         root.engine.Agrees
-            | root.engine.UnexpectedDiagnostics
-            | root.engine.UnexpectedCompile
-            | root.engine.Mislocated
-            | root.engine.InitThrew
-            | root.engine.MissingTests
-            | root.engine.FailedTests =>
-        {
-            false
-        },
+        | root.engine.UnexpectedDiagnostics
+        | root.engine.UnexpectedCompile
+        | root.engine.Mislocated
+        | root.engine.InitThrew
+        | root.engine.MissingTests
+        | root.engine.FailedTests => { false },
     }
 }
 
@@ -327,40 +316,30 @@ function reports_mislocation(outcome: root.engine.Outcome) -> bool throws never 
     match (outcome) {
         let m: root.engine.Mislocated => {
             m.at == region_of("case.baml", mismatch_source(), "mismatch")
-                && m.diagnostics.map((d) -> {
-                    d.code
-                })
-                    == ["E0001"]
-                && m.diagnostics.every((d) -> {
-                    d.at != null
-                })
+                && m.diagnostics.map((d) -> { d.code }) == ["E0001"]
+                && m.diagnostics.every((d) -> { d.at != null })
         },
         root.engine.Agrees
-            | root.engine.UnexpectedDiagnostics
-            | root.engine.UnexpectedCompile
-            | root.engine.OtherCodes
-            | root.engine.InitThrew
-            | root.engine.MissingTests
-            | root.engine.FailedTests =>
-        {
-            false
-        },
+        | root.engine.UnexpectedDiagnostics
+        | root.engine.UnexpectedCompile
+        | root.engine.OtherCodes
+        | root.engine.InitThrew
+        | root.engine.MissingTests
+        | root.engine.FailedTests => { false },
     }
 }
 
 function reports_unexpected_diagnostics(outcome: root.engine.Outcome) -> bool throws never {
     match (outcome) {
-        let u: root.engine.UnexpectedDiagnostics => u.codes == ["E0001"] && u.messages.length() == 1,
+        let u: root.engine.UnexpectedDiagnostics =>
+            u.codes == ["E0001"] && u.messages.length() == 1,
         root.engine.Agrees
-            | root.engine.UnexpectedCompile
-            | root.engine.OtherCodes
-            | root.engine.Mislocated
-            | root.engine.InitThrew
-            | root.engine.MissingTests
-            | root.engine.FailedTests =>
-        {
-            false
-        },
+        | root.engine.UnexpectedCompile
+        | root.engine.OtherCodes
+        | root.engine.Mislocated
+        | root.engine.InitThrew
+        | root.engine.MissingTests
+        | root.engine.FailedTests => { false },
     }
 }
 
@@ -374,14 +353,16 @@ test "verify: failing test is reported by name with a reason" {
 }
 
 test "verify: an unlisted failing test still fails the case" {
-    assert.equal(failed_names(verify_unlisted_failing_test()), ["root::unlisted"])
+    assert.equal(failed_names(verify_unlisted_failing_test()), [
+        "root::unlisted",
+    ])
 }
 
 test "verify: missing test is reported with what is defined" {
-    assert.equal(
-        verify_missing_test(),
-        root.engine.MissingTests { names: ["root::absent"], defined: ["root::probe"] },
-    )
+    assert.equal(verify_missing_test(), root.engine.MissingTests {
+        names: ["root::absent"],
+        defined: ["root::probe"],
+    })
 }
 
 test "verify: expected rejection agrees" {
@@ -397,7 +378,9 @@ test "verify: a region the compiler does not point inside is a mislocation" {
 }
 
 test "verify: a compiling key on a rejected case reports the diagnostics" {
-    assert.is_true(reports_unexpected_diagnostics(verify_unexpected_diagnostics()))
+    assert.is_true(
+        reports_unexpected_diagnostics(verify_unexpected_diagnostics()),
+    )
 }
 
 test "verify: regions are bytes, not characters" {
@@ -406,7 +389,10 @@ test "verify: regions are bytes, not characters" {
 }
 
 test "verify: rejected key on compiling case is unexpected compile" {
-    assert.equal(verify_unexpected_compile(), root.engine.UnexpectedCompile {})
+    assert.equal(
+        verify_unexpected_compile(),
+        root.engine.UnexpectedCompile {},
+    )
 }
 
 // ─── conformance of a report to a status ─────────────────────────────────────
@@ -414,15 +400,16 @@ test "verify: rejected key on compiling case is unexpected compile" {
 function report_of(outcomes: root.engine.Outcome[]) -> root.engine.ItemReport throws never {
     let checked: root.engine.Checked[] = baml.iter.Range.new(0, outcomes.length())
         .map((i) -> {
-            root.engine.Checked { index: i, outcome: outcomes[i] }
+            root.engine.Checked {
+                index: i,
+                outcome: outcomes[i],
+            }
         })
         .collect();
     root.engine.ItemReport {
         id: "synthetic",
         produced: outcomes.length(),
-        disagreements: checked.filter((c) -> {
-            !root.engine.agrees(c.outcome)
-        }),
+        disagreements: checked.filter((c) -> { !root.engine.agrees(c.outcome) }),
     }
 }
 
@@ -444,24 +431,28 @@ function verified_needs_every_case_to_agree() -> bool throws never {
     root.engine.conforms(
         root.engine.Verified {},
         report_of([root.engine.Agrees {}, root.engine.Agrees {}]),
+    ) && !root.engine.conforms(
+        root.engine.Verified {},
+        report_of([root.engine.Agrees {}, root.engine.UnexpectedCompile {}]),
     )
-        && !root.engine.conforms(
-            root.engine.Verified {},
-            report_of([root.engine.Agrees {}, root.engine.UnexpectedCompile {}]),
-        )
 }
 
 function divergence_needs_every_case_to_contradict_as_declared() -> bool throws never {
-    let other = root.engine.OtherCodes { expected: ["E0068"], codes: ["E0001"], messages: [] };
+    let other = root.engine.OtherCodes {
+        expected: ["E0068"],
+        codes: ["E0001"],
+        messages: [],
+    };
     root.engine.conforms(
         accepts(),
-        report_of([root.engine.UnexpectedCompile {}, root.engine.UnexpectedCompile {}]),
-    )
-        && !root.engine.conforms(
-            accepts(),
-            report_of([root.engine.UnexpectedCompile {}, root.engine.Agrees {}]),
-        )
-        && !root.engine.conforms(accepts(), report_of([other, other]))
+        report_of([
+            root.engine.UnexpectedCompile {},
+            root.engine.UnexpectedCompile {},
+        ]),
+    ) && !root.engine.conforms(
+        accepts(),
+        report_of([root.engine.UnexpectedCompile {}, root.engine.Agrees {}]),
+    ) && !root.engine.conforms(accepts(), report_of([other, other]))
 }
 
 function spec_only_needs_every_case_to_disagree() -> bool throws never {
@@ -588,7 +579,9 @@ function claim_of(name: string) -> root.engine.Claim throws never {
         bearing: true,
         rule: root.engine.Rule {
             name,
-            spec: root.engine.Section { heading: "Taxonomy" },
+            spec: root.engine.Section {
+                heading: "Taxonomy",
+            },
             quote: "a quote",
             more: [],
         },
@@ -606,19 +599,27 @@ function traced(compiles: bool, source: string, names: string[]) -> root.engine.
             root.engine.Rejected {
                 code: "E0001",
                 more: [],
-                at: root.engine.Region { file: "case.baml", start: 0, end: 1 },
+                at: root.engine.Region {
+                    file: "case.baml",
+                    start: 0,
+                    end: 1,
+                },
             }
         },
-        trace: names.map((name) -> {
-            claim_of(name)
-        }),
+        trace: names.map((name) -> { claim_of(name) }),
     }
 }
 
 /// A candidate whose item has a second program to offer.
 function paired(compiles: bool) -> root.engine.Candidate throws never {
-    let served = root.engine.Casting { rules: ["axiom", "one-way"], traps: ["spelling"], features: {} };
-    root.engine.Candidate.new(traced(compiles, "one", ["axiom", "one-way"]), served, [served])
+    let served = root.engine.Casting {
+        rules: ["axiom", "one-way"],
+        traps: ["spelling"],
+        features: {},
+    };
+    root.engine.Candidate.new(traced(compiles, "one", ["axiom", "one-way"]), served, [
+        served,
+    ])
 }
 
 /// The foil that answers the other way.
@@ -644,14 +645,7 @@ function put_with(
     knobs: root.engine.Knobs,
     seed: root.engine.Seed,
 ) -> root.engine.Put throws never {
-    root.engine.put(
-        paired(true),
-        () -> {
-            foil
-        },
-        knobs,
-        seed,
-    )
+    root.engine.put(paired(true), () -> { foil }, knobs, seed)
 }
 
 /// How often the foil is asked for over a sweep at a rate of a third, and
@@ -678,7 +672,10 @@ function builds_only_when_needed() -> string throws never {
 }
 
 function knobs_at(contrast: float) -> root.engine.Knobs throws never {
-    root.engine.Knobs { ...root.engine.default_knobs(), contrast }
+    root.engine.Knobs {
+        ...root.engine.default_knobs(),
+        contrast,
+    }
 }
 
 function is_choice(put: root.engine.Put) -> bool throws never {
@@ -689,9 +686,7 @@ function is_choice(put: root.engine.Put) -> bool throws never {
 /// choice, and whether putting one twice puts it the same way.
 function putting_report() -> string throws never {
     let seeds = baml.iter.Range.new(0, 200)
-        .map((i) -> {
-            root.engine.seed_for("putting", i)
-        })
+        .map((i) -> { root.engine.seed_for("putting", i) })
         .collect();
     let never_ = seeds
         .filter((seed) -> {
@@ -704,9 +699,7 @@ function putting_report() -> string throws never {
         })
         .length();
     let unpaired = seeds
-        .filter((seed) -> {
-            is_choice(put_with(null, knobs_at(1.0), seed))
-        })
+        .filter((seed) -> { is_choice(put_with(null, knobs_at(1.0), seed)) })
         .length();
     let same_way = seeds
         .filter((seed) -> {
@@ -726,7 +719,11 @@ function putting_report() -> string throws never {
 function contrast_share() -> string throws never {
     let choices = baml.iter.Range.new(0, 200)
         .filter((i) -> {
-            is_choice(put_with(opposing(true), knobs_at(0.35), root.engine.seed_for("share", i)))
+            is_choice(put_with(
+                opposing(true),
+                knobs_at(0.35),
+                root.engine.seed_for("share", i),
+            ))
         })
         .count();
     `choices=${choices}`
@@ -735,10 +732,9 @@ function contrast_share() -> string throws never {
 /// Which of the two is shown first is the only thing `compiles_first` says,
 /// and both halves of the question follow from it.
 function order_report() -> string throws never {
-    let first = root.engine.contrast(paired(true).case, opposing(true), true)
-        ?? return "no choice";
-    let second = root.engine.contrast(paired(true).case, opposing(true), false)
-        ?? return "no choice";
+    let first = root.engine.contrast(paired(true).case, opposing(true), true) ?? return "no choice";
+    let second =
+        root.engine.contrast(paired(true).case, opposing(true), false) ?? return "no choice";
     let sources = [first, second].map((choice) -> {
         root.engine.cases_of(choice).map((case) -> {
             case.files.get("case.baml") ?? "?"
@@ -750,8 +746,8 @@ function order_report() -> string throws never {
 /// A question of two programs turns on what they agree about, and its reveal
 /// keeps that apart from what tells them apart.
 function shared_report() -> string throws never {
-    let choice = root.engine.contrast(paired(true).case, opposing(true), true)
-        ?? return "no choice";
+    let choice =
+        root.engine.contrast(paired(true).case, opposing(true), true) ?? return "no choice";
     let revealed = root.engine.reveal(choice);
     let alone = root.engine.reveal(paired(true).case);
     `rules=${root.engine.rules_of(choice)} tails=${revealed.programs.map((p) -> {
@@ -784,7 +780,13 @@ function side_report() -> string throws never {
     let draws = 2000;
     let first = baml.iter.Range.new(0, draws)
         .filter((i) -> {
-            match (put_with(opposing(true), knobs_at(1.0), root.engine.seed_for("side", i)).posed) {
+            match (
+                put_with(
+                    opposing(true),
+                    knobs_at(1.0),
+                    root.engine.seed_for("side", i),
+                ).posed
+            ) {
                 let choice: root.engine.Choice => choice.compiles_first,
                 root.engine.Case => false,
             }
@@ -810,9 +812,7 @@ test "choice: the order of the two is all that `compiles_first` decides" {
 
 /// The rule names of a rubric, which is all a pin needs of it.
 function rules_in(claims: root.engine.Claim[]) -> string[] throws never {
-    claims.map((claim) -> {
-        claim.rule.name
-    })
+    claims.map((claim) -> { claim.rule.name })
 }
 
 /// What a reason is marked against follows the answer it was given for.
@@ -825,8 +825,8 @@ function rules_in(claims: root.engine.Claim[]) -> string[] throws never {
 /// answers therefore draw different rubrics, and the one that commits to
 /// nothing draws none.
 function rubric_report() -> string throws never {
-    let choice = root.engine.contrast(paired(true).case, opposing(true), true)
-        ?? return "no choice";
+    let choice =
+        root.engine.contrast(paired(true).case, opposing(true), true) ?? return "no choice";
     let revealed = root.engine.reveal(choice);
     let alone = root.engine.reveal(paired(true).case);
     `first=${rules_in(root.engine.rubric(revealed, root.engine.Chose { second: false }))} second=${rules_in(root.engine.rubric(revealed, root.engine.Chose { second: true }))} unsure=${rules_in(root.engine.rubric(revealed, null))} alone=${rules_in(root.engine.rubric(alone, root.engine.VerdictKind.Rejected))}`
@@ -849,17 +849,28 @@ test "choice: a question turns on what its programs agree about" {
 // ─── judging what was asked ──────────────────────────────────────────────────
 
 function choice_question() -> root.engine.Question throws never {
-    let choice = root.engine.contrast(paired(true).case, opposing(true), true)
-        ?? return question_of_case();
-    root.engine.Question { item: "synthetic", seed: 1, posed: choice }
+    let choice =
+        root.engine.contrast(paired(true).case, opposing(true), true) ?? return question_of_case();
+    root.engine.Question {
+        item: "synthetic",
+        seed: 1,
+        posed: choice,
+    }
 }
 
 function question_of_case() -> root.engine.Question throws never {
-    root.engine.Question { item: "synthetic", seed: 1, posed: paired(true).case }
+    root.engine.Question {
+        item: "synthetic",
+        seed: 1,
+        posed: paired(true).case,
+    }
 }
 
 function chose(second: bool) -> root.engine.Answer throws never {
-    root.engine.Answer { said: root.engine.Chose { second }, reasoning: "" }
+    root.engine.Answer {
+        said: root.engine.Chose { second },
+        reasoning: "",
+    }
 }
 
 /// A judgement in a word, since it has three outcomes and not two.
@@ -880,7 +891,10 @@ function judged_word(verdict_correct: bool?) -> string throws never {
 /// the second is wrong; withholding is neither.
 function judging_a_choice() -> string throws never {
     let question = choice_question();
-    let no_answer = root.engine.Answer { said: null, reasoning: "" };
+    let no_answer = root.engine.Answer {
+        said: null,
+        reasoning: "",
+    };
     let marks = [chose(false), chose(true), no_answer].map((answer) -> {
         judged_word(root.engine.judge(question, answer, null).verdict_correct)
     });
@@ -893,7 +907,10 @@ function crossed_answers() -> string throws never {
     let verdict_on_choice = {
         let judgement = root.engine.judge(
             choice_question(),
-            root.engine.Answer { said: root.engine.VerdictKind.Compiles, reasoning: "" },
+            root.engine.Answer {
+                said: root.engine.VerdictKind.Compiles,
+                reasoning: "",
+            },
             null,
         );
         judged_word(judgement.verdict_correct)
@@ -914,7 +931,10 @@ test "judge: a choice is right when it names the program the compiler accepts" {
 }
 
 test "judge: an answer of the wrong kind for the question is refused" {
-    assert.equal(crossed_answers(), "verdict_on_choice=panicked choice_on_verdict=panicked")
+    assert.equal(
+        crossed_answers(),
+        "verdict_on_choice=panicked choice_on_verdict=panicked",
+    )
 }
 
 // ─── the normal bound ────────────────────────────────────────────────────────
@@ -929,21 +949,15 @@ function thousandths(x: float) -> int throws never {
 /// Every claim the model makes about how sure it is rests on these.
 function normal_bounds() -> string throws never {
     [0.5, 0.1, 0.05, 0.025, 0.01, 0.001, 0.004]
-        .map((tail) -> {
-            `${thousandths(root.engine.z_for(tail))}`
-        })
+        .map((tail) -> { `${thousandths(root.engine.z_for(tail))}` })
         .join(" ")
 }
 
 function refuses_impossible_bounds() -> string throws never {
-    let over = {
-        `${root.engine.z_for(1.0)}`
-    } catch (e) {
+    let over = { `${root.engine.z_for(1.0)}` } catch (e) {
         baml.panics.Panic => "panicked",
     };
-    let under = {
-        `${root.engine.z_for(0.0)}`
-    } catch (e) {
+    let under = { `${root.engine.z_for(0.0)}` } catch (e) {
         baml.panics.Panic => "panicked",
     };
     `${over} ${under}`

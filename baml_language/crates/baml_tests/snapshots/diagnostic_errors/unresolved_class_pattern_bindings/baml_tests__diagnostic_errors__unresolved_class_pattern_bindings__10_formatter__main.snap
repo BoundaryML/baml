@@ -21,7 +21,9 @@ function let_renamed(person: Person) -> int {
 }
 
 function let_nested(person: Person) -> int {
-    let Missing { address: Address { zip } } = person;
+    let Missing {
+        address: Address { zip },
+    } = person;
     zip;
     zip.missing
 }
@@ -63,12 +65,12 @@ function match_binding(person: Person) -> int {
 }
 
 function throws_person(person: Person) -> int throws Person {
-    throw person
+    throw person;
 }
 
 function catch_arm_binding(person: Person) -> int {
     throws_person(person) catch (error) {
         Missing { age } => age,
-        _ => 0
+        _ => 0,
     }
 }

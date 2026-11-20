@@ -59,7 +59,9 @@ class Holder<T extends Named & Sized> {
 }
 
 function missing_conjunct_in_class_type_arg() -> string {
-    let h = Holder<OnlyNamed> { item: OnlyNamed { name: "n" } };
+    let h = Holder<OnlyNamed> {
+        item: OnlyNamed { name: "n" },
+    };
     h.item.name
 }
 
@@ -69,8 +71,10 @@ interface Printable {
     function display(self) -> string throws never;
 }
 
-implements<T extends Named & Sized> Printable for T {
-    function display(self) -> string { self.name }
+implement<T extends Named & Sized> Printable for T {
+    function display(self) -> string {
+        self.name
+    }
 }
 
 function blanket_impl_needs_every_conjunct() -> string {

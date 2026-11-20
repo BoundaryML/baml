@@ -51,7 +51,9 @@ function mask32() -> int throws never {
 /// The stream state for any integer: masked, mixed so that neighbouring
 /// integers start far apart, and moved off the zero fixed point.
 function seed_from(state: int) -> Seed throws never {
-    Seed { state: normalise(mix32(state & mask32())) }
+    Seed {
+        state: normalise(mix32(state & mask32())),
+    }
 }
 
 /// A non-zero 32-bit state.
@@ -70,7 +72,10 @@ function next(seed: Seed) -> Draw throws never {
     let s1 = (s0 ^ (s0 << 13)) & mask32();
     let s2 = (s1 ^ (s1 >> 17)) & mask32();
     let s3 = (s2 ^ (s2 << 5)) & mask32();
-    Draw { value: s3, next: Seed { state: s3 } }
+    Draw {
+        value: s3,
+        next: Seed { state: s3 },
+    }
 }
 
 /// Draw a value in `[0, n)` for `n > 0`. Each residue's probability differs
@@ -83,23 +88,35 @@ function next(seed: Seed) -> Draw throws never {
 ///   from a non-empty pool.
 function below(seed: Seed, n: int) -> Draw throws never {
     if (n <= 0) {
-        throw baml.panics.Unreachable { message: `below() needs a positive bound, got ${n}` }
+        throw baml.panics.Unreachable {
+            message: `below() needs a positive bound, got ${n}`,
+        };
     }
     let d = next(seed);
-    Draw { value: d.value % n, next: d.next }
+    Draw {
+        value: d.value % n,
+        next: d.next,
+    }
 }
 
 /// Fork the stream.
 function split(seed: Seed) -> SeedPair throws never {
     let d = next(seed);
-    SeedPair { left: d.next, right: Seed { state: normalise(mix32(d.value ^ 2654435769)) } }
+    SeedPair {
+        left: d.next,
+        right: Seed {
+            state: normalise(mix32(d.value ^ 2654435769)),
+        },
+    }
 }
 
 /// The seed for the `index`-th case of the item called `item_id`. Stable
 /// across runs and across edits to other items.
 function seed_for(item_id: string, index: int) -> Seed throws never {
     let id_hash = fnv1a32(item_id.to_utf8());
-    Seed { state: normalise(mix32(id_hash ^ mix32((index & mask32()) ^ 2654435769))) }
+    Seed {
+        state: normalise(mix32(id_hash ^ mix32((index & mask32()) ^ 2654435769))),
+    }
 }
 
 /// `n` distinct elements of `pool`, in draw order, and the seed that
@@ -115,11 +132,16 @@ function pick_distinct<T>(seed: Seed, pool: T[], n: int) -> Rolled<T[]> throws n
         match (remaining.remove_at(d.value)) {
             let v: T => taken.push(v),
             null => {
-                throw baml.panics.Unreachable { message: "remove_at inside its own bounds returned null" }
+                throw baml.panics.Unreachable {
+                    message: "remove_at inside its own bounds returned null",
+                };
             },
         };
     }
-    Rolled<T[]> { value: taken, next: s }
+    Rolled<T[]> {
+        value: taken,
+        next: s,
+    }
 }
 
 /// `(a * b) mod 2^32` for `a` and `b` in `[0, 2^32)`, computed in two 16-bit
@@ -142,10 +164,7 @@ function mix32(h: int) -> int throws never {
 
 /// FNV-1a over `bytes`, 32-bit.
 function fnv1a32(bytes: uint8array) -> int throws never {
-    bytes.to_array().reduce(
-        (h, b) -> {
-            mul32(h ^ b, 16777619)
-        },
-        2166136261,
-    )
+    bytes
+        .to_array()
+        .reduce((h, b) -> { mul32(h ^ b, 16777619) }, 2166136261)
 }

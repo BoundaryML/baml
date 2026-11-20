@@ -3,6 +3,7 @@
 
 use std::collections::hash_map::Entry;
 
+use btel_core::recording::field;
 use btel_processor::AggregateDelta;
 use btel_settings::publisher as settings;
 use btel_types::{AwaitDuration, CallPathNodeId, ClockDuration};
@@ -148,18 +149,24 @@ impl PendingAggregates {
         match self.nodes.entry(delta.node) {
             Entry::Vacant(entry) => {
                 let totals = Totals::from_delta(delta);
-                let bytes =
-                    prost::encoding::message::encoded_len(1, &totals.into_proto(delta.node));
+                let bytes = prost::encoding::message::encoded_len(
+                    field::aggregate_batch::ENTRIES,
+                    &totals.into_proto(delta.node),
+                );
                 entry.insert(totals);
                 bytes
             }
             Entry::Occupied(mut entry) => {
                 let current = entry.get_mut();
                 if let Some(merged) = current.checked_add(delta) {
-                    let before =
-                        prost::encoding::message::encoded_len(1, &current.into_proto(delta.node));
-                    let after =
-                        prost::encoding::message::encoded_len(1, &merged.into_proto(delta.node));
+                    let before = prost::encoding::message::encoded_len(
+                        field::aggregate_batch::ENTRIES,
+                        &current.into_proto(delta.node),
+                    );
+                    let after = prost::encoding::message::encoded_len(
+                        field::aggregate_batch::ENTRIES,
+                        &merged.into_proto(delta.node),
+                    );
                     *current = merged;
                     after - before
                 } else {
@@ -168,7 +175,10 @@ impl PendingAggregates {
                     // chunk callback or partially apply a failed addition.
                     let previous = std::mem::replace(current, Totals::from_delta(delta));
                     output.entries.push(previous.into_proto(delta.node));
-                    prost::encoding::message::encoded_len(1, &current.into_proto(delta.node))
+                    prost::encoding::message::encoded_len(
+                        field::aggregate_batch::ENTRIES,
+                        &current.into_proto(delta.node),
+                    )
                 }
             }
         }

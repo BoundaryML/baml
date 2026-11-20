@@ -55,11 +55,9 @@ class File {
     ///
     /// Throws `InvalidArgument` if `offset` is negative when paired with
     /// `whence="start"` (the underlying syscall takes an unsigned offset).
-    function seek_from(
-        self,
-        whence: "start" | "current" | "end",
-        offset: int,
-    ) -> int throws root.errors.Io | root.errors.InvalidArgument {
+    function seek_from(self, whence: "start" | "current" | "end", offset: int) -> int
+        throws root.errors.Io | root.errors.InvalidArgument
+    {
         $rust_io_function
     }
 
@@ -100,10 +98,9 @@ class File {
 ///
 /// Mode values: `"r"` (read), `"r+"` (read/write), `"w"` (write/truncate),
 /// `"w+"` (read/write/truncate), `"a"` (append), `"a+"` (read/append).
-function open(
-    path: string,
-    mode: "r" | "r+" | "w" | "w+" | "a" | "a+",
-) -> File throws root.errors.Io | root.errors.InvalidArgument {
+function open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> File
+    throws root.errors.Io | root.errors.InvalidArgument
+{
     $rust_io_function
 }
 
@@ -199,10 +196,9 @@ function remove_dir_all(path: string) -> null throws root.errors.Io {
 /// read-only attribute and clearing it sets it. Every other bit, including the
 /// group and other digits, is accepted and ignored. `path` must exist on
 /// Windows even when the resulting attribute is unchanged.
-function chmod(
-    path: string,
-    mode: int,
-) -> void throws root.errors.Io | root.errors.InvalidArgument {
+function chmod(path: string, mode: int) -> void
+    throws root.errors.Io | root.errors.InvalidArgument
+{
     $rust_io_function
 }
 

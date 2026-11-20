@@ -453,7 +453,11 @@ test "BasicTest" {
 
 // ===== Trivia on test declaration (line comments) =====
 // 1 test keyword leading
-test "TriviaTest" { // 6 open brace trailing
+test // 2 test keyword trailing
+// 3 name leading
+"TriviaTest" // 4 name trailing
+// 5 open brace leading
+{ // 6 open brace trailing
     // 7 body leading
     TestTarget() // 8 body trailing
     // 9 close brace leading
@@ -461,7 +465,11 @@ test "TriviaTest" { // 6 open brace trailing
 
 // ===== Trivia on test declaration (block comments) =====
 /* 1 test keyword leading */
-test "TriviaTestBlock" { /* 6 open brace trailing */
+test /* 2 test keyword trailing */
+/* 3 name leading */
+"TriviaTestBlock" /* 4 name trailing */
+/* 5 open brace leading */
+{ /* 6 open brace trailing */
     /* 7 body leading */
     TestTarget() /* 8 body trailing */
     /* 9 close brace leading */

@@ -7,7 +7,7 @@
 //!
 //! Python/TS erase `throws`, so there is no cross-language counterpart.
 
-use baml_bridge::Error;
+use baml_sdk::baml_bridge::Error;
 use baml_sdk::throws_test::{ErrorsParseErrorOrJsonParseError, ParseIntOrJson_sync};
 
 fn classify(s: &str, as_int: bool) -> String {

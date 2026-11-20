@@ -56,9 +56,9 @@ class ReadPipeLines {
         type Item = string;
         type Error = root.errors.Io;
 
-        function iter(
-            self,
-        ) -> root.iter.Iterator<Item = string, Error = root.errors.Io> throws never {
+        function iter(self) -> root.iter.Iterator<Item = string, Error = root.errors.Io>
+            throws never
+        {
             self
         }
     }
@@ -127,10 +127,9 @@ class Subprocess {
     /// Wait for the child's exit status. The timeout applies to this call,
     /// without killing the child. A later call can wait again; completed
     /// processes return their status immediately, including repeated waits.
-    function wait(
-        self,
-        timeout: root.time.Duration? = null,
-    ) -> ProcessExit throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
+    function wait(self, timeout: root.time.Duration? = null) -> ProcessExit
+        throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument
+    {
         self._state.wait(timeout?.to_nanoseconds())
     }
 
@@ -154,10 +153,9 @@ class Subprocess {
 /// (internal) The OS process behind a `Subprocess`.
 class _SubprocessState {
     /// `timeout_nanos` is `null` to wait without a limit.
-    function wait(
-        self,
-        timeout_nanos: bigint?,
-    ) -> ProcessExit throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
+    function wait(self, timeout_nanos: bigint?) -> ProcessExit
+        throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument
+    {
         $rust_io_function
     }
 
@@ -181,7 +179,10 @@ class ReadPipe {
 
     /// Return a line-oriented view over this pipe.
     function lines(self) -> ReadPipeLines throws never {
-        ReadPipeLines { pipe: self, _pending: b"" }
+        ReadPipeLines {
+            pipe: self,
+            _pending: b"",
+        }
     }
 
     implements root.io.Read {
@@ -252,11 +253,9 @@ function run(
 }
 
 /// (internal) Direct command execution with resolved defaults.
-function _run(
-    program: string,
-    args: string[],
-    options: _ProcessOptions,
-) -> ProcessOutput throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
+function _run(program: string, args: string[], options: _ProcessOptions) -> ProcessOutput
+    throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument
+{
     $rust_io_function
 }
 
@@ -295,10 +294,9 @@ function shell(
 }
 
 /// (internal) Shell execution with resolved defaults.
-function _shell(
-    command: string,
-    options: _ProcessOptions,
-) -> ProcessOutput throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
+function _shell(command: string, options: _ProcessOptions) -> ProcessOutput
+    throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument
+{
     $rust_io_function
 }
 
@@ -322,29 +320,23 @@ function subprocess(
     stderr: Stdio = "inherit",
     detached: bool = false,
 ) -> Subprocess throws root.errors.Io | root.errors.InvalidArgument {
-    _subprocess(
-        program,
-        args,
-        _ProcessOptions {
-            cwd: cwd,
-            env: env,
-            inherit_env: inherit_env,
-            timeout: null,
-            input: input,
-            stdin: stdin,
-            stdout: stdout,
-            stderr: stderr,
-            detached: detached,
-        },
-    )
+    _subprocess(program, args, _ProcessOptions {
+        cwd: cwd,
+        env: env,
+        inherit_env: inherit_env,
+        timeout: null,
+        input: input,
+        stdin: stdin,
+        stdout: stdout,
+        stderr: stderr,
+        detached: detached,
+    })
 }
 
 /// (internal) Subprocess creation with resolved defaults.
-function _subprocess(
-    program: string,
-    args: string[],
-    options: _ProcessOptions,
-) -> Subprocess throws root.errors.Io | root.errors.InvalidArgument {
+function _subprocess(program: string, args: string[], options: _ProcessOptions) -> Subprocess
+    throws root.errors.Io | root.errors.InvalidArgument
+{
     $rust_io_function
 }
 

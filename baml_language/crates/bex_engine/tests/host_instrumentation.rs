@@ -126,7 +126,7 @@ async fn host_context_and_recording_owner_have_independent_lifetimes() {
         let mut threads = HashMap::new();
         let mut entries = vec![];
         let mut completions = vec![];
-        for file in btel_file::read_directory(path).unwrap().files {
+        for file in btel_core::recording::read_directory(path).unwrap().files {
             let definitions = file.definitions.unwrap();
             for function in definitions.functions {
                 if let Some(proto::function_definition::Resolution::Metadata(metadata)) =
@@ -321,7 +321,7 @@ async fn host_definitions_and_call_sites_are_structural_across_modes() {
         assert_eq!(engine.telemetry_result(), Some(Ok(())));
         let mut paths = vec![];
         let mut spans = 0;
-        for file in btel_file::read_directory(path).unwrap().files {
+        for file in btel_core::recording::read_directory(path).unwrap().files {
             paths.extend(file.definitions.unwrap().call_paths);
             for section in file.spans.unwrap().sections {
                 spans += section
@@ -547,7 +547,7 @@ async fn callback_options_resolve_once_and_reserved_id_reaches_recording() {
         assert_eq!(engine.telemetry_result(), Some(Ok(())));
         let mut entries = vec![];
         let mut completions = vec![];
-        for file in btel_file::read_directory(path).unwrap().files {
+        for file in btel_core::recording::read_directory(path).unwrap().files {
             for section in file.spans.unwrap().sections {
                 for event in section.events {
                     match event.event.unwrap() {

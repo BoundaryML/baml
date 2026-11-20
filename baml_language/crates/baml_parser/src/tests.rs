@@ -3,7 +3,7 @@
 
 use std::fmt::Write as _;
 
-use baml_syntax::{nodes::Arenas, token::TokenIdx};
+use baml_syntax::token::TokenIdx;
 
 use crate::parse;
 
@@ -378,7 +378,7 @@ fn tree_index_links_parents_owners_and_covering_nodes() {
     // Between `)` and `->`: the signature is the smallest node spanning both.
     let gap = text.find(") ->").expect(") ->") + 1;
     assert_eq!(
-        Arenas::kind(index.covering_node(tree, range(gap, gap))),
+        index.covering_node(tree, range(gap, gap)).kind(),
         NodeKind::FunctionDef
     );
 

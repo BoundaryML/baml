@@ -1,0 +1,8 @@
+function f(env: Point, obj: Point) -> int {
+    let a = (env).x;
+    let b = ((env)).x;
+    let c = (obj).x;
+    let d = (env)(1);
+    let e = env.HOME;
+    a + b + c
+}

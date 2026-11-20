@@ -206,7 +206,12 @@ class TlsConfig {
     ) -> TlsConfig throws root.errors.Io {
         // `$rust_io_function` sys-ops don't fill omitted default args, so this
         // wrapper resolves the defaults and forwards to `_new`.
-        TlsConfig._new(cert_pem, key_pem, allow_tls1_2, handshake_timeout.to_nanoseconds())
+        TlsConfig._new(
+            cert_pem,
+            key_pem,
+            allow_tls1_2,
+            handshake_timeout.to_nanoseconds(),
+        )
     }
 
     function _new(

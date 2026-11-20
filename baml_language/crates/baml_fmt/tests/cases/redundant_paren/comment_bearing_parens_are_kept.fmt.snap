@@ -2,5 +2,5 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function f(a: bool, b: bool, c: bool) -> bool {
-    (a && b/* keep */) && c
+    (a && b /* keep */) && c
 }

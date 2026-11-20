@@ -53,9 +53,9 @@ fn test_recursion_int_binary_tree_deeper_than_the_wire_is_refused() {
     // own error, never a panic and never the engine's refusal.
     for nodes in [33, 1000] {
         match round_trip_int_binary_tree_sync(left_chain(nodes)) {
-            Err(baml_bridge::Error::Argument(baml_bridge::ArgumentError {
+            Err(baml_sdk::baml_bridge::Error::Argument(baml_sdk::baml_bridge::ArgumentError {
                 name,
-                error: baml_bridge::EncodeError::TooDeep { limit: 100 },
+                error: baml_sdk::baml_bridge::EncodeError::TooDeep { limit: 100 },
             })) => assert_eq!(name, "t", "{nodes}-deep tree"),
             other => {
                 panic!("{nodes}-deep tree: expected the argument's own refusal, got {other:?}")

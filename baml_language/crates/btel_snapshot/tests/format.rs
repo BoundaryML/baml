@@ -1,10 +1,10 @@
 //! Frozen v3 decoding compatibility and current writer round trips.
 use std::{fmt::Write as _, sync::Arc};
 
-use baml_type::{DeclarationName, RealizedTy, TaggedTypeName, TypeName, typetag::TypeTag};
+use baml_type::{DeclarationName, RealizedTy, TypeName, typetag::TypeTag};
 use btel_snapshot::{
     BlobScratch, Description, Leaves, Limit, Limits, ShapePolicy, Shaper, Snapshot,
-    SnapshotObject as O, SnapshotPool, SnapshotRoot, SnapshotValue as V, TypeIdentity,
+    SnapshotObject as O, SnapshotPool, SnapshotRoot, SnapshotValue as V,
 };
 
 fn hex(bytes: &[u8]) -> String {
@@ -123,7 +123,7 @@ fn all_snapshot_tags_round_trip() {
         let snapshot = graph(&pool, arguments);
         let bytes = root_blob(&snapshot);
         assert_eq!(&bytes[12..28], snapshot.root_id().as_bytes());
-        let decoded = btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+        let decoded = btel_core::cas::decode_blob(&bytes, &btel_core::cas::DecodeLimits::default())
             .expect("the reader must verify the writer's bytes");
         assert_eq!(decoded.id, snapshot.root_id());
         drop(snapshot);
@@ -139,20 +139,6 @@ fn print_current_encodings() {
     for arguments in [true, false] {
         println!("{arguments}: {}", hex(&root_blob(&graph(&pool, arguments))));
     }
-}
-
-#[test]
-fn nominal_identity_tags_preserve_v3_bytes() {
-    let tag = TypeTag::from_i64(42);
-    let name = DeclarationName::Declared(TypeName::local("Golden".into()));
-    assert_eq!(
-        hex(&borsh::to_vec(&TypeIdentity::Unresolved(tag)).unwrap()),
-        "002a00000000000000"
-    );
-    assert_eq!(
-        hex(&borsh::to_vec(&TypeIdentity::Resolved(TaggedTypeName::new(tag, name))).unwrap()),
-        "012a0000000000000000000000000006000000476f6c64656e"
-    );
 }
 
 /// Arguments cut into blobs: a string and bytes stored alone, a map that
@@ -210,7 +196,7 @@ fn blob_lines(snapshot: &Snapshot) -> Vec<String> {
             blob.write(&mut scratch, &mut bytes).unwrap();
             assert_eq!(blob.encoded_len(), bytes.len() as u64);
             let decoded =
-                btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+                btel_core::cas::decode_blob(&bytes, &btel_core::cas::DecodeLimits::default())
                     .expect("the reader must verify the writer's bytes");
             assert_eq!(decoded.id, blob.id());
             hex(&bytes)
@@ -351,15 +337,15 @@ fn frozen_v3_blobs_remain_readable_with_verified_content_ids() {
     ] {
         for bytes in fixture_blobs(fixture) {
             let decoded =
-                btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+                btel_core::cas::decode_blob(&bytes, &btel_core::cas::DecodeLimits::default())
                     .unwrap();
             assert_eq!(decoded.id.as_bytes(), &bytes[12..28]);
             for object in decoded.objects {
-                if let btel_snapshot::DecodedObject::Map { entries, .. } = object {
+                if let btel_core::cas::DecodedObject::Map { entries, .. } = object {
                     assert!(
                         entries
                             .iter()
-                            .all(|(key, _)| matches!(key, btel_snapshot::DecodedValue::String(_)))
+                            .all(|(key, _)| matches!(key, btel_core::cas::DecodedValue::String(_)))
                     );
                 }
             }
@@ -381,15 +367,15 @@ fn frozen_v4_blobs_remain_readable_with_verified_content_ids() {
         for bytes in fixture_blobs(fixture) {
             assert_eq!(bytes[8..12], 4_u32.to_le_bytes());
             let decoded =
-                btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+                btel_core::cas::decode_blob(&bytes, &btel_core::cas::DecodeLimits::default())
                     .unwrap();
             assert_eq!(decoded.id.as_bytes(), &bytes[12..28]);
             for object in decoded.objects {
-                if let btel_snapshot::DecodedObject::Declaration {
+                if let btel_core::cas::DecodedObject::Declaration {
                     tag, definition, ..
                 } = object
                 {
-                    assert_eq!(tag, Some(TypeTag::from_i64(42)));
+                    assert_eq!(tag, Some(btel_core::cas::RuntimeTag(42)));
                     assert_eq!(definition, None);
                     declarations += 1;
                 }
@@ -408,7 +394,7 @@ fn frozen_v4_blobs_remain_readable_with_verified_content_ids() {
 /// a redacted slot. A writer of format 6 must produce these bytes.
 fn redacted_v6_blobs() -> Vec<Vec<u8>> {
     let header = || {
-        let mut bytes = btel_snapshot::BLOB_MAGIC.to_vec();
+        let mut bytes = btel_core::cas::MAGIC.to_vec();
         bytes.extend_from_slice(&6_u32.to_le_bytes());
         bytes.extend_from_slice(&[0; 16]);
         bytes.extend_from_slice(&0_u32.to_le_bytes()); // no children
@@ -442,8 +428,8 @@ fn redacted_v6_blobs() -> Vec<Vec<u8>> {
     ]
     .into_iter()
     .map(|mut bytes| {
-        let Err(btel_snapshot::BlobError::IdMismatch { computed, .. }) =
-            btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+        let Err(btel_core::cas::BlobError::IdMismatch { computed, .. }) =
+            btel_core::cas::decode_blob(&bytes, &btel_core::cas::DecodeLimits::default())
         else {
             panic!("a hand-built blob decodes to an ID mismatch")
         };
@@ -464,7 +450,7 @@ fn print_redacted_v6_encodings() {
 
 #[test]
 fn frozen_v6_redactions_decode_with_verified_content_ids() {
-    use btel_snapshot::{DecodedRoot, DecodedValue, Redaction};
+    use btel_core::cas::{DecodedRoot, DecodedValue, Redaction};
     let fixture = include_str!("fixtures/format_v6_redacted.hex");
     let blobs: Vec<_> = fixture_blobs(fixture).collect();
     assert_eq!(
@@ -477,7 +463,8 @@ fn frozen_v6_redactions_decode_with_verified_content_ids() {
         .map(|bytes| {
             assert_eq!(bytes[8..12], 6_u32.to_le_bytes());
             let decoded =
-                btel_snapshot::decode_blob(bytes, &btel_snapshot::DecodeLimits::default()).unwrap();
+                btel_core::cas::decode_blob(bytes, &btel_core::cas::DecodeLimits::default())
+                    .unwrap();
             assert_eq!(decoded.id.as_bytes(), &bytes[12..28]);
             decoded.root
         })
@@ -505,7 +492,8 @@ fn frozen_v6_redactions_decode_with_verified_content_ids() {
 /// one among arguments decodes back as itself.
 #[test]
 fn the_writer_writes_redactions_as_frozen() {
-    use btel_snapshot::{DecodedRoot, DecodedValue, Redaction, RedactionReason};
+    use btel_core::cas::{DecodedRoot, DecodedValue, Redaction};
+    use btel_snapshot::RedactionReason;
     let pool = SnapshotPool::unbounded(Limits::default());
     let declared = V::Redacted(RedactionReason::Declared);
     let builder = pool.try_acquire().unwrap();
@@ -518,9 +506,9 @@ fn the_writer_writes_redactions_as_frozen() {
         _ => V::Int(7),
     });
     let arguments = builder.finish(arguments, &mut Shaper::default());
-    let decoded = btel_snapshot::decode_blob(
+    let decoded = btel_core::cas::decode_blob(
         &root_blob(&arguments),
-        &btel_snapshot::DecodeLimits::default(),
+        &btel_core::cas::DecodeLimits::default(),
     )
     .unwrap();
     assert_eq!(

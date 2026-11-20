@@ -17,7 +17,7 @@
 //! parameterized receiver is a turbofished struct literal
 //! (`GenericBox::<i64> { .. }`).
 
-use baml_bridge::Map;
+use baml_sdk::baml_bridge::Map;
 // ADAPTATION(rust): the `T | string | null` union enum is named for its arms
 // (`TOrString`), not its declaring field (python's `ContainerShapesMixed`).
 use baml_sdk::generic_tests::{

@@ -1,0 +1,12 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    match (
+        ccc(aaaa, (p: int) -> int {
+            /* b1 */ x
+        })
+    ) {
+        _ => 3,
+    }
+}

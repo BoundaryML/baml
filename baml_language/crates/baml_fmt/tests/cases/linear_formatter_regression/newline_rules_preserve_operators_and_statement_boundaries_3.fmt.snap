@@ -3,17 +3,12 @@ source: crates/baml_fmt/tests/cases.rs
 ---
 function example() -> int {
     let score = 0;
-    score
-        += (
+    score += 1
+        + 10
+        - (if (true) {
             1
-                + 10
-                - (
-                    if (true) {
-                        1
-                    } else {
-                        0
-                    }
-                )
-        );
+        } else {
+            0
+        });
     score
 }

@@ -9,8 +9,7 @@ class MyTool {
     name: string,
 }
 
-implements reflect.AnyFunction for MyTool {
-}
+implement reflect.AnyFunction for MyTool {}
 
 function pick<T extends reflect.AnyFunction>(f: T) -> T throws never {
     return f;
@@ -39,7 +38,9 @@ class Doc {
 
 function web_search(q: string) -> Doc[] throws ToolError {
     if (q == "boom") {
-        throw ToolError { message: "no results" }
+        throw ToolError {
+            message: "no results",
+        };
     }
     return [Doc { title: q }];
 }
