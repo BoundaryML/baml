@@ -1740,11 +1740,18 @@ fn split_ctors(cx: &dyn PatCtx, place: &PlaceInfo, matrix: &Matrix<'_>) -> CtorS
         // it) and must not manufacture witnesses (see
         // `CtorSplit::reachability_only`); `missing` stays computed against
         // `all` alone.
-        let all_set: FxHashSet<Ctor> = all.iter().cloned().collect();
-        let reachability_only: Vec<Ctor> = present_no_wild
-            .into_iter()
-            .filter(|c| !all_set.contains(c))
-            .collect();
+        // A column with no value reaches no row: its alphabet branches find
+        // that out through their uninhabited fields, but a reachability-only
+        // ctor carries no fields to check, so it gets no branch at all.
+        let reachability_only: Vec<Ctor> = if cx.is_inhabited(col) {
+            let all_set: FxHashSet<Ctor> = all.iter().cloned().collect();
+            present_no_wild
+                .into_iter()
+                .filter(|c| !all_set.contains(c))
+                .collect()
+        } else {
+            vec![]
+        };
         if missing.len() == all.len() {
             // Only reachability-only heads (and wildcards) are present. The
             // wildcard rows are all that join any alphabet branch, so one
@@ -5733,15 +5740,18 @@ mod tests {
         compute_match_usefulness(&cx, &[rigid, wild, null], col(&scrut))
     }
 
+    /// No `Outer` value exists, so neither `Outer` arm is reachable: the
+    /// rigid row's reachability-only branch must not reach through the
+    /// empty `Dead` column either.
     #[test]
-    fn wildcard_row_in_uninhabited_column_beside_rigid_row_is_unreachable() {
+    fn rows_in_uninhabited_column_beside_rigid_row_are_unreachable() {
         let report = rigid_then_wildcard_in_dead_field(never_ty());
         assert!(
             report.missing.is_empty(),
             "got {:?}",
             render_missing(&report)
         );
-        assert_eq!(report.unreachable_arms, vec![ArmId(1)]);
+        assert_eq!(report.unreachable_arms, vec![ArmId(0), ArmId(1)]);
     }
 
     #[test]
