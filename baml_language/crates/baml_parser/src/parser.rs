@@ -37,8 +37,9 @@ pub(crate) struct Parser<'t, 'a> {
     pub depth: u32,
 }
 
-/// The deepest nesting of expressions, types, patterns and blocks the parser
-/// reads; past it the construct is reported and skipped. Real code is nowhere
+/// The deepest nesting of expressions (a prefix operator's or an `await`'s
+/// operand included), types, patterns and blocks the parser reads; past it
+/// the construct is reported and skipped. Real code is nowhere
 /// near; the bound keeps a pathological file from exhausting the stack of the
 /// thread the compiler runs on (2 MiB on a worker), and lowering recurses
 /// over the same shape.

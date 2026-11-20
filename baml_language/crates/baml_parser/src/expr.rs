@@ -479,7 +479,11 @@ fn line_break_ends_expr(cur: Cursor<'_>, r: Restrictions) -> bool {
 /// tighter: `!x.f()` is `!(x.f())`.
 fn prefix(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> {
     if let Some(op) = p.cur.eat_in::<UnaryOpToken>() {
+        // A prefix operator nests like a bracket: `- - - … x` recurses once
+        // per operator.
+        p.enter_nesting("an expression")?;
         let operand = expr_bp(p, PREFIX_BINDING_POWER, r);
+        p.leave_nesting();
         return Ok(AnyExpr::Unary(
             p.alloc(Mark::of(op), UnaryExpr { op, operand }),
         ));
@@ -487,7 +491,9 @@ fn prefix(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> {
     if let Some(kw) = p.cur.eat::<kw::Await>() {
         // `await f catch …` catches what the await re-throws: the clause
         // belongs to the whole `await f`.
+        p.enter_nesting("an expression")?;
         let operand = expr_bp(p, PREFIX_BINDING_POWER, r | Restrictions::NO_CATCH);
+        p.leave_nesting();
         return Ok(AnyExpr::Await(
             p.alloc(Mark::of(kw), AwaitExpr { kw, operand }),
         ));

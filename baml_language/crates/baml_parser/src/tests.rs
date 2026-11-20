@@ -266,6 +266,14 @@ fn nesting_is_bounded() {
         "}}`".repeat(140)
     );
     assert!(!parse(&text).errors.is_empty());
+    // A prefix operator or an `await` nests one level per operator.
+    for prefix in ["-", "!", "await "] {
+        let text = format!(
+            "function f() -> int {{\n  {}x\n}}\n",
+            prefix.repeat(100_000)
+        );
+        assert!(!parse(&text).errors.is_empty(), "{prefix:?}");
+    }
     // A flat assignment chain is not nesting: one error, no stack per link.
     let text = format!(
         "function f() -> int {{\n  x {}= 1;\n  1\n}}\n",

@@ -43,7 +43,8 @@
 //! Nothing stands between a prefix operator and its operand: a `-` that
 //! opens a line with anything after it continues the line before instead of
 //! negating. So a comment written after the operator (`- /* c */ x`,
-//! `- // c` then `x`) leads the whole expression, and the rule that places
+//! `- // c` then `x`) leads the whole expression — the whole run, when
+//! prefix operators are nested (`-- /* c */ x`) — and the rule that places
 //! the expression places it.
 //!
 //! The rules print a token of the source on a new line when a line comment

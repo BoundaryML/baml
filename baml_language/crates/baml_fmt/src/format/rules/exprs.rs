@@ -502,13 +502,20 @@ fn rightmost_operand(f: &Formatter<'_>, id: Id<BinaryExpr>) -> AnyExpr {
 /// operator and what follows it as its own: a `return` or `throw` with a
 /// payload takes the rest of the expression, whatever operator follows; an
 /// `is` pattern takes a `|` as another alternative and a `??` as two `?`
-/// suffixes on its type. A prefix operator's operand never does: prefix
-/// operators bind above every binary one
-/// ([`PREFIX_BINDING_POWER`](baml_syntax::ops::PREFIX_BINDING_POWER)).
+/// suffixes on its type. A prefix operator or an `await` binds above every
+/// binary one ([`PREFIX_BINDING_POWER`](baml_syntax::ops::PREFIX_BINDING_POWER))
+/// and so never takes the operator itself, but its operand decides:
+/// `-return b + c` is `-(return (b + c))`.
 fn takes_the_operator(f: &Formatter<'_>, expr: AnyExpr, op: BinaryOp) -> bool {
     match expr {
         AnyExpr::Return(ret) => f.tree.get(ret).value.is_some(),
         AnyExpr::Throw(_) => true,
+        AnyExpr::Unary(unary) => {
+            takes_the_operator(f, f.tree.present(f.tree.get(unary).operand), op)
+        }
+        AnyExpr::Await(awaited) => {
+            takes_the_operator(f, f.tree.present(f.tree.get(awaited).operand), op)
+        }
         AnyExpr::Is(_) => matches!(op, BinaryOp::BitOr | BinaryOp::NullCoalesce),
         _ => false,
     }
@@ -643,39 +650,52 @@ impl FormatNode for IsExpr {
     }
 }
 
+/// `-x`, `!x`, `~x`. A run of prefix operators (`---x`, `!-x`) is printed by
+/// the outermost as one glued run: nothing stands between a prefix operator
+/// and its operand, a blank included — at the start of a line `a\n- b`
+/// subtracts and `a\n-b` negates, so `--x` after a braced statement stays
+/// glued (BAML has no decrement for it to be mistaken for). The comments
+/// written inside the run — after an operator, which the comments module
+/// attaches to that operator's expression, or carried out of a peeled
+/// parenthesis — all go before the first operator, on the first pass rather
+/// than one operator further out on each.
 impl FormatNode for UnaryExpr {
     fn fmt<'a>(id: Id<Self>, f: &Formatter<'a>) -> Doc<'a> {
-        let node = f.tree.get(id);
         let d = f.docs;
-        let operand = unary_operand(f, f.tree.present(node.operand));
-        let operand_id = operand.expr.node_id();
-        // `- -x`: a `-` right under another keeps a space, so the pair does
-        // not read as a decrement (`--x`, which BAML does not have); `!!x`
-        // needs none.
-        let op = f.tree.token_text(node.op.idx);
-        let fuses = match operand.expr {
-            AnyExpr::Unary(inner) => {
-                op == "-" && f.tree.token_text(f.tree.get(inner).op.idx) == "-"
+        let mut ops = Vec::new();
+        let mut leading = Vec::new();
+        // Each level's operand trailing comments, outermost level first.
+        let mut trailing = Vec::new();
+        let mut node = f.tree.get(id);
+        let base = loop {
+            debug_assert!(
+                f.dangling_after(node.op.idx).is_empty(),
+                "a comment after a prefix operator leads the expression"
+            );
+            ops.push(node.op.idx);
+            let operand = unary_operand(f, f.tree.present(node.operand));
+            leading.extend(operand.leading);
+            trailing.push(operand.trailing);
+            match operand.expr {
+                AnyExpr::Unary(inner) => node = f.tree.get(inner),
+                base => break base,
             }
-            _ => false,
         };
-        let space = if fuses { Doc::SPACE } else { Doc::NIL };
-        // Nothing stands between a prefix operator and its operand (`a\n- b`
-        // subtracts, `a\n-b` negates): a comment written there leads the
-        // whole expression (see the comments module), and one a peeled
-        // parenthesis carried goes before the operator as well.
-        debug_assert!(
-            f.dangling_after(node.op.idx).is_empty(),
-            "a comment after a prefix operator leads the expression"
-        );
-        d.concat([
-            docs::leading(d, f.tree, &operand.leading),
-            Doc::LINE_SUFFIX_BOUNDARY,
-            d.text(op),
-            space,
-            f.bare(operand_id),
-            docs::trailing(d, f.tree, &operand.trailing),
-        ])
+        d.concat(
+            [
+                docs::leading(d, f.tree, &leading),
+                Doc::LINE_SUFFIX_BOUNDARY,
+            ]
+            .into_iter()
+            .chain(ops.iter().map(|&op| d.text(f.tree.token_text(op))))
+            .chain([f.bare(base.node_id())])
+            .chain(
+                trailing
+                    .iter()
+                    .rev()
+                    .map(|comments| docs::trailing(d, f.tree, comments)),
+            ),
+        )
     }
 }
 
