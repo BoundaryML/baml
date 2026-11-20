@@ -10807,6 +10807,18 @@ impl BexVm {
         }
     }
 
+    /// Hand the invocation timings this VM buffered to the runtime, before
+    /// the execution scope they were written in ends. Out of line: `exec`
+    /// holds the dispatch loop, whose register allocation shifts with any
+    /// code added around it.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[inline(never)]
+    fn flush_telemetry_timing(&mut self) {
+        if let Some(telemetry) = self.telemetry.as_mut() {
+            telemetry.flush_timing();
+        }
+    }
+
     /// Cold one-time cleanup at existing VM entry/resume/finalization boundaries.
     /// Frames remain executable; only observation state and GC roots are released.
     #[cfg(not(target_arch = "wasm32"))]
@@ -10931,7 +10943,10 @@ impl BexVm {
                 FrameAt::Record(_) => self.complete_record_invocation(frame, outcome, error),
             }
         }
-        self.telemetry.as_mut().unwrap().complete_thread(outcome);
+        let telemetry = self.telemetry.as_mut().unwrap();
+        telemetry.complete_thread(outcome);
+        #[cfg(not(target_arch = "wasm32"))]
+        telemetry.flush_timing();
     }
 
     pub fn telemetry_clock(&self) -> Option<&Arc<btel_clock::ClockEpoch>> {
@@ -11110,6 +11125,8 @@ impl BexVm {
         // The VM may now park for a long time: leave nothing unsettled.
         self.tlab.flush_alloc_debt();
         self.settle();
+        #[cfg(not(target_arch = "wasm32"))]
+        self.flush_telemetry_timing();
 
         if kp {
             crate::kperf::exec_end(kp_start, self.op_count - ops_start);
@@ -11145,6 +11162,14 @@ impl BexVm {
         self.stop_disabled_telemetry();
         #[cfg(not(target_arch = "wasm32"))]
         let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
+        let handled = self.handle_external_thrown(thrown);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.flush_telemetry_timing();
+        handled
+    }
+
+    /// `try_handle_external_thrown` inside its telemetry scope.
+    fn handle_external_thrown(&mut self, thrown: VmThrown) -> Result<(), VmError> {
         self.finish_pending_telemetry_wait();
         let exception_value = thrown.value;
         if self.frames.is_empty() {

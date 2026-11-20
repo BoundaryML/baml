@@ -70,6 +70,11 @@ const ERROR_DECLINED: u8 = 1 << 5;
 
 static LAST_CALL_PATH_ID: AtomicU32 = AtomicU32::new(0);
 
+/// How many invocation timings a thread buffers before it hands them to the
+/// runtime in one batch (`TelemetryState::buffer_timing`).
+#[cfg(all(not(test), not(target_arch = "wasm32")))]
+const PENDING_TIMING_RECORDS: usize = 64;
+
 fn allocate_call_path_id(last: &AtomicU32) -> CallPathId {
     // Exhaustion stays terminal even if a caller catches the panic. A wrapping
     // fetch_add could otherwise reuse live IDs after the first overflow.
@@ -229,6 +234,11 @@ pub struct TelemetryState {
     /// Model usage charged to open spans (or the thread), one entry per model,
     /// written just before the node completes. Empty without model calls.
     usage: Vec<(TelemetryId, Vec<btel_records::ModelUsage>)>,
+    /// Invocation timings not yet handed to the runtime: they go over in
+    /// batches, so a call does not look up this thread's producer for each
+    /// one. Empty outside an execution scope; see [`Self::flush_timing`].
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    pending_timing: Vec<TimingRecord>,
     #[cfg(test)]
     timing_records: Vec<TimingRecord>,
     #[cfg(test)]
@@ -412,6 +422,8 @@ impl TelemetryState {
             runtime,
             errors: None,
             usage: Vec::new(),
+            #[cfg(all(not(test), not(target_arch = "wasm32")))]
+            pending_timing: Vec::new(),
             #[cfg(test)]
             timing_records: Vec::new(),
             #[cfg(test)]
@@ -1085,7 +1097,7 @@ impl TelemetryState {
         let call_path = self.thread.active_call_path;
         let policy_id = function.telemetry_policy_id.load();
         if !telemetry.is_span() && policy_id == btel_types::TelemetryPolicyId::NONE {
-            self.write_timing(TimingRecord::FunctionTimingCompletion {
+            self.buffer_timing(TimingRecord::FunctionTimingCompletion {
                 call_path,
                 entered_at: telemetry.entered_at,
                 exited_at,
@@ -1406,7 +1418,7 @@ impl TelemetryState {
                 }
             }
         } else {
-            self.write_timing(TimingRecord::FunctionTimingCompletion {
+            self.buffer_timing(TimingRecord::FunctionTimingCompletion {
                 call_path,
                 entered_at: telemetry.entered_at,
                 exited_at,
@@ -1714,6 +1726,47 @@ impl TelemetryState {
         let _ = (self, record);
     }
 
+    /// [`Self::write_timing`] for an invocation's completion, which the VM
+    /// writes on every observed return. The record waits in this state until
+    /// a batch fills or [`Self::flush_timing`] runs, so it must be written
+    /// inside an execution scope that flushes before it ends. Out of line:
+    /// completions are inlined into the dispatch loop, and code added there
+    /// shifts its register allocation.
+    #[inline(never)]
+    fn buffer_timing(&mut self, record: TimingRecord) {
+        #[cfg(all(not(test), not(target_arch = "wasm32")))]
+        {
+            if self.pending_timing.len() >= PENDING_TIMING_RECORDS {
+                self.flush_full_timing_batch();
+            }
+            self.pending_timing.push(record);
+        }
+        #[cfg(any(test, target_arch = "wasm32"))]
+        self.write_timing(record);
+    }
+
+    /// Hand the buffered invocation timings to the runtime. Call inside the
+    /// execution scope they were written in, before it ends: records still
+    /// buffered when the scope releases its producer are delivered only by
+    /// the next scope's flush.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg_attr(test, expect(clippy::unused_self, reason = "tests record unbuffered"))]
+    #[inline]
+    pub(crate) fn flush_timing(&mut self) {
+        #[cfg(not(test))]
+        if !self.pending_timing.is_empty() {
+            self.flush_full_timing_batch();
+        }
+    }
+
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    #[cold]
+    #[inline(never)]
+    fn flush_full_timing_batch(&mut self) {
+        self.runtime
+            .write_timing_batch(self.thread.id, &mut self.pending_timing);
+    }
+
     #[inline(always)]
     fn write_span(&mut self, record: VmSpanRecord) {
         #[cfg(test)]
@@ -1783,6 +1836,8 @@ impl ::bex_vm_types::RootHaver for TelemetryState {
                 runtime: _,
             errors: _,
             usage: _,
+            #[cfg(all(not(test), not(target_arch = "wasm32")))]
+                pending_timing: _,
             #[cfg(test)]
                 timing_records: _,
             #[cfg(test)]
