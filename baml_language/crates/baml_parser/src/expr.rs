@@ -448,8 +448,10 @@ fn infix(p: &mut Parser<'_, '_>, mut lhs: AnyExpr, min_bp: u8, r: Restrictions) 
 /// Whether a line break before the current token ends the expression parsed
 /// so far. Calls and indexing never attach across a line break. Where lines
 /// separate items, a token that can begin an expression ends the previous
-/// one — except a `-` not followed by a blank: `a\n- b` subtracts, `a\n-b`
-/// is two expressions. Inside a delimiter a line break is whitespace.
+/// one — except a `-` with anything (a blank, a comment, a line break)
+/// between it and what follows: `a\n- b`, `a\n-\nb` and `a\n- // c\nb`
+/// subtract, `a\n-b` is two expressions. Inside a delimiter a line break is
+/// whitespace.
 fn line_break_ends_expr(cur: Cursor<'_>, r: Restrictions) -> bool {
     if !cur.has_newline_ahead() {
         return false;
@@ -461,7 +463,11 @@ fn line_break_ends_expr(cur: Cursor<'_>, r: Restrictions) -> bool {
         return false;
     }
     if cur.at(TokenKind::Minus) {
-        return !cur.nth(0).is_some_and(|idx| cur.blank_after(idx));
+        // Glued to its operand the `-` negates; else it continues the line.
+        return cur
+            .nth(0)
+            .zip(cur.nth(1))
+            .is_some_and(|(minus, next)| next.0 == minus.0 + 1);
     }
     at_expression_start(cur)
 }
@@ -807,13 +813,25 @@ fn object_literal(
                 let shorthand = p.out.get(key).segments.is_empty()
                     && matches!(p.cur.kind(0), Some(TokenKind::Comma | TokenKind::RBrace));
                 (AnyObjectKey::Name(key), shorthand)
-            } else if let Some(lit) = string_lit(p, StringSite::Expr) {
-                (AnyObjectKey::String(lit), false)
-            } else if let Some(open) = p.cur.eat::<baml_syntax::token::lit::BacktickStart>() {
-                (
-                    AnyObjectKey::Backtick(BacktickString::parse(p, open)),
-                    false,
-                )
+            } else if p.cur.at_in::<StringToken>() || p.cur.at(TokenKind::BacktickStart) {
+                // A quoted key names no field. The member is read for its
+                // extent and is one `Bogus` with the report.
+                let error = ParseError::InvalidSyntax {
+                    message: "a field of a constructed object is named by an identifier; a map literal is written without the constructor: `{ \"key\": value }`".to_string(),
+                    range: p.cur.error_range(),
+                };
+                p.probe(|p| {
+                    if string_lit(p, StringSite::Expr).is_none()
+                        && let Some(open) = p.cur.eat::<baml_syntax::token::lit::BacktickStart>()
+                    {
+                        BacktickString::parse(p, open);
+                    }
+                    if p.cur.eat::<punct::Colon>().is_some() && at_expression_start(p.cur) {
+                        let _ = expr(p, Restrictions::empty());
+                    }
+                });
+                p.cur.eat::<punct::Comma>();
+                return Some((AnyObjectMember::Bogus(p.bogus_since(mark, error)), None));
             } else {
                 p.unexpected("field name, spread element, or '}'");
                 return None;

@@ -141,6 +141,54 @@ fn header_comment_recovery_never_panics() {
     ));
 }
 
+/// A `-` opening a line continues the expression before it unless it is
+/// glued to its operand: blanks, trailing blanks, a comment or a line break
+/// after it all subtract; `-1` on a line of its own negates.
+#[test]
+fn a_line_opening_minus_subtracts_unless_glued() {
+    for (name, body) in [
+        ("blank", "a\n  - 1"),
+        ("line_break", "a\n  -\n  1"),
+        ("trailing_blank", "a\n  - \n  1"),
+        ("comment", "a\n  -//c\n  1"),
+        ("glued", "a\n  -1"),
+    ] {
+        insta::assert_snapshot!(
+            format!("line_opening_minus_{name}"),
+            tree(&format!("function f(a: int) -> int {{\n  {body}\n}}\n"))
+        );
+    }
+}
+
+/// Both `;` of a C-style `for` header are required.
+#[test]
+fn a_c_style_for_header_demands_both_semicolons() {
+    insta::assert_snapshot!(tree(
+        "function f() -> int {\n  for (let i = 0 i < 3; i += 1) {}\n  for (let i = 0; i < 3 i += 1) {}\n  for (;;) {}\n  0\n}\n"
+    ));
+}
+
+/// A `<` inside a parenthesised argument is a comparison: the generic
+/// look-ahead skips bracket groups whole and stops at an unmatched closer.
+#[test]
+fn a_comparison_inside_a_parenthesised_argument_is_not_a_generic() {
+    insta::assert_snapshot!(tree(
+        "function f(a: int, b: int, c: int, d: int) -> bool {\n  g((a < b), (c > (d)))\n}\n"
+    ));
+    insta::assert_snapshot!(tree(
+        "function f() -> int {\n  h<(a: int) -> int>(x) + k<int[]>()\n}\n"
+    ));
+}
+
+/// A quoted key in a constructed object is reported where it stands; the
+/// constructor is not left behind as a bare path.
+#[test]
+fn a_quoted_object_key_is_an_error_at_the_key() {
+    insta::assert_snapshot!(tree(
+        "function f() -> Foo {\n  let s = Foo { \"a\": 1, b: 2, `c`: 3 };\n  s\n}\n"
+    ));
+}
+
 /// Shapes whose recovery once consumed nothing and looped forever: a map or
 /// object member at a token that starts no expression, `@@` in an
 /// `implements` body, a catch arm whose pattern fails before its `=>`.

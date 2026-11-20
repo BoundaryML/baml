@@ -432,11 +432,6 @@ impl<'t> Cursor<'t> {
             })
     }
 
-    /// Whether horizontal whitespace directly follows token `idx`.
-    pub(crate) fn blank_after(&self, idx: TokenIdx) -> bool {
-        self.input.tokens.get(TokenIdx(idx.0 + 1)) == Some(TokenKind::Whitespace)
-    }
-
     /// A line break between significant tokens `i` and `j` (`i < j`).
     pub(crate) fn newline_between_sig(&self, i: usize, j: usize) -> bool {
         let (Some(from), Some(to)) = (self.sig(i), self.sig(j)) else {

@@ -85,15 +85,15 @@ function OtherExprs(a: int, b: int) -> int {
 
     // ===== Trivia in unary (line comments) =====
     // 1 op leading
-    -// 2 op trailing
-        // 3 operand leading
-        a; // 4 operand trailing
+    // 2 op trailing
+    // 3 operand leading
+    -a; // 4 operand trailing
 
     // ===== Trivia in unary (block comments) =====
     /* 1 op leading */
-    -/* 2 op trailing */
-        /* 3 operand leading */
-        a; /* 4 operand trailing */
+    /* 2 op trailing */
+    /* 3 operand leading */
+    -a; /* 4 operand trailing */
 
     // ===== Array initializers =====
     [];

@@ -1,0 +1,88 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== c_for_missing_semicolon.baml ===
+SourceFile@107..210
+  items: FunctionDef@107..210
+    kw: Function "function" @107..115
+    name: Name@116..117
+      token: Word "f" @116..117
+    params: ParamList@117..119
+      l: LParen "(" @117..118
+      r: RParen ")" @118..119
+    ret: ReturnType@120..126
+      arrow: Arrow "->" @120..122
+      ty: PathType@123..126
+        head: Name@123..126
+          token: Word "int" @123..126
+    body: Block@127..210
+      l: LBrace "{" @127..128
+      stmts: ForStmt@133..165
+        kw: For "for" @133..136
+        header: CForHeader@137..162
+          l: LParen "(" @137..138
+          init: LetStmt@138..147
+            introducer: Let "let" @138..141
+            pattern: BindingPattern@142..143
+              name: Name@142..143
+                token: Word "i" @142..143
+            eq: Equals "=" @144..145
+            init: LiteralExpr@146..147
+              token: Integer "0" @146..147
+          semi1: <missing @148>
+          cond: BinaryExpr@148..153
+            lhs: PathExpr@148..149
+              head: Name@148..149
+                token: Word "i" @148..149
+            op: Less "<" @150..151
+            rhs: LiteralExpr@152..153
+              token: Integer "3" @152..153
+          semi2: Semicolon ";" @153..154
+          step: AssignStmt@155..161
+            target: PathExpr@155..156
+              head: Name@155..156
+                token: Word "i" @155..156
+            op: PlusEquals "+=" @157..159
+            value: LiteralExpr@160..161
+              token: Integer "1" @160..161
+          r: RParen ")" @161..162
+        body: Block@163..165
+          l: LBrace "{" @163..164
+          r: RBrace "}" @164..165
+      stmts: ForStmt@170..202
+        kw: For "for" @170..173
+        header: CForHeader@174..199
+          l: LParen "(" @174..175
+          init: LetStmt@175..184
+            introducer: Let "let" @175..178
+            pattern: BindingPattern@179..180
+              name: Name@179..180
+                token: Word "i" @179..180
+            eq: Equals "=" @181..182
+            init: LiteralExpr@183..184
+              token: Integer "0" @183..184
+          semi1: Semicolon ";" @184..185
+          cond: BinaryExpr@186..191
+            lhs: PathExpr@186..187
+              head: Name@186..187
+                token: Word "i" @186..187
+            op: Less "<" @188..189
+            rhs: LiteralExpr@190..191
+              token: Integer "3" @190..191
+          semi2: <missing @192>
+          step: AssignStmt@192..198
+            target: PathExpr@192..193
+              head: Name@192..193
+                token: Word "i" @192..193
+            op: PlusEquals "+=" @194..196
+            value: LiteralExpr@197..198
+              token: Integer "1" @197..198
+          r: RParen ")" @198..199
+        body: Block@200..202
+          l: LBrace "{" @200..201
+          r: RBrace "}" @201..202
+      tail: LiteralExpr@207..208
+        token: Integer "0" @207..208
+      r: RBrace "}" @209..210
+error @148..149: expected ';', found identifier
+error @192..193: expected ';', found identifier

@@ -473,8 +473,8 @@ fn for_in_header(
     )
 }
 
-/// `init; cond; step)` after the `(` (`l`), every part optional. With the
-/// `(` missing, the `)` is not demanded either.
+/// `init; cond; step)` after the `(` (`l`): every part optional but the two
+/// `;`. With the `(` missing, the `)` is not demanded either.
 fn c_for_header(
     p: &mut Parser<'_, '_>,
     mark: Mark,
@@ -490,11 +490,11 @@ fn c_for_header(
     } else {
         None
     };
-    let semi1 = p.cur.eat::<punct::Semicolon>();
+    let semi1 = p.expect::<punct::Semicolon>();
     let cond = (!p.cur.at(TokenKind::LBrace) && at_expression_start(p.cur))
         .then(|| expr(p, r).ok())
         .flatten();
-    let semi2 = p.cur.eat::<punct::Semicolon>();
+    let semi2 = p.expect::<punct::Semicolon>();
     let step =
         (!p.cur.at(TokenKind::LBrace) && at_expression_start(p.cur)).then(|| {
             match stmt_expr(p, r) {

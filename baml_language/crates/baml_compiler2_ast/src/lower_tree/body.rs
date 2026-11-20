@@ -1422,8 +1422,7 @@ fn object_literal(ctx: &mut LoweringContext, v: View<'_>, id: Id<ObjectLiteral>)
         match member {
             AnyObjectMember::Field(field) => {
                 let field = *v.node(field);
-                // Only a name keys a field of a constructed object (a string
-                // or template key is a map's); the rowan lowering read none.
+                // A `Bogus` key (a quoted one) was reported by the parser.
                 let AnyObjectKey::Name(key) = field.key else {
                     continue;
                 };

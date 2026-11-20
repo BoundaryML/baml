@@ -1,0 +1,60 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f() -> Foo {\\n  let s = Foo { \\\"a\\\": 1, b: 2, `c`: 3 };\\n  s\\n}\\n\")"
+---
+SourceFile@0..67
+  items: FunctionDef@0..67
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..12
+      l: LParen "(" @10..11
+      r: RParen ")" @11..12
+    ret: ReturnType@13..19
+      arrow: Arrow "->" @13..15
+      ty: PathType@16..19
+        head: Name@16..19
+          token: Word "Foo" @16..19
+    body: Block@20..67
+      l: LBrace "{" @20..21
+      stmts: LetStmt@24..61
+        introducer: Let "let" @24..27
+        pattern: BindingPattern@28..29
+          name: Name@28..29
+            token: Word "s" @28..29
+        eq: Equals "=" @30..31
+        init: ObjectLiteral@32..60
+          ctor: PathExpr@32..35
+            head: Name@32..35
+              token: Word "Foo" @32..35
+          l: LBrace "{" @36..37
+          members: Bogus@38..45
+            tokens: String "\"a\"" @38..41
+            tokens: Colon ":" @41..42
+            tokens: Whitespace " " @42..43
+            tokens: Integer "1" @43..44
+            tokens: Comma "," @44..45
+          members: ObjectField@46..51
+            key: DottedName@46..47
+              head: Name@46..47
+                token: Word "b" @46..47
+            colon: Colon ":" @47..48
+            value: LiteralExpr@49..50
+              token: Integer "2" @49..50
+            comma: Comma "," @50..51
+          members: Bogus@52..58
+            tokens: BacktickStart "`" @52..53
+            tokens: TemplateChunk "c" @53..54
+            tokens: BacktickEnd "`" @54..55
+            tokens: Colon ":" @55..56
+            tokens: Whitespace " " @56..57
+            tokens: Integer "3" @57..58
+          r: RBrace "}" @59..60
+        semi: Semicolon ";" @60..61
+      tail: PathExpr@64..65
+        head: Name@64..65
+          token: Word "s" @64..65
+      r: RBrace "}" @66..67
+---
+InvalidSyntax { message: "a field of a constructed object is named by an identifier; a map literal is written without the constructor: `{ \"key\": value }`", range: 38..41 }
+InvalidSyntax { message: "a field of a constructed object is named by an identifier; a map literal is written without the constructor: `{ \"key\": value }`", range: 52..53 }

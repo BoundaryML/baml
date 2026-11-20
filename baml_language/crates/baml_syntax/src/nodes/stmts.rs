@@ -147,9 +147,9 @@ pub struct ParenForInHeader {
 pub struct CForHeader {
     pub l: Result<Token!["("], Missing>,
     pub init: Option<AnyForInit>,
-    pub semi1: Option<Token![";"]>,
+    pub semi1: Result<Token![";"], Missing>,
     pub cond: Option<AnyExpr>,
-    pub semi2: Option<Token![";"]>,
+    pub semi2: Result<Token![";"], Missing>,
     pub step: Option<AnyForStep>,
     pub r: Result<Token![")"], Missing>,
 }

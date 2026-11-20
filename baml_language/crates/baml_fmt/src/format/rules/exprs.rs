@@ -213,14 +213,14 @@ struct Operand {
 }
 
 /// A prefix operator's operand without its redundant parentheses — as a
-/// receiver needs none, and a literal needs none either — whatever leading
-/// comments they carry: the rule prints the leading comments of all it
-/// peels itself, and moves the ones on lines of their own past the operand
-/// anyway, so the parentheses are no more needed with them than without
-/// (kept, they would be dropped on the next pass, once the comments are
-/// elsewhere). They stay when a comment dangles inside them or one on a
-/// line of its own precedes the `)`: without the parentheses that comment
-/// would attach to whatever ends where the operand ends, at its level.
+/// receiver needs none, and a literal needs none either. The parentheses
+/// stay when a comment dangles inside them, when a comment on a line of its
+/// own precedes the `)`, or when one on a line of its own (or a line
+/// comment) leads what is inside: without them that comment would attach to
+/// whatever ends where the operand ends, or sit before the operator at a
+/// level that depends on what encloses the expression. A comment on the
+/// operand's own line inside them (`-(/* c */ x)`) is carried out in front of
+/// the operator.
 fn unary_operand(f: &Formatter<'_>, expr: AnyExpr) -> Operand {
     let own_line_trailing = |id: AnyNodeId| {
         f.comments
@@ -228,13 +228,20 @@ fn unary_operand(f: &Formatter<'_>, expr: AnyExpr) -> Operand {
             .iter()
             .any(|comment| comment.before.is_line_break())
     };
+    let line_breaking_leading = |id: AnyNodeId| {
+        f.comments
+            .leading(id)
+            .iter()
+            .any(|comment| comment.kind == CommentKind::Line || comment.before.is_line_break())
+    };
     let mut parens = Vec::new();
     let mut inner = expr;
     while let AnyExpr::Paren(paren) = inner {
         let next = f.tree.present(f.tree.get(paren).inner);
         let anchors = !f.comments.dangling(AnyNodeId::of(paren)).is_empty()
             || own_line_trailing(AnyNodeId::of(paren))
-            || own_line_trailing(next.node_id());
+            || own_line_trailing(next.node_id())
+            || line_breaking_leading(next.node_id());
         if anchors {
             break;
         }
@@ -652,55 +659,24 @@ impl FormatNode for UnaryExpr {
             }
             _ => false,
         };
-        // The comments between the operator and the operand stay where they
-        // were written, unspaced from the operator: `-/* c */ x`, `-//c`
-        // then the operand one level in — a `-` that opens a line and is
-        // followed by a space reads as a binary one, continuing the
-        // statement before it, so nothing the formatter owns puts a space
-        // after a prefix operator. A comment that ends a line puts the
-        // operand one level in, as after `let x = // c`.
         let space = if fuses { Doc::SPACE } else { Doc::NIL };
-        let after_op = f.dangling_after(node.op.idx);
-        let rhs = d.concat([
+        // Nothing stands between a prefix operator and its operand (`a\n- b`
+        // subtracts, `a\n-b` negates): a comment written there leads the
+        // whole expression (see the comments module), and one a peeled
+        // parenthesis carried goes before the operator as well.
+        debug_assert!(
+            f.dangling_after(node.op.idx).is_empty(),
+            "a comment after a prefix operator leads the expression"
+        );
+        d.concat([
             docs::leading(d, f.tree, &operand.leading),
+            Doc::LINE_SUFFIX_BOUNDARY,
+            d.text(op),
+            space,
             f.bare(operand_id),
             docs::trailing(d, f.tree, &operand.trailing),
-        ]);
-        let ends_line = |comment: &SourceComment| {
-            comment.kind == CommentKind::Line
-                || comment.before.is_line_break()
-                || comment.after.is_line_break()
-        };
-        // The operator's comments go inside the indentation with the
-        // operand: the line break after a line comment then indents it.
-        let rhs = d.concat([unspaced(f, after_op), rhs]);
-        let rhs = if after_op.iter().any(ends_line) || operand.leading.iter().any(ends_line) {
-            d.indent(rhs)
-        } else {
-            rhs
-        };
-        d.concat([Doc::LINE_SUFFIX_BOUNDARY, d.text(op), space, rhs])
+        ])
     }
-}
-
-/// `comments` right after a prefix operator, unspaced from it: each as
-/// plain text, a line comment or one that ended its line followed by a hard
-/// line, one written on a line of its own on one. Not a line suffix: a
-/// suffix brings a space before it, and `- //c` reads as a binary operator.
-fn unspaced<'a>(f: &Formatter<'a>, comments: &[SourceComment]) -> Doc<'a> {
-    let d = f.docs;
-    let mut after_line_comment = false;
-    d.concat(comments.iter().map(|comment| {
-        let own_line = comment.before.is_line_break() || after_line_comment;
-        after_line_comment = comment.kind == CommentKind::Line;
-        let before = if own_line { Doc::HARD_LINE } else { Doc::NIL };
-        let after = if comment.kind == CommentKind::Line || comment.after.is_line_break() {
-            Doc::HARD_LINE
-        } else {
-            Doc::NIL
-        };
-        d.concat([before, d.text(comment.text(f.tree)), after])
-    }))
 }
 
 /// `kw operand`.
@@ -891,8 +867,6 @@ impl FormatNode for ObjectField {
         let node = f.tree.get(id);
         let key = match node.key {
             AnyObjectKey::Name(name) => f.node(name),
-            AnyObjectKey::String(string) => f.node(string),
-            AnyObjectKey::Backtick(backtick) => f.node(backtick),
             AnyObjectKey::Bogus(bogus) => f.tree.absent(bogus),
         };
         // After a comment that ends the key's line, the `:` starts the next

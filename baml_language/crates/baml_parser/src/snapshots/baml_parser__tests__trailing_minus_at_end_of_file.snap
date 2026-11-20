@@ -3,16 +3,17 @@ source: crates/baml_parser/src/tests.rs
 expression: "tree(\"let x = 1\\n-\")"
 ---
 SourceFile@0..11
-  items: LetItem@0..9
-    stmt: LetStmt@0..9
+  items: LetItem@0..11
+    stmt: LetStmt@0..11
       introducer: Let "let" @0..3
       pattern: BindingPattern@4..5
         name: Name@4..5
           token: Word "x" @4..5
       eq: Equals "=" @6..7
-      init: LiteralExpr@8..9
-        token: Integer "1" @8..9
-  items: Bogus@10..11
-    tokens: Minus "-" @10..11
+      init: BinaryExpr@8..11
+        lhs: LiteralExpr@8..9
+          token: Integer "1" @8..9
+        op: Minus "-" @10..11
+        rhs: <missing @11>
 ---
-UnexpectedToken { expected: "top-level declaration", found: "'-'", range: 10..11 }
+UnexpectedEof { expected: "expression", range: 11..11 }
