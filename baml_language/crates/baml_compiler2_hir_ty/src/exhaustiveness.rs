@@ -29,7 +29,7 @@ use std::fmt;
 
 use baml_base::Literal;
 use baml_type::{DeclName, PrimitiveType, Ty, contains_error};
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::render::{Spell, Viewpoint};
 
@@ -971,14 +971,56 @@ pub trait PatCtx {
     }
 }
 
-/// The types on the current path of an inhabitedness walk. Classes are
-/// keyed by name so a class whose args grow on every level
-/// (`class G<T> { v: G<T[]> }`) still closes a cycle; every other column
-/// is keyed by its type, which closes a recursive alias.
+/// The types on the current path of an inhabitedness walk. A class is
+/// walked again under itself only at strictly smaller arguments
+/// (`Wrap<never>` under `Wrap<Wrap<never>>`), which every chain of one
+/// class does finitely often; arguments that do not shrink
+/// (`class G<T> { v: G<T[]> }`, or the same instantiation) may recur
+/// forever, so they close a cycle. Every other column is keyed by its
+/// type, which closes a recursive alias.
 #[derive(Default)]
 struct InhabitedSeen {
-    classes: FxHashSet<DeclName>,
+    /// Per class, the argument sizes on the path, outermost first.
+    classes: FxHashMap<DeclName, Vec<usize>>,
     cols: FxHashSet<Ty>,
+}
+
+impl InhabitedSeen {
+    /// Enters `ty`, or answers `false` when it closes a cycle.
+    fn enter(&mut self, ty: &Ty) -> bool {
+        match ty {
+            Ty::Class(qtn, args) => {
+                let size = args.iter().map(ty_size).sum();
+                let sizes = self.classes.entry(qtn.clone()).or_default();
+                if sizes.last().is_some_and(|&outer| size >= outer) {
+                    return false;
+                }
+                sizes.push(size);
+                true
+            }
+            _ => self.cols.insert(ty.clone()),
+        }
+    }
+
+    fn leave(&mut self, ty: &Ty) {
+        match ty {
+            Ty::Class(qtn, _) => {
+                if let Some(sizes) = self.classes.get_mut(qtn) {
+                    sizes.pop();
+                }
+            }
+            _ => {
+                self.cols.remove(ty);
+            }
+        }
+    }
+}
+
+/// The number of nodes in `ty`'s structure.
+fn ty_size(ty: &Ty) -> usize {
+    let mut size = 1;
+    ty.visit_children(&mut |child| size += ty_size(child));
+    size
 }
 
 /// Walks canonical columns: every nested type is derived the way the
@@ -990,11 +1032,7 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
     seen: &mut InhabitedSeen,
 ) -> bool {
     let ty = col.ty();
-    let fresh = match ty {
-        Ty::Class(qtn, _) => seen.classes.insert(qtn.clone()),
-        _ => seen.cols.insert(ty.clone()),
-    };
-    if !fresh {
+    if !seen.enter(ty) {
         // Cycle: assume inhabited. Uninhabitedness is only *proven* by
         // reaching a Never; it is never assumed.
         return true;
@@ -1013,10 +1051,7 @@ fn is_inhabited_default<C: PatCtx + ?Sized>(
         // `T[]` always inhabits `[]`, so it is inhabited regardless of T.
         _ => true,
     };
-    match ty {
-        Ty::Class(qtn, _) => seen.classes.remove(qtn),
-        _ => seen.cols.remove(ty),
-    };
+    seen.leave(ty);
     inhabited
 }
 
