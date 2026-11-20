@@ -27,7 +27,9 @@ SourceFile@0..319
     body: Whitespace "    " @54..58
     body: Word "provider" @58..66
     body: Whitespace " " @66..67
-    body: Word "vertex-ai" @67..76
+    body: Word "vertex" @67..73
+    body: Minus "-" @73..74
+    body: Word "ai" @74..76
     body: Newline "\n" @76..77
     body: Whitespace "    " @77..81
     body: Word "options" @81..88
@@ -37,9 +39,9 @@ SourceFile@0..319
     body: Whitespace "        " @91..99
     body: Word "model" @99..104
     body: Whitespace " " @104..105
-    body: Word "gemini-2" @105..113
-    body: Dot "." @113..114
-    body: Integer "0" @114..115
+    body: Word "gemini" @105..111
+    body: Minus "-" @111..112
+    body: Float "2.0" @112..115
     body: Minus "-" @115..116
     body: Word "flash" @116..121
     body: Newline "\n" @121..122

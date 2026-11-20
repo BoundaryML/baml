@@ -36,9 +36,11 @@ use crate::{
 #[repr(u8)]
 pub enum TokenKind {
     // ----- trivia -----------------------------------------------------------
+    /// Blanks and tabs; a byte-order mark (U+FEFF) counts as a blank, so a
+    /// file that opens with one lexes like one that does not.
     #[group(trivia)]
     #[describe = "whitespace"]
-    #[regex(r"[ \t]+")]
+    #[regex(r"[ \t\u{feff}]+")]
     Whitespace,
     #[group(trivia)]
     #[describe = "newline"]
@@ -180,7 +182,7 @@ pub enum TokenKind {
 
     // ----- contextual keywords: a name anywhere the grammar does not give
     // ----- them meaning. Logos prefers a `#[token]` over a regex of the same
-    // ----- length, so these win over `Word`; a longer word (`type-x`) is a `Word`.
+    // ----- length, so these win over `Word`; a longer word (`typed`) is a `Word`.
     #[group(contextual)]
     #[token("type")]
     Type,
@@ -419,12 +421,12 @@ pub enum TokenKind {
     Backslash,
 
     // ----- literals and other variable-text kinds ---------------------------
-    /// `name`, `gpt-4o` (hyphens after the first character), `$name`,
-    /// `Foo$bar`; never ends in `$`.
+    /// `name`, `$name`, `Foo$bar`; never ends in `$`. A `-` is never part
+    /// of a name: `a-b` is a subtraction.
     #[group(literal)]
     #[describe = "identifier"]
     #[regex(r"\$[a-zA-Z_][a-zA-Z0-9_]*")]
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*(\$[a-zA-Z_][a-zA-Z0-9_-]*)*")]
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*(\$[a-zA-Z_][a-zA-Z0-9_]*)*")]
     Word,
     /// Decimal, hex, octal or binary. The prefixed forms over-accept so a
     /// malformed literal stays one token; validation reports it precisely.
