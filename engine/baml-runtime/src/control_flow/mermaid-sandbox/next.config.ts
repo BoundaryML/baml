@@ -43,7 +43,7 @@ class WatchHeaderFilesPlugin {
   }
 
   apply(compiler: any) {
-    compiler.hooks.afterCompile.tap("WatchHeaderFilesPlugin", (compilation) => {
+    compiler.hooks.afterCompile.tap("WatchHeaderFilesPlugin", (compilation: any) => {
       compilation.contextDependencies.add(this.directory);
 
       for (const file of collectWatchedFiles(this.directory)) {
