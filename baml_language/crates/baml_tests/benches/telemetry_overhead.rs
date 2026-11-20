@@ -2,8 +2,12 @@
 //! Run with: cargo bench -p baml_tests --bench telemetry_overhead
 //!
 //! Each scenario's `main` makes `CALLS` calls in a loop; every scenario runs
-//! with telemetry off (no recording) and on (recording to local files). The
-//! overhead per call is `(on - off) / CALLS`, from the two medians.
+//! with telemetry off and on. Off is an engine with no telemetry at all
+//! (recording level `off`), whatever `BAML_TELEMETRY` says: an engine built
+//! without a recording still observes every call at the environment's level.
+//! On records to local files at the `BAML_TELEMETRY` level (`medium` unless
+//! set). Both use the default clock, the one programs run with. The overhead
+//! per call is `(on - off) / CALLS`, from the two medians.
 #![allow(clippy::disallowed_methods)]
 
 use std::{path::Path, sync::Arc};
@@ -11,7 +15,8 @@ use std::{path::Path, sync::Arc};
 use baml_compiler2_emit::OptLevel;
 use baml_db::{CheckedWorld, ProjectDatabase};
 use baml_tests::engine::TestDbExt;
-use bex_engine::{BexEngine, FunctionCallContextBuilder, TelemetryRecording};
+use bex_engine::{BexEngine, EngineConfig, FunctionCallContextBuilder, TelemetryRecording};
+use btel_settings::artifact::{ArtifactTelemetry, RecordingLevel};
 use divan::{Bencher, black_box};
 use sys_native::{CallId, SysOpsExt};
 
@@ -29,7 +34,8 @@ fn main() {
 }
 
 /// Compile once, then measure calling `main()`. With `recording`, telemetry
-/// records to a fresh local directory for the whole run.
+/// records to a fresh local directory for the whole run; without it, the
+/// engine has no telemetry.
 fn bench_main(bencher: Bencher, source: &str, recording: bool) {
     let mut db = ProjectDatabase::new();
     let package = db.workspace(Path::new("."));
@@ -40,19 +46,25 @@ fn bench_main(bencher: Bencher, source: &str, recording: bool) {
         .expect("benchmark compilation failed");
     let sys_ops = Arc::new(sys_native::SysOps::native());
     let dir = tempfile::tempdir().expect("recording directory");
-    let engine = if recording {
-        BexEngine::new_with_telemetry_recording(
-            program,
-            sys_ops,
-            vec![],
-            None,
-            btel_clock::ClockMode::Monotonic,
-            TelemetryRecording::local_files(dir.path(), btel_recorder::RecordingConfig::default()),
-        )
+    let config = if recording {
+        EngineConfig {
+            recording: Some(TelemetryRecording::local_files(
+                dir.path(),
+                btel_recorder::RecordingConfig::default(),
+            )),
+            ..EngineConfig::default()
+        }
     } else {
-        BexEngine::new(program, sys_ops, vec![])
-    }
-    .expect("benchmark engine creation failed");
+        EngineConfig {
+            artifact_telemetry: Some(ArtifactTelemetry {
+                recording_level: RecordingLevel::Off,
+                ..ArtifactTelemetry::default()
+            }),
+            ..EngineConfig::default()
+        }
+    };
+    let engine = BexEngine::new_with_config(program, sys_ops, vec![], config)
+        .expect("benchmark engine creation failed");
     let engine = Arc::new(engine);
     let rt = tokio::runtime::Runtime::new().expect("failed to build tokio runtime");
     bencher.bench(|| {
@@ -111,6 +123,71 @@ scenario!(
 function main() -> int {{
     let t = 0; let i = 0;
     while (i < 10000) {{ t = Add(t, i); i = i + 1; }}
+    t
+}}"
+    )
+);
+
+// 1b-1e. Timing only, but the calls do not repeat one key back to back. The
+// VM's call-path cache has one entry (`CALL_PATH_CACHE_SLOTS`), so a call hits
+// it only when the previous resolved key was its own; every scenario below
+// misses on every call and takes the hash-map path. Each makes 10,000 timed
+// calls, as `timing_only` does, so their per-call overheads compare directly.
+
+// 1b. Two call sites in one loop: keys alternate Add, Sub, Add, Sub.
+scenario!(
+    timing_two_sites,
+    &format!(
+        "{TYPES}
+function Sub(a: int, b: int) -> int {{ a - b }}
+function main() -> int {{
+    let t = 0; let i = 0;
+    while (i < 5000) {{ t = Add(t, i); t = Sub(t, 1); i = i + 1; }}
+    t
+}}"
+    )
+);
+
+// 1c. A call that makes one call: keys alternate Outer, Add (parent and child).
+scenario!(
+    timing_nested,
+    &format!(
+        "{TYPES}
+function Outer(t: int, i: int) -> int {{ Add(t, i) }}
+function main() -> int {{
+    let t = 0; let i = 0;
+    while (i < 5000) {{ t = Outer(t, i); i = i + 1; }}
+    t
+}}"
+    )
+);
+
+// 1d. Four call sites in one loop.
+scenario!(
+    timing_four_sites,
+    &format!(
+        "{TYPES}
+function Sub(a: int, b: int) -> int {{ a - b }}
+function Mul(a: int, b: int) -> int {{ a * b }}
+function Keep(a: int, b: int) -> int {{ a }}
+function main() -> int {{
+    let t = 0; let i = 0;
+    while (i < 2500) {{ t = Add(t, i); t = Sub(t, 1); t = Mul(t, 1); t = Keep(t, i); i = i + 1; }}
+    t
+}}"
+    )
+);
+
+// 1e. A three-deep chain: Outer -> Mid -> Add per iteration, three keys in turn.
+scenario!(
+    timing_chain3,
+    &format!(
+        "{TYPES}
+function Mid(t: int, i: int) -> int {{ Add(t, i) }}
+function Outer(t: int, i: int) -> int {{ Mid(t, i) }}
+function main() -> int {{
+    let t = 0; let i = 0;
+    while (i < 3334) {{ t = Outer(t, i); i = i + 1; }}
     t
 }}"
     )

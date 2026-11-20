@@ -1026,6 +1026,7 @@ dependencies = [
  "borsh",
  "btel_clock",
  "btel_recorder",
+ "btel_settings",
  "darwin-kperf",
  "darwin-kperf-events",
  "divan",
