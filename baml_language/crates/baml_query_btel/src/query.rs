@@ -256,7 +256,7 @@ fn diagnostic_message(code: &str) -> &'static str {
         }
         "capture_root_mismatch" => "captured blob has an unexpected root shape",
         "capture_pending" => {
-            "the call completed but the announcement carrying its captured args is not indexed yet"
+            "the span has not completed yet; its captured values arrive with its completion"
         }
         "comparison_unsupported" => {
             "this comparison needs unsupported value semantics: ordering structured values, or comparing opaque/descriptive/type values"

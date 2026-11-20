@@ -173,13 +173,13 @@ fn section(thread: u64, events: Vec<Event>) -> proto::ThreadSection {
     }
 }
 
+/// A completion of a thread `tree` defines: it repeats no start.
 fn thread_done(ticks: u64, outcome: proto::InvocationOutcome, panicked: bool) -> Event {
     Event::ThreadCompletion(proto::ThreadCompletion {
         completed_at_ticks: ticks,
         outcome: outcome as i32,
         panicked,
-        usage: Vec::new(),
-        error_cas_id: None,
+        ..Default::default()
     })
 }
 
@@ -235,17 +235,15 @@ fn rows(index: &mut Index, sql: &str) -> Vec<Vec<Json>> {
 }
 
 #[test]
-fn context_evidence_is_section_local_and_announcement_wins_in_both_ingesters() {
+fn context_evidence_is_section_local_and_the_start_record_wins_in_both_ingesters() {
     use proto::thread_section::Context;
     let announcement = |id| {
         Event::FunctionAnnouncement(proto::FunctionAnnouncement {
-            manual: false,
             id,
             parent_id: ROOT,
             call_path_id: 3,
             entered_at_ticks: 10,
-            inputs_cas_id: None,
-            type_args_cas_id: None,
+            ..Default::default()
         })
     };
     let completion = |id, late| {
@@ -311,10 +309,7 @@ fn context_evidence_is_section_local_and_announcement_wins_in_both_ingesters() {
                     context_section(
                         CHILD,
                         None,
-                        vec![
-                            Event::ThreadRunning(proto::ThreadRunning { at_ticks: 20 }),
-                            thread_done(20, proto::InvocationOutcome::Cancelled, false),
-                        ],
+                        vec![thread_done(20, proto::InvocationOutcome::Cancelled, false)],
                     ),
                     context_section(
                         3,
@@ -340,13 +335,19 @@ fn context_evidence_is_section_local_and_announcement_wins_in_both_ingesters() {
                 vec![id(33), json!("unavailable"), Json::Null],
             ]
         );
+        // Without a start record, the start-time context is the completion's.
         assert_eq!(
             rows(
                 &mut index,
-                "SELECT baml_kind(context_metadata) FROM span_announcements
-             WHERE span_id LIKE '%:32'"
+                "SELECT span_id, baml_kind(context_metadata) FROM span_announcements
+             WHERE span_id LIKE '%:3_' ORDER BY span_id"
             ),
-            vec![vec![json!("unavailable")]]
+            vec![
+                vec![id(30), json!("json")],
+                vec![id(31), json!("unavailable")],
+                vec![id(32), json!("json")],
+                vec![id(33), json!("unavailable")],
+            ]
         );
     }
 }
@@ -760,85 +761,239 @@ fn futures_are_spans_named_by_their_spawn() {
     );
 }
 
+/// The index of `project`, built in memory at once or applied file by file
+/// against indexed rows.
+fn open(project: &Path, incremental: bool) -> Index {
+    let mut options = IndexOptions::default();
+    if incremental {
+        options.refresh.fresh_bytes = 0;
+        options.refresh.batch_files = 1;
+    }
+    Index::for_project(project, options).unwrap()
+}
+
+/// `2026-09-21T14:13:20Z` plus `ticks` nanoseconds, as timestamps render.
+fn at(ticks: u64) -> Json {
+    json!(format!("2026-09-21T14:13:20.{:06}Z", ticks / 1_000))
+}
+
+/// Every span is whole in its end record: with no thread definition and no
+/// start record, the completions alone give each span its tree, times,
+/// name and captures.
 #[test]
-fn usage_ingested_before_its_ancestors_reaches_them_when_they_arrive() {
-    let usage = |input: u64| proto::ModelUsage {
-        provider: "anthropic".into(),
-        model: Some("claude-opus-5-5".into()),
-        calls: 1,
-        input_tokens: Some(input),
-        ..Default::default()
-    };
-    let completion = |id: u64, parent_id: u64, path: u64, usage: Vec<proto::ModelUsage>| {
-        Event::FunctionCompletion(proto::FunctionCompletion {
-            id,
-            parent_id,
-            node: path << 1,
-            entered_at_ticks: 10,
-            exited_at_ticks: 40,
-            completion_flags: 1,
-            usage,
-            ..Default::default()
-        })
-    };
-    let (outer, invoke, spawned, spawned_invoke) = (60, 61, 3, 71);
+fn finished_spans_are_read_from_their_completions_alone() {
+    let (inputs, type_args) = (
+        proto::CasId { low: 7, high: 0 },
+        proto::CasId { low: 8, high: 0 },
+    );
     for incremental in [false, true] {
         let project = tempfile::tempdir().unwrap();
         let recording = Recording::new(project.path(), 1, Some([9; 16]));
-        // The invokes complete first: one under a call not yet ingested, one
-        // on a thread not yet defined.
-        let mut first = tree(vec![], vec![]);
-        first.spans = Some(proto::SpanBatch {
+        let mut file = tree(vec![], vec![]);
+        file.definitions.as_mut().unwrap().threads.clear();
+        file.spans = Some(proto::SpanBatch {
             sections: vec![
-                section(ROOT, vec![completion(invoke, outer, 3, vec![usage(1)])]),
                 section(
-                    spawned,
-                    vec![completion(spawned_invoke, spawned, 3, vec![usage(10)])],
+                    CHILD,
+                    vec![
+                        Event::FunctionCompletion(proto::FunctionCompletion {
+                            id: 40,
+                            parent_id: CHILD,
+                            node: 3 << 1,
+                            entered_at_ticks: 31_000,
+                            exited_at_ticks: 36_000,
+                            completion_flags: 1,
+                            inputs_cas_id: Some(inputs),
+                            type_args_cas_id: Some(type_args),
+                            ..Default::default()
+                        }),
+                        Event::ThreadCompletion(proto::ThreadCompletion {
+                            completed_at_ticks: 40_000,
+                            outcome: proto::InvocationOutcome::Ok as i32,
+                            parent_id: Some(ROOT),
+                            spawn_call_path_id: 5,
+                            started_at_ticks: 20_000,
+                            clock_epoch_id: EPOCH,
+                            name: Some("fetcher".into()),
+                            running_at_ticks: Some(30_000),
+                            ..Default::default()
+                        }),
+                    ],
+                ),
+                section(
+                    ROOT,
+                    vec![Event::ThreadCompletion(proto::ThreadCompletion {
+                        completed_at_ticks: 50_000,
+                        outcome: proto::InvocationOutcome::Ok as i32,
+                        clock_epoch_id: EPOCH,
+                        ..Default::default()
+                    })],
                 ),
             ],
         });
-        recording.write(1, first);
-        let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-        if incremental {
-            index.refresh().unwrap();
-        }
-        // Then the outer call, and the thread's definition under it.
-        recording.write(
-            2,
-            proto::RecordingFile {
-                definitions: Some(proto::Definitions {
-                    threads: vec![thread(spawned, Some(outer), 5, 20)],
-                    ..Default::default()
-                }),
-                spans: Some(proto::SpanBatch {
-                    sections: vec![section(ROOT, vec![completion(outer, ROOT, 2, vec![])])],
-                }),
-                ..Default::default()
-            },
-        );
+        recording.write(1, file);
+        let mut index = open(project.path(), incremental);
         let id = |node| json!(format!("{}:{node}", "01".repeat(16)));
         assert_eq!(
             rows(
                 &mut index,
-                "SELECT span_id, total_usage[0]['input_tokens'], total_usage[1] FROM spans
-                 WHERE total_usage[0] IS NOT NULL ORDER BY span_id",
+                "SELECT span_id, span_name, parent_span_id, future_id, status, scheduled_time,
+                   start_time, end_time, duration FROM spans ORDER BY span_id"
             ),
-            // The spawned invoke's usage passes up through its thread.
             vec![
-                vec![id(outer), json!(11), Json::Null],
-                vec![id(invoke), json!(1), Json::Null],
-                vec![id(spawned_invoke), json!(10), Json::Null],
+                // A root future runs at once: scheduled when it started.
+                vec![
+                    id(1),
+                    json!("user.A"),
+                    Json::Null,
+                    Json::Null,
+                    json!("return"),
+                    at(0),
+                    at(0),
+                    at(50_000),
+                    json!(50_000)
+                ],
+                // A spawned one starts when it began running.
+                vec![
+                    id(2),
+                    json!("fetcher"),
+                    id(1),
+                    id(1),
+                    json!("return"),
+                    at(20_000),
+                    at(30_000),
+                    at(40_000),
+                    json!(10_000)
+                ],
+                vec![
+                    id(40),
+                    json!("user.B"),
+                    id(2),
+                    id(2),
+                    json!("return"),
+                    Json::Null,
+                    at(31_000),
+                    at(36_000),
+                    json!(5_000)
+                ],
             ],
             "incremental: {incremental}"
+        );
+        // The captures are named by the completion; their blobs are not here.
+        assert_eq!(
+            rows(
+                &mut index,
+                "SELECT baml_value_state(input_args), baml_value_state(type_args)
+                 FROM spans WHERE span_type = 'function'"
+            ),
+            vec![vec![json!("cas_missing"), json!("cas_missing")]]
+        );
+        let unresolved: i64 = index
+            .connection()
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM thread WHERE defined = 0)
+                   + (SELECT COUNT(*) FROM issue)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(unresolved, 0, "incremental: {incremental}");
+    }
+}
+
+/// A local recording's slim start records show what is running, and what
+/// never completed when the process crashed; the captures of a span that has
+/// not completed are pending, not absent.
+#[test]
+fn running_and_crashed_calls_show_from_their_start_records() {
+    let start = |id, parent, path, entered| {
+        Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+            id,
+            parent_id: parent,
+            call_path_id: path,
+            entered_at_ticks: entered,
+            ..Default::default()
+        })
+    };
+    let (outer, inner) = (60, 61);
+    for incremental in [false, true] {
+        let project = tempfile::tempdir().unwrap();
+        let recording = Recording::new(project.path(), 1, Some([9; 16]));
+        let mut file = tree(vec![], vec![]);
+        file.spans = Some(proto::SpanBatch {
+            sections: vec![section(
+                ROOT,
+                vec![
+                    Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
+                    start(outer, ROOT, 1, 1_000),
+                    start(inner, outer, 3, 2_000),
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: inner,
+                        parent_id: outer,
+                        node: 3 << 1,
+                        entered_at_ticks: 2_000,
+                        exited_at_ticks: 3_000,
+                        completion_flags: 1,
+                        ..Default::default()
+                    }),
+                ],
+            )],
+        });
+        recording.write(1, file);
+        let mut index = open(project.path(), incremental);
+        let id = |node| json!(format!("{}:{node}", "01".repeat(16)));
+        let started = "SELECT span_id, span_name, parent_span_id, future_id, start_time,
+               is_complete, baml_value_state(input_args), baml_value_state(type_args)
+             FROM span_announcements WHERE span_type = 'function' AND NOT is_complete";
+        let running = vec![vec![
+            id(outer),
+            json!("user.A"),
+            id(ROOT),
+            id(ROOT),
+            at(1_000),
+            json!(0),
+            json!("capture_pending"),
+            json!("capture_pending"),
+        ]];
+        assert_eq!(rows(&mut index, started), running);
+        let finished = "SELECT span_id, span_type FROM spans ORDER BY span_id";
+        assert_eq!(
+            rows(&mut index, finished),
+            vec![vec![id(inner), json!("function")]],
+            "a running span is not in spans"
+        );
+        let announced = "SELECT span_id, is_complete FROM span_announcements
+             WHERE span_type = 'future' ORDER BY span_id";
+        assert_eq!(
+            rows(&mut index, announced),
+            vec![vec![id(ROOT), json!(0)], vec![id(CHILD), json!(0)]]
+        );
+
+        // The process crashes: the call never completes.
+        recording.write(
+            2,
+            proto::RecordingFile {
+                end: Some(process_end(proto::ProcessStatus::Panicked)),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            rows(&mut index, "SELECT status FROM processes"),
+            vec![vec![json!("panicked")]]
+        );
+        assert_eq!(rows(&mut index, started), running);
+        assert_eq!(
+            rows(&mut index, finished),
+            vec![vec![id(inner), json!("function")]]
         );
     }
 }
 
+/// A span's total usage is the one its completion carries: the runtime adds
+/// the spans under it that completed before it, so the index sums nothing.
 #[test]
-fn self_usage_is_an_invokes_own_and_total_usage_sums_the_tree() {
-    let project = tempfile::tempdir().unwrap();
-    let recording = Recording::new(project.path(), 1, Some([9; 16]));
-    let (invoke, absorbed) = (50, 51);
+fn self_usage_is_an_invokes_own_and_total_usage_the_completions() {
+    let (invoke, absorbed, outlived) = (50, 51, 52);
     let usage = |model: Option<&str>, input: u64, read, write| proto::ModelUsage {
         provider: "anthropic".into(),
         model: model.map(Into::into),
@@ -849,105 +1004,134 @@ fn self_usage_is_an_invokes_own_and_total_usage_sums_the_tree() {
         cache_write_tokens: write,
         reasoning_tokens: None,
     };
-    let completion = |id: u64, path: u64, usage: Vec<proto::ModelUsage>| {
+    let opus_usage = || {
+        usage(
+            Some("claude-opus-5-5-20260915"),
+            1_000_000,
+            Some(1_000_000),
+            Some(1_000_000),
+        )
+    };
+    let jev_usage = |calls: u64| proto::ModelUsage {
+        calls,
+        input_tokens: Some(calls * 1_000_000),
+        output_tokens: Some(calls * 1_000),
+        ..usage(Some("jev-1.13.0"), 0, None, None)
+    };
+    let completion = |id: u64,
+                      parent_id: u64,
+                      path: u64,
+                      usage: Vec<proto::ModelUsage>,
+                      total_usage: Vec<proto::ModelUsage>| {
         Event::FunctionCompletion(proto::FunctionCompletion {
             id,
-            parent_id: ROOT,
+            parent_id,
             node: path << 1,
             entered_at_ticks: 10,
             exited_at_ticks: 40,
             completion_flags: 1,
             usage,
+            total_usage,
             ..Default::default()
         })
     };
-    let mut file = tree(vec![], vec![]);
-    // B is a model invoke; A is not.
-    if let Some(definitions) = &mut file.definitions {
-        definitions.functions[1] = {
-            let mut b = function(B, "user.B");
-            if let Some(proto::function_definition::Resolution::Metadata(metadata)) =
-                &mut b.resolution
-            {
-                metadata.model_invoke = true;
-            }
-            b
+    for incremental in [false, true] {
+        let project = tempfile::tempdir().unwrap();
+        let recording = Recording::new(project.path(), 1, Some([9; 16]));
+        let mut file = tree(vec![], vec![]);
+        // B is a model invoke; A is not.
+        if let Some(definitions) = &mut file.definitions {
+            definitions.functions[1] = {
+                let mut b = function(B, "user.B");
+                if let Some(proto::function_definition::Resolution::Metadata(metadata)) =
+                    &mut b.resolution
+                {
+                    metadata.model_invoke = true;
+                }
+                b
+            };
+        }
+        file.spans = Some(proto::SpanBatch {
+            sections: vec![section(
+                ROOT,
+                vec![
+                    // The invoke's own calls, one entry per model.
+                    completion(
+                        invoke,
+                        ROOT,
+                        3,
+                        vec![opus_usage(), jev_usage(1)],
+                        vec![opus_usage(), jev_usage(1)],
+                    ),
+                    // A's span absorbed an invoke that was not a span.
+                    completion(absorbed, ROOT, 2, vec![jev_usage(1)], vec![jev_usage(1)]),
+                    // Completed after its parent: not in the parent's total.
+                    completion(
+                        outlived,
+                        absorbed,
+                        3,
+                        vec![jev_usage(1)],
+                        vec![jev_usage(1)],
+                    ),
+                    // No span open: the thread pays, and totals what completed
+                    // before it.
+                    Event::ThreadCompletion(proto::ThreadCompletion {
+                        completed_at_ticks: 100,
+                        outcome: proto::InvocationOutcome::Ok as i32,
+                        usage: vec![usage(Some("some-new-model"), 10, None, None)],
+                        total_usage: vec![
+                            opus_usage(),
+                            jev_usage(2),
+                            usage(Some("some-new-model"), 10, None, None),
+                        ],
+                        clock_epoch_id: EPOCH,
+                        ..Default::default()
+                    }),
+                ],
+            )],
+        });
+        recording.write(1, file);
+        let mut index = open(project.path(), incremental);
+        let result = run(
+            &mut index,
+            "SELECT span_name, self_usage, total_usage FROM spans
+             ORDER BY span_type, span_name, span_id",
+        );
+        let entry = |model: &str, calls, input, read: Json, write: Json| {
+            json!({"provider": "anthropic", "model": model, "calls": calls, "input_tokens": input, "output_tokens": calls * 1_000,
+                "cache_read_tokens": read, "cache_write_tokens": write, "reasoning_tokens": null})
         };
+        let opus = entry(
+            "claude-opus-5-5-20260915",
+            1,
+            1_000_000,
+            json!(1_000_000),
+            json!(1_000_000),
+        );
+        let jev = |calls: i64| {
+            entry(
+                "jev-1.13.0",
+                calls,
+                calls * 1_000_000,
+                Json::Null,
+                Json::Null,
+            )
+        };
+        let unknown = entry("some-new-model", 1, 10, Json::Null, Json::Null);
+        assert_eq!(
+            result.rows,
+            vec![
+                vec![json!("user.A"), json!([]), json!([jev(1)])],
+                vec![
+                    json!("user.B"),
+                    json!([opus.clone(), jev(1)]),
+                    json!([opus.clone(), jev(1)])
+                ],
+                vec![json!("user.B"), json!([jev(1)]), json!([jev(1)])],
+                vec![json!("user.A"), json!([]), json!([opus, jev(2), unknown])],
+            ],
+            "incremental: {incremental}: {:?}",
+            result.outcome.diagnostics
+        );
     }
-    file.spans = Some(proto::SpanBatch {
-        sections: vec![section(
-            ROOT,
-            vec![
-                // The invoke's own calls, one entry per model.
-                completion(
-                    invoke,
-                    3,
-                    vec![
-                        usage(
-                            Some("claude-opus-5-5-20260915"),
-                            1_000_000,
-                            Some(1_000_000),
-                            Some(1_000_000),
-                        ),
-                        usage(Some("jev-1.13.0"), 1_000_000, None, None),
-                    ],
-                ),
-                // A's span absorbed an invoke that was not a span.
-                completion(
-                    absorbed,
-                    2,
-                    vec![usage(Some("jev-1.13.0"), 1_000_000, None, None)],
-                ),
-                // No span open: the thread pays.
-                Event::ThreadCompletion(proto::ThreadCompletion {
-                    completed_at_ticks: 100,
-                    outcome: proto::InvocationOutcome::Ok as i32,
-                    panicked: false,
-                    usage: vec![usage(Some("some-new-model"), 10, None, None)],
-                    error_cas_id: None,
-                }),
-            ],
-        )],
-    });
-    recording.write(1, file);
-    let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    let result = run(
-        &mut index,
-        "SELECT span_name, self_usage, total_usage FROM spans ORDER BY span_type, span_name",
-    );
-    let entry = |model: &str, calls, input, read: Json, write: Json| {
-        json!({"provider": "anthropic", "model": model, "calls": calls, "input_tokens": input, "output_tokens": calls * 1_000,
-            "cache_read_tokens": read, "cache_write_tokens": write, "reasoning_tokens": null})
-    };
-    let opus = entry(
-        "claude-opus-5-5-20260915",
-        1,
-        1_000_000,
-        json!(1_000_000),
-        json!(1_000_000),
-    );
-    let jev = |calls: i64| {
-        entry(
-            "jev-1.13.0",
-            calls,
-            calls * 1_000_000,
-            Json::Null,
-            Json::Null,
-        )
-    };
-    let unknown = entry("some-new-model", 1, 10, Json::Null, Json::Null);
-    assert_eq!(
-        result.rows,
-        vec![
-            vec![json!("user.A"), json!([]), json!([jev(1)])],
-            vec![
-                json!("user.B"),
-                json!([opus.clone(), jev(1)]),
-                json!([opus.clone(), jev(1)])
-            ],
-            vec![json!("user.A"), json!([]), json!([opus, jev(2), unknown])],
-        ],
-        "{:?}",
-        result.outcome.diagnostics
-    );
 }

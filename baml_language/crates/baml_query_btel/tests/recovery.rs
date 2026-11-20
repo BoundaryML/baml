@@ -141,18 +141,28 @@ fn spans(events: Vec<Event>) -> proto::SpanBatch {
     }
 }
 
-fn announce(inputs: Option<[u8; 16]>) -> Event {
+/// A local recording's slim start record of the call.
+fn announce() -> Event {
     Event::FunctionAnnouncement(proto::FunctionAnnouncement {
-        manual: false,
         id: CALL,
         parent_id: THREAD,
         call_path_id: PATH,
         entered_at_ticks: 1000,
-        inputs_cas_id: inputs.map(|b| proto::CasId {
-            low: u64::from_le_bytes(b[..8].try_into().unwrap()),
-            high: u64::from_le_bytes(b[8..].try_into().unwrap()),
+        ..Default::default()
+    })
+}
+
+/// The call's completion, carrying its captured inputs.
+fn complete_with_inputs(inputs: [u8; 16]) -> Event {
+    let Event::FunctionCompletion(done) = complete(THREAD, 1) else {
+        unreachable!("a function completion")
+    };
+    Event::FunctionCompletion(proto::FunctionCompletion {
+        inputs_cas_id: Some(proto::CasId {
+            low: u64::from_le_bytes(inputs[..8].try_into().unwrap()),
+            high: u64::from_le_bytes(inputs[8..].try_into().unwrap()),
         }),
-        type_args_cas_id: None,
+        ..done
     })
 }
 
@@ -258,7 +268,7 @@ fn late_definitions_completions_and_clock_invalidation_repair_derived_fields() {
         1,
         proto::RecordingFile {
             aggregates: Some(aggregate(1, 500)),
-            spans: Some(spans(vec![announce(None)])),
+            spans: Some(spans(vec![announce()])),
             ..Default::default()
         },
     );
@@ -339,7 +349,7 @@ fn late_definitions_completions_and_clock_invalidation_repair_derived_fields() {
 }
 
 #[test]
-fn completion_before_its_announcement_waits_for_inputs() {
+fn a_running_calls_inputs_are_pending_until_its_completion_brings_them() {
     let project = tempfile::tempdir().unwrap();
     let recording = Recording::new(project.path(), 2);
     recording.write(
@@ -347,8 +357,7 @@ fn completion_before_its_announcement_waits_for_inputs() {
         proto::RecordingFile {
             definitions: Some(definitions("user.Ask")),
             clock_states: Some(state(proto::TimingStatus::Valid)),
-            // Bit 3: the inputs live in an announcement not yet published.
-            spans: Some(spans(vec![complete(THREAD, 9)])),
+            spans: Some(spans(vec![announce()])),
             ..Default::default()
         },
     );
@@ -357,19 +366,19 @@ fn completion_before_its_announcement_waits_for_inputs() {
     // Reading the inputs now is unavailable evidence, not a non-match.
     let pending = run(
         &mut index,
-        "SELECT status, input_args[0], baml_value_state(input_args[0]) FROM spans
-         WHERE span_type = 'function'",
+        "SELECT is_complete, input_args[0], baml_value_state(input_args[0])
+         FROM span_announcements WHERE span_type = 'function'",
     );
     assert_eq!(
         pending.rows,
-        vec![vec![json!("return"), Json::Null, json!("capture_pending")]]
+        vec![vec![json!(0), Json::Null, json!("capture_pending")]]
     );
     assert_eq!(pending.outcome.status, Status::Incomplete);
     assert_eq!(pending.outcome.diagnostics[0].code, "capture_pending");
     recording.write(
         2,
         proto::RecordingFile {
-            spans: Some(spans(vec![announce(Some([7; 16]))])),
+            spans: Some(spans(vec![complete_with_inputs([7; 16])])),
             ..Default::default()
         },
     );
@@ -550,7 +559,7 @@ fn schema_changes_rebuild_and_equal_evidence_gives_equal_rows() {
     recording.write(
         1,
         proto::RecordingFile {
-            spans: Some(spans(vec![announce(None)])),
+            spans: Some(spans(vec![announce()])),
             aggregates: Some(aggregate(2, 7)),
             ..Default::default()
         },
@@ -767,7 +776,7 @@ fn value_callbacks_respect_the_time_budget() {
         1,
         proto::RecordingFile {
             definitions: Some(definitions("user.Ask")),
-            spans: Some(spans(vec![announce(Some([1; 16]))])),
+            spans: Some(spans(vec![complete_with_inputs([1; 16])])),
             ..Default::default()
         },
     );
@@ -775,7 +784,7 @@ fn value_callbacks_respect_the_time_budget() {
     index.refresh().unwrap();
     let error = index
         .query(&QueryRequest {
-            sql: "SELECT input_args FROM span_announcements".into(),
+            sql: "SELECT input_args FROM spans".into(),
             budgets: baml_query_btel::Budgets {
                 max_duration: Some(Duration::ZERO),
                 ..baml_query_btel::Budgets::default()
