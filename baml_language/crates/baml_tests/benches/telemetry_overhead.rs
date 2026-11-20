@@ -128,10 +128,10 @@ function main() -> int {{
     )
 );
 
-// 1b-1e. Timing only, but the calls do not repeat one key back to back. The
-// VM's call-path cache has one entry (`CALL_PATH_CACHE_SLOTS`), so a call hits
-// it only when the previous resolved key was its own; every scenario below
-// misses on every call and takes the hash-map path. Each makes 10,000 timed
+// 1b-1e. Timing only, but the calls do not repeat one key back to back. A
+// one-entry call-path cache would miss on every call here and take the
+// hash-map path; the VM's cache has `CALL_PATH_CACHE_SLOTS` entries so that
+// they hit, unless two of their keys share a slot. Each makes 10,000 timed
 // calls, as `timing_only` does, so their per-call overheads compare directly.
 
 // 1b. Two call sites in one loop: keys alternate Add, Sub, Add, Sub.

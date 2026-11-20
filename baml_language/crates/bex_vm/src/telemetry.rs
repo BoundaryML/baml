@@ -54,8 +54,8 @@ impl PartialEq for ThreadSpawnContext {
 use btel_settings::policy::{
     AI_DEFAULT_MODE, BYTECODE_DEFAULT_MODE, CALL_PATH_CACHE_SLOTS, NATIVE_DEFAULT_MODE,
 };
-// The resolver below uses the measured single-entry fast path.
-const _: () = assert!(CALL_PATH_CACHE_SLOTS == 1);
+// `CallPathCache` indexes its entries with the top bits of a hash.
+const _: () = assert!(CALL_PATH_CACHE_SLOTS.is_power_of_two());
 // Native instrumentation is unsupported; changing this requires a producer implementation.
 const _: () = assert!(matches!(NATIVE_DEFAULT_MODE, InvocationMode::Hidden));
 
@@ -97,6 +97,82 @@ struct CallPathKey {
     caller_pc: u32,
     callee: HeapPtr,
     edge: CallPathEdge,
+}
+
+/// Entries in `CallPathCache::callees`: a power of two, since a path's
+/// slot is the low bits of its id. A thread's recursion only ever asks for
+/// the paths on its stack, so this needs fewer entries than the key table.
+const CALL_PATH_CALLEE_SLOTS: usize = 32;
+const _: () = assert!(CALL_PATH_CALLEE_SLOTS.is_power_of_two());
+
+/// A direct-mapped cache in front of `call_paths` and `call_path_keys`. A
+/// call resolves its key with one probe, however many call sites are hot;
+/// two keys that share a slot evict each other and fall back to the map.
+/// Every entry repeats a map entry, so dropping any of them changes no
+/// call-path id, only how fast it is found. The entries hold heap pointers
+/// that a collection may move or free, so `visit_roots` clears them.
+struct CallPathCache {
+    by_key: [Option<(CallPathKey, CallPathId)>; CALL_PATH_CACHE_SLOTS],
+    /// Each path's callee, by path id, for the recursion check.
+    callees: [Option<(CallPathId, HeapPtr)>; CALL_PATH_CALLEE_SLOTS],
+}
+
+impl CallPathCache {
+    const EMPTY: Self = Self {
+        by_key: [None; CALL_PATH_CACHE_SLOTS],
+        callees: [None; CALL_PATH_CALLEE_SLOTS],
+    };
+
+    /// The `by_key` slot of `key`: a multiplicative (Fibonacci) hash of the
+    /// sum of the callee, the call site and the parent path, whose top bits
+    /// pick the slot. A sum keeps evenly spaced keys (consecutive path ids,
+    /// functions allocated one after another) evenly spaced, which this hash
+    /// spreads over distinct slots. The other two fields rarely tell hot keys
+    /// apart; the full key is compared.
+    #[inline(always)]
+    fn key_slot(key: &CallPathKey) -> usize {
+        const BITS: u32 = CALL_PATH_CACHE_SLOTS.trailing_zeros();
+        let callee = key.callee.as_ptr().addr() as u64 >> 3;
+        let hash = callee
+            .wrapping_add(u64::from(key.parent.get()).wrapping_mul(0x2545_F491))
+            .wrapping_add(u64::from(key.caller_pc) << 20)
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        // The shift leaves `BITS` bits, so the cast loses nothing, and the
+        // slot is in bounds.
+        #[allow(clippy::cast_possible_truncation, reason = "keeps the top BITS bits")]
+        let slot = hash.checked_shr(64 - BITS).unwrap_or(0) as usize;
+        slot
+    }
+
+    #[inline(always)]
+    fn callee_slot(id: CallPathId) -> usize {
+        id.get() as usize & (CALL_PATH_CALLEE_SLOTS - 1)
+    }
+
+    #[inline(always)]
+    fn get(&self, key: &CallPathKey) -> Option<CallPathId> {
+        match self.by_key[Self::key_slot(key)] {
+            Some((cached, id)) if cached == *key => Some(id),
+            _ => None,
+        }
+    }
+
+    #[inline(always)]
+    fn callee(&self, id: CallPathId) -> Option<HeapPtr> {
+        match self.callees[Self::callee_slot(id)] {
+            Some((cached, callee)) if cached == id => Some(callee),
+            _ => None,
+        }
+    }
+
+    fn insert(&mut self, key: CallPathKey, id: CallPathId) {
+        self.by_key[Self::key_slot(&key)] = Some((key, id));
+        self.insert_callee(id, key.callee);
+    }
+
+    fn insert_callee(&mut self, id: CallPathId, callee: HeapPtr) {
+        self.callees[Self::callee_slot(id)] = Some((id, callee));
+    }
 }
 
 #[repr(C)]
@@ -244,7 +320,10 @@ pub struct TelemetryState {
     thread: ThreadTelemetry,
     call_paths: FxHashMap<CallPathKey, CallPathId>,
     call_path_keys: FxHashMap<CallPathId, CallPathKey>,
-    last_call_path: [Option<(CallPathKey, CallPathId)>; CALL_PATH_CACHE_SLOTS],
+    /// Allocated by the first lookup of a path the thread already resolved,
+    /// so a thread that resolves each of its paths once (a spawned body that
+    /// makes no call) allocates nothing.
+    call_path_cache: Option<Box<CallPathCache>>,
     policies: Arc<TelemetryPolicies>,
     clock: Arc<ClockEpoch>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -435,7 +514,7 @@ impl TelemetryState {
             },
             call_paths: FxHashMap::default(),
             call_path_keys: FxHashMap::default(),
-            last_call_path: [None; CALL_PATH_CACHE_SLOTS],
+            call_path_cache: None,
             policies,
             clock,
             #[cfg(not(target_arch = "wasm32"))]
@@ -1589,18 +1668,36 @@ impl TelemetryState {
     }
 
     /// The callee of the call path `id`, as `call_path_keys` records it.
-    /// A recursive call asks this of the path it is already on, which is
-    /// usually the one the resolver resolved last: its cache holds the
-    /// same entry, so the map is read only when the cache holds another.
+    /// A recursive call asks this of the path it is already on, which the
+    /// cache usually holds: the map is read only after an eviction or a
+    /// collection.
     #[inline(always)]
-    fn call_path_callee(&self, id: CallPathId) -> Option<HeapPtr> {
-        if let Some((key, cached)) = self.last_call_path[0]
-            && cached == id
+    fn call_path_callee(&mut self, id: CallPathId) -> Option<HeapPtr> {
+        if let Some(callee) = self
+            .call_path_cache
+            .as_deref()
+            .and_then(|cache| cache.callee(id))
         {
-            debug_assert_eq!(self.call_path_keys.get(&id), Some(&key));
-            return Some(key.callee);
+            debug_assert_eq!(
+                self.call_path_keys.get(&id).map(|key| key.callee),
+                Some(callee)
+            );
+            return Some(callee);
         }
-        self.call_path_keys.get(&id).map(|key| key.callee)
+        self.call_path_callee_slow(id)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn call_path_callee_slow(&mut self, id: CallPathId) -> Option<HeapPtr> {
+        let callee = self.call_path_keys.get(&id)?.callee;
+        self.call_path_cache_mut().insert_callee(id, callee);
+        Some(callee)
+    }
+
+    fn call_path_cache_mut(&mut self) -> &mut CallPathCache {
+        self.call_path_cache
+            .get_or_insert_with(|| Box::new(CallPathCache::EMPTY))
     }
 
     #[inline(always)]
@@ -1609,9 +1706,12 @@ impl TelemetryState {
         key: CallPathKey,
         register: impl FnOnce(Option<HeapPtr>, HeapPtr) -> (Option<FunctionId>, FunctionId),
     ) -> CallPathId {
-        if let Some((cached_key, id)) = self.last_call_path[0]
-            && cached_key == key
+        if let Some(id) = self
+            .call_path_cache
+            .as_deref()
+            .and_then(|cache| cache.get(&key))
         {
+            debug_assert_eq!(self.call_paths.get(&key), Some(&id));
             return id;
         }
         self.resolve_call_path_slow(key, register)
@@ -1626,7 +1726,7 @@ impl TelemetryState {
     ) -> CallPathId {
         if let Some(id) = self.call_paths.get(&key) {
             let id = *id;
-            self.last_call_path[0] = Some((key, id));
+            self.call_path_cache_mut().insert(key, id);
             return id;
         }
         // Registration precedes publishing any definition that references it.
@@ -1635,7 +1735,11 @@ impl TelemetryState {
         let id = allocate_call_path_id(&LAST_CALL_PATH_ID);
         self.call_paths.insert(key, id);
         self.call_path_keys.insert(id, key);
-        self.last_call_path[0] = Some((key, id));
+        // A new path allocates no cache: a spawned body that makes no call
+        // resolves only its own path, once. The first repeat lookup does.
+        if let Some(cache) = &mut self.call_path_cache {
+            cache.insert(key, id);
+        }
         self.write_span(SpanRecord::CallPathDefined {
             call_path: id,
             parent_call_path: key.parent,
@@ -1849,7 +1953,7 @@ impl ::bex_vm_types::RootHaver for TelemetryState {
             thread: _,
             call_paths,
             call_path_keys,
-            last_call_path,
+            call_path_cache,
             policies: _,
             clock: _,
             #[cfg(not(target_arch = "wasm32"))]
@@ -1865,6 +1969,11 @@ impl ::bex_vm_types::RootHaver for TelemetryState {
             #[cfg(test)]
                 span_contexts: _,
         } = self;
+        // The cache is keyed by pointers the collection may move or free, and
+        // repeats the map, so it is emptied rather than forwarded.
+        if let Some(cache) = call_path_cache {
+            **cache = CallPathCache::EMPTY;
+        }
         // The pointers are part of the map's keys, so it is rebuilt through
         // the visitor.
         let old_paths = std::mem::take(call_paths);
@@ -1879,23 +1988,12 @@ impl ::bex_vm_types::RootHaver for TelemetryState {
                     call_path_keys.insert(id, key);
                 }
             }
-            for slot in last_call_path.iter_mut() {
-                if slot
-                    .as_mut()
-                    .is_some_and(|(key, _)| !key.visit_weak(visitor))
-                {
-                    *slot = None;
-                }
-            }
             return;
         }
         for (mut key, id) in old_paths {
             key.visit_roots(visitor);
             call_paths.insert(key, id);
             call_path_keys.insert(id, key);
-        }
-        for (key, _) in last_call_path.iter_mut().flatten() {
-            key.visit_roots(visitor);
         }
     }
 }
@@ -2606,7 +2704,7 @@ mod tests {
         // Definitions must not keep executable objects alive or need forwarding.
         state.call_paths.clear();
         state.call_path_keys.clear();
-        state.last_call_path[0] = None;
+        state.call_path_cache = None;
         roots.clear();
         state.collect_roots(&mut roots);
         assert!(roots.is_empty());
@@ -2621,6 +2719,106 @@ mod tests {
         assert!(vm.heap.function_metadata(vm.proof(), caller_id).is_none());
         assert!(vm.heap.function_metadata(vm.proof(), callee_id).is_none());
         assert_eq!(definitions(&state), before);
+    }
+
+    #[test]
+    fn call_path_cache_keeps_several_hot_keys_and_empties_at_collection() {
+        let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
+        let callee_id = function(FunctionKind::Bytecode, None)
+            .telemetry_function_id
+            .unwrap();
+        let key = |caller_pc| CallPathKey {
+            parent: CallPathId::ROOT,
+            visible_caller: None,
+            caller_pc,
+            callee: HeapPtr::null(),
+            edge: CallPathEdge::Synchronous,
+        };
+        // Up to eight call sites with slots of their own, and two others that
+        // share a slot. One slot stays free for that pair, so the search ends
+        // whatever the cache's size.
+        let hot_count = 8.min(CALL_PATH_CACHE_SLOTS - 1);
+        let mut slots = std::collections::HashMap::new();
+        let mut hot = Vec::new();
+        let mut shared = None;
+        for caller_pc in 0.. {
+            let key = key(caller_pc);
+            let slot = CallPathCache::key_slot(&key);
+            if hot.len() < hot_count {
+                if slots.insert(slot, None).is_none() {
+                    hot.push(key);
+                }
+            } else if let Some(entry) = slots.get_mut(&slot) {
+                if let Some(other) = *entry {
+                    shared = Some([other, key]);
+                    break;
+                }
+            } else {
+                slots.insert(slot, Some(key));
+            }
+        }
+        let [first, second] = shared.unwrap();
+        let ids = hot
+            .iter()
+            .map(|key| state.resolve_call_path(*key, |_, _| (None, callee_id)))
+            .collect::<Vec<_>>();
+        let first_id = state.resolve_call_path(first, |_, _| (None, callee_id));
+        let second_id = state.resolve_call_path(second, |_, _| (None, callee_id));
+        let defined = |state: &TelemetryState| {
+            state
+                .span_records()
+                .iter()
+                .filter(|record| matches!(record, SpanRecord::CallPathDefined { .. }))
+                .count()
+        };
+        assert_eq!(defined(&state), hot_count + 2);
+        // Paths resolved once allocate no cache; the first repeat does.
+        assert!(state.call_path_cache.is_none());
+        for (key, id) in hot.iter().zip(&ids) {
+            assert_eq!(
+                state.resolve_call_path(*key, |_, _| panic!("known key registered")),
+                *id
+            );
+        }
+
+        let cached = |state: &TelemetryState, key: &CallPathKey| {
+            state
+                .call_path_cache
+                .as_deref()
+                .and_then(|cache| cache.get(key))
+        };
+        for _ in 0..3 {
+            for (key, id) in hot.iter().zip(&ids) {
+                assert_eq!(cached(&state, key), Some(*id));
+                assert_eq!(
+                    state.resolve_call_path(*key, |_, _| panic!("hot key registered")),
+                    *id
+                );
+                assert_eq!(state.call_path_callee(*id), Some(HeapPtr::null()));
+            }
+            // Keys that share a slot evict each other, and keep their ids.
+            for (key, id) in [(first, first_id), (second, second_id)] {
+                assert_eq!(
+                    state.resolve_call_path(key, |_, _| panic!("evicted key registered")),
+                    id
+                );
+            }
+            assert_eq!(cached(&state, &first), None);
+            assert_eq!(cached(&state, &second), Some(second_id));
+        }
+
+        // A collection empties the cache; the map still has every path.
+        let mut roots = Vec::new();
+        state.collect_roots(&mut roots);
+        assert!(hot.iter().all(|key| cached(&state, key).is_none()));
+        for (key, id) in hot.iter().zip(&ids) {
+            assert_eq!(
+                state.resolve_call_path(*key, |_, _| panic!("collected key registered")),
+                *id
+            );
+            assert_eq!(cached(&state, key), Some(*id));
+        }
+        assert_eq!(defined(&state), hot_count + 2);
     }
 
     #[test]
@@ -2653,7 +2851,7 @@ mod tests {
         // Isolate capture roots from the separate executable call-path cache.
         state.call_paths.clear();
         state.call_path_keys.clear();
-        state.last_call_path[0] = None;
+        state.call_path_cache = None;
         let mut roots = Vec::new();
         state.collect_roots(&mut roots);
         assert!(roots.is_empty());
