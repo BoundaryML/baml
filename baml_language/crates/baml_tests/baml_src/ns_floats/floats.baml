@@ -1141,15 +1141,9 @@ test "float_signum_negative" {
     assert.equal((-3.5).signum(), -1.0)
 }
 
-// The two zero-sign cases are kept in separate test bodies for the same
-// reason as the cbrt pair below: a `0.0` and a `-0.0` literal in one body
-// currently alias to whichever is written first (#4750).
-test "float_signum_positive_zero" {
+test "float_signum_signed_zero" {
     assert.equal((0.0).to_string(), "0.0");
-    assert.equal((0.0).signum(), 1.0)
-}
-
-test "float_signum_negative_zero" {
+    assert.equal((0.0).signum(), 1.0);
     assert.equal((-0.0).to_string(), "-0.0");
     assert.equal((-0.0).signum(), -1.0)
 }
@@ -1356,17 +1350,9 @@ test "float_cbrt_beats_pow_one_third" {
     assert.equal((1000.0).cbrt(), 10.0)
 }
 
-test "float_cbrt_positive_zero" {
+test "float_cbrt_signed_zero" {
     assert.equal((0.0).cbrt(), 0.0);
-    assert.equal((0.0).cbrt().to_string(), "0.0")
-}
-
-// Split from the positive case deliberately: a `0.0` and a `-0.0` literal in
-// the same function body currently collapse to whichever is written first
-// (#4750), so mixing them here would make the assertion pass or fail on
-// literal order rather than on cbrt's behaviour. Merge these two tests once
-// that is fixed.
-test "float_cbrt_negative_zero" {
+    assert.equal((0.0).cbrt().to_string(), "0.0");
     assert.equal((-0.0).cbrt().to_string(), "-0.0")
 }
 
@@ -1436,4 +1422,17 @@ test "float_epsilon_is_the_gap_above_one" {
 
 test "float_epsilon_is_not_smallest_positive" {
     assert.is_true(5e-324 < float.epsilon())
+}
+
+// ─── signed-zero literals ─────────────────────────────────────────────────────
+// `-0.0 == 0.0`, but the two are distinct values: a `0.0` and a `-0.0` literal
+// in one body each keep their own sign, whichever is written first.
+test "float_signed_zero_literals_stay_distinct" {
+    assert.equal(
+        (0.0).to_string() + "," + (-0.0).to_string() + "," + (0.0).to_string(),
+        "0.0,-0.0,0.0"
+    );
+    let negative = -0.0;
+    assert.equal(negative.signum(), -1.0);
+    assert.equal((0.0).atan2(-0.0), float.pi())
 }

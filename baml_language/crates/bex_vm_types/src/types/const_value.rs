@@ -1,24 +1,58 @@
 //! Compile-time constant values ([`ConstValue`]).
 
+use std::fmt;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::{heap_ptr::HeapPtr, types::Value};
+
+/// A float constant, identified by its bit pattern.
+///
+/// BAML's `==` on floats is not identity: `-0.0 == 0.0`, yet `to_string` and
+/// `signum` tell the two apart. Two constants equal here are interchangeable
+/// under every operation, so a pool that shares equal constants never hands a
+/// `-0.0` literal the `0.0` written before it.
+///
+/// Serializes to the same eight bytes as the `f64` it holds.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub struct FloatBits(u64);
+
+impl FloatBits {
+    #[must_use]
+    pub const fn new(value: f64) -> Self {
+        Self(value.to_bits())
+    }
+
+    #[must_use]
+    pub const fn get(self) -> f64 {
+        f64::from_bits(self.0)
+    }
+}
+
+impl fmt::Debug for FloatBits {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.get(), f)
+    }
+}
 
 /// Compile-time constant values.
 ///
 /// Similar to `Value` but uses `ObjectIndex` for object references instead of `HeapPtr`.
 /// Used in bytecode constants which are converted to `Value` when loading into the engine.
 ///
+/// Equality is identity: two equal constants are the same value, which is what
+/// lets a function's constant pool share them.
+///
 /// Note: `ConstValue::Type` is intentionally excluded from the `to_value` conversion — the
 /// `LoadType` instruction reads the `TyTemplate` directly from the constant pool at execution
 /// time and substitutes type arguments from `frame.type_args` before allocating an
 /// `Object::Type` on the heap.
-#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum ConstValue {
     OmittedArg,
     Null,
     Int(i64),
-    Float(f64),
+    Float(FloatBits),
     Bool(bool),
     /// Index into the object pool (converted to `HeapPtr` at load time).
     Object(crate::ObjectIndex),
@@ -77,9 +111,9 @@ impl ConstValue {
             ConstValue::OmittedArg => Value::OMITTED_ARG,
             ConstValue::Null => Value::NULL,
             ConstValue::Int(v) => Value::int(*v),
-            ConstValue::Float(f) => Value::try_inline_float(*f).unwrap_or_else(|| {
+            ConstValue::Float(f) => Value::try_inline_float(f.get()).unwrap_or_else(|| {
                 panic!(
-                    "ConstValue::Float {f} has no inline encoding and must be heap-boxed \
+                    "ConstValue::Float {f:?} has no inline encoding and must be heap-boxed \
                      at engine load time (box_compile_time_floats), not resolved via to_value"
                 )
             }),
