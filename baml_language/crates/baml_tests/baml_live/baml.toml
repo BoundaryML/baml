@@ -1,0 +1,28 @@
+[package]
+name = "baml_live"
+
+# Realtime voice demo. See README.md.
+#
+#   talk           full-duplex conversation on this Mac, GPT-Live
+#   talk_realtime  the same conversation on the OpenAI Realtime API
+#   mic_check      records the microphone and plays a phrase, no session
+#   selftest       no microphone: synthesizes a caller with TTS, runs both
+#                  providers, and prints what each one heard and said
+#
+#   infisical run --env=dev -- baml run --project crates/baml_tests/baml_live talk
+[scripts]
+talk = "--function talk"
+talk_realtime = "--function talk_realtime"
+selftest = "--function selftest"
+mic_check = "--function mic_check"
+
+# The `::live::` testset opens real provider sessions, so a bare `baml test`
+# skips it. Run it with `--profile live` and an OPENAI_API_KEY.
+[test]
+default = "offline"
+
+[test.profiles.offline]
+args = ["-x", "::live::"]
+
+[test.profiles.live]
+args = ["-i", "::live::"]
