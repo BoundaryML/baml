@@ -154,7 +154,7 @@ async fn long_compute_collects_before_returning() {
 
 /// Growing an array that already survived a collection spends the budget by
 /// the capacity it gains: 2.1 million pushes reach a 4 Mi-element buffer, which
-/// is 32 MiB, the whole initial allowance.
+/// is 32 MiB, four times the initial 8 MiB allowance.
 #[tokio::test(start_paused = true)]
 async fn existing_old_array_growth_spends_the_budget() {
     let engine = engine();
@@ -214,7 +214,7 @@ async fn large_payloads_trigger_gc_with_few_objects() {
     let collections = engine.heap().gc_budget().full_collections;
     assert!(
         collections >= 2,
-        "{collections} collections for 80 MiB of payload against a 32 MiB budget"
+        "{collections} collections for 80 MiB of payload against an 8 MiB budget"
     );
     engine.collect_garbage().await;
     for value in kept {
@@ -228,9 +228,9 @@ async fn large_payloads_trigger_gc_with_few_objects() {
 
 /// A loop that makes and drops one large buffer per iteration collects
 /// during the call rather than waiting for it to end. The first collection
-/// comes after four 8 MiB iterations spend the 32 MiB budget; it finds the
-/// seed and the current copy live, 16 MiB, so the budget becomes 64 MiB and
-/// the remaining 224 MiB of churn brings at least two more.
+/// comes once one 8 MiB buffer spends the 8 MiB budget; it finds the seed
+/// and the current copy live, 16 MiB, so the budget becomes 64 MiB and the
+/// remaining 240 MiB or so of churn brings at least two more.
 #[tokio::test(start_paused = true)]
 async fn large_buffers_collect_during_the_call() {
     let engine = engine();
@@ -317,7 +317,7 @@ async fn unread_concatenation_is_charged_its_nodes() {
 /// grows: a CSV buffer writer accumulating 256 MiB of text in one call must
 /// bring collections during the call, though the call allocates almost no
 /// heap objects (one two-element record per iteration) and never reads the
-/// text back. The first collection comes at 32 MiB; it finds the buffer live
+/// text back. The first collection comes at 8 MiB; it finds the buffer live
 /// and sets the budget to four times that, so the rest brings at least one
 /// more.
 #[tokio::test(start_paused = true)]

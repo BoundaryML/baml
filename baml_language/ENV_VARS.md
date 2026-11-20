@@ -47,7 +47,7 @@ Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential
 | `BAML_CLI_ALLOW_DIRECT` | Hides the "don't run baml-cli directly" warning. The wrapper sets it. |
 | `BAML_AWS_CREDENTIAL_PROCESS` | Allow running an AWS profile's `credential_process`. Off by default because it runs a program. |
 | `BAML_GC_GROWTH` | How much the heap may grow between collections, as a multiple of the data that survived the last one: `0.25` to `1000`, at most two decimals. Default `4`. See [Memory](#memory). |
-| `BAML_GC_MIN_GROWTH` | The least the heap may grow between collections, and before the first: a size such as `8MiB` (`B`, `KiB`, `MiB`, `GiB`; a bare number is bytes), at least `1MiB`. Default `32MiB`. See [Memory](#memory). |
+| `BAML_GC_MIN_GROWTH` | The least the heap may grow between collections, and before the first: a size such as `4MiB` (`B`, `KiB`, `MiB`, `GiB`; a bare number is bytes), at least `1MiB`. Default `8MiB`. See [Memory](#memory). |
 
 ## Memory
 
@@ -56,7 +56,7 @@ BAML's heap is garbage collected. After each collection, the next one waits unti
 | | Default | Environment | Packed programs (`baml.toml`) |
 |---|---|---|---|
 | growth | `4` | `BAML_GC_GROWTH=2.5` | `[pack.gc]` `growth = 2.5` |
-| min_growth | `32MiB` | `BAML_GC_MIN_GROWTH=8MiB` | `[pack.gc]` `min_growth = "8MiB"` |
+| min_growth | `8MiB` | `BAML_GC_MIN_GROWTH=4MiB` | `[pack.gc]` `min_growth = "4MiB"` |
 
 - `baml run`, `baml test`, the playground and the generated SDKs that load the native library read the two variables when the runtime starts. The WASM SDK cannot read environment variables and always uses the defaults.
 - `baml pack` bakes `[pack.gc]` into the binary. Only `baml pack` checks `[pack.gc]`; `baml run`, `baml test` and `baml check` neither read nor validate it. At startup the variables still win over the baked values, each setting on its own. A publisher can rename the variables the binary reads with `[pack.env_var_names]` (`BAML_GC_GROWTH = "ACME_GC_GROWTH"`), but cannot turn them off; a GC variable cannot be renamed to the other one's standard name. Generated SDKs always read the standard names, so `[bridge.env_var_names]` cannot point another binding at them.
