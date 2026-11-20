@@ -1270,6 +1270,147 @@ test "chat_sse_assembles_tool_calls" {
     )
 }
 
+// A stream selects completion zero across events, regardless of array order.
+// Summarize normalized events and buffered tool calls without selecting or
+// filtering choices in the test oracle.
+function chat_stream_choice_summary(chunks: string[]) -> string {
+    let decoder = openai.internal.ChatStreamDecoder.new(provider = "openai-chat");
+    let text = "";
+    let stops: string[] = [];
+    let seen = 0;
+    let input: int? = null;
+    let output: int? = null;
+    let model: string? = null;
+    let done = 0;
+    for (let chunk in chunks) {
+        let batch = baml.json.to_string([ai.stream.SseEvent { event: null, data: chunk, id: null }]);
+        for (let event in decoder.decode(batch)) {
+            match (event) {
+                let delta: ai.stream.TextDelta => {
+                    text += delta.text;
+                    null
+                },
+                let meta: ai.stream.TurnMeta => {
+                    if let reason: ai.content.StopReason = meta.stop_reason {
+                        stops.push(`${reason}`);
+                    }
+                    input = meta.usage?.input_tokens ?? input;
+                    output = meta.usage?.output_tokens ?? output;
+                    model = meta.resolved_model ?? model;
+                    null
+                },
+                let content: ai.stream.ContentSeen => {
+                    seen += 1;
+                    null
+                },
+                let terminal: ai.stream.TurnDone => {
+                    done += 1;
+                    null
+                },
+            };
+        }
+    }
+    let calls = decoder.tool_uses().map((call) -> {
+        `${call.id}:${call.name}:${baml.json.to_string(call.args)}`
+    });
+    `${text}|${stops.join(",")}|${seen}|${calls.join(",")}|${input ?? -1}/${output ?? -1}|${model ?? "-"}|${done}`
+}
+
+test "chat_stream_choice_interleaved" {
+    assert.equal(
+        chat_stream_choice_summary(
+            [
+                `{"choices":[{"index":0,"delta":{"content":"po"}}]}`,
+                `{"choices":[{"index":1,"delta":{"content":"other"}}]}`,
+                `{"choices":[{"index":0,"delta":{"content":"ng"},"finish_reason":"stop"}]}`,
+                `[DONE]`,
+            ],
+        ),
+        "pong|Complete|0||-1/-1|-|1",
+    )
+}
+
+test "chat_stream_choice_secondary_first" {
+    assert.equal(
+        chat_stream_choice_summary(
+            [
+                `{"choices":[{"index":1,"delta":{"content":"other"}}]}`,
+                `{"choices":[{"index":0,"delta":{"content":"pong"},"finish_reason":"stop"}]}`,
+                `[DONE]`,
+            ],
+        ),
+        "pong|Complete|0||-1/-1|-|1",
+    )
+}
+
+test "chat_stream_choice_reversed_array" {
+    assert.equal(
+        chat_stream_choice_summary(
+            [
+                `{"choices":[{"index":1,"delta":{"content":"other"}},{"index":0,"delta":{"content":"po"}}]}`,
+                `{"choices":[{"index":1,"delta":{"content":" answer"}},{"index":0,"delta":{"content":"ng"},"finish_reason":"stop"}]}`,
+                `[DONE]`,
+            ],
+        ),
+        "pong|Complete|0||-1/-1|-|1",
+    )
+}
+
+test "chat_stream_choice_secondary_finish_and_reasoning" {
+    assert.equal(
+        chat_stream_choice_summary(
+            [
+                `{"choices":[{"index":0,"delta":{"content":"pong"},"finish_reason":"stop"}]}`,
+                `{"model":"resolved","choices":[{"index":1,"delta":{"reasoning_content":"other thoughts"},"finish_reason":"length"}],"usage":{"prompt_tokens":7,"completion_tokens":2}}`,
+                `[DONE]`,
+            ],
+        ),
+        "pong|Complete|0||7/2|resolved|1",
+    )
+}
+
+test "chat_stream_choice_secondary_refusal_and_tool" {
+    assert.equal(
+        chat_stream_choice_summary(
+            [
+                `{"choices":[{"index":1,"delta":{"refusal":"other refusal"}}]}`,
+                `{"choices":[{"index":1,"delta":{"tool_calls":[{"index":0,"id":"other","type":"function","function":{"name":"other_tool","arguments":"{}"}}]}}]}`,
+                `{"choices":[{"index":0,"delta":{"content":"pong"},"finish_reason":"stop"}]}`,
+                `[DONE]`,
+            ],
+        ),
+        "pong|Complete|0||-1/-1|-|1",
+    )
+}
+
+// Legacy single-choice compatible servers may omit the completion index.
+test "chat_stream_choice_missing_index" {
+    assert.equal(
+        chat_stream_choice_summary(
+            [
+                `{"choices":[{"delta":{"content":"po"}}]}`,
+                `{"choices":[{"delta":{"content":"ng"},"finish_reason":"stop"}]}`,
+                `{"model":"resolved","choices":[],"usage":{"prompt_tokens":7,"completion_tokens":2}}`,
+                `[DONE]`,
+            ],
+        ),
+        "pong|Complete|0||7/2|resolved|1",
+    )
+}
+
+test "chat_stream_choice_primary_reasoning_and_tool" {
+    assert.equal(
+        chat_stream_choice_summary(
+            [
+                `{"choices":[{"index":0,"delta":{"reasoning_content":"primary thoughts","tool_calls":[{"index":0,"id":"kept","type":"function","function":{"name":"primary_tool","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`,
+                `{"model":"resolved","choices":[],"usage":{"prompt_tokens":7,"completion_tokens":2}}`,
+                `[DONE]`,
+            ],
+        ),
+        "|ToolUse|1|kept:primary_tool:{}|7/2|resolved|1",
+    )
+}
+
 // ─── through the runner ──────────────────────────────────────────────────────
 
 // The whole path: spec -> prompt -> request -> canned response -> SAP -> value.
