@@ -72,6 +72,12 @@ pub enum Ctor {
     /// variants. Without this, list/class members of a union can't be
     /// distinguished by the matrix and combined slice patterns aren't
     /// recognised as exhaustive on the list branch.
+    ///
+    /// In a column that may hold any shape (`unknown`, a type variable) it
+    /// is the type an ascribed pattern tests for (`[1]: int[]`). Such a
+    /// column enumerates as [`Ctor::NonExhaustive`] and never lists the
+    /// type, so the branch decides only which arms are reachable, never
+    /// that the column is covered.
     UnionMember(Ty),
 
     /// Or-pattern: alternatives stored in `DPat::fields`. The arity (=

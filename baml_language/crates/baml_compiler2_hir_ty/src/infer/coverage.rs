@@ -333,7 +333,8 @@ impl HirPatCtx<'_, '_> {
 
     /// A list pattern: claims the members that hold lists its shape may
     /// fit. A written ascription, on the list or on its rest, narrows that
-    /// to the members inside every one of them.
+    /// to the members inside every one of them, and in a member that may
+    /// hold any shape tests for the ascribed type.
     fn slice_dpat(
         &self,
         body: &ExprBody,
@@ -371,14 +372,31 @@ impl HirPatCtx<'_, '_> {
                 .iter()
                 .all(|ascription| self.is_subtype(member, ascription))
         };
+        // The type an ascribed pattern tests for in a column that may hold
+        // any shape: the ascription inside all the others.
+        let tested = ascriptions
+            .iter()
+            .find(|&ascription| within_ascriptions(ascription));
         let claims = self.claims(col, &|member_col| {
             let member = member_col.ty();
-            let holds = if ascriptions.is_empty() {
-                matches!(member, baml_type::Ty::List(_)) || holds_any_shape(member)
-            } else {
-                matches!(member, baml_type::Ty::List(_)) && within_ascriptions(member)
-            };
-            (holds && self.may_fit(body, pat, member_col)).then(|| build(member_col))
+            match tested {
+                // A test inside an open member keeps its own type, so arms
+                // testing different types stay apart; the open member never
+                // lists that type, so the arm proves none of it covered.
+                Some(tested) if holds_any_shape(member) => Some(DPat::union_member(
+                    tested.clone(),
+                    build(&self.column(tested)),
+                    member_col.clone(),
+                )),
+                _ => {
+                    let holds = if ascriptions.is_empty() {
+                        matches!(member, baml_type::Ty::List(_)) || holds_any_shape(member)
+                    } else {
+                        matches!(member, baml_type::Ty::List(_)) && within_ascriptions(member)
+                    };
+                    (holds && self.may_fit(body, pat, member_col)).then(|| build(member_col))
+                }
+            }
         });
         if !claims.is_empty() || matches!(col.ty(), baml_type::Ty::Union(_)) {
             // A union whose lists the pattern does not claim: the slice
