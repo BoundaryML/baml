@@ -6175,8 +6175,8 @@ impl BexVm {
             .globals
             .into_iter()
             .map(|cv| match cv {
-                bex_vm_types::ConstValue::Float(f) if float_indices.contains_key(&f.to_bits()) => {
-                    let idx = float_indices[&f.to_bits()];
+                bex_vm_types::ConstValue::Float(f) if float_indices.contains_key(&f) => {
+                    let idx = float_indices[&f];
                     Value::object(heap.compile_time_ptr(idx))
                 }
                 other => other.to_value(|idx| heap.compile_time_ptr(idx.into_raw())),

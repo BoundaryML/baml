@@ -1484,7 +1484,7 @@ fn relocate(
                     | ConstValue::ClassWithTypeArgs { .. }
                     | ConstValue::Literal(_) => Value::NULL,
                     ConstValue::Float(value) => {
-                        let float = vm.float_value(*value);
+                        let float = vm.float_value(value.get());
                         // An inline float needs no rooting; a boxed one
                         // (NaN, `±inf`, extreme magnitudes) lives in the image.
                         if let Some(boxed) = float.as_object_ptr() {

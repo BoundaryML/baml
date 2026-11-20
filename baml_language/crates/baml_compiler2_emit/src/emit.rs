@@ -24,8 +24,9 @@ use baml_compiler2_mir::{
 };
 use baml_type::DeclName;
 use bex_vm_types::{
-    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
-    GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
+    BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, FloatBits, Function, FunctionKind,
+    FunctionOrigin, GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool,
+    UnaryOp as VmUnaryOp,
     bytecode::{
         BlockPcs, ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta,
         JumpTableData, LineTableEntry, OperandMeta, SwitchKey, SwitchTable,
@@ -2317,7 +2318,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 self.set_operand(inst, OperandMeta::Const(operand_str));
             }
             Constant::Float(v) => {
-                let idx = self.add_constant(ConstValue::Float(*v));
+                let idx = self.add_constant(ConstValue::Float(FloatBits::new(*v)));
                 let inst = self.emit(Instruction::LoadConst(idx));
                 self.set_operand(inst, OperandMeta::Const(bex_vm_types::format_float(*v)));
             }
