@@ -17,12 +17,41 @@ defaults:
 jobs:
   typecheck:
     name: "Typecheck"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
     timeout-minutes: 15
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
@@ -34,15 +63,6 @@ jobs:
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # Share cache across similar Linux WASM jobs for better hit rates
-          shared-key: "linux-wasm"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
-
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch --target wasm32-unknown-unknown
@@ -53,6 +73,7 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
+          cache: "false"
           install_args: "github:rustwasm/wasm-pack"
 
       # Path-mapped imports from app-vscode-webview resolve into pkg-playground/wasm
@@ -75,12 +96,41 @@ jobs:
 
   unit-tests:
     name: "Unit Tests (jsdom)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
     timeout-minutes: 15
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
@@ -92,15 +142,6 @@ jobs:
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # Share cache across similar Linux WASM jobs for better hit rates
-          shared-key: "linux-wasm"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
-
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch --target wasm32-unknown-unknown
@@ -111,6 +152,7 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
+          cache: "false"
           install_args: "github:rustwasm/wasm-pack"
 
       - name: "Build WASM"
@@ -123,12 +165,45 @@ jobs:
 
   browser-tests:
     name: "Browser Tests (Playwright)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
     timeout-minutes: 20
+    env:
+      # The Trunk runner image can be newer than the Ubuntu versions the pinned
+      # Playwright knows. Use its supported Ubuntu 24.04 Chromium build.
+      PLAYWRIGHT_HOST_PLATFORM_OVERRIDE: ubuntu24.04-x64
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
@@ -140,15 +215,6 @@ jobs:
           rustup target add wasm32-unknown-unknown
         working-directory: baml_language
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # Share cache across similar Linux WASM jobs for better hit rates
-          shared-key: "linux-wasm"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
-
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch --target wasm32-unknown-unknown
@@ -159,6 +225,7 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
+          cache: "false"
           install_args: "github:rustwasm/wasm-pack"
 
       - name: "Build WASM"
@@ -166,7 +233,7 @@ jobs:
         working-directory: typescript2
 
       - name: "Install Playwright browsers"
-        run: npx --no playwright install chromium
+        run: npx --no playwright install --with-deps chromium
         working-directory: typescript2/app-vscode-webview
 
       - name: "Run browser tests"

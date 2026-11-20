@@ -29,13 +29,42 @@ env:
 jobs:
   size-gate-linux:
     name: "measure-baml-size (linux)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
     timeout-minutes: 30
     continue-on-error: true
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -44,20 +73,11 @@ jobs:
       - name: "Install sccache and direnv"
         uses: ./.github/actions/setup-mise
         with:
+          cache: "false"
           install_args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          shared-key: "linux-cargo"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
 
       - name: "Load .envrc with direnv"
         run: |
@@ -320,13 +340,42 @@ jobs:
 
   size-gate-wasm:
     name: "measure-baml-size (wasm)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=high
     timeout-minutes: 25
     continue-on-error: true
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: "Install Rust toolchain"
         run: |
@@ -337,20 +386,11 @@ jobs:
       - name: "Install sccache and direnv"
         uses: ./.github/actions/setup-mise
         with:
+          cache: "false"
           install_args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          shared-key: "linux-wasm"
-          # Read-only consumer. The canary saver lives in
-          # cargo-tests.reusable.yaml; see the cache strategy comment there.
-          save-if: false
 
       - name: "Load .envrc with direnv"
         run: |

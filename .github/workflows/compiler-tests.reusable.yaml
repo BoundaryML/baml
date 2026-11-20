@@ -81,12 +81,41 @@ jobs:
 
   snapshot-tests:
     name: "Compiler and documentation tests"
-    runs-on: blacksmith-16vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=xlarge
     timeout-minutes: 30
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: "Install Rust toolchain"
         run: rustup show
@@ -95,18 +124,11 @@ jobs:
       - name: "Install tools (mise)"
         uses: ./.github/actions/setup-mise
         with:
+          cache: "false"
           install_args: ${{ inputs.run-compiler-tests && 'sccache direnv python uv cargo:cargo-insta cargo:cargo-nextest' || 'sccache direnv' }}
 
       - name: "Verify sccache"
         run: sccache --version
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          cache-all-crates: true
-          cache-targets: false
-          save-if: false
-          shared-key: "linux-cargo"
 
       - name: "Load .envrc with direnv"
         run: |

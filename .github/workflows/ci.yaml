@@ -28,7 +28,7 @@ env:
 jobs:
   determine_changes:
     name: "Determine changes"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=small..memory=low
     outputs:
       # Flag that is raised when any code in baml_language is changed
       code: ${{ steps.check_code.outputs.changed }}
@@ -59,10 +59,39 @@ jobs:
       # Flag for SDK test changes - triggers the SDK parity analysis pipeline
       sdk_tests: ${{ steps.check_sdk_tests.outputs.changed }}
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           fetch-depth: 0
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: Determine merge base
         id: merge_base
@@ -411,15 +440,44 @@ jobs:
   # Lint checks
   prek:
     name: "Pre-commit Checks"
-    runs-on: blacksmith-16vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=large..memory=low
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 20
     steps:
       - name: "Checkout Branch"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version
       - name: "Install Rust toolchain"
@@ -427,13 +485,6 @@ jobs:
           rustup toolchain install
           rustup toolchain install 1.97.1 --profile minimal --component rustc-dev
         working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
-          save-if: false
-          shared-key: "linux-cargo"
 
       # prek hooks invoke cargo (from rustup), mise tasks that shell out
       # to cargo, and python scripts that begin with `#!/usr/bin/env -S
@@ -443,6 +494,7 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
+          cache: "false"
           # Temporarily omit Hawk while its CI check is disabled.
           # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
           install_args: "sccache cargo:prek python uv node clang-format"
@@ -471,16 +523,45 @@ jobs:
 
   release-metadata:
     name: "Release Metadata"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=low
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 5
     steps:
       - name: "Checkout"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           fetch-depth: 0
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: "Validate baml_language release metadata"
         run: scripts/baml-language-version check
@@ -624,14 +705,43 @@ jobs:
 
   grammar-tests:
     name: "Grammar Tests"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
     needs: determine_changes
     if: needs.determine_changes.outputs.grammar == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     steps:
       - name: "Checkout Branch"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: "Setup Node.js for typescript2"
         uses: ./.github/actions/setup-node2
@@ -753,27 +863,49 @@ jobs:
 
   proto-sync:
     name: "proto generated files sync"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=medium
     needs: determine_changes
     if: needs.determine_changes.outputs.proto == 'true'
     timeout-minutes: 20
     steps:
       - name: "Checkout"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version.
       - name: "Install Rust toolchain"
         run: rustup toolchain install
         working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          # See the cache strategy explanation at the top of cargo-tests.reusable.yaml.
-          save-if: false
-          shared-key: "linux-cargo"
 
       # bridge_ctypes/build.rs needs `protoc`; baml_go's generate.sh needs
       # `protoc` + `protoc-gen-go`; bridge_typescript needs node + pnpm.
@@ -782,6 +914,7 @@ jobs:
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
+          cache: "false"
           install_args: "node npm:pnpm protoc protoc-gen-go"
 
       # Separate step so if fetch is slow, build is fast.
@@ -792,7 +925,14 @@ jobs:
       # Rust (prost) + Python (protoc) — both driven by bridge_ctypes/build.rs.
       # Writes Python pb2/pyi into baml_language/sdks/python/src/baml_bridge/cffi/v1/.
       - name: "Generate Rust + Python proto bindings (bridge_ctypes)"
-        run: cargo build -p bridge_ctypes
+        # bridge_ctypes/build.rs writes the bindings into the source tree but
+        # does not track them, so cargo skips it on a warm target/ tree when its
+        # inputs are unchanged, and a hand edit to a generated file would pass
+        # the check below. Touch build.rs (it is a rerun-if-changed input) so
+        # the script always runs and writes the bindings again.
+        run: |
+          touch crates/bridge_ctypes/build.rs
+          cargo build -p bridge_ctypes
         working-directory: baml_language
 
       # Go (protoc-gen-go) — writes into sdks/go/baml_go/internal/cffi/.
@@ -868,31 +1008,55 @@ jobs:
 
   sdk_parity_check:
     name: "SDK parity lint"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: trunk=${{ github.run_id }}-${{ github.run_attempt }}..size=medium..memory=low
     needs: determine_changes
     if: needs.determine_changes.outputs.sdk_tests == 'true'
     timeout-minutes: 15
     steps:
       - name: "Checkout Branch"
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v7
         with:
+          # A Trunk runner starts from a warm checkout of canary with a built
+          # target/ tree. Keep the untracked build output so cargo reuses it.
+          clean: false
           fetch-depth: 0
           persist-credentials: false
+
+      # baml_artifact's build script tracks HEAD and refs/heads/canary. The
+      # checkout rewrites both, which makes cargo rebuild every crate that
+      # depends on baml_artifact. Backdate the refs so the warm target/ tree
+      # stays fresh, and stamp the SHA that the warm tree was built from.
+      - name: "Backdate the git refs baml_artifact tracks"
+        run: |
+          echo "variant=$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-variant" 2>/dev/null || echo NONE)"
+          basis="$(cat "${XDG_CACHE_HOME:-/cache}/trunk-template-basis-sha" 2>/dev/null || true)"
+          git cat-file -e "${basis}^{commit}" 2>/dev/null || basis=""
+          p=("$(git rev-parse --git-path HEAD)")
+          if r="$(git symbolic-ref -q HEAD)"; then p+=("$(git rev-parse --git-path "${r}")"); fi
+          if ! git show-ref --verify --quiet refs/heads/canary; then
+            b="${basis:-$(git rev-parse HEAD)}"
+            git update-ref refs/heads/canary "${b}"
+            echo "recreated refs/heads/canary at ${b}"
+          fi
+          p+=("$(git rev-parse --git-path refs/heads/canary)")
+          touch -t 197001010000 "${p[@]}"
+          ls -l --time-style=+%Y-%m-%d\ %H:%M "${p[@]}"
+          if [ -n "${basis}" ]; then
+            echo "BAML_GIT_SHA=${basis}" >> "$GITHUB_ENV"
+            echo "stamping BAML_GIT_SHA=${basis}"
+          else
+            echo "no warm template; build.rs reads HEAD, which matches a cold tree"
+          fi
 
       - name: "Install mise"
         uses: ./.github/actions/setup-mise
         with:
+          cache: "false"
           install_args: "ast-grep"
 
       - name: "Install Rust toolchain"
         working-directory: baml_language
         run: rustup show
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
-          shared-key: "sdk-parity-baml-cli"
 
       - name: "Build local BAML CLI"
         run: cargo build --manifest-path baml_language/Cargo.toml -p baml_cli --bin baml-cli
