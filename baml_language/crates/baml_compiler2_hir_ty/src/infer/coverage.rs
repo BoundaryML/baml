@@ -158,10 +158,14 @@ impl HirPatCtx<'_, '_> {
                 || proves_nothing(col),
             );
         }
-        if !matches!(col.ty(), baml_type::Ty::Union(_)) {
+        if !matches!(col.ty(), baml_type::Ty::Union(_)) && !holds_any_type(col.ty()) {
             return self.type_dpat_in(written, col);
         }
-        let claims = self.claims(col, &|member_col| {
+        let narrowing = Narrowing {
+            ty: written,
+            inner: &|narrowed| DPat::wildcard(narrowed.clone()),
+        };
+        let claims = self.claims(col, Some(narrowing), &|member_col| {
             (self.is_subtype(member_col.ty(), written) || self.is_subtype(written, member_col.ty()))
                 .then(|| self.type_dpat(written, member_col))
         });
@@ -216,10 +220,11 @@ impl HirPatCtx<'_, '_> {
         }
     }
 
-    /// A class destructure. In a union column it claims the one member of
-    /// the same class at agreeing args (so per-instantiation arms compose
-    /// to coverage); a column with no such member, or several, takes the
-    /// destructure directly.
+    /// A class destructure. In a union column it claims the members of the
+    /// same class at agreeing args (so per-instantiation arms compose to
+    /// coverage; errored args agree with any) and narrows the members that
+    /// may hold any type; a column with neither takes the destructure
+    /// directly.
     fn class_dpat(
         &self,
         body: &ExprBody,
@@ -235,7 +240,7 @@ impl HirPatCtx<'_, '_> {
         };
         // Error args (a generic destructure without them, an erroneous
         // written arg) were reported by typing; such a ctor covers any args.
-        let baml_type::Ty::Class(_, args) = written else {
+        let baml_type::Ty::Class(_, args) = &written else {
             return fails_closed(col, format_args!("class destructure head {written:?}"));
         };
         let ctor = Ctor::Class(qtn.clone(), args.clone());
@@ -244,7 +249,11 @@ impl HirPatCtx<'_, '_> {
             let rows = self.field_rows(body, fields, &sub_cols);
             DPat::class_inst(qtn.clone(), args.clone(), rows, col.clone())
         };
-        let mut claims = self.claims(col, &|member_col| match member_col.ty() {
+        let narrowing = Narrowing {
+            ty: &written,
+            inner: &build,
+        };
+        let claims = self.claims(col, Some(narrowing), &|member_col| match member_col.ty() {
             baml_type::Ty::Class(member_qtn, member_args)
                 if member_qtn == qtn
                     && (args.iter().any(baml_type::contains_error)
@@ -254,11 +263,7 @@ impl HirPatCtx<'_, '_> {
             }
             _ => None,
         });
-        if claims.len() == 1 {
-            claims.pop().expect("one claim")
-        } else {
-            build(col)
-        }
+        any_of(claims, col, || build(col))
     }
 
     /// An interface destructure: the existential's single-ctor struct view.
@@ -284,7 +289,11 @@ impl HirPatCtx<'_, '_> {
             let rows = self.field_rows(body, fields, &sub_cols);
             DPat::interface(head.clone(), rows, col.clone())
         };
-        let claims = self.claims(col, &|member_col| match member_col.ty() {
+        let narrowing = Narrowing {
+            ty: &head,
+            inner: &build,
+        };
+        let claims = self.claims(col, Some(narrowing), &|member_col| match member_col.ty() {
             baml_type::Ty::Interface(member_qtn, ..) if member_qtn == qtn => {
                 Some(build(member_col))
             }
@@ -324,7 +333,13 @@ impl HirPatCtx<'_, '_> {
                 .collect();
             DPat::tuple(rows, col.clone())
         };
-        let claims = self.claims(col, &|member_col| {
+        // Any tuple of its arity: the slots narrow on their own.
+        let any_tuple = baml_type::Ty::Tuple(vec![baml_type::Ty::Unknown; elements.len()].into());
+        let narrowing = Narrowing {
+            ty: &any_tuple,
+            inner: &build,
+        };
+        let claims = self.claims(col, Some(narrowing), &|member_col| {
             self.may_fit(body, pat, member_col)
                 .then(|| build(member_col))
         });
@@ -333,8 +348,7 @@ impl HirPatCtx<'_, '_> {
 
     /// A list pattern: claims the members that hold lists its shape may
     /// fit. A written ascription, on the list or on its rest, narrows that
-    /// to the members inside every one of them, and in a member that may
-    /// hold any shape tests for the ascribed type.
+    /// to the members inside every one of them.
     fn slice_dpat(
         &self,
         body: &ExprBody,
@@ -372,31 +386,26 @@ impl HirPatCtx<'_, '_> {
                 .iter()
                 .all(|ascription| self.is_subtype(member, ascription))
         };
-        // The type an ascribed pattern tests for in a column that may hold
-        // any shape: the ascription inside all the others.
-        let tested = ascriptions
-            .iter()
-            .find(|&ascription| within_ascriptions(ascription));
-        let claims = self.claims(col, &|member_col| {
+        // The list type the pattern demands: any list without an
+        // ascription, else the ascription inside all the others (none when
+        // they are unrelated, whose common lists no type here names).
+        let any_list = baml_type::Ty::List(Box::new(baml_type::Ty::Unknown));
+        let demanded = if ascriptions.is_empty() {
+            Some(&any_list)
+        } else {
+            ascriptions
+                .iter()
+                .find(|&ascription| within_ascriptions(ascription))
+        };
+        let narrowing = demanded.map(|ty| Narrowing { ty, inner: &build });
+        let claims = self.claims(col, narrowing, &|member_col| {
             let member = member_col.ty();
-            match tested {
-                // A test inside an open member keeps its own type, so arms
-                // testing different types stay apart; the open member never
-                // lists that type, so the arm proves none of it covered.
-                Some(tested) if holds_any_shape(member) => Some(DPat::union_member(
-                    tested.clone(),
-                    build(&self.column(tested)),
-                    member_col.clone(),
-                )),
-                _ => {
-                    let holds = if ascriptions.is_empty() {
-                        matches!(member, baml_type::Ty::List(_)) || holds_any_shape(member)
-                    } else {
-                        matches!(member, baml_type::Ty::List(_)) && within_ascriptions(member)
-                    };
-                    (holds && self.may_fit(body, pat, member_col)).then(|| build(member_col))
-                }
-            }
+            let holds = if ascriptions.is_empty() {
+                matches!(member, baml_type::Ty::List(_)) || holds_any_shape(member)
+            } else {
+                matches!(member, baml_type::Ty::List(_)) && within_ascriptions(member)
+            };
+            (holds && self.may_fit(body, pat, member_col)).then(|| build(member_col))
         });
         if !claims.is_empty() || matches!(col.ty(), baml_type::Ty::Union(_)) {
             // A union whose lists the pattern does not claim: the slice
@@ -528,13 +537,38 @@ impl HirPatCtx<'_, '_> {
         }
     }
 
-    /// The rows a structural pattern claims in `col`: in a union column one
-    /// `UnionMember` branch per member `claim` accepts, each built against
-    /// that member's own column (a member whose column is itself a union, a
+    /// The rows a pattern claims in `col`: in a union column one
+    /// `UnionMember` branch per member it claims, each built against that
+    /// member's own column (a member whose column is itself a union, a
     /// recursive alias the canonical form keeps folded, is searched in
     /// turn); in any other column, the claim of the column itself.
-    fn claims(&self, col: &ColumnTy, claim: &dyn Fn(&ColumnTy) -> Option<DPat>) -> Vec<DPat> {
+    ///
+    /// A column that may hold a value of any type (`unknown`, a type
+    /// variable), on its own or as a member, is claimed by narrowing: the
+    /// pattern first tests for the type it demands, `narrowing`, and then
+    /// matches against that type's column. Every pattern form narrows this
+    /// one way, so arms demanding the same type meet in one branch and a
+    /// wider demand covers a narrower one. The column never lists the type,
+    /// so a narrowing proves none of it covered.
+    fn claims(
+        &self,
+        col: &ColumnTy,
+        narrowing: Option<Narrowing<'_>>,
+        claim: &dyn Fn(&ColumnTy) -> Option<DPat>,
+    ) -> Vec<DPat> {
         if !matches!(col.ty(), baml_type::Ty::Union(_)) {
+            if let Some(narrowing) = &narrowing
+                && holds_any_type(col.ty())
+                && !baml_type::contains_error(narrowing.ty)
+                && !self.is_subtype(col.ty(), narrowing.ty)
+            {
+                let narrowed = self.column(narrowing.ty);
+                return vec![DPat::union_member(
+                    narrowed.ty().clone(),
+                    (narrowing.inner)(&narrowed),
+                    col.clone(),
+                )];
+            }
             return claim(col).into_iter().collect();
         }
         let mut branches = Vec::new();
@@ -544,7 +578,7 @@ impl HirPatCtx<'_, '_> {
             };
             let [member_col] = <[ColumnTy; 1]>::try_from(ctor_sub_tys(self, &ctor, col))
                 .expect("a union member has one sub-column");
-            let mut nested = self.claims(&member_col, claim);
+            let mut nested = self.claims(&member_col, narrowing, claim);
             let inner = match nested.len() {
                 0 => continue,
                 1 => nested.pop().expect("one claim"),
@@ -842,6 +876,27 @@ impl PatCtx for HirPatCtx<'_, '_> {
 fn plain_or_error(ty: &Ty) -> baml_type::Ty {
     baml_type::interned::ClosedTy::try_from(ty)
         .map_or(baml_type::Ty::Error, |closed| closed.to_plain())
+}
+
+/// The type a pattern demands of a column that may hold any type, and its
+/// row against that type's column ([`HirPatCtx::claims`]).
+#[derive(Clone, Copy)]
+struct Narrowing<'a> {
+    ty: &'a baml_type::Ty,
+    inner: &'a dyn Fn(&ColumnTy) -> DPat,
+}
+
+/// Types whose values may be of any type and that offer no structure of
+/// their own to match: a pattern narrows them to the type it demands. An
+/// interface also holds values of many types, but is matched through its
+/// fields; an errored type takes no verdict.
+fn holds_any_type(ty: &baml_type::Ty) -> bool {
+    matches!(
+        ty,
+        baml_type::Ty::Unknown
+            | baml_type::Ty::TypeVar(_)
+            | baml_type::Ty::AssociatedTypeProjection { .. }
+    )
 }
 
 /// Types that may hold a value of any shape (a list, a tuple of any

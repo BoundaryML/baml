@@ -73,11 +73,14 @@ pub enum Ctor {
     /// distinguished by the matrix and combined slice patterns aren't
     /// recognised as exhaustive on the list branch.
     ///
-    /// In a column that may hold any shape (`unknown`, a type variable) it
-    /// is the type an ascribed pattern tests for (`[1]: int[]`). Such a
-    /// column enumerates as [`Ctor::NonExhaustive`] and never lists the
-    /// type, so the branch decides only which arms are reachable, never
-    /// that the column is covered.
+    /// In a column that may hold any type (`unknown`, a type variable) it
+    /// is the type a pattern demands before matching its structure: the
+    /// one form every pattern narrows such a column with (`let xs: int[]`,
+    /// `[1]: int[]`, `1`, `(a, b)`, `Box<int> { .. }`). Such a column
+    /// enumerates as [`Ctor::NonExhaustive`] and never lists the type, so
+    /// the branch decides only which arms are reachable, never that the
+    /// column is covered. A wider member covers a narrower one, as a type
+    /// test does.
     UnionMember(Ty),
 
     /// Or-pattern: alternatives stored in `DPat::fields`. The arity (=
@@ -229,7 +232,9 @@ impl Ctor {
             (Class(a, aa), Class(b, ba)) => a == b && !class_args_definitely_distinct(aa, ba),
             (Interface(a), Interface(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
             (Slice(a), Slice(b)) => slice_covers(a, b),
-            (UnionMember(a), UnionMember(b)) => ty_ctor_identity(a) == ty_ctor_identity(b),
+            (UnionMember(a), UnionMember(b)) => {
+                ty_ctor_identity(a) == ty_ctor_identity(b) || cx.is_subtype(b, a)
+            }
             (NonExhaustive, NonExhaustive) => true,
             (Missing, Missing) => true,
             (Or, Or) => true,
@@ -1884,18 +1889,17 @@ fn dedup_ctors(ctors: Vec<Ctor>) -> Vec<Ctor> {
         .collect()
 }
 
-/// Keep one type test per set of mutually covering ones (`int` beside an
-/// alias of `int`). Each would otherwise be its own branch over the same
-/// values and rows, reporting every witness of that branch once per spelling.
+/// Keep one type test or narrowing per set of mutually covering ones
+/// (`int` beside an alias of `int`). Each would otherwise be its own branch
+/// over the same values and rows, reporting every witness of that branch
+/// once per spelling.
 fn dedup_equivalent_type_tests(cx: &dyn PatCtx, ctors: Vec<Ctor>) -> Vec<Ctor> {
     let mut kept: Vec<Ctor> = Vec::with_capacity(ctors.len());
     for ctor in ctors {
-        let duplicate = matches!(ctor, Ctor::Type(_))
-            && kept.iter().any(|earlier| {
-                matches!(earlier, Ctor::Type(_))
-                    && earlier.covers(&ctor, cx)
-                    && ctor.covers(earlier, cx)
-            });
+        let duplicate = matches!(ctor, Ctor::Type(_) | Ctor::UnionMember(_))
+            && kept
+                .iter()
+                .any(|earlier| earlier.covers(&ctor, cx) && ctor.covers(earlier, cx));
         if !duplicate {
             kept.push(ctor);
         }
