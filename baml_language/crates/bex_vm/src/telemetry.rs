@@ -2734,15 +2734,17 @@ mod tests {
             callee: HeapPtr::null(),
             edge: CallPathEdge::Synchronous,
         };
-        // Eight call sites with slots of their own, and two others that share
-        // a slot.
+        // Up to eight call sites with slots of their own, and two others that
+        // share a slot. One slot stays free for that pair, so the search ends
+        // whatever the cache's size.
+        let hot_count = 8.min(CALL_PATH_CACHE_SLOTS - 1);
         let mut slots = std::collections::HashMap::new();
         let mut hot = Vec::new();
         let mut shared = None;
         for caller_pc in 0.. {
             let key = key(caller_pc);
             let slot = CallPathCache::key_slot(&key);
-            if hot.len() < 8 {
+            if hot.len() < hot_count {
                 if slots.insert(slot, None).is_none() {
                     hot.push(key);
                 }
@@ -2769,7 +2771,7 @@ mod tests {
                 .filter(|record| matches!(record, SpanRecord::CallPathDefined { .. }))
                 .count()
         };
-        assert_eq!(defined(&state), 10);
+        assert_eq!(defined(&state), hot_count + 2);
         // Paths resolved once allocate no cache; the first repeat does.
         assert!(state.call_path_cache.is_none());
         for (key, id) in hot.iter().zip(&ids) {
@@ -2816,7 +2818,7 @@ mod tests {
             );
             assert_eq!(cached(&state, key), Some(*id));
         }
-        assert_eq!(defined(&state), 10);
+        assert_eq!(defined(&state), hot_count + 2);
     }
 
     #[test]
