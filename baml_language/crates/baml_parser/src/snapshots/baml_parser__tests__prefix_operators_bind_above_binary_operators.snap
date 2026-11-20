@@ -1,0 +1,61 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f(a: int, b: int) -> int { -a * b + -a.b() }\")"
+---
+SourceFile@0..53
+  items: FunctionDef@0..53
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..26
+      l: LParen "(" @10..11
+      params: Param@11..17
+        name: Name@11..12
+          token: Word "a" @11..12
+        ascription: TypeAscription@12..17
+          colon: Colon ":" @12..13
+          ty: PathType@14..17
+            head: Name@14..17
+              token: Word "int" @14..17
+      params: Comma "," @17..18
+      params: Param@19..25
+        name: Name@19..20
+          token: Word "b" @19..20
+        ascription: TypeAscription@20..25
+          colon: Colon ":" @20..21
+          ty: PathType@22..25
+            head: Name@22..25
+              token: Word "int" @22..25
+      r: RParen ")" @25..26
+    ret: ReturnType@27..33
+      arrow: Arrow "->" @27..29
+      ty: PathType@30..33
+        head: Name@30..33
+          token: Word "int" @30..33
+    body: Block@34..53
+      l: LBrace "{" @34..35
+      tail: BinaryExpr@36..51
+        lhs: BinaryExpr@36..42
+          lhs: UnaryExpr@36..38
+            op: Minus "-" @36..37
+            operand: PathExpr@37..38
+              head: Name@37..38
+                token: Word "a" @37..38
+          op: Star "*" @39..40
+          rhs: PathExpr@41..42
+            head: Name@41..42
+              token: Word "b" @41..42
+        op: Plus "+" @43..44
+        rhs: UnaryExpr@45..51
+          op: Minus "-" @45..46
+          operand: CallExpr@46..51
+            callee: PathExpr@46..49
+              head: Name@46..47
+                token: Word "a" @46..47
+              dot: Dot "." @47..48
+              name: Name@48..49
+                token: Word "b" @48..49
+            args: ArgList@49..51
+              l: LParen "(" @49..50
+              r: RParen ")" @50..51
+      r: RBrace "}" @52..53

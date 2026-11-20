@@ -1,0 +1,65 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f(x: int) -> int {\\n  let a = --x;\\n  let b = ++x;\\n  a\\n}\\n\")"
+---
+SourceFile@0..63
+  items: FunctionDef@0..63
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..18
+      l: LParen "(" @10..11
+      params: Param@11..17
+        name: Name@11..12
+          token: Word "x" @11..12
+        ascription: TypeAscription@12..17
+          colon: Colon ":" @12..13
+          ty: PathType@14..17
+            head: Name@14..17
+              token: Word "int" @14..17
+      r: RParen ")" @17..18
+    ret: ReturnType@19..25
+      arrow: Arrow "->" @19..21
+      ty: PathType@22..25
+        head: Name@22..25
+          token: Word "int" @22..25
+    body: Block@26..63
+      l: LBrace "{" @26..27
+      stmts: LetStmt@30..42
+        introducer: Let "let" @30..33
+        pattern: BindingPattern@34..35
+          name: Name@34..35
+            token: Word "a" @34..35
+        eq: Equals "=" @36..37
+        init: UnaryExpr@38..41
+          op: Minus "-" @38..39
+          operand: UnaryExpr@39..41
+            op: Minus "-" @39..40
+            operand: PathExpr@40..41
+              head: Name@40..41
+                token: Word "x" @40..41
+        semi: Semicolon ";" @41..42
+      stmts: LetStmt@45..52
+        introducer: Let "let" @45..48
+        pattern: BindingPattern@49..50
+          name: Name@49..50
+            token: Word "b" @49..50
+        eq: Equals "=" @51..52
+        init: <missing @53>
+      stmts: Bogus@53..54
+        tokens: Plus "+" @53..54
+      stmts: Bogus@54..55
+        tokens: Plus "+" @54..55
+      stmts: ExprStmt@55..57
+        expr: PathExpr@55..56
+          head: Name@55..56
+            token: Word "x" @55..56
+        semi: Semicolon ";" @56..57
+      tail: PathExpr@60..61
+        head: Name@60..61
+          token: Word "a" @60..61
+      r: RBrace "}" @62..63
+---
+UnexpectedToken { expected: "expression", found: "'+'", range: 53..54 }
+UnexpectedToken { expected: "expression", found: "'+'", range: 53..54 }
+UnexpectedToken { expected: "expression", found: "'+'", range: 54..55 }

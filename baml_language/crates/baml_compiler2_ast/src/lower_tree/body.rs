@@ -1626,25 +1626,6 @@ fn unary_expr(ctx: &mut LoweringContext, v: View<'_>, id: Id<UnaryExpr>) -> Expr
             },
             span,
         ),
-        // `--x` is `-(-x)`.
-        ops::UnaryOp::PreDec => {
-            let inner = ctx.alloc_expr(
-                Expr::Unary {
-                    op: UnaryOp::Neg,
-                    expr,
-                },
-                span,
-            );
-            ctx.alloc_expr(
-                Expr::Unary {
-                    op: UnaryOp::Neg,
-                    expr: inner,
-                },
-                span,
-            )
-        }
-        // `++x` has no meaning; the operand stands (as in the rowan lowering).
-        ops::UnaryOp::PreInc => expr,
     }
 }
 

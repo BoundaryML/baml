@@ -116,8 +116,6 @@ pub(crate) const EXPR_START: KindSet =
             TokenKind::Minus,
             TokenKind::Not,
             TokenKind::Tilde,
-            TokenKind::PlusPlus,
-            TokenKind::MinusMinus,
             TokenKind::Await,
             TokenKind::Spawn,
         ]));

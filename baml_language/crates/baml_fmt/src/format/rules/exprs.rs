@@ -36,7 +36,7 @@ use baml_syntax::{
         PathExpr, ReturnExpr, SpecExpr, SpreadElement, StringLit, TaggedTemplateExpr, ThrowExpr,
         TupleExpr, TupleFieldExpr, UnaryExpr, UpcastExpr,
     },
-    ops::{BinaryOp, BinaryOpTok, PREFIX_BINDING_POWER},
+    ops::{BinaryOp, BinaryOpTok},
     token::{Token, TokenIdx, TokenKind, punct},
     tree::{AnyNodeId, Id, NodeUnion as _, SepItem},
 };
@@ -493,16 +493,15 @@ fn rightmost_operand(f: &Formatter<'_>, id: Id<BinaryExpr>) -> AnyExpr {
 
 /// Whether an expression, written bare before `op`, would take the
 /// operator and what follows it as its own: a `return` or `throw` with a
-/// payload takes the rest of the expression, whatever operator follows; a
-/// prefix operator's or an `await`'s operand extends past an operator that
-/// binds tighter than the prefix does (`c * -a * d` is `c * -(a * d)`); an
+/// payload takes the rest of the expression, whatever operator follows; an
 /// `is` pattern takes a `|` as another alternative and a `??` as two `?`
-/// suffixes on its type.
+/// suffixes on its type. A prefix operator's operand never does: prefix
+/// operators bind above every binary one
+/// ([`PREFIX_BINDING_POWER`](baml_syntax::ops::PREFIX_BINDING_POWER)).
 fn takes_the_operator(f: &Formatter<'_>, expr: AnyExpr, op: BinaryOp) -> bool {
     match expr {
         AnyExpr::Return(ret) => f.tree.get(ret).value.is_some(),
         AnyExpr::Throw(_) => true,
-        AnyExpr::Unary(_) | AnyExpr::Await(_) => op.binding_power().0 > PREFIX_BINDING_POWER,
         AnyExpr::Is(_) => matches!(op, BinaryOp::BitOr | BinaryOp::NullCoalesce),
         _ => false,
     }
@@ -643,15 +642,13 @@ impl FormatNode for UnaryExpr {
         let d = f.docs;
         let operand = unary_operand(f, f.tree.present(node.operand));
         let operand_id = operand.expr.node_id();
-        // `- -x`: `--` and `++` are tokens, so a `-` or `+` followed by
-        // another (either may be that token itself) keeps a space between
-        // them; `!!x` needs none.
+        // `- -x`: a `-` right under another keeps a space, so the pair does
+        // not read as a decrement (`--x`, which BAML does not have); `!!x`
+        // needs none.
         let op = f.tree.token_text(node.op.idx);
         let fuses = match operand.expr {
             AnyExpr::Unary(inner) => {
-                let next = f.tree.token_text(f.tree.get(inner).op.idx);
-                let touching = (op.chars().last(), next.chars().next());
-                matches!(touching, (Some('-'), Some('-')) | (Some('+'), Some('+')))
+                op == "-" && f.tree.token_text(f.tree.get(inner).op.idx) == "-"
             }
             _ => false,
         };

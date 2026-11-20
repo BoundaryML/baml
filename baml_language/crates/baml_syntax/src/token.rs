@@ -396,12 +396,6 @@ pub enum TokenKind {
     #[token("~")]
     Tilde,
     #[group(punct)]
-    #[token("++")]
-    PlusPlus,
-    #[group(punct)]
-    #[token("--")]
-    MinusMinus,
-    #[group(punct)]
     #[token("+")]
     Plus,
     #[group(punct)]

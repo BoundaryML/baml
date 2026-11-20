@@ -111,6 +111,24 @@ fn function_titles_are_owned() {
     ));
 }
 
+/// A prefix operator binds above every binary operator: `-a * b` is
+/// `(-a) * b`; its operand still takes the postfix forms (`-a.b()`).
+#[test]
+fn prefix_operators_bind_above_binary_operators() {
+    insta::assert_snapshot!(tree(
+        "function f(a: int, b: int) -> int { -a * b + -a.b() }"
+    ));
+}
+
+/// BAML has no `++`/`--`: `--x` is two negations and `++x` is an error at
+/// its first `+`.
+#[test]
+fn there_are_no_increment_operators() {
+    insta::assert_snapshot!(tree(
+        "function f(x: int) -> int {\n  let a = --x;\n  let b = ++x;\n  a\n}\n"
+    ));
+}
+
 /// Shapes whose recovery once consumed nothing and looped forever: a map or
 /// object member at a token that starts no expression, `@@` in an
 /// `implements` body, a catch arm whose pattern fails before its `=>`.

@@ -213,7 +213,7 @@ pub struct IsExpr {
     pub pattern: Result<AnyPattern, Missing>,
 }
 
-/// `-x`, `!x`, `~x`, `++x`, `--x`; the operator is
+/// `-x`, `!x`, `~x`; the operator is
 /// [`UnaryOp::from_kind`](crate::ops::UnaryOp::from_kind) of the token.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct UnaryExpr {

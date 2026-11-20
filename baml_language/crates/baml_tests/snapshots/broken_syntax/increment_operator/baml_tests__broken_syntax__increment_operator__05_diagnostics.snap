@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × unexpected token
+   ╭─[increment_operator.baml:5:13]
+ 5 │     let b = ++x;
+   ·             ┬
+   ·             ╰── expected `expression`, found `'+'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[increment_operator.baml:5:14]
+ 5 │     let b = ++x;
+   ·              ┬
+   ·              ╰── expected `expression`, found `'+'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[increment_operator.baml:6:15]
+ 6 │     let c = x++;
+   ·               ┬
+   ·               ╰── expected `expression`, found `'+'`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[increment_operator.baml:6:16]
+ 6 │     let c = x++;
+   ·                ┬
+   ·                ╰── expected `expression`, found `';'`
+   ╰────
