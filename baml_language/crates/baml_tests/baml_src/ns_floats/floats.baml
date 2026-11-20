@@ -1141,9 +1141,6 @@ test "float_signum_negative" {
     assert.equal((-3.5).signum(), -1.0)
 }
 
-// The two zero-sign cases are kept in separate test bodies for the same
-// reason as the cbrt pair below: a `0.0` and a `-0.0` literal in one body
-// currently alias to whichever is written first (#4750).
 test "float_signum_positive_zero" {
     assert.equal((0.0).to_string(), "0.0");
     assert.equal((0.0).signum(), 1.0)
@@ -1361,11 +1358,6 @@ test "float_cbrt_positive_zero" {
     assert.equal((0.0).cbrt().to_string(), "0.0")
 }
 
-// Split from the positive case deliberately: a `0.0` and a `-0.0` literal in
-// the same function body currently collapse to whichever is written first
-// (#4750), so mixing them here would make the assertion pass or fail on
-// literal order rather than on cbrt's behaviour. Merge these two tests once
-// that is fixed.
 test "float_cbrt_negative_zero" {
     assert.equal((-0.0).cbrt().to_string(), "-0.0")
 }
@@ -1436,4 +1428,12 @@ test "float_epsilon_is_the_gap_above_one" {
 
 test "float_epsilon_is_not_smallest_positive" {
     assert.is_true(5e-324 < float.epsilon())
+}
+
+test "float_signed_zero_literals_positive_first" {
+    assert.equal((0.0).to_string() + "," + (-0.0).to_string(), "0.0,-0.0")
+}
+
+test "float_signed_zero_literals_negative_first" {
+    assert.equal((-0.0).to_string() + "," + (0.0).to_string(), "-0.0,0.0")
 }
