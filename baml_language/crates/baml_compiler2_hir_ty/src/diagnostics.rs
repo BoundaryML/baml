@@ -428,13 +428,10 @@ pub enum TirTypeError {
         class_name: baml_type::DeclName,
         companion: baml_type::type_kind::BuiltinCompanion,
     },
-    /// A class literal for a class with a `$rust_type` field. Only the
-    /// class's own native functions create that state, so the literal could
-    /// only relabel a handle taken from another value.
+    /// A class literal for a `@@rust_type` class. Only the class's own
+    /// native functions create its state.
     CannotConstructOpaqueClass {
         class_name: baml_type::DeclName,
-        /// The first field that holds native state.
-        field: Name,
     },
     /// A constructor head that is an alias of a type no object literal can
     /// construct (anything but a class).
@@ -613,8 +610,6 @@ pub enum TirTypeError {
     },
     /// Native and compiler-only calls do not expose a traceable invocation.
     TraceUnsupportedCall,
-    /// Trace handles have no public constructor or fields.
-    TraceOpaqueValue,
     /// A defaulted parameter was supplied positionally instead of by name.
     DefaultedParamPassedPositionally {
         name: Name,
@@ -1760,10 +1755,10 @@ impl TirTypeError {
                         );
                     f.write_str(diagnostic.message.as_str())
                 }
-                TirTypeError::CannotConstructOpaqueClass { class_name, field } => write!(
+                TirTypeError::CannotConstructOpaqueClass { class_name } => write!(
                     f,
-                    "class `{}` cannot be built with a class literal: its field `{field}` holds \
-                 state that only the class's own functions create",
+                    "class `{}` cannot be built with a class literal: it is a `@@rust_type` \
+                     class, whose state only its own functions create",
                     class_name.spell(vp)
                 ),
                 TirTypeError::CallSiteBuiltinValue { reference } => write!(
@@ -2104,12 +2099,6 @@ impl TirTypeError {
                     write!(
                         f,
                         "`$trace` is not supported on native, host, or compiler-intrinsic calls"
-                    )
-                }
-                TirTypeError::TraceOpaqueValue => {
-                    write!(
-                        f,
-                        "trace options, reservations, and span IDs are opaque; use their public methods"
                     )
                 }
                 TirTypeError::DefaultedParamPassedPositionally { name } => {

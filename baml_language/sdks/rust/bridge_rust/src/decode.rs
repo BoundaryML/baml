@@ -124,6 +124,7 @@ pub fn decode_result<R: BamlValue, E: BamlValue>(bytes: &[u8]) -> Result<R, Erro
         .map_err(|e| Error::Sdk(SdkError::new(format!("malformed result envelope: {e}"))))?;
     match envelope.result {
         Some(wire::baml_outbound_result::Result::Ok(value)) => {
+            let _pins = crate::outbound::Pins::of([&value]);
             R::from_baml(value).map_err(Error::Decode)
         }
         Some(wire::baml_outbound_result::Result::Error(err)) => {

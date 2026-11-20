@@ -112,7 +112,6 @@ impl Blob<'_> {
                     | RealizedTy::Uint8Array
                     | RealizedTy::Media(_)
                     | RealizedTy::Enum(_)
-                    | RealizedTy::RustType
                     | RealizedTy::Type
                     | RealizedTy::Resource
                     | RealizedTy::PromptAst
@@ -616,7 +615,7 @@ mod tests {
         let media = object(
             &mut b,
             SnapshotObject::Media {
-                kind: baml_type::MediaKind::Image,
+                kind: baml_type::ConcreteMediaKind::Image,
                 mime_type,
                 source: MediaSource::Base64 { data },
             },

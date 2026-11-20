@@ -31,62 +31,123 @@ class Box<T> {
 // ============================================================================
 
 function class_destructure_unknown_field_in_let() -> int {
-    let Person { missing } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person { missing } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     0
 }
 
 function class_destructure_duplicate_field_key_in_let() -> int {
-    let Person { age: let first, age: let second } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person {
+        age: let first,
+        age: let second,
+    } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     first + second
 }
 
 function class_destructure_duplicate_field_key_with_wildcards() -> int {
-    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) {
+    match (
+        Person {
+            age: 1,
+            flexible_age: 2,
+            address: Address { zip: 3 },
+        }
+    ) {
         Person { age: _, age: _ } => 1,
     }
 }
 
 function class_destructure_duplicate_binding_name_across_fields() -> int {
-    let Person { age, flexible_age: let age } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person {
+        age,
+        flexible_age: let age,
+    } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     0
 }
 
 function nested_class_destructure_duplicate_binding_name_in_field_chain() -> int {
-    let SameNameOuter { field: let field: SameNameInner { field } } = SameNameOuter { field: SameNameInner { field: 1 }, other: SameNameInner { field: 2 } };
+    let SameNameOuter {
+        field: let field: SameNameInner { field },
+    } = SameNameOuter {
+        field: SameNameInner { field: 1 },
+        other: SameNameInner { field: 2 },
+    };
     0
 }
 
 function nested_class_destructure_duplicate_binding_name_across_nested_fields() -> int {
-    let SameNameOuter { field: SameNameInner { field }, other: SameNameInner { field } } = SameNameOuter { field: SameNameInner { field: 1 }, other: SameNameInner { field: 2 } };
+    let SameNameOuter {
+        field: SameNameInner { field },
+        other: SameNameInner { field },
+    } = SameNameOuter {
+        field: SameNameInner { field: 1 },
+        other: SameNameInner { field: 2 },
+    };
     0
 }
 
 function nested_class_destructure_unknown_field_in_let() -> int {
-    let Person { address: Address { missing } } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person {
+        address: Address { missing },
+    } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     0
 }
 
 function match_class_destructure_unknown_field() -> int {
-    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) {
+    match (
+        Person {
+            age: 1,
+            flexible_age: 2,
+            address: Address { zip: 3 },
+        }
+    ) {
         Person { missing } => 1,
         _ => 0,
     }
 }
 
 function class_destructure_unresolved_class() -> int {
-    let MissingClass { age } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let MissingClass { age } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     0
 }
 
 function class_destructure_field_pattern_type_mismatch() -> int {
-    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) {
+    match (
+        Person {
+            age: 1,
+            flexible_age: 2,
+            address: Address { zip: 3 },
+        }
+    ) {
         Person { age: string } => 1,
         _ => 0,
     }
 }
 
 function class_destructure_invalid_chain_type() -> int {
-    let Person { age } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person { age } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     age
 }
 
@@ -126,37 +187,62 @@ function let_top_level_class_narrows_union_scrutinee_is_refutable(v: Person | in
 }
 
 function for_top_level_class_narrows_union_element_is_refutable() -> int {
-    for (let Person { age } in [Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }, 2]) {
+    for (
+        let Person { age } in [
+            Person {
+                age: 1,
+                flexible_age: 2,
+                address: Address { zip: 3 },
+            },
+            2,
+        ]
+    ) {
         age
     }
-    ;
     1
 }
 
 function let_class_field_type_narrower_than_field_is_refutable() -> int {
-    let Person { flexible_age: int } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person { flexible_age: int } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     1
 }
 
 function let_class_field_literal_narrower_than_field_is_refutable() -> int {
-    let Person { age: 1 } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person { age: 1 } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     1
 }
 
 function nested_class_field_type_narrower_than_field_is_refutable() -> int {
-    let Person { address: Address { zip: 1 } } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person {
+        address: Address { zip: 1 },
+    } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     1
 }
 
 function for_class_field_type_narrower_than_field_is_refutable() -> int {
     for (
         let Person { flexible_age: int } in [
-            Person { age: 1, flexible_age: 2, address: Address { zip: 3 } },
+            Person {
+                age: 1,
+                flexible_age: 2,
+                address: Address { zip: 3 },
+            },
         ]
     ) {
         1
     }
-    ;
     1
 }
 
@@ -208,20 +294,38 @@ function generic_class_destructure_or_pattern_same_binding_conflicting_types(
 }
 
 function nested_generic_class_destructure_duplicate_binding_name() -> int {
-    let boxed: Box<SameNameInner> = Box { value: SameNameInner { field: 1 } };
-    let Box<SameNameInner> { value: let value: SameNameInner { field: let value } } = boxed;
+    let boxed: Box<SameNameInner> = Box {
+        value: SameNameInner { field: 1 },
+    };
+    let Box<SameNameInner> {
+        value: let value: SameNameInner { field: let value },
+    } = boxed;
     0
 }
 
 function nested_class_destructure_field_pattern_type_mismatch() -> int {
-    match (Person { age: 1, flexible_age: 2, address: Address { zip: 3 } }) {
-        Person { address: Address { zip: string } } => 1,
+    match (
+        Person {
+            age: 1,
+            flexible_age: 2,
+            address: Address { zip: 3 },
+        }
+    ) {
+        Person {
+            address: Address { zip: string },
+        } => 1,
         _ => 0,
     }
 }
 
 function class_destructure_unknown_renamed_field_span() -> int {
-    let Person { missing: let renamed } = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let Person {
+        missing: let renamed,
+    } = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     renamed
 }
 
@@ -230,7 +334,11 @@ function lambda_class_destructure_field_pattern_type_mismatch_span() -> int {
         let Person { age: string } = p;
         1
     };
-    f(Person { age: 1, flexible_age: 2, address: Address { zip: 3 } })
+    f(Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    })
 }
 
 // ============================================================================
@@ -238,20 +346,28 @@ function lambda_class_destructure_field_pattern_type_mismatch_span() -> int {
 // ============================================================================
 
 function class_destructure_formatter_trivia_preserved() -> int {
-    let input = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
-    let Person { /* open */
-        age /* before colon */: /* after colon */ let years /* before comma */, /* after comma */
+    let input = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
+    let Person {
+        /* open */ age /* before colon */: /* after colon */ let years /* before comma */, /* after comma */
         address: Address { /* nested */ zip } /* before close */,
     } = input;
     years + zip
 }
 
 function class_destructure_formatter_empty_and_trailing_comma_trivia() -> int {
-    let input = Person { age: 1, flexible_age: 2, address: Address { zip: 3 } };
+    let input = Person {
+        age: 1,
+        flexible_age: 2,
+        address: Address { zip: 3 },
+    };
     let Person { /* empty */ } = input;
     match (input) {
-        Person { /* match open */ age: let years /* trailing field */ /* trailing comma */ } => {
-            years
-        },
+        Person {
+            /* match open */ age: let years /* trailing field */, /* trailing comma */
+        } => years,
     }
 }

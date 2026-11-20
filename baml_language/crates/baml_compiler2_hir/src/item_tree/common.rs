@@ -71,6 +71,9 @@ pub struct ClassAttrs {
     /// `@@trace.redact`: telemetry records a redaction in place of every
     /// instance of the class.
     pub redact: bool,
+    /// `@@rust_type`: the class keeps its state in Rust, of this kind, and
+    /// declares no fields. Only its own functions create an instance.
+    pub rust_type: Option<baml_base::RustPayloadKind>,
 }
 
 /// The `@@` attributes an enum can carry.

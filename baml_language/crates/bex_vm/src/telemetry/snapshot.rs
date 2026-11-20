@@ -52,6 +52,23 @@ impl Scratch {
     pub(super) fn shaper(&mut self) -> &mut Shaper {
         &mut self.shaper
     }
+    /// The one object a piece of runtime state captures as, keyed by the
+    /// identity of what it shares: made by `make` the first time it is met.
+    fn rust_object(
+        &mut self,
+        leaves: &mut Leaves<'_>,
+        identity: usize,
+        make: impl FnOnce(&mut Leaves<'_>, &[(String, String)]) -> SnapshotObject,
+    ) -> Option<ObjectId> {
+        if let Some(id) = self.rust_seen.get(&identity) {
+            return Some(*id);
+        }
+        let object = make(leaves, &self.rewrites);
+        let id = leaves.object(object)?;
+        self.rust_seen.insert(identity, id);
+        Some(id)
+    }
+
     /// [`Self::add`] for an instance field, which may be a raw float.
     fn add_field(&mut self, leaves: &mut Leaves<'_>, field: Field, depth: usize) -> SnapshotValue {
         match field {
@@ -109,33 +126,35 @@ impl Scratch {
                     None => SnapshotValue::Truncated(Limit::Bytes),
                 }
             }
-            Object::RustData(data) => {
-                let identity = std::sync::Arc::as_ptr(data).cast::<()>() as usize;
-                let id = if let Some(id) = self.rust_seen.get(&identity) {
-                    *id
-                } else {
-                    // Media is the one host value captured by content. Others
-                    // hold keys and cipher state, and stay opaque.
-                    let object = match data.downcast_ref::<MediaValue>() {
-                        Some(value) => media(leaves, &self.rewrites, value),
-                        None => SnapshotObject::NonSnapshotableValue {},
-                    };
-                    let Some(id) = leaves.object(object) else {
-                        return SnapshotValue::Truncated(Limit::Objects);
-                    };
-                    self.rust_seen.insert(identity, id);
-                    id
-                };
-                SnapshotValue::Object(id)
-            }
-            // A class declared redacted is withheld whole: nothing of the
-            // instance enters the capture, which records only that it was.
-            // SAFETY: the class lives under the same heap permit.
-            Object::Instance
-                if unsafe { InstanceRef::of(ptr) }
-                    .is_some_and(|instance| instance.class_object().redact) =>
+            // A class declared redacted is withheld whole, whether its
+            // instance holds fields or runtime state: nothing of the instance
+            // enters the capture, which records only that it was.
+            Object::Instance | Object::RustInstance(_)
+                // SAFETY: the instance and its class live under the same heap
+                // permit.
+                if unsafe { Object::class_instance_at(ptr) }.is_some_and(|(class, _)| {
+                    matches!(unsafe { class.get() }, Object::Class(class) if class.redact)
+                }) =>
             {
                 SnapshotValue::Redacted(RedactionReason::Declared)
+            }
+            // Media is the one runtime value captured by content: one object
+            // per media value, however many instances share it.
+            Object::RustInstance(bex_vm_types::RustInstance {
+                payload:
+                    bex_vm_types::RustPayload::Image(value)
+                    | bex_vm_types::RustPayload::Audio(value)
+                    | bex_vm_types::RustPayload::Pdf(value)
+                    | bex_vm_types::RustPayload::Video(value),
+                ..
+            }) => {
+                let identity = std::sync::Arc::as_ptr(value).cast::<()>() as usize;
+                match self.rust_object(leaves, identity, |leaves, rewrites| {
+                    media(leaves, rewrites, value)
+                }) {
+                    Some(id) => SnapshotValue::Object(id),
+                    None => return SnapshotValue::Truncated(Limit::Objects),
+                }
             }
             _ => {
                 let Some(slot) = leaves.reserve() else {
@@ -225,7 +244,7 @@ impl Scratch {
                             b.described_instance(
                                 declaration,
                                 type_arguments,
-                                (0..instance.field_len()).zip(&class.fields),
+                                (0..instance.field_len()).zip(class.instance_fields()),
                                 |leaves, (at, field)| {
                                     // A field declared redacted is withheld,
                                     // its value never visited.
@@ -236,6 +255,79 @@ impl Scratch {
                                     };
                                     (field.name.as_str().into(), value)
                                 },
+                            )
+                        }
+                        SnapshotValue::Truncated(reason) => SnapshotObject::Truncated(reason),
+                        _ => unreachable!("class declaration is an object"),
+                    }
+                }
+                // Its declaration and type arguments, with no fields; the
+                // payload records nothing a reader could use.
+                Object::RustInstance(instance) => {
+                    let class = Value::object(instance.class);
+                    match self.add(&mut b.leaves(), class, depth + 1) {
+                        SnapshotValue::Object(declaration) => {
+                            match &instance.payload {
+                                bex_vm_types::RustPayload::Foreign(_)
+                                | bex_vm_types::RustPayload::DefaultHasher(_)
+                                | bex_vm_types::RustPayload::Sha256(_)
+                                | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+                                | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+                                | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+                                | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+                                | bex_vm_types::RustPayload::Regex(_)
+                                | bex_vm_types::RustPayload::CsvRecord(_)
+                                | bex_vm_types::RustPayload::Semaphore(_)
+                                | bex_vm_types::RustPayload::Permit(_)
+                                | bex_vm_types::RustPayload::Ticket(_)
+                                | bex_vm_types::RustPayload::CancelToken(_)
+                                | bex_vm_types::RustPayload::SpanId(_)
+                                | bex_vm_types::RustPayload::TraceOptions(_)
+                                | bex_vm_types::RustPayload::ReservedSpan(_)
+                                | bex_vm_types::RustPayload::File(_)
+                                | bex_vm_types::RustPayload::Glob(_)
+                                | bex_vm_types::RustPayload::OutputFormat(_)
+                                | bex_vm_types::RustPayload::Lock(_)
+                                | bex_vm_types::RustPayload::TcpStream(_)
+                                | bex_vm_types::RustPayload::TcpListener(_)
+                                | bex_vm_types::RustPayload::UdpSocket(_)
+                                | bex_vm_types::RustPayload::Xoshiro256PlusPlus(_)
+                                | bex_vm_types::RustPayload::ChaCha20(_)
+                                | bex_vm_types::RustPayload::InterfaceWitness(_)
+                                | bex_vm_types::RustPayload::CsvReader(_)
+                                | bex_vm_types::RustPayload::CsvWriter(_)
+                                | bex_vm_types::RustPayload::ClassBuilder(_)
+                                | bex_vm_types::RustPayload::ChildProcess(_)
+                                | bex_vm_types::RustPayload::ReadPipe(_)
+                                | bex_vm_types::RustPayload::WritePipe(_)
+                                | bex_vm_types::RustPayload::WebSocket(_)
+                                | bex_vm_types::RustPayload::HttpBody(_)
+                                | bex_vm_types::RustPayload::SseStream(_)
+                                | bex_vm_types::RustPayload::HttpServer(_)
+                                | bex_vm_types::RustPayload::TlsKeys(_)
+                                | bex_vm_types::RustPayload::HostValue(_)
+                                | bex_vm_types::RustPayload::Image(_)
+                                | bex_vm_types::RustPayload::Audio(_)
+                                | bex_vm_types::RustPayload::Pdf(_)
+                                | bex_vm_types::RustPayload::Video(_)
+                                | bex_vm_types::RustPayload::Prompt(_) => {}
+                            }
+                            let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
+                                if instance.class_type_args.is_empty() {
+                                    SmallVec::new()
+                                } else {
+                                    let mut leaves = b.leaves();
+                                    instance
+                                        .class_type_args
+                                        .iter()
+                                        .map(|ty| owned_type(&mut leaves, &mut self.carried, ty))
+                                        .collect()
+                                };
+                            b.described_instance(
+                                declaration,
+                                type_arguments,
+                                std::iter::empty(),
+                                |_, never: std::convert::Infallible| match never {},
                             )
                         }
                         SnapshotValue::Truncated(reason) => SnapshotObject::Truncated(reason),
@@ -279,8 +371,7 @@ impl Scratch {
                 | Object::String(_)
                 | Object::Bigint(_)
                 | Object::Type(_)
-                | Object::Variant(_)
-                | Object::RustData(_) => unreachable!("inline value queued as object"),
+                | Object::Variant(_) => unreachable!("inline value queued as object"),
             };
             b.fill(slot, object);
         }
@@ -575,6 +666,77 @@ mod tests {
     fn ty() -> RealizedTy {
         RealizedTy::Null
     }
+
+    /// An instance of a bare `@@rust_type` class around `payload`.
+    fn foreign_instance(
+        vm: &mut crate::BexVm,
+        payload: Arc<dyn bex_vm_types::BexRustData>,
+    ) -> Value {
+        let class = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
+            declared_crossing: baml_type::ClassCrossing::Opaque,
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Opaque")),
+            body: bex_vm_types::ClassBody::RustType(baml_base::RustPayloadKind::Foreign),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            type_tag: baml_type::typetag::TypeTag::from_i64(301),
+            stream_done: false,
+            cleanup: None,
+            methods: indexmap::IndexMap::new(),
+            generic_param_count: 0,
+            owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact: false,
+        })));
+        vm.alloc_rust_instance(
+            class,
+            bex_vm_types::ThinVec::new(),
+            bex_vm_types::RustPayload::Foreign(payload),
+        )
+    }
+
+    /// A media value as the VM holds one: an instance of a wrapper class
+    /// around it. The capture reads only the payload, so the class is bare.
+    fn media_instance(vm: &mut crate::BexVm, media: Arc<MediaValue>) -> Value {
+        media_instance_of_class(vm, media, false)
+    }
+
+    /// A media instance whose class is declared redacted as `redact` says.
+    fn media_instance_of_class(
+        vm: &mut crate::BexVm,
+        media: Arc<MediaValue>,
+        redact: bool,
+    ) -> Value {
+        let class = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
+            declared_crossing: baml_type::ClassCrossing::Media(media.kind),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Media")),
+            body: bex_vm_types::ClassBody::RustType(match media.kind {
+                baml_base::ConcreteMediaKind::Image => baml_base::RustPayloadKind::Image,
+                baml_base::ConcreteMediaKind::Audio => baml_base::RustPayloadKind::Audio,
+                baml_base::ConcreteMediaKind::Pdf => baml_base::RustPayloadKind::Pdf,
+                baml_base::ConcreteMediaKind::Video => baml_base::RustPayloadKind::Video,
+            }),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            type_tag: baml_type::typetag::TypeTag::from_i64(300),
+            stream_done: false,
+            cleanup: None,
+            methods: indexmap::IndexMap::new(),
+            generic_param_count: 0,
+            owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
+            redact,
+        })));
+        vm.alloc_rust_instance(
+            class,
+            bex_vm_types::ThinVec::new(),
+            bex_vm_types::RustPayload::media(media),
+        )
+    }
+
     fn capture(values: &[Value]) -> Snapshot {
         let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
         // SAFETY: all test values remain live; fixtures do not collect during capture.
@@ -623,7 +785,7 @@ mod tests {
         assert_eq!(snapshot.bytes(*data), [1, 2, 3]);
     }
     #[test]
-    fn scalar_kinds_strings_bigints_and_non_snapshotable_rust_objects() {
+    fn scalar_kinds_strings_and_bigints() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let string = vm.tlab.alloc_string(bex_str::BexStr::concat(
             "a".repeat(1024).into(),
@@ -632,11 +794,6 @@ mod tests {
         let big = vm.tlab.alloc_bigint(num_bigint::BigInt::from(123));
         let float = vm.tlab.float_value(2.5);
         let boxed_float = vm.tlab.float_value(f64::INFINITY);
-        let opaque: Arc<dyn bex_vm_types::BexRustData> = Arc::new(bex_vm_types::TestRustData(7));
-        let weak = Arc::downgrade(&opaque);
-        let first = vm.tlab.alloc_rust_data(opaque.clone());
-        let second = vm.tlab.alloc_rust_data(opaque.clone());
-        drop(opaque);
         let snapshot = capture(&[
             Value::NULL,
             Value::OMITTED_ARG,
@@ -645,16 +802,10 @@ mod tests {
             Value::object(string),
             Value::object(big),
             float,
-            Value::object(first),
-            Value::object(second),
             boxed_float,
         ]);
         unsafe { vm.heap.collect_garbage(&[]) };
         drop(vm);
-        assert!(
-            weak.upgrade().is_none(),
-            "opaque source must not be retained"
-        );
         let roots = snapshot.roots();
         assert!(matches!(roots[0], Val::Null));
         assert!(matches!(roots[1], Val::OmittedArg));
@@ -669,13 +820,8 @@ mod tests {
         );
         assert!(matches!(roots[5], Val::Bigint(_)));
         assert!(matches!(roots[6], Val::Float(2.5)));
-        assert_eq!(roots[7], roots[8]);
-        assert!(matches!(
-            captured_object(&snapshot, roots[8]),
-            Obj::NonSnapshotableValue {}
-        ));
         // Inline and boxed floats capture alike.
-        assert!(matches!(roots[9], Val::Float(f) if f == f64::INFINITY));
+        assert!(matches!(roots[7], Val::Float(f) if f == f64::INFINITY));
     }
     #[test]
     fn media_is_captured_by_content_without_retaining_sources() {
@@ -686,21 +832,21 @@ mod tests {
             panic!("expected a heap-backed payload, got {payload:?}")
         };
         let stored = Arc::clone(stored);
-        let sources: [Arc<dyn bex_vm_types::BexRustData>; 3] = [
+        let sources: [Arc<MediaValue>; 3] = [
             // Content that was read from a file: only its name is kept.
             MediaValue::from_file_content(
-                baml_type::MediaKind::Image,
+                baml_type::ConcreteMediaKind::Image,
                 "/photos/2026/cat.png",
                 payload.clone(),
                 None,
             ),
             MediaValue::from_url(
-                baml_type::MediaKind::Pdf,
+                baml_type::ConcreteMediaKind::Pdf,
                 "https://example.test/report.pdf",
                 Some("application/pdf"),
             ),
             MediaValue::from_base64(
-                baml_type::MediaKind::Audio,
+                baml_type::ConcreteMediaKind::Audio,
                 payload.clone(),
                 Some("audio/wav"),
             ),
@@ -709,7 +855,7 @@ mod tests {
         // Two host wrappers of one media value are one captured object.
         let values: Vec<_> = [&sources[0], &sources[1], &sources[2], &sources[2]]
             .into_iter()
-            .map(|source| Value::object(vm.tlab.alloc_rust_data(Arc::clone(source))))
+            .map(|source| media_instance(&mut vm, Arc::clone(source)))
             .collect();
         drop(sources);
         let snapshot = capture(&values);
@@ -744,7 +890,7 @@ mod tests {
         };
         assert_eq!(
             (kind, mime_type),
-            (baml_type::MediaKind::Image, Some("image/png"))
+            (baml_type::ConcreteMediaKind::Image, Some("image/png"))
         );
         assert_eq!(snapshot.label(path).as_str(), "cat.png");
         assert_eq!(snapshot.string(content).as_str(), payload.as_str());
@@ -753,7 +899,7 @@ mod tests {
         };
         assert_eq!(
             (kind, mime_type),
-            (baml_type::MediaKind::Pdf, Some("application/pdf"))
+            (baml_type::ConcreteMediaKind::Pdf, Some("application/pdf"))
         );
         assert_eq!(
             snapshot.label(url).as_str(),
@@ -764,7 +910,7 @@ mod tests {
         };
         assert_eq!(
             (kind, mime_type),
-            (baml_type::MediaKind::Audio, Some("audio/wav"))
+            (baml_type::ConcreteMediaKind::Audio, Some("audio/wav"))
         );
         let bex_str::BexStr::Flat(captured) = snapshot.string(data) else {
             panic!("expected the payload's own handle")
@@ -849,12 +995,12 @@ mod tests {
             Value::object(vm.tlab.alloc_uint8array(vec![7; length]))
         };
         let image = |vm: &mut crate::BexVm, length: usize| {
-            let media: Arc<dyn bex_vm_types::BexRustData> = MediaValue::from_base64(
-                baml_type::MediaKind::Image,
+            let media = MediaValue::from_base64(
+                baml_type::ConcreteMediaKind::Image,
                 bex_str::BexStr::from("A".repeat(length)),
                 None,
             );
-            Value::object(vm.tlab.alloc_rust_data(media))
+            media_instance(vm, media)
         };
         // Each kind at the limit, then just over it.
         let values = [
@@ -908,7 +1054,7 @@ mod tests {
                 Vec::new(),
                 baml_type::Name::new("TestClass"),
             ),
-            fields: vec![
+            body: bex_vm_types::ClassBody::Fields(vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
                     field_type: baml_type::RuntimeTy::Int,
@@ -945,7 +1091,7 @@ mod tests {
                     json_omit_null: false,
                     redact: false,
                 },
-            ],
+            ]),
             description: None,
             alias: None,
             docstring: None,
@@ -1111,7 +1257,7 @@ mod tests {
         vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
-            fields,
+            body: bex_vm_types::ClassBody::Fields(fields),
             description: None,
             alias: None,
             docstring: None,
@@ -1225,6 +1371,27 @@ mod tests {
                 );
             }
         }
+    }
+    /// A redacted class is withheld whole whatever holds its state: an
+    /// instance of runtime state, media included, is the marker too.
+    #[test]
+    fn a_declared_redaction_withholds_runtime_state() {
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let media = || {
+            MediaValue::from_base64(
+                baml_type::ConcreteMediaKind::Image,
+                "c2VjcmV0LWltYWdl".into(),
+                Some("image/png"),
+            )
+        };
+        let redacted = media_instance_of_class(&mut vm, media(), true);
+        let plain = media_instance_of_class(&mut vm, media(), false);
+        let snapshot = capture(&[redacted, plain]);
+        assert_eq!(
+            snapshot.roots()[0],
+            Val::Redacted(btel_snapshot::RedactionReason::Declared)
+        );
+        assert!(matches!(snapshot.roots()[1], Val::Object(_)));
     }
     #[test]
     fn function_args_preserve_omission_null_and_aliases_separately_from_value_roots() {
@@ -1423,12 +1590,11 @@ mod tests {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let raw = "https://example.test/report.pdf?key=secret";
         let clean = "https://example.test/report.pdf?key=sha256:0123";
-        let media: Arc<dyn bex_vm_types::BexRustData> =
-            MediaValue::from_url(baml_type::MediaKind::Pdf, raw, None);
+        let media = MediaValue::from_url(baml_type::ConcreteMediaKind::Pdf, raw, None);
         let message = format!("GET {raw} failed");
         let values = [
             Value::object(vm.tlab.alloc_string(message.as_str())),
-            Value::object(vm.tlab.alloc_rust_data(media)),
+            media_instance(&mut vm, media),
         ];
         let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
         let mut scratch = Scratch {
@@ -1556,13 +1722,11 @@ mod tests {
             panic!()
         };
         source.store(Value::object(cell));
-        let a = vm
-            .tlab
-            .alloc_rust_data(Arc::new(bex_vm_types::TestRustData(1)));
-        let b = vm
-            .tlab
-            .alloc_rust_data(Arc::new(bex_vm_types::TestRustData(1)));
-        let snapshot = capture(&[Value::object(cell), Value::object(a), Value::object(b)]);
+        let opaque: Arc<dyn bex_vm_types::BexRustData> = Arc::new(bex_vm_types::TestRustData(1));
+        let weak = Arc::downgrade(&opaque);
+        let a = foreign_instance(&mut vm, Arc::clone(&opaque));
+        let b = foreign_instance(&mut vm, opaque);
+        let snapshot = capture(&[Value::object(cell), a, b]);
         source.store(Value::int(5));
         drop(vm);
         let roots = snapshot.roots();
@@ -1570,11 +1734,15 @@ mod tests {
         assert!(matches!(captured_object(&snapshot,roots[0]),Obj::Cell(value) if *value==roots[0]));
         assert!(matches!(
             captured_object(&snapshot, roots[1]),
-            Obj::NonSnapshotableValue {}
+            Obj::Instance { .. }
         ));
         assert!(matches!(
             captured_object(&snapshot, roots[2]),
-            Obj::NonSnapshotableValue {}
+            Obj::Instance { .. }
         ));
+        assert!(
+            weak.upgrade().is_none(),
+            "an opaque payload must not be retained"
+        );
     }
 }

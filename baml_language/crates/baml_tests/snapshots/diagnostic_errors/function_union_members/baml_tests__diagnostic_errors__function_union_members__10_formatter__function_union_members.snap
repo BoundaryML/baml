@@ -12,15 +12,11 @@ function wrong_argument() -> int {
 }
 
 function wrong_callable_return() -> int {
-    h(() -> int throws never {
-        7
-    })
+    h(() -> int throws never { 7 })
 }
 
 function wrong_callable_parameter() -> int {
-    h((x: int) -> string throws never {
-        "s"
-    })
+    h((x: int) -> string throws never { "s" })
 }
 
 class Holder {

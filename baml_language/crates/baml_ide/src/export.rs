@@ -159,7 +159,7 @@ fn ty_head(db: &Db, viewer: SourceRoot, ty: &Ty) -> Option<TyHead> {
         Ty::Union(_) => None,
         Ty::Tuple(_) => None,
         Ty::AssociatedTypeProjection { .. } => None,
-        Ty::RustType | Ty::Type | Ty::Resource | Ty::PromptAst => None,
+        Ty::Type | Ty::Resource | Ty::PromptAst => None,
         Ty::Unknown | Ty::Never | Ty::Error => None,
     }
 }

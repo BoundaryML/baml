@@ -27,7 +27,10 @@ function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unkn
         } else {
             a.type
         };
-        let lowered = _scope_schema_refs(baml.json.schema(accepted, naming = baml.json.Naming.Aliased), prefix);
+        let lowered = _scope_schema_refs(
+            baml.json.schema(accepted, naming = baml.json.Naming.Aliased),
+            prefix,
+        );
         let property = baml.json.to<map<string, unknown>>(lowered);
         let reached = baml.json.path_or<map<string, unknown>>(lowered, ".$defs", {});
         for (let name in reached.keys()) {
@@ -37,7 +40,12 @@ function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unkn
         let _ = props.set(a.name, property);
         required.push(a.name);
     }
-    let schema: map<string, unknown> = { "type": "object", "properties": props, "required": required, "additionalProperties": false };
+    let schema: map<string, unknown> = {
+        "type": "object",
+        "properties": props,
+        "required": required,
+        "additionalProperties": false,
+    };
     if (definitions.length() > 0) {
         let _ = schema.set("$defs", definitions);
     }
@@ -56,7 +64,8 @@ function _scope_schema_refs(schema: json, prefix: string) -> json {
                 if let reference: string = value {
                     if (key == "$ref" && reference.starts_with("#/$defs/")) {
                         let escaped = prefix.replace_all("~", "~0").replace_all("/", "~1");
-                        let _ = scoped.set(key, reference.replace("#/$defs/", "#/$defs/" + escaped));
+                        let _ =
+                            scoped.set(key, reference.replace("#/$defs/", "#/$defs/" + escaped));
                         continue;
                     }
                 }
@@ -145,7 +154,10 @@ function assemble_llm_prompt(parts: string[], values: unknown[]) -> root.Prompt 
     if (needs_system) {
         // The reserved metadata key marks this role as assembler-inserted; the
         // VM strips it and skips legacy edge-trimming for the message.
-        let system = root.Role { name: "system", metadata: { "__baml_synthetic_role": "1" } };
+        let system = root.Role {
+            name: "system",
+            metadata: { "__baml_synthetic_role": "1" },
+        };
         let llm_parts: string[] = [""];
         for (let part in parts) {
             llm_parts.push(part);
@@ -172,11 +184,9 @@ function total_input_tokens(uncached: int?, cached: int?, cache_write: int?) -> 
 /// Input tokens billed at the full rate, for a provider whose `total` counts
 /// the cached share (and, where it reports them, the cache writes) too: null
 /// when it reported no total, never below zero.
-function uncached_input_tokens(
-    total: int?,
-    cached: int?,
-    cache_write: int? = null,
-) -> int? throws never {
+function uncached_input_tokens(total: int?, cached: int?, cache_write: int? = null) -> int?
+    throws never
+{
     match (total) {
         let t: int => {
             let rest = t - (cached ?? 0) - (cache_write ?? 0);
@@ -202,11 +212,10 @@ function with_own_call(
     resolved_model: string?,
 ) -> root.ModelTurn {
     call.usage = usage;
-    call.resolved_model
-        = root.events.ModelKey {
-            provider: call.resolved_model.provider,
-            model: resolved_model ?? requested_model ?? call.resolved_model.model,
-        };
+    call.resolved_model = root.events.ModelKey {
+        provider: call.resolved_model.provider,
+        model: resolved_model ?? requested_model ?? call.resolved_model.model,
+    };
     root.ModelTurn {
         ...turn,
         resolved_model: call.resolved_model,

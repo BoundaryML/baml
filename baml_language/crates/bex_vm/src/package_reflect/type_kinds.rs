@@ -8,8 +8,12 @@ use baml_compiler_diagnostics::{
     runtime_type::{self, DuplicateMemberKind, InvalidIdentifierKind, SerializedKeyContainer},
 };
 use bex_heap::TlabHolder;
-use bex_vm_types::types::{
-    Class, ClassField, Enum, EnumVariant, InterfaceDef, Object, RuntimeImplRule, TypeValue, Value,
+use bex_vm_types::{
+    InterfaceWitness,
+    types::{
+        Class, ClassField, Enum, EnumVariant, InterfaceDef, Object, RuntimeImplRule, TypeValue,
+        Value,
+    },
 };
 use indexmap::IndexMap;
 
@@ -26,21 +30,6 @@ use super::{
 };
 use crate::{BexVm, package_load::StdlibClass};
 
-#[derive(Clone, Debug)]
-struct InterfaceWitness {
-    interface_ptr: bex_vm_types::HeapPtr,
-    interface_ty: bex_vm_types::RealizedTy,
-    field_links: IndexMap<baml_type::Name, baml_type::Name>,
-}
-
-impl bex_vm_types::BexRustData for InterfaceWitness {
-    fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        meter.bytes(
-            self.field_links.capacity() * size_of::<(baml_type::Name, baml_type::Name, usize)>(),
-        );
-    }
-}
-
 pub(super) struct WitnessField {
     pub(super) name: String,
     pub(super) ty: bex_vm_types::RealizedTy,
@@ -53,20 +42,18 @@ pub(super) struct ValidatedClassWitness {
     field_links: Vec<u32>,
 }
 
+/// The witness `value` holds. Only a `reflect.interface.Implementation`
+/// holds one.
 fn witness_state(vm: &BexVm, value: Value) -> Result<InterfaceWitness, String> {
-    let instance = vm
-        .as_instance(&value)
-        .map_err(|_| "implementations must contain reflect.interface.Implementation values")?;
-    let class = instance.class_object();
-    if !vm
-        .stdlib_heads()
-        .is_class(StdlibClass::InterfaceImplementation, class.type_tag)
+    match vm
+        .as_rust_instance(&value)
+        .map(|instance| &instance.payload)
     {
-        return Err("implementations must contain reflect.interface.Implementation values".into());
+        Ok(bex_vm_types::RustPayload::InterfaceWitness(witness)) => {
+            Ok(InterfaceWitness::clone(witness))
+        }
+        _ => Err("implementations must contain reflect.interface.Implementation values".into()),
     }
-    vm.as_rust_data::<InterfaceWitness>(&instance.load_value(0))
-        .cloned()
-        .map_err(|_| "invalid reflect.interface.Implementation handle".into())
 }
 
 pub(super) fn validate_class_witnesses(
@@ -389,7 +376,7 @@ fn mint_class(
     let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
     let class_ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
         path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(class_name)),
-        fields: class_fields,
+        body: bex_vm_types::ClassBody::Fields(class_fields),
         description: None,
         alias: None,
         docstring: None,
@@ -713,12 +700,23 @@ impl BamlClassClass for PackageReflectImpl {
             return Err(fail_non_instance(vm));
         };
         let (field_value, class_name) = {
+            // A `@@rust_type` class instance holds native state, not fields.
+            if let Object::RustInstance(instance) = vm.get_object(instance_ptr) {
+                let Object::Class(class) = vm.get_object(instance.class) else {
+                    unreachable!("RustInstance.class must point to Object::Class")
+                };
+                let message = format!(
+                    "class `{}` has no field `{name}`",
+                    class.name().display_name()
+                );
+                return Err(fail(vm, message));
+            }
             let Some(instance) = vm.get_instance(instance_ptr) else {
                 return Err(fail_non_instance(vm));
             };
             let class = instance.class_object();
             let Some(index) = class
-                .fields
+                .instance_fields()
                 .iter()
                 .position(|field| field.name == name.as_str())
             else {
@@ -792,7 +790,7 @@ impl BamlClassClass for PackageReflectImpl {
         };
         // Refuse what the compiler refuses for a class literal: a reflection
         // kind view, whose values only reflection creates, and (below) a
-        // class holding native state.
+        // class whose state is the runtime's own.
         if baml_type::type_kind::TypeKind::ALL
             .iter()
             .any(|kind| vm.lang_declaration(kind.class()) == Some(class_ptr))
@@ -804,6 +802,16 @@ impl BamlClassClass for PackageReflectImpl {
                 ),
             ));
         }
+        // A `@@rust_type` class, whose instance is its payload, or a
+        // capability whose fields are the runtime's own.
+        let Ok(class_fields) = class.buildable_fields() else {
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Class.instantiate cannot build `{class_ty}`: its state is the runtime's own, which only the class's own functions create"
+                ),
+            ));
+        };
         let param_count = class.generic_param_count;
         if type_args.len() != param_count {
             return Err(invalid_argument(
@@ -817,8 +825,7 @@ impl BamlClassClass for PackageReflectImpl {
         // Each declared field with its type realized against `T`'s arguments,
         // and whether a missing value may stand in as `null`.
         let program: &BexVm = vm;
-        let declared: Vec<(String, bex_vm_types::RealizedTy, bool)> = class
-            .fields
+        let declared: Vec<(String, bex_vm_types::RealizedTy, bool)> = class_fields
             .iter()
             .map(|field| {
                 let ty = program.realize_field_ty(&field.field_template, type_args);
@@ -828,20 +835,6 @@ impl BamlClassClass for PackageReflectImpl {
                 (field.name.clone(), ty, nullable)
             })
             .collect();
-        // Only the class's own functions create `$rust_type` state, so a
-        // class literal cannot build such a class either. Refuse it here with
-        // that reason, before the field check below reports a bare mismatch.
-        if let Some((name, ..)) = declared
-            .iter()
-            .find(|(_, ty, _)| matches!(ty, bex_vm_types::RealizedTy::RustType))
-        {
-            return Err(invalid_argument(
-                vm,
-                format!(
-                    "reflect.Class.instantiate cannot build `{class_ty}`: its field `{name}` holds state that only the class's own functions create"
-                ),
-            ));
-        }
         // Values are stored exactly as given: the membership test only, never
         // `call_any`'s int-to-float widening, which would allocate a new value.
         let mut values = Vec::with_capacity(declared.len());
@@ -1193,7 +1186,7 @@ impl BamlClassInterfaceImplementation for PackageReflectImpl {
         );
         witness.field_links.insert(field_name, class_field);
         Ok(copy::interface::Implementation {
-            _handle: Arc::new(witness),
+            payload: Box::new(witness),
         }
         .to_value(vm))
     }
@@ -1233,7 +1226,7 @@ impl BamlClassInterface for PackageReflectImpl {
             ));
         }
         Ok(copy::interface::Implementation {
-            _handle: Arc::new(InterfaceWitness {
+            payload: Box::new(InterfaceWitness {
                 interface_ptr,
                 interface_ty,
                 field_links: IndexMap::new(),
@@ -2197,8 +2190,11 @@ pub(super) fn reflected_class_fields(
     view: Value,
 ) -> Result<Vec<(ClassField, TypeValue)>, crate::errors::VmRustFnError> {
     let (class, args) = reflected_class(vm, view)?;
-    Ok(class
-        .fields
+    let fields = match class.body {
+        bex_vm_types::ClassBody::Fields(fields) => fields,
+        bex_vm_types::ClassBody::RustType(_) => Vec::new(),
+    };
+    Ok(fields
         .into_iter()
         .map(|field| {
             let type_value = if let Some(type_value) = &field.runtime_type {

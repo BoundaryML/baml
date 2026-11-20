@@ -2,5 +2,7 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 interface I {
-    type /* keyword */ Key /* name */ extends /* bound */ string /* value */ = /* default */ string /* delimiter */; // end
+    type /* keyword */ Key /* name */
+        extends /* bound */ string /* value */
+        = /* default */ string /* delimiter */; // end
 }

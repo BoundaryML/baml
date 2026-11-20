@@ -38,7 +38,7 @@ async fn sysop_result_lands_as_its_declared_type() {
 async fn sysop_result_outside_its_declared_return_type_is_the_ops_fault() {
     let mut ops = sys_ops::SysOps::native();
     ops.baml_sys_pid = Arc::new(|_heap, _permit, _args, _ctx, _call_id| {
-        sys_types::SysOpResult::Ready(Ok(BexExternalValue::String("not a pid".into())))
+        sys_types::SysOpResult::Ready(Ok(BexExternalValue::String("not a pid".into()).into()))
     });
     let error = call_read_pid(ops)
         .await

@@ -1,0 +1,14 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+type F = (
+    a:
+        // c
+        int,
+) -> int;
+
+type G = Map<
+    Item =
+        // c
+        int,
+>;

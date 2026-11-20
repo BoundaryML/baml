@@ -1,5 +1,6 @@
 //! Formatter cases: every `tests/cases/**/*.baml` is formatted, checked for
-//! idempotency, and compared with the `<name>.fmt.snap` beside it.
+//! idempotency and against the oracle, and compared with the
+//! `<name>.fmt.snap` beside it.
 //!
 //! The cases are the formatter's behavioural spec. They were extracted
 //! one-to-one from the former in-crate regression tests, grouped by the module
@@ -10,9 +11,9 @@
 //!
 //! Review a change with `cargo insta test --accept -p baml_fmt --test cases`.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use baml_fmt::{FormatOptions, format};
+use baml_fmt::{FormatOptions, format, oracle};
 
 /// Split an optional `// fmt: key=value …` header off the case text.
 fn options(text: &str) -> (FormatOptions, &str) {
@@ -44,9 +45,26 @@ fn cases() {
     let mut violations: Vec<String> = Vec::new();
     let mut count = 0usize;
 
-    for entry in walkdir::WalkDir::new(&root).sort_by_file_name() {
+    let mut snapshots: Vec<PathBuf> = Vec::new();
+    // Hidden directories (a `.baml/` the CLI leaves behind when run in a
+    // case's directory) are not cases.
+    let hidden = |entry: &walkdir::DirEntry| {
+        entry.depth() > 0
+            && entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.starts_with('.'))
+    };
+    for entry in walkdir::WalkDir::new(&root)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_entry(|entry| !hidden(entry))
+    {
         let entry = entry.unwrap_or_else(|e| panic!("walking {}: {e}", root.display()));
         let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("snap") {
+            snapshots.push(path.to_path_buf());
+        }
         if path.extension().and_then(|e| e.to_str()) != Some("baml") {
             continue;
         }
@@ -70,6 +88,12 @@ fn cases() {
             Ok(second) if second == formatted => {}
             Ok(_) => violations.push(format!("{rel}: formatting is not idempotent")),
             Err(error) => violations.push(format!("{rel}: second pass failed: {error}")),
+        }
+        // The formatter reads the file with every line break as `\n`, as the
+        // database stores it; the oracle must compare the same text.
+        let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+        if let Err(violation) = oracle::check(&baml_parser::parse(&normalized).tree, &formatted) {
+            violations.push(format!("{rel}: {violation}"));
         }
 
         let stem = path
@@ -96,4 +120,22 @@ fn cases() {
         violations.join("\n")
     );
     assert!(count > 0, "no cases found under {}", root.display());
+    // A snapshot without its case would pass silently.
+    let orphans: Vec<String> = snapshots
+        .iter()
+        .filter(|snapshot| {
+            let name = snapshot
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("");
+            let stem = name.strip_suffix(".fmt.snap");
+            stem.is_none_or(|stem| !snapshot.with_file_name(format!("{stem}.baml")).exists())
+        })
+        .map(|snapshot| snapshot.display().to_string())
+        .collect();
+    assert!(
+        orphans.is_empty(),
+        "snapshot(s) without a case:\n{}",
+        orphans.join("\n")
+    );
 }

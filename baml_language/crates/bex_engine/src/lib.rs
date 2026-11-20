@@ -494,12 +494,65 @@ pub enum BexCallArg {
     OmittedDefault,
 }
 
+/// A call's arguments, as the peer that sent them. Which one it was decides
+/// what a value may be: only the runtime builds its own tagged instances.
+enum SentArgs {
+    /// A host's values; a defaulted parameter may be omitted.
+    Host(Vec<BexCallArg>),
+    /// The runtime's own values (a sys-op calling back into BAML), one per
+    /// parameter.
+    Runtime(Vec<sys_types::OpValue>),
+}
+
+impl SentArgs {
+    fn len(&self) -> usize {
+        match self {
+            SentArgs::Host(args) => args.len(),
+            SentArgs::Runtime(args) => args.len(),
+        }
+    }
+
+    /// Whether the argument at `idx` was omitted for its default.
+    fn is_omitted(&self, idx: usize) -> bool {
+        match self {
+            SentArgs::Host(args) => matches!(args.get(idx), Some(BexCallArg::OmittedDefault)),
+            SentArgs::Runtime(_) => false,
+        }
+    }
+
+    /// The live object the argument at `idx` references, if it is one.
+    fn handle(&self, idx: usize) -> Option<&bex_external_types::Handle> {
+        let value = match self {
+            SentArgs::Host(args) => match args.get(idx)? {
+                BexCallArg::Provided(value) => value.as_ref(),
+                BexCallArg::OmittedDefault => return None,
+            },
+            SentArgs::Runtime(args) => match args.get(idx)? {
+                sys_types::OpValue::External(value) => value,
+                sys_types::OpValue::RustInstance { .. } | sys_types::OpValue::Instance { .. } => {
+                    return None;
+                }
+            },
+        };
+        match value {
+            BexExternalValue::Handle(handle)
+            | BexExternalValue::Adt(bex_external_types::BexExternalAdt::TaggedHeapHandle {
+                heap_handle: handle,
+                ..
+            }) => Some(handle),
+            _ => None,
+        }
+    }
+}
+
 enum CallableArgs {
     Positional(Vec<BexExternalValue>),
     Named {
         required: indexmap::IndexMap<String, BexExternalValue>,
         optional: indexmap::IndexMap<String, BexExternalValue>,
     },
+    /// The runtime's own values, in parameter order.
+    Runtime(Vec<sys_types::OpValue>),
 }
 
 // ============================================================================
@@ -1287,6 +1340,11 @@ pub struct BexEngine {
     /// for interface dispatch, recursive aliases, and named-item lookup.
     packages: Arc<bex_vm::package_load::PackageIndex>,
 
+    /// Every class the runtime builds (`sys_types::generated::RUNTIME_BUILT_CLASSES`)
+    /// the program loads, by its pointer: a value of one comes back from a
+    /// BAML callback to the runtime in the runtime's own form.
+    runtime_built_classes: HashMap<HeapPtr, baml_base::LangItem>,
+
     /// Value-scoped runtime class/interface dispatch table.
     dynamic_dispatch: Arc<bex_vm::package_load::DynDispatchTables>,
     /// Weak-table forwarding/sweep participant registered for every GC.
@@ -1388,7 +1446,7 @@ fn host_call_type_arg(
 ) -> Result<bex_vm_types::RuntimeTy, bex_vm::errors::VmInternalError> {
     let bad_slot = || bex_vm::errors::VmInternalError::BridgeFailure {
         message: format!(
-            "call_host_value: missing or non-Type {slot_name} (sysop arg slot \
+            "_call_host_value: missing or non-Type {slot_name} (sysop arg slot \
              {slot_index}); this is an engine/compiler ABI bug — expected the \
              VM to pack args as [handle, args_array, ret_ty, throws_ty]"
         ),
@@ -1409,7 +1467,7 @@ fn host_call_type_arg(
     }
 }
 
-/// The host callable a `call_host_value` sys-op calls, read off its closure:
+/// The host callable a `_call_host_value` sys-op calls, read off its closure:
 /// the host's own reference to it and the parameters it declares.
 fn host_callee(
     handle: Option<Value>,
@@ -1421,7 +1479,7 @@ fn host_callee(
     bex_vm::errors::VmInternalError,
 > {
     let malformed = || bex_vm::errors::VmInternalError::BridgeFailure {
-        message: "call_host_value: missing or non-HostClosure handle in sysop arg slot 0"
+        message: "_call_host_value: missing or non-HostClosure handle in sysop arg slot 0"
             .to_string(),
     };
     let ptr = handle
@@ -2401,11 +2459,12 @@ impl BexEngine {
                     identity.name().to_string(),
                     btel_snapshot::host::HostDeclaration {
                         identity: identity.clone(),
-                        fields: definition
-                            .fields
-                            .iter()
-                            .map(|field| field.name.clone())
-                            .collect(),
+                        fields: match &definition.body {
+                            sys_types::ClassDefinitionBody::Fields(fields) => {
+                                fields.iter().map(|field| field.name.clone()).collect()
+                            }
+                            sys_types::ClassDefinitionBody::RuntimeOwned => Vec::new(),
+                        },
                         variants: None,
                     },
                 )
@@ -2531,6 +2590,10 @@ impl BexEngine {
                 delivering: false,
             }),
             unhandled_spawn_delivery: tokio::sync::Mutex::new(()),
+            runtime_built_classes: sys_types::generated::RUNTIME_BUILT_CLASSES
+                .iter()
+                .filter_map(|&item| Some((packages.lang_declaration(item)?, item)))
+                .collect(),
             packages,
             dynamic_dispatch,
             _dynamic_dispatch_permit: dynamic_dispatch_permit,
@@ -3348,6 +3411,53 @@ impl BexEngine {
         self.heap.resolve_handle_ptr(handle.slab_key())
     }
 
+    /// Whether `handle` was issued by this engine. A handle keeps its object
+    /// live, so this is all a host-held reference needs to name an object of
+    /// this engine, and it reads no heap.
+    pub fn owns_handle(&self, handle: &bex_external_types::Handle) -> bool {
+        self.heap.owns_handle(handle)
+    }
+
+    /// A `baml.spawn.CancelToken` holding `state`, for a host frame that runs
+    /// no BAML (a traced host function) but holds a token: issued without a
+    /// heap object, so a host thread never waits on the heap for one. Sent
+    /// back into BAML, it becomes an instance here ([`Self::issued`]).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn issue_cancel_token(
+        &self,
+        state: bex_vm_types::cancellation::CancelTokenState,
+    ) -> Result<BexExternalValue, EngineError> {
+        let class = self
+            .packages
+            .lang_declaration(bex_vm::lang_items::BAML_SPAWN_CANCEL_TOKEN)
+            .ok_or_else(|| EngineError::TypeMismatch {
+                message: format!("the program declares no `{CANCEL_TOKEN_CLASS}`"),
+            })?;
+        // SAFETY: a standard-library class is a compile-time object, which
+        // never moves.
+        let bex_vm_types::Object::Class(declaration) = (unsafe { class.get() }) else {
+            panic!("the CancelToken lang item is not a class")
+        };
+        let ty = crate::conversion::to_annotation(&bex_vm_types::RealizedTy::Class(
+            bex_vm_types::TypeHead::new(class, declaration.type_tag),
+            Box::new([]),
+        ))?;
+        Ok(BexExternalValue::Adt(
+            bex_external_types::BexExternalAdt::CancelToken(
+                bex_external_types::CancelTokenCapability::new(
+                    Arc::new(state),
+                    ty,
+                    &(Arc::clone(&self.heap) as Arc<dyn bex_external_types::WeakHeapRef>),
+                ),
+            ),
+        ))
+    }
+
+    /// Whether this runtime issued `token`: a token dies with its runtime.
+    pub(crate) fn issued(&self, token: &bex_external_types::CancelTokenCapability) -> bool {
+        token.issued_by(&(Arc::clone(&self.heap) as Arc<dyn bex_external_types::WeakHeapRef>))
+    }
+
     /// Explicitly trigger garbage collection.
     ///
     /// Requests and waits for all heap permit holders to park.
@@ -3442,14 +3552,16 @@ impl BexEngine {
                 Some(_) => engine.task_report_for_task().await,
                 None => TaskReport::default(),
             };
-            Ok(if op == SysOp::BamlFutureTaskStack {
-                future
-                    .and_then(|future| report.task_settling(future))
-                    .map_or(BexExternalValue::Null, StuckTask::stack_trace_value)
-            } else {
-                let held_up = future.map(|future| report.holding_up(future));
-                BexExternalValue::String(held_up.unwrap_or_default().to_string().into())
-            })
+            Ok(sys_types::OpValue::External(
+                if op == SysOp::BamlFutureTaskStack {
+                    future
+                        .and_then(|future| report.task_settling(future))
+                        .map_or(BexExternalValue::Null, StuckTask::stack_trace_value)
+                } else {
+                    let held_up = future.map(|future| report.holding_up(future));
+                    BexExternalValue::String(held_up.unwrap_or_default().to_string().into())
+                },
+            ))
         }))
     }
 
@@ -3699,6 +3811,39 @@ impl BexEngine {
         self: &Arc<Self>,
         function_name: &str,
         args: Vec<BexCallArg>,
+        call_ctx: FunctionCallContext,
+        copy_objects: bool,
+    ) -> Result<BexCallResult, EngineError> {
+        self.call_named_with_outcome(function_name, SentArgs::Host(args), call_ctx, copy_objects)
+            .await
+    }
+
+    /// Call a function by name for the runtime's own code (a sys-op calling
+    /// back into BAML): its arguments are the runtime's own values, and so is
+    /// its result ([`Self::runtime_result`]).
+    pub(crate) async fn call_function_for_runtime(
+        self: &Arc<Self>,
+        function_name: &str,
+        args: Vec<sys_types::OpValue>,
+        call_ctx: FunctionCallContext,
+    ) -> Result<sys_types::OpValue, EngineError> {
+        // The result comes back as a handle, read once the call is done.
+        let result = self
+            .call_named_with_outcome(
+                function_name,
+                SentArgs::Runtime(args),
+                call_ctx,
+                /* copy_objects = */ false,
+            )
+            .await
+            .and_then(|result| result.value)?;
+        self.runtime_result(result).await
+    }
+
+    async fn call_named_with_outcome(
+        self: &Arc<Self>,
+        function_name: &str,
+        args: SentArgs,
         mut call_ctx: FunctionCallContext,
         copy_objects: bool,
     ) -> Result<BexCallResult, EngineError> {
@@ -3727,7 +3872,7 @@ impl BexEngine {
         function_index: HeapPtr,
         kind: bex_vm_types::FunctionKind,
         function_name: &str,
-        args: Vec<BexCallArg>,
+        args: SentArgs,
         FunctionCallContext {
             host_call_id,
             boundary,
@@ -3742,8 +3887,6 @@ impl BexEngine {
             deadline_ns: _,
             deadline,
             bound_runtime: _,
-            peer,
-
             type_args,
         }: FunctionCallContext,
         copy_objects: bool,
@@ -3810,16 +3953,8 @@ impl BexEngine {
         // variables in its signature (`Stream.next`'s `T | Done`), and the
         // receiver carries them concretely. Explicit bindings win, since
         // `collect_live_type_var_bindings` only fills unbound keys.
-        for (declared, arg) in declared_param_types.iter().zip(&args) {
-            let BexCallArg::Provided(value) = arg else {
-                continue;
-            };
-            let (BexExternalValue::Handle(handle)
-            | BexExternalValue::Adt(bex_external_types::BexExternalAdt::TaggedHeapHandle {
-                heap_handle: handle,
-                ..
-            })) = value.as_ref()
-            else {
+        for (idx, declared) in declared_param_types.iter().enumerate() {
+            let Some(handle) = args.handle(idx) else {
                 continue;
             };
             if let Some(ptr) = self.resolve_handle(thread.proof(), handle)
@@ -3833,18 +3968,9 @@ impl BexEngine {
         // from the declared types, so a value's type is settled by the time it
         // is inferred from or checked. A runtime declaration a host names in a
         // value is referenced by handle and resolves to itself.
-        let mut landed: Vec<Option<Value>> = Vec::with_capacity(args.len());
-        for (idx, arg) in args.iter().enumerate() {
-            landed.push(match arg {
-                BexCallArg::Provided(value) => Some(
-                    self.hydrate_from(peer, &mut thread, value)
-                        .map_err(|refusal| {
-                            argument_refused(function_name, &params, idx, &refusal)
-                        })?,
-                ),
-                BexCallArg::OmittedDefault => None,
-            });
-        }
+        let landed = self
+            .land_args(&mut thread, args)
+            .map_err(|(idx, refusal)| argument_refused(function_name, &params, idx, &refusal))?;
 
         // A call is generic iff the callee declares any generic params, OR a
         // TypeVar appears in a parameter / the return type. The declared-params
@@ -4572,6 +4698,108 @@ impl BexEngine {
         .await
     }
 
+    /// Invoke a callable for the runtime's own code (a sys-op calling back
+    /// into BAML): its arguments are the runtime's own values, and so is its
+    /// result ([`Self::runtime_result`]).
+    pub(crate) async fn call_callable_for_runtime(
+        self: &Arc<Self>,
+        handle: bex_external_types::Handle,
+        args: Vec<sys_types::OpValue>,
+        call_ctx: FunctionCallContext,
+    ) -> Result<sys_types::OpValue, EngineError> {
+        // The result comes back as a handle, read once the call is done.
+        let result = self
+            .call_callable_with_outcome_impl(
+                handle,
+                CallableArgs::Runtime(args),
+                call_ctx,
+                /* copy_objects = */ false,
+            )
+            .await
+            .and_then(|result| result.value)?;
+        self.runtime_result(result).await
+    }
+
+    /// A callback's result as the runtime takes it back: an instance of a
+    /// class the runtime builds in the runtime's own form (a tagged instance
+    /// as its state, a class holding one by its fields), and anything else
+    /// as its external value, at its own type. `result` is the call's result
+    /// in handle form: an object as a handle, a primitive as itself.
+    async fn runtime_result(
+        &self,
+        result: BexExternalValue,
+    ) -> Result<sys_types::OpValue, EngineError> {
+        let BexExternalValue::Handle(handle) = result else {
+            return Ok(sys_types::OpValue::External(result));
+        };
+        let vm = self.new_vm(self.next_bex_thread_id(), None);
+        let permit = self
+            .heap_permit_manager
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
+        let ptr = self
+            .resolve_handle(permit.proof(), &handle)
+            .ok_or_else(|| EngineError::Other("a callback's result handle is stale".to_string()))?;
+        self.runtime_value(&vm, permit.proof(), Value::object(ptr))
+    }
+
+    /// [`Self::runtime_result`] for a value on the heap.
+    fn runtime_value(
+        &self,
+        vm: &BexVm,
+        proof: bex_heap::PermitProof<'_>,
+        value: Value,
+    ) -> Result<sys_types::OpValue, EngineError> {
+        if let Some(ptr) = value.as_object_ptr() {
+            // SAFETY: `proof` keeps the collector from moving or freeing the
+            // object while it is read.
+            match unsafe { ptr.get() } {
+                Object::RustInstance(instance) => {
+                    if let Some(&class) = self.runtime_built_classes.get(&instance.class) {
+                        return Ok(sys_types::OpValue::RustInstance {
+                            class,
+                            payload: instance.payload.clone(),
+                        });
+                    }
+                }
+                Object::Instance => {
+                    // SAFETY: as above; the tag says the cell is an instance.
+                    let instance =
+                        unsafe { bex_vm_types::InstanceRef::of(ptr) }.expect("an instance pointer");
+                    if let Some(&class) = self.runtime_built_classes.get(&instance.class()) {
+                        let fields = instance
+                            .fields()
+                            .map(|field| match field {
+                                bex_vm_types::Field::Value(value) => {
+                                    self.runtime_value(vm, proof, value)
+                                }
+                                bex_vm_types::Field::Float(float) => {
+                                    Ok(sys_types::OpValue::External(BexExternalValue::Float(float)))
+                                }
+                            })
+                            .collect::<Result<_, _>>()?;
+                        return Ok(sys_types::OpValue::Instance { class, fields });
+                    }
+                }
+                _ => {}
+            }
+        }
+        let own_ty = vm
+            .value_concrete_ty(value)
+            .ok_or_else(|| EngineError::TypeMismatch {
+                message: "a callback returned a value with no BAML type".to_string(),
+            })?;
+        self.convert_vm_value_to_external_with_type(
+            value,
+            &bex_vm_types::RealizedTy::from(own_ty),
+            vm,
+            proof,
+        )
+        .map(sys_types::OpValue::External)
+    }
+
     /// Invoke a host-returned callable using ordered required arguments and
     /// named supplied optionals, matching the cross-SDK callable convention.
     pub async fn call_callable_named(
@@ -4614,8 +4842,6 @@ impl BexEngine {
             deadline_ns: _,
             deadline,
             bound_runtime: _,
-            peer,
-
             type_args,
         } = call_ctx;
         // A callable value is already specialized: its type arguments were
@@ -4826,19 +5052,27 @@ impl BexEngine {
         // it (the receiver is injected below), so the visible arity drops by one.
         let self_offset = usize::from(receiver.is_some());
         let user_arity = arity.saturating_sub(self_offset);
+        let positional_arity = |given: usize| {
+            if given == user_arity {
+                Ok(())
+            } else {
+                Err(EngineError::TypeMismatch {
+                    message: format!("callable expects {user_arity} argument(s), got {given}"),
+                })
+            }
+        };
         let args = match args {
             CallableArgs::Positional(args) => {
-                if args.len() != user_arity {
-                    return Err(EngineError::TypeMismatch {
-                        message: format!(
-                            "callable expects {user_arity} argument(s), got {}",
-                            args.len()
-                        ),
-                    });
-                }
-                args.into_iter()
-                    .map(|arg| BexCallArg::Provided(Box::new(arg)))
-                    .collect()
+                positional_arity(args.len())?;
+                SentArgs::Host(
+                    args.into_iter()
+                        .map(|arg| BexCallArg::Provided(Box::new(arg)))
+                        .collect(),
+                )
+            }
+            CallableArgs::Runtime(args) => {
+                positional_arity(args.len())?;
+                SentArgs::Runtime(args)
             }
             CallableArgs::Named {
                 required,
@@ -4887,7 +5121,7 @@ impl BexEngine {
                         ),
                     });
                 }
-                ordered
+                SentArgs::Host(ordered)
             }
         };
 
@@ -4903,15 +5137,10 @@ impl BexEngine {
         if let Some(receiver) = receiver {
             landed.push(Some(receiver));
         }
-        for (idx, arg) in args.iter().enumerate() {
-            landed.push(match arg {
-                BexCallArg::Provided(value) => Some(
-                    self.hydrate_from(peer, &mut thread, value)
-                        .map_err(|refusal| callable_argument_refused(idx, &refusal))?,
-                ),
-                BexCallArg::OmittedDefault => None,
-            });
-        }
+        landed.extend(
+            self.land_args(&mut thread, args)
+                .map_err(|(idx, refusal)| callable_argument_refused(idx, &refusal))?,
+        );
 
         // A slot the seed left symbolic (a method reached through its raw
         // function object, with the class's variables unbound; a generic
@@ -5228,7 +5457,7 @@ impl BexEngine {
     fn validate_bound_args(
         function: HeapPtr,
         function_name: &str,
-        args: &[BexCallArg],
+        args: &SentArgs,
     ) -> Result<(), EngineError> {
         let params = Self::function_params_of(function)?;
         if args.len() != params.len() {
@@ -5241,12 +5470,11 @@ impl BexEngine {
             });
         }
 
-        for (idx, arg) in args.iter().enumerate() {
-            if matches!(arg, BexCallArg::OmittedDefault) && !params[idx].2 {
+        for (idx, (name, _, has_default)) in params.iter().enumerate() {
+            if args.is_omitted(idx) && !has_default {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
-                        "Argument `{}` for function `{function_name}` cannot be omitted; only parameters with defaults may use omitted defaults",
-                        params[idx].0
+                        "Argument `{name}` for function `{function_name}` cannot be omitted; only parameters with defaults may use omitted defaults",
                     ),
                 });
             }
@@ -5525,7 +5753,7 @@ impl BexEngine {
             test_init,
             bex_vm_types::FunctionKind::Bytecode,
             "$init_test",
-            vec![BexCallArg::Provided(Box::new(collector.clone()))],
+            SentArgs::Host(vec![BexCallArg::Provided(Box::new(collector.clone()))]),
             ctx(),
             true, // return value is null, doesn't matter
         )
@@ -5635,20 +5863,19 @@ impl BexEngine {
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
         for RootedPendingFinalizer { instance, cleanup } in pending {
-            let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .for_runtime()
-                .build();
+            let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
             // The finalizer is called as the function it is: the collector
             // read it off the instance's class, so no name is resolved — a
             // class no host name reaches is finalized like any other.
             // `Box::pin` breaks the async-recursion cycle: a `cleanup` body can
             // allocate and trigger another collection, which re-enters this
             // drain — boxing erases the otherwise-infinite future size.
-            let call = Box::pin(self.call_callable(
+            let call = Box::pin(self.call_callable_for_runtime(
                 cleanup,
-                vec![BexExternalValue::Handle(instance)],
+                vec![sys_types::OpValue::External(BexExternalValue::Handle(
+                    instance,
+                ))],
                 ctx,
-                /* copy_objects = */ false,
             ));
             if let Err(e) = call.await {
                 tracing::warn!("BEP-042 cleanup finalizer failed: {e}");
@@ -6737,7 +6964,7 @@ impl BexEngine {
                                 return Err(EngineError::VmInternalError(
                                     bex_vm::errors::VmInternalError::BridgeFailure {
                                         message: format!(
-                                            "call_host_value: got {} sysop arguments, expected 4",
+                                            "_call_host_value: got {} sysop arguments, expected 4",
                                             args.len()
                                         ),
                                     },
@@ -6859,8 +7086,7 @@ impl BexEngine {
                                     )],
                                 );
                                 // The token crosses as any `CancelToken` value
-                                // does, by its fields, its state a payload row
-                                // the bridge reads.
+                                // does, as a live reference to the instance.
                                 Some(self.convert_vm_value_to_external_with_type(
                                     token,
                                     &bex_vm_types::RealizedTy::Unknown,
@@ -6969,9 +7195,20 @@ impl BexEngine {
                                 // A host callback's return is a value the
                                 // host built; any other op's, the runtime's.
                                 let landed = if operation == SysOp::BamlHostCallHostValue {
+                                    // A host completes with an external value: it
+                                    // has no way to name a runtime instance.
+                                    let sys_types::OpValue::External(external) = external else {
+                                        return Err(EngineError::VmInternalError(
+                                            bex_vm::errors::VmInternalError::BridgeFailure {
+                                                message: "a host callable completed with a \
+                                                          runtime instance"
+                                                    .to_string(),
+                                            },
+                                        ));
+                                    };
                                     self.hydrate_host_value_into(thread, &external, &declared_ret)
                                 } else {
-                                    self.land_op_result_into(thread, &external, &declared_ret)
+                                    self.land_op_result_into(thread, external, &declared_ret)
                                 };
                                 let landed = match landed {
                                     Ok(landed) => Ok(landed),
@@ -7397,7 +7634,7 @@ impl BexEngine {
             let engine = self.clone();
             return SysOpResult::Async(Box::pin(async move {
                 engine.collect_garbage().await;
-                Ok(BexExternalValue::Null)
+                Ok(BexExternalValue::Null.into())
             }));
         }
         let args = args.iter().map(std::convert::Into::into).collect();
@@ -7722,7 +7959,7 @@ impl BexEngine {
                     name: name.name.clone(),
                     docstring: class.docstring.clone(),
                     fields: class
-                        .fields
+                        .declared_fields()
                         .iter()
                         .map(|field| {
                             Ok((
@@ -7811,9 +8048,10 @@ impl BexEngine {
                 .iter()
                 .zip(rule.field_links.iter())
                 .map(|(field, slot)| {
-                    let class_field = class.fields.get(*slot as usize).ok_or_else(|| {
-                        internal("a witness rule has an out-of-range field link".to_string())
-                    })?;
+                    let class_field =
+                        class.declared_fields().get(*slot as usize).ok_or_else(|| {
+                            internal("a witness rule has an out-of-range field link".to_string())
+                        })?;
                     Ok((field.name.clone(), baml_type::Name::new(&class_field.name)))
                 })
                 .collect::<Result<Vec<_>, EngineError>>()?;
@@ -8246,7 +8484,7 @@ impl BexEngine {
 
         let PendingRuntimeCompile { request, pins } = pending;
         let compiler = self.runtime_compiler.clone();
-        SysOpResult::Async(Box::pin(async move {
+        let compile = async move {
             let Some(compiler) = compiler else {
                 // `reflect.*._compile` declares only `CompilationError`
                 // (and `SessionBusy`), so an absent compiler is not an error
@@ -8278,14 +8516,14 @@ impl BexEngine {
                     }])
                 });
             match compiled {
-                Ok(artifact) => Ok(BexExternalValue::Instance {
-                    class_name: "reflect.CompileArtifact".to_string(),
-                    type_args: Vec::new(),
-                    fields: indexmap::indexmap! {
-                        "_inner".to_string() => BexExternalValue::RustData(Arc::new(
-                            bex_vm::RuntimeCompileArtifactSlot::new(bex_vm::PinnedArtifact { artifact, pins }),
-                        )),
-                    },
+                Ok(artifact) => Ok(sys_types::OpValue::RustInstance {
+                    class: bex_vm::lang_items::REFLECT_COMPILE_ARTIFACT,
+                    payload: bex_vm_types::RustPayload::Foreign(Arc::new(
+                        bex_vm::RuntimeCompileArtifactSlot::new(bex_vm::PinnedArtifact {
+                            artifact,
+                            pins,
+                        }),
+                    )),
                 }),
                 Err(diagnostics) => {
                     let message = diagnostics
@@ -8314,7 +8552,8 @@ impl BexEngine {
                     ))
                 }
             }
-        }))
+        };
+        SysOpResult::Async(Box::pin(compile))
     }
 }
 
@@ -8323,17 +8562,15 @@ impl sys_types::VmSpawner for BexEngine {
     async fn spawn_with_function(
         self: Arc<Self>,
         function_name: String,
-        args: Vec<BexExternalValue>,
+        args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
-        self.call_function(
+    ) -> Result<sys_types::OpValue, Box<dyn Send + Sync + 'static>> {
+        self.call_function_for_runtime(
             &function_name,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
-                .for_runtime()
                 .build(),
-            true,
         )
         .await
         .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
@@ -8342,17 +8579,15 @@ impl sys_types::VmSpawner for BexEngine {
     async fn spawn_with_callable(
         self: Arc<Self>,
         callable: bex_external_types::Handle,
-        args: Vec<BexExternalValue>,
+        args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
-        self.call_callable(
+    ) -> Result<sys_types::OpValue, Box<dyn Send + Sync + 'static>> {
+        self.call_callable_for_runtime(
             callable,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
-                .for_runtime()
                 .build(),
-            true,
         )
         .await
         .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
@@ -8372,20 +8607,18 @@ impl sys_types::VmSpawner for InvocationSpawner {
     async fn spawn_with_function(
         self: Arc<Self>,
         function_name: String,
-        args: Vec<BexExternalValue>,
+        args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+    ) -> Result<sys_types::OpValue, Box<dyn Send + Sync + 'static>> {
         self.capture
             .runtime
-            .call_function(
+            .call_function_for_runtime(
                 &function_name,
                 args,
                 FunctionCallContextBuilder::new(sys_types::CallId::next())
                     .with_cancel_token(cancel)
-                    .for_runtime()
                     .with_inherited_state(self.capture.state.clone())
                     .build(),
-                true,
             )
             .await
             .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
@@ -8394,20 +8627,18 @@ impl sys_types::VmSpawner for InvocationSpawner {
     async fn spawn_with_callable(
         self: Arc<Self>,
         callable: bex_external_types::Handle,
-        args: Vec<BexExternalValue>,
+        args: Vec<sys_types::OpValue>,
         cancel: CancellationToken,
-    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+    ) -> Result<sys_types::OpValue, Box<dyn Send + Sync + 'static>> {
         self.capture
             .runtime
-            .call_callable(
+            .call_callable_for_runtime(
                 callable,
                 args,
                 FunctionCallContextBuilder::new(sys_types::CallId::next())
                     .with_cancel_token(cancel)
-                    .for_runtime()
                     .with_inherited_state(self.capture.state.clone())
                     .build(),
-                true,
             )
             .await
             .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
@@ -8424,7 +8655,7 @@ impl sys_types::VmSpawner for InvocationSpawner {
 // (no dedicated `bex_vm` unit test today — a follow-up could add one if
 // the integration-only coverage proves slow to diagnose regressions).
 //
-// The former `call_host_value_tests` module asserted the same shape against
+// The former `_call_host_value_tests` module asserted the same shape against
 // the now-deleted `op_error_to_catchable_throw` helper; removing it avoids
 // duplicating the same expectations across crates.
 
@@ -8675,7 +8906,7 @@ mod type_identity_tests {
             .alloc(Object::Class(Box::new(bex_vm_types::types::Class {
                 declared_crossing: baml_type::ClassCrossing::Fields,
                 path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Foo")),
-                fields: Vec::new(),
+                body: bex_vm_types::ClassBody::Fields(Vec::new()),
                 description: None,
                 alias: None,
                 docstring: None,
@@ -8861,7 +9092,7 @@ mod type_identity_tests {
                         Vec::new(),
                         baml_type::Name::new("Foo"),
                     ),
-                    fields: Vec::new(),
+                    body: bex_vm_types::ClassBody::Fields(Vec::new()),
                     description: None,
                     alias: None,
                     docstring: None,
@@ -8941,3 +9172,113 @@ mod type_identity_tests {
 
 #[cfg(test)]
 mod completion_tests;
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod trace_control_tests {
+    use std::{sync::Arc, time::Duration};
+
+    use baml_test_support::compile_source;
+    use bex_external_types::{
+        BexExternalAdt, BexExternalValue, TaggedHeapHandleKind, TraceControl,
+    };
+    use bex_heap::HeapPermit as _;
+    use sys_native::SysOpsExt as _;
+
+    use super::{BexEngine, FunctionCallContextBuilder};
+
+    /// A trace control's reference carries the instance's own payload, and
+    /// naming it as this engine's reads nothing while the collector holds
+    /// the heap.
+    #[tokio::test]
+    async fn a_trace_control_reads_without_the_heap() {
+        let program = compile_source(
+            "function options() -> trace.Options { trace.span(output = false) }\n\
+             function reserve() -> trace.ReservedSpan { trace.span(error = false).reserve() }",
+        );
+        let engine = Arc::new(
+            BexEngine::new(program, Arc::new(sys_native::SysOps::native()), Vec::new())
+                .expect("engine construction should succeed"),
+        );
+        let other = Arc::new(
+            BexEngine::new(
+                compile_source(""),
+                Arc::new(sys_native::SysOps::native()),
+                Vec::new(),
+            )
+            .expect("engine construction should succeed"),
+        );
+        for name in ["options", "reserve"] {
+            let value = engine
+                .call_function(
+                    name,
+                    Vec::new(),
+                    FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                    true,
+                )
+                .await
+                .expect("the call succeeds");
+            let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                kind: TaggedHeapHandleKind::TraceControl(control),
+                heap_handle,
+                ..
+            }) = &value
+            else {
+                panic!("`{name}` crosses as a reference carrying its control: {value:?}")
+            };
+
+            let parked = tokio::time::timeout(
+                Duration::from_secs(5),
+                engine.heap_permit_manager.request_park(),
+            )
+            .await
+            .expect("no permit is outstanding between calls");
+            assert!(
+                tokio::time::timeout(Duration::from_millis(50), async {
+                    engine
+                        .heap_permit_manager
+                        .new_permit(())
+                        .await
+                        .acquire()
+                        .await
+                })
+                .await
+                .is_err(),
+                "reading the instance would wait for the collector"
+            );
+            assert!(engine.owns_handle(heap_handle));
+            assert!(!other.owns_handle(heap_handle));
+            match (name, control) {
+                ("options", TraceControl::Options(options)) => {
+                    assert_eq!(options.output, Some(false));
+                }
+                ("reserve", TraceControl::Reservation(reservation)) => {
+                    assert_eq!(reservation.options.error, Some(false));
+                }
+                (name, control) => panic!("`{name}` carries {control:?}"),
+            }
+            drop(parked);
+
+            let permit = engine
+                .heap_permit_manager
+                .new_permit(())
+                .await
+                .acquire()
+                .await;
+            let ptr = engine
+                .resolve_handle(permit.proof(), heap_handle)
+                .expect("the reference is live");
+            // SAFETY: the permit keeps the collector from moving or freeing
+            // the object while it is read.
+            let bex_vm_types::Object::RustInstance(instance) = (unsafe { ptr.get() }) else {
+                panic!("a trace control is a `@@rust_type` instance")
+            };
+            assert_eq!(
+                TraceControl::of(&instance.payload).as_ref(),
+                Some(control),
+                "the reference carries the instance's payload, not a copy"
+            );
+        }
+        engine.shutdown().await;
+        other.shutdown().await;
+    }
+}

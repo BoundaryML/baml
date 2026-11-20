@@ -1,0 +1,7 @@
+function f(a: int, c: bool) -> int {
+    let w1 = (a + if (c) { 1 } else { 2 }) + 3;
+    let w2 = (a + match (c) { _ => 1 }) + 3;
+    let w3 = (a + { 1 }) + 3;
+    let w4 = (a + 1) + 3;
+    w1
+}

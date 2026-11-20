@@ -108,7 +108,7 @@ class AiGatewayImageClient {
             status_code: null,
             detail: `no AI Gateway API key: set the client's api_key (a literal or env.NAME), or export one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "AI_GATEWAY_API_KEY")}`,
             raw_body: null,
-        }
+        };
     }
 
     /// The request-time base URL, or null for the gateway default.

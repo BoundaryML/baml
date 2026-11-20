@@ -7,7 +7,7 @@
 
 use std::fmt::Debug;
 
-use baml_bridge::{
+use baml_sdk::baml_bridge::{
     BamlValue, Map,
     serde_json::{self, json},
 };

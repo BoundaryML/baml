@@ -248,6 +248,10 @@ final class FFISmokeTests: XCTestCase {
             }
             XCTAssertEqual(media.kind, expected)
         }
+        guard case .media(let any)? = BamlTypeDescriptor.anyMedia.raw.ty else {
+            return XCTFail("expected the media type")
+        }
+        XCTAssertEqual(any.kind, .generic)
     }
 
     /// A null-bearing recursive alias (`json`) is referenced as `Alias?`; a

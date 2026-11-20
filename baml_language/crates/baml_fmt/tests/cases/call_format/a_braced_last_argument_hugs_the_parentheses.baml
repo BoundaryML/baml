@@ -1,0 +1,15 @@
+function f(a: int, x: int, c: bool) -> int {
+    g(a, match (x) {
+        1 => 2,
+        _ => 3,
+    });
+    g(a, if (c) { 1 } else { 2 });
+    g(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, if (c) { first_value_here_is_long } else { second_value_here_is_long });
+    g(a, {
+        let y = x + 1;
+        y
+    });
+    g(a, match (x) { 1 => 2, _ => 3 } // t
+    );
+    1
+}

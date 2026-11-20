@@ -5,7 +5,7 @@ import {
     _discardHostCallArgs,
     _handleRefcount,
     _seedHeapHandle,
-    _seedGenericMediaHandle,
+    _seedMediaHandle,
 } from '../dist/native.js';
 
 const { BamlToHostCall, BamlHandleType } = baml_bridge.cffi.v1;
@@ -21,7 +21,7 @@ describe('host argument decoding ownership', () => {
         constructor() { throw new Error('deliberate argument validation failure'); }
     }
     const rejected = { classValue: { name: 'Reject' } };
-    const wire = ([key, handleType]: ReturnType<typeof _seedGenericMediaHandle>) => ({ handleValue: { key, handleType } });
+    const wire = ([key, handleType]: ReturnType<typeof _seedMediaHandle>) => ({ handleValue: { key, handleType } });
     const encode = (values: baml_bridge.cffi.v1.IBamlOutboundValue[]) => Buffer.from(
         BamlToHostCall.encode({ args: values.map((value) => ({ value })) }).finish(),
     );
@@ -36,7 +36,7 @@ describe('host argument decoding ownership', () => {
     afterEach(() => { captured.length = 0; setTypeMap(previous); });
 
     test('decode failure releases untransferred callable and media', () => {
-        const owners = [_seedGenericMediaHandle(), _seedGenericMediaHandle()];
+        const owners = [_seedMediaHandle(), _seedMediaHandle()];
         try {
             expect(() => decodeHostCall(encode([rejected, ...owners.map(wire)]))).toThrow('deliberate argument');
             for (const [key] of owners) expect(_handleRefcount(key)).toBeNull();
@@ -95,8 +95,31 @@ describe('host argument decoding ownership', () => {
         }
     });
 
+    test('host values release their pins once decoded, whether the decode succeeds or fails', () => {
+        const pins = [_seedMediaHandle(), _seedMediaHandle(), _seedMediaHandle()];
+        const hostValue = ([pin]: ReturnType<typeof _seedMediaHandle>, handleType: number) => ({
+            handleValue: { key: { low: 0x7fff_0001, high: 0 }, handleType, pin },
+        });
+        try {
+            const decoded = decodeHostCall(encode([
+                hostValue(pins[0], BamlHandleType.HOST_VALUE_CALLABLE),
+                { listValue: { items: [hostValue(pins[1], BamlHandleType.HOST_VALUE_OPAQUE)] } },
+            ]));
+            expect(decoded.positional).toHaveLength(2);
+            expect(_handleRefcount(pins[0][0])).toBeNull();
+            expect(_handleRefcount(pins[1][0])).toBeNull();
+            expect(() => decodeHostCall(encode([rejected, hostValue(pins[2], BamlHandleType.HOST_VALUE_OPAQUE)])))
+                .toThrow('deliberate argument');
+            expect(_handleRefcount(pins[2][0])).toBeNull();
+        } finally {
+            for (const pin of pins) {
+                if (_handleRefcount(pin[0]) !== null) _discardHostCallArgs(encode([wire(pin)]));
+            }
+        }
+    });
+
     test('successful decode transfers ownership to callback arguments', () => {
-        const owner = _seedGenericMediaHandle();
+        const owner = _seedMediaHandle();
         const decoded = decodeHostCall(encode([wire(owner)]));
         expect(decoded.positional).toHaveLength(1);
         expect(_handleRefcount(owner[0])).toBe(1);

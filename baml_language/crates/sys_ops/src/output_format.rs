@@ -3,6 +3,7 @@ use std::fmt::Write as _;
 use ::sys_types::SapTy;
 use baml_base::Literal as LiteralValue;
 use baml_type::json_inhabit::{JsonInhabitance, JsonNaming, JsonStatus};
+use bex_vm_types::resource as render;
 use indexmap::IndexMap;
 use thiserror::Error;
 
@@ -127,7 +128,109 @@ pub struct OutputFormatContent {
     build_error: Option<RenderError>,
 }
 
-impl bex_vm_types::BexRustData for OutputFormatContent {
+/// `ai.OutputFormat`: the schema renders with the caller's options. Every
+/// option is a typed choice, so there is none to refuse.
+impl bex_vm_types::resource::OutputFormatResource for OutputFormatContent {
+    fn _render(
+        self: std::sync::Arc<Self>,
+        prefix: render::OutputFormatRenderPrefix,
+        or_splitter: render::OutputFormatRenderOrSplitter,
+        enum_value_prefix: render::OutputFormatRenderEnumValuePrefix,
+        hoisted_class_prefix: render::OutputFormatRenderHoistedClassPrefix,
+        always_hoist_enums: render::OutputFormatRenderAlwaysHoistEnums,
+        quote_class_fields: render::OutputFormatRenderQuoteClassFields,
+        hoist_classes: render::OutputFormatRenderHoistClasses,
+        map_style: render::OutputFormatRenderMapStyle,
+        render_null_as: render::OutputFormatRenderRenderNullAs,
+    ) -> bex_vm_types::OpOutput<String> {
+        use render::OutputFormatDefault::Auto;
+        let options = RenderOptions {
+            prefix: match prefix {
+                render::OutputFormatRenderPrefix::String(prefix) => RenderSetting::Always(prefix),
+                render::OutputFormatRenderPrefix::Null => RenderSetting::Never,
+                render::OutputFormatRenderPrefix::OutputFormatDefault(Auto) => RenderSetting::Auto,
+            },
+            or_splitter: match or_splitter {
+                render::OutputFormatRenderOrSplitter::String(splitter) => {
+                    RenderSetting::Always(splitter)
+                }
+                render::OutputFormatRenderOrSplitter::OutputFormatDefault(Auto) => {
+                    RenderSetting::Auto
+                }
+            },
+            enum_value_prefix: match enum_value_prefix {
+                render::OutputFormatRenderEnumValuePrefix::String(prefix) => {
+                    RenderSetting::Always(prefix)
+                }
+                render::OutputFormatRenderEnumValuePrefix::Null => RenderSetting::Never,
+                render::OutputFormatRenderEnumValuePrefix::OutputFormatDefault(Auto) => {
+                    RenderSetting::Auto
+                }
+            },
+            hoisted_class_prefix: match hoisted_class_prefix {
+                render::OutputFormatRenderHoistedClassPrefix::String(prefix) => {
+                    RenderSetting::Always(prefix)
+                }
+                render::OutputFormatRenderHoistedClassPrefix::Null => RenderSetting::Never,
+                render::OutputFormatRenderHoistedClassPrefix::OutputFormatDefault(Auto) => {
+                    RenderSetting::Auto
+                }
+            },
+            hoist_classes: match hoist_classes {
+                render::OutputFormatRenderHoistClasses::Bool(true) => HoistClasses::All,
+                render::OutputFormatRenderHoistClasses::Bool(false)
+                | render::OutputFormatRenderHoistClasses::Auto
+                | render::OutputFormatRenderHoistClasses::OutputFormatDefault(Auto) => {
+                    HoistClasses::Auto
+                }
+                render::OutputFormatRenderHoistClasses::StringList(classes) => {
+                    HoistClasses::Subset(classes)
+                }
+            },
+            always_hoist_enums: match always_hoist_enums {
+                render::OutputFormatRenderAlwaysHoistEnums::Bool(hoist) => {
+                    RenderSetting::Always(hoist)
+                }
+                render::OutputFormatRenderAlwaysHoistEnums::OutputFormatDefault(Auto) => {
+                    RenderSetting::Auto
+                }
+            },
+            map_style: match map_style {
+                render::OutputFormatRenderMapStyle::Angle => MapStyle::TypeParameters,
+                render::OutputFormatRenderMapStyle::Object => MapStyle::ObjectLiteral,
+                render::OutputFormatRenderMapStyle::OutputFormatDefault(Auto) => {
+                    MapStyle::default()
+                }
+            },
+            quote_class_fields: match quote_class_fields {
+                render::OutputFormatRenderQuoteClassFields::Bool(quote) => {
+                    RenderSetting::Always(quote)
+                }
+                render::OutputFormatRenderQuoteClassFields::OutputFormatDefault(Auto) => {
+                    RenderSetting::Auto
+                }
+            },
+            // `null` renders as the default spelling: there is no "never".
+            render_null_as: match render_null_as {
+                render::OutputFormatRenderRenderNullAs::String(spelling) => {
+                    RenderSetting::Always(spelling)
+                }
+                render::OutputFormatRenderRenderNullAs::Null
+                | render::OutputFormatRenderRenderNullAs::OutputFormatDefault(Auto) => {
+                    RenderSetting::Auto
+                }
+            },
+        };
+        match render_output_format_content(&self, &options) {
+            Ok(rendered) => bex_vm_types::OpOutput::ok(rendered),
+            Err(error) => {
+                bex_vm_types::OpOutput::err(bex_vm_types::errors::VmBamlError::RenderPrompt {
+                    message: error.to_string(),
+                })
+            }
+        }
+    }
+
     fn measure(&self, meter: &mut bex_vm_types::Meter) {
         meter.bytes(self.enums.capacity() * size_of::<(String, Enum)>());
         meter.bytes(self.classes.capacity() * size_of::<(String, Class)>());
@@ -999,12 +1102,11 @@ impl OutputFormatContent {
             | SapTy::Future(..)
             | SapTy::TypeVar(..)
             | SapTy::AssociatedTypeProjection { .. }
-            | SapTy::Never
             // Checked LLM execution and render-companion paths reject these at
             // `validate_output_type`. Throws-never low-level output-format
             // helpers may still degrade this error to an empty string, so keep
             // the formatter fallible rather than aborting the process.
-            | SapTy::RustType => Err(RenderError::UnsupportedType(ty.to_string()))
+            | SapTy::Never => Err(RenderError::UnsupportedType(ty.to_string()))
         }
     }
 
@@ -1589,13 +1691,16 @@ fn walk_ty(
                 }
             }
 
-            if let Some(class_def) = find_class_definition(ctx, type_name) {
+            // A class only the runtime builds has no JSON form: the analysis
+            // keeps it out of every format, so it has no definition to show.
+            if let Some(class_def) = find_class_definition(ctx, type_name)
+                && let sys_types::ClassDefinitionBody::Fields(class_fields) = &class_def.body
+            {
                 // `field_type` is the erased/runtime shape used by older
                 // callers. Emitted classes also carry a symbolic template so
                 // a generic class visited as `Outer<Choice>` can substitute
                 // `T` through nested positions such as `Inner<T>.values`.
-                let field_types: Vec<SapTy> = class_def
-                    .fields
+                let field_types: Vec<SapTy> = class_fields
                     .iter()
                     .filter(|f| !f.skip)
                     .map(|f| {
@@ -1605,8 +1710,7 @@ fn walk_ty(
                             .unwrap_or_else(|| f.field_type.clone())
                     })
                     .collect();
-                let fields: Vec<self::ClassField> = class_def
-                    .fields
+                let fields: Vec<self::ClassField> = class_fields
                     .iter()
                     .filter(|f| !f.skip)
                     .zip(field_types.iter())
@@ -1638,8 +1742,7 @@ fn walk_ty(
                     arity: type_args.len(),
                     shaped: false,
                 });
-                for (field, field_type) in class_def
-                    .fields
+                for (field, field_type) in class_fields
                     .iter()
                     .filter(|field| !field.skip)
                     .zip(&field_types)
@@ -1769,7 +1872,7 @@ fn walk_ty(
 mod tests {
     #[test]
     fn schema_measurement_includes_definition_and_variant_text() {
-        use bex_vm_types::{BexRustData, Meter};
+        use bex_vm_types::{Meter, resource::OutputFormatResource};
         let content =
             super::OutputFormatContent::new(sys_types::SapTy::String).with_enum(super::Enum {
                 name: "Choice".into(),
@@ -2765,7 +2868,7 @@ mod tests {
             description: None,
             docstring: None,
             alias: None,
-            fields,
+            body: sys_types::ClassDefinitionBody::Fields(fields),
             stream_done: false,
         }
     }

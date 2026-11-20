@@ -22,7 +22,7 @@ mod union;
 
 use std::sync::Arc;
 
-use baml_type::MediaKind;
+use baml_type::ConcreteMediaKind;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     BexStr, HeapPtr, RealizedTy, TypeHead, Value, ValueKind,
@@ -669,7 +669,7 @@ struct MediaFields {
 fn build_media(
     vm: &mut BexVm,
     fields: &MediaFields,
-    kind: MediaKind,
+    kind: ConcreteMediaKind,
     head: TypeHead,
 ) -> Result<Value, String> {
     let tagged_kind = fields
@@ -713,23 +713,16 @@ fn build_media(
             ));
         }
     };
-    let data = Value::object(vm.alloc_rust_data(media));
-    Ok(Value::object(vm.alloc_instance(head.ptr(), vec![data])))
+    debug_assert!(
+        vm.stdlib_heads().media_kind(head) == Some(media.kind),
+        "the decoded media is of its wrapper's kind"
+    );
+    Ok(vm.alloc_media(media))
 }
 
 pub(crate) fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<bex_vm_types::MediaValue>> {
-    let instance = vm.get_instance(value.as_object_ptr()?)?;
-    let class_head = instance.head();
-    vm.stdlib_heads().media_kind(class_head)?;
-
-    let data_ptr = instance.load_value(0).as_object_ptr()?;
-    match vm.get_object(data_ptr) {
-        Object::RustData(arc) => {
-            use bex_vm_types::RustDataArc as _;
-            arc.clone()
-                .downcast_payload::<bex_vm_types::MediaValue>()
-                .ok()
-        }
+    match vm.get_object(value.as_object_ptr()?) {
+        Object::RustInstance(instance) => instance.payload.as_media().cloned(),
         _ => None,
     }
 }

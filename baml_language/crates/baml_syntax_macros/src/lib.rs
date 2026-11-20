@@ -6,8 +6,8 @@
 //!
 //! - [`define_tree!`](define_tree) — given the list of node types and list
 //!   pools, generates `NodeKind`, the `Arenas` struct with one arena per node
-//!   type (the builder), `AnyNodeRef`, the read-only `FileTree`, the per-type
-//!   `NodeKindOf` impls that give every node its kind, and
+//!   type (the builder), `AnyNodeRef` and `AnyId`, the read-only `FileTree`,
+//!   the per-type `NodeKindOf` impls that give every node its kind, and
 //!   `for_each_node_type!` (which needs `nodes::*` and `tree::Bogus` in
 //!   scope).
 //! - [`Node`](derive@Node) — on an arena node struct: walks its fields in
@@ -19,7 +19,8 @@
 //!   (a label, a clause); walked transparently as part of its parent.
 //! - [`AnyNode`](derive@AnyNode) — on a union enum of alternatives; walks the
 //!   active variant and must carry a `Bogus` variant, so every union can hold
-//!   recovered garbage without loss.
+//!   recovered garbage without loss. A union with no token variant is also a
+//!   `NodeUnion`: the node behind an alternative without a check.
 //!
 //! - [`TokenTable`](derive@TokenTable) — on the token kind enum, which also
 //!   derives `Logos`: reads the same `#[token]`/`#[regex]` attributes plus

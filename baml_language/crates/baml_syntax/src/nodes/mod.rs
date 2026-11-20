@@ -25,9 +25,12 @@ pub use stmts::*;
 pub use templates::*;
 pub use types::*;
 
+// `Bogus` stands among the node types wherever they are listed (every `Any*`
+// union, `for_each_node_type!`), so it is reachable from here like the rest.
+pub use crate::tree::Bogus;
 use crate::{
     token::punct,
-    tree::{Bogus, Id, SepItem},
+    tree::{Id, SepItem},
 };
 
 crate::define_tree! {

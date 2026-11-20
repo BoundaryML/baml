@@ -95,9 +95,6 @@ class Class {
     /// `int[]`, and `[]` fits no typed list. Build such a value with the
     /// field's type first, as in `let tags: string[] = [];`.
     ///
-    /// A native handle, such as the `_handle` field of a `baml.regex.Regex`,
-    /// has no BAML type. It fits only a field of type `unknown`.
-    ///
     /// # Parameters
     ///
     /// - `fields`: each field's value, keyed by the field's declared name.
@@ -183,10 +180,9 @@ class Enum {
     /// identity even when its name and rows are byte-identical.
     //baml:mut_vm
     //baml:fallible
-    function new(
-        name: string,
-        values: (string | root.enum.Value)[],
-    ) -> root.Enum throws root.errors.CompilationError {
+    function new(name: string, values: (string | root.enum.Value)[]) -> root.Enum
+        throws root.errors.CompilationError
+    {
         $rust_function
     }
 
@@ -393,8 +389,9 @@ class Interface {
 
     /// Start a structural witness for a static interface.
     //baml:mut_vm
-    function implementation<I>(
-    ) -> root.interface.Implementation throws root.errors.CompilationError {
+    function implementation<I>() -> root.interface.Implementation
+        throws root.errors.CompilationError
+    {
         $rust_function
     }
 

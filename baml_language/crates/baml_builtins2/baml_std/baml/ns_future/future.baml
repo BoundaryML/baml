@@ -140,9 +140,13 @@ class Panicked {
 /// remain governed by their own cancellation tokens and task groups.
 function all_settled<T, E>(
     futures: root.future.Future<T, E>[],
-) -> root.future.Future<(root.future.Success<T> | root.future.Failure<E> | root.future.Panicked)[], never> {
+) -> root.future.Future<
+    (root.future.Success<T> | root.future.Failure<E> | root.future.Panicked)[],
+    never,
+> {
     spawn {
-        let outcomes: (root.future.Success<T> | root.future.Failure<E> | root.future.Panicked)[] = [];
+        let outcomes: (root.future.Success<T> | root.future.Failure<E> | root.future.Panicked)[] =
+            [];
         for (let f in futures) {
             // Wait for `f` to settle. Only the collector's own cancellation
             // ends this wait early, and it propagates, stopping the collection.
@@ -151,7 +155,10 @@ function all_settled<T, E>(
             // caught here, `Cancelled` included, is the input's.
             let value = (await f) catch_all_panics (e, context) {
                 let panic: root.panics.Panic => {
-                    outcomes.push(root.future.Panicked { panic: panic, context: context });
+                    outcomes.push(root.future.Panicked {
+                        panic: panic,
+                        context: context,
+                    });
                     continue;
                 },
                 let error => {
@@ -183,9 +190,7 @@ function all<T, E>(futures: root.future.Future<T, E>[]) -> root.future.Future<T[
                     // A future failed: cancel the rest, then re-throw. Cancelling an
                     // already-settled future is a no-op, so cancelling `f` itself is
                     // harmless.
-                    futures.map((g) -> {
-                        g.cancel()
-                    });
+                    futures.map((g) -> { g.cancel() });
                     // Drain inputs that ALREADY failed (settlement can outrun the
                     // in-order awaits): their errors are parked fire-and-forget and
                     // would otherwise bypass this rethrow and resurface at the
@@ -198,13 +203,13 @@ function all<T, E>(futures: root.future.Future<T, E>[]) -> root.future.Future<T[
                         let g = futures[j];
                         if (g.is_error()) {
                             (await g) catch (drained) {
-                                let drained => null
+                                let drained => null,
                             };
                         }
                         j = j + 1;
                     }
-                    throw e
-                }
+                    throw e;
+                },
             }
         })
     }
@@ -235,9 +240,7 @@ function race<T, E>(futures: root.future.Future<T, E>[]) -> root.future.Future<T
         let i = root.future.__await_any(futures);
         // The winner is already settled; cancelling it is a no-op, so a blanket
         // cancel cleanly stops just the losers.
-        futures.map((f) -> {
-            f.cancel()
-        });
+        futures.map((f) -> { f.cancel() });
         await futures[i]
     }
 }
@@ -265,9 +268,10 @@ function any<T, Err>(
                 winners.push(
                     (await f) catch (e) {
                         let e => {
-                            let failure: root.future.AllFailed<Err> = root.future.AllFailed { errors: [e] };
-                            throw failure
-                        }
+                            let failure: root.future.AllFailed<Err> =
+                                root.future.AllFailed { errors: [e] };
+                            throw failure;
+                        },
                     },
                 );
                 break;
@@ -278,11 +282,13 @@ function any<T, Err>(
                 // the spawner; the value itself is re-read in INPUT order below —
                 // a settled Error future rethrows on every await.
                 (await f) catch (e) {
-                    let e => null
+                    let e => null,
                 };
             }
             // Drop `f` (failed or cancelled) and keep going.
-            remaining = remaining.slice(0, i).concat(remaining.slice(i + 1, remaining.length()));
+            remaining = remaining.slice(0, i).concat(
+                remaining.slice(i + 1, remaining.length()),
+            );
         }
         if (winners.length() == 0) {
             // Everything settled without a success: collect the errors by walking
@@ -298,7 +304,7 @@ function any<T, Err>(
                         let e => {
                             errors.push(e);
                             null
-                        }
+                        },
                     };
                 }
                 j = j + 1;
@@ -312,9 +318,7 @@ function any<T, Err>(
             throw failure;
         }
         // A success was recorded; cancel the losers and return it.
-        futures.map((g) -> {
-            g.cancel()
-        });
+        futures.map((g) -> { g.cancel() });
         winners[0]
     }
 }
@@ -331,19 +335,16 @@ function any<T, Err>(
 ///
 /// - `baml.panics.Cancelled` re-raised, when the cancellation came from
 ///   somewhere other than this deadline.
-function with_timeout<T, E>(
-    limit: root.time.Duration,
-    body: () -> T throws E,
-) -> T throws E | root.errors.Timeout {
+function with_timeout<T, E>(limit: root.time.Duration, body: () -> T throws E) -> T
+    throws E | root.errors.Timeout
+{
     let token = root.spawn.CancelToken.new();
     let work = spawn with token { body() };
     let deadline = spawn {
         root.sys.sleep(limit);
         token.cancel()
     };
-    defer {
-        deadline.cancel()
-    }
+    defer { deadline.cancel() }
     // Wait for `work` to settle. Only the caller's own cancellation ends this
     // wait early, and it propagates as itself, never as a timeout.
     let _ = root.future.__await_any([work]);
@@ -357,7 +358,7 @@ function with_timeout<T, E>(
                 message: `operation timed out after ${limit.to_milliseconds()}ms`,
                 duration: limit,
                 timeout_type: "limit",
-            }
+            };
         },
     }
 }

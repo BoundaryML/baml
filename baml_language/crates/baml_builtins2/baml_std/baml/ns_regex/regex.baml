@@ -95,9 +95,6 @@ class Error {
 /// rather than quietly reporting "no match" — a missed match would be a wrong
 /// answer, and only a `backtracking = true` pattern can reach it.
 class Regex {
-    /// Opaque, runtime-owned compiled program.
-    _handle: $rust_type,
-
     /// Returns `true` if the pattern matches anywhere in `haystack`.
     ///
     /// Cheaper than `match_once` when the match itself is not needed: no
@@ -202,13 +199,13 @@ class Regex {
     /// `${name}` / `$$`. Backs `string.replace_all`.
     //baml:mut_vm
     //baml:fallible
-    function _replace_all_template(
-        self,
-        haystack: string,
-        template: string,
-    ) -> string throws never {
+    function _replace_all_template(self, haystack: string, template: string) -> string
+        throws never
+    {
         $rust_function
     }
+
+    @@rust_type("Regex")
 }
 
 /// Compiles `pattern` into a reusable regex.
@@ -323,19 +320,12 @@ function _replace_literal_with<E>(
                 // Stepping one codepoint past it terminates the scan and
                 // carries the stepped-over character through; the `slice` is
                 // empty when the match was at the very end.
-                pieces.push(
-                    if (width == 0) {
-                        haystack.slice(at, at + 1)
-                    } else {
-                        ""
-                    },
-                );
-                pos
-                    = if (width == 0) {
-                        at + 1
-                    } else {
-                        at + width
-                    };
+                pieces.push(if (width == 0) {
+                    haystack.slice(at, at + 1)
+                } else {
+                    ""
+                });
+                pos = if (width == 0) { at + 1 } else { at + width };
                 scanning = all;
             },
         }
@@ -381,7 +371,13 @@ function _literal_match(text: string, start: int) -> Match throws never {
         text: text,
         start: start,
         end: end,
-        groups: [Group { text: text, start: start, end: end }],
+        groups: [
+            Group {
+                text: text,
+                start: start,
+                end: end,
+            },
+        ],
         named: {},
     }
 }

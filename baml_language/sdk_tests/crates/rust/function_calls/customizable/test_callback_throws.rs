@@ -15,7 +15,7 @@
 //! — hence a Rust-only file. (Callback return types are concrete: the engine
 //! validates the host's returned value against them.)
 
-use baml_bridge::Error;
+use baml_sdk::baml_bridge::Error;
 use baml_sdk::host_callable_tests::{
     IntOrCbError, IntOrString, callback_error_caught_sync, callback_error_replaced_sync,
     callback_error_rethrown_sync,

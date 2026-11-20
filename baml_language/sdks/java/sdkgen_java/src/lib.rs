@@ -180,7 +180,7 @@ fn to_source_code_internal(
         ]
         .map(str::to_string),
     );
-    let tuples = TupleTable::collect(pool, &aliases, &root_reserved);
+    let tuples = TupleTable::collect(pool, &aliases, &crossings, &root_reserved);
     // Typemap entries generated into Baml.java's static initializer:
     // (BAML FQN, Java binary name, per-kind payload). Field order is
     // carried explicitly because the JVM does not guarantee
@@ -230,12 +230,14 @@ fn to_source_code_internal(
                 let ident = java_identifier(class.name.name().as_str());
                 match class.crossing {
                     // A class that crosses as its own wire value (media, a
-                    // prompt) or as a live capability (a stream, a function
-                    // spec) is the runtime library's wrapper, never generated.
+                    // prompt), as a live capability (a stream, a function
+                    // spec) or as a host's handle to its own value is the
+                    // runtime library's wrapper, never generated.
                     ClassCrossing::Media(_)
                     | ClassCrossing::Prompt
                     | ClassCrossing::Stream
-                    | ClassCrossing::FunctionSpec => continue,
+                    | ClassCrossing::FunctionSpec
+                    | ClassCrossing::HostValue => continue,
                     ClassCrossing::Opaque => {
                         type_idents_per_package
                             .entry(pkg.clone())
@@ -408,7 +410,8 @@ fn to_source_code_internal(
                 .filter(|t| !matches!(t, Ty::Null))
                 .cloned()
                 .collect();
-            let (union_binary, arm_entries) = union_registration(&pkg, &ident, &arms, &aliases);
+            let (union_binary, arm_entries) =
+                union_registration(&pkg, &ident, &arms, &aliases, &crossings);
             // Two registrations — by the arm SET (structural, derived runtime-side)
             // AND by the alias's own FQN: the engine may send self_type either
             // resolved (the member union) or as the alias node, depending on how
@@ -666,7 +669,7 @@ pub fn to_source_code_with_bytecode_and_metadata(
 /// `crate::translate_ty::registry_arm_expr` / `descriptor_expr`; this token no
 /// longer feeds any registry key or wire comparison, so it carries the raw
 /// literal value with no escaping.)
-pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
+pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable, crossings: &CrossingTable) -> String {
     match ty {
         Ty::Int => "int".to_string(),
         Ty::Bigint => "bigint".to_string(),
@@ -682,26 +685,32 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         // registry key can't silently first-win. (The class *descriptor* path
         // stays bare — see `descriptor_expr`'s `Class` arm — so class decode still
         // resolves by FQN.)
+        Ty::Class(name, _) if crate::translate_ty::is_host_value(name, crossings) => {
+            "handle".to_string()
+        }
         Ty::Class(name, args) => {
             let base = baml_fqn(name);
             if args.is_empty() {
                 base
             } else {
-                let inner: Vec<String> = args.iter().map(|a| signature_token(a, aliases)).collect();
+                let inner: Vec<String> = args
+                    .iter()
+                    .map(|a| signature_token(a, aliases, crossings))
+                    .collect();
                 format!("{base}<{}>", inner.join(","))
             }
         }
         Ty::Enum(name) | Ty::EnumVariant(name, _) => baml_fqn(name),
         Ty::TypeAlias(name) => match aliases.get(name) {
-            Some((resolved, false)) => signature_token(resolved, aliases),
+            Some((resolved, false)) => signature_token(resolved, aliases, crossings),
             _ => baml_fqn(name),
         },
         Ty::TypeVar(name) => format!("tv:{}", name.as_str()),
-        Ty::List(inner) => format!("list<{}>", signature_token(inner, aliases)),
+        Ty::List(inner) => format!("list<{}>", signature_token(inner, aliases, crossings)),
         Ty::Map { key, value, .. } => format!(
             "map<{},{}>",
-            signature_token(key, aliases),
-            signature_token(value, aliases)
+            signature_token(key, aliases, crossings),
+            signature_token(value, aliases, crossings)
         ),
         Ty::Literal(lit, ..) => match lit {
             baml_base::Literal::Int(v) => format!("lit:int:{v}"),
@@ -712,7 +721,6 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         },
         Ty::Media(kind) => format!("media:{}", format!("{kind:?}").to_lowercase()),
         Ty::Function { .. } => "callable".to_string(),
-        Ty::RustType => "handle".to_string(),
         // Types the Java SDK does not model yet collapse to the opaque
         // `unknown` token (the conservative "?"-token fallback).
         Ty::Interface(..)
@@ -723,7 +731,10 @@ pub(crate) fn signature_token(ty: &Ty, aliases: &AliasTable) -> String {
         | Ty::Future(..) => "unknown".to_string(),
         Ty::Union(..) => "union".to_string(), // banned by validate(); defensive
         Ty::Tuple(items) => {
-            let inner: Vec<String> = items.iter().map(|i| signature_token(i, aliases)).collect();
+            let inner: Vec<String> = items
+                .iter()
+                .map(|i| signature_token(i, aliases, crossings))
+                .collect();
             format!("tuple<{}>", inner.join(","))
         }
     }
@@ -754,15 +765,16 @@ fn union_registration(
     ident: &str,
     arms: &[Ty],
     aliases: &AliasTable,
+    crossings: &CrossingTable,
 ) -> (String, Vec<(String, String)>) {
     let union_binary = format!("{}.{}", pkg.java_package(), ident);
-    let arm_tokens = crate::translate_ty::union_arm_tokens(arms);
+    let arm_tokens = crate::translate_ty::union_arm_tokens(arms, crossings);
     let arm_entries: Vec<(String, String)> = arms
         .iter()
         .zip(&arm_tokens)
         .map(|(arm, token)| {
             (
-                registry_arm_expr(arm, aliases),
+                registry_arm_expr(arm, aliases, crossings),
                 format!("{union_binary}${token}Value"),
             )
         })
@@ -1634,7 +1646,7 @@ mod tests {
         class.properties = vec![ClassProperty {
             name: BaseName::new("_inner"),
             docstring: None,
-            ty: Ty::RustType,
+            ty: Ty::Unknown,
             json_fallback: false,
             json_flatten: false,
             json_rename: None,
@@ -1658,6 +1670,8 @@ mod tests {
         assert!(!file.contains("public Package("), "{file}");
         assert!(!file.contains("_inner"), "{file}");
         assert!(!file.contains("equals("), "{file}");
+        // Not generic: no type arguments to read back.
+        assert!(!file.contains("bamlTypeArgs"), "{file}");
         // Methods send the instance itself as the receiver; a position typed as
         // the class decodes through its descriptor.
         assert!(file.contains(
@@ -1675,6 +1689,44 @@ mod tests {
         assert!(
             !anchor.contains("registerClass(\"reflect.Package\""),
             "{anchor}"
+        );
+    }
+
+    /// A generic opaque class reads back the type arguments the engine stated
+    /// for its instance, escaping the readback from a BAML method that claims
+    /// its name.
+    #[test]
+    fn generic_opaque_class_reads_back_its_type_arguments() {
+        let mut pool = SymbolPool::new();
+        let n = name("baml", &["sap"], "_ParseCache");
+        let Symbol::Class(mut class) = class_sym_with_methods(
+            &n,
+            vec![],
+            vec![method_fn(
+                "bamlTypeArgs",
+                ("text", t_string()),
+                t_string(),
+                1,
+            )],
+            0,
+        ) else {
+            unreachable!("class_sym_with_methods builds a class");
+        };
+        class.crossing = baml_sdkgen_types::ClassCrossing::Opaque;
+        class.generic_params = vec![BaseName::new("T")];
+        pool.insert(n, Symbol::Class(class));
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("baml/sap/_ParseCache.java")];
+
+        assert!(
+            file.contains("public final class _ParseCache<T> extends baml_bridge.BamlOpaque {"),
+            "{file}"
+        );
+        assert!(
+            file.contains(
+                "    public java.util.List<baml_bridge.BamlType> bamlTypeArgs$() {\n        return baml_bridge.TypeRegistry.typeArgsOf(this);\n    }\n"
+            ),
+            "{file}"
         );
     }
 
@@ -2302,6 +2354,99 @@ mod tests {
         assert!(file.contains("package baml_sdk.void$;"));
     }
 
+    /// A host's own value is the host's handle, `baml_bridge.BamlHandle`, in
+    /// every position a type names it, and its class emits nothing.
+    #[test]
+    fn host_value_class_is_the_host_handle() {
+        use baml_sdkgen_types::{CallableParam, ClassCrossing, CodegenFunctionParamMode};
+        let host_value = name("baml", &["host"], "Value");
+        let holder = name("user", &[], "Holder");
+        let rec = name("user", &[], "Rec");
+        let pool_with = |handle: Ty| {
+            let callback = Ty::Function {
+                params: Box::new([
+                    CallableParam {
+                        name: Some(BaseName::new("x")),
+                        ty: handle.clone(),
+                        mode: CodegenFunctionParamMode::Required,
+                    },
+                    CallableParam {
+                        name: Some(BaseName::new("y")),
+                        ty: t_int(),
+                        mode: CodegenFunctionParamMode::Required,
+                    },
+                    CallableParam {
+                        name: Some(BaseName::new("z")),
+                        ty: handle.clone(),
+                        mode: CodegenFunctionParamMode::Required,
+                    },
+                ]),
+                ret: Box::new(handle.clone()),
+                throws: Box::new(Ty::Never),
+            };
+            let mut pool = SymbolPool::new();
+            pool.insert(
+                holder.clone(),
+                class_sym_with_props(
+                    &holder,
+                    &[],
+                    vec![
+                        ("handle", handle.clone()),
+                        ("maybe", t_opt(handle.clone())),
+                        ("either", t_union(vec![handle.clone(), t_int()])),
+                        ("many", t_list(handle.clone())),
+                        ("rec", t_alias(rec.clone())),
+                    ],
+                    0,
+                ),
+            );
+            pool.insert(
+                rec.clone(),
+                Symbol::TypeAlias(TypeAlias {
+                    name: rec.clone(),
+                    resolves_to: t_union(vec![handle.clone(), t_list(t_alias(rec.clone()))]),
+                    recursive: true,
+                    origin: origin(1),
+                }),
+            );
+            let Symbol::Class(mut with_method) = class_sym_with_methods(
+                &name("user", &[], "Host"),
+                vec![method_fn("call", ("cb", callback), handle, 2)],
+                Vec::new(),
+                2,
+            ) else {
+                unreachable!("class_sym_with_methods builds a class");
+            };
+            with_method.properties = vec![ClassProperty {
+                name: BaseName::new("x"),
+                docstring: None,
+                ty: t_int(),
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
+            }];
+            pool.insert(name("user", &[], "Host"), Symbol::Class(with_method));
+            pool
+        };
+        let mut pool = pool_with(t_class(host_value.clone()));
+        pool.insert(
+            host_value.clone(),
+            crossing_sym(&host_value, ClassCrossing::HostValue, 3),
+        );
+        let host_value = emit_sdk(&pool);
+
+        let holder_file = &host_value[&PathBuf::from("Holder.java")];
+        assert!(
+            holder_file.contains("baml_bridge.BamlHandle"),
+            "{holder_file}"
+        );
+        let definitions: Vec<_> = host_value
+            .keys()
+            .filter(|path| path.ends_with("Value.java"))
+            .collect();
+        assert!(definitions.is_empty(), "{definitions:?}");
+    }
+
     /// A class with no members, crossing as `crossing`.
     fn crossing_sym(n: &Name, crossing: baml_sdkgen_types::ClassCrossing, span: u32) -> Symbol {
         let Symbol::Class(mut class) = class_sym(n, &[], span) else {
@@ -2318,7 +2463,11 @@ mod tests {
         let img = name("baml", &["media"], "Image");
         pool.insert(
             img.clone(),
-            crossing_sym(&img, ClassCrossing::Media(baml_base::MediaKind::Image), 0),
+            crossing_sym(
+                &img,
+                ClassCrossing::Media(baml_base::ConcreteMediaKind::Image),
+                0,
+            ),
         );
         let stream = name("ai", &["stream"], "Stream");
         pool.insert(
@@ -2344,7 +2493,11 @@ mod tests {
         let clip = name("user", &["shapes"], "Clip");
         pool.insert(
             clip.clone(),
-            crossing_sym(&clip, ClassCrossing::Media(baml_base::MediaKind::Video), 6),
+            crossing_sym(
+                &clip,
+                ClassCrossing::Media(baml_base::ConcreteMediaKind::Video),
+                6,
+            ),
         );
         let user_prompt = name("user", &["shapes"], "Prompt");
         pool.insert(user_prompt.clone(), class_sym(&user_prompt, &[], 7));
@@ -2361,7 +2514,11 @@ mod tests {
         let mut pool = SymbolPool::new();
         pool.insert(
             clip.clone(),
-            crossing_sym(&clip, ClassCrossing::Media(baml_base::MediaKind::Video), 0),
+            crossing_sym(
+                &clip,
+                ClassCrossing::Media(baml_base::ConcreteMediaKind::Video),
+                0,
+            ),
         );
         let holder = name("user", &["shapes"], "Holder");
         pool.insert(

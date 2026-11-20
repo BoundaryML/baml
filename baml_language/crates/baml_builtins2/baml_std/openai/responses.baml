@@ -148,7 +148,7 @@ class ResponsesClient {
             status_code: null,
             detail: `openai needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "OPENAI_API_KEY")}`,
             raw_body: null,
-        }
+        };
     }
 
     /// The request-time base URL, or null for the provider default.

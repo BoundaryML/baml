@@ -94,7 +94,7 @@ class GenericClient {
         throw root.internal._reject(
             "openai-generic",
             `openai.GenericClient requires base_url (a literal or env.NAME naming a set variable): the endpoint of the OpenAI-compatible server, e.g. "http://localhost:8000/v1". Checked: ${ai.wire.credential_sources(self.base_url, null)}`,
-        )
+        );
     }
 
     /// The provider record: everything the shared chat core needs to know
@@ -142,9 +142,10 @@ class GenericClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            root.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
-            }
+            root.internal
+                .chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
+                    _ => throw ai.errors.normalize(e),
+                }
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {

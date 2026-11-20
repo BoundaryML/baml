@@ -321,11 +321,9 @@ class String {
     /// "a.b".replace(baml.regex.new("."), "-")              // "-.b"
     /// "5 cm".replace(baml.regex.new("(\\d+) cm"), "${1}mm") // "5mm"
     /// ```
-    function replace(
-        self,
-        search: string | root.regex.Regex,
-        replacement: string,
-    ) -> string throws never {
+    function replace(self, search: string | root.regex.Regex, replacement: string) -> string
+        throws never
+    {
         root.regex._replace(self._as_string(), search, replacement, false)
     }
 
@@ -447,11 +445,9 @@ class String {
     /// "a.b.c".replace_all(".", "-")                       // "a-b-c"
     /// "a1b2".replace_all(baml.regex.new("\\d"), "#") // "a#b#"
     /// ```
-    function replace_all(
-        self,
-        search: string | root.regex.Regex,
-        replacement: string,
-    ) -> string throws never {
+    function replace_all(self, search: string | root.regex.Regex, replacement: string) -> string
+        throws never
+    {
         root.regex._replace(self._as_string(), search, replacement, true)
     }
 
@@ -474,11 +470,9 @@ class String {
 
     /// (internal) `replace_all` restricted to a literal search and a literal replacement.
     /// Called from `baml.regex._replace`, which owns the dispatch.
-    function _replace_all_literal(
-        self,
-        search: string,
-        replacement: string,
-    ) -> string throws never {
+    function _replace_all_literal(self, search: string, replacement: string) -> string
+        throws never
+    {
         $rust_function
     }
 
@@ -854,7 +848,7 @@ class String {
 // operation`. Widening `+` to render any right operand needs both of those
 // fixed first.
 implement root.ops.Add<string> for string {
-    type Output = string
+    type Output = string;
 
     /// Concatenates `self` and `rhs`. Backs the `+` operator on strings.
     ///

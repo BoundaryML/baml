@@ -22,6 +22,10 @@ pub enum CleanupMethod {
     Finalizer,
     /// Not shaped as a finalizer, which the reserved name requires (E0144).
     Malformed,
+    /// Shaped as a finalizer but native (`$rust_function`): the run-once
+    /// guard is BAML code wrapped around the body, so a native body would run
+    /// on every call (E0144).
+    Native,
 }
 
 /// Whether `function` is a class's finalizer. `None` for anything but a
@@ -51,11 +55,13 @@ pub fn cleanup_method<'db>(
     let facts = Facts::new(db);
     let returns_unit = facts.equivalent(&signature.ret, &Ty::Null);
     let throws_nothing = data.throws.is_none() || facts.equivalent(&signature.throws, &Ty::Never);
+    if !(data.generic_params.is_empty() && takes_only_self && returns_unit && throws_nothing) {
+        return Some(CleanupMethod::Malformed);
+    }
     Some(
-        if data.generic_params.is_empty() && takes_only_self && returns_unit && throws_nothing {
-            CleanupMethod::Finalizer
-        } else {
-            CleanupMethod::Malformed
+        match *baml_compiler2_hir::body::function_body(db, function) {
+            baml_compiler2_hir::body::FunctionBody::Builtin(_) => CleanupMethod::Native,
+            _ => CleanupMethod::Finalizer,
         },
     )
 }

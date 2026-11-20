@@ -7,7 +7,10 @@ class MedicalDoc {
 }
 
 test "medical_doc" {
-    let result = MedicalDoc { document: `Shadow`, follow_up: null };
+    let result = MedicalDoc {
+        document: `Shadow`,
+        follow_up: null,
+    };
     let output_document = reflect.Class.get_field<string?>(result, "document");
     let output_follow_up = reflect.Class.get_field<string?>(result, "follow_up");
 

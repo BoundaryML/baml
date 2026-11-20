@@ -52,11 +52,17 @@ function test_err_unbound_type_mismatch() -> string {
 
 // Error 5: Bound passed where unbound expected
 function takes_unbound(f: (Employee) -> string) -> string {
-    let e = Employee { first: "X", last: "Y" };
+    let e = Employee {
+        first: "X",
+        last: "Y",
+    };
     f(e)
 }
 
 function test_err_bound_for_unbound() -> string {
-    let e = Employee { first: "Alice", last: "Smith" };
+    let e = Employee {
+        first: "Alice",
+        last: "Smith",
+    };
     takes_unbound(e.full_name)
 }

@@ -342,6 +342,25 @@ class BamlFfiSmokeTest {
         assertEquals("video/mp4", video.mime_type());
     }
 
+    /** A media value has a concrete kind: no other `MediaTypeEnum` value mints or decodes. */
+    @Test
+    void media_without_a_concrete_kind_is_refused() {
+        for (int kind : new int[] {0, 5, 6}) {
+            assertThrows(
+                    RuntimeException.class,
+                    () -> BamlFfi.nativeMediaFromUrl(kind, "https://example.com/x", null));
+            assertThrows(
+                    RuntimeException.class,
+                    () -> BamlFfi.nativeMediaFromBase64(kind, "eA==", null));
+            assertThrows(
+                    RuntimeException.class,
+                    () -> BamlFfi.nativeMediaFromFileContent(kind, "/x.bin", "eA==", null));
+            assertThrows(
+                    BamlError.class,
+                    () -> decodePortableMedia(kind, 3, "https://example.com/x", null));
+        }
+    }
+
     private static Object decodePortableMedia(
             int kind, int sourceField, String value, String mimeType) {
         return decodePortableMedia(kind, sourceField, value, mimeType, null);

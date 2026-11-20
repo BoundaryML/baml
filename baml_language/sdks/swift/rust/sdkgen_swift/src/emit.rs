@@ -100,8 +100,8 @@ pub(crate) struct RenderedField {
     pub ty: String,
     pub boxed: bool,
     pub doc: Option<String>,
-    /// `$rust_type` field (opaque engine handle).
-    pub is_rust: bool,
+    /// A handle field: a host's own value, or a media struct's engine handle.
+    pub is_handle: bool,
     /// The field's [`slot_expr`], its type variables spelled as the class
     /// slot's arguments ([`class_argument_local`]).
     pub slot: String,
@@ -139,14 +139,14 @@ fn class_argument_locals(class: &Class, fields: &[RenderedField]) -> String {
 }
 
 /// The Swift struct of a class crossing by its fields, or, given `media`,
-/// of the class crossing as that media together with its one field, its
-/// `$rust_type` payload.
+/// of the class crossing as that media together with its one field, the
+/// engine's handle to the media.
 pub(crate) fn render_class(
     class: &Class,
     key: &Name,
     fields: &[RenderedField],
     methods: &[String],
-    media: Option<(baml_base::MediaKind, &RenderedField)>,
+    media: Option<(baml_base::ConcreteMediaKind, &RenderedField)>,
 ) -> String {
     let name = escape_ident(key.name().as_str());
     let fqn = key.to_string();
@@ -240,11 +240,10 @@ pub(crate) fn render_class(
     if let Some((kind, data)) = media {
         let data = format!("self.{}", data.name);
         let kind = match kind {
-            baml_base::MediaKind::Image => "image",
-            baml_base::MediaKind::Audio => "audio",
-            baml_base::MediaKind::Video => "video",
-            baml_base::MediaKind::Pdf => "pdf",
-            baml_base::MediaKind::Generic => "generic",
+            baml_base::ConcreteMediaKind::Image => "image",
+            baml_base::ConcreteMediaKind::Audio => "audio",
+            baml_base::ConcreteMediaKind::Video => "video",
+            baml_base::ConcreteMediaKind::Pdf => "pdf",
         };
         let _ = write!(
             out,
@@ -300,10 +299,10 @@ pub(crate) fn render_class(
         })
         .collect::<Vec<_>>()
         .join(",\n");
-    // Media shape: a class whose ONLY field is a `$rust_type` handle
+    // Media shape: a class whose ONLY field is a handle
     // arrives from the engine as a bare tagged handle (ADT_MEDIA_*),
     // not a class value — decode accepts both forms.
-    let media_fallback = if fields.len() == 1 && fields[0].is_rust {
+    let media_fallback = if fields.len() == 1 && fields[0].is_handle {
         format!(
             "\t\tif let handle = try? BamlHandle._bamlDecode(v) {{\n\
              \t\t\treturn {name}({}: handle)\n\
@@ -352,38 +351,58 @@ pub(crate) fn render_class(
     out
 }
 
-/// An opaque class (`reflect.Package`, …): the engine's instance, held by
-/// reference. The Swift type stores only the handle it arrived as and sends
-/// that back as itself; a host never builds one (no public initializer) nor
-/// reads its declared fields, which are the runtime's own. Equal values are
-/// the same instance.
-pub(crate) fn render_opaque_class(
-    class: &Class,
-    key: &Name,
-    methods: &[String],
-) -> Result<String, String> {
+/// An opaque class (`reflect.Package`, `sap._ParseCache<T>`, …): the
+/// engine's instance, held by reference. The Swift type stores only the
+/// handle it arrived as and sends that back as itself; a host never builds
+/// one (no public initializer) nor reads its declared fields, which are the
+/// runtime's own. Equal values are the same instance. A generic class's type
+/// parameters say what the instance is: its slot states them, and it decodes
+/// only an instance at exactly those.
+pub(crate) fn render_opaque_class(class: &Class, key: &Name, methods: &[String]) -> String {
     let fqn = key.to_string();
-    // A generic opaque class would have to state its type arguments, which
-    // the handle alone does not carry; no standard-library class is one.
-    if !class.generic_params.is_empty() {
-        return Err(
-            "an opaque class cannot be generic: its handle carries no type arguments".into(),
-        );
-    }
     let name = escape_ident(key.name().as_str());
+    let params: Vec<String> = class
+        .generic_params
+        .iter()
+        .map(|p| escape_ident(p.as_str()))
+        .collect();
+    let generics = if params.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<{}>",
+            params
+                .iter()
+                .map(|p| format!("{p}: BamlCodableValue"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    };
+    // The class's type arguments, each its parameter's own type, stated by
+    // the slot.
+    let type_arguments = if params.is_empty() {
+        String::new()
+    } else {
+        let arguments = params
+            .iter()
+            .map(|p| format!("{}.type", own_slot(p)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(", typeArguments: [{arguments}]")
+    };
     let doc = class
         .docstring
         .as_deref()
         .map(render_docstring)
         .unwrap_or_default();
     let mut out = format!(
-        "{doc}public struct {name}: Equatable, Sendable, BamlTyped, BamlLeafEncodable, BamlDecodable {{\n\
-         \tprivate let _bamlHandle: BamlHandle\n\n\
+        "{doc}public struct {name}{generics}: Equatable, Sendable, BamlTyped, BamlLeafEncodable, BamlDecodable {{\n\
+         \tinternal let _bamlHandle: BamlHandle\n\n\
          \tprivate nonisolated init(_bamlHandle: BamlHandle) {{\n\
          \t\tself._bamlHandle = _bamlHandle\n\
          \t}}\n\n\
          \tpublic nonisolated static var _bamlArmIdentity: Swift.String? {{ \"{fqn}\" }}\n\n\
-         \tpublic nonisolated static var _bamlSlot: BamlSlot<Self> {{ ._leaf(.classType(\"{fqn}\")) }}\n\n\
+         \tpublic nonisolated static var _bamlSlot: BamlSlot<Self> {{ ._leaf(.classType(\"{fqn}\"{type_arguments})) }}\n\n\
          \tpublic nonisolated func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {{\n\
          \t\ttry _bamlHandle._bamlEncode(as: ._leaf(slot.type))\n\
          \t}}\n\n\
@@ -396,7 +415,7 @@ pub(crate) fn render_opaque_class(
         out.push_str(&indent_lines(method, 1));
     }
     out.push_str("}\n");
-    Ok(out)
+    out
 }
 
 /// How a callable is bound: a free function in a namespace, a static

@@ -158,7 +158,6 @@ internal static class BamlGeneratedTypeMetadata
             type.Interface.TypeArgs),
         BamlTy.TyOneofCase.EnumVariant =>
             $"{RequireName(type.EnumVariant.Name, type)}.{RequireName(type.EnumVariant.Variant, type)}",
-        BamlTy.TyOneofCase.RustType => "$rust_type",
         BamlTy.TyOneofCase.MetaType => "type",
         BamlTy.TyOneofCase.Resource => "baml.llm.Resource",
         BamlTy.TyOneofCase.PromptAst => "baml.llm.PromptAst",
@@ -268,24 +267,18 @@ internal static class BamlGeneratedTypeMetadata
     }
 }
 
-internal sealed class BamlGeneratedFunctionSpecCodec<TFinal>(
-    BamlGeneratedType<TFinal> finalType,
-    byte[] metadata)
+internal sealed class BamlGeneratedFunctionSpecCodec<TFinal>(BamlGeneratedType<TFinal> finalType)
     : IBamlGeneratedCodec<global::Baml.BamlFunctionSpec<TFinal>>
 {
     public BamlGeneratedValue Encode(
         BamlGeneratedCodecContext context,
         global::Baml.BamlFunctionSpec<TFinal> value) =>
-        context.FunctionSpec(value, "ai.FunctionSpec", metadata);
+        context.FunctionSpec(value, "ai.FunctionSpec");
 
     public global::Baml.BamlFunctionSpec<TFinal> Decode(
         BamlGeneratedCodecContext context,
         BamlGeneratedValue value) =>
-        context.ReadFunctionSpec(
-            value,
-            "ai.FunctionSpec",
-            metadata,
-            finalType);
+        context.ReadFunctionSpec(value, "ai.FunctionSpec", finalType);
 }
 
 internal sealed class BamlGeneratedNullableValueCodec<T>(BamlGeneratedType<T> inner)

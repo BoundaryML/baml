@@ -1,0 +1,4 @@
+function f() -> int {
+    let t = (some_long_identifier_number_one, some_long_identifier_number_two, some_long_identifier_number_three);
+    0
+}

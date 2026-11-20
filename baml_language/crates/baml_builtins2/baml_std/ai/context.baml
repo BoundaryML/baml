@@ -5,22 +5,31 @@
 /// Opaque handle to a prebuilt output-format schema. This supports the
 /// standalone `prompt` tag's parameterized output-format rendering.
 class OutputFormat {
-    _data: $rust_type,
-
     function _render(
         self,
-        prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        or_splitter: string | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        enum_value_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        hoisted_class_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        always_hoist_enums: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        quote_class_fields: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        hoist_classes: bool | "auto" | string[] | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        map_style: "angle" | "object" | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        render_null_as: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        prefix: string | null | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        or_splitter: string | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        enum_value_prefix: string | null | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        hoisted_class_prefix: string | null | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        always_hoist_enums: bool | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        quote_class_fields: bool | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        hoist_classes: bool | "auto" | string[] | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        map_style: "angle" | "object" | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        render_null_as: string | null | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
     ) -> string throws never {
         $rust_io_function
     }
+
+    @@rust_type("OutputFormat")
 }
 
 /// A typed chat-role marker produced by `${role("system")}` in a prompt.
@@ -47,15 +56,24 @@ class Context {
 
     function output_format(
         self,
-        prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        or_splitter: string | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        enum_value_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        hoisted_class_prefix: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        always_hoist_enums: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        quote_class_fields: bool | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        hoist_classes: bool | "auto" | string[] | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        map_style: "angle" | "object" | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
-        render_null_as: string | null | root.internal.OutputFormatDefault = root.internal.OutputFormatDefault.Auto,
+        prefix: string | null | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        or_splitter: string | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        enum_value_prefix: string | null | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        hoisted_class_prefix: string | null | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        always_hoist_enums: bool | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        quote_class_fields: bool | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        hoist_classes: bool | "auto" | string[] | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        map_style: "angle" | "object" | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
+        render_null_as: string | null | root.internal.OutputFormatDefault =
+            root.internal.OutputFormatDefault.Auto,
     ) -> string throws never {
         self._output_format._render(
             prefix = prefix,

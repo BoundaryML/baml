@@ -184,7 +184,132 @@ impl Object {
                 meter.bytes(usize::try_from(bigint.bits().div_ceil(8)).unwrap_or(usize::MAX));
             }),
             Object::Future(future) => future.measure(meter),
-            Object::RustData(data) => meter.shared(data, |meter| data.measure(meter)),
+            Object::RustInstance(instance) => {
+                meter.bytes(size_of_val(&*instance.class_type_args));
+                match &instance.payload {
+                    crate::RustPayload::Foreign(data) => {
+                        meter.shared(data, |meter| data.measure(meter));
+                    }
+                    crate::RustPayload::DefaultHasher(state) => meter.bytes(size_of_val(&**state)),
+                    crate::RustPayload::Sha256(state) => meter.bytes(size_of_val(&**state)),
+                    crate::RustPayload::Aes256GcmSiv(cipher) => meter.shared(cipher, |_| {}),
+                    crate::RustPayload::Aes128GcmSiv(cipher) => meter.shared(cipher, |_| {}),
+                    crate::RustPayload::ChaCha20Poly1305(cipher) => meter.shared(cipher, |_| {}),
+                    crate::RustPayload::XChaCha20Poly1305(cipher) => meter.shared(cipher, |_| {}),
+                    crate::RustPayload::Regex(program) => meter.shared(program, |meter| {
+                        meter.bytes(program.retained_bytes());
+                    }),
+                    crate::RustPayload::CsvRecord(record) => {
+                        meter.shared(record, |meter| record.measure(meter));
+                    }
+                    crate::RustPayload::Semaphore(limit) => {
+                        meter.shared(limit, |meter| crate::BexRustData::measure(&**limit, meter));
+                    }
+                    crate::RustPayload::Permit(permit) => {
+                        meter.shared(permit, |meter| {
+                            crate::BexRustData::measure(&**permit, meter);
+                        });
+                    }
+                    crate::RustPayload::Ticket(ticket) => {
+                        meter.shared(ticket, |meter| {
+                            crate::BexRustData::measure(&**ticket, meter);
+                        });
+                    }
+                    crate::RustPayload::CancelToken(token) => {
+                        meter.shared(token, |meter| token.measure(meter));
+                    }
+                    crate::RustPayload::SpanId(id) => meter.bytes(size_of_val(&**id)),
+                    crate::RustPayload::TraceOptions(options) => {
+                        meter.shared(options, |meter| {
+                            crate::BexRustData::measure(&**options, meter);
+                        });
+                    }
+                    crate::RustPayload::ReservedSpan(reservation) => {
+                        meter.shared(reservation, |meter| {
+                            crate::BexRustData::measure(&**reservation, meter);
+                        });
+                    }
+                    crate::RustPayload::File(file) => {
+                        meter.shared(file, |meter| file.measure(meter));
+                    }
+                    crate::RustPayload::Glob(glob) => {
+                        meter.shared(glob, |meter| glob.measure(meter));
+                    }
+                    crate::RustPayload::OutputFormat(schema) => {
+                        meter.shared(schema, |meter| schema.measure(meter));
+                    }
+                    crate::RustPayload::Lock(lock) => {
+                        meter.shared(lock, |meter| lock.measure(meter));
+                    }
+                    crate::RustPayload::TcpStream(stream) => {
+                        meter.shared(stream, |meter| stream.measure(meter));
+                    }
+                    crate::RustPayload::TcpListener(listener) => {
+                        meter.shared(listener, |meter| listener.measure(meter));
+                    }
+                    crate::RustPayload::UdpSocket(socket) => {
+                        meter.shared(socket, |meter| socket.measure(meter));
+                    }
+                    crate::RustPayload::Xoshiro256PlusPlus(state) => {
+                        meter.bytes(size_of_val(&**state));
+                    }
+                    crate::RustPayload::ChaCha20(state) => meter.bytes(size_of_val(&**state)),
+                    crate::RustPayload::CsvReader(state) => {
+                        meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
+                    }
+                    crate::RustPayload::CsvWriter(state) => {
+                        meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
+                    }
+                    crate::RustPayload::ChildProcess(process) => {
+                        meter.shared(process, |meter| process.measure(meter));
+                    }
+                    crate::RustPayload::ReadPipe(pipe) => {
+                        meter.shared(pipe, |meter| pipe.measure(meter));
+                    }
+                    crate::RustPayload::WritePipe(pipe) => {
+                        meter.shared(pipe, |meter| pipe.measure(meter));
+                    }
+                    crate::RustPayload::WebSocket(socket) => {
+                        meter.shared(socket, |meter| socket.measure(meter));
+                    }
+                    crate::RustPayload::HttpBody(body) => {
+                        meter.shared(body, |meter| body.measure(meter));
+                    }
+                    crate::RustPayload::SseStream(stream) => {
+                        meter.shared(stream, |meter| stream.measure(meter));
+                    }
+                    // The listener's buffers are the operating system's.
+                    crate::RustPayload::HttpServer(server) => {
+                        meter.shared(server, |meter| meter.bytes(size_of_val(&**server)));
+                    }
+                    crate::RustPayload::TlsKeys(keys) => {
+                        meter.shared(keys, |meter| meter.bytes(keys.retained_bytes()));
+                    }
+                    // The value itself lives in the host.
+                    crate::RustPayload::HostValue(_) => {}
+                    crate::RustPayload::Image(media)
+                    | crate::RustPayload::Audio(media)
+                    | crate::RustPayload::Pdf(media)
+                    | crate::RustPayload::Video(media) => {
+                        meter.shared(media, |meter| crate::BexRustData::measure(&**media, meter));
+                    }
+                    crate::RustPayload::Prompt(prompt) => {
+                        meter.shared(prompt, |meter| {
+                            crate::BexRustData::measure(&**prompt, meter);
+                        });
+                    }
+                    crate::RustPayload::ClassBuilder(state) => {
+                        meter.shared(state, |meter| meter.bytes(state.retained_bytes()));
+                    }
+                    crate::RustPayload::InterfaceWitness(witness) => {
+                        meter.bytes(size_of_val(&**witness));
+                        meter.bytes(
+                            witness.field_links.capacity()
+                                * size_of::<(baml_type::Name, baml_type::Name, usize)>(),
+                        );
+                    }
+                }
+            }
             Object::Type(_) => meter.bytes(size_of::<TypeValue>()),
             Object::Function(function) => {
                 let bytecode = &function.bytecode;
@@ -197,7 +322,10 @@ impl Object {
             }
             Object::Class(class) => {
                 meter.bytes(size_of::<Class>());
-                meter.bytes(class.fields.footprint());
+                match &class.body {
+                    crate::ClassBody::Fields(fields) => meter.bytes(fields.footprint()),
+                    crate::ClassBody::RustType(_) => {}
+                }
                 meter.bytes(index_map_bytes(&class.methods));
             }
             Object::Enum(enm) => {
@@ -367,8 +495,13 @@ mod tests {
             inline: [0; 16],
             buffer: Vec::with_capacity(1_000),
         });
+        let instance = Object::RustInstance(crate::RustInstance::new(
+            crate::HeapPtr::null(),
+            crate::ThinVec::new(),
+            crate::RustPayload::Foreign(payload),
+        ));
         assert_eq!(
-            charged(Object::RustData(payload)),
+            charged(instance),
             2 * size_of::<usize>() + size_of::<Payload>() + 1_000
         );
     }

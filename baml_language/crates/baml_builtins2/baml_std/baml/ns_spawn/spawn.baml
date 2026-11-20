@@ -21,8 +21,6 @@
 /// token.cancel();
 /// ```
 class CancelToken {
-    _handle: $rust_type,
-
     /// Create a fresh, un-cancelled token.
     //baml:mut_vm
     function new() -> CancelToken throws never {
@@ -49,6 +47,8 @@ class CancelToken {
     function is_cancelled(self) -> bool throws never {
         $rust_function
     }
+
+    @@rust_type("CancelToken")
 }
 
 /// A value written after `with` in a `spawn`: it transforms the spawn's
@@ -90,7 +90,13 @@ class Plan<T, E> {
 
     /// A plan that runs `body`, with nothing added to it.
     function new(body: () -> T throws E, name: string? = null) -> Plan<T, E> throws never {
-        Plan { body: body, name: name, semaphores: [], cancel_tokens: [], root: false }
+        Plan {
+            body: body,
+            name: name,
+            semaphores: [],
+            cancel_tokens: [],
+            root: false,
+        }
     }
 
     /// Returns this plan with a new body: `wrapper`, called with the old one.
@@ -106,9 +112,7 @@ class Plan<T, E> {
     ) -> Plan<Output, Error> throws never {
         let body = self.body;
         Plan<Output, Error> {
-            body: () -> Output throws Error {
-                wrapper(body)
-            },
+            body: () -> Output throws Error { wrapper(body) },
             name: self.name,
             semaphores: self.semaphores,
             cancel_tokens: self.cancel_tokens,
@@ -141,15 +145,21 @@ class Root {
     }
 }
 
-implements<T, E> Modifier<T, E> for Root {
+implement<T, E> Modifier<T, E> for Root {
     function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
-        Plan { ...plan, root: true }
+        Plan {
+            ...plan,
+            root: true,
+        }
     }
 }
 
-implements<T, E> Modifier<T, E> for CancelToken {
+implement<T, E> Modifier<T, E> for CancelToken {
     function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
-        Plan { ...plan, cancel_tokens: plan.cancel_tokens.concat([self]) }
+        Plan {
+            ...plan,
+            cancel_tokens: plan.cancel_tokens.concat([self]),
+        }
     }
 }
 

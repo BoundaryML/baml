@@ -55,8 +55,7 @@ function sitting_length(seed: int, length: int) -> int throws never {
 /// The `index`-th program of a sitting, with no answer attached, or `null`
 /// past the end.
 function prompt_at(seed: int, length: int, index: int) -> root.engine.Prompt? throws never {
-    let question = question_at(seed, length, index)
-        ?? return null;
+    let question = question_at(seed, length, index) ?? return null;
     root.engine.prompt_of(question)
 }
 
@@ -108,37 +107,40 @@ function marked_given(given: Given) -> root.engine.Reasoning? throws never {
     } else if (given.mark == "wrong") {
         root.engine.Understanding.Wrong
     } else {
-        throw baml.panics.Unreachable { message: `no such mark: ${given.mark}` }
+        throw baml.panics.Unreachable {
+            message: `no such mark: ${given.mark}`,
+        };
     };
     let marked_by = if (given.marked_by == "") {
         null
     } else {
         given.marked_by
     };
-    root.engine.Reasoning { understanding, marked_by }
+    root.engine.Reasoning {
+        understanding,
+        marked_by,
+    }
 }
 
 /// Answer the `index`-th question: the case is worked out again from the
 /// seed, the verdict is marked against its key, and what comes back is the
 /// whole exchange, including the derivation to show the learner.
-function answer_at(
-    seed: int,
-    length: int,
-    index: int,
-    given: Given,
-) -> root.engine.Exchange? throws never {
-    let question = question_at(seed, length, index)
-        ?? return null;
+function answer_at(seed: int, length: int, index: int, given: Given) -> root.engine.Exchange?
+    throws never
+{
+    let question = question_at(seed, length, index) ?? return null;
     exchange_of(question, given)
 }
 
 /// The whole exchange for what was said about a question: the answer as the
 /// engine speaks it, marked against the key.
-function exchange_of(
-    question: root.engine.Question,
-    given: Given,
-) -> root.engine.Exchange throws never {
-    let answer = root.engine.Answer { said: said_given(given), reasoning: given.reasoning };
+function exchange_of(question: root.engine.Question, given: Given) -> root.engine.Exchange
+    throws never
+{
+    let answer = root.engine.Answer {
+        said: said_given(given),
+        reasoning: given.reasoning,
+    };
     root.engine.Exchange {
         question,
         answer,
@@ -159,27 +161,27 @@ function mode_of(full: bool) -> root.engine.Mode throws never {
 /// The interface keeps only the answers; every judged value is worked out
 /// here, so there is one account of how a sitting went rather than one on each
 /// side of the boundary.
-function sitting_of(
-    seed: int,
-    length: int,
-    full: bool,
-    answers: Given[],
-) -> root.engine.Transcript throws never {
+function sitting_of(seed: int, length: int, full: bool, answers: Given[]) -> root.engine.Transcript
+    throws never
+{
     let exchanges = baml.iter.Range.new(0, answers.length())
         .filter_map((index) -> {
             answer_at(seed, length, index, answers[index])
         })
         .collect();
-    root.engine.Transcript { mode: mode_of(full), seed, exchanges, learner: null, built: null }
+    root.engine.Transcript {
+        mode: mode_of(full),
+        seed,
+        exchanges,
+        learner: null,
+        built: null,
+    }
 }
 
 /// How a sitting has gone so far.
-function sitting_score(
-    seed: int,
-    length: int,
-    full: bool,
-    answers: Given[],
-) -> root.engine.Score throws never {
+function sitting_score(seed: int, length: int, full: bool, answers: Given[]) -> root.engine.Score
+    throws never
+{
     root.engine.tally(sitting_of(seed, length, full, answers))
 }
 
@@ -192,12 +194,13 @@ function sitting_score(
 ///   A sitting planned from a seed alone puts one at a time, and this is the
 ///   surface for such a sitting.
 function compiler_report(seed: int, length: int, index: int) -> root.engine.Reported? throws never {
-    let question = question_at(seed, length, index)
-        ?? return null;
+    let question = question_at(seed, length, index) ?? return null;
     match (question.posed) {
         let case: root.engine.Case => root.engine.report(case),
         root.engine.Choice => {
-            throw baml.panics.Unreachable { message: "a sitting planned from a seed alone puts one program at a time" }
+            throw baml.panics.Unreachable {
+                message: "a sitting planned from a seed alone puts one program at a time",
+            };
         },
     }
 }
@@ -231,14 +234,16 @@ function review(path: string) -> string throws never {
 function read_back(transcript: root.engine.Transcript) -> string throws never {
     let score = root.engine.tally(transcript);
     let stale = transcript.exchanges.flat_map((exchange) -> {
-        root.engine.cases_of(exchange.question.posed).filter_map((case) -> {
-            let outcome = root.engine.verify(case);
-            if (root.engine.agrees(outcome)) {
-                null
-            } else {
-                `  ${exchange.question.item} (seed ${exchange.question.seed}): ${outcome}`
-            }
-        })
+        root.engine
+            .cases_of(exchange.question.posed)
+            .filter_map((case) -> {
+                let outcome = root.engine.verify(case);
+                if (root.engine.agrees(outcome)) {
+                    null
+                } else {
+                    `  ${exchange.question.item} (seed ${exchange.question.seed}): ${outcome}`
+                }
+            })
     });
     let standing = if (stale.length() == 0) {
         "every case still behaves as recorded"
@@ -276,9 +281,7 @@ function concluded(learned: root.engine.Learned) -> string throws never {
 function fresh_profile() -> root.engine.Profile throws never {
     root.engine.fresh(
         root.bank.rule_orders(4),
-        root.bank.models().map((model) -> {
-            model.id
-        }),
+        root.bank.models().map((model) -> { model.id }),
     )
 }
 
@@ -291,7 +294,9 @@ function fresh_profile() -> root.engine.Profile throws never {
 function state_of(seed: bigint) -> int throws never {
     seed.to_int() catch (e) {
         baml.errors.InvalidArgument => {
-            throw baml.panics.Unreachable { message: `${seed} is not a stream state` }
+            throw baml.panics.Unreachable {
+                message: `${seed} is not a stream state`,
+            };
         },
     }
 }
@@ -305,20 +310,19 @@ function state_of(seed: bigint) -> int throws never {
 ///   defect in the page, or a sitting saved against a bank that has since
 ///   moved on, and neither is something to absorb.
 function item_named(item: string) -> root.engine.Item throws never {
-    bank_items().find((candidate) -> {
-        candidate.id() == item
-    })
-        ?? throw baml.panics.Unreachable { message: `no item called ${item}` }
+    bank_items().find((candidate) -> { candidate.id() == item })
+        ?? throw baml.panics.Unreachable {
+            message: `no item called ${item}`,
+        }
 }
 
 /// The case behind a prompt, generated again from its item and seed, or
 /// `null` when no such item exists.
 function candidate_of(item: string, seed: bigint) -> root.engine.Candidate? throws never {
-    let found = bank_items().find((candidate) -> {
-        candidate.id() == item
+    let found = bank_items().find((candidate) -> { candidate.id() == item }) ?? return null;
+    root.engine.generate(found, root.engine.Seed {
+        state: state_of(seed),
     })
-        ?? return null;
-    root.engine.generate(found, root.engine.Seed { state: state_of(seed) })
 }
 
 /// The rules a posed question holds as the tracer reads them: its trace,
@@ -345,19 +349,25 @@ function next_prompt(
 ) -> Next? throws never {
     let seed = root.engine.seed_for(`mastery/${session}`, step);
     let streams = root.engine.split(seed);
-    let verified = bank_items().filter((item) -> {
-        item.status() is root.engine.Verified
-    });
+    let verified = bank_items().filter((item) -> { item.status() is root.engine.Verified });
     let drawn = root.engine.batch(
         verified,
         streams.left,
         root.bank.default_weights(),
         root.bank.default_budget(),
     );
-    let chosen = root.engine.choose(profile, knobs, drawn, streams.right)
-        ?? return null;
-    let put = root.engine.put_drawn(knobs, item_named(chosen.item), chosen.seed, chosen.candidate);
-    let question = root.engine.Question { item: chosen.item, seed: chosen.seed.state, posed: put.posed };
+    let chosen = root.engine.choose(profile, knobs, drawn, streams.right) ?? return null;
+    let put = root.engine.put_drawn(
+        knobs,
+        item_named(chosen.item),
+        chosen.seed,
+        chosen.candidate,
+    );
+    let question = root.engine.Question {
+        item: chosen.item,
+        seed: chosen.seed.state,
+        posed: put.posed,
+    };
     // The stuck rule is taught only before a case that turns on it: the
     // selection leans toward such a case but does not insist, and the spec's
     // words on one rule shown before a case about another would mislead.
@@ -370,7 +380,10 @@ function next_prompt(
         },
         null => null,
     };
-    Next { prompt: root.engine.prompt_of(question), teach }
+    Next {
+        prompt: root.engine.prompt_of(question),
+        teach,
+    }
 }
 
 /// The case behind a prompt, generated again from its item and seed.
@@ -383,7 +396,9 @@ function next_prompt(
 ///   neither is something to absorb.
 function case_at(item: string, seed: bigint) -> root.engine.Candidate throws never {
     candidate_of(item, seed)
-        ?? throw baml.panics.Unreachable { message: `no case for ${item} at seed ${seed}` }
+        ?? throw baml.panics.Unreachable {
+            message: `no case for ${item} at seed ${seed}`,
+        }
 }
 
 /// How the case at `item` and `seed` is put under `knobs`: what a learner
@@ -396,15 +411,17 @@ function case_at(item: string, seed: bigint) -> root.engine.Candidate throws nev
 /// # Panics
 ///
 /// - As `case_at`.
-function put_at(
-    knobs: root.engine.Knobs,
-    item: string,
-    seed: bigint,
-) -> root.engine.Put throws never {
+function put_at(knobs: root.engine.Knobs, item: string, seed: bigint) -> root.engine.Put
+    throws never
+{
     let found = item_named(item);
-    let state = root.engine.Seed { state: state_of(seed) };
+    let state = root.engine.Seed {
+        state: state_of(seed),
+    };
     let candidate = root.engine.generate(found, state)
-        ?? throw baml.panics.Unreachable { message: `no case for ${item} at seed ${seed}` };
+        ?? throw baml.panics.Unreachable {
+            message: `no case for ${item} at seed ${seed}`,
+        };
     root.engine.put_drawn(knobs, found, state, candidate)
 }
 
@@ -422,15 +439,19 @@ class Judged {
 /// # Panics
 ///
 /// - As `case_at`.
-function judged(
-    knobs: root.engine.Knobs,
-    item: string,
-    seed: bigint,
-    given: Given,
-) -> Judged throws never {
+function judged(knobs: root.engine.Knobs, item: string, seed: bigint, given: Given) -> Judged
+    throws never
+{
     let put = put_at(knobs, item, seed);
-    let question = root.engine.Question { item, seed: state_of(seed), posed: put.posed };
-    Judged { put, exchange: exchange_of(question, given) }
+    let question = root.engine.Question {
+        item,
+        seed: state_of(seed),
+        posed: put.posed,
+    };
+    Judged {
+        put,
+        exchange: exchange_of(question, given),
+    }
 }
 
 function observe_judged(
@@ -438,16 +459,12 @@ function observe_judged(
     knobs: root.engine.Knobs,
     judgement: Judged,
 ) -> root.engine.Profile throws never {
-    root.engine.observe(
-        profile,
-        knobs,
-        root.engine.Observed {
-            item: judgement.exchange.question.item,
-            rules: tracer_rules(judgement.put.posed),
-            traps: judgement.put.traps,
-            verdict: judgement.exchange.judgement.verdict_correct,
-        },
-    )
+    root.engine.observe(profile, knobs, root.engine.Observed {
+        item: judgement.exchange.question.item,
+        rules: tracer_rules(judgement.put.posed),
+        traps: judgement.put.traps,
+        verdict: judgement.exchange.judgement.verdict_correct,
+    })
 }
 
 /// The profile after the learner answered the case at `item` and `seed`.
@@ -525,9 +542,7 @@ function answer_case(
 /// - As `case_at`, for any question the bank no longer has.
 function replay(knobs: root.engine.Knobs, taken: Taken[]) -> root.engine.Profile throws never {
     taken.reduce(
-        (profile, t) -> {
-            observe_answer(profile, knobs, t.item, t.seed, t.given)
-        },
+        (profile, t) -> { observe_answer(profile, knobs, t.item, t.seed, t.given) },
         fresh_profile(),
     )
 }
@@ -549,10 +564,11 @@ function adaptive_sitting(
     root.engine.Transcript {
         mode: mode_of(full),
         seed: session,
-        exchanges: taken.map((t) -> {
-            judged(knobs, t.item, t.seed, t.given).exchange
-        }),
-        learner: root.engine.Learned { knobs, profile: replay(knobs, taken) },
+        exchanges: taken.map((t) -> { judged(knobs, t.item, t.seed, t.given).exchange }),
+        learner: root.engine.Learned {
+            knobs,
+            profile: replay(knobs, taken),
+        },
         built,
     }
 }
@@ -652,13 +668,10 @@ class Driven {
 /// The answers of `answers`, one word each: `compiles`, `rejected`, `first`,
 /// `second`, or `unsure`. An empty string is no answers at all.
 function answers_of(answers: string) -> string[] throws never {
-    answers.split(",")
-        .filter((word) -> {
-            word.trim() != ""
-        })
-        .map((word) -> {
-            word.trim()
-        })
+    answers
+        .split(",")
+        .filter((word) -> { word.trim() != "" })
+        .map((word) -> { word.trim() })
 }
 
 /// The sitting drawn from `session` replayed through `answers`.
@@ -680,8 +693,17 @@ function driven(session: int, answers: string) -> Driven throws never {
                 ?? throw baml.panics.Unreachable {
                     message: `the sitting from ${session} has no question ${taken.length()}`,
                 };
-            let given = Given { said, reasoning: "", mark: "", marked_by: "" };
-            taken.push(Taken { item: next.prompt.item, seed: next.prompt.seed, given });
+            let given = Given {
+                said,
+                reasoning: "",
+                mark: "",
+                marked_by: "",
+            };
+            taken.push(Taken {
+                item: next.prompt.item,
+                seed: next.prompt.seed,
+                given,
+            });
             observe_answer(carried, knobs, next.prompt.item, next.prompt.seed, given)
         },
         fresh_profile(),
@@ -696,31 +718,24 @@ function programs_of(prompt: root.engine.Prompt) -> string[] throws never {
         let second: map<string, string> => shown.push(second),
         null => {},
     }
-    shown.map((files) -> {
-        root.engine.source_of(files)
-    })
+    shown.map((files) -> { root.engine.source_of(files) })
 }
 
 /// What the answer at the end of `answers` was worth.
 function marked_last(knobs: root.engine.Knobs, taken: Taken[]) -> Marked? throws never {
-    let last = taken.at(-1)
-        ?? return null;
+    let last = taken.at(-1) ?? return null;
     let judgement = judged(knobs, last.item, last.seed, last.given);
     let revealed = root.engine.reveal(judgement.put.posed);
     Marked {
         said: last.given.said,
         correct: judgement.exchange.judgement.verdict_correct,
         points: root.engine.points_for(knobs, judgement.exchange.judgement.verdict_correct),
-        compiles: revealed.programs.map((program) -> {
-            program.compiles
-        }),
+        compiles: revealed.programs.map((program) -> { program.compiles }),
         reported: revealed.programs.map((program) -> {
             let said = program.reported.codes.concat(program.reported.messages);
             said.join("; ")
         }),
-        because: revealed.shared.map((claim) -> {
-            claim.instance
-        }),
+        because: revealed.shared.map((claim) -> { claim.instance }),
         difference: revealed.difference,
     }
 }
@@ -800,9 +815,7 @@ function adaptive_record(session: int, answers: string) -> string throws never {
 /// What a learner who reasons as the naive model `id` does believes, in the
 /// second person; `null` for a model the bank does not know.
 function describe_model(id: string) -> string? throws never {
-    root.bank.models()
-        .find((model) -> {
-            model.id == id
-        })
-        ?.description
+    root.bank.models().find((model) -> {
+        model.id == id
+    })?.description
 }

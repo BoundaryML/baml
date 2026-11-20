@@ -4,9 +4,11 @@ use std::sync::Arc;
 use prost::Message;
 
 use crate::{
-    RustType, SdkError, capi,
+    SdkError,
+    baml_value::internal::RuntimeInstance,
+    capi,
     encode::{ArgumentError, Encoder},
-    rust_type::OwnedHandle,
+    handle::OwnedHandle,
     wire,
 };
 
@@ -18,14 +20,16 @@ pub type CancelEncoder = Arc<crate::encode::EncodeValue>;
 #[doc(hidden)]
 #[derive(Clone, Default)]
 pub struct InvocationOptions {
-    trace: Option<RustType>,
+    /// The `trace.Options` or `trace.ReservedSpan` instance the call is
+    /// traced with.
+    trace: Option<RuntimeInstance>,
     cancel: Option<CancelEncoder>,
     timeout_ms: Option<u32>,
 }
 impl InvocationOptions {
     #[doc(hidden)]
     pub fn new(
-        trace: Option<RustType>,
+        trace: Option<RuntimeInstance>,
         cancel: Option<CancelEncoder>,
         timeout_ms: Option<u32>,
     ) -> Self {
@@ -71,15 +75,10 @@ impl InvocationOptions {
                 len: 0,
             };
             let mut owner = 0;
-            // SAFETY: the trace owns a live capability; outputs are writable.
+            // SAFETY: the trace instance owns a live handle; outputs are writable.
             #[expect(unsafe_code)]
             let status = unsafe {
-                (api.trace_selection)(
-                    call_id,
-                    trace.invocation_key(),
-                    &raw mut buffer,
-                    &raw mut owner,
-                )
+                (api.trace_selection)(call_id, trace.key(), &raw mut buffer, &raw mut owner)
             };
             if status != 0 {
                 return Err(SdkError::new("invalid trace selection").into());
@@ -136,5 +135,6 @@ pub fn current_context<T: crate::BamlValue>() -> Result<T, crate::Error<std::con
     let bytes = api.copy_and_free(output);
     let value = wire::BamlOutboundValue::decode(bytes.as_slice())
         .map_err(|error| crate::Error::Sdk(SdkError::new(error.to_string())))?;
+    let _pins = crate::outbound::Pins::of([&value]);
     T::from_baml(value).map_err(crate::Error::Decode)
 }

@@ -7,16 +7,13 @@ use wasm_bindgen::prelude::*;
 fn type_name(ht: BamlHandleType) -> &'static str {
     match ht {
         BamlHandleType::HandleUnspecified => "unspecified",
-        BamlHandleType::UntaggedRustData => "rust_data",
         BamlHandleType::UntaggedBexHeap => "bex_heap",
         BamlHandleType::FunctionRef => "function_ref",
         BamlHandleType::AdtMediaImage => "image",
         BamlHandleType::AdtMediaAudio => "audio",
         BamlHandleType::AdtMediaVideo => "video",
         BamlHandleType::AdtMediaPdf => "pdf",
-        BamlHandleType::AdtMediaGeneric => "media",
         BamlHandleType::AdtPromptAst => "prompt_ast",
-        BamlHandleType::AdtType => "type",
         BamlHandleType::AdtTaggedHeapHandle => "tagged_heap_handle",
         BamlHandleType::AdtFunctionSpec => "function_spec",
         BamlHandleType::AdtRuntimeValue => "runtime_value",
@@ -27,6 +24,7 @@ fn type_name(ht: BamlHandleType) -> &'static str {
         BamlHandleType::HostValueOpaque => "host_value_opaque",
         BamlHandleType::InvocationState => "invocation_state",
         BamlHandleType::TraceReservation => "trace_reservation",
+        BamlHandleType::HostValuePin => "host_value_pin",
     }
 }
 

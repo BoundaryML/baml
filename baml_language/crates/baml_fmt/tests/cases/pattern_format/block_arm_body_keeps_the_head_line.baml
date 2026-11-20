@@ -1,0 +1,21 @@
+function f(x: int, e: string) -> int {
+    match (x) {
+        SomeLongVariant
+        | AnotherLongVariant
+        | Third => {
+            let y = x + 1;
+            y
+        },
+        0 => {
+            root.sys.panic("a block body too long for the head line, so the block breaks inside")
+        },
+        1 => { root.sys.panic("a block body that fits beside its head stays flat") },
+        _ => 0,
+    }
+}
+
+function g() -> int {
+    h() catch (e) {
+        root.errors.InvalidArgument { message } => { root.sys.panic("Instant.to_string: " + message + "!") },
+    }
+}

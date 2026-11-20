@@ -128,6 +128,9 @@ struct ClassSpec<'a> {
     generic_codec_request: CSharpNameRequest,
     generic_factory_request: CSharpNameRequest,
     properties: Vec<PropertySpec<'a>>,
+    /// The members `render_class` gives a reference wrapper, which keep their
+    /// spelling: a BAML member that projects onto one is renamed.
+    wrapper_members: Vec<CSharpNameRequest>,
     methods: Vec<MethodSpec<'a>>,
     /// The methods of an opaque standard-library class a host cannot call,
     /// each with why: the class's C# documentation lists them.
@@ -245,6 +248,9 @@ fn builtin_projection(model: &CodegenModel, name: &Name) -> Option<BuiltinProjec
             ClassCrossing::FunctionSpec => return Some(BuiltinProjection::FunctionSpec),
             ClassCrossing::Prompt => return Some(BuiltinProjection::Prompt),
             ClassCrossing::Stream => return Some(BuiltinProjection::UnsupportedInternal),
+            // C# has no handle type yet: a host's own value has no C# shape,
+            // and the class no definition.
+            ClassCrossing::HostValue => return Some(BuiltinProjection::UnsupportedInternal),
             // A media value is `Ty::Media`, and an opaque class is its own
             // projection: neither is a builtin nominal.
             ClassCrossing::Media(_) | ClassCrossing::Opaque => return None,
@@ -279,33 +285,19 @@ fn fields_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.spawn.Root"
         | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
         "trace.Mode" | "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
-        "trace.SpanId" | "trace.Options" | "trace.ReservedSpan"
-        | "baml.spawn.CancelToken"
-        | "baml.sync.Semaphore"
-        | "baml.sync.Permit"
-        | "baml.http.Response"
+        "baml.http.Response"
         | "baml.http.SseStream"
         | "baml.http.Server"
         | "baml.http.TlsConfig"
-        | "baml.glob.Glob"
-        | "baml.fs.File"
-        | "baml.fs.Lock"
-        | "baml.csv.Record"
         | "baml.csv.Reader"
         | "baml.csv.Rows"
-        | "baml.csv.Writer"
-        | "baml.net.TcpStream"
-        | "baml.net.TcpListener"
-        | "baml.net.UdpSocket"
-        | "baml.ws.WebSocket" => Some(BuiltinProjection::Resource),
+        | "baml.csv.Writer" => Some(BuiltinProjection::Resource),
         // A plan holds a BAML closure: no host can build or run one, so a
         // signature that mentions it has no host shape.
         "baml.spawn.Plan"
         | "baml.csv._NeedData"
         | "baml.csv._Skip"
         | "baml.csv._Headers"
-        | "ai.OutputFormat"
-        | "baml.sap._ParseCache"
         | "baml.errors.HostCallable"
         | "ai.PromptMessage"
         | AI_STREAM_DONE
@@ -337,6 +329,61 @@ fn is_structural_enum_projection(name: &Name) -> bool {
 
 fn is_resource_projection(name: &Name) -> bool {
     fields_projection(name) == Some(BuiltinProjection::Resource)
+}
+
+/// Whether `class` is a standard-library handle a host holds — a resource or
+/// a reference to the engine's instance — whose methods take a string choice
+/// as a `string`, checked against its choices.
+fn is_stdlib_handle_class(class: &ClassSpec<'_>) -> bool {
+    is_resource_projection(class.name) || crosses_opaque(class.class)
+}
+
+/// Whether `name` is a trace selection: the options or reservation a call is
+/// traced with.
+fn is_trace_selection(name: &Name) -> bool {
+    matches!(
+        name.to_string().as_str(),
+        "trace.Options" | "trace.ReservedSpan"
+    )
+}
+
+/// The members `render_class` writes into the wrapper for `name`, besides its
+/// methods and properties.
+fn wrapper_members(
+    name: &Name,
+    opaque: bool,
+) -> &'static [(&'static str, CSharpNameKind, CSharpVisibility)] {
+    use CSharpNameKind::{Function, Property};
+    use CSharpVisibility::{Internal, Public};
+    if is_resource_projection(name) {
+        &[
+            ("Resource", Property, Internal),
+            ("IsClosed", Property, Public),
+            ("Clone", Function, Public),
+            ("Dispose", Function, Public),
+        ]
+    } else if opaque && is_trace_selection(name) {
+        &[
+            ("Handle", Property, Internal),
+            ("Opaque", Property, Internal),
+            ("IsClosed", Property, Public),
+            ("Clone", Function, Public),
+            ("Dispose", Function, Public),
+            ("Equals", Function, Public),
+            ("GetHashCode", Function, Public),
+        ]
+    } else if opaque {
+        &[
+            ("Opaque", Property, Internal),
+            ("IsClosed", Property, Public),
+            ("Clone", Function, Public),
+            ("Dispose", Function, Public),
+            ("Equals", Function, Public),
+            ("GetHashCode", Function, Public),
+        ]
+    } else {
+        &[]
+    }
 }
 
 fn is_public_resource_stdlib_function(name: &Name) -> bool {
@@ -378,7 +425,8 @@ fn crosses_opaque(class: &Class) -> bool {
         | ClassCrossing::Stream
         | ClassCrossing::FunctionSpec
         | ClassCrossing::Media(_)
-        | ClassCrossing::Prompt => false,
+        | ClassCrossing::Prompt
+        | ClassCrossing::HostValue => false,
     }
 }
 
@@ -631,6 +679,7 @@ fn generate_program_inner(
                 .iter()
                 .map(|property| property.request.clone()),
         );
+        requests.extend(class.wrapper_members.iter().cloned());
         for method in &class.methods {
             requests.extend([
                 method.method_request.clone(),
@@ -1231,12 +1280,6 @@ fn collect_classes<'a>(
         {
             continue;
         }
-        if opaque && !class.generic_params.is_empty() {
-            return Err(unsupported(
-                &format!("class `{name}`"),
-                "a generic class that crosses by reference",
-            ));
-        }
         if name.package().as_str() == "user" {
             for property in &class.properties {
                 require_unambiguous_csharp_unions(
@@ -1291,10 +1334,13 @@ fn collect_classes<'a>(
             })
             .collect::<Vec<_>>();
         // An opaque class's declared fields are the runtime's internals: its
-        // C# type has none.
-        let declared_properties = if opaque { &[][..] } else { &class.properties };
-        let properties = declared_properties
+        // C# type has none. A resource's `_` fields are its runtime state and
+        // have no C# surface either, so they take no names from its members.
+        let resource = is_resource_projection(name);
+        let properties = class
+            .properties
             .iter()
+            .filter(|property| !opaque && (!resource || !property.name.as_str().starts_with('_')))
             .map(|property| PropertySpec {
                 property,
                 request: source_request(
@@ -1304,6 +1350,20 @@ fn collect_classes<'a>(
                     CSharpNameKind::Property,
                     CSharpScope::Type(fqn.clone()),
                 ),
+            })
+            .collect();
+        let wrapper_members = wrapper_members(name, opaque)
+            .iter()
+            .map(|&(member, kind, visibility)| {
+                CSharpNameRequest::new(
+                    fqn.member(&BaseName::new(format!("${member}"))),
+                    BamlWireName::Generated,
+                    member,
+                    kind,
+                    visibility,
+                    CSharpNameOrigin::Fixed,
+                    CSharpScope::Type(fqn.clone()),
+                )
             })
             .collect();
         let CollectedMethods {
@@ -1320,6 +1380,7 @@ fn collect_classes<'a>(
             generic_codec_request,
             generic_factory_request,
             properties,
+            wrapper_members,
             methods,
             unavailable_methods,
         });
@@ -1359,8 +1420,10 @@ fn collect_methods<'a>(
         .chain(class.instance_methods.iter().map(|method| (false, method)))
     {
         // BUG: a `_` prefix is a convention, not a visibility, yet a
-        // resource class's `_` methods are left off its C# surface.
-        if resource_owner && method.name.as_str().starts_with('_') {
+        // standard-library handle's (a resource's or an opaque class's) `_`
+        // methods are left off its C# surface. C# drops the underscore when it
+        // spells a name, so `_connect` would otherwise collide with `connect`.
+        if (resource_owner || opaque_owner) && method.name.as_str().starts_with('_') {
             continue;
         }
         let key = if is_static {
@@ -3105,17 +3168,20 @@ fn render_class(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
     };
     let resource = is_resource_projection(class.name);
     let opaque = crosses_opaque(class.class);
+    // A trace selection is the options or reservation a call is traced with:
+    // the reference the runtime reads them through.
+    let trace_selection = is_trace_selection(class.name);
     let implements = if resource {
-        if matches!(
-            class.name.to_string().as_str(),
-            "trace.Options" | "trace.ReservedSpan"
-        ) {
-            " : TRACE_SELECTION_PLACEHOLDER, global::System.IDisposable".to_string()
-        } else {
-            " : global::System.IDisposable".to_string()
-        }
+        " : global::System.IDisposable".to_string()
     } else if opaque {
-        format!(" : global::System.IDisposable, global::System.IEquatable<{name}>")
+        let selection = if trace_selection {
+            format!("{}, ", render.selection_source())
+        } else {
+            String::new()
+        };
+        format!(
+            " : {selection}global::System.IDisposable, global::System.IEquatable<{name}{generic_params}>"
+        )
     } else {
         String::new()
     };
@@ -3123,12 +3189,11 @@ fn render_class(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
     source.push_str(&format!(
         "public sealed partial class {name}{generic_params}{implements}\n{{\n"
     ));
-    if matches!(
-        class.name.to_string().as_str(),
-        "trace.Options" | "trace.ReservedSpan"
-    ) {
-        source = source.replace("TRACE_SELECTION_PLACEHOLDER", &render.selection_source());
-        source.push_str("    internal override global::Baml.BamlHandle Handle => resource.InvocationHandle;\n\n");
+    if trace_selection {
+        debug_assert!(opaque, "`{}` crosses by reference", class.name);
+        source.push_str(
+            "    internal override global::Baml.BamlHandle Handle => opaque.InvocationHandle;\n\n",
+        );
     }
     if resource {
         let resource_source = format!("{name}{generic_params}");
@@ -3183,7 +3248,7 @@ fn render_class(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
         // A reference to the engine's own instance: no public constructor and
         // no fields; equal when it is the same engine reference.
         source.push_str(&format!(
-            "    private readonly global::Baml.Generated.V1.BamlGeneratedOpaque opaque;\n\n    internal {name}(global::Baml.Generated.V1.BamlGeneratedOpaque opaque)\n    {{\n        this.opaque = opaque ?? throw new global::System.ArgumentNullException(nameof(opaque));\n    }}\n\n    internal global::Baml.Generated.V1.BamlGeneratedOpaque Opaque => opaque;\n\n    public bool IsClosed => opaque.IsClosed;\n\n    public {name} Clone() => new(opaque.Clone());\n\n    public void Dispose() => opaque.Dispose();\n\n    public bool Equals({name}? other) => other is not null && opaque.Equals(other.opaque);\n\n    public override bool Equals(object? obj) => Equals(obj as {name});\n\n    public override int GetHashCode() => opaque.GetHashCode();\n\n"
+            "    private readonly global::Baml.Generated.V1.BamlGeneratedOpaque opaque;\n\n    internal {name}(global::Baml.Generated.V1.BamlGeneratedOpaque opaque)\n    {{\n        this.opaque = opaque ?? throw new global::System.ArgumentNullException(nameof(opaque));\n    }}\n\n    internal global::Baml.Generated.V1.BamlGeneratedOpaque Opaque => opaque;\n\n    public bool IsClosed => opaque.IsClosed;\n\n    public {name}{generic_params} Clone() => new(opaque.Clone());\n\n    public void Dispose() => opaque.Dispose();\n\n    public bool Equals({name}{generic_params}? other) => other is not null && opaque.Equals(other.opaque);\n\n    public override bool Equals(object? obj) => Equals(obj as {name}{generic_params});\n\n    public override int GetHashCode() => opaque.GetHashCode();\n\n"
         ));
     } else {
         for property in &class.properties {
@@ -3324,7 +3389,7 @@ fn render_method(
     let mut parameters = ordered_arguments
         .iter()
         .map(|argument| {
-            let ty = if is_resource_projection(class.name)
+            let ty = if is_stdlib_handle_class(class)
                 && string_literal_union_members(&argument.ty).is_some()
             {
                 "string".to_string()
@@ -3442,7 +3507,7 @@ fn render_method_argument_builder(
             &method.type_params,
             &input_value,
             parameter,
-            is_resource_projection(class.name),
+            is_stdlib_handle_class(class),
         );
         if matches!(&argument.ty, Ty::Function { .. }) && contains_type_var(&argument.ty) {
             let argument_token = format!("{program}.{field}");
@@ -3817,6 +3882,8 @@ fn render_program(
     {
         if is_resource_projection(class.name) {
             source.push_str(&render_generic_resource_support(render, class));
+        } else if crosses_opaque(class.class) {
+            source.push_str(&render_generic_opaque_support(render, class));
         } else {
             source.push_str(&render_generic_class_support(render, class));
         }
@@ -4033,15 +4100,12 @@ fn render_function_codec(
 /// both directions.
 fn render_opaque_codec(render: &RenderContext<'_>, ty: &Ty, name: &Name) -> (String, String) {
     let identity = csharp_string(&name.to_string());
-    let metadata = byte_array_source(&render.wire_metadata(ty));
     let source = render.type_source(ty);
     (
         format!(
-            "            if (value is null)\n            {{\n                return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                    \"A generated opaque codec received null.\",\n                    \"{name} is non-nullable.\");\n            }}\n            return context.Opaque(value.Opaque, {identity}, {metadata});\n"
+            "            if (value is null)\n            {{\n                return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                    \"A generated opaque codec received null.\",\n                    \"{name} is non-nullable.\");\n            }}\n            return context.Opaque(value.Opaque, {identity});\n"
         ),
-        format!(
-            "            return new {source}(context.ReadOpaque(value, {identity}, {metadata}));\n"
-        ),
+        format!("            return new {source}(context.ReadOpaque(value, {identity}));\n"),
     )
 }
 
@@ -4117,13 +4181,10 @@ fn render_builtin_codec(render: &RenderContext<'_>, ty: &Ty, name: &Name) -> (St
                 unreachable!("FunctionSpec projection has one final type argument")
             };
             let identity = csharp_string(&name.to_string());
-            let metadata = byte_array_source(&render.wire_metadata(ty));
             (
+                format!("            return context.FunctionSpec(value, {identity});\n"),
                 format!(
-                    "            return context.FunctionSpec(value, {identity}, {metadata});\n"
-                ),
-                format!(
-                    "            return context.ReadFunctionSpec(value, {identity}, {metadata}, {});\n",
+                    "            return context.ReadFunctionSpec(value, {identity}, {});\n",
                     render.type_field(final_type),
                 ),
             )
@@ -4136,6 +4197,55 @@ fn render_builtin_codec(render: &RenderContext<'_>, ty: &Ty, name: &Name) -> (St
             unreachable!("unsupported builtins are rejected before rendering")
         }
     }
+}
+
+/// The type factory and codec of a generic class that crosses by reference:
+/// its instance at given type arguments is the engine reference it holds.
+fn render_generic_opaque_support(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
+    let codec = allocated(render.names, &class.generic_codec_request).source();
+    let factory = allocated(render.names, &class.generic_factory_request).source();
+    let generic_parameters = class
+        .generic_params
+        .iter()
+        .map(|parameter| allocated(render.names, &parameter.request).source())
+        .collect::<Vec<_>>();
+    let generic_suffix = format!("<{}>", generic_parameters.join(", "));
+    let class_source = format!(
+        "{}{}",
+        render.nominal_source(class.name, true),
+        generic_suffix,
+    );
+    let identity = csharp_string(&class.name.to_string());
+
+    let mut source = format!(
+        "    private static global::Baml.Generated.V1.BamlGeneratedTypeFactoryResult {factory}{generic_suffix}(\n        global::Baml.Generated.V1.BamlGeneratedRegistry registry)\n    {{\n"
+    );
+    for parameter in &class.generic_params {
+        let parameter_source = allocated(render.names, &parameter.request).source();
+        source.push_str(&format!(
+            "        global::Baml.Generated.V1.BamlGeneratedType<{parameter_source}> type_{parameter_source} =\n            registry.ResolveType<{parameter_source}>({position});\n        global::Baml.Generated.V1.BamlGeneratedTypeArgument argument_{parameter_source} =\n            registry.TypeArgument(type_{parameter_source});\n",
+            position = csharp_string(&format!("{}.{}", class.name, parameter.name)),
+        ));
+    }
+    let type_arguments = generic_parameters
+        .iter()
+        .map(|parameter| format!("argument_{parameter}"))
+        .collect::<Vec<_>>();
+    source.push_str(&format!(
+        "        global::Baml.Generated.V1.BamlGeneratedTypeArgument[] type_arguments =\n        [\n            {}\n        ];\n        return registry.CreateClassTypeFactoryResult<{class_source}>(\n            {identity},\n            new {codec}{generic_suffix}(),\n            type_arguments);\n    }}\n\n",
+        type_arguments.join(", "),
+    ));
+    source.push_str(&format!(
+        "    private sealed class {codec}{generic_suffix} :\n        global::Baml.Generated.V1.IBamlGeneratedCodec<{class_source}>\n    {{\n"
+    ));
+    source.push_str(&format!(
+        "        public global::Baml.Generated.V1.BamlGeneratedValue Encode(\n            global::Baml.Generated.V1.BamlGeneratedCodecContext context,\n            {class_source} value)\n        {{\n            if (value is null)\n            {{\n                return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                    \"A generated opaque codec received null.\",\n                    \"{} is non-nullable.\");\n            }}\n            return context.Opaque(value.Opaque, {identity});\n        }}\n\n",
+        class.name,
+    ));
+    source.push_str(&format!(
+        "        public {class_source} Decode(\n            global::Baml.Generated.V1.BamlGeneratedCodecContext context,\n            global::Baml.Generated.V1.BamlGeneratedValue value)\n        {{\n            return new {class_source}(context.ReadOpaque(value, {identity}));\n        }}\n    }}\n"
+    ));
+    source
 }
 
 fn render_generic_resource_support(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
@@ -6649,7 +6759,7 @@ mod tests {
             Some(BuiltinProjection::StructuralEnum),
         );
         assert_eq!(
-            fields_projection(&stdlib_name("fs", "Lock")),
+            fields_projection(&stdlib_name("csv", "Reader")),
             Some(BuiltinProjection::Resource),
         );
 
@@ -6829,7 +6939,7 @@ mod tests {
     }
 
     #[test]
-    fn generic_media_and_rust_type_keep_fail_closed_diagnostics() {
+    fn generic_media_keeps_a_fail_closed_diagnostic() {
         let model = CodegenModel {
             symbols: HashMap::new(),
             callables: HashMap::new(),
@@ -6841,11 +6951,32 @@ mod tests {
             generic_media.to_string(),
             "C# generation does not yet support type `image | audio | video | pdf` at test.location",
         );
-        let rust_type = require_supported_type(&Ty::RustType, &model, "test.location").unwrap_err();
+    }
+
+    /// C# has no handle type yet: a host's own value has no C# shape, and its
+    /// class no definition.
+    #[test]
+    fn host_value_class_is_unsupported() {
+        let host_value = stdlib_name("host", "Value");
+        let model = CodegenModel {
+            symbols: HashMap::from([(
+                host_value.clone(),
+                crossing_class(host_value.clone(), vec![], ClassCrossing::HostValue),
+            )]),
+            callables: HashMap::new(),
+        };
+        let error = require_supported_type(
+            &Ty::Class(host_value, Box::new([])),
+            &model,
+            "test.location",
+        )
+        .unwrap_err();
         assert_eq!(
-            rust_type.to_string(),
-            "C# generation does not yet support type `$rust_type` at test.location",
+            error.to_string(),
+            "C# generation does not yet support internal standard-library class \
+             `baml.host.Value` at test.location",
         );
+        assert!(collect_classes(&model, None).unwrap().is_empty());
     }
 
     fn echo_function_source(ty: Ty) -> String {
@@ -7475,14 +7606,14 @@ mod tests {
                 "generated Package omitted `{expected}`:\n{package_source}"
             );
         }
-        // A `_` prefix is a convention, not a visibility: `_compile` is on
-        // the surface beside `compile`, under a name that does not collide.
+        // A standard-library handle's `_` methods are left off its surface
+        // (see the `// BUG:` in `collect_methods`): `compile` alone is there.
         assert_eq!(
             package_source
                 .matches("public static global::Reflect.Package Compile")
                 .count(),
-            2,
-            "`compile` and `_compile` are both on the surface:\n{package_source}"
+            1,
+            "`_compile` is off the surface beside `compile`:\n{package_source}"
         );
         assert!(
             package_source.contains(
@@ -7502,9 +7633,9 @@ mod tests {
             .map(|file| String::from_utf8_lossy(&file.contents))
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(source.contains("return context.Opaque(value.Opaque, \"reflect.Package\", "));
+        assert!(source.contains("return context.Opaque(value.Opaque, \"reflect.Package\");"));
         assert!(source.contains(
-            "return new global::Reflect.Package(context.ReadOpaque(value, \"reflect.Package\", "
+            "return new global::Reflect.Package(context.ReadOpaque(value, \"reflect.Package\"));"
         ));
         assert!(!source.contains("\"_inner\""));
     }
@@ -7557,7 +7688,7 @@ fn render_invocation_facade(
         (
             src,
             format!("{program}.Registry.Decode({program}.{field}, captured.CancelValue)"),
-            "Cancel?.Resource.InvocationValue".to_string(),
+            format!("Cancel is null ? null : {program}.Registry.Encode({program}.{field}, Cancel)"),
         )
     } else {
         (

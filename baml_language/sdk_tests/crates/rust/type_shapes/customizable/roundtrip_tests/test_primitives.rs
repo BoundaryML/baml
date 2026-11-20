@@ -76,19 +76,16 @@ fn test_primitives_round_trip_float_refuses_an_int_on_the_wire() {
         round_trip_float_sync(2.5).unwrap().to_bits(),
         2.5_f64.to_bits()
     );
-    let result = baml_bridge::runtime::invoke_sync::<f64, core::convert::Infallible>(
+    use baml_sdk::baml_bridge::baml_value::internal::__BamlValuePrivate;
+    let result = baml_sdk::baml_bridge::runtime::invoke_sync::<f64, core::convert::Infallible>(
         "user.primitives.round_trip_float",
         |arguments| {
-            arguments.value(
-                "x",
-                &7_i64,
-                &<f64 as baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),
-            )?;
+            arguments.value("x", &7_i64, &<f64 as __BamlValuePrivate>::baml_ty())?;
             Ok(vec![])
         },
     );
     match result {
-        Err(baml_bridge::error::Error::Runtime {
+        Err(baml_sdk::baml_bridge::error::Error::Runtime {
             class_name,
             message,
             ..

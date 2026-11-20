@@ -36,13 +36,11 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
         let out: ChoiceOption[] = [];
         for (let variant in en.values()) {
             if (!variant.meta.skip) {
-                out.push(
-                    ChoiceOption {
-                        key: variant.meta.alias ?? variant.name,
-                        description: variant.meta.description,
-                        value: reflect.Enum.value_of<T>(variant.name),
-                    },
-                );
+                out.push(ChoiceOption {
+                    key: variant.meta.alias ?? variant.name,
+                    description: variant.meta.description,
+                    value: reflect.Enum.value_of<T>(variant.name),
+                });
             }
         }
         return out;
@@ -57,7 +55,13 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
         return out;
     }
     if (ty == reflect.Type.of<null>()) {
-        return [ChoiceOption { key: "<null>", description: null, value: null }];
+        return [
+            ChoiceOption {
+                key: "<null>",
+                description: null,
+                value: null,
+            },
+        ];
     }
     if let literal: reflect.Literal = ty.as_literal() {
         let value = literal.value();
@@ -77,7 +81,7 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
                     ];
                 }
             }
-            throw reject("Decisions could not reflect the literal enum variant")
+            throw reject("Decisions could not reflect the literal enum variant");
         }
         let key = match (value) {
             let text: string => text,
@@ -92,9 +96,15 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
             },
             _ => throw reject("Decisions cannot format this literal value"),
         };
-        return [ChoiceOption { key: key, description: null, value: value }];
+        return [
+            ChoiceOption {
+                key: key,
+                description: null,
+                value: value,
+            },
+        ];
     }
-    throw reject(`Decisions cannot convert Choice member ${ty.to_string()}`)
+    throw reject(`Decisions cannot convert Choice member ${ty.to_string()}`);
 }
 
 function accepts_null(ty: reflect.Type) -> bool {
@@ -122,7 +132,7 @@ function collect(
 ) -> Leaf[] {
     for (let ancestor in ancestors) {
         if (ancestor == ty) {
-            throw reject(`Decisions cannot convert recursive type ${ty.to_string()}`)
+            throw reject(`Decisions cannot convert recursive type ${ty.to_string()}`);
         }
     }
     if let cls: reflect.Class = ty.as_class() {
@@ -131,7 +141,7 @@ function collect(
             let field_type = field.type;
             if (field.meta.skip) {
                 if (!accepts_null(field_type)) {
-                    throw reject(`Skipped Decisions field ${field.name} must accept null`)
+                    throw reject(`Skipped Decisions field ${field.name} must accept null`);
                 }
             } else {
                 for (
@@ -150,7 +160,7 @@ function collect(
             }
         }
         if (out.length() == 0) {
-            throw reject("Decisions cannot convert an empty class")
+            throw reject("Decisions cannot convert an empty class");
         }
         return out;
     }
@@ -165,7 +175,9 @@ function collect(
             }
         }
         if (choices.length() < 2 || choices.length() > 255) {
-            throw reject("Decisions Choice requires between 2 and 255 distinct options")
+            throw reject(
+                "Decisions Choice requires between 2 and 255 distinct options",
+            );
         }
     }
 
@@ -182,7 +194,9 @@ function collect(
     let parts = prefix.concat([ai.content.Text { text: contextual }]);
     let instructions = ai.content.text(parts).trim();
     if (instructions.length() == 0) {
-        throw reject(`Decisions question ${ids.join(".")} needs instructions: use role("instructions") or @description`)
+        throw reject(
+            `Decisions question ${ids.join(".")} needs instructions: use role("instructions") or @description`,
+        );
     }
     return [
         Leaf {
@@ -203,7 +217,7 @@ function validate_blocks(blocks: ai.content.Block[], instructions: bool = false)
     for (let block in blocks) {
         if let media: ai.content.Media = block {
             if (instructions || media.kind() != "image") {
-                throw reject(`Decisions does not support ${media.kind()} in this input`)
+                throw reject(`Decisions does not support ${media.kind()} in this input`);
             }
         }
     }
@@ -211,7 +225,7 @@ function validate_blocks(blocks: ai.content.Block[], instructions: bool = false)
 
 function plan(input: ai.ModelTurnInput) -> Plan {
     if (!input.toolbox.is_empty()) {
-        throw reject("Decisions does not support tools")
+        throw reject("Decisions does not support tools");
     }
     let rendered = (input.prompt)(ai.internal.build_output_format(input.output_type));
     let prefix: ai.content.Block[] = [];
@@ -220,7 +234,9 @@ function plan(input: ai.ModelTurnInput) -> Plan {
         let blocks = ai.wire.prompt_blocks(message);
         validate_blocks(blocks, instructions = message.role == "instructions");
         if (message.role == "instructions") {
-            prefix.push(ai.content.Text { text: ai.content.text(blocks) });
+            prefix.push(ai.content.Text {
+                text: ai.content.text(blocks),
+            });
             prefix.push(ai.content.Text { text: "\n\n" });
         } else {
             if (evidence.length() > 0) {
@@ -241,7 +257,7 @@ function plan(input: ai.ModelTurnInput) -> Plan {
                         let text: ai.content.Text => out.push(text),
                         let media: ai.content.Media => out.push(media),
                         let tool: ai.content.ToolUse => {
-                            throw reject("Decisions does not support tool history")
+                            throw reject("Decisions does not support tool history");
                         },
                         _ => null,
                     };
@@ -249,7 +265,7 @@ function plan(input: ai.ModelTurnInput) -> Plan {
                 out
             },
             let tool: ai.events.ToolCompleted => {
-                throw reject("Decisions does not support tool history")
+                throw reject("Decisions does not support tool history");
             },
             _ => [],
         };
@@ -268,9 +284,12 @@ function plan(input: ai.ModelTurnInput) -> Plan {
         }
     }
     if (images > 128) {
-        throw reject("Decisions supports at most 128 images per request")
+        throw reject("Decisions supports at most 128 images per request");
     }
-    Plan { evidence: evidence, leaves: collect(input.output_type, [], [], null, false, prefix, []) }
+    Plan {
+        evidence: evidence,
+        leaves: collect(input.output_type, [], [], null, false, prefix, []),
+    }
 }
 
 function evidence(p: Plan, preview: bool) -> baml.json.json {
@@ -283,7 +302,7 @@ function evidence(p: Plan, preview: bool) -> baml.json.json {
             },
             let media: ai.content.Media => {
                 let image: baml.media.Image = media.media else {
-                    throw reject("Decisions only supports image media")
+                    throw reject("Decisions only supports image media");
                 };
                 let resolved = if (preview) {
                     ai.wire.resolve_media_preview(image)
@@ -294,14 +313,12 @@ function evidence(p: Plan, preview: bool) -> baml.json.json {
                     throw ai.errors.PreviewUnsupported {
                         provider: "openai-decisions",
                         detail: "Decisions requires downloaded image bytes during request preview",
-                    }
+                    };
                 }
-                parts.push(
-                    {
-                        "type": "input_image",
-                        "image_url": `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`,
-                    },
-                );
+                parts.push({
+                    "type": "input_image",
+                    "image_url": `data:${resolved.mime_type};base64,${resolved.base64 ?? ""}`,
+                });
                 has_images = true;
             },
         };
@@ -345,7 +362,7 @@ function request(
     let headers: map<string, string> = { "content-type": "application/json" };
     if (!preview) {
         let key: string = ai.wire.resolve_credential(c.api_key, "OPENAI_API_KEY") else {
-            throw reject("openai-decisions needs api_key or OPENAI_API_KEY")
+            throw reject("openai-decisions needs api_key or OPENAI_API_KEY");
         };
         let _ = headers.set("authorization", `Bearer ${key}`);
     }
@@ -359,9 +376,11 @@ function request(
         method: "POST",
         url: `${trimmed}/decisions`,
         headers: headers,
-        body: baml.json.stringify(
-            { "model": c.model, "input": evidence(p, preview), "questions": questions },
-        ),
+        body: baml.json.stringify({
+            "model": c.model,
+            "input": evidence(p, preview),
+            "questions": questions,
+        }),
     }
 }
 
@@ -379,19 +398,26 @@ class Response {
 }
 
 function failed(detail: string) -> ai.errors.ParseFailed {
-    ai.errors.ParseFailed { provider: "openai-decisions", raw_output: detail }
+    ai.errors.ParseFailed {
+        provider: "openai-decisions",
+        raw_output: detail,
+    }
 }
 
 function decode(leaf: Leaf, answer: Answer) -> unknown {
     if (answer.type == "refusal") {
-        throw ai.errors.Refused { provider: "openai-decisions", reason: `Decisions refused question ${leaf.id}`, raw_body: null }
+        throw ai.errors.Refused {
+            provider: "openai-decisions",
+            reason: `Decisions refused question ${leaf.id}`,
+            raw_body: null,
+        };
     }
     if (leaf.options.length() == 0) {
         let probability: float = answer.probability else {
-            throw failed(`Missing predicate for ${leaf.id}`)
+            throw failed(`Missing predicate for ${leaf.id}`);
         };
         if (answer.type != "predicate" || probability < 0.0 || probability > 1.0) {
-            throw failed(`Invalid predicate answer for ${leaf.id}`)
+            throw failed(`Invalid predicate answer for ${leaf.id}`);
         }
         if (leaf.ty == bool.type()) {
             return probability >= 0.5;
@@ -399,14 +425,16 @@ function decode(leaf: Leaf, answer: Answer) -> unknown {
         return probability;
     }
     if (answer.type != "choice") {
-        throw failed(`Expected choice for ${leaf.id}`)
+        throw failed(`Expected choice for ${leaf.id}`);
     }
     for (let option in leaf.options) {
         if (answer.choice == option.key) {
             return option.value;
         }
     }
-    throw failed(`Unknown choice for ${leaf.id}: ${answer.choice ?? "<missing>"}`)
+    throw failed(
+        `Unknown choice for ${leaf.id}: ${answer.choice ?? "<missing>"}`,
+    );
 }
 
 function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>) -> unknown {
@@ -417,19 +445,20 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
                 let _ = fields.set(field.name, null);
             } else {
                 let field_type = field.type;
-                let _ = fields.set(field.name, assemble(field_type, path.concat([field.name]), values));
+                let _ = fields.set(
+                    field.name,
+                    assemble(field_type, path.concat([field.name]), values),
+                );
             }
         }
         let type T = ty;
         return reflect.Class.instantiate<T>(fields);
     }
-    values.get(
-        if (path.length() == 0) {
-            "result"
-        } else {
-            path.join(".")
-        },
-    )
+    values.get(if (path.length() == 0) {
+        "result"
+    } else {
+        path.join(".")
+    })
 }
 
 function invoke(c: root.DecisionsClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
@@ -437,26 +466,31 @@ function invoke(c: root.DecisionsClient, input: ai.ModelTurnInput) -> ai.ModelTu
     // No streaming here: only the two transport deadlines apply.
     let sent = ai.wire.send_as_with_wire<Response>(
         ai.LlmTimeoutOptions._resolve(c.timeout)._apply(request(c, input, p, false)),
-        ai.events.ModelKey { provider: c.provider(), model: c.model },
+        ai.events.ModelKey {
+            provider: c.provider(),
+            model: c.model,
+        },
         capture_wire = c.capture_wire,
     );
     if (sent.value.answers.length() != p.leaves.length()) {
-        throw failed("Decisions returned a different number of answers than questions")
+        throw failed(
+            "Decisions returned a different number of answers than questions",
+        );
     }
     let answers: map<string, Answer> = {};
     for (let answer in sent.value.answers) {
         let name: string = answer.name else {
-            throw failed("Decisions answer is missing its name")
+            throw failed("Decisions answer is missing its name");
         };
         if (answers.has(name)) {
-            throw failed(`Duplicate Decisions answer ${name}`)
+            throw failed(`Duplicate Decisions answer ${name}`);
         }
         let _ = answers.set(name, answer);
     }
     let values: map<string, unknown> = {};
     for (let leaf in p.leaves) {
         let answer: Answer = answers.get(leaf.id) else {
-            throw failed(`Missing Decisions answer ${leaf.id}`)
+            throw failed(`Missing Decisions answer ${leaf.id}`);
         };
         let _ = values.set(leaf.id, decode(leaf, answer));
     }
@@ -480,7 +514,11 @@ function invoke(c: root.DecisionsClient, input: ai.ModelTurnInput) -> ai.ModelTu
     };
     ai.internal.with_own_call(
         ai.ModelTurn {
-            content: [ai.content.Text { text: baml.json.stringify(value) }],
+            content: [
+                ai.content.Text {
+                    text: baml.json.stringify(value),
+                },
+            ],
             parsed_output: ai.ParsedOutput { value: value },
             stop_reason: ai.content.StopReason.Complete,
             calls: [],

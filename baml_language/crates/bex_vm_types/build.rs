@@ -9,6 +9,9 @@ fn main() {
     let error_code = baml_builtins2_codegen::generate_error_enums(&class_defs);
     std::fs::write(format!("{out_dir}/errors_generated.rs"), error_code).unwrap();
 
+    let resource_code = baml_builtins2_codegen::generate_resource_traits(&io_builtins, &class_defs);
+    std::fs::write(format!("{out_dir}/resource_generated.rs"), resource_code).unwrap();
+
     let panic_code = baml_builtins2_codegen::generate_panic_enums(&class_defs);
     std::fs::write(format!("{out_dir}/panics_generated.rs"), panic_code).unwrap();
 }

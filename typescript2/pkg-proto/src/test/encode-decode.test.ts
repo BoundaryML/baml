@@ -181,6 +181,7 @@ describe('decodeCallResult', () => {
         handleValue: {
           handleType: BamlHandleType.FUNCTION_REF,
           key: 42,
+          pin: 0,
           ty: undefined,
         },
       },
@@ -368,6 +369,7 @@ describe('structuredClone round-trip', () => {
         handleValue: {
           handleType: BamlHandleType.FUNCTION_REF,
           key: 42,
+          pin: 0,
           ty: undefined,
         },
       },
@@ -425,6 +427,7 @@ describe('structuredClone round-trip', () => {
                   handleValue: {
                     handleType: BamlHandleType.FUNCTION_REF,
                     key: 99,
+                    pin: 0,
                     ty: undefined,
                   },
                 },

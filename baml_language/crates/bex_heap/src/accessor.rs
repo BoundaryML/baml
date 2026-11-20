@@ -88,6 +88,7 @@ pub enum AccessError {
     CannotConvertToOwned { reason: String },
 }
 
+#[derive(Clone, Copy)]
 pub enum BexValue<'a> {
     ExternalValue(&'a BexExternalValue),
     HeapPtr(&'a HeapPtr),
@@ -122,7 +123,7 @@ impl<'a> BexClass<'a> {
             },
             BexClass::Value(class, instance) => {
                 let field_idx = class
-                    .fields
+                    .instance_fields()
                     .iter()
                     .position(|field| field.name == name)
                     .ok_or_else(|| AccessError::FieldNotFound {
@@ -144,7 +145,18 @@ impl From<Field> for BexValue<'_> {
 }
 
 impl<'a> BexValue<'a> {
-    fn type_name(&self) -> String {
+    /// Whether the value is `null`.
+    pub fn is_null(&self) -> bool {
+        match self {
+            BexValue::ExternalValue(value) => matches!(value, BexExternalValue::Null),
+            BexValue::HeapPtr(_) | BexValue::Float(_) => false,
+            BexValue::Value(value) => value.is_null(),
+            BexValue::OwnedValue(value) => value.is_null(),
+        }
+    }
+
+    /// What the value is, for an access error.
+    pub fn type_name(&self) -> String {
         match self {
             BexValue::Float(float) => float.to_string(),
             BexValue::ExternalValue(value) => value.type_name().to_string(),
@@ -244,29 +256,24 @@ impl<'a> BexValue<'a> {
         }
     }
 
-    /// Extract the opaque `Arc<dyn BexRustData>` from a RustData value.
-    /// Handles both external values (`BexExternalValue::RustData`) and
-    /// heap values (`Object::RustData`).
-    pub fn as_rust_data(
+    /// The payload of a `@@rust_type` instance. A tagged instance lives only on
+    /// the heap, so an external value is never one.
+    pub fn as_rust_payload(
         self,
         heap: &BexHeap,
         permit: PermitProof<'a>,
-    ) -> Result<std::sync::Arc<dyn bex_vm_types::BexRustData>, AccessError> {
-        match self {
-            BexValue::ExternalValue(BexExternalValue::RustData(data)) => {
-                Ok(std::sync::Arc::clone(data))
-            }
-            other => other.as_object("rust_data", heap, permit, |ptr| {
-                let obj = unsafe { ptr.get() };
-                let Object::RustData(arc) = obj else {
-                    return Err(AccessError::TypeMismatch {
-                        expected: "rust_data",
-                        actual: obj.to_string(),
-                    });
-                };
-                Ok(std::sync::Arc::clone(arc))
-            }),
-        }
+    ) -> Result<bex_vm_types::RustPayload, AccessError> {
+        self.as_object("rust instance", heap, permit, |ptr| {
+            // SAFETY: `as_object` resolved `ptr` under `permit`.
+            let obj = unsafe { ptr.get() };
+            let Object::RustInstance(instance) = obj else {
+                return Err(AccessError::TypeMismatch {
+                    expected: "rust instance",
+                    actual: obj.to_string(),
+                });
+            };
+            Ok(instance.payload.clone())
+        })
     }
 
     /// Extract a rooted host [`Handle`](bex_external_types::Handle) to a callable
@@ -312,6 +319,27 @@ impl<'a> BexValue<'a> {
         }
     }
 
+    /// Copy the bytes of a `uint8array` value.
+    pub fn as_uint8array(
+        self,
+        heap: &BexHeap,
+        permit: PermitProof<'a>,
+    ) -> Result<Vec<u8>, AccessError> {
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Uint8Array(bytes)) => Ok(bytes.clone()),
+            other => other.as_object("uint8array", heap, permit, |ptr| {
+                let obj = unsafe { ptr.get() };
+                let Object::Uint8Array(bytes) = obj else {
+                    return Err(AccessError::TypeMismatch {
+                        expected: "uint8array",
+                        actual: obj.to_string(),
+                    });
+                };
+                Ok(bytes.to_vec())
+            }),
+        }
+    }
+
     /// Extract an `Arc<BigInt>` from a bigint value. External bigints are
     /// stored as `BigInt` by value; heap bigints share an `Arc<BigInt>` —
     /// in both cases the caller gets an owned `Arc` (cheap clone for the
@@ -334,6 +362,45 @@ impl<'a> BexValue<'a> {
                     });
                 };
                 Ok(std::sync::Arc::clone(arc))
+            }),
+        }
+    }
+
+    /// The name of an enum variant, within its enum.
+    pub fn as_variant_name(
+        self,
+        heap: &BexHeap,
+        permit: PermitProof<'a>,
+    ) -> Result<String, AccessError> {
+        match self {
+            BexValue::ExternalValue(BexExternalValue::Variant { variant_name, .. }) => {
+                Ok(variant_name.clone())
+            }
+            other => other.as_object("variant", heap, permit, |ptr| {
+                // SAFETY: `as_object` resolved `ptr` under `permit`.
+                let obj = unsafe { ptr.get() };
+                let Object::Variant(variant) = obj else {
+                    return Err(AccessError::TypeMismatch {
+                        expected: "variant",
+                        actual: obj.to_string(),
+                    });
+                };
+                // SAFETY: a live variant keeps its enum alive, under `permit`.
+                let enum_obj = unsafe { variant.enm.get() };
+                let Object::Enum(enm) = enum_obj else {
+                    return Err(AccessError::TypeMismatch {
+                        expected: "enum",
+                        actual: enum_obj.to_string(),
+                    });
+                };
+                let declared =
+                    enm.variants
+                        .get(variant.index)
+                        .ok_or_else(|| AccessError::TypeMismatch {
+                            expected: "a variant its enum declares",
+                            actual: obj.to_string(),
+                        })?;
+                Ok(declared.name.clone())
             }),
         }
     }
@@ -616,9 +683,6 @@ fn owned_inner(
                 metadata: metadata.clone(),
             }),
             BexExternalValue::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
-            BexExternalValue::RustData(data) => {
-                Ok(BexExternalValue::RustData(std::sync::Arc::clone(data)))
-            }
             BexExternalValue::Adt(adt) => Ok(BexExternalValue::Adt(adt.clone())),
             BexExternalValue::HostValue(hv) => {
                 Ok(BexExternalValue::HostValue(std::sync::Arc::clone(hv)))
@@ -783,7 +847,7 @@ fn convert_object_body(
             let instance = unsafe { InstanceRef::of(heap_ptr) }.expect("an instance pointer");
             let class = instance.class_object();
             let fields = class
-                .fields
+                .instance_fields()
                 .iter()
                 .zip(instance.fields())
                 .map(|(field, value)| {
@@ -855,8 +919,15 @@ fn convert_object_body(
         ))),
         Object::Bigint(bi) => Ok(BexExternalValue::Bigint((**bi).clone())),
         Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
-        Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
-            .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),
+        // A media value, a rendered prompt or a host's value is a value of its
+        // own; other state has no form outside the VM, and a bare handle
+        // would lose the class it is an instance of.
+        Object::RustInstance(instance) => {
+            match bex_external_types::payload_value(&instance.payload) {
+                Some(value) => Ok(value),
+                None => unconvertible("rust instance"),
+            }
+        }
         Object::Float(f) => Ok(BexExternalValue::Float(*f)),
         Object::Closure(_) => unconvertible("closure"),
         Object::BoundMethod(_) => unconvertible("bound_method"),

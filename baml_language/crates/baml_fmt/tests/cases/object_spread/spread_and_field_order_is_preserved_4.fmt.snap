@@ -7,5 +7,9 @@ class P {
 }
 
 function f(p: P, a: P, b: P) -> P {
-    P { ...a, score: 1, ...b }
+    P {
+        ...a,
+        score: 1,
+        ...b,
+    }
 }

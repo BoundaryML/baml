@@ -1232,6 +1232,52 @@ mod tests {
         assert!(!consumer_pyi.contains("reflect.class.Field"));
     }
 
+    /// A host's own value renders as the host's handle, and has no
+    /// definition of its own.
+    #[test]
+    fn host_value_class_renders_as_the_host_handle() {
+        let host_value = cg_name("baml", &["host"], "Value");
+        let holder = cg_name("baml", &["errors"], "HostCallable");
+        let pool_with = |handle: Ty| {
+            let Symbol::Class(mut holder_class) = class(holder.clone()) else {
+                unreachable!()
+            };
+            holder_class.properties = vec![ClassProperty {
+                name: BaseName::new("_handle"),
+                docstring: None,
+                ty: handle,
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
+            }];
+            let mut pool: SymbolPool = HashMap::new();
+            pool.insert(holder.clone(), Symbol::Class(holder_class));
+            pool
+        };
+        let mut pool = pool_with(class_ty(host_value.clone(), Vec::new()));
+        let Symbol::Class(mut host_value_class) = class(host_value.clone()) else {
+            unreachable!()
+        };
+        host_value_class.crossing = baml_sdkgen_types::ClassCrossing::HostValue;
+        host_value_class.properties = Vec::new();
+        pool.insert(host_value, Symbol::Class(host_value_class));
+        let host_value = to_source_code(&pool, &[], NamingConvention::PreserveCase);
+
+        for file in ["baml/errors/__init__.py", "baml/errors/__init__.pyi"] {
+            let file = PathBuf::from(file);
+            assert!(
+                host_value[&file].contains("_BamlPyHandle"),
+                "{}",
+                file.display()
+            );
+        }
+        for file in ["baml/host/__init__.py", "baml/host/__init__.pyi"] {
+            let host = &host_value[&PathBuf::from(file)];
+            assert!(!host.contains("class Value"), "{host}");
+        }
+        assert!(!host_value[&PathBuf::from("_typemap.py")].contains("baml.host.Value"));
+    }
+
     #[test]
     fn enum_body_renders() {
         let mut pool: SymbolPool = HashMap::new();

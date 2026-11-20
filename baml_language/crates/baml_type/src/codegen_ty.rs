@@ -65,7 +65,6 @@ impl CodegenTy {
                 Box::new(value.canonicalize()),
                 Box::new(error.canonicalize()),
             ),
-            Self::RustType => Self::RustType,
             Self::Type => Self::Type,
             Self::Resource => Self::Resource,
             Self::PromptAst => Self::PromptAst,

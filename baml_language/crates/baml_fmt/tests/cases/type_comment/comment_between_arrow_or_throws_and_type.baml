@@ -1,0 +1,11 @@
+function f() ->
+    // c
+    int {
+    1
+}
+
+function g() -> int throws
+    // e
+    E {
+    1
+}

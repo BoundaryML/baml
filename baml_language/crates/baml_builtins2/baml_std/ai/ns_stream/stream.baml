@@ -48,10 +48,8 @@
 interface StreamingClient requires root.Client {
     /// InvokeError, not just Failure | UnknownError: a streaming invocation
     /// preserves Timeout/Cancelled/CompilationError exactly like Client.invoke.
-    function invoke_stream(
-        self,
-        input: root.ModelTurnInput,
-    ) -> TurnStream throws root.errors.InvokeError;
+    function invoke_stream(self, input: root.ModelTurnInput) -> TurnStream
+        throws root.errors.InvokeError;
 }
 
 /// One decoded raw SSE event, as produced by `baml.http.SseStream.next()`:
@@ -96,8 +94,7 @@ class TurnMeta {
 /// connection that closed early as a failure instead of a complete turn. For a
 /// protocol with no terminal marker, TurnDone is optional and a socket close
 /// still completes the turn.
-class TurnDone {
-}
+class TurnDone {}
 
 /// Non-empty content that is not assistant text: a reasoning or tool-input
 /// delta, or a complete tool-call or file part. There is nothing to deliver to
@@ -106,8 +103,7 @@ class TurnDone {
 /// it for every content-bearing event that produces no TextDelta; events that
 /// carry no content (`message_start`, `response.created`, pings, usage-only
 /// frames, empty deltas) yield nothing.
-class ContentSeen {
-}
+class ContentSeen {}
 
 /// One provider-agnostic event decoded from an SSE batch: a piece of
 /// assistant text, content that is not text, the turn metadata that arrived
@@ -117,8 +113,7 @@ type Event = TextDelta | ContentSeen | TurnMeta | TurnDone;
 /// The single end-of-stream marker returned by both raw turn streams and typed
 /// function streams. A nominal sentinel is required because null may itself be
 /// a valid partial value.
-class Done {
-}
+class Done {}
 
 /// Pulls every normalized event that is ready, or `Done` once the turn is
 /// over.
@@ -239,7 +234,7 @@ class TurnStream {
         if let limit: baml.time.Duration = first_token_timeout {
             if (waited.to_nanoseconds() >= limit.to_nanoseconds()) {
                 sse.close();
-                throw _token_timeout_error(limit, "first_token_timeout")
+                throw _token_timeout_error(limit, "first_token_timeout");
             }
         }
         TurnStream {
@@ -393,7 +388,7 @@ class TurnStream {
                 let remaining = limit.sub(self._token_waited);
                 if (remaining.to_nanoseconds() <= 0n) {
                     self._finish();
-                    throw _token_timeout_error(limit, timeout_type)
+                    throw _token_timeout_error(limit, timeout_type);
                 }
                 let pull_started = baml.time.Instant.now();
                 let pulled = baml.future.with_timeout(remaining, () -> {
@@ -403,7 +398,7 @@ class TurnStream {
                 }) catch (e) {
                     baml.errors.Timeout => {
                         self._finish();
-                        throw _token_timeout_error(limit, timeout_type)
+                        throw _token_timeout_error(limit, timeout_type);
                     },
                 };
                 self._token_waited = self._token_waited.add(pull_started.elapsed());
@@ -429,7 +424,11 @@ class TurnStream {
             };
             let records = call.sse_responses ?? [];
             for (let e in decoded) {
-                records.push(root.events.SseEventRecord { event: e.event, data: e.data, id: e.id });
+                records.push(root.events.SseEventRecord {
+                    event: e.event,
+                    data: e.data,
+                    id: e.id,
+                });
             }
             call.sse_responses = records;
         }
@@ -453,16 +452,13 @@ class TurnStream {
     function _check_terminal(self) -> void {
         if let provider: string = self._require_terminal {
             if (!self._saw_terminal) {
-                let partial: string? = if (self._text == "") {
-                    null
-                } else {
-                    self._text
-                };
-                throw root.errors.NetworkFailure { status_code: null,
+                let partial: string? = if (self._text == "") { null } else { self._text };
+                throw root.errors.NetworkFailure {
+                    status_code: null,
                     provider: provider,
                     detail: `stream ended before the provider's terminal event: the connection closed after ${self._text.length()} characters of assistant text with no end-of-turn event, so the turn is truncated`,
                     raw_body: partial,
-                }
+                };
             }
         }
     }
@@ -566,7 +562,9 @@ class TurnStream {
                         },
                         let batch: string => {
                             self._capture_batch(batch);
-                            if let decode: (string) -> Event[] throws root.errors.InvokeError = self._decode {
+                            if let decode: (string) -> Event[]
+                                throws root.errors.InvokeError = self._decode
+                            {
                                 for (let e in decode(batch)) {
                                     self._pending.push(e);
                                 }
@@ -748,12 +746,7 @@ class Stream<T> {
         }
         let caller = trace.current_context();
         self._span.run(() -> {
-            _in_context(
-                () -> {
-                    self._next()
-                },
-                $trace = _context_patch(caller),
-            )
+            _in_context(() -> { self._next() }, $trace = _context_patch(caller))
         }) catch_all_panics (e, context) {
             _ => {
                 self._fail(e, context);
@@ -768,19 +761,22 @@ class Stream<T> {
                 null => {
                     self._finished = true;
                     self._settle() catch (e) {
-                        root.errors.ParseFailed => {}
+                        root.errors.ParseFailed => {},
                     };
                     return Done {};
                 },
                 let s: string => {
                     self._text = self._text + s;
-                    let parsed: T | baml.sap._NoYield = self._cache._parse_partial(self._text) catch (e) {
-                        let parse: baml.errors.LlmClient => {
-                            throw root.errors.ParseFailed {
-                                provider: self._provider, raw_output: self._text, message: parse.message,
-                            }
-                        },
-                    };
+                    let parsed: T | baml.sap._NoYield = self._cache
+                        ._parse_partial(self._text) catch (e) {
+                            let parse: baml.errors.LlmClient => {
+                                throw root.errors.ParseFailed {
+                                    provider: self._provider,
+                                    raw_output: self._text,
+                                    message: parse.message,
+                                };
+                            },
+                        };
                     match (parsed) {
                         baml.sap._NoYield => {},
                         let p: T => {
@@ -851,7 +847,7 @@ class Stream<T> {
                     provider: self._provider,
                     raw_output: self._text,
                     message: parse.message,
-                }
+                };
             },
         }
     }
@@ -923,7 +919,7 @@ function from_spec<T>(
                 _ => {
                     throw root.errors.StreamingUnsupported {
                         requested_model: spec.default_client.requested_model(),
-                    }
+                    };
                 },
             }
         },
@@ -935,26 +931,31 @@ function from_spec<T>(
     }
     inputs["client"] = selected;
     inputs["on_event"] = on_event;
-    let span = trace._create_span(spec.target(), inputs = inputs, config = trace._passthrough());
+    let span = trace._create_span(
+        spec.target(),
+        inputs = inputs,
+        config = trace._passthrough(),
+    );
     span.run(() -> {
         if (!spec.tools().is_empty()) {
             throw baml.errors.InvalidArgument {
                 message: `streaming does not run the tool loop yet: ${spec.name()} has a non-empty toolbox`,
-            }
+            };
         }
         let emit = root.events.guard(on_event);
         let settled = false;
         if let cb: (root.events.Event) -> void throws never = emit {
-            cb(root.events.RunStarted { spec_name: spec.name(), arguments: spec.arguments() });
+            cb(root.events.RunStarted {
+                spec_name: spec.name(),
+                arguments: spec.arguments(),
+            });
         }
-        let turns = selected.invoke_stream(
-            root.ModelTurnInput {
-                prompt: spec.prompt_template,
-                journal: root.Journal.new(spec),
-                toolbox: spec.tools(),
-                output_type: spec.output_type(),
-            },
-        );
+        let turns = selected.invoke_stream(root.ModelTurnInput {
+            prompt: spec.prompt_template,
+            journal: root.Journal.new(spec),
+            toolbox: spec.tools(),
+            output_type: spec.output_type(),
+        });
         // A relay has no call of its own until a member answers.
         let provider = turns._wire_call?.resolved_model?.provider ?? "unknown";
         // The host-facing stream is `ai.stream.Stream`. It is provider-agnostic:
@@ -973,13 +974,11 @@ function from_spec<T>(
                             settled = true;
                             if let cb: (root.events.Event) -> void throws never = emit {
                                 let turn = turns.final_turn();
-                                cb(
-                                    root.events.AssistantMessage {
-                                        content: turn.content,
-                                        resolved_model: turn.resolved_model,
-                                        requested_model: turn.requested_model,
-                                    },
-                                );
+                                cb(root.events.AssistantMessage {
+                                    content: turn.content,
+                                    resolved_model: turn.resolved_model,
+                                    requested_model: turn.requested_model,
+                                });
                                 for (let call in turn.all_calls()) {
                                     cb(call);
                                 }
@@ -999,7 +998,9 @@ function from_spec<T>(
             _result: null,
             _cache: baml.sap._new_parse_cache<T>() catch (e) {
                 let err: baml.errors.ParseError => {
-                    throw baml.errors.InvalidArgument { message: err.message }
+                    throw baml.errors.InvalidArgument {
+                        message: err.message,
+                    };
                 },
             },
             _text: "",

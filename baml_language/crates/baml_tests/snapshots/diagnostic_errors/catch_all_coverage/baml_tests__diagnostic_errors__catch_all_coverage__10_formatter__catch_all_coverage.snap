@@ -57,7 +57,7 @@ function declared(n: int) -> int throws NotFound | string {
     if (n == 0) {
         throw NotFound { key: "k" };
     }
-    throw "bad"
+    throw "bad";
 }
 
 function MissingDeclared() -> int {

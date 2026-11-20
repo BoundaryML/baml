@@ -2,7 +2,7 @@
 // Port of function_calls/customizable/test_host_callables.py. The bridge
 // registers a std::function in its host-value registry and emits a
 // Handle{HOST_VALUE_CALLABLE} wire entry; the engine binds it to an
-// Object::HostClosure; when BAML invokes it the call_host_value sysop
+// Object::HostClosure; when BAML invokes it the _call_host_value sysop
 // fires the dispatch trampoline, which runs the callable on a detached
 // thread and completes the call.
 //

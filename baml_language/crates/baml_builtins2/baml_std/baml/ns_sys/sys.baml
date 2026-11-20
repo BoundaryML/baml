@@ -56,9 +56,9 @@ class ReadPipeLines {
         type Item = string;
         type Error = root.errors.Io;
 
-        function iter(
-            self,
-        ) -> root.iter.Iterator<Item = string, Error = root.errors.Io> throws never {
+        function iter(self) -> root.iter.Iterator<Item = string, Error = root.errors.Io>
+            throws never
+        {
             self
         }
     }
@@ -112,32 +112,36 @@ function _strip_carriage_return(line: uint8array) -> uint8array throws never {
 /// terminate the process and does not wait for it. Use `defer { child.kill() }`
 /// when termination should follow a BAML scope's lifetime.
 class Subprocess {
-    _handle: $rust_type,
-    pid: int,
+    _state: _SubprocessState,
+    _pid: int,
     /// A stream is present only when its configuration is "pipe".
     stdin: WritePipe?,
     stdout: ReadPipe?,
     stderr: ReadPipe?,
 
+    /// The child's OS process ID.
+    function pid(self) -> int throws never {
+        self._pid
+    }
+
     /// Wait for the child's exit status. The timeout applies to this call,
     /// without killing the child. A later call can wait again; completed
     /// processes return their status immediately, including repeated waits.
-    function wait(
-        self,
-        timeout: root.time.Duration? = null,
-    ) -> ProcessExit throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
-        $rust_io_function
+    function wait(self, timeout: root.time.Duration? = null) -> ProcessExit
+        throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument
+    {
+        self._state.wait(timeout?.to_nanoseconds())
     }
 
     /// Request termination. Safe to call repeatedly or after the child exits.
     function kill(self) -> void throws root.errors.Io {
-        $rust_io_function
+        self._state.kill()
     }
 
     /// Release the process handle without terminating or waiting for the child.
     /// Stream handles have independent lifetimes; close those explicitly if needed.
     function close(self) -> null throws never {
-        $rust_io_function
+        self._state.close()
     }
 
     /// Release the process handle; also invoked by GC. Termination stays explicit.
@@ -146,10 +150,28 @@ class Subprocess {
     }
 }
 
+/// (internal) The OS process behind a `Subprocess`.
+class _SubprocessState {
+    /// `timeout_nanos` is `null` to wait without a limit.
+    function wait(self, timeout_nanos: bigint?) -> ProcessExit
+        throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument
+    {
+        $rust_io_function
+    }
+
+    function kill(self) -> void throws root.errors.Io {
+        $rust_io_function
+    }
+
+    function close(self) -> null throws never {
+        $rust_io_function
+    }
+
+    @@rust_type("ChildProcess")
+}
+
 /// A system pipe for reading data, typically from another process.
 class ReadPipe {
-    _pipe: $rust_type,
-
     /// Close the read pipe, releasing any resources.
     function close(self) -> void throws root.errors.Io {
         $rust_io_function
@@ -157,7 +179,10 @@ class ReadPipe {
 
     /// Return a line-oriented view over this pipe.
     function lines(self) -> ReadPipeLines throws never {
-        ReadPipeLines { pipe: self, _pending: b"" }
+        ReadPipeLines {
+            pipe: self,
+            _pending: b"",
+        }
     }
 
     implements root.io.Read {
@@ -165,12 +190,12 @@ class ReadPipe {
             $rust_io_function
         }
     }
+
+    @@rust_type("ReadPipe")
 }
 
 /// A system pipe for writing data, typically to another process.
 class WritePipe {
-    _pipe: $rust_type,
-
     /// Close the write pipe, delivering EOF. Call flush() first if needed.
     function close(self) -> void throws root.errors.Io {
         $rust_io_function
@@ -185,6 +210,8 @@ class WritePipe {
             $rust_io_function
         }
     }
+
+    @@rust_type("WritePipe")
 }
 
 /// Execute a program directly and wait for its result. Arguments are passed
@@ -226,11 +253,9 @@ function run(
 }
 
 /// (internal) Direct command execution with resolved defaults.
-function _run(
-    program: string,
-    args: string[],
-    options: _ProcessOptions,
-) -> ProcessOutput throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
+function _run(program: string, args: string[], options: _ProcessOptions) -> ProcessOutput
+    throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument
+{
     $rust_io_function
 }
 
@@ -269,10 +294,9 @@ function shell(
 }
 
 /// (internal) Shell execution with resolved defaults.
-function _shell(
-    command: string,
-    options: _ProcessOptions,
-) -> ProcessOutput throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument {
+function _shell(command: string, options: _ProcessOptions) -> ProcessOutput
+    throws root.errors.Io | root.errors.Timeout | root.errors.InvalidArgument
+{
     $rust_io_function
 }
 
@@ -296,29 +320,23 @@ function subprocess(
     stderr: Stdio = "inherit",
     detached: bool = false,
 ) -> Subprocess throws root.errors.Io | root.errors.InvalidArgument {
-    _subprocess(
-        program,
-        args,
-        _ProcessOptions {
-            cwd: cwd,
-            env: env,
-            inherit_env: inherit_env,
-            timeout: null,
-            input: input,
-            stdin: stdin,
-            stdout: stdout,
-            stderr: stderr,
-            detached: detached,
-        },
-    )
+    _subprocess(program, args, _ProcessOptions {
+        cwd: cwd,
+        env: env,
+        inherit_env: inherit_env,
+        timeout: null,
+        input: input,
+        stdin: stdin,
+        stdout: stdout,
+        stderr: stderr,
+        detached: detached,
+    })
 }
 
 /// (internal) Subprocess creation with resolved defaults.
-function _subprocess(
-    program: string,
-    args: string[],
-    options: _ProcessOptions,
-) -> Subprocess throws root.errors.Io | root.errors.InvalidArgument {
+function _subprocess(program: string, args: string[], options: _ProcessOptions) -> Subprocess
+    throws root.errors.Io | root.errors.InvalidArgument
+{
     $rust_io_function
 }
 

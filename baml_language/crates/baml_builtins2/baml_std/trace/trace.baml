@@ -46,13 +46,11 @@ class ContextOptions {
 /// Equality includes the recording scope, not just its local span number.
 /// There is no public constructor, component access, or serialization API.
 class SpanId {
-    _handle: $rust_type,
+    @@rust_type("SpanId")
 }
 
 /// Immutable, reusable tracing options. Builders leave their receiver unchanged.
 class Options {
-    _handle: $rust_type,
-
     /// Compose a shallow patch without reading ambient context.
     //baml:mut_vm
     function context(
@@ -71,12 +69,9 @@ class Options {
 
     /// Select Span mode and replace all three capture requests, by default
     /// with requests for inputs, output and error, as `trace.span` does.
-    function span(
-        self,
-        inputs: bool? = true,
-        output: bool? = true,
-        error: bool? = true,
-    ) -> Options throws never {
+    function span(self, inputs: bool? = true, output: bool? = true, error: bool? = true) -> Options
+        throws never
+    {
         self._span(inputs, output, error)
     }
 
@@ -105,12 +100,12 @@ class Options {
     function reserve(self) -> ReservedSpan throws never {
         $rust_function
     }
+
+    @@rust_type("TraceOptions")
 }
 
 /// A single-use reservation. Inspection remains available after attachment.
 class ReservedSpan {
-    _handle: $rust_type,
-
     //baml:mut_vm
     function id(self) -> SpanId throws never {
         $rust_function
@@ -121,6 +116,8 @@ class ReservedSpan {
     function inspect(self) -> Settings throws never {
         $rust_function
     }
+
+    @@rust_type("ReservedSpan")
 }
 
 function options(mode: Mode? = null) -> Options throws never {
@@ -149,11 +146,9 @@ function timing() -> Options throws never {
 /// Pass `inputs = false`, `output = false` or `error = false` to leave one
 /// out, or use `empty_span` to record the invocation alone. A value that must
 /// never be recorded is withheld with `@trace.redact` wherever it is captured.
-function span(
-    inputs: bool? = true,
-    output: bool? = true,
-    error: bool? = true,
-) -> Options throws never {
+function span(inputs: bool? = true, output: bool? = true, error: bool? = true) -> Options
+    throws never
+{
     _span(inputs, output, error)
 }
 
@@ -214,8 +209,6 @@ class SpanError {
 /// `close`. Inputs are captured at creation. The first ending wins; `close`
 /// makes no claim about the outcome.
 class Span {
-    _handle: $rust_type,
-
     //baml:mut_vm
     function id(self) -> SpanId? throws never {
         $rust_function
@@ -241,11 +234,9 @@ class Span {
     /// Record an error with its existing baml.errors.Context and end the operation.
     //baml:mut_vm
     //baml:fallible
-    function fail_with_context<E>(
-        self,
-        error: E,
-        context: baml.errors.Context,
-    ) -> void throws never {
+    function fail_with_context<E>(self, error: E, context: baml.errors.Context) -> void
+        throws never
+    {
         $rust_function
     }
 
@@ -268,6 +259,8 @@ class Span {
     function _activate(self) -> void throws SpanError {
         $rust_function
     }
+
+    @@rust_type
 }
 
 /// Start an operation associated with a name or an existing function value.

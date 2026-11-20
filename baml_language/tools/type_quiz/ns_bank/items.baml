@@ -48,10 +48,9 @@ function orient(
 
 /// `relation`, which holds between the derivation's left and right, read in
 /// the flow's direction.
-function in_direction(
-    relation: root.algebra.Relation,
-    flow: Oriented,
-) -> root.algebra.Relation throws never {
+function in_direction(relation: root.algebra.Relation, flow: Oriented) -> root.algebra.Relation
+    throws never
+{
     if (flow.reversed) {
         root.algebra.mirror(relation)
     } else {
@@ -65,13 +64,10 @@ function in_direction(
 function site_rule(site: root.algebra.SiteKind) -> root.engine.Rule throws never {
     match (site) {
         root.algebra.SiteKind.Let
-            | root.algebra.SiteKind.CallArgument
-            | root.algebra.SiteKind.Return
-            | root.algebra.SiteKind.Field
-            | root.algebra.SiteKind.ArrayElement =>
-        {
-            flow_requires_subtype()
-        },
+        | root.algebra.SiteKind.CallArgument
+        | root.algebra.SiteKind.Return
+        | root.algebra.SiteKind.Field
+        | root.algebra.SiteKind.ArrayElement => { flow_requires_subtype() },
         root.algebra.SiteKind.Coherence => coherence_at_most_one(),
     }
 }
@@ -103,11 +99,10 @@ function site_claim(
             `${root.algebra.site_phrase(site)}, one for ${s} and one for ${t}: they ${same}`
         },
         root.algebra.SiteKind.Let
-            | root.algebra.SiteKind.CallArgument
-            | root.algebra.SiteKind.Return
-            | root.algebra.SiteKind.Field
-            | root.algebra.SiteKind.ArrayElement =>
-        {
+        | root.algebra.SiteKind.CallArgument
+        | root.algebra.SiteKind.Return
+        | root.algebra.SiteKind.Field
+        | root.algebra.SiteKind.ArrayElement => {
             let outcome = if (compiles) {
                 "holds, so the program compiles"
             } else {
@@ -118,7 +113,11 @@ function site_claim(
     };
     // The site's own rule is always what the answer turns on: it is the one
     // that says what the construct makes of the pair.
-    root.engine.Claim { rule: site_rule(site), instance, bearing: true }
+    root.engine.Claim {
+        rule: site_rule(site),
+        instance,
+        bearing: true,
+    }
 }
 
 /// What a seed settles before either direction of a case is rendered.
@@ -135,15 +134,12 @@ class Drawn {
     names: root.algebra.SiteNames,
 }
 
-function draw_flow(
-    fact: Fact,
-    sites: root.algebra.SiteKind[],
-    seed: root.engine.Seed,
-) -> Drawn? throws never {
+function draw_flow(fact: Fact, sites: root.algebra.SiteKind[], seed: root.engine.Seed) -> Drawn?
+    throws never
+{
     let streams = root.engine.split(seed);
     let d = (fact.generate)(streams.left).value;
-    let relation = root.algebra.decided(root.algebra.knowledge(d))
-        ?? return null;
+    let relation = root.algebra.decided(root.algebra.knowledge(d)) ?? return null;
     let direction = root.engine.below(streams.right, 2);
     // A pair that mentions a type variable can only be spelled where the
     // probe's own function binds it, so the site is drawn from what this
@@ -153,9 +149,9 @@ function draw_flow(
         return null;
     }
     let site_draw = root.engine.below(direction.next, usable.length());
-    let reserved = root.algebra.decls_of_all([root.algebra.left_of(d), root.algebra.right_of(d)]).map((decl) -> {
-        root.algebra.decl_name(decl)
-    });
+    let reserved = root.algebra
+        .decls_of_all([root.algebra.left_of(d), root.algebra.right_of(d)])
+        .map((decl) -> { root.algebra.decl_name(decl) });
     Drawn {
         d,
         relation,
@@ -183,7 +179,11 @@ class Cast {
 /// `drawn`'s pair flowing one way at its site.
 function cast_of(drawn: Drawn, reversed: bool) -> Cast throws never {
     let flow = orient(drawn.d, drawn.relation, reversed);
-    Cast { flow, site: drawn.site, compiles: root.algebra.compiles_when(drawn.site, flow.relation) }
+    Cast {
+        flow,
+        site: drawn.site,
+        compiles: root.algebra.compiles_when(drawn.site, flow.relation),
+    }
 }
 
 /// One direction of a fact at a site as a program: the cast, and the case
@@ -223,7 +223,11 @@ function flowed(drawn: Drawn, reversed: bool) -> Flowed throws never {
         root.engine.Rejected {
             code: rejection_code(cast.site),
             more: [],
-            at: root.engine.Region { file, start: probe.start, end: probe.end },
+            at: root.engine.Region {
+                file,
+                start: probe.start,
+                end: probe.end,
+            },
         }
     };
     Flowed {
@@ -248,7 +252,10 @@ class Belief {
 /// ways.
 function beliefs(d: root.algebra.Derivation) -> Belief[] throws never {
     models().map((model) -> {
-        Belief { model: model.id, relation: root.algebra.decided(root.algebra.under(d, model)) }
+        Belief {
+            model: model.id,
+            relation: root.algebra.decided(root.algebra.under(d, model)),
+        }
     })
 }
 
@@ -256,8 +263,7 @@ function beliefs(d: root.algebra.Derivation) -> Belief[] throws never {
 /// site the cast stands at. Null for an undecided belief, which is not a
 /// prediction and so cannot be wrong.
 function predicted(belief: Belief, cast: Cast) -> bool? throws never {
-    let believed = belief.relation
-        ?? return null;
+    let believed = belief.relation ?? return null;
     root.algebra.compiles_when(cast.site, in_direction(believed, cast.flow))
 }
 
@@ -265,8 +271,7 @@ function predicted(belief: Belief, cast: Cast) -> bool? throws never {
 /// verdict the other way.
 function traps_of(believed: Belief[], cast: Cast) -> string[] throws never {
     believed.filter_map((belief) -> {
-        let says = predicted(belief, cast)
-            ?? return null;
+        let says = predicted(belief, cast) ?? return null;
         if (says != cast.compiles) {
             belief.model
         } else {
@@ -285,9 +290,7 @@ function flow_traps(d: root.algebra.Derivation, cast: Cast) -> string[] throws n
 /// none. The one reading of a question's rules, whether the question is a
 /// case, a choice, or a casting that was never rendered.
 function without_site_rules(names: string[]) -> string[] throws never {
-    names.filter((name) -> {
-        !is_site_rule(name)
-    })
+    names.filter((name) -> { !is_site_rule(name) })
 }
 
 /// A casting from what explains it, so that what selection reads of a
@@ -334,12 +337,21 @@ class Replayed {
 }
 
 function replayed(drawn: Drawn) -> Replayed throws never {
-    Replayed { drawn, claims: root.algebra.claims(drawn.d), believed: beliefs(drawn.d) }
+    Replayed {
+        drawn,
+        claims: root.algebra.claims(drawn.d),
+        believed: beliefs(drawn.d),
+    }
 }
 
 /// `replay`'s pair flowing the way `reversed` says, as selection sees it.
 function cast_in(replay: Replayed, reversed: bool) -> root.engine.Casting throws never {
-    casting_of(replay.drawn, replay.claims, replay.believed, cast_of(replay.drawn, reversed))
+    casting_of(
+        replay.drawn,
+        replay.claims,
+        replay.believed,
+        cast_of(replay.drawn, reversed),
+    )
 }
 
 /// Member `chosen` of `all`, served in the direction `reversed`: the case
@@ -349,23 +361,19 @@ function cast_in(replay: Replayed, reversed: bool) -> root.engine.Casting throws
 /// # Panics
 ///
 /// - `baml.panics.Unreachable` if `all` has no member `chosen`.
-function candidate_of(
-    all: Drawn[],
-    chosen: int,
-    reversed: bool,
-) -> root.engine.Candidate throws never {
-    let replays = all.map((drawn) -> {
-        replayed(drawn)
-    });
+function candidate_of(all: Drawn[], chosen: int, reversed: bool) -> root.engine.Candidate
+    throws never
+{
+    let replays = all.map((drawn) -> { replayed(drawn) });
     let own = replays.at(chosen)
-        ?? throw baml.panics.Unreachable { message: `no member ${chosen} of a draw of ${all.length()}` };
+        ?? throw baml.panics.Unreachable {
+            message: `no member ${chosen} of a draw of ${all.length()}`,
+        };
     root.engine.Candidate.new(
         flowed(own.drawn, reversed).case,
         cast_in(own, reversed),
         replays.flat_map((replay) -> {
-            [false, true].map((direction) -> {
-                cast_in(replay, direction)
-            })
+            [false, true].map((direction) -> { cast_in(replay, direction) })
         }),
     )
 }
@@ -384,7 +392,9 @@ class Dealt {
     ///   `deal` never builds.
     function served(self) -> Drawn throws never {
         self.all.at(self.chosen)
-            ?? throw baml.panics.Unreachable { message: `no member ${self.chosen} of a draw of ${self.all.length()}` }
+            ?? throw baml.panics.Unreachable {
+                message: `no member ${self.chosen} of a draw of ${self.all.length()}`,
+            }
     }
 }
 
@@ -394,24 +404,23 @@ class Dealt {
 /// `null` unless every member draws. A draw missing a member would show
 /// selection a lottery of the members that remained, which may all answer
 /// one way — the very thing a shape exists to hide.
-function deal(
-    shape: Shape,
-    sites: root.algebra.SiteKind[],
-    seed: root.engine.Seed,
-) -> Dealt? throws never {
+function deal(shape: Shape, sites: root.algebra.SiteKind[], seed: root.engine.Seed) -> Dealt?
+    throws never
+{
     let members = shape.members();
     let coins = root.engine.split(seed);
     let seeds = root.engine.streams(coins.right, members.length());
     let all = baml.iter.Range.new(0, members.length())
-        .filter_map((i) -> {
-            draw_flow(members[i], sites, seeds[i])
-        })
+        .filter_map((i) -> { draw_flow(members[i], sites, seeds[i]) })
         .collect();
     if (all.length() != members.length()) {
         return null;
     }
     let pick = root.engine.below(coins.left, all.length());
-    Dealt { all, chosen: pick.value }
+    Dealt {
+        all,
+        chosen: pick.value,
+    }
 }
 
 /// What differs between the two directions of one fact, in the learner's
@@ -431,10 +440,8 @@ function flow_difference(cast: Cast) -> string throws never {
 /// hold a learner's answer against a belief that could not have produced it.
 function choice_traps(believed: Belief[], one: Cast, other: Cast) -> string[] throws never {
     believed.filter_map((belief) -> {
-        let says_one = predicted(belief, one)
-            ?? return null;
-        let says_other = predicted(belief, other)
-            ?? return null;
+        let says_one = predicted(belief, one) ?? return null;
+        let says_other = predicted(belief, other) ?? return null;
         if (says_one == says_other || says_one == one.compiles) {
             null
         } else {
@@ -465,14 +472,12 @@ class FlowItem {
         }
 
         function generate(self, seed: root.engine.Seed) -> root.engine.Candidate? throws never {
-            let dealt = deal(self.shape, self.sites, seed)
-                ?? return null;
+            let dealt = deal(self.shape, self.sites, seed) ?? return null;
             candidate_of(dealt.all, dealt.chosen, dealt.served().reversed)
         }
 
         function foil(self, seed: root.engine.Seed) -> root.engine.Foil? throws never {
-            let dealt = deal(self.shape, self.sites, seed)
-                ?? return null;
+            let dealt = deal(self.shape, self.sites, seed) ?? return null;
             let drawn = dealt.served();
             // Exactly one direction of a strict relation compiles, so a
             // strict fact, and only a strict fact, has a second program to
@@ -509,13 +514,14 @@ function cycle_case(a: string, b: string, two: bool, guarded: bool) -> CycleCase
     let decl = if (two) {
         root.algebra.AliasDecl.recursive(a, (cycle) -> {
             root.algebra.Alias {
-                decl: root.algebra.AliasDecl { name: b, body: closed(cycle, guarded) },
+                decl: root.algebra.AliasDecl {
+                    name: b,
+                    body: closed(cycle, guarded),
+                },
             }
         })
     } else {
-        root.algebra.AliasDecl.recursive(a, (cycle) -> {
-            closed(cycle, guarded)
-        })
+        root.algebra.AliasDecl.recursive(a, (cycle) -> { closed(cycle, guarded) })
     };
     let ty: root.algebra.Ty = root.algebra.Alias { decl };
     let source = root.algebra.render_decls(root.algebra.decls_of(ty));
@@ -537,23 +543,29 @@ function cycle_case(a: string, b: string, two: bool, guarded: bool) -> CycleCase
     let key: root.engine.Verdict = if (guarded) {
         root.engine.Compiles { tests: [] }
     } else {
-        let more: string[] = if (two) {
-            ["E0068"]
-        } else {
-            []
-        };
+        let more: string[] = if (two) { ["E0068"] } else { [] };
         let at = source.index_of(a)
-            ?? throw baml.panics.Unreachable { message: `no \`${a}\` in the case it names` };
+            ?? throw baml.panics.Unreachable {
+                message: `no \`${a}\` in the case it names`,
+            };
         let prefix = source.slice(0, at);
         let start = prefix.to_utf8().length();
         root.engine.Rejected {
             code: "E0068",
             more,
-            at: root.engine.Region { file, start, end: start + a.to_utf8().length() },
+            at: root.engine.Region {
+                file,
+                start,
+                end: start + a.to_utf8().length(),
+            },
         }
     };
     CycleCase {
-        case: root.engine.Case { files: root.engine.one_file(file, source), key, trace },
+        case: root.engine.Case {
+            files: root.engine.one_file(file, source),
+            key,
+            trace,
+        },
         casting: casting(trace, 0, [ty], []),
     }
 }
@@ -574,16 +586,13 @@ class UnguardedCycleItem {
             let guard = root.engine.below(form.next, 2);
             let a = names.value[0];
             let b = names.value[1];
-            let members = [false, true].map((guarded) -> {
-                cycle_case(a, b, form.value == 1, guarded)
-            });
+            let members =
+                [false, true].map((guarded) -> { cycle_case(a, b, form.value == 1, guarded) });
             let served = members[guard.value];
             root.engine.Candidate.new(
                 served.case,
                 served.casting,
-                members.map((member) -> {
-                    member.casting
-                }),
+                members.map((member) -> { member.casting }),
             )
         }
 
@@ -614,8 +623,7 @@ class NestedUnionLetItem {
         function generate(self, seed: root.engine.Seed) -> root.engine.Candidate? throws never {
             let streams = root.engine.split(seed);
             let d = union_regrouped_differs(streams.left).value;
-            let relation = root.algebra.decided(root.algebra.knowledge(d))
-                ?? return null;
+            let relation = root.algebra.decided(root.algebra.knowledge(d)) ?? return null;
             let none: string[] = [];
             // The fact nests its left side, so flowing backwards is what
             // makes the nested union the annotation.

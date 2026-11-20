@@ -45,16 +45,15 @@ pub use generated::*;
 pub struct PackageTraceImpl;
 
 fn options_data(vm: &BexVm, value: Value) -> TraceOptionsData {
-    let instance = vm.as_instance(&value).expect("trace.Options receiver");
-    vm.as_rust_data::<TraceOptionsData>(&instance.load_value(0))
-        .expect("trace.Options handle")
-        .clone()
+    let instance = vm.as_rust_instance(&value).expect("trace.Options receiver");
+    TraceOptionsData::clone(view::Options { instance }.payload())
 }
 
 fn reservation_data(vm: &BexVm, value: Value) -> &ReservedSpanData {
-    let instance = vm.as_instance(&value).expect("trace.ReservedSpan receiver");
-    vm.as_rust_data::<ReservedSpanData>(&instance.load_value(0))
-        .expect("trace.ReservedSpan handle")
+    let instance = vm
+        .as_rust_instance(&value)
+        .expect("trace.ReservedSpan receiver");
+    view::ReservedSpan { instance }.payload()
 }
 
 fn mode_from_value(vm: &BexVm, value: Option<&Value>) -> Option<InvocationMode> {
@@ -77,14 +76,21 @@ fn mode_from_value(vm: &BexVm, value: Option<&Value>) -> Option<InvocationMode> 
 
 fn alloc_options(vm: &mut BexVm, options: TraceOptionsData) -> Value {
     copy::Options {
-        _handle: Arc::new(options),
+        payload: Arc::new(options),
     }
     .to_value(vm)
 }
 
 fn alloc_id(vm: &mut BexVm, id: SpanId) -> Value {
     copy::SpanId {
-        _handle: Arc::new(id),
+        payload: Box::new(id),
+    }
+    .to_value(vm)
+}
+
+fn alloc_reservation(vm: &mut BexVm, reservation: ReservedSpanData) -> Value {
+    copy::ReservedSpan {
+        payload: Arc::new(reservation),
     }
     .to_value(vm)
 }
@@ -263,10 +269,7 @@ impl BamlPackageTrace for PackageTraceImpl {
             context: trace.context,
         };
         Ok(match trace.reservation {
-            Some(reservation) => copy::ReservedSpan {
-                _handle: Arc::new(reservation.claimed_view(options)),
-            }
-            .to_value(vm),
+            Some(reservation) => alloc_reservation(vm, reservation.claimed_view(options)),
             None => alloc_options(vm, options),
         })
     }
@@ -403,10 +406,7 @@ impl BamlClassOptions for PackageTraceImpl {
 
     fn reserve(vm: &mut BexVm, options: &Value) -> Value {
         let data = ReservedSpanData::new(vm.trace_scope, options_data(vm, *options));
-        copy::ReservedSpan {
-            _handle: Arc::new(data),
-        }
-        .to_value(vm)
+        alloc_reservation(vm, data)
     }
 }
 
@@ -423,13 +423,8 @@ impl BamlClassReservedSpan for PackageTraceImpl {
 }
 
 fn span_data(vm: &BexVm, value: Value) -> Arc<crate::telemetry::manual::ManualSpan> {
-    use bex_vm_types::RustDataArc as _;
-    let instance = vm.as_instance(&value).expect("trace.Span receiver");
-    let handle = instance.load_value(0).as_object_ptr().expect("span handle");
-    let Object::RustData(data) = vm.get_object(handle) else {
-        unreachable!("span handle")
-    };
-    data.clone().downcast_payload().expect("manual span")
+    vm.foreign_payload(&value)
+        .unwrap_or_else(|error| unreachable!("trace.Span holds its operation: {error:?}"))
 }
 
 pub(crate) fn span_error(vm: &mut BexVm, message: &str) -> VmRustFnError {
@@ -625,10 +620,8 @@ fn start_span_impl(
                 captured_type_args,
             )
         };
-        Ok(copy::Span {
-            _handle: span.into_owner(),
-        }
-        .to_value(vm))
+        let payload: Arc<dyn bex_vm_types::BexRustData> = span.into_owner();
+        Ok(copy::Span { payload }.to_value(vm))
     })()
     .map_err(|message| span_error(vm, &message))
 }

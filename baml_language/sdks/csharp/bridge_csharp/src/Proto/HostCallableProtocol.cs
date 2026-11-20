@@ -207,20 +207,24 @@ internal static class HostCallableProtocol
         return raised;
     }
 
-    internal static void ThrowIfHostCallbackError(BamlOutboundResult envelope)
+    /// <summary>
+    /// Rethrow the host's own exception when <paramref name="error"/> is the
+    /// <c>baml.errors.HostCallable</c> the engine built around it. The caller
+    /// holds the error's references, its <c>_handle</c>'s pin among them, so
+    /// the registration is live while it is read.
+    /// </summary>
+    internal static void ThrowIfHostCallbackError(BamlOutboundError error)
     {
-        ArgumentNullException.ThrowIfNull(envelope);
-        if (envelope.ResultCase != BamlOutboundResult.ResultOneofCase.Error
-            || envelope.Error?.Value?.ValueCase
-                != BamlOutboundValue.ValueOneofCase.ClassValue
+        ArgumentNullException.ThrowIfNull(error);
+        if (error.Value?.ValueCase != BamlOutboundValue.ValueOneofCase.ClassValue
             || !StringComparer.Ordinal.Equals(
-                envelope.Error.Value.ClassValue.Name,
+                error.Value.ClassValue.Name,
                 HostCallableIdentity))
         {
             return;
         }
 
-        BamlValueClass value = envelope.Error.Value.ClassValue;
+        BamlValueClass value = error.Value.ClassValue;
         BamlOutboundValue? handleValue = FindField(value, "_handle");
         if (handleValue?.ValueCase == BamlOutboundValue.ValueOneofCase.HandleValue
             && handleValue.HandleValue.HandleType == BamlHandleType.HostValueOpaque
@@ -229,7 +233,7 @@ internal static class HostCallableProtocol
                 handleValue.HandleValue.Key,
                 out ExceptionDispatchInfo? exception))
         {
-            exception!.Throw();
+            exception.Throw();
         }
 
         string message = ReadStringField(value, "message")

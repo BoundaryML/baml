@@ -2,6 +2,8 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function example() -> int {
-    spawn { 3 };
+    spawn {
+        3
+    };
     -1
 }

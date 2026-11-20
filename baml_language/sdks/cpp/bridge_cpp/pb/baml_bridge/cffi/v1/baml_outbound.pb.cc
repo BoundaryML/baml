@@ -222,6 +222,7 @@ inline constexpr BamlOutboundHandle::Impl_::Impl_(
       : _cached_size_{0},
         ty_{nullptr},
         key_{::uint64_t{0u}},
+        pin_{::uint64_t{0u}},
         handle_type_{static_cast< ::baml_bridge::cffi::v1::BamlHandleType >(0)} {}
 
 template <typename>
@@ -696,15 +697,14 @@ namespace baml_bridge {
 namespace cffi {
 namespace v1 {
 PROTOBUF_CONSTINIT const uint32_t MediaTypeEnum_internal_data_[] = {
-    393216u, 0u, };
+    327680u, 0u, };
 static ::google::protobuf::internal::ExplicitlyConstructed<::std::string>
-    MediaTypeEnum_strings[6] = {};
+    MediaTypeEnum_strings[5] = {};
 
 static const char MediaTypeEnum_names[] = {
     "AUDIO"
     "IMAGE"
     "MEDIA_TYPE_UNSPECIFIED"
-    "OTHER"
     "PDF"
     "VIDEO"
 };
@@ -713,36 +713,34 @@ static const ::google::protobuf::internal::EnumEntry MediaTypeEnum_entries[] = {
     {{&MediaTypeEnum_names[0], 5}, 2},
     {{&MediaTypeEnum_names[5], 5}, 1},
     {{&MediaTypeEnum_names[10], 22}, 0},
-    {{&MediaTypeEnum_names[32], 5}, 5},
-    {{&MediaTypeEnum_names[37], 3}, 3},
-    {{&MediaTypeEnum_names[40], 5}, 4},
+    {{&MediaTypeEnum_names[32], 3}, 3},
+    {{&MediaTypeEnum_names[35], 5}, 4},
 };
 
 static const int MediaTypeEnum_entries_by_number[] = {
     2,  // 0 -> MEDIA_TYPE_UNSPECIFIED
     1,  // 1 -> IMAGE
     0,  // 2 -> AUDIO
-    4,  // 3 -> PDF
-    5,  // 4 -> VIDEO
-    3,  // 5 -> OTHER
+    3,  // 3 -> PDF
+    4,  // 4 -> VIDEO
 };
 
 const ::std::string& MediaTypeEnum_Name(MediaTypeEnum value) {
   static const bool kDummy = ::google::protobuf::internal::InitializeEnumStrings(
-      MediaTypeEnum_entries, MediaTypeEnum_entries_by_number, 6,
+      MediaTypeEnum_entries, MediaTypeEnum_entries_by_number, 5,
       MediaTypeEnum_strings);
   (void)kDummy;
 
   int idx = ::google::protobuf::internal::LookUpEnumName(MediaTypeEnum_entries,
                                   MediaTypeEnum_entries_by_number,
-                                  6, value);
+                                  5, value);
   return idx == -1 ? ::google::protobuf::internal::GetEmptyString() : MediaTypeEnum_strings[idx].get();
 }
 
 bool MediaTypeEnum_Parse(::absl::string_view name, MediaTypeEnum* PROTOBUF_NONNULL value) {
   int int_value;
   bool success = ::google::protobuf::internal::LookUpEnumValue(
-      MediaTypeEnum_entries, 6, name, &int_value);
+      MediaTypeEnum_entries, 5, name, &int_value);
   if (success) {
     *value = static_cast<MediaTypeEnum>(int_value);
   }
@@ -2998,16 +2996,16 @@ BamlOutboundHandle::GetClassData() const {
   return BamlOutboundHandle_class_data_.base();
 }
 PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
-const ::_pbi::TcParseTable<2, 3, 1, 0, 2>
+const ::_pbi::TcParseTable<2, 4, 1, 0, 2>
 BamlOutboundHandle::_table_ = {
   {
     PROTOBUF_FIELD_OFFSET(BamlOutboundHandle, _impl_._has_bits_),
     0, // no _extensions_
-    3, 24,  // max_field_number, fast_idx_mask
+    4, 24,  // max_field_number, fast_idx_mask
     offsetof(decltype(_table_), field_lookup_table),
-    4294967288,  // skipmap
+    4294967280,  // skipmap
     offsetof(decltype(_table_), field_entries),
-    3,  // num_field_entries
+    4,  // num_field_entries
     1,  // num_aux_entries
     offsetof(decltype(_table_), aux_entries),
     BamlOutboundHandle_class_data_.base(),
@@ -3017,13 +3015,15 @@ BamlOutboundHandle::_table_ = {
     ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlOutboundHandle>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    {::_pbi::TcParser::MiniParse, {}},
+    // uint64 pin = 4;
+    {::_pbi::TcParser::FastV64S1,
+     {32, 2, 0, PROTOBUF_FIELD_OFFSET(BamlOutboundHandle, _impl_.pin_)}},
     // uint64 key = 1;
     {::_pbi::TcParser::FastV64S1,
      {8, 1, 0, PROTOBUF_FIELD_OFFSET(BamlOutboundHandle, _impl_.key_)}},
     // .baml_bridge.cffi.v1.BamlHandleType handle_type = 2;
     {::_pbi::TcParser::FastV32S1,
-     {16, 2, 0, PROTOBUF_FIELD_OFFSET(BamlOutboundHandle, _impl_.handle_type_)}},
+     {16, 3, 0, PROTOBUF_FIELD_OFFSET(BamlOutboundHandle, _impl_.handle_type_)}},
     // .baml_bridge.cffi.v1.BamlTy ty = 3;
     {::_pbi::TcParser::FastMtS1,
      {26, 0, 0, PROTOBUF_FIELD_OFFSET(BamlOutboundHandle, _impl_.ty_)}},
@@ -3034,11 +3034,14 @@ BamlOutboundHandle::_table_ = {
     {PROTOBUF_FIELD_OFFSET(BamlOutboundHandle, _impl_.key_), _Internal::kHasBitsOffset + 1, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     // .baml_bridge.cffi.v1.BamlHandleType handle_type = 2;
-    {PROTOBUF_FIELD_OFFSET(BamlOutboundHandle, _impl_.handle_type_), _Internal::kHasBitsOffset + 2, 0,
+    {PROTOBUF_FIELD_OFFSET(BamlOutboundHandle, _impl_.handle_type_), _Internal::kHasBitsOffset + 3, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
     // .baml_bridge.cffi.v1.BamlTy ty = 3;
     {PROTOBUF_FIELD_OFFSET(BamlOutboundHandle, _impl_.ty_), _Internal::kHasBitsOffset + 0, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    // uint64 pin = 4;
+    {PROTOBUF_FIELD_OFFSET(BamlOutboundHandle, _impl_.pin_), _Internal::kHasBitsOffset + 2, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
   }},
   {{
       {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::BamlTy>()},
@@ -3058,7 +3061,7 @@ PROTOBUF_NOINLINE void BamlOutboundHandle::Clear() {
     ABSL_DCHECK(_impl_.ty_ != nullptr);
     _impl_.ty_->Clear();
   }
-  if ((cached_has_bits & 0x00000006u) != 0) {
+  if ((cached_has_bits & 0x0000000eu) != 0) {
     ::memset(&_impl_.key_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.handle_type_) -
         reinterpret_cast<char*>(&_impl_.key_)) + sizeof(_impl_.handle_type_));
@@ -3092,7 +3095,7 @@ PROTOBUF_NOINLINE void BamlOutboundHandle::Clear() {
   }
 
   // .baml_bridge.cffi.v1.BamlHandleType handle_type = 2;
-  if ((this_._impl_._has_bits_[0] & 0x00000004u) != 0) {
+  if ((this_._impl_._has_bits_[0] & 0x00000008u) != 0) {
     if (this_._internal_handle_type() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -3106,6 +3109,15 @@ PROTOBUF_NOINLINE void BamlOutboundHandle::Clear() {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         3, *this_._impl_.ty_, this_._impl_.ty_->GetCachedSize(), target,
         stream);
+  }
+
+  // uint64 pin = 4;
+  if ((cached_has_bits & 0x00000004u) != 0) {
+    if (this_._internal_pin() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_pin(), target);
+    }
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -3133,7 +3145,7 @@ PROTOBUF_NOINLINE void BamlOutboundHandle::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if ((cached_has_bits & 0x00000007u) != 0) {
+  if ((cached_has_bits & 0x0000000fu) != 0) {
     // .baml_bridge.cffi.v1.BamlTy ty = 3;
     if ((cached_has_bits & 0x00000001u) != 0) {
       total_size += 1 +
@@ -3146,8 +3158,15 @@ PROTOBUF_NOINLINE void BamlOutboundHandle::Clear() {
             this_._internal_key());
       }
     }
-    // .baml_bridge.cffi.v1.BamlHandleType handle_type = 2;
+    // uint64 pin = 4;
     if ((cached_has_bits & 0x00000004u) != 0) {
+      if (this_._internal_pin() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_pin());
+      }
+    }
+    // .baml_bridge.cffi.v1.BamlHandleType handle_type = 2;
+    if ((cached_has_bits & 0x00000008u) != 0) {
       if (this_._internal_handle_type() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_handle_type());
@@ -3171,7 +3190,7 @@ void BamlOutboundHandle::MergeImpl(::google::protobuf::MessageLite& to_msg, cons
   (void) cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if ((cached_has_bits & 0x00000007u) != 0) {
+  if ((cached_has_bits & 0x0000000fu) != 0) {
     if ((cached_has_bits & 0x00000001u) != 0) {
       ABSL_DCHECK(from._impl_.ty_ != nullptr);
       if (_this->_impl_.ty_ == nullptr) {
@@ -3186,6 +3205,11 @@ void BamlOutboundHandle::MergeImpl(::google::protobuf::MessageLite& to_msg, cons
       }
     }
     if ((cached_has_bits & 0x00000004u) != 0) {
+      if (from._internal_pin() != 0) {
+        _this->_impl_.pin_ = from._impl_.pin_;
+      }
+    }
+    if ((cached_has_bits & 0x00000008u) != 0) {
       if (from._internal_handle_type() != 0) {
         _this->_impl_.handle_type_ = from._impl_.handle_type_;
       }

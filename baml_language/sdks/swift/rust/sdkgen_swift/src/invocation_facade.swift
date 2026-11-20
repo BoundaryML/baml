@@ -9,7 +9,7 @@ extension Baml {
         public enum Selection: Sendable {
             case options(Options)
             case reserved(ReservedSpan)
-            fileprivate var handle: BamlHandle? { switch self { case .options(let value): value._handle; case .reserved(let value): value._handle } }
+            fileprivate var handle: BamlHandle? { switch self { case .options(let value): value._bamlHandle; case .reserved(let value): value._bamlHandle } }
         }
     }
     public struct BamlOptions: Sendable {

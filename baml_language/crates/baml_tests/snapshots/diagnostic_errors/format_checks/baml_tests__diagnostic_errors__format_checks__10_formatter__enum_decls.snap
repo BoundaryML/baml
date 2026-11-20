@@ -77,7 +77,11 @@ enum BlockAttributedEnum {
 
 // ===== Trivia on enum declaration (line comments) =====
 // 1 enum keyword leading
-enum TriviaEnum { // 6 open brace trailing
+enum // 2 enum keyword trailing
+// 3 name leading
+TriviaEnum // 4 name trailing
+// 5 open brace leading
+{ // 6 open brace trailing
     // 7 first variant leading
     A, // 8 first variant trailing
     // 9 second variant leading
@@ -89,11 +93,15 @@ enum TriviaEnum { // 6 open brace trailing
 
 // ===== Trivia on enum declaration (block comments) =====
 /* 1 enum keyword leading */
-enum TriviaEnumBlock { /* 6 open brace trailing */
+enum /* 2 enum keyword trailing */
+/* 3 name leading */
+TriviaEnumBlock /* 4 name trailing */
+/* 5 open brace leading */
+{ /* 6 open brace trailing */
     /* 7 first variant leading */
-    A/* 8 first variant trailing */, /* 8 first variant trailing */
+    A, /* 8 first variant trailing */
     /* 9 second variant leading */
-    B/* 10 second variant trailing */, /* 10 second variant trailing */
+    B, /* 10 second variant trailing */
     /* 11 close brace leading */
 } /* 12 close brace trailing */
 
@@ -104,7 +112,9 @@ enum TriviaVariantAttr {
     // 1 variant leading
     Active // 2 variant name trailing
         // 3 attr leading
-        @description( // 6 open paren trailing
+        @description // 4 attr name trailing
+        // 5 open paren leading
+        ( // 6 open paren trailing
             // 7 arg leading
             "active", // 8 arg trailing
             // 9 close paren leading
@@ -116,9 +126,11 @@ enum TriviaVariantAttrBlock {
     /* 1 variant leading */
     Active /* 2 variant name trailing */
         /* 3 attr leading */
-        @description( /* 6 open paren trailing */
+        @description /* 4 attr name trailing */
+        /* 5 open paren leading */
+        (/* 6 open paren trailing */
             /* 7 arg leading */
-            "active", /* 8 arg trailing */
+            "active" /* 8 arg trailing */,
             /* 9 close paren leading */
         ), /* 10 close paren trailing */
 }
@@ -128,13 +140,17 @@ enum TriviaWrapVariantAttrs {
     // 1 variant leading
     ConfiguredVariant // 2 variant name trailing
         // 3 first attr leading
-        @description( // 6 open paren trailing
+        @description // 4 first attr name trailing
+        // 5 open paren leading
+        ( // 6 open paren trailing
             // 7 arg leading
             "a configured variant with many attributes", // 8 arg trailing
             // 9 close paren leading
         ) // 10 close paren trailing
         // 11 second attr leading
-        @alias( // 14 open paren trailing
+        @alias // 12 second attr name trailing
+        // 13 open paren leading
+        ( // 14 open paren trailing
             // 15 arg leading
             "configured", // 16 arg trailing
             // 17 close paren leading
@@ -150,15 +166,19 @@ enum TriviaWrapVariantAttrsBlock {
     /* 1 variant leading */
     ConfiguredVariant /* 2 variant name trailing */
         /* 3 first attr leading */
-        @description( /* 6 open paren trailing */
+        @description /* 4 first attr name trailing */
+        /* 5 open paren leading */
+        (/* 6 open paren trailing */
             /* 7 arg leading */
-            "a configured variant with many attributes", /* 8 arg trailing */
+            "a configured variant with many attributes" /* 8 arg trailing */,
             /* 9 close paren leading */
         ) /* 10 close paren trailing */
         /* 11 second attr leading */
-        @alias( /* 14 open paren trailing */
+        @alias /* 12 second attr name trailing */
+        /* 13 open paren leading */
+        (/* 14 open paren trailing */
             /* 15 arg leading */
-            "configured", /* 16 arg trailing */
+            "configured" /* 16 arg trailing */,
             /* 17 close paren leading */
         ) /* 18 close paren trailing */
         /* 19 third attr leading */

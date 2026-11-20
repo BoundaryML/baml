@@ -30,7 +30,8 @@
 //!
 //! The token kinds and the lexer that produces them are [`token`] and
 //! [`lexer`]; the node definitions live in [`nodes`]; operator precedence,
-//! shared by the parser and the formatter, in [`ops`]. This crate has no
+//! shared by the parser and the formatter, in [`ops`]; a tree proven to hold
+//! no `Missing` or `Bogus` is a [`complete::CompleteTree`]. This crate has no
 //! dependency on a parser or on Salsa.
 
 // Lets the derive macros emit `::baml_syntax::…` paths that resolve both from
@@ -41,8 +42,8 @@ extern crate self as baml_syntax;
 #[macro_use]
 pub mod token;
 
+pub mod complete;
 pub mod debug;
-pub mod docs;
 pub mod index;
 pub mod lexer;
 pub mod nodes;

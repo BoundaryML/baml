@@ -2,6 +2,7 @@ package baml_bridge.internal;
 
 import baml_bridge.BamlError;
 import baml_bridge.BamlHandle;
+import baml_bridge.BamlOpaque;
 import baml_bridge.BamlPanic;
 import baml_bridge.BamlType;
 import baml_bridge.TypeRegistry;
@@ -129,10 +130,11 @@ public final class ProtoReader {
     private static final int UNION_VALUE = 6;
     private static final int UNION_SELECTED_OPTION_INDEX = 8;
 
-    // BamlOutboundHandle (key = 1, handle_type = 2, ty = 3).
+    // BamlOutboundHandle (key = 1, handle_type = 2, ty = 3, pin = 4).
     private static final int HANDLE_KEY = 1;
     private static final int HANDLE_TYPE = 2;
     private static final int HANDLE_TY = 3;
+    private static final int HANDLE_PIN = 4;
 
     // BamlToHostCall (engine→host callable dispatch): args = 1.
     // BamlToHostArg: value = 1 (BamlOutboundValue), arg_name = 2, is_optional_arg = 3.
@@ -160,15 +162,11 @@ public final class ProtoReader {
     private static final int ADT_MEDIA_AUDIO = 7;
     private static final int ADT_MEDIA_VIDEO = 8;
     private static final int ADT_MEDIA_PDF = 9;
-    private static final int ADT_MEDIA_GENERIC = 10;
     // Adt(TaggedHeapHandle{ty, heap_handle}) — a streaming call's result. Reifies
     // the runtime-owned BamlStream wrapper (the sole tagged-heap-handle capability
     // today; the typed generics are erased, exactly as in bridge_python).
     private static final int ADT_TAGGED_HEAP_HANDLE = 14;
     private static final int ADT_FUNCTION_SPEC = 17;
-
-    // The single field name a handle-backed media class carries on the wire.
-    private static final String MEDIA_DATA_FIELD = "_data";
 
     // BamlTy oneof (baml_type.proto) — used to tokenize a union's self_type into
     // the arm-token signature the TypeRegistry keys on. Unlisted variants fall to
@@ -185,11 +183,11 @@ public final class ProtoReader {
     private static final int TY_UNKNOWN = 10;
     private static final int TY_MEDIA = 11;
     private static final int TY_FUNCTION = 14;
-    private static final int TY_RUST_TYPE = 16;
     private static final int TY_TUPLE = 25;
 
     // Sub-message field numbers on the BamlTy variants.
     private static final int TY_NAME = 1; // BamlTyClass/BamlTyEnum.name
+    private static final int TY_CLASS_TYPE_ARGS = 2; // BamlTyClass.type_args (repeated)
     private static final int TY_PRIMITIVE_KIND = 1; // BamlTyPrimitive.kind (enum varint)
     private static final int TY_MEDIA_KIND = 1; // BamlTyMedia.kind (enum varint)
     private static final int TY_LIST_ITEM = 1; // BamlTyList.item
@@ -444,8 +442,13 @@ public final class ProtoReader {
         if (handle == null || handle.handleType() != BamlHandle.HOST_VALUE_OPAQUE) {
             return null;
         }
-        Object original = baml_bridge.HostCalls.lookup(handle.key());
-        return original instanceof Throwable t ? t : null;
+        if (!(baml_bridge.HostCalls.lookup(handle.key()) instanceof Throwable original)) {
+            return null;
+        }
+        // The original stands in for the decoded value, which is dropped: give
+        // the engine its pin back now rather than when the Cleaner runs.
+        handle.close();
+        return original;
     }
 
     /**
@@ -989,7 +992,7 @@ public final class ProtoReader {
 
     /**
      * Read one {@code BamlTy} into its {@link BamlType}, or {@code null} when it is
-     * outside the token grammar (media / function / rust_type / unknown, and
+     * outside the token grammar (media / function / unknown, and
      * the {@code null} / {@code bytes} / {@code bigint} primitive kinds). Named
      * types (class / enum / type_alias) become a bare {@link BamlType#classByFqn}
      * (matching the emitter's arm rendering — a wire optional unwraps to its inner,
@@ -1163,11 +1166,6 @@ public final class ProtoReader {
                 default -> r.skipField(wire);
             }
         }
-        // A media stdlib class wraps its engine handle in a `_data` field; the
-        // inner decode already reified the media wrapper, so unwrap and return it.
-        if (isMediaFqn(fqn) && fields.containsKey(MEDIA_DATA_FIELD)) {
-            return fields.get(MEDIA_DATA_FIELD);
-        }
         Object instance = TypeRegistry.constructClass(fqn, fields);
         if (instance == null) {
             return fields;
@@ -1225,33 +1223,29 @@ public final class ProtoReader {
 
     /**
      * Decode a {@code BamlOutboundHandle} ({@code key}, {@code handle_type}; the
-     * {@code ty} field is unused for the media/bare cases). A media handle type
+     * {@code ty} field is unused for the media/bare cases). A host value
+     * ({@code HOST_VALUE_*}) decodes to a {@link BamlHandle} over the host's key
+     * that owns the engine's {@code pin}. A media handle type
      * ({@code ADT_MEDIA_*}) reifies the matching runtime-owned media class over a
-     * fresh {@link BamlHandle}; any other handle type (including
-     * {@code ADT_MEDIA_GENERIC} and the not-yet-modeled handle-backed
-     * capabilities) decodes to a bare {@link BamlHandle}. Mirrors
-     * {@code bridge_python}'s {@code _decode_handle}.
+     * fresh {@link BamlHandle}; an {@code ADT_RUNTIME_VALUE} handle whose type
+     * names a registered opaque class reifies that class's generated wrapper,
+     * at the class type arguments the type states; any other handle type
+     * (the not-yet-modeled handle-backed capabilities) decodes to a bare
+     * {@link BamlHandle}. Mirrors {@code bridge_python}'s {@code _decode_handle}.
      */
     private static Object decodeHandle(WireReader r) {
-        long key = 0;
-        int handleType = 0;
-        String classFqn = null;
-        byte[] handleTy = null;
-        while (r.hasRemaining()) {
-            int tag = r.readTag();
-            int field = WireReader.fieldOf(tag);
-            int wire = WireReader.wireOf(tag);
-            switch (field) {
-                case HANDLE_KEY -> key = r.readVarint();
-                case HANDLE_TYPE -> handleType = (int) r.readVarint();
-                case HANDLE_TY -> {
-                    handleTy = r.readBytes();
-                    classFqn = selfTypeFqn(new WireReader(handleTy));
-                }
-                default -> r.skipField(wire);
-            }
+        HandleWire wire = readHandleWire(r);
+        int handleType = wire.type();
+        byte[] tyBytes = wire.ty();
+        String classFqn = wire.classFqn();
+        BamlHandle handle = wire.take(classFqn);
+        if (handleType == BamlHandle.ADT_RUNTIME_VALUE
+                && classFqn != null
+                && TypeRegistry.isOpaqueClass(classFqn)) {
+            BamlOpaque instance = TypeRegistry.constructOpaque(classFqn, handle);
+            bindReifiedTypeArgs(instance, classTypeArgs(tyBytes));
+            return instance;
         }
-        BamlHandle handle = new BamlHandle(key, handleType, classFqn);
         return switch (handleType) {
             case ADT_MEDIA_IMAGE -> Image.fromHandle(handle);
             case ADT_MEDIA_AUDIO -> Audio.fromHandle(handle);
@@ -1261,7 +1255,7 @@ public final class ProtoReader {
             // The wrapper retains handle.ty.class_ty.name and derives `.next`
             // and `.final` from that identity. Java erases the generic args but
             // must not erase the receiver class FQN.
-            case ADT_TAGGED_HEAP_HANDLE -> baml_bridge.BamlStream.fromHandle(handle, streamValueType(handleTy));
+            case ADT_TAGGED_HEAP_HANDLE -> baml_bridge.BamlStream.fromHandle(handle, streamValueType(tyBytes));
             case ADT_FUNCTION_SPEC -> baml_bridge.BamlFunctionSpec.fromHandle(handle);
             default -> handle;
         };
@@ -1280,21 +1274,6 @@ public final class ProtoReader {
                         && stream.classTypeArgs().size() == 1
                 ? stream.classTypeArgs().get(0)
                 : null;
-    }
-
-    /**
-     * Whether {@code fqn} names one of the handle-backed media stdlib classes.
-     * The engine wraps a media value as {@code class_value(baml.media.X, {_data})}
-     * whose {@code _data} field is a media {@code handle_value}; the wrapper is
-     * unwrapped to that decoded field (see {@link #decodeClass}), mirroring
-     * {@code bridge_python}'s {@code _decode_class} media special-case. These
-     * FQNs are runtime-owned and never registered in the {@link TypeRegistry}.
-     */
-    private static boolean isMediaFqn(String fqn) {
-        return Image.FQN.equals(fqn)
-                || Audio.FQN.equals(fqn)
-                || Video.FQN.equals(fqn)
-                || Pdf.FQN.equals(fqn);
     }
 
     // ========================================================================
@@ -1653,10 +1632,9 @@ public final class ProtoReader {
         if (decoded == null) {
             return null;
         }
-        if (decoded instanceof BamlHandle handle
-                && handle.handleType() == BamlHandle.ADT_RUNTIME_VALUE
-                && fqn.equals(handle.classFqn())) {
-            return TypeRegistry.constructOpaque(fqn, handle);
+        // The handle decoder reifies a registered opaque class's wrapper.
+        if (decoded instanceof BamlOpaque instance && fqn.equals(instance.bamlHandle().classFqn())) {
+            return instance;
         }
         if (lenient) {
             return decoded;
@@ -1668,6 +1646,27 @@ public final class ProtoReader {
                                 : "a " + decoded.getClass().getName()),
                 List.of(),
                 null);
+    }
+
+    /**
+     * The class type arguments ({@code BamlTy} bytes, in declaration order) a
+     * type states, or an empty list when it is not a class type or states none.
+     */
+    private static List<byte[]> classTypeArgs(byte[] tyBytes) {
+        WireReader classTy = subTy(new WireReader(tyBytes), TY_CLASS);
+        if (classTy == null) {
+            return List.of();
+        }
+        List<byte[]> typeArgs = new ArrayList<>();
+        while (classTy.hasRemaining()) {
+            int tag = classTy.readTag();
+            if (WireReader.fieldOf(tag) == TY_CLASS_TYPE_ARGS) {
+                typeArgs.add(classTy.readBytes());
+            } else {
+                classTy.skipField(WireReader.wireOf(tag));
+            }
+        }
+        return typeArgs;
     }
 
     /**
@@ -1726,11 +1725,6 @@ public final class ProtoReader {
             }
             byte[] vb = vals.get(i);
             fields.put(keys.get(i), vb == null ? null : decodeWithDesc(vb, fieldDesc, lenient));
-        }
-        // Defensive parity with the wire-driven path: a media stdlib class
-        // (never registered, so normally unreachable here) unwraps its `_data`.
-        if (isMediaFqn(fqn) && fields.containsKey(MEDIA_DATA_FIELD)) {
-            return fields.get(MEDIA_DATA_FIELD);
         }
         Object instance = TypeRegistry.constructClass(fqn, fields);
         if (instance == null) {
@@ -1997,7 +1991,6 @@ public final class ProtoReader {
                 case ADT_MEDIA_AUDIO -> MEDIA_AUDIO;
                 case ADT_MEDIA_VIDEO -> MEDIA_VIDEO;
                 case ADT_MEDIA_PDF -> MEDIA_PDF;
-                case ADT_MEDIA_GENERIC -> MEDIA_GENERIC;
                 default -> 0;
             };
         }
@@ -2007,39 +2000,58 @@ public final class ProtoReader {
     /**
      * A {@code handle_value}'s fields, read without taking the handle: matching
      * an arm must not mint a {@link BamlHandle}, whose release would free the
-     * row the decode that follows takes.
+     * row the decode that follows takes. Exactly one decode {@link #take}s it.
      */
-    private record HandleWire(long key, int type, byte[] ty) {
+    private record HandleWire(long key, int type, byte[] ty, long pin) {
         boolean isCallable() {
             return type == BamlHandle.FUNCTION_REF || type == BamlHandle.HOST_VALUE_CALLABLE;
+        }
+
+        boolean isHostValue() {
+            return type == BamlHandle.HOST_VALUE_CALLABLE || type == BamlHandle.HOST_VALUE_OPAQUE;
         }
 
         /** The class the handle's type names, or null when it names none. */
         String classFqn() {
             return ty == null ? null : selfTypeFqn(new WireReader(ty));
         }
+
+        /**
+         * Own what the engine handed over with this handle: the row of an
+         * engine handle, or the pin of a host value.
+         */
+        BamlHandle take(String classFqn) {
+            if (isHostValue()) {
+                return BamlHandle.hostValue(key, type, classFqn, pin);
+            }
+            assert pin == 0 : "only a host value carries a pin";
+            return new BamlHandle(key, type, classFqn);
+        }
     }
 
     /** The {@code handle_value} of an outbound value, or null when it carries none. */
     private static HandleWire handleWire(byte[] valueBytes) {
         byte[] sub = outboundSub(valueBytes, OV_HANDLE);
-        if (sub == null) {
-            return null;
-        }
-        WireReader r = new WireReader(sub);
+        return sub == null ? null : readHandleWire(new WireReader(sub));
+    }
+
+    /** Read a {@code BamlOutboundHandle}'s fields. */
+    private static HandleWire readHandleWire(WireReader r) {
         long key = 0;
         int type = 0;
         byte[] ty = null;
+        long pin = 0;
         while (r.hasRemaining()) {
             int tag = r.readTag();
             switch (WireReader.fieldOf(tag)) {
                 case HANDLE_KEY -> key = r.readVarint();
                 case HANDLE_TYPE -> type = (int) r.readVarint();
                 case HANDLE_TY -> ty = r.readBytes();
+                case HANDLE_PIN -> pin = r.readVarint();
                 default -> r.skipField(WireReader.wireOf(tag));
             }
         }
-        return new HandleWire(key, type, ty);
+        return new HandleWire(key, type, ty, pin);
     }
 
     /**
@@ -2090,13 +2102,21 @@ public final class ProtoReader {
                 throw refused;
             }
         }
-        if (handle != null && handle.type() == BamlHandle.HOST_VALUE_CALLABLE
-                && baml_bridge.HostCalls.lookup(handle.key())
-                        instanceof baml_bridge.BamlTypedCallable typed
-                && host.isInstance(typed.callable())) {
-            return typed.callable();
-        }
-        if (lenient) {
+        if (handle != null && handle.type() == BamlHandle.HOST_VALUE_CALLABLE) {
+            // The pin keeps the key registered while it is resolved; a host
+            // callable that resolves is the host's own object again, and the
+            // pin goes back with nothing left to read.
+            BamlHandle received = handle.take(handle.classFqn());
+            if (baml_bridge.HostCalls.lookup(handle.key()) instanceof baml_bridge.BamlTypedCallable typed
+                    && host.isInstance(typed.callable())) {
+                received.close();
+                return typed.callable();
+            }
+            if (lenient) {
+                return received;
+            }
+            received.close();
+        } else if (lenient) {
             return decodeValue(new WireReader(valueBytes), lenient);
         }
         throw new BamlError(

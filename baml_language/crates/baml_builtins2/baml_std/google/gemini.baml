@@ -21,7 +21,10 @@ class SafetySetting {
     /// Creates a safety setting pairing a harm `category` with a blocking
     /// `threshold`. Both strings go on the wire verbatim.
     function new(category: string, threshold: string) -> SafetySetting {
-        SafetySetting { category: category, threshold: threshold }
+        SafetySetting {
+            category: category,
+            threshold: threshold,
+        }
     }
 }
 
@@ -131,7 +134,7 @@ class GeminiClient {
             status_code: null,
             detail: `google needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "GOOGLE_API_KEY")}`,
             raw_body: null,
-        }
+        };
     }
 
     /// The request-time base URL, or null for the provider default.
