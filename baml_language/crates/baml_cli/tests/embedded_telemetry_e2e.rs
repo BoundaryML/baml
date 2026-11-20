@@ -591,7 +591,8 @@ async fn malformed_publisher_settings_fail_before_writing_an_artifact() {
     initial_telemetry_warning_message
     http_bodies
     env_var_names
-    build"#,
+    build
+    gc"#,
         ),
         (
             "bridge",

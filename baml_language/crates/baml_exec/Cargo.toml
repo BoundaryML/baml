@@ -30,6 +30,8 @@ clap = { workspace = true }
 console = { workspace = true }
 indexmap = { workspace = true }
 serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
+thiserror = { workspace = true }
+toml = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = [ "macros", "signal" ] }

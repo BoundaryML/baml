@@ -24,6 +24,7 @@ pub mod interrupt;
 pub mod json_coerce;
 pub mod launch_context;
 pub mod output;
+pub mod pack_gc;
 
 pub use auto_cli::{is_auto_cli_primitive, parse_cli_value};
 pub use call_context::HelperCallContext;
@@ -48,3 +49,4 @@ pub use launch_context::{
     CONTEXT_ENV, context_source_from_env, ensure_single_stdin_consumer, load_launch_context,
 };
 pub use output::{OutputFormat, format_value, write_output, write_output_with_context};
+pub use pack_gc::{PackGc, PackGcError};

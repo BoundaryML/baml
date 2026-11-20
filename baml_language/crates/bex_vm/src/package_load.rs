@@ -842,9 +842,10 @@ pub fn build_heap_with_packages(
     mut compile_time_objects: Vec<Object>,
     packages: &[ProgramPackage],
     root: u32,
+    gc: bex_heap::gc_policy::GcSettings,
 ) -> (Arc<BexHeap>, PackageIndex) {
     let layout = reserve_package_slots(&mut compile_time_objects, packages);
-    let mut heap = BexHeap::build_unsealed_default(compile_time_objects);
+    let mut heap = BexHeap::build_unsealed_default_with_gc(compile_time_objects, gc);
     let index = fill_package_slots(&mut heap, packages, root, &layout);
     // Every slot is now real (impl rules carry heads in their patterns), so
     // this is the one point where the whole image can bind — and prove it

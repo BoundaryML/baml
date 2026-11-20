@@ -451,3 +451,72 @@ async fn completed_bridge_call_leaves_debt_for_next_entry_and_preserves_its_hand
     assert_eq!(engine.heap().gc_budget().full_collections, 1);
     engine.shutdown().await;
 }
+
+fn engine_with_gc(growth: &str, min_growth: usize) -> Arc<BexEngine> {
+    let gc = bex_engine::GcConfig {
+        growth: Some(bex_engine::gc_settings::Growth::parse(growth).unwrap()),
+        min_growth: Some(min_growth),
+        // Names nothing sets, so the test cannot pick up the environment.
+        growth_env_var: "BEX_ENGINE_TEST_UNSET_GC_GROWTH".into(),
+        min_growth_env_var: "BEX_ENGINE_TEST_UNSET_GC_MIN_GROWTH".into(),
+    };
+    let engine = BexEngine::new_with_config(
+        baml_test_support::compile_source(SOURCE),
+        Arc::new(sys_native::SysOps::native()),
+        vec![],
+        bex_engine::EngineConfig {
+            gc,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let settings = engine.heap().gc_settings();
+    assert_eq!(settings.growth().to_string(), growth);
+    assert_eq!(settings.min_growth(), min_growth);
+    assert_eq!(engine.heap().gc_budget().full_budget_bytes, min_growth);
+    Arc::new(engine)
+}
+
+/// Collections during 256 MiB of buffer churn with 8 MiB live.
+async fn collections_during_churn(engine: &Arc<BexEngine>) -> usize {
+    engine.collect_garbage().await;
+    let before = engine.heap().gc_budget().full_collections;
+    let size = 8 * 1024 * 1024;
+    call(
+        engine,
+        "Bytes",
+        vec![Ext::Uint8Array(vec![1; size]), Ext::Int(32)],
+        true,
+    )
+    .await;
+    engine.heap().gc_budget().full_collections - before
+}
+
+/// The same program collects more often under a lower growth and less often
+/// under a higher one; a large `min_growth` holds collections off entirely.
+#[tokio::test(start_paused = true)]
+async fn growth_and_min_growth_set_how_often_the_same_program_collects() {
+    const MIB: usize = 1024 * 1024;
+    let mut counts = Vec::new();
+    for growth in ["0.25", "4", "16"] {
+        let engine = engine_with_gc(growth, MIB);
+        counts.push(collections_during_churn(&engine).await);
+        engine.shutdown().await;
+    }
+    let [low, default, high] = counts[..] else {
+        unreachable!()
+    };
+    assert!(
+        low > default && default > high,
+        "collections at growth 0.25 / 4 / 16: {low} / {default} / {high}"
+    );
+    assert!(low >= 16, "growth 0.25 collects about every copy: {low}");
+
+    let engine = engine_with_gc("0.25", 1024 * MIB);
+    assert_eq!(
+        collections_during_churn(&engine).await,
+        0,
+        "256 MiB of churn stays under a 1 GiB min_growth"
+    );
+    engine.shutdown().await;
+}

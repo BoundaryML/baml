@@ -827,3 +827,119 @@ fn pack_child_survives_cleanup_and_runtime_shutdown() {
     }
     assert_eq!(std::fs::read_to_string(marker).unwrap(), "completed");
 }
+
+/// `[pack.gc]` and its variable names reach a real packed binary: the program
+/// runs with the baked policy, reads only the variables the artifact carries
+/// (a renamed one replaces the standard name), and refuses a bad value at
+/// startup. `baml run` reads the standard variables and ignores `[pack.gc]`.
+#[test]
+fn pack_e2e_gc_settings_are_baked_and_overridable() {
+    let built = common::ensure_built();
+    let temp = tempfile::tempdir().unwrap();
+    common::write_project(temp.path(), "function main() -> int { 7 }\n");
+    let manifest = |gc: &str| {
+        std::fs::write(
+            temp.path().join("baml.toml"),
+            format!("[package]\nname = \"test\"\n{gc}"),
+        )
+        .unwrap();
+    };
+    let run_with = |bin: &Path, env: &[(&str, &str)]| {
+        let mut command = Command::new(bin);
+        for name in ["BAML_GC_GROWTH", "BAML_GC_MIN_GROWTH", "ACME_GC_GROWTH"] {
+            command.env_remove(name);
+        }
+        command.envs(env.iter().copied()).output().unwrap()
+    };
+
+    // A setting that cannot work fails the pack, naming the key.
+    for bad in [
+        "[pack.gc]\ngrowth = 0.1",
+        "[pack.gc]\nmin_growth = \"32MB\"",
+        "[pack.gc]\nmin_budget = \"8MiB\"",
+        "[bridge.gc]\ngrowth = 2",
+    ] {
+        manifest(bad);
+        let output = Command::new(&built.baml_cli)
+            .args(["pack", "--project-dir"])
+            .arg(temp.path())
+            .arg("-o")
+            .arg(temp.path().join("bad"))
+            .arg("main")
+            .env("BAML_HOME", common::shared_baml_home())
+            .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{bad} packed");
+        assert!(stderr.contains(".gc"), "{bad}: {stderr}");
+    }
+
+    manifest(
+        "[pack.gc]\ngrowth = 0.5\nmin_growth = \"2MiB\"\n[pack.env_var_names]\nBAML_GC_GROWTH = \"ACME_GC_GROWTH\"\n",
+    );
+    let bin = pack(built, temp.path(), &["main"]);
+    let ok = |output: &Output, what: &str| {
+        assert!(
+            output.status.success(),
+            "{what}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n", "{what}");
+    };
+    ok(&run_with(&bin, &[]), "baked policy");
+    ok(
+        &run_with(&bin, &[("BAML_GC_GROWTH", "not a number")]),
+        "the renamed standard variable is not read",
+    );
+    ok(
+        &run_with(
+            &bin,
+            &[("ACME_GC_GROWTH", "8"), ("BAML_GC_MIN_GROWTH", "64MiB")],
+        ),
+        "valid overrides",
+    );
+    for (name, value) in [("ACME_GC_GROWTH", "0.1"), ("BAML_GC_MIN_GROWTH", "0")] {
+        let output = run_with(&bin, &[(name, value)]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{name}={value} ran");
+        assert!(stderr.contains(name), "{name}={value}: {stderr}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "", "nothing ran");
+    }
+
+    // Source runs use the standard names; `[pack.gc]` does not apply there.
+    let baml_run = |env: &[(&str, &str)]| {
+        let mut command = Command::new(&built.baml_cli);
+        for name in ["BAML_GC_GROWTH", "BAML_GC_MIN_GROWTH", "ACME_GC_GROWTH"] {
+            command.env_remove(name);
+        }
+        command
+            .args(["run", "main"])
+            .current_dir(temp.path())
+            .env("BAML_HOME", common::shared_baml_home())
+            .env("BAML_CLI_ALLOW_DIRECT", "1")
+            .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+            .env("BAML_TELEMETRY", "off")
+            .envs(env.iter().copied())
+            .output()
+            .unwrap()
+    };
+    for (env, what) in [
+        (("ACME_GC_GROWTH", "0.1"), "baml run ignores pack names"),
+        (("BAML_GC_GROWTH", "2.5"), "baml run with growth"),
+    ] {
+        let output = baml_run(&[env]);
+        assert!(
+            output.status.success(),
+            "{what}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let output = baml_run(&[("BAML_GC_GROWTH", "fast")]);
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("BAML_GC_GROWTH"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

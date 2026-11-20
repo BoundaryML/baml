@@ -77,6 +77,7 @@ mod bex_work;
 mod conversion;
 mod function_call_context;
 mod future;
+pub mod gc_settings;
 mod hydrate;
 pub use future::LeakedFuture;
 #[cfg(not(target_arch = "wasm32"))]
@@ -143,6 +144,7 @@ use bex_vm_types::{
     Admission, AdmissionTicket, FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, LimitSet,
     Object, RealizedTy, SharedGlobals, SysOp, Value, ValueKind, VmGlobals,
 };
+pub use gc_settings::{GcConfig, GcConfigError};
 // Re-export CancellationToken for callers.
 pub use function_call_context::{
     BoundaryContext, BoundaryStorageContext, FunctionCallContext, FunctionCallContextBuilder,
@@ -1135,6 +1137,9 @@ pub struct EngineConfig {
     pub recording: Option<TelemetryRecording>,
     /// Compiled bodies and the verified digest of the artifact containing `program`.
     pub compiled_bodies: Option<bex_vm::CompiledBodies>,
+    /// The heap's collection policy before the environment: baked values and
+    /// the variable names that override them (`BAML_GC_*` by default).
+    pub gc: GcConfig,
 }
 
 impl Default for EngineConfig {
@@ -1148,6 +1153,7 @@ impl Default for EngineConfig {
             #[cfg(not(target_arch = "wasm32"))]
             recording: None,
             compiled_bodies: None,
+            gc: GcConfig::default(),
         }
     }
 }
@@ -2020,7 +2026,12 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             recording,
             compiled_bodies,
+            gc,
         } = config;
+        // Before any other work: a bad GC variable stops startup here.
+        let gc = gc
+            .resolve()
+            .map_err(|error| EngineError::Other(error.to_string()))?;
         // Application identity is execution context, independent of recording.
         // Apply it before any package initializer executes, so pack and every
         // bridge inherit the same root metadata. The language version is shared
@@ -2138,6 +2149,7 @@ impl BexEngine {
             compile_time_objects,
             &bytecode.packages,
             bytecode.root,
+            gc,
         );
         // Shared with every VM so spawned workers see the same package index
         // without re-resolving it.

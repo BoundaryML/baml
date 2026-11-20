@@ -263,15 +263,42 @@ impl BuildTelemetry {
     }
 }
 
+/// `[pack]` also takes `[pack.gc]`, the heap's collection policy, which
+/// `baml_exec::PackGc` parses; generated SDKs read it from the environment.
+const PACK_FIELDS: &[&str] = &[
+    "on_initial_telemetry_failure",
+    "initial_telemetry_warning_message",
+    "http_bodies",
+    "env_var_names",
+    "build",
+    "gc",
+];
 const ENVVAR_FIELDS: &[&str] = &["BAML_TELEMETRY", "BOUNDARY_PROJECT", "BOUNDARY_API_KEY"];
+/// Packed programs may also rename the GC variables (see `PackGc`).
+const PACK_ENVVAR_FIELDS: &[&str] = &[
+    "BAML_TELEMETRY",
+    "BOUNDARY_PROJECT",
+    "BOUNDARY_API_KEY",
+    "BAML_GC_GROWTH",
+    "BAML_GC_MIN_GROWTH",
+];
 
 /// Validate publisher-owned namespaces before building artifacts.
 /// Other manifest tables (package, generators, etc.) have their own parsers.
 fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError> {
-    for (name, fields) in [
-        ("boundary", &["project", "api_url"][..]),
-        ("pack", PRODUCER_FIELDS),
-        ("bridge", PRODUCER_FIELDS),
+    if manifest
+        .get("bridge")
+        .and_then(toml::Value::as_table)
+        .is_some_and(|bridge| bridge.contains_key("gc"))
+    {
+        return Err(PolicyError(
+            "[bridge.gc] is not supported: generated SDKs take their GC settings from the BAML_GC_GROWTH and BAML_GC_MIN_GROWTH environment variables. [pack.gc] sets them for packed programs.".into(),
+        ));
+    }
+    for (name, fields, envvar_fields) in [
+        ("boundary", &["project", "api_url"][..], ENVVAR_FIELDS),
+        ("pack", PACK_FIELDS, PACK_ENVVAR_FIELDS),
+        ("bridge", PRODUCER_FIELDS, ENVVAR_FIELDS),
     ] {
         let Some(value) = manifest.get(name) else {
             continue;
@@ -291,7 +318,7 @@ fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError>
                 let table = names
                     .as_table()
                     .ok_or_else(|| PolicyError(format!("[{name}] must be a table.")))?;
-                validate_fields(table, &name, ENVVAR_FIELDS)?;
+                validate_fields(table, &name, envvar_fields)?;
             }
         }
     }
@@ -684,6 +711,14 @@ embed_telemetry_env = "Bridge environment"
                 "`pack.telemetry_environment` has moved to `pack.build.embed_telemetry_env`. Set `embed_telemetry_env` in the [pack.build] table in baml.toml.",
             ),
             (
+                "[bridge.gc]\ngrowth = 2",
+                "[bridge.gc] is not supported: generated SDKs take their GC settings from the BAML_GC_GROWTH and BAML_GC_MIN_GROWTH environment variables. [pack.gc] sets them for packed programs.",
+            ),
+            (
+                "[bridge.env_var_names]\nBAML_GC_GROWTH = \"ACME\"",
+                "Unknown setting `bridge.env_var_names.BAML_GC_GROWTH` in baml.toml.\n\n  Valid [bridge.env_var_names] settings:\n    BAML_TELEMETRY\n    BOUNDARY_PROJECT\n    BOUNDARY_API_KEY",
+            ),
+            (
                 "[bridge]\ntelemetry_environment = \"staging\"",
                 "`bridge.telemetry_environment` has moved to `bridge.build.embed_telemetry_env`. Set `embed_telemetry_env` in the [bridge.build] table in baml.toml.",
             ),
@@ -699,7 +734,8 @@ on_inital_telemetry_failure = "ignore""#,
     initial_telemetry_warning_message
     http_bodies
     env_var_names
-    build"#,
+    build
+    gc"#,
             ),
             (
                 r#"[bridge]
@@ -723,7 +759,9 @@ BOUNDARY_API_KE = "CUSTOM_KEY""#,
   Valid [pack.env_var_names] settings:
     BAML_TELEMETRY
     BOUNDARY_PROJECT
-    BOUNDARY_API_KEY"#,
+    BOUNDARY_API_KEY
+    BAML_GC_GROWTH
+    BAML_GC_MIN_GROWTH"#,
             ),
             (
                 r#"[boundary]

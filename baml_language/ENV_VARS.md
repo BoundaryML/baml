@@ -46,6 +46,22 @@ Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential
 | `BOUNDARY_PROJECT` | Cloud target as `org_handle/project_name`. Overrides `[boundary].project`; `baml cloud --project` takes precedence. |
 | `BAML_CLI_ALLOW_DIRECT` | Hides the "don't run baml-cli directly" warning. The wrapper sets it. |
 | `BAML_AWS_CREDENTIAL_PROCESS` | Allow running an AWS profile's `credential_process`. Off by default because it runs a program. |
+| `BAML_GC_GROWTH` | How much the heap may grow between collections, as a multiple of the data that survived the last one: `0.25` to `1000`, at most two decimals. Default `4`. See [Memory](#memory). |
+| `BAML_GC_MIN_GROWTH` | The least the heap may grow between collections, and before the first: a size such as `8MiB` (`B`, `KiB`, `MiB`, `GiB`; a bare number is bytes), at least `1MiB`. Default `32MiB`. See [Memory](#memory). |
+
+## Memory
+
+BAML's heap is garbage collected. After each collection, the next one waits until the heap has grown by `growth` times the data that survived, and by at least `min_growth`. Memory in use is then roughly the live data plus the allowed growth, and a collection needs extra room while it copies the survivors. Lower values use less memory and more collector time: collector work per allocated byte is about `1 / growth`, so `growth = 1` does about four times the collector work of the default `4`, and values below `1` are allowed but costly. Programs that allocate little barely notice either setting. `min_growth` keeps small programs from collecting constantly; lower it, together with `growth`, where memory is tight (AWS Lambda, small containers). These are not a hard memory limit.
+
+| | Default | Environment | Packed programs (`baml.toml`) |
+|---|---|---|---|
+| growth | `4` | `BAML_GC_GROWTH=2.5` | `[pack.gc]` `growth = 2.5` |
+| min_growth | `32MiB` | `BAML_GC_MIN_GROWTH=8MiB` | `[pack.gc]` `min_growth = "8MiB"` |
+
+- `baml run`, `baml test`, the playground and every generated SDK read the two variables when the runtime starts. `[pack.gc]` does not apply to them.
+- `baml pack` bakes `[pack.gc]` into the binary. At startup the variables still win over the baked values, each setting on its own. A publisher can rename the variables the binary reads with `[pack.env_var_names]` (`BAML_GC_GROWTH = "ACME_GC_GROWTH"`), but cannot turn them off.
+- A value that cannot work (`growth` below `0.25`, `min_growth` below `1MiB`, a decimal unit such as `MB`, anything that is not a number) stops startup with an error naming the variable, or fails `baml pack` naming the key. Empty means unset.
+- Each running program (one engine) has one heap and one policy, shared by its spawned tasks. Several engines in one process each get their own heap and allowance.
 
 ## Bridges
 
