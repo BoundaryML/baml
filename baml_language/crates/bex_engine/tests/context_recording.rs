@@ -3,9 +3,9 @@
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
-use btel_reader::{
-    cas::{CasLimits, CasStore},
+use btel_core::reader::{
     context::{ContextReference, reference},
+    store::{CasLimits, CasStore},
 };
 use btel_recorder::{RecordingConfig, proto};
 use sys_native::SysOpsExt;
@@ -62,13 +62,14 @@ function main() -> string {
         engine.shutdown().await;
         assert_eq!(engine.telemetry_result(), Some(Ok(())));
         let files =
-            btel_file::read_directory(engine.telemetry_recording_directory().unwrap()).unwrap();
+            btel_core::recording::read_directory(engine.telemetry_recording_directory().unwrap())
+                .unwrap();
         assert!(files.issues.is_empty());
         let cas = CasStore::new(directory.join("cas"), CasLimits::default());
         let mut saw_program_context = false;
         for file in files.files {
             let header = file.header.unwrap();
-            let id: btel_snapshot::CasId = header.initial_context_cas_id.unwrap().into();
+            let id = btel_core::recording::cas_id(header.initial_context_cas_id.unwrap());
             let identity = (header.process_id.unwrap(), *id.as_bytes());
             if let Some(expected) = &shared_process {
                 assert_eq!(&identity, expected);
@@ -100,7 +101,7 @@ function main() -> string {
                 let (_, metadata) = trace_context::metadata(&snapshot);
                 assert_eq!(
                     metadata["baml.ctx.app_version"],
-                    &btel_snapshot::DecodedValue::String(version.into())
+                    &btel_core::cas::DecodedValue::String(version.into())
                 );
                 saw_program_context = true;
             }
@@ -156,7 +157,9 @@ async fn baml_context_reaches_local_files_and_cas_at_entry_and_completion() {
         .await
         .unwrap();
     assert_eq!(engine.telemetry_result(), Some(Ok(())));
-    let files = btel_file::read_directory(engine.telemetry_recording_directory().unwrap()).unwrap();
+    let files =
+        btel_core::recording::read_directory(engine.telemetry_recording_directory().unwrap())
+            .unwrap();
     assert!(files.issues.is_empty(), "{:?}", files.issues);
     let cas = CasStore::new(root.path().join("cas"), CasLimits::default());
     let mut snapshots = BTreeMap::new();
@@ -184,18 +187,18 @@ async fn baml_context_reaches_local_files_and_cas_at_entry_and_completion() {
         }
     }
     for file in &files.files {
-        let id: btel_snapshot::CasId = file
-            .header
-            .as_ref()
-            .unwrap()
-            .initial_context_cas_id
-            .unwrap()
-            .into();
+        let id = btel_core::recording::cas_id(
+            file.header
+                .as_ref()
+                .unwrap()
+                .initial_context_cas_id
+                .unwrap(),
+        );
         let snapshot = cas.load(id).snapshot.unwrap();
         let (_, metadata) = trace_context::metadata(&snapshot);
         assert_eq!(
             metadata["baml.ctx.baml_version"],
-            &btel_snapshot::DecodedValue::String(baml_version::CANONICAL_VERSION.into())
+            &btel_core::cas::DecodedValue::String(baml_version::CANONICAL_VERSION.into())
         );
         assert!(
             !metadata.contains_key("baml.ctx.app_version"),

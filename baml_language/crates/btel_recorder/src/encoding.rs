@@ -4,23 +4,17 @@
 //! index, so Vec relocation is safe. Non-minimal varints preserve the protobuf
 //! schema; no whole-buffer shift or nested sizing pass is required. Span
 //! bodies have one-byte lengths; events with strings (logs, network spans)
-//! use a full container prefix.
-use std::mem::MaybeUninit;
-
-#[cfg(test)]
-use btel_settings::encoding::MAX_EVENT_BYTES;
-use btel_settings::encoding::{LENGTH_BYTES, MAX_COMPLETION_BYTES};
+//! use a full container prefix. Every key, length and completion is
+//! `btel-core`'s (`btel_core::recording::frame`); what is here is the loop,
+//! the buffer and when a section opens and closes.
+use btel_core::recording::{field, frame, minor};
 use btel_types::TelemetryId;
-use prost::{Message, encoding::uint64};
+use prost::encoding::uint64;
 
 use crate::proto::span_event::Event;
 
 #[cfg(test)]
 mod context_tests;
-
-const VARINT_PAYLOAD_BITS: u32 = 7;
-const VARINT_CONTINUATION_BIT: u8 = 1 << VARINT_PAYLOAD_BITS;
-const VARINT_PAYLOAD_MASK: u8 = VARINT_CONTINUATION_BIT - 1;
 
 #[derive(Default)]
 pub(crate) struct EncodedSpans {
@@ -50,7 +44,7 @@ impl EncodedSpans {
     }
 
     pub(crate) fn format_minor(&self) -> u32 {
-        btel_settings::encoding::FORMAT_MINOR.max(self.required_minor)
+        minor::BASE.max(self.required_minor)
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -83,68 +77,71 @@ impl EncodedSpans {
         match event {
             // Usage has strings, so its rare completions leave the fixed-size path.
             Event::FunctionCompletion(m) if !m.usage.is_empty() => {
-                self.require(btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR);
-                self.variable(4, &m);
+                self.require(minor::MODEL_USAGE);
+                self.variable(field::span_event::FUNCTION_COMPLETION, &m);
             }
             Event::LateFunctionCompletion(m) if !m.usage.is_empty() => {
-                self.require(btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR);
-                self.variable(5, &m);
+                self.require(minor::MODEL_USAGE);
+                self.variable(field::span_event::LATE_FUNCTION_COMPLETION, &m);
             }
             Event::ThreadCompletion(m) if !m.usage.is_empty() => {
-                self.require(btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR);
+                self.require(minor::MODEL_USAGE);
                 if m.error_cas_id.is_some() {
-                    self.require(btel_settings::encoding::THREAD_ERROR_FORMAT_MINOR);
+                    self.require(minor::THREAD_ERROR);
                 }
-                self.variable(2, &m);
+                self.variable(field::span_event::THREAD_COMPLETION, &m);
             }
-            Event::FunctionCompletion(m) => self.completion(4, &m),
-            Event::LateFunctionCompletion(m) => self.completion(5, &m),
+            Event::FunctionCompletion(m) => {
+                self.completion(field::span_event::FUNCTION_COMPLETION, &m);
+            }
+            Event::LateFunctionCompletion(m) => {
+                self.completion(field::span_event::LATE_FUNCTION_COMPLETION, &m);
+            }
             Event::Log(message) => {
                 self.require(if message.line.is_some() {
-                    btel_settings::encoding::LOG_LINE_FORMAT_MINOR
+                    minor::LOG_LINE
                 } else {
-                    btel_settings::encoding::LOG_FORMAT_MINOR
+                    minor::LOG
                 });
-                self.variable(6, &message);
+                self.variable(field::span_event::LOG, &message);
             }
             Event::NetworkAnnouncement(message) => {
-                self.require(btel_settings::encoding::NETWORK_FORMAT_MINOR);
-                self.variable(8, &message);
+                self.require(minor::NETWORK);
+                self.variable(field::span_event::NETWORK_ANNOUNCEMENT, &message);
             }
             Event::NetworkEvent(message) => {
-                self.require(btel_settings::encoding::NETWORK_FORMAT_MINOR);
-                self.variable(9, &message);
+                self.require(minor::NETWORK);
+                self.variable(field::span_event::NETWORK_EVENT, &message);
             }
-            other => {
-                let length = begin(&mut self.bytes, 2, 1);
-                match other {
-                    Event::ThreadAnnouncement(m) => leaf(&mut self.bytes, 1, &m),
-                    Event::ThreadCompletion(m) => {
-                        if m.error_cas_id.is_some() {
-                            self.require(btel_settings::encoding::THREAD_ERROR_FORMAT_MINOR);
-                        }
-                        leaf(&mut self.bytes, 2, &m);
-                    }
-                    Event::ThreadRunning(m) => {
-                        self.require(btel_settings::encoding::THREAD_RUNNING_FORMAT_MINOR);
-                        leaf(&mut self.bytes, 7, &m);
-                    }
-                    Event::FunctionAnnouncement(m) => {
-                        if m.manual {
-                            self.require(btel_settings::encoding::MANUAL_SPAN_FORMAT_MINOR);
-                        }
-                        if m.type_args_cas_id.is_some() {
-                            self.require(btel_settings::encoding::TYPE_ARGS_FORMAT_MINOR);
-                        }
-                        leaf(&mut self.bytes, 3, &m);
-                    }
-                    Event::NetworkCompletion(m) => {
-                        self.require(btel_settings::encoding::NETWORK_FORMAT_MINOR);
-                        leaf(&mut self.bytes, 10, &m);
-                    }
-                    _ => unreachable!(),
+            Event::ThreadAnnouncement(m) => {
+                frame::event(&mut self.bytes, field::span_event::THREAD_ANNOUNCEMENT, &m);
+            }
+            Event::ThreadCompletion(m) => {
+                if m.error_cas_id.is_some() {
+                    self.require(minor::THREAD_ERROR);
                 }
-                end_short(&mut self.bytes, length);
+                frame::event(&mut self.bytes, field::span_event::THREAD_COMPLETION, &m);
+            }
+            Event::ThreadRunning(m) => {
+                self.require(minor::THREAD_RUNNING);
+                frame::event(&mut self.bytes, field::span_event::THREAD_RUNNING, &m);
+            }
+            Event::FunctionAnnouncement(m) => {
+                if m.manual {
+                    self.require(minor::MANUAL_SPAN);
+                }
+                if m.type_args_cas_id.is_some() {
+                    self.require(minor::TYPE_ARGS);
+                }
+                frame::event(
+                    &mut self.bytes,
+                    field::span_event::FUNCTION_ANNOUNCEMENT,
+                    &m,
+                );
+            }
+            Event::NetworkCompletion(m) => {
+                self.require(minor::NETWORK);
+                frame::event(&mut self.bytes, field::span_event::NETWORK_COMPLETION, &m);
             }
         }
     }
@@ -154,54 +151,28 @@ impl EncodedSpans {
     }
 
     /// An event with strings, under a full-width length prefix.
-    fn variable<M: Message>(&mut self, tag: u32, message: &M) {
-        let length = begin(&mut self.bytes, 2, LENGTH_BYTES);
-        prost::encoding::message::encode(tag, message, &mut self.bytes);
-        end_container(&mut self.bytes, length);
+    fn variable<M: prost::Message>(&mut self, member: u32, message: &M) {
+        frame::event_with_text(&mut self.bytes, member, message);
     }
 
     #[inline]
     #[allow(unsafe_code)]
-    fn completion(&mut self, tag: u8, message: &crate::proto::FunctionCompletion) {
-        if message.completion_flags & 16 != 0 && message.completion_flags & 32 == 0 {
-            self.require(btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR);
+    fn completion(&mut self, member: u32, message: &crate::proto::FunctionCompletion) {
+        let flags = message.completion_flags;
+        if btel_core::recording::CompletionFlags::closed_bit(flags)
+            && !btel_core::recording::CompletionFlags::manual_bit(flags)
+        {
+            self.require(minor::OWNED_SPAN);
         }
-        if message.completion_flags & 32 != 0 {
-            self.require(btel_settings::encoding::MANUAL_SPAN_FORMAT_MINOR);
+        if btel_core::recording::CompletionFlags::manual_bit(flags) {
+            self.require(minor::MANUAL_SPAN);
         }
-        // Maximum protobuf body: 3*(tag+10-byte varint), 3*(tag+fixed64),
-        // one tag+5-byte uint32 = 66 bytes, plus two tag/length pairs = 70.
-        // Optional CAS message adds tag+length+2*(tag+fixed64) = 20 bytes, and
-        // the panic flag tag+1 = 2 bytes.
         // Indexing stays checked; only publishing initialized bytes is unsafe.
         let start = self.bytes.len();
-        let region = &mut self.bytes.spare_capacity_mut()[..MAX_COMPLETION_BYTES];
-        let mut writer = CompletionWriter { region, len: 0 };
-        writer.byte(0x12); // ThreadSection.events = 2.
-        writer.byte(0); // SpanEvent length, filled below.
-        writer.byte((tag << 3) | 2);
-        writer.byte(0); // FunctionCompletion length, filled below.
-        writer.varint(0x08, message.id);
-        writer.varint(0x10, message.parent_id);
-        writer.varint(0x18, message.node);
-        writer.fixed64(0x21, message.entered_at_ticks);
-        writer.fixed64(0x29, message.exited_at_ticks);
-        writer.fixed64(0x31, message.self_await_ticks);
-        writer.varint(0x38, u64::from(message.completion_flags));
-        if let Some(id) = &message.value_cas_id {
-            writer.byte(0x42);
-            let prefix = writer.len;
-            writer.byte(0);
-            writer.fixed64(0x09, id.low);
-            writer.fixed64(0x11, id.high);
-            writer.region[prefix].write(u8::try_from(writer.len - prefix - 1).unwrap());
-        }
-        writer.varint(0x48, u64::from(message.panicked));
-        let length = writer.len;
-        writer.region[1].write(u8::try_from(length - 2).expect("bounded completion"));
-        writer.region[3].write(u8::try_from(length - 4).expect("bounded completion"));
-        // SAFETY: all bytes in [start,start+length) were initialized by checked
-        // writes into spare capacity above. No allocation or references escape.
+        let region = &mut self.bytes.spare_capacity_mut()[..frame::MAX_COMPLETION_BYTES];
+        let length = frame::function_completion(region, member, message);
+        // SAFETY: `function_completion` initialized the `length` bytes from
+        // the start of the spare capacity. No allocation or references escape.
         unsafe {
             self.bytes.set_len(start + length);
         }
@@ -213,26 +184,44 @@ impl EncodedSpans {
         context: Option<crate::proto::thread_section::Context>,
     ) {
         if self.thread.is_some() {
-            end_container(&mut self.bytes, self.section_length);
+            frame::close_padded(&mut self.bytes, self.section_length);
         } else {
-            // RecordingFile.spans = 5. Remains open until sealing.
-            begin(&mut self.bytes, 5, LENGTH_BYTES);
+            // Remains open until sealing.
+            frame::open(
+                &mut self.bytes,
+                field::recording_file::SPANS,
+                frame::LENGTH_BYTES,
+            );
         }
-        self.section_length = begin(&mut self.bytes, 1, LENGTH_BYTES);
-        uint64::encode(1, &thread.get(), &mut self.bytes);
+        self.section_length = frame::open(
+            &mut self.bytes,
+            field::span_batch::SECTIONS,
+            frame::LENGTH_BYTES,
+        );
+        uint64::encode(
+            field::thread_section::THREAD_ID,
+            &thread.get(),
+            &mut self.bytes,
+        );
         if let Some(context) = context {
             use crate::proto::thread_section::Context;
             match context {
                 Context::ContextCasId(id) => {
-                    prost::encoding::message::encode(3, &id, &mut self.bytes);
+                    prost::encoding::message::encode(
+                        field::thread_section::CONTEXT_CAS_ID,
+                        &id,
+                        &mut self.bytes,
+                    );
                 }
                 Context::EmptyContext(empty) => {
-                    prost::encoding::bool::encode(4, &empty, &mut self.bytes);
+                    prost::encoding::bool::encode(
+                        field::thread_section::EMPTY_CONTEXT,
+                        &empty,
+                        &mut self.bytes,
+                    );
                 }
             }
-            self.required_minor = self
-                .required_minor
-                .max(btel_settings::encoding::CONTEXT_FORMAT_MINOR);
+            self.required_minor = self.required_minor.max(minor::CONTEXT);
         }
         self.thread = Some(thread);
         self.context = context;
@@ -240,90 +229,19 @@ impl EncodedSpans {
 
     pub(crate) fn finish(&mut self) -> Vec<u8> {
         if self.thread.take().is_some() {
-            end_container(&mut self.bytes, self.section_length);
-            end_container(&mut self.bytes, 1);
+            frame::close_padded(&mut self.bytes, self.section_length);
+            // The spans' length, after the one-byte key at the start.
+            frame::close_padded(&mut self.bytes, 1);
         }
         self.required_minor = 0;
         std::mem::take(&mut self.bytes)
     }
 }
 
-struct CompletionWriter<'a> {
-    region: &'a mut [MaybeUninit<u8>],
-    len: usize,
-}
-impl CompletionWriter<'_> {
-    #[inline]
-    fn byte(&mut self, byte: u8) {
-        self.region[self.len].write(byte);
-        self.len += 1;
-    }
-    #[inline]
-    fn varint(&mut self, tag: u8, mut value: u64) {
-        if value == 0 {
-            return;
-        }
-        self.byte(tag);
-        while value > u64::from(VARINT_PAYLOAD_MASK) {
-            self.byte(value.to_le_bytes()[0] | VARINT_CONTINUATION_BIT);
-            value >>= VARINT_PAYLOAD_BITS;
-        }
-        self.byte(value.to_le_bytes()[0]);
-    }
-    #[inline]
-    fn fixed64(&mut self, tag: u8, value: u64) {
-        if value == 0 {
-            return;
-        }
-        self.byte(tag);
-        for (dst, byte) in self.region[self.len..self.len + 8]
-            .iter_mut()
-            .zip(value.to_le_bytes())
-        {
-            dst.write(byte);
-        }
-        self.len += 8;
-    }
-}
-
-#[inline]
-fn begin(bytes: &mut Vec<u8>, tag: u8, length_bytes: usize) -> usize {
-    bytes.push((tag << 3) | 2);
-    let length = bytes.len();
-    bytes.resize(length + length_bytes, 0);
-    length
-}
-#[inline]
-fn leaf<M: Message>(bytes: &mut Vec<u8>, tag: u8, message: &M) {
-    let length = begin(bytes, tag, 1);
-    message.encode_raw(bytes);
-    end_short(bytes, length);
-}
-#[inline]
-fn end_short(bytes: &mut [u8], length: usize) {
-    let size = bytes.len() - length - 1;
-    assert!(
-        size <= usize::from(VARINT_PAYLOAD_MASK),
-        "span schema exceeded its scalar-only encoding bound"
-    );
-    bytes[length] = u8::try_from(size).expect("one-byte length checked above");
-}
-fn end_container(bytes: &mut [u8], length: usize) {
-    let mut size = u32::try_from(bytes.len() - length - LENGTH_BYTES)
-        .expect("recording allocation exceeded its admitted encoding bound");
-    for i in 0..LENGTH_BYTES {
-        let continuation = if i + 1 == LENGTH_BYTES {
-            0
-        } else {
-            VARINT_CONTINUATION_BIT
-        };
-        bytes[length + i] = (size.to_le_bytes()[0] & VARINT_PAYLOAD_MASK) | continuation;
-        size >>= VARINT_PAYLOAD_BITS;
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use prost::Message as _;
+
     use super::*;
     use crate::proto;
 
@@ -331,10 +249,10 @@ mod tests {
     fn container_lengths_decode_across_varint_boundaries() {
         for size in [0, 1, 127, 128, 16_383, 16_384, 65_535] {
             let mut bytes = Vec::new();
-            let length = begin(&mut bytes, 1, LENGTH_BYTES);
+            let length = frame::open(&mut bytes, 1, frame::LENGTH_BYTES);
             bytes.resize(bytes.len() + size, 0);
-            end_container(&mut bytes, length);
-            let mut prefix = &bytes[length..length + LENGTH_BYTES];
+            frame::close_padded(&mut bytes, length);
+            let mut prefix = &bytes[length..length + frame::LENGTH_BYTES];
             assert_eq!(
                 prost::encoding::decode_varint(&mut prefix).unwrap(),
                 u64::try_from(size).unwrap()
@@ -349,7 +267,7 @@ mod tests {
     fn a_thread_error_requires_its_minor_with_or_without_usage() {
         for usage in [Vec::new(), vec![proto::ModelUsage::default()]] {
             let mut encoded = EncodedSpans::default();
-            encoded.reserve(MAX_EVENT_BYTES);
+            encoded.reserve(frame::MAX_EVENT_BYTES);
             encoded.event(
                 btel_types::allocate_telemetry_id(),
                 Event::ThreadCompletion(proto::ThreadCompletion {
@@ -360,7 +278,7 @@ mod tests {
                 }),
             );
             assert!(
-                encoded.format_minor() >= btel_settings::encoding::THREAD_ERROR_FORMAT_MINOR,
+                encoded.format_minor() >= minor::THREAD_ERROR,
                 "{}",
                 encoded.format_minor()
             );
@@ -452,7 +370,7 @@ mod tests {
         ];
         let mut encoded = EncodedSpans::default();
         for event in &events {
-            encoded.reserve(encoded.len() + MAX_EVENT_BYTES);
+            encoded.reserve(encoded.len() + frame::MAX_EVENT_BYTES);
             let capacity = encoded.capacity();
             encoded.event(thread, event.clone());
             assert_eq!(
@@ -485,6 +403,8 @@ mod tests {
 
 #[cfg(test)]
 mod equivalence_tests {
+    use prost::Message as _;
+
     use super::*;
     use crate::proto;
 
@@ -538,10 +458,10 @@ mod equivalence_tests {
                     }
                     .encode_to_vec();
                     let mut writer = EncodedSpans::default();
-                    writer.reserve(MAX_EVENT_BYTES);
+                    writer.reserve(frame::MAX_EVENT_BYTES);
                     writer.event(thread, event);
                     assert_eq!(
-                        &writer.bytes[writer.section_length + LENGTH_BYTES..],
+                        &writer.bytes[writer.section_length + frame::LENGTH_BYTES..],
                         expected
                     );
                 }

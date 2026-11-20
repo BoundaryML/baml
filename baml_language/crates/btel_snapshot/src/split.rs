@@ -296,7 +296,7 @@ mod tests {
         assert_eq!(parts, whole);
         assert_eq!(structure.root_id(), whole.last().unwrap().0);
         for (_, bytes) in &parts {
-            crate::decode_blob(bytes, &crate::DecodeLimits::default()).unwrap();
+            btel_core::cas::decode_blob(bytes, &btel_core::cas::DecodeLimits::default()).unwrap();
         }
     }
 

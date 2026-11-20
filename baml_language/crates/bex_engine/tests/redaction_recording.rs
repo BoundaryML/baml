@@ -5,8 +5,8 @@
 use std::{sync::Arc, time::Duration};
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
+use btel_core::cas::{DecodeLimits, DecodedObject, DecodedValue, Redaction, decode_blob};
 use btel_recorder::RecordingConfig;
-use btel_snapshot::{DecodeLimits, DecodedObject, DecodedValue, Redaction, decode_blob};
 use sys_native::SysOpsExt;
 
 const SOURCE: &str = include_str!("../../baml_tests/baml_src/ns_trace_redact/redact.baml");

@@ -95,6 +95,19 @@ pub enum TypeIdentity {
     /// definition's.
     Defined(DefinitionRef),
 }
+/// How a captured type renders a head: its name, or what identifies it when
+/// it has none to show.
+impl baml_type::HeadDisplay for TypeIdentity {
+    fn head_display_name(&self) -> String {
+        match self {
+            Self::Resolved(head) => head.head_display_name(),
+            Self::Unresolved(tag) => format!("<unresolved {tag:?}>"),
+            Self::Defined(definition) => {
+                format!("<definition {}.{}>", definition.group, definition.member)
+            }
+        }
+    }
+}
 pub type OwnedType = baml_type::RealizedTy<TypeIdentity>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Limit {

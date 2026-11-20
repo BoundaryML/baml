@@ -3,7 +3,7 @@ mod common;
 
 use std::{path::Path, process::Command};
 
-use btel_bcs::{proto::CloudUploadEnvelope, wire::PrepareUploadsRequest};
+use btel_core::upload::{PrepareUploadsRequest, envelope::UploadEnvelope};
 use prost::Message as _;
 use wiremock::{
     Mock, MockServer, Request, ResponseTemplate,
@@ -205,7 +205,7 @@ fn baml_run_uploads_from_boundary_env() {
                     assert_eq!(request.method, "PUT");
                     assert!(!request.headers.contains_key("authorization"));
                     assert_eq!(request.headers["x-required"], "signed-value");
-                    let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+                    let envelope = UploadEnvelope::decode(request.body.as_slice()).unwrap();
                     if let Some(bytes) = envelope.recording_file {
                         recordings.push(
                             btel_recorder::proto::RecordingFile::decode(bytes.as_slice()).unwrap(),

@@ -4,6 +4,7 @@ use std::{
     time::Instant,
 };
 
+use btel_core::upload::{ProposedUploadTarget, UploadKind};
 use btel_processor::{AggregateDelta, Publisher};
 use btel_recorder::{RecordingBuilder, RecordingConfig, RecordingError, RecordingId, SealedFile};
 use btel_records::SpanRecord;
@@ -13,7 +14,6 @@ use btel_types::TelemetryId;
 use crate::{
     delivery::{BcsDeliveryHandle, Candidate, DeliveryError, Source, Window},
     metadata::MetadataJournal,
-    wire::{ProposedUploadTarget, UploadKind},
 };
 
 #[derive(Clone, Debug)]
@@ -970,7 +970,7 @@ mod tests {
         )
         .unwrap();
         let publisher = CloudPublisher::new(
-            RecordingId::generate(),
+            btel_types::new_recording_id(),
             RecordingConfig::default(),
             config,
             delivery.handle(),
@@ -1642,7 +1642,7 @@ mod tests {
         )
         .unwrap();
         let mut publisher = CloudPublisher::new(
-            RecordingId::generate(),
+            btel_types::new_recording_id(),
             RecordingConfig::default(),
             CloudPublisherConfig::default(),
             delivery.handle(),
@@ -1838,7 +1838,7 @@ mod tests {
         )
         .unwrap();
         let mut publisher = CloudPublisher::new(
-            RecordingId::generate(),
+            btel_types::new_recording_id(),
             RecordingConfig {
                 target_bytes: NonZeroUsize::new(128).unwrap(),
                 ..RecordingConfig::default()
@@ -1965,7 +1965,7 @@ mod tests {
         )
         .unwrap();
         let mut publisher = CloudPublisher::new(
-            RecordingId::generate(),
+            btel_types::new_recording_id(),
             RecordingConfig {
                 target_bytes: NonZeroUsize::new(128).unwrap(),
                 ..RecordingConfig::default()
@@ -2043,7 +2043,7 @@ mod tests {
             )
             .unwrap();
             let mut publisher = CloudPublisher::new(
-                RecordingId::generate(),
+                btel_types::new_recording_id(),
                 RecordingConfig {
                     target_bytes: NonZeroUsize::new(512).unwrap(),
                     ..RecordingConfig::default()

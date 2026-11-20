@@ -27,7 +27,7 @@ impl Recording {
         let id = [tag; 16];
         let dir = project
             .join(".baml/btel/recordings")
-            .join(btel_reader::discovery::hex(&id));
+            .join(btel_core::reader::discovery::hex(&id));
         std::fs::create_dir_all(&dir).unwrap();
         Self { dir, id }
     }
@@ -49,7 +49,7 @@ impl Recording {
     }
 }
 
-/// `btel_settings::encoding::FORMAT_MAJOR`.
+/// `btel_core::recording::FORMAT_MAJOR`.
 const FORMAT_MAJOR: u32 = 2;
 
 fn epoch() -> proto::ClockEpochDefinition {
@@ -211,7 +211,9 @@ fn internal(index: &Index, sql: &str) -> Vec<Vec<Json>> {
                         rusqlite::types::Value::Integer(n) => json!(n),
                         rusqlite::types::Value::Real(f) => json!(f),
                         rusqlite::types::Value::Text(t) => json!(t),
-                        rusqlite::types::Value::Blob(b) => json!(btel_reader::discovery::hex(&b)),
+                        rusqlite::types::Value::Blob(b) => {
+                            json!(btel_core::reader::discovery::hex(&b))
+                        }
                     })
                 })
                 .collect()

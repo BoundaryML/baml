@@ -3649,7 +3649,7 @@ mod tests {
             let span = unsafe {
                 manual::ManualSpan::start_with_options(
                     Some(&mut creator),
-                    btel_types::RecordingId::generate(),
+                    btel_types::new_recording_id(),
                     btel_types::context::Context::default(),
                     &metadata,
                     Some(Value::int(7)),
@@ -3780,7 +3780,7 @@ mod tests {
                 let span = unsafe {
                     manual::ManualSpan::start_with_options(
                         Some(&mut creator),
-                        btel_types::RecordingId::generate(),
+                        btel_types::new_recording_id(),
                         btel_types::context::Context::default(),
                         &metadata,
                         None,

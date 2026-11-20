@@ -2,11 +2,11 @@ use std::time::Duration;
 
 use btel_bcs::{
     delivery::{BcsDelivery, DeliveryConfig, DeliveryError},
-    proto::CloudUploadEnvelope,
     publisher::{CloudPublisher, CloudPublisherConfig},
 };
+use btel_core::upload::envelope::UploadEnvelope;
 use btel_processor::{AggregateDelta, Publisher};
-use btel_recorder::{RecordingConfig, RecordingId};
+use btel_recorder::RecordingConfig;
 use btel_records::SpanRecord;
 use btel_snapshot::{Limits, Snapshot, SnapshotPool, SnapshotValue};
 use btel_types::{CallPathId, ClockInstant, allocate_telemetry_id};
@@ -78,7 +78,7 @@ async fn setup(
     )
     .unwrap();
     let publisher = CloudPublisher::new(
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         RecordingConfig {
             flush_interval_duration: Duration::from_secs(60),
             ..RecordingConfig::default()
@@ -184,7 +184,7 @@ fn recording_ends(requests: &[Request]) -> Vec<(u64, bool)> {
         .iter()
         .filter(|request| request.method.as_str() == "PUT")
         .filter_map(|request| {
-            let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+            let envelope = UploadEnvelope::decode(request.body.as_slice()).unwrap();
             let file =
                 btel_recorder::proto::RecordingFile::decode(envelope.recording_file?.as_slice())
                     .unwrap();
@@ -241,7 +241,7 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
     .unwrap();
     let handle = delivery.handle();
     let mut publisher = CloudPublisher::new(
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         RecordingConfig::default(),
         CloudPublisherConfig::default(),
         handle.clone(),
@@ -346,9 +346,8 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
         .iter()
         .find(|request| request.method == "PUT" && request.url.path() == "/put/2-0")
         .unwrap();
-    let envelope =
-        btel_bcs::proto::CloudUploadEnvelope::decode(recovered_put.body.as_slice()).unwrap();
-    assert_eq!(envelope.cas_objects.len(), 1);
+    let envelope = UploadEnvelope::decode(recovered_put.body.as_slice()).unwrap();
+    assert_eq!(envelope.blobs.len(), 1);
     let recovered =
         btel_recorder::proto::RecordingFile::decode(envelope.recording_file.as_deref().unwrap())
             .unwrap();
@@ -461,8 +460,8 @@ async fn a_capture_spanning_plans_delivers_every_blob_once_and_ends_last() {
     assert_eq!(offered, expected);
     let mut uploaded = std::collections::HashSet::new();
     for request in requests.iter().filter(|r| r.method == "PUT") {
-        let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
-        for object in envelope.cas_objects {
+        let envelope = UploadEnvelope::decode(request.body.as_slice()).unwrap();
+        for object in envelope.blobs {
             let id = btel_snapshot::CasId::from_bytes(object.snapshot_id.try_into().unwrap());
             assert!(uploaded.insert(id), "a blob is uploaded once");
         }
@@ -490,7 +489,7 @@ async fn blobs_a_sealed_file_left_queued_are_delivered_without_another_record() 
     let plan = config.max_candidates;
     let delivery = BcsDelivery::new(config, |_| {}).unwrap();
     let mut publisher = CloudPublisher::new(
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         RecordingConfig {
             flush_interval_duration: Duration::from_millis(50),
             ..RecordingConfig::default()
@@ -605,7 +604,7 @@ async fn captures_over_every_byte_budget_are_sent_whole_and_none_is_dropped() {
     )
     .unwrap();
     let mut publisher = CloudPublisher::new(
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         RecordingConfig {
             flush_interval_duration: Duration::from_secs(60),
             ..RecordingConfig::default()
@@ -666,8 +665,8 @@ async fn captures_over_every_byte_budget_are_sent_whole_and_none_is_dropped() {
     let requests = server.received_requests().await.unwrap();
     let mut uploaded = std::collections::HashMap::new();
     for request in requests.iter().filter(|r| r.method == "PUT") {
-        let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
-        for object in envelope.cas_objects {
+        let envelope = UploadEnvelope::decode(request.body.as_slice()).unwrap();
+        for object in envelope.blobs {
             let id = btel_snapshot::CasId::from_bytes(object.snapshot_id.try_into().unwrap());
             assert!(
                 uploaded.insert(id, object.blob).is_none(),
@@ -733,7 +732,7 @@ async fn strings_sent_with_one_plan_are_let_go_while_their_capture_waits_for_the
     .unwrap();
     let plan = delivery.handle();
     let mut publisher = CloudPublisher::new(
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         RecordingConfig {
             flush_interval_duration: Duration::from_secs(60),
             ..RecordingConfig::default()

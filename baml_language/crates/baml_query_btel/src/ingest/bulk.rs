@@ -10,12 +10,14 @@
 //! row is written once, in key order.
 use std::{borrow::Cow, collections::BTreeMap};
 
-use btel_reader::{
-    evidence::{self, ArgumentNames},
-    source_map::SourceMap,
-    timing::EpochStatus,
+use btel_core::{
+    reader::{
+        evidence::{self, ArgumentNames},
+        source_map::SourceMap,
+        timing::EpochStatus,
+    },
+    recording::v2::{self as proto, function_definition::Resolution, span_event::Event},
 };
-use btel_recorder::proto::{self, function_definition::Resolution, span_event::Event};
 use prost::Message as _;
 use rusqlite::{Transaction, params};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -667,7 +669,7 @@ impl Bulk {
                                     if let Some(error) = &done.error_cas_id {
                                         self.thread_errors.insert(section.thread_id, cas_id(error));
                                     }
-                                    let usage = crate::usage::from_proto(&done.usage);
+                                    let usage = crate::usage::from_wire(&done.usage);
                                     if !usage.is_empty() {
                                         self.usage.insert(section.thread_id, usage);
                                     }
@@ -837,7 +839,7 @@ impl Bulk {
         let completed_sequence = Some(saturating_sequence(sequence));
         // The first usage stored wins, as on the incremental path: a second
         // completion is a conflict.
-        let usage = crate::usage::from_proto(&done.usage);
+        let usage = crate::usage::from_wire(&done.usage);
         if !usage.is_empty() {
             self.usage.entry(done.id).or_insert(usage);
         }
@@ -1032,7 +1034,7 @@ impl Bulk {
                 let utc = epoch
                     .utc
                     .as_ref()
-                    .and_then(btel_reader::timing::UtcAnchor::from_wire);
+                    .and_then(btel_core::reader::timing::UtcAnchor::from_wire);
                 row.def = Some(EpochDef {
                     domain: epoch.domain_id,
                     source: epoch.source,
@@ -1321,7 +1323,11 @@ impl Bulk {
                 let node = match parent_node {
                     Some(None) => None,
                     parent => self.node_name(def.callee).map(|name| {
-                        crate::functions::node_hash(parent.flatten(), &name, i64::from(def.edge))
+                        btel_core::reader::profile::node_hash(
+                            parent.flatten(),
+                            &name,
+                            i64::from(def.edge),
+                        )
                     }),
                 };
                 nodes.insert(path, node);

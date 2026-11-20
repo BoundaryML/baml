@@ -2073,9 +2073,9 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let trace_scope = recording
             .as_ref()
-            .map_or_else(btel_types::RecordingId::generate, TelemetryRecording::id);
+            .map_or_else(btel_types::new_recording_id, TelemetryRecording::id);
         #[cfg(target_arch = "wasm32")]
-        let trace_scope = btel_types::RecordingId::generate();
+        let trace_scope = btel_types::new_recording_id();
 
         // The init order, before the executable is consumed.
         let init_order = bytecode_program.init_order.clone();

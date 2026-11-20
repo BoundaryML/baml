@@ -186,7 +186,7 @@ mod tests {
             error: None,
             context: None,
         };
-        let scope = RecordingId::generate();
+        let scope = btel_types::new_recording_id();
         let reserved = ReservedSpanData::new(scope, options.clone());
         assert_eq!(options.mode, Some(InvocationMode::Hidden));
         assert_eq!(reserved.options.mode, Some(InvocationMode::Span));
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn reservation_attachment_is_shared_across_threads() {
-        let recording = RecordingId::generate();
+        let recording = btel_types::new_recording_id();
         let reservation = Arc::new(ReservedSpanData::new(
             recording,
             TraceOptionsData::default(),
@@ -231,7 +231,7 @@ mod tests {
 
     #[test]
     fn forwarding_preserves_effective_options_and_claim_without_reclaiming() {
-        let scope = RecordingId::generate();
+        let scope = btel_types::new_recording_id();
         let raw = ReservedSpanData::new(scope, TraceOptionsData::default());
         let raw_alias = raw.clone();
         let id = raw.enter(scope).unwrap();
@@ -255,7 +255,7 @@ mod tests {
 
     #[test]
     fn forwarded_aliases_create_only_one_span() {
-        let scope = RecordingId::generate();
+        let scope = btel_types::new_recording_id();
         let raw = ReservedSpanData::new(scope, TraceOptionsData::default());
         raw.enter(scope).unwrap();
         let first = raw.claimed_view(raw.options.clone());
@@ -267,14 +267,14 @@ mod tests {
         });
         assert_eq!(winners, 1);
         assert_eq!(
-            first.enter(RecordingId::generate()),
+            first.enter(btel_types::new_recording_id()),
             Err(ReservationError::WrongScope)
         );
     }
 
     #[test]
     fn failed_setup_does_not_release_entry_claim() {
-        let scope = RecordingId::generate();
+        let scope = btel_types::new_recording_id();
         let raw = ReservedSpanData::new(scope, TraceOptionsData::default());
         raw.enter(scope).unwrap();
         drop(raw.claimed_view(raw.options.clone()));
@@ -283,8 +283,8 @@ mod tests {
 
     #[test]
     fn span_identity_includes_recording_scope_and_local_id() {
-        let scope = RecordingId::generate();
-        let other_scope = RecordingId::generate();
+        let scope = btel_types::new_recording_id();
+        let other_scope = btel_types::new_recording_id();
         let local = allocate_telemetry_id();
         let id = SpanId::new(scope, local);
         assert_eq!(id, SpanId::new(scope, local));
@@ -294,10 +294,10 @@ mod tests {
 
     #[test]
     fn wrong_runtime_does_not_consume_reservation() {
-        let scope = RecordingId::generate();
+        let scope = btel_types::new_recording_id();
         let reservation = ReservedSpanData::new(scope, TraceOptionsData::default());
         assert_eq!(
-            reservation.attach(RecordingId::generate()),
+            reservation.attach(btel_types::new_recording_id()),
             Err(ReservationError::WrongScope)
         );
         let local = reservation.attach(scope).unwrap();

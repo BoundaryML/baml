@@ -13,21 +13,21 @@
 //! A type head or declaration that names a recorded definition holds its
 //! group's ID in place; the walk reports it where it is written, so the
 //! groups a blob names are found in encoding order.
-use std::io::{self, Write};
-
 use baml_type::typetag::TypeTag;
 use bex_str::BexStr;
-use borsh::BorshSerialize;
+pub(crate) use btel_core::cas::encode::infallible;
+use btel_core::cas::encode::{ByteCount, DefinitionIdentity};
 use num_bigint::BigInt;
 
 use crate::{
     CasId, TypeIdentity,
+    describe::{self, Segments},
     graph::{
         BigintId, Declared, FieldEntry, Graph, LabelId, MapEntry, MediaSource, ObjectId, OwnedType,
         Range, RedactionReason, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId,
     },
-    hash::{self, Absorb, Counter, Digest, HashSink, TypeLeaf},
-    tags::{self, DeclarationTag, MediaSourceTag, ObjectTag, RootTag, ValueTag},
+    hash::{self, Absorb, Digest, HashSink, TypeLeaf},
+    tags::{self, MediaSourceTag, ObjectTag, RootTag, ValueTag},
 };
 
 /// How a declaration identifies itself, written in place: by its recorded
@@ -36,19 +36,14 @@ pub(crate) struct DeclarationIdentity<'a> {
     pub(crate) tag: TypeTag,
     pub(crate) declared: &'a Declared,
 }
-impl BorshSerialize for DeclarationIdentity<'_> {
-    fn serialize<W: Write>(&self, w: &mut W) -> io::Result<()> {
-        match &self.declared.definition {
-            Some(definition) => {
-                (DeclarationTag::Defined as u8).serialize(w)?;
-                self.declared.name.serialize(w)?;
-                definition.serialize(w)
-            }
-            None => {
-                (DeclarationTag::Tagged as u8).serialize(w)?;
-                self.tag.serialize(w)?;
-                self.declared.name.serialize(w)
-            }
+impl DeclarationIdentity<'_> {
+    /// As `btel-core` writes it: by the definition when there is one, else by the tag, with the
+    /// name either way.
+    pub(crate) fn encoded(&self) -> DefinitionIdentity<'_, Segments<'_>> {
+        let name = describe::name(&self.declared.name);
+        match self.declared.definition {
+            Some(definition) => DefinitionIdentity::Defined(name, definition),
+            None => DefinitionIdentity::Tagged(self.tag.as_i64(), name),
         }
     }
 }
@@ -541,7 +536,7 @@ impl<H: HashSink> Visitor for H {
     }
     #[inline]
     fn declaration(&mut self, identity: &DeclarationIdentity<'_>) -> Result<(), Self::Error> {
-        HashSink::borsh(self, identity);
+        HashSink::declaration(self, identity.encoded());
         Ok(())
     }
     #[inline]
@@ -646,10 +641,8 @@ impl Visitor for Length {
     }
     #[inline(always)]
     fn declaration(&mut self, identity: &DeclarationIdentity<'_>) -> Result<(), Self::Error> {
-        let mut counter = Counter(0);
-        identity
-            .serialize(&mut counter)
-            .expect("counting cannot fail");
+        let mut counter = ByteCount(0);
+        infallible(identity.encoded().write(&mut counter));
         self.add(counter.0);
         Ok(())
     }
@@ -737,13 +730,5 @@ where
     fn begin_range(&mut self, len: usize) -> Result<(), Self::Error> {
         infallible(self.1.begin_range(len));
         self.0.begin_range(len)
-    }
-}
-
-/// Unwrap the result of a walk whose visitor cannot fail.
-pub(crate) fn infallible(result: Result<(), std::convert::Infallible>) {
-    match result {
-        Ok(()) => {}
-        Err(never) => match never {},
     }
 }

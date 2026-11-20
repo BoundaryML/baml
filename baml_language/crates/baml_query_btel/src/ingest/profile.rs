@@ -12,7 +12,7 @@
 //! that never ended is summed from those rows when the profiler is built.
 use std::collections::hash_map::Entry;
 
-use btel_reader::timing::{Clock, TimingState};
+use btel_core::reader::timing::{Clock, TimingState};
 use rusqlite::{Connection, Transaction, params, types::ValueRef};
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 

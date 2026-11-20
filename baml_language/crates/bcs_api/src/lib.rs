@@ -1,34 +1,34 @@
-//! BCS cloud API contracts and native clients shared by BAML hosts.
+//! The BCS client as BAML hosts use it: `bcs-sdk`, which BCS publishes, and what is BAML's own.
+//! BAML reads its endpoint override and its home directory from the environment ([`endpoint`],
+//! [`store`]) and words each failure for its users ([`diagnostics`]); the client reads no
+//! environment of its own. The formats are `btel-core`'s.
 //!
-//! The `bcs_*` family owns cloud wire formats and HTTP operations. Telemetry
-//! recording, bounded delivery and heartbeat scheduling belong to `btel_*`.
+//! Telemetry recording, bounded delivery and heartbeat scheduling belong to `btel_*`.
 
+pub use bcs_sdk::{ApiErrorBody, HttpFailure, credentials, response, telemetry, upload};
 #[cfg(feature = "auth")]
-pub mod api_keys;
-#[cfg(feature = "auth")]
-pub mod auth;
-pub mod credentials;
-pub mod response;
-pub use response::{ApiErrorBody, HttpFailure};
+pub use bcs_sdk::{
+    Caller, Client, DEFAULT_API_URL, DeviceLogin, Endpoint, Error, LoginPoll, Secret, Session,
+    Store, StoredSession, api_keys, auth, error, query,
+};
+
 #[cfg(feature = "auth")]
 pub mod diagnostics;
-#[cfg(feature = "auth")]
-pub mod error;
-#[cfg(feature = "auth")]
-pub mod query;
-#[cfg(feature = "auth")]
-mod store;
-pub mod telemetry;
-pub mod wire;
 
+/// The endpoint BAML talks to: `BOUNDARY_API_URL` when it is set, else `configured`, else BCS's
+/// own.
 #[cfg(feature = "auth")]
-pub use auth::{
-    Caller, Client, DEFAULT_API_URL, DeviceLogin, Endpoint, LoginPoll, Secret, Session, Store,
-    StoredSession,
-};
-#[cfg(feature = "auth")]
-pub use error::Error;
+pub fn endpoint(configured: Option<&str>) -> error::Result<Endpoint> {
+    // Reading a string variable fails only when its value is not Unicode.
+    let override_url = baml_env::string_var("BOUNDARY_API_URL")
+        .map_err(|_| Error::Endpoint("BOUNDARY_API_URL is not valid Unicode"))?;
+    Endpoint::resolve(override_url.as_deref(), configured)
+}
 
-pub mod proto {
-    include!(concat!(env!("OUT_DIR"), "/btel.cloud.v1.rs"));
+/// The saved logins for `endpoint`, under `$BAML_HOME` (by default `~/.baml`), which every BAML
+/// host shares.
+#[cfg(feature = "auth")]
+pub fn store(endpoint: &Endpoint) -> Store {
+    let home = baml_env::baml_home_from(baml_env::os_var("BAML_HOME"), dirs::home_dir());
+    Store::in_home(endpoint, &home)
 }

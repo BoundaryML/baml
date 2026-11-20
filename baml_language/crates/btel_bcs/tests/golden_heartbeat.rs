@@ -6,10 +6,8 @@ use std::{
     time::Duration,
 };
 
-use btel_bcs::{
-    liveness::Heartbeat,
-    wire::{HeartbeatPolicy, Liveness, ProducerState},
-};
+use btel_bcs::liveness::Heartbeat;
+use btel_core::upload::{HeartbeatPolicy, Liveness, ProducerState};
 use serde_json::Value;
 use wiremock::{
     Mock, MockServer, Request, ResponseTemplate,

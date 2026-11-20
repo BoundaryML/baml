@@ -88,7 +88,7 @@ async fn shutdown_finalizes_telemetry_once_without_guessing_the_host_outcome() {
     );
     let mut completions = 0;
     for directory in recordings {
-        let read = btel_file::read_directory(&directory).unwrap();
+        let read = btel_core::recording::read_directory(&directory).unwrap();
         assert!(read.issues.is_empty(), "{:?}", read.issues);
         assert!(read.has_recording_end);
         assert_eq!(
@@ -108,7 +108,7 @@ async fn shutdown_finalizes_telemetry_once_without_guessing_the_host_outcome() {
             assert!(header.program_id.is_some());
             assert_eq!(
                 header.format_minor,
-                btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR
+                btel_core::recording::minor::PACKAGE_IDENTITY
             );
         }
     }

@@ -118,9 +118,6 @@ impl FailureKind {
             Error::Url(_) => {
                 Self::InvalidConfiguration("Boundary API URL must be a valid absolute URL")
             }
-            Error::Environment(_) => {
-                Self::InvalidConfiguration("Boundary environment variables could not be read")
-            }
             Error::EndpointMismatch => Self::InvalidConfiguration(
                 "The credential belongs to a different Boundary endpoint",
             ),
@@ -197,7 +194,7 @@ impl Context {
             let session = self
                 .endpoint
                 .as_ref()
-                .map(|endpoint| crate::Store::new(endpoint).and_then(|store| store.read()));
+                .map(|endpoint| crate::store(endpoint).read());
             match session {
                 Some(Ok(Some(_))) => SavedLogin::Exists,
                 Some(Ok(None)) => SavedLogin::Missing,
@@ -921,9 +918,55 @@ mod tests {
         );
     }
 
+    /// What reading the saved login fails with in a home of its own that `arrange` prepares,
+    /// and the credential file the failure names.
+    fn failed_read(arrange: impl FnOnce(&std::path::Path, &crate::Store)) -> (Error, String) {
+        let home = tempfile::tempdir().unwrap();
+        let endpoint = crate::Endpoint::parse("https://api.prod.bcs.boundaryml.com").unwrap();
+        let store = crate::Store::in_home(&endpoint, home.path());
+        arrange(home.path(), &store);
+        let error = store.read().unwrap_err();
+        let location = match &error {
+            Error::Storage { location, .. } | Error::InvalidStoredLogin { location } => {
+                location.to_string()
+            }
+            other => panic!("reading the saved login failed with {other:?}"),
+        };
+        (error, location)
+    }
+
     #[test]
     fn auth_storage_and_login_failures_get_auth_specific_recovery() {
         let context = context(Operation::Authentication, CredentialSource::Configured);
+        // A file where the cache directory should be.
+        let (blocked, blocked_at) = failed_read(|home, _| {
+            std::fs::create_dir(home.join("login")).unwrap();
+            std::fs::write(home.join("login/cache"), b"").unwrap();
+        });
+        // A saved login, then whatever is not one in its place. Its lock file may sit beside it,
+        // as on Windows.
+        let (invalid, invalid_at) = failed_read(|home, store| {
+            store
+                .write(&crate::StoredSession {
+                    refresh_token: crate::Secret::new("bdry_session_test".into()),
+                    caller: crate::Caller {
+                        user_id: "test-user".into(),
+                        email: "test@example.invalid".into(),
+                    },
+                })
+                .unwrap();
+            let [saved] = std::fs::read_dir(home.join("login/cache"))
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .filter(|path| {
+                    path.extension()
+                        .is_some_and(|extension| extension == "json")
+                })
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+            std::fs::write(saved, b"not a login").unwrap();
+        });
         for (error, expected) in [
             (
                 Error::LoginDenied,
@@ -932,7 +975,8 @@ mod tests {
   To continue, choose one:
     • Run `baml cloud auth login` again and approve the new code in your browser.
 
-  Authentication command failed."#,
+  Authentication command failed."#
+                    .to_owned(),
             ),
             (
                 Error::LoginExpired,
@@ -941,36 +985,31 @@ mod tests {
   To continue, choose one:
     • Run `baml cloud auth login` again and approve the new code in your browser.
 
-  Authentication command failed."#,
+  Authentication command failed."#
+                    .to_owned(),
             ),
             (
-                Error::Storage {
-                    operation: "read",
-                    location: crate::auth::CredentialStoreLocation {
-                        path: "test-home/login/cache/endpoint.json".into(),
-                    },
-                    source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
-                },
-                r#"Boundary could not access the local credential file at test-home/login/cache/endpoint.json.
+                blocked,
+                format!(
+                    r#"Boundary could not access the local credential file at {blocked_at}.
 
   To continue, choose one:
     • Check permissions for this file and its parent directory.
 
-  Authentication command failed."#,
+  Authentication command failed."#
+                ),
             ),
             (
-                Error::InvalidStoredLogin {
-                    location: crate::auth::CredentialStoreLocation {
-                        path: "test-home/login/cache/endpoint.json".into(),
-                    },
-                },
-                r#"The saved Boundary login in the local credential file at test-home/login/cache/endpoint.json is invalid.
+                invalid,
+                format!(
+                    r#"The saved Boundary login in the local credential file at {invalid_at} is invalid.
 
   To continue, choose one:
     • Remove the invalid saved login: run `baml cloud auth logout`, then `baml cloud auth login`.
     • Set BOUNDARY_API_KEY to a valid API key.
 
-  Authentication command failed."#,
+  Authentication command failed."#
+                ),
             ),
         ] {
             let report = context.report(error, Outcome::AuthenticationFailed);

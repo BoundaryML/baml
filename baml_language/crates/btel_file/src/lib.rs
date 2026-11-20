@@ -29,14 +29,8 @@ use btel_recorder::{RecordingId, SealedFile};
 pub use btel_settings::local_files::LocalDeliveryConfig;
 
 mod cas;
-pub use cas::{cas_path, cas_path_versioned};
 mod publisher;
 pub use publisher::LocalPublisher;
-mod reader;
-pub use reader::{
-    ReadIssue, RecordingRead, parse_recording_id, parse_sequence_file_name, read_directory,
-    validate_file,
-};
 
 /// Terminal delivery errors retain the path and operating-system explanation.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -48,13 +42,9 @@ impl fmt::Display for LocalDeliveryError {
 }
 impl std::error::Error for LocalDeliveryError {}
 
+/// A recording's directory beneath the recordings root: its ID in lowercase hex.
 pub fn recording_directory(root: &Path, id: RecordingId) -> PathBuf {
-    let mut name = String::with_capacity(32);
-    for byte in id.as_bytes() {
-        use std::fmt::Write as _;
-        write!(&mut name, "{byte:02x}").expect("writing to String");
-    }
-    root.join(name)
+    root.join(id.to_string())
 }
 
 fn io_error(path: &Path, error: &io::Error) -> LocalDeliveryError {
@@ -121,7 +111,13 @@ impl LocalDelivery {
         config: LocalDeliveryConfig,
         on_failure: impl FnOnce(&LocalDeliveryError) + Send + 'static,
     ) -> io::Result<Self> {
-        Self::create_with_cas(root, &root.join("cas"), id, config, on_failure)
+        Self::create_with_cas(
+            root,
+            &root.join(btel_core::cas::DIRECTORY_NAME),
+            id,
+            config,
+            on_failure,
+        )
     }
 
     /// Explicit shared CAS location. A recording owns its sequence directory;
@@ -164,7 +160,7 @@ impl LocalDelivery {
         write: impl FnMut(&SealedFile) -> Result<(), LocalDeliveryError> + Send + 'static,
         on_failure: impl FnOnce(&LocalDeliveryError) + Send + 'static,
     ) -> io::Result<Self> {
-        let mut cas = cas::CasWriter::new(directory.join("cas"));
+        let mut cas = cas::CasWriter::new(directory.join(btel_core::cas::DIRECTORY_NAME));
         Self::start_with_snapshots(
             directory,
             config,
@@ -301,8 +297,8 @@ fn write_file(
         ));
     }
     let sequence = file.sequence().get();
-    let destination = directory.join(format!("{sequence:020}.btel"));
-    let temporary = directory.join(format!("{sequence:020}.btel.part"));
+    let destination = directory.join(btel_core::recording::file_name(sequence));
+    let temporary = directory.join(btel_core::recording::partial_file_name(sequence));
     // The fresh recording directory has one writer enforcing unique sequences,
     // so completed destinations cannot collide within this recording.
     let mut output = OpenOptions::new()

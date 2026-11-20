@@ -12,7 +12,7 @@ const ROOT: u64 = 1;
 const CHILD: u64 = 2;
 const A: u64 = 10;
 const B: u64 = 11;
-/// `btel_settings::encoding::FORMAT_MAJOR`.
+/// `btel_core::recording::FORMAT_MAJOR`.
 const FORMAT_MAJOR: u32 = 2;
 
 struct Recording {
@@ -27,7 +27,7 @@ impl Recording {
         let id = [tag; 16];
         let dir = project
             .join(".baml/btel/recordings")
-            .join(btel_reader::discovery::hex(&id));
+            .join(btel_core::reader::discovery::hex(&id));
         std::fs::create_dir_all(&dir).unwrap();
         Self { dir, id, process }
     }
@@ -713,7 +713,7 @@ fn futures_are_spans_named_by_their_spawn() {
     });
     recording.write(1, file);
     let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
-    let hex = btel_reader::discovery::hex(&recording.id);
+    let hex = btel_core::reader::discovery::hex(&recording.id);
     assert_eq!(
         rows(
             &mut index,

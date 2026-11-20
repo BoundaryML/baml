@@ -39,7 +39,7 @@ impl<F: FnMut(ConvertedBatch)> Publisher<Snapshot, Snapshot> for ProtobufPublish
     fn span(&mut self, t: TelemetryId, r: &mut SpanRecord<Snapshot, Snapshot>) {
         self.buffer
             .spans
-            .reserve(self.buffer.spans.len() + btel_settings::encoding::MAX_EVENT_BYTES);
+            .reserve(self.buffer.spans.len() + btel_core::recording::frame::MAX_EVENT_BYTES);
         self.buffer.span(t, r);
     }
     fn flush(&mut self) {
@@ -330,7 +330,7 @@ fn completion_variants_roundtrip_without_losing_wire_semantics() {
             _ => panic!("expected completion"),
         };
         let flags = CompletionFlags::from_wire(completion.completion_flags, is_late).unwrap();
-        assert_eq!(flags.outcome(), outcome);
+        assert_eq!(flags.outcome(), crate::flags::outcome(outcome));
         assert_eq!(completion.value_cas_id.is_some(), captured);
         assert_eq!(flags.requires_announcement(), dependency);
         assert_eq!(is_late, late);

@@ -8,28 +8,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
+// Where a blob is kept is `btel-core`'s (`btel_core::cas::cas_path`): beneath the unversioned
+// CAS root, a directory per blob version, then one of 256 shard directories named by the ID's
+// first byte. All of them exist after about 1,600 blobs on average, and from then on publishing
+// a blob creates a file and no directory.
+use btel_core::cas::cas_path;
 use btel_snapshot::{Blob, BlobScratch, CasId, Snapshot};
 use rustc_hash::FxHashSet;
 
 use crate::{LocalDeliveryError, io_error};
-
-/// Resolve beneath the unversioned CAS root, isolating each blob format
-/// version, then in one of 256 shard directories named by the ID's first
-/// byte. All of them exist after about 1,600 blobs on average, and from then
-/// on publishing a blob creates a file and no directory.
-pub fn cas_path(root: &Path, id: CasId) -> PathBuf {
-    cas_path_versioned(root, id, btel_snapshot::BLOB_VERSION)
-}
-
-/// Resolve a blob in a specific format's namespace.
-pub fn cas_path_versioned(root: &Path, id: CasId, version: u32) -> PathBuf {
-    use std::fmt::Write as _;
-    let mut name = String::with_capacity(32);
-    for byte in id.as_bytes() {
-        write!(&mut name, "{byte:02x}").expect("write string");
-    }
-    root.join(format!("v{version}")).join(&name[..2]).join(name)
-}
 
 /// Publishes captures beneath one CAS root. Blobs it published or found in
 /// place are not checked again: like the recent-capture window, this assumes
@@ -79,8 +66,8 @@ fn write_blob(
             existing
                 .read_exact(&mut header)
                 .map_err(|e| io_error(&destination, &e))?;
-            if header[..8] != btel_snapshot::BLOB_MAGIC
-                || header[8..12] != btel_snapshot::BLOB_VERSION.to_le_bytes()
+            if header[..8] != btel_core::cas::MAGIC
+                || header[8..12] != btel_core::cas::VERSION.to_le_bytes()
                 || header[12..] != *blob.id().as_bytes()
             {
                 return Err(LocalDeliveryError(format!(
@@ -177,11 +164,7 @@ mod tests {
         let first = snapshot(1);
         writer.write(&first).unwrap();
         // Removed behind the writer: the next blob makes what it needs.
-        fs::remove_dir_all(
-            root.path()
-                .join(format!("v{}", btel_snapshot::BLOB_VERSION)),
-        )
-        .unwrap();
+        fs::remove_dir_all(root.path().join(format!("v{}", btel_core::cas::VERSION))).unwrap();
         let second = snapshot(2);
         writer.write(&second).unwrap();
         let path = cas_path(root.path(), second.root_id());

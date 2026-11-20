@@ -5,6 +5,10 @@ use std::{
     time::Duration,
 };
 
+use btel_core::{
+    cas::{cas_path, cas_path_versioned},
+    recording::{ReadIssue, read_directory},
+};
 use btel_processor::{AggregateDelta, Publisher};
 use btel_recorder::{RecordingConfig, RecordingPublisher, proto};
 use btel_types::{AwaitDuration, CallPathId, CallPathNodeId, ClockDuration};
@@ -26,12 +30,12 @@ fn delta() -> AggregateDelta {
 
 #[test]
 fn process_completion_accepts_unknown_outcomes_but_rejects_invalid_statuses() {
-    let id = RecordingId::generate();
+    let id = btel_types::new_recording_id();
     for status in [-1, 0, 1, 2, 3, 4, 5] {
         let file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
-                format_major: btel_settings::encoding::FORMAT_MAJOR,
-                format_minor: btel_settings::encoding::UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR,
+                format_major: btel_core::recording::FORMAT_MAJOR,
+                format_minor: btel_core::recording::minor::UNKNOWN_PROCESS_OUTCOME,
                 recording_id: id.as_bytes().to_vec(),
                 ..Default::default()
             }),
@@ -44,7 +48,7 @@ fn process_completion_accepts_unknown_outcomes_but_rejects_invalid_statuses() {
             }),
             ..Default::default()
         };
-        let parsed = reader::validate_file(&file.encode_to_vec(), id, 1);
+        let parsed = btel_core::recording::validate_file(&file.encode_to_vec(), id, 1);
         assert_eq!(
             parsed.is_ok(),
             (1..=4).contains(&status),
@@ -70,7 +74,7 @@ fn files(id: RecordingId, count: usize) -> Vec<SealedFile> {
 #[test]
 fn local_publisher_finishes_encoding_before_disk_drain() {
     let root = tempfile::tempdir().unwrap();
-    let id = RecordingId::generate();
+    let id = btel_types::new_recording_id();
     let (entered, started) = mpsc::channel();
     let (release, released) = mpsc::channel();
     // Finishing seals the pending window as the terminal file.
@@ -122,7 +126,7 @@ fn local_publisher_finishes_encoding_before_disk_drain() {
 #[test]
 fn local_recording_ends_after_its_flushed_data_and_only_once() {
     let root = tempfile::tempdir().unwrap();
-    let id = RecordingId::generate();
+    let id = btel_types::new_recording_id();
     let delivery = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
     let builder = btel_recorder::RecordingBuilder::new(id, RecordingConfig::default()).unwrap();
     let mut publisher = LocalPublisher::new(builder, delivery);
@@ -149,7 +153,7 @@ fn local_recording_ends_after_its_flushed_data_and_only_once() {
 #[test]
 fn writes_exact_publisher_bytes_and_finish_is_idempotent() {
     let root = tempfile::tempdir().unwrap();
-    let id = RecordingId::generate();
+    let id = btel_types::new_recording_id();
     let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
     let sender = sink.take_handle();
     let produced = files(id, 3);
@@ -214,7 +218,7 @@ fn full_queue_waits_for_capacity_and_unblocks_on_writer_failure() {
         )
         .unwrap();
         let sender = sink.take_handle();
-        let mut files = files(RecordingId::generate(), 3).into_iter();
+        let mut files = files(btel_types::new_recording_id(), 3).into_iter();
         sender.send(files.next().unwrap()).unwrap();
         started.recv_timeout(Duration::from_secs(5)).unwrap();
         sender.send(files.next().unwrap()).unwrap();
@@ -277,7 +281,7 @@ fn writer_failure_is_reported_before_a_blocked_send_returns() {
     )
     .unwrap();
     let sender = sink.take_handle();
-    let mut files = files(RecordingId::generate(), 3).into_iter();
+    let mut files = files(btel_types::new_recording_id(), 3).into_iter();
     sender.send(files.next().unwrap()).unwrap();
     started.recv_timeout(Duration::from_secs(5)).unwrap();
     sender.send(files.next().unwrap()).unwrap();
@@ -303,7 +307,7 @@ fn writer_failure_is_reported_before_a_blocked_send_returns() {
 #[test]
 fn disk_failure_and_duplicate_sequence_are_observable() {
     let root = tempfile::tempdir().unwrap();
-    let id = RecordingId::generate();
+    let id = btel_types::new_recording_id();
     let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
     let sender = sink.take_handle();
     let original = files(id, 1).pop().unwrap();
@@ -315,7 +319,7 @@ fn disk_failure_and_duplicate_sequence_are_observable() {
     assert_eq!(sink.result(), Some(Err(error.clone())));
     assert_eq!(sink.finish(), Err(error));
 
-    let id = RecordingId::generate();
+    let id = btel_types::new_recording_id();
     let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
     let sender = sink.take_handle();
     let original = files(id, 1).pop().unwrap();
@@ -332,7 +336,7 @@ fn disk_failure_and_duplicate_sequence_are_observable() {
 #[test]
 fn recovery_keeps_later_files_when_a_middle_file_is_missing_or_corrupt() {
     let root = tempfile::tempdir().unwrap();
-    let id = RecordingId::generate();
+    let id = btel_types::new_recording_id();
     let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
     let sender = sink.take_handle();
     for file in files(id, 4) {
@@ -371,7 +375,7 @@ fn recovery_keeps_later_files_when_a_middle_file_is_missing_or_corrupt() {
 #[test]
 fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
     let root = tempfile::tempdir().unwrap();
-    let id = RecordingId::generate();
+    let id = btel_types::new_recording_id();
     let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
     let sender = sink.take_handle();
     let original = files(id, 1).pop().unwrap();
@@ -412,7 +416,8 @@ fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
     let path = sink.directory().join("00000000000000000002.btel");
     fs::write(&path, second.encode_to_vec()).unwrap();
     assert!(read_directory(sink.directory()).unwrap().issues.is_empty());
-    second.header.as_mut().unwrap().recording_id = RecordingId::generate().as_bytes().to_vec();
+    second.header.as_mut().unwrap().recording_id =
+        btel_types::new_recording_id().as_bytes().to_vec();
     fs::write(path, second.encode_to_vec()).unwrap();
     let read = read_directory(sink.directory()).unwrap();
     assert_eq!(read.files.len(), 1);
@@ -449,7 +454,7 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     let mut a = LocalDelivery::create_with_cas(
         root.path(),
         &cas,
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         LocalDeliveryConfig::default(),
         |_| {},
     )
@@ -457,7 +462,7 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     let mut b = LocalDelivery::create_with_cas(
         root.path(),
         &cas,
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         LocalDeliveryConfig::default(),
         |_| {},
     )
@@ -473,7 +478,7 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     assert_eq!(filename.len(), 32);
     assert_eq!(
         path,
-        cas.join(format!("v{}", btel_snapshot::BLOB_VERSION))
+        cas.join(format!("v{}", btel_core::cas::VERSION))
             .join(&filename[..2])
             .join(filename)
     );
@@ -486,7 +491,7 @@ fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     let mut c = LocalDelivery::create_with_cas(
         root.path(),
         &cas,
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         LocalDeliveryConfig::default(),
         |_| {},
     )
@@ -546,7 +551,7 @@ fn every_blob_of_a_capture_is_written_and_stored_ones_are_kept() {
     let mut delivery = LocalDelivery::create_with_cas(
         root.path(),
         &cas,
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         LocalDeliveryConfig::default(),
         |_| {},
     )
@@ -586,11 +591,7 @@ fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
     let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let value = snapshot(&pool, 42);
     let path = cas_path(root.path(), value.root_id());
-    let legacy = crate::cas_path_versioned(
-        root.path(),
-        value.root_id(),
-        btel_snapshot::BLOB_VERSION - 1,
-    );
+    let legacy = cas_path_versioned(root.path(), value.root_id(), btel_core::cas::VERSION - 1);
     fs::create_dir_all(legacy.parent().unwrap()).unwrap();
     fs::write(&legacy, b"existing legacy entry").unwrap();
     crate::cas::CasWriter::new(root.path().to_owned())

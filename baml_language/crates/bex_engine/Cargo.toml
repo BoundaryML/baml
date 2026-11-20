@@ -55,7 +55,6 @@ wasm-bindgen-futures = { workspace = true }
 gloo-timers = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-btel_reader = { workspace = true }
 btel_file = { workspace = true, features = [ "test-support" ] }
 btel_snapshot = { workspace = true }
 
@@ -67,6 +66,7 @@ bridge_ctypes = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
 anyhow = { workspace = true }
 borsh = { workspace = true }
+btel-core = { workspace = true, features = [ "reader" ] }
 clap = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }

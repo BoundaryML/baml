@@ -1,4 +1,5 @@
 use btel_types::allocate_telemetry_id;
+use prost::Message as _;
 
 use super::*;
 use crate::proto::{self, thread_section::Context};
@@ -11,7 +12,7 @@ fn context(value: u64) -> Context {
 }
 
 fn event(writer: &mut EncodedSpans, thread: TelemetryId) {
-    writer.reserve(writer.len() + MAX_EVENT_BYTES);
+    writer.reserve(writer.len() + frame::MAX_EVENT_BYTES);
     let capacity = writer.capacity();
     writer.event(
         thread,
@@ -95,23 +96,17 @@ fn finishing_resets_file_features_without_losing_context_selection() {
             ..Default::default()
         }),
     );
-    assert_eq!(
-        writer.format_minor(),
-        btel_settings::encoding::LOG_FORMAT_MINOR
-    );
+    assert_eq!(writer.format_minor(), btel_core::recording::minor::LOG);
     assert_eq!(sections(&mut writer)[0].context, Some(context(7)));
-    assert_eq!(writer.format_minor(), btel_settings::encoding::FORMAT_MINOR);
+    assert_eq!(writer.format_minor(), btel_core::recording::minor::BASE);
 
     event(&mut writer, thread);
-    assert_eq!(
-        writer.format_minor(),
-        btel_settings::encoding::CONTEXT_FORMAT_MINOR
-    );
+    assert_eq!(writer.format_minor(), btel_core::recording::minor::CONTEXT);
     assert_eq!(sections(&mut writer)[0].context, Some(context(7)));
 
     writer.begin_chunk();
     event(&mut writer, thread);
-    assert_eq!(writer.format_minor(), btel_settings::encoding::FORMAT_MINOR);
+    assert_eq!(writer.format_minor(), btel_core::recording::minor::BASE);
     assert_eq!(sections(&mut writer)[0].context, None);
 }
 
@@ -161,7 +156,7 @@ fn largest_completion_and_context_fit_admitted_capacity() {
     let mut writer = EncodedSpans::default();
     let thread = allocate_telemetry_id();
     writer.select_context(thread, Some(context(u64::MAX)));
-    writer.reserve(MAX_EVENT_BYTES);
+    writer.reserve(frame::MAX_EVENT_BYTES);
     let capacity = writer.capacity();
     writer.event(
         thread,
@@ -183,7 +178,7 @@ fn largest_completion_and_context_fit_admitted_capacity() {
     );
     assert_eq!(writer.capacity(), capacity);
     let thread_varint = prost::encoding::encoded_len_varint(thread.get());
-    assert_eq!(writer.len() + (10 - thread_varint), MAX_EVENT_BYTES);
+    assert_eq!(writer.len() + (10 - thread_varint), frame::MAX_EVENT_BYTES);
     assert_eq!(sections(&mut writer)[0].context, Some(context(u64::MAX)));
 }
 
@@ -192,7 +187,7 @@ fn largest_owned_announcement_and_context_fit_admitted_capacity() {
     let mut writer = EncodedSpans::default();
     let thread = allocate_telemetry_id();
     writer.select_context(thread, Some(context(u64::MAX)));
-    writer.reserve(MAX_EVENT_BYTES);
+    writer.reserve(frame::MAX_EVENT_BYTES);
     let capacity = writer.capacity();
     let capture = Some(proto::CasId {
         low: u64::MAX,
@@ -212,7 +207,7 @@ fn largest_owned_announcement_and_context_fit_admitted_capacity() {
     );
     assert_eq!(writer.capacity(), capacity);
     let thread_varint = prost::encoding::encoded_len_varint(thread.get());
-    assert!(writer.len() + (10 - thread_varint) <= MAX_EVENT_BYTES);
+    assert!(writer.len() + (10 - thread_varint) <= frame::MAX_EVENT_BYTES);
     assert_eq!(sections(&mut writer)[0].context, Some(context(u64::MAX)));
 }
 
@@ -227,7 +222,7 @@ fn changing_context_pays_for_a_new_section_not_just_the_hash() {
         event(&mut shared, thread);
         event(&mut changing, thread);
     }
-    let section_prefix = 1 + LENGTH_BYTES;
+    let section_prefix = 1 + frame::LENGTH_BYTES;
     let thread_field = 1 + prost::encoding::encoded_len_varint(thread.get());
     assert_eq!(
         changing.finish().len() - shared.finish().len(),

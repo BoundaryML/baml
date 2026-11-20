@@ -82,10 +82,13 @@ impl Recording {
         let mut threads = HashMap::new();
         if let Some(path) = engine.telemetry_recording_directory() {
             assert_eq!(engine.telemetry_result(), Some(Ok(())));
-            let files = btel_file::read_directory(path).unwrap().files;
+            let files = btel_core::recording::read_directory(path).unwrap().files;
             engine.shutdown().await;
             assert_eq!(
-                btel_file::read_directory(path).unwrap().files.len(),
+                btel_core::recording::read_directory(path)
+                    .unwrap()
+                    .files
+                    .len(),
                 files.len()
             );
             for file in files {
@@ -149,11 +152,11 @@ impl Recording {
     }
 
     /// One blob from the recording's CAS, decoded and checked against its ID.
-    fn blob(&self, id: btel_snapshot::CasId) -> (Vec<u8>, btel_snapshot::DecodedSnapshot) {
-        let path = btel_file::cas_path(&self.directory.path().join("cas"), id);
+    fn blob(&self, id: btel_snapshot::CasId) -> (Vec<u8>, btel_core::cas::DecodedBlob) {
+        let path = btel_core::cas::cas_path(&self.directory.path().join("cas"), id);
         let bytes = std::fs::read(path).unwrap();
         let decoded =
-            btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default()).unwrap();
+            btel_core::cas::decode_blob(&bytes, &btel_core::cas::DecodeLimits::default()).unwrap();
         assert_eq!(decoded.id, id);
         (bytes, decoded)
     }
@@ -178,7 +181,7 @@ impl Recording {
     /// `error` is the thrown value `expected` holds.
     #[track_caller]
     fn assert_error_capture(&self, actual: Option<&proto::CasId>, expected: Option<&Snapshot>) {
-        use btel_snapshot::{DecodedObject, DecodedRoot, DecodedValue};
+        use btel_core::cas::{DecodedObject, DecodedRoot, DecodedValue};
         let (actual, expected) = match (actual, expected) {
             (None, None) => return,
             (Some(actual), Some(expected)) => (actual, expected),
@@ -238,7 +241,7 @@ impl Recording {
 /// A capture's blobs by ID.
 struct Blobs {
     root: btel_snapshot::CasId,
-    blobs: HashMap<btel_snapshot::CasId, btel_snapshot::DecodedSnapshot>,
+    blobs: HashMap<btel_snapshot::CasId, btel_core::cas::DecodedBlob>,
 }
 
 impl Blobs {
@@ -251,7 +254,7 @@ impl Blobs {
                 let mut bytes = Vec::new();
                 blob.write(&mut scratch, &mut bytes).unwrap();
                 let decoded =
-                    btel_snapshot::decode_blob(&bytes, &btel_snapshot::DecodeLimits::default())
+                    btel_core::cas::decode_blob(&bytes, &btel_core::cas::DecodeLimits::default())
                         .unwrap();
                 (blob.id(), decoded)
             })
@@ -274,13 +277,13 @@ impl Blobs {
 #[derive(Clone, Copy)]
 struct Side<'a> {
     blobs: &'a Blobs,
-    blob: &'a btel_snapshot::DecodedSnapshot,
+    blob: &'a btel_core::cas::DecodedBlob,
 }
 
 impl<'a> Side<'a> {
     /// Media content, read from the child blob that stores it there.
-    fn content(self, payload: &'a btel_snapshot::MediaPayload) -> &'a str {
-        use btel_snapshot::{DecodedRoot, DecodedValue as V, MediaPayload};
+    fn content(self, payload: &'a btel_core::cas::MediaPayload) -> &'a str {
+        use btel_core::cas::{DecodedRoot, DecodedValue as V, MediaPayload};
         match payload {
             MediaPayload::Inline(text) => text,
             MediaPayload::External { child, text_len } => {
@@ -296,8 +299,8 @@ impl<'a> Side<'a> {
 
     /// What `value` names, and the blob it is read in: a reference into a
     /// child blob is followed there.
-    fn resolve(self, value: &btel_snapshot::DecodedValue) -> (Self, btel_snapshot::DecodedValue) {
-        use btel_snapshot::{DecodedRoot, DecodedValue as V};
+    fn resolve(self, value: &btel_core::cas::DecodedValue) -> (Self, btel_core::cas::DecodedValue) {
+        use btel_core::cas::{DecodedRoot, DecodedValue as V};
         match value {
             V::External(child) => {
                 let blob = &self.blobs.blobs[&self.blob.child(*child)];
@@ -330,11 +333,11 @@ impl<'a> Side<'a> {
 /// blob, and a reference into a child blob compares as what it names.
 fn same_value(
     a: Side<'_>,
-    x: &btel_snapshot::DecodedValue,
+    x: &btel_core::cas::DecodedValue,
     b: Side<'_>,
-    y: &btel_snapshot::DecodedValue,
+    y: &btel_core::cas::DecodedValue,
 ) -> bool {
-    use btel_snapshot::DecodedValue as V;
+    use btel_core::cas::DecodedValue as V;
     let (a, x) = a.resolve(x);
     let (b, y) = b.resolve(y);
     match (&x, &y) {
@@ -390,11 +393,11 @@ fn same_value(
 
 fn same_object(
     a: Side<'_>,
-    x: &btel_snapshot::DecodedObject,
+    x: &btel_core::cas::DecodedObject,
     b: Side<'_>,
-    y: &btel_snapshot::DecodedObject,
+    y: &btel_core::cas::DecodedObject,
 ) -> bool {
-    use btel_snapshot::{DecodedObject as O, Fields};
+    use btel_core::cas::{DecodedObject as O, Fields};
     let same_fields = |x: &Fields, y: &Fields| {
         x.len() == y.len()
             && x.iter()
@@ -511,11 +514,11 @@ fn same_object(
 /// stores its content.
 fn same_media(
     left: Side<'_>,
-    x: &btel_snapshot::DecodedMedia,
+    x: &btel_core::cas::DecodedMedia,
     right: Side<'_>,
-    y: &btel_snapshot::DecodedMedia,
+    y: &btel_core::cas::DecodedMedia,
 ) -> bool {
-    use btel_snapshot::{DecodedMediaSource as S, MediaPayload};
+    use btel_core::cas::{DecodedMediaSource as S, MediaPayload};
     let content = |x: Option<&MediaPayload>, y: Option<&MediaPayload>| match (x, y) {
         (Some(x), Some(y)) => left.content(x) == right.content(y),
         (None, None) => true,
@@ -643,9 +646,9 @@ async fn capture_flags(program: &Program) {
                                 .unwrap()
                                 .outcome(),
                             if fail {
-                                btel_types::InvocationOutcome::Errored
+                                proto::InvocationOutcome::Errored
                             } else {
-                                btel_types::InvocationOutcome::Ok
+                                proto::InvocationOutcome::Ok
                             },
                         );
                     }
@@ -936,7 +939,7 @@ async fn arguments_and_graphs(program: &Program) {
             CompletionFlags::from_wire(done.completion_flags, false)
                 .unwrap()
                 .outcome(),
-            btel_types::InvocationOutcome::Ok
+            proto::InvocationOutcome::Ok
         );
     }
     for (scenario, function, arguments, before, after) in [
@@ -968,7 +971,7 @@ async fn arguments_and_graphs(program: &Program) {
 }
 
 async fn typed_map_keys() {
-    use btel_snapshot::{DecodedObject as O, DecodedRoot, DecodedValue as V};
+    use btel_core::cas::{DecodedObject as O, DecodedRoot, DecodedValue as V};
 
     let program = baml_test_support::compile_source(include_str!(
         "../../../baml_tests/baml_src/ns_trace_capture/map_keys.baml"
@@ -1389,14 +1392,14 @@ async fn exceptional_completion(program: &Program) {
             "matrix_panic",
             "captured panic",
             "baml.panics.UserPanic",
-            btel_types::InvocationOutcome::Errored,
+            proto::InvocationOutcome::Errored,
             false,
         ),
         (
             "matrix_cancel",
             "cancelled input",
             "baml.panics.Cancelled",
-            btel_types::InvocationOutcome::Cancelled,
+            proto::InvocationOutcome::Cancelled,
             true,
         ),
     ] {
@@ -1550,9 +1553,9 @@ async fn llm_capture_case(
             .unwrap()
             .outcome(),
         if fail {
-            btel_types::InvocationOutcome::Errored
+            proto::InvocationOutcome::Errored
         } else {
-            btel_types::InvocationOutcome::Ok
+            proto::InvocationOutcome::Ok
         },
     );
     if !fail {
