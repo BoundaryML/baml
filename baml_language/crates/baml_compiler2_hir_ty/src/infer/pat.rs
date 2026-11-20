@@ -453,26 +453,28 @@ impl<'db> InferenceContext<'db> {
                     .iter()
                     .map(|s| baml_type::Name::new(s.as_str()))
                     .collect();
+                // The head resolves as the destructure's does: an alias of a
+                // class demands that class at the arguments it pins.
                 let head = self.lower.path_head(&segments);
-                if self.scoped_type_param_heads(head, &segments) {
-                    return None;
-                }
-                let def = self.lower.resolve_type_definition(head, &segments)?;
-                let baml_compiler2_hir::contributions::Definition::Class(class_loc) = def else {
+                let Ok(ClassHead::Class {
+                    class: DeclRef::Source(class_loc),
+                    pinned,
+                }) = self.resolve_class_head(head, &segments)
+                else {
                     return None;
                 };
-                let short = segments.last()?;
-                let qtn = self.lower.qualify_definition(def, short);
+                let qtn = crate::lower::class_qualified_name(self.db, class_loc);
                 let generic_count = baml_compiler2_hir::item_data::class_data(self.db, class_loc)
                     .generic_params
                     .len();
                 let written = self.type_refs.pattern_class_args.get(&pat).cloned();
-                let args: Vec<Ty> = match written {
-                    Some(written) => written
+                let args: Vec<Ty> = match (pinned, written) {
+                    (Some(pinned), _) => pinned,
+                    (None, Some(written)) => written
                         .iter()
                         .map(|&type_ref| self.lower_body_annotation(type_ref))
                         .collect(),
-                    None => (0..generic_count)
+                    (None, None) => (0..generic_count)
                         .map(|_| self.table.new_var_ty())
                         .collect(),
                 };
