@@ -418,17 +418,17 @@ jobs:
     # native Windows Rust builds (build-caching/04 Exp 7/9).
     runs-on: blacksmith-8vcpu-windows-2025
     env:
+      # No Blacksmith job attaches a debugger or prints backtraces, so debug
+      # info only costs compile time, link time, and target/ size. Set per job
+      # so the Trunk-hosted sdk-tests job keeps the profile its warm tree uses.
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
       CARGO_BUILD_JOBS: "16"
-      # Windows debug builds emit very large PDBs; full debuginfo across the
-      # whole `--all-features` test build overruns the runner's ~130 GB disk
-      # ("no space on device" during codegen, before any test runs).
-      # `line-tables-only` keeps file:line backtraces for test failures while
-      # dropping the bulk of the debug-info size (variable/type DIEs). Pinned on
-      # both `dev` (dependencies) and `test` (the `--test` binaries, which
-      # inherit `dev` but are pinned explicitly so the reduction is unambiguous).
-      # Drop to "0" if this is still too tight.
-      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
-      CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
+      # EXPERIMENT (do not merge): Cargo's unstable checksum-based freshness
+      # lets a fresh checkout reuse cached workspace crates. It needs
+      # RUSTC_BOOTSTRAP on a stable toolchain.
+      RUSTC_BOOTSTRAP: "1"
+      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
       WINDOWS_CLI_E2E_FILTER: >-
         binary(=pack_e2e) or binary(=exit_code_e2e) or
         (binary(=telemetry_recording_e2e) and test(=packed_modes_write_to_user_home_even_when_launched_in_another_project))
@@ -452,13 +452,27 @@ jobs:
       - name: "Verify sccache"
         run: sccache --version
 
+      - uses: ./.github/actions/pin-git-stamp
+        with:
+          sha: ${{ github.event.pull_request.base.sha || github.sha }}
+
+      # EXPERIMENT (do not merge): cache the whole target directory, our own
+      # crates included, and save from this PR so its second run can restore
+      # it. Wraps Swatinem/rust-cache and restores build-input timestamps.
+      # Registry and git checkouts only, read-only, as on canary.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
           cache-all-crates: true
           cache-targets: false
-          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          save-if: false
           shared-key: "windows-cargo"
+
+      - uses: ./.github/actions/workspace-target-cache
+        with:
+          profile: debug
+          key: cargo-test-windows-debug0-opt1
+          probe-key: target-v1-cargo-test-windows-debug0-opt1-Windows-X64-496c6c1b385685de9a674c4d294657724a4ff31e830d3197d27be7f3e08de5c4
 
       - name: "Load .envrc with direnv"
         run: |
@@ -466,26 +480,18 @@ jobs:
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+          # EXPERIMENT (do not merge): no sccache. .envrc would otherwise pick
+          # up the wrapper binary restored inside the cached target directory.
+          echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
 
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         run: cargo fetch
         working-directory: baml_language
 
-      - name: "Build native sccache wrapper"
-        run: |
-          set -euo pipefail
-          # The native RUSTC_WRAPPER (tools_sccache crate) maps the R2 creds and
-          # execs sccache; cargo launches it via CreateProcess (32767-char
-          # limit), avoiding cmd.exe's ~8191-char limit that windows-sys' huge
-          # `--check-cfg cfg(feature, values(...))` line blows past. The binary
-          # lives in the build tree, so build it first — .envrc leaves
-          # RUSTC_WRAPPER unset until it exists, so this bootstrap compiles with
-          # plain rustc — then point RUSTC_WRAPPER at it for the cargo steps
-          # below.
-          cargo build -p tools_sccache
-          echo "RUSTC_WRAPPER=$(pwd -W)/target/debug/baml-sccache.exe" >> "$GITHUB_ENV"
-        working-directory: baml_language
+      # EXPERIMENT (do not merge): the native sccache wrapper step is removed
+      # so this job runs without sccache (.envrc leaves RUSTC_WRAPPER unset on
+      # Windows until that wrapper exists).
 
       # Snapshot tests live in `baml_tests` and are covered by the dedicated
       # `snapshot-tests` job. The `sdk_test_*` crates need uv and run in the
@@ -493,11 +499,14 @@ jobs:
       # level (`--exclude`), not a nextest `-E` filter, so their test binaries
       # (the heaviest links, and on Windows the largest PDBs) aren't built.
       - name: "Build tests with --timings"
-        run: cargo test --no-run --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
+        run: cargo test --no-run -v --all-features --timings --workspace --exclude baml_tests --exclude "sdk_test_*" --exclude baml_bridge
         working-directory: baml_language
 
       - name: "Preserve workspace Cargo timings"
-        run: mv target/cargo-timings/cargo-timing.html cargo-timing-test-windows.html
+        # Kept inside target/: an untracked file in the workspace root changes
+        # the source layout the target cache records, which discards every
+        # cached workspace crate on the next run.
+        run: mv target/cargo-timings/cargo-timing.html target/cargo-timings/cargo-timing-test-windows.html
         working-directory: baml_language
 
       - name: "Build CLI binary e2e tests and pack host (windows)"
@@ -516,6 +525,14 @@ jobs:
         working-directory: baml_language
         env:
           BAML_PACK_HOST_PREBUILT: "1"
+
+      # EXPERIMENT (do not merge): sizes the target directory to estimate how
+      # much cache storage whole-target caching would need.
+      - name: "Report target size"
+        if: always()
+        run: |
+          du -sh baml_language/target 2>/dev/null || true
+          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
 
       - name: "Show sccache stats"
         if: always()
@@ -538,7 +555,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: cargo-timings-test-windows
-          path: baml_language/cargo-timing-test-windows.html
+          path: baml_language/target/cargo-timings/cargo-timing-test-windows.html
           if-no-files-found: ignore
 
   sdk-test-matrix:

@@ -46,6 +46,15 @@ jobs:
     if: inputs.run-compiler-tests && github.event_name != 'merge_group'
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 30
+    env:
+      # EXPERIMENT (do not merge): Cargo's unstable checksum-based freshness
+      # lets a fresh checkout reuse cached workspace crates. It needs
+      # RUSTC_BOOTSTRAP on a stable toolchain. Set on this job only: the other
+      # job in this workflow runs on a Trunk runner with its own warm tree.
+      RUSTC_BOOTSTRAP: "1"
+      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
       - uses: useblacksmith/checkout@v1
         with:
@@ -60,6 +69,10 @@ jobs:
         with:
           install_args: "sccache direnv cargo:cargo-nextest"
 
+      # EXPERIMENT (do not merge): cache the whole target directory. No git
+      # stamp pin here: this test packs against the workspace, and the CLI
+      # refuses a workspace whose commit differs from the one it was built from.
+      # Registry and git checkouts only, read-only, as on canary.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
@@ -68,16 +81,32 @@ jobs:
           save-if: false
           shared-key: "linux-cargo"
 
+      - uses: ./.github/actions/workspace-target-cache
+        with:
+          profile: debug
+          key: rust-differential-debug0-opt1
+
       - name: "Load .envrc with direnv"
         run: |
           set -euo pipefail
 
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
+          # EXPERIMENT (do not merge): no sccache, to see whether the cached
+          # target directory alone is enough.
+          echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
 
       - name: "Run the Rust backend differential test"
         run: cargo nextest run -p baml_tests --test rust_differential --all-features --run-ignored only --success-output immediate
         working-directory: baml_language
+
+      # EXPERIMENT (do not merge): sizes the target directory to estimate how
+      # much cache storage whole-target caching would need.
+      - name: "Report target size"
+        if: always()
+        run: |
+          du -sh baml_language/target 2>/dev/null || true
+          du -sh baml_language/target/*/ baml_language/target/*/*/ 2>/dev/null | sort -rh | head -20 || true
 
   snapshot-tests:
     name: "Compiler and documentation tests"

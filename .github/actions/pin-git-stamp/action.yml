@@ -1,0 +1,28 @@
+name: "Pin the git stamp baml_artifact builds in"
+description: >-
+  EXPERIMENT (do not merge). baml_artifact's build script bakes the checkout's
+  commit into the crate and reruns whenever .git/HEAD changes, so every commit
+  rebuilds it and everything that depends on it. Stamp a fixed commit and
+  backdate the refs it tracks so a restored target directory stays fresh.
+  Mirrors the Trunk-runner step in the sdk-tests job.
+
+inputs:
+  sha:
+    description: "Full lowercase commit id to stamp"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        STAMP: ${{ inputs.sha }}
+      run: |
+        set -euo pipefail
+        paths=("$(git rev-parse --git-path HEAD)")
+        if ref="$(git symbolic-ref -q HEAD)"; then
+          paths+=("$(git rev-parse --git-path "$ref")")
+        fi
+        touch -t 197001010000 "${paths[@]}"
+        echo "BAML_GIT_SHA=$STAMP" >> "$GITHUB_ENV"
+        echo "stamping BAML_GIT_SHA=$STAMP"
