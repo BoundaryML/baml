@@ -290,9 +290,9 @@ fn baml_run_uploads_from_boundary_env() {
                 )
             );
 
-            // The recording names the program in its header and the build
-            // on each function of the built package, and carries no row of
-            // the build itself.
+            // The recording names the program and the build in its header,
+            // where BCS reads a span's build, and the build on each function
+            // of the built package.
             let unit = hex::decode(build["compilation_unit_hash"].as_str().unwrap()).unwrap();
             let build_id = hex::decode(build["build_id"].as_str().unwrap()).unwrap();
             let mut built_functions = 0;
@@ -302,7 +302,9 @@ fn baml_run_uploads_from_boundary_env() {
                     header.program_id.as_deref().map(hex::encode).as_deref(),
                     registration["program"]["program_id"].as_str()
                 );
-                assert!(header.build.is_none(), "the build's row is registered apart");
+                let named = header.build.as_ref().expect("the header names the build");
+                assert_eq!(named.build_id, build_id);
+                assert_eq!(named.compilation_unit_hash, unit);
                 assert_eq!(header.os.as_deref(), Some(std::env::consts::OS));
                 assert_eq!(header.arch.as_deref(), Some(std::env::consts::ARCH));
                 for function in &recording.definitions.as_ref().unwrap().functions {

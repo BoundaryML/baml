@@ -67,9 +67,8 @@ message RecordingHeader {
   // Derived from the program's packages when they record their hashes, so
   // every run of one program writes the same value; random otherwise.
   optional bytes program_id = 12;
-  // Minor 14. The build of the program's own package. Local recordings
-  // only: a cloud recording names builds by FunctionMetadata.build_id, and
-  // the build's row reaches BCS by its own registration.
+  // Minor 14. The build of the program's own package. BCS links a span to
+  // this build when the span's function belongs to the package it produced.
   Build build = 13;
   // Minor 16. The operating system and CPU architecture the process runs
   // on, as Rust names them (linux, macos, windows; x86_64, aarch64).

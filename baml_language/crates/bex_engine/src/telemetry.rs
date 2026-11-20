@@ -540,8 +540,8 @@ impl TelemetryRecording {
     /// How to describe the build of the program's package (its git commit,
     /// source hash and unit hash). Called at most once, and only when the
     /// recording starts, so a host pays for reading git and formatting
-    /// sources only then. A local recording writes the build in its header;
-    /// a cloud recording registers it with BCS (BEP-088).
+    /// sources only then. Every recording writes the build in its header;
+    /// a cloud recording also registers it with BCS (BEP-088).
     #[must_use]
     pub fn with_build(mut self, build: BuildProvider) -> Self {
         self.build = Some(build);
@@ -653,17 +653,9 @@ impl TelemetryRecording {
             ),
             exit: Arc::clone(&self.exit),
             program_id,
-            // A cloud recording names builds by ID on each function; the
-            // build's row, with its git remote and branch, is registered
-            // with BCS apart from the recording.
-            build: build
-                .filter(|_| {
-                    matches!(
-                        self.destination,
-                        Destination::LocalFiles { .. } | Destination::UserFiles { .. }
-                    )
-                })
-                .map(|registration| registration.build.clone()),
+            // BCS names the build of a span from the header: it links the
+            // functions of the package the build produced to it.
+            build: build.map(|registration| registration.build.clone()),
         }
     }
 
@@ -1387,9 +1379,9 @@ mod source_privacy_tests {
     use super::*;
 
     #[test]
-    /// Cloud process snapshots gain environment metadata without source text
-    /// or the build's row, which reach BCS by the build's registration; local
-    /// snapshots retain their sources, build and unmodified launch context.
+    /// Cloud process snapshots gain environment metadata without source text,
+    /// which reaches BCS by the build's registration; local snapshots retain
+    /// their sources and unmodified launch context. Both name the build.
     fn cloud_recordings_exclude_sources_while_local_recordings_remain_readable() {
         let sources = vec![(
             "main.baml".to_owned(),
@@ -1461,7 +1453,7 @@ mod source_privacy_tests {
             registered.as_ref(),
         );
         assert!(cloud_process.sources.is_none());
-        assert_eq!(cloud_process.build, None);
+        assert_eq!(cloud_process.build, Some(build().build));
         assert_eq!(cloud_process.program_id, program_id);
         let context = btel_types::context::Context::default();
         let snapshot = |context: &btel_types::context::Context| {

@@ -461,8 +461,8 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         let header = file.header.unwrap();
         assert_eq!(header.recording_id, recording_id.as_bytes());
         assert!(header.source_cas_id.is_none(), "cloud sources stay local");
-        // Cloud files name the program and the process's platform; a
-        // build's row reaches BCS by its registration, never in a file.
+        // Cloud files name the program and the process's platform, and no
+        // build when the host describes none.
         assert!(header.program_id.is_some() && header.build.is_none());
         assert_eq!(header.os.as_deref(), Some(std::env::consts::OS));
         assert_eq!(header.arch.as_deref(), Some(std::env::consts::ARCH));
