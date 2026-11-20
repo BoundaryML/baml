@@ -17,7 +17,10 @@ use ::core::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
-use ::std::sync::{Arc, Weak};
+use ::std::sync::{
+    Arc, Weak,
+    atomic::{AtomicIsize, Ordering},
+};
 
 /// The lesser of [`u32::MAX`] and [`tokio::sync::Semaphore::MAX_PERMITS`] (depends on compilation target pointer width).
 const MAX_PERMITS: u32 = {
@@ -34,6 +37,10 @@ const MAX_PERMITS: u32 = {
         tokio::sync::Semaphore::MAX_PERMITS as u32
     }
 };
+
+/// Dead entries [`HeapPermitManager::holders`] may hold beyond the live ones
+/// before a registration drops them.
+const DEAD_HOLDER_SLACK: usize = 64;
 
 /// The existence of a value that implements this trait proves that the heap is currently accessible for non-exclusive access (e.g. by a VM executor task).
 pub trait HeapPermit<T: RootHaver> {
@@ -138,6 +145,16 @@ pub struct InactiveHeapPermit<T: RootHaver> {
     /// This should be the only strong reference, so when it is dropped the [`HeapPermitManager`]'s weak reference
     /// will let it know the permit is no longer needed.
     holder: Arc<PermitCell<T>>,
+    /// The manager's count of dropped holders, bumped when this permit drops.
+    dead_holders: Arc<AtomicIsize>,
+}
+impl<T: RootHaver> Drop for InactiveHeapPermit<T> {
+    fn drop(&mut self) {
+        // Counted just before `holder` drops, so the manager's entry for it
+        // is dead or about to be. The count only decides when a registration
+        // prunes; what is removed is decided by each entry's strong count.
+        self.dead_holders.fetch_add(1, Ordering::Relaxed);
+    }
 }
 impl<T: RootHaver> InactiveHeapPermit<T> {
     /// Wait for a permit to become available (i.e. as soon as there is no GC or other exclusive access operation running),
@@ -214,7 +231,21 @@ pub struct HeapPermitManager {
     /// - Up to [`MAX_PERMITS`] [`ActiveHeapPermit`]s holding one semaphore permit each.
     active: Arc<tokio::sync::Semaphore>,
     /// Mutex must be held during GC (or other exclusive access operations) to prevent new permits being created during GC.
+    ///
+    /// An entry outlives its holder until it is pruned, and keeps the
+    /// holder's whole `Arc` allocation (a task's thread, VM included) alive
+    /// until then, so entries are pruned at registration as well as by the
+    /// collector: see [`Self::register`].
     holders: tokio::sync::Mutex<Vec<Weak<PermitCell<dyn RootHaver>>>>,
+    /// Holders dropped and not yet pruned: incremented by each permit's drop,
+    /// decreased by each prune by what it removed. Outside the mutex, so a
+    /// drop never takes a lock; it may briefly overcount (a permit counted
+    /// before its entry is dead) or undercount (a prune subtracting before the
+    /// matching increment lands), and readers clamp it to the list's length.
+    dead_holders: Arc<AtomicIsize>,
+    /// Entries visited by prunes, for the tests' cost checks.
+    #[cfg(test)]
+    scanned: std::sync::atomic::AtomicUsize,
 }
 
 impl HeapPermitManager {
@@ -224,6 +255,9 @@ impl HeapPermitManager {
         Self {
             active: Arc::new(tokio::sync::Semaphore::const_new(MAX_PERMITS as usize)),
             holders: tokio::sync::Mutex::new(Vec::new()),
+            dead_holders: Arc::new(AtomicIsize::new(0)),
+            #[cfg(test)]
+            scanned: std::sync::atomic::AtomicUsize::new(0),
         }
     }
     /// Provides a new permit.
@@ -250,17 +284,55 @@ impl HeapPermitManager {
         drop(guard);
         Ok(permit)
     }
+    /// Add a holder, under the holders lock the caller already holds.
+    ///
+    /// First drops the dead entries once they outnumber the live ones by more
+    /// than [`DEAD_HOLDER_SLACK`], so at every registration the list holds at
+    /// most `live + DEAD_HOLDER_SLACK` dead entries (up to the drop counter's
+    /// lag), whatever happened since the last collection. A prune visits
+    /// `live + dead < 2 × dead` entries and removes the `dead` ones, each of
+    /// which was counted once when its permit dropped, so its cost is
+    /// amortized over those drops: a constant per registration, however many
+    /// holders stay alive.
     fn register<T: RootHaver + 'static>(
         &self,
         holders: &mut Vec<Weak<PermitCell<dyn RootHaver>>>,
         with_roots: T,
     ) -> InactiveHeapPermit<T> {
+        let dead = self.dead_holders(holders);
+        if dead > holders.len() - dead + DEAD_HOLDER_SLACK {
+            self.prune(holders);
+        }
         debug_assert!(holders.len() < MAX_PERMITS as usize);
         let holder = Arc::new(PermitCell::new(with_roots));
         holders.push(Arc::downgrade(&holder) as Weak<PermitCell<dyn RootHaver>>);
         InactiveHeapPermit {
             active: self.active.clone(),
             holder,
+            dead_holders: Arc::clone(&self.dead_holders),
+        }
+    }
+    /// The drop counter, clamped to the entries there are.
+    fn dead_holders(&self, holders: &[Weak<PermitCell<dyn RootHaver>>]) -> usize {
+        usize::try_from(self.dead_holders.load(Ordering::Relaxed))
+            .unwrap_or(0)
+            .min(holders.len())
+    }
+    /// Drop every entry whose holder is gone, under the holders lock. Only an
+    /// entry with no strong reference left is removed: such an entry can never
+    /// be upgraded again, while a live one is how the collector finds that
+    /// holder's roots. Order is kept. After a burst, the capacity it needed is
+    /// released too.
+    fn prune(&self, holders: &mut Vec<Weak<PermitCell<dyn RootHaver>>>) {
+        #[cfg(test)]
+        self.scanned
+            .fetch_add(holders.len(), std::sync::atomic::Ordering::Relaxed);
+        let before = holders.len();
+        holders.retain(|holder| holder.strong_count() > 0);
+        let removed = isize::try_from(before - holders.len()).unwrap_or(isize::MAX);
+        self.dead_holders.fetch_sub(removed, Ordering::Relaxed);
+        if holders.capacity() > 4 * (holders.len() + DEAD_HOLDER_SLACK) {
+            holders.shrink_to(2 * (holders.len() + DEAD_HOLDER_SLACK));
         }
     }
     pub async fn request_park(&self) -> HeapGuard<'_> {
@@ -276,7 +348,7 @@ impl HeapPermitManager {
             .await
             .unwrap_or_else(|_| unreachable!("We do not close the semaphore"));
         let mut guard = self.holders.lock().await;
-        guard.retain(|holder| holder.strong_count() > 0);
+        self.prune(&mut guard);
         HeapGuard {
             guard,
             _permits: permits,
@@ -394,3 +466,139 @@ impl<T: ?Sized + RootHaver> PermitCell<T> {
 // holders), or rework the holders Mutex's element type.
 unsafe impl<T: ?Sized + RootHaver> Send for PermitCell<T> {}
 unsafe impl<T: ?Sized + RootHaver> Sync for PermitCell<T> {}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::Ordering;
+
+    use super::*;
+
+    /// A holder that names itself, so a walk over the holders can say which
+    /// ones it saw.
+    struct Probe(usize);
+    impl RootHaver for Probe {
+        fn visit_roots(&mut self, _: &mut dyn RootVisitor) {}
+        fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+            Some(self)
+        }
+    }
+
+    fn register(manager: &HeapPermitManager, id: usize) -> InactiveHeapPermit<Probe> {
+        manager
+            .try_new_permit(Probe(id))
+            .unwrap_or_else(|_| panic!("the registry is uncontended in these tests"))
+    }
+
+    fn entries(manager: &HeapPermitManager) -> usize {
+        manager.holders.try_lock().expect("uncontended").len()
+    }
+
+    fn scanned(manager: &HeapPermitManager) -> usize {
+        manager.scanned.load(Ordering::Relaxed)
+    }
+
+    /// Every entry that is dead now, read without pruning.
+    fn dead_entries(manager: &HeapPermitManager) -> usize {
+        let holders = manager.holders.try_lock().expect("uncontended");
+        holders.iter().filter(|h| h.strong_count() == 0).count()
+    }
+
+    #[test]
+    fn finished_holders_do_not_pile_up_between_collections() {
+        let manager = HeapPermitManager::new();
+        for id in 0..100_000 {
+            drop(register(&manager, id));
+            // One live holder at most at a time: the list never holds more
+            // than the slack's worth of dead entries plus the newest one.
+            assert!(entries(&manager) <= DEAD_HOLDER_SLACK + 2, "{id}");
+        }
+    }
+
+    #[tokio::test]
+    async fn live_holders_survive_every_prune_and_are_walked_by_the_collector() {
+        let manager = HeapPermitManager::new();
+        let mut live = Vec::new();
+        for id in 0..10_000 {
+            let permit = register(&manager, id);
+            // Keep every seventh; the rest finish at once.
+            if id % 7 == 0 {
+                live.push(permit);
+            }
+        }
+        assert!(scanned(&manager) > 0, "registrations pruned");
+        let expected: Vec<usize> = (0..10_000).step_by(7).collect();
+        let mut guard = manager.request_park().await;
+        let mut seen = Vec::new();
+        guard.for_each_holder(|holder| {
+            let probe = holder
+                .as_any_mut()
+                .and_then(|any| any.downcast_mut::<Probe>())
+                .expect("every holder is a probe");
+            seen.push(probe.0);
+        });
+        assert_eq!(
+            seen, expected,
+            "each live holder, once, in registration order"
+        );
+        assert_eq!(
+            guard.num_permits(),
+            expected.len(),
+            "the collector pruned the rest"
+        );
+        drop(guard);
+        drop(live);
+    }
+
+    #[test]
+    fn a_burst_then_a_quiet_period_does_not_keep_the_burst_alive() {
+        let manager = HeapPermitManager::new();
+        // A million tasks alive at once, then all finished.
+        let burst: Vec<_> = (0..1_000_000).map(|id| register(&manager, id)).collect();
+        assert_eq!(entries(&manager), 1_000_000);
+        drop(burst);
+        // The quiet period: ten long-lived tasks, then a churn of short ones.
+        let quiet: Vec<_> = (0..10).map(|id| register(&manager, id)).collect();
+        let capacity = manager.holders.try_lock().expect("uncontended").capacity();
+        assert!(
+            capacity <= 4 * (10 + DEAD_HOLDER_SLACK),
+            "the burst's capacity is released ({capacity})"
+        );
+        for id in 0..1_000_000 {
+            drop(register(&manager, id));
+            assert!(dead_entries(&manager) <= 10 + DEAD_HOLDER_SLACK + 1, "{id}");
+        }
+        drop(quiet);
+    }
+
+    #[test]
+    fn many_live_holders_and_a_churn_of_short_ones_stay_cheap() {
+        let manager = HeapPermitManager::new();
+        let live: Vec<_> = (0..10_000).map(|id| register(&manager, id)).collect();
+        let before = scanned(&manager);
+        let spawns = 200_000;
+        for id in 0..spawns {
+            drop(register(&manager, id));
+        }
+        let visited = scanned(&manager) - before;
+        assert!(
+            visited < 3 * spawns,
+            "{visited} entries visited for {spawns} registrations"
+        );
+        // And the dead never outnumber the live by more than the slack.
+        assert!(dead_entries(&manager) <= live.len() + DEAD_HOLDER_SLACK + 1);
+        drop(live);
+    }
+
+    #[test]
+    fn the_drop_count_tracks_what_prunes_remove() {
+        let manager = HeapPermitManager::new();
+        let kept = register(&manager, 0);
+        for id in 1..=100 {
+            drop(register(&manager, id));
+        }
+        // 100 dropped, some of them pruned already: the count is what is left.
+        let dead = manager.dead_holders.load(Ordering::Relaxed);
+        assert_eq!(usize::try_from(dead).unwrap(), dead_entries(&manager));
+        drop(kept);
+    }
+}
