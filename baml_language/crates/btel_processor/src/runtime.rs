@@ -625,6 +625,37 @@ impl TelemetryRuntime {
         });
     }
 
+    /// [`Self::write_timing`] for each of `records` in order, all from
+    /// `thread`, with one binding lookup for the lot. Leaves `records` empty.
+    pub fn write_timing_batch(&self, thread: TelemetryId, records: &mut Vec<TimingRecord>) {
+        if records.is_empty() {
+            return;
+        }
+        BINDINGS.with_borrow_mut(|bindings| {
+            let producer = bindings
+                .iter_mut()
+                .rev()
+                .find(|b| b.runtime == self.id)
+                .and_then(|binding| {
+                    let producer = binding.producer.as_mut()?;
+                    Some((producer, &mut binding.timing_thread))
+                });
+            let Some((producer, timing_thread)) = producer else {
+                assert!(
+                    self.is_disabled(),
+                    "telemetry emission outside execution scope"
+                );
+                return;
+            };
+            if *timing_thread != Some(thread) {
+                producer.write_timing(TimingRecord::ThreadSelected { thread_id: thread });
+                *timing_thread = Some(thread);
+            }
+            producer.write_timing_batch(records);
+        });
+        records.clear();
+    }
+
     #[inline]
     pub fn write_span(&self, thread: TelemetryId, record: Span) {
         self.write_span_with_context(

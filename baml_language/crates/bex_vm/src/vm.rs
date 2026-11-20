@@ -10807,6 +10807,18 @@ impl BexVm {
         }
     }
 
+    /// Hand the invocation timings this VM buffered to the runtime, before
+    /// the execution scope they were written in ends. Out of line: `exec`
+    /// holds the dispatch loop, whose register allocation shifts with any
+    /// code added around it.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[inline(never)]
+    fn flush_telemetry_timing(&mut self) {
+        if let Some(telemetry) = self.telemetry.as_mut() {
+            telemetry.flush_timing();
+        }
+    }
+
     /// Cold one-time cleanup at existing VM entry/resume/finalization boundaries.
     /// Frames remain executable; only observation state and GC roots are released.
     #[cfg(not(target_arch = "wasm32"))]
@@ -10931,7 +10943,10 @@ impl BexVm {
                 FrameAt::Record(_) => self.complete_record_invocation(frame, outcome, error),
             }
         }
-        self.telemetry.as_mut().unwrap().complete_thread(outcome);
+        let telemetry = self.telemetry.as_mut().unwrap();
+        telemetry.complete_thread(outcome);
+        #[cfg(not(target_arch = "wasm32"))]
+        telemetry.flush_timing();
     }
 
     pub fn telemetry_clock(&self) -> Option<&Arc<btel_clock::ClockEpoch>> {
@@ -11110,6 +11125,8 @@ impl BexVm {
         // The VM may now park for a long time: leave nothing unsettled.
         self.tlab.flush_alloc_debt();
         self.settle();
+        #[cfg(not(target_arch = "wasm32"))]
+        self.flush_telemetry_timing();
 
         if kp {
             crate::kperf::exec_end(kp_start, self.op_count - ops_start);
@@ -11145,6 +11162,14 @@ impl BexVm {
         self.stop_disabled_telemetry();
         #[cfg(not(target_arch = "wasm32"))]
         let _telemetry_scope = self.telemetry.as_ref().map(TelemetryState::execution_scope);
+        let handled = self.handle_external_thrown(thrown);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.flush_telemetry_timing();
+        handled
+    }
+
+    /// `try_handle_external_thrown` inside its telemetry scope.
+    fn handle_external_thrown(&mut self, thrown: VmThrown) -> Result<(), VmError> {
         self.finish_pending_telemetry_wait();
         let exception_value = thrown.value;
         if self.frames.is_empty() {
@@ -11842,19 +11867,24 @@ impl BexVm {
             return None;
         };
         telemetry.select_context(&caller.context);
-        let actual_caller = self.frame_function_identity(frame_idx);
-        let caller_is_observed = matches!(
-            self.frames.get(frame_idx),
-            Some(Frame::Bytecode(BytecodeFrame {
-                telemetry: Some(_),
-                ..
-            }))
-        );
+        let caller_telemetry = caller.telemetry;
+        let caller_is_observed = caller_telemetry.is_some();
+        // A frame this function entered resolves to its own function object,
+        // so only other frames look their identity up.
+        let actual_caller = if caller_telemetry.is_some_and(FrameTelemetry::own_identity) {
+            debug_assert_eq!(
+                self.callable_function_identity(caller.function),
+                Some(caller.function)
+            );
+            Some(caller.function)
+        } else {
+            self.callable_function_identity(caller.function)
+        };
         let caller_pc = u32::try_from(call_pc).unwrap_or(u32::MAX);
         let args = &self.stack.as_slice()
             [locals_offset.raw()..locals_offset.raw().saturating_add(callee.arity)];
         // SAFETY: arguments and callable remain live under the heap permit.
-        self.telemetry.as_mut().and_then(|telemetry| unsafe {
+        let mut entered = self.telemetry.as_mut().and_then(|telemetry| unsafe {
             telemetry.enter_bytecode_with_trace(
                 callee,
                 callee_ptr,
@@ -11869,7 +11899,14 @@ impl BexVm {
                 },
                 |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
             )
-        })
+        });
+        // The callee frame runs `callee_ptr`, a function object, and is
+        // observed only when that function carries a telemetry id: exactly
+        // when `callable_function_identity` resolves it to itself.
+        if let Some(entered) = &mut entered {
+            entered.set_own_identity();
+        }
+        entered
     }
 
     /// The fast path's exact call of the plain bytecode `callee` with

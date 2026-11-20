@@ -757,6 +757,35 @@ impl<T, S> Producer<T, S> {
             self.seal_timing(true);
         }
     }
+    /// Write every record of `records` in order, as [`Self::write_timing`]
+    /// would one by one, and leave `records` empty. The transport's status is
+    /// checked once per chunk rather than once per record: records written
+    /// after recording is disabled are discarded either way.
+    pub fn write_timing_batch(&mut self, records: &mut Vec<T>) {
+        let capacity = self.shared.config.chunk_capacity.get();
+        let mut records = records.drain(..);
+        while records.len() != 0 {
+            if !self.shared.check() {
+                return;
+            }
+            if self.timing.is_none() {
+                self.timing = self.shared.take(
+                    |s| &mut s.timing,
+                    &mut self.stats,
+                    &self.shared.timing_free.0,
+                    &self.shared.timing_overage.0,
+                );
+            }
+            let Some(chunk) = self.timing.as_mut() else {
+                return;
+            };
+            let room = capacity - chunk.len();
+            chunk.extend(records.by_ref().take(room));
+            if chunk.len() == capacity {
+                self.seal_timing(true);
+            }
+        }
+    }
     #[inline(always)]
     pub fn write_span(&mut self, record: S) {
         if !self.shared.check() {
