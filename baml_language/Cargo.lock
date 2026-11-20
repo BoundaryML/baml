@@ -1111,6 +1111,7 @@ dependencies = [
 [[package]]
 name = "bcs-sdk"
 version = "0.2.0"
+source = "git+ssh://git@github.com/BoundaryML/bcs.git?branch=antoniosarosi/end-spans-format#995c156aebb23653f3beee06d11eddaf101f02dc"
 dependencies = [
  "btel-core",
  "bytes",
@@ -1765,6 +1766,7 @@ dependencies = [
 [[package]]
 name = "btel-core"
 version = "0.2.0"
+source = "git+ssh://git@github.com/BoundaryML/bcs.git?branch=antoniosarosi/end-spans-format#995c156aebb23653f3beee06d11eddaf101f02dc"
 dependencies = [
  "base64",
  "num-bigint",

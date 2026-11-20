@@ -567,7 +567,8 @@ inherits = "release"
 # wasm32 has no unwinding and behaves as `abort` regardless of the panic setting.
 
 # btel-core 0.2.0 (recording minor 16) and the bcs-sdk published beside it are not on crates.io
-# yet: until they are, they come from the BCS change that adds them.
+# yet: until they are, they come from the BCS change that adds them. Remove this once they are
+# published.
 [patch.crates-io]
-btel-core = { path = "../../bcs-end-spans/sdk/btel-core" }
-bcs-sdk = { path = "../../bcs-end-spans/sdk/bcs-sdk" }
+btel-core = { git = "ssh://git@github.com/BoundaryML/bcs.git", branch = "antoniosarosi/end-spans-format" }
+bcs-sdk = { git = "ssh://git@github.com/BoundaryML/bcs.git", branch = "antoniosarosi/end-spans-format" }
