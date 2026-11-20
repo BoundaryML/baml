@@ -31,7 +31,23 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0063
 
   × unreachable arm
-    ╭─[main.baml:59:32]
- 59 │         RigidOuter { d: _ } => 2,
+    ╭─[main.baml:50:39]
+ 50 │         RigidOuter { d: let t: T } => 1,
+    ·                                       ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[main.baml:59:39]
+ 59 │         RigidOuter { d: let t: T } => 1,
+    ·                                       ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[main.baml:60:32]
+ 60 │         RigidOuter { d: _ } => 2,
     ·                                ─
     ╰────

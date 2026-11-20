@@ -147,6 +147,43 @@ function type_var_member<T>(x: T | null) -> int {
     }
 }
 
+// A list pattern with no ascription demands only a list, not `unknown[]`:
+// an `int[]` fails the type test but reaches `[..]`.
+function unknown_list_test_leaves_shape(x: unknown) -> int {
+    match (x) {
+        let xs: unknown[] => 1,
+        [..] => 2,
+        _ => 3,
+    }
+}
+
+// The same for a tuple: `(1, 2)` fails `(unknown, unknown)` but reaches
+// `(_, _)`.
+function unknown_tuple_test_leaves_shape(x: unknown) -> int {
+    match (x) {
+        let t: (unknown, unknown) => 1,
+        (_, _) => 2,
+        _ => 3,
+    }
+}
+
+// Shapes still cover shapes.
+function any_list_covers_singleton(x: unknown) -> int {
+    match (x) {
+        [..] => 1,
+        [1] => 2,
+        _ => 3,
+    }
+}
+
+function any_pair_covers_pair(x: unknown) -> int {
+    match (x) {
+        (_, _) => 1,
+        (1, _) => 2,
+        _ => 3,
+    }
+}
+
 // No narrowing covers the column.
 function narrowings_without_wildcard(x: unknown) -> int {
     match (x) {

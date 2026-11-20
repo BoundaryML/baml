@@ -74,12 +74,28 @@ source: crates/baml_tests/src/generated_tests.rs
      ·                       ─
      ╰────
 
+  [type] E0063
+
+  × unreachable arm
+     ╭─[open_column_narrowing.baml:171:16]
+ 171 │         [1] => 2,
+     ·                ─
+     ╰────
+
+  [type] E0063
+
+  × unreachable arm
+     ╭─[open_column_narrowing.baml:179:19]
+ 179 │         (1, _) => 2,
+     ·                   ─
+     ╰────
+
   [type] E0062
 
   × non-exhaustive match on type unknown; missing: _
-     ╭─[open_column_narrowing.baml:149:5]
- 149 │ ╭─▶     match (x) {
- 150 │ │           let xs: int[] => 1,
- 151 │ │           let n: int => 2,
- 152 │ ╰─▶     }
+     ╭─[open_column_narrowing.baml:186:5]
+ 186 │ ╭─▶     match (x) {
+ 187 │ │           let xs: int[] => 1,
+ 188 │ │           let n: int => 2,
+ 189 │ ╰─▶     }
      ╰────
