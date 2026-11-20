@@ -11867,19 +11867,24 @@ impl BexVm {
             return None;
         };
         telemetry.select_context(&caller.context);
-        let actual_caller = self.frame_function_identity(frame_idx);
-        let caller_is_observed = matches!(
-            self.frames.get(frame_idx),
-            Some(Frame::Bytecode(BytecodeFrame {
-                telemetry: Some(_),
-                ..
-            }))
-        );
+        let caller_telemetry = caller.telemetry;
+        let caller_is_observed = caller_telemetry.is_some();
+        // A frame this function entered resolves to its own function object,
+        // so only other frames look their identity up.
+        let actual_caller = if caller_telemetry.is_some_and(FrameTelemetry::own_identity) {
+            debug_assert_eq!(
+                self.callable_function_identity(caller.function),
+                Some(caller.function)
+            );
+            Some(caller.function)
+        } else {
+            self.callable_function_identity(caller.function)
+        };
         let caller_pc = u32::try_from(call_pc).unwrap_or(u32::MAX);
         let args = &self.stack.as_slice()
             [locals_offset.raw()..locals_offset.raw().saturating_add(callee.arity)];
         // SAFETY: arguments and callable remain live under the heap permit.
-        self.telemetry.as_mut().and_then(|telemetry| unsafe {
+        let mut entered = self.telemetry.as_mut().and_then(|telemetry| unsafe {
             telemetry.enter_bytecode_with_trace(
                 callee,
                 callee_ptr,
@@ -11894,7 +11899,14 @@ impl BexVm {
                 },
                 |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
             )
-        })
+        });
+        // The callee frame runs `callee_ptr`, a function object, and is
+        // observed only when that function carries a telemetry id: exactly
+        // when `callable_function_identity` resolves it to itself.
+        if let Some(entered) = &mut entered {
+            entered.set_own_identity();
+        }
+        entered
     }
 
     /// The fast path's exact call of the plain bytecode `callee` with

@@ -67,6 +67,10 @@ const REQUIRES_ANNOUNCEMENT: u8 = 1 << 4;
 /// The span does not record the error it ends with by default: the call
 /// asked for no error capture (`error = false`, as `trace.empty_span` does).
 const ERROR_DECLINED: u8 = 1 << 5;
+/// The frame's function object is its own call-path identity: a plain
+/// function entered by an exact call. Its outgoing calls name it as their
+/// caller without reading the object. See `FrameTelemetry::own_identity`.
+const OWN_IDENTITY: u8 = 1 << 6;
 
 static LAST_CALL_PATH_ID: AtomicU32 = AtomicU32::new(0);
 
@@ -167,6 +171,22 @@ impl FrameTelemetry {
     #[inline(always)]
     const fn records_error_by_default(self) -> bool {
         btel_settings::policy::SPAN_CAPTURE_ERROR && self.flags & (SPAN | ERROR_DECLINED) == SPAN
+    }
+
+    /// Whether the frame's function pointer is its call-path identity, as
+    /// `BexVm::callable_function_identity` would resolve it. Set only where
+    /// the frame was entered with a function object that carries a telemetry
+    /// id; frames never change their function object.
+    #[inline(always)]
+    pub(crate) const fn own_identity(self) -> bool {
+        self.flags & OWN_IDENTITY != 0
+    }
+
+    /// Mark the frame as running a function object that is its own
+    /// identity (see [`Self::own_identity`]).
+    #[inline(always)]
+    pub(crate) const fn set_own_identity(&mut self) {
+        self.flags |= OWN_IDENTITY;
     }
 
     #[inline(always)]
