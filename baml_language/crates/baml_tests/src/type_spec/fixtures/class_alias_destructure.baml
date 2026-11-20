@@ -58,3 +58,27 @@ function cad_alias_refutable(x: CadFoo) -> int {
 //          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ non-exhaustive
     r
 }
+
+// A `let` destructure informs its initializer: through an alias, the
+// demanded class is at the alias's arguments, which solve a generic call
+// named only by its result.
+class CadMarker<T> {
+}
+
+type CadIntMarker = CadMarker<int>
+
+function cad_make<T>() -> CadMarker<T> {
+    CadMarker<T> {}
+}
+
+function cad_let_alias_solves_the_call() -> int {
+    let CadIntMarker {} = cad_make();
+    //                    ^^^^^^^^^^ user.CadMarker<int>
+    1
+}
+
+function cad_let_class_solves_the_call() -> int {
+    let CadMarker<int> {} = cad_make();
+    //                      ^^^^^^^^^^ user.CadMarker<int>
+    1
+}

@@ -68,3 +68,24 @@ test "alias_destructure_field_tests_fall_through_to_later_arms" {
     assert.equal(ad_first_x_is_one(AdPoint { x: 2, y: 0 }), "point");
     assert.equal(ad_first_x_is_one(AdOther { x: 1 }), "other")
 }
+
+class AdTagged<T> {
+    tag string
+}
+
+type AdIntTagged = AdTagged<int>
+
+// `T` is named only by the result: the alias head demands
+// `AdTagged<int>`, which solves it.
+function ad_tag<T>() -> AdTagged<T> throws never {
+    AdTagged<T> { tag: reflect.Type.of<T>().to_string() }
+}
+
+function ad_let_alias_solves_the_call() -> string throws never {
+    let AdIntTagged { tag: let t } = ad_tag();
+    t
+}
+
+test "let_alias_destructure_solves_a_generic_call" {
+    assert.equal(ad_let_alias_solves_the_call(), "int")
+}
