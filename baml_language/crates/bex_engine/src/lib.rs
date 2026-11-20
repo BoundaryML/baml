@@ -144,12 +144,12 @@ use bex_vm_types::{
     Admission, AdmissionTicket, FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, LimitSet,
     Object, RealizedTy, SharedGlobals, SysOp, Value, ValueKind, VmGlobals,
 };
-pub use gc_settings::{GcConfig, GcConfigError};
 // Re-export CancellationToken for callers.
 pub use function_call_context::{
     BoundaryContext, BoundaryStorageContext, FunctionCallContext, FunctionCallContextBuilder,
     InheritedInvocationState, InvocationCapture,
 };
+pub use gc_settings::{GcConfig, GcConfigError};
 use indexmap::IndexMap;
 use invocation::PreparedInvocation;
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
