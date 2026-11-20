@@ -333,13 +333,11 @@ impl HirPatCtx<'_, '_> {
                 .collect();
             DPat::tuple(rows, col.clone())
         };
-        // Any tuple of its arity: the slots narrow on their own.
-        let any_tuple = baml_type::Ty::Tuple(vec![baml_type::Ty::Unknown; elements.len()].into());
-        let narrowing = Narrowing {
-            ty: &any_tuple,
-            inner: &build,
-        };
-        let claims = self.claims(col, Some(narrowing), &|member_col| {
+        // A tuple pattern demands only a tuple of its arity, which no type
+        // names (tuples are invariant, so `(unknown, unknown)` would leave
+        // out an `(int, int)`): in an open column it stands as its bare
+        // shape, and its slots narrow on their own.
+        let claims = self.claims(col, None, &|member_col| {
             self.may_fit(body, pat, member_col)
                 .then(|| build(member_col))
         });
@@ -386,18 +384,16 @@ impl HirPatCtx<'_, '_> {
                 .iter()
                 .all(|ascription| self.is_subtype(member, ascription))
         };
-        // The list type the pattern demands: any list without an
-        // ascription, else the ascription inside all the others (none when
-        // they are unrelated, whose common lists no type here names).
-        let any_list = baml_type::Ty::List(Box::new(baml_type::Ty::Unknown));
-        let demanded = if ascriptions.is_empty() {
-            Some(&any_list)
-        } else {
-            ascriptions
-                .iter()
-                .find(|&ascription| within_ascriptions(ascription))
-        };
-        let narrowing = demanded.map(|ty| Narrowing { ty, inner: &build });
+        // The list type an ascribed pattern demands: the ascription inside
+        // all the others (none when they are unrelated, whose common lists
+        // no type here names). Without an ascription the pattern demands
+        // only a list, which no type names either: lists are invariant, so
+        // `unknown[]` would leave out an `int[]` the shape matches. Such a
+        // pattern stands in an open column as its bare shape.
+        let narrowing = ascriptions
+            .iter()
+            .find(|&ascription| within_ascriptions(ascription))
+            .map(|ty| Narrowing { ty, inner: &build });
         let claims = self.claims(col, narrowing, &|member_col| {
             let member = member_col.ty();
             let holds = if ascriptions.is_empty() {
@@ -546,10 +542,12 @@ impl HirPatCtx<'_, '_> {
     /// A column that may hold a value of any type (`unknown`, a type
     /// variable), on its own or as a member, is claimed by narrowing: the
     /// pattern first tests for the type it demands, `narrowing`, and then
-    /// matches against that type's column. Every pattern form narrows this
-    /// one way, so arms demanding the same type meet in one branch and a
-    /// wider demand covers a narrower one. The column never lists the type,
-    /// so a narrowing proves none of it covered.
+    /// matches against that type's column. Every pattern that demands a
+    /// type narrows this one way, so arms demanding the same type meet in
+    /// one branch and a wider demand covers a narrower one. The column
+    /// never lists the type, so a narrowing proves none of it covered. A
+    /// bare list or tuple shape demands no type it could name (`None`) and
+    /// is claimed as that shape.
     fn claims(
         &self,
         col: &ColumnTy,

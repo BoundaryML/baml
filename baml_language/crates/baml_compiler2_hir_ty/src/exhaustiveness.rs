@@ -75,8 +75,9 @@ pub enum Ctor {
     ///
     /// In a column that may hold any type (`unknown`, a type variable) it
     /// is the type a pattern demands before matching its structure: the
-    /// one form every pattern narrows such a column with (`let xs: int[]`,
-    /// `[1]: int[]`, `1`, `(a, b)`, `Box<int> { .. }`). Such a column
+    /// one form every pattern that demands a type narrows such a column
+    /// with (`let xs: int[]`, `[1]: int[]`, `1`, `Box<int> { .. }`). A bare
+    /// list or tuple shape names no type and stands as its shape. Such a column
     /// enumerates as [`Ctor::NonExhaustive`] and never lists the type, so
     /// the branch decides only which arms are reachable, never that the
     /// column is covered. A wider member covers a narrower one, as a type
