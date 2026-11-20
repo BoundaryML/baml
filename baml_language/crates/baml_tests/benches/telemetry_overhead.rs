@@ -2,8 +2,12 @@
 //! Run with: cargo bench -p baml_tests --bench telemetry_overhead
 //!
 //! Each scenario's `main` makes `CALLS` calls in a loop; every scenario runs
-//! with telemetry off (no recording) and on (recording to local files). The
-//! overhead per call is `(on - off) / CALLS`, from the two medians.
+//! with telemetry off and on. Off is an engine with no telemetry at all
+//! (recording level `off`), whatever `BAML_TELEMETRY` says: an engine built
+//! without a recording still observes every call at the environment's level.
+//! On records to local files at the `BAML_TELEMETRY` level (`medium` unless
+//! set). Both use the default clock, the one programs run with. The overhead
+//! per call is `(on - off) / CALLS`, from the two medians.
 #![allow(clippy::disallowed_methods)]
 
 use std::{path::Path, sync::Arc};
@@ -11,7 +15,8 @@ use std::{path::Path, sync::Arc};
 use baml_compiler2_emit::OptLevel;
 use baml_db::{CheckedWorld, ProjectDatabase};
 use baml_tests::engine::TestDbExt;
-use bex_engine::{BexEngine, FunctionCallContextBuilder, TelemetryRecording};
+use bex_engine::{BexEngine, EngineConfig, FunctionCallContextBuilder, TelemetryRecording};
+use btel_settings::artifact::{ArtifactTelemetry, RecordingLevel};
 use divan::{Bencher, black_box};
 use sys_native::{CallId, SysOpsExt};
 
@@ -29,7 +34,8 @@ fn main() {
 }
 
 /// Compile once, then measure calling `main()`. With `recording`, telemetry
-/// records to a fresh local directory for the whole run.
+/// records to a fresh local directory for the whole run; without it, the
+/// engine has no telemetry.
 fn bench_main(bencher: Bencher, source: &str, recording: bool) {
     let mut db = ProjectDatabase::new();
     let package = db.workspace(Path::new("."));
@@ -40,19 +46,25 @@ fn bench_main(bencher: Bencher, source: &str, recording: bool) {
         .expect("benchmark compilation failed");
     let sys_ops = Arc::new(sys_native::SysOps::native());
     let dir = tempfile::tempdir().expect("recording directory");
-    let engine = if recording {
-        BexEngine::new_with_telemetry_recording(
-            program,
-            sys_ops,
-            vec![],
-            None,
-            btel_clock::ClockMode::Monotonic,
-            TelemetryRecording::local_files(dir.path(), btel_recorder::RecordingConfig::default()),
-        )
+    let config = if recording {
+        EngineConfig {
+            recording: Some(TelemetryRecording::local_files(
+                dir.path(),
+                btel_recorder::RecordingConfig::default(),
+            )),
+            ..EngineConfig::default()
+        }
     } else {
-        BexEngine::new(program, sys_ops, vec![])
-    }
-    .expect("benchmark engine creation failed");
+        EngineConfig {
+            artifact_telemetry: Some(ArtifactTelemetry {
+                recording_level: RecordingLevel::Off,
+                ..ArtifactTelemetry::default()
+            }),
+            ..EngineConfig::default()
+        }
+    };
+    let engine = BexEngine::new_with_config(program, sys_ops, vec![], config)
+        .expect("benchmark engine creation failed");
     let engine = Arc::new(engine);
     let rt = tokio::runtime::Runtime::new().expect("failed to build tokio runtime");
     bencher.bench(|| {
