@@ -74,10 +74,11 @@ away, and the program prints the first result and the accumulator.
   The VM records every collection as a `baml.gc` span, and
   `baml-cli local recordings query` reads the spans back: the number of
   collections and each pause. The collection at shutdown is left out. The timed
-  runs keep telemetry off. `--no-gc-probe` skips the probe.
-- **Environment.** Inherited `BAML_GC_*`, `BAML_TELEMETRY`, `BAML_HOME`,
-  `MALLOC_*`, `GLIBC_TUNABLES` and every swept variable are dropped. Only a
-  variant sets them. Each run gets a fresh, empty `BAML_HOME`.
+  runs have telemetry off unless a variant's `env` sets `BAML_TELEMETRY`.
+  `--no-gc-probe` skips the probe.
+- **Environment.** Inherited `BAML_GC_*`, `BAML_TELEMETRY`, `MALLOC_*`,
+  `GLIBC_TUNABLES` and every swept variable are dropped. Only a variant sets
+  them. Each run gets a fresh, empty `BAML_HOME`, whatever the variant says.
 
 ## Reading the tables
 

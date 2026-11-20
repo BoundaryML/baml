@@ -13,9 +13,10 @@
 #               labelled `<label>@<value>`.
 #   relative_to the variant the sweep tables compare against (default: `baseline`).
 #
-# Every run gets BAML_TELEMETRY=off and a fresh BAML_HOME unless the variant's env
-# says otherwise. Inherited BAML_GC_*, BAML_TELEMETRY, BAML_HOME, MALLOC_*,
-# GLIBC_TUNABLES and every swept variable are dropped: only a variant sets them.
+# Every run gets a fresh, empty BAML_HOME (a variant cannot change it), and
+# BAML_TELEMETRY=off unless the variant's env sets it. Inherited BAML_GC_*,
+# BAML_TELEMETRY, MALLOC_*, GLIBC_TUNABLES and every swept variable are dropped:
+# only a variant sets them.
 # Variants with the same baml_cli, pack_host and pack_toml share packed programs.
 
 baseline = "vm"

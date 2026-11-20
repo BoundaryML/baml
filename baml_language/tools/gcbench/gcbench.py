@@ -158,11 +158,18 @@ def load_config(path):
     labels = [v.label for v in variants]
     if len(set(labels)) != len(labels):
         sys.exit(f"duplicate variant labels in {path}")
-    for v in variants:
-        if v.relative_to and v.relative_to not in labels:
-            sys.exit(f"variant {v.label}: relative_to names no variant: {v.relative_to!r}")
+    rows = [i.label for i in instances(variants)]  # a plain label may not collide with a generated one
+    if len(set(rows)) != len(rows):
+        sys.exit(f"duplicate row labels in {path}: {sorted({r for r in rows if rows.count(r) > 1})}")
+    baseline = raw.get("baseline", "vm")
+    swept = {v.label for v in variants if v.sweep_var}
+    for name, ref in [("baseline", baseline)] + [(f"variant {v.label}: relative_to", v.relative_to) for v in variants]:
+        if ref and ref not in labels and name != "baseline":  # a missing baseline only warns (see prepare)
+            sys.exit(f"{name} names no variant: {ref!r}")
+        if ref in swept:  # a swept variant has no row of its own to compare against
+            sys.exit(f"{name} names a swept variant ({ref!r}); name a variant without `sweep`")
     return {
-        "baseline": raw.get("baseline", "vm"),
+        "baseline": baseline,
         "iters": int(raw.get("iters", 20)),
         "iters_override": {k: int(x) for k, x in raw.get("iters_override", {}).items()},
         "workloads": list(raw.get("workloads", [])),
@@ -309,13 +316,16 @@ def build_vm(variant, w, n, cache):
     toml = pack_project_toml(variant)
     cli, host = binary_identity(variant.baml_cli), binary_identity(variant.pack_host)
     key = digest("vm", cli["sha256"], host["sha256"], toml, w.baml, entry)
-    d = cache / "vm" / key
+    final = cache / "vm" / key
+    if (final / "meta.json").exists() and (final / "exe").exists() and json.loads((final / "meta.json").read_text())["ok"]:
+        return Exe(final / "exe", key)
+    # Pack in a private directory and publish it complete with one rename, so a
+    # concurrent invocation never sees, or deletes, a half-built entry. A failed
+    # pack is not cached: the next invocation tries again.
+    import tempfile
+    (cache / "vm").mkdir(parents=True, exist_ok=True)
+    d = Path(tempfile.mkdtemp(prefix=f".{key}-", dir=cache / "vm"))
     meta = d / "meta.json"
-    if meta.exists():
-        m = json.loads(meta.read_text())
-        return Exe(d / "exe" if m["ok"] else None, key, m.get("error"))
-    if d.exists():
-        shutil.rmtree(d)  # a pack that died half-way
     (d / "project/baml_src").mkdir(parents=True)
     (d / "project/baml.toml").write_text(toml)
     (d / "project/baml_src/main.baml").write_text(w.baml)
@@ -329,7 +339,16 @@ def build_vm(variant, w, n, cache):
     error = None if ok else ("\n".join(lines[-5:]) or r.stdout.strip() or f"exit {r.returncode}")[-2000:]
     meta.write_text(json.dumps({"ok": ok, "error": error, "cmd": cmd, "workload": w.id, "n": n,
                                 "seconds": round(time.perf_counter() - start, 2)}, indent=1))
-    return Exe(d / "exe" if ok else None, key, error)
+    if not ok:
+        shutil.rmtree(d, ignore_errors=True)
+        return Exe(None, key, error)
+    if final.exists():  # an entry from an older run without an executable, or a failed one
+        shutil.rmtree(final, ignore_errors=True)
+    try:
+        d.rename(final)
+    except OSError:  # another invocation published the same entry first
+        shutil.rmtree(d, ignore_errors=True)
+    return Exe(final / "exe", key)
 
 
 # ---------------------------------------------------------------------- running
@@ -374,7 +393,7 @@ def run_once(cmd, env, timeout=None):
     lines = [l for l in out.splitlines() if l.strip()]
     trial["stdout"] = lines[-1] if lines else ""
     if p.returncode != 0:
-        trial["stderr_tail"] = "\n".join(l for l in err.splitlines()[-40:] if not re.match(r"^\s+\d+\s+[a-z]", l))[-1500:]
+        trial["stderr_tail"] = "\n".join(l for l in err.splitlines()[-40:] if not re.match(r"^\s+[\d.]+\s+[a-z]", l))[-1500:]
         if p.returncode < 0:  # `time` re-raises the program's signal on itself
             trial["signal"] = -p.returncode
     return trial
@@ -466,16 +485,17 @@ def check_output(w, trial):
     return text == w.expect, acc
 
 
-def verify(inst, w, cmd):
+def verify(inst, w, cmd, timeout):
     """Run once untimed and check the result. A success is remembered next to the
-    executable, per instance environment, so later invocations skip it."""
+    executable, per instance environment and expected result, so later
+    invocations skip it."""
     env_vars = inst.variant.env_vars | inst.setting
-    marker = Path(cmd[0]).parent / f"verified-{digest(env_vars, [str(c) for c in cmd[1:]])}.json"
+    marker = Path(cmd[0]).parent / f"verified-{digest(env_vars, w.expect, [str(c) for c in cmd[1:]])}.json"
     if marker.exists():
         record = json.loads(marker.read_text())
         if "peak_bytes" in record:
             return record
-    t = run_trial(inst, cmd)
+    t = run_trial(inst, cmd, timeout)
     result, acc = outcome(w, t)
     ok = result == "ok"
     record = {"ok": ok, "outcome": result, "acc": acc, "exit": t["exit"], "stdout": t["stdout"][:200],
@@ -488,7 +508,7 @@ def verify(inst, w, cmd):
 GC_QUERY = "SELECT duration, context_metadata FROM spans WHERE span_name = 'baml.gc'"
 
 
-def gc_probe(inst, w, exe):
+def gc_probe(inst, w, exe, timeout):
     """GC counts and pauses for a program, from one untimed run with telemetry
     on: the engine records every collection as a `baml.gc` span (its duration is
     the pause, from the request to the end of the collection, parking included;
@@ -509,16 +529,27 @@ def gc_probe(inst, w, exe):
         level = env_vars.get("BAML_TELEMETRY", "off")
         env = run_env(inst) | {"BAML_HOME": str(root / ".baml"),
                                      "BAML_TELEMETRY": "low" if level == "off" else level}
-        t = run_once([exe], env)
+        t = run_once([exe], env, timeout)
         if outcome(w, t)[0] != "ok":
-            return {"error": f"probe run failed: {describe_failure(t)}"}
-        r = subprocess.run([str(v.baml_cli), "--color", "never", "--output-format", "json", "local", "recordings",
-                            "query", GC_QUERY], cwd=root, capture_output=True, text=True, env=cli_env())
+            return {"error": f"probe run failed: {describe_failure(t) if t['exit'] != 'timeout' else 'timeout'}"}
+        try:
+            r = subprocess.run([str(v.baml_cli), "--color", "never", "--output-format", "json", "local", "recordings",
+                                "query", GC_QUERY], cwd=root, capture_output=True, text=True, env=cli_env(),
+                               timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return {"error": "recordings query timed out"}
     try:
-        rows = json.loads(r.stdout)["rows"]
-    except (ValueError, KeyError):
+        result = json.loads(r.stdout)
+        rows, status = result["rows"], result["outcome"]
+    except (ValueError, KeyError, TypeError):
         return {"error": f"recordings query failed: {(r.stderr.strip() or r.stdout.strip())[-300:]}"}
-    pauses = [int(d) for d, m in rows if not (isinstance(m, dict) and m.get("trigger") == "shutdown")]
+    if status.get("status") != "complete" or status.get("source_missing"):
+        return {"error": f"recordings query incomplete: status {status.get('status')}, "
+                         f"source_missing {status.get('source_missing')}"}
+    rows = [(d, m) for d, m in rows if not (isinstance(m, dict) and m.get("trigger") == "shutdown")]
+    if any(d is None for d, _ in rows):
+        return {"error": "a baml.gc span has no recorded duration"}
+    pauses = [int(d) for d, _ in rows]
     stats = {"collections": len(pauses), "pause_ns_total": sum(pauses), "pause_ns_max": max(pauses, default=0),
              "pause_ns": pauses, "probe_wall_ns": t["wall_ns"], "probe_telemetry": env["BAML_TELEMETRY"]}
     marker.write_text(json.dumps(stats))
@@ -651,21 +682,24 @@ def prepare(cfg, args, cache):
     if cfg["baseline"] not in {v.label for v in variants}:
         warn_loudly(f"the baseline variant {cfg['baseline']!r} is not configured: ratios will be empty")
     workloads, skipped = [], {}
-    exes, dropped, probes = {}, set(), {}
+    exes, dropped, probes, ref_accs = {}, set(), {}, {}
+    rows = instances(variants, set(args.values) if args.values else None)
     for wid in resolve_workloads(args.workloads, cfg["workloads"]):
         w = load_workload(wid)
-        n = cfg["iters_override"].get(wid, args.iters or cfg["iters"])
+        n = args.iters or cfg["iters_override"].get(wid, cfg["iters"])
         problems, accs = [], {}
         for v in variants:
+            insts = [i for i in rows if i.variant is v]
+            if not insts:
+                continue
             built = {k: build_vm(v, w, k, cache) for k in (1, n)}
             bad = [e for e in built.values() if e.error]
             if bad:
                 problems.append(f"{v.label}: does not compile: {bad[0].error.splitlines()[-1][:300]}")
                 continue
-            insts = instances([v])
             for inst in insts:
                 for k, e in built.items():
-                    t = verify(inst, w, [e.path])
+                    t = verify(inst, w, [e.path], args.timeout)
                     if not t["ok"]:
                         problems.append(f"{inst.label}: N={k} FAILED verification ({t['outcome']}): "
                                         f"{t['failure'] if t['outcome'] != 'wrong' else repr(t['stdout'][:80])}")
@@ -674,16 +708,25 @@ def prepare(cfg, args, cache):
                     if k == n:
                         accs[inst.label] = t["acc"]
                 if args.gc_probe and (inst.label, wid) not in dropped:
-                    probe = {phase: gc_probe(inst, w, built[k].path) for phase, k in (("cold", 1), ("steady", n))}
+                    probe = {phase: gc_probe(inst, w, built[k].path, args.timeout)
+                             for phase, k in (("cold", 1), ("steady", n))}
                     errors = [p["error"] for p in probe.values() if "error" in p]
                     if errors:
                         log(f"  {wid}: {inst.label}: no GC numbers: {errors[0]}")
                     probes[(inst.label, wid)] = probe
-            if all((i.label, wid) in dropped for i in insts):
-                continue
             exes[(v.label, wid)] = {k: e.path for k, e in built.items()}
-        if len(set(accs.values())) > 1:
-            warn_loudly(f"{wid}: rows disagree on the accumulated result: {accs}")
+        # Every row must compute the same accumulated result: the baseline's (or,
+        # without one, the most common). A row that disagrees is dropped.
+        if accs:
+            ref = accs.get(cfg["baseline"]) or max(set(accs.values()), key=list(accs.values()).count)
+            ref_accs[wid] = ref
+            for label, acc in accs.items():
+                if acc != ref:
+                    problems.append(f"{label}: FAILED verification (accumulated result {acc!r}, expected {ref!r})")
+                    dropped.add((label, wid))
+        for v in variants:
+            if all((i.label, wid) in dropped for i in rows if i.variant is v):
+                exes.pop((v.label, wid), None)
         if problems:
             skipped[wid] = problems
             for p in problems:
@@ -691,8 +734,10 @@ def prepare(cfg, args, cache):
         if any((v.label, wid) in exes for v in variants):
             workloads.append((w, n))
         log(f"ready {wid} (N={n})" if not problems else f"partial {wid}")
-    return {"variants": variants, "workloads": workloads, "skipped": skipped, "exes": exes, "dropped": dropped,
-            "gc_probe": probes}
+    if not workloads:
+        sys.exit("no workload is ready to run (see the messages above)")
+    return {"variants": variants, "instances": rows, "workloads": workloads, "skipped": skipped, "exes": exes,
+            "dropped": dropped, "gc_probe": probes, "accs": ref_accs}
 
 
 def select_variants(cfg, names):
@@ -736,7 +781,7 @@ def instances(variants, values=None):
 def measure(cfg, args, cache):
     plan = prepare(cfg, args, cache)
     start = gate(args)
-    insts = instances(plan["variants"], set(args.values) if args.values else None)
+    insts = plan["instances"]
     skip = plan["dropped"]
     out = Path(args.out or HERE / "results" / time.strftime("%Y%m%d-%H%M%S"))
     out.mkdir(parents=True, exist_ok=True)
@@ -755,6 +800,7 @@ def measure(cfg, args, cache):
                            "value": i.value} for i in insts],
             "gc_probe": [{"instance": k[0], "workload": k[1], **p} for k, p in plan["gc_probe"].items()],
             "load_start": start,
+            "max_busy": args.max_busy,
             "load_rounds": [],
             "round_seconds": [],
         },
@@ -777,7 +823,10 @@ def measure(cfg, args, cache):
                     continue
                 for phase in ("cold", "steady"):
                     t = run_trial(inst, command(exes, phase, n), timeout=args.timeout)
-                    t["outcome"], _ = outcome(w, t)
+                    t["outcome"], acc = outcome(w, t)
+                    if t["outcome"] == "ok" and phase == "steady" and acc != plan["accs"].get(w.id, acc):
+                        t["outcome"] = "wrong"
+                        t["stderr_tail"] = f"accumulated result {acc!r}, expected {plan['accs'][w.id]!r}"
                     t["ok"] = t["outcome"] == "ok"
                     if t["outcome"] in ("crash", "wrong"):
                         failures.append(f"{inst.label} {w.id} {phase}: {t['outcome']}: {describe_failure(t)}")
@@ -788,9 +837,9 @@ def measure(cfg, args, cache):
                                               "instance": inst.label, "value": inst.value, "phase": phase, "iters": 1 if phase == "cold" else n, **t})
         results["meta"]["round_seconds"].append(round(time.perf_counter() - round_start, 1))
         log(f"round {r + 1} took {results['meta']['round_seconds'][-1]:.0f} s")
-        path.write_text(json.dumps(results, indent=1))  # after every round: a killed run keeps its data
+        write_atomic(path, json.dumps(results, indent=1))  # after every round: a killed run keeps its data
     results["meta"]["load_end"] = load_snapshot()
-    path.write_text(json.dumps(results, indent=1))
+    write_atomic(path, json.dumps(results, indent=1))
     text = summarize(results)
     (out / "summary.md").write_text(text)
     print(text)
@@ -800,6 +849,13 @@ def measure(cfg, args, cache):
         warn_loudly(f"{len(failures)} failures (crashes or wrong results; details in the summary):\n"
                     + "\n".join(f[:200] for f in failures[:20]))
         sys.exit(4)
+
+
+def write_atomic(path, text):
+    """Replace a file only once the new contents are fully written."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
 
 
 def machine():
@@ -843,12 +899,15 @@ def aggregate(trials, n):
     bad = [t.get("outcome", "failed") for t in trials if not t["ok"]]
     a = {"rounds_ok": min(len(cold), len(steady)),
          "failed": ", ".join(f"{bad.count(o)} {o}" for o in dict.fromkeys(bad))}
-    if not cold or not steady:
+    if not cold:
         return a
-    bc, bs = min(cold, key=lambda t: t["cycles"]), min(steady, key=lambda t: t["cycles"])
-    per = lambda s, c: (s - c) / (n - 1) if n > 1 and s is not None and c is not None else None
+    bc = min(cold, key=lambda t: t["cycles"])
     a["cold"] = {"cycles_best": bc["cycles"], **{f"{k}_med": med(t[k] for t in cold) for k in
                  ("cycles", "instructions", "wall_ns", "page_faults", "peak_bytes")}}
+    if not steady:  # steady numbers subtract the cold run, so they need both
+        return a
+    bs = min(steady, key=lambda t: t["cycles"])
+    per = lambda s, c: (s - c) / (n - 1) if n > 1 and s is not None and c is not None else None
     a["steady"] = {
         "cycles_best": per(bs["cycles"], bc["cycles"]),
         **{f"{k}_med": per(med(t[k] for t in steady), a["cold"][f"{k}_med"]) for k in
@@ -934,9 +993,10 @@ def summarize(results):
     if meta["load_start"].get("gate") == "forced":
         lines.append("- **measured on a busy machine because of --force**")
     loads = [s["busy_cores"] for s in meta["load_rounds"] if s["busy_cores"] is not None]
-    noisy = [i + 1 for i, s in enumerate(meta["load_rounds"]) if (s["busy_cores"] or 0) > 1.5]
+    limit = meta.get("max_busy", 1.0)
+    noisy = [i + 1 for i, s in enumerate(meta["load_rounds"]) if (s["busy_cores"] or 0) > limit]
     if noisy:
-        lines.append(f"- **noisy rounds (outside load > 1.5 cores): {noisy}**; outside load per round: {loads}")
+        lines.append(f"- **noisy rounds (outside load > {limit:g} cores): {noisy}**; outside load per round: {loads}")
     if meta.get("round_seconds"):
         rs = meta["round_seconds"]
         lines.append(f"- time per round: {', '.join(f'{x:.0f} s' for x in rs)} (mean {statistics.mean(rs):.0f} s)")
@@ -1016,6 +1076,8 @@ def calibrate(cfg, args, cache):
     v = next((v for v in cfg["variants"] if v.label == cfg["baseline"]), cfg["variants"][0])
     missing_binaries([v])
     k = args.iters or 6
+    if k < 2:
+        sys.exit("calibrate needs --iters of at least 2 (it measures 1 and K iterations)")
     log(f"calibrating with {v.label}: N = 1 and {k}, target {args.target:g} s of steady wall time")
     print("[iters_override]")
     for wid in resolve_workloads(args.workloads, cfg["workloads"]):
@@ -1173,7 +1235,7 @@ def main():
         return
     cfg = load_config(args.config)
     SWEPT_VARS.update(v.sweep_var for v in cfg["variants"] if v.sweep_var)
-    cache = Path(args.cache)
+    cache = Path(args.cache).expanduser().resolve()  # baml-cli pack runs in another directory
     if args.command == "calibrate":
         calibrate(cfg, args, cache)
     elif args.command == "memtrace":
