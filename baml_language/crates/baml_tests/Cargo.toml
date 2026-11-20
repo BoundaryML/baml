@@ -59,8 +59,8 @@ baml_syntax = { workspace = true }
 bex_events = { workspace = true }
 bex_external_types = { workspace = true }
 btel_clock = { workspace = true }
-btel_settings = { workspace = true }
 btel_recorder = { workspace = true }
+btel_settings = { workspace = true }
 borsh = { workspace = true }
 darwin-kperf = { workspace = true }
 darwin-kperf-events = { workspace = true }
