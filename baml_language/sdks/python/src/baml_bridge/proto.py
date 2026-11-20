@@ -65,7 +65,8 @@ _PROTO_MEDIA_TYPES = {
 
 
 class _PortablePromptAst:
-    """Owned wire copy stored in the generated ``ai.Prompt._data`` slot."""
+    """Owned wire copy of a rendered prompt, held by a generated ``ai.Prompt``
+    instance as its ``_data`` private attribute."""
 
     __slots__ = ("_value",)
 
@@ -408,6 +409,15 @@ def pydantic_instance_type_args(value: Any) -> List[Any]:
     return []
 
 
+def receiver_type_args(value: Any) -> List[Any]:
+    """Concrete class type args of a generic method's receiver, in declaration
+    order: a reference's from the engine, a Pydantic instance's from its generic
+    metadata. Empty when the receiver carries none."""
+    if isinstance(value, BamlOpaque):
+        return list(value._type_args)
+    return pydantic_instance_type_args(value)
+
+
 class _EncodedCall(bytes):
     """The control part of a call as `CallFunctionArgs` bytes, with the
     values the bridge encodes against the target's declared types alongside.
@@ -575,7 +585,7 @@ def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: TypeLookup) -> Any:
         except BamlError:
             return typing.Any
         return typing.Any if media_cls is None else media_cls
-    # enum_variant / interface / function / future / rust_type / meta_type /
+    # enum_variant / interface / function / future / meta_type /
     # resource / prompt_ast / type_var /
     # associated_type_projection / never — no concrete Python binding in a
     # generic-arg position; treat as an unbound wildcard.
@@ -639,7 +649,8 @@ def _decode_media(media) -> Any:
 
 
 def _decode_prompt_ast(prompt_ast, type_map: TypeLookup) -> Any:
-    """Reconstruct the generated ``ai.Prompt`` wrapper around owned data."""
+    """Build the generated ``ai.Prompt``, a field-less model, holding an owned
+    copy of the prompt as its ``_data`` private attribute."""
     cls = type_map.get_class("ai.Prompt")
     portable = _PortablePromptAst(prompt_ast)
     if cls is None:
@@ -647,17 +658,6 @@ def _decode_prompt_ast(prompt_ast, type_map: TypeLookup) -> Any:
     if not issubclass(cls, BaseModel):
         raise BamlError("The generated ai.Prompt host type is not a Pydantic model")
 
-    if any(
-        (field.serialization_alias or field.alias or name) == "_data"
-        for name, field in cls.model_fields.items()
-    ):
-        # The generated annotation is the VM-side ``$rust_type`` proxy, while
-        # this host-owned value deliberately carries a portable AST instead.
-        # Construction must therefore bypass Pydantic validation.
-        return cls.model_construct(_data=portable)
-
-    # Compatibility with generated Prompt models that represented ``_data``
-    # as a Pydantic private attribute.
     instance = cls.model_validate({})
     if instance.__pydantic_private__ is None:
         instance.__pydantic_private__ = {}
@@ -688,15 +688,6 @@ def _decode_class(
     cls = type_map.get_class(class_value.name)
     if cls is None:
         return BamlClassInstance(class_value.name, field_dict)
-
-    # Media stdlib classes (`baml.media.*`) are PyO3 types wrapping a
-    # `BamlPyHandle`. The engine emits them as
-    # `class_value { name: "baml.media.Pdf", fields: { _data: handle_value }}`;
-    # the inner `_data` decode already constructed a fresh `BamlPdf` via
-    # `_decode_handle` → `cls._from_pyhandle(...)`. Unwrap and return it
-    # directly — `BamlPdf` is not a Pydantic model.
-    if cls in _MEDIA_PYO3_TYPES and "_data" in field_dict:
-        return field_dict["_data"]
 
     parameterized = _parameterize_tys(cls, class_value.type_args, type_map)
     if not issubclass(cls, BaseModel):
@@ -755,10 +746,30 @@ def _decode_enum(enum_value, type_map: TypeLookup) -> Any:
         ) from exc
 
 
+def _opaque_reference(handle, pyhandle: BamlPyHandle, type_map: TypeLookup) -> Any:
+    """The generated wrapper of a runtime value the engine keeps to itself
+    (`reflect.Package`, `sap._ParseCache[int]`, ...), at the class type
+    arguments its `ty` names; `None` for any other runtime value, which keeps
+    the `BamlRuntimeValue` proxy."""
+    cls = _opaque_class(handle, type_map)
+    if cls is None:
+        return None
+    params = getattr(cls, "__parameters__", ())
+    args = handle.ty.class_ty.type_args
+    if len(args) != len(params):
+        raise BamlError(
+            f"a runtime value of the class {handle.ty.class_ty.name} came with "
+            f"{len(args)} type argument(s); the class takes {len(params)}"
+        )
+    # An annotation type references no runtime declaration, so the
+    # arguments hold no engine rows.
+    return cls._from_wire(pyhandle, handle.key, tuple(BamlType(arg) for arg in args))
+
+
 def _opaque_class(handle, type_map: TypeLookup) -> Optional[type]:
     """The generated class of a runtime value the engine keeps to itself
     (`reflect.Package`, ...), from the compiled class its `ty` names; `None`
-    for any other runtime value, which keeps the `BamlRuntimeValue` proxy."""
+    for any other runtime value."""
     ty = getattr(handle, "ty", None)
     if (
         ty is None
@@ -793,13 +804,17 @@ def _decode_handle(
     """
     HT = baml_handle_pb2.BamlHandleType
     ht = handle.handle_type
+    if ht in (HT.HOST_VALUE_CALLABLE, HT.HOST_VALUE_OPAQUE):
+        # A host value: the wrapper takes a reference of its own to the key
+        # while the pin still holds the engine's, then the pin is let go.
+        try:
+            return BamlPyHandle(handle.key, int(ht))
+        finally:
+            _release_pin(handle, ownership)
     pyhandle = BamlPyHandle(handle.key, int(ht))
     # Creating the base wrapper transfers one reference, even if constructing
     # a typed wrapper or validating its enclosing model subsequently fails.
-    if ownership is not None and ht not in (
-        HT.HOST_VALUE_CALLABLE,
-        HT.HOST_VALUE_OPAQUE,
-    ):
+    if ownership is not None:
         ownership[handle.key] -= 1
 
     if ht == HT.ADT_MEDIA_IMAGE:
@@ -815,9 +830,9 @@ def _decode_handle(
     if ht == HT.ADT_FUNCTION_SPEC:
         return BamlFunctionSpec._from_pyhandle(pyhandle)
     if ht == HT.ADT_RUNTIME_VALUE:
-        opaque = _opaque_class(handle, type_map)
+        opaque = _opaque_reference(handle, pyhandle, type_map)
         if opaque is not None:
-            return opaque._from_wire(pyhandle, handle.key)
+            return opaque
         return BamlRuntimeValue._from_pyhandle(pyhandle)
     if ht == HT.FUNCTION_REF:
         ty = getattr(handle, "ty", None)
@@ -826,8 +841,7 @@ def _decode_handle(
     if ht == HT.HANDLE_UNSPECIFIED:
         raise BamlError("BEX emitted HANDLE_UNSPECIFIED (Rust-side bug)")
 
-    # Everything else (UNTAGGED_RUST_DATA, UNTAGGED_BEX_HEAP, FUNCTION_REF,
-    # ADT_PROMPT_AST, ADT_TYPE, ADT_MEDIA_GENERIC): bare
+    # Everything else (UNTAGGED_BEX_HEAP, ADT_PROMPT_AST): bare
     # BamlPyHandle. The outer codegen class (if any) wraps it via
     # `_decode_class` → private-attr injection.
     return pyhandle
@@ -981,8 +995,10 @@ def _decode_literal(literal) -> Any:
     return None
 
 
-def _host_call_handle_keys(holder) -> typing.Iterator[int]:
-    """Yield each owned wire reference; borrowed host registry keys are excluded."""
+def _owned_wire_keys(holder) -> typing.Iterator[int]:
+    """Yield each engine row an outbound value transfers, once per occurrence:
+    its engine handles, the live heads of its types, and the pin of each host
+    value. A host value's own key names the host's registry, not a row."""
     which = holder.WhichOneof("value")
     if which == "handle_value":
         handle = holder.handle_value
@@ -991,31 +1007,65 @@ def _host_call_handle_keys(holder) -> typing.Iterator[int]:
             baml_handle_pb2.HOST_VALUE_OPAQUE,
         ):
             yield handle.key
+        elif handle.pin:
+            yield handle.pin
     elif which == "list_value":
         for item in holder.list_value.items:
-            yield from _host_call_handle_keys(item)
+            yield from _owned_wire_keys(item)
     elif which == "tuple_value":
         for item in holder.tuple_value.items:
-            yield from _host_call_handle_keys(item)
+            yield from _owned_wire_keys(item)
     elif which == "map_value":
         for entry in holder.map_value.entries:
-            yield from _host_call_handle_keys(entry.value)
+            yield from _owned_wire_keys(entry.value)
     elif which == "class_value":
         for field in holder.class_value.fields:
-            yield from _host_call_handle_keys(field.value)
+            yield from _owned_wire_keys(field.value)
     elif which == "union_variant_value":
-        yield from _host_call_handle_keys(holder.union_variant_value.value)
+        yield from _owned_wire_keys(holder.union_variant_value.value)
     elif which == "ty_value":
         yield from _live_keys(holder.ty_value)
+
+
+def _release_pin(handle, ownership: Optional[Counter[int]]) -> None:
+    """Let go of the pin an outbound host value carries, once its key has been
+    read. A handle with no pin (an inbound shape, or an offline encoding)
+    holds nothing."""
+    pin = getattr(handle, "pin", 0)
+    if not pin:
+        return
+    if ownership is not None:
+        ownership[pin] -= 1
+    _release_wire_handle(pin)
+
+
+def _release_owned(ownership: Counter[int]) -> None:
+    """Release every row a decode did not hand to a host wrapper."""
+    for key, count in ownership.items():
+        for _ in range(count):
+            try:
+                _release_wire_handle(key)
+            except RuntimeError:
+                # Cleanup must preserve the original decode failure.
+                pass
+
+
+def _decode_owned(holder, type_map: TypeLookup) -> Any:
+    """Decode an outbound value, owning every row it transfers until a host
+    wrapper takes that reference; a decode that fails partway releases the
+    rest."""
+    ownership = Counter(_owned_wire_keys(holder))
+    try:
+        return decode_value(holder, type_map, ownership)
+    finally:
+        _release_owned(ownership)
 
 
 def _decode_host_call_args(data: bytes) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
     """Own every wire reference until a host wrapper takes that reference."""
     call = baml_outbound_pb2.BamlToHostCall()
     call.ParseFromString(data)
-    ownership = Counter(
-        key for arg in call.args for key in _host_call_handle_keys(arg.value)
-    )
+    ownership = Counter(key for arg in call.args for key in _owned_wire_keys(arg.value))
     try:
         type_map = get_type_map()
         positional = []
@@ -1028,13 +1078,7 @@ def _decode_host_call_args(data: bytes) -> Tuple[Tuple[Any, ...], Dict[str, Any]
                 positional.append(value)
         return tuple(positional), optional
     finally:
-        for key, count in ownership.items():
-            for _ in range(count):
-                try:
-                    _release_wire_handle(key)
-                except RuntimeError:
-                    # Cleanup must preserve the original decode failure.
-                    pass
+        _release_owned(ownership)
 
 
 def decode_value(
@@ -1191,7 +1235,7 @@ def decode_call_result(data: bytes) -> Any:
 
     if which == "error":
         msg = result.error
-        decoded = decode_value(msg.value, thrown_types)
+        decoded = _decode_owned(msg.value, thrown_types)
         # A value/type mismatch at the call boundary (`baml.errors.TypeMismatch`,
         # synthesized host-side from `EngineError::TypeMismatch`) is a *caller*
         # type error — surface it as Python's native `TypeError` rather than a
@@ -1220,6 +1264,10 @@ def decode_call_result(data: bytes) -> Any:
         if _outbound_class_fqn(msg.value) == "baml.errors.HostCallable":
             rehydrated = _try_rehydrate_host_value(decoded)
             if rehydrated is not None:
+                # `decoded` holds a reference to the key that keeps
+                # `rehydrated` registered; left in this frame, the traceback
+                # raising `rehydrated` would keep both alive for good.
+                del decoded
                 raise attach_baml_traceback(rehydrated)
         raise attach_baml_traceback(
             BamlError(
@@ -1242,11 +1290,11 @@ def decode_call_result(data: bytes) -> Any:
         )
         raise attach_baml_traceback(
             panic_type(
-                decode_value(msg.value, thrown_types),
+                _decode_owned(msg.value, thrown_types),
                 baml_trace=list(msg.trace),
                 class_name=_outbound_class_fqn(msg.value),
             )
         )
 
     # `ok` (or an absent oneof — an all-default envelope is a null `ok`).
-    return decode_value(result.ok, type_map)
+    return _decode_owned(result.ok, type_map)

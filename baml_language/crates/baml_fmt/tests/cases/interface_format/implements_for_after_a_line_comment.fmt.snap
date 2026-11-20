@@ -1,0 +1,6 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+implement Interface // c
+    for Type
+{}

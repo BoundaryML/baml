@@ -104,7 +104,6 @@ fn primitive_member(vm: &BexVm, value: Value, ty: &Ty) -> Option<bool> {
         | Ty::Union(_)
         | Ty::Function { .. }
         | Ty::Future(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
@@ -178,6 +177,7 @@ pub fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
         | Object::ImplRule(_)
         | Object::Class(_)
         | Object::Instance
+        | Object::RustInstance(_)
         | Object::Enum(_)
         | Object::TypeAlias(_)
         | Object::Variant(_)
@@ -189,7 +189,6 @@ pub fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
         | Object::Tuple(_)
         | Object::Map(_)
         | Object::Future(_)
-        | Object::RustData(_)
         | Object::Type(_) => None,
         Object::Cell(cell) => value_primitive(vm, cell.load()),
         Object::Tombstone => Object::tombstone_reached(),

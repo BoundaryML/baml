@@ -23,8 +23,8 @@ use std::{
 };
 
 use bex_project::{
-    BexExternalAdt, BexExternalValue, Bounded, HostKey, HostValueArc, HostValueKind, MediaKind,
-    MediaValue, PromptAst, PromptAstSimple, WireHead, WireTy,
+    BexExternalAdt, BexExternalValue, Bounded, ConcreteMediaKind, HostKey, HostValueArc,
+    HostValueKind, MediaValue, PromptAst, PromptAstSimple, WireHead, WireTy,
 };
 use indexmap::IndexMap;
 
@@ -112,8 +112,9 @@ pub struct InboundOwners<'a> {
     table: &'a CffiHandleTable,
     /// Engine references not yet drained, counted per occurrence.
     engine: HashMap<TableKey, usize>,
-    /// Host registrations not yet interned, with the kind each arrived under.
-    host: HashMap<HostKey, HostValueKind>,
+    /// Host references not yet interned, counted per occurrence: each one the
+    /// host handed the engine, which a refusal gives back.
+    host: HashMap<HostKey, usize>,
 }
 
 impl<'a> InboundOwners<'a> {
@@ -220,13 +221,10 @@ impl<'a> InboundOwners<'a> {
     fn record(&mut self, handle: &BamlHandle) -> Result<(), CtypesError> {
         match WireHandle::try_from(handle)? {
             WireHandle::Engine(key) => *self.engine.entry(key).or_insert(0) += 1,
-            WireHandle::Host(key, kind) => match self.host.entry(key) {
-                Entry::Vacant(slot) => {
-                    slot.insert(kind);
-                }
-                Entry::Occupied(slot) if *slot.get() == kind => {}
-                Entry::Occupied(_) => return Err(CtypesError::HandleKindConflict(key.get())),
-            },
+            // Every occurrence is one reference the host transferred, whatever
+            // its kind: a request that names one key under two kinds is
+            // refused when it is interned, and gives every occurrence back.
+            WireHandle::Host(key, _) => *self.host.entry(key).or_insert(0) += 1,
         }
         Ok(())
     }
@@ -241,9 +239,15 @@ impl<'a> InboundOwners<'a> {
         }
     }
 
-    /// `key` was interned into a value; the engine now holds the registration.
+    /// One occurrence of `key` was interned into a value; the engine's
+    /// identity for it now holds that reference.
     fn interned(&mut self, key: HostKey) {
-        self.host.remove(&key);
+        if let Entry::Occupied(mut slot) = self.host.entry(key) {
+            *slot.get_mut() -= 1;
+            if *slot.get() == 0 {
+                slot.remove();
+            }
+        }
     }
 
     /// Decode one collected value.
@@ -314,13 +318,10 @@ impl Drop for InboundOwners<'_> {
                 self.table.release(key);
             }
         }
-        // A key never interned owes the host one release: a fresh identity
-        // dropped at once fires it. A key the engine already holds, under this
-        // kind or another, was never this request's to release.
-        for (key, kind) in self.host.drain() {
-            if let Ok(arc) = HostValueArc::try_intern(key, kind) {
-                drop(arc);
-            }
+        // An occurrence never interned is a reference the host handed over
+        // that no identity took in: give it back.
+        for (key, occurrences) in self.host.drain() {
+            bex_project::host_release_dispatch::fire(key, occurrences as u64);
         }
     }
 }
@@ -473,25 +474,21 @@ fn decode_inbound(
             }
             WireHandle::Engine(key) => {
                 implied(stated.as_ref(), "handle")?;
-                // Internal invocation capabilities are control-channel data,
-                // not application values, even if the host forges their tag.
+                // A capability is control-channel data, not an application
+                // value, even if the host forges its tag.
                 let pinned = handle_table
                     .resolve(key)
                     .ok_or(CtypesError::InvalidHandleKey(key.get()))?;
-                if matches!(
-                    &*pinned,
-                    crate::CffiHandleTableEntry::InvocationState(_)
-                        | crate::CffiHandleTableEntry::TraceReservation(_)
-                ) {
+                let Some(value) = pinned.value() else {
                     return Err(CtypesError::InternalError(
-                        "invocation capabilities cannot be supplied as application values".into(),
+                        "capabilities cannot be supplied as application values".into(),
                     ));
-                }
-                let value = handle_table
+                };
+                handle_table
                     .drain(key)
                     .ok_or(CtypesError::InvalidHandleKey(key.get()))?;
                 owners.drained(key);
-                Ok(BexExternalValue::from((*value).clone()))
+                Ok(value)
             }
         },
     }
@@ -541,15 +538,12 @@ fn shape(node: &'static str, expected: &'static str, stated: &WireTy) -> CtypesE
 
 fn proto_media_to_bex_media(media: BamlValueMedia) -> Result<Arc<MediaValue>, CtypesError> {
     let kind = match MediaTypeEnum::try_from(media.media) {
-        Ok(MediaTypeEnum::Image) => MediaKind::Image,
-        Ok(MediaTypeEnum::Audio) => MediaKind::Audio,
-        Ok(MediaTypeEnum::Video) => MediaKind::Video,
-        Ok(MediaTypeEnum::Pdf) => MediaKind::Pdf,
-        Ok(MediaTypeEnum::Other) => MediaKind::Generic,
+        Ok(MediaTypeEnum::Image) => ConcreteMediaKind::Image,
+        Ok(MediaTypeEnum::Audio) => ConcreteMediaKind::Audio,
+        Ok(MediaTypeEnum::Video) => ConcreteMediaKind::Video,
+        Ok(MediaTypeEnum::Pdf) => ConcreteMediaKind::Pdf,
         Ok(MediaTypeEnum::MediaTypeUnspecified) | Err(_) => {
-            return Err(CtypesError::InternalError(
-                "portable media payload has no valid media kind".to_string(),
-            ));
+            return Err(CtypesError::MediaKindInvalid(media.media));
         }
     };
     let mime_type = media.mime_type.as_deref();
@@ -784,7 +778,7 @@ mod tests {
         InboundValue {
             value: Some(InboundValueVariant::Handle(BamlHandle {
                 key: key.get(),
-                handle_type: BamlHandleType::AdtMediaGeneric as i32,
+                handle_type: BamlHandleType::AdtMediaImage as i32,
             })),
             ..Default::default()
         }
@@ -792,8 +786,8 @@ mod tests {
 
     /// Any engine row a test can mint without a heap: a media value.
     fn media_row() -> CffiHandleTableEntry {
-        CffiHandleTableEntry::Adt(BexExternalAdt::Media(MediaValue::from_url(
-            MediaKind::Generic,
+        CffiHandleTableEntry::Adt(crate::TableAdt::Media(MediaValue::from_url(
+            ConcreteMediaKind::Image,
             "https://example.com/",
             None,
         )))
@@ -949,7 +943,7 @@ mod tests {
         let engine = InboundValue {
             value: Some(InboundValueVariant::Handle(BamlHandle {
                 key: 0,
-                handle_type: BamlHandleType::AdtMediaGeneric as i32,
+                handle_type: BamlHandleType::AdtMediaImage as i32,
             })),
             ..Default::default()
         };
@@ -1292,9 +1286,44 @@ mod tests {
             let PromptAstSimple::Media(media) = parts[1].as_ref() else {
                 panic!("expected media in the second prompt part")
             };
-            assert_eq!(media.kind, MediaKind::Image);
+            assert_eq!(media.kind, ConcreteMediaKind::Image);
             assert_eq!(media.mime_type().as_deref(), Some("image/png"));
             assert_eq!(media.base64().as_str(), "aW1hZ2U=");
+        }
+    }
+
+    #[test]
+    fn media_without_a_kind_of_its_own_is_refused_at_top_level_and_in_a_prompt() {
+        // 5 is the reserved generic kind; 0 is unspecified; 99 is no member.
+        for kind in [5, MediaTypeEnum::MediaTypeUnspecified as i32, 99] {
+            let media = BamlValueMedia {
+                media: kind,
+                mime_type: None,
+                value: Some(baml_value_media::Value::Url(
+                    "https://example.test/a.png".to_string(),
+                )),
+            };
+            let in_prompt = BamlValuePromptAst {
+                value: Some(PromptAstVariant::Simple(BamlValuePromptAstSimple {
+                    value: Some(PromptAstSimpleVariant::Media(media.clone())),
+                })),
+            };
+            for value in [
+                InboundValueVariant::MediaValue(media),
+                InboundValueVariant::PromptAstValue(in_prompt),
+            ] {
+                let refused = inbound_to_external(
+                    InboundValue {
+                        value_type: None,
+                        value: Some(value),
+                    },
+                    &CffiHandleTable::new(),
+                );
+                assert!(
+                    matches!(refused, Err(CtypesError::MediaKindInvalid(k)) if k == kind),
+                    "{refused:?}"
+                );
+            }
         }
     }
 

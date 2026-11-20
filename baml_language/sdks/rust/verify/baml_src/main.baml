@@ -5,3 +5,5 @@
 function rt_int(x: int) -> int { x }
 
 function rt_greet(name: string) -> string { "hi" }
+
+function rt_default(x: int = 3) -> int { x }

@@ -32,7 +32,7 @@ func cleanupCompletedHostError(payload []byte) {
 		return
 	}
 	if raised := completion.GetRaised(); raised != nil && raised.Handle != 0 {
-		unregisterHostValue(raised.Handle)
+		releaseHostValue(raised.Handle, 1)
 	}
 }
 
@@ -42,10 +42,10 @@ func registeredHostValueCount() int {
 	return len(hostValues.table)
 }
 
-func outboundHostCallableFailure(key uint64, extra *cffi.BamlOutboundValue) *cffi.BamlOutboundValue {
+func outboundHostCallableFailure(key, pin uint64, extra *cffi.BamlOutboundValue) *cffi.BamlOutboundValue {
 	fields := []*cffi.BamlOutboundMapEntry{
 		{Key: "message", Value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "native callback failed"}}},
-		{Key: "_handle", Value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_HandleValue{HandleValue: &cffi.BamlOutboundHandle{Key: key, HandleType: cffi.BamlHandleType_HOST_VALUE_OPAQUE}}}},
+		{Key: "_handle", Value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_HandleValue{HandleValue: &cffi.BamlOutboundHandle{Key: key, HandleType: cffi.BamlHandleType_HOST_VALUE_OPAQUE, Pin: pin}}}},
 	}
 	if extra != nil {
 		fields = append(fields, &cffi.BamlOutboundMapEntry{Key: "other", Value: extra})
@@ -88,11 +88,12 @@ func TestHostCallableTransactionRollbackAndRuntimeReleaseAreExact(t *testing.T) 
 	if _, ok := lookupHostCallable(handle.Key); !ok {
 		t.Fatal("committed callback was released by transaction rollback")
 	}
-	unregisterHostValue(handle.Key)
-	unregisterHostValue(handle.Key)
+	releaseHostValue(handle.Key, 1)
 	if _, ok := lookupHostCallable(handle.Key); ok {
 		t.Fatal("runtime release did not remove callback")
 	}
+	// A release of a key no longer registered is ignored.
+	releaseHostValue(handle.Key, 1)
 }
 
 func TestHostCallableRegistrationIsConcurrent(t *testing.T) {
@@ -103,9 +104,9 @@ func TestHostCallableRegistrationIsConcurrent(t *testing.T) {
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
-			keys <- registerHostValue(hostValue{callable: func(HostCallArguments) (Input, error) {
+			keys <- registerHostCallable(func(HostCallArguments) (Input, error) {
 				return NullInput(Null{}), nil
-			}})
+			})
 		}()
 	}
 	wait.Wait()
@@ -119,7 +120,7 @@ func TestHostCallableRegistrationIsConcurrent(t *testing.T) {
 			t.Fatalf("duplicate host-value key %d", key)
 		}
 		seen[key] = struct{}{}
-		unregisterHostValue(key)
+		releaseHostValue(key, 1)
 	}
 }
 
@@ -146,10 +147,10 @@ func TestMalformedHostDispatchCompletesWithStructuredError(t *testing.T) {
 	dispatchHostCall(999_999, 1, nil)
 	assertBridgeFailure(t, <-completed)
 
-	key := registerHostValue(hostValue{callable: func(HostCallArguments) (Input, error) {
+	key := registerHostCallable(func(HostCallArguments) (Input, error) {
 		return String("unused"), nil
-	}})
-	t.Cleanup(func() { unregisterHostValue(key) })
+	})
+	t.Cleanup(func() { releaseHostValue(key, 1) })
 	dispatchHostCall(key, 2, []byte{0xff})
 	assertBridgeFailure(t, <-completed)
 }
@@ -161,11 +162,11 @@ func TestHostDispatchPartitionsRequiredAndOptionalArguments(t *testing.T) {
 	completeNativeHostCall = func(_ uint32, payload []byte) { completed <- append([]byte(nil), payload...) }
 
 	observed := make(chan HostCallArguments, 1)
-	key := registerHostValue(hostValue{callable: func(arguments HostCallArguments) (Input, error) {
+	key := registerHostCallable(func(arguments HostCallArguments) (Input, error) {
 		observed <- arguments
 		return String("ok"), nil
-	}})
-	t.Cleanup(func() { unregisterHostValue(key) })
+	})
+	t.Cleanup(func() { releaseHostValue(key, 1) })
 	dispatchHostCall(key, 1, marshalHostDispatch(t,
 		&cffi.BamlToHostArg{Value: outboundString("required")},
 		&cffi.BamlToHostArg{Value: outboundString("optional"), IsOptionalArg: true, ArgName: "named"},
@@ -259,13 +260,13 @@ func TestRejectedHostDispatchReleasesEveryNativeHandleExactlyOnce(t *testing.T) 
 	}
 	t.Cleanup(func() { completeNativeHostCall = previous })
 
-	callableKey := registerHostValue(hostValue{callable: func(arguments HostCallArguments) (Input, error) {
+	callableKey := registerHostCallable(func(arguments HostCallArguments) (Input, error) {
 		if arguments.RequiredCount() != 1 {
 			return InvalidInput("bad arity"), HostCallableArityError(1, arguments.RequiredCount())
 		}
 		return String("ok"), nil
-	}})
-	t.Cleanup(func() { unregisterHostValue(callableKey) })
+	})
+	t.Cleanup(func() { releaseHostValue(callableKey, 1) })
 	handle := func(key uint64) *cffi.BamlToHostArg {
 		return &cffi.BamlToHostArg{Value: outboundMediaHandle(key)}
 	}
@@ -312,29 +313,56 @@ func TestRejectedHostDispatchReleasesEveryNativeHandleExactlyOnce(t *testing.T) 
 	}
 }
 
-func TestFailureResultReleasesOnlyOpaqueHostIdentityAfterFormatting(t *testing.T) {
+// An error envelope owns the pins of the host values it carries, not their
+// keys: the keys stay registered until the engine gives them back, and a host
+// value the error carries stays the value that was sent.
+func TestFailureResultOwnsPinsNotHostKeys(t *testing.T) {
+	released := installOutboundReleaseRecorder(t)
 	baseline := registeredHostValueCount()
-	opaqueKey := registerHostValue(hostValue{opaque: errors.New("native callback failed")})
-	callableKey := registerHostValue(hostValue{callable: func(HostCallArguments) (Input, error) {
+	cell, opaqueKey := registerHostCell(errors.New("native callback failed"))
+	callableKey := registerHostCallable(func(HostCallArguments) (Input, error) {
 		return String("still live"), nil
-	}})
+	})
 	callableHandle := &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_HandleValue{HandleValue: &cffi.BamlOutboundHandle{
-		Key: callableKey, HandleType: cffi.BamlHandleType_HOST_VALUE_CALLABLE,
+		Key: callableKey, HandleType: cffi.BamlHandleType_HOST_VALUE_CALLABLE, Pin: 902,
 	}}}
-	value := outboundHostCallableFailure(opaqueKey, callableHandle)
+	value := outboundHostCallableFailure(opaqueKey, 901, callableHandle)
 	_, err := decodeResultEnvelope(&cffi.BamlOutboundResult{Result: &cffi.BamlOutboundResult_Error{Error: &cffi.BamlOutboundError{Value: value}}})
 	if err == nil || !strings.Contains(err.Error(), "native callback failed") {
 		t.Fatalf("formatted callback failure = %v", err)
 	}
-	if got := registeredHostValueCount(); got != baseline+1 {
-		t.Fatalf("registry count after failure formatting = %d, want %d", got, baseline+1)
+	if got := registeredHostValueCount(); got != baseline+2 {
+		t.Fatalf("registry count after failure formatting = %d, want %d", got, baseline+2)
+	}
+	if len(*released) != 0 {
+		t.Fatalf("the error released %v while it is held", *released)
+	}
+	var failure *BamlError
+	if !errors.As(err, &failure) {
+		t.Fatalf("failure %T is not a BamlError", err)
+	}
+	handleField := failure.payload.value.GetClassValue().GetFields()[1].GetValue()
+	carried, err := Value{value: handleField, owner: failure.payload.owner}.HostValue()
+	if err != nil || carried.cell != cell {
+		t.Fatalf("the error carries %v, %v; want the registered cell", carried, err)
+	}
+
+	releaseResultOwner(failure.payload.owner)
+	got := append([]uint64(nil), (*released)...)
+	sort.Slice(got, func(i, j int) bool { return got[i] < got[j] })
+	if !reflect.DeepEqual(got, []uint64{901, 902}) {
+		t.Fatalf("pins released = %v, want [901 902]", got)
 	}
 	if _, ok := lookupHostCallable(callableKey); !ok {
-		t.Fatal("failure cleanup incorrectly released a callable handle")
+		t.Fatal("releasing the error released a callable key")
 	}
-	unregisterHostValue(callableKey)
+	releaseHostValue(opaqueKey, 1)
+	releaseHostValue(callableKey, 1)
 	if got := registeredHostValueCount(); got != baseline {
 		t.Fatalf("registry did not return to baseline: got %d, want %d", got, baseline)
+	}
+	if carried.Value() == nil || carried.Value().(error).Error() != "native callback failed" {
+		t.Fatalf("the carried host value is %v after its key was released", carried.Value())
 	}
 }
 
@@ -346,12 +374,12 @@ func TestHostInvocationCarriesStateAndCancellationUntilActualExit(t *testing.T) 
 	releaseOutboundHandle = func(uint64) {}
 	entered := make(chan HostCallArguments, 1)
 	exit := make(chan struct{})
-	key := registerHostValue(hostValue{callable: func(arguments HostCallArguments) (Input, error) {
+	key := registerHostCallable(func(arguments HostCallArguments) (Input, error) {
 		entered <- arguments
 		<-exit
 		return String("done"), nil
-	}})
-	t.Cleanup(func() { unregisterHostValue(key) })
+	})
+	t.Cleanup(func() { releaseHostValue(key, 1) })
 	payload, err := proto.Marshal(&cffi.HostInvocation{HostValueKey: key, CallbackId: 707, EffectiveState: 1234,
 		ApplicationArgs: marshalHostDispatch(t)})
 	if err != nil {
@@ -408,11 +436,11 @@ func TestHostInvocationCapturedContextSurvivesNormalCompletion(t *testing.T) {
 	completeNativeHostCall = func(_ uint32, _ []byte) { completed <- struct{}{} }
 	releaseOutboundHandle = func(uint64) {}
 	captured := make(chan context.Context, 1)
-	key := registerHostValue(hostValue{callable: func(arguments HostCallArguments) (Input, error) {
+	key := registerHostCallable(func(arguments HostCallArguments) (Input, error) {
 		captured <- arguments.Context()
 		return String("done"), nil
-	}})
-	t.Cleanup(func() { unregisterHostValue(key) })
+	})
+	t.Cleanup(func() { releaseHostValue(key, 1) })
 	payload, err := proto.Marshal(&cffi.HostInvocation{HostValueKey: key, CallbackId: 708, EffectiveState: 4321,
 		ApplicationArgs: marshalHostDispatch(t)})
 	if err != nil {

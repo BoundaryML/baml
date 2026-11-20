@@ -1,0 +1,5 @@
+function f() -> int {
+    match (some_long_scrutinee_number_one, some_long_scrutinee_number_two, some_long_scrutinee_number_three) {
+        _ => 0,
+    }
+}

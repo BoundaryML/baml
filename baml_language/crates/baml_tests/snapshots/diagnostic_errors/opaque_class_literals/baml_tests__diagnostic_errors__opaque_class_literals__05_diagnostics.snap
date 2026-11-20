@@ -4,16 +4,16 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0173
 
-  × class `baml.sync.Semaphore` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
-   ╭─[opaque_class_literals.baml:8:16]
- 8 │     let fake = baml.sync.Semaphore { _handle: token._handle };
-   ·                ──────────────────────────────────────────────
+  × class `baml.sync.Semaphore` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
+   ╭─[opaque_class_literals.baml:6:5]
+ 6 │     baml.sync.Semaphore { ...limit }
+   ·     ────────────────────────────────
    ╰────
 
   [type] E0173
 
-  × class `baml.sync.Semaphore` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
-    ╭─[opaque_class_literals.baml:14:5]
- 14 │     baml.sync.Semaphore { ...limit }
-    ·     ────────────────────────────────
+  × class `baml.hash.DefaultHasher` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
+    ╭─[opaque_class_literals.baml:11:5]
+ 11 │     baml.hash.DefaultHasher {}
+    ·     ──────────────────────────
     ╰────

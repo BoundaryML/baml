@@ -10,16 +10,16 @@
 use baml_syntax::{
     Token,
     nodes::{
-        AnyExpr, AnyLiteralTypeValue, AnyType, AnyTypeArg, Arenas, ArrayType, AssocTypeBinding,
+        AnyExpr, AnyLiteralTypeValue, AnyType, AnyTypeArg, ArrayType, AssocTypeBinding,
         BacktickString, FunctionType, FunctionTypeParam, FunctionTypeParamName, LiteralType,
-        NodeKind, OptionalType, ParenType, PathType, QualifiedPath, ThrowsClause, TupleType,
-        TypeArgs, UnionArm, UnionType,
+        OptionalType, ParenType, PathType, QualifiedPath, ThrowsClause, TupleType, TypeArgs,
+        UnionArm, UnionType,
     },
     token::{
         Ident, KindSet, TokenIdx, TokenKind, TokenSet as _, ctx, kw, lit, punct,
         sets::{LiteralTypeToken, NameToken, StringToken},
     },
-    tree::{AnyNode as _, AnyNodeId, Bogus, Id, Missing, SepItem, TokenRange, Visitor},
+    tree::{AnyNode as _, AnyNodeId, Bogus, Id, Missing, NodeUnion as _, SepItem, TokenRange},
 };
 
 use crate::{
@@ -791,42 +791,7 @@ fn is_function_shaped(p: &Parser<'_, '_>, mut ty: AnyType) -> bool {
 
 /// Whether the tree under `ty` holds no `Missing` and no `Bogus`.
 fn is_complete(p: &Parser<'_, '_>, ty: AnyType) -> bool {
-    struct Completeness {
-        complete: bool,
-        pending: Vec<AnyNodeId>,
-    }
-    impl Visitor for Completeness {
-        fn node(&mut self, _field: &'static str, id: AnyNodeId) {
-            if Arenas::kind(id) == NodeKind::Bogus {
-                self.complete = false;
-            } else {
-                self.pending.push(id);
-            }
-        }
-        fn token(&mut self, _field: &'static str, _token: TokenIdx) {}
-        fn range(&mut self, _field: &'static str, _range: TokenRange) {}
-        fn missing(&mut self, _field: &'static str, _missing: Missing) {
-            self.complete = false;
-        }
-    }
-    if matches!(ty, AnyType::Bogus(_)) {
-        return false;
-    }
-    let root = ty
-        .any_node_id()
-        .unwrap_or_else(|| unreachable!("every `AnyType` alternative is a node"));
-    let arenas = p.out.arenas();
-    let mut walk = Completeness {
-        complete: true,
-        pending: vec![root],
-    };
-    while let Some(id) = walk.pending.pop() {
-        arenas.walk_node(id, &mut walk);
-        if !walk.complete {
-            return false;
-        }
-    }
-    true
+    baml_syntax::complete::check(p.out.arenas(), ty.node_id()).is_ok()
 }
 
 /// E0175 for each of `pipes`, with two explicit groupings of the owner

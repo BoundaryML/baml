@@ -57,7 +57,11 @@ class Media {
         provider_id: string? = null,
         revised_prompt: string? = null,
     ) -> Media {
-        Media { media: value, provider_id: provider_id, revised_prompt: revised_prompt }
+        Media {
+            media: value,
+            provider_id: provider_id,
+            revised_prompt: revised_prompt,
+        }
     }
 }
 

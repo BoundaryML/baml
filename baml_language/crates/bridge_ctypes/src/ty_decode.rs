@@ -236,7 +236,6 @@ pub(crate) fn live_keys(ty: &BamlTy, f: &mut impl FnMut(TableKey)) {
         | TyVariant::Literal(_)
         | TyVariant::Unknown(_)
         | TyVariant::Media(_)
-        | TyVariant::RustType(_)
         | TyVariant::MetaType(_)
         | TyVariant::Resource(_)
         | TyVariant::PromptAst(_)
@@ -356,7 +355,6 @@ pub fn proto_ty_to_wire_ty(ty: &BamlTy) -> Result<ParsedTy, CtypesError> {
             Box::new(opt_to_wire_ty(fut.value.as_deref(), "future's value type")?),
             Box::new(opt_to_wire_ty(fut.error.as_deref(), "future's error type")?),
         ),
-        TyVariant::RustType(_) => RealizedTy::RustType,
         TyVariant::MetaType(_) => RealizedTy::Type,
         TyVariant::Resource(_) => RealizedTy::Resource,
         TyVariant::PromptAst(_) => RealizedTy::PromptAst,

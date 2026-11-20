@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+class A {
+    f: int
+        @alias(
+            "f",
+        ) /* block */
+        @description("g"),
+}

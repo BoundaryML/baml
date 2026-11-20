@@ -708,6 +708,12 @@ struct ManualActivation {
     context: Context,
 }
 
+/// What a `$trace` value selects, read from its instance's payload.
+enum TraceSelection<'a> {
+    Options(&'a bex_vm_types::trace::TraceOptionsData),
+    Reservation(&'a bex_vm_types::trace::ReservedSpanData),
+}
+
 #[derive(Clone, Default)]
 pub(crate) struct CallTrace {
     pub(crate) telemetry: crate::telemetry::TraceConfig,
@@ -893,7 +899,7 @@ pub(crate) mod tests {
         Object::Class(Box::new(Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Resource")),
-            fields: vec![],
+            body: bex_vm_types::ClassBody::Fields(vec![]),
             description: None,
             alias: None,
             docstring: None,
@@ -2020,7 +2026,7 @@ pub(crate) mod tests {
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("LiveArg")),
-            fields: Vec::new(),
+            body: bex_vm_types::ClassBody::Fields(Vec::new()),
             description: None,
             alias: None,
             docstring: None,
@@ -2079,7 +2085,7 @@ pub(crate) mod tests {
                 Vec::new(),
                 baml_type::Name::new("PendingNativeArg"),
             ),
-            fields: Vec::new(),
+            body: bex_vm_types::ClassBody::Fields(Vec::new()),
             description: None,
             alias: None,
             docstring: None,
@@ -2603,7 +2609,7 @@ pub enum VmExecState {
         args: Vec<Value>,
         /// The declared return type of the op, realized. A sys-op threads no
         /// type arguments, so the declaration realizes on its own; the one
-        /// exception, `call_host_value<T, E>`, is dispatched by the VM's own
+        /// exception, `_call_host_value<T, E>`, is dispatched by the VM's own
         /// host-call path with the callable's bound types.
         return_type: bex_vm_types::RealizedTy,
         /// The declared throws type of the op, realized likewise. A value a
@@ -3126,7 +3132,6 @@ fn value_type_tag(value: Value) -> i64 {
                 Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
-                Object::RustData(_) => type_tags::UNKNOWN,
                 Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
                 Object::TypeAlias(_) => type_tags::UNKNOWN,
@@ -3141,6 +3146,13 @@ fn value_type_tag(value: Value) -> i64 {
                     .class_object()
                     .type_tag
                     .as_i64(),
+                Object::RustInstance(instance) => {
+                    let class_obj = unsafe { instance.class.get() };
+                    let Object::Class(class) = class_obj else {
+                        unreachable!("RustInstance.class does not point to a Class object")
+                    };
+                    class.type_tag.as_i64()
+                }
             }
         }
     }
@@ -3816,35 +3828,44 @@ impl BexVm {
         state.select_context(context);
     }
 
-    pub(crate) fn span_creation_trace(&self, value: Value) -> Result<CallTrace, &'static str> {
-        use bex_vm_types::trace::{ReservedSpanData, TraceOptionsData};
-        let held = self.passthrough_trace()?;
-        let handle = self
-            .as_instance(&value)
-            .ok()
-            .filter(|i| i.field_len() > 0)
-            .map(|i| i.load_value(0))
-            .ok_or("invalid trace configuration")?;
-        let (options, reserved_id, reservation) = if let Ok(options) =
-            self.as_rust_data::<TraceOptionsData>(&handle)
-        {
-            (options.clone(), None, None)
-        } else if let Ok(reservation) = self.as_rust_data::<ReservedSpanData>(&handle) {
-            if !held
-                .reservation
-                .as_ref()
-                .is_some_and(|claim| claim.shares_claim(reservation))
-            {
-                return Err("reservation claim does not belong to this pass-through invocation");
+    /// What a `$trace` value selects: a `trace.Options`' settings or a
+    /// `trace.ReservedSpan`'s reservation, or `None` for any other value.
+    fn trace_selection(&self, value: Value) -> Option<TraceSelection<'_>> {
+        match &self.as_rust_instance(&value).ok()?.payload {
+            bex_vm_types::RustPayload::TraceOptions(options) => {
+                Some(TraceSelection::Options(options))
             }
-            let id = reservation.materialize(self.trace_scope)?;
-            (
-                reservation.options.clone(),
-                Some(id),
-                Some(reservation.clone()),
-            )
-        } else {
-            return Err("invalid trace configuration");
+            bex_vm_types::RustPayload::ReservedSpan(reservation) => {
+                Some(TraceSelection::Reservation(reservation))
+            }
+            _ => None,
+        }
+    }
+
+    pub(crate) fn span_creation_trace(&self, value: Value) -> Result<CallTrace, &'static str> {
+        let held = self.passthrough_trace()?;
+        let (options, reserved_id, reservation) = match self
+            .trace_selection(value)
+            .ok_or("invalid trace configuration")?
+        {
+            TraceSelection::Options(options) => (options.clone(), None, None),
+            TraceSelection::Reservation(reservation) => {
+                if !held
+                    .reservation
+                    .as_ref()
+                    .is_some_and(|claim| claim.shares_claim(reservation))
+                {
+                    return Err(
+                        "reservation claim does not belong to this pass-through invocation",
+                    );
+                }
+                let id = reservation.materialize(self.trace_scope)?;
+                (
+                    reservation.options.clone(),
+                    Some(id),
+                    Some(reservation.clone()),
+                )
+            }
         };
         Ok(CallTrace {
             telemetry: crate::telemetry::TraceConfig {
@@ -3860,21 +3881,16 @@ impl BexVm {
     }
 
     fn trace_config(&mut self, value: Value) -> Result<CallTrace, VmError> {
-        use bex_vm_types::trace::{ReservationError, ReservedSpanData, TraceOptionsData};
+        use bex_vm_types::trace::ReservationError;
 
-        let handle = self
-            .as_instance(&value)
-            .ok()
-            .and_then(|instance| (instance.field_len() > 0).then(|| instance.load_value(0)));
-        let Some(handle) = handle else {
+        let Some(selection) = self.trace_selection(value) else {
             return Err(
                 self.trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan")
             );
         };
-        let (options, reserved_id, reservation) =
-            if let Ok(options) = self.as_rust_data::<TraceOptionsData>(&handle) {
-                (options.clone(), None, None)
-            } else if let Ok(reservation) = self.as_rust_data::<ReservedSpanData>(&handle) {
+        let (options, reserved_id, reservation) = match selection {
+            TraceSelection::Options(options) => (options.clone(), None, None),
+            TraceSelection::Reservation(reservation) => {
                 if reservation.is_forwarded_claim()
                     && !self
                         .passthrough_trace()
@@ -3904,10 +3920,8 @@ impl BexVm {
                     Some(local),
                     Some(reservation.clone()),
                 )
-            } else {
-                return Err(self
-                    .trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan"));
-            };
+            }
+        };
         Ok(CallTrace {
             telemetry: crate::telemetry::TraceConfig {
                 mode: options.mode,
@@ -4430,8 +4444,21 @@ impl BexVm {
     /// The class of the instance `value` names, if it names one.
     #[inline]
     pub fn instance_class(&self, value: Value) -> Option<HeapPtr> {
-        let instance = self.get_instance(value.as_object_ptr()?)?;
-        Some(instance.class())
+        self.class_instance(value.as_object_ptr()?)
+            .map(|(class, _)| class)
+    }
+
+    /// The instance at `ptr` a BEP-042 `cleanup` runs on, if it is one.
+    pub fn cleanup_subject(&self, ptr: HeapPtr) -> Option<bex_vm_types::CleanupSubject> {
+        // SAFETY: as for `get_object`.
+        unsafe { bex_vm_types::CleanupSubject::at(ptr) }
+    }
+
+    /// The class the instance at `ptr` belongs to and the type arguments it
+    /// was built at, for a field-backed or a `@@rust_type` instance alike.
+    pub fn class_instance(&self, ptr: HeapPtr) -> Option<(HeapPtr, &[bex_vm_types::RealizedTy])> {
+        // SAFETY: as for `get_object`.
+        unsafe { Object::class_instance_at(ptr) }
     }
 
     /// The declaration of the standard library's error class `class`.
@@ -5066,19 +5093,21 @@ impl BexVm {
                 type_args_templates,
             } => {
                 let class_ptr = self.idx_to_ptr(*class_obj);
-                match value.as_object_ptr().and_then(|ptr| self.get_instance(ptr)) {
-                    Some(inst) if inst.class() == class_ptr => {
-                        // Class-pointer identity (above) fixes the class; each
-                        // type arg is then related *invariantly* through the
-                        // canonical algebra (BAML generics are invariant). No
-                        // covariance is needed for a reified frame type-param
-                        // that inference widened to a union (`T = Shape | Sq`
-                        // vs a value's narrower `Shape`): the algebra knows
-                        // `Sq <: Shape` and absorbs `Shape | Sq == Shape`, so
-                        // the invariant relation already holds — the retired
-                        // guard needed a covariant band-aid only because it
-                        // could not see that membership.
-                        let class_type_args = inst.type_args();
+                match value
+                    .as_object_ptr()
+                    .and_then(|ptr| self.class_instance(ptr))
+                {
+                    // Class-pointer identity (above) fixes the class; each
+                    // type arg is then related *invariantly* through the
+                    // canonical algebra (BAML generics are invariant). No
+                    // covariance is needed for a reified frame type-param
+                    // that inference widened to a union (`T = Shape | Sq`
+                    // vs a value's narrower `Shape`): the algebra knows
+                    // `Sq <: Shape` and absorbs `Shape | Sq == Shape`, so
+                    // the invariant relation already holds — the retired
+                    // guard needed a covariant band-aid only because it
+                    // could not see that membership.
+                    Some((instance_class, class_type_args)) if instance_class == class_ptr => {
                         debug_assert_eq!(
                             type_args_templates.len(),
                             class_type_args.len(),
@@ -5099,7 +5128,7 @@ impl BexVm {
                         }
                         Ok(true)
                     }
-                    _ => Ok(false),
+                    Some(_) | None => Ok(false),
                 }
             }
             _ => {
@@ -5110,10 +5139,12 @@ impl BexVm {
                     // because the shared `ENUM` type tag cannot tell `Color`
                     // from `Status`.
                     Ok(match value.as_object_ptr() {
-                        Some(val_ptr) => match self.get_object(val_ptr) {
-                            Object::Instance => self.instance_class(value) == Some(expected_ptr),
-                            Object::Variant(variant) => variant.enm == expected_ptr,
-                            _ => false,
+                        Some(val_ptr) => match self.class_instance(val_ptr) {
+                            Some((class, _)) => class == expected_ptr,
+                            None => matches!(
+                                self.get_object(val_ptr),
+                                Object::Variant(variant) if variant.enm == expected_ptr
+                            ),
                         },
                         None => false,
                     })
@@ -5449,13 +5480,14 @@ impl BexVm {
             Object::Instance => {
                 let inst = self.get_instance(value.as_object_ptr()?)?;
                 let class = inst.class_object();
-                let head = bex_vm_types::TypeHead::new(inst.class(), class.type_tag);
-                if let Some(kind) = self.stdlib_heads.media_kind(head) {
-                    ConcreteRealizedTy::Media(kind)
-                } else {
-                    debug_assert_eq!(inst.type_args().len(), class.generic_param_count);
-                    ConcreteRealizedTy::Class(head, inst.type_args().into())
-                }
+                debug_assert_eq!(inst.type_args().len(), class.generic_param_count);
+                // A generic instance's stored type arguments are already
+                // realized (`Box<int>` ⇒ `T = int`), so they are exactly the
+                // `ConcreteRealizedTy::Class` argument list.
+                ConcreteRealizedTy::Class(
+                    bex_vm_types::TypeHead::new(inst.class(), class.type_tag),
+                    inst.type_args().into(),
+                )
             }
             Object::Variant(v) => match self.get_object(v.enm) {
                 Object::Enum(e) => {
@@ -5463,6 +5495,33 @@ impl BexVm {
                 }
                 other => unreachable!(
                     "Variant.enm must point to an Enum, found {:?}",
+                    ObjectType::of(other)
+                ),
+            },
+            // A `@@rust_type` class's instance is the class at its realized
+            // type arguments, exactly as a plain instance is.
+            // A media value is an instance of a std media class
+            // (`baml.media.{Image,Audio,Video,Pdf}`), but its concrete type is
+            // the `image`/`audio`/… primitive (`ConcreteRealizedTy::Media`) —
+            // which is how the impl registry keys `implement I for image`.
+            Object::RustInstance(bex_vm_types::RustInstance {
+                payload:
+                    bex_vm_types::RustPayload::Image(media)
+                    | bex_vm_types::RustPayload::Audio(media)
+                    | bex_vm_types::RustPayload::Pdf(media)
+                    | bex_vm_types::RustPayload::Video(media),
+                ..
+            }) => ConcreteRealizedTy::Media(media.kind.into()),
+            Object::RustInstance(instance) => match self.get_object(instance.class) {
+                Object::Class(class) => {
+                    debug_assert_eq!(instance.class_type_args.len(), class.generic_param_count);
+                    ConcreteRealizedTy::Class(
+                        bex_vm_types::TypeHead::new(instance.class, class.type_tag),
+                        Box::from(instance.class_type_args.as_slice()),
+                    )
+                }
+                other => unreachable!(
+                    "RustInstance.class must point to a Class, found {:?}",
                     ObjectType::of(other)
                 ),
             },
@@ -5550,11 +5609,6 @@ impl BexVm {
                 Box::new(fut.returns().clone()),
                 Box::new(fut.throws().clone()),
             ),
-            // Opaque native data is a value of the leaf type `$rust_type`: a
-            // host's opaque value, a media or prompt payload, a Rust-backed
-            // resource. Membership in `$rust_type` is what a `$rust_type` field
-            // or a type variable bound to it asks, and it is decidable.
-            Object::RustData(_) => ConcreteRealizedTy::RustType,
 
             Object::Tombstone => Object::tombstone_reached(),
 
@@ -5827,6 +5881,10 @@ impl BexVm {
             Object::Instance => self
                 .get_instance(ptr)
                 .and_then(|instance| instance.class_object().owner.package()),
+            Object::RustInstance(instance) => match self.get_object(instance.class) {
+                Object::Class(class) => class.owner.package(),
+                _ => None,
+            },
             Object::Variant(variant) => match self.get_object(variant.enm) {
                 Object::Enum(enm) => enm.owner.package(),
                 _ => None,
@@ -7195,70 +7253,126 @@ impl BexVm {
         Ok(Value::object(self.tlab.alloc(Object::Bigint(arc))))
     }
 
-    /// Downcast a `Value` carrying a heap pointer to `Object::RustData` to `&T`.
-    ///
-    /// Used by generated `view::` struct accessors for `$rust_type` fields.
-    pub fn as_rust_data<T: bex_vm_types::BexRustData>(
+    /// The foreign payload of the `@@rust_type` instance `value`, as a shared
+    /// `Arc<T>`, so a native can keep it while it borrows `&mut BexVm` to
+    /// allocate. Only a bare `@@rust_type` class's payload is foreign; a kind
+    /// with a variant of its own is read through its class's view.
+    pub fn foreign_payload<T: bex_vm_types::BexRustData>(
         &self,
         value: &Value,
-    ) -> Result<&T, VmInternalError> {
-        let Some(ptr) = value.as_object_ptr() else {
-            return Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::RustData),
-                got: self.type_of(value),
-            });
-        };
-        let obj = self.get_object(ptr);
-        match obj {
-            Object::RustData(arc) => {
-                arc.downcast_ref::<T>()
-                    .ok_or_else(|| VmInternalError::RustTypeError {
-                        expected: TypeId::of::<T>(),
-                        got: arc.payload_type_id(),
-                    })
-            }
-            _ => Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::RustData),
-                got: self.type_of(value),
-            }),
-        }
-    }
-
-    /// Clone the `Arc` out of the `$rust_type` field `field` of the instance
-    /// `holder`, so a native can keep using the payload while it borrows
-    /// `&mut BexVm` to allocate.
-    pub fn rust_data_field<T: bex_vm_types::BexRustData>(
-        &self,
-        holder: &Value,
-        field: usize,
     ) -> Result<Arc<T>, VmInternalError> {
-        let handle = self.as_instance(holder)?.load_value(field);
-        let Some(ptr) = handle.as_object_ptr() else {
-            return Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::RustData),
-                got: self.type_of(&handle),
-            });
+        let payload = &self.as_rust_instance(value)?.payload;
+        let mismatch = || VmInternalError::RustTypeError {
+            expected: TypeId::of::<T>(),
+            got: payload.payload_type_id(),
         };
-        match self.get_object(ptr) {
-            Object::RustData(arc) => {
-                let got = arc.payload_type_id();
-                arc.clone()
-                    .downcast_payload::<T>()
-                    .map_err(|_| VmInternalError::RustTypeError {
-                        expected: TypeId::of::<T>(),
-                        got,
-                    })
-            }
-            _ => Err(VmInternalError::TypeError {
-                expected: Type::Object(ObjectType::RustData),
-                got: self.type_of(&handle),
-            }),
+        match payload {
+            bex_vm_types::RustPayload::Foreign(data) => Arc::clone(data)
+                .downcast_payload::<T>()
+                .map_err(|_| mismatch()),
+            bex_vm_types::RustPayload::DefaultHasher(_)
+            | bex_vm_types::RustPayload::Sha256(_)
+            | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+            | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+            | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+            | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+            | bex_vm_types::RustPayload::Regex(_)
+            | bex_vm_types::RustPayload::CsvRecord(_)
+            | bex_vm_types::RustPayload::Semaphore(_)
+            | bex_vm_types::RustPayload::Permit(_)
+            | bex_vm_types::RustPayload::Ticket(_)
+            | bex_vm_types::RustPayload::CancelToken(_)
+            | bex_vm_types::RustPayload::SpanId(_)
+            | bex_vm_types::RustPayload::TraceOptions(_)
+            | bex_vm_types::RustPayload::ReservedSpan(_)
+            | bex_vm_types::RustPayload::File(_)
+            | bex_vm_types::RustPayload::Glob(_)
+            | bex_vm_types::RustPayload::OutputFormat(_)
+            | bex_vm_types::RustPayload::Lock(_)
+            | bex_vm_types::RustPayload::TcpStream(_)
+            | bex_vm_types::RustPayload::TcpListener(_)
+            | bex_vm_types::RustPayload::UdpSocket(_)
+            | bex_vm_types::RustPayload::Xoshiro256PlusPlus(_)
+            | bex_vm_types::RustPayload::ChaCha20(_)
+            | bex_vm_types::RustPayload::InterfaceWitness(_)
+            | bex_vm_types::RustPayload::CsvReader(_)
+            | bex_vm_types::RustPayload::CsvWriter(_)
+            | bex_vm_types::RustPayload::ClassBuilder(_)
+            | bex_vm_types::RustPayload::ChildProcess(_)
+            | bex_vm_types::RustPayload::ReadPipe(_)
+            | bex_vm_types::RustPayload::WritePipe(_)
+            | bex_vm_types::RustPayload::WebSocket(_)
+            | bex_vm_types::RustPayload::HttpBody(_)
+            | bex_vm_types::RustPayload::SseStream(_)
+            | bex_vm_types::RustPayload::HttpServer(_)
+            | bex_vm_types::RustPayload::TlsKeys(_)
+            | bex_vm_types::RustPayload::HostValue(_)
+            | bex_vm_types::RustPayload::Image(_)
+            | bex_vm_types::RustPayload::Audio(_)
+            | bex_vm_types::RustPayload::Pdf(_)
+            | bex_vm_types::RustPayload::Video(_)
+            | bex_vm_types::RustPayload::Prompt(_) => Err(mismatch()),
         }
     }
 
     /// The instance `value` names, or a type error.
     ///
     /// Used by generated glue code to construct `view::` structs.
+    /// The `@@rust_type` instance `value` holds.
+    pub fn as_rust_instance(
+        &self,
+        value: &Value,
+    ) -> Result<&bex_vm_types::RustInstance, VmInternalError> {
+        let mismatch = || VmInternalError::TypeError {
+            expected: Type::Object(ObjectType::RustInstance),
+            got: self.type_of(value),
+        };
+        let ptr = value.as_object_ptr().ok_or_else(mismatch)?;
+        match self.get_object(ptr) {
+            Object::RustInstance(instance) => Ok(instance),
+            _ => Err(mismatch()),
+        }
+    }
+
+    /// Allocate an instance of the `@@rust_type` class `class` at
+    /// `class_type_args`, holding `payload`.
+    pub fn alloc_rust_instance(
+        &mut self,
+        class: HeapPtr,
+        class_type_args: bex_vm_types::ThinVec<bex_vm_types::RealizedTy>,
+        payload: bex_vm_types::RustPayload,
+    ) -> Value {
+        Value::object(
+            self.tlab
+                .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
+                    class,
+                    class_type_args,
+                    payload,
+                ))),
+        )
+    }
+
+    /// A media value, as an instance of its kind's wrapper class
+    /// (`baml.media.Image`, …).
+    pub fn alloc_media(&mut self, media: bex_vm_types::payload::Media) -> Value {
+        let class = self.lang_object(media.kind.wrapper_class());
+        self.alloc_rust_instance(
+            class,
+            bex_vm_types::ThinVec::new(),
+            bex_vm_types::RustPayload::media(media),
+        )
+    }
+
+    /// A rendered prompt, as an `ai.Prompt`.
+    pub fn alloc_prompt(&mut self, prompt: bex_vm_types::payload::Prompt) -> Value {
+        let class = self.lang_object(crate::lang_items::AI_PROMPT);
+        self.alloc_rust_instance(
+            class,
+            bex_vm_types::ThinVec::new(),
+            bex_vm_types::RustPayload::Prompt(prompt),
+        )
+    }
+
     pub fn as_instance(&self, value: &Value) -> Result<InstanceRef, VmInternalError> {
         value
             .as_object_ptr()
@@ -7481,10 +7595,8 @@ impl BexVm {
             // `ns_errors/errors.baml`: message, class_name, language,
             // traceback?, _handle. `traceback?` surfaces as `Null` when
             // absent; `language` is the empty string when absent (kept
-            // non-null for class-field type consistency). `_handle` is
-            // an opaque `$rust_type` slot — populated as
-            // `Object::RustData(Arc<HostValueArc>)` when a same-host
-            // rehydration handle is attached, else `Null`.
+            // non-null for class-field type consistency). `_handle` is the
+            // `baml.host.Value` around the host's reference to its exception.
             VmBamlError::HostCallable {
                 class_name,
                 message,
@@ -7498,12 +7610,16 @@ impl BexVm {
                 let traceback_val =
                     traceback.map_or(Value::NULL, |t| Value::object(self.alloc_string(t)));
                 // `handle` is required: `HostCallable` always carries a
-                // reference to the originating host exception. Materialize
-                // it as `Object::RustData(Arc<HostValueArc>)` so the BAML
-                // class's `_handle` slot can be downcast back to the
-                // original host-value reference on round-trip.
-                let dyn_arc: std::sync::Arc<dyn bex_vm_types::BexRustData> = handle;
-                let handle_val = Value::object(self.tlab.alloc(Object::RustData(dyn_arc)));
+                // reference to the originating host exception, which crosses
+                // back to the host as that reference.
+                let host_value = self.lang_object(crate::lang_items::BAML_HOST_VALUE);
+                let handle_val = Value::object(self.tlab.alloc(Object::RustInstance(
+                    bex_vm_types::RustInstance::new(
+                        host_value,
+                        bex_vm_types::ThinVec::new(),
+                        bex_vm_types::RustPayload::HostValue(handle),
+                    ),
+                )));
                 (
                     ErrorClass::HostCallable,
                     vec![
@@ -8854,7 +8970,6 @@ impl BexVm {
             | Concrete::Enum(_)
             | Concrete::Tuple(_)
             | Concrete::Function { .. }
-            | Concrete::RustType
             | Concrete::Type
             | Concrete::Resource
             | Concrete::PromptAst
@@ -8889,7 +9004,7 @@ impl BexVm {
     /// (`execute_call_from_locals_offset`).
     ///
     /// Sys-op arg layout (mirrors the codegen-generated glue for
-    /// `baml.host.call_host_value` in `sys_ops/.../io_generated.rs`):
+    /// `baml.host._call_host_value` in `sys_ops/.../io_generated.rs`):
     ///   args\[0\] = `handle`     (`Object::HostClosure` → `BexExternalValue::HostValue`)
     ///   args\[1\] = `args_pack`  (`Object::Array` of `[positional: Object::Array, optional: Object::Map]`)
     ///   args\[2\] = `ret_ty`     (`Object::Type<TypeValue>`) — `type_arg_0` (`T`)

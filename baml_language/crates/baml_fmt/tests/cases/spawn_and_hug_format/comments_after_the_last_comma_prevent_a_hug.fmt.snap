@@ -1,0 +1,13 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    run(
+        h(),
+        /*C*/
+    );
+    run(
+        h(), // c
+    );
+    0
+}

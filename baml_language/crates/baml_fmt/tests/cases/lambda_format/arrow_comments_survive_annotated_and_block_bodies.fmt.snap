@@ -6,8 +6,6 @@ function top() -> /* result */ int {
 }
 
 function apply() -> int {
-    let identity = (x: int) -> /* body */ {
-        x
-    };
+    let identity = (x: int) -> /* body */ { x };
     identity(1)
 }

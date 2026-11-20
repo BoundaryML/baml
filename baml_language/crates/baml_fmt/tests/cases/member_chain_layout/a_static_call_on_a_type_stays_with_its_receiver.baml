@@ -1,0 +1,8 @@
+function f(client: Client, spec: Spec, items: Item[]) -> Out {
+    let agent = Agent.new(client = client, on_event = on_event).run(spec, $trace = trace._passthrough()).value;
+    let duration = baml.time.Duration.from_milliseconds(self.backoff.delay_ms(attempt, retry.cause)).as_seconds();
+    let thrown = baml.errors.UnknownError.with_message<never>(error, "could not start the agent span at all");
+    let field = root.internal._media_of_kind(turn, shape.split(":").at(1) ?? "").length() > 0 && other;
+    let built = Agent.new(client = client, on_event = on_event, retries = 3, timeout = timeout_ms).run(spec);
+    agent
+}

@@ -7,8 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // the accepted shapes get are in the type fixture `divergence_scoping`, and
 // their run-time behavior in the corpus namespace `ns_loop_narrowing`.
 
-class Tag {
-}
+class Tag {}
 
 function thrower(a: int) -> int throws string {
     if (a > 0) {
@@ -21,11 +20,10 @@ function thrower(a: int) -> int throws string {
 function or_right_operand_may_not_run(a: int, xs: int[]) -> int {
     let x: int | Tag = a;
     x = a;
-    for let v in xs {
-        let ok = v < 5
-            || {
-                return 7;
-            };
+    for (let v in xs) {
+        let ok = v < 5 || {
+            return 7;
+        };
         x = Tag {};
     }
     let u: int = x;
@@ -36,11 +34,10 @@ function or_right_operand_may_not_run(a: int, xs: int[]) -> int {
 function null_coalesce_fallback_may_not_run(a: int, o: int?, xs: int[]) -> int {
     let x: int | Tag = a;
     x = a;
-    for let v in xs {
-        let w = o
-            ?? {
-                return 7;
-            };
+    for (let v in xs) {
+        let w = o ?? {
+            return 7;
+        };
         x = Tag {};
     }
     let u: int = x;
@@ -51,11 +48,11 @@ function null_coalesce_fallback_may_not_run(a: int, o: int?, xs: int[]) -> int {
 function catch_arm_may_not_run(a: int, xs: int[]) -> int {
     let x: int | Tag = a;
     x = a;
-    for let v in xs {
+    for (let v in xs) {
         let r = thrower(v) catch (e) {
             _ => {
                 return 5;
-            }
+            },
         };
         x = Tag {};
     }
@@ -69,10 +66,9 @@ function null_coalesce_fallback_in_a_branch(a: int, o: int?) -> int {
     x = a;
     if (a > 0) {
         x = Tag {};
-        let w = o
-            ?? {
-                return 5;
-            };
+        let w = o ?? {
+            return 5;
+        };
     }
     let u: int = x;
     u
@@ -80,10 +76,9 @@ function null_coalesce_fallback_in_a_branch(a: int, o: int?) -> int {
 
 // A `??` fallback that returns does not return for the whole body.
 function null_coalesce_fallback_is_not_the_return(o: int?) -> int {
-    let v = o
-        ?? {
-            return 1;
-        };
+    let v = o ?? {
+        return 1;
+    };
 }
 
 class Box {
@@ -96,12 +91,10 @@ class Box {
 function optional_call_argument_write_may_be_skipped(a: int, b: Box?) -> int {
     let x: int | Tag = a;
     x = Tag {};
-    let r = b?.m(
-        {
-            x = a;
-            1
-        },
-    );
+    let r = b?.m({
+        x = a;
+        1
+    });
     let u: int = x;
     u
 }
@@ -112,13 +105,10 @@ function optional_call_argument_return_keeps_the_false_edge(a: int, b: Box?) -> 
     let x: int | Tag = a;
     x = Tag {};
     while (
-        b?.m(
-            {
-                x = a;
-                return 0;
-            },
-        )
-            == 1
+        b?.m({
+            x = a;
+            return 0;
+        }) == 1
     ) {}
     let u: int = x;
     u
@@ -128,11 +118,10 @@ function optional_call_argument_return_keeps_the_false_edge(a: int, b: Box?) -> 
 function null_coalesce_fallback_write_may_be_skipped(a: int, o: int?) -> int {
     let x: int | Tag = a;
     x = Tag {};
-    let r = o
-        ?? {
-            x = a;
-            0
-        };
+    let r = o ?? {
+        x = a;
+        0
+    };
     let u: int = x;
     u
 }
@@ -141,13 +130,12 @@ function null_coalesce_fallback_write_may_be_skipped(a: int, o: int?) -> int {
 function null_coalesce_fallback_continue_keeps_the_body_end(a: int, o: int?, xs: int[]) -> int {
     let x: int | Tag = a;
     x = a;
-    for let v in xs {
+    for (let v in xs) {
         x = Tag {};
-        let r = o
-            ?? {
-                x = a;
-                continue;
-            };
+        let r = o ?? {
+            x = a;
+            continue;
+        };
     }
     let u: int = x;
     u
@@ -156,11 +144,9 @@ function null_coalesce_fallback_continue_keeps_the_body_end(a: int, o: int?, xs:
 // A `return` inside a `?.` argument does not make the else block diverge.
 function let_else_with_a_return_in_an_optional_argument(p: int?, b: Box?) -> int {
     let v: int = p else {
-        b?.m(
-            {
-                return 1;
-            },
-        );
+        b?.m({
+            return 1;
+        });
     };
     v
 }

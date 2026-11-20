@@ -22,8 +22,8 @@ class Box<T> {
     value: T,
 }
 
-implements<T extends Named> Printable for Box<T> {
-  function display(self) -> string {
-    return self.value.label()
-  }
+implement<T extends Named> Printable for Box<T> {
+    function display(self) -> string {
+        return self.value.label();
+    }
 }

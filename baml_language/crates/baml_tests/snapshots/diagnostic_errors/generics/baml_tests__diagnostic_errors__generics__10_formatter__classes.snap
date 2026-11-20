@@ -51,17 +51,26 @@ class Pair<A, B> {
     }
 
     function swap(self) -> Pair<B, A> {
-        Pair<B, A> { first: self.second, second: self.first }
+        Pair<B, A> {
+            first: self.second,
+            second: self.first,
+        }
     }
 }
 
 function use_pair() -> string {
-    let p = Pair<int, string> { first: 1, second: "two" };
+    let p = Pair<int, string> {
+        first: 1,
+        second: "two",
+    };
     p.get_second()
 }
 
 function use_pair_swap() -> Pair<string, int> {
-    let p = Pair<int, string> { first: 1, second: "two" };
+    let p = Pair<int, string> {
+        first: 1,
+        second: "two",
+    };
     p.swap()
 }
 
@@ -134,7 +143,10 @@ function wrong_arity_extra() -> Box<int, string> {
 
 // Too few args (1 when 2 expected)
 function wrong_arity_partial() -> Pair<int> {
-    Pair<int> { first: 1, second: "two" }
+    Pair<int> {
+        first: 1,
+        second: "two",
+    }
 }
 
 // ============================================================
@@ -162,7 +174,9 @@ class Container<T> {
 }
 
 function use_nested() -> int {
-    let c = Container<int> { inner: Box<int> { value: 10 } };
+    let c = Container<int> {
+        inner: Box<int> { value: 10 },
+    };
     c.unwrap()
 }
 
@@ -220,7 +234,9 @@ class Stack<T> {
 }
 
 function use_stack() -> string {
-    let s = Stack<string> { items: ["a", "b", "c"] };
+    let s = Stack<string> {
+        items: ["a", "b", "c"],
+    };
     s.peek()
 }
 

@@ -90,34 +90,23 @@ pub fn _validate_host_options(options: Option<&BamlPyHandle>) -> PyResult<(bool,
 
 #[gen_stub_pyfunction]
 #[pyfunction]
-#[pyo3(signature = (definition, inherited, options, caller, inputs))]
+#[pyo3(signature = (marker, inherited, caller, inputs))]
 pub fn _begin_host_invocation(
-    definition: (String, String, String, u32, u32, String),
+    marker: &_HostMarker,
     inherited: Option<&BamlPyHandle>,
-    options: Option<&BamlPyHandle>,
     caller: (String, u32),
     inputs: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<(_HostExecution, BamlPyHandle, Vec<u8>)> {
-    let (module, qualified_name, source_file, definition_line, wrapper_line, display_name) =
-        definition;
-    let options =
-        bridge_cffi::host_instrumentation::options(options.map_or(0, |handle| handle.handle_key))
-            .map_err(host_error)?;
+    // The definition and options are the marker's, read once when the function
+    // was instrumented: a call reads no runtime state for them.
+    let marker = &marker.marker;
     let inputs = inputs
-        .filter(|_| options.inputs == Some(true))
+        .filter(|_| marker.options.inputs == Some(true))
         .map(crate::host_capture::capture);
     let (execution, key) = bridge_cffi::host_instrumentation::begin(
-        &bex_project::HostDefinition {
-            language: "python".into(),
-            module,
-            qualified_name,
-            source_file,
-            definition_line,
-            wrapper_line,
-            display_name,
-        },
+        &marker.definition,
         inherited.map_or(0, |handle| handle.handle_key),
-        &options,
+        &marker.options,
         &bex_project::HostCallSite {
             source_file: caller.0,
             line: caller.1,
@@ -126,13 +115,7 @@ pub fn _begin_host_invocation(
     )
     .map_err(host_error)?;
     let state_handle = BamlPyHandle::new(key, BamlHandleType::InvocationState as u64);
-    use prost::Message;
-    let cancel = bridge_ctypes::external_to_outbound(
-        &execution.inherited_state().cancellation_projection(),
-        &bridge_ctypes::CffiHandleTableOptions::for_wire(),
-    )
-    .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?
-    .encode_to_vec();
+    let cancel = bridge_cffi::host_instrumentation::cancel_token(&execution).map_err(host_error)?;
     Ok((
         _HostExecution {
             execution: std::sync::Mutex::new(Some(execution)),
@@ -142,16 +125,26 @@ pub fn _begin_host_invocation(
     ))
 }
 
+/// The marker of an instrumented function, which the decorator keeps beside
+/// the function and the bridge reads when the function is registered as a
+/// callback.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(frozen)]
+pub struct _HostMarker {
+    pub(crate) marker: std::sync::Arc<bex_project::HostMarker>,
+}
+
 #[gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (definition, options=None))]
 pub fn _define_host_marker(
     definition: (String, String, String, u32, u32, String),
     options: Option<&BamlPyHandle>,
-) -> PyResult<BamlPyHandle> {
+) -> PyResult<_HostMarker> {
     let (module, qualified_name, source_file, definition_line, wrapper_line, display_name) =
         definition;
-    let key = bridge_cffi::host_instrumentation::define_marker(
+    let key = options.map_or(0, |handle| handle.handle_key);
+    let marker = bridge_cffi::host_instrumentation::define_marker(
         bex_project::HostDefinition {
             language: "python".into(),
             module,
@@ -161,32 +154,23 @@ pub fn _define_host_marker(
             wrapper_line,
             display_name,
         },
-        options.map_or(0, |handle| handle.handle_key),
+        key,
     )
     .map_err(host_error)?;
-    Ok(BamlPyHandle::new(
-        key,
-        BamlHandleType::UntaggedRustData as u64,
-    ))
+    Ok(_HostMarker { marker })
 }
 
 /// Transfer the lifetime owner and its separate inherited carrier to Python.
 pub(crate) fn stream_frame(
     execution: bex_project::HostInvocation,
     state: BamlPyHandle,
-) -> PyResult<(_HostExecution, BamlPyHandle, Vec<u8>)> {
-    use prost::Message;
-    let cancel = bridge_ctypes::external_to_outbound(
-        &execution.inherited_state().cancellation_projection(),
-        &bridge_ctypes::CffiHandleTableOptions::for_wire(),
-    )
-    .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?
-    .encode_to_vec();
-    Ok((
+    cancel: Vec<u8>,
+) -> (_HostExecution, BamlPyHandle, Vec<u8>) {
+    (
         _HostExecution {
             execution: std::sync::Mutex::new(Some(execution)),
         },
         state,
         cancel,
-    ))
+    )
 }

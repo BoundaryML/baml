@@ -1535,25 +1535,6 @@ function foo(user: User) -> string {
     }
 
     #[test]
-    fn builtin_only_rust_type_is_rejected_in_user_file() {
-        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
-
-        let mut db = make_db();
-        let file = db.file(
-            "user_rust_type.baml",
-            "class Response {\n  _body $rust_type\n}",
-        );
-
-        let index = file_semantic_index(&db, file);
-        assert!(index.diagnostics().iter().any(|diag| {
-            matches!(
-                diag,
-                Hir2Diagnostic::BuiltinOnlySyntax { feature, .. } if feature == "$rust_type"
-            )
-        }));
-    }
-
-    #[test]
     fn builtin_http_file_has_no_phase1_contract_diagnostics() {
         let db = make_db();
         let builtin = baml_compiler2_hir::compiler2_all_files(&db)

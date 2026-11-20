@@ -115,16 +115,18 @@ pub struct Candidate<K> {
     pub key: K,
     /// The spelling the name would take with no other name in the scope.
     pub spelling: String,
-    /// Whether `spelling` is exactly what the user wrote. Authored spellings
-    /// are placed first, so a `next_cursor` keeps its name and a `nextCursor`
-    /// that only projects onto it is the one renamed.
+    /// Whether `spelling` is exactly what the user wrote. An authored spelling
+    /// keeps its name unless it is reserved, so a `next_cursor` keeps its name
+    /// and a `nextCursor` that only projects onto it is the one renamed.
     pub authored: bool,
 }
 
 /// Give every candidate in one scope a distinct spelling, none of them in
 /// `reserved`. A spelling already taken gets trailing underscores until it is
-/// free. Authored spellings are placed before projected ones; otherwise the
-/// input order decides, so callers pass candidates in a deterministic order.
+/// free. Authored spellings that are not reserved are placed first, then the
+/// authored spellings `reserved` displaces, then projected ones, so a renamed
+/// name never takes a spelling the user wrote. Otherwise the input order
+/// decides, so callers pass candidates in a deterministic order.
 pub fn allocate_distinct<'r, K: Eq + std::hash::Hash>(
     candidates: Vec<Candidate<K>>,
     reserved: impl IntoIterator<Item = &'r str>,
@@ -133,8 +135,11 @@ pub fn allocate_distinct<'r, K: Eq + std::hash::Hash>(
     let (authored, projected): (Vec<_>, Vec<_>) = candidates
         .into_iter()
         .partition(|candidate| candidate.authored);
-    authored
+    let (kept, displaced): (Vec<_>, Vec<_>) = authored
         .into_iter()
+        .partition(|candidate| !used.contains(&candidate.spelling));
+    kept.into_iter()
+        .chain(displaced)
         .chain(projected)
         .map(|candidate| {
             let spelling = allocate_one(&candidate.spelling, &mut used);
@@ -443,5 +448,28 @@ mod tests {
         assert_eq!(allocated["next_cursor"], "next_cursor");
         assert_eq!(allocated["nextCursor"], "next_cursor_");
         assert_eq!(allocated["baml"], "baml_");
+    }
+
+    #[test]
+    fn a_renamed_spelling_never_takes_an_authored_one() {
+        // The user's `Value` collides with the reserved `Value`, so it moves,
+        // past the `Value_` the user also wrote, whatever the input order;
+        // `value`, which only projects onto `Value`, moves after it.
+        let candidate = |key, spelling: &str, authored| Candidate {
+            key,
+            spelling: spelling.to_string(),
+            authored,
+        };
+        let allocated = allocate_distinct(
+            vec![
+                candidate("value", "Value", false),
+                candidate("Value", "Value", true),
+                candidate("Value_", "Value_", true),
+            ],
+            ["Value"],
+        );
+        assert_eq!(allocated["Value_"], "Value_");
+        assert_eq!(allocated["Value"], "Value__");
+        assert_eq!(allocated["value"], "Value___");
     }
 }

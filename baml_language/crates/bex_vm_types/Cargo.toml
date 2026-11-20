@@ -28,13 +28,21 @@ baml_version = { workspace = true }
 bex_resource_types = { workspace = true }
 bex_str = { workspace = true }
 btel_types = { workspace = true }
+sys_regex = { workspace = true }
+aes-gcm-siv = { workspace = true }
 borsh = { workspace = true }
+bytes = { workspace = true }
+chacha20poly1305 = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
+rand_chacha = { workspace = true }
+rand_xoshiro = { workspace = true }
 rustc-hash = { workspace = true }
+rustls-pki-types = { workspace = true }
 serde_json = { workspace = true, features = [ "arbitrary_precision", "preserve_order" ] }
 sha2 = { workspace = true }
 smallvec = { workspace = true }
+thin-vec = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "macros", "sync" ] }
 tokio-util = { workspace = true }

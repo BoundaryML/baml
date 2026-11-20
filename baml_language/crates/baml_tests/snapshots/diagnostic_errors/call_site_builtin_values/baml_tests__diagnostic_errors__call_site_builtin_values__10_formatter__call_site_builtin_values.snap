@@ -42,11 +42,7 @@ function optional_call() -> void {
 
 function specialized_spawn() -> baml.future.Future<int, never> {
     let launch = baml.spawn.__spawn<int, never>;
-    launch(
-        baml.spawn.Plan.new(body = () -> int {
-            1
-        }),
-    )
+    launch(baml.spawn.Plan.new(body = () -> int { 1 }))
 }
 
 function specialized_await_any(futures: baml.future.Future<int, never>[]) -> int {

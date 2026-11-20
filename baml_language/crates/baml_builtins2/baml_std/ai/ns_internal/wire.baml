@@ -107,7 +107,10 @@ function _wire_blocks(
 /// tell that the call did not run.
 function _flush_orphaned_calls(out: root.events.Event[], pending: string[]) -> void {
     for (let id in pending) {
-        out.push(root.events.ToolFailed { id: id, message: "No result provided" });
+        out.push(root.events.ToolFailed {
+            id: id,
+            message: "No result provided",
+        });
     }
     pending.clear();
 }

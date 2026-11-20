@@ -2,7 +2,7 @@
 //
 // Each case is a top-level `function` (to avoid the test-block local-boxing VM
 // bug) plus a `test` block that asserts on its result. Every server binds
-// "127.0.0.1:0"; the OS-assigned address is read directly from `server.addr`
+// "127.0.0.1:0"; the OS-assigned address is read directly from `server.addr()`
 // (`bind` resolves the port synchronously, so there's no busy-wait and no bind
 // race). The socket queues connections from bind time, so
 // a client may connect before `serve` begins accepting.
@@ -20,7 +20,7 @@ function server_roundtrip() -> string {
     };
     let resp = baml.http.send(baml.http.Request {
         method: "POST",
-        url: "http://" + server.addr + "/echo",
+        url: "http://" + server.addr() + "/echo",
         headers: { },
         body: "ping",
     });
@@ -41,7 +41,7 @@ function server_status_code() -> int {
             baml.http.Response.new(503, { }, "down".to_utf8())
         })
     };
-    let resp = baml.http.fetch("http://" + server.addr + "/");
+    let resp = baml.http.fetch("http://" + server.addr() + "/");
     task.cancel();
     resp.status_code
 }
@@ -59,7 +59,7 @@ function server_response_headers() -> string? {
             baml.http.Response.new(200, { "x-custom": "from-handler" }, "".to_utf8())
         })
     };
-    let resp = baml.http.fetch("http://" + server.addr + "/");
+    let resp = baml.http.fetch("http://" + server.addr() + "/");
     task.cancel();
     resp.headers.get("x-custom")
 }
@@ -83,7 +83,7 @@ function server_strips_framing_headers() -> string {
             )
         })
     };
-    let resp = baml.http.fetch("http://" + server.addr + "/");
+    let resp = baml.http.fetch("http://" + server.addr() + "/");
     let body = resp.text();
     task.cancel();
     body
@@ -107,7 +107,7 @@ function server_rejects_oversized_body() -> int {
     };
     let resp = baml.http.send(baml.http.Request {
         method: "POST",
-        url: "http://" + server.addr + "/",
+        url: "http://" + server.addr() + "/",
         headers: { },
         body: "this body is much longer than eight bytes",
     });
@@ -132,8 +132,8 @@ function server_isolates_handler_panic() -> bool {
             }
         })
     };
-    let boom = baml.http.fetch("http://" + server.addr + "/boom");
-    let good = baml.http.fetch("http://" + server.addr + "/ok");
+    let boom = baml.http.fetch("http://" + server.addr() + "/boom");
+    let good = baml.http.fetch("http://" + server.addr() + "/ok");
     task.cancel();
     boom.status_code == 500 && good.status_code == 200
 }
@@ -146,7 +146,7 @@ test "server_isolates_handler_panic" {
 function server_bind_resolves_ephemeral_port() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     // The OS picks a real port, so `.addr` is neither empty nor the ":0" we asked for.
-    server.addr != "" && server.addr != "127.0.0.1:0"
+    server.addr() != "" && server.addr() != "127.0.0.1:0"
 }
 
 test "server_bind_resolves_ephemeral_port" {
@@ -159,7 +159,7 @@ function server_reserve_after_cancel() -> string {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let request = baml.http.Request {
         method: "GET",
-        url: "http://" + server.addr + "/",
+        url: "http://" + server.addr() + "/",
         headers: { "connection": "close" },
         body: "",
     };
@@ -210,7 +210,7 @@ function server_bound_method_handler() -> string {
     let task = spawn { server.serve(greeter.handle) };
     let resp = baml.http.send(baml.http.Request {
         method: "POST",
-        url: "http://" + server.addr + "/",
+        url: "http://" + server.addr() + "/",
         headers: { },
         body: "there",
     });
@@ -256,7 +256,7 @@ function server_custom_config() -> int {
     };
     let resp = baml.http.send(baml.http.Request {
         method: "GET",
-        url: "http://" + server.addr + "/",
+        url: "http://" + server.addr() + "/",
         headers: { },
         body: "",
     });
@@ -287,4 +287,166 @@ function tls_config_handshake_timeout_arg() -> bool {
 
 test "tls_config_handshake_timeout_arg" {
     assert.is_true(tls_config_handshake_timeout_arg())
+}
+
+// A WebSocket echo: the server hands each upgraded connection to its `WsAccept`
+// as a `baml.ws.WebSocket` the runtime builds (the callback's argument), and the
+// client's socket is `baml.ws.connect`'s result. A text and a binary frame echo
+// back as what they were sent as, and the client's closing handshake ends the
+// exchange with the client's own code and reason.
+function server_websocket_echo() -> string {
+    let server = baml.http.Server.bind("127.0.0.1:0");
+    let task = spawn {
+        server.serve(
+            (req: baml.http.ServerRequest) -> baml.http.Response {
+                baml.http.Response.new(404, { }, "".to_utf8())
+            },
+            websocket = (req: baml.http.ServerRequest) -> baml.http.Response | baml.http.WsAccept {
+                (socket: baml.ws.WebSocket) -> void {
+                    while (true) {
+                        let frame = socket.next() catch (_) {
+                            baml.errors.Io => { break; },
+                        };
+                        match (frame) {
+                            baml.ws.CloseEvent => { break; },
+                            let data: string | uint8array => {
+                                socket.send(data) catch (_) {
+                                    baml.errors.Io => { break; },
+                                };
+                            },
+                        }
+                    }
+                }
+            },
+        )
+    };
+    let socket = baml.ws.connect("ws://" + server.addr() + "/", { });
+    socket.send("hello");
+    let text = match (socket.next()) {
+        let s: string => "text " + s,
+        _ => "not text",
+    };
+    socket.send("hi".to_utf8());
+    let binary = match (socket.next()) {
+        let b: uint8array => "binary " + b.to_hex(),
+        _ => "not binary",
+    };
+    socket.close(4000, "done");
+    let closed = match (socket.next()) {
+        let e: baml.ws.CloseEvent => "closed " + e.code.to_string() + " " + e.reason,
+        _ => "not closed",
+    };
+    task.cancel();
+    text + ", " + binary + ", " + closed
+}
+
+test "server_websocket_echo" {
+    assert.equal(server_websocket_echo(), "text hello, binary 6869, closed 4000 done")
+}
+
+// A streaming body is sent by one server only, and only that server holds its
+// chunks: a client that hangs up reaches the handler's next `write`, a body
+// dropped without `end` ends the response, and a second serve is refused.
+function streaming_hangup_reaches_the_writer() -> string {
+    let server = baml.http.Server.bind("127.0.0.1:0");
+    let log: string[] = [];
+    let task = spawn {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
+            let resp = baml.http.Response.new_streaming(200, {});
+            spawn {
+                let failed = false;
+                let i = 0;
+                while (!failed && i < 100) {
+                    resp.write("x".to_utf8()) catch (e) {
+                        _ => {
+                            failed = true;
+                            null
+                        },
+                    };
+                    baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
+                    i += 1;
+                }
+                log.push(if (failed) { "write failed" } else { "never failed" });
+                null
+            };
+            resp
+        })
+    };
+    let r = baml.http.send(baml.http.Request {
+        method: "GET",
+        url: "http://" + server.addr() + "/",
+        headers: {},
+        body: "",
+        timeout: baml.time.Duration.from_milliseconds(250),
+    });
+    r.text() catch_all (e) { _ => "" };
+    let i = 0;
+    while (i < 100 && log.length() == 0) {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
+        i += 1;
+    }
+    task.cancel();
+    log.join(",")
+}
+
+test "a client hanging up reaches the streaming writer" {
+    assert.equal(streaming_hangup_reaches_the_writer(), "write failed")
+}
+
+function streaming_dropped_body_ends() -> string {
+    let server = baml.http.Server.bind("127.0.0.1:0");
+    let task = spawn {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
+            let resp = baml.http.Response.new_streaming(200, {});
+            spawn {
+                resp.write("x".to_utf8());
+                null
+            };
+            resp
+        })
+    };
+    let gc = spawn {
+        let i = 0;
+        while (i < 30) {
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(100));
+            baml.sys.collect_garbage();
+            i += 1;
+        }
+        null
+    };
+    let r = baml.http.send(baml.http.Request {
+        method: "GET",
+        url: "http://" + server.addr() + "/",
+        headers: {},
+        body: "",
+        timeout: baml.time.Duration.from_milliseconds(5000),
+    });
+    let body = r.text() catch_all (e) { _ => "timed out" };
+    task.cancel();
+    body
+}
+
+test "a streaming body dropped without end ends the response" {
+    assert.equal(streaming_dropped_body_ends(), "x")
+}
+
+function streaming_served_twice() -> string {
+    let server = baml.http.Server.bind("127.0.0.1:0");
+    let shared = baml.http.Response.new_streaming(200, {});
+    let task = spawn {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response { shared })
+    };
+    spawn {
+        shared.write("a".to_utf8());
+        shared.end();
+        null
+    };
+    let first = baml.http.fetch("http://" + server.addr() + "/").text();
+    let second = baml.http.fetch("http://" + server.addr() + "/");
+    task.cancel();
+    first + ":" + baml.json.stringify(second.status_code)
+}
+
+test "a streaming body is served once" {
+    assert.equal(streaming_served_twice(), "a:500")
 }

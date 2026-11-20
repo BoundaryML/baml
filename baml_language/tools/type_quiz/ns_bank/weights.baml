@@ -9,17 +9,21 @@
 // cases; a learner profile can also want these as axiom drills.
 
 function weight(weight: float) -> root.engine.Weight throws never {
-    root.engine.Weight { weight: weight, hinge: null }
-}
-
-function penalty(
-    weight: float,
-    allowance: float,
-    hard_cap: float,
-) -> root.engine.Weight throws never {
     root.engine.Weight {
         weight: weight,
-        hinge: root.engine.Hinge { allowance: allowance, hard_cap: hard_cap },
+        hinge: null,
+    }
+}
+
+function penalty(weight: float, allowance: float, hard_cap: float) -> root.engine.Weight
+    throws never
+{
+    root.engine.Weight {
+        weight: weight,
+        hinge: root.engine.Hinge {
+            allowance: allowance,
+            hard_cap: hard_cap,
+        },
     }
 }
 
@@ -41,5 +45,9 @@ function default_weights() -> root.engine.Weights throws never {
 /// did not ask for. Two re-draws is enough that the fixed session never falls
 /// back; see the sampler suite.
 function default_budget() -> root.engine.Budget throws never {
-    root.engine.Budget { per_step: 3, draws: 3, redraws: 2 }
+    root.engine.Budget {
+        per_step: 3,
+        draws: 3,
+        redraws: 2,
+    }
 }

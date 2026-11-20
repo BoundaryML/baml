@@ -57,27 +57,33 @@ impl<A, R, E> From<&crate::BamlFunction<A, R, E>> for Target {
 /// back as it arrived, and released when the last clone is dropped.
 #[derive(Clone)]
 pub struct Value(Arc<OwnedValue>);
-struct OwnedValue(wire::BamlOutboundValue);
+struct OwnedValue {
+    value: wire::BamlOutboundValue,
+    /// The pins of the host values in `value`, which keep them readable for
+    /// as long as it is held.
+    _pins: crate::outbound::Pins,
+}
 impl Drop for OwnedValue {
     fn drop(&mut self) {
-        crate::outbound::release(std::mem::take(&mut self.0));
+        crate::outbound::release(std::mem::take(&mut self.value));
     }
 }
 impl std::fmt::Debug for Value {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.debug_tuple("Value").field(&self.0.0).finish()
+        formatter.debug_tuple("Value").field(&self.0.value).finish()
     }
 }
 impl Value {
-    /// Take ownership of a value the engine sent.
+    /// Take ownership of a value the engine sent, pins included.
     pub(crate) fn own(value: wire::BamlOutboundValue) -> Self {
-        Self(Arc::new(OwnedValue(value)))
+        let pins = crate::outbound::Pins::of([&value]);
+        Self(Arc::new(OwnedValue { value, _pins: pins }))
     }
 
     /// Decode the value as a `T`, which owns references of its own.
     pub fn decode<T: BamlValue>(&self) -> Result<T, DecodeError> {
         let mut encoder = Encoder::new();
-        let cloned = crate::outbound::clone(&self.0.0, &mut encoder)?;
+        let cloned = crate::outbound::clone(&self.0.value, &mut encoder)?;
         // The decoded value owns the clones now.
         encoder.commit();
         T::from_baml(cloned)
@@ -85,11 +91,11 @@ impl Value {
 
     /// The FQN of the value's class, when it is a class instance.
     pub fn class_name(&self) -> Option<&str> {
-        crate::outbound::class_name(&self.0.0)
+        crate::outbound::class_name(&self.0.value)
     }
 
     pub fn callable_target(&self) -> Result<Target, SdkError> {
-        let value = crate::decode::unwrap(self.0.0.clone());
+        let value = crate::decode::unwrap(self.0.value.clone());
         let Some(wire::baml_outbound_value::Value::HandleValue(handle)) = value.value else {
             return Err(SdkError::new("value is not a BAML callable"));
         };
@@ -108,11 +114,19 @@ impl Value {
     }
 }
 impl __BamlValuePrivate for Value {
-    fn from_baml(value: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
-        Ok(Self::own(value))
+    /// Holds the value with its engine references, and pins of its own: the
+    /// pins it came with are read only, and stay their owner's.
+    fn from_baml(mut value: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        match crate::outbound::Pins::renew(&mut value) {
+            Ok(pins) => Ok(Self(Arc::new(OwnedValue { value, _pins: pins }))),
+            Err(refused) => {
+                crate::outbound::release(value);
+                Err(refused.into())
+            }
+        }
     }
     fn to_baml(&self, encoder: &mut Encoder) -> Result<wire::InboundValue, EncodeError> {
-        crate::outbound::to_inbound(&self.0.0, encoder)
+        crate::outbound::to_inbound(&self.0.value, encoder)
     }
     fn baml_ty() -> wire::BamlTy {
         wire::BamlTy {
@@ -340,17 +354,17 @@ mod tests {
                 key: handle.key,
                 handle_type: handle.handle_type,
                 ty: None,
+                pin: 0,
             })),
             &mut Encoder::new(),
         )
         .unwrap();
         assert_eq!(back.value_type, Some(stated));
-        // Never sent: dropping the encoding unregisters the callable.
+        // The re-send's reference went back with its encoding; never sent,
+        // dropping the first encoding unregisters the callable.
+        assert_eq!(crate::host_value::references(handle.key), Some(1));
         drop(encoder);
-        assert_eq!(
-            crate::host_value::registered_function_type(handle.key),
-            None
-        );
+        assert_eq!(crate::host_value::references(handle.key), None);
     }
 
     /// A union envelope says which member a value came out of; the value

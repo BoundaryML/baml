@@ -3,9 +3,14 @@
 //! Generates:
 //! - `SysOp` enum with `path()`, `allowed_error_categories()`,
 //!   `allowed_panic_categories()`, `Display`, and `sys_op_for_path()`
+//! - Resource traits (`{Kind}Resource`, in `bex_vm_types`): the operations of
+//!   a `@@rust_type("Kind")` class, which each platform implements on its own
+//!   handle, and the choice enums their signatures state
 //! - View structs (`view::{ns}::{ClassName}<'a>`) wrapping `BexClass<'a>`
-//! - Owned structs (`owned::{ns}::{ClassName}`) with `AsBexExternalValue`
-//! - Class traits (`IoClass{Ns}{Class}`) with clean methods, glue, dispatch
+//! - Owned structs (`owned::{ns}::{ClassName}`) with `AsBexExternalValue`; a
+//!   tagged class's owned form is its payload
+//! - Class traits (`IoClass{Ns}{Class}`) with clean methods, glue, dispatch;
+//!   a resource operation's glue is a free function that calls its payload
 //! - Namespace traits (`IoNamespace{Ns}`) composing class traits + free functions
 //! - Root trait (`IoPackageBaml`) composing all namespace traits
 //! - `SysOps` struct with `get()`, `host_unavailable()`, `all_host_unavailable()`, `from_impl()`
@@ -17,7 +22,7 @@ use quote::{format_ident, quote};
 
 use crate::{
     rust_ident::{rust_class_type_ident, rust_field_ident},
-    types::{BamlType, NativeBuiltin, NativeClassDef, Receiver},
+    types::{BamlType, BuiltinPipeline, IoCallers, NativeBuiltin, NativeClassDef, Receiver},
 };
 
 // ============================================================================
@@ -183,17 +188,19 @@ fn build_io_namespace_tree<'a>(
 /// dot-split once an impl-block class segment embeds a dotted interface
 /// target (`baml.io.Read$for$File`).
 fn io_namespace_prefixes(io_builtins: &[NativeBuiltin]) -> BTreeSet<String> {
-    io_builtins
-        .iter()
-        .map(|b| {
-            let package = io_package_name(b);
-            if b.namespace.is_empty() {
-                package.to_string()
-            } else {
-                format!("{package}.{}", b.namespace)
-            }
-        })
-        .collect()
+    io_builtins.iter().map(io_scope).collect()
+}
+
+/// The dotted namespace `builtin` is declared in, which its signature's type
+/// paths are written in: `baml.fs` for `baml.fs.File.read`, `ai` for
+/// `ai.OutputFormat._render`.
+fn io_scope(builtin: &NativeBuiltin) -> String {
+    let package = io_package_name(builtin);
+    if builtin.namespace.is_empty() {
+        package.to_string()
+    } else {
+        format!("{package}.{}", builtin.namespace)
+    }
 }
 
 /// Filter class defs to those in IO-relevant namespaces.
@@ -212,13 +219,17 @@ fn filter_io_class_defs<'a>(
 fn build_class_ns_map(io_class_defs: &[&NativeClassDef]) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
     for cd in io_class_defs {
-        let ns = cd
-            .namespace_prefix
-            .strip_prefix("baml.")
-            .unwrap_or(&cd.namespace_prefix);
-        map.insert(cd.name.clone(), ns.to_string());
+        map.insert(cd.name.clone(), class_ns_segment(cd).to_string());
     }
     map
+}
+
+/// The namespace segment the IO structs of the class `cd` live under:
+/// `fs` for `baml.fs.File`.
+fn class_ns_segment(cd: &NativeClassDef) -> &str {
+    cd.namespace_prefix
+        .strip_prefix("baml.")
+        .unwrap_or(&cd.namespace_prefix)
 }
 
 /// Group IO class defs by namespace segment.
@@ -227,11 +238,9 @@ fn group_class_defs_by_ns<'a>(
 ) -> BTreeMap<String, Vec<&'a NativeClassDef>> {
     let mut map: BTreeMap<String, Vec<&NativeClassDef>> = BTreeMap::new();
     for cd in io_class_defs {
-        let ns = cd
-            .namespace_prefix
-            .strip_prefix("baml.")
-            .unwrap_or(&cd.namespace_prefix);
-        map.entry(ns.to_string()).or_default().push(cd);
+        map.entry(class_ns_segment(cd).to_string())
+            .or_default()
+            .push(cd);
     }
     map
 }
@@ -253,7 +262,6 @@ fn owned_rust_type(
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
-        BamlType::RustType => quote! { std::sync::Arc<dyn bex_vm_types::BexRustData> },
         BamlType::List(inner) => {
             let inner_ty = owned_rust_type(inner, class_ns_map, paths);
             quote! { Vec<#inner_ty> }
@@ -283,7 +291,13 @@ fn owned_rust_type(
             }
         }
         BamlType::Uint8Array => quote! { Vec<u8> },
-        BamlType::Generic(_) | BamlType::Media(_) => quote! { BexExternalValue },
+        BamlType::Generic(_)
+        | BamlType::Media(_)
+        | BamlType::Enum(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_) => {
+            quote! { BexExternalValue }
+        }
     }
 }
 
@@ -309,10 +323,6 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
             *needs_heap = true;
             quote! { Result<&'a bex_str::BexStr, AccessError> }
         }
-        BamlType::RustType => {
-            *needs_heap = true;
-            quote! { Result<std::sync::Arc<dyn bex_vm_types::BexRustData>, AccessError> }
-        }
         // The `type` metatype's owned representation is `RuntimeTy` (see the
         // owned-field mapping), so the accessor must return it too — not the
         // generic `BexExternalValue` fallback, which would not type-check.
@@ -336,7 +346,6 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
         BamlType::Bool => quote! { self.cls.field(#field_lit)?.as_bool() },
         BamlType::Bigint => quote! { self.cls.field(#field_lit)?.as_bigint(heap, permit) },
         BamlType::String => quote! { self.cls.field(#field_lit)?.as_string(heap, permit) },
-        BamlType::RustType => quote! { self.cls.field(#field_lit)?.as_rust_data(heap, permit) },
         BamlType::Named(name) if name == "type" => {
             quote! { self.cls.field(#field_lit)?.as_baml_type_owned(heap, permit) }
         }
@@ -394,15 +403,6 @@ fn external_to_typed_expr(
                 BexExternalValue::Bool(v) => Ok(v),
                 other => Err(AccessError::TypeMismatch {
                     expected: "bool",
-                    actual: other.type_name().to_string(),
-                }),
-            }
-        },
-        BamlType::RustType => quote! {
-            match #val_expr {
-                BexExternalValue::RustData(v) => Ok(v),
-                other => Err(AccessError::TypeMismatch {
-                    expected: "rust_data",
                     actual: other.type_name().to_string(),
                 }),
             }
@@ -502,7 +502,6 @@ fn into_owned_expr(
         // Float accessor is heap-aware (a boxed `Object::Float` derefs).
         BamlType::Float => quote! { self.#field_ident(heap, permit)? },
         BamlType::String => quote! { self.#field_ident(heap, permit)?.to_string() },
-        BamlType::RustType => quote! { self.#field_ident(heap, permit)? },
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { self.#field_ident(heap, permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
@@ -550,17 +549,18 @@ fn runtime_ty_tokens(ty: &BamlType) -> TokenStream {
             let kind = media_kind_tokens(kind);
             quote! { baml_type::RealizedTy::Media(#kind) }
         }
-        BamlType::RustType => {
-            quote! { baml_type::RealizedTy::RustType }
-        }
-        // `Named` is a lossy catch-all: the type parser discards a class's
-        // generic arguments (`Box<int>` → `Named("Box")`) and also funnels
-        // unions/unresolved types through it (`Named("union")`,
-        // `Named("unknown")`). Reconstructing a `RuntimeTy::class(name)` here
-        // would both drop generics and fabricate a class for the placeholder
-        // names, so this static-`BamlType` path cannot recover a named type — the
+        // `Named` is lossy: the type parser discards a class's generic
+        // arguments (`Box<int>` → `Named("Box")`) and also funnels the types it
+        // has no form for through placeholder names (`Named("unknown")`,
+        // `Named("function")`). Reconstructing a `RuntimeTy::class(name)` here
+        // would both drop generics and fabricate a class for the placeholders,
+        // so this static-`BamlType` path cannot recover a named type — the
         // complete type lives only on the runtime value's stored `element_ty`.
-        BamlType::Named(_) | BamlType::Generic(_) => {
+        BamlType::Named(_)
+        | BamlType::Enum(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_)
+        | BamlType::Generic(_) => {
             quote! { baml_type::RealizedTy::unknown() }
         }
     }
@@ -593,7 +593,6 @@ fn owned_to_external_expr(
         BamlType::Float => quote! { BexExternalValue::Float(#field_expr) },
         BamlType::Bool => quote! { BexExternalValue::Bool(#field_expr) },
         BamlType::String => quote! { BexExternalValue::String((#field_expr).into()) },
-        BamlType::RustType => quote! { BexExternalValue::RustData(#field_expr) },
         BamlType::Null => quote! { BexExternalValue::Null },
         BamlType::List(inner) => {
             let inner_conv = owned_to_external_expr(&quote! { __v }, inner, class_ns_map);
@@ -641,7 +640,6 @@ fn clean_rust_type(
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
-        BamlType::RustType => quote! { std::sync::Arc<dyn bex_vm_types::BexRustData> },
         BamlType::List(inner) => {
             let inner_ty = clean_rust_type(inner, class_ns_map, paths);
             quote! { Vec<#inner_ty> }
@@ -671,7 +669,13 @@ fn clean_rust_type(
             }
         }
         BamlType::Uint8Array => quote! { Vec<u8> },
-        BamlType::Generic(_) | BamlType::Media(_) => quote! { BexExternalValue },
+        BamlType::Generic(_)
+        | BamlType::Media(_)
+        | BamlType::Enum(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_) => {
+            quote! { BexExternalValue }
+        }
     }
 }
 
@@ -744,7 +748,6 @@ fn glue_extract_expr(
                 }
             }
         }
-        BamlType::RustType => quote! { #arg_ident.as_rust_data(heap.as_ref(), permit)? },
         // An optional callable param (`((…) -> …)?`): `null` → `None`, else a
         // rooted handle. Must precede the general `Optional(_)` arm below.
         BamlType::Optional(inner) if is_callable_param(inner, class_ns_map) => {
@@ -753,7 +756,10 @@ fn glue_extract_expr(
         BamlType::Uint8Array | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? };
             let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
-            quote! { (#conv)? }
+            quote! {{
+                let __converted: Result<_, AccessError> = #conv;
+                __converted?
+            }}
         }
         _ => quote! { #arg_ident.as_owned_but_very_slow(heap.as_ref(), permit)? },
     }
@@ -830,7 +836,7 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
             // `None` (no clause) is rejected during extraction; `Some([])`
             // (`throws never`) and `None` both map to no error categories.
             // A `throws` entry that names one of the builtin's generic params
-            // (e.g. `call_host_value<T, E> ... throws E`) is a *dynamic* error
+            // (e.g. `_call_host_value<T, E> ... throws E`) is a *dynamic* error
             // contract, not a fixed `SysOpErrorCategory`. The static category
             // list cannot represent a mix of "concrete X" + "dynamic E" — the
             // dynamic component would be silently dropped, and a category
@@ -935,13 +941,683 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
                 #(#path_to_variant_arms,)*
                 // Legacy aliases (baml_builtins paths)
                 "env.get" | "env.get_or_panic" => Some(SysOp::BamlEnvGet),
-                "baml.http.Response.ok" => Some(SysOp::BamlHttpResponseText),
                 _ => None,
             }
         }
     };
 
     crate::format_tokens(&tokens)
+}
+
+// ============================================================================
+// Resource traits (bex_vm_types)
+// ============================================================================
+
+/// The kind of resource `builtin` operates on: `Some` for a method of a
+/// `@@rust_type` class called on an instance. Such an operation is a method
+/// of its kind's resource trait, which each platform implements on its own
+/// handle, rather than an entry in the platform's sys-op table.
+fn resource_kind(builtin: &NativeBuiltin) -> Option<baml_base::RustPayloadKind> {
+    let receiver = builtin.receiver.as_ref()?;
+    if receiver.receiver_type.is_static() {
+        return None;
+    }
+    let kind = receiver.rust_type?;
+    assert!(
+        kind != baml_base::RustPayloadKind::Foreign,
+        "`{}` is a sys-op on a `@@rust_type` class with no kind; a resource names its \
+         kind, and its kind names the trait its operations belong to",
+        builtin.path
+    );
+    Some(kind)
+}
+
+/// The dotted name of a method's receiver class: `baml.fs.File`.
+fn receiver_class_path(builtin: &NativeBuiltin) -> String {
+    let receiver = builtin
+        .receiver
+        .as_ref()
+        .unwrap_or_else(|| unreachable!("`{}` is a method", builtin.path));
+    let package = io_package_name(builtin);
+    if receiver.namespace.is_empty() {
+        format!("{package}.{}", receiver.class_name)
+    } else {
+        format!("{package}.{}.{}", receiver.namespace, receiver.class_name)
+    }
+}
+
+/// How a resource kind is spelled, which names its trait and payload type.
+fn resource_spelling(kind: baml_base::RustPayloadKind) -> &'static str {
+    kind.spelling()
+        .unwrap_or_else(|| unreachable!("`resource_kind` refuses a kind with no spelling"))
+}
+
+fn resource_trait_ident(kind: baml_base::RustPayloadKind) -> syn::Ident {
+    format_ident!("{}Resource", resource_spelling(kind))
+}
+
+/// The typed enum standing for the union `param` of `builtin`:
+/// `FileSeekFromWhence` for `whence` of `baml.fs.File.seek_from`.
+fn resource_union_ident(
+    kind: baml_base::RustPayloadKind,
+    builtin: &NativeBuiltin,
+    param: &str,
+) -> syn::Ident {
+    format_ident!(
+        "{}{}{}",
+        resource_spelling(kind),
+        pascal_case_key(io_method_name(builtin)),
+        pascal_case_key(param)
+    )
+}
+
+/// The variant of a resource choice enum standing for `choice`.
+fn resource_choice_variant(choice: &str) -> syn::Ident {
+    let variant = pascal_case_key(choice);
+    assert!(
+        !variant.is_empty() && variant.chars().all(|c| c.is_ascii_alphanumeric()),
+        "the string choice `{choice}` of a resource operation has no variant spelling"
+    );
+    format_ident!("{variant}")
+}
+
+/// Every IO class whose instance only the runtime builds whole, by its bare
+/// name (the key the rest of the IO codegen looks classes up by): a class
+/// tagged `@@rust_type`, and a class with fields one of which holds such a
+/// class. Neither has an external form; a sys-op hands
+/// one back as an [`OpValue`](sys_types::OpValue) tree.
+fn runtime_built_io_classes<'a>(
+    io_class_defs: &[&'a NativeClassDef],
+) -> BTreeMap<String, &'a NativeClassDef> {
+    let mut built: BTreeMap<String, &'a NativeClassDef> = io_class_defs
+        .iter()
+        .filter(|cd| is_tagged(cd))
+        .map(|cd| (cd.name.clone(), *cd))
+        .collect();
+    // Mixed classes, to a fixed point: one may hold another.
+    loop {
+        let mixed: Vec<&'a NativeClassDef> = io_class_defs
+            .iter()
+            .copied()
+            .filter(|cd| !built.contains_key(&cd.name))
+            .filter(|cd| {
+                cd.fields()
+                    .iter()
+                    .any(|field| mentions_runtime_built_ty(&field.field_type, &built))
+            })
+            .collect();
+        if mixed.is_empty() {
+            return built;
+        }
+        built.extend(mixed.into_iter().map(|cd| (cd.name.clone(), cd)));
+    }
+}
+
+/// Whether `cd` is tagged `@@rust_type`, with a kind of its own or bare: an
+/// instance is its state, which only the runtime builds an instance around.
+fn is_tagged(cd: &NativeClassDef) -> bool {
+    match cd.body {
+        crate::types::NativeClassBody::RustType(_) => true,
+        crate::types::NativeClassBody::Fields(_) => false,
+    }
+}
+
+/// The kind of a class tagged `@@rust_type("Kind")`; `None` for a plain
+/// class, or one tagged bare (whose payload has no variant of its own).
+fn tagged_kind(cd: &NativeClassDef) -> Option<baml_base::RustPayloadKind> {
+    match cd.body {
+        crate::types::NativeClassBody::RustType(kind)
+            if kind != baml_base::RustPayloadKind::Foreign =>
+        {
+            Some(kind)
+        }
+        crate::types::NativeClassBody::RustType(_) | crate::types::NativeClassBody::Fields(_) => {
+            None
+        }
+    }
+}
+
+/// Whether `ty` names a class only the runtime builds anywhere.
+fn mentions_runtime_built_ty(
+    ty: &BamlType,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+) -> bool {
+    match ty {
+        BamlType::Named(name) => runtime_built.contains_key(name.as_str()),
+        BamlType::Optional(inner) | BamlType::List(inner) => {
+            mentions_runtime_built_ty(inner, runtime_built)
+        }
+        BamlType::Map(key, value) => {
+            mentions_runtime_built_ty(key, runtime_built)
+                || mentions_runtime_built_ty(value, runtime_built)
+        }
+        BamlType::Int
+        | BamlType::Bigint
+        | BamlType::Float
+        | BamlType::Bool
+        | BamlType::Null
+        | BamlType::String
+        | BamlType::Uint8Array
+        | BamlType::Generic(_)
+        | BamlType::Media(_)
+        | BamlType::Enum(_)
+        | BamlType::StringLiteral(_) => false,
+        BamlType::Union(members) => members
+            .iter()
+            .any(|member| mentions_runtime_built_ty(member, runtime_built)),
+    }
+}
+
+/// What a resource operation's signature can state, in the vocabulary
+/// `bex_vm_types` names: plain values, a tagged class's payload, and the
+/// types emitted beside the traits for the rest — an enum for a union and a
+/// struct for a plain data class.
+struct ResourceVocab<'a> {
+    /// Every tagged class with a kind of its own, by dotted path.
+    tagged: BTreeMap<String, baml_base::RustPayloadKind>,
+    /// Every class with fields, by dotted path: what a plain struct mirrors.
+    plain: BTreeMap<String, &'a NativeClassDef>,
+}
+
+/// The items a resource signature needs emitted, each once.
+#[derive(Default)]
+struct ResourceItems {
+    /// Each emitted item's Rust name, and the declaration it stands for.
+    emitted: BTreeMap<String, String>,
+    items: Vec<TokenStream>,
+}
+
+impl ResourceItems {
+    /// Whether the item named `ident`, standing for `decl`, is still to emit.
+    /// The items share one module, so two declarations may not share a name.
+    fn claim(&mut self, ident: &syn::Ident, decl: &str) -> bool {
+        match self.emitted.entry(ident.to_string()) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(decl.to_string());
+                true
+            }
+            std::collections::btree_map::Entry::Occupied(entry) => {
+                assert!(
+                    entry.get() == decl,
+                    "the resource items `{}` and `{decl}` are both named `{ident}`",
+                    entry.get()
+                );
+                false
+            }
+        }
+    }
+}
+
+/// The dotted path of the stdlib class `cd`: `baml.fs.File`.
+fn class_path(cd: &NativeClassDef) -> String {
+    format!("{}.{}", cd.namespace_prefix, cd.name)
+}
+
+/// The dotted path a type path written in the namespace `scope` names.
+fn resolve_written(written: &str, scope: &str) -> String {
+    let package = scope.split('.').next().unwrap_or(scope);
+    crate::extract::written_path(written, package, scope)
+}
+
+impl<'a> ResourceVocab<'a> {
+    fn new(class_defs: &'a [NativeClassDef]) -> Self {
+        let tagged = class_defs
+            .iter()
+            .filter_map(|cd| Some((class_path(cd), tagged_kind(cd)?)))
+            .collect();
+        let plain = class_defs
+            .iter()
+            .filter(|cd| matches!(cd.body, crate::types::NativeClassBody::Fields(_)))
+            .map(|cd| (class_path(cd), cd))
+            .collect();
+        Self { tagged, plain }
+    }
+
+    /// The Rust type for `ty`, written in the namespace `scope`, registering
+    /// in `items` what it needs emitted. `named` names the enum a union
+    /// becomes; `doc` says where it is used.
+    fn ty(
+        &self,
+        ty: &BamlType,
+        scope: &str,
+        named: &dyn Fn() -> syn::Ident,
+        doc: &dyn Fn() -> String,
+        path: &str,
+        items: &mut ResourceItems,
+    ) -> TokenStream {
+        match ty {
+            BamlType::Int => quote! { i64 },
+            BamlType::Bigint => quote! { std::sync::Arc<num_bigint::BigInt> },
+            BamlType::Float => quote! { f64 },
+            BamlType::Bool => quote! { bool },
+            BamlType::Null => quote! { () },
+            BamlType::String => quote! { String },
+            BamlType::Uint8Array => quote! { Vec<u8> },
+            BamlType::Optional(inner) => {
+                let inner = self.ty(inner, scope, named, doc, path, items);
+                quote! { Option<#inner> }
+            }
+            BamlType::List(inner) => {
+                let inner = self.ty(inner, scope, named, doc, path, items);
+                quote! { Vec<#inner> }
+            }
+            BamlType::Union(members) => {
+                let ident = named();
+                let doc = doc();
+                if items.claim(&ident, &doc) {
+                    let item = self.union_item(&ident, members, scope, &doc, path, items);
+                    items.items.push(item);
+                }
+                quote! { #ident }
+            }
+            BamlType::Enum(enm) => {
+                let ident = resource_enum_ident(enm);
+                if items.claim(&ident, &enm.path) {
+                    items.items.push(enum_item(&ident, enm));
+                }
+                quote! { #ident }
+            }
+            BamlType::Named(written) => {
+                let class = resolve_written(written, scope);
+                if let Some(&kind) = self.tagged.get(&class) {
+                    let spelling = format_ident!("{}", resource_spelling(kind));
+                    return quote! { crate::payload::#spelling };
+                }
+                let Some(&cd) = self.plain.get(&class) else {
+                    panic!(
+                        "`{path}`: a resource operation cannot state `{written}` yet; give the \
+                         type a resource-trait form"
+                    )
+                };
+                let ident = rust_class_type_ident(&cd.name);
+                if items.claim(&ident, &class) {
+                    let item = self.struct_item(cd, path, items);
+                    items.items.push(item);
+                }
+                quote! { #ident }
+            }
+            BamlType::StringLiteral(_)
+            | BamlType::Map(..)
+            | BamlType::Generic(_)
+            | BamlType::Media(_) => panic!(
+                "`{path}`: a resource operation cannot state `{ty:?}` yet; give the type a \
+                 resource-trait form"
+            ),
+        }
+    }
+
+    /// The enum a union becomes: its string choices, or one variant per
+    /// member type.
+    fn union_item(
+        &self,
+        ident: &syn::Ident,
+        members: &[BamlType],
+        scope: &str,
+        doc: &str,
+        path: &str,
+        items: &mut ResourceItems,
+    ) -> TokenStream {
+        if let Some(choices) = string_choices(members) {
+            let doc = format!(" {doc}: one of its string choices.");
+            let variants: Vec<syn::Ident> =
+                choices.iter().map(|c| resource_choice_variant(c)).collect();
+            let count = choices.len();
+            return quote! {
+                #[doc = #doc]
+                #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+                pub enum #ident { #(#variants),* }
+
+                impl #ident {
+                    pub const ALL: [Self; #count] = [#(Self::#variants),*];
+
+                    /// The string this choice is written as.
+                    pub const fn spelling(self) -> &'static str {
+                        match self { #(Self::#variants => #choices),* }
+                    }
+
+                    /// The choice written `spelling`.
+                    pub fn from_spelling(spelling: &str) -> Option<Self> {
+                        Self::ALL.into_iter().find(|choice| choice.spelling() == spelling)
+                    }
+                }
+            };
+        }
+        check_union_members(members, path);
+        let doc = format!(" {doc}: one of its members.");
+        let variants: Vec<TokenStream> = members
+            .iter()
+            .map(|member| {
+                let variant = union_variant(member, path);
+                match member {
+                    // A member that is one value is a variant with no data.
+                    BamlType::Null | BamlType::StringLiteral(_) => quote! { #variant },
+                    _ => {
+                        let ty = self.ty(
+                            member,
+                            scope,
+                            &|| {
+                                panic!(
+                                    "`{path}`: a union member of a resource operation is a union"
+                                )
+                            },
+                            &|| unreachable!("a nested union is refused above"),
+                            path,
+                            items,
+                        );
+                        quote! { #variant(#ty) }
+                    }
+                }
+            })
+            .collect();
+        quote! {
+            #[doc = #doc]
+            #[derive(Clone, Debug, PartialEq)]
+            pub enum #ident { #(#variants),* }
+        }
+    }
+
+    /// The struct a plain data class becomes, field for field.
+    fn struct_item(
+        &self,
+        cd: &NativeClassDef,
+        path: &str,
+        items: &mut ResourceItems,
+    ) -> TokenStream {
+        let ident = rust_class_type_ident(&cd.name);
+        let class = format!("{}.{}", cd.namespace_prefix, cd.name);
+        let fields: Vec<TokenStream> = cd
+            .fields()
+            .iter()
+            .map(|field| {
+                let field_ident = rust_field_ident(&field.name);
+                let ty = self.ty(
+                    &field.field_type,
+                    &cd.namespace_prefix,
+                    &|| format_ident!("{}{}", ident, pascal_case_key(&field.name)),
+                    &|| format!("`{}` of `{class}`", field.name),
+                    path,
+                    items,
+                );
+                quote! { pub #field_ident: #ty }
+            })
+            .collect();
+        let doc = format!(" A `{class}`, as plain data.");
+        quote! {
+            #[doc = #doc]
+            #[derive(Clone, Debug, PartialEq)]
+            pub struct #ident { #(#fields),* }
+        }
+    }
+
+    /// Every plain data class a resource signature written in the namespace
+    /// `scope` states, by dotted path.
+    fn plain_classes_of(&self, ty: &BamlType, scope: &str, out: &mut BTreeSet<String>) {
+        match ty {
+            BamlType::Optional(inner) | BamlType::List(inner) => {
+                self.plain_classes_of(inner, scope, out);
+            }
+            BamlType::Union(members) => {
+                for member in members {
+                    self.plain_classes_of(member, scope, out);
+                }
+            }
+            BamlType::Named(written) => {
+                let class = resolve_written(written, scope);
+                if let Some(&cd) = self.plain.get(&class)
+                    && out.insert(class)
+                {
+                    for field in cd.fields() {
+                        self.plain_classes_of(&field.field_type, &cd.namespace_prefix, out);
+                    }
+                }
+            }
+            BamlType::Int
+            | BamlType::Bigint
+            | BamlType::Float
+            | BamlType::Bool
+            | BamlType::Null
+            | BamlType::String
+            | BamlType::Uint8Array
+            | BamlType::StringLiteral(_)
+            | BamlType::Map(..)
+            | BamlType::Generic(_)
+            | BamlType::Media(_)
+            | BamlType::Enum(_) => {}
+        }
+    }
+}
+
+/// The plain data classes the resource traits state, by dotted path, which
+/// the glue converts to and from their owned structs.
+fn resource_plain_classes(
+    io_builtins: &[NativeBuiltin],
+    vocab: &ResourceVocab,
+) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for op in io_builtins.iter().filter(|op| resource_kind(op).is_some()) {
+        let scope = io_scope(op);
+        for param in &op.params {
+            vocab.plain_classes_of(&param.ty, &scope, &mut out);
+        }
+        vocab.plain_classes_of(&op.return_type, &scope, &mut out);
+    }
+    out
+}
+
+/// The string choices of a union whose every member is a string literal.
+fn string_choices(members: &[BamlType]) -> Option<Vec<&str>> {
+    members
+        .iter()
+        .map(|member| match member {
+            BamlType::StringLiteral(choice) => Some(choice.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The variant of a resource union enum standing for the member `ty`.
+fn union_variant(ty: &BamlType, path: &str) -> syn::Ident {
+    match ty {
+        BamlType::String => format_ident!("String"),
+        BamlType::Int => format_ident!("Int"),
+        BamlType::Float => format_ident!("Float"),
+        BamlType::Bool => format_ident!("Bool"),
+        BamlType::Null => format_ident!("Null"),
+        BamlType::Uint8Array => format_ident!("Uint8Array"),
+        BamlType::StringLiteral(choice) => resource_choice_variant(choice),
+        BamlType::List(inner) => format_ident!("{}List", union_variant(inner, path)),
+        BamlType::Enum(enm) => resource_enum_ident(enm),
+        BamlType::Named(name) => rust_class_type_ident(name),
+        BamlType::Bigint
+        | BamlType::Map(..)
+        | BamlType::Optional(_)
+        | BamlType::Generic(_)
+        | BamlType::Media(_)
+        | BamlType::Union(_) => panic!("`{path}`: a resource union member `{ty:?}` has no variant"),
+    }
+}
+
+/// Refuse a union whose members the glue cannot tell apart, or whose enum
+/// would name two variants alike. The glue tries the members in order and
+/// tells them apart by the kind of value alone, so:
+/// - `string` and a string literal would both read a string;
+/// - two lists, or two enums, would both read their kind of value.
+fn check_union_members(members: &[BamlType], path: &str) {
+    let mut variants = BTreeSet::new();
+    for member in members {
+        let variant = union_variant(member, path).to_string();
+        assert!(
+            variants.insert(variant.clone()),
+            "`{path}`: two members of a resource union are both the variant `{variant}`"
+        );
+    }
+    let count = |is: fn(&BamlType) -> bool| members.iter().filter(|m| is(m)).count();
+    assert!(
+        count(|m| matches!(m, BamlType::String)) == 0
+            || count(|m| matches!(m, BamlType::StringLiteral(_))) == 0,
+        "`{path}`: a resource union holds both `string` and a string literal"
+    );
+    assert!(
+        count(|m| matches!(m, BamlType::List(_))) <= 1,
+        "`{path}`: a resource union holds two lists"
+    );
+    assert!(
+        count(|m| matches!(m, BamlType::Enum(_))) <= 1,
+        "`{path}`: a resource union holds two enums"
+    );
+}
+
+/// The Rust enum standing for the stdlib enum `enm`.
+fn resource_enum_ident(enm: &crate::types::NativeEnum) -> syn::Ident {
+    format_ident!("{}", enm.name())
+}
+
+/// The Rust enum standing for the stdlib enum `enm`, variant for variant.
+fn enum_item(ident: &syn::Ident, enm: &crate::types::NativeEnum) -> TokenStream {
+    let doc = format!(" A `{}`.", enm.path);
+    let variants: Vec<syn::Ident> = enm
+        .variants
+        .iter()
+        .map(|variant| format_ident!("{variant}"))
+        .collect();
+    let names = &enm.variants;
+    let count = variants.len();
+    quote! {
+        #[doc = #doc]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum #ident { #(#variants),* }
+
+        impl #ident {
+            pub const ALL: [Self; #count] = [#(Self::#variants),*];
+
+            /// The name of this variant.
+            pub const fn name(self) -> &'static str {
+                match self { #(Self::#variants => #names),* }
+            }
+
+            /// The variant named `name`.
+            pub fn from_name(name: &str) -> Option<Self> {
+                Self::ALL.into_iter().find(|variant| variant.name() == name)
+            }
+        }
+    }
+}
+
+/// Clippy's default `too_many_arguments` threshold, past which it lints.
+const CLIPPY_TOO_MANY_ARGUMENTS: usize = 7;
+
+/// The resource trait of every kind whose class has operations, and the
+/// types their signatures state. Emitted into `bex_vm_types`, beside the
+/// payload variant that holds each trait object.
+pub fn generate_resource_traits(
+    io_builtins: &[NativeBuiltin],
+    class_defs: &[NativeClassDef],
+) -> String {
+    let vocab = ResourceVocab::new(class_defs);
+    let mut by_kind: BTreeMap<baml_base::RustPayloadKind, Vec<&NativeBuiltin>> = BTreeMap::new();
+    for builtin in io_builtins {
+        if let Some(kind) = resource_kind(builtin) {
+            by_kind.entry(kind).or_default().push(builtin);
+        }
+    }
+
+    let mut items = ResourceItems::default();
+    let mut traits = Vec::new();
+    for (&kind, ops) in &by_kind {
+        let trait_ident = resource_trait_ident(kind);
+        let class = receiver_class_path(ops[0]);
+        let trait_doc = format!(
+            " The operations of a `{class}` (`@@rust_type(\"{}\")`), which each platform \
+             implements on its own handle.",
+            resource_spelling(kind)
+        );
+        let mut methods = Vec::new();
+        for op in ops {
+            let scope = io_scope(op);
+            assert!(
+                io_method_name(op) != "measure",
+                "`{}` is named as the resource trait's own `measure`",
+                op.path
+            );
+            assert!(
+                fn_only_generic_count(op) == 0,
+                "`{}`: a resource operation takes no type arguments",
+                op.path
+            );
+            let method = io_method_name(op);
+            let method_ident = format_ident!("{method}");
+            let params: Vec<TokenStream> = op
+                .params
+                .iter()
+                .map(|param| {
+                    let param_ident = format_ident!("{}", param.name);
+                    let param_ty = vocab.ty(
+                        &param.ty,
+                        &scope,
+                        &|| resource_union_ident(kind, op, &param.name),
+                        &|| format!("`{}` of `{class}.{method}`", param.name),
+                        &op.path,
+                        &mut items,
+                    );
+                    quote! { #param_ident: #param_ty }
+                })
+                .collect();
+            let ret = vocab.ty(
+                &op.return_type,
+                &scope,
+                &|| resource_union_ident(kind, op, "output"),
+                &|| format!("The result of `{class}.{method}`"),
+                &op.path,
+                &mut items,
+            );
+            let doc = format!(" `{class}.{method}`.");
+            // The method takes what its BAML signature does, and the receiver.
+            let many_arguments = (op.params.len() + 1 > CLIPPY_TOO_MANY_ARGUMENTS)
+                .then(|| quote! { #[expect(clippy::too_many_arguments)] });
+            methods.push(quote! {
+                #[doc = #doc]
+                #many_arguments
+                fn #method_ident(self: std::sync::Arc<Self> #(, #params)*) -> crate::OpOutput<#ret>;
+            });
+        }
+        let embedding = embedding_methods(kind);
+        traits.push(quote! {
+            #[doc = #trait_doc]
+            pub trait #trait_ident: Send + Sync + 'static {
+                #(#methods)*
+
+                #embedding
+
+                /// The memory the resource holds, for the heap's accounting.
+                fn measure(&self, meter: &mut crate::Meter);
+
+                /// The traced request the resource belongs to, if it belongs
+                /// to one: the engine ends its span when the resource is read
+                /// to its end.
+                fn network(&self) -> Option<&crate::network::NetworkContext> {
+                    None
+                }
+            }
+        });
+    }
+    let items = items.items;
+    crate::format_tokens(&quote! { #(#items)* #(#traits)* })
+}
+
+/// A resource kind's operations that only the embedding calls, never BAML:
+/// what the runtime itself does with the resource beyond its BAML methods.
+fn embedding_methods(kind: baml_base::RustPayloadKind) -> TokenStream {
+    match kind {
+        baml_base::RustPayloadKind::HttpBody => quote! {
+            /// The body as a server sends it: whole, or the chunks a handler
+            /// writes, which one server takes. A body that is not written
+            /// incrementally is read whole.
+            fn take_stream(&self) -> crate::http::StreamTake {
+                crate::http::StreamTake::Whole
+            }
+        },
+        _ => TokenStream::new(),
+    }
 }
 
 // ============================================================================
@@ -960,13 +1636,90 @@ pub fn generate_io_structs(io_builtins: &[NativeBuiltin], class_defs: &[NativeCl
 
     let view_mod = emit_view_module(&io_class_defs, &class_ns_map, &class_defs_by_ns, &paths);
     let owned_mod = emit_owned_module(&io_class_defs, &class_ns_map, &class_defs_by_ns, &paths);
+    let resource_conversions =
+        emit_resource_conversions(io_builtins, class_defs, &io_class_defs, &paths);
 
     let tokens = quote! {
         #view_mod
         #owned_mod
+        #resource_conversions
     };
 
     crate::format_tokens(&tokens)
+}
+
+/// The conversions between each plain data class a resource trait states and
+/// the owned struct of that class: the glue converts an argument into the
+/// trait's struct, and a result back.
+fn emit_resource_conversions(
+    io_builtins: &[NativeBuiltin],
+    class_defs: &[NativeClassDef],
+    io_class_defs: &[&NativeClassDef],
+    paths: &CodegenPaths,
+) -> TokenStream {
+    let vocab = ResourceVocab::new(class_defs);
+    let conversions = resource_plain_classes(io_builtins, &vocab)
+        .into_iter()
+        .map(|class| {
+            let cd = vocab.plain[class.as_str()];
+            assert!(
+                io_class_defs.iter().any(|io| std::ptr::eq(*io, cd)),
+                "the plain class `{class}` a resource states is in no sys-op namespace"
+            );
+            let owned = &paths.owned;
+            let ns_ident = format_ident!("{}", class_ns_segment(cd));
+            let name = &cd.name;
+            let ident = rust_class_type_ident(name);
+            let fields: Vec<syn::Ident> = cd
+                .fields()
+                .iter()
+                .map(|field| {
+                    assert!(
+                        plain_value(&field.field_type),
+                        "`{name}.{}`: a plain class a resource states holds only plain values so \
+                     far, which both forms spell alike",
+                        field.name
+                    );
+                    rust_field_ident(&field.name)
+                })
+                .collect();
+            quote! {
+                impl From<#owned::#ns_ident::#ident> for bex_vm_types::resource::#ident {
+                    fn from(value: #owned::#ns_ident::#ident) -> Self {
+                        Self { #(#fields: value.#fields),* }
+                    }
+                }
+
+                impl From<bex_vm_types::resource::#ident> for #owned::#ns_ident::#ident {
+                    fn from(value: bex_vm_types::resource::#ident) -> Self {
+                        Self { #(#fields: value.#fields),* }
+                    }
+                }
+            }
+        });
+    quote! { #(#conversions)* }
+}
+
+/// Whether `ty` is spelled alike by an owned struct and the resource
+/// vocabulary: a primitive, or an optional or list of one.
+fn plain_value(ty: &BamlType) -> bool {
+    match ty {
+        BamlType::Int
+        | BamlType::Bigint
+        | BamlType::Float
+        | BamlType::Bool
+        | BamlType::Null
+        | BamlType::String
+        | BamlType::Uint8Array => true,
+        BamlType::Optional(inner) | BamlType::List(inner) => plain_value(inner),
+        BamlType::Map(..)
+        | BamlType::Generic(_)
+        | BamlType::Media(_)
+        | BamlType::Named(_)
+        | BamlType::Enum(_)
+        | BamlType::Union(_)
+        | BamlType::StringLiteral(_) => false,
+    }
 }
 
 /// Generate IO trait hierarchy and `SysOps` dispatch struct.
@@ -998,13 +1751,16 @@ pub fn generate_io_traits(
         quote! {}
     };
 
-    let class_traits = emit_class_traits(&tree, &class_ns_map, &paths);
-    let ns_traits = emit_namespace_traits(&tree, &class_ns_map, &paths);
+    let runtime_built = runtime_built_io_classes(&io_class_defs);
+    let class_traits = emit_class_traits(&tree, &class_ns_map, &runtime_built, &paths);
+    let ns_traits = emit_namespace_traits(&tree, &class_ns_map, &runtime_built, &paths);
     let root_trait = emit_root_trait(&tree);
     let sys_ops = emit_sys_ops_struct(io_builtins);
+    let glue_error = emit_glue_error();
 
     let tokens = quote! {
         #struct_mods
+        #glue_error
         #class_traits
         #ns_traits
         #root_trait
@@ -1014,22 +1770,58 @@ pub fn generate_io_traits(
     crate::format_tokens(&tokens)
 }
 
+/// Why a sys-op's glue could not read its arguments: a value of another
+/// shape than the operation takes, which BAML can catch, or a heap that
+/// breaks the runtime's own invariants.
+fn emit_glue_error() -> TokenStream {
+    quote! {
+        enum __GlueError {
+            Access(AccessError),
+            Internal(bex_vm_types::errors::VmInternalError),
+        }
+
+        impl From<AccessError> for __GlueError {
+            fn from(error: AccessError) -> Self {
+                Self::Access(error)
+            }
+        }
+
+        impl __GlueError {
+            fn into_op_error(self, op: SysOp) -> OpError {
+                match self {
+                    Self::Access(error) => OpError::new(
+                        op,
+                        bex_vm_types::errors::VmBamlError::AccessError {
+                            message: error.to_string(),
+                        },
+                    ),
+                    Self::Internal(error) => OpError::new(op, error),
+                }
+            }
+        }
+    }
+}
+
 // ============================================================================
 // View module
 // ============================================================================
 
 fn emit_view_module(
-    _io_class_defs: &[&NativeClassDef],
+    io_class_defs: &[&NativeClassDef],
     class_ns_map: &BTreeMap<String, String>,
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
     paths: &CodegenPaths,
 ) -> TokenStream {
+    // A class only the runtime builds has no view: its sys-ops read their
+    // receiver's payload, and nothing reads such a class's fields.
+    let runtime_built = runtime_built_io_classes(io_class_defs);
     let ns_modules: Vec<TokenStream> = class_defs_by_ns
         .iter()
         .map(|(ns, classes)| {
             let ns_ident = format_ident!("{}", ns);
             let structs: Vec<TokenStream> = classes
                 .iter()
+                .filter(|cd| !runtime_built.contains_key(&cd.name))
                 .map(|cd| emit_view_struct(cd, class_ns_map, ns, paths))
                 .collect();
             quote! {
@@ -1054,13 +1846,17 @@ fn emit_view_struct(
     ns: &str,
     paths: &CodegenPaths,
 ) -> TokenStream {
+    // A tagged instance has no fields to view: its sys-ops read the payload.
+    if let crate::types::NativeClassBody::RustType(_) = cd.body {
+        return quote! {};
+    }
     let name_ident = rust_class_type_ident(&cd.name);
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
     let source_comment = format!("Generated from `{}`", cd.source_file);
 
     // Field accessors
     let accessors: Vec<TokenStream> = cd
-        .fields
+        .fields()
         .iter()
         .map(|field| {
             let mut needs_heap = false;
@@ -1094,7 +1890,7 @@ fn emit_view_struct(
     let owned_path = quote! { #owned::#ns_ident::#name_ident };
 
     let into_owned_fields: Vec<TokenStream> = cd
-        .fields
+        .fields()
         .iter()
         .map(|field| {
             let field_ident = rust_field_ident(&field.name);
@@ -1143,8 +1939,9 @@ fn emit_view_struct(
 
 /// Compute the set of class names that cannot derive `Default`.
 ///
-/// A class is non-defaultable if it directly contains a `$rust_type` field,
-/// or if any of its fields transitively references a non-defaultable class.
+/// A class is non-defaultable if it is tagged `@@rust_type`, directly holds a
+/// `type` field, or has a field that transitively references a
+/// non-defaultable class.
 ///
 /// Both a fully-qualified name (for example `baml.sap._ParseCache`) and its
 /// short name are stored, because field type references may use
@@ -1178,16 +1975,19 @@ fn compute_non_defaultable_classes(
         .map(|cd| (cd, format!("{}.{}", cd.namespace_prefix, cd.name)))
         .collect();
 
-    // Seed: classes with a direct non-`Default` field — insert both name forms.
-    // `$rust_type` (`Arc<dyn Any>`) and the `type` metatype (`RuntimeTy`) are
-    // both non-`Default`. (Container forms like `list<reflect.Type>`/`reflect.Type?` stay
+    // Seed: tagged classes (whose owned form is their payload) and classes
+    // with a direct non-`Default` field — insert both name forms.
+    // The `type` metatype (`RuntimeTy`) is non-`Default`. (Container forms
+    // like `list<reflect.Type>`/`reflect.Type?` stay
     // defaultable — `Vec`/`Option` are `Default` — so only direct fields seed.)
     let mut non_defaultable: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (cd, full_name) in &all_classes {
-        if cd.fields.iter().any(|f| {
-            matches!(f.field_type, BamlType::RustType)
-                || matches!(&f.field_type, BamlType::Named(name) if name == "type")
-        }) {
+        if matches!(cd.body, crate::types::NativeClassBody::RustType(_))
+            || cd
+                .fields()
+                .iter()
+                .any(|f| matches!(&f.field_type, BamlType::Named(name) if name == "type"))
+        {
             non_defaultable.insert(full_name.clone());
             non_defaultable.insert(cd.name.clone());
         }
@@ -1201,7 +2001,7 @@ fn compute_non_defaultable_classes(
                 continue;
             }
             if cd
-                .fields
+                .fields()
                 .iter()
                 .any(|f| references_non_defaultable(&f.field_type, &non_defaultable))
             {
@@ -1219,12 +2019,13 @@ fn compute_non_defaultable_classes(
 }
 
 fn emit_owned_module(
-    _io_class_defs: &[&NativeClassDef],
+    io_class_defs: &[&NativeClassDef],
     class_ns_map: &BTreeMap<String, String>,
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let non_defaultable = compute_non_defaultable_classes(class_defs_by_ns);
+    let runtime_built = runtime_built_io_classes(io_class_defs);
 
     let ns_modules: Vec<TokenStream> = class_defs_by_ns
         .iter()
@@ -1232,7 +2033,16 @@ fn emit_owned_module(
             let ns_ident = format_ident!("{}", ns);
             let structs: Vec<TokenStream> = classes
                 .iter()
-                .map(|cd| emit_owned_struct(cd, class_ns_map, ns, paths, &non_defaultable))
+                .map(|cd| {
+                    emit_owned_struct(
+                        cd,
+                        class_ns_map,
+                        ns,
+                        paths,
+                        &non_defaultable,
+                        &runtime_built,
+                    )
+                })
                 .collect();
             quote! {
                 pub mod #ns_ident {
@@ -1243,9 +2053,204 @@ fn emit_owned_module(
         })
         .collect();
 
+    let runtime_built_items: Vec<TokenStream> = runtime_built
+        .values()
+        .map(|cd| crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name))
+        .collect();
+
     quote! {
         pub mod owned {
             #(#ns_modules)*
+        }
+
+        /// Every class the runtime builds: a `@@rust_type` class, and a
+        /// class holding one. A value of one of these comes back to the
+        /// runtime in its own form (an `OpValue`), never as a handle.
+        pub const RUNTIME_BUILT_CLASSES: &[baml_base::LangItem] = &[#(#runtime_built_items),*];
+    }
+}
+
+/// The owned struct of a mixed class: its fields, a tagged one as its
+/// payload, and the instance as the `OpValue` tree the engine lands.
+fn emit_mixed_owned_struct(
+    cd: &NativeClassDef,
+    full_path: &str,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+) -> TokenStream {
+    let name_ident = rust_class_type_ident(&cd.name);
+    let source_comment = format!("Generated from `{}`", cd.source_file);
+    let struct_fields: Vec<TokenStream> = cd
+        .fields()
+        .iter()
+        .map(|field| {
+            let field_ident = rust_field_ident(&field.name);
+            let rust_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
+            quote! { pub #field_ident: #rust_ty }
+        })
+        .collect();
+    let field_values: Vec<TokenStream> = cd
+        .fields()
+        .iter()
+        .map(|field| {
+            let field_ident = rust_field_ident(&field.name);
+            op_value_expr(
+                &quote! { self.#field_ident },
+                &field.field_type,
+                class_ns_map,
+                runtime_built,
+                &format!("{full_path}.{}", field.name),
+            )
+        })
+        .collect();
+    let field_count = cd.fields().len();
+    let field_reads: Vec<TokenStream> = cd
+        .fields()
+        .iter()
+        .map(|field| {
+            let field_ident = rust_field_ident(&field.name);
+            let read = from_op_value_expr(
+                &quote! {
+                    fields
+                        .next()
+                        .unwrap_or_else(|| unreachable!("the field count was checked"))
+                },
+                &field.field_type,
+                class_ns_map,
+                runtime_built,
+                paths,
+                &format!("{full_path}.{}", field.name),
+            );
+            quote! { #field_ident: #read }
+        })
+        .collect();
+    let class = crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name);
+    quote! {
+        #[doc = #source_comment]
+        #[derive(Clone)]
+        pub struct #name_ident {
+            #(#struct_fields,)*
+        }
+
+        impl #name_ident {
+            /// The BAML class this value is an instance of, as the engine
+            /// resolves it.
+            pub const BAML_CLASS: &'static str = #full_path;
+
+            /// The instance as the engine lands it: its fields in
+            /// declaration order.
+            pub fn into_op_value(self) -> OpValue {
+                OpValue::Instance {
+                    class: #class,
+                    fields: vec![#(#field_values),*],
+                }
+            }
+        }
+
+        /// An instance the runtime got back, by its fields.
+        impl FromOpValue for #name_ident {
+            fn from_op_value(value: OpValue) -> Result<Self, AccessError> {
+                match value {
+                    OpValue::Instance { class, fields } if class == #class && fields.len() == #field_count => {
+                        let mut fields = fields.into_iter();
+                        Ok(Self {
+                            #(#field_reads,)*
+                        })
+                    }
+                    other => Err(AccessError::TypeMismatch {
+                        expected: #full_path,
+                        actual: other.describe(),
+                    }),
+                }
+            }
+        }
+    }
+}
+
+/// The owned value of `ty` read back from `value`, an `OpValue` the runtime
+/// got from a callback: the inverse of [`op_value_expr`].
+fn from_op_value_expr(
+    value: &TokenStream,
+    ty: &BamlType,
+    class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+    paths: &CodegenPaths,
+    path: &str,
+) -> TokenStream {
+    match ty {
+        BamlType::Named(name) if runtime_built.contains_key(name.as_str()) => {
+            quote! { FromOpValue::from_op_value(#value)? }
+        }
+        BamlType::Optional(inner) if mentions_runtime_built_ty(inner, runtime_built) => {
+            let inner = from_op_value_expr(
+                &quote! { __some },
+                inner,
+                class_ns_map,
+                runtime_built,
+                paths,
+                path,
+            );
+            quote! {
+                match #value {
+                    OpValue::External(BexExternalValue::Null) => None,
+                    __some => Some(#inner),
+                }
+            }
+        }
+        ty if mentions_runtime_built_ty(ty, runtime_built) => {
+            panic!("`{path}`: `{ty:?}` has no form to read back from the runtime yet")
+        }
+        ty => {
+            let typed = external_to_typed_expr(&quote! { __external }, ty, class_ns_map, paths);
+            quote! {
+                match #value {
+                    OpValue::External(__external) => (#typed)?,
+                    __other => {
+                        return Err(AccessError::TypeMismatch {
+                            expected: #path,
+                            actual: __other.describe(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The `OpValue` for `expr`, an owned value of `ty`: a tagged class's payload
+/// as the instance it is the state of, a mixed class as its tree, anything
+/// else as its external value.
+fn op_value_expr(
+    expr: &TokenStream,
+    ty: &BamlType,
+    class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+    path: &str,
+) -> TokenStream {
+    match ty {
+        BamlType::Named(name) if runtime_built.contains_key(name.as_str()) => {
+            if is_tagged(runtime_built[name.as_str()]) {
+                quote! { OpValue::from(#expr) }
+            } else {
+                quote! { #expr.into_op_value() }
+            }
+        }
+        BamlType::Optional(inner) if mentions_runtime_built_ty(inner, runtime_built) => {
+            let inner = op_value_expr(&quote! { __some }, inner, class_ns_map, runtime_built, path);
+            quote! {
+                match #expr {
+                    Some(__some) => #inner,
+                    None => OpValue::External(BexExternalValue::Null),
+                }
+            }
+        }
+        ty if mentions_runtime_built_ty(ty, runtime_built) => {
+            panic!("`{path}`: a sys-op result holds `{ty:?}`, which has no landing form yet")
+        }
+        ty => {
+            let external = owned_to_external_expr(expr, ty, class_ns_map);
+            quote! { OpValue::External(#external) }
         }
     }
 }
@@ -1256,10 +2261,96 @@ fn emit_owned_struct(
     _ns: &str,
     paths: &CodegenPaths,
     non_defaultable: &std::collections::HashSet<String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
 ) -> TokenStream {
     let name_ident = rust_class_type_ident(&cd.name);
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
     let source_comment = format!("Generated from `{}`", cd.source_file);
+
+    // A tagged instance is its payload: an operation that builds one returns
+    // the state, and the glue builds the instance around it.
+    match cd.body {
+        crate::types::NativeClassBody::RustType(kind) => {
+            let class = crate::lang_item::lang_item_tokens(&cd.namespace_prefix, &cd.name);
+            let doc = format!(
+                " The state of a `{full_path}`, which only the runtime builds an instance around."
+            );
+            // A bare tag's payload is foreign, which every bare-tagged class
+            // shares, so each class wraps it to convert as itself.
+            let Some(spelling) = kind.spelling() else {
+                return quote! {
+                    #[doc = #doc]
+                    pub struct #name_ident(pub std::sync::Arc<dyn bex_vm_types::BexRustData>);
+
+                    /// A new instance around this state, as the engine lands it.
+                    impl From<#name_ident> for OpValue {
+                        fn from(state: #name_ident) -> Self {
+                            OpValue::RustInstance {
+                                class: #class,
+                                payload: bex_vm_types::RustPayload::Foreign(state.0),
+                            }
+                        }
+                    }
+
+                    /// The state of an instance the runtime got back.
+                    impl FromOpValue for #name_ident {
+                        fn from_op_value(value: OpValue) -> Result<Self, AccessError> {
+                            match value {
+                                OpValue::RustInstance {
+                                    class,
+                                    payload: bex_vm_types::RustPayload::Foreign(state),
+                                } if class == #class => Ok(Self(state)),
+                                other => Err(AccessError::TypeMismatch {
+                                    expected: #full_path,
+                                    actual: other.describe(),
+                                }),
+                            }
+                        }
+                    }
+                };
+            };
+            let spelling = format_ident!("{spelling}");
+            // One impl per kind: two classes sharing a payload type would
+            // collide here rather than land as each other.
+            return quote! {
+                #[doc = #doc]
+                pub type #name_ident = bex_vm_types::payload::#spelling;
+
+                /// A new instance around this state, as the engine lands it.
+                impl From<#name_ident> for OpValue {
+                    fn from(state: #name_ident) -> Self {
+                        OpValue::RustInstance {
+                            class: #class,
+                            payload: bex_vm_types::RustPayload::#spelling(state),
+                        }
+                    }
+                }
+
+                /// The state of an instance the runtime got back.
+                impl FromOpValue for #name_ident {
+                    fn from_op_value(value: OpValue) -> Result<Self, AccessError> {
+                        match value {
+                            OpValue::RustInstance {
+                                class,
+                                payload: bex_vm_types::RustPayload::#spelling(state),
+                            } if class == #class => Ok(state),
+                            other => Err(AccessError::TypeMismatch {
+                                expected: #full_path,
+                                actual: other.describe(),
+                            }),
+                        }
+                    }
+                }
+            };
+        }
+        crate::types::NativeClassBody::Fields(_) => {}
+    }
+
+    // A mixed class holds a tagged class, which has no external form: the
+    // struct hands the engine the whole instance as an `OpValue` tree.
+    if runtime_built.contains_key(&cd.name) {
+        return emit_mixed_owned_struct(cd, &full_path, class_ns_map, paths, runtime_built);
+    }
 
     // Struct definition
     let derives = if non_defaultable.contains(&full_path) {
@@ -1270,7 +2361,7 @@ fn emit_owned_struct(
 
     // Struct fields
     let struct_fields: Vec<TokenStream> = cd
-        .fields
+        .fields()
         .iter()
         .map(|field| {
             let field_ident = rust_field_ident(&field.name);
@@ -1281,7 +2372,7 @@ fn emit_owned_struct(
 
     // AsBexExternalValue impl — indexmap entries
     let as_bex_entries: Vec<TokenStream> = cd
-        .fields
+        .fields()
         .iter()
         .map(|field| {
             let field_name_str = &field.name;
@@ -1297,7 +2388,7 @@ fn emit_owned_struct(
 
     // from_external — field extraction
     let from_external_fields: Vec<TokenStream> = cd
-        .fields
+        .fields()
         .iter()
         .map(|field| {
             let field_ident = rust_field_ident(&field.name);
@@ -1358,6 +2449,7 @@ fn emit_owned_struct(
 fn emit_class_traits(
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let traits: Vec<TokenStream> = tree
@@ -1377,6 +2469,7 @@ fn emit_class_traits(
                     class_name,
                     methods,
                     class_ns_map,
+                    runtime_built,
                     paths,
                 )
             })
@@ -1406,12 +2499,20 @@ fn fn_only_generic_count(builtin: &NativeBuiltin) -> usize {
     builtin.generics.len()
 }
 
+/// Whether some method of a class is an entry in the platform's sys-op table
+/// rather than an operation of its resource: only then does the class have a
+/// trait for platforms to implement.
+fn has_table_ops(methods: &[&NativeBuiltin]) -> bool {
+    methods.iter().any(|m| resource_kind(m).is_none())
+}
+
 fn emit_one_class_trait(
     ns_key: &str,
     ns: &str,
     class_name: &str,
     methods: &[&NativeBuiltin],
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let trait_ident = class_trait_ident(ns_key, class_name);
@@ -1422,8 +2523,17 @@ fn emit_one_class_trait(
         .map(|m| format!("Generated from `{}`", m.source_file))
         .unwrap_or_default();
 
+    // An operation on a resource is a method of its kind's trait, which the
+    // payload carries; the rest are the platform's to implement here.
+    let (resource_methods, table_methods): (Vec<&NativeBuiltin>, Vec<&NativeBuiltin>) =
+        methods.iter().partition(|m| resource_kind(m).is_some());
+    let resource_glues: Vec<TokenStream> = resource_methods
+        .iter()
+        .map(|m| emit_resource_glue(m, class_ns_map, runtime_built, paths))
+        .collect();
+
     // Clean methods
-    let clean_methods: Vec<TokenStream> = methods
+    let clean_methods: Vec<TokenStream> = table_methods
         .iter()
         .map(|m| {
             let method_ident = format_ident!("{}", io_method_name(m));
@@ -1481,9 +2591,9 @@ fn emit_one_class_trait(
         .collect();
 
     // Glue methods
-    let glue_methods: Vec<TokenStream> = methods
+    let glue_methods: Vec<TokenStream> = table_methods
         .iter()
-        .map(|m| emit_glue_method(m, ns, class_name, class_ns_map, paths))
+        .map(|m| emit_glue_method(m, ns, class_name, class_ns_map, runtime_built, paths))
         .collect();
 
     // Dispatch method — match arms. The key is the bare method name, so it
@@ -1511,13 +2621,40 @@ fn emit_one_class_trait(
         .map(|m| {
             let method_name_str = io_class_dispatch_key(m);
             let glue_ident = format_ident!("__glue_{}", m.fn_name);
-            quote! {
-                #method_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id))
+            if resource_kind(m).is_some() {
+                quote! { #method_name_str => Some(#glue_ident(heap, permit, args)) }
+            } else {
+                quote! {
+                    #method_name_str => Some(self.#glue_ident(heap, permit, args, ctx, call_id))
+                }
             }
         })
         .collect();
 
+    if table_methods.is_empty() {
+        // Every method is a resource operation: nothing for a platform to
+        // implement, so the class routes through a free function.
+        return quote! {
+            #(#resource_glues)*
+
+            #[doc = #source_comment]
+            fn #dispatch_fn_ident<'a>(
+                method: &str,
+                heap: &std::sync::Arc<BexHeap>,
+                permit: PermitProof<'a>,
+                args: Vec<BexValue<'a>>,
+            ) -> Option<SysOpResult> {
+                match method {
+                    #(#dispatch_arms,)*
+                    _ => None,
+                }
+            }
+        };
+    }
+
     quote! {
+        #(#resource_glues)*
+
         #[doc = #source_comment]
         pub trait #trait_ident {
             #(#clean_methods)*
@@ -1547,6 +2684,7 @@ fn emit_glue_method(
     ns: &str,
     class_name: &str,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let glue_ident = format_ident!("__glue_{}", builtin.fn_name);
@@ -1611,7 +2749,8 @@ fn emit_glue_method(
         .map(|(i, p)| {
             let arg_id = &arg_idents[i];
             let param_ident = format_ident!("__{}", p.name);
-            let extract = glue_extract_expr(arg_id, &p.ty, class_ns_map, false, paths);
+            let extract = tagged_arg_expr(arg_id, &p.ty, runtime_built, &builtin.path)
+                .unwrap_or_else(|| glue_extract_expr(arg_id, &p.ty, class_ns_map, false, paths));
             quote! { let #param_ident = #extract; }
         })
         .collect();
@@ -1672,6 +2811,7 @@ fn emit_glue_method(
         &variant_ident,
         &call_expr,
         class_ns_map,
+        runtime_built,
         paths,
     );
 
@@ -1694,7 +2834,7 @@ fn emit_glue_method(
                 #receiver_extraction
                 #(#param_extractions)*
                 #(#type_arg_extractions)*
-                Ok::<_, AccessError>((#receiver_ident #(#tuple_idents,)* #(#type_arg_val_idents),*))
+                Ok::<_, __GlueError>((#receiver_ident #(#tuple_idents,)* #(#type_arg_val_idents),*))
             })();
 
             match __extraction {
@@ -1702,10 +2842,365 @@ fn emit_glue_method(
                     #(#type_arg_bind_stmts)*
                     #into_result
                 }
-                Err(e) => SysOpResult::Ready(Err(OpError::new(
-                    SysOp::#variant_ident,
-                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
-                ))),
+                Err(e) => SysOpResult::Ready(Err(e.into_op_error(SysOp::#variant_ident))),
+            }
+        }
+    }
+}
+
+/// The glue's reading of the argument `arg` when `ty` is a tagged class (or an
+/// optional one): the instance's state. `None` for any other type. A class
+/// that merely holds a tagged one has no argument form yet.
+fn tagged_arg_expr(
+    arg: &syn::Ident,
+    ty: &BamlType,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+    path: &str,
+) -> Option<TokenStream> {
+    let state = |name: &str| {
+        let kind = tagged_kind(runtime_built[name]).unwrap_or_else(|| {
+            panic!(
+                "`{path}`: an operation cannot take `{name}`, a bare `@@rust_type` class or a \
+                 class holding a `@@rust_type` instance, yet"
+            )
+        });
+        let spelling = format_ident!("{}", resource_spelling(kind));
+        quote! {
+            match #arg.as_rust_payload(heap.as_ref(), permit)? {
+                bex_vm_types::RustPayload::#spelling(state) => state,
+                __other => {
+                    return Err(__GlueError::Internal(
+                        bex_vm_types::errors::VmInternalError::RustPayloadMismatch {
+                            class: #name,
+                            expected: baml_base::RustPayloadKind::#spelling,
+                            got: __other.kind(),
+                        },
+                    ));
+                }
+            }
+        }
+    };
+    match ty {
+        BamlType::Named(name) if runtime_built.contains_key(name.as_str()) => Some(state(name)),
+        BamlType::Optional(inner) => match inner.as_ref() {
+            BamlType::Named(name) if runtime_built.contains_key(name.as_str()) => {
+                let state = state(name);
+                Some(quote! {
+                    if #arg.is_null() { None } else { Some(#state) }
+                })
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The glue's conversion of the argument `arg` into the resource vocabulary's
+/// form of `ty` (see [`ResourceVocab`]): a union into its enum, a plain data
+/// class into the struct that mirrors it, anything else as any sys-op takes it.
+fn resource_extract_expr(
+    arg: &syn::Ident,
+    ty: &BamlType,
+    named: &dyn Fn() -> syn::Ident,
+    class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+    paths: &CodegenPaths,
+    path: &str,
+) -> TokenStream {
+    if let Some(state) = tagged_arg_expr(arg, ty, runtime_built, path) {
+        return state;
+    }
+    assert!(
+        !mentions_runtime_built_ty(ty, runtime_built),
+        "`{path}`: a resource operation cannot take `{ty:?}` yet"
+    );
+    let plain_view = |name: &str| {
+        let ns = class_ns_map.get(name).unwrap_or_else(|| {
+            panic!(
+                "`{path}`: the plain class `{name}` is in no sys-op namespace, so it has no view"
+            )
+        });
+        let view = &paths.view;
+        let ns_ident = format_ident!("{ns}");
+        let name_ident = rust_class_type_ident(name);
+        quote! { #view::#ns_ident::#name_ident }
+    };
+    match ty {
+        BamlType::Union(members) => {
+            let ident = named();
+            let expected = ident.to_string();
+            if string_choices(members).is_some() {
+                return quote! {{
+                    let __choice = #arg.as_string(heap.as_ref(), permit)?;
+                    bex_vm_types::resource::#ident::from_spelling(__choice.as_str())
+                        .ok_or_else(|| AccessError::TypeMismatch {
+                            expected: #expected,
+                            actual: __choice.to_string(),
+                        })?
+                }};
+            }
+            // Members are tried in order; the VM admitted the argument to the
+            // union, so one of them holds.
+            let arms: Vec<TokenStream> = members
+                .iter()
+                .map(|member| {
+                    let variant = union_variant(member, path);
+                    match member {
+                        BamlType::Null => quote! {
+                            if #arg.is_null() {
+                                bex_vm_types::resource::#ident::#variant
+                            }
+                        },
+                        BamlType::Bool => quote! {
+                            if let Ok(__member) = #arg.as_bool() {
+                                bex_vm_types::resource::#ident::#variant(__member)
+                            }
+                        },
+                        BamlType::Int => quote! {
+                            if let Ok(__member) = #arg.as_int() {
+                                bex_vm_types::resource::#ident::#variant(__member)
+                            }
+                        },
+                        BamlType::StringLiteral(choice) => quote! {
+                            if #arg
+                                .as_string(heap.as_ref(), permit)
+                                .is_ok_and(|__member| __member.as_str() == #choice)
+                            {
+                                bex_vm_types::resource::#ident::#variant
+                            }
+                        },
+                        BamlType::Enum(enm) => {
+                            let enum_ident = resource_enum_ident(enm);
+                            let enum_path = &enm.path;
+                            quote! {
+                                if let Ok(__member) = #arg.as_variant_name(heap.as_ref(), permit) {
+                                    bex_vm_types::resource::#ident::#variant(
+                                        bex_vm_types::resource::#enum_ident::from_name(&__member)
+                                            .ok_or_else(|| AccessError::TypeMismatch {
+                                                expected: #enum_path,
+                                                actual: __member,
+                                            })?,
+                                    )
+                                }
+                            }
+                        }
+                        BamlType::List(_) => {
+                            let conv = external_to_typed_expr(
+                                &quote! { __member },
+                                member,
+                                class_ns_map,
+                                paths,
+                            );
+                            quote! {
+                                if let Ok(__member @ BexExternalValue::Array { .. }) =
+                                    #arg.as_owned_but_very_slow(heap.as_ref(), permit)
+                                {
+                                    bex_vm_types::resource::#ident::#variant({
+                                        let __converted: Result<_, AccessError> = #conv;
+                                        __converted?
+                                    })
+                                }
+                            }
+                        }
+                        BamlType::String => quote! {
+                            if let Ok(__member) = #arg.as_string(heap.as_ref(), permit) {
+                                bex_vm_types::resource::#ident::#variant(__member.to_string())
+                            }
+                        },
+                        BamlType::Uint8Array => quote! {
+                            if let Ok(__member) = #arg.as_uint8array(heap.as_ref(), permit) {
+                                bex_vm_types::resource::#ident::#variant(__member)
+                            }
+                        },
+                        BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
+                            let view = plain_view(name);
+                            quote! {
+                                if let Ok(__member) = #arg.as_builtin_class::<#view>(heap.as_ref(), permit) {
+                                    bex_vm_types::resource::#ident::#variant(
+                                        __member.into_owned(heap.as_ref(), permit)?.into(),
+                                    )
+                                }
+                            }
+                        }
+                        _ => panic!("`{path}`: the union member `{member:?}` has no glue form yet"),
+                    }
+                })
+                .collect();
+            quote! {
+                #(#arms else)* {
+                    return Err(AccessError::TypeMismatch {
+                        expected: #expected,
+                        actual: #arg.type_name(),
+                    }
+                    .into());
+                }
+            }
+        }
+        BamlType::Enum(enm) => {
+            let enum_ident = resource_enum_ident(enm);
+            let enum_path = &enm.path;
+            quote! {{
+                let __name = #arg.as_variant_name(heap.as_ref(), permit)?;
+                bex_vm_types::resource::#enum_ident::from_name(&__name).ok_or_else(|| {
+                    AccessError::TypeMismatch { expected: #enum_path, actual: __name }
+                })?
+            }}
+        }
+        BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
+            let view = plain_view(name);
+            quote! {
+                #arg.as_builtin_class::<#view>(heap.as_ref(), permit)?
+                    .into_owned(heap.as_ref(), permit)?
+                    .into()
+            }
+        }
+        _ => glue_extract_expr(arg, ty, class_ns_map, false, paths),
+    }
+}
+
+/// The glue of an operation on a resource: read the receiver's payload, call
+/// its kind's trait, and settle as the sys-op. A free function, since the
+/// platform's sys-op table has no part in it.
+fn emit_resource_glue(
+    builtin: &NativeBuiltin,
+    class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+    paths: &CodegenPaths,
+) -> TokenStream {
+    let kind = resource_kind(builtin)
+        .unwrap_or_else(|| unreachable!("`{}` is a resource operation", builtin.path));
+    let glue_ident = format_ident!("__glue_{}", builtin.fn_name);
+    let variant_ident = format_ident!("{}", builtin.sys_op_variant_name());
+    let method_ident = format_ident!("{}", io_method_name(builtin));
+    let trait_ident = resource_trait_ident(kind);
+    let spelling = format_ident!("{}", resource_spelling(kind));
+    let class = receiver_class_path(builtin);
+
+    let arg_idents: Vec<syn::Ident> = (0..builtin.params.len())
+        .map(|i| format_ident!("__arg{}", i))
+        .collect();
+    let param_idents: Vec<syn::Ident> = builtin
+        .params
+        .iter()
+        .map(|p| format_ident!("__{}", p.name))
+        .collect();
+    let param_extractions: Vec<TokenStream> = builtin
+        .params
+        .iter()
+        .zip(&arg_idents)
+        .zip(&param_idents)
+        .map(|((param, arg), ident)| {
+            let extract = resource_extract_expr(
+                arg,
+                &param.ty,
+                &|| resource_union_ident(kind, builtin, &param.name),
+                class_ns_map,
+                runtime_built,
+                paths,
+                &builtin.path,
+            );
+            quote! { let #ident = #extract; }
+        })
+        .collect();
+
+    let call_expr = quote! {
+        SysOpOutput::from(bex_vm_types::resource::#trait_ident::#method_ident(
+            __receiver #(, #param_idents)*
+        ))
+    };
+    let owned = &paths.owned;
+    let plain_owned = |name: &str| {
+        let ns_ident = format_ident!("{}", class_ns_map[name]);
+        let name_ident = rust_class_type_ident(name);
+        quote! { #owned::#ns_ident::#name_ident }
+    };
+    // A plain data class comes back as the struct that mirrors it, which
+    // the glue turns into the owned class it stands for; a union comes back
+    // as its enum, whose member is the value.
+    let into_result = match &builtin.return_type {
+        BamlType::Union(members) if string_choices(members).is_none() => {
+            let ident = resource_union_ident(kind, builtin, "output");
+            let arms: Vec<TokenStream> = members
+                .iter()
+                .map(|member| {
+                    let variant = union_variant(member, &builtin.path);
+                    let value = match member {
+                        BamlType::String => quote! { BexExternalValue::String(__member.into()) },
+                        BamlType::Uint8Array => quote! { BexExternalValue::Uint8Array(__member) },
+                        BamlType::Named(name)
+                            if class_ns_map.contains_key(name.as_str())
+                                && !runtime_built.contains_key(name.as_str()) =>
+                        {
+                            let owned = plain_owned(name);
+                            quote! {
+                                AsBexExternalValue::into_bex_external_value(#owned::from(__member))
+                            }
+                        }
+                        _ => panic!(
+                            "`{}`: the union member `{member:?}` has no result form yet",
+                            builtin.path
+                        ),
+                    };
+                    quote! { bex_vm_types::resource::#ident::#variant(__member) => #value }
+                })
+                .collect();
+            quote! {
+                #call_expr.into_result_mapped(SysOp::#variant_ident, |v| match v {
+                    #(#arms,)*
+                })
+            }
+        }
+        BamlType::Named(name)
+            if class_ns_map.contains_key(name.as_str())
+                && !runtime_built.contains_key(name.as_str()) =>
+        {
+            let owned = plain_owned(name);
+            quote! {
+                #call_expr.into_result_mapped(SysOp::#variant_ident, |v| {
+                    AsBexExternalValue::into_bex_external_value(#owned::from(v))
+                })
+            }
+        }
+        _ => emit_into_result_call(
+            &builtin.return_type,
+            &variant_ident,
+            &call_expr,
+            class_ns_map,
+            runtime_built,
+            paths,
+        ),
+    };
+
+    quote! {
+        fn #glue_ident<'a>(
+            heap: &std::sync::Arc<BexHeap>,
+            permit: PermitProof<'a>,
+            args: Vec<BexValue<'a>>,
+        ) -> SysOpResult {
+            let mut __args = args.into_iter();
+            let __arg_self = __args.next().unwrap();
+            #(let #arg_idents = __args.next().unwrap();)*
+
+            let __extraction = (|| {
+                let __receiver = match __arg_self.as_rust_payload(heap.as_ref(), permit)? {
+                    bex_vm_types::RustPayload::#spelling(resource) => resource,
+                    __other => {
+                        return Err(__GlueError::Internal(
+                            bex_vm_types::errors::VmInternalError::RustPayloadMismatch {
+                                class: #class,
+                                expected: baml_base::RustPayloadKind::#spelling,
+                                got: __other.kind(),
+                            },
+                        ));
+                    }
+                };
+                #(#param_extractions)*
+                Ok::<_, __GlueError>((__receiver #(, #param_idents)*))
+            })();
+
+            match __extraction {
+                Ok((__receiver #(, #param_idents)*)) => #into_result,
+                Err(e) => SysOpResult::Ready(Err(e.into_op_error(SysOp::#variant_ident))),
             }
         }
     }
@@ -1718,11 +3213,14 @@ fn emit_glue_method(
 fn emit_namespace_traits(
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let traits: Vec<TokenStream> = tree
         .iter()
-        .map(|(ns_key, node)| emit_one_namespace_trait(ns_key, node, class_ns_map, paths))
+        .map(|(ns_key, node)| {
+            emit_one_namespace_trait(ns_key, node, class_ns_map, runtime_built, paths)
+        })
         .collect();
 
     quote! { #(#traits)* }
@@ -1732,16 +3230,19 @@ fn emit_one_namespace_trait(
     ns_key: &str,
     node: &IoNamespaceNode,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let trait_ident = ns_trait_ident(ns_key);
     let dispatch_fn_ident = format_ident!("__dispatch_{}", ns_key);
 
-    // Supertraits: class traits in this namespace
+    // Supertraits: the class traits in this namespace, which a class whose
+    // every method is a resource operation does not have.
     let class_trait_idents: Vec<syn::Ident> = node
         .classes
-        .keys()
-        .map(|cn| class_trait_ident(ns_key, cn))
+        .iter()
+        .filter(|(_, methods)| has_table_ops(methods))
+        .map(|(cn, _)| class_trait_ident(ns_key, cn))
         .collect();
 
     let supertrait_bound = if class_trait_idents.is_empty() {
@@ -1796,7 +3297,7 @@ fn emit_one_namespace_trait(
     let free_fn_glues: Vec<TokenStream> = node
         .free_fns
         .iter()
-        .map(|f| emit_free_fn_glue(f, &trait_ident, class_ns_map, paths))
+        .map(|f| emit_free_fn_glue(f, &trait_ident, class_ns_map, runtime_built, paths))
         .collect();
 
     // Dispatch method body
@@ -1839,9 +3340,17 @@ fn emit_one_namespace_trait(
             .iter()
             .map(|(prefix, cn)| {
                 let dispatch = format_ident!("__dispatch_{}_{}", ns_key, cn.to_lowercase());
-                quote! {
-                    if let Some(method) = rest.strip_prefix(#prefix) {
-                        return self.#dispatch(method, heap, permit, args, ctx, call_id);
+                if has_table_ops(&node.classes[*cn]) {
+                    quote! {
+                        if let Some(method) = rest.strip_prefix(#prefix) {
+                            return self.#dispatch(method, heap, permit, args, ctx, call_id);
+                        }
+                    }
+                } else {
+                    quote! {
+                        if let Some(method) = rest.strip_prefix(#prefix) {
+                            return #dispatch(method, heap, permit, args);
+                        }
                     }
                 }
             })
@@ -1898,8 +3407,32 @@ fn emit_into_result_call(
     variant_ident: &syn::Ident,
     call_expr: &TokenStream,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
+    // A new instance of a tagged class: the glue builds it around the state
+    // the operation returns. A mixed class's is the tree its owned struct
+    // builds.
+    if let BamlType::Named(name) = return_type
+        && let Some(cd) = runtime_built.get(name.as_str())
+    {
+        let owned = &paths.owned;
+        let ns_ident = format_ident!("{}", class_ns_map[name.as_str()]);
+        let name_ident = rust_class_type_ident(name);
+        // A tagged class's payload converts itself.
+        let into_op_value = if is_tagged(cd) {
+            quote! { std::convert::identity }
+        } else {
+            quote! { #owned::#ns_ident::#name_ident::into_op_value }
+        };
+        return quote! {
+            #call_expr.into_result_mapped(SysOp::#variant_ident, #into_op_value)
+        };
+    }
+    assert!(
+        !mentions_runtime_built_ty(return_type, runtime_built),
+        "a sys-op result holds a `@@rust_type` instance below its top level: `{return_type:?}`"
+    );
     if let BamlType::List(inner) = return_type {
         if let BamlType::Named(name) = inner.as_ref() {
             if let Some(ns) = class_ns_map.get(name.as_str()) {
@@ -1936,6 +3469,7 @@ fn emit_free_fn_glue(
     builtin: &NativeBuiltin,
     ns_trait_ident: &syn::Ident,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let glue_ident = format_ident!("__glue_{}", builtin.fn_name);
@@ -1980,6 +3514,7 @@ fn emit_free_fn_glue(
             &variant_ident,
             &call_expr,
             class_ns_map,
+            runtime_built,
             paths,
         );
         return quote! {
@@ -2011,7 +3546,8 @@ fn emit_free_fn_glue(
         .map(|(i, p)| {
             let arg_id = &arg_idents[i];
             let param_ident = format_ident!("__{}", p.name);
-            let extract = glue_extract_expr(arg_id, &p.ty, class_ns_map, false, paths);
+            let extract = tagged_arg_expr(arg_id, &p.ty, runtime_built, &builtin.path)
+                .unwrap_or_else(|| glue_extract_expr(arg_id, &p.ty, class_ns_map, false, paths));
             quote! { let #param_ident = #extract; }
         })
         .collect();
@@ -2038,9 +3574,9 @@ fn emit_free_fn_glue(
 
     let extraction_return = if all_extracted_idents.len() == 1 {
         let id = &all_extracted_idents[0];
-        quote! { Ok::<_, AccessError>(#id) }
+        quote! { Ok::<_, __GlueError>(#id) }
     } else {
-        quote! { Ok::<_, AccessError>((#(#all_extracted_idents),*)) }
+        quote! { Ok::<_, __GlueError>((#(#all_extracted_idents),*)) }
     };
 
     let call_expr = quote! {
@@ -2051,6 +3587,7 @@ fn emit_free_fn_glue(
         &variant_ident,
         &call_expr,
         class_ns_map,
+        runtime_built,
         paths,
     );
 
@@ -2079,10 +3616,7 @@ fn emit_free_fn_glue(
                     #(#type_arg_bind_stmts)*
                     #into_result
                 }
-                Err(e) => SysOpResult::Ready(Err(OpError::new(
-                    SysOp::#variant_ident,
-                    bex_vm_types::errors::VmBamlError::AccessError { message: e.to_string() },
-                ))),
+                Err(e) => SysOpResult::Ready(Err(e.into_op_error(SysOp::#variant_ident))),
             }
         }
     }
@@ -2208,12 +3742,37 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
         .map(|b| format_ident!("{}", b.sys_op_variant_name()))
         .collect();
 
+    // An operation on a resource is its payload's own, whatever platform
+    // built the payload: every table runs its glue.
+    let resource_field = |b: &NativeBuiltin| {
+        let glue_ident = format_ident!("__glue_{}", b.fn_name);
+        quote! {
+            std::sync::Arc::new(|heap, permit, args, _ctx, _call_id| #glue_ident(heap, permit, args))
+        }
+    };
+    let unavailable_fields: Vec<TokenStream> = io_builtins
+        .iter()
+        .map(|b| {
+            let field_ident = format_ident!("{}", b.fn_name);
+            let variant_ident = format_ident!("{}", b.sys_op_variant_name());
+            if resource_kind(b).is_some() {
+                let field = resource_field(b);
+                quote! { #field_ident: #field }
+            } else {
+                quote! { #field_ident: Self::host_unavailable(SysOp::#variant_ident) }
+            }
+        })
+        .collect();
     let from_impl_fields: Vec<TokenStream> = io_builtins
         .iter()
         .map(|b| {
             let field_ident = format_ident!("{}", b.fn_name);
             let variant_ident = format_ident!("{}", b.sys_op_variant_name());
             let path_str = &b.path;
+            if resource_kind(b).is_some() {
+                let field = resource_field(b);
+                return quote! { #field_ident: #field };
+            }
             quote! {
                 #field_ident: {
                     let t = t.clone();
@@ -2265,9 +3824,11 @@ fn emit_sys_ops_struct(io_builtins: &[NativeBuiltin]) -> TokenStream {
                 })
             }
 
+            /// A table of a host with no facility of its own. An operation on
+            /// a resource still runs: the resource carries it.
             pub fn all_host_unavailable() -> Self {
                 Self {
-                    #(#field_idents: Self::host_unavailable(SysOp::#variant_idents),)*
+                    #(#unavailable_fields,)*
                 }
             }
 
@@ -2317,6 +3878,8 @@ pub fn generate_runtime_io(
     let io_class_defs = filter_io_class_defs(io_builtins, class_defs);
     let class_ns_map = build_class_ns_map(&io_class_defs);
     let class_defs_by_ns = group_class_defs_by_ns(&io_class_defs);
+    let runtime_built = runtime_built_io_classes(&io_class_defs);
+    let surface = host_surface(io_builtins, &runtime_built);
 
     let paths = CodegenPaths::external(structs_path);
 
@@ -2326,10 +3889,11 @@ pub fn generate_runtime_io(
         &io_class_defs,
         &class_ns_map,
         &class_defs_by_ns,
+        &runtime_built,
         &paths,
     );
-    let trait_def = emit_runtime_io_trait(io_builtins, &tree, &class_ns_map, &paths);
-    let noop = emit_noop_runtime_io(io_builtins, &tree, &class_ns_map, &paths);
+    let trait_def = emit_runtime_io_trait(&surface, &tree, &class_ns_map, &runtime_built, &paths);
+    let noop = emit_noop_runtime_io();
 
     let tokens = quote! {
         use std::pin::Pin;
@@ -2367,18 +3931,185 @@ fn emit_runtime_io_error() -> TokenStream {
     }
 }
 
+/// Where a host reaches an IO builtin.
+enum HostReach {
+    /// A method of `RuntimeIo`.
+    RuntimeIo,
+    /// A method of its kind's resource trait, called on the payload a
+    /// `RuntimeIo` result holds.
+    Resource(baml_base::RustPayloadKind),
+    /// Only the running engine calls it (`//baml:runtime_only`): it takes the
+    /// state of a `@@rust_type` class as an argument, and `RuntimeIo`
+    /// arguments are external values, which runtime-owned state has none of.
+    RuntimeOnly,
+}
+
+/// Where a host reaches `builtin`. Panics for a builtin no host can reach:
+/// one whose signature names a class only the runtime builds somewhere
+/// `RuntimeIo` has no form for. Panics, too, unless `//baml:runtime_only`
+/// marks exactly the builtins that take runtime-owned state, so a new one is
+/// never dropped from `RuntimeIo` unannounced.
+fn host_reach(
+    builtin: &NativeBuiltin,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+) -> HostReach {
+    let callers = match builtin.pipeline {
+        BuiltinPipeline::Io(callers) => callers,
+        BuiltinPipeline::Vm => panic!(
+            "`{}` is a `$rust_function`, which runs inside the VM and no host reaches",
+            builtin.path
+        ),
+    };
+    if let Some(kind) = resource_kind(builtin) {
+        assert!(
+            callers == IoCallers::Hosts,
+            "`{}` is marked `//baml:runtime_only`, but is an operation of a resource trait",
+            builtin.path
+        );
+        return HostReach::Resource(kind);
+    }
+    if let Some(receiver) = &builtin.receiver
+        && consumes_self_slot(receiver)
+        && runtime_built.contains_key(receiver.class_name.as_str())
+    {
+        panic!(
+            "`{}` is called on an instance only the runtime builds, and is no operation of a \
+             resource trait, so no host can reach it",
+            builtin.path
+        );
+    }
+    let state: BTreeMap<String, &NativeClassDef> = runtime_built
+        .iter()
+        .filter(|(_, cd)| is_tagged(cd))
+        .map(|(name, cd)| (name.clone(), *cd))
+        .collect();
+    let mut takes_state = false;
+    for param in &builtin.params {
+        if mentions_runtime_built_ty(&param.ty, &state) {
+            takes_state = true;
+        } else if mentions_runtime_built_ty(&param.ty, runtime_built) {
+            panic!(
+                "`{}` takes `{}`, which holds state only the runtime builds; `RuntimeIo` has no \
+                 argument form for it",
+                builtin.path, param.name
+            );
+        }
+    }
+    if mentions_runtime_built_ty(&builtin.return_type, runtime_built)
+        && runtime_built_result(builtin, runtime_built).is_none()
+    {
+        panic!(
+            "`{}` returns a class only the runtime builds nested in its result; `RuntimeIo` reads \
+             one back only as the whole result",
+            builtin.path
+        );
+    }
+    match (takes_state, callers) {
+        (true, IoCallers::RuntimeOnly) => HostReach::RuntimeOnly,
+        (false, IoCallers::Hosts) => HostReach::RuntimeIo,
+        (true, IoCallers::Hosts) => panic!(
+            "`{}` takes state only the runtime builds as an argument, so no `RuntimeIo` method \
+             can stand for it; mark it `//baml:runtime_only` if only the running engine calls it",
+            builtin.path
+        ),
+        (false, IoCallers::RuntimeOnly) => panic!(
+            "`{}` is marked `//baml:runtime_only`, but takes no state only the runtime builds; \
+             `RuntimeIo` can stand for it",
+            builtin.path
+        ),
+    }
+}
+
+/// Every IO builtin, by where a host reaches it.
+struct HostSurface<'a> {
+    /// The methods of `RuntimeIo`.
+    runtime_io: Vec<&'a NativeBuiltin>,
+    /// The resource kinds whose traits hold the rest of the operations.
+    resource_kinds: BTreeSet<baml_base::RustPayloadKind>,
+    /// The `//baml:runtime_only` builtins, which no host reaches.
+    runtime_only: Vec<&'a NativeBuiltin>,
+}
+
+fn host_surface<'a>(
+    io_builtins: &'a [NativeBuiltin],
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
+) -> HostSurface<'a> {
+    let mut surface = HostSurface {
+        runtime_io: Vec::new(),
+        resource_kinds: BTreeSet::new(),
+        runtime_only: Vec::new(),
+    };
+    for builtin in io_builtins {
+        match host_reach(builtin, runtime_built) {
+            HostReach::RuntimeIo => surface.runtime_io.push(builtin),
+            HostReach::Resource(kind) => {
+                surface.resource_kinds.insert(kind);
+            }
+            HostReach::RuntimeOnly => surface.runtime_only.push(builtin),
+        }
+    }
+    surface
+}
+
+/// The docs of the `RuntimeIo` trait, which name where a host reaches the
+/// builtins it does not cover.
+fn runtime_io_docs(surface: &HostSurface<'_>) -> TokenStream {
+    let resource_traits: Vec<String> = surface
+        .resource_kinds
+        .iter()
+        .map(|&kind| format!("`{}`", resource_trait_ident(kind)))
+        .collect();
+    let mut docs = vec![
+        " The IO builtins, typed and without the VM's plumbing.".to_owned(),
+        String::new(),
+        format!(
+            " The operations of a `@@rust_type` class's instance are methods of its resource \
+             trait ({}), called on the payload a result holds.",
+            resource_traits.join(", ")
+        ),
+    ];
+    if !surface.runtime_only.is_empty() {
+        let runtime_only: Vec<String> = surface
+            .runtime_only
+            .iter()
+            .map(|builtin| format!("`{}`", builtin.path))
+            .collect();
+        docs.push(format!(
+            " Not here, as they take runtime-owned state, which has no external value: {}.",
+            runtime_only.join(", ")
+        ));
+    }
+    quote! { #(#[doc = #docs])* }
+}
+
+/// The class `builtin` returns when it is one only the runtime builds.
+fn runtime_built_result<'a>(
+    builtin: &NativeBuiltin,
+    runtime_built: &BTreeMap<String, &'a NativeClassDef>,
+) -> Option<&'a NativeClassDef> {
+    match &builtin.return_type {
+        BamlType::Named(name) => runtime_built.get(name.as_str()).copied(),
+        _ => None,
+    }
+}
+
 /// Emit handle structs for classes that have `$rust_io_function` methods.
 fn emit_runtime_io_handles(
     tree: &BTreeMap<String, IoNamespaceNode>,
     _io_class_defs: &[&NativeClassDef],
     class_ns_map: &BTreeMap<String, String>,
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let mut handles = Vec::new();
 
     for (ns, node) in tree {
         for (class_name, methods) in &node.classes {
+            // A class only the runtime builds has no external form for a handle to hold.
+            if runtime_built.contains_key(class_name.as_str()) {
+                continue;
+            }
             // Fieldless marker classes (e.g. `random.SystemRandom`) have no
             // generated `owned::` struct, so there is nothing to wrap in a
             // handle and `from_external` would not resolve. They are never used
@@ -2398,14 +4129,11 @@ fn emit_runtime_io_handles(
                 .get(ns.as_str())
                 .and_then(|defs| defs.iter().find(|cd| cd.name == *class_name));
 
-            // Build public fields for non-$rust_type fields.
+            // Build public fields.
             let mut pub_fields = Vec::new();
             let mut from_raw_fields = Vec::new();
             if let Some(cd) = class_def {
-                for field in &cd.fields {
-                    if field.field_type == BamlType::RustType {
-                        continue;
-                    }
+                for field in cd.fields() {
                     let field_ident = rust_field_ident(&field.name);
                     let field_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
                     pub_fields.push(quote! { pub #field_ident: #field_ty });
@@ -2449,8 +4177,12 @@ fn runtime_io_return_type(
     builtin: &NativeBuiltin,
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
+    if let Some(cd) = runtime_built_result(builtin, runtime_built) {
+        return owned_rust_type(&BamlType::Named(cd.name.clone()), class_ns_map, paths);
+    }
     if let BamlType::Named(name) = &builtin.return_type {
         if let Some(ns) = class_ns_map.get(name.as_str()) {
             if let Some(node) = tree.get(ns) {
@@ -2465,25 +4197,27 @@ fn runtime_io_return_type(
 }
 
 fn emit_runtime_io_trait(
-    io_builtins: &[NativeBuiltin],
+    surface: &HostSurface<'_>,
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let mut methods = Vec::new();
 
-    for builtin in io_builtins {
+    for builtin in &surface.runtime_io {
         let method_name = runtime_io_method_name(builtin);
         let method_ident = format_ident!("{}", method_name);
-        let ret_ty = runtime_io_return_type(builtin, tree, class_ns_map, paths);
+        let ret_ty = runtime_io_return_type(builtin, tree, class_ns_map, runtime_built, paths);
 
         let mut params: Vec<TokenStream> = Vec::new();
 
-        // For class methods, the first param is a handle reference. Fieldless
-        // marker receivers (e.g. `random.SystemRandom`) have no handle type, so
-        // they take no receiver param — the adapter synthesizes their `self`.
+        // For instance methods, the first param is a handle reference. A
+        // static method takes no receiver, and neither does a fieldless
+        // marker receiver (e.g. `random.SystemRandom`), which has no handle
+        // type: the adapter synthesizes the marker's `self`.
         if let Some(ref receiver) = builtin.receiver {
-            if receiver.instance_backed {
+            if receiver_is_extracted(receiver) {
                 // Key by package+namespace so top-level classes of non-`baml`
                 // packages (`ai.Context` → `AiContextHandle`) match the
                 // handle-definition loop, which iterates tree keys.
@@ -2514,19 +4248,16 @@ fn emit_runtime_io_trait(
         });
     }
 
+    let docs = runtime_io_docs(surface);
     quote! {
+        #docs
         pub trait RuntimeIo: Send + Sync + UnwindSafe + RefUnwindSafe {
             #(#methods)*
         }
     }
 }
 
-fn emit_noop_runtime_io(
-    _io_builtins: &[NativeBuiltin],
-    _tree: &BTreeMap<String, IoNamespaceNode>,
-    _class_ns_map: &BTreeMap<String, String>,
-    _paths: &CodegenPaths,
-) -> TokenStream {
+fn emit_noop_runtime_io() -> TokenStream {
     quote! {
         pub struct NoopRuntimeIo;
         impl RuntimeIo for NoopRuntimeIo {}
@@ -2548,11 +4279,19 @@ pub fn generate_io_adapter(
     let tree = build_io_namespace_tree(io_builtins);
     let io_class_defs = filter_io_class_defs(io_builtins, class_defs);
     let class_ns_map = build_class_ns_map(&io_class_defs);
+    let runtime_built = runtime_built_io_classes(&io_class_defs);
+    let surface = host_surface(io_builtins, &runtime_built);
 
     let paths = CodegenPaths::external(structs_path);
 
     let adapter_struct = emit_adapter_struct();
-    let adapter_impl = emit_adapter_impl(io_builtins, &tree, &class_ns_map, &paths);
+    let adapter_impl = emit_adapter_impl(
+        &surface.runtime_io,
+        &tree,
+        &class_ns_map,
+        &runtime_built,
+        &paths,
+    );
     let build_fn = emit_build_runtime_io();
     let resolve_fn = emit_resolve_helper();
 
@@ -2571,14 +4310,23 @@ pub fn generate_io_adapter(
 
 fn emit_resolve_helper() -> TokenStream {
     quote! {
-        async fn __resolve_sys_op_result(
-            result: SysOpResult,
-        ) -> Result<BexExternalValue, RuntimeIoError> {
+        async fn __resolve_sys_op_result(result: SysOpResult) -> Result<OpValue, RuntimeIoError> {
             match result {
-                SysOpResult::Ready(Ok(val)) => Ok(val),
-                SysOpResult::Ready(Err(e)) => Err(RuntimeIoError::Other(format!("{e:?}"))),
-                SysOpResult::Async(fut) => {
-                    fut.await.map_err(|e| RuntimeIoError::Other(format!("{e:?}")))
+                SysOpResult::Ready(result) => result,
+                SysOpResult::Async(fut) => fut.await,
+            }
+            .map_err(|e| RuntimeIoError::Other(format!("{e:?}")))
+        }
+
+        /// The external form of an operation's result that names no class
+        /// only the runtime builds.
+        fn __external(value: OpValue) -> Result<BexExternalValue, RuntimeIoError> {
+            match value {
+                OpValue::External(value) => Ok(value),
+                OpValue::RustInstance { class, .. } | OpValue::Instance { class, .. } => {
+                    Err(RuntimeIoError::Other(format!(
+                        "an instance of `{class}` has no external form"
+                    )))
                 }
             }
         }
@@ -2605,9 +4353,10 @@ fn emit_adapter_struct() -> TokenStream {
 }
 
 fn emit_adapter_impl(
-    io_builtins: &[NativeBuiltin],
+    io_builtins: &[&NativeBuiltin],
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
+    runtime_built: &BTreeMap<String, &NativeClassDef>,
     paths: &CodegenPaths,
 ) -> TokenStream {
     let mut methods = Vec::new();
@@ -2615,7 +4364,7 @@ fn emit_adapter_impl(
     for builtin in io_builtins {
         let method_name = runtime_io_method_name(builtin);
         let method_ident = format_ident!("{}", method_name);
-        let ret_ty = runtime_io_return_type(builtin, tree, class_ns_map, paths);
+        let ret_ty = runtime_io_return_type(builtin, tree, class_ns_map, runtime_built, paths);
 
         let mut params: Vec<TokenStream> = Vec::new();
 
@@ -2625,13 +4374,13 @@ fn emit_adapter_impl(
 
         if let Some(ref receiver) = builtin.receiver {
             let ns = io_ns_key(io_package_name(builtin), io_namespace_name(builtin));
-            if receiver.instance_backed {
+            if receiver_is_extracted(receiver) {
                 let handle = handle_type_name(&ns, &receiver.class_name);
                 let param_ident = format_ident!("{}", receiver.class_name.to_lowercase());
                 params.push(quote! { #param_ident: &#handle });
                 ext_bindings.push(quote! { let __recv_raw = #param_ident.raw.clone(); });
                 arg_exprs.push(quote! { BexValue::ExternalValue(&__recv_raw) });
-            } else if !receiver.receiver_type.is_static() {
+            } else if consumes_self_slot(receiver) {
                 // Fieldless marker receiver: the SysOpFn glue still consumes a
                 // leading `self` slot, so synthesize an empty instance for it.
                 // The `RuntimeIo` method itself takes no receiver param.
@@ -2660,7 +4409,25 @@ fn emit_adapter_impl(
             arg_exprs.push(quote! { BexValue::ExternalValue(&#ext_ident) });
         }
 
-        let result_conversion = emit_result_conversion(builtin, tree, class_ns_map, paths);
+        // A class the runtime builds comes back in the runtime's own form;
+        // anything else has an external one.
+        let result_conversion = match runtime_built_result(builtin, runtime_built) {
+            Some(cd) => {
+                let owned_ty =
+                    owned_rust_type(&BamlType::Named(cd.name.clone()), class_ns_map, paths);
+                quote! {
+                    <#owned_ty as sys_types::FromOpValue>::from_op_value(__op)
+                        .map_err(|e| RuntimeIoError::Other(e.to_string()))
+                }
+            }
+            None => {
+                let conversion = emit_result_conversion(builtin, tree, class_ns_map, paths);
+                quote! {
+                    let __val = __external(__op)?;
+                    #conversion
+                }
+            }
+        };
         let sys_ops_field = format_ident!("{}", builtin.fn_name);
 
         let body = quote! {
@@ -2682,7 +4449,7 @@ fn emit_adapter_impl(
                     CallId::next(),
                 );
                 drop(permit);
-                let __val = __resolve_sys_op_result(result).await?;
+                let __op = __resolve_sys_op_result(result).await?;
                 #result_conversion
             })
         };
@@ -2938,7 +4705,7 @@ mod tests {
     use super::{CodegenPaths, emit_owned_struct, emit_view_struct};
     use crate::{
         rust_ident::rust_field_ident,
-        types::{BamlType, NativeClassDef, NativeClassField},
+        types::{BamlType, NativeClassBody, NativeClassDef, NativeClassField},
     };
 
     #[test]
@@ -2961,16 +4728,18 @@ mod tests {
             name: "KeywordFields".to_string(),
             namespace_prefix: "baml.test".to_string(),
             generic_params: Vec::new(),
-            fields: BAML_FIELD_NAMES
-                .iter()
-                .copied()
-                .enumerate()
-                .map(|(index, name)| NativeClassField {
-                    name: name.to_string(),
-                    field_type: BamlType::Bool,
-                    index,
-                })
-                .collect(),
+            body: NativeClassBody::Fields(
+                BAML_FIELD_NAMES
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .map(|(index, name)| NativeClassField {
+                        name: name.to_string(),
+                        field_type: BamlType::Bool,
+                        index,
+                    })
+                    .collect(),
+            ),
             source_file: "<test>/keywords.baml".to_string(),
         };
         let class_ns_map = BTreeMap::new();
@@ -2982,6 +4751,7 @@ mod tests {
             "test",
             &paths,
             &HashSet::new(),
+            &BTreeMap::new(),
         ));
         let view = crate::format_tokens(&emit_view_struct(&class, &class_ns_map, "test", &paths));
         let compact_owned: String = owned.chars().filter(|c| !c.is_whitespace()).collect();
@@ -3013,5 +4783,127 @@ mod tests {
                 "VM lookup changed the BAML key `{baml_name}`:\n{view}"
             );
         }
+    }
+
+    /// The IO builtins and the classes only the runtime builds, from the stdlib.
+    fn io_surface_inputs() -> (
+        Vec<crate::types::NativeBuiltin>,
+        Vec<crate::types::NativeClassDef>,
+    ) {
+        let (_vm, io_builtins, class_defs) = crate::extract_native_builtins().unwrap();
+        (io_builtins, class_defs)
+    }
+
+    #[test]
+    fn runtime_io_covers_static_constructors_of_runtime_built_classes() {
+        let (io_builtins, class_defs) = io_surface_inputs();
+        let io_class_defs = super::filter_io_class_defs(&io_builtins, &class_defs);
+        let runtime_built = super::runtime_built_io_classes(&io_class_defs);
+        let surface = super::host_surface(&io_builtins, &runtime_built);
+        let runtime_io: HashSet<&str> = surface
+            .runtime_io
+            .iter()
+            .map(|builtin| builtin.path.as_str())
+            .collect();
+        for constructor in [
+            "baml.http.Response.new",
+            "baml.http.Response.new_streaming",
+            "baml.http.Server.bind",
+            "baml.http.TlsConfig._new",
+            "baml.net.TcpStream._connect",
+            "baml.net.TcpListener.bind",
+            "baml.net.UdpSocket.bind",
+            "baml.time.Instant.now",
+        ] {
+            assert!(
+                runtime_io.contains(constructor),
+                "`{constructor}` is not in `RuntimeIo`"
+            );
+        }
+        let runtime_only: Vec<&str> = surface
+            .runtime_only
+            .iter()
+            .map(|builtin| builtin.path.as_str())
+            .collect();
+        assert_eq!(
+            runtime_only,
+            [
+                "baml.http.Server._serve",
+                "baml.sync._wait",
+                "baml.sync._wait_permit",
+            ]
+        );
+    }
+
+    /// `builtin` with its first parameter's type replaced by `ty`.
+    fn with_param(
+        mut builtin: crate::types::NativeBuiltin,
+        ty: crate::types::BamlType,
+    ) -> crate::types::NativeBuiltin {
+        builtin.params[0].ty = ty;
+        builtin
+    }
+
+    fn reach_of(edit: impl FnOnce(crate::types::NativeBuiltin) -> crate::types::NativeBuiltin) {
+        let (io_builtins, class_defs) = io_surface_inputs();
+        let io_class_defs = super::filter_io_class_defs(&io_builtins, &class_defs);
+        let runtime_built = super::runtime_built_io_classes(&io_class_defs);
+        let fetch = io_builtins
+            .into_iter()
+            .find(|builtin| builtin.path == "baml.http._fetch")
+            .unwrap();
+        super::host_reach(&edit(fetch), &runtime_built);
+    }
+
+    #[test]
+    #[should_panic(expected = "holds state only the runtime builds")]
+    fn runtime_io_refuses_a_mixed_class_argument() {
+        reach_of(|fetch| with_param(fetch, crate::types::BamlType::Named("Response".into())));
+    }
+
+    #[test]
+    #[should_panic(expected = "nested in its result")]
+    fn runtime_io_refuses_a_nested_runtime_built_result() {
+        reach_of(|mut fetch| {
+            fetch.return_type = crate::types::BamlType::Optional(Box::new(
+                crate::types::BamlType::Named("Response".into()),
+            ));
+            fetch
+        });
+    }
+
+    /// A builtin taking a resource as an ordinary argument is no method of
+    /// `RuntimeIo`; codegen stops rather than drop it unannounced.
+    #[test]
+    #[should_panic(expected = "mark it `//baml:runtime_only`")]
+    fn runtime_io_refuses_unmarked_runtime_state() {
+        reach_of(|fetch| with_param(fetch, crate::types::BamlType::Named("File".into())));
+    }
+
+    #[test]
+    fn runtime_only_admits_a_tagged_argument() {
+        let (io_builtins, class_defs) = io_surface_inputs();
+        let io_class_defs = super::filter_io_class_defs(&io_builtins, &class_defs);
+        let runtime_built = super::runtime_built_io_classes(&io_class_defs);
+        let fetch = io_builtins
+            .into_iter()
+            .find(|builtin| builtin.path == "baml.http._fetch")
+            .unwrap();
+        let mut edited = with_param(fetch, crate::types::BamlType::Named("File".into()));
+        edited.pipeline = crate::types::BuiltinPipeline::Io(crate::types::IoCallers::RuntimeOnly);
+        assert!(matches!(
+            super::host_reach(&edited, &runtime_built),
+            super::HostReach::RuntimeOnly
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "`RuntimeIo` can stand for it")]
+    fn runtime_only_refuses_a_builtin_runtime_io_stands_for() {
+        reach_of(|mut fetch| {
+            fetch.pipeline =
+                crate::types::BuiltinPipeline::Io(crate::types::IoCallers::RuntimeOnly);
+            fetch
+        });
     }
 }

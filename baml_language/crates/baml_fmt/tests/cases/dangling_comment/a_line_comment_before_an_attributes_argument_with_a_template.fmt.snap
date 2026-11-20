@@ -1,0 +1,12 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+class C {
+    x: string
+        @description( // c
+            `
+                some desc
+            `,
+        )
+        @alias("x"),
+}

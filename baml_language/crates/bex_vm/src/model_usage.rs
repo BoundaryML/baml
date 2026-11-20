@@ -68,7 +68,10 @@ impl BexVm {
     fn field(&self, value: Value, name: &str) -> Option<Value> {
         let instance = self.as_instance(&value).ok()?;
         let class = instance.class_object();
-        let index = class.fields.iter().position(|field| field.name == name)?;
+        let index = class
+            .instance_fields()
+            .iter()
+            .position(|field| field.name == name)?;
         Some(instance.load_value(index))
     }
 }

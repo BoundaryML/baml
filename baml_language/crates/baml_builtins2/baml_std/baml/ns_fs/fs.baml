@@ -4,8 +4,6 @@
 /// additionally throws `ParseError` when the remaining bytes are not valid
 /// UTF-8.
 class File {
-    _handle: $rust_type,
-
     /// Reads the entire remaining file contents as a UTF-8 string.
     ///
     /// # Throws
@@ -57,11 +55,9 @@ class File {
     ///
     /// Throws `InvalidArgument` if `offset` is negative when paired with
     /// `whence="start"` (the underlying syscall takes an unsigned offset).
-    function seek_from(
-        self,
-        whence: "start" | "current" | "end",
-        offset: int,
-    ) -> int throws root.errors.Io | root.errors.InvalidArgument {
+    function seek_from(self, whence: "start" | "current" | "end", offset: int) -> int
+        throws root.errors.Io | root.errors.InvalidArgument
+    {
         $rust_io_function
     }
 
@@ -94,16 +90,17 @@ class File {
     function write(self, data: string | uint8array) -> int throws root.errors.Io {
         self.as<root.io.Write>.write(data)
     }
+
+    @@rust_type("File")
 }
 
 /// Opens the file at `path` with the given `mode`.
 ///
 /// Mode values: `"r"` (read), `"r+"` (read/write), `"w"` (write/truncate),
 /// `"w+"` (read/write/truncate), `"a"` (append), `"a+"` (read/append).
-function open(
-    path: string,
-    mode: "r" | "r+" | "w" | "w+" | "a" | "a+",
-) -> File throws root.errors.Io | root.errors.InvalidArgument {
+function open(path: string, mode: "r" | "r+" | "w" | "w+" | "a" | "a+") -> File
+    throws root.errors.Io | root.errors.InvalidArgument
+{
     $rust_io_function
 }
 
@@ -199,10 +196,9 @@ function remove_dir_all(path: string) -> null throws root.errors.Io {
 /// read-only attribute and clearing it sets it. Every other bit, including the
 /// group and other digits, is accepted and ignored. `path` must exist on
 /// Windows even when the resulting attribute is unchanged.
-function chmod(
-    path: string,
-    mode: int,
-) -> void throws root.errors.Io | root.errors.InvalidArgument {
+function chmod(path: string, mode: int) -> void
+    throws root.errors.Io | root.errors.InvalidArgument
+{
     $rust_io_function
 }
 
@@ -255,10 +251,11 @@ function write_atomic(path: string, content: uint8array) -> void throws root.err
 /// An advisory cross-process lock. Keep the handle alive; close or process exit releases it.
 /// The lock file remains on disk and must not be deleted while other processes may use it.
 class Lock {
-    _handle: $rust_type,
     function close(self) -> void throws never {
         $rust_io_function
     }
+
+    @@rust_type("Lock")
 }
 
 /// Acquires an exclusive advisory lock, waiting up to timeout_ms. Creates missing parent directories.

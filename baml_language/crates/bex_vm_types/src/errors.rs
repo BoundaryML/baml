@@ -231,6 +231,15 @@ pub enum VmInternalError {
         got: ::core::any::TypeId,
     },
 
+    /// A `@@rust_type` instance holds a payload of another kind than its
+    /// class declares, which [`crate::RustInstance::fits`] rules out.
+    #[error("a `{class}` instance holds a {got:?} payload, not a {expected:?} one")]
+    RustPayloadMismatch {
+        class: &'static str,
+        expected: baml_base::RustPayloadKind,
+        got: baml_base::RustPayloadKind,
+    },
+
     #[error("cannot apply binary operation: {left} {op} {right}")]
     CannotApplyBinOp { left: Type, right: Type, op: BinOp },
 
@@ -268,14 +277,6 @@ pub enum VmInternalError {
     /// run first. The engine names the global from `slot`.
     #[error("global slot {} was read before its initializer ran", slot.raw())]
     GlobalReadBeforeInit { slot: crate::GlobalIndex },
-
-    /// A native resource handle (SSE stream, WebSocket stream, …) did not
-    /// resolve in the registry that owns it. The sysop holds a live
-    /// `ResourceHandle` for the whole call and the registry entry is removed
-    /// only when the last handle drops, so a missing entry is a registry
-    /// invariant violation rather than anything user code can provoke.
-    #[error("resource handle {key} of kind `{kind}` did not resolve in its registry")]
-    UnresolvedResourceHandle { kind: &'static str, key: usize },
 
     /// A bridge-layer fault that prevented a host operation from
     /// proceeding — e.g. `external_to_outbound` could not serialize a

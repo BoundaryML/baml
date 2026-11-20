@@ -104,7 +104,6 @@ pub fn classify_type<N: Clone>(ty: &RealizedTy<N>) -> TypeKind {
         | RealizedTy::Uint8Array
         | RealizedTy::Media(..)
         | RealizedTy::Future(..)
-        | RealizedTy::RustType
         | RealizedTy::Type
         | RealizedTy::Resource
         | RealizedTy::PromptAst

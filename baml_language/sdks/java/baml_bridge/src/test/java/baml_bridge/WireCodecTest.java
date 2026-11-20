@@ -14,7 +14,6 @@ import baml_bridge.internal.ProtoWriter;
 import baml_bridge.internal.WireDepth;
 import baml_bridge.internal.WireWriter;
 import baml_sdk.baml.media.Image;
-import baml_sdk.baml.media.Pdf;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -994,8 +993,12 @@ class WireCodecTest {
                 BamlType.map(BamlType.STRING, BamlType.BYTES).toWireTy(),
                 valueTypeOf(ProtoWriter.encodeInboundValue(Map.of("k", new byte[] {1}))));
         // A host opaque value is a handle the engine owns the type of; its key
-        // goes as it is, so no native row is touched.
-        BamlHandle opaque = new BamlHandle(7, BamlHandle.HOST_VALUE_OPAQUE);
+        // goes as it is, taking a count in the host registry, so no native row
+        // is touched. Any registered key will do.
+        long key = HostCalls.registerCallable(
+                new BamlTypedCallable((java.util.function.Supplier<Long>) () -> 1L,
+                        BamlType.function(List.of(), BamlType.INT, BamlType.UNKNOWN)));
+        BamlHandle opaque = new BamlHandle(key, BamlHandle.HOST_VALUE_OPAQUE);
         assertArrayEquals(
                 BamlType.list(BamlType.UNKNOWN).toWireTy(),
                 valueTypeOf(ProtoWriter.encodeInboundValue(List.of(opaque))));
@@ -1007,6 +1010,7 @@ class WireCodecTest {
                 () -> ProtoWriter.encodeInboundValue(new BamlTypedValue(
                         List.of(opaque), BamlType.list(BamlType.typeVar("T")))));
         assertTrue(open.getMessage().contains("could not infer a type for `T`"), open.getMessage());
+        HostCalls.release(key, Long.MAX_VALUE);
         // A type value is a value of `type`, and crosses as itself.
         assertArrayEquals(
                 BamlType.list(BamlType.TYPE).toWireTy(),
@@ -1779,6 +1783,10 @@ class WireCodecTest {
         // Handle-backed media.
         assertTrue(ProtoReader.armMatchesValue(pdf, ovHandle(1, ADT_MEDIA_PDF)));
         assertFalse(ProtoReader.armMatchesValue(image, ovHandle(1, ADT_MEDIA_PDF)));
+        assertTrue(ProtoReader.armMatchesValue(anyMedia, ovHandle(1, ADT_MEDIA_PDF)));
+        // A media value has a concrete kind: no other kind is media.
+        assertFalse(ProtoReader.armMatchesValue(anyMedia, ovMedia(5)));
+        assertFalse(ProtoReader.armMatchesValue(anyMedia, ovHandle(1, 10)));
 
         BamlType callable = BamlType.function(
                 List.of(new BamlType.Param(null, BamlType.INT, false)), BamlType.INT, BamlType.NEVER);
@@ -1851,27 +1859,6 @@ class WireCodecTest {
         assertEquals(ADT_MEDIA_IMAGE, img.bamlHandle().handleType());
     }
 
-    /** class_value(baml.media.Pdf, {_data: handle_value}) unwraps to the Pdf. */
-    @Test
-    void decode_media_class_wrapper_unwraps_to_media() {
-        WireWriter dataVal = new WireWriter();
-        dataVal.writeMessage(OV_HANDLE, handleMsg(77L, ADT_MEDIA_PDF)); // _data value
-        WireWriter dataEntry = new WireWriter();
-        dataEntry.writeString(1, "_data"); // BamlOutboundMapEntry.key = 1
-        dataEntry.writeMessage(2, dataVal.toByteArray()); // value = 2
-
-        WireWriter cls = new WireWriter();
-        cls.writeString(1, "baml.media.Pdf"); // BamlValueClass.name = 1
-        cls.writeMessage(2, dataEntry.toByteArray()); // fields = 2
-
-        WireWriter ov = new WireWriter();
-        ov.writeMessage(OV_CLASS, cls.toByteArray());
-
-        Object decoded = ProtoReader.decodeOutboundResult(okEnvelope(ov.toByteArray()));
-        Pdf pdf = assertInstanceOf(Pdf.class, decoded);
-        assertEquals(77L, pdf.bamlHandle().key());
-    }
-
     /** A non-media handle type keeps the bare-BamlHandle fallback. */
     @Test
     void decode_unknown_handle_type_falls_back_to_bare_handle() {
@@ -1913,9 +1900,26 @@ class WireCodecTest {
                 okEnvelope(ovHandle(32L, ADT_RUNTIME_VALUE, tyClass(PKG_FQN))),
                 BamlType.classByFqn(PKG_FQN));
         assertNotEquals(pkg, other);
-        // An open position keeps the bare runtime-value handle.
-        BamlHandle bare = assertInstanceOf(BamlHandle.class, ProtoReader.decodeOutboundResult(wire));
+        // An open position (an erased type variable) reifies the wrapper too:
+        // the handle's type names the class.
+        assertEquals(pkg, assertInstanceOf(Pkg.class, ProtoReader.decodeOutboundResult(wire)));
+        // A runtime value of a class with no wrapper stays a bare handle.
+        BamlHandle bare = assertInstanceOf(
+                BamlHandle.class,
+                ProtoReader.decodeOutboundResult(
+                        okEnvelope(ovHandle(34L, ADT_RUNTIME_VALUE, tyClass("user.RuntimeDeclared")))));
         assertEquals(ADT_RUNTIME_VALUE, bare.handleType());
+    }
+
+    /** An instance of a generic opaque class keeps the type arguments its handle's type states. */
+    @Test
+    void decode_opaque_handle_keeps_its_type_arguments() {
+        TypeRegistry.registerOpaqueClass(PKG_FQN, Pkg.class.getName());
+        byte[] wire = okEnvelope(ovHandle(
+                35L, ADT_RUNTIME_VALUE, tyClass(PKG_FQN, tyPrimitive(PRIM_INT), tyPrimitive(PRIM_STRING))));
+        Pkg pkg = assertInstanceOf(
+                Pkg.class, ProtoReader.decodeOutboundResult(wire, BamlType.classByFqn(PKG_FQN)));
+        assertEquals(List.of(BamlType.INT, BamlType.STRING), TypeRegistry.typeArgsOf(pkg));
     }
 
     /** Anything but its runtime-value handle at an opaque class's position is refused. */
@@ -2187,7 +2191,7 @@ class WireCodecTest {
      * A genuinely out-of-grammar type arg (a media arm — no {@link BamlType}
      * kind) still poisons the whole binding all-or-nothing: positions must never
      * misalign. The residual skip cases after the widening are the non-token
-     * {@code BamlTy} arms (media / function / rust_type / unknown / never / …)
+     * {@code BamlTy} arms (media / function / unknown / never / …)
      * and the {@code null}/{@code bytes}/{@code bigint} primitive kinds.
      */
     @Test

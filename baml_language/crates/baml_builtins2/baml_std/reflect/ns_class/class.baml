@@ -27,16 +27,29 @@ class Field {
         };
         root.Class.get_field<T>(owner, self.name) catch (e) {
             root.errors.CompilationError { message } => {
-                throw root.errors.TypeMismatch { message: message }
-            }
+                throw root.errors.TypeMismatch { message: message };
+            },
         }
     }
+}
+
+/// (internal) A `Builder`'s state: the class it is defining, field by field.
+class _BuilderState {
+    @@rust_type("ClassBuilder")
+}
+
+/// (internal) How a `PendingType` is built from its roots.
+enum _PendingOp {
+    Direct,
+    Array,
+    Optional,
+    Union,
 }
 
 /// A mutable runtime-class definition. Calling `build` freezes every builder
 /// connected through a pending field type as one atomic recursive group.
 class Builder {
-    _handle: $rust_type,
+    _state: _BuilderState,
     _roots: unknown[],
     _neighbors: Builder[],
     _resolved: root.Type?,
@@ -75,10 +88,9 @@ class Builder {
     /// Only the fields are copied. The new class gets neither `some_class`'s
     /// own metadata nor its interfaces; it implements what `build` is given.
     //baml:mut_vm
-    function fields_from(
-        self,
-        some_class: root.Class,
-    ) -> Builder throws root.errors.CompilationError {
+    function fields_from(self, some_class: root.Class) -> Builder
+        throws root.errors.CompilationError
+    {
         $rust_function
     }
 
@@ -89,19 +101,17 @@ class Builder {
     }
 
     /// Validate and freeze this builder's complete connected recursive group.
-    function build(
-        self,
-        implementations: root.interface.Implementation[] = [],
-    ) -> root.Class throws root.errors.CompilationError {
+    function build(self, implementations: root.interface.Implementation[] = []) -> root.Class
+        throws root.errors.CompilationError
+    {
         self._build(implementations)
     }
 
     /// (internal) Internal native backing `build`; all arguments have been materialized.
     //baml:mut_vm
-    function _build(
-        self,
-        implementations: root.interface.Implementation[],
-    ) -> root.Class throws root.errors.CompilationError {
+    function _build(self, implementations: root.interface.Implementation[]) -> root.Class
+        throws root.errors.CompilationError
+    {
         $rust_function
     }
 }
@@ -109,7 +119,7 @@ class Builder {
 /// A reference to a not-yet-frozen builder type. It is deliberately not a
 /// subtype of the built-in `type`; only Builder.field accepts it directly.
 class PendingType {
-    _handle: $rust_type,
+    _op: _PendingOp,
     _roots: unknown[],
     _resolved: root.Type?,
 
@@ -130,12 +140,10 @@ class PendingType {
         let members: (root.Type | PendingType)[] = [];
         // NOTE: an index loop, not `for ... in`; see `reflect.AnyClass.get_field`.
         for (let i = 0; i < others.length(); i += 1) {
-            members.push(
-                match (others[i]) {
-                    let view: root.TypeView => view.as_type(),
-                    let pending => pending,
-                },
-            );
+            members.push(match (others[i]) {
+                let view: root.TypeView => view.as_type(),
+                let pending => pending,
+            });
         }
         self._union(members)
     }

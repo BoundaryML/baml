@@ -78,7 +78,7 @@ const SOURCE: &str = r##"
     function main() -> string {
         let canned = Canned { server: baml.http.Server.bind("127.0.0.1:0"), slow: Flag { set: false } };
         let task = spawn { canned.server.serve(canned.handle) };
-        let base = "http://" + canned.server.addr;
+        let base = "http://" + canned.server.addr();
 
         let ok = baml.http.send(request(base, "/ok")).text();
         let bytes = baml.http.send(request(base, "/bytes")).bytes();
@@ -606,7 +606,7 @@ const HANDLER_SOURCE: &str = r##"
     function serve_once() -> string {
         let server = baml.http.Server.bind("127.0.0.1:0");
         let task = spawn { server.serve(handle) };
-        let text = baml.http.fetch("http://" + server.addr + "/").text();
+        let text = baml.http.fetch("http://" + server.addr() + "/").text();
         let _ = task.cancel();
         text
     }
@@ -754,13 +754,31 @@ async fn application_read_cancellation_stays_cancelled_without_drop_on_the_wire(
     let BexExternalValue::Instance { fields, .. } = &response else {
         panic!("response");
     };
-    let BexExternalValue::RustData(body) = &fields["_body"] else {
+    // The body is a `@@rust_type` instance the host holds by reference: its
+    // payload reports the request it belongs to.
+    let BexExternalValue::Adt(bex_external_types::BexExternalAdt::TaggedHeapHandle {
+        heap_handle,
+        ..
+    }) = &fields["_body"]
+    else {
         panic!("native body");
     };
-    sys_types::network::NetworkTraced::of(body.as_ref())
-        .unwrap()
-        .network()
-        .cancel_read();
+    {
+        use bex_heap::HeapPermit as _;
+        let permit = engine
+            .heap_permit_manager()
+            .new_permit(())
+            .await
+            .acquire()
+            .await;
+        let body = engine.resolve_handle(permit.proof(), heap_handle).unwrap();
+        // SAFETY: the permit keeps the body live and in place while it is read.
+        #[expect(unsafe_code, reason = "read the body the permit keeps in place")]
+        let bex_vm_types::Object::RustInstance(instance) = (unsafe { body.get() }) else {
+            panic!("a payload-backed body");
+        };
+        instance.payload.network().unwrap().cancel_read();
+    }
     engine.shutdown().await;
     tokio::time::timeout(Duration::from_secs(2), server)
         .await

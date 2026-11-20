@@ -57,11 +57,25 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Trivia positions in match (line comments) =====
     // 1 match leading
-    match (x) { // 6 open brace trailing
+    match // 2 match trailing
+    // 3 scrutinee leading
+    (x) // 4 scrutinee trailing
+    // 5 open brace leading
+    { // 6 open brace trailing
         // 7 first arm leading
-        0 => "zero", // 14 comma trailing
+        0 // 8 pattern trailing
+        // 9 arrow leading
+            => // 10 arrow trailing
+                // 11 body leading
+                "zero", // 12 body trailing
+        // 13 comma leading
+        // 14 comma trailing
         // 15 second arm leading
-        _ => "other", // 20 second body trailing
+        _ // 16 second pattern trailing
+        // 17 second arrow leading
+            => // 18 second arrow trailing
+                // 19 second body leading
+                "other", // 20 second body trailing
         // 21 close brace leading
     } // 22 close brace trailing
 
@@ -69,11 +83,24 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Trivia positions in match (block comments) =====
     /* 1 match leading */
-    match (x) { /* 6 open brace trailing */
+    match /* 2 match trailing */
+    /* 3 scrutinee leading */
+    (x) /* 4 scrutinee trailing */
+    /* 5 open brace leading */
+    { /* 6 open brace trailing */
         /* 7 first arm leading */
-        0 => "zero", /* 14 comma trailing */
+        0 /* 8 pattern trailing */
+        /* 9 arrow leading */
+            => /* 10 arrow trailing */
+                /* 11 body leading */
+                "zero", /* 12 body trailing */
+        /* 13 comma leading */ /* 14 comma trailing */
         /* 15 second arm leading */
-        _ => "other", /* 20 second body trailing */
+        _ /* 16 second pattern trailing */
+        /* 17 second arrow leading */
+            => /* 18 second arrow trailing */
+                /* 19 second body leading */
+                "other", /* 20 second body trailing */
         /* 21 close brace leading */
     } /* 22 close brace trailing */
 
@@ -82,7 +109,19 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia in guard arm (line comments) =====
     match (x) {
         // 1 arm leading
-        let n: int if n > 0 => "positive", // 14 comma trailing
+        let n // 2 name trailing
+        : // 3 colon trailing
+            // 4 type leading
+            int // 5 type trailing
+        // 6 if leading
+        if // 7 if trailing
+        // 8 guard leading
+        n > 0 // 9 guard trailing
+        // 10 arrow leading
+            => // 11 arrow trailing
+                // 12 body leading
+                "positive", // 13 body trailing
+        // 14 comma trailing
         _ => "other",
     }
 
@@ -91,10 +130,17 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia in guard arm (block comments) =====
     match (x) {
         /* 1 arm leading */
-        let n /* 2 name trailing */: /* 3 colon trailing */ /* 4 type leading */ int if n > 0 => {
-            /* 12 body leading */
-            "positive" /* 13 body trailing */
-        }, /* 14 comma trailing */
+        let n /* 2 name trailing */: /* 3 colon trailing */
+            /* 4 type leading */
+            int /* 5 type trailing */
+        /* 6 if leading */
+        if /* 7 if trailing */
+        /* 8 guard leading */
+        n > 0 /* 9 guard trailing */
+        /* 10 arrow leading */
+            => /* 11 arrow trailing */
+                /* 12 body leading */
+                "positive", /* 13 body trailing */ /* 14 comma trailing */
         _ => "other",
     }
 
@@ -185,61 +231,52 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Guard with long condition exceeding limit =====
     match (x) {
-        let n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 && n != 99 => {
-            "acceptable small positive number that passes all the filters"
-        },
+        let n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 && n != 99 =>
+            "acceptable small positive number that passes all the filters",
         _ => "other",
     }
 
     // ===== Long arm body exceeding limit =====
     match (x) {
-        0 => {
-            "this is a very long string result that should push the arm width past the default line limit of one hundred columns easily right now"
-        },
-        1 => {
-            "another long string result that also exceeds one hundred columns to test wrapping on the second arm as well as the first arm"
-        },
+        0 => "this is a very long string result that should push the arm width past the default line limit of one hundred columns easily right now",
+        1 => "another long string result that also exceeds one hundred columns to test wrapping on the second arm as well as the first arm",
         _ => "short",
     }
 
     // ===== Long pattern union exceeding limit =====
     match (x) {
         0
-            | 1
-            | 2
-            | 3
-            | 4
-            | 5
-            | 6
-            | 7
-            | 8
-            | 9
-            | 10
-            | 11
-            | 12
-            | 13
-            | 14
-            | 15
-            | 16
-            | 17
-            | 18
-            | 19
-            | 20
-            | 21
-            | 22
-            | 23
-            | 24 =>
-        {
-            "lots of literals"
-        },
+        | 1
+        | 2
+        | 3
+        | 4
+        | 5
+        | 6
+        | 7
+        | 8
+        | 9
+        | 10
+        | 11
+        | 12
+        | 13
+        | 14
+        | 15
+        | 16
+        | 17
+        | 18
+        | 19
+        | 20
+        | 21
+        | 22
+        | 23
+        | 24 => "lots of literals",
         _ => "other",
     }
 
     // ===== Long enum variant pattern exceeding limit =====
     match (s) {
-        MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending => {
-            "this arm has many long enum variant names that together push past the limit easily"
-        },
+        MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending =>
+            "this arm has many long enum variant names that together push past the limit easily",
     }
 
     // ===== Arm with block body containing nested logic exceeding limit =====
@@ -258,21 +295,36 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia on wrapping arm (line comments) =====
     match (x) {
         // 1 arm leading
-        let n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 => {
-            // 12 body leading
-            "acceptable small positive number that passes all the defined filter conditions" // 13 body trailing
-        }, // 14 comma trailing
+        let n // 2 name trailing
+        : // 3 colon trailing
+            // 4 type leading
+            int // 5 type trailing
+        // 6 if leading
+        if // 7 if trailing
+        // 8 guard leading
+        n > 0 && n < 100 && n != 42 && n != 13 && n != 7 // 9 guard trailing
+        // 10 arrow leading
+            => // 11 arrow trailing
+                // 12 body leading
+                "acceptable small positive number that passes all the defined filter conditions", // 13 body trailing
+        // 14 comma trailing
         _ => "other",
     }
 
     // ===== Trivia on wrapping arm (block comments) =====
     match (x) {
         /* 1 arm leading */
-        let n /* 2 name trailing */: /* 3 colon trailing */ /* 4 type leading */ int
-            if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 => {
-            /* 12 body leading */
-            "acceptable small positive number that passes all the defined filter conditions" /* 13 body trailing */
-        }, /* 14 comma trailing */
+        let n /* 2 name trailing */: /* 3 colon trailing */
+            /* 4 type leading */
+            int /* 5 type trailing */
+        /* 6 if leading */
+        if /* 7 if trailing */
+        /* 8 guard leading */
+        n > 0 && n < 100 && n != 42 && n != 13 && n != 7 /* 9 guard trailing */
+        /* 10 arrow leading */
+            => /* 11 arrow trailing */
+                /* 12 body leading */
+                "acceptable small positive number that passes all the defined filter conditions", /* 13 body trailing */ /* 14 comma trailing */
         _ => "other",
     }
 
@@ -331,16 +383,14 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     // ===== Match with nested if/match in body exceeding limit =====
     match (x) {
-        0 => {
-            if (b) {
-                match (s) {
-                    MatchStatus.Active => "active",
-                    MatchStatus.Inactive => "inactive",
-                    MatchStatus.Pending => "pending",
-                }
-            } else {
-                "not bool"
+        0 => if (b) {
+            match (s) {
+                MatchStatus.Active => "active",
+                MatchStatus.Inactive => "inactive",
+                MatchStatus.Pending => "pending",
             }
+        } else {
+            "not bool"
         },
         _ => "other",
     }
@@ -354,54 +404,59 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     // ===== Trivia between Or-pattern alternatives (block comments around `|`) =====
     match (x) {
         /* 1 arm leading */
-        (let /* 2a paren leading */ x /* 2b name trailing */: /* 2c colon trailing */ int) /* 3 first trailing */
-            |/* 4 pipe trailing *//* 5 second leading */(let /* 6a paren leading */ x /* 6b name trailing */: /* 6c colon trailing */ int) =>
-        {
-            x
-        },
+        (
+            let /* 2a paren leading */ x /* 2b name trailing */: /* 2c colon trailing */ int
+        ) /* 3 first trailing */
+        | /* 4 pipe trailing */
+        /* 5 second leading */
+        (
+            let /* 6a paren leading */ x /* 6b name trailing */: /* 6c colon trailing */ int
+        ) /* 7 last trailing */ => x,
     }
 
     // ===== Bare type union arm with trivia between members =====
     match (s) {
-        MatchStatus.Active/* a */|/* b */MatchStatus.Inactive/* c */|/* d */MatchStatus.Pending => {
-            "any"
-        },
+        MatchStatus.Active /* a */
+        | /* b */
+            MatchStatus.Inactive /* c */
+        | /* d */
+            MatchStatus.Pending => "any",
     }
 
     // ===== Single-line short union, comment after first only =====
     match (x) {
-        1/* trail */| 2 => 0,
+        1 /* trail */ | 2 => 0,
     }
 
     // ===== Single-line short union, comment before second only =====
     match (x) {
-        1 |/* lead */2 => 0,
+        1 | /* lead */ 2 => 0,
     }
 
     // ===== Comment between members, both sides of `|` =====
     match (x) {
-        1/* a */|/* b */2 => 0,
+        1 /* a */ | /* b */ 2 => 0,
     }
 
     // ===== Three-way union with comment on middle member =====
     match (x) {
-        1 | 2/* mid */| 3 => 0,
+        1 | 2 /* mid */ | 3 => 0,
     }
 
     // ===== Long enough to force multi-line, comment on first member trailing =====
     match (s) {
-        MatchStatus.Active/* will-wrap */| MatchStatus.Inactive | MatchStatus.Pending => "x",
+        MatchStatus.Active /* will-wrap */ | MatchStatus.Inactive | MatchStatus.Pending => "x",
     }
 
     // ===== Mixed: block comments on every junction =====
     match (s) {
-        MatchStatus.Active/* 1 */|/* 2 */MatchStatus.Inactive/* 3 */|/* 4 */MatchStatus.Pending => {
-            "y"
-        },
+        MatchStatus.Active /* 1 */
+        | /* 2 */ MatchStatus.Inactive /* 3 */
+        | /* 4 */ MatchStatus.Pending => "y",
     }
 
     // ===== Nested Or-of-Or with trivia at outer and inner pipes =====
     match (x) {
-        (1/* inner1 */| 2/* inner2 */)/* outer-trail */| 3 => 0,
+        (1 /* inner1 */ | 2 /* inner2 */) /* outer-trail */ | 3 => 0,
     }
 }

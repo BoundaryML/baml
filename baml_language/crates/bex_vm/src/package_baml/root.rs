@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::collections::{HashMap, HashSet};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
@@ -116,7 +113,7 @@ impl BamlPackageBaml for PackageBamlImpl {
         }
         let mut state = StringRenderState::with_overrides(&[], &[]);
         let mut sink = StringRenderSink::default();
-        render_to_sink(vm, *value, false, 0, &mut state, &mut sink);
+        let Ok(()) = render_to_sink(vm, *value, false, 0, &mut state, &mut sink);
         sink.0.into()
     }
 
@@ -155,13 +152,17 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// the body is skipped. The latch is set on entry: a `cleanup` that throws
     /// is still considered cleaned and will not be retried.
     ///
-    /// A non-instance receiver returns `true` defensively; the guard is only
-    /// emitted for a class `cleanup(self)` method, whose `self` is an instance.
+    /// The guard is only emitted for a class's `cleanup(self)`, whose `self`
+    /// is an instance.
     fn _cleanup_begin(vm: &BexVm, value: &Value) -> bool {
-        value
+        let subject = value
             .as_object_ptr()
-            .and_then(|ptr| vm.get_instance(ptr))
-            .is_none_or(InstanceRef::begin_cleanup)
+            .and_then(|ptr| vm.cleanup_subject(ptr));
+        debug_assert!(
+            subject.is_some(),
+            "the `cleanup` guard runs on an instance receiver"
+        );
+        subject.is_none_or(bex_vm_types::CleanupSubject::begin)
     }
 
     // ── Numeric-array reductions (formerly `baml.math.*`) ──────────────────────
@@ -376,7 +377,7 @@ fn render_done(
 ) -> NativeCallResult {
     let mut state = StringRenderState::with_overrides(pending, results);
     let mut sink = StringRenderSink::default();
-    render_to_sink(vm, root, false, 0, &mut state, &mut sink);
+    let Ok(()) = render_to_sink(vm, root, false, 0, &mut state, &mut sink);
     NativeCallResult::Done(Value::object(vm.alloc_string(sink.0)))
 }
 
@@ -507,7 +508,7 @@ impl JoinContinuation {
                 _ => {
                     let mut state = StringRenderState::with_overrides(&self.pending, &self.results);
                     let mut sink = StringRenderSink(std::mem::take(&mut self.out));
-                    render_to_sink(vm, element, false, 0, &mut state, &mut sink);
+                    let Ok(()) = render_to_sink(vm, element, false, 0, &mut state, &mut sink);
                     self.out = sink.0;
                 }
             }
@@ -640,10 +641,15 @@ impl<'a> StringRenderState<'a> {
 }
 
 pub(super) trait StructuralRenderSink {
+    /// What rendering into this sink can fail with: nothing, for plain text.
+    type Error;
+
     fn push_text(&mut self, text: &str);
 
-    fn try_push_special(&mut self, _vm: &BexVm, _value: Value) -> bool {
-        false
+    /// Render `value` as this sink's own kind of part, if it is one; `false`
+    /// leaves it to the structural walk.
+    fn try_push_special(&mut self, _vm: &BexVm, _value: Value) -> Result<bool, Self::Error> {
+        Ok(false)
     }
 }
 
@@ -651,6 +657,8 @@ pub(super) trait StructuralRenderSink {
 struct StringRenderSink(String);
 
 impl StructuralRenderSink for StringRenderSink {
+    type Error = std::convert::Infallible;
+
     fn push_text(&mut self, text: &str) {
         self.0.push_str(text);
     }
@@ -684,17 +692,23 @@ fn is_primitive_object(vm: &BexVm, ptr: HeapPtr) -> bool {
 
 /// A field of an instance being rendered: a raw float renders as a float
 /// value would, against the same node budget.
-fn render_field(
+fn render_field<S: StructuralRenderSink>(
     vm: &BexVm,
     field: Field,
     depth: usize,
     state: &mut StringRenderState<'_>,
-    sink: &mut impl StructuralRenderSink,
-) {
+    sink: &mut S,
+) -> Result<(), S::Error> {
     match field {
         Field::Value(value) => render_to_sink(vm, value, true, depth, state, sink),
-        Field::Float(_) if !state.consume_node(depth) => sink.push_text(TRUNCATED_RENDER),
-        Field::Float(float) => sink.push_text(&bex_vm_types::format_float(float)),
+        Field::Float(_) if !state.consume_node(depth) => {
+            sink.push_text(TRUNCATED_RENDER);
+            Ok(())
+        }
+        Field::Float(float) => {
+            sink.push_text(&bex_vm_types::format_float(float));
+            Ok(())
+        }
     }
 }
 
@@ -707,22 +721,22 @@ fn render_field(
 /// `pending[state.counter]` is exactly the next override node — so the check is a
 /// pointer compare, not a per-node global lookup. With an empty `pending` this is
 /// a pure structural walk.
-pub(super) fn render_to_sink(
+pub(super) fn render_to_sink<S: StructuralRenderSink>(
     vm: &BexVm,
     value: Value,
     nested: bool,
     depth: usize,
     state: &mut StringRenderState<'_>,
-    sink: &mut impl StructuralRenderSink,
-) {
+    sink: &mut S,
+) -> Result<(), S::Error> {
     if !state.consume_node(depth) {
         sink.push_text(TRUNCATED_RENDER);
-        return;
+        return Ok(());
     }
 
     if let Some(text) = primitive_text(vm, value) {
         sink.push_text(&text);
-        return;
+        return Ok(());
     }
     let ptr = match value.kind() {
         ValueKind::Object(ptr) => ptr,
@@ -730,7 +744,7 @@ pub(super) fn render_to_sink(
         | ValueKind::Int(_)
         | ValueKind::Bool(_)
         | ValueKind::Float(_)
-        | ValueKind::OmittedArg => return,
+        | ValueKind::OmittedArg => return Ok(()),
     };
 
     // Override node: splice its precomputed `to_string` result in bare.
@@ -742,18 +756,18 @@ pub(super) fn render_to_sink(
             .unwrap_or_default();
         state.counter += 1;
         sink.push_text(&rendered);
-        return;
+        return Ok(());
     }
 
-    if sink.try_push_special(vm, value) {
-        return;
+    if sink.try_push_special(vm, value)? {
+        return Ok(());
     }
 
     // Only an object currently on the recursion stack is a cycle. Shared DAG
     // children render normally after the first branch removes them on unwind.
     if !state.active_objects.insert(ptr) {
         sink.push_text(TRUNCATED_RENDER);
-        return;
+        return Ok(());
     }
 
     // Capture an owned snapshot, dropping the heap borrow / container lock
@@ -806,20 +820,34 @@ pub(super) fn render_to_sink(
         Object::Instance => {
             let inst = vm.get_instance(ptr).expect("an instance pointer");
             let class = inst.class_object();
-            let limit = state.snapshot_child_limit(class.fields.len());
+            let limit = state.snapshot_child_limit(class.instance_fields().len());
             let class_name = if state.qualified_class_names {
                 class.name().to_string()
             } else {
                 class.path.name.to_string()
             };
             let paired = class
-                .fields
+                .instance_fields()
                 .iter()
                 .zip(inst.fields())
                 .take(limit)
                 .map(|(field, value)| (field.name.clone(), value))
                 .collect();
-            DisplaySnap::Instance(class_name, paired, class.fields.len() > limit)
+            DisplaySnap::Instance(class_name, paired, class.instance_fields().len() > limit)
+        }
+        // Its class, with nothing inside: the state is not BAML data.
+        Object::RustInstance(inst) => {
+            let class_name = match vm.get_object(inst.class) {
+                Object::Class(class) => {
+                    if state.qualified_class_names {
+                        class.name().to_string()
+                    } else {
+                        class.path.name.to_string()
+                    }
+                }
+                _ => String::new(),
+            };
+            DisplaySnap::Instance(class_name, Vec::new(), false)
         }
         Object::Variant(var) => {
             let name = match vm.get_object(var.enm) {
@@ -855,7 +883,7 @@ pub(super) fn render_to_sink(
                 if rendered_count != 0 {
                     sink.push_text(", ");
                 }
-                render_to_sink(vm, *value, true, depth + 1, state, sink);
+                render_to_sink(vm, *value, true, depth + 1, state, sink)?;
                 rendered_count += 1;
             }
             if truncated {
@@ -879,7 +907,7 @@ pub(super) fn render_to_sink(
                 if rendered_count != 0 {
                     sink.push_text(", ");
                 }
-                render_to_sink(vm, *value, true, depth + 1, state, sink);
+                render_to_sink(vm, *value, true, depth + 1, state, sink)?;
                 rendered_count += 1;
             }
             if truncated {
@@ -901,9 +929,9 @@ pub(super) fn render_to_sink(
                 if rendered_count != 0 {
                     sink.push_text(", ");
                 }
-                render_to_sink(vm, *key, true, depth + 1, state, sink);
+                render_to_sink(vm, *key, true, depth + 1, state, sink)?;
                 sink.push_text(": ");
-                render_to_sink(vm, *value, true, depth + 1, state, sink);
+                render_to_sink(vm, *value, true, depth + 1, state, sink)?;
                 rendered_count += 1;
             }
             if truncated {
@@ -935,7 +963,7 @@ pub(super) fn render_to_sink(
                     }
                     sink.push_text(name);
                     sink.push_text(": ");
-                    render_field(vm, *value, depth + 1, state, sink);
+                    render_field(vm, *value, depth + 1, state, sink)?;
                     rendered_count += 1;
                 }
                 if truncated {
@@ -949,6 +977,7 @@ pub(super) fn render_to_sink(
         }
     }
     state.active_objects.remove(&ptr);
+    Ok(())
 }
 
 /// VM-heap-allocation-free structural rendering for diagnostics that already
@@ -958,7 +987,7 @@ pub(super) fn render_to_sink(
 pub(super) fn render_value_structural(vm: &BexVm, value: Value, nested: bool) -> String {
     let mut state = StringRenderState::diagnostic();
     let mut sink = StringRenderSink::default();
-    render_to_sink(vm, value, nested, 0, &mut state, &mut sink);
+    let Ok(()) = render_to_sink(vm, value, nested, 0, &mut state, &mut sink);
     sink.0
 }
 
@@ -1098,7 +1127,18 @@ fn deep_copy_value_recursive(
                 Object::Enum(e) => vm.tlab.alloc(Object::Enum(e)),
                 Object::TypeAlias(a) => vm.tlab.alloc(Object::TypeAlias(a)),
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
-                Object::RustData(arc) => vm.tlab.alloc(Object::RustData(Arc::clone(&arc))),
+                Object::RustInstance(instance) => {
+                    // Cloning the object above cloned the payload, and a
+                    // payload's clone is its copy: the VM's own state is
+                    // copied, and shared or immutable state shares its `Arc`.
+                    let payload = instance.payload;
+                    vm.tlab
+                        .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
+                            instance.class,
+                            instance.class_type_args,
+                            payload,
+                        )))
+                }
                 // `Object::Future(_)` is short-circuited above; it can't
                 // reach this match arm.
                 Object::Future(_) => unreachable!("Future short-circuited above"),

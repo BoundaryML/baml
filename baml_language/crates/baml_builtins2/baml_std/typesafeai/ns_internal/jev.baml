@@ -36,13 +36,11 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
         let out: ChoiceOption[] = [];
         for (let variant in en.values()) {
             if (!variant.meta.skip) {
-                out.push(
-                    ChoiceOption {
-                        key: variant.meta.alias ?? variant.name,
-                        description: variant.meta.description,
-                        value: reflect.Enum.value_of<T>(variant.name),
-                    },
-                );
+                out.push(ChoiceOption {
+                    key: variant.meta.alias ?? variant.name,
+                    description: variant.meta.description,
+                    value: reflect.Enum.value_of<T>(variant.name),
+                });
             }
         }
         return out;
@@ -57,7 +55,13 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
         return out;
     }
     if (ty == reflect.Type.of<null>()) {
-        return [ChoiceOption { key: "<null>", description: null, value: null }];
+        return [
+            ChoiceOption {
+                key: "<null>",
+                description: null,
+                value: null,
+            },
+        ];
     }
     if let literal: reflect.Literal = ty.as_literal() {
         let value = literal.value();
@@ -77,7 +81,7 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
                     ];
                 }
             }
-            throw reject("JEV could not reflect the literal enum variant")
+            throw reject("JEV could not reflect the literal enum variant");
         }
         let key = match (value) {
             let text: string => text,
@@ -92,9 +96,15 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
             },
             _ => throw reject("JEV cannot format this literal value"),
         };
-        return [ChoiceOption { key: key, description: null, value: value }];
+        return [
+            ChoiceOption {
+                key: key,
+                description: null,
+                value: value,
+            },
+        ];
     }
-    throw reject(`JEV cannot convert Choice member ${ty.to_string()}`)
+    throw reject(`JEV cannot convert Choice member ${ty.to_string()}`);
 }
 
 function accepts_null(ty: reflect.Type) -> bool {
@@ -122,7 +132,7 @@ function collect(
 ) -> Leaf[] {
     for (let ancestor in ancestors) {
         if (ancestor == ty) {
-            throw reject(`JEV cannot convert recursive type ${ty.to_string()}`)
+            throw reject(`JEV cannot convert recursive type ${ty.to_string()}`);
         }
     }
     if let cls: reflect.Class = ty.as_class() {
@@ -131,7 +141,7 @@ function collect(
             let field_type = field.type;
             if (field.meta.skip) {
                 if (!accepts_null(field_type)) {
-                    throw reject(`Skipped JEV field ${field.name} must accept null`)
+                    throw reject(`Skipped JEV field ${field.name} must accept null`);
                 }
             } else {
                 for (
@@ -150,7 +160,7 @@ function collect(
             }
         }
         if (out.length() == 0) {
-            throw reject("JEV cannot convert an empty class")
+            throw reject("JEV cannot convert an empty class");
         }
         return out;
     }
@@ -165,7 +175,7 @@ function collect(
             }
         }
         if (choices.length() < 2 || choices.length() > 255) {
-            throw reject("JEV Choice requires between 2 and 255 distinct options")
+            throw reject("JEV Choice requires between 2 and 255 distinct options");
         }
     }
 
@@ -182,7 +192,9 @@ function collect(
     let parts = prefix.concat([ai.content.Text { text: contextual }]);
     let instructions = ai.content.text(parts).trim();
     if (instructions.length() == 0) {
-        throw reject(`JEV question ${ids.join(".")} needs instructions: use role("instructions") or @description`)
+        throw reject(
+            `JEV question ${ids.join(".")} needs instructions: use role("instructions") or @description`,
+        );
     }
     return [
         Leaf {
@@ -201,7 +213,7 @@ function collect(
 function text_blocks(blocks: ai.content.Block[]) -> string {
     for (let block in blocks) {
         if let media: ai.content.Media = block {
-            throw reject(`JEV does not support ${media.kind()} input`)
+            throw reject(`JEV does not support ${media.kind()} input`);
         }
     }
     ai.content.text(blocks)
@@ -209,7 +221,7 @@ function text_blocks(blocks: ai.content.Block[]) -> string {
 
 function plan(input: ai.ModelTurnInput) -> Plan {
     if (!input.toolbox.is_empty()) {
-        throw reject("JEV does not support tools")
+        throw reject("JEV does not support tools");
     }
     let rendered = (input.prompt)(ai.internal.build_output_format(input.output_type));
     let prefix: ai.content.Block[] = [];
@@ -241,10 +253,10 @@ function plan(input: ai.ModelTurnInput) -> Plan {
                             null
                         },
                         let media: ai.content.Media => {
-                            throw reject("JEV does not support media in history")
+                            throw reject("JEV does not support media in history");
                         },
                         let tool: ai.content.ToolUse => {
-                            throw reject("JEV does not support tool history")
+                            throw reject("JEV does not support tool history");
                         },
                         _ => null,
                     };
@@ -298,7 +310,7 @@ function request(
     }
     if (!preview && !extra.has("authorization")) {
         let key: string = ai.wire.resolve_credential(c.api_key, "TYPESAFE_API_KEY") else {
-            throw reject("typesafeai needs api_key or TYPESAFE_API_KEY")
+            throw reject("typesafeai needs api_key or TYPESAFE_API_KEY");
         };
         let _ = headers.set("authorization", `Bearer ${key}`);
     }
@@ -310,7 +322,11 @@ function request(
         method: "POST",
         url: `${base}/systemone`,
         headers: headers,
-        body: baml.json.stringify({ "model": c.model, "state": p.state, "questions": questions }),
+        body: baml.json.stringify({
+            "model": c.model,
+            "state": p.state,
+            "questions": questions,
+        }),
     }
 }
 
@@ -331,16 +347,19 @@ class Response {
 }
 
 function failed(detail: string) -> ai.errors.ParseFailed {
-    ai.errors.ParseFailed { provider: "typesafeai", raw_output: detail }
+    ai.errors.ParseFailed {
+        provider: "typesafeai",
+        raw_output: detail,
+    }
 }
 
 function decode(leaf: Leaf, answer: Answer) -> unknown {
     if (leaf.options.length() == 0) {
         let probability: float = answer.noul else {
-            throw failed(`Missing noul for ${leaf.id}`)
+            throw failed(`Missing noul for ${leaf.id}`);
         };
         if (answer.type != "noul" || probability < 0.0 || probability > 1.0) {
-            throw failed(`Invalid noul answer for ${leaf.id}`)
+            throw failed(`Invalid noul answer for ${leaf.id}`);
         }
         if (leaf.ty == bool.type()) {
             return probability >= 0.5;
@@ -348,14 +367,16 @@ function decode(leaf: Leaf, answer: Answer) -> unknown {
         return probability;
     }
     if (answer.type != "choice") {
-        throw failed(`Expected choice for ${leaf.id}`)
+        throw failed(`Expected choice for ${leaf.id}`);
     }
     for (let option in leaf.options) {
         if (answer.choice == option.key) {
             return option.value;
         }
     }
-    throw failed(`Unknown choice for ${leaf.id}: ${answer.choice ?? "<missing>"}`)
+    throw failed(
+        `Unknown choice for ${leaf.id}: ${answer.choice ?? "<missing>"}`,
+    );
 }
 
 function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>) -> unknown {
@@ -366,19 +387,20 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
                 let _ = fields.set(field.name, null);
             } else {
                 let field_type = field.type;
-                let _ = fields.set(field.name, assemble(field_type, path.concat([field.name]), values));
+                let _ = fields.set(
+                    field.name,
+                    assemble(field_type, path.concat([field.name]), values),
+                );
             }
         }
         let type T = ty;
         return reflect.Class.instantiate<T>(fields);
     }
-    values.get(
-        if (path.length() == 0) {
-            "result"
-        } else {
-            path.join(".")
-        },
-    )
+    values.get(if (path.length() == 0) {
+        "result"
+    } else {
+        path.join(".")
+    })
 }
 
 function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
@@ -386,13 +408,16 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
     // No streaming here: only the two transport deadlines apply.
     let sent = ai.wire.send_as_with_wire<Response>(
         ai.LlmTimeoutOptions._resolve(c.timeout)._apply(request(c, input, p, false)),
-        ai.events.ModelKey { provider: c.provider(), model: c.model },
+        ai.events.ModelKey {
+            provider: c.provider(),
+            model: c.model,
+        },
         capture_wire = c.capture_wire,
     );
     let values: map<string, unknown> = {};
     for (let leaf in p.leaves) {
         let answer: Answer = sent.value.answers.get(leaf.id) else {
-            throw failed(`Missing JEV answer ${leaf.id}`)
+            throw failed(`Missing JEV answer ${leaf.id}`);
         };
         let _ = values.set(leaf.id, decode(leaf, answer));
     }
@@ -411,7 +436,11 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
     };
     ai.internal.with_own_call(
         ai.ModelTurn {
-            content: [ai.content.Text { text: baml.json.stringify(value) }],
+            content: [
+                ai.content.Text {
+                    text: baml.json.stringify(value),
+                },
+            ],
             parsed_output: ai.ParsedOutput { value: value },
             stop_reason: ai.content.StopReason.Complete,
             calls: [],

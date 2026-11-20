@@ -16,7 +16,10 @@ class UserMessage {
     metadata: map<string, baml.json.json>,
 
     function new(text: string) -> UserMessage {
-        UserMessage { content: [root.content.Text { text: text }], metadata: {} }
+        UserMessage {
+            content: [root.content.Text { text: text }],
+            metadata: {},
+        }
     }
 
     /// A turn from ordinary values: text, the `image` / `audio` / `video` /
@@ -25,7 +28,10 @@ class UserMessage {
         items: (string | image | audio | video | pdf | root.content.Text | root.content.Media)[],
         metadata: map<string, baml.json.json> = {},
     ) -> UserMessage {
-        UserMessage { content: root.content.blocks(items), metadata: metadata }
+        UserMessage {
+            content: root.content.blocks(items),
+            metadata: metadata,
+        }
     }
 
     /// The `Text` blocks joined; a media block contributes a `[image]`-style
@@ -56,7 +62,10 @@ class ToolCompleted {
 
     /// `output` is the tool's result serialized as JSON text.
     function new(id: string, output: string) -> ToolCompleted {
-        ToolCompleted { id: id, content: [root.content.Text { text: output }] }
+        ToolCompleted {
+            id: id,
+            content: [root.content.Text { text: output }],
+        }
     }
 
     /// A result from ordinary values: text, the `image` / `audio` / `video` /
@@ -65,7 +74,10 @@ class ToolCompleted {
         id: string,
         items: (string | image | audio | video | pdf | root.content.Text | root.content.Media)[],
     ) -> ToolCompleted {
-        ToolCompleted { id: id, content: root.content.blocks(items) }
+        ToolCompleted {
+            id: id,
+            content: root.content.blocks(items),
+        }
     }
 
     /// The `Text` blocks joined — the tool's text output; a media block
@@ -122,7 +134,12 @@ function call_usage(calls: ModelCall[]) -> ModelUsage[] {
     let out: ModelUsage[] = [];
     for (let call in calls) {
         if let u: Usage = call.usage {
-            merge_usage(out, [ModelUsage { resolved_model: call.resolved_model, usage: u }]);
+            merge_usage(out, [
+                ModelUsage {
+                    resolved_model: call.resolved_model,
+                    usage: u,
+                },
+            ]);
         }
     }
     out
@@ -130,11 +147,9 @@ function call_usage(calls: ModelCall[]) -> ModelUsage[] {
 
 /// The usage `usage` lists for `model`, or null when it lists none.
 function usage_for(usage: ModelUsage[], model: ModelKey) -> Usage? {
-    usage
-        .find((entry: ModelUsage) -> bool {
-            entry.resolved_model == model
-        })
-        ?.usage
+    usage.find((entry: ModelUsage) -> bool {
+        entry.resolved_model == model
+    })?.usage
 }
 
 /// Add every entry of `from` into `into`, summing the counts of a model both
@@ -152,7 +167,10 @@ function merge_usage(into: ModelUsage[], from: ModelUsage[]) -> void {
             },
             // A copy, so summing into it later leaves `from` unchanged.
             null => {
-                into.push(ModelUsage { resolved_model: added.resolved_model, usage: added.usage });
+                into.push(ModelUsage {
+                    resolved_model: added.resolved_model,
+                    usage: added.usage,
+                });
                 null
             },
         };
@@ -165,7 +183,10 @@ function _sum_usage(a: Usage, b: Usage) -> Usage {
         output_tokens: _sum_count(a.output_tokens, b.output_tokens),
         cached_input_tokens: _sum_count(a.cached_input_tokens, b.cached_input_tokens),
         reasoning_tokens: _sum_count(a.reasoning_tokens, b.reasoning_tokens),
-        cache_write_input_tokens: _sum_count(a.cache_write_input_tokens, b.cache_write_input_tokens),
+        cache_write_input_tokens: _sum_count(
+            a.cache_write_input_tokens,
+            b.cache_write_input_tokens,
+        ),
         uncached_input_tokens: _sum_count(a.uncached_input_tokens, b.uncached_input_tokens),
     }
 }
@@ -248,7 +269,7 @@ function guard<E>(listener: ((Event) -> void throws E)?) -> ((Event) -> void thr
     if let cb: (Event) -> void throws E = listener {
         (e: Event) -> void {
             cb(e) catch_all (err) {
-                _ => {}
+                _ => {},
             }
         }
     } else {

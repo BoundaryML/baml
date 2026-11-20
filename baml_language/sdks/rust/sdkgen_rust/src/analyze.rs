@@ -148,8 +148,9 @@ pub(crate) enum ClassShape<'a> {
     /// runtime's own internals and never reach the host.
     Opaque,
     /// A capability or value with a crossing of its own (`ai.stream.Stream`,
-    /// `ai.FunctionSpec`, `ai.Prompt`): a `baml_bridge` type stands in
-    /// wherever a type names the class, so the class itself emits nothing.
+    /// `ai.FunctionSpec`, `ai.Prompt`, `baml.host.Value`): a `baml_bridge`
+    /// type stands in wherever a type names the class, so the class itself
+    /// emits nothing.
     Bridged,
     /// A media wrapper, carried by its own wire arm.
     Media,
@@ -169,9 +170,10 @@ impl<'a> ClassShape<'a> {
         match class.crossing {
             ClassCrossing::Fields => Self::Fields(&class.properties),
             ClassCrossing::Opaque => Self::Opaque,
-            ClassCrossing::Stream | ClassCrossing::FunctionSpec | ClassCrossing::Prompt => {
-                Self::Bridged
-            }
+            ClassCrossing::Stream
+            | ClassCrossing::FunctionSpec
+            | ClassCrossing::Prompt
+            | ClassCrossing::HostValue => Self::Bridged,
             ClassCrossing::Media(_) => Self::Media,
         }
     }
@@ -235,7 +237,8 @@ pub(crate) fn analyze(
             .iter()
             .map(baml_base::Name::as_str)
             .collect();
-        let properties = match ClassShape::of(class) {
+        let shape = ClassShape::of(class);
+        let properties = match shape {
             ClassShape::Fields(properties) => properties,
             ClassShape::Opaque => &[],
             ClassShape::Bridged => {
@@ -272,12 +275,16 @@ pub(crate) fn analyze(
                 // "type parameter is only used recursively" error — Rust
                 // cannot determine its variance. Either way the struct would
                 // not compile, and PhantomData would leak into the public
-                // struct literal, so skip (fail closed).
+                // struct literal, so skip (fail closed). An opaque class's
+                // parameters say what its instance is, through a private
+                // marker, so it needs no field to use them.
                 let mut used = HashSet::new();
                 for prop in properties {
                     collect_non_recursive_type_vars(&prop.ty, name, &mut used);
                 }
-                if let Some(unused) = class_params.iter().find(|param| !used.contains(**param)) {
+                if let ClassShape::Fields(_) = shape
+                    && let Some(unused) = class_params.iter().find(|param| !used.contains(**param))
+                {
                     warnings.push(SkipWarning::new(
                         name,
                         format!(
@@ -631,7 +638,6 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
         Ty::Resource => Err("unsupported type: resource handle".to_string()),
         Ty::PromptAst => Err("unsupported type: prompt AST".to_string()),
         Ty::Never => Err("unsupported type: never".to_string()),
-        Ty::RustType => Ok(()),
     }
 }
 
@@ -738,8 +744,7 @@ fn has_serde(ty: &Ty, serde: &HashSet<Name>) -> bool {
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
-        | Ty::Never
-        | Ty::RustType => false,
+        | Ty::Never => false,
     }
 }
 

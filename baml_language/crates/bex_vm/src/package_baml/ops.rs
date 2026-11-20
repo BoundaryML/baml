@@ -646,15 +646,119 @@ impl EqualsDriver {
 
             (Object::Tombstone, _) => Object::tombstone_reached(),
 
-            (Object::RustData(x), Object::RustData(y)) => {
-                match (
-                    x.downcast_ref::<bex_vm_types::trace::SpanId>(),
-                    y.downcast_ref::<bex_vm_types::trace::SpanId>(),
-                ) {
-                    (Some(x), Some(y)) => step(x == y),
-                    _ => step(pa == pb),
+            (Object::RustInstance(x), Object::RustInstance(y)) => {
+                // The same concrete type, as for `Instance`: `Equals.eq(self,
+                // other: Self)` needs one `Self`.
+                if x.class != y.class
+                    || !resolve::ImplResolver::new(vm)
+                        .ty_args_equivalent(&x.class_type_args, &y.class_type_args)
+                {
+                    return Cmp::NotEqual;
+                }
+                // A custom `Equals.eq` decides; else the payloads compare.
+                match value_concrete_ty(vm, pa)
+                    .map(|ty| resolve_equals_eq(vm, Value::object(pa), &ty))
+                {
+                    Some(Ok(Some((callee, type_args)))) => {
+                        return Cmp::Yield {
+                            callee,
+                            args: vec![Value::object(pa), Value::object(pb)],
+                            type_args,
+                        };
+                    }
+                    Some(Err(e)) => return Cmp::Error(e),
+                    Some(Ok(None)) | None => {}
+                }
+                match (&x.payload, &y.payload) {
+                    // A span ID is the span it names, wherever it was read.
+                    (
+                        bex_vm_types::RustPayload::SpanId(x),
+                        bex_vm_types::RustPayload::SpanId(y),
+                    ) => step(x == y),
+                    // A host's value is the host's value it names: every
+                    // arrival of one registration shares one `Arc`.
+                    (
+                        bex_vm_types::RustPayload::HostValue(x),
+                        bex_vm_types::RustPayload::HostValue(y),
+                    ) => step(std::sync::Arc::ptr_eq(x, y)),
+                    // A token is the cancellation it controls: every instance
+                    // built from one host body's token shares its state.
+                    (
+                        bex_vm_types::RustPayload::CancelToken(x),
+                        bex_vm_types::RustPayload::CancelToken(y),
+                    ) => step(std::sync::Arc::ptr_eq(x, y)),
+                    // Immutable data compares by value: the same media, the
+                    // same rendered prompt, the same pattern in the same
+                    // dialect, the same record read at the same place.
+                    (bex_vm_types::RustPayload::Image(x), bex_vm_types::RustPayload::Image(y))
+                    | (bex_vm_types::RustPayload::Audio(x), bex_vm_types::RustPayload::Audio(y))
+                    | (bex_vm_types::RustPayload::Pdf(x), bex_vm_types::RustPayload::Pdf(y))
+                    | (bex_vm_types::RustPayload::Video(x), bex_vm_types::RustPayload::Video(y)) => {
+                        step(x == y)
+                    }
+                    (
+                        bex_vm_types::RustPayload::Prompt(x),
+                        bex_vm_types::RustPayload::Prompt(y),
+                    ) => step(x == y),
+                    (bex_vm_types::RustPayload::Regex(x), bex_vm_types::RustPayload::Regex(y)) => {
+                        step(x == y)
+                    }
+                    (
+                        bex_vm_types::RustPayload::CsvRecord(x),
+                        bex_vm_types::RustPayload::CsvRecord(y),
+                    ) => step(x == y),
+                    // Every other kind has no value apart from its identity
+                    // (mutable state, a key, a live resource), and `pa != pb`
+                    // here.
+                    (
+                        bex_vm_types::RustPayload::Foreign(_)
+                        | bex_vm_types::RustPayload::DefaultHasher(_)
+                        | bex_vm_types::RustPayload::Sha256(_)
+                        | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+                        | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+                        | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+                        | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+                        | bex_vm_types::RustPayload::Regex(_)
+                        | bex_vm_types::RustPayload::CsvRecord(_)
+                        | bex_vm_types::RustPayload::Semaphore(_)
+                        | bex_vm_types::RustPayload::Permit(_)
+                        | bex_vm_types::RustPayload::Ticket(_)
+                        | bex_vm_types::RustPayload::CancelToken(_)
+                        | bex_vm_types::RustPayload::SpanId(_)
+                        | bex_vm_types::RustPayload::TraceOptions(_)
+                        | bex_vm_types::RustPayload::ReservedSpan(_)
+                        | bex_vm_types::RustPayload::File(_)
+                        | bex_vm_types::RustPayload::Glob(_)
+                        | bex_vm_types::RustPayload::OutputFormat(_)
+                        | bex_vm_types::RustPayload::Lock(_)
+                        | bex_vm_types::RustPayload::TcpStream(_)
+                        | bex_vm_types::RustPayload::TcpListener(_)
+                        | bex_vm_types::RustPayload::UdpSocket(_)
+                        | bex_vm_types::RustPayload::Xoshiro256PlusPlus(_)
+                        | bex_vm_types::RustPayload::ChaCha20(_)
+                        | bex_vm_types::RustPayload::InterfaceWitness(_)
+                        | bex_vm_types::RustPayload::CsvReader(_)
+                        | bex_vm_types::RustPayload::CsvWriter(_)
+                        | bex_vm_types::RustPayload::ClassBuilder(_)
+                        | bex_vm_types::RustPayload::ChildProcess(_)
+                        | bex_vm_types::RustPayload::ReadPipe(_)
+                        | bex_vm_types::RustPayload::WritePipe(_)
+                        | bex_vm_types::RustPayload::WebSocket(_)
+                        | bex_vm_types::RustPayload::HttpBody(_)
+                        | bex_vm_types::RustPayload::SseStream(_)
+                        | bex_vm_types::RustPayload::HttpServer(_)
+                        | bex_vm_types::RustPayload::TlsKeys(_)
+                        | bex_vm_types::RustPayload::HostValue(_)
+                        | bex_vm_types::RustPayload::Image(_)
+                        | bex_vm_types::RustPayload::Audio(_)
+                        | bex_vm_types::RustPayload::Pdf(_)
+                        | bex_vm_types::RustPayload::Video(_)
+                        | bex_vm_types::RustPayload::Prompt(_),
+                        _,
+                    ) => Cmp::NotEqual,
                 }
             }
+            (Object::RustInstance(_), _) => Cmp::NotEqual,
 
             // By reference:
             (Object::Function(_), Object::Function(_))
@@ -673,8 +777,7 @@ impl EqualsDriver {
                 | Object::Closure(_)
                 | Object::Class(_)
                 | Object::Enum(_)
-                | Object::TypeAlias(_)
-                | Object::RustData(_),
+                | Object::TypeAlias(_),
                 _,
             ) => Cmp::NotEqual,
         }
@@ -760,6 +863,13 @@ impl Continuation for EqualsDriver {
 /// `None` for any other object kind (only instances/enums implement `Equals`).
 fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
     match vm.get_object(ptr) {
+        Object::RustInstance(inst) => match vm.get_object(inst.class) {
+            Object::Class(class) => Some(RealizedTy::Class(
+                bex_vm_types::TypeHead::new(inst.class, class.type_tag),
+                Box::from(inst.class_type_args.as_slice()),
+            )),
+            _ => None,
+        },
         Object::Instance => {
             let inst = vm.get_instance(ptr)?;
             Some(RealizedTy::Class(inst.head(), inst.type_args().into()))

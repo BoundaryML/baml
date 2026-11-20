@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
 
 use bex_vm_types::{HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, Value, ValueKind};
 
@@ -9,7 +9,9 @@ enum Work {
     Value(Value, bool),
     Exit(HeapPtr),
     MapEntry(Value, Value),
-    FinishMapEntry(Value, Arc<super::hasher::HasherState>),
+    /// The entry's hasher is finished, and the state it replaced is the one
+    /// to restore.
+    FinishMapEntry(Value),
     FinishMap,
 }
 
@@ -70,19 +72,23 @@ impl HashDriver {
                     continue;
                 }
                 Work::MapEntry(key, value) => {
-                    let (state, handle) = super::hasher::new_state(vm);
+                    let state = super::hasher::new_state(vm);
                     let previous = std::mem::replace(&mut self.state, state);
-                    self.pending.push(Work::FinishMapEntry(previous, handle));
+                    self.pending.push(Work::FinishMapEntry(previous));
                     self.pending.push(Work::Value(value, true));
                     self.pending.push(Work::Value(key, true));
                     continue;
                 }
-                Work::FinishMapEntry(previous, handle) => {
-                    self.state = previous;
+                Work::FinishMapEntry(previous) => {
+                    let entry = std::mem::replace(&mut self.state, previous);
+                    let hash = match super::hasher::finish_state(vm, entry) {
+                        Ok(hash) => hash,
+                        Err(error) => return error.into(),
+                    };
                     self.map_hashes
                         .last_mut()
                         .expect("map entry belongs to an active map")
-                        .push(super::hasher::finish_state(&handle));
+                        .push(hash);
                     continue;
                 }
                 Work::FinishMap => {
@@ -179,6 +185,56 @@ impl HashDriver {
                                 bytes.extend_from_slice(&(variant.index as u64).to_le_bytes());
                                 bytes
                             }
+                            // A `@@rust_type` class hashes only through an
+                            // explicit implementation (the checker refuses a
+                            // structural hash of one), so no kind hashes here.
+                            Object::RustInstance(instance) => match &instance.payload {
+                                bex_vm_types::RustPayload::Foreign(_)
+                                | bex_vm_types::RustPayload::DefaultHasher(_)
+                                | bex_vm_types::RustPayload::Sha256(_)
+                                | bex_vm_types::RustPayload::Aes256GcmSiv(_)
+                                | bex_vm_types::RustPayload::Aes128GcmSiv(_)
+                                | bex_vm_types::RustPayload::ChaCha20Poly1305(_)
+                                | bex_vm_types::RustPayload::XChaCha20Poly1305(_)
+                                | bex_vm_types::RustPayload::Regex(_)
+                                | bex_vm_types::RustPayload::CsvRecord(_)
+                                | bex_vm_types::RustPayload::Semaphore(_)
+                                | bex_vm_types::RustPayload::Permit(_)
+                                | bex_vm_types::RustPayload::Ticket(_)
+                                | bex_vm_types::RustPayload::CancelToken(_)
+                                | bex_vm_types::RustPayload::SpanId(_)
+                                | bex_vm_types::RustPayload::TraceOptions(_)
+                                | bex_vm_types::RustPayload::ReservedSpan(_)
+                                | bex_vm_types::RustPayload::File(_)
+                                | bex_vm_types::RustPayload::Glob(_)
+                                | bex_vm_types::RustPayload::OutputFormat(_)
+                                | bex_vm_types::RustPayload::Lock(_)
+                                | bex_vm_types::RustPayload::TcpStream(_)
+                                | bex_vm_types::RustPayload::TcpListener(_)
+                                | bex_vm_types::RustPayload::UdpSocket(_)
+                                | bex_vm_types::RustPayload::Xoshiro256PlusPlus(_)
+                                | bex_vm_types::RustPayload::ChaCha20(_)
+                                | bex_vm_types::RustPayload::InterfaceWitness(_)
+                                | bex_vm_types::RustPayload::CsvReader(_)
+                                | bex_vm_types::RustPayload::CsvWriter(_)
+                                | bex_vm_types::RustPayload::ClassBuilder(_)
+                                | bex_vm_types::RustPayload::ChildProcess(_)
+                                | bex_vm_types::RustPayload::ReadPipe(_)
+                                | bex_vm_types::RustPayload::WritePipe(_)
+                                | bex_vm_types::RustPayload::WebSocket(_)
+                                | bex_vm_types::RustPayload::HttpBody(_)
+                                | bex_vm_types::RustPayload::SseStream(_)
+                                | bex_vm_types::RustPayload::HttpServer(_)
+                                | bex_vm_types::RustPayload::TlsKeys(_)
+                                | bex_vm_types::RustPayload::HostValue(_)
+                                | bex_vm_types::RustPayload::Image(_)
+                                | bex_vm_types::RustPayload::Audio(_)
+                                | bex_vm_types::RustPayload::Pdf(_)
+                                | bex_vm_types::RustPayload::Video(_)
+                                | bex_vm_types::RustPayload::Prompt(_) => {
+                                    return panic("Value does not support structural hashing");
+                                }
+                            },
                             _ => return panic("Value does not support structural hashing"),
                         },
                     }
@@ -220,7 +276,7 @@ impl RootHaver for Work {
                 key.visit_roots(visitor);
                 value.visit_roots(visitor);
             }
-            Work::FinishMapEntry(previous, _) => previous.visit_roots(visitor),
+            Work::FinishMapEntry(previous) => previous.visit_roots(visitor),
             Work::FinishMap => {}
         }
     }

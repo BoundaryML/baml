@@ -3,28 +3,23 @@
 ///
 /// Implements `baml.io.Read` and `baml.io.Write`.
 class TcpStream {
-    /// (internal)
-    _handle: $rust_type,
-
     /// Opens a TCP connection to `addr` (e.g. `"127.0.0.1:8080"`) and returns the stream.
     ///
     /// `timeout` bounds how long to wait for the connection to be established;
     /// `null` (the default) waits indefinitely (subject to the OS default). On
     /// expiry this throws `baml.errors.Timeout`.
-    function connect(
-        addr: string,
-        timeout: root.time.Duration? = null,
-    ) -> TcpStream throws root.errors.Io | root.errors.Timeout {
+    function connect(addr: string, timeout: root.time.Duration? = null) -> TcpStream
+        throws root.errors.Io | root.errors.Timeout
+    {
         // Thin wrapper resolving the default: `$rust_io_function` sys-ops don't fill
         // omitted args, so `connect` forwards to the all-required `_connect` sys-op.
         TcpStream._connect(addr, timeout?.to_nanoseconds() ?? 0n)
     }
 
     /// (internal)
-    function _connect(
-        addr: string,
-        timeout_nanos: bigint,
-    ) -> TcpStream throws root.errors.Io | root.errors.Timeout {
+    function _connect(addr: string, timeout_nanos: bigint) -> TcpStream
+        throws root.errors.Io | root.errors.Timeout
+    {
         $rust_io_function
     }
 
@@ -49,6 +44,8 @@ class TcpStream {
     function close(self) -> null throws root.errors.Io {
         $rust_io_function
     }
+
+    @@rust_type("TcpStream")
 }
 
 /// A bound TCP listener. Created by `baml.net.TcpListener.bind`. Calling `accept`
@@ -67,9 +64,6 @@ class TcpStream {
 /// }
 /// ```
 class TcpListener {
-    /// (internal)
-    _handle: $rust_type,
-
     /// Binds to `addr` (e.g. `"127.0.0.1:8080"`) and returns a listener ready to
     /// accept incoming connections.
     function bind(addr: string) -> TcpListener throws root.errors.Io {
@@ -84,14 +78,13 @@ class TcpListener {
     function close(self) -> null throws root.errors.Io {
         $rust_io_function
     }
+
+    @@rust_type("TcpListener")
 }
 
 /// A UDP socket. Created by `baml.net.UdpSocket.bind`. UDP is connectionless and
 /// message-oriented: every `send_to` / `recv_from` carries a single datagram.
 class UdpSocket {
-    /// (internal)
-    _handle: $rust_type,
-
     /// Binds to `addr` (e.g. `"0.0.0.0:0"` for an OS-assigned ephemeral port) and
     /// returns the socket.
     function bind(addr: string) -> UdpSocket throws root.errors.Io {
@@ -112,12 +105,9 @@ class UdpSocket {
     }
 
     /// (internal)
-    function _send_to(
-        self,
-        data: uint8array,
-        addr: string,
-        timeout_nanos: bigint,
-    ) -> int throws root.errors.Io | root.errors.Timeout {
+    function _send_to(self, data: uint8array, addr: string, timeout_nanos: bigint) -> int
+        throws root.errors.Io | root.errors.Timeout
+    {
         $rust_io_function
     }
 
@@ -127,18 +117,16 @@ class UdpSocket {
     /// `timeout` bounds the wait for a datagram; `null` (the default) blocks
     /// indefinitely. On expiry this throws `baml.errors.Timeout` and the socket
     /// remains usable. Mirrors `UdpSocket::set_read_timeout`.
-    function recv_from(
-        self,
-        timeout: root.time.Duration? = null,
-    ) -> Datagram throws root.errors.Io | root.errors.Timeout {
+    function recv_from(self, timeout: root.time.Duration? = null) -> Datagram
+        throws root.errors.Io | root.errors.Timeout
+    {
         self._recv_from(timeout?.to_nanoseconds() ?? 0n)
     }
 
     /// (internal)
-    function _recv_from(
-        self,
-        timeout_nanos: bigint,
-    ) -> Datagram throws root.errors.Io | root.errors.Timeout {
+    function _recv_from(self, timeout_nanos: bigint) -> Datagram
+        throws root.errors.Io | root.errors.Timeout
+    {
         $rust_io_function
     }
 
@@ -146,6 +134,8 @@ class UdpSocket {
     function close(self) -> null throws root.errors.Io {
         $rust_io_function
     }
+
+    @@rust_type("UdpSocket")
 }
 
 /// A received UDP datagram: the payload bytes and the address of the sender.

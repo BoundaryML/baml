@@ -30,11 +30,11 @@ class _ExecutionContext:
 
     def __init__(self, frame):
         from collections import Counter
-        from .proto import _host_call_handle_keys
+        from .proto import _owned_wire_keys
 
         self._state, cancel_bytes = frame
         self._wire = baml_outbound_pb2.BamlOutboundValue.FromString(bytes(cancel_bytes))
-        self._unconsumed = Counter(_host_call_handle_keys(self._wire))
+        self._unconsumed = Counter(_owned_wire_keys(self._wire))
         self._cancel = None
 
     def _release_unconsumed(self):
@@ -75,14 +75,14 @@ def current():
 
 
 def current_context():
-    from .proto import decode_value
+    from .proto import _decode_owned
     from .typemap import get_type_map
 
     active = current()
     value = baml_outbound_pb2.BamlOutboundValue.FromString(
         bytes(_invocation_context(active._state if active is not None else None))
     )
-    return decode_value(value, get_type_map())
+    return _decode_owned(value, get_type_map())
 
 
 def current_cancel_token():

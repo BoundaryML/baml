@@ -305,17 +305,17 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
     let fs_functions = fs::read_to_string(generated.join("Fs").join("Functions.g.cs"))
         .expect("failed to read generated baml.fs function surface");
     let glob = fs::read_to_string(generated.join("Glob").join("Glob.g.cs"))
-        .expect("failed to read generated typed Glob resource surface");
+        .expect("failed to read generated typed Glob reference surface");
 
     for expected in [
-        "public sealed partial class File : global::System.IDisposable",
+        "public sealed partial class File : global::System.IDisposable, global::System.IEquatable<File>",
         "public long SeekFrom(\n        string whence,",
         "public string Text(",
-        "public File Clone() => new(\n        resource.Clone());",
+        "public File Clone() => new(opaque.Clone());",
     ] {
         assert!(
             file.contains(expected),
-            "generated File resource surface omitted `{expected}`"
+            "generated File reference surface omitted `{expected}`"
         );
     }
     for expected in [
@@ -370,25 +370,6 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
 
     let resource_surfaces = [
         (
-            "Fs/File.g.cs",
-            vec![
-                " Text(",
-                " TextAsync(",
-                " Bytes(",
-                " BytesAsync(",
-                " Close(",
-                " CloseAsync(",
-                " SeekFrom(",
-                " SeekFromAsync(",
-                " Write(",
-                " WriteAsync(",
-            ],
-        ),
-        (
-            "Glob/Glob.g.cs",
-            vec![" Scan(", " ScanAsync(", " Matches(", " MatchesAsync("],
-        ),
-        (
             "Http/Response.g.cs",
             vec![
                 " StatusCode { get; }",
@@ -422,83 +403,11 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
         ),
         (
             "Http/Server.g.cs",
-            vec![
-                " Addr { get; }",
-                " Bind(",
-                " BindAsync(",
-                " Serve(",
-                " ServeAsync(",
-            ],
+            vec![" Addr(", " Bind(", " BindAsync(", " Serve(", " ServeAsync("],
         ),
         (
             "Http/TlsConfig.g.cs",
             vec![" AllowTls12 { get; }", " New(", " NewAsync("],
-        ),
-        (
-            "Net/TcpStream.g.cs",
-            vec![" Connect(", " ConnectAsync(", " Close(", " CloseAsync("],
-        ),
-        (
-            "Net/TcpListener.g.cs",
-            vec![
-                " Bind(",
-                " BindAsync(",
-                " Accept(",
-                " AcceptAsync(",
-                " Close(",
-                " CloseAsync(",
-            ],
-        ),
-        (
-            "Net/UdpSocket.g.cs",
-            vec![
-                " Bind(",
-                " BindAsync(",
-                " SendTo(",
-                " SendToAsync(",
-                " RecvFrom(",
-                " RecvFromAsync(",
-                " Close(",
-                " CloseAsync(",
-            ],
-        ),
-        (
-            // `baml.sync` types cross as handles only: a host gets no
-            // operations on them (`build_symbol_pool`).
-            "Sync/Semaphore.g.cs",
-            vec![],
-        ),
-        (
-            "Spawn/CancelToken.g.cs",
-            vec![
-                " New(",
-                " NewAsync(",
-                " Any(",
-                " AnyAsync(",
-                " Cancel(",
-                " CancelAsync(",
-                " IsCancelled(",
-                " IsCancelledAsync(",
-            ],
-        ),
-        (
-            "Csv/Record.g.cs",
-            vec![
-                " Get<T>(",
-                " GetAsync<T>(",
-                " GetAt<T>(",
-                " GetAtAsync<T>(",
-                " Fields(",
-                " FieldsAsync(",
-                " Length(",
-                " LengthAsync(",
-                " Position(",
-                " PositionAsync(",
-                " Decode<T>(",
-                " DecodeAsync<T>(",
-                " ToMap(",
-                " ToMapAsync(",
-            ],
         ),
         (
             "Csv/Reader.g.cs",
@@ -568,6 +477,123 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             assert!(
                 source.contains(member),
                 "generated resource {relative} omitted `{member}`"
+            );
+        }
+    }
+
+    // A `@@rust_type` class is the runtime's own instance, held by reference:
+    // an opaque wrapper with value equality, never a resource carrier.
+    let opaque_surfaces = [
+        (
+            "Glob/Glob.g.cs",
+            vec![" Scan(", " ScanAsync(", " Matches(", " MatchesAsync("],
+        ),
+        (
+            "Net/TcpStream.g.cs",
+            vec![" Connect(", " ConnectAsync(", " Close(", " CloseAsync("],
+        ),
+        (
+            "Net/TcpListener.g.cs",
+            vec![
+                " Bind(",
+                " BindAsync(",
+                " Accept(",
+                " AcceptAsync(",
+                " Close(",
+                " CloseAsync(",
+            ],
+        ),
+        (
+            "Net/UdpSocket.g.cs",
+            vec![
+                " Bind(",
+                " BindAsync(",
+                " SendTo(",
+                " SendToAsync(",
+                " RecvFrom(",
+                " RecvFromAsync(",
+                " Close(",
+                " CloseAsync(",
+            ],
+        ),
+        (
+            "Fs/File.g.cs",
+            vec![
+                " Text(",
+                " TextAsync(",
+                " Bytes(",
+                " BytesAsync(",
+                " Close(",
+                " CloseAsync(",
+                " SeekFrom(",
+                " SeekFromAsync(",
+                " Write(",
+                " WriteAsync(",
+            ],
+        ),
+        (
+            "Spawn/CancelToken.g.cs",
+            vec![
+                " New(",
+                " NewAsync(",
+                " Any(",
+                " AnyAsync(",
+                " Cancel(",
+                " CancelAsync(",
+                " IsCancelled(",
+                " IsCancelledAsync(",
+            ],
+        ),
+        (
+            // `baml.sync` types cross as handles only: a host gets no
+            // operations on them (`build_symbol_pool`). Like `baml.sap`'s,
+            // their namespace is their own, beside `Baml`.
+            "../Sync/Semaphore.g.cs",
+            vec![],
+        ),
+        (
+            "Csv/Record.g.cs",
+            vec![
+                " Get<T>(",
+                " GetAsync<T>(",
+                " GetAt<T>(",
+                " GetAtAsync<T>(",
+                " Fields(",
+                " FieldsAsync(",
+                " Length(",
+                " LengthAsync(",
+                " Position(",
+                " PositionAsync(",
+                " Decode<T>(",
+                " DecodeAsync<T>(",
+                " ToMap(",
+                " ToMapAsync(",
+            ],
+        ),
+    ];
+    for (relative, expected) in opaque_surfaces {
+        let source = fs::read_to_string(generated.join(relative))
+            .unwrap_or_else(|error| panic!("failed to read generated {relative}: {error}"));
+        for common in [
+            " : global::System.IDisposable",
+            "public bool IsClosed => opaque.IsClosed;",
+            " Clone() => new(opaque.Clone());",
+            "public void Dispose() => opaque.Dispose();",
+            "opaque.Equals(other.opaque)",
+        ] {
+            assert!(
+                source.contains(common),
+                "generated opaque {relative} omitted `{common}`"
+            );
+        }
+        assert!(
+            !source.contains("public global::Baml.BamlHandle Handle"),
+            "generated opaque {relative} exposed its raw handle"
+        );
+        for member in expected {
+            assert!(
+                source.contains(member),
+                "generated opaque {relative} omitted `{member}`"
             );
         }
     }

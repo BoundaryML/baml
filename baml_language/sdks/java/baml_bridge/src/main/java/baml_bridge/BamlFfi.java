@@ -183,8 +183,9 @@ public final class BamlFfi {
     // The JVM analog of bridge_python's media/handle FFI: media values are
     // minted as HANDLE_TABLE rows and referenced across JNI by their u64 key
     // (returned as a long). The `kind` argument is a proto MediaTypeEnum
-    // discriminant (IMAGE=1, AUDIO=2, PDF=3, VIDEO=4, OTHER=5). A native failure
-    // (bad kind, invalid key, alloc) throws an unchecked RuntimeException.
+    // discriminant (IMAGE=1, AUDIO=2, PDF=3, VIDEO=4); a media value always has
+    // one of these kinds. A native failure (any other kind, invalid key, alloc)
+    // throws an unchecked RuntimeException.
 
     /** Mint an `Adt(Media)` row from a URL; returns its handle key. */
     static native long nativeMediaFromUrl(int kind, String url, String mimeType);
@@ -211,7 +212,10 @@ public final class BamlFfi {
     /** The media's MIME type, or {@code null} when none is set. */
     static native String nativeMediaMimeType(long key);
 
-    /** Clone a handle key, minting a fresh owned key for the same row. */
+    /**
+     * Take one more ownership of a handle key: the same key for a row naming an
+     * engine object, a fresh key for an identity-free row.
+     */
     static native long nativeHandleClone(long key);
 
     /** Release one owned handle key (best-effort; a stale key is ignored). */
@@ -693,13 +697,13 @@ public final class BamlFfi {
     // hostDispatch; the call's one outcome flows back via nativeCompleteHostCall.
 
     /**
-     * Engine-driven release: drop the registry entry for {@code key} (the engine
-     * dropped the last reference to the host value). Called from the Rust release
-     * trampoline; a stale/absent key is a harmless no-op. Rarely fires per call
-     * (GC-driven) — hence the {@code @Disabled} release test.
+     * Engine-driven release: the engine gives back {@code count} references to
+     * the host value {@code key} ({@link HostCalls#release}). Called from the
+     * Rust release trampoline after the engine collects the values holding
+     * them; an absent key is ignored.
      */
-    static void hostRelease(long key) {
-        HostCalls.release(key);
+    static void hostRelease(long key, long count) {
+        HostCalls.release(key, count);
     }
 
     /**

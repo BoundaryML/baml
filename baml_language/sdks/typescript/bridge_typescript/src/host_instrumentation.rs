@@ -5,7 +5,6 @@ use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use btel_snapshot::host::HostValue;
 use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
-use prost::Message;
 
 use crate::{errors::bridge_error_to_napi, handle::BamlHandle};
 
@@ -85,30 +84,21 @@ pub fn validate_host_options(options: Option<&BamlHandle>) -> napi::Result<Vec<b
 
 #[napi(js_name = "_beginHostInvocation")]
 pub fn begin_host_invocation(
-    definition: HostDefinition,
+    marker: &HostMarker,
     inherited: Option<&BamlHandle>,
-    options: Option<&BamlHandle>,
     caller: HostCallSite,
     inputs: Option<String>,
 ) -> napi::Result<(HostExecution, BamlHandle, Buffer)> {
-    let options =
-        bridge_cffi::host_instrumentation::options(options.map_or(0, BamlHandle::key_u64))
-            .map_err(host_error)?;
+    // The definition and options are the marker's, read once when the function
+    // was instrumented: a call reads no runtime state for them.
+    let marker = &marker.marker;
     let inputs = inputs
-        .filter(|_| options.inputs == Some(true))
+        .filter(|_| marker.options.inputs == Some(true))
         .map(|value| capture(&value));
     let (execution, key) = bridge_cffi::host_instrumentation::begin(
-        &bex_project::HostDefinition {
-            language: "typescript".into(),
-            module: definition.module,
-            qualified_name: definition.qualified_name,
-            source_file: definition.source_file,
-            definition_line: definition.definition_line,
-            wrapper_line: definition.wrapper_line,
-            display_name: definition.display_name,
-        },
+        &marker.definition,
         inherited.map_or(0, BamlHandle::key_u64),
-        &options,
+        &marker.options,
         &bex_project::HostCallSite {
             source_file: caller.source_file,
             line: caller.line,
@@ -117,12 +107,8 @@ pub fn begin_host_invocation(
     )
     .map_err(host_error)?;
     let state = BamlHandle::from_parts(key, BamlHandleType::InvocationState as i32);
-    let cancel = bridge_ctypes::external_to_outbound(
-        &execution.inherited_state().cancellation_projection(),
-        &bridge_ctypes::CffiHandleTableOptions::for_wire(),
-    )
-    .map_err(|error| napi::Error::from_reason(error.to_string()))?
-    .encode_to_vec();
+    let cancel = bridge_cffi::host_instrumentation::cancel_token(&execution)
+        .map_err(|error| napi::Error::from_reason(error.to_string()))?;
     Ok((
         HostExecution(Mutex::new(Some(execution))),
         state,
@@ -136,12 +122,20 @@ pub(crate) fn capture(wire: &str) -> HostValue {
     bridge_cffi::host_capture::decode(wire)
 }
 
+/// The marker of an instrumented function, which the wrapper keeps beside the
+/// function and the bridge reads when the function is registered as a
+/// callback. JavaScript holds it but cannot build or look into one.
+#[napi(js_name = "_HostMarker")]
+pub struct HostMarker {
+    pub(crate) marker: std::sync::Arc<bex_project::HostMarker>,
+}
+
 #[napi(js_name = "_defineHostMarker")]
 pub fn define_host_marker(
     definition: HostDefinition,
     options: Option<&BamlHandle>,
-) -> napi::Result<BamlHandle> {
-    let key = bridge_cffi::host_instrumentation::define_marker(
+) -> napi::Result<HostMarker> {
+    let marker = bridge_cffi::host_instrumentation::define_marker(
         bex_project::HostDefinition {
             language: "typescript".into(),
             module: definition.module,
@@ -154,8 +148,5 @@ pub fn define_host_marker(
         options.map_or(0, BamlHandle::key_u64),
     )
     .map_err(host_error)?;
-    Ok(BamlHandle::from_parts(
-        key,
-        BamlHandleType::UntaggedRustData as i32,
-    ))
+    Ok(HostMarker { marker })
 }

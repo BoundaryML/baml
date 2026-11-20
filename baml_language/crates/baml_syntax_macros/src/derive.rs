@@ -177,6 +177,8 @@ pub(crate) fn any_node(input: &DeriveInput) -> syn::Result<TokenStream> {
     let mut bounds = Vec::new();
     let mut arms = Vec::new();
     let mut id_arms = Vec::new();
+    let mut node_id_arms = Vec::new();
+    let mut all_nodes = true;
     for variant in &data.variants {
         let ident = &variant.ident;
         let Fields::Unnamed(unnamed) = &variant.fields else {
@@ -199,7 +201,30 @@ pub(crate) fn any_node(input: &DeriveInput) -> syn::Result<TokenStream> {
         id_arms.push(quote! {
             Self::#ident(inner) => ::baml_syntax::tree::AnyNodeIdOf::any_node_id(inner),
         });
+        if is_token(ty) {
+            all_nodes = false;
+        } else {
+            node_id_arms.push(quote! {
+                Self::#ident(inner) => ::baml_syntax::tree::NodeIdOf::node_id(inner),
+            });
+        }
     }
+    // A nested union that holds a token has no `NodeIdOf`, so a union nesting
+    // it fails to compile here rather than claim to be all nodes.
+    let node_union = all_nodes.then(|| {
+        quote! {
+            impl ::baml_syntax::tree::NodeUnion for #name {
+                fn node_id(&self) -> ::baml_syntax::tree::AnyNodeId {
+                    match self { #(#node_id_arms)* }
+                }
+            }
+            impl ::baml_syntax::tree::NodeIdOf for #name {
+                fn node_id(&self) -> ::baml_syntax::tree::AnyNodeId {
+                    ::baml_syntax::tree::NodeUnion::node_id(self)
+                }
+            }
+        }
+    });
     Ok(quote! {
         impl<#arena> ::baml_syntax::tree::Walk<#arena> for #name where #(#bounds,)* {
             fn walk(
@@ -221,5 +246,20 @@ pub(crate) fn any_node(input: &DeriveInput) -> syn::Result<TokenStream> {
                 ::baml_syntax::tree::AnyNode::any_node_id(self)
             }
         }
+        #node_union
     })
+}
+
+/// Whether a union variant's payload is a token: spelled `Token![…]` (the
+/// only macro type a node field uses) or `Token<…>`.
+fn is_token(ty: &Type) -> bool {
+    match ty {
+        Type::Macro(_) => true,
+        Type::Path(path) => path
+            .path
+            .segments
+            .last()
+            .is_some_and(|segment| segment.ident == "Token"),
+        _ => false,
+    }
 }

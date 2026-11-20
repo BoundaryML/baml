@@ -304,7 +304,9 @@ impl fmt::Display for Path {
     }
 }
 
-/// The types of media we support
+/// A media type: one kind of media, or `Generic` for any of them
+/// (`image | audio | video | pdf`). A media value always has a
+/// [`ConcreteMediaKind`].
 #[derive(
     Debug, Clone, PartialEq, Eq, Hash, Copy, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
 )]
@@ -313,7 +315,8 @@ pub enum MediaKind {
     Audio,
     Video,
     Pdf,
-    Generic, // could be any of the media types
+    /// Any media: `image | audio | video | pdf`.
+    Generic,
 }
 
 impl MediaKind {
@@ -329,94 +332,155 @@ impl MediaKind {
     /// Tag value used in the BEP-038 `{ kind, source, value, mime }` JSON
     /// shape. `Generic` collapses to `"media"` (any media subtype).
     pub fn tag_str(self) -> &'static str {
+        match self.concrete() {
+            Some(kind) => kind.tag_str(),
+            None => "media",
+        }
+    }
+
+    /// The one kind this type names, or `None` for `Generic`.
+    pub const fn concrete(self) -> Option<ConcreteMediaKind> {
         match self {
-            MediaKind::Image => "image",
-            MediaKind::Audio => "audio",
-            MediaKind::Video => "video",
-            MediaKind::Pdf => "pdf",
-            MediaKind::Generic => "media",
+            MediaKind::Image => Some(ConcreteMediaKind::Image),
+            MediaKind::Audio => Some(ConcreteMediaKind::Audio),
+            MediaKind::Video => Some(ConcreteMediaKind::Video),
+            MediaKind::Pdf => Some(ConcreteMediaKind::Pdf),
+            MediaKind::Generic => None,
+        }
+    }
+
+    /// Whether a media value of kind `value` inhabits this media type.
+    pub fn admits(self, value: ConcreteMediaKind) -> bool {
+        self.concrete().is_none_or(|kind| kind == value)
+    }
+}
+
+impl fmt::Display for MediaKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.concrete() {
+            Some(kind) => fmt::Display::fmt(&kind, f),
+            None => f.write_str("image | audio | video | pdf"),
+        }
+    }
+}
+
+/// The kind of a media value: exactly one of the media types.
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, Copy, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
+)]
+pub enum ConcreteMediaKind {
+    Image,
+    Audio,
+    Video,
+    Pdf,
+}
+
+impl ConcreteMediaKind {
+    /// Every kind, in declaration order.
+    pub const ALL: [Self; 4] = [Self::Image, Self::Audio, Self::Video, Self::Pdf];
+
+    /// Tag value used in the BEP-038 `{ kind, source, value, mime }` JSON
+    /// shape.
+    pub const fn tag_str(self) -> &'static str {
+        match self {
+            ConcreteMediaKind::Image => "image",
+            ConcreteMediaKind::Audio => "audio",
+            ConcreteMediaKind::Video => "video",
+            ConcreteMediaKind::Pdf => "pdf",
         }
     }
 
     /// The stdlib wrapper class (`baml.media.*`) that carries this media kind
-    /// as a nominal value, by identity; `None` for `Generic`, which has no
-    /// wrapper class. What the runtime reaches the class by.
-    pub const fn wrapper_class(self) -> Option<crate::LangItem> {
+    /// as a nominal value, by identity. What the runtime reaches the class by.
+    pub const fn wrapper_class(self) -> crate::LangItem {
         match self {
-            MediaKind::Image => Some(crate::lang_item!(Baml: media.Image)),
-            MediaKind::Audio => Some(crate::lang_item!(Baml: media.Audio)),
-            MediaKind::Video => Some(crate::lang_item!(Baml: media.Video)),
-            MediaKind::Pdf => Some(crate::lang_item!(Baml: media.Pdf)),
-            MediaKind::Generic => None,
+            ConcreteMediaKind::Image => crate::lang_item!(Baml: media.Image),
+            ConcreteMediaKind::Audio => crate::lang_item!(Baml: media.Audio),
+            ConcreteMediaKind::Video => crate::lang_item!(Baml: media.Video),
+            ConcreteMediaKind::Pdf => crate::lang_item!(Baml: media.Pdf),
         }
     }
 
     /// [`Self::wrapper_class`] as a wire name (`baml.media.Image`): how a
     /// host spells the class. Single source of truth for the kind ↔
     /// wrapper-class-name mapping, together with
-    /// [`MediaKind::from_wrapper_class_name`]. Consumers must resolve wrapper
-    /// class names through these instead of local string matches.
-    pub const fn wrapper_class_name(self) -> Option<&'static str> {
+    /// [`ConcreteMediaKind::from_wrapper_class_name`]. Consumers must resolve
+    /// wrapper class names through these instead of local string matches.
+    pub const fn wrapper_class_name(self) -> &'static str {
         match self {
-            MediaKind::Image => Some("baml.media.Image"),
-            MediaKind::Audio => Some("baml.media.Audio"),
-            MediaKind::Video => Some("baml.media.Video"),
-            MediaKind::Pdf => Some("baml.media.Pdf"),
-            MediaKind::Generic => None,
+            ConcreteMediaKind::Image => "baml.media.Image",
+            ConcreteMediaKind::Audio => "baml.media.Audio",
+            ConcreteMediaKind::Video => "baml.media.Video",
+            ConcreteMediaKind::Pdf => "baml.media.Pdf",
         }
     }
 
-    /// Inverse of [`MediaKind::wrapper_class_name`]: the media kind carried by
-    /// a stdlib media wrapper class, or `None` for any other class name.
+    /// Inverse of [`ConcreteMediaKind::wrapper_class_name`]: the media kind
+    /// carried by a stdlib media wrapper class, or `None` for any other class
+    /// name.
     pub fn from_wrapper_class_name(name: &str) -> Option<Self> {
-        match name {
-            "baml.media.Image" => Some(MediaKind::Image),
-            "baml.media.Audio" => Some(MediaKind::Audio),
-            "baml.media.Video" => Some(MediaKind::Video),
-            "baml.media.Pdf" => Some(MediaKind::Pdf),
-            _ => None,
+        Self::ALL
+            .into_iter()
+            .find(|kind| kind.wrapper_class_name() == name)
+    }
+}
+
+impl From<ConcreteMediaKind> for MediaKind {
+    fn from(kind: ConcreteMediaKind) -> Self {
+        match kind {
+            ConcreteMediaKind::Image => MediaKind::Image,
+            ConcreteMediaKind::Audio => MediaKind::Audio,
+            ConcreteMediaKind::Video => MediaKind::Video,
+            ConcreteMediaKind::Pdf => MediaKind::Pdf,
         }
+    }
+}
+
+impl fmt::Display for ConcreteMediaKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.tag_str())
     }
 }
 
 #[cfg(test)]
-mod media_kind_wrapper_tests {
-    use super::MediaKind;
+mod media_kind_tests {
+    use super::{ConcreteMediaKind, MediaKind};
 
     #[test]
     fn wrapper_class_name_round_trips() {
-        for kind in [
-            MediaKind::Image,
-            MediaKind::Audio,
-            MediaKind::Video,
-            MediaKind::Pdf,
-        ] {
-            let name = kind
-                .wrapper_class_name()
-                .expect("concrete kind has a wrapper");
-            assert_eq!(MediaKind::from_wrapper_class_name(name), Some(kind));
+        for kind in ConcreteMediaKind::ALL {
+            let name = kind.wrapper_class_name();
+            assert_eq!(ConcreteMediaKind::from_wrapper_class_name(name), Some(kind));
             // The identity and the wire name spell one declaration.
-            assert_eq!(
-                kind.wrapper_class()
-                    .expect("concrete kind has a wrapper")
-                    .to_string(),
-                name
-            );
+            assert_eq!(kind.wrapper_class().to_string(), name);
         }
-        assert_eq!(MediaKind::Generic.wrapper_class_name(), None);
-        assert_eq!(MediaKind::Generic.wrapper_class(), None);
-        assert_eq!(MediaKind::from_wrapper_class_name("baml.media.File"), None);
-        assert_eq!(MediaKind::from_wrapper_class_name("user.Image"), None);
+        assert_eq!(
+            ConcreteMediaKind::from_wrapper_class_name("baml.media.File"),
+            None
+        );
+        assert_eq!(
+            ConcreteMediaKind::from_wrapper_class_name("user.Image"),
+            None
+        );
     }
-}
 
-impl fmt::Display for MediaKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            MediaKind::Image | MediaKind::Audio | MediaKind::Video | MediaKind::Pdf => {
-                write!(f, "{}", self.tag_str())
+    #[test]
+    fn a_concrete_kind_is_the_type_of_its_own_name() {
+        for kind in ConcreteMediaKind::ALL {
+            assert_eq!(MediaKind::from(kind).concrete(), Some(kind));
+            assert_eq!(MediaKind::from(kind).tag_str(), kind.tag_str());
+        }
+        assert_eq!(MediaKind::Generic.concrete(), None);
+        assert_eq!(MediaKind::Generic.tag_str(), "media");
+    }
+
+    #[test]
+    fn generic_admits_every_kind_and_a_kind_admits_itself() {
+        for value in ConcreteMediaKind::ALL {
+            assert!(MediaKind::Generic.admits(value));
+            for ty in ConcreteMediaKind::ALL {
+                assert_eq!(MediaKind::from(ty).admits(value), ty == value);
             }
-            MediaKind::Generic => write!(f, "image | audio | video | pdf"),
         }
     }
 }

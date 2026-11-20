@@ -42,11 +42,12 @@ pub fn test_handle_table_entry_count() -> Result<u32, JsError> {
         .map_err(|_| JsError::new("handle table entry count exceeds uint32"))
 }
 
-#[wasm_bindgen(js_name = seedGenericMediaHandle)]
-pub fn seed_generic_media_handle() -> Result<u64, JsError> {
+/// Test-only: seed an image media entry into the handle table.
+#[wasm_bindgen(js_name = seedMediaHandle)]
+pub fn seed_media_handle() -> Result<u64, JsError> {
     key_with_expected_type(
-        "seedGenericMediaHandle",
-        handle_cffi::seed_generic_media_handle(),
-        BamlHandleType::AdtMediaGeneric,
+        "seedMediaHandle",
+        handle_cffi::seed_media_handle(),
+        BamlHandleType::AdtMediaImage,
     )
 }

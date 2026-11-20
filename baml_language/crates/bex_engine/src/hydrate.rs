@@ -234,7 +234,6 @@ impl Restricted {
                 | Ty::Union(_)
                 | Ty::Function { .. }
                 | Ty::Future(..)
-                | Ty::RustType
                 | Ty::Type
                 | Ty::Resource
                 | Ty::PromptAst
@@ -307,7 +306,6 @@ fn mentions_literal(vm: &BexVm, ty: &Ty, seen: &mut Vec<HeapPtr>) -> bool {
         | Ty::Union(_)
         | Ty::Function { .. }
         | Ty::Future(..)
-        | Ty::RustType
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
@@ -590,12 +588,6 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     "a union envelope is not a host value; a node states the type it has",
                 ));
             }
-            BexExternalValue::RustData(data) => Value::object(
-                self.holder
-                    .holder_mut()
-                    .tlab_mut()
-                    .alloc_rust_data(data.clone()),
-            ),
             BexExternalValue::Handle(handle)
             | BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
                 heap_handle: handle,
@@ -615,7 +607,27 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         )
                     })?
                     .ptr();
-                self.wrapper_instance(class, media.clone())?
+                self.rust_instance(class, bex_vm_types::RustPayload::media(media.clone()))
+            }
+            // A token this runtime issued to a host body becomes the
+            // instance it stands for; one from another runtime died with it.
+            BexExternalValue::Adt(BexExternalAdt::CancelToken(token)) => {
+                if !self.engine.issued(token) {
+                    return Err(self.malformed(
+                        "a cancel token is stale or belongs to a different BAML runtime",
+                    ));
+                }
+                let class = self
+                    .vm()
+                    .lang_head(bex_vm::lang_items::BAML_SPAWN_CANCEL_TOKEN)
+                    .ok_or_else(|| {
+                        self.malformed("the program declares no `baml.spawn.CancelToken`")
+                    })?
+                    .ptr();
+                self.rust_instance(
+                    class,
+                    bex_vm_types::RustPayload::CancelToken(std::sync::Arc::clone(&token.state)),
+                )
             }
             BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt)) => {
                 let class = self
@@ -623,7 +635,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     .lang_head(bex_vm::lang_items::AI_PROMPT)
                     .ok_or_else(|| self.malformed("the program declares no `ai.Prompt`"))?
                     .ptr();
-                self.wrapper_instance(class, prompt.clone())?
+                self.rust_instance(class, bex_vm_types::RustPayload::Prompt(prompt.clone()))
             }
             BexExternalValue::Adt(BexExternalAdt::Type(reflected)) => {
                 // A reflected type names its declarations; an anonymous one has
@@ -669,18 +681,32 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         .alloc_type(bex_vm_types::types::TypeValue::new(realized)),
                 )
             }
-            BexExternalValue::HostValue(host) => match host.kind {
-                HostValueKind::Opaque => {
-                    let data: std::sync::Arc<dyn bex_vm_types::BexRustData> = host.clone();
-                    Value::object(self.holder.holder_mut().tlab_mut().alloc_rust_data(data))
-                }
-                HostValueKind::Callable => {
-                    return Err(self.malformed(
-                        "a host callable arrives with the function type it inhabits; this one \
+            BexExternalValue::HostValue(host) => {
+                match host.kind {
+                    // A host's own value is a `baml.host.Value` around the host's
+                    // reference to it.
+                    HostValueKind::Opaque => {
+                        let class = self
+                            .holder
+                            .holder()
+                            .vm
+                            .lang_object(bex_vm::lang_items::BAML_HOST_VALUE);
+                        Value::object(self.holder.holder_mut().tlab_mut().alloc(
+                            Object::RustInstance(bex_vm_types::RustInstance::new(
+                                class,
+                                bex_vm_types::ThinVec::new(),
+                                bex_vm_types::RustPayload::HostValue(host.clone()),
+                            )),
+                        ))
+                    }
+                    HostValueKind::Callable => {
+                        return Err(self.malformed(
+                            "a host callable arrives with the function type it inhabits; this one \
                          states none",
-                    ));
+                        ));
+                    }
                 }
-            },
+            }
             BexExternalValue::HostCallable {
                 handle,
                 params,
@@ -754,8 +780,43 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     type_args.len()
                 )));
             }
-            let declared = class
-                .fields
+            // A class that crosses as its own kind of thing is built by the
+            // runtime alone: a host sends that thing, or passes back the
+            // instance it received.
+            let crossing = class.crossing();
+            if self.peer == Peer::Host && !crossing.host_builds() {
+                return Err(self.malformed(match crossing {
+                    ClassCrossing::Media(_) => {
+                        format!("`{}` is a media value; send the media itself", class.name())
+                    }
+                    ClassCrossing::Prompt => format!(
+                        "`{}` is a rendered prompt; send the prompt itself",
+                        class.name()
+                    ),
+                    ClassCrossing::HostValue => {
+                        format!(
+                            "`{}` is a host's own value; send the value itself",
+                            class.name()
+                        )
+                    }
+                    ClassCrossing::Opaque | ClassCrossing::Stream | ClassCrossing::FunctionSpec => {
+                        format!(
+                            "`{}` is the runtime's own; pass the instance you received",
+                            class.name()
+                        )
+                    }
+                    ClassCrossing::Fields => unreachable!("a host builds a `Fields` class"),
+                }));
+            }
+            // The runtime's own peer reaches here too: it never sends a class
+            // only the runtime builds by its fields either.
+            let class_fields = class.buildable_fields().map_err(|_| {
+                self.malformed(format!(
+                    "`{}` is built only by the runtime, never from fields",
+                    class.name()
+                ))
+            })?;
+            let declared = class_fields
                 .iter()
                 .map(|field| {
                     let ty = field
@@ -771,28 +832,6 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     Ok((field.name.clone(), ty))
                 })
                 .collect::<Result<Vec<(String, RealizedTy)>, Refusal>>()?;
-            // A class that crosses as its own kind of thing is built by the
-            // runtime alone: a host sends that thing, or passes back the
-            // instance it received.
-            let crossing = class.crossing();
-            if self.peer == Peer::Host && !crossing.host_builds() {
-                return Err(self.malformed(match crossing {
-                    ClassCrossing::Media(_) => {
-                        format!("`{}` is a media value; send the media itself", class.name())
-                    }
-                    ClassCrossing::Prompt => format!(
-                        "`{}` is a rendered prompt; send the prompt itself",
-                        class.name()
-                    ),
-                    ClassCrossing::Opaque | ClassCrossing::Stream | ClassCrossing::FunctionSpec => {
-                        format!(
-                            "`{}` is the runtime's own; pass the instance you received",
-                            class.name()
-                        )
-                    }
-                    ClassCrossing::Fields => unreachable!("a host builds a `Fields` class"),
-                }));
-            }
             (class.name().to_string(), declared)
         };
         // A key the class does not declare is refused once the declared
@@ -861,33 +900,19 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
         Ok(Value::object(ptr))
     }
 
-    /// An instance of the standard library's wrapper class `class` around
-    /// `payload`, which its one `_data` field holds as opaque data.
-    fn wrapper_instance(
-        &mut self,
-        class: HeapPtr,
-        payload: std::sync::Arc<dyn bex_vm_types::BexRustData>,
-    ) -> Result<Value, Refusal> {
-        {
-            let Object::Class(declared) = self.vm().get_object(class) else {
-                return Err(self.malformed("a media or prompt wrapper is not a class"));
-            };
-            let fields: Vec<&str> = declared.fields.iter().map(|f| f.name.as_str()).collect();
-            if fields != [bex_external_types::MEDIA_WRAPPER_DATA_FIELD] {
-                return Err(self.malformed(format!(
-                    "wrapper class `{}` does not hold one `{}` field",
-                    declared.name(),
-                    bex_external_types::MEDIA_WRAPPER_DATA_FIELD
-                )));
-            }
-        }
-        let data = Value::object(self.holder.holder_mut().tlab_mut().alloc_rust_data(payload));
-        Ok(Value::object(
+    /// An instance of the standard library's `@@rust_type` class `class`
+    /// around `payload`.
+    fn rust_instance(&mut self, class: HeapPtr, payload: bex_vm_types::RustPayload) -> Value {
+        Value::object(
             self.holder
                 .holder_mut()
                 .tlab_mut()
-                .alloc_instance_with_type_args(class, Box::new([]), vec![data]),
-        ))
+                .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
+                    class,
+                    bex_vm_types::ThinVec::new(),
+                    payload,
+                ))),
+        )
     }
 }
 
@@ -966,16 +991,127 @@ impl BexEngine {
         Ok(built)
     }
 
-    /// [`Self::land_op_result`], then [`Self::check_member`] against `slot`.
+    /// Build each argument of a call on the heap as the value it is, before
+    /// any question of its slot: as its sender's value, a host's or the
+    /// runtime's. `None` stands for an argument omitted for its default; a
+    /// refusal names the index of the argument it refused.
+    pub(crate) fn land_args(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        args: crate::SentArgs,
+    ) -> Result<Vec<Option<Value>>, (usize, Refusal)> {
+        match args {
+            crate::SentArgs::Host(args) => args
+                .iter()
+                .enumerate()
+                .map(|(idx, arg)| match arg {
+                    crate::BexCallArg::Provided(value) => self
+                        .hydrate_from(Peer::Host, holder, value)
+                        .map(Some)
+                        .map_err(|refusal| (idx, refusal)),
+                    crate::BexCallArg::OmittedDefault => Ok(None),
+                })
+                .collect(),
+            crate::SentArgs::Runtime(args) => args
+                .into_iter()
+                .enumerate()
+                .map(|(idx, arg)| {
+                    self.land_op_value(holder, arg)
+                        .map(Some)
+                        .map_err(|refusal| (idx, refusal))
+                })
+                .collect(),
+        }
+    }
+
+    /// [`Self::land_op_value`], then [`Self::check_member`] against `slot`.
     pub(crate) fn land_op_result_into(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
-        value: &BexExternalValue,
+        value: sys_types::OpValue,
         slot: &RealizedTy,
     ) -> Result<Value, Refusal> {
-        let built = self.land_op_result(holder, value)?;
+        let built = self.land_op_value(holder, value)?;
         Self::check_member(holder, built, slot)?;
         Ok(built)
+    }
+
+    /// Build a value the runtime sent on the heap as the value it is: an
+    /// external one as [`Self::land_op_result`] does, and the runtime's own
+    /// instances bottom-up, each field checked against its declared type.
+    /// The value itself is not judged against any slot.
+    pub(crate) fn land_op_value(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        value: sys_types::OpValue,
+    ) -> Result<Value, Refusal> {
+        Ok(match value {
+            sys_types::OpValue::External(value) => self.land_op_result(holder, &value)?,
+            // The runtime's own instance, built around the state the op
+            // returned: no external form says what it is, so it is judged
+            // only as the instance it is.
+            sys_types::OpValue::RustInstance { class, payload } => {
+                let thread = holder.holder_mut();
+                let class = thread.vm.lang_object(class);
+                debug_assert!(
+                    matches!(
+                        thread.vm.get_object(class),
+                        Object::Class(class) if class.generic_param_count == 0
+                    ),
+                    "an op builds a tagged instance of a non-generic class"
+                );
+                Value::object(thread.tlab_mut().alloc(Object::RustInstance(
+                    bex_vm_types::RustInstance::new(class, bex_vm_types::ThinVec::new(), payload),
+                )))
+            }
+            // An instance holding the runtime's own instances: each field
+            // lands against its declared type, and the instance is built
+            // from them.
+            sys_types::OpValue::Instance { class, fields } => {
+                let class = holder.holder().vm.lang_object(class);
+                let slots: Vec<RealizedTy> = {
+                    let vm = &holder.holder().vm;
+                    let Object::Class(def) = vm.get_object(class) else {
+                        unreachable!("a lang item class is an `Object::Class`")
+                    };
+                    debug_assert_eq!(
+                        def.generic_param_count, 0,
+                        "an op builds an instance of a non-generic class"
+                    );
+                    // An op states every field of the instance it builds.
+                    if def.instance_fields().len() != fields.len() {
+                        return Err(Refusal {
+                            path: Vec::new(),
+                            kind: RefusalKind::Malformed(format!(
+                                "an op built `{}` from {} fields, but it declares {}",
+                                def.name(),
+                                fields.len(),
+                                def.instance_fields().len()
+                            )),
+                        });
+                    }
+                    def.instance_fields()
+                        .iter()
+                        .map(|field| {
+                            field
+                                .field_template
+                                .substitute(&[], vm)
+                                .unwrap_or_else(|error| {
+                                    unreachable!(
+                                        "a non-generic class's field type realizes: {error}"
+                                    )
+                                })
+                        })
+                        .collect()
+                };
+                let values = fields
+                    .into_iter()
+                    .zip(&slots)
+                    .map(|(field, slot)| self.land_op_result_into(holder, field, slot))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Value::object(holder.holder_mut().tlab_mut().alloc_instance(class, values))
+            }
+        })
     }
 
     /// The concrete type of a value on the heap, as the type system reads it

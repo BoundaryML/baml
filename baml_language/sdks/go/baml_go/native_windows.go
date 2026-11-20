@@ -14,7 +14,7 @@ extern void bamlGoResultCallback(uint32_t call_id, int8_t *content, size_t lengt
 extern void bamlGoUnhandledSpawnErrorCallback(int8_t *content, size_t length, int32_t cancelled);
 extern void bamlGoHostDispatchV2(uint8_t *args, size_t length);
 extern void bamlGoHostCancel(uint32_t call_id);
-extern void bamlGoHostRelease(uint64_t host_value_key);
+extern void bamlGoHostRelease(uint64_t host_value_key, uint64_t count);
 
 static void baml_go_result_callback(uint32_t call_id, const int8_t *content, size_t length) {
 	bamlGoResultCallback(call_id, (int8_t *)content, length);
@@ -23,7 +23,7 @@ static void baml_go_host_dispatch(const uint8_t *args, size_t length) {
 	bamlGoHostDispatchV2((uint8_t *)args, length);
 }
 static void baml_go_host_cancel(uint32_t call_id) { bamlGoHostCancel(call_id); }
-static void baml_go_host_release(uint64_t host_value_key) { bamlGoHostRelease(host_value_key); }
+static void baml_go_host_release(uint64_t host_value_key, uint64_t count) { bamlGoHostRelease(host_value_key, count); }
 
 static void baml_go_unhandled_spawn_error_callback(const int8_t *content, size_t length, int32_t cancelled) {
 	bamlGoUnhandledSpawnErrorCallback((int8_t *)content, length, cancelled);
@@ -397,8 +397,8 @@ func bamlGoHostDispatchV2(content *C.uint8_t, length C.size_t) {
 func bamlGoHostCancel(callID C.uint32_t) { cancelHostInvocation(uint32(callID)) }
 
 //export bamlGoHostRelease
-func bamlGoHostRelease(hostValueKey C.uint64_t) {
-	unregisterHostValue(uint64(hostValueKey))
+func bamlGoHostRelease(hostValueKey, count C.uint64_t) {
+	releaseHostValue(uint64(hostValueKey), uint64(count))
 }
 
 func nativeTraceSelection(id, key uint64) ([]byte, uint64, error) {

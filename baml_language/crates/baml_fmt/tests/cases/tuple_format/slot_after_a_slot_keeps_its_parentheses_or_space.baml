@@ -1,0 +1,3 @@
+function f(t: (int, (int, int))) -> int {
+    (t.1).0 + t.1 .0
+}

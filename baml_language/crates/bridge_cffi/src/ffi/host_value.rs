@@ -15,7 +15,7 @@
 //!
 //! The dispatch fn pointer and in-flight call table live in
 //! `sys_native::host_dispatch` (not here) to avoid a circular dependency:
-//! the `call_host_value` sysop impl (also in `sys_native`) needs them,
+//! the `_call_host_value` sysop impl (also in `sys_native`) needs them,
 //! and bridge_cffi → sys_native is the one-way dependency direction.
 
 use bex_project::{HostCallCompletion, host_release_dispatch};
@@ -46,7 +46,7 @@ impl Drop for DrainHostReleasesOnReturn {
 /// are silently ignored (consistent with `register_callback` semantics).
 ///
 /// Delegates to `sys_native::host_dispatch::set_dispatch_fn` so the
-/// `call_host_value` sysop (implemented in `sys_native`) can read it.
+/// `_call_host_value` sysop (implemented in `sys_native`) can read it.
 ///
 /// # Safety
 ///
@@ -172,8 +172,11 @@ mod tests {
     static RELEASED_HOST_KEYS: LazyLock<Mutex<Vec<u64>>> = LazyLock::new(|| Mutex::new(Vec::new()));
     static NEXT_TEST_HOST_KEY: AtomicU64 = AtomicU64::new(10_000_000);
 
-    extern "C" fn record_host_release(key: u64) {
-        RELEASED_HOST_KEYS.lock().unwrap().push(key);
+    extern "C" fn record_host_release(key: u64, count: u64) {
+        let mut released = RELEASED_HOST_KEYS.lock().unwrap();
+        for _ in 0..count {
+            released.push(key);
+        }
     }
 
     fn install_release_recorder() {
@@ -236,7 +239,10 @@ mod tests {
         match result {
             sys_types::SysOpResult::Async(fut) => {
                 let value = fut.await.expect("should succeed");
-                assert!(matches!(value, BexExternalValue::Null));
+                assert!(matches!(
+                    value,
+                    sys_types::OpValue::External(BexExternalValue::Null)
+                ));
             }
             sys_types::SysOpResult::Ready(_) => panic!("expected async"),
         }

@@ -59,8 +59,12 @@ impl JsonDefs<TypeHead> for HeapDefs<'_> {
             .iter()
             .filter_map(|arg| RealizedTy::try_from(arg).ok())
             .collect();
-        let fields = class
-            .fields
+        // A class built only by the runtime has no JSON form: decoding,
+        // parsing, schemas and output formats all refuse it here.
+        let Ok(fields) = class.buildable_fields() else {
+            return Ok(JsonClass::RuntimeOwned);
+        };
+        let fields = fields
             .iter()
             .map(|field| {
                 // A runtime-built field carries the exact type it was built
@@ -80,7 +84,7 @@ impl JsonDefs<TypeHead> for HeapDefs<'_> {
                 }
             })
             .collect();
-        Ok(JsonClass { fields })
+        Ok(JsonClass::Fields(fields))
     }
 
     fn variants(&self, head: &TypeHead) -> Result<Vec<JsonVariant>, OutputReject> {

@@ -265,10 +265,9 @@ class Array<T> {
     /// The key type must implement `baml.ops.Compare`, whose ordering is total
     /// and `throws never`, so the only error is the key callback's own `E`.
     //baml:mut_self
-    function sort_by_key<U extends root.ops.Compare, E>(
-        self,
-        key: (T) -> U throws E,
-    ) -> T[] throws E {
+    function sort_by_key<U extends root.ops.Compare, E>(self, key: (T) -> U throws E) -> T[]
+        throws E
+    {
         let n = self.length();
         if (n <= 1) {
             return self;
@@ -677,12 +676,9 @@ class Array<T> {
     /// xs.splice(99, 0, [])         // throws — start out of range
     /// ```
     //baml:mut_self
-    function splice(
-        self,
-        start: int,
-        count: int,
-        replace: T[],
-    ) -> null throws root.errors.InvalidArgument {
+    function splice(self, start: int, count: int, replace: T[]) -> null
+        throws root.errors.InvalidArgument
+    {
         $rust_function
     }
 }
@@ -880,52 +876,52 @@ interface Summable {
     function sum(self) -> Self.Sum throws never;
 }
 
-implements Summable for int[] {
-  type Sum = int
+implement Summable for int[] {
+    type Sum = int;
 
-  /// Adds every element left to right starting from `0`, so an empty array
-  /// sums to `0`.
-  ///
-  /// The running total is range-checked at every step, exactly as repeated `+`
-  /// is, so a partial sum that leaves the `int` range panics even when the
-  /// final total would have landed back inside it. Fold with a `bigint`
-  /// accumulator, or map to `float`, when the intermediate values can grow past
-  /// `int`.
-  ///
-  /// # Panics
-  /// - `baml.panics.IntegerOverflow` when a running total leaves the `int`
-  ///   range.
-  ///
-  /// # Examples
-  /// ```baml
-  /// [1, 2, 3].sum()   // 6
-  /// [].sum()          // 0
-  /// ```
-  function sum(self) -> int throws never {
-    root._sum_int(self)
-  }
+    /// Adds every element left to right starting from `0`, so an empty array
+    /// sums to `0`.
+    ///
+    /// The running total is range-checked at every step, exactly as repeated `+`
+    /// is, so a partial sum that leaves the `int` range panics even when the
+    /// final total would have landed back inside it. Fold with a `bigint`
+    /// accumulator, or map to `float`, when the intermediate values can grow past
+    /// `int`.
+    ///
+    /// # Panics
+    /// - `baml.panics.IntegerOverflow` when a running total leaves the `int`
+    ///   range.
+    ///
+    /// # Examples
+    /// ```baml
+    /// [1, 2, 3].sum()   // 6
+    /// [].sum()          // 0
+    /// ```
+    function sum(self) -> int throws never {
+        root._sum_int(self)
+    }
 }
 
-implements Summable for float[] {
-  type Sum = float
+implement Summable for float[] {
+    type Sum = float;
 
-  /// Adds every element left to right starting from `0.0`, so an empty array
-  /// sums to `0.0`.
-  ///
-  /// Plain sequential IEEE 754 addition with no compensation: the result
-  /// depends on the element order, and a `NaN` or infinity anywhere in the
-  /// array propagates to the total. Unlike `int[].sum()` there is no range to
-  /// leave — a total too large to represent becomes an infinity rather than
-  /// panicking.
-  ///
-  /// # Examples
-  /// ```baml
-  /// [1.0, 2.0, 3.0].sum()   // 6.0
-  /// [].sum()                // 0.0
-  /// ```
-  function sum(self) -> float throws never {
-    root._sum_float(self)
-  }
+    /// Adds every element left to right starting from `0.0`, so an empty array
+    /// sums to `0.0`.
+    ///
+    /// Plain sequential IEEE 754 addition with no compensation: the result
+    /// depends on the element order, and a `NaN` or infinity anywhere in the
+    /// array propagates to the total. Unlike `int[].sum()` there is no range to
+    /// leave — a total too large to represent becomes an infinity rather than
+    /// panicking.
+    ///
+    /// # Examples
+    /// ```baml
+    /// [1.0, 2.0, 3.0].sum()   // 6.0
+    /// [].sum()                // 0.0
+    /// ```
+    function sum(self) -> float throws never {
+        root._sum_float(self)
+    }
 }
 
 /// Statistical reductions for `float[]`.
@@ -951,7 +947,7 @@ interface FloatStats {
     function median(self) -> float throws root.errors.InvalidArgument;
 }
 
-implements FloatStats for float[] {
+implement FloatStats for float[] {
     /// Returns the arithmetic mean (average) of `self`.
     ///
     /// Computed as `self.sum() / self.length()` — one sequential IEEE 754 pass
@@ -970,7 +966,9 @@ implements FloatStats for float[] {
     /// ```
     function mean(self) -> float throws root.errors.InvalidArgument {
         if (self.length() == 0) {
-            throw root.errors.InvalidArgument { message: "float[].mean: cannot take the mean of an empty array" };
+            throw root.errors.InvalidArgument {
+                message: "float[].mean: cannot take the mean of an empty array",
+            };
         }
         Summable.sum(self) / self.length()
     }

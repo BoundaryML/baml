@@ -585,7 +585,10 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                             ));
                         }
                     }
-                    ClassForm::Opaque | ClassForm::Carried | ClassForm::Proxied => {}
+                    ClassForm::Opaque
+                    | ClassForm::Carried
+                    | ClassForm::Proxied
+                    | ClassForm::Handle => {}
                 }
                 for method in class_def
                     .static_methods
@@ -815,6 +818,23 @@ mod injected_argument_tests {
 /// Legacy `$`-suffixed companion functions are not part of the host surface;
 /// callable `@spec`/`@stream` companions continue to ordinary function
 /// emission.
+/// Whether the class `name` is a host's own value, which crosses as the
+/// host's handle to it: an instance is the runtime's `::baml::host_value`.
+fn is_host_value(pool: &SymbolPool, name: &Name) -> bool {
+    match pool.get(name) {
+        Some(Symbol::Class(class_def)) => match class_def.crossing {
+            ClassCrossing::HostValue => true,
+            ClassCrossing::Fields
+            | ClassCrossing::Opaque
+            | ClassCrossing::Stream
+            | ClassCrossing::FunctionSpec
+            | ClassCrossing::Media(_)
+            | ClassCrossing::Prompt => false,
+        },
+        Some(Symbol::Enum(_) | Symbol::TypeAlias(_) | Symbol::Function(_)) | None => false,
+    }
+}
+
 fn skip_symbol(name: &Name) -> bool {
     name.name().as_str().contains('$')
 }
@@ -984,6 +1004,10 @@ enum ClassForm<'a> {
     /// instance is the runtime's generic proxy ([`translate_ty`] names it),
     /// and the class contributes nothing.
     Proxied,
+    /// A host's own value (`baml.host.Value`): an instance is the host's
+    /// handle to it, the runtime's `::baml::host_value` ([`translate_ty`]
+    /// names it), and the class contributes nothing.
+    Handle,
 }
 
 fn class_form(class_def: &Class) -> ClassForm<'_> {
@@ -992,6 +1016,7 @@ fn class_form(class_def: &Class) -> ClassForm<'_> {
         ClassCrossing::Opaque => ClassForm::Opaque,
         ClassCrossing::Media(_) | ClassCrossing::Prompt => ClassForm::Carried,
         ClassCrossing::Stream | ClassCrossing::FunctionSpec => ClassForm::Proxied,
+        ClassCrossing::HostValue => ClassForm::Handle,
     }
 }
 
@@ -1010,9 +1035,8 @@ enum EmittedShape {
     /// identity), no methods.
     AliasWrapper(EmittedField),
     /// The engine's instance, held by reference: a private engine handle, no
-    /// public constructor and no fields, equality by holder (two copies of
-    /// one reference; the engine's keys say nothing about identity), and a
-    /// codec that carries the handle (`ADT_RUNTIME_VALUE`).
+    /// public constructor and no fields, equality by instance (the handle's
+    /// key), and a codec that carries the handle (`ADT_RUNTIME_VALUE`).
     Opaque,
     /// A class carried by a wire arm of its own: a scope for its static
     /// methods, with no fields, no instances, no equality and no codec (its
@@ -1088,6 +1112,9 @@ fn emit_class(
         ClassForm::Carried => (EmittedShape::Carried, &[][..]),
         ClassForm::Proxied => {
             return Err("crosses as the runtime's proxy type, never as a struct".to_string());
+        }
+        ClassForm::Handle => {
+            return Err("crosses as the runtime's handle type, never as a struct".to_string());
         }
     };
     // Method optional params become arg<T> fields on opts structs nested in
@@ -1622,7 +1649,9 @@ fn incomplete_stored_type_issue(
     complete_types: &BTreeSet<Name>,
 ) -> Option<String> {
     match ty {
-        Ty::Class(name, _) if !complete_types.contains(name) => {
+        // A host's own value is the runtime's `::baml::host_value`, which is
+        // always complete.
+        Ty::Class(name, _) if !complete_types.contains(name) && !is_host_value(pool, name) => {
             Some(format!("stores incomplete class `{name}`"))
         }
         Ty::TypeAlias(name)
@@ -1676,7 +1705,6 @@ fn translate_ty(
         Ty::Bool => "bool".to_string(),
         Ty::Null => "std::monostate".to_string(),
         Ty::Uint8Array => "std::vector<uint8_t>".to_string(),
-        Ty::RustType => "::baml::rust_type".to_string(),
         Ty::Bigint => "::baml::bigint".to_string(),
         Ty::Media(kind) => media_cpp_type(*kind).to_string(),
         Ty::Literal(lit, ..) => {
@@ -1787,9 +1815,11 @@ fn translate_ty(
             };
             match class_def.crossing {
                 ClassCrossing::Prompt => return carried("::baml::prompt"),
-                ClassCrossing::Media(kind) => return carried(media_cpp_type(kind)),
+                ClassCrossing::Media(kind) => return carried(media_cpp_type(kind.into())),
                 ClassCrossing::FunctionSpec => return proxied("function_spec"),
                 ClassCrossing::Stream => return proxied("stream"),
+                // A host's own value is the host's handle to it.
+                ClassCrossing::HostValue => return carried("::baml::host_value"),
                 ClassCrossing::Fields | ClassCrossing::Opaque => {}
             }
             // Type args occur only on generic-class instantiations, and
@@ -2318,10 +2348,14 @@ fn render_header(
                     eq_terms.join(" && ")
                 })
             }
-            // Two copies of one reference. Whether two references name one
-            // engine instance the host cannot tell: the engine mints a fresh
-            // key for each one it sends.
-            EmittedShape::Opaque => Some(format!("a.{state} == b.{state}")),
+            // The engine keys one instance by one handle while any reference
+            // to it is held, so two references name one instance exactly when
+            // they hold the same key. A moved-from reference holds none and
+            // equals only another that holds none.
+            EmittedShape::Opaque => Some(format!(
+                "a.{state} && b.{state} ? a.{state}->key == b.{state}->key \
+                 : a.{state} == b.{state}"
+            )),
             EmittedShape::Carried => None,
         };
         if let Some(eq_expr) = eq_expr {
@@ -2418,13 +2452,6 @@ fn render_invocation_definitions(buf: &mut String, classes: &[&EmittedClass]) {
     ) else {
         return;
     };
-    let trace_handle = options
-        .fields()
-        .iter()
-        .find(|field| field.name.wire().to_string() == "_handle")
-        .unwrap()
-        .name
-        .declared();
     let token = cancel.name.identifier();
     let trace_ns = options.ns.join("::");
     let _ = writeln!(
@@ -2434,10 +2461,9 @@ fn render_invocation_definitions(buf: &mut String, classes: &[&EmittedClass]) {
     buf.push_str("namespace baml_sdk { using target = ::baml::target; using arguments = ::baml::arguments; using type_bindings = ::baml::type_bindings; using value = ::baml::value; inline ::baml::future<value> invoke_async(const target& target, const arguments& args, const type_bindings& types, const baml_options& baml = {}) { detail::ensure_runtime(); return ::baml::invoke_async(target, args, types, baml); } inline value invoke(const target& target, const arguments& args, const type_bindings& types, const baml_options& baml = {}) { detail::ensure_runtime(); return ::baml::invoke(target, args, types, baml); } }\n");
     let _ = writeln!(
         buf,
-        "namespace baml_sdk {{\ninline baml_options baml_options::trace(std::variant<{}, {}> selection) const {{ auto copy = *this; copy.trace_key = [selection = std::move(selection)] {{ return std::visit([](const auto& value) {{ return value.{}.key(); }}, selection); }}; return copy; }}\ninline baml_options baml_options::cancel({token} token) const {{ auto copy = *this; copy.encode_cancel = [token = std::move(token)](::baml::detail::pb::InboundValue& out) {{ ::baml::codec<{token}>::encode(out, token); }}; return copy; }}\nnamespace invocation {{\nclass Invocation {{ public: explicit Invocation(std::shared_ptr<::baml::detail::invocation_state> state) : state_(std::move(state)) {{}} {token} cancel() const {{ return ::baml::codec<{token}>::decode(::baml::detail::clone_control_value(state_->cancel)); }} template <typename Body> decltype(auto) run(Body&& body) const {{ struct restore {{ std::shared_ptr<::baml::detail::invocation_state> prior; ~restore() {{ ::baml::detail::current_invocation_state = std::move(prior); }} }} guard{{::baml::detail::current_invocation_state}}; ::baml::detail::current_invocation_state = state_; return std::forward<Body>(body)(); }} private: std::shared_ptr<::baml::detail::invocation_state> state_; }};\ninline std::optional<Invocation> current() {{ auto state = ::baml::detail::current_invocation_state; if (!state) return std::nullopt; return Invocation(std::move(state)); }}\n}} }}",
+        "namespace baml_sdk {{\ninline baml_options baml_options::trace(std::variant<{}, {}> selection) const {{ auto copy = *this; copy.trace_key = [selection = std::move(selection)] {{ return std::visit([](const auto& value) {{ return ::baml::codec<std::decay_t<decltype(value)>>::reference_key(value); }}, selection); }}; return copy; }}\ninline baml_options baml_options::cancel({token} token) const {{ auto copy = *this; copy.encode_cancel = [token = std::move(token)](::baml::detail::pb::InboundValue& out) {{ ::baml::codec<{token}>::encode(out, token); }}; return copy; }}\nnamespace invocation {{\nclass Invocation {{ public: explicit Invocation(std::shared_ptr<::baml::detail::invocation_state> state) : state_(std::move(state)) {{}} {token} cancel() const {{ return ::baml::codec<{token}>::decode(::baml::detail::clone_control_value(state_->cancel)); }} template <typename Body> decltype(auto) run(Body&& body) const {{ struct restore {{ std::shared_ptr<::baml::detail::invocation_state> prior; ~restore() {{ ::baml::detail::current_invocation_state = std::move(prior); }} }} guard{{::baml::detail::current_invocation_state}}; ::baml::detail::current_invocation_state = state_; return std::forward<Body>(body)(); }} private: std::shared_ptr<::baml::detail::invocation_state> state_; }};\ninline std::optional<Invocation> current() {{ auto state = ::baml::detail::current_invocation_state; if (!state) return std::nullopt; return Invocation(std::move(state)); }}\n}} }}",
         options.name.identifier(),
         reserved.name.identifier(),
-        trace_handle
     );
 }
 
@@ -2540,7 +2566,8 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
                      static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
                      detail::encode_capability(value_msg, *v.{state});\n  }}\n  \
                      static {q} decode(const detail::pb::BamlOutboundValue& raw) {{\n    \
-                     return {q}(detail::decode_runtime_value(raw, \"{fqn}\"));\n  }}\n}};"
+                     return {q}(detail::decode_runtime_value(raw, \"{fqn}\"));\n  }}\n  \
+                     static uint64_t reference_key(const {q}& v) {{ return v.{state}->key; }}\n}};"
                 );
                 continue;
             }
@@ -3054,7 +3081,14 @@ mod opaque_class_tests {
             ),
             "{header}"
         );
-        assert!(header.contains("return a.state_ == b.state_;"), "{header}");
+        // Equal when both reference one engine instance: one key.
+        assert!(
+            header.contains(
+                "return a.state_ && b.state_ ? a.state_->key == b.state_->key \
+                 : a.state_ == b.state_;"
+            ),
+            "{header}"
+        );
         // It crosses as the handle both ways, never as a `class_value`.
         assert!(
             header.contains("detail::encode_capability(value_msg, *v.state_);"),
@@ -3090,7 +3124,7 @@ mod opaque_class_tests {
         for (crossing, value_type) in [
             (ClassCrossing::Prompt, "::baml::prompt"),
             (
-                ClassCrossing::Media(baml_base::MediaKind::Image),
+                ClassCrossing::Media(baml_base::ConcreteMediaKind::Image),
                 "::baml::image",
             ),
         ] {
@@ -3116,6 +3150,105 @@ mod opaque_class_tests {
                 "{header}"
             );
         }
+    }
+
+    /// A host's own value is the runtime's handle type, `::baml::host_value`, in
+    /// every position a type names it, and its class emits nothing.
+    #[test]
+    fn host_value_class_is_the_host_value_handle() {
+        let host_value = Name::new(
+            BaseName::new("baml"),
+            vec![BaseName::new("host")],
+            BaseName::new("Value"),
+        );
+        let holder = Name::new(BaseName::new("user"), vec![], BaseName::new("Holder"));
+        let echo = Name::new(BaseName::new("user"), vec![], BaseName::new("echo"));
+        let generate = |handle: Ty, extra: Option<(Name, Symbol)>| {
+            let property = |name: &str, ty: Ty| ClassProperty {
+                name: BaseName::new(name),
+                docstring: None,
+                ty,
+                json_fallback: false,
+                json_flatten: false,
+                json_rename: None,
+            };
+            let argument = |name: &str, default| FunctionArgument {
+                name: BaseName::new(name),
+                docstring: None,
+                ty: handle.clone(),
+                default,
+                injected: false,
+            };
+            let class = Class {
+                name: holder.clone(),
+                generic_params: vec![],
+                docstring: None,
+                properties: vec![
+                    property("handle", handle.clone()),
+                    property("maybe", Ty::Union(Box::new([handle.clone(), Ty::Null]))),
+                    property("many", Ty::List(Box::new(handle.clone()))),
+                ],
+                crossing: ClassCrossing::Fields,
+                static_methods: vec![function(
+                    "make",
+                    vec![argument(
+                        "seed",
+                        Some(baml_sdkgen_types::FunctionArgumentDefault::Null),
+                    )],
+                    handle.clone(),
+                )],
+                instance_methods: vec![],
+                origin: origin(),
+                json_omit_nulls: false,
+            };
+            let mut pool = SymbolPool::from([
+                (holder.clone(), Symbol::Class(class)),
+                (
+                    echo.clone(),
+                    Symbol::Function(function("echo", vec![argument("value", None)], handle)),
+                ),
+            ]);
+            pool.extend(extra);
+            to_source_code_with_bytecode(&pool, &[], &[])
+        };
+        let host_value = generate(
+            Ty::Class(host_value.clone(), Box::new([])),
+            Some((
+                host_value.clone(),
+                Symbol::Class(Class {
+                    name: host_value,
+                    generic_params: vec![],
+                    docstring: None,
+                    properties: vec![],
+                    crossing: ClassCrossing::HostValue,
+                    static_methods: vec![],
+                    instance_methods: vec![],
+                    origin: origin(),
+                    json_omit_nulls: false,
+                }),
+            )),
+        );
+
+        let header = PathBuf::from("include/baml_sdk.h");
+        assert!(
+            host_value[&header].contains("::baml::host_value handle"),
+            "{}",
+            host_value[&header]
+        );
+        assert!(
+            !host_value[&header].contains("user.Holder.make:"),
+            "{}",
+            host_value[&header]
+        );
+        // The class is reported, as every class without a definition is.
+        let skipped = "\n// Symbols not yet emitted by this sdkgen_cpp slice:\n\
+                       //   baml.host.Value: crosses as the runtime's handle type, never as a \
+                       struct\n";
+        assert!(
+            host_value[&header].contains(skipped),
+            "{}",
+            host_value[&header]
+        );
     }
 
     /// Negative control: the same declaration crossing by its fields is a

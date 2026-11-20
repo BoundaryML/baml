@@ -8,5 +8,5 @@ class Person {
 
 enum Status {
     /// A documentation line that is far longer than sixty columns on its own.
-    Unsupported/*c*/ @alias("u"),
+    Unsupported /*c*/ @alias("u"),
 }

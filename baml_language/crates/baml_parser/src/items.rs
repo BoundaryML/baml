@@ -548,7 +548,8 @@ fn alloc_docs(p: &mut Parser<'_, '_>, docs: Vec<DocPart>, owner: DocOwner<'_>) -
                         | DirectiveKind::MayYield
                         | DirectiveKind::Fallible
                         | DirectiveKind::TaggedString
-                        | DirectiveKind::LocalTwin,
+                        | DirectiveKind::LocalTwin
+                        | DirectiveKind::RuntimeOnly,
                     ) => format!("`{text}` can only be attached to function definitions."),
                     DocPart::Invalid(_, DocProblem::UnknownDirective) => {
                         format!("unknown directive `{text}`")

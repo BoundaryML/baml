@@ -1451,11 +1451,7 @@ impl<'db> InferenceContext<'db> {
         };
 
         let head = crate::lower::class_ty(self.lang(), qtn.clone(), args.clone());
-        let declared = if self.is_opaque_trace_type(&qtn) {
-            Vec::new()
-        } else {
-            crate::lower::class_field_types(self.db, class)
-        };
+        let declared = crate::lower::class_field_types(self.db, class);
         let mut field_covers = true;
         let mut sub_dpats: Vec<Option<DPat>> = vec![None; declared.len()];
         for (name, field_pat) in field_pats {
@@ -2090,7 +2086,8 @@ impl<'db> InferenceContext<'db> {
         crate::extern_loc::mounted_class_loc(self.db, qtn)
             .map(|class| {
                 crate::extern_loc::extern_class_row(self.db, class)
-                    .fields
+                    .body
+                    .fields()
                     .iter()
                     .map(|(_, field_ty, _)| self.pattern_field_ty(&Ty::from_plain(field_ty), args))
                     .collect()
@@ -2267,7 +2264,6 @@ fn list_holding(ty: &Ty) -> Option<ListHolding> {
         | InferTy::Map { .. }
         | InferTy::Function { .. }
         | InferTy::Future(..)
-        | InferTy::RustType
         | InferTy::Type
         | InferTy::Resource
         | InferTy::PromptAst

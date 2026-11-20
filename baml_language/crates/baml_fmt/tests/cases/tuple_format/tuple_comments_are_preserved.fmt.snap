@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    let t = (
+        1, // one
+        2, // two
+    );
+    0
+}

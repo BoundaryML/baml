@@ -44,7 +44,7 @@ describe('run-store-client', () => {
 
     const pending = client.startPreviewRun({
       args: '{"x": 1}',
-      functionName: 'Extract$render_prompt',
+      functionName: 'Extract@render_prompt',
       helper: 'render_prompt',
       parentFunctionName: 'Extract',
       project: 'project',
@@ -53,7 +53,7 @@ describe('run-store-client', () => {
     expect(port.sent).toEqual([
       {
         args: '{"x": 1}',
-        functionName: 'Extract$render_prompt',
+        functionName: 'Extract@render_prompt',
         helper: 'render_prompt',
         parentFunctionName: 'Extract',
         project: 'project',

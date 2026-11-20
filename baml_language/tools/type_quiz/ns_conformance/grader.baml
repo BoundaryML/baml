@@ -17,7 +17,11 @@ function fixture_revealed() -> root.engine.Revealed throws never {
                     "function settle(value: 1) -> void {\n    let target: int = value;\n}\n",
                 ),
                 compiles: true,
-                reported: root.engine.Reported { compiles: true, codes: [], messages: [] },
+                reported: root.engine.Reported {
+                    compiles: true,
+                    codes: [],
+                    messages: [],
+                },
                 claims: [],
             },
         ],
@@ -56,8 +60,7 @@ function env_key(name: string) -> string throws never {
     baml.env.get(name) catch_all (e) {
         baml.errors.Io => "",
         baml.errors.ParseError => "",
-    }
-        ?? ""
+    } ?? ""
 }
 
 /// One provider's judge: its key from the environment, and the best model the
@@ -71,9 +74,11 @@ function live_for(name: string, provider: root.engine.Provider) -> Live? throws 
     }
     let offer = root.engine.offered().find((offer) -> {
         offer.provider == provider
-    })
-        ?? return null;
-    Live { key, model: offer.id }
+    }) ?? return null;
+    Live {
+        key,
+        model: offer.id,
+    }
 }
 
 /// Whichever provider's key is set, Anthropic first. Calibration is about the
@@ -90,11 +95,19 @@ function live_judge() -> Live throws never {
 /// what went wrong.
 function marked(reasoning: string) -> root.engine.Grade {
     let judge = live_judge();
-    let judged = root.engine.judge_reasoning(judge.key, judge.model, fixture_revealed(), "compiles", reasoning);
+    let judged = root.engine.judge_reasoning(
+        judge.key,
+        judge.model,
+        fixture_revealed(),
+        "compiles",
+        reasoning,
+    );
     match (judged) {
         let grade: root.engine.Grade => grade,
         let unjudged: root.engine.Unjudged => {
-            throw baml.panics.Unreachable { message: `the judge refused: ${unjudged.why}` }
+            throw baml.panics.Unreachable {
+                message: `the judge refused: ${unjudged.why}`,
+            };
         },
     }
 }
@@ -119,6 +132,8 @@ testset "live" with testing.Sequential() {
             assert.is_true(grade.understanding != root.engine.Understanding.Sound)
         }
     } else {
-        log.warn("live::grader not registered: neither ANTHROPIC_API_KEY nor OPENAI_API_KEY is set")
+        log.warn(
+            "live::grader not registered: neither ANTHROPIC_API_KEY nor OPENAI_API_KEY is set",
+        )
     }
 }

@@ -56,7 +56,10 @@ function _media_shape(t: reflect.Type) -> string {
 function _media_envelope(m: root.content.Media) -> baml.json.json {
     baml.json.from(m.media) catch_all (e) {
         _ => {
-            throw baml.errors.UnknownError { data: e, message: [e.to_string()] }
+            throw baml.errors.UnknownError {
+                data: e,
+                message: [e.to_string()],
+            };
         },
     }
 }
@@ -143,6 +146,6 @@ function _media_reject_mixed(turn: root.ModelTurn, kind: string, provider: strin
         throw root.errors.ParseFailed {
             provider: provider,
             raw_output: `Expected only ${kind} output parts, got ${unexpected} non-${kind} part(s). Use a text/image union return type to preserve mixed outputs.`,
-        }
+        };
     }
 }

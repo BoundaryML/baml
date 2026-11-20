@@ -11,29 +11,29 @@ use crate::{
     tree::{AnyNodeId, Missing, TokenRange, Visitor},
 };
 
-/// "No node": the root's parent, a trivia token's owner. A kind no node type
-/// has, so it can never collide with a real id.
-const NONE: AnyNodeId = AnyNodeId::from_raw_parts(u16::MAX, u32::MAX);
+/// A link is a node or none (the root's parent, a trivia token's owner), and
+/// still one word: `None` lives in the kind's spare values.
+const _: () = assert!(size_of::<Option<AnyNodeId>>() == 8);
 
 /// One pass over the tree: records each node's parent and each token's
 /// owner as it reaches them.
 struct Build {
     current: AnyNodeId,
-    parents: Vec<Box<[AnyNodeId]>>,
-    token_owner: Vec<AnyNodeId>,
+    parents: Vec<Box<[Option<AnyNodeId>]>>,
+    token_owner: Vec<Option<AnyNodeId>>,
     pending: Vec<AnyNodeId>,
 }
 impl Visitor for Build {
     fn node(&mut self, _field: &'static str, id: AnyNodeId) {
-        self.parents[usize::from(id.kind_raw())][id.raw() as usize] = self.current;
+        self.parents[usize::from(id.kind().to_raw())][id.raw() as usize] = Some(self.current);
         self.pending.push(id);
     }
     fn token(&mut self, _field: &'static str, token: TokenIdx) {
-        self.token_owner[token.index()] = self.current;
+        self.token_owner[token.index()] = Some(self.current);
     }
     fn range(&mut self, _field: &'static str, range: TokenRange) {
         for token in range.iter() {
-            self.token_owner[token.index()] = self.current;
+            self.token_owner[token.index()] = Some(self.current);
         }
     }
     fn missing(&mut self, _field: &'static str, _missing: Missing) {}
@@ -53,11 +53,11 @@ impl Visitor for Children<'_> {
 /// Parent and owner links over one [`FileTree`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TreeIndex {
-    /// `parents[kind][index]`: each node's parent; [`NONE`] for the root.
-    parents: Box<[Box<[AnyNodeId]>]>,
-    /// Each token's owning node; [`NONE`] for trivia and for a token no node
+    /// `parents[kind][index]`: each node's parent; `None` for the root.
+    parents: Box<[Box<[Option<AnyNodeId>]>]>,
+    /// Each token's owning node; `None` for trivia and for a token no node
     /// owns (possible only in a parse with errors).
-    token_owner: Box<[AnyNodeId]>,
+    token_owner: Box<[Option<AnyNodeId>]>,
 }
 
 impl TreeIndex {
@@ -68,9 +68,9 @@ impl TreeIndex {
             current: tree.root_id(),
             parents: NodeKind::ALL
                 .iter()
-                .map(|&kind| vec![NONE; arenas.len_of(kind)].into_boxed_slice())
+                .map(|&kind| vec![None; arenas.len_of(kind)].into_boxed_slice())
                 .collect(),
-            token_owner: vec![NONE; tree.tokens().len()],
+            token_owner: vec![None; tree.tokens().len()],
             pending: vec![tree.root_id()],
         };
         while let Some(id) = build.pending.pop() {
@@ -87,9 +87,9 @@ impl TreeIndex {
     pub fn heap_bytes(&self) -> usize {
         self.parents
             .iter()
-            .map(|arena| size_of_val::<[AnyNodeId]>(arena))
+            .map(|arena| size_of_val::<[Option<AnyNodeId>]>(arena))
             .sum::<usize>()
-            + size_of_val::<[AnyNodeId]>(&self.token_owner)
+            + size_of_val::<[Option<AnyNodeId>]>(&self.token_owner)
     }
 
     /// Whether this index was built from a tree of `tree`'s shape — the guard
@@ -103,13 +103,11 @@ impl TreeIndex {
 
     /// The node `id` is a field of; `None` for the root.
     pub fn parent(&self, id: AnyNodeId) -> Option<AnyNodeId> {
-        let parent = self
-            .parents
-            .get(usize::from(id.kind_raw()))
+        self.parents
+            .get(usize::from(id.kind().to_raw()))
             .and_then(|arena| arena.get(id.raw() as usize))
             .copied()
-            .unwrap_or_else(|| unreachable!("`id` is a node of the indexed tree"));
-        (parent != NONE).then_some(parent)
+            .unwrap_or_else(|| unreachable!("`id` is a node of the indexed tree"))
     }
 
     /// `id`, its parent, and so on up to the root.
@@ -120,11 +118,10 @@ impl TreeIndex {
     /// The node owning `token`; `None` for trivia, and for a token no node
     /// owns in a parse with errors.
     pub fn token_owner(&self, token: TokenIdx) -> Option<AnyNodeId> {
-        let owner = *self
+        *self
             .token_owner
             .get(token.index())
-            .unwrap_or_else(|| unreachable!("`token` is a token of the indexed tree"));
-        (owner != NONE).then_some(owner)
+            .unwrap_or_else(|| unreachable!("`token` is a token of the indexed tree"))
     }
 
     /// The deepest node whose span covers `range`: the nearest common

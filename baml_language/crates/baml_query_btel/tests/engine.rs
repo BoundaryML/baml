@@ -548,7 +548,7 @@ async fn each_invoke_is_a_span_with_its_own_usage() {
                 body: `{"id":"m","type":"message","role":"assistant","model":"claude-opus-5-5","content":[{"type":"text","text":"short"}],"stop_reason":"end_turn","usage":{"input_tokens":900,"output_tokens":30,"cache_read_input_tokens":200,"cache_creation_input_tokens":100}}`,
             };
             let task = spawn { server.server.serve(server.handle) };
-            let url = "http://" + server.server.addr;
+            let url = "http://" + server.server.addr();
             let facts = Group(url);
             let draft = Draft(url);
             task.cancel();
@@ -638,7 +638,7 @@ async fn streamed_usage_keeps_the_cache_split() {
                 ],
             };
             let task = spawn { server.server.serve(server.handle) };
-            let text = Stream("http://" + server.server.addr, $trace = trace.span());
+            let text = Stream("http://" + server.server.addr(), $trace = trace.span());
             task.cancel();
             text.length()
         }
@@ -750,7 +750,7 @@ async fn a_streamed_llm_function_is_its_own_span() {
             let cl = anthropic.Client.new(
                 model = "claude-opus-5-5",
                 api_key = "test-key",
-                base_url = "http://" + server.server.addr,
+                base_url = "http://" + server.server.addr(),
             );
             let text = Summarize@stream("hi", client = cl).final();
             task.cancel();
@@ -866,7 +866,7 @@ async fn openai_usage_reaches_its_invoke_and_settle_spans() {
                 ],
             };
             let task = spawn { server.server.serve(server.handle) };
-            let url = "http://" + server.server.addr + "/v1";
+            let url = "http://" + server.server.addr() + "/v1";
             let chat = Chat(url);
             let streamed = ChatStream(url);
             let responses = ResponsesStream(url);

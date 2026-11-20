@@ -33,22 +33,16 @@ impl InheritedInvocationState {
         &self.context
     }
 
-    /// Concrete generated token payload observing this retained environment.
-    /// Its private authority never grants cancellation of inherited sources.
-    pub fn cancellation_projection(&self) -> bex_external_types::BexExternalValue {
-        let payload = bex_vm::package_baml::projected_cancel_token_data(
+    /// The state of a `baml.spawn.CancelToken` observing this retained
+    /// environment, including its deadline. Its own authority cancels the
+    /// environment's task, never the sources it inherits.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn cancel_token_state(&self) -> bex_vm_types::cancellation::CancelTokenState {
+        bex_vm_types::cancellation::CancelTokenState::new(
             self.cancellation.own().clone(),
             vec![bex_vm_types::cancellation::CancellationSource::Observer(
                 std::sync::Arc::new(self.cancellation.clone()),
             )],
-        );
-        bex_external_types::BexExternalValue::instance(
-            "baml.spawn.CancelToken",
-            [(
-                "_handle",
-                bex_external_types::BexExternalValue::RustData(payload),
-            )]
-            .into(),
         )
     }
 
@@ -133,10 +127,6 @@ pub struct FunctionCallContext {
     pub(crate) deadline_ns: Option<u64>,
     pub(crate) deadline: Option<InvocationDeadline>,
     pub(crate) bound_runtime: Option<bex_events::ids::EngineId>,
-    /// Who the call answers to: a host, unless the engine calls back into
-    /// BAML for the runtime's own code.
-    pub(crate) peer: crate::conversion::Peer,
-
     /// Named `TypeVar` bindings for a generic call. Each entry is
     /// `TypeVar name -> concrete type`; insertion order is the callee's De
     /// Bruijn order. Sourced from a host SDK call (`CallFunctionArgs.type_args`)
@@ -161,8 +151,6 @@ pub struct FunctionCallContextBuilder {
     host_environment: u64,
     timeout: Option<std::time::Duration>,
     deadline_ns: Option<u64>,
-    peer: crate::conversion::Peer,
-
     type_args: Option<IndexMap<String, bex_external_types::WireTy>>,
 }
 
@@ -181,18 +169,8 @@ impl FunctionCallContextBuilder {
             host_environment: 0,
             timeout: None,
             deadline_ns: None,
-            peer: crate::conversion::Peer::Host,
             type_args: None,
         }
-    }
-
-    /// A call the engine makes for the runtime's own code (a sys-op calling
-    /// back into BAML): its arguments are the runtime's values, and its
-    /// result goes back to the runtime by its fields.
-    #[must_use]
-    pub(crate) fn for_runtime(mut self) -> Self {
-        self.peer = crate::conversion::Peer::Runtime;
-        self
     }
 
     #[must_use]
@@ -211,8 +189,6 @@ impl FunctionCallContextBuilder {
             deadline_ns: self.deadline_ns,
             deadline: None,
             bound_runtime: None,
-            peer: self.peer,
-
             type_args: self.type_args.unwrap_or_default(),
         }
     }

@@ -170,7 +170,6 @@ enum MediaTypeEnum : int {
   AUDIO = 2,
   PDF = 3,
   VIDEO = 4,
-  OTHER = 5,
   MediaTypeEnum_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   MediaTypeEnum_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -181,11 +180,11 @@ extern const uint32_t MediaTypeEnum_internal_data_[];
 inline constexpr MediaTypeEnum MediaTypeEnum_MIN =
     static_cast<MediaTypeEnum>(0);
 inline constexpr MediaTypeEnum MediaTypeEnum_MAX =
-    static_cast<MediaTypeEnum>(5);
+    static_cast<MediaTypeEnum>(4);
 inline bool MediaTypeEnum_IsValid(int value) {
-  return 0 <= value && value <= 5;
+  return 0 <= value && value <= 4;
 }
-inline constexpr int MediaTypeEnum_ARRAYSIZE = 5 + 1;
+inline constexpr int MediaTypeEnum_ARRAYSIZE = 4 + 1;
 const ::std::string& MediaTypeEnum_Name(MediaTypeEnum value);
 template <typename T>
 const ::std::string& MediaTypeEnum_Name(T value) {
@@ -1882,6 +1881,7 @@ class BamlOutboundHandle final : public ::google::protobuf::MessageLite
   enum : int {
     kTyFieldNumber = 3,
     kKeyFieldNumber = 1,
+    kPinFieldNumber = 4,
     kHandleTypeFieldNumber = 2,
   };
   // .baml_bridge.cffi.v1.BamlTy ty = 3;
@@ -1909,6 +1909,16 @@ class BamlOutboundHandle final : public ::google::protobuf::MessageLite
   void _internal_set_key(::uint64_t value);
 
   public:
+  // uint64 pin = 4;
+  void clear_pin() ;
+  ::uint64_t pin() const;
+  void set_pin(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pin() const;
+  void _internal_set_pin(::uint64_t value);
+
+  public:
   // .baml_bridge.cffi.v1.BamlHandleType handle_type = 2;
   void clear_handle_type() ;
   ::baml_bridge::cffi::v1::BamlHandleType handle_type() const;
@@ -1923,7 +1933,7 @@ class BamlOutboundHandle final : public ::google::protobuf::MessageLite
  private:
   class _Internal;
   friend class ::google::protobuf::internal::TcParser;
-  static const ::google::protobuf::internal::TcParseTable<2, 3,
+  static const ::google::protobuf::internal::TcParseTable<2, 4,
                                    1, 0,
                                    2>
       _table_;
@@ -1947,6 +1957,7 @@ class BamlOutboundHandle final : public ::google::protobuf::MessageLite
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::baml_bridge::cffi::v1::BamlTy* PROTOBUF_NULLABLE ty_;
     ::uint64_t key_;
+    ::uint64_t pin_;
     int handle_type_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -7869,7 +7880,7 @@ inline void BamlOutboundHandle::_internal_set_key(::uint64_t value) {
 inline void BamlOutboundHandle::clear_handle_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.handle_type_ = 0;
-  _impl_._has_bits_[0] &= ~0x00000004u;
+  _impl_._has_bits_[0] &= ~0x00000008u;
 }
 inline ::baml_bridge::cffi::v1::BamlHandleType BamlOutboundHandle::handle_type() const {
   // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlOutboundHandle.handle_type)
@@ -7877,7 +7888,7 @@ inline ::baml_bridge::cffi::v1::BamlHandleType BamlOutboundHandle::handle_type()
 }
 inline void BamlOutboundHandle::set_handle_type(::baml_bridge::cffi::v1::BamlHandleType value) {
   _internal_set_handle_type(value);
-  _impl_._has_bits_[0] |= 0x00000004u;
+  _impl_._has_bits_[0] |= 0x00000008u;
   // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlOutboundHandle.handle_type)
 }
 inline ::baml_bridge::cffi::v1::BamlHandleType BamlOutboundHandle::_internal_handle_type() const {
@@ -7980,6 +7991,30 @@ inline void BamlOutboundHandle::set_allocated_ty(::baml_bridge::cffi::v1::BamlTy
 
   _impl_.ty_ = reinterpret_cast<::baml_bridge::cffi::v1::BamlTy*>(value);
   // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.BamlOutboundHandle.ty)
+}
+
+// uint64 pin = 4;
+inline void BamlOutboundHandle::clear_pin() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pin_ = ::uint64_t{0u};
+  _impl_._has_bits_[0] &= ~0x00000004u;
+}
+inline ::uint64_t BamlOutboundHandle::pin() const {
+  // @@protoc_insertion_point(field_get:baml_bridge.cffi.v1.BamlOutboundHandle.pin)
+  return _internal_pin();
+}
+inline void BamlOutboundHandle::set_pin(::uint64_t value) {
+  _internal_set_pin(value);
+  _impl_._has_bits_[0] |= 0x00000004u;
+  // @@protoc_insertion_point(field_set:baml_bridge.cffi.v1.BamlOutboundHandle.pin)
+}
+inline ::uint64_t BamlOutboundHandle::_internal_pin() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pin_;
+}
+inline void BamlOutboundHandle::_internal_set_pin(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pin_ = value;
 }
 
 // -------------------------------------------------------------------

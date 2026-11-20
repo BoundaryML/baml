@@ -42,8 +42,10 @@ pub mod io {
 // ============================================================================
 // Every `$rust_io_function` in the ns_* .baml files is used by
 // `baml_builtins2_codegen` to generate the `RuntimeIo` trait (in
-// `sys_types::runtime_io`). RuntimeIo is a flat, typed async interface to all
+// `sys_types::runtime_io`). RuntimeIo is a flat, typed async interface to the
 // sys-ops -- no VM plumbing (BexHeap, SysOpContext, CallId) in its signatures.
+// A `@@rust_type` instance's operations are methods of its resource trait
+// instead; the trait's docs name every sys-op it leaves out.
 // Crates like `sys_auth` take `&dyn RuntimeIo` to call into the runtime IO
 // layer (HTTP, env, filesystem, shell) without coupling to the VM.
 //
@@ -75,8 +77,8 @@ mod io_adapter {
     pub use bex_external_types::BexExternalAdt;
     pub use bex_heap::{BexValue, HeapPermitManager};
     pub use sys_types::{
-        AsBexExternalValue, BexExternalValue, BexHeap, CallId, SysOpContext, SysOpFn, SysOpResult,
-        runtime_io::*,
+        AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpValue, SysOpContext, SysOpFn,
+        SysOpResult, runtime_io::*,
     };
 
     use super::io::SysOps;
@@ -150,41 +152,6 @@ fn llm_function_lookup_error(
     }
 }
 
-/// Blanket impl — `ai.OutputFormat`: rendering the output-format schema with
-/// the caller's options.
-impl<T> io::IoClassAiOutputFormat for T {
-    #[allow(clippy::too_many_arguments)]
-    fn _render(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        output_format: io::owned::ai::OutputFormat,
-        prefix: io::BexExternalValue,
-        or_splitter: io::BexExternalValue,
-        enum_value_prefix: io::BexExternalValue,
-        hoisted_class_prefix: io::BexExternalValue,
-        always_hoist_enums: io::BexExternalValue,
-        quote_class_fields: io::BexExternalValue,
-        hoist_classes: io::BexExternalValue,
-        map_style: io::BexExternalValue,
-        render_null_as: io::BexExternalValue,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        render_output_format_with_op(
-            &output_format,
-            prefix,
-            or_splitter,
-            enum_value_prefix,
-            hoisted_class_prefix,
-            always_hoist_enums,
-            quote_class_fields,
-            hoist_classes,
-            map_style,
-            render_null_as,
-        )
-    }
-}
-
 // ============================================================================
 // `baml.json.schema` — provider-neutral JSON Schema lowering
 // ============================================================================
@@ -251,42 +218,27 @@ impl<T> io::IoNamespaceSync for T {
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        ticket: std::sync::Arc<dyn bex_vm_types::BexRustData>,
+        ticket: io::owned::sync::Ticket,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        use bex_vm_types::RustDataArc as _;
-        let got = ticket.payload_type_id();
-        match ticket.downcast_payload::<bex_vm_types::Waiter>() {
-            Ok(waiter) => SysOpOutput::async_op(async move {
-                waiter.granted().await;
-                Ok(())
-            }),
-            Err(_) => SysOpOutput::err(VmInternalError::RustTypeError {
-                expected: std::any::TypeId::of::<bex_vm_types::Waiter>(),
-                got,
-            }),
-        }
+        let waiter = ticket;
+        SysOpOutput::async_op(async move {
+            waiter.granted().await;
+            Ok(())
+        })
     }
 
     fn _wait_permit(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        held: std::sync::Arc<dyn bex_vm_types::BexRustData>,
+        permit: io::owned::sync::Permit,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        use bex_vm_types::RustDataArc as _;
-        let got = held.payload_type_id();
-        match held.downcast_payload::<bex_vm_types::PermitState>() {
-            Ok(held) => SysOpOutput::async_op(async move {
-                held.wait().await;
-                Ok(())
-            }),
-            Err(_) => SysOpOutput::err(VmInternalError::RustTypeError {
-                expected: std::any::TypeId::of::<bex_vm_types::PermitState>(),
-                got,
-            }),
-        }
+        SysOpOutput::async_op(async move {
+            permit.wait().await;
+            Ok(())
+        })
     }
 }
 
@@ -433,8 +385,10 @@ mod schema {
                         return false;
                     }
                     find_class_definition(ctx, head).is_some_and(|class_def| {
-                        class_def
-                            .fields
+                        let sys_types::ClassDefinitionBody::Fields(fields) = &class_def.body else {
+                            return false;
+                        };
+                        fields
                             .iter()
                             .filter(|field| !field.skip)
                             .any(|field| walk(&field.field_type, ctx, analysis, seen))
@@ -759,14 +713,20 @@ mod schema {
             let class_def = find_class_definition(self.ctx, head)
                 .ok_or_else(|| format!("json_schema: unknown class `{}`", head.display_name()))?;
 
+            let sys_types::ClassDefinitionBody::Fields(class_fields) = &class_def.body else {
+                return Err(format!(
+                    "json_schema: `{}` has no JSON form",
+                    head.display_name()
+                ));
+            };
             let naming = self.naming;
             // A `@json.fallback` class is any object it does not recognize,
             // and a `@json.flatten` field is the keys no field names.
-            let fallback = class_def.fields.iter().any(|field| field.json_fallback);
-            let flatten = class_def.fields.iter().any(|field| field.json_flatten);
+            let fallback = class_fields.iter().any(|field| field.json_fallback);
+            let flatten = class_fields.iter().any(|field| field.json_flatten);
             let mut properties = serde_json::Map::new();
             let mut required = Vec::new();
-            for field in class_def.fields.iter().filter(|field| {
+            for field in class_fields.iter().filter(|field| {
                 naming.shows(field.skip) && !field.json_flatten && !field.json_fallback
             }) {
                 let key = naming.key(
@@ -996,7 +956,7 @@ mod schema {
                 description: None,
                 docstring: None,
                 alias: None,
-                fields,
+                body: sys_types::ClassDefinitionBody::Fields(fields),
                 stream_done: false,
             }
         }
@@ -1471,161 +1431,7 @@ pub fn build_output_format_op(
     ctx: &SysOpContext,
 ) -> SysOpOutput<io::owned::ai::OutputFormat> {
     let content = crate::output_format::build_output_format_content(return_type, ctx);
-    SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
-}
-
-fn output_format_option_value(value: io::BexExternalValue) -> io::BexExternalValue {
-    match value {
-        io::BexExternalValue::Union { value, .. } => output_format_option_value(*value),
-        value => value,
-    }
-}
-
-/// The `output_format` options are declared as literal unions in
-/// `ai/context.baml`, so the type checker already rejects every value this
-/// would report. Reaching it means the wire value disagrees with the declared
-/// parameter type — an engine inconsistency, not a caller error.
-fn invalid_output_format_option(name: &str, value: &io::BexExternalValue) -> VmRustFnError {
-    VmInternalError::BridgeFailure {
-        message: format!("invalid internal value for output_format option `{name}`: {value:?}"),
-    }
-    .into()
-}
-
-fn is_output_format_default(value: &io::BexExternalValue) -> bool {
-    matches!(
-        value,
-        io::BexExternalValue::Variant {
-            variant_name,
-            ..
-        } if variant_name == "Auto"
-    )
-}
-
-fn output_format_string_setting(
-    name: &str,
-    value: io::BexExternalValue,
-    null_is_never: bool,
-) -> Result<crate::output_format::RenderSetting<String>, VmRustFnError> {
-    use crate::output_format::RenderSetting;
-
-    let value = output_format_option_value(value);
-    match value {
-        io::BexExternalValue::String(value) => Ok(RenderSetting::Always(value.to_string())),
-        io::BexExternalValue::Null if null_is_never => Ok(RenderSetting::Never),
-        io::BexExternalValue::Null => Ok(RenderSetting::Auto),
-        value if is_output_format_default(&value) => Ok(RenderSetting::Auto),
-        value => Err(invalid_output_format_option(name, &value)),
-    }
-}
-
-fn output_format_bool_setting(
-    name: &str,
-    value: io::BexExternalValue,
-) -> Result<crate::output_format::RenderSetting<bool>, VmRustFnError> {
-    use crate::output_format::RenderSetting;
-
-    let value = output_format_option_value(value);
-    match value {
-        io::BexExternalValue::Bool(value) => Ok(RenderSetting::Always(value)),
-        value if is_output_format_default(&value) => Ok(RenderSetting::Auto),
-        value => Err(invalid_output_format_option(name, &value)),
-    }
-}
-
-fn output_format_hoist_classes(
-    value: io::BexExternalValue,
-) -> Result<crate::output_format::HoistClasses, VmRustFnError> {
-    use crate::output_format::HoistClasses;
-
-    let value = output_format_option_value(value);
-    match value {
-        io::BexExternalValue::Bool(true) => Ok(HoistClasses::All),
-        io::BexExternalValue::Bool(false) => Ok(HoistClasses::Auto),
-        io::BexExternalValue::String(value) if value.as_str() == "auto" => Ok(HoistClasses::Auto),
-        io::BexExternalValue::Array { items, .. } => items
-            .into_iter()
-            .map(|item| match output_format_option_value(item) {
-                io::BexExternalValue::String(value) => Ok(value.to_string()),
-                value => Err(invalid_output_format_option("hoist_classes", &value)),
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map(HoistClasses::Subset),
-        value if is_output_format_default(&value) => Ok(HoistClasses::Auto),
-        value => Err(invalid_output_format_option("hoist_classes", &value)),
-    }
-}
-
-fn output_format_map_style(
-    value: io::BexExternalValue,
-) -> Result<crate::output_format::MapStyle, VmRustFnError> {
-    use crate::output_format::MapStyle;
-
-    let value = output_format_option_value(value);
-    match value {
-        io::BexExternalValue::String(value) if value.as_str() == "angle" => {
-            Ok(MapStyle::TypeParameters)
-        }
-        io::BexExternalValue::String(value) if value.as_str() == "object" => {
-            Ok(MapStyle::ObjectLiteral)
-        }
-        value if is_output_format_default(&value) => Ok(MapStyle::default()),
-        value => Err(invalid_output_format_option("map_style", &value)),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn render_output_format_with_op(
-    output_format: &io::owned::ai::OutputFormat,
-    prefix: io::BexExternalValue,
-    or_splitter: io::BexExternalValue,
-    enum_value_prefix: io::BexExternalValue,
-    hoisted_class_prefix: io::BexExternalValue,
-    always_hoist_enums: io::BexExternalValue,
-    quote_class_fields: io::BexExternalValue,
-    hoist_classes: io::BexExternalValue,
-    map_style: io::BexExternalValue,
-    render_null_as: io::BexExternalValue,
-) -> SysOpOutput<String> {
-    let options: Result<crate::output_format::RenderOptions, VmRustFnError> = (|| {
-        Ok(crate::output_format::RenderOptions {
-            prefix: output_format_string_setting("prefix", prefix, true)?,
-            or_splitter: output_format_string_setting("or_splitter", or_splitter, false)?,
-            enum_value_prefix: output_format_string_setting(
-                "enum_value_prefix",
-                enum_value_prefix,
-                true,
-            )?,
-            hoisted_class_prefix: output_format_string_setting(
-                "hoisted_class_prefix",
-                hoisted_class_prefix,
-                true,
-            )?,
-            hoist_classes: output_format_hoist_classes(hoist_classes)?,
-            always_hoist_enums: output_format_bool_setting(
-                "always_hoist_enums",
-                always_hoist_enums,
-            )?,
-            map_style: output_format_map_style(map_style)?,
-            quote_class_fields: output_format_bool_setting(
-                "quote_class_fields",
-                quote_class_fields,
-            )?,
-            render_null_as: output_format_string_setting("render_null_as", render_null_as, false)?,
-        })
-    })();
-
-    let options = match options {
-        Ok(options) => options,
-        Err(error) => return SysOpOutput::err(error),
-    };
-    let content = unwrap_output_format(output_format);
-    match crate::output_format::render_output_format_content(&content, &options) {
-        Ok(rendered) => SysOpOutput::ok(rendered),
-        Err(error) => SysOpOutput::err(VmBamlError::RenderPrompt {
-            message: error.to_string(),
-        }),
-    }
+    SysOpOutput::ok(std::sync::Arc::new(content))
 }
 
 /// Look up an LLM function's declared return type by name.
@@ -1638,28 +1444,6 @@ pub fn get_return_type_op(
         return SysOpOutput::err(llm_function_lookup_error(function_name, &outcome));
     };
     SysOpOutput::ok(info.return_type.clone())
-}
-
-/// Wrap an `OutputFormatContent` into the generated `owned::ai::OutputFormat` handle.
-fn wrap_output_format(
-    content: std::sync::Arc<crate::output_format::OutputFormatContent>,
-) -> io::owned::ai::OutputFormat {
-    io::owned::ai::OutputFormat {
-        _data: content as std::sync::Arc<dyn bex_vm_types::BexRustData>,
-    }
-}
-
-/// Unwrap a generated `owned::ai::OutputFormat` handle back to its `OutputFormatContent`.
-#[allow(clippy::used_underscore_binding)]
-fn unwrap_output_format(
-    owned: &io::owned::ai::OutputFormat,
-) -> std::sync::Arc<crate::output_format::OutputFormatContent> {
-    use bex_vm_types::RustDataArc as _;
-    owned
-        ._data
-        .clone()
-        .downcast_payload::<crate::output_format::OutputFormatContent>()
-        .expect("OutputFormat._data downcast failed: expected Arc<OutputFormatContent>. This indicates a bug in wrap_output_format or a type mismatch.")
 }
 
 // ============================================================================
@@ -1709,85 +1493,6 @@ impl io::IoClassReflectSession for DefaultIoOps {
 }
 
 impl io::IoNamespaceReflect for DefaultIoOps {}
-
-impl io::IoClassFsFile for DefaultIoOps {
-    fn read(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn seek_from(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _whence: BexExternalValue,
-        _offset: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn write_some(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn flush(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-}
 
 impl io::IoNamespaceFs for DefaultIoOps {
     fn metadata(
@@ -2030,30 +1735,6 @@ impl io::IoNamespaceFs for DefaultIoOps {
 }
 
 impl io::IoClassHttpResponse for DefaultIoOps {
-    fn text(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _r: io::owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _r: io::owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
     fn new(
         &self,
         _h: &Arc<BexHeap>,
@@ -2076,31 +1757,6 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _headers: indexmap::IndexMap<String, String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn write(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _r: io::owned::http::Response,
-        _data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn end(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _r: io::owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
@@ -2144,42 +1800,17 @@ impl io::IoClassHttpServer for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _server: io::owned::http::Server,
+        _state: io::owned::http::ServerState,
         _handler: bex_external_types::Handle,
         _websocket: bex_external_types::Handle,
-        _tls_config: Option<io::owned::http::TlsConfig>,
+        _tls_keys: Option<io::owned::http::TlsKeys>,
+        _allow_tls1_2: bool,
+        _tls_handshake_timeout_nanos: Arc<num_bigint::BigInt>,
         _allow_http1: bool,
         _allow_http2: bool,
         _max_body_size: i64,
         _max_connections: i64,
         _header_read_timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-}
-
-impl io::IoClassHttpSseStream for DefaultIoOps {
-    fn next(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::http::SseStream,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "http".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2234,50 +1865,6 @@ impl io::IoNamespaceHttp for DefaultIoOps {
     }
 }
 
-impl io::IoClassWsWebSocket for DefaultIoOps {
-    fn send(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _websocket: io::owned::ws::WebSocket,
-        _data: BexExternalValue,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "websocket".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn next(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _websocket: io::owned::ws::WebSocket,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "websocket".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _websocket: io::owned::ws::WebSocket,
-        _code: i64,
-        _reason: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "websocket".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-}
-
 impl io::IoNamespaceWs for DefaultIoOps {
     fn _connect(
         &self,
@@ -2309,44 +1896,6 @@ impl io::IoClassNetTcpStream for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn read(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::TcpStream,
-        _limit: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn write_some(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::TcpStream,
-        _data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::TcpStream,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
 }
 
 impl io::IoClassNetTcpListener for DefaultIoOps {
@@ -2362,30 +1911,6 @@ impl io::IoClassNetTcpListener for DefaultIoOps {
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn accept(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _l: io::owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::net::TcpStream> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _l: io::owned::net::TcpListener,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
 }
 
 impl io::IoClassNetUdpSocket for DefaultIoOps {
@@ -2396,46 +1921,6 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
         _addr: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::UdpSocket> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn _send_to(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::UdpSocket,
-        _data: Vec<u8>,
-        _addr: String,
-        _timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn _recv_from(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::UdpSocket,
-        _timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::net::Datagram> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "network".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::UdpSocket,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
@@ -2518,116 +2003,6 @@ impl io::IoNamespaceIo for DefaultIoOps {
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "stdio".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-}
-
-impl io::IoClassSysSubprocess for DefaultIoOps {
-    fn wait(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _process: io::owned::sys::Subprocess,
-        _timeout: Option<BexExternalValue>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sys::ProcessExit> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn kill(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _process: io::owned::sys::Subprocess,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _process: io::owned::sys::Subprocess,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
-    }
-}
-
-impl io::IoClassSysReadPipe for DefaultIoOps {
-    fn read(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _readpipe: io::owned::sys::ReadPipe,
-        _limit: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<Vec<u8>>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _readpipe: io::owned::sys::ReadPipe,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-}
-
-impl io::IoClassSysWritePipe for DefaultIoOps {
-    fn write_some(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _writepipe: io::owned::sys::WritePipe,
-        _data: Vec<u8>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn flush(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _writepipe: io::owned::sys::WritePipe,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _writepipe: io::owned::sys::WritePipe,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -2777,36 +2152,6 @@ impl io::IoNamespaceSys for DefaultIoOps {
     }
 }
 
-impl io::IoClassGlobGlob for DefaultIoOps {
-    fn scan(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _glob: io::owned::glob::Glob,
-        _root: BexExternalValue,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<String>> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn matches(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _glob: io::owned::glob::Glob,
-        _path: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<bool> {
-        SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "filesystem".to_string(),
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-}
-
 impl io::IoNamespaceGlob for DefaultIoOps {
     fn new(
         &self,
@@ -2823,7 +2168,7 @@ impl io::IoNamespaceGlob for DefaultIoOps {
 }
 
 impl io::IoNamespaceHost for DefaultIoOps {
-    fn call_host_value(
+    fn _call_host_value(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -3133,7 +2478,8 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `fs` namespace (including `fs.File` methods) with a pre-built instance.
+    /// Override the `fs` namespace with a pre-built instance. A `fs.File`'s
+    /// methods are its own: whichever instance opened it serves them.
     #[must_use]
     pub fn with_fs_instance(
         mut self,
@@ -3167,12 +2513,6 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_fs_lock(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_lock_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_lock_close(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_open = {
@@ -3215,36 +2555,6 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_fs_write_bytes(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_baml_io_read_for_file_read = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_baml_io_read_for_file_read(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_close(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_seek_from = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_seek_from(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_baml_io_write_for_file_write_some = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_baml_io_write_for_file_write_some(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_baml_io_write_for_file_flush = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_baml_io_write_for_file_flush(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_read_dir = {
@@ -3295,34 +2605,24 @@ impl IoSysOpsBuilder {
         self.with_fs_instance(Arc::new(T::default()))
     }
 
-    /// Override the `glob` namespace (including `glob.Glob` methods) with a pre-built instance.
+    /// Override the `glob` namespace with a pre-built instance. A `glob.Glob`'s
+    /// methods are its own: whichever instance compiled it serves them.
     #[must_use]
     pub fn with_glob_instance(
         mut self,
         instance: Arc<dyn io::IoNamespaceGlob + Send + Sync + 'static>,
     ) -> Self {
         self.inner.baml_glob_new = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_glob_new(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_glob_glob_scan = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_glob_glob_scan(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_glob_glob_matches = {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_glob_glob_matches(heap, permit, args, ctx, call_id)
+                t.__glue_baml_glob_new(heap, permit, args, ctx, call_id)
             })
         };
         self
     }
 
-    /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.
+    /// Override the `http` namespace (the request, response-construction and
+    /// server operations) with a pre-built instance.
     #[must_use]
     pub fn with_http_instance(
         mut self,
@@ -3340,34 +2640,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_http__send(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_http_response_text = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_text(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_bytes = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
-            })
-        };
         self.inner.baml_http__send_sse = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_http__send_sse(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_ssestream_next = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_ssestream_next(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_ssestream_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_ssestream_close(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_response_new = {
@@ -3380,18 +2656,6 @@ impl IoSysOpsBuilder {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_http_response_new_streaming(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_write = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_write(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_end = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_end(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_tlsconfig__new = {
@@ -3417,8 +2681,9 @@ impl IoSysOpsBuilder {
 
     /// Override the non-streaming HTTP client operations only.
     ///
-    /// Installs `_fetch`, `_send`, `Response.text`, and `Response.bytes` while
-    /// leaving SSE, server, TLS, and response-construction slots unsupported.
+    /// Installs `_fetch` and `_send` while leaving SSE, server, TLS, and
+    /// response-construction slots unsupported. A response's body is its own:
+    /// whichever instance sent the request serves its reads.
     #[must_use]
     pub fn with_http_fetch_instance(
         mut self,
@@ -3431,28 +2696,17 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_http__send = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http__send(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_text = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_text(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_bytes = {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
+                t.__glue_baml_http__send(heap, permit, args, ctx, call_id)
             })
         };
         self
     }
 
-    /// Override the `net` namespace (`TcpStream` / `TcpListener` / `UdpSocket`
-    /// methods) with a pre-built instance.
+    /// Override the `net` namespace (the `TcpStream` / `TcpListener` /
+    /// `UdpSocket` constructors) with a pre-built instance. A socket's methods
+    /// are its own: whichever instance opened it serves them.
     #[must_use]
     pub fn with_net_instance(
         mut self,
@@ -3464,66 +2718,16 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_net_tcpstream__connect(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_baml_io_read_for_tcpstream_read = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_baml_io_read_for_tcpstream_read(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_baml_io_write_for_tcpstream_write_some = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_baml_io_write_for_tcpstream_write_some(
-                    heap, permit, args, ctx, call_id,
-                )
-            })
-        };
-        self.inner.baml_net_tcpstream_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream_close(heap, permit, args, ctx, call_id)
-            })
-        };
         self.inner.baml_net_tcplistener_bind = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_net_tcplistener_bind(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_tcplistener_accept = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcplistener_accept(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_tcplistener_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcplistener_close(heap, permit, args, ctx, call_id)
-            })
-        };
         self.inner.baml_net_udpsocket_bind = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_udpsocket_bind(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_udpsocket__send_to = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_udpsocket__send_to(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_udpsocket__recv_from = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_udpsocket__recv_from(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_udpsocket_close = {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_udpsocket_close(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_udpsocket_bind(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -3542,58 +2746,6 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceSys + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_sys_subprocess_wait = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_subprocess_wait(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys_subprocess_kill = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_subprocess_kill(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys_subprocess_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_subprocess_close(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys_readpipe_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_readpipe_close(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys_baml_io_read_for_readpipe_read = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_baml_io_read_for_readpipe_read(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys_writepipe_close = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_writepipe_close(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys_baml_io_write_for_writepipe_write_some = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_baml_io_write_for_writepipe_write_some(
-                    heap, permit, args, ctx, call_id,
-                )
-            })
-        };
-        self.inner.baml_sys_baml_io_write_for_writepipe_flush = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_baml_io_write_for_writepipe_flush(
-                    heap, permit, args, ctx, call_id,
-                )
-            })
-        };
         self.inner.baml_sys_current_dir = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
@@ -3679,7 +2831,7 @@ impl IoSysOpsBuilder {
     ///
     /// Only the WASM bridge uses this builder method: it composes its `SysOps`
     /// here and injects its JS dispatch impl explicitly, wiring the
-    /// [`io::IoNamespaceHost::call_host_value`] sysop to a bridge-specific
+    /// [`io::IoNamespaceHost::_call_host_value`] sysop to a bridge-specific
     /// dispatch implementation that fires the host-language callable. The
     /// native bridges (Python, Node, Go) instead wire dispatch through
     /// `sys_native::NativeSysOps` (passed to [`SysOps::from_impl`]) and never
@@ -3689,10 +2841,10 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceHost + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_host_call_host_value = {
+        self.inner.baml_host__call_host_value = {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_host_call_host_value(heap, permit, args, ctx, call_id)
+                t.__glue_baml_host__call_host_value(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -3854,18 +3006,6 @@ impl io::IoNamespaceArchive for DefaultIoOps {
             resource: "archive".into(),
             message: "Operation not supported on this platform".into(),
         })
-    }
-}
-
-impl io::IoClassFsLock for DefaultIoOps {
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _lock: io::owned::fs::Lock,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
     }
 }
 

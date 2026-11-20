@@ -40,7 +40,7 @@ class Impl {
     }
 }
 
-implements<root> Bound<root> for Holder<root> {
+implement<root> Bound<root> for Holder<root> {
     function pick(self) -> root throws never {
         self.value
     }
@@ -56,9 +56,7 @@ function binding() -> int {
 }
 
 function lambda() -> int {
-    let f = (root: int) -> {
-        root
-    };
+    let f = (root: int) -> { root };
     f(1)
 }
 
@@ -70,10 +68,8 @@ function loop_binding(items: int[]) -> int {
 }
 
 function caught() -> int {
-    {
-        1
-    } catch (root) {
-        _ => 2
+    { 1 } catch (root) {
+        _ => 2,
     }
 }
 

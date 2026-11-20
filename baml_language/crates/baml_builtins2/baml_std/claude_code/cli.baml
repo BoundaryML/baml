@@ -59,7 +59,7 @@ class ClaudeCodeClient {
             throw ai.errors.PreviewUnsupported {
                 provider: "claude-code",
                 detail: "claude-code has no HTTP request representation",
-            }
+            };
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {

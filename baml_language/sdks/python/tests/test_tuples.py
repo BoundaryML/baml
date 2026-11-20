@@ -12,8 +12,8 @@ import pydantic
 
 from baml_bridge._host_capture import capture
 from baml_bridge.baml_py import _encode_inbound
-from baml_bridge.cffi.v1 import baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
-from baml_bridge.proto import BamlTuple, _host_call_handle_keys, decode_value
+from baml_bridge.cffi.v1 import baml_handle_pb2, baml_inbound_pb2, baml_outbound_pb2, baml_type_pb2
+from baml_bridge.proto import BamlTuple, _owned_wire_keys, decode_value
 from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
 
 
@@ -94,8 +94,8 @@ def test_cleanup_walks_tuple_items():
     holder = baml_outbound_pb2.BamlOutboundValue()
     item = holder.tuple_value.items.add()
     item.handle_value.key = 77
-    item.handle_value.handle_type = 1
-    assert list(_host_call_handle_keys(holder)) == [77]
+    item.handle_value.handle_type = baml_handle_pb2.ADT_RUNTIME_VALUE
+    assert list(_owned_wire_keys(holder)) == [77]
 
 
 T = typing.TypeVar("T")

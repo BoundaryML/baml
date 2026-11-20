@@ -123,13 +123,13 @@ final class HostCallableCompletionTests: XCTestCase {
         let callable = BamlHostCallable(
             functionType: .function(
                 params: [BamlFunctionParamDescriptor(type: .int)],
-                returns: .rustType,
+                returns: .hostValue,
                 throws: .unknown
             ),
             thrown: []
         ) { args in
             _ = try args.required(0, as: BamlSlot<Int>.own)
-            return try args.result(stale, as: ._leaf(.rustType))
+            return try args.result(stale, as: ._leaf(.hostValue))
         }
         assertBridgeFailure(await callable.invoke(try call(positional: [int(1)])), "handle_clone failed")
     }
@@ -257,7 +257,7 @@ final class HostCallableCompletionTests: XCTestCase {
                 return XCTFail("expected raised, got \(outcome)")
             }
             XCTAssertEqual(exception.language, "swift")
-            HostCallableRegistry.shared.release(exception.handle)
+            HostCallableRegistry.shared.release(exception.handle, count: 1)
         }
     }
 
@@ -458,5 +458,153 @@ private indirect enum Nest: BamlTyped, BamlLeafEncodable {
         case .leaf: return 0._bamlEncode(as: BamlSlot<Int>.own)
         case .list(let items): return try items._bamlEncode(as: BamlSlots.list(BamlSlot<Nest>.own))
         }
+    }
+}
+
+/// Every send of a host key takes one reference to it; the engine's release,
+/// or the rollback of a send that never reached it, gives exactly those back.
+final class HostKeyReferenceTests: XCTestCase {
+    private let registry = HostCallableRegistry.shared
+
+    private func registerError() -> UInt64 {
+        struct Mine: Error {}
+        return registry.register(.opaqueError(Mine()))
+    }
+
+    private func hostValue(_ handle: BamlHandle?) -> BamlArgument {
+        BamlArgument("value", handle, as: BamlSlots.optional(BamlSlot<BamlHandle>._leaf(.hostValue)))
+    }
+
+    /// A key sent again takes one more reference, and stays registered until
+    /// the engine gives back every one; sent once it is gone, it is refused.
+    func testAReceivedKeySentAgainStaysAliveAndBalanced() throws {
+        let key = registerError()
+        let received = BamlHandle(key: key, handleType: .hostValueOpaque)
+        let sent = try received._bamlEncode(as: ._leaf(.hostValue)).raw
+        XCTAssertEqual(sent.handle.key, key)
+        XCTAssertEqual(registry.references(to: key), 2)
+        registry.release(key, count: 1)
+        XCTAssertNotNil(registry.lookup(key))
+        registry.release(key, count: 1)
+        XCTAssertNil(registry.lookup(key))
+        XCTAssertThrowsError(try received._bamlEncode(as: ._leaf(.hostValue)))
+        XCTAssertEqual(registry.references(to: key), 0)
+        // A release of a key no longer registered is ignored.
+        registry.release(key, count: 1)
+        XCTAssertNil(registry.lookup(key))
+    }
+
+    /// The engine gives back references by the count.
+    func testAReleaseGivesBackItsCount() throws {
+        let key = registerError()
+        try registry.sendAgain(key)
+        try registry.sendAgain(key)
+        registry.release(key, count: 2)
+        XCTAssertEqual(registry.references(to: key), 1)
+        registry.release(key, count: 1)
+        XCTAssertNil(registry.lookup(key))
+    }
+
+    /// A release racing a send again either comes after the send's reference,
+    /// leaving the key registered, or refuses the send: never a send of a key
+    /// that is gone.
+    func testAReleaseRacingASendAgainNeverLosesTheKey() {
+        let registry = HostCallableRegistry.shared
+        for _ in 0..<500 {
+            let key = registerError()
+            let sent = LockedFlag()
+            DispatchQueue.concurrentPerform(iterations: 2) { lane in
+                if lane == 0 {
+                    if (try? registry.sendAgain(key)) != nil { sent.set() }
+                } else {
+                    registry.release(key, count: 1)
+                }
+            }
+            XCTAssertEqual(registry.references(to: key), sent.value ? 1 : 0)
+            registry.release(key, count: 1)
+        }
+    }
+
+    /// A call whose arguments are refused gives back exactly the references
+    /// its arguments took: a callable registered for it is gone, a key sent
+    /// again keeps the references held elsewhere.
+    func testARolledBackCallGivesBackOnlyItsReferences() {
+        let key = registerError()
+        let held = BamlHandle(key: key, handleType: .hostValueOpaque)
+        let gone = BamlHandle(key: registerError(), handleType: .hostValueOpaque)
+        registry.release(gone.key, count: 1)
+        let callable = BamlHostCallable(
+            functionType: .function(params: [], returns: .null, throws: .never),
+            thrown: []
+        ) { _ in BamlInboundValue() }
+        let before = registry.registeredKeys
+        XCTAssertThrowsError(
+            try encodeCallArgs(
+                [BamlArgument("f", callable), hostValue(held), hostValue(held), hostValue(gone)],
+                callId: 7,
+                callTarget: .functionName("f")
+            )
+        )
+        XCTAssertEqual(registry.registeredKeys, before)
+        XCTAssertEqual(registry.references(to: key), 1)
+        registry.release(key, count: 1)
+    }
+
+    /// The engine rows an outbound value holds: each engine handle's, each
+    /// host value's pin (none when 0), each type value's live head. Only the
+    /// pins and live heads have no Swift owner.
+    func testAnOutboundValueHoldsItsHostValuesPins() {
+        func handle(_ key: UInt64, _ type: BamlBridge_Cffi_V1_BamlHandleType, pin: UInt64 = 0) -> BamlBridge_Cffi_V1_BamlOutboundValue {
+            var value = BamlBridge_Cffi_V1_BamlOutboundValue()
+            value.handleValue.key = key
+            value.handleValue.handleType = type
+            value.handleValue.pin = pin
+            return value
+        }
+        var live = BamlBridge_Cffi_V1_BamlTyClass()
+        live.head = .live(40)
+        var type = BamlBridge_Cffi_V1_BamlOutboundValue()
+        type.tyValue.classTy = live
+        var list = BamlBridge_Cffi_V1_BamlOutboundValue()
+        list.listValue.items = [
+            handle(1, .hostValueCallable, pin: 10),
+            handle(2, .adtRuntimeValue),
+            handle(3, .hostValueOpaque, pin: 30),
+            handle(4, .hostValueOpaque),
+            type,
+        ]
+        let rows = engineRows(list).map { row -> String in
+            switch row {
+            case .handle(let key): return "handle \(key)"
+            case .pin(let key): return "pin \(key)"
+            case .typeValue(let key): return "type \(key)"
+            }
+        }
+        XCTAssertEqual(rows, ["pin 10", "handle 2", "pin 30", "type 40"])
+    }
+
+    /// A pin is never a value.
+    func testAPinDoesNotDecodeAsAHandle() {
+        var value = BamlBridge_Cffi_V1_BamlOutboundValue()
+        value.handleValue.key = 5
+        value.handleValue.handleType = .hostValuePin
+        XCTAssertThrowsError(try BamlHandle._bamlDecode(BamlOutboundValue(value)))
+    }
+}
+
+private final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+
+    func set() {
+        lock.lock()
+        defer { lock.unlock() }
+        flag = true
+    }
+
+    var value: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return flag
     }
 }

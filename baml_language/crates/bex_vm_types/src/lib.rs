@@ -12,19 +12,28 @@
 
 pub mod bytecode;
 pub mod cancellation;
+pub mod class_builder;
+pub mod csv;
+mod csv_record;
 pub mod errors;
 pub mod float_order;
 pub mod head_walk;
 pub mod heap_ptr;
+pub mod http;
 pub mod identity;
 pub mod indexable;
+mod interface_witness;
 pub mod lazy_biased_mutex;
 pub mod limit;
 pub mod media;
 pub mod meter;
 pub mod monitor;
+pub mod network;
+pub mod op_output;
+mod owned_state;
 pub mod prompt;
 pub mod relink;
+pub mod resource;
 mod roots;
 pub mod runtime_compile;
 pub mod rust_data;
@@ -36,14 +45,18 @@ pub mod types;
 pub use bex_str::BexStr;
 pub use btel_types::{DefinitionCell, FunctionRegistration, TelemetryPolicyId};
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
+pub use csv_record::{CsvCell, CsvHeader, CsvRecord};
 pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
+pub use interface_witness::InterfaceWitness;
 pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet, PermitState};
 pub use media::{MediaContent, MediaValue};
 pub use meter::{AllocDebt, Meter};
 pub use monitor::{MonitorTable, Waiter};
+pub use op_output::OpOutput;
+pub use owned_state::OwnedState;
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{
     CollectRoots, ForwardRoots, Forwarding, NothingCollected, PermitProof, RootHaver, RootHaverExt,
@@ -63,6 +76,7 @@ pub use rust_data::{
     BexRustData, MeteredGuard, MeteredMutex, RetainedBytes, RetainedFootprint, RustDataArc,
     TestRustData,
 };
+pub use thin_vec::ThinVec;
 pub use type_head::TypeHead;
 
 /// The name prefix of the helper that evaluates one global's initializer.
@@ -170,17 +184,18 @@ pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, Un
 }
 pub use types::{
     ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod,
-    CLEANED, Class, ClassField, ClassLayout, ClassMethodDef, ClassShape, ConstValue, DeclPath,
-    DeclarationName, EntryId, Enum, EnumVariant, FORWARDED, Field, FieldRef, FnPath, Function,
-    FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead, GenericFunction, HEADER_FLAGS,
-    HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, InstanceRef, InterfaceBound,
-    InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard, MapContainer,
-    MapData, MapEntry, MapEpochChanged, MapKeyUndecided, MapReadGuard, MapWriteGuard, OBJECT_BODY,
-    OBJECT_CELL_WORDS, Object, ObjectType, PanicClass, Program, RenderedCallable, SlotKind,
+    CLEANED, Class, ClassBody, ClassField, ClassLayout, ClassMethodDef, ClassShape, CleanupLatch,
+    CleanupSubject, ConstValue, DeclPath, DeclarationName, EntryId, Enum, EnumVariant, FORWARDED,
+    Field, FieldRef, FnPath, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future,
+    FutureRead, GenericFunction, HEADER_FLAGS, HostClosure, ImplBodyCoherence, ImplBodyKey,
+    ImplCoherenceKey, InstanceRef, InterfaceBound, InterfaceKey, ItemPath, LockedContainer,
+    LockedReadGuard, LockedWriteGuard, MapContainer, MapData, MapEntry, MapEpochChanged,
+    MapKeyUndecided, MapReadGuard, MapWriteGuard, OBJECT_BODY, OBJECT_CELL_WORDS, Object,
+    ObjectType, PanicClass, Program, RenderedCallable, RustInstance, RustPayload, SlotKind,
     SlotKindMismatch, SpelledBound, SysOp, SysOpErrorCategory, SysOpPanicCategory, Tuple,
-    TupleShapeMismatch, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value,
-    ValueKind, Variant, WORD_BYTES, format_float, map_int_hash, map_key_hasher, map_string_hash,
-    sys_op_for_path, type_tags,
+    TupleShapeMismatch, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard,
+    Unbuildable, Value, ValueKind, Variant, WORD_BYTES, format_float, map_int_hash, map_key_hasher,
+    map_string_hash, payload, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.

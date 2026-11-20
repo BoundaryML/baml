@@ -19,14 +19,14 @@ function transcript_text(j: ai.Journal) -> string {
                             lines.push(`assistant: ${t.text}`);
                         },
                         let c: ai.content.ToolUse => {
-                            let call = baml.json.stringify(
-                                { "id": c.id, "name": c.name, "args": baml.json.from(c.args) },
-                            );
+                            let call = baml.json.stringify({
+                                "id": c.id,
+                                "name": c.name,
+                                "args": baml.json.from(c.args),
+                            });
                             lines.push(`assistant tool_call: ${call}`);
                         },
-                        _ => {
-                            null
-                        },
+                        _ => { null },
                     };
                 }
             },
@@ -34,11 +34,11 @@ function transcript_text(j: ai.Journal) -> string {
                 lines.push(`tool result id=${done.id} is_error=false: ${done.text()}`);
             },
             let failed: ai.events.ToolFailed => {
-                lines.push(`tool result id=${failed.id} is_error=true: ${failed.message}`);
+                lines.push(
+                    `tool result id=${failed.id} is_error=true: ${failed.message}`,
+                );
             },
-            _ => {
-                null
-            },
+            _ => { null },
         };
     }
     if (lines.length() == 0) {
@@ -76,7 +76,10 @@ function envelope_schema(output_type: reflect.Type) -> map<string, unknown> {
     let _ = calls_schema.set("required", ["calls"]);
     let _ = calls_schema.set("additionalProperties", false);
     let outcome: map<string, unknown> = {};
-    let _ = outcome.set("anyOf", [baml.json.from(final_root), baml.json.from(calls_schema)]);
+    let _ = outcome.set("anyOf", [
+        baml.json.from(final_root),
+        baml.json.from(calls_schema),
+    ]);
     let props: map<string, unknown> = {};
     let _ = props.set("outcome", outcome);
     let envelope: map<string, unknown> = {};
@@ -103,13 +106,11 @@ function _type_schema(t: string) -> map<string, unknown> {
 function tool_protocol(tb: ai.tools.Toolbox) -> string {
     let catalog: json[] = [];
     for (let t in tb.list()) {
-        catalog.push(
-            {
-                "name": t.name,
-                "description": t.description,
-                "parameters": baml.json.from(t.input_schema),
-            },
-        );
+        catalog.push({
+            "name": t.name,
+            "description": t.description,
+            "parameters": baml.json.from(t.input_schema),
+        });
     }
     `
         \n\nThe output contract is one object with an outcome field. Set outcome
@@ -157,7 +158,7 @@ function _read_result(p: baml.sys.Subprocess) -> json {
                         message: "the CLI emitted an invalid JSON event",
                         raw_body: trimmed,
                         status_code: null,
-                    }
+                    };
                 },
             };
             _log_cc_event(raw);
@@ -174,7 +175,7 @@ function _read_result(p: baml.sys.Subprocess) -> json {
             message: "the Claude Code CLI stream ended without a result event",
             raw_body: raw_lines.join("\n"),
             status_code: null,
-        }
+        };
     }
     result
 }
@@ -210,7 +211,9 @@ function _log_cc_event(raw: json) -> void {
                 let bt = baml.json.path_or<string>(b, ".type", "?");
                 match (bt) {
                     "text" => {
-                        parts.push(`text: ${_preview(baml.json.path_or<string>(b, ".text", ""))}`)
+                        parts.push(
+                            `text: ${_preview(baml.json.path_or<string>(b, ".text", ""))}`,
+                        )
                     },
                     "thinking" => {
                         parts.push(
@@ -249,10 +252,9 @@ function mcp_config_json(c: root.ClaudeCodeClient) -> string? {
 /// One mcp__<name> entry per attached server: the --allowedTools value that
 /// permits every tool the server provides.
 function allowed_mcp_tools(c: root.ClaudeCodeClient) -> string {
-    c.mcp_servers.keys()
-        .map((n: string) -> {
-            `mcp__${n}`
-        })
+    c.mcp_servers
+        .keys()
+        .map((n: string) -> { `mcp__${n}` })
         .join(",")
 }
 
@@ -322,11 +324,12 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
         input = null,
     ) catch_all (e) {
         _ => {
-            throw ai.errors.NetworkFailure { status_code: null,
+            throw ai.errors.NetworkFailure {
+                status_code: null,
                 provider: "claude-code",
                 detail: `the Claude Code CLI could not start: ${e.to_string()}`,
                 raw_body: null,
-            }
+            };
         },
     };
     defer {
@@ -336,41 +339,42 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     // events stream LIVE: each JSONL line logs as it arrives, and the last
     // relevant line is the result. Stderr inherits the parent process.
     let input_error: string? = null;
-    let result = baml.future.with_timeout(baml.time.Duration.from_milliseconds(c.timeout_ms), () -> {
-        // The prompt goes on stdin while stdout drains concurrently: either
-        // pipe can exceed its buffer.
-        let input = spawn {
-            _write_prompt(p, message) catch_all (e) {
-                _ => e.to_string()
-            }
-        };
-        let result = _read_result(p);
-        // A result counts only once the whole prompt was written, so wait for
-        // the writer (within this timeout). Its failures are reported after
-        // the CLI's own exit status and result errors.
-        input_error
-            = (await input) catch_all (e) {
-                _ => "the stdin writer task did not complete cleanly"
+    let result = baml.future
+        .with_timeout(baml.time.Duration.from_milliseconds(c.timeout_ms), () -> {
+            // The prompt goes on stdin while stdout drains concurrently: either
+            // pipe can exceed its buffer.
+            let input = spawn {
+                _write_prompt(p, message) catch_all (e) {
+                    _ => e.to_string(),
+                }
             };
-        result
-    }) catch (e) {
-        baml.errors.Timeout => {
-            throw ai.errors.NetworkFailure {
-                status_code: null,
-                provider: "claude-code",
-                detail: `the Claude Code CLI produced no result within ${c.timeout_ms}ms`,
-                raw_body: null,
-            }
-        },
-    };
+            let result = _read_result(p);
+            // A result counts only once the whole prompt was written, so wait for
+            // the writer (within this timeout). Its failures are reported after
+            // the CLI's own exit status and result errors.
+            input_error = (await input) catch_all (e) {
+                _ => "the stdin writer task did not complete cleanly",
+            };
+            result
+        }) catch (e) {
+            baml.errors.Timeout => {
+                throw ai.errors.NetworkFailure {
+                    status_code: null,
+                    provider: "claude-code",
+                    detail: `the Claude Code CLI produced no result within ${c.timeout_ms}ms`,
+                    raw_body: null,
+                };
+            },
+        };
     let exit = p.wait(timeout = baml.time.Duration.from_milliseconds(c.timeout_ms)) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw ai.errors.NetworkFailure { status_code: null,
+            throw ai.errors.NetworkFailure {
+                status_code: null,
                 provider: "claude-code",
                 detail: `the Claude Code CLI did not terminate cleanly: ${e.to_string()}`,
                 raw_body: null,
-            }
+            };
         },
     };
     if (!exit.ok()) {
@@ -379,7 +383,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
             status_code: null,
             detail: `the Claude Code CLI exited with code ${exit.exit_code}`,
             raw_body: null, // stderr inherits the parent and is not captured
-        }
+        };
     }
 
     if (baml.json.path_or<bool>(result, ".is_error", false)) {
@@ -390,7 +394,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
             error_code: null,
             raw_body: baml.json.stringify(result),
             status_code: null,
-        }
+        };
     }
     if let error: string = input_error {
         throw ai.errors.NetworkFailure {
@@ -398,7 +402,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
             provider: "claude-code",
             detail: "the Claude Code CLI could not receive the prompt: " + error,
             raw_body: null,
-        }
+        };
     }
     log.info(
         `claude-code result: subtype=${baml.json.path_or<string>(result, ".subtype", "?")} cost_usd=${baml.json.path_or<float>(result, ".total_cost_usd", 0.0)} session=${baml.json.path_or<string>(result, ".session_id", "?")}`,
@@ -410,16 +414,17 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
                     throw ai.errors.ParseFailed {
                         provider: "claude-code",
                         raw_output: baml.json.stringify(result),
-                    }
+                    };
                 },
             }
-        }
+        },
     };
 
     let usage = ai.events.Usage {
         input_tokens: baml.json.path_or<int?>(result, ".usage.input_tokens", null),
         output_tokens: baml.json.path_or<int?>(result, ".usage.output_tokens", null),
-        cached_input_tokens: baml.json.path_or<int?>(result, ".usage.cache_read_input_tokens", null),
+        cached_input_tokens: baml.json
+            .path_or<int?>(result, ".usage.cache_read_input_tokens", null),
         reasoning_tokens: null,
     };
 
@@ -437,33 +442,55 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
                     `cc_call_${input.journal.entries().length()}_${i}`,
                 );
                 let name = baml.json.path_or<string>(raw_call, ".name", "");
-                let call_args = baml.json.to<map<string, unknown>>(baml.json.path_or<json>(raw_call, ".args", {})) catch_all (e) {
+                let call_args = baml.json.to<map<string, unknown>>(
+                    baml.json.path_or<json>(raw_call, ".args", {}),
+                ) catch_all (e) {
                     _ => {
                         let empty: map<string, unknown> = {};
                         empty
                     },
                 };
-                content.push(ai.content.ToolUse { id: id, name: name, args: call_args });
+                content.push(ai.content.ToolUse {
+                    id: id,
+                    name: name,
+                    args: call_args,
+                });
                 i = i + 1;
             }
             stop = ai.content.StopReason.ToolUse;
         } else {
-            content.push(ai.content.Text { text: baml.json.stringify(outcome) });
+            content.push(ai.content.Text {
+                text: baml.json.stringify(outcome),
+            });
         }
     } else {
-        content.push(ai.content.Text { text: baml.json.stringify(structured) });
+        content.push(ai.content.Text {
+            text: baml.json.stringify(structured),
+        });
     }
     // One CLI run is one model call, with no HTTP exchange to record.
     let call = ai.events.ModelCall {
-        resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
+        resolved_model: ai.events.ModelKey {
+            provider: c.provider(),
+            model: c.model,
+        },
         usage: null,
-        timing: ai.events.Timing { start_time: started, duration: started.elapsed(), ttft: null },
+        timing: ai.events.Timing {
+            start_time: started,
+            duration: started.elapsed(),
+            ttft: null,
+        },
         http_request: null,
         http_response: null,
         sse_responses: null,
     };
     ai.internal.with_own_call(
-        ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop },
+        ai.ModelTurn {
+            calls: [],
+            child_turns: [],
+            content: content,
+            stop_reason: stop,
+        },
         call,
         usage,
         c.model,

@@ -78,6 +78,10 @@ pub enum CSharpVisibility {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum CSharpNameOrigin {
+    /// A member whose spelling is a contract: an interface implementation or
+    /// the generated wrapper's own surface. It always takes its base; anything
+    /// else in its scope that projects there is renamed.
+    Fixed,
     Source,
     CompilerGenerated,
 }
@@ -268,6 +272,17 @@ impl CSharpNames {
             for (base, requests) in &mut by_base {
                 requests.sort_by_key(|request| (request_priority(request), request.clone()));
                 let winner = requests.remove(0);
+                debug_assert!(
+                    requests
+                        .iter()
+                        .all(|request| request.origin != CSharpNameOrigin::Fixed),
+                    "two fixed members of one scope project to `{base}`"
+                );
+                debug_assert!(
+                    winner.origin != CSharpNameOrigin::Fixed || *base == winner.source_identity,
+                    "a fixed member is spelled as requested: `{}` projects to `{base}`",
+                    winner.source_identity
+                );
                 occupied.insert(base.clone());
                 insert_allocation(&mut allocations, winner, base.clone());
                 deferred.extend(requests.drain(..).map(|request| (base.clone(), request)));
@@ -389,9 +404,10 @@ fn project_base(request: &CSharpNameRequest) -> String {
 
 fn request_priority(request: &CSharpNameRequest) -> u8 {
     match (request.origin, request.kind) {
-        (CSharpNameOrigin::Source, _) => 0,
-        (CSharpNameOrigin::CompilerGenerated, CSharpNameKind::GeneratedLocal) => 2,
-        (CSharpNameOrigin::CompilerGenerated, _) => 1,
+        (CSharpNameOrigin::Fixed, _) => 0,
+        (CSharpNameOrigin::Source, _) => 1,
+        (CSharpNameOrigin::CompilerGenerated, CSharpNameKind::GeneratedLocal) => 3,
+        (CSharpNameOrigin::CompilerGenerated, _) => 2,
     }
 }
 
@@ -783,6 +799,31 @@ mod tests {
                 names.get(&same_named_type).unwrap().source(),
             ]
             .contains(&"Functions")
+        );
+    }
+
+    #[test]
+    fn fixed_members_outrank_source_declarations() {
+        let class = BamlFqn::symbol(&symbol("Span"));
+        let scope = CSharpScope::Type(class.clone());
+        let method = request("Span", "is_closed", CSharpNameKind::Function, scope.clone());
+        let fixed = CSharpNameRequest::new(
+            class.member(&BaseName::new("$is_closed")),
+            BamlWireName::Generated,
+            "IsClosed",
+            CSharpNameKind::Property,
+            CSharpVisibility::Public,
+            CSharpNameOrigin::Fixed,
+            scope,
+        );
+        let names = CSharpNames::allocate([method.clone(), fixed.clone()]);
+        assert_eq!(names.get(&fixed).unwrap().source(), "IsClosed");
+        assert!(
+            names
+                .get(&method)
+                .unwrap()
+                .source()
+                .starts_with("IsClosed_")
         );
     }
 

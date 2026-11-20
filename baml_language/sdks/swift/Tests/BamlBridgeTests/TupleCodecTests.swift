@@ -366,7 +366,7 @@ final class TupleCodecTests: XCTestCase {
     }
 
     private var handleSlot: BamlSlot<BamlHandle> {
-        BamlSlot(BamlSlotNode(type: .rustType, shape: .leaf))
+        BamlSlot(BamlSlotNode(type: .unknown, shape: .leaf))
     }
 
     func testTupleDecodeFailureReleasesTheHandlesOfLaterSlots() throws {

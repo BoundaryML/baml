@@ -289,11 +289,7 @@ function _gm_strip_nulls(value: baml.json.json, opaque: bool) -> baml.json.json 
             }
             out
         },
-        let items: baml.json.json[] => {
-            items.map((item) -> {
-                _gm_strip_nulls(item, false)
-            })
-        },
+        let items: baml.json.json[] => { items.map((item) -> { _gm_strip_nulls(item, false) }) },
         _ => value,
     }
 }
@@ -303,7 +299,8 @@ function _gm_strip_nulls(value: baml.json.json, opaque: bool) -> baml.json.json 
 /// the ones that are simply illegal in a query. Values that need more than this
 /// (raw UTF-8, control characters) should be encoded by the caller.
 function _gm_encode_query(value: string) -> string {
-    value.replace_all("%", "%25")
+    value
+        .replace_all("%", "%25")
         .replace_all(" ", "%20")
         .replace_all("\"", "%22")
         .replace_all("#", "%23")
@@ -322,13 +319,8 @@ function _gm_apply_query(url: string, params: map<string, string>?) -> string {
     if let items: map<string, string> = params {
         let out = url;
         for (let name in items.keys()) {
-            let separator = if (out.includes("?")) {
-                "&"
-            } else {
-                "?"
-            };
-            out
-                = `${out}${separator}${_gm_encode_query(name)}=${_gm_encode_query(items.get(name) ?? "")}`;
+            let separator = if (out.includes("?")) { "&" } else { "?" };
+            out = `${out}${separator}${_gm_encode_query(name)}=${_gm_encode_query(items.get(name) ?? "")}`;
         }
         out
     } else {
@@ -450,16 +442,18 @@ function _gm_media_part(media: ai.MediaPart, fetch_url: bool, preview: bool = fa
         throw ai.errors.PreviewUnsupported {
             provider: "google",
             detail: "the Gemini Developer API requires downloaded URL media bytes during request preview",
-        }
+        };
     }
     if let url: string = resolved.url {
-        GmPart.of_file_data(
-            GmFileData { mimeType: _gm_mime_for_uri(url, resolved.mime_type), fileUri: url },
-        )
+        GmPart.of_file_data(GmFileData {
+            mimeType: _gm_mime_for_uri(url, resolved.mime_type),
+            fileUri: url,
+        })
     } else {
-        GmPart.of_inline_data(
-            GmInlineData { mimeType: resolved.mime_type, data: resolved.base64 ?? "" },
-        )
+        GmPart.of_inline_data(GmInlineData {
+            mimeType: resolved.mime_type,
+            data: resolved.base64 ?? "",
+        })
     }
 }
 
@@ -520,11 +514,17 @@ function lower_prompt(prompt: ai.Prompt, fetch_url: bool = true, preview: bool =
             } else {
                 "user"
             };
-            contents.push(GmContent { role: role, parts: parts });
+            contents.push(GmContent {
+                role: role,
+                parts: parts,
+            });
             null
         };
     }
-    Prompt { system_parts: system_parts, contents: contents }
+    Prompt {
+        system_parts: system_parts,
+        contents: contents,
+    }
 }
 
 /// (internal) ---------------------------------------------------------------------------
@@ -584,7 +584,10 @@ function lower_journal(j: ai.Journal, fetch_url: bool, preview: bool = false) ->
         match (e) {
             let u: ai.events.UserMessage => {
                 if (pending.length() > 0) {
-                    contents.push(GmContent { role: "user", parts: pending });
+                    contents.push(GmContent {
+                        role: "user",
+                        parts: pending,
+                    });
                     pending = [];
                     null
                 } else {
@@ -592,13 +595,19 @@ function lower_journal(j: ai.Journal, fetch_url: bool, preview: bool = false) ->
                 };
                 let parts = _lower_blocks(u.content, fetch_url, preview = preview);
                 if (parts.length() > 0) {
-                    contents.push(GmContent { role: "user", parts: parts });
+                    contents.push(GmContent {
+                        role: "user",
+                        parts: parts,
+                    });
                 }
                 null
             },
             let a: ai.events.AssistantMessage => {
                 if (pending.length() > 0) {
-                    contents.push(GmContent { role: "user", parts: pending });
+                    contents.push(GmContent {
+                        role: "user",
+                        parts: pending,
+                    });
                     pending = [];
                     null
                 } else {
@@ -615,12 +624,13 @@ function lower_journal(j: ai.Journal, fetch_url: bool, preview: bool = false) ->
                             // The `thoughtSignature` Gemini 3 issued with this
                             // call rides its id; replaying the call without it
                             // is a hard 400.
-                            parts.push(
-                                GmPart.of_function_call(
-                                    GmFunctionCall { name: use.name, args: use.args },
-                                    _gm_call_id_signature(use.id),
-                                ),
-                            );
+                            parts.push(GmPart.of_function_call(
+                                GmFunctionCall {
+                                    name: use.name,
+                                    args: use.args,
+                                },
+                                _gm_call_id_signature(use.id),
+                            ));
                             null
                         },
                         // Reasoning replay needs the `thoughtSignature` Gemini
@@ -630,7 +640,10 @@ function lower_journal(j: ai.Journal, fetch_url: bool, preview: bool = false) ->
                     };
                 }
                 if (parts.length() > 0) {
-                    contents.push(GmContent { role: "model", parts: parts });
+                    contents.push(GmContent {
+                        role: "model",
+                        parts: parts,
+                    });
                     null
                 } else {
                     null
@@ -650,41 +663,32 @@ function lower_journal(j: ai.Journal, fetch_url: bool, preview: bool = false) ->
                 }
                 let response: map<string, unknown> = {};
                 let _ = response.set("result", result);
-                let parts: GmPart[]? = if (media.length() > 0) {
-                    media
-                } else {
-                    null
-                };
-                pending.push(
-                    GmPart.of_function_response(
-                        GmFunctionResponse {
-                            name: ai.wire.tool_name(j, c.id) ?? "",
-                            response: response,
-                            parts: parts,
-                        },
-                    ),
-                );
+                let parts: GmPart[]? = if (media.length() > 0) { media } else { null };
+                pending.push(GmPart.of_function_response(GmFunctionResponse {
+                    name: ai.wire.tool_name(j, c.id) ?? "",
+                    response: response,
+                    parts: parts,
+                }));
                 null
             },
             let f: ai.events.ToolFailed => {
                 let response: map<string, unknown> = {};
                 let _ = response.set("error", f.message);
-                pending.push(
-                    GmPart.of_function_response(
-                        GmFunctionResponse {
-                            name: ai.wire.tool_name(j, f.id) ?? "",
-                            response: response,
-                            parts: null,
-                        },
-                    ),
-                );
+                pending.push(GmPart.of_function_response(GmFunctionResponse {
+                    name: ai.wire.tool_name(j, f.id) ?? "",
+                    response: response,
+                    parts: null,
+                }));
                 null
             },
             _ => null,
         };
     }
     if (pending.length() > 0) {
-        contents.push(GmContent { role: "user", parts: pending });
+        contents.push(GmContent {
+            role: "user",
+            parts: pending,
+        });
         null
     } else {
         null
@@ -728,10 +732,19 @@ function gemini_build_body(
     let system: GmContent? = null;
     let first_role = contents.at(0)?.role ?? "";
     if (first_role != "user" && lowered.system_parts.length() > 0) {
-        contents = [GmContent { role: "user", parts: lowered.system_parts }].concat(contents);
+        contents = [
+            GmContent {
+                role: "user",
+                parts: lowered.system_parts,
+            },
+        ]
+        .concat(contents);
         null
     } else if (lowered.system_parts.length() > 0) {
-        system = GmContent { role: null, parts: lowered.system_parts };
+        system = GmContent {
+            role: null,
+            parts: lowered.system_parts,
+        };
         null
     } else {
         null
@@ -746,7 +759,7 @@ function gemini_build_body(
             status_code: null,
             detail: "the rendered prompt and journal produced no message content",
             raw_body: null,
-        }
+        };
     }
 
     let tools: GmTool[]? = null;
@@ -754,17 +767,20 @@ function gemini_build_body(
     if (!input.toolbox.is_empty()) {
         let declarations: GmFunctionDeclaration[] = [];
         for (let t in input.toolbox.list()) {
-            declarations.push(
-                GmFunctionDeclaration {
-                    name: t.name,
-                    description: t.description,
-                    parametersJsonSchema: t.input_schema,
-                },
-            );
+            declarations.push(GmFunctionDeclaration {
+                name: t.name,
+                description: t.description,
+                parametersJsonSchema: t.input_schema,
+            });
         }
-        tools = [GmTool { functionDeclarations: declarations }];
-        tool_config
-            = GmToolConfig { functionCallingConfig: GmFunctionCallingConfig { mode: "AUTO" } };
+        tools = [
+            GmTool {
+                functionDeclarations: declarations,
+            },
+        ];
+        tool_config = GmToolConfig {
+            functionCallingConfig: GmFunctionCallingConfig { mode: "AUTO" },
+        };
         null
     } else {
         null
@@ -834,7 +850,8 @@ function _gm_usage(usage: GmUsageMetadata?) -> ai.events.Usage? {
             cached_input_tokens: um.cachedContentTokenCount,
             reasoning_tokens: um.thoughtsTokenCount,
             // promptTokenCount counts the cached share too.
-            uncached_input_tokens: ai.internal.uncached_input_tokens(um.promptTokenCount, um.cachedContentTokenCount),
+            uncached_input_tokens: ai.internal
+                .uncached_input_tokens(um.promptTokenCount, um.cachedContentTokenCount),
         }
     } else {
         null
@@ -859,10 +876,14 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
             provider: provider,
             message: err.message ?? "the Google request failed",
             error_type: err.status,
-            error_code: if let code: int = err.code { code.to_string() } else { null },
+            error_code: if let code: int = err.code {
+                code.to_string()
+            } else {
+                null
+            },
             raw_body: baml.json.stringify(resp),
             status_code: null,
-        }
+        };
     }
     let content: ai.content.ModelBlock[] = [];
     let has_call = false;
@@ -876,19 +897,19 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
             if let a: map<string, unknown> = fc.args {
                 args = a;
             }
-            content.push(
-                ai.content.ToolUse {
-                    id: _gm_encode_call_id(`call_${seq}_${call_index}`, p.thoughtSignature),
-                    name: fc.name,
-                    args: args,
-                },
-            );
+            content.push(ai.content.ToolUse {
+                id: _gm_encode_call_id(`call_${seq}_${call_index}`, p.thoughtSignature),
+                name: fc.name,
+                args: args,
+            });
             call_index += 1;
             has_call = true;
             null
         } else if let inline: GmRespInlineData = p.inlineData {
             // Image-out models (gemini-*-image) answer with base64 media parts.
-            content.push(_gm_output_media(inline.mimeType ?? "image/png", inline.data ?? ""));
+            content.push(
+                _gm_output_media(inline.mimeType ?? "image/png", inline.data ?? ""),
+            );
             null
         } else {
             if let t: string = p.text {
@@ -916,7 +937,7 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
             message: "the response contained no model turn",
             raw_body: baml.json.stringify(resp),
             status_code: null,
-        }
+        };
     }
     let stop = if (has_call) {
         ai.content.StopReason.ToolUse
@@ -927,7 +948,12 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
     } else {
         ai.content.StopReason.Complete
     };
-    ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop }
+    ai.ModelTurn {
+        calls: [],
+        child_turns: [],
+        content: content,
+        stop_reason: stop,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -938,8 +964,11 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
 /// enter the provider failure taxonomy.
 function _gm_route_sse_open(
     provider: string,
-    open: (
-    ) -> baml.http.SseStream throws baml.errors.Io | baml.errors.Timeout | baml.errors.InvalidArgument | baml.panics.Cancelled,
+    open: () -> baml.http.SseStream
+        throws baml.errors.Io
+            | baml.errors.Timeout
+            | baml.errors.InvalidArgument
+            | baml.panics.Cancelled,
 ) -> baml.http.SseStream {
     open() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
@@ -951,9 +980,7 @@ function _gm_route_sse_open(
 
 /// (internal) Open the SSE connection, classifying the failure precisely.
 function _gm_open_sse(req: baml.http.Request, provider: string) -> baml.http.SseStream {
-    _gm_route_sse_open(provider, () -> {
-        baml.http.send_sse(req)
-    })
+    _gm_route_sse_open(provider, () -> { baml.http.send_sse(req) })
 }
 
 /// (internal) One SseStream batch -> provider-agnostic stream events.
@@ -987,7 +1014,7 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] 
                         message: e.to_string(),
                         raw_body: payload,
                         status_code: null,
-                    }
+                    };
                 },
             };
             // A mid-stream `{"error": …}` payload is a real failure: raise
@@ -998,10 +1025,14 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] 
                     provider: provider,
                     message: err.message ?? "the Google stream failed",
                     error_type: err.status,
-                    error_code: if let code: int = err.code { code.to_string() } else { null },
+                    error_code: if let code: int = err.code {
+                        code.to_string()
+                    } else {
+                        null
+                    },
                     raw_body: payload,
                     status_code: null,
-                }
+                };
             }
             let cand: GmCandidate? = resp.candidates?.at(0);
             let parts: GmRespPart[] = cand?.content?.parts ?? [];
@@ -1038,13 +1069,11 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] 
             };
             let usage: GmUsageMetadata? = resp.usageMetadata;
             if (stop != null || usage != null) {
-                out.push(
-                    ai.stream.TurnMeta {
-                        stop_reason: stop,
-                        usage: _gm_usage(usage),
-                        resolved_model: resp.modelVersion,
-                    },
-                );
+                out.push(ai.stream.TurnMeta {
+                    stop_reason: stop,
+                    usage: _gm_usage(usage),
+                    resolved_model: resp.modelVersion,
+                });
                 null
             } else {
                 null
@@ -1103,7 +1132,10 @@ function _request(
         preview = preview,
     );
     let base = c.resolved_base_url() ?? "https://generativelanguage.googleapis.com/v1beta";
-    let url = _gm_apply_query(`${base}/models/${c.model}${gemini_method(stream)}`, c.query_params);
+    let url = _gm_apply_query(
+        `${base}/models/${c.model}${gemini_method(stream)}`,
+        c.query_params,
+    );
     let headers: map<string, string> = { "content-type": "application/json" };
     let with_user = _gm_apply_headers(headers, c.headers);
     if (!preview || with_user.get("x-goog-api-key") == null) {
@@ -1114,7 +1146,12 @@ function _request(
         };
         let _ = with_user.set("x-goog-api-key", api_key);
     }
-    baml.http.Request { method: "POST", url: url, headers: with_user, body: body }
+    baml.http.Request {
+        method: "POST",
+        url: url,
+        headers: with_user,
+        body: body,
+    }
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
@@ -1126,7 +1163,10 @@ function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.Mod
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(render(c, input));
     let sent = ai.wire.send_as_with_wire<GmResponse>(
         req,
-        ai.events.ModelKey { provider: c.provider(), model: c.model },
+        ai.events.ModelKey {
+            provider: c.provider(),
+            model: c.model,
+        },
         capture_wire = c.capture_wire,
     );
     ai.internal.with_own_call(
@@ -1166,9 +1206,16 @@ function gemini_invoke_stream(
         dispatched = started,
     );
     let call = ai.events.ModelCall {
-        resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
+        resolved_model: ai.events.ModelKey {
+            provider: c.provider(),
+            model: c.model,
+        },
         usage: null,
-        timing: ai.events.Timing { start_time: started, duration: null, ttft: null },
+        timing: ai.events.Timing {
+            start_time: started,
+            duration: null,
+            ttft: null,
+        },
         http_request: if (c.capture_wire) {
             baml.http.Request {
                 method: req.method,
@@ -1179,12 +1226,12 @@ function gemini_invoke_stream(
         } else {
             null
         },
-        http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
-        sse_responses: if (c.capture_wire) {
-            []
-        } else {
-            null
+        http_response: ai.events.HttpResponse {
+            status: sse.status_code,
+            headers: sse.headers,
+            body: null,
         },
+        sse_responses: if (c.capture_wire) { [] } else { null },
     };
     stream._wire_call = call;
     stream._requested_model = c.model;

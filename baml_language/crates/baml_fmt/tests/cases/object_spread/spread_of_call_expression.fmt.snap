@@ -7,9 +7,15 @@ class P {
 }
 
 function base() -> P {
-    P { name: "b", score: 0 }
+    P {
+        name: "b",
+        score: 0,
+    }
 }
 
 function f() -> P {
-    P { ...base(), score: 1 }
+    P {
+        ...base(),
+        score: 1,
+    }
 }

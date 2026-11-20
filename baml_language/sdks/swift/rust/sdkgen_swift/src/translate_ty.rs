@@ -45,6 +45,7 @@ impl TranslateCtx {
     /// The Swift type of media of kind `kind`: the generated struct of the
     /// class that crosses as that media.
     fn media_wrapper(&self, kind: MediaKind) -> Option<String> {
+        let kind = kind.concrete()?;
         let (fqn, _) = self
             .crossings
             .iter()
@@ -110,7 +111,7 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         Ty::Null => Some("BamlNull".to_string()),
         Ty::Uint8Array => Some("Foundation.Data".to_string()),
         // Provider-neutral prompts cross as a copied protobuf tree. They are
-        // portable values, not generated `$rust_type` handle wrappers.
+        // portable values, not handle wrappers.
         Ty::PromptAst => Some("BamlPrompt".to_string()),
         // Media is spelled by the generated struct of the class the
         // compiler says crosses as that media. The generic media shape has
@@ -160,6 +161,8 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
                 Some(format!("BamlStream<{}>", translate_ty(value, ctx)?))
             }
             ClassCrossing::Prompt => args.is_empty().then(|| "BamlPrompt".to_string()),
+            // A host's own value is the host's handle to it.
+            ClassCrossing::HostValue => args.is_empty().then(|| HANDLE.to_string()),
             ClassCrossing::Fields | ClassCrossing::Opaque | ClassCrossing::Media(_) => {
                 let path = TranslateCtx::named_ref(name, &ctx.supported_classes)?;
                 if args.is_empty() {
@@ -190,9 +193,6 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
                 Some(path)
             }
         }
-        // Opaque engine-owned state (`$rust_type` fields on stdlib
-        // resource classes: File._handle, Response._body, media _data).
-        Ty::RustType => Some("BamlHandle?".to_string()),
         Ty::Tuple(items) => translate_tuple(items, ctx),
         // Unit is only meaningful in return position; the emitter
         // special-cases it. Everything else lands in later phases.
@@ -307,7 +307,8 @@ fn is_leaf(ty: &Ty, ctx: &TranslateCtx) -> bool {
                 | ClassCrossing::Media(_)
                 | ClassCrossing::Prompt,
             ) => true,
-            Some(ClassCrossing::Fields) | None => false,
+            // A host's own value's slot states its type: it is not a leaf.
+            Some(ClassCrossing::Fields | ClassCrossing::HostValue) | None => false,
         },
         Ty::TypeAlias(name) => ctx
             .alias_bodies
@@ -422,6 +423,9 @@ pub(crate) fn slot_expr(ty: &Ty, ctx: &TranslateCtx, vars: TypeVarSlot<'_>) -> O
                 inner
             })
         }
+        Ty::Class(name, args) if ctx.crossing(name) == Some(ClassCrossing::HostValue) => {
+            args.is_empty().then(handle_slot)
+        }
         Ty::Class(name, args) => {
             let fqn = name.to_string();
             let swift = translate_ty(ty, ctx)?;
@@ -465,9 +469,6 @@ pub(crate) fn slot_expr(ty: &Ty, ctx: &TranslateCtx, vars: TypeVarSlot<'_>) -> O
                 own_slot(&path)
             })
         }
-        Ty::RustType => {
-            Some("BamlSlots.optional(BamlSlot<BamlHandle>._leaf(.rustType))".to_string())
-        }
         Ty::Tuple(items) if !items.is_empty() => {
             let slots = items
                 .iter()
@@ -476,6 +477,30 @@ pub(crate) fn slot_expr(ty: &Ty, ctx: &TranslateCtx, vars: TypeVarSlot<'_>) -> O
             Some(format!("BamlSlots.tuple({})", slots.join(", ")))
         }
         _ => None,
+    }
+}
+
+/// The Swift type of an opaque handle: a host's own value, and the engine's
+/// handle to a media value.
+pub(crate) const HANDLE: &str = "BamlHandle?";
+
+/// The slot of a host's own value ([`HANDLE`]): a `baml.host.Value`.
+pub(crate) fn handle_slot() -> String {
+    "BamlSlots.optional(BamlSlot<BamlHandle>._leaf(.hostValue))".to_string()
+}
+
+/// The slot of an engine handle ([`HANDLE`]), whose type the engine knows:
+/// it states nothing.
+pub(crate) fn engine_handle_slot() -> String {
+    "BamlSlots.optional(BamlSlot<BamlHandle>._leaf(.unknown))".to_string()
+}
+
+/// Whether a value of `ty` is an opaque handle ([`HANDLE`]): a host's own
+/// value.
+pub(crate) fn is_handle(ty: &Ty, ctx: &TranslateCtx) -> bool {
+    match ty {
+        Ty::Class(name, _) => ctx.crossing(name) == Some(ClassCrossing::HostValue),
+        _ => false,
     }
 }
 

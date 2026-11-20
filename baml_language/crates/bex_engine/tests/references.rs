@@ -1,37 +1,118 @@
-//! What a host holds of the runtime's own: an instance that keeps runtime
-//! data (`$rust_type`) crosses by its fields with that data as a payload the
-//! host passes back as it received it, and a standard-library capability
-//! (`reflect.Package`) crosses as an opaque reference to the engine's
-//! instance, which a host holds, passes back, and never builds.
+//! What a host holds of the runtime's own. An instance of a `@@rust_type`
+//! class and a standard-library capability (`reflect.Package`) cross as an
+//! opaque reference to the engine's instance, which a host holds, passes back
+//! as that same instance, and never builds.
 
 mod common;
 
 use std::sync::Arc;
 
+use baml_type::TypeName;
 use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
-use bex_external_types::{BexExternalAdt, TaggedHeapHandleKind};
+use bex_external_types::{BexExternalAdt, TaggedHeapHandleKind, WireHead};
 use common::compile_for_engine;
 use indexmap::IndexMap;
 use sys_native::SysOpsExt;
 
 const SOURCE: &str = r#"
+    class Marker {
+        n int
+    }
+
+    function make_reader() -> baml.csv.Reader {
+        baml.csv.reader("1\n2\n", options = baml.csv.ReaderOptions { has_header: false })
+    }
+
+    function lock(path: string) -> baml.fs.Lock {
+        baml.fs.lock(path, 0)
+    }
+
+    function release(lock: baml.fs.Lock) -> null {
+        lock.close();
+        null
+    }
+
+    function next_cell(reader: baml.csv.Reader) -> string {
+        if let record: baml.csv.Record = reader.next() {
+            record.get_at<string>(0) ?? "missing"
+        } else {
+            "done"
+        }
+    }
+
+    function make_token() -> baml.spawn.CancelToken {
+        baml.spawn.CancelToken.new()
+    }
+
+    function cancel_token(token: baml.spawn.CancelToken) -> null {
+        let _ = token.cancel();
+        null
+    }
+
+    function is_cancelled(token: baml.spawn.CancelToken) -> bool {
+        token.is_cancelled()
+    }
+
+    function same_token(a: baml.spawn.CancelToken, b: baml.spawn.CancelToken) -> bool {
+        a == b
+    }
+
+    function open_file(path: string) -> baml.fs.File {
+        baml.fs.open(path, "r")
+    }
+
+    function skip_to(file: baml.fs.File, offset: int) -> int {
+        file.seek_from("start", offset)
+    }
+
+    function read_rest(file: baml.fs.File) -> string {
+        file.text()
+    }
+
+    function compile_glob(pattern: string) -> baml.glob.Glob {
+        baml.glob.new(pattern)
+    }
+
+    function glob_matches(glob: baml.glob.Glob, path: string) -> bool {
+        glob.matches(path)
+    }
+
+    function make_span() -> trace.Span {
+        trace.start_span("operation")
+    }
+
+    function finish_span(span: trace.Span) -> null {
+        span.finish(1);
+        null
+    }
+
+    function is_closed(span: trace.Span) -> bool {
+        span.is_closed()
+    }
+
     function make_hasher() -> baml.hash.DefaultHasher {
         baml.hash.DefaultHasher.new()
     }
 
-    function hasher_write(hasher: baml.hash.DefaultHasher, text: string) -> null {
+    function hash_after(hasher: baml.hash.DefaultHasher, text: string) -> int {
         hasher.write(text.to_utf8());
-        null
-    }
-
-    function hasher_finish(hasher: baml.hash.DefaultHasher) -> int {
         hasher.finish()
     }
 
     function hash_text(text: string) -> int {
-        let hasher = baml.hash.DefaultHasher.new();
-        hasher.write(text.to_utf8());
-        hasher.finish()
+        hash_after(baml.hash.DefaultHasher.new(), text)
+    }
+
+    function pick(hasher: bool) -> baml.hash.DefaultHasher | Marker {
+        if (hasher) {
+            baml.hash.DefaultHasher.new()
+        } else {
+            Marker { n: 1 }
+        }
+    }
+
+    function make_identity() -> (x: int) -> int throws never {
+        (x: int) -> int { x }
     }
 
     function current_package() -> reflect.Package {
@@ -72,45 +153,408 @@ fn string(value: &str) -> BexExternalValue {
     BexExternalValue::String(value.into())
 }
 
-/// An instance holding runtime data crosses by its fields, the data among
-/// them as a payload the engine issued.
-#[tokio::test]
-async fn an_instance_holding_runtime_data_crosses_by_fields_with_its_payload() {
-    let engine = engine();
-    let hasher = call(&engine, "make_hasher", vec![]).await.unwrap();
-    let BexExternalValue::Instance {
-        class_name, fields, ..
-    } = &hasher
-    else {
-        panic!("a DefaultHasher crosses by its fields, got {hasher:?}");
+/// The refusal's message, or a panic with whatever else came back.
+#[track_caller]
+fn refusal(result: Result<BexExternalValue, EngineError>) -> String {
+    match result {
+        Err(EngineError::TypeMismatch { message }) => message,
+        other => panic!("expected a type mismatch, got {other:?}"),
+    }
+}
+
+/// `baml.hash.DefaultHasher` as a wire type, in either the engine's
+/// annotation form or the host's.
+fn default_hasher_ty<L: Clone>() -> baml_type::WireTy<L> {
+    baml_type::RealizedTy::Class(
+        WireHead::Static(TypeName::from_dotted_path("baml.hash.DefaultHasher")),
+        Box::new([]),
+    )
+}
+
+/// The value is a live reference to an instance of `baml.spawn.CancelToken`.
+#[track_caller]
+fn assert_cancel_token_reference(value: &BexExternalValue) {
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = value else {
+        panic!("a cancel token crosses as a live reference, got {value:?}");
     };
-    assert_eq!(class_name, "baml.hash.DefaultHasher");
-    assert!(
-        matches!(fields.get("_state"), Some(BexExternalValue::RustData(_))),
-        "its state is a payload: {fields:?}"
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(
+        *ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("baml.spawn.CancelToken")),
+            Box::new([]),
+        )
     );
 }
 
-/// A host passes the instance back as it received it; the payload is the
-/// engine's own, so the instance the engine builds shares its state.
+/// The value is a token the runtime issued a host body: a `CancelToken` the
+/// host holds by reference, with no heap object behind it.
+#[track_caller]
+fn assert_issued_cancel_token(value: &BexExternalValue) {
+    let BexExternalValue::Adt(BexExternalAdt::CancelToken(token)) = value else {
+        panic!("a host body's cancel token is issued without a heap object, got {value:?}");
+    };
+    assert_eq!(
+        token.ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("baml.spawn.CancelToken")),
+            Box::new([]),
+        )
+    );
+}
+
+/// The value is a live reference to an instance of `baml.hash.DefaultHasher`.
+#[track_caller]
+fn assert_hasher_reference(value: &BexExternalValue) {
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = value else {
+        panic!("a hasher crosses as a live reference, got {value:?}");
+    };
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(*ty, default_hasher_ty());
+}
+
+/// A `baml.fs.Lock` is a lock the runtime holds, so it crosses as a reference,
+/// and the lock passed back is the one that was taken.
 #[tokio::test]
-async fn a_payload_sent_back_keeps_its_state() {
+async fn a_lock_crosses_as_a_reference_to_the_held_lock() {
+    let engine = engine();
+    let dir = tempfile::tempdir().unwrap();
+    let path = string(&dir.path().join("lock").to_string_lossy());
+    let lock = call(&engine, "lock", vec![path.clone()]).await.unwrap();
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = &lock else {
+        panic!("a lock crosses as a live reference, got {lock:?}");
+    };
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(
+        *ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("baml.fs.Lock")),
+            Box::new([]),
+        )
+    );
+    // Negative control: while the lock is held, the path cannot be locked.
+    assert!(call(&engine, "lock", vec![path.clone()]).await.is_err());
+    // Passed back, it is the lock that was taken: closing it frees the path.
+    call(&engine, "release", vec![lock]).await.unwrap();
+    let again = call(&engine, "lock", vec![path]).await.unwrap();
+    call(&engine, "release", vec![again]).await.unwrap();
+}
+
+/// A class with fields and runtime state crosses by its fields, its state a
+/// reference to the engine's `@@rust_type` instance, and works when it comes
+/// back.
+#[tokio::test]
+async fn a_class_holding_rust_type_state_crosses_by_fields_with_a_reference() {
+    let engine = engine();
+    let reader = call(&engine, "make_reader", vec![]).await.unwrap();
+    let BexExternalValue::Instance {
+        class_name, fields, ..
+    } = &reader
+    else {
+        panic!("a csv.Reader crosses by its fields, got {reader:?}");
+    };
+    assert_eq!(class_name, "baml.csv.Reader");
+    assert!(
+        matches!(
+            fields.get("_state"),
+            Some(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                kind: TaggedHeapHandleKind::RuntimeValue,
+                ..
+            }))
+        ),
+        "its state is a reference: {fields:?}"
+    );
+    // The reference is the engine's own: a record read through one crossing
+    // moves the position the next one reads from.
+    let first = call(&engine, "next_cell", vec![reader.clone()])
+        .await
+        .unwrap();
+    let second = call(&engine, "next_cell", vec![reader]).await.unwrap();
+    assert_eq!((first.clone(), second), (string("1"), string("2")));
+    // Negative control: a fresh reader starts from its first record.
+    let fresh = call(&engine, "make_reader", vec![]).await.unwrap();
+    assert_eq!(
+        call(&engine, "next_cell", vec![fresh]).await.unwrap(),
+        first
+    );
+}
+
+/// A `CancelToken` keeps its sources in the runtime, so it crosses as a
+/// reference, and cancelling through one crossing is seen through the next.
+#[tokio::test]
+async fn a_cancel_token_crosses_as_a_reference_to_its_state() {
+    let engine = engine();
+    let token = call(&engine, "make_token", vec![]).await.unwrap();
+    assert_cancel_token_reference(&token);
+    call(&engine, "cancel_token", vec![token.clone()])
+        .await
+        .unwrap();
+    let cancelled = call(&engine, "is_cancelled", vec![token]).await.unwrap();
+    assert_eq!(cancelled, BexExternalValue::Bool(true));
+    // Negative control: a token nobody cancelled is not cancelled.
+    let fresh = call(&engine, "make_token", vec![]).await.unwrap();
+    let fresh_cancelled = call(&engine, "is_cancelled", vec![fresh]).await.unwrap();
+    assert_eq!(fresh_cancelled, BexExternalValue::Bool(false));
+}
+
+/// A `baml.fs.File` is the platform's open file, so it crosses as a reference,
+/// and a seek through one crossing moves the cursor the next one reads from.
+#[tokio::test]
+async fn a_file_crosses_as_a_reference_to_the_open_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("crossing.txt");
+    std::fs::write(&path, "Hello from BAML!").unwrap();
+    let path = string(path.to_str().unwrap());
+
+    let engine = engine();
+    let file = call(&engine, "open_file", vec![path.clone()])
+        .await
+        .unwrap();
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = &file else {
+        panic!("a file crosses as a live reference, got {file:?}");
+    };
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(
+        *ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("baml.fs.File")),
+            Box::new([]),
+        )
+    );
+    let position = call(
+        &engine,
+        "skip_to",
+        vec![file.clone(), BexExternalValue::Int(6)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(position, BexExternalValue::Int(6));
+    let rest = call(&engine, "read_rest", vec![file]).await.unwrap();
+    assert_eq!(rest, string("from BAML!"));
+    // Negative control: a file nobody moved reads from its start.
+    let fresh = call(&engine, "open_file", vec![path]).await.unwrap();
+    let all = call(&engine, "read_rest", vec![fresh]).await.unwrap();
+    assert_eq!(all, string("Hello from BAML!"));
+}
+
+/// A `baml.glob.Glob` is the platform's compiled pattern, so it crosses as a
+/// reference, and the pattern passed back is the one that was compiled.
+#[tokio::test]
+async fn a_glob_crosses_as_a_reference_to_its_pattern() {
+    let engine = engine();
+    let glob = call(&engine, "compile_glob", vec![string("*.txt")])
+        .await
+        .unwrap();
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = &glob else {
+        panic!("a glob crosses as a live reference, got {glob:?}");
+    };
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(
+        *ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("baml.glob.Glob")),
+            Box::new([]),
+        )
+    );
+    let text = call(
+        &engine,
+        "glob_matches",
+        vec![glob.clone(), string("notes.txt")],
+    )
+    .await
+    .unwrap();
+    assert_eq!(text, BexExternalValue::Bool(true));
+    // Negative control: the pattern refuses what it does not match.
+    let image = call(&engine, "glob_matches", vec![glob, string("photo.png")])
+        .await
+        .unwrap();
+    assert_eq!(image, BexExternalValue::Bool(false));
+}
+
+/// A `trace.Span` is an operation the runtime records, so it crosses as a
+/// reference, and finishing it through one crossing is seen through the next.
+#[tokio::test]
+async fn a_span_crosses_as_a_reference_to_its_operation() {
+    let engine = engine();
+    let span = call(&engine, "make_span", vec![]).await.unwrap();
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = &span else {
+        panic!("a span crosses as a live reference, got {span:?}");
+    };
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(
+        *ty,
+        baml_type::RealizedTy::Class(
+            WireHead::Static(TypeName::from_dotted_path("trace.Span")),
+            Box::new([]),
+        )
+    );
+    call(&engine, "finish_span", vec![span.clone()])
+        .await
+        .unwrap();
+    let closed = call(&engine, "is_closed", vec![span]).await.unwrap();
+    assert_eq!(closed, BexExternalValue::Bool(true));
+    // Negative control: a span nobody finished is open.
+    let fresh = call(&engine, "make_span", vec![]).await.unwrap();
+    let fresh_closed = call(&engine, "is_closed", vec![fresh]).await.unwrap();
+    assert_eq!(fresh_closed, BexExternalValue::Bool(false));
+}
+
+/// A host body that runs no BAML (a traced host function) still holds a
+/// token, which the engine allocates outside any VM call: a live reference
+/// observing the body's cancellation, whose own authority cancels the body.
+#[tokio::test]
+async fn a_host_body_holds_a_cancel_token_reference() {
+    let engine = engine();
+    let host = engine
+        .begin_host_invocation(
+            &bex_engine::HostDefinition {
+                language: "python".into(),
+                module: "application".into(),
+                qualified_name: "request".into(),
+                source_file: "application.py".into(),
+                definition_line: 10,
+                wrapper_line: 9,
+                display_name: "request".into(),
+            },
+            None,
+            &bex_vm_types::trace::TraceOptionsData::default(),
+            &bex_engine::HostCallSite {
+                source_file: "caller.py".into(),
+                line: 20,
+            },
+            None,
+        )
+        .unwrap();
+    let token = host.cancel_token().unwrap();
+    assert_issued_cancel_token(&token);
+    // Each crossing into BAML is the same token.
+    let same = call(&engine, "same_token", vec![token.clone(), token.clone()]).await;
+    assert_eq!(same.unwrap(), BexExternalValue::Bool(true));
+    let cancelled = call(&engine, "is_cancelled", vec![token.clone()]).await;
+    assert_eq!(cancelled.unwrap(), BexExternalValue::Bool(false));
+    assert!(!host.inherited_state().is_cancelled());
+    call(&engine, "cancel_token", vec![token.clone()])
+        .await
+        .unwrap();
+    let cancelled = call(&engine, "is_cancelled", vec![token]).await;
+    assert_eq!(cancelled.unwrap(), BexExternalValue::Bool(true));
+    assert!(host.inherited_state().is_cancelled());
+    host.finish(btel_types::InvocationOutcome::Cancelled);
+}
+
+/// A host body's token dies with the runtime that issued it: another runtime
+/// refuses it rather than building a token for an execution it does not run.
+#[tokio::test]
+async fn a_host_body_cancel_token_dies_with_its_runtime() {
+    let issuer = engine();
+    let host = issuer
+        .begin_host_invocation(
+            &bex_engine::HostDefinition {
+                language: "python".into(),
+                module: "application".into(),
+                qualified_name: "request".into(),
+                source_file: "application.py".into(),
+                definition_line: 10,
+                wrapper_line: 9,
+                display_name: "request".into(),
+            },
+            None,
+            &bex_vm_types::trace::TraceOptionsData::default(),
+            &bex_engine::HostCallSite {
+                source_file: "caller.py".into(),
+                line: 20,
+            },
+            None,
+        )
+        .unwrap();
+    let token = host.cancel_token().unwrap();
+    let other = engine();
+    let refused = call(&other, "is_cancelled", vec![token])
+        .await
+        .expect_err("another runtime refuses the token");
+    assert!(
+        refused
+            .to_string()
+            .contains("belongs to a different BAML runtime"),
+        "{refused}"
+    );
+    host.finish(btel_types::InvocationOutcome::Ok);
+}
+
+/// An instance of a `@@rust_type` class keeps all its state in the runtime,
+/// so it crosses as a reference to the engine's instance.
+#[tokio::test]
+async fn a_rust_type_instance_crosses_as_a_reference() {
     let engine = engine();
     let hasher = call(&engine, "make_hasher", vec![]).await.unwrap();
-    call(&engine, "hasher_write", vec![hasher.clone(), string("ab")])
+    assert_hasher_reference(&hasher);
+}
+
+/// A host passes the reference back as it received it, and the engine gets
+/// the same instance: state one call leaves is the next call's.
+#[tokio::test]
+async fn a_rust_type_instance_comes_back_as_the_same_instance() {
+    let engine = engine();
+    let hasher = call(&engine, "make_hasher", vec![]).await.unwrap();
+    // The second call's hash covers both writes, as one hasher fed "ab" does.
+    call(&engine, "hash_after", vec![hasher.clone(), string("a")])
         .await
         .unwrap();
-    call(&engine, "hasher_write", vec![hasher.clone(), string("cd")])
+    let after_both = call(&engine, "hash_after", vec![hasher, string("b")])
         .await
         .unwrap();
-    let finished = call(&engine, "hasher_finish", vec![hasher]).await.unwrap();
-    let expected = call(&engine, "hash_text", vec![string("abcd")])
+    let fresh = call(&engine, "hash_text", vec![string("ab")])
         .await
         .unwrap();
-    assert_eq!(
-        finished, expected,
-        "two calls wrote through one payload: the state the first left is the second's"
+    assert_eq!(after_both, fresh);
+    // Negative control: a fresh hasher fed only "b" differs, so the equality
+    // above came from the shared state.
+    let only_b = call(&engine, "hash_text", vec![string("b")]).await.unwrap();
+    assert_ne!(after_both, only_b);
+}
+
+/// A host never builds an instance of a `@@rust_type` class: it has no
+/// fields, and its state is the runtime's own.
+#[tokio::test]
+async fn a_host_never_builds_a_rust_type_instance() {
+    let engine = engine();
+    let forged = BexExternalValue::Instance {
+        class_name: "baml.hash.DefaultHasher".to_string(),
+        type_args: Vec::new(),
+        fields: IndexMap::new(),
+    };
+    let message = refusal(call(&engine, "hash_after", vec![forged, string("a")]).await);
+    assert!(
+        message.contains("`baml.hash.DefaultHasher` is the runtime's own"),
+        "{message}"
     );
+}
+
+/// A reference fills a slot only if the instance it names is a member: a
+/// closure is not a `DefaultHasher`.
+#[tokio::test]
+async fn a_reference_of_another_type_does_not_fill_a_rust_type_slot() {
+    let engine = engine();
+    let closure = call(&engine, "make_identity", vec![]).await.unwrap();
+    let message = refusal(call(&engine, "hash_after", vec![closure, string("a")]).await);
+    assert!(
+        message.contains("does not match the declared type `baml.hash.DefaultHasher`"),
+        "{message}"
+    );
+}
+
+/// A reference under a union return carries the arm its instance selects.
+#[tokio::test]
+async fn a_rust_type_instance_selects_its_union_arm() {
+    let engine = engine();
+    let picked = call(&engine, "pick", vec![BexExternalValue::Bool(true)])
+        .await
+        .unwrap();
+    let BexExternalValue::Union { value, metadata } = &picked else {
+        panic!("a union return carries its selected arm, got {picked:?}");
+    };
+    assert_eq!(metadata.selected_option, default_hasher_ty());
+    assert_hasher_reference(value);
 }
 
 /// A standard-library capability whose fields are the runtime's own crosses

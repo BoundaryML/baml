@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use baml_base::{Literal, MediaKind, Name as BaseName, qualified_name::BAML_JSON_JSON};
+use baml_base::{ConcreteMediaKind, Literal, Name as BaseName, qualified_name::BAML_JSON_JSON};
 use baml_sdkgen_types::{
     ClassCrossing, CodegenFunctionParamMode, Name, Symbol, SymbolPool, Ty,
     is_synthetic_effect_param,
@@ -27,7 +27,7 @@ pub(crate) enum GoTy {
     Bool,
     Null,
     Uint8Array,
-    Media(MediaKind),
+    Media(ConcreteMediaKind),
     /// The exact recursive stdlib alias `baml.json.json`. Its Go surface is
     /// `any`, but unlike a dynamic union its wire decoder accepts only the
     /// canonical JSON value algebra.
@@ -35,9 +35,9 @@ pub(crate) enum GoTy {
     /// A first-class reflected BAML type value (`type`). Its Go surface is the
     /// opaque runtime descriptor `baml_go.BAMLType`.
     ReflectedType,
-    /// Opaque Rust-managed state (`$rust_type`). The native handle table owns
-    /// the underlying value; Go only holds a cloneable lifetime token.
-    RustType,
+    /// A host's own value (`baml.host.Value`): the Go value this process
+    /// sent, which BAML holds by reference.
+    HostValue,
     FunctionSpec {
         output: Box<Self>,
     },
@@ -48,10 +48,11 @@ pub(crate) enum GoTy {
     /// The class whose crossing is `Prompt` (`ai.Prompt`): a rendered prompt,
     /// carried by its own wire arm. Its Go surface is `baml_go.Prompt`.
     Prompt(Name),
-    /// A class whose crossing is `Opaque` (`reflect.Session`, ...): an
-    /// instance only the engine builds, which Go holds as the reference it
-    /// crossed as, a `baml_go.OpaqueHandle`, and passes back.
-    Opaque(Name),
+    /// A class whose crossing is `Opaque` (`reflect.Session`,
+    /// `sap._ParseCache<T>`, ...) at its type arguments: an instance only the
+    /// engine builds, which Go holds as the reference it crossed as, in the
+    /// class's generated wrapper, and passes back.
+    Opaque(Name, Box<[Self]>),
     /// A Go type parameter projected from the compiler-owned BAML `TypeVar`.
     TypeVar(BaseName),
     Literal(GoLiteral),
@@ -390,10 +391,9 @@ impl<'a> GoTypeProjection<'a> {
             Ty::Bool => GoTy::Bool,
             Ty::Null => GoTy::Null,
             Ty::Uint8Array => GoTy::Uint8Array,
-            Ty::Media(MediaKind::Generic) => GoTy::Unsupported,
-            Ty::Media(kind) => GoTy::Media(*kind),
+            // Go has no surface for the open `media` type yet.
+            Ty::Media(kind) => kind.concrete().map_or(GoTy::Unsupported, GoTy::Media),
             Ty::Type => GoTy::ReflectedType,
-            Ty::RustType => GoTy::RustType,
             Ty::Literal(literal, ..) => GoTy::Literal(match literal {
                 Literal::String(value) => GoLiteral::String(value.clone()),
                 Literal::Int(value) => GoLiteral::Int(*value),
@@ -416,8 +416,16 @@ impl<'a> GoTypeProjection<'a> {
                     value: Box::new(self.project_inner(value, aliases)),
                 },
                 (ClassCrossing::Prompt, []) => GoTy::Prompt(name.clone()),
-                (ClassCrossing::Opaque, []) => GoTy::Opaque(name.clone()),
-                (ClassCrossing::Media(MediaKind::Generic), []) => GoTy::Unsupported,
+                // A host's own value is the host's handle to it.
+                (ClassCrossing::HostValue, []) => GoTy::HostValue,
+                (ClassCrossing::Opaque, arguments) => GoTy::Opaque(
+                    name.clone(),
+                    arguments
+                        .iter()
+                        .map(|argument| self.project_inner(argument, aliases))
+                        .collect::<Vec<_>>()
+                        .into_boxed_slice(),
+                ),
                 (ClassCrossing::Media(kind), []) => GoTy::Media(kind),
                 (ClassCrossing::Fields, arguments) => GoTy::Class(
                     name.clone(),
@@ -431,7 +439,7 @@ impl<'a> GoTypeProjection<'a> {
                     ClassCrossing::FunctionSpec
                     | ClassCrossing::Stream
                     | ClassCrossing::Prompt
-                    | ClassCrossing::Opaque
+                    | ClassCrossing::HostValue
                     | ClassCrossing::Media(_),
                     _,
                 ) => GoTy::Unsupported,
@@ -928,6 +936,7 @@ pub(crate) fn literal_surface(literal: &GoLiteral) -> GoTy {
 
 #[cfg(test)]
 mod tests {
+    use baml_base::MediaKind;
     use baml_sdkgen_types::{CallableParam, Origin, TypeAlias};
     use baml_type::Freshness;
 
@@ -997,10 +1006,9 @@ mod tests {
     }
 
     #[test]
-    fn rust_type_projects_as_one_canonical_opaque_leaf_while_resource_stays_deferred() {
+    fn resource_stays_deferred() {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
-        assert_eq!(projection.project(&Ty::RustType), GoTy::RustType);
         assert_eq!(projection.project(&Ty::Resource), GoTy::Unsupported);
     }
 
@@ -1244,13 +1252,11 @@ mod tests {
     fn concrete_media_kinds_project_canonically_and_generic_media_is_deferred() {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
-        for kind in [
-            MediaKind::Image,
-            MediaKind::Audio,
-            MediaKind::Video,
-            MediaKind::Pdf,
-        ] {
-            assert_eq!(projection.project(&Ty::Media(kind)), GoTy::Media(kind));
+        for kind in ConcreteMediaKind::ALL {
+            assert_eq!(
+                projection.project(&Ty::Media(kind.into())),
+                GoTy::Media(kind)
+            );
         }
         assert_eq!(
             projection.project(&Ty::Media(MediaKind::Generic)),
@@ -1455,6 +1461,7 @@ mod tests {
         };
         let pool = SymbolPool::from([
             declared("reflect.Session", ClassCrossing::Opaque),
+            declared("baml.sap._ParseCache", ClassCrossing::Opaque),
             declared("ai.Prompt", ClassCrossing::Prompt),
             declared("ai.FunctionSpec", ClassCrossing::FunctionSpec),
             declared("user.Plain", ClassCrossing::Fields),
@@ -1468,7 +1475,14 @@ mod tests {
         };
         assert_eq!(
             class("reflect.Session", vec![]),
-            GoTy::Opaque(Name::from_dotted_path("reflect.Session"))
+            GoTy::Opaque(Name::from_dotted_path("reflect.Session"), Box::new([]))
+        );
+        assert_eq!(
+            class("baml.sap._ParseCache", vec![Ty::Int]),
+            GoTy::Opaque(
+                Name::from_dotted_path("baml.sap._ParseCache"),
+                Box::new([GoTy::Int])
+            )
         );
         assert_eq!(
             class("ai.Prompt", vec![]),
