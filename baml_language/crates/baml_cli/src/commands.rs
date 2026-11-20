@@ -238,6 +238,13 @@ pub(crate) struct CloudArgs {
 pub(crate) enum CloudCommands {
     #[command(
         subcommand,
+        about = "Create, update, get or delete dashboards",
+        after_long_help = "Examples:\n  Create a dashboard:\n    baml cloud dashboard create dashboard.html --project acme/app --key overview --name Overview\n\n  Download a dashboard:\n    baml cloud dashboard get --project acme/app --key overview --output dashboard.html"
+    )]
+    Dashboard(crate::cloud_command::DashboardCommands),
+
+    #[command(
+        subcommand,
         about = "Manage authentication",
         long_about = "Manage the identity used by Boundary Cloud.\n\nUse `baml cloud auth login` to authenticate, `baml cloud auth status` to verify authentication and inspect the selected project, and `baml cloud auth logout` to remove the authenticated session.",
         after_long_help = "Examples:\n  Log in:\n    baml cloud auth login\n\n  Verify authentication and show the selected project:\n    baml cloud auth status\n\n  Log out:\n    baml cloud auth logout"
@@ -344,6 +351,13 @@ impl RuntimeCli {
             Commands::Playground(args) => run_command(args, cx),
             Commands::Local(LocalCommands::Recordings(command)) => command.run(cx, Backend::Local),
             Commands::Cloud(cloud) => match &cloud.command {
+                CloudCommands::Dashboard(command) => run_command(
+                    &crate::cloud_command::Dashboard {
+                        command,
+                        scope: &cloud.scope,
+                    },
+                    cx,
+                ),
                 CloudCommands::Auth(command) => command.run(cx, &cloud.scope),
                 CloudCommands::Recordings(command) => command.run(cx, Backend::Cloud(&cloud.scope)),
             },

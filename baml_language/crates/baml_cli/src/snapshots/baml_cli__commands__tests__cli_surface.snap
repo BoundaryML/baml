@@ -99,6 +99,25 @@ baml local recordings schema
 baml cloud
   --env <ENV> [global]
   --project <ORG/PROJECT> [global]
+baml cloud dashboard
+baml cloud dashboard create
+  --environment <ENVIRONMENT>
+  --key <KEY>
+  --name <NAME>
+  <file>
+baml cloud dashboard update
+  --environment <ENVIRONMENT>
+  --expected-version <EXPECTED_VERSION>
+  --key <KEY>
+  --name <NAME>
+  <file>
+baml cloud dashboard get
+  --environment <ENVIRONMENT>
+  --key <KEY>
+  --output <OUTPUT>
+baml cloud dashboard delete
+  --environment <ENVIRONMENT>
+  --key <KEY>
 baml cloud auth
 baml cloud auth login
   --no-open [default: false]

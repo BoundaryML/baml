@@ -8,6 +8,8 @@ pub mod api_keys;
 #[cfg(feature = "auth")]
 pub mod auth;
 pub mod credentials;
+#[cfg(feature = "auth")]
+pub mod dashboards;
 pub mod response;
 pub use response::{ApiErrorBody, HttpFailure};
 #[cfg(feature = "auth")]
