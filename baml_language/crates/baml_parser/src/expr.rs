@@ -225,7 +225,7 @@ fn operand(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> 
 fn infix(p: &mut Parser<'_, '_>, mut lhs: AnyExpr, min_bp: u8, r: Restrictions) -> AnyExpr {
     loop {
         // A `//#` line is a statement: it ends the expression before it.
-        if p.cur.header_ahead() || p.cur.at_end() || line_break_ends_expr(p.cur, r) {
+        if p.cur.at(TokenKind::HeaderComment) || p.cur.at_end() || line_break_ends_expr(p.cur, r) {
             break;
         }
         let mark = p.mark_of_any(&lhs);

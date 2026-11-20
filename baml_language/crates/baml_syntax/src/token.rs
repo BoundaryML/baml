@@ -64,8 +64,10 @@ pub enum TokenKind {
     #[group(doc)]
     #[describe = "`//baml:` directive"]
     DirectiveComment,
-    /// `//#…`.
-    #[group(trivia)]
+    /// `//#…`: a section heading — a statement in a block, or the title
+    /// directly above a function. Syntax, not trivia; anywhere else it is an
+    /// error.
+    #[group(doc)]
     #[describe = "`//#` header comment"]
     HeaderComment,
     /// Not nested; closes at the first `*/`.
@@ -704,9 +706,7 @@ pub mod sets {
 /// The names `Token![Name]` resolves: kinds whose text varies (`Word`,
 /// `String`, `TemplateChunk`, …) and token sets (`Ident`, `LetIntroducer`, …).
 pub mod by_name {
-    // A trivia token is a node's field in exactly one place: a `//#` line that
-    // is a statement.
-    pub use super::{Ident, doc::*, lit::*, sets::*, trivia::HeaderComment};
+    pub use super::{Ident, doc::*, lit::*, sets::*};
     pub use crate::ops::UnaryOpToken;
 }
 

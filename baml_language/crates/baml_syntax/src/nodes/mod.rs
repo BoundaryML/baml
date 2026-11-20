@@ -7,9 +7,10 @@
 //! `Bogus` variant for recovered garbage.
 //!
 //! Trivia (whitespace, comments) never appear in a node; they stay in the
-//! token array between the tokens nodes own. The one exception is the `//#`
-//! header line: in a block it is a statement ([`HeaderStmt`]), directly
-//! above a function it is the function's title ([`HeaderLine`]).
+//! token array between the tokens nodes own. A `///` or `//baml:` line is
+//! syntax a declaration owns; a `//#` header line is a statement in a block
+//! ([`HeaderStmt`]) or, directly above a function, the function's title
+//! ([`HeaderLine`]).
 
 mod exprs;
 mod items;

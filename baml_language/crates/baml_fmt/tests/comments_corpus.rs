@@ -71,7 +71,6 @@ fn every_corpus_comment_is_attached_once_to_a_node_beside_it() {
                     matches!(
                         tokens.kind(t),
                         TokenKind::LineComment
-                            | TokenKind::HeaderComment
                             | TokenKind::BlockComment
                             | TokenKind::UnclosedBlockComment
                     ) && index.token_owner(t).is_none()

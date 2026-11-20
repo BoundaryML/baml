@@ -11,10 +11,10 @@ use baml_syntax::{
     },
     ops::AssignOp,
     token::{
-        Ident, KindSet, TokenIdx, TokenKind, TokenSet as _, ctx, kw, punct,
+        Ident, KindSet, TokenKind, TokenSet as _, ctx, doc, kw, punct,
         sets::{DocToken, LetIntroducer, TestKw},
     },
-    tree::{Id, Missing, TokenRange},
+    tree::{Id, Missing},
 };
 
 use crate::{
@@ -82,13 +82,12 @@ pub(crate) fn body_lines(
     (stmts, None)
 }
 
-/// The `//#` lines between the last statement and the next token, each a
-/// statement.
+/// The `//#` lines at the cursor, each a statement.
 fn header_stmts(p: &mut Parser<'_, '_>, stmts: &mut Vec<AnyStmt>) {
-    let headers: Vec<_> = p.cur.headers_ahead().collect();
-    for token in headers {
-        let span = TokenRange::new(token.idx, TokenIdx(token.idx.0 + 1));
-        stmts.push(AnyStmt::Header(p.out.alloc(HeaderStmt { token }, span)));
+    while let Some(token) = p.cur.eat::<doc::HeaderComment>() {
+        stmts.push(AnyStmt::Header(
+            p.alloc(Mark::of(token), HeaderStmt { token }),
+        ));
     }
 }
 
@@ -155,7 +154,7 @@ fn expr_line(p: &mut Parser<'_, '_>, expr: AnyExpr) -> Line {
     }
     let semi = p.cur.eat::<punct::Semicolon>();
     let closes = p.cur.at(TokenKind::RBrace) || p.cur.at_end();
-    if semi.is_none() && closes && !p.cur.header_ahead() {
+    if semi.is_none() && closes {
         return Line::Tail(expr);
     }
     Line::Stmt(AnyStmt::Expr(p.alloc(mark, ExprStmt { expr, semi })))

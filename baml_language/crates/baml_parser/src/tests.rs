@@ -129,6 +129,18 @@ fn there_are_no_increment_operators() {
     ));
 }
 
+/// Headers where no statement can stand never panic: a `let` with nothing
+/// after it, a header before the `}` that ends a body, a signature whose
+/// `->` a comment split (from the formatter fuzz corpus).
+#[test]
+fn header_comment_recovery_never_panics() {
+    insta::assert_snapshot!(tree("let//#\n}"));
+    insta::assert_snapshot!(tree("let//#\n   "));
+    insta::assert_snapshot!(tree(
+        "function classify(n: int) -/*C1*/> string {\n    //# statements\n    let label = match (n) {\n        0 => \"zero\",\n        _ => \"big\",\n    };\n    //# result\n    label\n}\n"
+    ));
+}
+
 /// Shapes whose recovery once consumed nothing and looped forever: a map or
 /// object member at a token that starts no expression, `@@` in an
 /// `implements` body, a catch arm whose pattern fails before its `=>`.

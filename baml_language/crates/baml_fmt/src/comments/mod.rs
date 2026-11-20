@@ -251,10 +251,10 @@ pub fn is_comment(kind: TokenKind) -> bool {
 
 /// The kind of comment a token is, if it is one the formatter places: the
 /// trivia comments. `///` and `//baml:` lines are syntax a declaration owns,
-/// and a `//#` line is a statement where it is allowed.
+/// and a `//#` line is a statement or a function's title where it is allowed.
 fn comment_kind(kind: TokenKind) -> Option<CommentKind> {
     match kind {
-        TokenKind::LineComment | TokenKind::HeaderComment => Some(CommentKind::Line),
+        TokenKind::LineComment => Some(CommentKind::Line),
         TokenKind::BlockComment | TokenKind::UnclosedBlockComment => Some(CommentKind::Block),
         TokenKind::Whitespace | TokenKind::Newline => None,
         kind => {

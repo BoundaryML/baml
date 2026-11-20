@@ -313,12 +313,8 @@ pub(crate) fn looks_like_as_projection(cur: Cursor<'_>) -> bool {
 /// empty map; a `//#` header right inside says block.
 pub(crate) fn looks_like_map(cur: Cursor<'_>) -> bool {
     debug_assert!(cur.at(TokenKind::LBrace));
-    {
-        let mut inside = cur;
-        inside.skip();
-        if inside.header_ahead() {
-            return false;
-        }
+    if cur.nth_is(1, TokenKind::HeaderComment) {
+        return false;
     }
     if cur.nth_is(1, TokenKind::RBrace) {
         return true;
