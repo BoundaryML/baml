@@ -348,6 +348,11 @@ pub struct TelemetryState {
     /// The nodes of this thread that spawned a future or started an owned
     /// span, each with where those hand their totals. Empty without spawns.
     shared_usage: Vec<(TelemetryId, Arc<SharedUsage>)>,
+    /// The owned spans whose scope runs on this thread, innermost last, each
+    /// with its accumulator: what is charged to one, and the totals of the
+    /// spans that complete under it, go there at once, since the owned span
+    /// can complete before its scope leaves the thread.
+    owned_usage: Vec<(TelemetryId, Arc<std::sync::Mutex<NodeUsage>>)>,
     /// Invocation timings not yet handed to the runtime: they go over in
     /// batches, so a call does not look up this thread's producer for each
     /// one. Empty outside an execution scope; see [`Self::flush_timing`].
@@ -538,6 +543,7 @@ impl TelemetryState {
             errors: None,
             usage: Vec::new(),
             shared_usage: Vec::new(),
+            owned_usage: Vec::new(),
             #[cfg(all(not(test), not(target_arch = "wasm32")))]
             pending_timing: Vec::new(),
             #[cfg(test)]
@@ -1579,7 +1585,46 @@ impl TelemetryState {
     #[cold]
     pub fn charge_model_usage(&mut self, entries: Vec<btel_records::ModelUsage>) {
         let node = self.thread.active_id;
+        if let Some(owned) = self.owned(node) {
+            merge_usage(
+                &mut owned
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .own,
+                entries,
+            );
+            return;
+        }
         merge_usage(&mut self.node_usage(node).own, entries);
+    }
+
+    /// The accumulator of `node`, when it is an owned span whose scope runs
+    /// on this thread.
+    fn owned(&self, node: TelemetryId) -> Option<Arc<std::sync::Mutex<NodeUsage>>> {
+        if self.owned_usage.is_empty() {
+            return None;
+        }
+        self.owned_usage
+            .iter()
+            .rev()
+            .find(|(id, _)| *id == node)
+            .map(|(_, usage)| Arc::clone(usage))
+    }
+
+    /// An owned span's scope enters this thread.
+    pub(crate) fn enter_owned(
+        &mut self,
+        node: TelemetryId,
+        usage: Arc<std::sync::Mutex<NodeUsage>>,
+    ) {
+        self.owned_usage.push((node, usage));
+    }
+
+    /// An owned span's scope leaves this thread.
+    pub(crate) fn exit_owned(&mut self, node: TelemetryId) {
+        if let Some(index) = self.owned_usage.iter().rposition(|(id, _)| *id == node) {
+            self.owned_usage.remove(index);
+        }
     }
 
     /// The usage entry of `node`, made empty when it has none.
@@ -1650,7 +1695,16 @@ impl TelemetryState {
         let total = usage.total();
         if !total.is_empty() {
             match parent {
-                Some(parent) => merge_usage(&mut self.node_usage(parent).below, total.clone()),
+                Some(parent) => match self.owned(parent) {
+                    Some(owned) => merge_usage(
+                        &mut owned
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .below,
+                        total.clone(),
+                    ),
+                    None => merge_usage(&mut self.node_usage(parent).below, total.clone()),
+                },
                 None => {
                     if let Some(spawner) = &self.thread.spawner_usage {
                         spawner.add(&total);
@@ -2058,6 +2112,7 @@ impl ::bex_vm_types::RootHaver for TelemetryState {
             errors: _,
             usage: _,
             shared_usage: _,
+            owned_usage: _,
             #[cfg(all(not(test), not(target_arch = "wasm32")))]
                 pending_timing: _,
             #[cfg(test)]

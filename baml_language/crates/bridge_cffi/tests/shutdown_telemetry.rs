@@ -103,12 +103,12 @@ async fn shutdown_finalizes_telemetry_once_without_guessing_the_host_outcome() {
                 btel_recorder::proto::ProcessStatus::Unknown as i32
             );
             assert!(end.at_unix_ns > 0);
-            // The header names the program, which is the newer addition.
+            // The header names the program; every file is at least minor 16.
             let header = terminal.header.as_ref().unwrap();
             assert!(header.program_id.is_some());
             assert_eq!(
                 header.format_minor,
-                btel_core::recording::minor::PACKAGE_IDENTITY
+                btel_core::recording::minor::WHOLE_SPAN
             );
         }
     }

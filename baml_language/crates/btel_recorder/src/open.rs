@@ -11,7 +11,9 @@
 //! completed) has no place: its lineage is unknown, and so is that of every
 //! span under it.
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
+
+use rustc_hash::FxHashMap as HashMap;
 
 use btel_core::recording::LINEAGE_ANCESTORS;
 

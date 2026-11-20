@@ -120,13 +120,14 @@ impl ManualScope {
     }
 
     pub(crate) fn restore(self, state: &mut TelemetryState) {
-        if let Some((id, usage)) = &self.usage
-            && let Some(charged) = state.take_model_usage(*id)
-        {
-            usage
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .merge(charged);
+        if let Some((id, usage)) = &self.usage {
+            state.exit_owned(*id);
+            if let Some(charged) = state.take_model_usage(*id) {
+                usage
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .merge(charged);
+            }
         }
         state.thread.active_id = self.parent_id;
         state.thread.active_call_path = self.call_path;
@@ -327,6 +328,9 @@ impl ManualSpan {
         };
         state.thread.active_id = template.id;
         state.thread.active_call_path = template.call_path;
+        if let Some(usage) = &template.usage {
+            state.enter_owned(template.id, Arc::clone(usage));
+        }
         state.set_context(self.context.clone());
         Some(saved)
     }
