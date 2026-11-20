@@ -116,6 +116,71 @@ function main() -> int {{
     )
 );
 
+// 1b-1e. Timing only, but the calls do not repeat one key back to back. The
+// VM's call-path cache has one entry (`CALL_PATH_CACHE_SLOTS`), so a call hits
+// it only when the previous resolved key was its own; every scenario below
+// misses on every call and takes the hash-map path. Each makes 10,000 timed
+// calls, as `timing_only` does, so their per-call overheads compare directly.
+
+// 1b. Two call sites in one loop: keys alternate Add, Sub, Add, Sub.
+scenario!(
+    timing_two_sites,
+    &format!(
+        "{TYPES}
+function Sub(a: int, b: int) -> int {{ a - b }}
+function main() -> int {{
+    let t = 0; let i = 0;
+    while (i < 5000) {{ t = Add(t, i); t = Sub(t, 1); i = i + 1; }}
+    t
+}}"
+    )
+);
+
+// 1c. A call that makes one call: keys alternate Outer, Add (parent and child).
+scenario!(
+    timing_nested,
+    &format!(
+        "{TYPES}
+function Outer(t: int, i: int) -> int {{ Add(t, i) }}
+function main() -> int {{
+    let t = 0; let i = 0;
+    while (i < 5000) {{ t = Outer(t, i); i = i + 1; }}
+    t
+}}"
+    )
+);
+
+// 1d. Four call sites in one loop.
+scenario!(
+    timing_four_sites,
+    &format!(
+        "{TYPES}
+function Sub(a: int, b: int) -> int {{ a - b }}
+function Mul(a: int, b: int) -> int {{ a * b }}
+function Keep(a: int, b: int) -> int {{ a }}
+function main() -> int {{
+    let t = 0; let i = 0;
+    while (i < 2500) {{ t = Add(t, i); t = Sub(t, 1); t = Mul(t, 1); t = Keep(t, i); i = i + 1; }}
+    t
+}}"
+    )
+);
+
+// 1e. A three-deep chain: Outer -> Mid -> Add per iteration, three keys in turn.
+scenario!(
+    timing_chain3,
+    &format!(
+        "{TYPES}
+function Mid(t: int, i: int) -> int {{ Add(t, i) }}
+function Outer(t: int, i: int) -> int {{ Mid(t, i) }}
+function main() -> int {{
+    let t = 0; let i = 0;
+    while (i < 3334) {{ t = Outer(t, i); i = i + 1; }}
+    t
+}}"
+    )
+);
+
 // 2. A generic call that is a span but captures no inputs: no type work
 // (#5145), and no definition work in either design.
 scenario!(
