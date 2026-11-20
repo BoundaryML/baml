@@ -1,0 +1,9 @@
+function f(foo: (int) -> int, a: ((int) -> int)[], t: (int, (int) -> int)) -> int {
+    let p = (foo)(1);
+    let q = ((foo))(1);
+    let r = (a[0])(1);
+    let s = (t.1)(1);
+    let g = (foo)<int>(1);
+    let h = (t.1)<int>(1);
+    p + q + r + s + g + h
+}

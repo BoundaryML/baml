@@ -115,9 +115,9 @@ function fence() -> string throws never {
 
 /// The system prompt every run shares, written beside the runs so what the
 /// models were told is part of the record. Returns its path.
-function system_prompt(
-    settings: Settings,
-) -> string throws baml.errors.Io | baml.errors.ParseError {
+function system_prompt(settings: Settings) -> string
+    throws baml.errors.Io | baml.errors.ParseError
+{
     let spec = baml.fs.read(settings.spec);
     let prompt = [
         "You are sitting a quiz on the BAML type system. Each question shows you a",
@@ -145,7 +145,7 @@ function system_prompt(
         "",
         spec,
     ]
-        .join("\n");
+    .join("\n");
     let path = `${settings.out}/system-prompt.txt`;
     let _ = baml.fs.write(path, prompt);
     path
@@ -192,7 +192,9 @@ function ask(asked: root.Asked, marked: root.Marked?, index: int) -> string thro
         null => {},
     }
     if (asked.teach != "") {
-        lines.push(`From the specification, on a rule you have been shaky on: ${asked.teach}`);
+        lines.push(
+            `From the specification, on a rule you have been shaky on: ${asked.teach}`,
+        );
         lines.push("");
     }
     lines.push(`Question ${index + 1}.`);
@@ -205,11 +207,7 @@ function ask(asked: root.Asked, marked: root.Marked?, index: int) -> string thro
         lines.push("Does it compile?");
     } else {
         for (let i = 0; i < asked.programs.length(); i = i + 1) {
-            let which = if (i == 0) {
-                "one"
-            } else {
-                "two"
-            };
+            let which = if (i == 0) { "one" } else { "two" };
             lines.push(`Program ${which}:`);
             lines.push(`${fence()}baml`);
             lines.push(asked.programs[i].trim_end());
@@ -232,16 +230,16 @@ function answer_in(reply: string, allowed: string[]) -> string? throws never {
             found = line;
         }
     }
-    let line = found
-        ?? return null;
-    let at = line.to_lower_case().index_of("answer")
-        ?? return null;
+    let line = found ?? return null;
+    let at = line.to_lower_case().index_of("answer") ?? return null;
     let after = line.slice(at + "answer".length(), line.length());
-    let bare = after.replace(":", " ").replace("*", " ").trim().to_lower_case();
-    let word = bare.split(" ").at(0)
-        ?? return null;
-    let clean = word.split(".").at(0)
-        ?? return null;
+    let bare = after
+        .replace(":", " ")
+        .replace("*", " ")
+        .trim()
+        .to_lower_case();
+    let word = bare.split(" ").at(0) ?? return null;
+    let clean = word.split(".").at(0) ?? return null;
     if (allowed.includes(clean)) {
         clean
     } else {
@@ -264,11 +262,13 @@ function put(
     message: string,
     system: string,
     settings: Settings,
-) -> Reply throws baml.errors.Io
-    | baml.errors.Timeout
-    | baml.json.ParseError
-    | baml.json.DecodeError
-    | baml.errors.InvalidArgument {
+) -> Reply
+    throws baml.errors.Io
+        | baml.errors.Timeout
+        | baml.json.ParseError
+        | baml.json.DecodeError
+        | baml.errors.InvalidArgument
+{
     let args = [
         "-p",
         "--model",
@@ -282,7 +282,7 @@ function put(
         `{"mcpServers":{}}`,
         "--disallowedTools",
     ]
-        .concat(denied());
+    .concat(denied());
     let resumed = match (session_id) {
         let id: string => args.concat(["--resume", id]),
         null => args,
@@ -308,16 +308,8 @@ function put(
 
 /// The end-of-sitting readout, as a learner is shown one.
 function readout(run: Run, rules: int?) -> string throws never {
-    let held = run.answers
-        .filter((a) -> {
-            a == "unsure"
-        })
-        .length();
-    let right = run.marks
-        .filter((m) -> {
-            m.correct == true
-        })
-        .length();
+    let held = run.answers.filter((a) -> { a == "unsure" }).length();
+    let right = run.marks.filter((m) -> { m.correct == true }).length();
     let why = match (run.ended) {
         let e: root.Ended => {
             if (e.why == "mastered") {
@@ -343,13 +335,17 @@ function readout(run: Run, rules: int?) -> string throws never {
                 let n: int => ` of ${n}`,
                 null => "",
             };
-            lines.push(`  Rules it will now bet on you for: ${e.mastered.length()}${of}`);
+            lines.push(
+                `  Rules it will now bet on you for: ${e.mastered.length()}${of}`,
+            );
             if (e.shaky.length() > 0) {
                 lines.push(`  Least certain of: ${e.shaky.slice(0, 4).join(", ")}`);
             }
             match (e.commits_unsure) {
                 let c: float => {
-                    lines.push(`  How often you committed to an answer you did not have: ${c}`)
+                    lines.push(
+                        `  How often you committed to an answer you did not have: ${c}`,
+                    )
                 },
                 null => {},
             }
@@ -440,17 +436,15 @@ function debrief_prompt(run: Run, rules: int?) -> string throws never {
         "on that you think you got right, and the three 0-5 scales run from 0 = not",
         "at all to 5 = completely.",
     ]
-        .join("\n")
+    .join("\n")
 }
 
 /// The JSON block a debrief ends with, when it ends with one.
 function ratings_in(reply: string) -> string? throws never {
     let open = `${fence()}json`;
-    let start = reply.last_index_of(open)
-        ?? return null;
+    let start = reply.last_index_of(open) ?? return null;
     let rest = reply.slice(start + open.length(), reply.length());
-    let close = rest.index_of(fence())
-        ?? return null;
+    let close = rest.index_of(fence()) ?? return null;
     rest.slice(0, close).trim()
 }
 
@@ -504,12 +498,14 @@ function drive(settings: Settings, model: string, session: int, system: string, 
                     run.stopped = "max";
                     going = false;
                 } else {
-                    let asked = step.asked
-                        ?? {
-                            run.stopped = "the quiz had nothing to ask";
-                            going = false;
-                            root.Asked { programs: [], teach: "" }
-                        };
+                    let asked = step.asked ?? {
+                        run.stopped = "the quiz had nothing to ask";
+                        going = false;
+                        root.Asked {
+                            programs: [],
+                            teach: "",
+                        }
+                    };
                     if (going) {
                         let allowed = if (asked.programs.length() == 1) {
                             ["compiles", "rejected", "unsure"]
@@ -526,8 +522,7 @@ function drive(settings: Settings, model: string, session: int, system: string, 
                             run.cost = run.cost + (answered.total_cost_usd ?? 0.0);
                             reply = answered.result ?? "";
                             said = answer_in(reply, allowed);
-                            message
-                                = `That reply did not end with an ANSWER line I could read. Answer with exactly one of: ${allowed.join(", ")}. End your reply with "ANSWER: <word>".`;
+                            message = `That reply did not end with an ANSWER line I could read. Answer with exactly one of: ${allowed.join(", ")}. End your reply with "ANSWER: <word>".`;
                             tries = tries + 1;
                         }
                         match (said) {
@@ -540,8 +535,7 @@ function drive(settings: Settings, model: string, session: int, system: string, 
                                 );
                             },
                             null => {
-                                run.stopped
-                                    = `no answer after ${settings.tries} tries: ${reply.slice(0, 200.min(reply.length()))}`;
+                                run.stopped = `no answer after ${settings.tries} tries: ${reply.slice(0, 200.min(reply.length()))}`;
                                 going = false;
                             },
                         }
@@ -559,14 +553,19 @@ function drive(settings: Settings, model: string, session: int, system: string, 
             root.Ended => 30,
             null => null,
         };
-        let answered = put(model, run.session_id, debrief_prompt(run, rules), system, settings);
+        let answered = put(
+            model,
+            run.session_id,
+            debrief_prompt(run, rules),
+            system,
+            settings,
+        );
         run.cost = run.cost + (answered.total_cost_usd ?? 0.0);
         run.debrief = answered.result;
-        run.ratings
-            = match (answered.result) {
-                let text: string => ratings_in(text),
-                null => null,
-            };
+        run.ratings = match (answered.result) {
+            let text: string => ratings_in(text),
+            null => null,
+        };
         keep(path, run);
     }
 }
@@ -617,16 +616,8 @@ function sit(settings: Settings, model: string, session: int, system: string) ->
 
 /// How a run turned out, in one line.
 function summarise(run: Run) -> string throws never {
-    let held = run.answers
-        .filter((a) -> {
-            a == "unsure"
-        })
-        .length();
-    let right = run.marks
-        .filter((m) -> {
-            m.correct == true
-        })
-        .length();
+    let held = run.answers.filter((a) -> { a == "unsure" }).length();
+    let right = run.marks.filter((m) -> { m.correct == true }).length();
     let why = match (run.ended) {
         let e: root.Ended => e.why,
         null => run.stopped ?? "unfinished",
@@ -662,23 +653,23 @@ function take_quiz(
     if (billing != "plan" && billing != "api") {
         baml.sys.exit(2);
     }
-    let settings = Settings { out, spec, max, tries, billing };
+    let settings = Settings {
+        out,
+        spec,
+        max,
+        tries,
+        billing,
+    };
     let _ = baml.fs.mkdir(out, baml.fs.MkdirOptions { recursive: true });
     let system = system_prompt(settings);
-    baml.io.println(
-        if (billing == "plan") {
-            "billing: the claude.ai plan (ANTHROPIC_API_KEY unset for the models)"
-        } else {
-            "billing: PAID API CREDITS (ANTHROPIC_API_KEY passed through)"
-        },
-    );
-    let named = models.split(",")
-        .map((m) -> {
-            m.trim()
-        })
-        .filter((m) -> {
-            m != ""
-        });
+    baml.io.println(if (billing == "plan") {
+        "billing: the claude.ai plan (ANTHROPIC_API_KEY unset for the models)"
+    } else {
+        "billing: PAID API CREDITS (ANTHROPIC_API_KEY passed through)"
+    });
+    let named = models.split(",").map((m) -> { m.trim() }).filter((m) -> {
+        m != ""
+    });
     // `Limit` replaced `TaskGroup`: a pure admission counter, capacity
     // positive (`.max(1)` is what makes the arm below unreachable).
     let limit = baml.sync.Semaphore.new(concurrency.max(1)) catch (e) {
@@ -695,15 +686,8 @@ function take_quiz(
     for (let f in futures) {
         runs.push(await f);
     }
-    let lines = runs.map((run) -> {
-        summarise(run)
-    });
-    let spent = runs.reduce(
-        (acc, run) -> {
-            acc + run.cost
-        },
-        0.0,
-    );
+    let lines = runs.map((run) -> { summarise(run) });
+    let spent = runs.reduce((acc, run) -> { acc + run.cost }, 0.0);
     lines.push(`total api-rate cost=$${spent} billed=${billing}`);
     let summary = lines.join("\n");
     let _ = baml.fs.write(`${out}/summary.txt`, `${summary}\n`);

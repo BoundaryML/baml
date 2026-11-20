@@ -11,18 +11,34 @@ function MyFunction(a: int, b: int) -> int {
     }
 
     // 1 if leading
-    if (a > b) { // 6 then inside
+    if // 2 if trailing
+    // 3 condition leading
+    (a > b) // 4 condition trailing
+    // 5 then leading
+    { // 6 then inside
         1;
-    } else { // 11 else then inside
+    } // 7 then trailing
+    // 8 else leading
+    else // 9 else trailing
+    // 10 else then leading
+    { // 11 else then inside
         1;
     } // 12 else then trailing
 
     ///////////////////
 
     /* 1 if leading */
-    if (a > b) { /* 6 then inside */
+    if /* 2 if trailing */
+    /* 3 condition leading */
+    (a > b) /* 4 condition trailing */
+    /* 5 then leading */
+    { /* 6 then inside */
         1;
-    } else { /* 11 else then inside */
+    } /* 7 then trailing */
+    /* 8 else leading */
+    else /* 9 else trailing */
+    /* 10 else then leading */
+    { /* 11 else then inside */
         1;
     } /* 12 else then trailing */
 

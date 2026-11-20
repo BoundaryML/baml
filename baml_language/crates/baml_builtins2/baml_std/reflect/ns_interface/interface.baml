@@ -13,11 +13,9 @@ class Implementation {
     /// - `reflect.errors.CompilationError` if the interface declares no such
     ///   field, or the link is not well typed.
     //baml:mut_vm
-    function field(
-        self,
-        interface_field: string,
-        class_field: string? = null,
-    ) -> Implementation throws root.errors.CompilationError {
+    function field(self, interface_field: string, class_field: string? = null) -> Implementation
+        throws root.errors.CompilationError
+    {
         $rust_function
     }
 

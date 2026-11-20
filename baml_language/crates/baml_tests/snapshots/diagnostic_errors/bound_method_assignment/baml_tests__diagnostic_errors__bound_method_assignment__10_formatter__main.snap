@@ -15,7 +15,7 @@ class G {
         "wrong"
     }
     function throwing(self, x: int) -> int throws string {
-        throw "error"
+        throw "error";
     }
 }
 

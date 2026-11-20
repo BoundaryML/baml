@@ -2,7 +2,7 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 function Plan() -> string {
-    client/* client colon */: "openai/gpt-4o-mini"
-    tools/* tools colon */: []
-    prompt/* prompt colon */: `hello`
+    client /* client colon */: "openai/gpt-4o-mini"
+    tools /* tools colon */: []
+    prompt /* prompt colon */: `hello`
 }

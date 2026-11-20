@@ -88,9 +88,7 @@ function to_reflect(ty: Ty) -> reflect.Type? throws never {
         Top => reflect.Type.of<unknown>(),
         let l: Lit => reflect.Literal.new(l.value).as_type(),
         let u: Union => {
-            let members = u.members().filter_map((m) -> {
-                to_reflect(m)
-            });
+            let members = u.members().filter_map((m) -> { to_reflect(m) });
             if (members.length() != u.members().length()) {
                 return null;
             }

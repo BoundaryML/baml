@@ -9,7 +9,11 @@ function _resolve_media_content(
     fetch_url: bool,
 ) -> root.wire.ResolvedMedia {
     if (inline != "") {
-        return root.wire.ResolvedMedia { url: null, base64: inline, mime_type: mime };
+        return root.wire.ResolvedMedia {
+            url: null,
+            base64: inline,
+            mime_type: mime,
+        };
     }
     if let media_url: string = url {
         if (media_url.starts_with("data:")) {
@@ -33,39 +37,53 @@ function _resolve_media_content(
             };
             throw baml.errors.InvalidArgument {
                 message: `media carries a data: URL with no ;base64, marker, which has no payload to send: ${preview}`,
-            }
+            };
         }
         if (!fetch_url || media_url.starts_with("gs://")) {
-            return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime };
+            return root.wire.ResolvedMedia {
+                url: media_url,
+                base64: null,
+                mime_type: mime,
+            };
         }
         // A remote fetch gets a bounded deadline (the default is unbounded).
         // Preserve Timeout for the invocation boundary; other transport errors
         // become a typed, classified NetworkFailure.
-        let response = baml.http.fetch(media_url, timeout = baml.time.Duration.from_seconds(30)) catch_all (e) {
-            let timeout: baml.errors.Timeout => throw timeout,
-            _ => {
-                throw root.errors.NetworkFailure { status_code: null,
-                    provider: "media",
-                    detail: root.wire.redact_url_secrets(`media URL ${media_url} could not be fetched: ${e.to_string()}`),
-                    raw_body: null,
-                }
-            },
-        };
+        let response = baml.http
+            .fetch(media_url, timeout = baml.time.Duration.from_seconds(30)) catch_all (e) {
+                let timeout: baml.errors.Timeout => throw timeout,
+                _ => {
+                    throw root.errors.NetworkFailure {
+                        status_code: null,
+                        provider: "media",
+                        detail: root.wire.redact_url_secrets(
+                            `media URL ${media_url} could not be fetched: ${e.to_string()}`,
+                        ),
+                        raw_body: null,
+                    };
+                },
+            };
         if (!response.ok()) {
-            throw root.errors.NetworkFailure { status_code: null,
+            throw root.errors.NetworkFailure {
+                status_code: null,
                 provider: "media",
-                detail: root.wire.redact_url_secrets(`media URL ${media_url} returned HTTP ${response.status_code}`),
+                detail: root.wire.redact_url_secrets(
+                    `media URL ${media_url} returned HTTP ${response.status_code}`,
+                ),
                 raw_body: null,
-            }
+            };
         }
         let response_mime = response.headers.get("content-type") ?? mime;
         let body = response.bytes() catch_all (e) {
             _ => {
-                throw root.errors.NetworkFailure { status_code: null,
+                throw root.errors.NetworkFailure {
+                    status_code: null,
                     provider: "media",
-                    detail: root.wire.redact_url_secrets(`media URL ${media_url} body could not be read: ${e.to_string()}`),
+                    detail: root.wire.redact_url_secrets(
+                        `media URL ${media_url} body could not be read: ${e.to_string()}`,
+                    ),
                     raw_body: null,
-                }
+                };
             },
         };
         return root.wire.ResolvedMedia {
@@ -76,7 +94,9 @@ function _resolve_media_content(
             mime_type: (response_mime.split(";").at(0) ?? mime).trim(),
         };
     }
-    throw baml.errors.InvalidArgument { message: "media has no URL or base64 content" }
+    throw baml.errors.InvalidArgument {
+        message: "media has no URL or base64 content",
+    };
 }
 
 /// (internal) Preview-only counterpart to `_resolve_media_content`. Ordinary URLs
@@ -87,7 +107,11 @@ function _resolve_media_preview_content(
     mime: string,
 ) -> root.wire.ResolvedMedia {
     if (inline != "") {
-        return root.wire.ResolvedMedia { url: null, base64: inline, mime_type: mime };
+        return root.wire.ResolvedMedia {
+            url: null,
+            base64: inline,
+            mime_type: mime,
+        };
     }
     if let media_url: string = url {
         if (media_url.starts_with("data:")) {
@@ -101,12 +125,16 @@ function _resolve_media_preview_content(
             throw root.errors.PreviewUnsupported {
                 provider: "media-preview",
                 detail: "request preview cannot represent a non-base64 data URL",
-            }
+            };
         }
-        return root.wire.ResolvedMedia { url: media_url, base64: null, mime_type: mime };
+        return root.wire.ResolvedMedia {
+            url: media_url,
+            base64: null,
+            mime_type: mime,
+        };
     }
     throw root.errors.PreviewUnsupported {
         provider: "media-preview",
         detail: "request preview received media without inline data or a URL",
-    }
+    };
 }

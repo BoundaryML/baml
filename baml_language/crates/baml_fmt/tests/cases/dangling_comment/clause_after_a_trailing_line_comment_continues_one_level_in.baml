@@ -1,0 +1,20 @@
+interface I // name
+    requires A, B {}
+
+interface J requires // c
+    A, B {}
+
+function l2() -> // ret
+    int {
+    1
+}
+
+function l3(a: int) // params
+    -> int {
+    1
+}
+
+test "t" // name
+    with A, B {
+    1
+}

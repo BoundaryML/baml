@@ -2,13 +2,9 @@
 source: crates/baml_fmt/tests/cases.rs
 ---
 interface I {
-    function f(
-        self,
-    ) -> string // result
+    function f(self) -> string // result
         throws never; // throws
-    function g(
-        self,
-    ) -> int throws never // default
+    function g(self) -> int throws never // default
     {
         1
     }

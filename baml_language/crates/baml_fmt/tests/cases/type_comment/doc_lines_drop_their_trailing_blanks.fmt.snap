@@ -1,0 +1,16 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+/// Summary
+///
+/// Body
+//baml:vm
+function f(x: int) -> int {
+    //# section
+    x
+}
+
+class A {
+    /// Field.
+    a: int,
+}

@@ -165,16 +165,17 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
     let text = resp.text() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw root.errors.NetworkFailure { status_code: null,
-            provider: provider,
-            detail: "the response body could not be read completely",
-            raw_body: null,
-        }
+            throw root.errors.NetworkFailure {
+                status_code: null,
+                provider: provider,
+                detail: "the response body could not be read completely",
+                raw_body: null,
+            };
         },
     };
     if (!resp.ok()) {
         // headers last: they are what fills RateLimited.retry_after_ms on a 429.
-        throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
+        throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers);
     }
     baml.json.decode<T>(text) catch_all (e) {
         let parse => {
@@ -183,7 +184,7 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
                 message: parse.to_string(),
                 raw_body: text,
                 status_code: resp.status_code,
-            }
+            };
         },
     }
 }
@@ -219,15 +220,16 @@ function send_as_with_wire<T>(
     let text = resp.text() catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw root.errors.NetworkFailure { status_code: null,
-            provider: provider,
-            detail: "the response body could not be read completely",
-            raw_body: null,
-        }
+            throw root.errors.NetworkFailure {
+                status_code: null,
+                provider: provider,
+                detail: "the response body could not be read completely",
+                raw_body: null,
+            };
         },
     };
     if (!resp.ok()) {
-        throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
+        throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers);
     }
     let value = baml.json.decode<T>(text) catch_all (e) {
         let parse => {
@@ -236,13 +238,17 @@ function send_as_with_wire<T>(
                 message: parse.to_string(),
                 raw_body: text,
                 status_code: resp.status_code,
-            }
+            };
         },
     };
     let call = root.events.ModelCall {
         resolved_model: model,
         usage: null,
-        timing: root.events.Timing { start_time: started, duration: started.elapsed(), ttft: null },
+        timing: root.events.Timing {
+            start_time: started,
+            duration: started.elapsed(),
+            ttft: null,
+        },
         http_request: if (capture_wire) {
             baml.http.Request {
                 method: req.method,
@@ -256,15 +262,14 @@ function send_as_with_wire<T>(
         http_response: root.events.HttpResponse {
             status: resp.status_code,
             headers: resp.headers,
-            body: if (capture_wire) {
-                text
-            } else {
-                null
-            },
+            body: if (capture_wire) { text } else { null },
         },
         sse_responses: null,
     };
-    SentAs { value: value, call: call }
+    SentAs {
+        value: value,
+        call: call,
+    }
 }
 
 /// The return type's schema as prompt text, in the standard dialect —
@@ -473,9 +478,11 @@ function prompt_blocks(message: root.PromptMessage) -> root.content.Block[] {
                 null
             },
             let media: root.MediaPart => {
-                out.push(
-                    root.content.Media { media: media, provider_id: null, revised_prompt: null },
-                );
+                out.push(root.content.Media {
+                    media: media,
+                    provider_id: null,
+                    revised_prompt: null,
+                });
                 rejoin = false;
                 null
             },
@@ -521,11 +528,7 @@ function prompt_parts(
     for (let part in message.parts) {
         match (part) {
             let text: string => {
-                let piece = if (trim_next) {
-                    text.trim_start()
-                } else {
-                    text
-                };
+                let piece = if (trim_next) { text.trim_start() } else { text };
                 let joined = false;
                 if (rejoin) {
                     if let last: string = out.at(out.length() - 1) {
@@ -628,19 +631,22 @@ function degrade_tool_media(j: root.Journal, carries: string[]) -> root.Journal 
                 }
                 if (moved.length() > 0) {
                     if (inline.length() == 0) {
-                        inline.push(root.content.Text { text: root.content.text(moved) });
+                        inline.push(root.content.Text {
+                            text: root.content.text(moved),
+                        });
                     }
                     let tool = tool_name(j, completed.id) ?? completed.id;
-                    attached.push(
-                        root.content.Text {
-                            text: "attached from the result of tool `" + tool + "`",
-                        },
-                    );
+                    attached.push(root.content.Text {
+                        text: "attached from the result of tool `" + tool + "`",
+                    });
                     for (let block in moved) {
                         attached.push(block);
                     }
                 }
-                out.push(root.events.ToolCompleted { id: completed.id, content: inline });
+                out.push(root.events.ToolCompleted {
+                    id: completed.id,
+                    content: inline,
+                });
                 null
             },
             let failed: root.events.ToolFailed => {
@@ -649,7 +655,10 @@ function degrade_tool_media(j: root.Journal, carries: string[]) -> root.Journal 
             },
             _ => {
                 if (attached.length() > 0) {
-                    out.push(root.events.UserMessage { content: attached, metadata: {} });
+                    out.push(root.events.UserMessage {
+                        content: attached,
+                        metadata: {},
+                    });
                     attached = [];
                 }
                 out.push(event);
@@ -658,7 +667,10 @@ function degrade_tool_media(j: root.Journal, carries: string[]) -> root.Journal 
         };
     }
     if (attached.length() > 0) {
-        out.push(root.events.UserMessage { content: attached, metadata: {} });
+        out.push(root.events.UserMessage {
+            content: attached,
+            metadata: {},
+        });
     }
     root.Journal { log: out }
 }
@@ -702,13 +714,11 @@ function sanitize_for_client(
                     && assistant.requested_model == requested_model;
                 let blocks = root.internal._wire_blocks(assistant.content, same_model);
                 if (blocks.length() > 0) {
-                    out.push(
-                        root.events.AssistantMessage {
-                            content: blocks,
-                            resolved_model: assistant.resolved_model,
-                            requested_model: assistant.requested_model,
-                        },
-                    );
+                    out.push(root.events.AssistantMessage {
+                        content: blocks,
+                        resolved_model: assistant.resolved_model,
+                        requested_model: assistant.requested_model,
+                    });
                     for (let block in blocks) {
                         if let use: root.content.ToolUse = block {
                             pending.push(use.id);

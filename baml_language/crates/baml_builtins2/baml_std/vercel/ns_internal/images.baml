@@ -139,17 +139,27 @@ function _gw_images_file(media: ai.MediaPart, preview: bool = false) -> GwImages
         ai.wire.resolve_media(media, false)
     };
     if let encoded: string = resolved.base64 {
-        return GwImagesFile { type: "file", mediaType: resolved.mime_type, data: encoded, url: null };
+        return GwImagesFile {
+            type: "file",
+            mediaType: resolved.mime_type,
+            data: encoded,
+            url: null,
+        };
     }
     if let location: string = resolved.url {
-        return GwImagesFile { type: "url", mediaType: null, data: null, url: location };
+        return GwImagesFile {
+            type: "url",
+            mediaType: null,
+            data: null,
+            url: location,
+        };
     }
     throw ai.errors.InvalidRequest {
         provider: "ai-gateway-images",
         status_code: null,
         detail: "image input carried no base64 content, file, or URL",
         raw_body: null,
-    }
+    };
 }
 
 /// (internal) Collect a turn into the endpoint's two inputs: text blocks trimmed into
@@ -178,7 +188,7 @@ function _gw_images_collect(
                         null
                     },
                     _ => {
-                        throw _gw_images_media_rejected(media.kind())
+                        throw _gw_images_media_rejected(media.kind());
                     },
                 }
             },
@@ -199,7 +209,12 @@ function _gw_images_input(
     let parts: string[] = [];
     let files: GwImagesFile[] = [];
     for (let message in prompt.messages()) {
-        _gw_images_collect(ai.wire.prompt_blocks(message), parts, files, preview = preview);
+        _gw_images_collect(
+            ai.wire.prompt_blocks(message),
+            parts,
+            files,
+            preview = preview,
+        );
     }
     for (let event in journal.entries()) {
         if let user: ai.events.UserMessage = event {
@@ -213,9 +228,12 @@ function _gw_images_input(
             status_code: null,
             detail: "Images API request requires a text prompt",
             raw_body: null,
-        }
+        };
     }
-    GwImagesInput { text: joined, files: files }
+    GwImagesInput {
+        text: joined,
+        files: files,
+    }
 }
 
 function _gw_images_trim_slash(url: string) -> string {
@@ -227,7 +245,8 @@ function _gw_images_trim_slash(url: string) -> string {
 
 /// (internal) Percent-escape the characters that would otherwise change a URL's structure.
 function _gw_images_escape_query(raw: string) -> string {
-    let escaped = raw.replace_all("%", "%25")
+    let escaped = raw
+        .replace_all("%", "%25")
         .replace_all(" ", "%20")
         .replace_all("&", "%26")
         .replace_all("+", "%2B")
@@ -249,11 +268,7 @@ function _gw_images_with_query(url: string, params: map<string, string>?) -> str
     if (pairs.length() == 0) {
         return url;
     }
-    let separator = if (url.includes("?")) {
-        "&"
-    } else {
-        "?"
-    };
+    let separator = if (url.includes("?")) { "&" } else { "?" };
     `${url}${separator}${pairs.join("&")}`
 }
 
@@ -294,11 +309,15 @@ function gateway_images_render(
             status_code: null,
             detail: "the gateway image endpoint has no tool calling; run tools with a chat client instead",
             raw_body: null,
-        }
+        };
     }
     let journal = ai.wire.sanitize_for_client(input.journal, "ai-gateway-images", c.model);
     // No schema block: the only thing this endpoint can return is an image.
-    let lowered = _gw_images_input((input.prompt)(ai.internal.build_output_format(input.output_type)), journal, preview = preview);
+    let lowered = _gw_images_input(
+        (input.prompt)(ai.internal.build_output_format(input.output_type)),
+        journal,
+        preview = preview,
+    );
     let files: GwImagesFile[]? = if (lowered.files.length() == 0) {
         null
     } else {
@@ -382,7 +401,7 @@ function _gw_images_value(encoded: string, fallback_mime: string) -> image {
             message: `images[] carried a data: URL with no ;base64, marker: ${preview}`,
             raw_body: encoded,
             status_code: null,
-        }
+        };
     }
     baml.media.Image.from_base64(encoded, fallback_mime)
 }
@@ -426,7 +445,9 @@ function gateway_images_parse(
     let content: ai.content.ModelBlock[] = [];
     for (let encoded in images) {
         if (encoded.trim() != "") {
-            content.push(ai.content.Media.new(value = _gw_images_value(encoded, fallback_mime)));
+            content.push(
+                ai.content.Media.new(value = _gw_images_value(encoded, fallback_mime)),
+            );
         }
     }
     if (content.length() == 0) {
@@ -435,7 +456,7 @@ function gateway_images_parse(
             message: "response contained no images in images[]",
             raw_body: baml.json.stringify(resp),
             status_code: null,
-        }
+        };
     }
     ai.ModelTurn {
         calls: [],
@@ -471,7 +492,10 @@ function gateway_images_invoke(
     );
     let sent = ai.wire.send_as_with_wire<GwImagesResponse>(
         req,
-        ai.events.ModelKey { provider: c.provider(), model: c.model },
+        ai.events.ModelKey {
+            provider: c.provider(),
+            model: c.model,
+        },
         capture_wire = c.capture_wire,
     );
     ai.internal.with_own_call(

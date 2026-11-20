@@ -52,5 +52,5 @@ type ReallyLongMapType = map<
         | map<string, int | string>
         | map<string, map<string, int | string>>
         | map<string, map<string, map<string, int | string>>>
-        | map<string, map<string, map<string, map<string, int | string>>>>
+        | map<string, map<string, map<string, map<string, int | string>>>>,
 >;

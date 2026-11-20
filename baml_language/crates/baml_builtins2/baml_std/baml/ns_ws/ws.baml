@@ -71,10 +71,8 @@ function connect(
     _connect(url, headers, timeout.to_nanoseconds())
 }
 
-function _connect(
-    url: string,
-    headers: map<string, string>,
-    timeout_nanos: bigint,
-) -> WebSocket throws root.errors.Io | root.errors.Timeout {
+function _connect(url: string, headers: map<string, string>, timeout_nanos: bigint) -> WebSocket
+    throws root.errors.Io | root.errors.Timeout
+{
     $rust_io_function
 }

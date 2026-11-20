@@ -1,5 +1,4 @@
 ---
 source: crates/baml_fmt/tests/cases.rs
 ---
-interface Empty { /* kept */
-}
+interface Empty { /* kept */ }

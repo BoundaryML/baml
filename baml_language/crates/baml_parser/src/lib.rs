@@ -18,9 +18,8 @@
 //! the sink's output except through their APIs.
 
 use baml_syntax::{
-    nodes::{Arenas, FileTree, NodeKind},
-    token::TokenIdx,
-    tree::{AnyNodeId, Missing, TokenRange, Visitor},
+    complete::CompleteTree,
+    nodes::{Arenas, FileTree},
 };
 
 pub mod error;
@@ -63,42 +62,8 @@ pub fn parse(text: &str) -> Parse {
     };
     let tree = FileTree::new(text.into(), input.into_tokens(), arenas, root);
     debug_assert!(
-        !errors.is_empty() || is_complete(&tree),
+        !errors.is_empty() || CompleteTree::try_from(&tree).is_ok(),
         "a parse with no errors holds a `Missing` or a `Bogus`"
     );
     Parse { tree, errors }
-}
-
-/// Whether the tree holds no `Missing` and no `Bogus`: what an error-free
-/// parse promises.
-fn is_complete(tree: &FileTree) -> bool {
-    struct Completeness {
-        complete: bool,
-        pending: Vec<AnyNodeId>,
-    }
-    impl Visitor for Completeness {
-        fn node(&mut self, _field: &'static str, id: AnyNodeId) {
-            if Arenas::kind(id) == NodeKind::Bogus {
-                self.complete = false;
-            } else {
-                self.pending.push(id);
-            }
-        }
-        fn token(&mut self, _field: &'static str, _token: TokenIdx) {}
-        fn range(&mut self, _field: &'static str, _range: TokenRange) {}
-        fn missing(&mut self, _field: &'static str, _missing: Missing) {
-            self.complete = false;
-        }
-    }
-    let mut walk = Completeness {
-        complete: true,
-        pending: vec![tree.root_id()],
-    };
-    while let Some(id) = walk.pending.pop() {
-        tree.arenas().walk_node(id, &mut walk);
-        if !walk.complete {
-            return false;
-        }
-    }
-    true
 }

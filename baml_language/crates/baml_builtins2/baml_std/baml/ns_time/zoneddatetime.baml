@@ -64,10 +64,9 @@ class ZonedDateTime {
     /// ```baml
     /// baml.time.ZonedDateTime.from_instant(baml.time.Instant.now(), "America/Los_Angeles")
     /// ```
-    function from_instant(
-        instant: Instant,
-        timezone: TimeZoneOffset | string,
-    ) -> ZonedDateTime throws never {
+    function from_instant(instant: Instant, timezone: TimeZoneOffset | string) -> ZonedDateTime
+        throws never
+    {
         match (timezone) {
             TimeZoneOffset => {
                 ZonedDateTime {
@@ -91,7 +90,9 @@ class ZonedDateTime {
     ///
     /// Contrast `to_plain`, which keeps the components and drops the moment.
     function to_instant(self) -> Instant throws never {
-        Instant { _nanoseconds: self._nanoseconds }
+        Instant {
+            _nanoseconds: self._nanoseconds,
+        }
     }
 
     /// Creates a `ZonedDateTime` from calendar and clock components read in
@@ -145,20 +146,24 @@ class ZonedDateTime {
         microsecond: int = 0,
         nanosecond: int = 0,
         disambiguation: Disambiguation = "compatible",
-    ) -> ZonedDateTime throws root.errors.InvalidArgument | UnknownTimezoneError | AmbiguousTimeError | root.errors.Io {
-        PlainDateTime
-            .from_components(
-                year,
-                month,
-                day,
-                hour = hour,
-                minute = minute,
-                second = second,
-                millisecond = millisecond,
-                microsecond = microsecond,
-                nanosecond = nanosecond,
-            )
-            .to_zoned(timezone, disambiguation = disambiguation)
+    ) -> ZonedDateTime
+        throws root.errors.InvalidArgument
+            | UnknownTimezoneError
+            | AmbiguousTimeError
+            | root.errors.Io
+    {
+        PlainDateTime.from_components(
+            year,
+            month,
+            day,
+            hour = hour,
+            minute = minute,
+            second = second,
+            millisecond = millisecond,
+            microsecond = microsecond,
+            nanosecond = nanosecond,
+        )
+        .to_zoned(timezone, disambiguation = disambiguation)
     }
 
     /// Parses [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)
@@ -205,12 +210,16 @@ class ZonedDateTime {
         ///   the panic channel, which a wildcard `catch` arm re-throws rather
         ///   than swallowing.
         function to_string(self) -> string throws never {
-            _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) catch (_) {
+            _format_zoned(
+                self._nanoseconds,
+                self.timezone_offset()._nanoseconds,
+                self._iana,
+            ) catch (_) {
                 _ => {
                     root.sys.panic(
                         "ZonedDateTime.to_string: value cannot be formatted (year out of range, unknown timezone, or IO error)",
                     )
-                }
+                },
             }
         }
     }
@@ -253,7 +262,9 @@ class ZonedDateTime {
     /// the concrete offset either way.
     function timezone(self) -> TimeZoneOffset | string throws never {
         match (self._iana) {
-            null => TimeZoneOffset { _nanoseconds: self._offset_ns ?? 0 },
+            null => TimeZoneOffset {
+                _nanoseconds: self._offset_ns ?? 0,
+            },
             // `?? ""` is unreachable: the null arm above already matched.
             let iana => iana ?? "",
         }
@@ -276,12 +287,18 @@ class ZonedDateTime {
     /// - `baml.panics.HostUnavailable` if timezone data is unavailable.
     function timezone_offset(self) -> TimeZoneOffset throws UnknownTimezoneError {
         match (self._iana) {
-            null => TimeZoneOffset { _nanoseconds: self._offset_ns ?? 0 },
+            null => TimeZoneOffset {
+                _nanoseconds: self._offset_ns ?? 0,
+            },
             // The `?? ""` / `?? 0` fallbacks are unreachable: the null arms
             // already matched.
             let iana => match (_tz_offset_at(iana ?? "", self._nanoseconds)) {
-                null => throw UnknownTimezoneError { timezone: iana ?? "" },
-                let offset => TimeZoneOffset { _nanoseconds: offset ?? 0 },
+                null => throw UnknownTimezoneError {
+                    timezone: iana ?? "",
+                },
+                let offset => TimeZoneOffset {
+                    _nanoseconds: offset ?? 0,
+                },
             },
         }
     }
@@ -309,7 +326,9 @@ class ZonedDateTime {
     /// - `baml.panics.HostUnavailable` if the timezone is an IANA identifier
     ///   and the host has no timezone database.
     function to_plain(self) -> PlainDateTime throws UnknownTimezoneError {
-        PlainDateTime { _nanoseconds: self._nanoseconds + self.timezone_offset()._nanoseconds }
+        PlainDateTime {
+            _nanoseconds: self._nanoseconds + self.timezone_offset()._nanoseconds,
+        }
     }
 
     /// The calendar year as read in this timezone.
@@ -364,12 +383,18 @@ class ZonedDateTime {
                 string => {
                     ZonedDateTime.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw root.json.DecodeError { message: message, path: "" }
+                            throw root.json.DecodeError {
+                                message: message,
+                                path: "",
+                            };
                         },
                     }
                 },
                 _ => {
-                    throw root.json.DecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string", path: "" }
+                    throw root.json.DecodeError {
+                        message: "Expected RFC 3339 / RFC 9557 timestamp string",
+                        path: "",
+                    };
                 },
             }
         }
@@ -386,7 +411,10 @@ class ZonedDateTime {
         function from_llm_output(shape: string) -> Self throws root.json.DecodeError {
             ZonedDateTime.parse(shape) catch (_) {
                 root.errors.ParseError { message } => {
-                    throw root.json.DecodeError { message: message, path: "" }
+                    throw root.json.DecodeError {
+                        message: message,
+                        path: "",
+                    };
                 },
             }
         }
@@ -407,20 +435,24 @@ class ZonedDateTime {
         /// - `baml.panics.HostUnavailable` if the timezone is an IANA
         ///   identifier and the host has no timezone database.
         function to_json(self) -> root.json.json throws root.json.SerializationError {
-            _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) catch (_) {
+            _format_zoned(
+                self._nanoseconds,
+                self.timezone_offset()._nanoseconds,
+                self._iana,
+            ) catch (_) {
                 root.errors.InvalidArgument { message } => {
                     throw root.json.SerializationError {
                         message: message,
                         path: "",
                         reason: "unserializable",
-                    }
+                    };
                 },
                 UnknownTimezoneError { timezone } => {
                     throw root.json.SerializationError {
                         message: "unknown timezone: " + timezone,
                         path: "",
                         reason: "unserializable",
-                    }
+                    };
                 },
             }
         }
@@ -453,16 +485,14 @@ class ZonedDateTime {
 ///
 /// - `baml.errors.InvalidArgument` if the local reading is outside the
 ///   supported ±9999 year range.
-function _format_zoned(
-    epoch_ns: bigint,
-    offset_ns: int,
-    iana: string?,
-) -> string throws root.errors.InvalidArgument {
+function _format_zoned(epoch_ns: bigint, offset_ns: int, iana: string?) -> string
+    throws root.errors.InvalidArgument
+{
     $rust_function
 }
 
 implement root.ops.Add<Duration> for ZonedDateTime {
-    type Output = ZonedDateTime
+    type Output = ZonedDateTime;
     /// The moment `other` after `self`, in the same timezone.
     ///
     /// Absolute-time arithmetic, matching Temporal's treatment of exact
@@ -485,7 +515,7 @@ implement root.ops.Add<Duration> for ZonedDateTime {
 }
 
 implement root.ops.Subtract<Duration> for ZonedDateTime {
-    type Output = ZonedDateTime
+    type Output = ZonedDateTime;
     /// The moment `other` before `self`, in the same timezone. Absolute-time
     /// arithmetic, with the same caveats as `ZonedDateTime + Duration`.
     function sub(self, other: Duration) -> ZonedDateTime {
@@ -498,7 +528,7 @@ implement root.ops.Subtract<Duration> for ZonedDateTime {
 }
 
 implement root.ops.Subtract<ZonedDateTime> for ZonedDateTime {
-    type Output = Duration
+    type Output = Duration;
     /// The signed gap from `other` to `self`: positive when `self` is the later
     /// moment, negative when it is the earlier.
     ///

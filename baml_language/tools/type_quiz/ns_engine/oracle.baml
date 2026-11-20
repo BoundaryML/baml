@@ -38,10 +38,14 @@ function type_of_spelling(declarations: string, spelling: string) -> Spelled thr
             if (probe != null) {
                 match (probe()) {
                     let t: reflect.Type => t,
-                    null => InitThrew { message: "the probe field's type did not reflect" },
+                    null => InitThrew {
+                        message: "the probe field's type did not reflect",
+                    },
                 }
             } else {
-                InitThrew { message: "probe function missing from the compiled package" }
+                InitThrew {
+                    message: "probe function missing from the compiled package",
+                }
             }
         },
     }

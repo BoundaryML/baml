@@ -175,9 +175,10 @@ class ChatClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            root.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
-                _ => throw ai.errors.normalize(e),
-            }
+            root.internal
+                .chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
+                    _ => throw ai.errors.normalize(e),
+                }
         }
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {

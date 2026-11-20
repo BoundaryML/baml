@@ -11,17 +11,13 @@ class P {
 
 // Inherent builtin method: emission panicked on a call with no layout.
 function lambda_param_method(n: int) -> int {
-    let g = (a) -> {
-        a.abs()
-    };
+    let g = (a) -> { a.abs() };
     g(n)
 }
 
 // Field: runtime type lowering panicked on the `Error` type.
 function lambda_param_field(p: P) -> int {
-    let g = (a) -> {
-        a.x
-    };
+    let g = (a) -> { a.x };
     g(p)
 }
 
@@ -36,11 +32,7 @@ function empty_array_element_method(n: int) -> int {
 // not-yet-inferred receiver, not a missing member.
 function union_with_lambda_param_field(p: P, c: bool) -> int {
     let g = (a) -> {
-        let u = if (c) {
-            a
-        } else {
-            p
-        };
+        let u = if (c) { a } else { p };
         u.x
     };
     g(p)

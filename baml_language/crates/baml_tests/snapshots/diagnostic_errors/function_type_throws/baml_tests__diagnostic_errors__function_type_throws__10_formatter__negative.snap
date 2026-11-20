@@ -13,13 +13,13 @@ function accept_hidden(cb: HiddenHandler) -> int {
 
 function nested_position(cb: ((value: int) -> int throws never) -> int) -> int {
     let inner = (value: int) -> int throws string {
-        throw "boom"
+        throw "boom";
     };
     cb(inner)
 }
 
 function risky(value: int) -> int throws string {
-    throw "boom"
+    throw "boom";
 }
 
 function fail_hidden() -> int {
@@ -32,7 +32,7 @@ function fail_stored() -> Holder {
 
 function fail_returned() -> (value: int) -> int throws never {
     let local = (value: int) -> int throws string {
-        throw "boom"
+        throw "boom";
     };
     local
 }

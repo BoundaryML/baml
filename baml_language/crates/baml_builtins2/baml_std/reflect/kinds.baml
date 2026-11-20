@@ -180,10 +180,9 @@ class Enum {
     /// identity even when its name and rows are byte-identical.
     //baml:mut_vm
     //baml:fallible
-    function new(
-        name: string,
-        values: (string | root.enum.Value)[],
-    ) -> root.Enum throws root.errors.CompilationError {
+    function new(name: string, values: (string | root.enum.Value)[]) -> root.Enum
+        throws root.errors.CompilationError
+    {
         $rust_function
     }
 
@@ -390,8 +389,9 @@ class Interface {
 
     /// Start a structural witness for a static interface.
     //baml:mut_vm
-    function implementation<I>(
-    ) -> root.interface.Implementation throws root.errors.CompilationError {
+    function implementation<I>() -> root.interface.Implementation
+        throws root.errors.CompilationError
+    {
         $rust_function
     }
 

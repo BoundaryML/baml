@@ -1,0 +1,10 @@
+function u(r: int | string, x: int) -> int {
+    let q: VeryLongTypeNameNumberOne | VeryLongTypeNameNumberTwo | VeryLongTypeNameNumberThree = 1;
+    match (x) {
+        let y:
+        // own
+        int => 1,
+        [aaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, cccccccccccccccccccccccccccc, d] => 4,
+        _ => 0,
+    }
+}

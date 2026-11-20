@@ -14,7 +14,9 @@
 /// ```
 function is_true(condition: bool) -> void throws never {
     if (!condition) {
-        throw baml.panics.AssertionFailed { message: "assertion failed: expected true" }
+        throw baml.panics.AssertionFailed {
+            message: "assertion failed: expected true",
+        };
     }
 }
 
@@ -32,7 +34,9 @@ function is_true(condition: bool) -> void throws never {
 /// ```
 function not_null(value: unknown?) -> void throws never {
     if (value == null) {
-        throw baml.panics.AssertionFailed { message: "assertion failed: expected non-null value" }
+        throw baml.panics.AssertionFailed {
+            message: "assertion failed: expected non-null value",
+        };
     }
 }
 

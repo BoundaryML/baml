@@ -8,15 +8,13 @@
 /// disagrees with is not one a learner can be asked about, so it has no
 /// place in what we expect them to master.
 function rule_orders(seeds: int) -> root.engine.RuleOrder[] throws never {
-    let servable = items().filter((item) -> {
-        item.status() is root.engine.Verified
-    });
+    let servable = items().filter((item) -> { item.status() is root.engine.Verified });
     let traces = servable.flat_map((item) -> {
         let id = item.id();
         baml.iter.Range.new(0, seeds)
             .filter_map((i) -> {
-                let candidate = root.engine.generate(item, root.engine.seed_for(id, i))
-                    ?? return null;
+                let candidate =
+                    root.engine.generate(item, root.engine.seed_for(id, i)) ?? return null;
                 // Every casting, not the one served: which member of a shape
                 // a draw serves is a coin, and orders read off the served
                 // case alone would find a rule or miss it by its luck.
@@ -26,14 +24,10 @@ function rule_orders(seeds: int) -> root.engine.RuleOrder[] throws never {
                 // the whole trace instead would set an order no sitting can
                 // reach, and a rule whose order cannot be reached can never
                 // be mastered and never stops being shaky.
-                candidate.castings.map((casting) -> {
-                    casting.rules
-                })
+                candidate.castings.map((casting) -> { casting.rules })
             })
             .collect()
-            .flat_map((rules) -> {
-                rules
-            })
+            .flat_map((rules) -> { rules })
     });
     rules().filter_map((rule) -> {
         if (is_site_rule(rule.name)) {
@@ -46,13 +40,13 @@ function rule_orders(seeds: int) -> root.engine.RuleOrder[] throws never {
                 null
             }
         });
-        let sorted = orders.sort_by_key((n) -> {
-            n
-        });
-        let highest = sorted.at(-1)
-            ?? return null;
-        let lowest = sorted.at(0)
-            ?? return null;
-        root.engine.RuleOrder { rule: rule.name, lowest, highest }
+        let sorted = orders.sort_by_key((n) -> { n });
+        let highest = sorted.at(-1) ?? return null;
+        let lowest = sorted.at(0) ?? return null;
+        root.engine.RuleOrder {
+            rule: rule.name,
+            lowest,
+            highest,
+        }
     })
 }
