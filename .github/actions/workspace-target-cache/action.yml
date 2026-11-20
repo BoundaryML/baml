@@ -18,6 +18,9 @@ inputs:
   key:
     description: "Distinguishes jobs whose builds differ (features, target, profile)"
     required: true
+  probe-key:
+    description: "Exact key of an older entry to check for, without downloading it"
+    default: ""
 
 outputs:
   cache-hit:
@@ -38,7 +41,34 @@ runs:
         path: |
           ${{ inputs.workspace }}/target
           ${{ steps.inputs.outputs.directory }}
-        key: target-v2-${{ inputs.key }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/Cargo.lock', inputs.workspace), format('{0}/rust-toolchain.toml', inputs.workspace)) }}
+        # One entry per commit, restored by prefix, so a run always starts from
+        # the newest saved target directory (the scheme Deno uses). Entries are
+        # never deleted here: this experiment is checking what Blacksmith does
+        # when they pile up past the 25 GB allowance.
+        key: target-v2-${{ inputs.key }}-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+        restore-keys: |
+          target-v2-${{ inputs.key }}-${{ runner.os }}-${{ runner.arch }}-
+
+    # Reports whether an old entry from earlier in the experiment still exists,
+    # as a signal for whether anything has been evicted.
+    - id: probe
+      if: inputs.probe-key != ''
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          ${{ inputs.workspace }}/target
+          ${{ steps.inputs.outputs.directory }}
+        key: ${{ inputs.probe-key }}
+        lookup-only: true
+
+    - if: inputs.probe-key != ''
+      shell: bash
+      env:
+        HIT: ${{ steps.probe.outputs.cache-hit }}
+        RESTORED: ${{ steps.cache.outputs.cache-matched-key }}
+      run: |
+        echo "old entry still present: ${HIT:-false}"
+        echo "restored from: ${RESTORED:-nothing}"
 
     - uses: astral-sh/github-actions/rust-workspace-cache/inputs@61a5a2c7e0df1c0caf46fe5d1e74a4cb8a7205f8 # 2026.11.16.1
       with:

@@ -121,6 +121,7 @@ jobs:
         with:
           profile: debug
           key: cargo-test-linux-debug0-opt1
+          probe-key: target-v1-cargo-test-linux-debug0-opt1-Linux-X64-34e896e75712f9922b0cd7ee08f192973241d29596ba2b5c4ceabe28e52011f0
 
       - name: "Load .envrc with direnv"
         run: |
