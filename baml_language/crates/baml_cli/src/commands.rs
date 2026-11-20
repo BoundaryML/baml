@@ -250,6 +250,12 @@ pub(crate) enum CloudCommands {
         after_long_help = "Examples:\n  Run a query:\n    baml cloud recordings query \"SELECT span_name FROM spans LIMIT 5\"\n\n  Pick the project and environment:\n    baml cloud recordings query \"SELECT span_name FROM spans\" --project acme/app --env staging"
     )]
     Recordings(RecordingsCommands),
+
+    #[command(
+        about = "Manage alerts: scheduled SQL that posts to Slack or a webhook",
+        long_about = "Manage the alerts of a Boundary environment: SQL that runs on a schedule and posts to Slack or a webhook when something is wrong. Uses your `baml cloud auth login` session."
+    )]
+    Alerts(Box<crate::alerts_command::AlertsArgs>),
 }
 
 impl RuntimeCli {
@@ -346,6 +352,13 @@ impl RuntimeCli {
             Commands::Cloud(cloud) => match &cloud.command {
                 CloudCommands::Auth(command) => command.run(cx, &cloud.scope),
                 CloudCommands::Recordings(command) => command.run(cx, Backend::Cloud(&cloud.scope)),
+                CloudCommands::Alerts(args) => run_command(
+                    &crate::alerts_command::CloudAlerts {
+                        args,
+                        scope: &cloud.scope,
+                    },
+                    cx,
+                ),
             },
             Commands::Query(args) => run_command(
                 &Query {

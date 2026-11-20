@@ -57,6 +57,7 @@ dunce = { workspace = true }
 gix = { workspace = true }
 hex = { workspace = true }
 indicatif = { workspace = true }
+jiff = { workspace = true }
 libsui = { workspace = true }
 mimalloc = { workspace = true }
 num-bigint = { workspace = true }

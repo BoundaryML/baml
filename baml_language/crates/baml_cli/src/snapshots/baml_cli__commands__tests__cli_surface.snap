@@ -112,6 +112,52 @@ baml cloud recordings query
   <sql>
 baml cloud recordings schema
   <table>
+baml cloud alerts
+baml cloud alerts list
+baml cloud alerts show
+  <alert>
+baml cloud alerts create
+  --after <N>
+  --at <AT>
+  --days <DAYS>
+  --every <EVERY>
+  --name <NAME>
+  --notify <WHEN>
+  --remind <INTERVAL>
+  --rows <ROWS>
+  --run-now [default: false]
+  --sql <SQL>
+  --sql-file <PATH>
+  --time-zone <TIME_ZONE>
+  --to <DESTINATION>
+  --when <CONDITION>
+baml cloud alerts update
+  --after <N>
+  --at <AT>
+  --days <DAYS>
+  --every <EVERY>
+  --name <NAME>
+  --notify <WHEN>
+  --remind <INTERVAL>
+  --rows <ROWS>
+  --run-now [default: false]
+  --sql <SQL>
+  --sql-file <PATH>
+  --time-zone <TIME_ZONE>
+  --to <DESTINATION>
+  --when <CONDITION>
+  <alert>
+baml cloud alerts runs
+  --before <BEFORE>
+  --limit <LIMIT> [default: 10]
+baml cloud alerts mute
+  <alert>
+  <duration>
+baml cloud alerts unmute
+  <alert>
+baml cloud alerts delete
+  <alert>
+baml cloud alerts destinations
 baml query
   --max-rows <N>
   --max-wall <DURATION>

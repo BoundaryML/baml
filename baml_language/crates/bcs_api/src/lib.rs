@@ -4,6 +4,8 @@
 //! recording, bounded delivery and heartbeat scheduling belong to `btel_*`.
 
 #[cfg(feature = "auth")]
+pub mod alerts;
+#[cfg(feature = "auth")]
 pub mod api_keys;
 #[cfg(feature = "auth")]
 pub mod auth;

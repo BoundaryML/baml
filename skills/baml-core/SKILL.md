@@ -203,6 +203,23 @@ test "Extract parses the recorded reply" {
 }
 ```
 
+### Alerts on recorded calls
+
+When the user wants to be told about something in their recorded calls ("tell #ai-pipeline when FindFacts starts failing"), set up a Boundary alert with `baml cloud alerts`. An alert is SQL that runs on a schedule in a Boundary environment and posts to Slack or a webhook when something is wrong. It uses the `baml cloud auth login` session, not an API key, and takes `baml cloud`'s `--project org_handle/project_name --env <env>`, like `baml cloud recordings query`.
+
+1. Write SQL with its own time window that matches the schedule: checked every 15 minutes, look at the last 15 minutes. Either it returns rows only when something is wrong (the default condition), or it returns a number to compare with a threshold, given as `--when "errors > 5"` (a column of the first row) or `--when "> 0.2"` (its first column).
+2. Run it with `baml cloud recordings query "..." --project ... --env ...` and check it returns what you expect now.
+3. `baml cloud alerts destinations` lists where it can post. Destinations are added in Studio.
+4. Show the user the SQL, the schedule and the destination, and wait for a yes: the alert posts to their team's channel.
+5. Create it, then report its ID and next run.
+
+```bash
+baml cloud alerts create --project acme/ai-pipeline --env production \
+  --name "FindFacts failing" --every 15m --to "#ai-pipeline" --sql-file findfacts.sql
+```
+
+By default it posts when it starts firing and when it resolves. `--after 3` fires only after 3 bad checks in a row, `--remind 1h` repeats while it stays firing, and `--notify every-check` posts on every bad check instead. `--at 09:00 --time-zone Europe/Madrid --days weekdays` runs it at a time instead of `--every`, and `--run-now` also runs it once right away. `baml cloud alerts list`, `show`, `update`, `runs`, `mute <alert> 24h`, `unmute` and `delete` manage alerts; add `--output-format json` to read the output as JSON.
+
 ## Tests
 
 - **Shape:** lone `test "name" { ... }` (no wrapper); `testset` only GROUPS. Asserts (only 6): `assert.equal`/`approx_equal`/`is_true`/`is_type`/`not_null`/`contains`. `assert.equal` compares **structurally** (deep, across classes/arrays/maps), and so does plain `==`, which is the bool form. `assert.equal` is *exact* on floats; use `assert.approx_equal(actual, expected, eps)` for computed ones. Last assert: no trailing `;`.
