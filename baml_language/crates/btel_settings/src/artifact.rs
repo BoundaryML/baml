@@ -319,11 +319,35 @@ fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError>
                     .as_table()
                     .ok_or_else(|| PolicyError(format!("[{name}] must be a table.")))?;
                 validate_fields(table, &name, envvar_fields)?;
+                if name == "bridge.env_var_names" {
+                    reject_bridge_gc_collisions(table)?;
+                }
             }
         }
     }
     for kind in [ArtifactKind::Pack, ArtifactKind::Bridge] {
         BuildTelemetry::from_manifest(manifest, kind)?;
+    }
+    Ok(())
+}
+
+/// Generated SDKs always read the standard GC variables (`baml_exec::PackGc`
+/// renames them for packed programs only), so a bridge binding renamed to one
+/// would read the same variable as two settings. Compared ignoring case: a
+/// bridge generated on a case-sensitive host may be loaded on Windows.
+fn reject_bridge_gc_collisions(names: &toml::Table) -> Result<(), PolicyError> {
+    for (key, value) in names {
+        let Some(value) = value.as_str() else {
+            continue;
+        };
+        if let Some(gc) = ["BAML_GC_GROWTH", "BAML_GC_MIN_GROWTH"]
+            .into_iter()
+            .find(|gc| gc.eq_ignore_ascii_case(value))
+        {
+            return Err(PolicyError(format!(
+                "bridge.env_var_names.{key}: `{value}` is the {gc} variable, which generated SDKs read for the heap's collection policy; use another name."
+            )));
+        }
     }
     Ok(())
 }
@@ -713,6 +737,14 @@ embed_telemetry_env = "Bridge environment"
             (
                 "[bridge.gc]\ngrowth = 2",
                 "[bridge.gc] is not supported: generated SDKs take their GC settings from the BAML_GC_GROWTH and BAML_GC_MIN_GROWTH environment variables. [pack.gc] sets them for packed programs.",
+            ),
+            (
+                "[bridge.env_var_names]\nBAML_TELEMETRY = \"BAML_GC_GROWTH\"",
+                "bridge.env_var_names.BAML_TELEMETRY: `BAML_GC_GROWTH` is the BAML_GC_GROWTH variable, which generated SDKs read for the heap's collection policy; use another name.",
+            ),
+            (
+                "[bridge.env_var_names]\nBOUNDARY_PROJECT = \"baml_gc_min_growth\"\nBOUNDARY_API_KEY = \"ACME_KEY\"",
+                "bridge.env_var_names.BOUNDARY_PROJECT: `baml_gc_min_growth` is the BAML_GC_MIN_GROWTH variable, which generated SDKs read for the heap's collection policy; use another name.",
             ),
             (
                 "[bridge.env_var_names]\nBAML_GC_GROWTH = \"ACME\"",

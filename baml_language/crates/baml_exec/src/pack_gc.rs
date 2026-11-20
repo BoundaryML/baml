@@ -80,6 +80,13 @@ impl PackGc {
             let fail = |key: &str, error: &dyn std::fmt::Display| {
                 PackGcError(format!("pack.gc.{key}: {error}"))
             };
+            if let Some(toml::Value::String(text)) = table.get("growth") {
+                let example = Growth::parse(text)
+                    .map_or_else(|_| "2.5".to_owned(), |growth| growth.to_string());
+                return Err(PackGcError(format!(
+                    "pack.gc.growth: growth is a number, not a string; write `growth = {example}` without quotes."
+                )));
+            }
             let growth = table
                 .get("growth")
                 .map(|value| match value {
@@ -138,6 +145,19 @@ impl PackGc {
                     })?;
                 name.clone_into(output);
             }
+            // A GC variable renamed to the other one's standard name would read
+            // a value meant for the other setting (a swap of the two included).
+            for (key, name, other) in [
+                (GROWTH_ENV_VAR, &gc.growth_env_var, MIN_GROWTH_ENV_VAR),
+                (MIN_GROWTH_ENV_VAR, &gc.min_growth_env_var, GROWTH_ENV_VAR),
+            ] {
+                if name.eq_ignore_ascii_case(other) {
+                    return Err(PackGcError(format!(
+                        "pack.env_var_names.{key}: `{name}` is the standard name of the other GC variable; use a name of its own (for example, \"ACME_{}\").",
+                        &key["BAML_".len()..]
+                    )));
+                }
+            }
             for name in [&gc.growth_env_var, &gc.min_growth_env_var] {
                 if taken.iter().any(|other| other.eq_ignore_ascii_case(name)) {
                     return Err(PackGcError(format!(
@@ -185,8 +205,8 @@ impl PackGc {
         Ok(GcConfig {
             growth,
             min_growth,
-            growth_env_var: self.growth_env_var.clone(),
-            min_growth_env_var: self.min_growth_env_var.clone(),
+            growth_env_var: Some(self.growth_env_var.clone()),
+            min_growth_env_var: Some(self.min_growth_env_var.clone()),
         })
     }
 }
@@ -287,6 +307,50 @@ mod tests {
                 "{names}"
             );
         }
+    }
+
+    #[test]
+    fn exact_messages_for_a_quoted_growth_and_a_swapped_name() {
+        assert_eq!(
+            parse("[pack.gc]\ngrowth = \"2.5\"").unwrap_err().0,
+            "pack.gc.growth: growth is a number, not a string; write `growth = 2.5` without quotes."
+        );
+        assert_eq!(
+            parse("[pack.gc]\ngrowth = \"3\"").unwrap_err().0,
+            "pack.gc.growth: growth is a number, not a string; write `growth = 3` without quotes."
+        );
+        assert_eq!(
+            parse("[pack.gc]\ngrowth = \"fast\"").unwrap_err().0,
+            "pack.gc.growth: growth is a number, not a string; write `growth = 2.5` without quotes."
+        );
+        // Exact values with trailing zeros are fine.
+        assert_eq!(
+            parse("[pack.gc]\ngrowth = 2.500")
+                .unwrap()
+                .growth_hundredths,
+            Some(250)
+        );
+        assert!(parse("[pack.gc]\ngrowth = 2.675").is_err());
+
+        let swap = "[pack.env_var_names]\nBAML_GC_GROWTH = \"BAML_GC_MIN_GROWTH\"\nBAML_GC_MIN_GROWTH = \"BAML_GC_GROWTH\"";
+        assert_eq!(
+            parse(swap).unwrap_err().0,
+            "pack.env_var_names.BAML_GC_GROWTH: `BAML_GC_MIN_GROWTH` is the standard name of the other GC variable; use a name of its own (for example, \"ACME_GC_GROWTH\")."
+        );
+        assert_eq!(
+            parse("[pack.env_var_names]\nBAML_GC_MIN_GROWTH = \"BAML_GC_GROWTH\"")
+                .unwrap_err()
+                .0,
+            "pack.env_var_names.BAML_GC_MIN_GROWTH: `BAML_GC_GROWTH` is the standard name of the other GC variable; use a name of its own (for example, \"ACME_GC_MIN_GROWTH\")."
+        );
+        // Like telemetry's renames, any well-formed name is accepted, `PATH`
+        // included: names are checked for shape and collisions only.
+        assert_eq!(
+            parse("[pack.env_var_names]\nBAML_GC_GROWTH = \"PATH\"")
+                .unwrap()
+                .growth_env_var,
+            "PATH"
+        );
     }
 
     /// What the host does with the envelope: the baked values reach the heap's

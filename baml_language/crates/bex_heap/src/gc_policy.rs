@@ -137,7 +137,9 @@ impl Growth {
         if whole.is_empty() || !digits(whole) || !digits(fraction) || text.ends_with('.') {
             return Err(invalid());
         }
-        if fraction.len() > 2 {
+        // Trailing zeros keep the value exact: `2.500` is `2.5`.
+        let (fraction, rest) = fraction.split_at(fraction.len().min(2));
+        if rest.bytes().any(|byte| byte != b'0') {
             return Err(GcSettingError::GrowthTooPrecise {
                 text: text.to_owned(),
             });
@@ -272,7 +274,10 @@ pub enum GcSettingError {
     MinGrowthBareNumber { bytes: usize },
     #[error("min_growth must be at least 1 MiB (got {bytes} bytes)")]
     MinGrowthOutOfRange { bytes: usize },
-    #[error("size `{text}` is too large")]
+    #[error(
+        "size `{text}` is too large; the largest min_growth this platform accepts is {} bytes",
+        GcSettings::MIN_GROWTH_CEILING
+    )]
     SizeTooLarge { text: String },
 }
 
@@ -419,6 +424,38 @@ mod tests {
         assert_eq!(p.budget.load(Ordering::Relaxed), usize::MAX, "saturates");
     }
 
+    /// The default policy is the formula it replaced, at the edges too.
+    #[test]
+    fn default_budget_equals_the_old_formula() {
+        let old = |live: usize| live.saturating_mul(4).max(32 * MIB);
+        for live in [
+            0,
+            1,
+            8 * MIB - 1,
+            8 * MIB,
+            usize::MAX / 4,
+            usize::MAX / 4 + 1,
+            usize::MAX,
+        ] {
+            assert_eq!(
+                GcSettings::default().budget_after(live),
+                old(live),
+                "{live}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_size_too_large_says_the_limit() {
+        let message = parse_min_growth("99999999999999GiB")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            message.contains(&GcSettings::MIN_GROWTH_CEILING.to_string()),
+            "{message}"
+        );
+    }
+
     #[test]
     fn growth_parsing_and_range() {
         for (text, hundredths) in [
@@ -453,6 +490,18 @@ mod tests {
         ] {
             assert!(Growth::parse(text).is_err(), "{text}");
         }
+        for text in ["2.500", "2.5000", "4.00", "0.250"] {
+            assert!(Growth::parse(text).is_ok(), "{text}");
+        }
+        assert_eq!(Growth::parse("2.500").unwrap().hundredths(), 250);
+        assert!(matches!(
+            Growth::parse("2.675"),
+            Err(GcSettingError::GrowthTooPrecise { .. })
+        ));
+        assert!(matches!(
+            Growth::parse("2.5001"),
+            Err(GcSettingError::GrowthTooPrecise { .. })
+        ));
         assert_eq!(Growth::from_f64(2.5).unwrap().hundredths(), 250);
         assert_eq!(Growth::from_f64(0.29).unwrap().hundredths(), 29);
         for value in [f64::NAN, f64::INFINITY, -1.0, 0.1, 1000.5, 1.234] {

@@ -34,9 +34,22 @@ use sys_native::SysOpsExt as _;
 // Helpers
 // ============================================================================
 
+/// GC variables the tests set on purpose and nowhere else.
+const GC_VARS: [&str; 3] = ["BAML_GC_GROWTH", "BAML_GC_MIN_GROWTH", "ACME_GC_GROWTH"];
+
+/// A command that does not inherit the developer's or CI's GC variables, so
+/// neither `baml pack` nor a packed program sees a value a test did not set.
+fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new(program);
+    for name in GC_VARS {
+        command.env_remove(name);
+    }
+    command
+}
+
 fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
     let out_bin = dir.join("out");
-    let mut cmd = Command::new(&built.baml_cli);
+    let mut cmd = command(&built.baml_cli);
     cmd.arg("pack")
         .arg("--project-dir")
         .arg(dir)
@@ -64,7 +77,7 @@ fn pack(built: &BuiltPaths, dir: &Path, pack_args: &[&str]) -> PathBuf {
 }
 
 fn run(binary: &Path, args: &[&str]) -> Output {
-    let mut cmd = Command::new(binary);
+    let mut cmd = command(binary);
     for arg in args {
         cmd.arg(arg);
     }
@@ -114,7 +127,7 @@ function main() -> string {{
     );
     common::write_project(project.path(), &source);
     let cli = |args: &[&str]| {
-        Command::new(&built.baml_cli)
+        command(&built.baml_cli)
             .args(args)
             .current_dir(project.path())
             .env("BAML_HOME", common::shared_baml_home())
@@ -178,7 +191,7 @@ naming_convention = "preserve-case"
             "{}",
             String::from_utf8_lossy(&packed.stderr)
         );
-        let output = Command::new(project.path().join("app"))
+        let output = command(project.path().join("app"))
             .env("BAML_HOME", project.path().join("packed-home"))
             .env("BOUNDARY_API_KEY", "local")
             .env("DO_NOT_TRACK", "1")
@@ -247,7 +260,7 @@ async fn artifact_recording_level_requires_explicit_permission_and_off_skips_aut
     let temp = tempfile::tempdir().unwrap();
     common::write_project(temp.path(), "function main() -> int { 7 }\n");
     let bin = pack(built, temp.path(), &["main"]);
-    let output = Command::new(&bin)
+    let output = command(&bin)
         .env("BAML_TELEMETRY", "invalid")
         .env("BOUNDARY_API_KEY", "local")
         .output()
@@ -274,7 +287,7 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
         .expect(0)
         .mount(&server)
         .await;
-    let output = Command::new(&bin)
+    let output = command(&bin)
         .env("BAML_TELEMETRY", "invalid")
         .env("ACME_TELEMETRY", "off")
         .env("BOUNDARY_API_KEY", "bdry_secret_test")
@@ -293,7 +306,7 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
 
     // A value that is not a level never stops the program, and records nothing.
     for level in ["false", "invalid"] {
-        let output = Command::new(&bin)
+        let output = command(&bin)
             .env("ACME_TELEMETRY", level)
             .env("BOUNDARY_API_KEY", "bdry_secret_test")
             .env("BOUNDARY_API_URL", server.uri())
@@ -339,7 +352,7 @@ initial_telemetry_warning_message = "Telemetry unavailable; continuing."
             .expect(1)
             .mount(&server)
             .await;
-        let output = Command::new(&bin)
+        let output = command(&bin)
             .env("BOUNDARY_API_KEY", "bdry_secret_test")
             .env("BOUNDARY_API_URL", server.uri())
             .env("BOUNDARY_PROJECT", "acme/app")
@@ -453,7 +466,7 @@ fn pack_e2e_omits_compile_file_status() {
     );
     let out_bin = tmp.path().join("out");
 
-    let output = Command::new(&built.baml_cli)
+    let output = command(&built.baml_cli)
         .env("BAML_CLI_ALLOW_DIRECT", "1")
         // Ignore inherited agent env (CLAUDECODE/AI_AGENT/…): it would flip
         // `--output-preset auto` to `agent` and hide progress lines.
@@ -509,7 +522,7 @@ fn pack_e2e_hermetic_baml_file() {
     let src = tmp.path().join("hello.baml");
     std::fs::write(&src, "function main() -> string { \"hermetic\" }\n").unwrap();
     let out_bin = tmp.path().join("out");
-    let status = Command::new(&built.baml_cli)
+    let status = command(&built.baml_cli)
         .env("BAML_HOME", common::shared_baml_home())
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .arg("pack")
@@ -602,7 +615,7 @@ fn pack_e2e_manifest_less_baml_src() {
 
 fn run_with_context(binary: &Path, args: &[&str], context: Option<&str>, stdin: &str) -> Output {
     use std::io::Write as _;
-    let mut cmd = Command::new(binary);
+    let mut cmd = command(binary);
     cmd.args(args)
         .env_remove("BAML_CONTEXT")
         .stdin(std::process::Stdio::piped())
@@ -713,9 +726,8 @@ fn rust_pack_from_outside_workspace_with_cargo_overrides() {
         .path()
         .join(format!("packed{}", std::env::consts::EXE_SUFFIX));
     for explicit_build_dir in [false, true] {
-        let mut command = Command::new(common::baml_cli());
-        command
-            .current_dir(caller.path())
+        let mut pack = command(common::baml_cli());
+        pack.current_dir(caller.path())
             .args(["pack", "main", "--rust", "--rust-profile", "fast"])
             .arg("--rust-workspace")
             .arg(workspace)
@@ -731,9 +743,9 @@ fn rust_pack_from_outside_workspace_with_cargo_overrides() {
             .env("CARGO_PROFILE_RELEASE_OPT_LEVEL", "invalid")
             .env("CARGO_PROFILE_RELEASE_STRIP", "invalid");
         if explicit_build_dir {
-            command.args(["--rust-build-dir", "target/baml-rust"]);
+            pack.args(["--rust-build-dir", "target/baml-rust"]);
         }
-        assert!(command.status().expect("spawn Rust pack").success());
+        assert!(pack.status().expect("spawn Rust pack").success());
         assert!(caller.path().join("target/baml-rust/Cargo.toml").is_file());
         let output = run(&output_path, &[]);
         assert!(output.status.success(), "{output:?}");
@@ -758,7 +770,7 @@ fn pack_child_preserves_streams_environment_and_status() {
     "#,
         &["main"],
     );
-    let mut child = Command::new(bin)
+    let mut child = command(bin)
         .env("BAML_HANDOFF_REMOVE", "inherited")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -807,11 +819,7 @@ fn pack_child_survives_cleanup_and_runtime_shutdown() {
         &["main"],
     );
     let marker = tmp.path().join("completed");
-    let output = Command::new(bin)
-        .arg("--marker")
-        .arg(&marker)
-        .output()
-        .unwrap();
+    let output = command(bin).arg("--marker").arg(&marker).output().unwrap();
     assert!(
         output.status.success(),
         "{}",
@@ -844,13 +852,8 @@ fn pack_e2e_gc_settings_are_baked_and_overridable() {
         )
         .unwrap();
     };
-    let run_with = |bin: &Path, env: &[(&str, &str)]| {
-        let mut command = Command::new(bin);
-        for name in ["BAML_GC_GROWTH", "BAML_GC_MIN_GROWTH", "ACME_GC_GROWTH"] {
-            command.env_remove(name);
-        }
-        command.envs(env.iter().copied()).output().unwrap()
-    };
+    let run_with =
+        |bin: &Path, env: &[(&str, &str)]| command(bin).envs(env.iter().copied()).output().unwrap();
 
     // A setting that cannot work fails the pack, naming the key.
     for bad in [
@@ -860,7 +863,7 @@ fn pack_e2e_gc_settings_are_baked_and_overridable() {
         "[bridge.gc]\ngrowth = 2",
     ] {
         manifest(bad);
-        let output = Command::new(&built.baml_cli)
+        let output = command(&built.baml_cli)
             .args(["pack", "--project-dir"])
             .arg(temp.path())
             .arg("-o")
@@ -874,6 +877,31 @@ fn pack_e2e_gc_settings_are_baked_and_overridable() {
         assert!(!output.status.success(), "{bad} packed");
         assert!(stderr.contains(".gc"), "{bad}: {stderr}");
     }
+
+    // `baml pack` runs no target, so the packer's own GC variables, even bad
+    // ones, neither fail the pack nor reach the binary.
+    manifest("");
+    let packed = temp.path().join("packed_with_env");
+    let output = command(&built.baml_cli)
+        .args(["pack", "--project-dir"])
+        .arg(temp.path())
+        .arg("-o")
+        .arg(&packed)
+        .arg("main")
+        .env("BAML_HOME", common::shared_baml_home())
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+        .env("BAML_GC_GROWTH", "fast")
+        .env("BAML_GC_MIN_GROWTH", "0")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "pack read the packer's GC variables: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = run_with(&packed, &[]);
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
 
     manifest(
         "[pack.gc]\ngrowth = 0.5\nmin_growth = \"2MiB\"\n[pack.env_var_names]\nBAML_GC_GROWTH = \"ACME_GC_GROWTH\"\n",
@@ -909,11 +937,7 @@ fn pack_e2e_gc_settings_are_baked_and_overridable() {
 
     // Source runs use the standard names; `[pack.gc]` does not apply there.
     let baml_run = |env: &[(&str, &str)]| {
-        let mut command = Command::new(&built.baml_cli);
-        for name in ["BAML_GC_GROWTH", "BAML_GC_MIN_GROWTH", "ACME_GC_GROWTH"] {
-            command.env_remove(name);
-        }
-        command
+        command(&built.baml_cli)
             .args(["run", "main"])
             .current_dir(temp.path())
             .env("BAML_HOME", common::shared_baml_home())
@@ -941,5 +965,117 @@ fn pack_e2e_gc_settings_are_baked_and_overridable() {
         String::from_utf8_lossy(&output.stderr).contains("BAML_GC_GROWTH"),
         "{}",
         String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// The baked policy reaches the collector of a real packed binary, through
+/// the host's envelope-to-engine glue: counted as `baml.gc` telemetry spans,
+/// `[pack.gc]` and the same values from the environment collect equally often,
+/// and more often than the defaults.
+#[test]
+fn pack_e2e_gc_settings_reach_the_collector() {
+    const SOURCE: &str = r#"
+class Node { left: Node?, right: Node? }
+function tree(depth: int) -> Node {
+  if (depth <= 0) { return Node { left: null, right: null }; }
+  Node { left: tree(depth - 1), right: tree(depth - 1) }
+}
+function count(node: Node) -> int {
+  let l = node.left;
+  let r = node.right;
+  if (l == null || r == null) { return 1; }
+  1 + count(l) + count(r)
+}
+function main() -> int {
+  let total = 0;
+  for (let i = 0; i < 400; i += 1) { total += count(tree(10)); }
+  total
+}
+"#;
+    let built = common::ensure_built();
+    let temp = tempfile::tempdir().unwrap();
+    let pack_with = |name: &str, gc: &str| {
+        let dir = temp.path().join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        common::write_project(&dir, SOURCE);
+        std::fs::write(
+            dir.join("baml.toml"),
+            format!(
+                "[package]\nname = \"gc_probe\"\n[pack.env_var_names]\nBAML_TELEMETRY = \"BAML_TELEMETRY\"\n{gc}"
+            ),
+        )
+        .unwrap();
+        pack(built, &dir, &["main"])
+    };
+    // One run in a fresh project, recording at `low`; its collections, less
+    // the one at shutdown.
+    let mut runs = 0;
+    let mut collections = |bin: &Path, env: &[(&str, &str)]| {
+        runs += 1;
+        let dir = temp.path().join(format!("run{runs}"));
+        std::fs::create_dir_all(dir.join("baml_src")).unwrap();
+        std::fs::write(dir.join("baml.toml"), "[package]\nname = \"run\"\n").unwrap();
+        let home = dir.join(".baml");
+        let output = command(bin)
+            .current_dir(&dir)
+            .env("BAML_HOME", &home)
+            .env("BAML_TELEMETRY", "low")
+            .env_remove("BOUNDARY_API_KEY")
+            .env_remove("BOUNDARY_PROJECT")
+            .envs(env.iter().copied())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "818800\n");
+        let query = command(&built.baml_cli)
+            .current_dir(&dir)
+            .env("BAML_HOME", &home)
+            .env("BAML_CLI_ALLOW_DIRECT", "1")
+            .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+            .args([
+                "--color",
+                "never",
+                "--output-format",
+                "json",
+                "local",
+                "recordings",
+                "query",
+            ])
+            .arg("SELECT context_metadata FROM spans WHERE span_name = 'baml.gc'")
+            .output()
+            .unwrap();
+        assert!(
+            query.status.success(),
+            "{}",
+            String::from_utf8_lossy(&query.stderr)
+        );
+        let rows: serde_json::Value = serde_json::from_slice(&query.stdout).unwrap();
+        rows["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|row| row[0]["trigger"] != "shutdown")
+            .count()
+    };
+
+    let defaults = pack_with("defaults", "");
+    let baked = pack_with("baked", "[pack.gc]\ngrowth = 2\nmin_growth = \"1MiB\"\n");
+    let at_defaults = collections(&defaults, &[]);
+    let from_manifest = collections(&baked, &[]);
+    let from_env = collections(
+        &defaults,
+        &[("BAML_GC_GROWTH", "2"), ("BAML_GC_MIN_GROWTH", "1MiB")],
+    );
+    assert_eq!(
+        from_manifest, from_env,
+        "the same policy, baked or from the environment"
+    );
+    assert!(
+        from_manifest > at_defaults,
+        "[pack.gc] {from_manifest} vs defaults {at_defaults} collections"
     );
 }

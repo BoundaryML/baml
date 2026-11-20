@@ -75,12 +75,18 @@ function Async(n: int) -> int {
 }
 "#;
 
+/// The default policy, whatever `BAML_GC_*` the developer or CI exported:
+/// these tests count collections.
 fn engine() -> Arc<BexEngine> {
     Arc::new(
-        BexEngine::new(
+        BexEngine::new_with_config(
             baml_test_support::compile_source(SOURCE),
             Arc::new(sys_native::SysOps::native()),
             vec![],
+            bex_engine::EngineConfig {
+                gc: bex_engine::GcConfig::fixed(bex_engine::gc_settings::GcSettings::default()),
+                ..Default::default()
+            },
         )
         .unwrap(),
     )
@@ -453,13 +459,10 @@ async fn completed_bridge_call_leaves_debt_for_next_entry_and_preserves_its_hand
 }
 
 fn engine_with_gc(growth: &str, min_growth: usize) -> Arc<BexEngine> {
-    let gc = bex_engine::GcConfig {
-        growth: Some(bex_engine::gc_settings::Growth::parse(growth).unwrap()),
-        min_growth: Some(min_growth),
-        // Names nothing sets, so the test cannot pick up the environment.
-        growth_env_var: "BEX_ENGINE_TEST_UNSET_GC_GROWTH".into(),
-        min_growth_env_var: "BEX_ENGINE_TEST_UNSET_GC_MIN_GROWTH".into(),
-    };
+    use bex_engine::gc_settings::{GcSettings, Growth};
+    let gc = bex_engine::GcConfig::fixed(
+        GcSettings::new(Growth::parse(growth).unwrap(), min_growth).unwrap(),
+    );
     let engine = BexEngine::new_with_config(
         baml_test_support::compile_source(SOURCE),
         Arc::new(sys_native::SysOps::native()),

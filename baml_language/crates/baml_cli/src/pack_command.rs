@@ -217,11 +217,17 @@ impl PackArgs {
             reporter.warning(crate::run_command::FORMAT_HINT);
         }
 
-        // Signature info for target resolution / reserved `help` check.
-        let engine = BexEngine::new(
+        // Signature info for target resolution / reserved `help` check. This
+        // engine never runs a target, so the packer's own `BAML_GC_*` must
+        // neither fail the pack nor matter: it uses the default policy.
+        let engine = BexEngine::new_with_config(
             program.clone(),
             Arc::new(sys_native::SysOps::native()),
             vec![],
+            bex_engine::EngineConfig {
+                gc: bex_engine::GcConfig::fixed(bex_engine::gc_settings::GcSettings::default()),
+                ..Default::default()
+            },
         )
         .map_err(|e| anyhow!("failed to initialize engine for resolution: {e:?}"))?;
 

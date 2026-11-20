@@ -24,6 +24,9 @@ pub const MIN_GROWTH_ENV_VAR: &str = "BAML_GC_MIN_GROWTH";
 /// [`Default`] is what every source run, test and bridge uses: nothing baked,
 /// the standard variable names. A packed program carries the publisher's
 /// values and the names it reads (see `baml_exec::PackGc`).
+/// [`GcConfig::fixed`] reads no variable at all, for engines built only to
+/// inspect a program (`baml pack` resolving its targets) and for tests whose
+/// assertions depend on the policy.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GcConfig {
     /// Baked `growth`; `None` keeps the default.
@@ -31,10 +34,10 @@ pub struct GcConfig {
     /// Baked `min_growth` in bytes; `None` keeps the default. Validated by
     /// [`GcConfig::resolve_with`] with the rest.
     pub min_growth: Option<usize>,
-    /// The variable that overrides `growth`.
-    pub growth_env_var: String,
-    /// The variable that overrides `min_growth`.
-    pub min_growth_env_var: String,
+    /// The variable that overrides `growth`; `None` reads nothing.
+    pub growth_env_var: Option<String>,
+    /// The variable that overrides `min_growth`; `None` reads nothing.
+    pub min_growth_env_var: Option<String>,
 }
 
 impl Default for GcConfig {
@@ -42,8 +45,20 @@ impl Default for GcConfig {
         Self {
             growth: None,
             min_growth: None,
-            growth_env_var: GROWTH_ENV_VAR.to_owned(),
-            min_growth_env_var: MIN_GROWTH_ENV_VAR.to_owned(),
+            growth_env_var: Some(GROWTH_ENV_VAR.to_owned()),
+            min_growth_env_var: Some(MIN_GROWTH_ENV_VAR.to_owned()),
+        }
+    }
+}
+
+impl GcConfig {
+    /// Exactly `settings`, whatever the environment says.
+    pub fn fixed(settings: GcSettings) -> Self {
+        Self {
+            growth: Some(settings.growth()),
+            min_growth: Some(settings.min_growth()),
+            growth_env_var: None,
+            min_growth_env_var: None,
         }
     }
 }
@@ -74,22 +89,25 @@ impl GcConfig {
         mut read: impl FnMut(&str) -> Option<OsString>,
     ) -> Result<GcSettings, GcConfigError> {
         let defaults = GcSettings::default();
-        let mut env = |name: &str| baml_env::string_from(name, read(name));
+        let mut env = |name: Option<&String>| match name {
+            Some(name) => baml_env::string_from(name, read(name)),
+            None => Ok(None),
+        };
         let at = |source_name: &str| {
             let source_name = source_name.to_owned();
             move |error| GcConfigError::Value { source_name, error }
         };
 
-        let growth = match env(&self.growth_env_var)? {
-            Some(text) => Growth::parse(&text).map_err(at(&self.growth_env_var))?,
-            None => self.growth.unwrap_or(defaults.growth()),
+        let growth = match (env(self.growth_env_var.as_ref())?, &self.growth_env_var) {
+            (Some(text), Some(name)) => Growth::parse(&text).map_err(at(name))?,
+            _ => self.growth.unwrap_or(defaults.growth()),
         };
-        let (min_growth, min_source) = match env(&self.min_growth_env_var)? {
-            Some(text) => (
-                parse_min_growth(&text).map_err(at(&self.min_growth_env_var))?,
-                self.min_growth_env_var.as_str(),
-            ),
-            None => (
+        let (min_growth, min_source) = match (
+            env(self.min_growth_env_var.as_ref())?,
+            &self.min_growth_env_var,
+        ) {
+            (Some(text), Some(name)) => (parse_min_growth(&text).map_err(at(name))?, name.as_str()),
+            _ => (
                 self.min_growth.unwrap_or(defaults.min_growth()),
                 "[pack.gc] min_growth",
             ),
@@ -175,8 +193,8 @@ mod tests {
     #[test]
     fn a_packed_program_reads_only_the_names_it_carries() {
         let renamed = GcConfig {
-            growth_env_var: "ACME_GC_GROWTH".into(),
-            min_growth_env_var: "ACME_GC_MIN".into(),
+            growth_env_var: Some("ACME_GC_GROWTH".into()),
+            min_growth_env_var: Some("ACME_GC_MIN".into()),
             ..GcConfig::default()
         };
         let settings = renamed
@@ -188,6 +206,21 @@ mod tests {
             .unwrap();
         assert_eq!(settings.growth(), growth("1.5"));
         assert_eq!(settings.min_growth(), 32 * MIB);
+    }
+
+    #[test]
+    fn fixed_settings_read_nothing() {
+        let settings = GcSettings::new(growth("1.5"), 4 * MIB).unwrap();
+        let resolved = GcConfig::fixed(settings)
+            .resolve_with(|name| panic!("read {name}"))
+            .unwrap();
+        assert_eq!(resolved, settings);
+        assert_eq!(
+            GcConfig::fixed(GcSettings::default())
+                .resolve_with(env(&[(GROWTH_ENV_VAR, "fast"), (MIN_GROWTH_ENV_VAR, "0")]))
+                .unwrap(),
+            GcSettings::default()
+        );
     }
 
     #[test]

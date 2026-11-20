@@ -58,9 +58,11 @@ BAML's heap is garbage collected. After each collection, the next one waits unti
 | growth | `4` | `BAML_GC_GROWTH=2.5` | `[pack.gc]` `growth = 2.5` |
 | min_growth | `32MiB` | `BAML_GC_MIN_GROWTH=8MiB` | `[pack.gc]` `min_growth = "8MiB"` |
 
-- `baml run`, `baml test`, the playground and every generated SDK read the two variables when the runtime starts. `[pack.gc]` does not apply to them.
-- `baml pack` bakes `[pack.gc]` into the binary. At startup the variables still win over the baked values, each setting on its own. A publisher can rename the variables the binary reads with `[pack.env_var_names]` (`BAML_GC_GROWTH = "ACME_GC_GROWTH"`), but cannot turn them off.
+- `baml run`, `baml test`, the playground and the generated SDKs that load the native library read the two variables when the runtime starts. The WASM SDK cannot read environment variables and always uses the defaults.
+- `baml pack` bakes `[pack.gc]` into the binary. Only `baml pack` checks `[pack.gc]`; `baml run`, `baml test` and `baml check` neither read nor validate it. At startup the variables still win over the baked values, each setting on its own. A publisher can rename the variables the binary reads with `[pack.env_var_names]` (`BAML_GC_GROWTH = "ACME_GC_GROWTH"`), but cannot turn them off; a GC variable cannot be renamed to the other one's standard name. Generated SDKs always read the standard names, so `[bridge.env_var_names]` cannot point another binding at them.
+- `baml pack` itself does not read the variables: they apply to the packed program when it runs, not to the packing.
 - A value that cannot work (`growth` below `0.25`, `min_growth` below `1MiB`, a decimal unit such as `MB`, anything that is not a number) stops startup with an error naming the variable, or fails `baml pack` naming the key. Empty means unset.
+- A very large `min_growth` means no collection until that much has been allocated since the last one, which in practice turns the collector off.
 - Each running program (one engine) has one heap and one policy, shared by its spawned tasks. Several engines in one process each get their own heap and allowance.
 
 ## Bridges
