@@ -321,10 +321,27 @@ struct BamlSlotNode: @unchecked Sendable {
     }
 }
 
-struct BamlSlotCodec {
+/// How a value whose Swift type alone cannot say how to cross (a native
+/// tuple, or a container holding one) encodes, decodes and compares.
+///
+/// A class, not a struct: a node holding a struct of closures is copied
+/// through an outlined copy function, and Swift 6.1's IRGen crashes emitting
+/// that copy inside a function generic over a parameter pack (`BamlSlots.tuple`,
+/// `BamlSlot._classType`).
+final class BamlSlotCodec {
     let encode: (Any) throws -> BamlInboundValue
     let decode: (BamlOutboundValue) throws -> Any
     let equal: (Any, Any) -> Bool
+
+    init(
+        encode: @escaping (Any) throws -> BamlInboundValue,
+        decode: @escaping (BamlOutboundValue) throws -> Any,
+        equal: @escaping (Any, Any) -> Bool
+    ) {
+        self.encode = encode
+        self.decode = decode
+        self.equal = equal
+    }
 }
 
 extension BamlSlot {
