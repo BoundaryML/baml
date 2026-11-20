@@ -198,6 +198,9 @@ pub enum NotDestructurableReason {
     /// The head is an alias of an interface, which no head reaches
     /// through an alias (a class literal does not either).
     AliasOfInterface,
+    /// The head is a builtin's companion class (`baml.Int`), which stands
+    /// in for `builtin` and holds no fields.
+    BuiltinCompanion { builtin: &'static str },
 }
 
 /// The syntactic context an irrefutable-pattern rule fires in.
@@ -2201,6 +2204,11 @@ impl TirTypeError {
                         f,
                         "cannot destructure `{name}`: it is an alias of an interface, not of a \
                          class"
+                    ),
+                    NotDestructurableReason::BuiltinCompanion { builtin } => write!(
+                        f,
+                        "cannot destructure `{name}`: it is the companion class of `{builtin}`, \
+                         which has no fields"
                     ),
                 },
                 TirTypeError::RefutablePatternInLet { context } => write!(

@@ -1299,6 +1299,11 @@ impl<'db> InferenceContext<'db> {
             )
             | Err(ClassHeadMiss::Unresolved | ClassHeadMiss::TypeParameter) => Err(None),
             Err(ClassHeadMiss::NotAClass) => Err(Some(NotDestructurableReason::NotAClass)),
+            Err(ClassHeadMiss::Companion(companion)) => {
+                Err(Some(NotDestructurableReason::BuiltinCompanion {
+                    builtin: companion.companion.builtin,
+                }))
+            }
             Err(ClassHeadMiss::Alias(alias)) => Err(Some(match alias.target {
                 Some(baml_type::Ty::Union(_)) => NotDestructurableReason::AliasOfUnion,
                 Some(baml_type::Ty::Interface(..)) => NotDestructurableReason::AliasOfInterface,

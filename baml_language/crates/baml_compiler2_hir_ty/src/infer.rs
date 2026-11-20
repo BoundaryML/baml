@@ -960,8 +960,8 @@ enum ConstructorMiss {
     /// The head is a type parameter or a scoped `type` binding: it shadows
     /// every item and denotes no class to construct.
     TypeParameter,
-    /// The head is an alias of a type no object literal can construct:
-    /// already reported precisely.
+    /// The head is an alias of a type no object literal can construct, or
+    /// a builtin's companion class: already reported precisely.
     Reported,
 }
 
@@ -990,6 +990,15 @@ enum ClassHeadMiss {
     NotAClass,
     /// The head is an alias of something other than a class.
     Alias(Box<AliasNotOfClass>),
+    /// The head names a builtin's companion class (`baml.Int`): it denotes
+    /// the builtin (`int`), not a class with fields.
+    Companion(Box<CompanionHead>),
+}
+
+/// A head naming a builtin's companion class.
+struct CompanionHead {
+    class_name: baml_type::DeclName,
+    companion: baml_type::type_kind::BuiltinCompanion,
 }
 
 /// An alias head that denotes no class.
@@ -9875,6 +9884,18 @@ impl<'db> InferenceContext<'db> {
                 Err(ConstructorMiss::Unresolved)
             }
             Err(ClassHeadMiss::TypeParameter) => Err(ConstructorMiss::TypeParameter),
+            Err(ClassHeadMiss::Companion(companion)) => {
+                let CompanionHead {
+                    class_name,
+                    companion,
+                } = *companion;
+                self.report(PendingDiag::CannotConstructBuiltinCompanion {
+                    expr: object,
+                    class_name,
+                    companion,
+                });
+                Err(ConstructorMiss::Reported)
+            }
             Err(ClassHeadMiss::Alias(alias)) => {
                 self.report(PendingDiag::AliasNotConstructible {
                     expr: object,
@@ -9907,10 +9928,7 @@ impl<'db> InferenceContext<'db> {
         let alias_value = match self.lower.resolve_type(head, segments) {
             None => return Err(ClassHeadMiss::Unresolved),
             Some(ResolvedTypeDefinition::Source(Definition::Class(class))) => {
-                return Ok(ClassHead::Class {
-                    class: DeclRef::Source(class),
-                    pinned: None,
-                });
+                return self.class_head(DeclRef::Source(class), None);
             }
             Some(ResolvedTypeDefinition::Source(Definition::Interface(interface))) => {
                 return Ok(ClassHead::Interface(interface));
@@ -9921,12 +9939,8 @@ impl<'db> InferenceContext<'db> {
             Some(ResolvedTypeDefinition::Source(_)) => return Err(ClassHeadMiss::NotAClass),
             Some(ResolvedTypeDefinition::Exported(exported)) => match exported.as_ref() {
                 ExportedType::Class { qtn, .. } => {
-                    return mounted_class_loc(db, qtn)
-                        .map(|class| ClassHead::Class {
-                            class: DeclRef::External(class),
-                            pinned: None,
-                        })
-                        .ok_or(ClassHeadMiss::Unresolved);
+                    let class = mounted_class_loc(db, qtn).ok_or(ClassHeadMiss::Unresolved)?;
+                    return self.class_head(DeclRef::External(class), None);
                 }
                 ExportedType::Interface { .. } => return Ok(ClassHead::ExportedInterface),
                 ExportedType::TypeAlias { resolved, .. } => resolved.clone(),
@@ -9942,17 +9956,32 @@ impl<'db> InferenceContext<'db> {
         };
         let pinned = Some(args.iter().map(crate::impls::interned_ty).collect());
         match crate::facts::definition_of(db, &class_head) {
-            Some(Definition::Class(class)) => Ok(ClassHead::Class {
-                class: DeclRef::Source(class),
-                pinned,
-            }),
+            Some(Definition::Class(class)) => self.class_head(DeclRef::Source(class), pinned),
             Some(_) => Err(ClassHeadMiss::Unresolved),
-            None => mounted_class_loc(db, &class_head)
-                .map(|class| ClassHead::Class {
-                    class: DeclRef::External(class),
-                    pinned,
-                })
-                .ok_or(ClassHeadMiss::Unresolved),
+            None => {
+                let class = mounted_class_loc(db, &class_head).ok_or(ClassHeadMiss::Unresolved)?;
+                self.class_head(DeclRef::External(class), pinned)
+            }
+        }
+    }
+
+    /// A head that names `class`, unless the class is a builtin's
+    /// companion, which denotes its builtin rather than itself.
+    fn class_head(
+        &self,
+        class: ClassRef<'db>,
+        pinned: Option<Vec<Ty>>,
+    ) -> Result<ClassHead<'db>, ClassHeadMiss> {
+        let class_name = match class {
+            DeclRef::Source(class) => crate::lower::class_qualified_name(self.db, class),
+            DeclRef::External(class) => class.head(self.db).clone(),
+        };
+        match baml_type::type_kind::builtin_companion_of_decl(self.lang(), &class_name) {
+            Some(companion) => Err(ClassHeadMiss::Companion(Box::new(CompanionHead {
+                class_name,
+                companion,
+            }))),
+            None => Ok(ClassHead::Class { class, pinned }),
         }
     }
 
@@ -10002,22 +10031,6 @@ impl<'db> InferenceContext<'db> {
             self.report(PendingDiag::CannotConstructReflectionKind {
                 expr: object,
                 class_name,
-            });
-            return Ty::error();
-        }
-        if let Some(companion) =
-            baml_type::type_kind::builtin_companion_of_decl(self.lang(), &class_name)
-        {
-            for field in fields {
-                self.infer_expr(body, field.value, &Expectation::None);
-            }
-            for spread in spreads {
-                self.infer_expr(body, spread.expr, &Expectation::None);
-            }
-            self.report(PendingDiag::CannotConstructBuiltinCompanion {
-                expr: object,
-                class_name,
-                companion,
             });
             return Ty::error();
         }
@@ -10207,22 +10220,6 @@ impl<'db> InferenceContext<'db> {
             self.report(PendingDiag::CannotConstructReflectionKind {
                 expr: object,
                 class_name,
-            });
-            return Ty::error();
-        }
-        if let Some(companion) =
-            baml_type::type_kind::builtin_companion_of_decl(self.lang(), &class_name)
-        {
-            for field in fields {
-                self.infer_expr(body, field.value, &Expectation::None);
-            }
-            for spread in spreads {
-                self.infer_expr(body, spread.expr, &Expectation::None);
-            }
-            self.report(PendingDiag::CannotConstructBuiltinCompanion {
-                expr: object,
-                class_name,
-                companion,
             });
             return Ty::error();
         }
