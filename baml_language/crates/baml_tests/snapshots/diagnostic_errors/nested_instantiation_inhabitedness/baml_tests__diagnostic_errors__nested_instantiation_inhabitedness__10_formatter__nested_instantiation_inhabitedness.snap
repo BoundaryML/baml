@@ -1,0 +1,43 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Inhabitedness of a class nested in another instantiation of itself.
+class Wrap<T> {
+    v: T,
+}
+
+// `Wrap<Wrap<never>>` has no values: its field is a `Wrap<never>`, whose
+// own field is `never`. The wildcard arm is unreachable.
+function nested_never(w: Wrap<Wrap<never>>) -> int {
+    match (w) {
+        _ => 1,
+    }
+}
+
+// `Wrap<Wrap<int>>` has values: the wildcard arm is reachable.
+function nested_int(w: Wrap<Wrap<int>>) -> int {
+    match (w) {
+        _ => 1,
+    }
+}
+
+// The arguments grow at every level, so the walk stops and assumes the
+// class inhabited: the wildcard arm is reachable.
+class Grow<T> {
+    next: Grow<T[]>,
+    v: T,
+}
+
+function growing(g: Grow<int>) -> int {
+    match (g) {
+        _ => 1,
+    }
+}
+
+// A field of type `never` still makes the class uninhabited past a field
+// whose arguments grow: the wildcard arm is unreachable.
+function growing_never(g: Grow<never>) -> int {
+    match (g) {
+        _ => 1,
+    }
+}

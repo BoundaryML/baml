@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  × unreachable arm
+    ╭─[nested_instantiation_inhabitedness.baml:10:14]
+ 10 │         _ => 1,
+    ·              ─
+    ╰────
+
+  [type] E0063
+
+  × unreachable arm
+    ╭─[nested_instantiation_inhabitedness.baml:38:14]
+ 38 │         _ => 1,
+    ·              ─
+    ╰────
