@@ -317,7 +317,12 @@ def build_vm(variant, w, n, cache):
     cli, host = binary_identity(variant.baml_cli), binary_identity(variant.pack_host)
     key = digest("vm", cli["sha256"], host["sha256"], toml, w.baml, entry)
     final = cache / "vm" / key
-    if (final / "meta.json").exists() and (final / "exe").exists() and json.loads((final / "meta.json").read_text())["ok"]:
+
+    def complete():
+        meta = final / "meta.json"
+        return meta.exists() and (final / "exe").exists() and json.loads(meta.read_text())["ok"]
+
+    if complete():
         return Exe(final / "exe", key)
     # Pack in a private directory and publish it complete with one rename, so a
     # concurrent invocation never sees, or deletes, a half-built entry. A failed
@@ -342,11 +347,14 @@ def build_vm(variant, w, n, cache):
     if not ok:
         shutil.rmtree(d, ignore_errors=True)
         return Exe(None, key, error)
-    if final.exists():  # an entry from an older run without an executable, or a failed one
+    if complete():  # another invocation published the same entry while this one packed
+        shutil.rmtree(d, ignore_errors=True)
+        return Exe(final / "exe", key)
+    if final.exists():  # an incomplete entry left by an older run
         shutil.rmtree(final, ignore_errors=True)
     try:
         d.rename(final)
-    except OSError:  # another invocation published the same entry first
+    except OSError:  # lost the race to publish; the other entry is the same program
         shutil.rmtree(d, ignore_errors=True)
     return Exe(final / "exe", key)
 
