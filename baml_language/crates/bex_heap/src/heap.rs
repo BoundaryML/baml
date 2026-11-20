@@ -25,7 +25,7 @@ use ::bex_vm_types::{Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
 use bex_vm_types::{HeapPtr, InstanceRef, Object};
 
-use crate::{HeapDebuggerConfig, HeapDebuggerState, cell_space::CellSpace};
+use crate::{HeapDebuggerConfig, HeapDebuggerState, cell_space::CellSpace, gc_policy::GcSettings};
 
 /// Which generation of the heap an object lives in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -314,6 +314,12 @@ impl BexHeap {
         Self::build_unsealed_default(compile_time_objects).seal()
     }
 
+    /// Create a new heap with an explicit collection policy.
+    pub fn with_gc(compile_time_objects: Vec<Object>, gc: GcSettings) -> Arc<Self> {
+        Self::build_unsealed_with_gc(compile_time_objects, HeapDebuggerConfig::from_env(), gc)
+            .seal()
+    }
+
     /// Create a new heap with explicit debug configuration.
     pub fn with_debug(compile_time_objects: Vec<Object>, debug: HeapDebuggerConfig) -> Arc<Self> {
         Self::build_unsealed(compile_time_objects, debug).seal()
@@ -329,9 +335,15 @@ impl BexHeap {
     /// yet the objects themselves must live inside it. The caller appends
     /// placeholder slots, builds unsealed, fills each slot using
     /// `compile_time_ptr`, then calls [`Self::seal`].
-    pub fn build_unsealed(
+    pub fn build_unsealed(compile_time_objects: Vec<Object>, debug: HeapDebuggerConfig) -> Self {
+        Self::build_unsealed_with_gc(compile_time_objects, debug, GcSettings::default())
+    }
+
+    /// [`Self::build_unsealed`] with an explicit collection policy.
+    pub fn build_unsealed_with_gc(
         mut compile_time_objects: Vec<Object>,
         debug: HeapDebuggerConfig,
+        gc: GcSettings,
     ) -> Self {
         // Append each enum's shared variants before any pointer into the
         // compile-time `Vec` is taken: they grow it.
@@ -364,7 +376,7 @@ impl BexHeap {
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes: AtomicBool::new(has_finalizable_classes),
             finalizable: Mutex::new(FinalizableInstances::default()),
-            gc_policy: crate::gc_policy::AllocationBudget::new(),
+            gc_policy: crate::gc_policy::AllocationBudget::new(gc),
             root_release_epoch: AtomicUsize::new(0),
             gc_activity: Arc::new(tokio::sync::Notify::new()),
             growth_lock: Mutex::new(()),
@@ -378,6 +390,14 @@ impl BexHeap {
     /// default [`Self::new`] uses).
     pub fn build_unsealed_default(compile_time_objects: Vec<Object>) -> Self {
         Self::build_unsealed(compile_time_objects, HeapDebuggerConfig::from_env())
+    }
+
+    /// [`Self::build_unsealed_default`] with an explicit collection policy.
+    pub fn build_unsealed_default_with_gc(
+        compile_time_objects: Vec<Object>,
+        gc: GcSettings,
+    ) -> Self {
+        Self::build_unsealed_with_gc(compile_time_objects, HeapDebuggerConfig::from_env(), gc)
     }
 
     /// Freeze the heap behind the shared `Arc`. Compile-time slots can no

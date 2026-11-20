@@ -65,4 +65,8 @@ pub struct PackEnvelope {
 
     /// Recording defaults and the runtime overrides permitted by the publisher.
     pub telemetry: btel_settings::artifact::ArtifactTelemetry,
+
+    /// The heap collection policy from `[pack.gc]` and the environment
+    /// variables that may override it.
+    pub gc: crate::PackGc,
 }

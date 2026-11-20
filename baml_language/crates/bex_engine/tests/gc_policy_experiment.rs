@@ -17,6 +17,21 @@ use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use sys_native::SysOpsExt;
 
 const MIB: usize = 1024 * 1024;
+
+/// The engine's default GC policy, ignoring any exported `BAML_GC_*`, so the
+/// measured trigger is the one this experiment chose.
+fn default_policy_engine(program: bex_vm_types::Program) -> BexEngine {
+    BexEngine::new_with_config(
+        program,
+        Arc::new(sys_native::SysOps::native()),
+        vec![],
+        bex_engine::EngineConfig {
+            gc: bex_engine::GcConfig::fixed(bex_engine::gc_settings::GcSettings::default()),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
 const SOURCE: &str = r#"
 class BenchNode { value int }
 function Identity(value: int) -> int { value }
@@ -231,7 +246,7 @@ fn compare_gc_policy() {
         .build()
         .unwrap();
     runtime.block_on(async {
-        let engine = Arc::new(BexEngine::new(program, Arc::new(sys_native::SysOps::native()), vec![]).unwrap());
+        let engine = Arc::new(default_policy_engine(program));
         let slot_size = std::mem::size_of::<u64>();
         engine.collect_garbage().await;
         let mut policy = Policy::new(policy_name);
@@ -444,9 +459,7 @@ fn profile_concurrent_gc() {
         .build()
         .unwrap();
     runtime.block_on(async {
-        let engine = Arc::new(
-            BexEngine::new(program, Arc::new(sys_native::SysOps::native()), vec![]).unwrap(),
-        );
+        let engine = Arc::new(default_policy_engine(program));
         let workers = setting("GC_WORKERS", 8);
         let calls = setting("GC_CALLS", 200);
         let n = i64::try_from(setting("GC_N", 512)).expect("GC_N must fit in a BAML int");

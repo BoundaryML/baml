@@ -6165,6 +6165,7 @@ impl BexVm {
             compile_time_objects,
             &bytecode.packages,
             bytecode.root,
+            bex_heap::gc_policy::GcSettings::default(),
         );
 
         // Convert compile-time globals (ConstValue) to runtime globals (Value).

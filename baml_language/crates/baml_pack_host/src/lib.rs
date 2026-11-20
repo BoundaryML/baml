@@ -108,6 +108,7 @@ fn new_engine(
     program: bex_vm_types::Program,
     argv: Vec<String>,
     telemetry: btel_settings::artifact::ArtifactTelemetry,
+    gc: bex_engine::GcConfig,
     launch_context: btel_types::context::Context,
     compiled_bodies: Option<bex_engine::CompiledBodies>,
 ) -> Result<BexEngine, bex_engine::EngineError> {
@@ -122,6 +123,7 @@ fn new_engine(
             artifact_telemetry: Some(telemetry),
             recording: Some(recording),
             compiled_bodies,
+            gc,
             ..Default::default()
         },
     )
@@ -282,10 +284,18 @@ fn launch(
 
     let has_compiled_bodies =
         compiled_bodies.is_some_and(|bodies| !bodies.table.entries.is_empty());
+    let gc = match envelope.gc.engine_config() {
+        Ok(gc) => gc,
+        Err(e) => {
+            print_error(e);
+            return ExitCode::FAILURE;
+        }
+    };
     let engine = match new_engine(
         envelope.program,
         argv,
         envelope.telemetry,
+        gc,
         launch_context,
         compiled_bodies,
     ) {
