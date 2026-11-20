@@ -192,17 +192,41 @@ impl<'t, 'a> Parser<'t, 'a> {
     /// cursor skipped, and the reported [`Missing`] returned for its place.
     /// Every `Ok` is paired with a [`Parser::leave_nesting`].
     pub(crate) fn enter_nesting(&mut self, what: &str) -> Result<(), Missing> {
+        match self.nesting_exceeded(what) {
+            Some(error) => {
+                let missing = self.out.missing(error);
+                self.cur.skip_group();
+                Err(missing)
+            }
+            None => Ok(()),
+        }
+    }
+
+    /// [`Parser::enter_nesting`] for a construct that is one item of a list
+    /// (a statement, a `for` step): past the limit the skipped group is a
+    /// `Bogus` with the report, which takes the item's place.
+    pub(crate) fn enter_nesting_in_list(&mut self, what: &str) -> Result<(), Id<Bogus>> {
+        match self.nesting_exceeded(what) {
+            Some(error) => {
+                let mark = self.cur.mark();
+                self.cur.skip_group();
+                Err(self.bogus_since(mark, error))
+            }
+            None => Ok(()),
+        }
+    }
+
+    /// The error for a construct one level past [`MAX_NESTING`], or `None`
+    /// with the level entered.
+    fn nesting_exceeded(&mut self, what: &str) -> Option<ParseError> {
         if self.depth >= MAX_NESTING {
-            let range = self.cur.error_range();
-            let missing = self.missing_because(
-                format!("{what} nested more than {MAX_NESTING} levels deep"),
-                range,
-            );
-            self.cur.skip_group();
-            return Err(missing);
+            return Some(ParseError::InvalidSyntax {
+                message: format!("{what} nested more than {MAX_NESTING} levels deep"),
+                range: self.cur.error_range(),
+            });
         }
         self.depth += 1;
-        Ok(())
+        None
     }
 
     pub(crate) fn leave_nesting(&mut self) {

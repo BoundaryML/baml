@@ -133,10 +133,10 @@ fn stmt(p: &mut Parser<'_, '_>) -> Line {
             },
         ))
     } else if at_expression_start(p.cur) {
-        let Ok(expr) = stmt_expr(p, Restrictions::STATEMENT) else {
-            unreachable!("an expression starts here");
+        return match stmt_expr(p, Restrictions::STATEMENT) {
+            Ok(expr) => expr_line(p, expr),
+            Err(bogus) => Line::Stmt(AnyStmt::Bogus(bogus)),
         };
-        return expr_line(p, expr);
     } else {
         AnyStmt::Bogus(p.bogus_one("expression"))
     };
@@ -495,18 +495,19 @@ fn c_for_header(
         .then(|| expr(p, r).ok())
         .flatten();
     let semi2 = p.cur.eat::<punct::Semicolon>();
-    let step = (!p.cur.at(TokenKind::LBrace) && at_expression_start(p.cur))
-        .then(|| {
-            let target = stmt_expr(p, r).ok()?;
-            Some(match p.cur.eat_op::<AssignOp>() {
-                Some(op) => {
-                    let mark = p.mark_of_any(&target);
-                    AnyForStep::Assign(assign_stmt(p, mark, target, op, r, Semi::Leave))
-                }
-                None => AnyForStep::Expr(target),
-            })
-        })
-        .flatten();
+    let step =
+        (!p.cur.at(TokenKind::LBrace) && at_expression_start(p.cur)).then(|| {
+            match stmt_expr(p, r) {
+                Err(bogus) => AnyForStep::Bogus(bogus),
+                Ok(target) => match p.cur.eat_op::<AssignOp>() {
+                    Some(op) => {
+                        let mark = p.mark_of_any(&target);
+                        AnyForStep::Assign(assign_stmt(p, mark, target, op, r, Semi::Leave))
+                    }
+                    None => AnyForStep::Expr(target),
+                },
+            }
+        });
     let close = match l {
         Ok(_) => p.expect::<punct::RParen>(),
         Err(missing) => p.cur.eat::<punct::RParen>().ok_or(missing),

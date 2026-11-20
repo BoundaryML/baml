@@ -193,6 +193,43 @@ fn nesting_is_bounded() {
         "]".repeat(n)
     );
     assert!(!parse(&text).errors.is_empty());
+    // A block entered at the limit: its first statement is reported and
+    // skipped, whatever exact level the block itself landed on (no panic at
+    // any depth around the limit; past it, an error).
+    for n in 120..=136 {
+        let text = format!(
+            "function f() -> int {{\n  {}{{ x }}{}\n}}\n",
+            "g(".repeat(n),
+            ")".repeat(n)
+        );
+        let parsed = parse(&text);
+        assert!(n < 130 || !parsed.errors.is_empty(), "{n}");
+    }
+    // Lambdas nest about four levels each; template interpolations one.
+    let text = format!(
+        "function f() -> int {{\n  {}1{}\n}}\n",
+        "g((x) -> {{ let y = g(".repeat(40),
+        "); y }})".repeat(40)
+    );
+    assert!(!parse(&text).errors.is_empty());
+    let text = format!(
+        "function f() -> string {{\n  {}1{}\n}}\n",
+        "`${{".repeat(140),
+        "}}`".repeat(140)
+    );
+    assert!(!parse(&text).errors.is_empty());
+    // A flat assignment chain is not nesting: one error, no stack per link.
+    let text = format!(
+        "function f() -> int {{\n  x {}= 1;\n  1\n}}\n",
+        "= x ".repeat(20_000)
+    );
+    let chain = parse(&text);
+    assert_eq!(
+        chain.errors.len(),
+        1,
+        "{:?}",
+        &chain.errors[..chain.errors.len().min(3)]
+    );
     let text = format!(
         "function f() -> int {{\n  {}1{}\n}}\n",
         "{".repeat(n),

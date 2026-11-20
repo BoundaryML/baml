@@ -171,12 +171,15 @@ pub(crate) fn expr(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, M
 
 /// An expression at the start of a statement line or of a `for` step, the
 /// positions an assignment may stand in: an assignment operator after it is
-/// left for the caller, which reads the assignment.
-pub(crate) fn stmt_expr(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> {
-    p.enter_nesting("an expression")?;
+/// left for the caller, which reads the assignment. Called where an
+/// expression starts; what cannot be read as one — past the nesting limit,
+/// or should [`prefix`] not take what [`at_expression_start`] accepted — is
+/// a `Bogus` that takes the line's place.
+pub(crate) fn stmt_expr(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Id<Bogus>> {
+    p.enter_nesting_in_list("an expression")?;
     let result = expr_bp(p, 0, r);
     p.leave_nesting();
-    result
+    result.map_err(|_missing| p.bogus_one("expression"))
 }
 
 /// `(x = 5)`, `f(x = 5)`, `let y = x = 5`: an assignment where only a value
@@ -187,10 +190,15 @@ fn reject_assignment(p: &mut Parser<'_, '_>, lhs: AnyExpr, r: Restrictions) {
         return;
     }
     let mark = p.mark_of_any(&lhs);
+    // Each further `= value` of a chain is read here, in a loop, so
+    // `x = x = … = 1` costs no stack per link.
     p.probe(|p| {
-        p.cur.eat_op::<AssignOp>();
-        if at_expression_start(p.cur) {
-            let _ = expr(p, r);
+        while p.cur.eat_op::<AssignOp>().is_some() && at_expression_start(p.cur) {
+            let Ok(()) = p.enter_nesting("an expression") else {
+                break;
+            };
+            let _ = expr_bp(p, 0, r);
+            p.leave_nesting();
         }
     });
     let range = p.cur.text_range(p.cur.range_from(mark));
