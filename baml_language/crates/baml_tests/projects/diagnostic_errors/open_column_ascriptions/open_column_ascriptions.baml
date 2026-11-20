@@ -1,0 +1,79 @@
+// Ascribed patterns on a column whose values may be of any type. Each arm
+// tests its own type, so arms that test different types are reachable,
+// and none of them covers the column.
+class Box<T> {
+    v: T,
+}
+
+// A `string[]` holding `"s"` reaches the second arm.
+function unknown_slices(x: unknown) -> int {
+    match (x) {
+        [1]: int[] => 1,
+        ["s"]: string[] => 2,
+        _ => 3,
+    }
+}
+
+// Two arms ascribing the same type with different elements both reach.
+function unknown_same_ascription(x: unknown) -> int {
+    match (x) {
+        [1]: int[] => 1,
+        [2]: int[] => 2,
+        _ => 3,
+    }
+}
+
+// The same arm written twice: the second is unreachable.
+function unknown_repeated_slice(x: unknown) -> int {
+    match (x) {
+        [1]: int[] => 1,
+        [1]: int[] => 2,
+        _ => 3,
+    }
+}
+
+function unknown_tuples(x: unknown) -> int {
+    match (x) {
+        let t: (int, int) => 1,
+        let t: (string, string) => 2,
+        (1, let b: int) => 3,
+        ("s", let b: string) => 4,
+        _ => 5,
+    }
+}
+
+function unknown_classes(x: unknown) -> int {
+    match (x) {
+        Box<int> { v: 1 } => 1,
+        Box<string> { v: "s" } => 2,
+        let b: Box<int> => 3,
+        let b: Box<string> => 4,
+        _ => 5,
+    }
+}
+
+function type_var_slices<T>(x: T) -> int {
+    match (x) {
+        [1]: int[] => 1,
+        ["s"]: string[] => 2,
+        _ => 3,
+    }
+}
+
+// A union with an open member: the list arms test inside that member.
+function unknown_or_null_slices(x: unknown | null) -> int {
+    match (x) {
+        [1]: int[] => 1,
+        ["s"]: string[] => 2,
+        _ => 3,
+    }
+}
+
+// No arm proves coverage of `unknown`: without the wildcard the match is
+// not exhaustive, and the second arm still tests its own type.
+function unknown_slices_no_wildcard(x: unknown) -> int {
+    match (x) {
+        [..]: int[] => 1,
+        [..]: string[] => 2,
+    }
+}
