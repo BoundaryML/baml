@@ -1103,6 +1103,49 @@ mod render_tests {
     }
 
     #[test]
+    fn render_output_format_as_toon() -> anyhow::Result<()> {
+        setup_logging();
+
+        let ir = make_test_ir(
+            "
+            class C {
+
+            }
+            ",
+        )?;
+
+        let rendered = render_prompt(
+            "{{ ctx.output_format(format='toon') }}",
+            &BamlValue::Map(BamlMap::default()),
+            RenderContext {
+                client: RenderContext_Client {
+                    name: "gpt4".to_string(),
+                    provider: "openai".to_string(),
+                    default_role: "system".to_string(),
+                    allowed_roles: vec!["system".to_string()],
+                    remap_role: HashMap::new(),
+                    options: IndexMap::new(),
+                },
+                output_format: OutputFormatContent::new_array(),
+                tags: HashMap::new(),
+            },
+            &[],
+            &ir,
+            &HashMap::new(),
+        )?;
+
+        assert_eq!(
+            rendered,
+            RenderedPrompt::Completion(
+                "Answer with a TOON array using this schema. Replace N with the actual array length:\n[N]: string"
+                    .to_string()
+            )
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn render_output_format_prefix_unspecified() -> anyhow::Result<()> {
         setup_logging();
 
