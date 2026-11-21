@@ -475,7 +475,7 @@ pub const WELL_KNOWN: [(&str, &str); 26] = [
 /// The compiler writes the type id of each after those of [`WELL_KNOWN`],
 /// in this order, and writes zero for a class that no native the program
 /// calls names in its declaration, which is then not described either.
-pub const NAMED: [(&str, &str); 16] = [
+pub const NAMED: [(&str, &str); 20] = [
     ("regex", "Regex"),
     ("regex", "Match"),
     ("regex", "Error"),
@@ -492,6 +492,10 @@ pub const NAMED: [(&str, &str); 16] = [
     ("fs", "DirEntry"),
     ("fs", "Metadata"),
     ("fs", "Lock"),
+    ("net", "TcpStream"),
+    ("net", "TcpListener"),
+    ("net", "UdpSocket"),
+    ("net", "Datagram"),
 ];
 pub const NAMED_REGEX: usize = 0;
 pub const NAMED_REGEX_MATCH: usize = 1;
@@ -509,6 +513,10 @@ pub const NAMED_FS_FILE: usize = 12;
 pub const NAMED_FS_DIR_ENTRY: usize = 13;
 pub const NAMED_FS_METADATA: usize = 14;
 pub const NAMED_FS_LOCK: usize = 15;
+pub const NAMED_NET_TCP_STREAM: usize = 16;
+pub const NAMED_NET_TCP_LISTENER: usize = 17;
+pub const NAMED_NET_UDP_SOCKET: usize = 18;
+pub const NAMED_NET_DATAGRAM: usize = 19;
 
 /// How many of [`WELL_KNOWN`], from the first, are panics.
 pub const WELL_KNOWN_PANICS: usize = 16;

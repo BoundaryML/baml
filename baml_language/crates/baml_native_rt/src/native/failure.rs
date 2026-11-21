@@ -14,10 +14,6 @@ use crate::layout::NAMED_TIMEOUT;
 const TIMEOUT_LIMIT: usize = 1;
 
 /// An error of `baml.errors`, before it is an object.
-#[cfg_attr(
-    not(feature = "http"),
-    allow(dead_code, reason = "only `baml.http` has limits so far")
-)]
 pub(super) enum Failure {
     Io(String),
     InvalidArgument(String),
@@ -71,10 +67,6 @@ impl Failure {
 
 /// A limit from the nanoseconds the standard library passes one as: none
 /// when zero or negative, and the longest there is when past it.
-#[cfg_attr(
-    not(feature = "http"),
-    allow(dead_code, reason = "only `baml.http` has limits so far")
-)]
 pub(super) fn limit(nanos: &BigInt) -> Option<Duration> {
     (nanos.sign() == num_bigint::Sign::Plus)
         .then(|| Duration::from_nanos(u64::try_from(nanos).unwrap_or(u64::MAX)))

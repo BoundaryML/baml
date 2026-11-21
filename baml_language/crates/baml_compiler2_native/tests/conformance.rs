@@ -243,6 +243,70 @@ async fn files_end_as_the_interpreter_does() {
     assert!(left.is_empty(), "a case left {left:?} behind");
 }
 
+/// A loopback UDP port nothing is bound to.
+fn free_udp_port() -> u16 {
+    let socket = std::net::UdpSocket::bind("127.0.0.1:0").expect("a loopback port");
+    socket.local_addr().expect("a bound address").port()
+}
+
+/// `baml.net` between the tasks of one program, on loopback ports that are
+/// free when the test starts.
+#[tokio::test(flavor = "multi_thread")]
+async fn sockets_end_as_the_interpreter_does() {
+    let source = include_str!("conformance/net.baml.in")
+        .replace("{tcp}", &closed_port().to_string())
+        .replace("{closed}", &closed_port().to_string())
+        .replace("{udp_a}", &free_udp_port().to_string())
+        .replace("{udp_b}", &free_udp_port().to_string());
+    cases_agree(&source).await;
+}
+
+/// `baml.io` writes to the program's own streams, which no case of the
+/// suites above can show: the interpreter there prints into the test's
+/// output. So this checks the native program alone: what it prints
+/// before its result, in order, on each stream, and a line read from its
+/// input with what was left of the input for the next read.
+#[test]
+fn a_program_prints_and_reads_its_own_streams() {
+    use std::io::Write as _;
+
+    let db = setup_test_db(
+        "function main() -> string {
+  baml.io.print(\"a\");
+  baml.io.println(\"b\");
+  baml.io.eprint(\"c\");
+  baml.io.eprintln(\"d\");
+  let first = baml.io.input(\"name? \");
+  let second = baml.io.input(null);
+  let third = baml.io.input(null);
+  `${first}|${second}|${third}`
+}
+",
+    );
+    assert_no_diagnostic_errors(&db);
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let built = build(&db, "main", directory.path()).expect("the program compiles");
+    let mut child = std::process::Command::new(&built.lean)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("the program starts");
+    child
+        .stdin
+        .take()
+        .expect("a piped input")
+        .write_all(b"Ada\r\nLovelace\n")
+        .expect("the program reads its input");
+    let output = child.wait_with_output().expect("the program ends");
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "ab\nname? \"Ada|Lovelace|\"\n"
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "cd\n");
+}
+
 /// Build `source`'s `main` and run it every way: what it prints, what it
 /// reports and the status it exits with.
 fn ends(source: &str, stdout: &str, stderr: &str) {
@@ -387,6 +451,9 @@ fn a_program_without_io_links_no_tokio() {
 }
 function main() -> string { baml.json.stringify(Temp { celsius: 21.5 }) }
 "
+    ));
+    assert!(!can_start_a_thread(
+        "function main() -> int { baml.io.println(\"printed where it is called\"); 42 }\n"
     ));
     assert!(can_start_a_thread(
         "function main() -> string { baml.fs.read(\"no such file\") }\n"

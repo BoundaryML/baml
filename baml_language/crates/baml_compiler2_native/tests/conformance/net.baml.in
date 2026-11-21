@@ -1,0 +1,118 @@
+// `baml.net` on loopback ports the test picks: a listener binds `{tcp}`,
+// nothing listens on `{closed}`, and the two UDP sockets bind `{udp_a}`
+// and `{udp_b}`. The file is not a case file of its own because the ports
+// are only known when the test runs.
+
+function net_spin(n: int) -> int {
+  let kept: string[] = [];
+  for (let i = 0; i < n; i += 1) { kept.push(`item ${i}`); };
+  kept.length()
+}
+function net_hex(bytes: uint8array?) -> string {
+  if bytes == null { return "null"; }
+  `[${bytes.to_hex()}]`
+}
+
+// One task serves and another connects: each waits on the other's bytes.
+function net_tcp_both_ways() -> string {
+  let listener = baml.net.TcpListener.bind("127.0.0.1:{tcp}");
+  let dialer = spawn {
+    let stream = baml.net.TcpStream.connect("127.0.0.1:{tcp}");
+    let wrote = stream.as<baml.io.Write>.write("ping");
+    let moved = net_spin(20);
+    let reply = stream.read(100);
+    let nothing = stream.read(0);
+    stream.close();
+    `${wrote} ${moved} ${net_hex(reply)} ${net_hex(nothing)}`
+  };
+  let server = listener.accept();
+  let got = server.read(100);
+  let wrote = server.write_some(b"pong!");
+  let said = await dialer;
+  let end = server.read(10);
+  server.close();
+  listener.close();
+  `${net_hex(got)} ${wrote} ${said} ${net_hex(end)}`
+}
+// A stream read to its end through `baml.io.Read`, whose default body
+// finds the stream's own `read` by the stream's type.
+function net_tcp_text_to_the_end() -> string {
+  let listener = baml.net.TcpListener.bind("127.0.0.1:{tcp}");
+  let dialer = spawn {
+    let stream = baml.net.TcpStream.connect("127.0.0.1:{tcp}", timeout = baml.time.Duration.from_seconds(5));
+    stream.write_some(b"first, ");
+    stream.write_some(b"second");
+    stream.close();
+    0
+  };
+  let server = listener.accept();
+  let text = server.as<baml.io.Read>.text();
+  let sent = await dialer;
+  server.close();
+  listener.close();
+  `${text} ${sent}`
+}
+function net_tcp_refused() -> string {
+  let stream = baml.net.TcpStream.connect("127.0.0.1:{closed}") catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return "timeout"; },
+  };
+  "connected"
+}
+function net_tcp_refused_uncaught() -> int {
+  let stream = baml.net.TcpStream.connect("127.0.0.1:{closed}");
+  stream.write_some(b"x")
+}
+function net_closed_sockets() -> string {
+  let listener = baml.net.TcpListener.bind("127.0.0.1:{tcp}");
+  let dialer = spawn {
+    let stream = baml.net.TcpStream.connect("127.0.0.1:{tcp}");
+    stream.close();
+    stream.close();
+    let read = stream.read(1) catch (e) { baml.errors.Io => { return `read: ${e.message}`; } };
+    "read"
+  };
+  let server = listener.accept();
+  let said = await dialer;
+  server.close();
+  let wrote = server.write_some(b"x") catch (e) { baml.errors.Io => -1 };
+  listener.close();
+  listener.close();
+  let again = listener.accept() catch (e) { baml.errors.Io => { return `${said} ${wrote} accept: ${e.message}`; } };
+  "accepted"
+}
+function net_bind_taken() -> string {
+  let listener = baml.net.TcpListener.bind("127.0.0.1:{tcp}");
+  let second = baml.net.TcpListener.bind("127.0.0.1:{tcp}") catch (e) { baml.errors.Io => { listener.close(); return e.message; } };
+  "bound twice"
+}
+function net_udp_there_and_back() -> string {
+  let a = baml.net.UdpSocket.bind("127.0.0.1:{udp_a}");
+  let b = baml.net.UdpSocket.bind("127.0.0.1:{udp_b}");
+  let sent = a.send_to(b"over", "127.0.0.1:{udp_b}");
+  let got = b.recv_from();
+  let back = b.send_to(b"and back", got.addr, timeout = baml.time.Duration.from_seconds(5));
+  let moved = net_spin(20);
+  let reply = a.recv_from(timeout = baml.time.Duration.from_seconds(5));
+  a.close();
+  b.close();
+  `${sent} ${got.data.to_hex()} ${got.addr} ${back} ${moved} ${reply.data.to_hex()} ${reply.addr}`
+}
+function net_udp_nothing_arrives() -> string {
+  let a = baml.net.UdpSocket.bind("127.0.0.1:{udp_a}");
+  let got = a.recv_from(timeout = baml.time.Duration.from_milliseconds(40)) catch (e) {
+    baml.errors.Io => { a.close(); return `io: ${e.message}`; },
+    baml.errors.Timeout => { a.close(); return `timeout: ${e.message} ${e.duration?.to_milliseconds() ?? 0n} ${e.timeout_type}`; },
+  };
+  "received"
+}
+function net_udp_closed() -> string {
+  let a = baml.net.UdpSocket.bind("127.0.0.1:{udp_a}");
+  a.close();
+  a.close();
+  let sent = a.send_to(b"x", "127.0.0.1:{udp_b}") catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return "timeout"; },
+  };
+  "sent"
+}

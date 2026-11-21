@@ -43,7 +43,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = [ "fs", "io-util", "rt-multi-thread", "sync", "time" ] }
+tokio = { workspace = true, features = [ "fs", "io-util", "net", "rt-multi-thread", "sync", "time" ] }
 zmij = { workspace = true }
 
 [build-dependencies]

@@ -1671,8 +1671,10 @@ mod hash;
 #[cfg(feature = "http")]
 mod http;
 mod int;
+mod io;
 mod json;
 mod map;
+mod net;
 mod regex;
 mod root;
 mod state;
