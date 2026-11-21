@@ -1,0 +1,5 @@
+# Natives of `baml.glob`, implemented in `src/native/glob.rs`. A `Glob` owns
+# its compiled pattern as Rust state. `Glob.scan` reads the file system and
+# is not here.
+baml.glob.new allocates
+baml.glob.Glob.matches

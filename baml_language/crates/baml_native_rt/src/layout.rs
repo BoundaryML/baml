@@ -475,7 +475,7 @@ pub const WELL_KNOWN: [(&str, &str); 26] = [
 /// The compiler writes the type id of each after those of [`WELL_KNOWN`],
 /// in this order, and writes zero for a class that no native the program
 /// calls names in its declaration, which is then not described either.
-pub const NAMED: [(&str, &str); 12] = [
+pub const NAMED: [(&str, &str); 22] = [
     ("regex", "Regex"),
     ("regex", "Match"),
     ("regex", "Error"),
@@ -488,6 +488,16 @@ pub const NAMED: [(&str, &str); 12] = [
     ("crypto", "ChaCha20Poly1305"),
     ("crypto", "XChaCha20Poly1305"),
     ("crypto", "DecryptionFailure"),
+    ("time", "Instant"),
+    ("time", "PlainDate"),
+    ("time", "PlainDateTime"),
+    ("time", "PlainTime"),
+    ("time", "TimeZoneOffset"),
+    ("time", "ZonedDateTime"),
+    ("random", "Xoshiro256PlusPlus"),
+    ("random", "ChaCha20"),
+    ("glob", "Glob"),
+    ("yaml", "ParseError"),
 ];
 pub const NAMED_REGEX: usize = 0;
 pub const NAMED_REGEX_MATCH: usize = 1;
@@ -501,6 +511,16 @@ pub const NAMED_AES_256_GCM_SIV: usize = 8;
 pub const NAMED_CHACHA20_POLY1305: usize = 9;
 pub const NAMED_XCHACHA20_POLY1305: usize = 10;
 pub const NAMED_DECRYPTION_FAILURE: usize = 11;
+pub const NAMED_TIME_INSTANT: usize = 12;
+pub const NAMED_TIME_PLAIN_DATE: usize = 13;
+pub const NAMED_TIME_PLAIN_DATE_TIME: usize = 14;
+pub const NAMED_TIME_PLAIN_TIME: usize = 15;
+pub const NAMED_TIME_ZONE_OFFSET: usize = 16;
+pub const NAMED_TIME_ZONED_DATE_TIME: usize = 17;
+pub const NAMED_RANDOM_XOSHIRO: usize = 18;
+pub const NAMED_RANDOM_CHACHA20: usize = 19;
+pub const NAMED_GLOB: usize = 20;
+pub const NAMED_YAML_PARSE_ERROR: usize = 21;
 
 /// How many of [`WELL_KNOWN`], from the first, are panics.
 pub const WELL_KNOWN_PANICS: usize = 16;

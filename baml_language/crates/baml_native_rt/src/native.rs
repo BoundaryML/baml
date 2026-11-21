@@ -1602,17 +1602,22 @@ pub(crate) mod drive;
 mod env;
 mod float;
 mod fs;
+mod glob;
 mod hash;
 #[cfg(feature = "http")]
 mod http;
 mod int;
 mod json;
 mod map;
+mod path;
+mod random;
 mod regex;
 mod root;
 mod state;
 mod string;
+mod time;
 mod uint8array;
+mod yaml;
 
 pub use build::{Build, Class, Value};
 pub use state::{Opaque, OpaqueRef};

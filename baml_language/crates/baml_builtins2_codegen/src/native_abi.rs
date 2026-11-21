@@ -509,6 +509,9 @@ fn abi_of(builtin: &NativeBuiltin, classes: &Classes<'_>) -> Option<Abi> {
                 _ if receiver.instance_backed && receiver.class_generics.is_empty() => {
                     classes.resolve(&receiver.namespace, &receiver.class_name)?
                 }
+                // A class without fields is not among the classes a
+                // signature names: its instance is passed as any value is.
+                "SystemRandom" if receiver.namespace == "random" => AbiTy::Any,
                 _ => return None,
             };
             params.push((receiver.class_name.to_lowercase(), ty));
@@ -516,7 +519,9 @@ fn abi_of(builtin: &NativeBuiltin, classes: &Classes<'_>) -> Option<Abi> {
     }
     // `baml.json` moves values of any type, as a union holds them, and so
     // do the two defaults a `to_json` and a `from_json` fall back on.
+    // `baml.yaml` returns a `json`.
     let of = if builtin.path.starts_with("baml.json.")
+        || builtin.path.starts_with("baml.yaml.")
         || matches!(
             builtin.path.as_str(),
             "baml._to_json_default" | "baml._from_json_structural_default"
