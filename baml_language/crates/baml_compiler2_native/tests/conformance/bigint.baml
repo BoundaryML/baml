@@ -244,3 +244,35 @@ function bigint_duration() -> string {
   let e = baml.time.Duration.from_seconds(big(2));
   `${d.to_nanoseconds()} ${d.to_microseconds()} ${d.to_milliseconds()} ${d.to_seconds()} ${e.to_nanoseconds()} ${e.to_minutes()}`
 }
+
+// The two halves of `bigint.random`: how many bytes a draw takes, and where
+// its bytes land in the range.
+function big_draw(n: int, byte: int) -> uint8array {
+  let out = b"";
+  for (let i = 0; i < n; i += 1) { out.push(byte); };
+  out
+}
+function bigint_random_byte_count() -> string {
+  let one = big(1);
+  `${bigint._random_byte_count(one, one)} ${bigint._random_byte_count(one, big(2))} ${bigint._random_byte_count(big(0), big_two_to(8))} ${bigint._random_byte_count(big(0), big_two_to(8) + one)} ${bigint._random_byte_count(big(0) - big_two_to(200), big_two_to(200))}`
+}
+function bigint_random_in_range() -> bigint {
+  bigint._random_in_range(big_draw(3, 5), big_two_to(4), big_two_to(20))
+}
+// A draw at or past the range's size is rejected: the answer is `upper`.
+function bigint_random_in_range_rejected() -> bigint {
+  bigint._random_in_range(big_draw(1, 255), big(1), big_two_to(7) + big(2))
+}
+// The bits past the range's are not part of the draw.
+function bigint_random_in_range_masked() -> bigint {
+  bigint._random_in_range(big_draw(2, 255), big(0), big_two_to(9))
+}
+function bigint_random_in_range_short_draw() -> bigint {
+  bigint._random_in_range(big_draw(1, 1), big(1), big_two_to(30))
+}
+function bigint_random_in_range_empty() -> bigint {
+  bigint._random_in_range(big_draw(4, 1), big_two_to(9), big_two_to(3))
+}
+function bigint_random_in_range_wide() -> bigint {
+  bigint._random_in_range(big_draw(80, 3), big(3) - big_two_to(300), big_two_to(300))
+}

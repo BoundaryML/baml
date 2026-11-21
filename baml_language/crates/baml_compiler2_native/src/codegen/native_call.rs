@@ -13,6 +13,10 @@ use crate::{
     types::NativeTy,
 };
 
+/// The sort of an array of `int`, `float`, `string` or `bigint`, whose one
+/// type argument is the type of the array.
+const RUST_SORT: &str = "baml._rust_sort";
+
 fn abi_param(ty: &Ty) -> Option<AbiParam> {
     match ty {
         // An optional scalar is two words, which its user passes one by
@@ -100,12 +104,18 @@ impl<'db> Translator<'_, 'db> {
         // The type id of each type argument, as a generic function is
         // passed them: after the worker and before the values.
         let described = super::json::takes_descriptions(native);
-        for argument in type_arguments {
+        for (argument, ty) in type_arguments.iter().zip(&types) {
             params.push(AbiParam::new(types::I32));
-            values.push(if described {
-                self.described_type(argument)?
-            } else {
-                self.type_id(argument)?
+            values.push(match ty {
+                _ if described => self.described_type(argument)?,
+                // An array has no type id of its own, and its words do not
+                // say whether they are `int`s or `float`s: the sort is
+                // told what the elements are.
+                NativeTy::Array(element) if native.path == RUST_SORT => {
+                    let id = self.backend.type_id(self.db, element)?.unwrap_or(0);
+                    self.builder.ins().iconst(types::I32, super::imm(id))
+                }
+                _ => self.type_id(argument)?,
             });
         }
         if type_arguments.is_empty() {

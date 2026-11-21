@@ -5,3 +5,5 @@ baml.Bigint.pow allocates
 baml.Bigint.ilog allocates
 baml.Bigint.to_int allocates
 baml.Bigint.parse allocates
+baml.Bigint._random_byte_count
+baml.Bigint._random_in_range allocates
