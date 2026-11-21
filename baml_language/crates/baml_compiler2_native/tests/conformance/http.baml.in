@@ -1,4 +1,4 @@
-// `baml.http.fetch`, run against a server the test starts on a loopback
+// `baml.http`, run against a server the test starts on a loopback
 // port: `{open}` is its address, and `{closed}` is one nothing listens on.
 // The file is not a case file of its own because the addresses are only
 // known when the test runs.
@@ -91,4 +91,111 @@ function http_bytes_after_text() -> string {
     baml.errors.Timeout => { return "timeout"; },
   };
   `${second.length()}`
+}
+
+// `send`: the method, the headers and the body of a `Request` reach the
+// server, which says what it was sent.
+function http_send_post() -> string {
+  let request = baml.http.Request.from_url("{open}/echo").set_method("POST").set_headers({ "x-custom": "yes", "content-type": "text/x-test" }).set_body("the body");
+  let response = baml.http.send(request);
+  let moved = http_spin(30);
+  `${response.status_code} ${response.url} ${moved} ${response.text()}`
+}
+function http_send_without_a_body() -> string {
+  let response = baml.http.send(baml.http.Request.from_url("{open}/echo").set_method("DELETE"));
+  response.text()
+}
+function http_send_refused(request: baml.http.Request) -> string {
+  let response = baml.http.send(request) catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return "timeout"; },
+    baml.errors.InvalidArgument => { return `invalid: ${e.message}`; },
+  };
+  `${response.status_code}`
+}
+function http_send_no_method() -> string {
+  http_send_refused(baml.http.Request.from_url("{open}/echo"))
+}
+function http_send_bad_method() -> string {
+  http_send_refused(baml.http.Request.from_url("{open}/echo").set_method("NOT A METHOD"))
+}
+function http_send_to_nothing() -> string {
+  http_send_refused(baml.http.Request.from_url("{closed}/").set_method("GET"))
+}
+function http_send_times_out() -> string {
+  let request = baml.http.Request.from_url("{open}/slow").set_method("GET").set_timeout(baml.time.Duration.from_milliseconds(200));
+  let response = baml.http.send(request) catch (e) {
+    baml.errors.Io => { return "io"; },
+    baml.errors.Timeout => { return `timeout ${e.timeout_type} ${e.duration?.to_milliseconds() ?? 0n}`; },
+    baml.errors.InvalidArgument => { return "invalid"; },
+  };
+  `${response.status_code}`
+}
+// Every event of a stream, whatever batches they arrive in: each batch is
+// a JSON array, joined here into one.
+function http_events(stream: baml.http.SseStream) -> string throws baml.errors.Io | baml.errors.Timeout {
+  let seen: string[] = [];
+  while (true) {
+    let batch = stream.next() ?? "";
+    if batch == "" { break; }
+    seen.push(batch.slice(1, batch.length() - 1));
+  };
+  seen.join(",")
+}
+function http_sse_events() -> string {
+  let stream = baml.http.send_sse(baml.http.Request.from_url("{open}/events").set_method("GET"));
+  let moved = http_spin(30);
+  let events = http_events(stream);
+  let after = stream.next();
+  stream.close();
+  `${stream.status_code} ${stream.headers["content-type"]} ${stream.url} ${moved} ${events} ${after == null}`
+}
+// Closing a stream ends it: the next read finds nothing. The interpreter's
+// `close` does nothing while the program still holds the stream, so there
+// the events that had arrived are still read.
+// native prints: "true"
+function http_sse_closed_early() -> string {
+  let stream = baml.http.send_sse(baml.http.Request.from_url("{open}/events").set_method("GET"));
+  stream.close();
+  stream.close();
+  let after = stream.next();
+  `${after == null}`
+}
+function http_sse_not_found() -> string {
+  let stream = baml.http.send_sse(baml.http.Request.from_url("{open}/missing").set_method("GET")) catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return "timeout"; },
+    baml.errors.InvalidArgument => { return "invalid"; },
+  };
+  `${stream.status_code}`
+}
+// A `Response` a program makes: its headers arrive as a map, and its body
+// can be read as often as asked.
+function http_response_made() -> string {
+  let headers = { "x-made": "here" };
+  let response = baml.http.Response.new(201, headers, b"made");
+  headers["x-made"] = "changed after";
+  `${response.status_code} ${response.ok()} ${response.headers["x-made"]} ${response.url.length()} ${response.text()} ${response.text()} ${response.bytes().to_hex()}`
+}
+function http_response_made_of_bytes_not_text() -> string {
+  let response = baml.http.Response.new(200, {}, b"\xff\xfe");
+  let text = response.text() catch (e) {
+    baml.errors.Io => e.message,
+    baml.errors.Timeout => "timeout",
+  };
+  `${text} ${response.bytes().to_hex()}`
+}
+function http_response_streaming() -> string {
+  let response = baml.http.Response.new_streaming(200, { "content-type": "text/plain" });
+  response.write(b"one");
+  let read = response.text() catch (e) { baml.errors.Io => e.message, baml.errors.Timeout => "timeout" };
+  response.end();
+  response.end();
+  let late = response.write(b"two") catch (e) { baml.errors.Io => { return `${response.headers["content-type"]} | ${read} | ${e.message}`; } };
+  "wrote after the end"
+}
+function http_response_not_streaming_refuses_a_write() -> string {
+  let response = baml.http.Response.new(200, {}, b"whole");
+  response.write(b"more") catch (e) { baml.errors.Io => { return e.message; } };
+  "wrote"
 }

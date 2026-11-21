@@ -83,6 +83,31 @@ fn cases(source: &str) -> Vec<(&str, Option<Ending>)> {
     found
 }
 
+/// The report of a case whose native runs do not all end as expected: as
+/// the interpreter does, or as `diverging` says where the case declares
+/// that native code ends otherwise, which the interpreter then must not.
+fn disagreement(
+    case: &str,
+    interpreted: &Ending,
+    diverging: Option<&Ending>,
+    native: &[(&'static str, Ending)],
+) -> Option<String> {
+    let expected = diverging.unwrap_or(interpreted);
+    let failed = native.iter().any(|(_, ending)| ending != expected)
+        || (interpreted == expected) != diverging.is_none();
+    failed.then(|| {
+        format!(
+            "{case}:\n  {:<24} {interpreted:?}{}{}",
+            "interpreter",
+            match diverging {
+                Some(expected) => format!("\n  {:<24} {expected:?}", "native expected"),
+                None => String::new(),
+            },
+            report(native),
+        )
+    })
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn natives_end_as_the_interpreter_does() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/conformance");
@@ -112,20 +137,8 @@ async fn natives_end_as_the_interpreter_does() {
             ran += 1;
             let interpreted = interpret(&engine, case).await;
             let native = run_every_way(&build(&db, case, directory.path()));
-            let agrees = diverging.is_none();
-            let expected = diverging.as_ref().unwrap_or(&interpreted);
-            if native.iter().any(|(_, ending)| ending != expected)
-                || (interpreted == *expected) != agrees
-            {
-                failures.push(format!(
-                    "{file}: {case}:\n  {:<24} {interpreted:?}{}{}",
-                    "interpreter",
-                    match &diverging {
-                        Some(expected) => format!("\n  {:<24} {expected:?}", "native expected"),
-                        None => String::new(),
-                    },
-                    report(&native),
-                ));
+            if let Some(failure) = disagreement(case, &interpreted, diverging.as_ref(), &native) {
+                failures.push(format!("{file}: {failure}"));
             }
         }
     }
@@ -133,45 +146,97 @@ async fn natives_end_as_the_interpreter_does() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// Answer one request on `stream`, and close it.
+fn answer(mut stream: std::net::TcpStream) {
+    use std::io::{Read as _, Write as _};
+
+    let mut request = Vec::new();
+    let mut chunk = [0; 1024];
+    let head_end = loop {
+        if let Some(at) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+            break at + 4;
+        }
+        match stream.read(&mut chunk) {
+            Ok(read) if read > 0 => request.extend_from_slice(&chunk[..read]),
+            _ => return,
+        }
+    };
+    let head = String::from_utf8_lossy(&request[..head_end]).into_owned();
+    let header = |name: &str| {
+        head.lines().skip(1).find_map(|line| {
+            let (found, value) = line.split_once(':')?;
+            found.eq_ignore_ascii_case(name).then(|| value.trim())
+        })
+    };
+    let length = header("content-length")
+        .and_then(|length| length.parse().ok())
+        .unwrap_or(0);
+    while request.len() < head_end + length {
+        match stream.read(&mut chunk) {
+            Ok(read) if read > 0 => request.extend_from_slice(&chunk[..read]),
+            _ => return,
+        }
+    }
+    let mut words = head.split(' ');
+    let (method, path) = (words.next().unwrap_or(""), words.next().unwrap_or(""));
+    let echoed;
+    let (status, kind, body): (&str, &str, &[u8]) = match path {
+        "/hello" => (
+            "200 OK",
+            "text/plain",
+            "hello from loopback, caf\u{e9}".as_bytes(),
+        ),
+        "/bytes" => ("200 OK", "text/plain", b"not \xFF utf-8"),
+        "/slow" => {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            ("200 OK", "text/plain", b"late")
+        }
+        "/echo" => {
+            echoed = format!(
+                "{method} x-custom={} content-type={} body={}",
+                header("x-custom").unwrap_or("none"),
+                header("content-type").unwrap_or("none"),
+                String::from_utf8_lossy(&request[head_end..])
+            );
+            ("200 OK", "text/plain", echoed.as_bytes())
+        }
+        // Events whose lines the chunks split, the last without the blank
+        // line that ends an event.
+        "/events" => {
+            let _ = stream.write_all(
+                b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\nconnection: close\r\n\r\n",
+            );
+            for piece in [
+                "event: greet\ndata: hello\nid: 1\n\n: a comment\nda",
+                "ta: split\r\ndata: lines\r\n\r",
+                "\ndata: last",
+            ] {
+                let _ = stream.write_all(piece.as_bytes());
+                let _ = stream.flush();
+                std::thread::sleep(std::time::Duration::from_millis(60));
+            }
+            return;
+        }
+        _ => ("404 Not Found", "text/plain", b"nothing here"),
+    };
+    let head = format!(
+        "HTTP/1.1 {status}\r\ncontent-type: {kind}\r\nx-asked: {path}\r\ncontent-length: \
+         {}\r\nconnection: close\r\n\r\n",
+        body.len()
+    );
+    // The client may have given up: a late answer has no reader.
+    let _ = stream.write_all(head.as_bytes());
+    let _ = stream.write_all(body);
+}
+
 /// Serve HTTP on a loopback port until the test process ends, and return
 /// the port. Every connection is answered once and closed.
 fn serve_http() -> u16 {
-    use std::io::{Read as _, Write as _};
-
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
     let port = listener.local_addr().expect("a bound address").port();
     std::thread::spawn(move || {
-        for stream in listener.incoming() {
-            let Ok(mut stream) = stream else { continue };
-            std::thread::spawn(move || {
-                let mut request = Vec::new();
-                let mut chunk = [0; 1024];
-                while !request.windows(4).any(|window| window == b"\r\n\r\n") {
-                    match stream.read(&mut chunk) {
-                        Ok(read) if read > 0 => request.extend_from_slice(&chunk[..read]),
-                        _ => return,
-                    }
-                }
-                let request = String::from_utf8_lossy(&request);
-                let path = request.split(' ').nth(1).unwrap_or("");
-                let (status, body): (&str, &[u8]) = match path {
-                    "/hello" => ("200 OK", "hello from loopback, caf\u{e9}".as_bytes()),
-                    "/bytes" => ("200 OK", b"not \xFF utf-8"),
-                    "/slow" => {
-                        std::thread::sleep(std::time::Duration::from_secs(3));
-                        ("200 OK", b"late")
-                    }
-                    _ => ("404 Not Found", b"nothing here"),
-                };
-                let head = format!(
-                    "HTTP/1.1 {status}\r\ncontent-type: text/plain\r\nx-asked: {path}\r\n\
-                     content-length: {}\r\nconnection: close\r\n\r\n",
-                    body.len()
-                );
-                // The client may have given up: a late answer has no reader.
-                let _ = stream.write_all(head.as_bytes());
-                let _ = stream.write_all(body);
-            });
+        for stream in listener.incoming().flatten() {
+            std::thread::spawn(move || answer(stream));
         }
     });
     port
@@ -192,23 +257,19 @@ async fn cases_agree(source: &str) {
     let directory = tempfile::tempdir().expect("a temporary directory");
 
     let mut failures = Vec::new();
-    for (case, _) in cases(source) {
+    for (case, diverging) in cases(source) {
         let interpreted = interpret(&engine, case).await;
         let native = run_every_way(&build(&db, case, directory.path()));
-        if native.iter().any(|(_, ending)| *ending != interpreted) {
-            failures.push(format!(
-                "{case}:\n  {:<24} {interpreted:?}{}",
-                "interpreter",
-                report(&native),
-            ));
+        if let Some(failure) = disagreement(case, &interpreted, diverging.as_ref(), &native) {
+            failures.push(failure);
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// `baml.http.fetch` against a server in this process: the request is sent
-/// by the runtime's own client, and the `Response` it returns is built in
-/// Rust and owns its unread body.
+/// `baml.http` against a server in this process: a request is sent by the
+/// runtime's own client, and the `Response` or the `SseStream` it returns
+/// is built in Rust and owns what of the answer has not been read.
 #[tokio::test(flavor = "multi_thread")]
 async fn http_requests_end_as_the_interpreter_does() {
     // A proxy named by the environment would be sent these requests.

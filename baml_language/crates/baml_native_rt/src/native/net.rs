@@ -127,14 +127,21 @@ async fn on_half<H, T>(
         return Err(stream_closed());
     }
     let half = half.as_mut().ok_or_else(stream_closed)?;
-    let mut work = std::pin::pin!(work(half));
-    let mut told = std::pin::pin!(closed.changed());
-    // Whichever comes first, and the close when both have.
+    unless(closed.changed(), work(half))
+        .await
+        .unwrap_or_else(|| Err(stream_closed()))
+}
+
+/// What `work` makes, unless `stop` ends first: nothing then, and nothing
+/// when both have ended.
+pub(super) async fn unless<T>(stop: impl Future, work: impl Future<Output = T>) -> Option<T> {
+    let mut stop = std::pin::pin!(stop);
+    let mut work = std::pin::pin!(work);
     std::future::poll_fn(|context| {
-        if told.as_mut().poll(context).is_ready() {
-            return Poll::Ready(Err(stream_closed()));
+        if stop.as_mut().poll(context).is_ready() {
+            return Poll::Ready(None);
         }
-        work.as_mut().poll(context)
+        work.as_mut().poll(context).map(Some)
     })
     .await
 }

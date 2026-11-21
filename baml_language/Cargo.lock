@@ -881,6 +881,7 @@ dependencies = [
  "base64",
  "btel_settings",
  "chacha20poly1305",
+ "forked_aws_smithy_eventstream",
  "num-bigint",
  "reqwest",
  "rustls",

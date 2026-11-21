@@ -24,7 +24,7 @@ checks = [  ]
 # `baml.http`. The compiler builds the runtime with it and without, and
 # links the one without into a program that calls no native of `baml.http`:
 # see `natives/README.md`.
-http = [ "dep:btel_settings", "dep:reqwest", "dep:rustls" ]
+http = [ "dep:aws-smithy-eventstream", "dep:btel_settings", "dep:reqwest", "dep:rustls" ]
 # The TLS provider of `baml.http`, chosen by the same features and with the
 # same settings of `reqwest` and `rustls` as `sys_native` chooses it.
 aws-crypto = [ "http", "reqwest/rustls", "rustls/aws_lc_rs", "rustls/std" ]
@@ -34,6 +34,7 @@ ring-crypto = [ "http", "reqwest/rustls-no-provider", "rustls/ring", "rustls/std
 btel_settings = { workspace = true, optional = true }
 sys_regex = { workspace = true }
 aes-gcm-siv = { workspace = true }
+aws-smithy-eventstream = { workspace = true, optional = true }
 base64 = { workspace = true }
 chacha20poly1305 = { workspace = true }
 num-bigint = { workspace = true }

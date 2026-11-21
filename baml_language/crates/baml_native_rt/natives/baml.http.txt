@@ -3,3 +3,14 @@
 baml.http._fetch async
 baml.http.Response.text async
 baml.http.Response.bytes async
+baml.http._send async
+baml.http._send_sse async
+# An `SseStream` owns the response whose body it decodes as it arrives.
+baml.http.SseStream.next async
+baml.http.SseStream.close async
+# A `Response` a program makes owns the bytes it was given, or the channel
+# its chunks are written to.
+baml.http.Response.new allocates
+baml.http.Response.new_streaming allocates
+baml.http.Response.write async
+baml.http.Response.end async
