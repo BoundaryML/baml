@@ -19,12 +19,11 @@ use btel_core::recording::LINEAGE_ANCESTORS;
 
 use crate::proto;
 
-/// A link of a chain of ancestors: a node, its depth, and its parent's link.
-/// Made for a node only once something is placed under it.
+/// A link of a chain of ancestors: a node and its parent's link. Made for a
+/// node only once something is placed under it.
 #[derive(Debug)]
 pub(crate) struct Lineage {
     id: u64,
-    depth: u32,
     parent: Option<Arc<Lineage>>,
 }
 
@@ -51,7 +50,6 @@ impl Spot {
     fn link(&self, id: u64) -> Arc<Lineage> {
         Arc::new(Lineage {
             id,
-            depth: self.depth,
             parent: self.parent.clone(),
         })
     }
@@ -397,11 +395,7 @@ mod tests {
     fn a_deep_chain_drops_without_recursing() {
         let mut link: Option<Arc<Lineage>> = None;
         for id in 0..200_000 {
-            link = Some(Arc::new(Lineage {
-                id,
-                depth: u32::try_from(id).unwrap(),
-                parent: link,
-            }));
+            link = Some(Arc::new(Lineage { id, parent: link }));
         }
         drop(link);
     }

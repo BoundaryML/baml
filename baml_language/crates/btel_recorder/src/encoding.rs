@@ -55,10 +55,10 @@ impl EncodedSpans {
         &mut self,
         thread: TelemetryId,
         context: Option<crate::proto::thread_section::Context>,
-        event: Event,
+        event: &Event,
     ) {
         let selected = self.selected_context.replace((thread, context));
-        self.event(thread, &event);
+        self.event(thread, event);
         self.selected_context = selected;
     }
 

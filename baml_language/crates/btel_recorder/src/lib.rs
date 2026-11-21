@@ -105,8 +105,8 @@ fn push_message<M: prost::Message>(output: &mut Vec<M>, bytes: &mut usize, tag: 
     output.push(value);
 }
 impl ConversionBuffer {
-    fn event(&mut self, thread: TelemetryId, event: proto::span_event::Event) {
-        self.spans.event(thread, &event);
+    fn event(&mut self, thread: TelemetryId, event: &proto::span_event::Event) {
+        self.spans.event(thread, event);
     }
 
     fn thread_definition(
@@ -256,7 +256,7 @@ impl ConversionBuffer {
                 };
                 self.event(
                     thread,
-                    Event::Log(proto::LogEvent {
+                    &Event::Log(proto::LogEvent {
                         parent_id: parent_id.get(),
                         function_id: function.get(),
                         pc: *pc,
@@ -341,7 +341,7 @@ impl ConversionBuffer {
                 if self.starts {
                     self.event(
                         thread,
-                        Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
+                        &Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
                     );
                 }
             }
@@ -378,7 +378,7 @@ impl ConversionBuffer {
                 let error_cas_id = self.thread_errors.remove(&id.get());
                 self.event(
                     thread,
-                    Event::ThreadCompletion(proto::ThreadCompletion {
+                    &Event::ThreadCompletion(proto::ThreadCompletion {
                         completed_at_ticks: completed_at.get(),
                         outcome: flags::outcome(*outcome) as i32,
                         panicked: *outcome == btel_types::InvocationOutcome::Panicked,
@@ -416,7 +416,7 @@ impl ConversionBuffer {
                 if self.starts {
                     self.event(
                         thread,
-                        Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+                        &Event::NetworkAnnouncement(proto::NetworkAnnouncement {
                             id: span.id.get(),
                             parent_id: span.parent_id.get(),
                             call_path_id: span.call_path.get(),
@@ -594,7 +594,7 @@ impl ConversionBuffer {
                 let (usage, total_usage) = self.usage.remove(&done.id.get()).unwrap_or_default();
                 self.event(
                     thread,
-                    Event::FunctionCompletion(proto::FunctionCompletion {
+                    &Event::FunctionCompletion(proto::FunctionCompletion {
                         id: done.id.get(),
                         parent_id: done.parent_id.get(),
                         node: CallPathNodeId::new(done.call_path, false).get(),
@@ -629,7 +629,7 @@ impl ConversionBuffer {
         self.spans.event_in(
             thread,
             parked.context,
-            proto::span_event::Event::NetworkCompletion(completion),
+            &proto::span_event::Event::NetworkCompletion(completion),
         );
     }
 
@@ -660,7 +660,7 @@ impl ConversionBuffer {
         if self.starts {
             self.event(
                 thread,
-                proto::span_event::Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                &proto::span_event::Event::FunctionAnnouncement(proto::FunctionAnnouncement {
                     id: id.get(),
                     parent_id: parent_id.get(),
                     call_path_id: call_path.get(),
