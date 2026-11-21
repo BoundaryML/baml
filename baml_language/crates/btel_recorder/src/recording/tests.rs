@@ -188,7 +188,7 @@ fn encoding_reservation_rejects_addition_overflow() {
     builder.admit_spans().unwrap();
     builder.buffer.spans.event(
         allocate_telemetry_id(),
-        proto::span_event::Event::FunctionCompletion(proto::FunctionCompletion::default()),
+        &proto::span_event::Event::FunctionCompletion(proto::FunctionCompletion::default()),
     );
     assert_eq!(
         builder.reserve_encoding(usize::MAX),

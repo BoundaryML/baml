@@ -16,7 +16,7 @@ fn event(writer: &mut EncodedSpans, thread: TelemetryId) {
     let capacity = writer.capacity();
     writer.event(
         thread,
-        Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
+        &Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
     );
     assert_eq!(writer.capacity(), capacity);
 }
@@ -89,7 +89,7 @@ fn finishing_resets_file_features_without_losing_context_selection() {
     writer.select_context(thread, Some(context(7)));
     writer.event(
         thread,
-        Event::Log(proto::LogEvent {
+        &Event::Log(proto::LogEvent {
             parent_id: thread.get(),
             function_id: 1,
             level: proto::LogLevel::Info as i32,
@@ -172,7 +172,7 @@ fn largest_completion_and_context_fit_admitted_capacity() {
     let capacity = writer.capacity();
     writer.event(
         thread,
-        Event::FunctionCompletion(proto::FunctionCompletion {
+        &Event::FunctionCompletion(proto::FunctionCompletion {
             id: u64::MAX,
             parent_id: u64::MAX,
             node: u64::MAX,
@@ -207,7 +207,7 @@ fn largest_owned_announcement_and_context_fit_admitted_capacity() {
     });
     writer.event(
         thread,
-        Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+        &Event::FunctionAnnouncement(proto::FunctionAnnouncement {
             id: u64::MAX,
             parent_id: u64::MAX,
             call_path_id: u32::MAX,

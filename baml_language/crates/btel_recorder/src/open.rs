@@ -19,7 +19,8 @@ use btel_core::recording::LINEAGE_ANCESTORS;
 
 use crate::proto;
 
-/// A node's depth, and its parent's place: the chain of its ancestors.
+/// A link of a chain of ancestors: a node, its depth, and its parent's link.
+/// Made for a node only once something is placed under it.
 #[derive(Debug)]
 pub(crate) struct Lineage {
     id: u64,
@@ -27,32 +28,44 @@ pub(crate) struct Lineage {
     parent: Option<Arc<Lineage>>,
 }
 
-/// Where a node sits, or `None` where that cannot be known.
-pub(crate) type Place = Option<Arc<Lineage>>;
+/// Where a span sits: its depth and its parent's link (none for a root).
+#[derive(Clone, Debug)]
+pub(crate) struct Spot {
+    depth: u32,
+    parent: Option<Arc<Lineage>>,
+}
 
-impl Lineage {
+/// Where a node sits, or `None` where that cannot be known.
+pub(crate) type Place = Option<Spot>;
+
+impl Spot {
     /// A root thread: depth 0, no ancestor.
-    pub(crate) fn root(id: u64) -> Arc<Self> {
-        Arc::new(Self {
-            id,
+    pub(crate) fn root() -> Self {
+        Self {
             depth: 0,
             parent: None,
-        })
+        }
     }
 
-    /// Node `id` under `parent`.
-    pub(crate) fn child(parent: &Arc<Self>, id: u64) -> Arc<Self> {
-        Arc::new(Self {
+    /// The link of node `id`, which sits here, for what is placed under it.
+    fn link(&self, id: u64) -> Arc<Lineage> {
+        Arc::new(Lineage {
             id,
-            depth: parent.depth.saturating_add(1),
-            parent: Some(Arc::clone(parent)),
+            depth: self.depth,
+            parent: self.parent.clone(),
         })
     }
 
     /// The lineage a span's end record carries: its depth, and its nearest
     /// ancestors, nearest first, at most `LINEAGE_ANCESTORS`.
     pub(crate) fn wire(&self) -> proto::Lineage {
-        let mut ancestors = Vec::new();
+        self.wire_into(Vec::new())
+    }
+
+    /// [`Self::wire`] into `ancestors`, emptied first: a writer reuses one
+    /// allocation for every span.
+    pub(crate) fn wire_into(&self, mut ancestors: Vec<u64>) -> proto::Lineage {
+        ancestors.clear();
         let mut next = self.parent.as_deref();
         while let Some(ancestor) = next {
             if ancestors.len() == LINEAGE_ANCESTORS {
@@ -69,11 +82,15 @@ impl Lineage {
 }
 
 /// A chain as deep as the program's recursion goes is dropped one link at a
-/// time, not by recursion.
+/// time, not by recursion. A link still shared, the usual case, is released
+/// with one decrement.
 impl Drop for Lineage {
     fn drop(&mut self) {
         let mut next = self.parent.take();
         while let Some(link) = next {
+            if Arc::strong_count(&link) > 1 {
+                break;
+            }
             match Arc::try_unwrap(link) {
                 Ok(mut lineage) => next = lineage.parent.take(),
                 Err(_) => break,
@@ -105,14 +122,16 @@ pub(crate) struct CallStart {
     pub(crate) place: Place,
     pub(crate) inputs: Option<proto::CasId>,
     pub(crate) type_args: Option<proto::CasId>,
+    /// The node's own link, once something was placed under it.
+    link: Option<Arc<Lineage>>,
 }
 
 /// The open spans of one recording.
 #[derive(Default)]
 pub(crate) struct OpenSpans {
-    /// The place of every open node that can be a parent: threads and calls.
-    nodes: HashMap<u64, Place>,
-    calls: HashMap<u64, CallStart>,
+    /// Every open node that can be a parent, threads and calls, with its place and, for a
+    /// call, what its start carried.
+    nodes: HashMap<u64, CallStart>,
     requests: HashMap<u64, Request>,
     /// When each open spawned thread began running, once it did.
     running: HashMap<u64, u64>,
@@ -126,16 +145,21 @@ pub(crate) struct OpenSpans {
 }
 
 impl OpenSpans {
-    fn under(&self, parent: u64, id: u64) -> Place {
-        self.nodes
-            .get(&parent)
-            .and_then(Option::as_ref)
-            .map(|parent| Lineage::child(parent, id))
+    /// The place of a node under `parent`: one deeper, under its link, which
+    /// is made the first time.
+    fn under(&mut self, parent: u64) -> Place {
+        let node = self.nodes.get_mut(&parent)?;
+        let spot = node.place.as_ref()?;
+        let link = node.link.get_or_insert_with(|| spot.link(parent)).clone();
+        Some(Spot {
+            depth: spot.depth.saturating_add(1),
+            parent: Some(link),
+        })
     }
 
     /// The spawner names future `child` while `parent` is open.
     pub(crate) fn spawned(&mut self, child: u64, parent: u64) {
-        let place = self.under(parent, child);
+        let place = self.under(parent);
         self.spawned.insert(child, place);
     }
 
@@ -143,13 +167,19 @@ impl OpenSpans {
     /// host started under `parent`.
     pub(crate) fn thread_started(&mut self, id: u64, parent: Option<u64>) {
         let place = match parent {
-            None => Some(Lineage::root(id)),
+            None => Some(Spot::root()),
             Some(parent) => match self.spawned.remove(&id) {
                 Some(place) => place,
-                None => self.under(parent, id),
+                None => self.under(parent),
             },
         };
-        self.nodes.insert(id, place);
+        self.nodes.insert(
+            id,
+            CallStart {
+                place,
+                ..CallStart::default()
+            },
+        );
     }
 
     /// Thread `id` started and has not completed.
@@ -163,7 +193,7 @@ impl OpenSpans {
 
     /// Thread `id` completes: its place, and when it began running.
     pub(crate) fn thread_completed(&mut self, id: u64) -> (Place, Option<u64>) {
-        let place = self.nodes.remove(&id).flatten();
+        let place = self.nodes.remove(&id).and_then(|node| node.place);
         (place, self.running.remove(&id))
     }
 
@@ -174,14 +204,14 @@ impl OpenSpans {
         inputs: Option<proto::CasId>,
         type_args: Option<proto::CasId>,
     ) {
-        let place = self.under(parent, id);
-        self.nodes.insert(id, place.clone());
-        self.calls.insert(
+        let place = self.under(parent);
+        self.nodes.insert(
             id,
             CallStart {
                 place,
                 inputs,
                 type_args,
+                link: None,
             },
         );
     }
@@ -189,13 +219,10 @@ impl OpenSpans {
     /// Call `id` completes: its start, or for a call promoted at its exit,
     /// which has none, its place under `parent`.
     pub(crate) fn call_completed(&mut self, id: u64, parent: u64) -> CallStart {
-        match self.calls.remove(&id) {
-            Some(start) => {
-                self.nodes.remove(&id);
-                start
-            }
+        match self.nodes.remove(&id) {
+            Some(start) => start,
             None => CallStart {
-                place: self.under(parent, id),
+                place: self.under(parent),
                 ..CallStart::default()
             },
         }
@@ -214,7 +241,7 @@ impl OpenSpans {
         url: String,
         request: Option<proto::CasId>,
     ) {
-        let place = self.under(parent, id);
+        let place = self.under(parent);
         self.requests.insert(
             id,
             Request {
@@ -368,10 +395,14 @@ mod tests {
 
     #[test]
     fn a_deep_chain_drops_without_recursing() {
-        let mut place = Lineage::root(0);
-        for id in 1..200_000 {
-            place = Lineage::child(&place, id);
+        let mut link: Option<Arc<Lineage>> = None;
+        for id in 0..200_000 {
+            link = Some(Arc::new(Lineage {
+                id,
+                depth: u32::try_from(id).unwrap(),
+                parent: link,
+            }));
         }
-        drop(place);
+        drop(link);
     }
 }

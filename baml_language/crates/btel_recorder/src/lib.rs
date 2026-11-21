@@ -69,6 +69,8 @@ struct ConversionBuffer {
     needs: needs::Needs,
     /// The sequence of the file being built: the home of what it defines.
     sequence: u64,
+    /// The ancestors of the last function completion written, kept for the next.
+    ancestors: Vec<u64>,
     /// The recording writes start records: a local one does, for a reader
     /// that shows running and crashed calls; one for an upload does not.
     starts: bool,
@@ -91,6 +93,7 @@ impl Default for ConversionBuffer {
             open: open::OpenSpans::default(),
             needs: needs::Needs::default(),
             sequence: 1,
+            ancestors: Vec::new(),
             starts: true,
         }
     }
@@ -103,7 +106,7 @@ fn push_message<M: prost::Message>(output: &mut Vec<M>, bytes: &mut usize, tag: 
 }
 impl ConversionBuffer {
     fn event(&mut self, thread: TelemetryId, event: proto::span_event::Event) {
-        self.spans.event(thread, event);
+        self.spans.event(thread, &event);
     }
 
     fn thread_definition(
@@ -701,16 +704,22 @@ impl ConversionBuffer {
             type_args_cas_id: start.type_args,
             manual: false,
             total_usage,
-            lineage: start.place.map(|place| place.wire()),
+            lineage: start
+                .place
+                .map(|place| place.wire_into(std::mem::take(&mut self.ancestors))),
         };
-        self.event(
-            thread,
-            if done.late {
-                Event::LateFunctionCompletion(completion)
-            } else {
-                Event::FunctionCompletion(completion)
-            },
-        );
+        let event = if done.late {
+            Event::LateFunctionCompletion(completion)
+        } else {
+            Event::FunctionCompletion(completion)
+        };
+        self.spans.event(thread, &event);
+        if let Event::FunctionCompletion(completion) | Event::LateFunctionCompletion(completion) =
+            event
+            && let Some(lineage) = completion.lineage
+        {
+            self.ancestors = lineage.truncated_ancestor_span_ids;
+        }
     }
 
     fn take(&mut self) -> PendingMessages {

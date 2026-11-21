@@ -58,7 +58,7 @@ impl EncodedSpans {
         event: Event,
     ) {
         let selected = self.selected_context.replace((thread, context));
-        self.event(thread, event);
+        self.event(thread, &event);
         self.selected_context = selected;
     }
 
@@ -88,7 +88,7 @@ impl EncodedSpans {
     }
 
     #[inline]
-    pub(crate) fn event(&mut self, thread: TelemetryId, event: Event) {
+    pub(crate) fn event(&mut self, thread: TelemetryId, event: &Event) {
         if self
             .selected_context
             .is_some_and(|(selected, _)| selected != thread)
@@ -102,17 +102,17 @@ impl EncodedSpans {
         match event {
             // A completion that carries more than scalars (its lineage, its
             // inputs, its usage) leaves the fixed-size path.
-            Event::FunctionCompletion(m) if !fixed(&m) => {
-                self.variable(field::span_event::FUNCTION_COMPLETION, &m);
+            Event::FunctionCompletion(m) if !fixed(m) => {
+                self.variable(field::span_event::FUNCTION_COMPLETION, m);
             }
-            Event::LateFunctionCompletion(m) if !fixed(&m) => {
-                self.variable(field::span_event::LATE_FUNCTION_COMPLETION, &m);
+            Event::LateFunctionCompletion(m) if !fixed(m) => {
+                self.variable(field::span_event::LATE_FUNCTION_COMPLETION, m);
             }
             Event::FunctionCompletion(m) => {
-                self.completion(field::span_event::FUNCTION_COMPLETION, &m);
+                self.completion(field::span_event::FUNCTION_COMPLETION, m);
             }
             Event::LateFunctionCompletion(m) => {
-                self.completion(field::span_event::LATE_FUNCTION_COMPLETION, &m);
+                self.completion(field::span_event::LATE_FUNCTION_COMPLETION, m);
             }
             Event::Log(message) => {
                 self.require(if message.line.is_some() {
@@ -120,25 +120,25 @@ impl EncodedSpans {
                 } else {
                     minor::LOG
                 });
-                self.variable(field::span_event::LOG, &message);
+                self.variable(field::span_event::LOG, message);
             }
             Event::NetworkAnnouncement(message) => {
                 self.require(minor::NETWORK);
-                self.variable(field::span_event::NETWORK_ANNOUNCEMENT, &message);
+                self.variable(field::span_event::NETWORK_ANNOUNCEMENT, message);
             }
             Event::NetworkEvent(message) => {
                 self.require(minor::NETWORK);
-                self.variable(field::span_event::NETWORK_EVENT, &message);
+                self.variable(field::span_event::NETWORK_EVENT, message);
             }
             Event::ThreadAnnouncement(m) => {
-                frame::event(&mut self.bytes, field::span_event::THREAD_ANNOUNCEMENT, &m);
+                frame::event(&mut self.bytes, field::span_event::THREAD_ANNOUNCEMENT, m);
             }
             Event::ThreadCompletion(m) => {
-                self.variable(field::span_event::THREAD_COMPLETION, &m);
+                self.variable(field::span_event::THREAD_COMPLETION, m);
             }
             Event::ThreadRunning(m) => {
                 self.require(minor::THREAD_RUNNING);
-                frame::event(&mut self.bytes, field::span_event::THREAD_RUNNING, &m);
+                frame::event(&mut self.bytes, field::span_event::THREAD_RUNNING, m);
             }
             Event::FunctionAnnouncement(m) => {
                 if m.manual {
@@ -147,14 +147,10 @@ impl EncodedSpans {
                 if m.type_args_cas_id.is_some() {
                     self.require(minor::TYPE_ARGS);
                 }
-                frame::event(
-                    &mut self.bytes,
-                    field::span_event::FUNCTION_ANNOUNCEMENT,
-                    &m,
-                );
+                frame::event(&mut self.bytes, field::span_event::FUNCTION_ANNOUNCEMENT, m);
             }
             Event::NetworkCompletion(m) => {
-                self.variable(field::span_event::NETWORK_COMPLETION, &m);
+                self.variable(field::span_event::NETWORK_COMPLETION, m);
             }
         }
     }
@@ -286,7 +282,7 @@ mod tests {
             encoded.reserve(frame::MAX_EVENT_BYTES);
             encoded.event(
                 btel_types::allocate_telemetry_id(),
-                Event::ThreadCompletion(proto::ThreadCompletion {
+                &Event::ThreadCompletion(proto::ThreadCompletion {
                     outcome: proto::InvocationOutcome::Errored as i32,
                     usage,
                     error_cas_id: Some(proto::CasId { low: 1, high: 2 }),
@@ -390,7 +386,7 @@ mod tests {
         for event in &events {
             encoded.reserve(encoded.len() + frame::MAX_EVENT_BYTES);
             let capacity = encoded.capacity();
-            encoded.event(thread, event.clone());
+            encoded.event(thread, event);
             assert_eq!(
                 encoded.capacity(),
                 capacity,
@@ -477,7 +473,7 @@ mod equivalence_tests {
                     .encode_to_vec();
                     let mut writer = EncodedSpans::default();
                     writer.reserve(frame::MAX_EVENT_BYTES);
-                    writer.event(thread, event);
+                    writer.event(thread, &event);
                     assert_eq!(
                         &writer.bytes[writer.section_length + frame::LENGTH_BYTES..],
                         expected
