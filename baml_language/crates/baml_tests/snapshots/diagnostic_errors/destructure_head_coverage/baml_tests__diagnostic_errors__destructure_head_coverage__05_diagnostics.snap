@@ -1,0 +1,78 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0062
+
+  × non-exhaustive match on type PbFoo | null; missing: null
+    ╭─[destructure_head_coverage.baml:39:5]
+ 39 │ ╭─▶     match (x) {
+ 40 │ │           PbAlias { v: _ } => 1,
+ 41 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type PbFoo; missing: PbFoo { v: _ }
+    ╭─[destructure_head_coverage.baml:45:5]
+ 45 │ ╭─▶     match (x) {
+ 46 │ │           PbChain { v: 1 } => 1,
+ 47 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type PbBox<int>; missing: PbBox<int> { value: _ }
+    ╭─[destructure_head_coverage.baml:51:5]
+ 51 │ ╭─▶     match (b) {
+ 52 │ │           PbIntBox { value: 1 } => 1,
+ 53 │ ╰─▶     }
+    ╰────
+
+  [type] E0001
+
+  × cannot destructure `PbUnion`: it is an alias of a union, not of a class
+    ╭─[destructure_head_coverage.baml:58:9]
+ 58 │         PbUnion { v: 1 } => 1,
+    ·         ────────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot destructure `PbEnumAlias`: only a class or an interface can be destructured
+    ╭─[destructure_head_coverage.baml:64:9]
+ 64 │         PbEnumAlias {} => 1,
+    ·         ──────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot destructure `PbIfaceAlias`: it is an alias of an interface, not of a class
+    ╭─[destructure_head_coverage.baml:70:9]
+ 70 │         PbIfaceAlias { v: _ } => 1,
+    ·         ─────────────────────
+    ╰────
+
+  [type] E0001
+
+  × cannot destructure `PbE`: only a class or an interface can be destructured
+    ╭─[destructure_head_coverage.baml:76:9]
+ 76 │         PbE {} => 1,
+    ·         ──────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: PbMissing
+    ╭─[destructure_head_coverage.baml:83:8]
+ 83 │     v: PbMissing,
+    ·        ─────────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: PbNope
+    ╭─[destructure_head_coverage.baml:94:9]
+ 94 │         PbNope { v: 1 } => 1,
+    ·         ───────────────
+    ╰────

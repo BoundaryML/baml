@@ -33,3 +33,31 @@ function concrete_only_arm_over_rigid_is_not_exhaustive<T>(x: T) -> string {
         let s: string => s,
     }
 }
+
+// A rigid arm in a field column whose type is uninhabited: `RigidOuter` has no
+// values, so the match is exhaustive and the arm is unreachable. No
+// `RigidOuter { d: _ }` witness.
+class RigidDead {
+    x: never
+}
+
+class RigidOuter {
+    d: RigidDead
+}
+
+function rigid_arm_in_uninhabited_field_is_exhaustive<T>(o: RigidOuter | null) -> int {
+    match (o) {
+        RigidOuter { d: let t: T } => 1,
+        null => 0,
+    }
+}
+
+// Neither the rigid arm nor a wildcard arm in the same uninhabited field
+// column matches a value, so both are unreachable.
+function wildcard_arm_in_uninhabited_field_is_unreachable<T>(o: RigidOuter | null) -> int {
+    match (o) {
+        RigidOuter { d: let t: T } => 1,
+        RigidOuter { d: _ } => 2,
+        null => 0,
+    }
+}

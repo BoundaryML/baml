@@ -394,3 +394,21 @@ source: crates/baml_tests/src/generated_tests.rs
  1047 │ │           WitBox<string> { v: "a" } => 2
  1048 │ ╰─▶     }
       ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type WitnessCollapseBig; missing: WitnessCollapseBig { f1: false, f2: _, f3: _, f4: _ }
+      ╭─[match_exhaustiveness.baml:1062:5]
+ 1062 │ ╭─▶     match (b) {
+ 1063 │ │           WitnessCollapseBig { f1: true } => 1
+ 1064 │ ╰─▶     }
+      ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type WitnessCollapseNode; missing: WitnessCollapseNode { val: _, next: _ }
+      ╭─[match_exhaustiveness.baml:1074:5]
+ 1074 │ ╭─▶     match (n) {
+ 1075 │ │           WitnessCollapseNode { val: 1 } => 1
+ 1076 │ ╰─▶     }
+      ╰────

@@ -1,0 +1,116 @@
+// A recursive alias inside a union column: a member no arm covers is
+// reported, and its witness names the missing member.
+type R = int | R[];
+
+type Leaf = int;
+
+type LR = Leaf | LR[];
+
+class OBox {
+    v: R?,
+}
+
+class Box<T> {
+    v: T,
+}
+
+class Holder {
+    v: LR,
+}
+
+// Was accepted: the `R[]` member of `R?` had no arm.
+function optional_field_missing_list(b: OBox) -> int {
+    match (b) {
+        OBox { v: null } => 0,
+        OBox { v: int } => 1,
+    }
+}
+
+function generic_optional_field_missing_null(b: Box<R?>) -> int {
+    match (b) {
+        Box<R?> { v: int } => 1,
+        Box<R?> { v: R[] } => 2,
+    }
+}
+
+function alias_member_field_missing_int(h: Holder) -> int {
+    match (h) {
+        Holder { v: LR[] } => 2,
+    }
+}
+
+function union_tuple_slot_missing_string(t: (R | string, bool)) -> int {
+    match (t) {
+        (int, _) => 1,
+        (R[], _) => 2,
+    }
+}
+
+type Void = never;
+
+class VoidBox {
+    v: Void,
+}
+
+// A field whose alias names an uninhabited type makes the class
+// uninhabited: the wildcard arm is unreachable.
+function uninhabited_alias_field(b: VoidBox) -> int {
+    match (b) {
+        _ => 1,
+    }
+}
+
+// `[let v: true]` cannot match an `int[]`, and `bool[]` is already
+// covered: the middle arm is unreachable.
+function list_member_fit(xs: bool[] | int[]) -> int {
+    match (xs) {
+        [..]: bool[] => 1,
+        [let v: true] => 2,
+        [..]: int[] => 3,
+    }
+}
+
+// Witnesses for the interface destructure over implementors, the nested
+// tuple shape, the typed rest and the solved hole.
+interface HasV {
+    v: int,
+}
+
+class Ia {
+    v: int,
+
+    implements HasV {}
+}
+
+class Ib {
+    v: int,
+
+    implements HasV {}
+}
+
+function interface_missing_implementor(x: Ia | Ib | null) -> int {
+    match (x) {
+        HasV { v: _ } => 1,
+    }
+}
+
+function nested_tuple_shape(t: ((int, int), int) | (string, int)) -> int {
+    match (t) {
+        ((_, _), _) => 1,
+    }
+}
+
+function typed_rest(xs: int[] | string[]) -> int {
+    match (xs) {
+        [..let rest: int[]] => 1,
+    }
+}
+
+function solved_hole(b: Box<int> | Box<string>) -> int {
+    match (b) {
+        let x: Box<_> => {
+            let t: Box<int> = x;
+            1
+        }
+    }
+}

@@ -89,10 +89,10 @@ test "an interface pattern's written pin types the field" {
     assert.equal(ipa_pinned(IpaStringBox { value: "s" }), 0)
 }
 
+// Both members implement `IpaBox` at that pin, so the one arm covers them.
 function ipa_adopted_pin(x: IpaIntBox | IpaOtherIntBox) -> int {
     match (x) {
         IpaBox { value } => value + 1,
-        _ => 0,
     }
 }
 

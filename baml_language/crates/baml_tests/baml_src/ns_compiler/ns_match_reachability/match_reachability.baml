@@ -224,7 +224,7 @@ test "equivalent type tests report their missing cases once" {
             }
         `,
     };
-    root.compiler.AssertHasMessage(files, "Tagged { value: Int, flag: false }");
+    root.compiler.AssertHasMessage(files, "Tagged { value: int, flag: false }");
     root.compiler.AssertLacksMessage(files, "Count");
 }
 
