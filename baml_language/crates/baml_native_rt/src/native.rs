@@ -1707,6 +1707,7 @@ mod regex;
 mod root;
 mod state;
 mod string;
+mod sync;
 mod sys;
 mod uint8array;
 

@@ -34,6 +34,30 @@ both rely on a single worker: with several workers on one heap another
 could write the bytes while the slice is alive. A native uses one only
 where it says why a copy would not do.
 
+## Passing a map, a union, and an instance to read
+
+A parameter declared `map<string, V>`, for a `V` that is a reference, is a
+map: `MapRef::each_str` hands a native each key and value of a map of
+strings, and `to_strings` copies them out for a native that stops.
+
+A parameter declared as a union is a value as a union holds it (`Elem`,
+or `usize` without `allocates`), whose header says which member it is:
+`Elem::as_any` and then `as_str` or `as_bytes`. A union of string
+literals is a string.
+
+A native reads a field of an instance it was passed by the class's
+description, by the field's position in the declaration:
+`scope.field_bits` for an `int`, a `float` or a `bool`, and
+`scope.field_ref::<M>` for a reference, with `Any` for a field that holds
+a union.
+
+A native that implements an interface method (`implements baml.io.Read`
+in the declaration) is listed by the path the build gives it,
+`baml.fs.baml.io.Read$for$File.read`. When it is `async`, takes only
+`int`s and references and returns no `float`, the interface's default
+bodies reach it through the method table, which enters its stub as it
+enters a function of the program.
+
 ## What a flag promises
 
 A flag is a promise the native's author makes. The generated signature
