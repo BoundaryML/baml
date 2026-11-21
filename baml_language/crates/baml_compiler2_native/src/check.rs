@@ -539,16 +539,20 @@ pub(crate) enum Operator {
 
 impl Operator {
     /// The operator `method` of `interface` is on a receiver of type
-    /// `receiver`, when that is an `int`, a `float` or a `bool`.
+    /// `receiver`, when that is an `int`, a `float`, a `bool` or a
+    /// `bigint`, or for `Equals` a `string` or a `uint8array`: the types
+    /// whose implementations the standard library declares in Rust.
     fn of(
         db: &dyn baml_compiler2_mir::Db,
         interface: &TyTemplateInterface,
         method: &str,
         receiver: &NativeTy<'_>,
     ) -> Option<Self> {
-        if !matches!(receiver, NativeTy::Int | NativeTy::Float | NativeTy::Bool) {
-            return None;
-        }
+        let only_equals = match receiver {
+            NativeTy::Int | NativeTy::Float | NativeTy::Bool | NativeTy::Bigint => false,
+            NativeTy::String | NativeTy::Bytes => true,
+            _ => return None,
+        };
         // `baml.ops`: the standard library's operator interfaces.
         let name = &interface.name;
         if name.key().kind(db) != baml_base::SourceRootKind::Stdlib
@@ -572,20 +576,14 @@ impl Operator {
             ("Equals", "neq") => Self::Binary(BinOp::Ne),
             _ => return None,
         };
-        Some(operator)
+        let equals = matches!(operator, Self::Binary(BinOp::Eq | BinOp::Ne));
+        (equals || !only_equals).then_some(operator)
     }
 
     /// The type of the result on operands of these types.
     pub(crate) fn result<'db>(self, operands: &[NativeTy<'db>]) -> Result<NativeTy<'db>, Blocker> {
         match (self, operands) {
             (Self::Binary(op), [left, right]) => {
-                // The other operand is a primitive too: a `bigint` is not.
-                if !matches!(right, NativeTy::Int | NativeTy::Float | NativeTy::Bool) {
-                    return Err(Blocker::new(
-                        "operator method on these operand types",
-                        format!("{op}"),
-                    ));
-                }
                 binary_typing(op, left, right).map(|(_, result)| result)
             }
             (Self::Unary(op), [operand]) => unary_typing(op, operand),

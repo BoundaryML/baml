@@ -924,6 +924,37 @@ function operator_methods_of_a_type_parameter() -> int {
   if op_same(half(2), half(3)) { seen += 1000; }
   seen
 }
+function operator_methods_of_a_bigint() -> string {
+  let a = 1n << count(70);
+  let b = 3n + 0n * a;
+  let sum = a.as<baml.ops.Add<bigint, Output = bigint>>.add(b);
+  let difference = a.as<baml.ops.Subtract<int, Output = bigint>>.sub(count(5));
+  let product = count(7).as<baml.ops.Multiply<bigint, Output = bigint>>.mul(a);
+  let quotient = a.as<baml.ops.Divide<bigint, Output = bigint>>.div(b);
+  let remainder = a.as<baml.ops.Remainder<int, Output = bigint>>.rem(count(1000));
+  let negated = a.as<baml.ops.Negate<Output = bigint>>.neg();
+  let bits = a.as<baml.ops.BitOr<bigint, Output = bigint>>.bit_or(b);
+  let shifted = a.as<baml.ops.ShiftRight<int, Output = bigint>>.shr(count(60));
+  `${sum} ${difference} ${product} ${quotient} ${remainder} ${negated} ${bits} ${shifted} ${op_sum(a, b)}`
+}
+function operator_equals_of_references() -> int {
+  let seen = 0;
+  let big = 1n << count(70);
+  if big.eq(1n << count(70)) { seen += 1; }
+  if big.neq(big + 1n) { seen += 10; }
+  if op_same(big, 1n << count(70)) { seen += 100; }
+  let text = `a${count(3)}`;
+  if text.eq(`a${count(3)}`) { seen += 1000; }
+  if op_same(text, `a${count(4)}`) { seen += 10000; }
+  let bytes = text.to_utf8();
+  if bytes.eq(`a${count(3)}`.to_utf8()) { seen += 100000; }
+  if op_same(bytes, `b${count(3)}`.to_utf8()) { seen += 1000000; }
+  seen
+}
+function operator_method_of_a_bigint_divides_by_zero() -> bigint {
+  let a = 1n << count(70);
+  a.as<baml.ops.Divide<int, Output = bigint>>.div(count(0))
+}
 function operator_method_divides_by_zero() -> int {
   count(5).as<baml.ops.Divide<int, Output = int>>.div(count(0))
 }
@@ -1163,6 +1194,17 @@ const CASES: &[Case] = &[
     case("operator_methods_on_float", Printed("-235477.0")),
     case("operator_equals", Printed("11111")),
     case("operator_methods_of_a_type_parameter", Printed("117")),
+    case(
+        "operator_methods_of_a_bigint",
+        Printed(
+            "\"1180591620717411303427 1180591620717411303419 8264141345021879123968 393530540239137101141 424 -1180591620717411303424 1180591620717411303427 1024 1180591620717411303427\"",
+        ),
+    ),
+    case("operator_equals_of_references", Printed("101111")),
+    case(
+        "operator_method_of_a_bigint_divides_by_zero",
+        Panicked("baml.panics.DivisionByZero {dividend: 1180591620717411303424}"),
+    ),
     case(
         "operator_method_divides_by_zero",
         Panicked("baml.panics.DivisionByZero {dividend: 5}"),
