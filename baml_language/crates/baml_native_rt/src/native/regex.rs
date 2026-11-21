@@ -11,7 +11,7 @@ use sys_regex::{ErrorKind, Program, RawMatch, SearchAborted};
 
 use super::{
     Arr, Class, Map, NativeBamlRegex, NativeBamlRegexRegex, Natives, Obj, Opaque, Root, Scope, Str,
-    Thrown, part_size,
+    StrRef, Thrown, array_size, part_size,
 };
 use crate::layout::{NAMED_REGEX, NAMED_REGEX_ERROR, NAMED_REGEX_MATCH};
 
@@ -73,20 +73,15 @@ fn spanned<'s>(
     built
 }
 
-/// The `Match` of `raw` in `haystack`.
+/// The `Match` of `raw` in `haystack`, whose spans are at the characters
+/// `chars`: a start and an end for each group that took part, in order.
 fn match_value<'s>(
     scope: &mut Scope<'s>,
     program: &Program,
     haystack: Root<'s, Str>,
     raw: &RawMatch,
+    chars: &[usize],
 ) -> Root<'s, Obj> {
-    let spans: Vec<usize> = raw
-        .groups
-        .iter()
-        .flatten()
-        .flat_map(|&(start, end)| [start, end])
-        .collect();
-    let chars = sys_regex::char_offsets(haystack.get(scope).as_str(), &spans);
     let class = scope.named_class(NAMED_REGEX_MATCH);
     let group = class
         .field_class(MATCH_GROUPS)
@@ -123,6 +118,86 @@ fn match_value<'s>(
     found.set(scope, MATCH_GROUPS, groups);
     found.set(scope, MATCH_NAMED, named);
     found.finish()
+}
+
+/// The `Match` of each of `matches` in `haystack`. Their spans are turned
+/// into characters in one pass over the text: counting again from the start
+/// for each match would make finding every match quadratic.
+fn match_values<'s>(
+    scope: &mut Scope<'s>,
+    program: &Program,
+    haystack: Root<'s, Str>,
+    matches: &[RawMatch],
+) -> Root<'s, Arr<Obj>> {
+    let spans: Vec<usize> = matches
+        .iter()
+        .flat_map(|raw| &raw.groups)
+        .flatten()
+        .flat_map(|&(start, end)| [start, end])
+        .collect();
+    let chars = sys_regex::char_offsets(haystack.get(scope).as_str(), &spans);
+    let found: Root<'s, Arr<Obj>> = scope.alloc_array(matches.len());
+    let mut rest = chars.as_slice();
+    for (index, raw) in matches.iter().enumerate() {
+        let (own, after) = rest.split_at(raw.groups.iter().flatten().count() * 2);
+        rest = after;
+        scope.scoped(|scope, _| {
+            let made = match_value(scope, program, haystack, raw, own);
+            found.set(scope, index, Some(made));
+        });
+    }
+    found
+}
+
+/// `haystack` with its first `limit` matches replaced by `template`, or
+/// every match when `limit` is zero. A haystack nothing matched in is
+/// returned as it is.
+fn replaced<'s>(
+    scope: &mut Scope<'s>,
+    regex: Root<'s, Obj>,
+    haystack: Root<'s, Str>,
+    template: Root<'s, Str>,
+    limit: usize,
+) -> Result<Root<'s, Str>, Thrown<'s>> {
+    let program = program(scope, regex);
+    let replaced = program
+        .replacen(
+            haystack.get(scope).as_str(),
+            limit,
+            template.get(scope).as_str(),
+        )
+        .map(|text| match text {
+            std::borrow::Cow::Borrowed(_) => None,
+            std::borrow::Cow::Owned(text) => Some(text),
+        });
+    match replaced {
+        Ok(None) => Ok(haystack),
+        Ok(Some(text)) => Ok(scope.alloc_str(&text)),
+        Err(abort) => Err(aborted(scope, &program, abort)),
+    }
+}
+
+/// The `Match` a search for one found, when it found one.
+fn first_match<'s>(
+    scope: &mut Scope<'s>,
+    program: &Program,
+    haystack: Root<'s, Str>,
+    found: Result<Option<RawMatch>, SearchAborted>,
+) -> Result<Option<Root<'s, Obj>>, Thrown<'s>> {
+    match found {
+        Ok(Some(raw)) => {
+            let spans: Vec<usize> = raw
+                .groups
+                .iter()
+                .flatten()
+                .flat_map(|&(start, end)| [start, end])
+                .collect();
+            let chars = sys_regex::char_offsets(haystack.get(scope).as_str(), &spans);
+            Ok(Some(match_value(scope, program, haystack, &raw, &chars)))
+        }
+        Ok(None) => Ok(None),
+        Err(abort) => Err(aborted(scope, program, abort)),
+    }
 }
 
 impl NativeBamlRegex for Natives {
@@ -163,6 +238,38 @@ impl NativeBamlRegex for Natives {
         let thrown = thrown.finish();
         Err(scope.throw(thrown))
     }
+
+    fn escape<'s>(scope: &mut Scope<'s>, literal: Root<'s, Str>) -> Root<'s, Str> {
+        let escaped = sys_regex::escape(literal.get(scope).as_str());
+        if escaped.len() == literal.get(scope).byte_len() {
+            // Nothing in it needed a backslash.
+            return literal;
+        }
+        scope.alloc_str(&escaped)
+    }
+
+    /// Where `search` first occurs in `haystack` at or after character
+    /// `start`, in characters.
+    fn _index_of_from(haystack: StrRef<'_>, search: StrRef<'_>, start: i64) -> Option<i64> {
+        let start = usize::try_from(start)
+            .ok()
+            .filter(|start| *start <= haystack.char_count())?;
+        let text = haystack.as_str();
+        let from = if haystack.is_ascii() {
+            start
+        } else {
+            text.char_indices()
+                .nth(start)
+                .map_or(text.len(), |(byte, _)| byte)
+        };
+        let found = from + text[from..].find(search.as_str())?;
+        let chars = if haystack.is_ascii() {
+            found
+        } else {
+            start + text[from..found].chars().count()
+        };
+        Some(offset(chars))
+    }
 }
 
 impl NativeBamlRegexRegex for Natives {
@@ -188,9 +295,78 @@ impl NativeBamlRegexRegex for Natives {
         haystack: Root<'s, Str>,
     ) -> Result<Option<Root<'s, Obj>>, Thrown<'s>> {
         let program = program(scope, regex);
-        match program.find_first(haystack.get(scope).as_str()) {
-            Ok(found) => Ok(found.map(|raw| match_value(scope, &program, haystack, &raw))),
+        let found = program.find_first(haystack.get(scope).as_str());
+        first_match(scope, &program, haystack, found)
+    }
+
+    fn match_full<'s>(
+        scope: &mut Scope<'s>,
+        regex: Root<'s, Obj>,
+        haystack: Root<'s, Str>,
+    ) -> Result<Option<Root<'s, Obj>>, Thrown<'s>> {
+        let program = program(scope, regex);
+        let found = program.find_exact(haystack.get(scope).as_str());
+        first_match(scope, &program, haystack, found)
+    }
+
+    fn match_all<'s>(
+        scope: &mut Scope<'s>,
+        regex: Root<'s, Obj>,
+        haystack: Root<'s, Str>,
+    ) -> Result<Root<'s, Arr<Obj>>, Thrown<'s>> {
+        let program = program(scope, regex);
+        match program.find_all(haystack.get(scope).as_str()) {
+            Ok(found) => Ok(match_values(scope, &program, haystack, &found)),
             Err(abort) => Err(aborted(scope, &program, abort)),
         }
+    }
+
+    /// The fields between the matches, with what each group of a match
+    /// took between them: every one a part of the haystack.
+    fn split<'s>(
+        scope: &mut Scope<'s>,
+        regex: Root<'s, Obj>,
+        haystack: Root<'s, Str>,
+    ) -> Result<Root<'s, Arr<Str>>, Thrown<'s>> {
+        let program = program(scope, regex);
+        let pieces = match program.split(haystack.get(scope).as_str()) {
+            Ok(pieces) => pieces,
+            Err(abort) => return Err(aborted(scope, &program, abort)),
+        };
+        let bytes: usize = pieces
+            .iter()
+            .map(|(start, end)| part_size(end - start))
+            .sum();
+        let reservation = scope.reserve(array_size(pieces.len()) + bytes);
+        let array = reservation.array::<Str>(pieces.len());
+        let whole = reservation.get(haystack).whole();
+        for (index, &(start, end)) in pieces.iter().enumerate() {
+            let chars = whole.as_str()[start..end].chars().count();
+            // SAFETY: a span an engine reports is inside the text and
+            // between characters, which were counted over it.
+            array.set(index, unsafe {
+                reservation.part(whole, start, end - start, chars)
+            });
+        }
+        let array = array.keep();
+        Ok(reservation.finish(array))
+    }
+
+    fn _replace_template<'s>(
+        scope: &mut Scope<'s>,
+        regex: Root<'s, Obj>,
+        haystack: Root<'s, Str>,
+        template: Root<'s, Str>,
+    ) -> Result<Root<'s, Str>, Thrown<'s>> {
+        replaced(scope, regex, haystack, template, 1)
+    }
+
+    fn _replace_all_template<'s>(
+        scope: &mut Scope<'s>,
+        regex: Root<'s, Obj>,
+        haystack: Root<'s, Str>,
+        template: Root<'s, Str>,
+    ) -> Result<Root<'s, Str>, Thrown<'s>> {
+        replaced(scope, regex, haystack, template, 0)
     }
 }

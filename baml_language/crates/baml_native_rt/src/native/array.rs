@@ -15,7 +15,7 @@ use crate::{
         ARRAY_DATA, ARRAY_LENGTH, STORAGE_CAPACITY, STORAGE_ELEMENTS, TYPE_BOX_BOOL,
         TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ID_MASK, TYPE_STRING, WORD,
     },
-    string::{INT_DIGITS, int_digits},
+    string::{INT_DIGITS, float_text, int_digits},
 };
 
 /// The smallest storage an array grows into.
@@ -54,7 +54,7 @@ fn slice_bound(bound: i64, length: usize) -> usize {
 ///
 /// `array` is a live array, and nothing else reads its elements or
 /// allocates while the slice is in use.
-unsafe fn elements<'a>(array: usize) -> &'a mut [usize] {
+pub(super) unsafe fn elements<'a>(array: usize) -> &'a mut [usize] {
     // SAFETY: an array with elements has storage holding its length of
     // them at its data address.
     unsafe {
@@ -371,7 +371,7 @@ impl NativeBamlArray for Natives {
                     (length, length)
                 }
                 TYPE_BOX_FLOAT => {
-                    let length = crate::float_text(f64::from_bits(word as u64)).len();
+                    let length = float_text(f64::from_bits(word as u64)).len();
                     (length, length)
                 }
                 TYPE_BOX_BOOL => {
@@ -394,7 +394,7 @@ impl NativeBamlArray for Natives {
                 // SAFETY: as above.
                 TYPE_STRING => joined.push(unsafe { StrRef::from_raw(word) }.as_str()),
                 TYPE_BOX_INT => joined.push(int_digits(word.cast_signed() as i64, &mut digits)),
-                TYPE_BOX_FLOAT => joined.push(&crate::float_text(f64::from_bits(word as u64))),
+                TYPE_BOX_FLOAT => joined.push(&float_text(f64::from_bits(word as u64))),
                 _ => joined.push(if word == 0 { "false" } else { "true" }),
             }
         }

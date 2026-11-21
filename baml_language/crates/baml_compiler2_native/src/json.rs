@@ -63,13 +63,14 @@ pub(crate) struct Pending<'db> {
 pub(crate) type Hooks<T> = [Option<T>; 2];
 
 /// The functions `class` provides for `baml.ToJson` and `baml.FromJson`,
-/// when it implements either with a body of its own.
+/// when it implements either with a body of its own, and then the `eq` it
+/// provides for `baml.ops.Equals`.
 pub(crate) fn hook_functions<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     class: ClassRef<'db>,
-) -> Hooks<FunctionLoc<'db>> {
+) -> (Hooks<FunctionLoc<'db>>, Option<FunctionLoc<'db>>) {
     let head = class_head(db, class);
-    let mut found = [None; 2];
+    let mut found = [None; 3];
     // The class's own package holds an implementation of an interface of
     // the standard library.
     for block in package_impl_locs(db, head.root()).iter().copied() {
@@ -80,6 +81,7 @@ pub(crate) fn hook_functions<'db>(
         let (which, method) = match structural_interface(db, &facts.interface.name) {
             Some(StructuralInterface::ToJson) => (0, "to_json"),
             Some(StructuralInterface::FromJson) => (1, "from_json"),
+            Some(StructuralInterface::Equals) => (2, "eq"),
             _ => continue,
         };
         if !matches!(facts.for_ty_pattern.to_plain(), baml_type::Ty::Class(of, _) if of == head) {
@@ -94,7 +96,7 @@ pub(crate) fn hook_functions<'db>(
             found[which] = Some(function);
         }
     }
-    found
+    ([found[0], found[1]], found[2])
 }
 
 /// The descriptions made so far.
@@ -153,7 +155,10 @@ fn head_name(db: &dyn baml_compiler2_mir::Db, head: &baml_type::DeclName) -> bam
 }
 
 /// The name an uncaught throw of an instance of `class` is written with.
-fn full_class_name<'db>(db: &'db dyn baml_compiler2_mir::Db, class: ClassRef<'db>) -> String {
+pub(crate) fn full_class_name<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    class: ClassRef<'db>,
+) -> String {
     let head = class_head(db, class);
     let mut name = Viewpoint::canonical(db)
         .display_label(head.root())
@@ -429,6 +434,21 @@ impl<'db> JsonTypes<'db> {
             return Ok(0);
         }
         self.describe_held(db, ty)
+    }
+
+    /// [`Self::describe_native`], or zero for a type `baml.json` has no
+    /// form for: what compares two values reads the description it is
+    /// given, and a value's header where it is given none.
+    pub(crate) fn describe_native_if_any(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        ty: &NativeTy<'db>,
+    ) -> u32 {
+        let mark = self.body.len();
+        self.describe_native(db, ty).unwrap_or_else(|_| {
+            self.forget(mark);
+            0
+        })
     }
 
     /// [`Self::describe_native`], for a type something described holds:

@@ -1,0 +1,8 @@
+# Natives of `baml.ops`, implemented in `src/native/structural.rs`.
+#
+# An operator method of `int`, `float`, `bool` or `bigint` is compiled to
+# the operator's own instructions and is not here. `equals_equals` is `==`
+# on the values no instruction compares: `async`, since it calls the `eq`
+# of a class that has one. A call passes the description of the static type
+# of each argument, as a call of `baml.json` does.
+baml.ops.equals_equals async

@@ -84,7 +84,7 @@ fn path_error<'s>(scope: &mut Scope<'s>, message: &str, selector: &str) -> Throw
 /// # Safety
 ///
 /// `object` is a live object.
-unsafe fn type_of(object: usize) -> usize {
+pub(super) unsafe fn type_of(object: usize) -> usize {
     // SAFETY: the caller's contract.
     unsafe { load(object) & TYPE_ID_MASK }
 }
@@ -155,7 +155,7 @@ impl Node {
 /// # Safety
 ///
 /// `map` is a live map.
-unsafe fn values_are_refs(map: usize) -> bool {
+pub(super) unsafe fn values_are_refs(map: usize) -> bool {
     // SAFETY: the caller's contract.
     unsafe {
         map::len(map) == 0
@@ -172,7 +172,7 @@ unsafe fn values_are_refs(map: usize) -> bool {
 /// # Safety
 ///
 /// `map` is a live map.
-unsafe fn string_keyed(map: usize) -> bool {
+pub(super) unsafe fn string_keyed(map: usize) -> bool {
     // SAFETY: the caller's contract.
     unsafe {
         map::len(map) == 0
@@ -470,7 +470,10 @@ pub(super) async fn to_json_value<'s>(
 }
 
 /// Parse the text of `s` into a `json` value.
-fn parse_rooted<'s>(scope: &mut Scope<'s>, s: Root<'s, Str>) -> Result<usize, Thrown<'s>> {
+pub(super) fn parse_rooted<'s>(
+    scope: &mut Scope<'s>,
+    s: Root<'s, Str>,
+) -> Result<usize, Thrown<'s>> {
     let counted = text::parse(s.get(scope).as_str(), Out::counting());
     match counted {
         Ok((_, out)) => {

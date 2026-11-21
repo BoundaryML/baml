@@ -2,7 +2,7 @@
 
 use num_bigint::{BigInt, Sign};
 
-use super::{Big, NativeBamlBigint, Natives, Root, Scope, Str, Thrown};
+use super::{Big, BigRef, Bytes, NativeBamlBigint, Natives, Root, Scope, Str, Thrown};
 use crate::bigint::MAX_BITS;
 
 /// The range an `int` a `bigint` converts to is in, which `int.parse`
@@ -158,4 +158,56 @@ impl NativeBamlBigint for Natives {
             }
         }
     }
+
+    /// How many bytes one draw over `lower..upper` takes: none for an
+    /// empty range.
+    fn _random_byte_count(lower: BigRef<'_>, upper: BigRef<'_>) -> i64 {
+        let (lower, upper) = (lower.value(), upper.value());
+        if lower >= upper {
+            return 0;
+        }
+        i64::try_from(draw_bits(&lower, &upper).div_ceil(8)).unwrap_or(i64::MAX)
+    }
+
+    /// Map the bytes of a draw onto `lower..upper`, or give `upper` for a
+    /// draw to reject: one at or past the range's size, or too short.
+    fn _random_in_range<'s>(
+        scope: &mut Scope<'s>,
+        draw: Root<'s, Bytes>,
+        lower: Root<'s, Big>,
+        upper: Root<'s, Big>,
+    ) -> Root<'s, Big> {
+        let (low, high) = (lower.get(scope).value(), upper.get(scope).value());
+        if low >= high {
+            return upper;
+        }
+        let bits = draw_bits(&low, &high);
+        let Some(width) = usize::try_from(bits.div_ceil(8))
+            .ok()
+            .filter(|width| *width <= draw.get(scope).len())
+        else {
+            return upper;
+        };
+        let mut bytes = vec![0; width];
+        draw.get(scope).copy_to(0, &mut bytes);
+        // Without the high bits the range does not use, fewer than half
+        // the draws are rejected.
+        if let Some(top) = bytes.first_mut() {
+            *top &= 0xFF >> (width as u64 * 8 - bits);
+        }
+        let sample = BigInt::from_bytes_be(Sign::Plus, &bytes);
+        if sample < &high - &low {
+            // Between two values that are within the limit.
+            scope.make_big(&(sample + low))
+        } else {
+            upper
+        }
+    }
+}
+
+/// How many random bits one draw over `lower..upper`, which is not empty,
+/// takes: the bits of the range's size less one, so that a range whose size
+/// is a power of two rejects nothing.
+fn draw_bits(lower: &BigInt, upper: &BigInt) -> u64 {
+    (upper - lower - 1_u32).bits()
 }

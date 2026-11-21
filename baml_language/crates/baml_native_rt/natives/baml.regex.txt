@@ -3,3 +3,10 @@
 baml.regex._compile allocates
 baml.regex.Regex.has_match allocates
 baml.regex.Regex.match_once allocates
+baml.regex.Regex.match_all allocates
+baml.regex.Regex.match_full allocates
+baml.regex.Regex.split allocates
+baml.regex.Regex._replace_template allocates
+baml.regex.Regex._replace_all_template allocates
+baml.regex.escape allocates
+baml.regex._index_of_from

@@ -1,0 +1,36 @@
+# Natives of `baml.time`, implemented in `src/native/time.rs`. Every value
+# is plain data in its instance. The four that the standard library declares
+# as I/O (`now`, `system_timezone` and the two time zone lookups) read the
+# clock and the host's time zone database where they are called: neither
+# waits on anything.
+baml.time.Instant.now allocates
+baml.time.Instant.parse allocates
+baml.time.Instant._to_string_impl allocates
+baml.time.PlainDate.from_components allocates
+baml.time.PlainDate.parse allocates
+baml.time.PlainDate._to_string_impl allocates
+baml.time.PlainDate._to_plain_datetime allocates
+baml.time.PlainDate.year allocates
+baml.time.PlainDate.month allocates
+baml.time.PlainDate.day allocates
+baml.time.PlainDateTime._from_components allocates
+baml.time.PlainDateTime.parse allocates
+baml.time.PlainDateTime._to_string_impl allocates
+baml.time.PlainDateTime.to_plain_date allocates
+baml.time.PlainDateTime.to_plain_time allocates
+baml.time.PlainDateTime.year allocates
+baml.time.PlainDateTime.month allocates
+baml.time.PlainDateTime.day allocates
+baml.time.PlainDateTime.hour allocates
+baml.time.PlainDateTime.minute allocates
+baml.time.PlainDateTime.second allocates
+baml.time.PlainDateTime.millisecond allocates
+baml.time.PlainTime._from_components allocates
+baml.time.PlainTime.parse allocates
+baml.time.PlainTime._to_string_impl allocates
+baml.time.TimeZoneOffset.from_duration allocates
+baml.time.ZonedDateTime.parse allocates
+baml.time._format_zoned allocates
+baml.time.system_timezone allocates
+baml.time._tz_offset_at
+baml.time._tz_to_instant allocates

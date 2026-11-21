@@ -93,6 +93,29 @@ impl Intrinsic {
         }
     }
 
+    /// Whether a call with these arguments is compiled where it is
+    /// written. `==` and `!=` on what no instruction compares are not:
+    /// they are the runtime's walk of the two values, and the standard
+    /// library's `!=` on top of it.
+    fn compiled_in_place<'db>(
+        self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        body: &Body<'_, 'db>,
+        args: &[Operand<'db>],
+        ntypeargs: usize,
+    ) -> bool {
+        if !matches!(self, Self::EnumEq | Self::EnumNe) {
+            return true;
+        }
+        let found: Result<Vec<_>, _> = args
+            .iter()
+            .skip(ntypeargs)
+            .map(|argument| operand_ty(db, body, argument))
+            .collect();
+        // Arguments with no type are reported where the call is checked.
+        found.is_ok_and(|found| self.result(&found).is_some())
+    }
+
     /// The result type for value arguments of these types, when they fit.
     pub(crate) fn result<'db>(self, arguments: &[NativeTy<'db>]) -> Option<NativeTy<'db>> {
         match (self, arguments) {
@@ -401,7 +424,9 @@ pub(crate) fn call_target<'db>(
     match callee {
         Operand::Constant(Constant::Function(function)) => {
             let name = function_display_name(db, *function);
-            if let Some(intrinsic) = Intrinsic::named(&name) {
+            if let Some(intrinsic) = Intrinsic::named(&name)
+                && intrinsic.compiled_in_place(db, body, args, ntypeargs)
+            {
                 return Ok(Callee::Intrinsic(intrinsic));
             }
             // A method written in Rust that takes a closure has a loop form
@@ -1885,8 +1910,13 @@ fn terminator_supported<'db>(
         } => {
             if *kind == ShortCircuitKind::Coalesce {
                 // `a ?? b`: where `a` is not null it is the result.
-                let NativeTy::Optional(inner) = operand_ty(db, body, operand)? else {
-                    return Err(Blocker::new("null coalescing of a non-optional value", ""));
+                let inner = match operand_ty(db, body, operand)? {
+                    NativeTy::Optional(inner) => *inner,
+                    NativeTy::Union(_) | NativeTy::Unknown | NativeTy::Null => {
+                        return Err(Blocker::new("null coalescing of a non-optional value", ""));
+                    }
+                    // A value flow has shown is not null: it is the result.
+                    found => found,
                 };
                 let destination = place_ty(db, body, destination)?;
                 return if assignable(&destination, &inner) {

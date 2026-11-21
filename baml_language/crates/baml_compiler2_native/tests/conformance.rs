@@ -130,9 +130,19 @@ async fn natives_end_as_the_interpreter_does() {
     let engine = engine(&db);
     let directory = tempfile::tempdir().expect("a temporary directory");
 
+    // While a file is being worked on, its name here runs its cases alone,
+    // or those of each file of a list with commas between. The program is
+    // still every file.
+    let only = std::env::var("BAML_CONFORMANCE_ONLY").ok();
     let mut ran = 0;
     let mut failures = Vec::new();
     for (file, text) in &texts {
+        if only
+            .as_ref()
+            .is_some_and(|only| !only.split(',').any(|name| file.contains(name)))
+        {
+            continue;
+        }
         for (case, diverging) in cases(text) {
             ran += 1;
             let interpreted = interpret(&engine, case).await;

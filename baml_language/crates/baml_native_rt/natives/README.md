@@ -195,6 +195,41 @@ describes the classes of `NAMED` that the declarations of the natives it
 calls name, in what they take, return and throw. Asking for one that no
 such declaration names ends the program.
 
+## Comparing two values
+
+`baml.ops.equals_equals` is `==` on the values no instruction compares, and
+`baml._equals_structural_default` is the `eq` of a class that writes none.
+Both are one walk of the two values (`src/native/structural.rs`). A call
+passes the description of each argument's static type, as a call of
+`baml.json` does, and zero for a type `baml.json` has no form for: the walk
+reads a description where it has one, and otherwise the value's header, and
+for an object nothing describes the words the collector follows.
+
+A class with an `eq` of its own is compared by it. The compiler makes an
+entry for each such `eq`, which takes two instances and returns the answer's
+one byte, and lists them in `baml_native_equals`: a count, then the type id
+and the entry of each class, sorted by type id. Only a program that calls
+one of the two natives defines the list, and only they read it. The walk
+calls nothing: it takes such a pair to be equal and hands it out, and the
+native calls the `eq` of each pair once the walk has found nothing else
+unequal.
+
+What the walk does not know, and compares as it finds it:
+
+- An enum with an `eq` of its own, and a generic class with one: both are
+  compared as if they had none.
+- The elements of an array of values, and the values of a map, whose
+  static type nothing says (an `unknown` holding a `float[]`): word by
+  word, so a NaN equals only itself bit for bit, and the two zeros differ.
+
+## A native the declaration says throws nothing
+
+A native listed without `async` throws only when its declaration lets it:
+the symbol of one that throws nothing returns the bare value. A builtin that
+panics all the same (a count below zero) is listed as `async`, whose symbol
+can always throw, and never stops. `baml.random.Rng$for$SystemRandom.random`
+is one.
+
 ## `baml.http` and the two builds of the runtime
 
 `baml.http` sends its requests with `reqwest` over `rustls`, set up as

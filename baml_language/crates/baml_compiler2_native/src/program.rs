@@ -170,6 +170,14 @@ pub(crate) struct Program<'db> {
     /// `from_json` of their own, with those functions: what `baml.json`
     /// calls when it writes or reads one.
     pub(crate) hooks: Vec<(ClassRef<'db>, crate::json::Hooks<FnKey<'db>>)>,
+    /// The classes the program makes values of that have an `eq` of their
+    /// own, with it: what the runtime calls when it compares two instances
+    /// it meets inside other values.
+    pub(crate) equals: Vec<(ClassRef<'db>, FnKey<'db>)>,
+    /// The generic classes the program makes values of that have an `eq`
+    /// of their own, which the runtime has no way to call: a program that
+    /// has one cannot ask the runtime to compare two values.
+    pub(crate) equals_unlisted: Vec<String>,
 }
 
 /// One interface method some call dispatches when it runs, at one set of
@@ -205,6 +213,8 @@ pub(crate) fn collect<'db>(
         types: Vec::new(),
         column_shift: 0,
         hooks: Vec::new(),
+        equals: Vec::new(),
+        equals_unlisted: Vec::new(),
     };
     let mut queue = VecDeque::from([Needed {
         key: FnKey::new(entry, Entry::Direct),
@@ -278,13 +288,27 @@ pub(crate) fn collect<'db>(
             let NativeTy::Class(class, arguments) = ty else {
                 continue;
             };
-            if !arguments.is_empty() || hooked.contains(class) {
+            if !arguments.is_empty() {
+                let name = crate::json::full_class_name(db, *class);
+                if !program.equals_unlisted.contains(&name)
+                    && crate::json::hook_functions(db, *class).1.is_some()
+                {
+                    program.equals_unlisted.push(name);
+                }
+                continue;
+            }
+            if hooked.contains(class) {
                 continue;
             }
             hooked.push(*class);
-            let functions = crate::json::hook_functions(db, *class)
+            let (functions, eq) = crate::json::hook_functions(db, *class);
+            let functions = functions
                 .map(|function| function.map(|function| FnKey::new(function, Entry::Direct)));
-            for key in functions.iter().flatten() {
+            let eq = eq.map(|function| FnKey::new(function, Entry::Direct));
+            if let Some(eq) = &eq {
+                program.equals.push((*class, eq.clone()));
+            }
+            for key in functions.iter().flatten().chain(&eq) {
                 queue.push_back(Needed {
                     key: key.clone(),
                     captures: Vec::new(),
@@ -337,6 +361,22 @@ fn check_hooks<'db>(db: &'db dyn baml_compiler2_mir::Db, program: &Program<'db>)
                     crate::types::describe(&own),
                 ));
             }
+        }
+    }
+    // An `eq` is entered with two instances and answers with a `bool`.
+    for (class, key) in &program.equals {
+        let Ok(signature) = function_signature(db, key) else {
+            continue;
+        };
+        let own = NativeTy::Class(*class, Vec::new());
+        if signature.params[..] != [own.clone(), own.clone()]
+            || signature.result != NativeTy::Bool
+            || identified_arguments(db, key).contains(&true)
+        {
+            blockers.push(Blocker::new(
+                "eq with a layout the runtime cannot call",
+                crate::types::describe(&own),
+            ));
         }
     }
     blockers

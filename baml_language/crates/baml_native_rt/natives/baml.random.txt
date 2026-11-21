@@ -1,0 +1,13 @@
+# Natives of `baml.random`, implemented in `src/native/random.rs`. A seeded
+# generator owns its state as Rust state, behind a lock.
+#
+# `SystemRandom.random` is `async` only so that it can throw, which its
+# declaration does not say it does: it never stops.
+baml.random.Xoshiro256PlusPlus._new allocates
+baml.random.Rng$for$Xoshiro256PlusPlus.random allocates
+baml.random.Rng$for$Xoshiro256PlusPlus.random_int
+baml.random.ChaCha20._new allocates
+baml.random.Rng$for$ChaCha20.random allocates
+baml.random.Rng$for$ChaCha20.random_int
+baml.random.Rng$for$SystemRandom.random async
+baml.random.Rng$for$SystemRandom.random_int

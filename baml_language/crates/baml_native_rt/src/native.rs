@@ -1695,6 +1695,7 @@ mod env;
 mod failure;
 mod float;
 mod fs;
+mod glob;
 mod hash;
 #[cfg(feature = "http")]
 mod http;
@@ -1703,13 +1704,18 @@ mod io;
 mod json;
 mod map;
 mod net;
+mod path;
+mod random;
 mod regex;
 mod root;
 mod state;
 mod string;
+mod structural;
 mod sync;
 mod sys;
+mod time;
 mod uint8array;
+mod yaml;
 
 pub use build::{Build, Class, Value};
 pub use state::{Opaque, OpaqueRef};

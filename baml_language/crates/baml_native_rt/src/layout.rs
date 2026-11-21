@@ -475,7 +475,7 @@ pub const WELL_KNOWN: [(&str, &str); 26] = [
 /// The compiler writes the type id of each after those of [`WELL_KNOWN`],
 /// in this order, and writes zero for a class that no native the program
 /// calls names in its declaration, which is then not described either.
-pub const NAMED: [(&str, &str); 25] = [
+pub const NAMED: [(&str, &str); 35] = [
     ("regex", "Regex"),
     ("regex", "Match"),
     ("regex", "Error"),
@@ -501,6 +501,16 @@ pub const NAMED: [(&str, &str); 25] = [
     ("sys", "ProcessOutput"),
     ("sync", "Semaphore"),
     ("sync", "Permit"),
+    ("time", "Instant"),
+    ("time", "PlainDate"),
+    ("time", "PlainDateTime"),
+    ("time", "PlainTime"),
+    ("time", "TimeZoneOffset"),
+    ("time", "ZonedDateTime"),
+    ("random", "Xoshiro256PlusPlus"),
+    ("random", "ChaCha20"),
+    ("glob", "Glob"),
+    ("yaml", "ParseError"),
 ];
 pub const NAMED_REGEX: usize = 0;
 pub const NAMED_REGEX_MATCH: usize = 1;
@@ -527,6 +537,16 @@ pub const NAMED_SYS_HOST_INFO: usize = 21;
 pub const NAMED_SYS_PROCESS_OUTPUT: usize = 22;
 pub const NAMED_SYNC_SEMAPHORE: usize = 23;
 pub const NAMED_SYNC_PERMIT: usize = 24;
+pub const NAMED_TIME_INSTANT: usize = 25;
+pub const NAMED_TIME_PLAIN_DATE: usize = 26;
+pub const NAMED_TIME_PLAIN_DATE_TIME: usize = 27;
+pub const NAMED_TIME_PLAIN_TIME: usize = 28;
+pub const NAMED_TIME_ZONE_OFFSET: usize = 29;
+pub const NAMED_TIME_ZONED_DATE_TIME: usize = 30;
+pub const NAMED_RANDOM_XOSHIRO: usize = 31;
+pub const NAMED_RANDOM_CHACHA20: usize = 32;
+pub const NAMED_GLOB: usize = 33;
+pub const NAMED_YAML_PARSE_ERROR: usize = 34;
 
 /// How many of [`WELL_KNOWN`], from the first, are panics.
 pub const WELL_KNOWN_PANICS: usize = 16;

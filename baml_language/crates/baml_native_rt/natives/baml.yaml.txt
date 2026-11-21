@@ -1,0 +1,2 @@
+# Natives of `baml.yaml`, implemented in `src/native/yaml.rs`.
+baml.yaml.parse allocates

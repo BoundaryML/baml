@@ -22,3 +22,8 @@ function array_join_int_to_string_widths() -> string {
   for (let i = 0; i < xs.length(); i += 1) { out = out + xs[i].to_string() + `<${xs[i]}>`; };
   out
 }
+// An infinity is spelled out inside a string, as a template spells it.
+function array_join_infinite_floats() -> string {
+  let values: float[] = [float.inf(), 0.0 - float.inf(), float.nan(), halves(3)];
+  values.join(" ")
+}
