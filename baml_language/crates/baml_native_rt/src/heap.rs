@@ -642,7 +642,7 @@ impl Mutator {
 
     /// Copy everything reachable into another space, leaving room for
     /// `needed` more bytes, and abandon the old one.
-    fn collect(&mut self, needed: usize) {
+    pub(crate) fn collect(&mut self, needed: usize) {
         let used = self.alloc_ptr - self.heap.space.start;
         if self.heap.stress {
             self.copy_into(used + needed);

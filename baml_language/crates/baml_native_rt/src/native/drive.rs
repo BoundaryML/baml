@@ -515,6 +515,12 @@ impl<'s> Scope<'s> {
         work()
     }
 
+    /// Collect now: what `baml.sys.collect_garbage` asks for. Every object
+    /// moves, as at any allocation.
+    pub fn collect_now(&mut self) {
+        self.mutator().collect(0);
+    }
+
     /// What the symbol of an `async` native returns for an error: the
     /// error itself with a flag, having left the trace it was caught with
     /// in the scratch word for the caller to throw it again with.

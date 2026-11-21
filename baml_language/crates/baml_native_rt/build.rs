@@ -18,6 +18,12 @@ fn main() {
         println!("cargo::rustc-cfg=checks");
     }
 
+    // What `baml.sys.host_target` answers.
+    println!(
+        "cargo::rustc-env=BAML_NATIVE_RT_TARGET={}",
+        env::var("TARGET").expect("set by cargo")
+    );
+
     let mut implemented =
         baml_builtins2_codegen::read_native_lists(&lists).unwrap_or_else(|error| panic!("{error}"));
     // A runtime built without `baml.http` has none of its natives.

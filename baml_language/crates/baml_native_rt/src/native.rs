@@ -565,6 +565,44 @@ impl<'a> MapRef<'a> {
     }
 }
 
+/// A value as a union holds it, which is not `null`.
+pub struct Any;
+
+impl Managed for Any {
+    type View<'a> = AnyRef<'a>;
+}
+
+/// A view of a value a union holds: an object whose header says what it
+/// is.
+#[derive(Clone, Copy)]
+pub struct AnyRef<'a>(usize, PhantomData<&'a ()>);
+
+impl<'a> View<'a> for AnyRef<'a> {
+    unsafe fn from_raw(raw: usize) -> Self {
+        Self(raw, PhantomData)
+    }
+    fn raw(self) -> usize {
+        self.0
+    }
+}
+
+impl<'a> AnyRef<'a> {
+    fn type_id(self) -> usize {
+        // SAFETY: a view is of a live object, which starts with its type.
+        unsafe { load(self.0) & TYPE_ID_MASK }
+    }
+
+    /// The string the value is, when it is one.
+    pub fn as_str(self) -> Option<StrRef<'a>> {
+        (self.type_id() < STRING_TYPES_END).then_some(StrRef(self.0, PhantomData))
+    }
+
+    /// The `uint8array` the value is, when it is one.
+    pub fn as_bytes(self) -> Option<BytesRef<'a>> {
+        (self.type_id() == TYPE_BYTES).then_some(BytesRef(self.0, PhantomData))
+    }
+}
+
 /// A view of a class instance: its slots, by position.
 #[derive(Clone, Copy)]
 pub struct ObjRef<'a>(usize, PhantomData<&'a ()>);
@@ -919,27 +957,17 @@ impl Elem<'_> {
         self.is_ref
     }
 
-    /// The string a value held as a union holds it is, when it is one.
-    pub fn as_str<'a>(self, _scope: &'a Scope<'_>) -> Option<StrRef<'a>> {
+    /// The value as a union holds it, when it is not `null`.
+    pub fn as_any<'a>(self, _scope: &'a Scope<'_>) -> Option<AnyRef<'a>> {
         let word = self.slot.get();
-        // SAFETY: a value a union holds is zero or a live object, whose
-        // header says what it is, and it moves only when the scope is
-        // borrowed exclusively.
-        unsafe {
-            (self.is_ref && word != 0 && load(word) & TYPE_ID_MASK < STRING_TYPES_END)
-                .then(|| StrRef::from_raw(word))
-        }
+        // SAFETY: a reference a union holds is zero or a live object, which
+        // moves only when the scope is borrowed exclusively.
+        (self.is_ref && word != 0).then(|| unsafe { AnyRef::from_raw(word) })
     }
 
-    /// The `uint8array` a value held as a union holds it is, when it is
-    /// one.
-    pub fn as_bytes<'a>(self, _scope: &'a Scope<'_>) -> Option<BytesRef<'a>> {
-        let word = self.slot.get();
-        // SAFETY: as in `Self::as_str`.
-        unsafe {
-            (self.is_ref && word != 0 && load(word) & TYPE_ID_MASK == TYPE_BYTES)
-                .then(|| BytesRef::from_raw(word))
-        }
+    /// The string a value held as a union holds it is, when it is one.
+    pub fn as_str<'a>(self, scope: &'a Scope<'_>) -> Option<StrRef<'a>> {
+        self.as_any(scope).and_then(AnyRef::as_str)
     }
 }
 
@@ -1679,6 +1707,7 @@ mod regex;
 mod root;
 mod state;
 mod string;
+mod sys;
 mod uint8array;
 
 pub use build::{Build, Class, Value};
