@@ -388,7 +388,8 @@ pub(crate) enum DocProblem {
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum DocOwner<'a> {
     /// A function definition, named once its name has parsed: directives are
-    /// its attributes, with one trace hook at most.
+    /// its attributes, with one trace hook at most, and a `//#` line above it
+    /// is its title, one at most.
     Function { name: Option<&'a str> },
     /// Any other declaration or member: directives belong to function
     /// definitions only, so each one here is an error.
@@ -414,14 +415,13 @@ impl DocPart {
 /// `//#` header lines — in source order, parsed before anything decides what
 /// they belong to: the caller dispatches on the token after them. A `@@`
 /// attribute is never one of these: it is written inside the body of the
-/// declaration it is for. A header is trivia to the cursor, so the ones
-/// between the last token read and the next significant one are collected
-/// before each doc line.
+/// declaration it is for.
 fn leading_docs(p: &mut Parser<'_, '_>) -> Vec<DocPart> {
     let mut parts = Vec::new();
     loop {
-        parts.extend(p.cur.headers_ahead().map(DocPart::Header));
-        if let Some(token) = p.cur.eat::<doc::DocComment>() {
+        if let Some(token) = p.cur.eat::<doc::HeaderComment>() {
+            parts.push(DocPart::Header(token));
+        } else if let Some(token) = p.cur.eat::<doc::DocComment>() {
             parts.push(doc_line(p, token));
         } else if let Some(token) = p.cur.eat::<doc::DirectiveComment>() {
             parts.push(directive(p, token));
@@ -478,31 +478,19 @@ fn alloc_docs(p: &mut Parser<'_, '_>, docs: Vec<DocPart>, owner: DocOwner<'_>) -
             let token = part.token();
             let end = TokenIdx(token.0 + 1);
             let text = p.cur.text_of(token).trim_end();
-            if let DocPart::Header(header) = part {
-                let accepted = matches!(owner, DocOwner::Function { .. }) && !header_seen;
-                header_seen = true;
-                if accepted {
-                    return AnyDoc::Header(p.alloc_to(
-                        Mark::of(header),
-                        end,
-                        HeaderLine { token: header },
-                    ));
-                }
-                let range = p.cur.token_range(token);
-                let message = if matches!(owner, DocOwner::Function { .. }) {
-                    HEADER_COMMENT_REPEATED
-                } else {
-                    HEADER_COMMENT_MISPLACED
-                };
-                let error = ParseError::InvalidSyntax {
-                    message: message.to_string(),
-                    range,
-                };
-                return AnyDoc::Bogus(p.bogus_tokens(TokenRange::new(token, end), error));
-            }
             let message = match owner {
                 DocOwner::Function { name } => match part {
-                    DocPart::Header(_) => unreachable!("headers were handled above"),
+                    DocPart::Header(header) => {
+                        if header_seen {
+                            return rejected_header(p, token, HEADER_COMMENT_REPEATED);
+                        }
+                        header_seen = true;
+                        return AnyDoc::Header(p.alloc_to(
+                            Mark::of(header),
+                            end,
+                            HeaderLine { token: header },
+                        ));
+                    }
                     DocPart::Doc(token) => {
                         return AnyDoc::Doc(p.alloc_to(Mark::of(token), end, DocLine { token }));
                     }
@@ -529,7 +517,9 @@ fn alloc_docs(p: &mut Parser<'_, '_>, docs: Vec<DocPart>, owner: DocOwner<'_>) -
                     },
                 },
                 DocOwner::Other => match part {
-                    DocPart::Header(_) => unreachable!("headers were handled above"),
+                    DocPart::Header(_) => {
+                        return rejected_header(p, token, HEADER_COMMENT_MISPLACED);
+                    }
                     DocPart::Doc(token) => {
                         return AnyDoc::Doc(p.alloc_to(Mark::of(token), end, DocLine { token }));
                     }
@@ -563,6 +553,17 @@ fn alloc_docs(p: &mut Parser<'_, '_>, docs: Vec<DocPart>, owner: DocOwner<'_>) -
         .collect()
 }
 
+/// A `//#` line its declaration cannot take (above anything but a function,
+/// or a second one above a function), as its own `Bogus`.
+fn rejected_header(p: &mut Parser<'_, '_>, token: TokenIdx, message: &str) -> AnyDoc {
+    let range = p.cur.token_range(token);
+    let error = ParseError::InvalidSyntax {
+        message: message.to_string(),
+        range,
+    };
+    AnyDoc::Bogus(p.bogus_tokens(TokenRange::new(token, TokenIdx(token.0 + 1)), error))
+}
+
 /// Docs that precede nothing they can document: one `Bogus` over their lines,
 /// with the error; `None` when there are none. A run of `//#` headers alone
 /// gets the header message.
@@ -582,6 +583,21 @@ fn reject_docs(p: &mut Parser<'_, '_>, docs: &[DocPart]) -> Option<Id<Bogus>> {
         }
     };
     Some(p.bogus_tokens(tokens, error))
+}
+
+/// A run of `//#` lines in an LLM body, where neither a statement nor a
+/// title can stand: one `Bogus` over the run, with the error.
+fn header_run(p: &mut Parser<'_, '_>) -> Id<Bogus> {
+    let mark = p.cur.mark();
+    while p.cur.eat::<doc::HeaderComment>().is_some() {}
+    let range = p.cur.text_range(p.cur.range_from(mark));
+    p.bogus_since(
+        mark,
+        ParseError::InvalidSyntax {
+            message: HEADER_COMMENT_MISPLACED.to_string(),
+            range,
+        },
+    )
 }
 
 /// Where a declaration with `docs` begins: at its first doc line, else at
@@ -1061,6 +1077,8 @@ impl Parse for LlmBody {
                 let sep_mark = p.cur.mark();
                 p.cur.skip();
                 fields.push(AnyLlmField::Bogus(p.bogus_since(sep_mark, error)));
+            } else if p.cur.at(TokenKind::HeaderComment) {
+                fields.push(AnyLlmField::Bogus(header_run(p)));
             } else {
                 // A name is quoted as written; anything else by its kind, so
                 // the message never embeds a whole string literal.
@@ -2282,10 +2300,8 @@ pub(crate) fn source_file(p: &mut Parser<'_, '_>) -> Id<SourceFile> {
     while !p.cur.at_end() {
         items.push(item(p));
     }
-    diagnose_header_comments(p);
     diagnose_unclosed_block_comments(p);
-    // The file starts where its first item does (a leading `//#` title
-    // included), not at the first significant token.
+    // The file starts where its first item does.
     let mark = items.first().map_or(mark, |item| p.mark_of_any(item));
     let items = p.out.alloc_list(items);
     p.alloc(mark, SourceFile { items })
@@ -2297,9 +2313,6 @@ fn item(p: &mut Parser<'_, '_>) -> AnyItem {
     // with nothing to document become one `Bogus`.
     let item = p.attempt(|p| {
         let docs = leading_docs(p);
-        // A `//#` title is trivia to the cursor: an item that begins with one
-        // starts there, not at its first significant token.
-        let mark = docs.first().map_or(mark, |doc| Mark::at(doc.token()));
         if p.cur.at(TokenKind::AtAt) {
             // A `@@` attribute has no position at the top level: it is written
             // inside the body of the declaration it is for. The docs before it
@@ -2492,29 +2505,5 @@ fn diagnose_unclosed_block_comments(p: &mut Parser<'_, '_>) {
             "unclosed block comment: expected `*/` before the end of the file",
             range,
         );
-    }
-}
-
-/// A `//#` line is a statement in a block or a function's title; anywhere
-/// else it is an error. One inside a `Bogus` — recovered text, or a template
-/// interior not parsed yet — is not checked.
-fn diagnose_header_comments(p: &mut Parser<'_, '_>) {
-    let bogus_ranges = p.out.bogus_spans();
-    let mut owned = p.out.owned_tokens::<baml_syntax::nodes::HeaderStmt>();
-    owned.extend(p.out.owned_tokens::<baml_syntax::nodes::HeaderLine>());
-    let tokens = p.cur.tokens();
-    let headers: Vec<TokenIdx> = tokens
-        .iter()
-        .filter(|&idx| tokens.kind(idx) == TokenKind::HeaderComment)
-        .filter(|idx| !owned.contains(idx))
-        .filter(|&idx| {
-            !bogus_ranges
-                .iter()
-                .any(|r| r.start() <= idx && idx < r.end())
-        })
-        .collect();
-    for idx in headers {
-        let range = p.cur.token_range(idx);
-        p.error(HEADER_COMMENT_MISPLACED, range);
     }
 }

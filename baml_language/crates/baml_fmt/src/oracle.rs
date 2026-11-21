@@ -239,7 +239,7 @@ fn shape(tree: &FileTree) -> Vec<String> {
             let kind = self.tree.tokens().kind(token);
             let text = match (field, self.tree.token_text(token)) {
                 // Optional punctuation the rules add or replace.
-                ("sep" | "semi" | "semi1" | "semi2" | "comma" | "colon", _) => return,
+                ("sep" | "semi" | "comma" | "colon", _) => return,
                 ("arrow", "=>") => "->",
                 ("kw", "implement") => "implements",
                 // A template's own chunks are compared dedented, by the

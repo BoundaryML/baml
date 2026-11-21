@@ -274,13 +274,14 @@ fn composite_operators_are_read_from_adjacent_tokens() {
 }
 
 #[test]
-fn precedence_matches_the_current_parser() {
+fn prefix_operators_bind_above_every_binary_operator() {
     assert_eq!(BinaryOp::NullCoalesce.binding_power(), (4, 5));
     assert_eq!(BinaryOp::Or.binding_power(), (6, 7));
     assert_eq!(BinaryOp::Add.binding_power(), (22, 23));
     assert_eq!(BinaryOp::Mul.binding_power(), (24, 25));
-    // Ported as-is (see the BUG note on the constant).
-    assert!(PREFIX_BINDING_POWER < BinaryOp::Mul.binding_power().0);
+    for op in BinaryOp::ALL {
+        assert!(PREFIX_BINDING_POWER > op.binding_power().1, "{op:?}");
+    }
 }
 
 #[test]

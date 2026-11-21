@@ -25,8 +25,8 @@ function f() -> int {
         1
     };
     let i = [
-        -// c8
-            x, // c11
+        // c8
+        -x, // c11
     ];
     1
 }

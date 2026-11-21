@@ -1,0 +1,8 @@
+function f(a: int, b: int, c: int, d: int) -> int {
+    let v1 = (c * -a) * d;
+    let v2 = (c * await a) * d;
+    let v3 = (c + -a) + d;
+    let v4 = -(a * b);
+    let v5 = (-a) * b;
+    v1
+}

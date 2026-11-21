@@ -1,0 +1,92 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== increment_operator.baml ===
+SourceFile@141..235
+  items: FunctionDef@141..235
+    kw: Function "function" @141..149
+    name: Name@150..151
+      token: Word "f" @150..151
+    params: ParamList@151..159
+      l: LParen "(" @151..152
+      params: Param@152..158
+        name: Name@152..153
+          token: Word "x" @152..153
+        ascription: TypeAscription@153..158
+          colon: Colon ":" @153..154
+          ty: PathType@155..158
+            head: Name@155..158
+              token: Word "int" @155..158
+      r: RParen ")" @158..159
+    ret: ReturnType@160..166
+      arrow: Arrow "->" @160..162
+      ty: PathType@163..166
+        head: Name@163..166
+          token: Word "int" @163..166
+    body: Block@167..235
+      l: LBrace "{" @167..168
+      stmts: LetStmt@173..185
+        introducer: Let "let" @173..176
+        pattern: BindingPattern@177..178
+          name: Name@177..178
+            token: Word "a" @177..178
+        eq: Equals "=" @179..180
+        init: UnaryExpr@181..184
+          op: Minus "-" @181..182
+          operand: UnaryExpr@182..184
+            op: Minus "-" @182..183
+            operand: PathExpr@183..184
+              head: Name@183..184
+                token: Word "x" @183..184
+        semi: Semicolon ";" @184..185
+      stmts: LetStmt@190..197
+        introducer: Let "let" @190..193
+        pattern: BindingPattern@194..195
+          name: Name@194..195
+            token: Word "b" @194..195
+        eq: Equals "=" @196..197
+        init: <missing @198>
+      stmts: Bogus@198..199
+        tokens: Plus "+" @198..199
+      stmts: Bogus@199..200
+        tokens: Plus "+" @199..200
+      stmts: ExprStmt@200..202
+        expr: PathExpr@200..201
+          head: Name@200..201
+            token: Word "x" @200..201
+        semi: Semicolon ";" @201..202
+      stmts: LetStmt@207..219
+        introducer: Let "let" @207..210
+        pattern: BindingPattern@211..212
+          name: Name@211..212
+            token: Word "c" @211..212
+        eq: Equals "=" @213..214
+        init: BinaryExpr@215..218
+          lhs: BinaryExpr@215..217
+            lhs: PathExpr@215..216
+              head: Name@215..216
+                token: Word "x" @215..216
+            op: Plus "+" @216..217
+            rhs: <missing @217>
+          op: Plus "+" @217..218
+          rhs: <missing @218>
+        semi: Semicolon ";" @218..219
+      tail: BinaryExpr@224..233
+        lhs: BinaryExpr@224..229
+          lhs: PathExpr@224..225
+            head: Name@224..225
+              token: Word "a" @224..225
+          op: Plus "+" @226..227
+          rhs: PathExpr@228..229
+            head: Name@228..229
+              token: Word "b" @228..229
+        op: Plus "+" @230..231
+        rhs: PathExpr@232..233
+          head: Name@232..233
+            token: Word "c" @232..233
+      r: RBrace "}" @234..235
+error @198..199: expected expression, found '+'
+error @198..199: expected expression, found '+'
+error @199..200: expected expression, found '+'
+error @217..218: expected expression, found '+'
+error @218..219: expected expression, found ';'

@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[object_literal_quoted_key.baml:9:19]
+ 9 │     let s = Foo { "a": 1, b: 2 };
+   ·                   ─┬─
+   ·                    ╰── a field of a constructed object is named by an identifier; a map literal is written without the constructor: `{ "key": value }`
+   ╰────

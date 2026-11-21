@@ -63,14 +63,8 @@ pub fn package_source(
             });
         }
         let text = file.text(db);
-        // The lexer does not read a byte-order mark as whitespace, so a file
-        // that opens with one is formatted without it.
-        let formatted = match text.strip_prefix(BYTE_ORDER_MARK) {
-            None => format_salsa(db, file, FormatOptions::default())
-                .map_or_else(|_| text.clone(), |formatted| formatted.apply_to(text)),
-            Some(unmarked) => crate::format(unmarked, &FormatOptions::default())
-                .unwrap_or_else(|_| unmarked.to_owned()),
-        };
+        let formatted = format_salsa(db, file, FormatOptions::default())
+            .map_or_else(|_| text.clone(), |formatted| formatted.apply_to(text));
         files.insert(normalized, normalize_text(&formatted));
     }
     Ok(PackageSource { files })

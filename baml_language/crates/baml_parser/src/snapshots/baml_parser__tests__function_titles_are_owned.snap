@@ -79,7 +79,7 @@ SourceFile@0..238
     name: Name@182..183
       token: Word "C" @182..183
     l: LBrace "{" @184..185
-    members: FunctionDef@207..236
+    members: FunctionDef@188..236
       docs: HeaderLine@188..204
         token: HeaderComment "//# method title" @188..204
       kw: Function "function" @207..215

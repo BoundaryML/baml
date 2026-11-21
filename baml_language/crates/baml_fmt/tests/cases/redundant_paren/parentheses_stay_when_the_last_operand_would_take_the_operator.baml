@@ -1,9 +1,8 @@
 function f(a: int, c: int, d: int, x: int?) -> int {
-    let v1 = (c * -a) * d;
-    let v2 = (c * await a) * d;
-    let v3 = (c | a is int) | d;
-    let v4 = (x ?? a is int) ?? d;
-    let v5 = (c + -a) + d;
-    let v6 = !(x is Foo.m());
+    let v1 = (c | a is int) | d;
+    let v2 = (x ?? a is int) ?? d;
+    let v3 = !(x is Foo.m());
+    let v4 = (a + -return c) + d;
+    let v5 = (a + await throw c) + d;
     v1
 }

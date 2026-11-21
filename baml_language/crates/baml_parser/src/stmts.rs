@@ -11,10 +11,10 @@ use baml_syntax::{
     },
     ops::AssignOp,
     token::{
-        Ident, KindSet, TokenIdx, TokenKind, TokenSet as _, ctx, kw, punct,
+        Ident, KindSet, TokenKind, TokenSet as _, ctx, doc, kw, punct,
         sets::{DocToken, LetIntroducer, TestKw},
     },
-    tree::{Id, Missing, TokenRange},
+    tree::{Id, Missing},
 };
 
 use crate::{
@@ -82,13 +82,12 @@ pub(crate) fn body_lines(
     (stmts, None)
 }
 
-/// The `//#` lines between the last statement and the next token, each a
-/// statement.
+/// The `//#` lines at the cursor, each a statement.
 fn header_stmts(p: &mut Parser<'_, '_>, stmts: &mut Vec<AnyStmt>) {
-    let headers: Vec<_> = p.cur.headers_ahead().collect();
-    for token in headers {
-        let span = TokenRange::new(token.idx, TokenIdx(token.idx.0 + 1));
-        stmts.push(AnyStmt::Header(p.out.alloc(HeaderStmt { token }, span)));
+    while let Some(token) = p.cur.eat::<doc::HeaderComment>() {
+        stmts.push(AnyStmt::Header(
+            p.alloc(Mark::of(token), HeaderStmt { token }),
+        ));
     }
 }
 
@@ -134,10 +133,10 @@ fn stmt(p: &mut Parser<'_, '_>) -> Line {
             },
         ))
     } else if at_expression_start(p.cur) {
-        let Ok(expr) = stmt_expr(p, Restrictions::STATEMENT) else {
-            unreachable!("an expression starts here");
+        return match stmt_expr(p, Restrictions::STATEMENT) {
+            Ok(expr) => expr_line(p, expr),
+            Err(bogus) => Line::Stmt(AnyStmt::Bogus(bogus)),
         };
-        return expr_line(p, expr);
     } else {
         AnyStmt::Bogus(p.bogus_one("expression"))
     };
@@ -155,7 +154,7 @@ fn expr_line(p: &mut Parser<'_, '_>, expr: AnyExpr) -> Line {
     }
     let semi = p.cur.eat::<punct::Semicolon>();
     let closes = p.cur.at(TokenKind::RBrace) || p.cur.at_end();
-    if semi.is_none() && closes && !p.cur.header_ahead() {
+    if semi.is_none() && closes {
         return Line::Tail(expr);
     }
     Line::Stmt(AnyStmt::Expr(p.alloc(mark, ExprStmt { expr, semi })))
@@ -474,8 +473,8 @@ fn for_in_header(
     )
 }
 
-/// `init; cond; step)` after the `(` (`l`), every part optional. With the
-/// `(` missing, the `)` is not demanded either.
+/// `init; cond; step)` after the `(` (`l`): every part optional but the two
+/// `;`. With the `(` missing, the `)` is not demanded either.
 fn c_for_header(
     p: &mut Parser<'_, '_>,
     mark: Mark,
@@ -491,23 +490,24 @@ fn c_for_header(
     } else {
         None
     };
-    let semi1 = p.cur.eat::<punct::Semicolon>();
+    let semi1 = p.expect::<punct::Semicolon>();
     let cond = (!p.cur.at(TokenKind::LBrace) && at_expression_start(p.cur))
         .then(|| expr(p, r).ok())
         .flatten();
-    let semi2 = p.cur.eat::<punct::Semicolon>();
-    let step = (!p.cur.at(TokenKind::LBrace) && at_expression_start(p.cur))
-        .then(|| {
-            let target = stmt_expr(p, r).ok()?;
-            Some(match p.cur.eat_op::<AssignOp>() {
-                Some(op) => {
-                    let mark = p.mark_of_any(&target);
-                    AnyForStep::Assign(assign_stmt(p, mark, target, op, r, Semi::Leave))
-                }
-                None => AnyForStep::Expr(target),
-            })
-        })
-        .flatten();
+    let semi2 = p.expect::<punct::Semicolon>();
+    let step =
+        (!p.cur.at(TokenKind::LBrace) && at_expression_start(p.cur)).then(|| {
+            match stmt_expr(p, r) {
+                Err(bogus) => AnyForStep::Bogus(bogus),
+                Ok(target) => match p.cur.eat_op::<AssignOp>() {
+                    Some(op) => {
+                        let mark = p.mark_of_any(&target);
+                        AnyForStep::Assign(assign_stmt(p, mark, target, op, r, Semi::Leave))
+                    }
+                    None => AnyForStep::Expr(target),
+                },
+            }
+        });
     let close = match l {
         Ok(_) => p.expect::<punct::RParen>(),
         Err(missing) => p.cur.eat::<punct::RParen>().ok_or(missing),
