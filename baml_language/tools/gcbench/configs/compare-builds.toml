@@ -1,0 +1,58 @@
+# Compare two builds of baml-cli and baml-pack-host on the default workloads.
+#
+#   base  the build to compare against: GCBENCH_BASE points at another checkout's
+#         baml_language/ directory (or set baml_cli to a path)
+#   new   this checkout's release build
+#
+# Build both with `cargo build --release -p baml_cli -p baml_pack_host`. The
+# `base-again` row runs the base build a second time: its ratios show the noise.
+#
+#   GCBENCH_BASE=../other-checkout/baml_language \
+#     python3 tools/gcbench/gcbench.py run --config tools/gcbench/configs/compare-builds.toml
+
+baseline = "base"
+iters = 20
+workloads = [
+  "memory/binary-trees-14",
+  "memory/live-heap",
+  "memory/allocation-low-retention",
+  "memory/allocation-high-retention",
+  "memory/cyclic-churn",
+  "memory/cycles-into-live",
+  "memory/splay-2k",
+  "memory/heap-calls",
+  "memory/live-walk",
+  "compute/nbody-20k",
+  "compute/fib32-recursive",
+  "compute/json-ndjson-events",
+  "programs/richards-50",
+  "programs/agent-loop-300",
+]
+
+[iters_override]  # as in variants.toml
+"memory/binary-trees-14" = 5
+"memory/live-heap" = 40
+"memory/allocation-low-retention" = 22
+"memory/allocation-high-retention" = 20
+"memory/cyclic-churn" = 170
+"memory/cycles-into-live" = 35
+"memory/splay-2k" = 24
+"memory/heap-calls" = 1200
+"memory/live-walk" = 50
+"compute/nbody-20k" = 22
+"compute/fib32-recursive" = 12
+"compute/json-ndjson-events" = 600
+"programs/richards-50" = 13
+"programs/agent-loop-300" = 100
+
+[[variant]]
+label = "base"
+baml_cli = "${GCBENCH_BASE}/target/release/baml-cli"
+
+[[variant]]
+label = "base-again"
+baml_cli = "${GCBENCH_BASE}/target/release/baml-cli"
+
+[[variant]]
+label = "new"
+baml_cli = "target/release/baml-cli"
