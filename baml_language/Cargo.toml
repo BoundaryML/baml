@@ -72,8 +72,8 @@ bcs_api = { path = "crates/bcs_api", default-features = false }
 # The formats BAML records and BCS stores, and the BCS client, as BCS publishes them. A format change
 # lands in BCS first, readers before writers, and reaches BAML by moving these pins together:
 # bcs-sdk takes exactly the btel-core published beside it.
-bcs-sdk = { version = "=0.1.0", default-features = false }
-btel-core = { version = "=0.1.0" }
+bcs-sdk = { version = "=0.2.0", default-features = false }
+btel-core = { version = "=0.2.0" }
 
 #  Internal dependencies (baml_*)
 btel_bcs = { path = "crates/btel_bcs", default-features = false }
@@ -565,3 +565,10 @@ inherits = "release"
 # the earlier size-focused release configuration. Release now prioritizes speed
 # with opt-level=3; artifact size budgets are tracked in `.cargo/size-gate.toml`.
 # wasm32 has no unwinding and behaves as `abort` regardless of the panic setting.
+
+# btel-core 0.2.0 (recording minor 16) and the bcs-sdk published beside it are not on crates.io
+# yet: until they are, they come from the BCS change that adds them. Remove this once they are
+# published.
+[patch.crates-io]
+btel-core = { git = "ssh://git@github.com/BoundaryML/bcs.git", branch = "antoniosarosi/end-spans-format" }
+bcs-sdk = { git = "ssh://git@github.com/BoundaryML/bcs.git", branch = "antoniosarosi/end-spans-format" }

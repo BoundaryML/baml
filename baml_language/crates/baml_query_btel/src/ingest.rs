@@ -35,7 +35,6 @@ use crate::{Error, store};
 mod bulk;
 mod context;
 mod profile;
-mod totals;
 
 #[derive(Clone, Debug)]
 pub struct RefreshOptions {
@@ -128,24 +127,17 @@ fn sequence_i64(sequence: u64) -> Result<i64, Error> {
     i64::try_from(sequence).map_err(|_| Error::Unsupported("recording sequence exceeds i64".into()))
 }
 
-/// A network event's place in recording order: its file's sequence, then
-/// its position among the file's network events.
-fn event_seq(sequence: u64, position: u32) -> Result<i64, Error> {
-    i64::try_from((u128::from(sequence) << 32) | u128::from(position)).map_err(|_| {
-        Error::Unsupported("recording sequence exceeds the network event order".into())
-    })
-}
-
-/// Network evidence the file reader does not check: an announcement,
-/// event or completion that names no span or parent, or a completion with
-/// an impossible outcome. Both index paths skip it with an issue.
+/// Network evidence the file reader does not check: a start or completion
+/// that names no span, parent or thread, or a completion with an impossible
+/// outcome. Both index paths skip it with an issue.
 fn network_invalid(event: &Event) -> Option<u64> {
     let (span, valid) = match event {
         Event::NetworkAnnouncement(entry) => (entry.id, entry.id != 0 && entry.parent_id != 0),
-        Event::NetworkEvent(event) => (event.span_id, event.span_id != 0),
         Event::NetworkCompletion(done) => (
             done.span_id,
             done.span_id != 0
+                && done.parent_id != 0
+                && done.thread_id != 0
                 && (1..=3).contains(&done.outcome)
                 && (!done.panicked || done.outcome == proto::InvocationOutcome::Errored as i32),
         ),
@@ -154,10 +146,28 @@ fn network_invalid(event: &Event) -> Option<u64> {
     (!valid).then_some(span)
 }
 
+/// A thread's start as its completion repeats it, shaped as its definition;
+/// `None` when the completion names no clock, so carries no start.
+fn thread_start(thread: u64, done: &proto::ThreadCompletion) -> Option<proto::ThreadDefinition> {
+    (done.clock_epoch_id != 0).then(|| proto::ThreadDefinition {
+        thread_id: thread,
+        parent_id: done.parent_id,
+        spawn_call_path_id: done.spawn_call_path_id,
+        started_at_ticks: done.started_at_ticks,
+        clock_epoch_id: done.clock_epoch_id,
+        name: done.name.clone(),
+    })
+}
+
+/// A call's explicit-operation marker: the completion's field, or its legacy
+/// completion flag (bit 5).
+fn manual(done: &proto::FunctionCompletion) -> bool {
+    done.manual || done.completion_flags & 32 != 0
+}
+
 const NETWORK_INVALID: &str = "network_evidence_invalid";
-const NETWORK_INVALID_DETAIL: &str = "network span evidence without a span or parent ID, or with an impossible outcome; it is ignored";
-const NETWORK_SPAN_CONFLICT: &str =
-    "two different announcements for one network span; the first is kept";
+const NETWORK_INVALID_DETAIL: &str = "network span evidence without a span, parent or thread ID, or with an impossible outcome; it is ignored";
+const NETWORK_SPAN_CONFLICT: &str = "two different starts for one network span; the first is kept";
 const NETWORK_COMPLETION_CONFLICT: &str =
     "a network span completed twice with different evidence; the first is kept";
 
@@ -850,7 +860,6 @@ fn apply_fresh<'p>(
             [rec],
         )?;
     }
-    let charged = merged.charged();
     merged.write(&tx, rec, applied.last().is_some_and(|file| file.end))?;
     let mut terminal = None;
     let mut source_snapshot = None;
@@ -899,7 +908,6 @@ fn apply_fresh<'p>(
         }
         metrics.files_applied += 1;
     }
-    totals::apply(&tx, rec, &charged)?;
     if rebuild || !applied.is_empty() {
         mark_profile_pending(&tx, rec)?;
     }
@@ -1013,8 +1021,19 @@ struct References {
     paths: HashSet<u32>,
     functions: HashSet<u64>,
     epochs: HashSet<u64>,
-    /// Network spans named by events.
-    network_spans: HashSet<u64>,
+}
+
+/// A network span's start, from its slim start record (in the requesting
+/// thread's section) or its completion (which names that thread).
+struct NetworkStart<'a> {
+    span: u64,
+    thread: u64,
+    parent: u64,
+    /// Zero outside any frame.
+    path: u32,
+    started: Option<i64>,
+    method: &'a str,
+    url: &'a str,
 }
 
 /// Applies files to one recording inside a transaction.
@@ -1033,8 +1052,6 @@ struct Applier<'t> {
     /// Functions whose metadata replaced an "unavailable" observation: the
     /// profiler nodes named after them change.
     renamed_functions: HashSet<u64>,
-    /// Calls and threads whose usage this transaction stored, for the totals.
-    charged: Vec<([u8; 8], Vec<crate::usage::ModelUsage>)>,
 }
 
 impl<'t> Applier<'t> {
@@ -1048,7 +1065,6 @@ impl<'t> Applier<'t> {
             entries: Vec::new(),
             sysops: HashMap::new(),
             renamed_functions: HashSet::new(),
-            charged: Vec::new(),
         }
     }
 
@@ -1137,8 +1153,6 @@ impl<'t> Applier<'t> {
             }
         }
         if let Some(spans) = &file.spans {
-            // Each network event's position among the file's.
-            let mut network_events = 0_u32;
             for section in &spans.sections {
                 self.references.threads.insert(section.thread_id);
                 for event in &section.events {
@@ -1161,100 +1175,26 @@ impl<'t> Applier<'t> {
                                 )?
                                 .execute(params![self.rec, id(section.thread_id)])?;
                         }
-                        Some(Event::ThreadRunning(running)) => {
-                            // The first time it began running wins.
-                            self.tx
-                                .prepare_cached(
-                                    "INSERT INTO thread (rec, thread_id, defined, ran_ticks)
-                                     VALUES (?1, ?2, 0, ?3)
-                                     ON CONFLICT (rec, thread_id)
-                                     DO UPDATE SET ran_ticks = COALESCE(ran_ticks, excluded.ran_ticks)",
-                                )?
-                                .execute(params![
-                                    self.rec,
-                                    id(section.thread_id),
-                                    tick(running.at_ticks)
-                                ])?;
-                        }
                         Some(Event::ThreadCompletion(done)) => {
-                            let completed = tick(done.completed_at_ticks);
-                            // Keep a completion even before its definition.
-                            self.tx
-                                .prepare_cached(
-                                    "INSERT OR IGNORE INTO thread (rec, thread_id, defined)
-                                     VALUES (?1, ?2, 0)",
-                                )?
-                                .execute(params![self.rec, id(section.thread_id)])?;
-                            let usage = crate::usage::from_wire(&done.usage);
-                            let changed = self
-                                .tx
-                                .prepare_cached(
-                                    "UPDATE thread SET completed_ticks = ?3, outcome = ?4, panicked = ?5,
-                                       usage = ?6, error_cas = ?7
-                                     WHERE rec = ?1 AND thread_id = ?2 AND outcome IS NULL",
-                                )?
-                                .execute(params![
-                                    self.rec,
-                                    id(section.thread_id),
-                                    completed,
-                                    done.outcome,
-                                    done.panicked,
-                                    crate::usage::to_json(&usage),
-                                    done.error_cas_id.as_ref().map(cas_id)
-                                ])?;
-                            if changed > 0 && !usage.is_empty() {
-                                self.charged.push((id(section.thread_id), usage));
-                            }
-                            if changed == 0 {
-                                let existing: Option<(Option<i64>, Option<i64>)> = self
-                                    .tx
-                                    .prepare_cached(
-                                        "SELECT completed_ticks, outcome FROM thread WHERE rec = ?1 AND thread_id = ?2",
-                                    )?
-                                    .query_row(params![self.rec, id(section.thread_id)], |r| {
-                                        Ok((r.get(0)?, r.get(1)?))
-                                    })
-                                    .optional()?;
-                                match existing {
-                                    Some((ticks, outcome))
-                                        if ticks == completed
-                                            && outcome == Some(i64::from(done.outcome)) => {}
-                                    _ => {
-                                        self.tx
-                                            .prepare_cached(
-                                                "UPDATE thread SET completion_conflict = 1
-                                                 WHERE rec = ?1 AND thread_id = ?2",
-                                            )?
-                                            .execute(params![self.rec, id(section.thread_id)])?;
-                                        self.issue(
-                                            sequence,
-                                            "thread_completion_conflict",
-                                            Some(&section.thread_id.to_string()),
-                                            "a thread completed twice with different evidence; the first is kept",
-                                        )?;
-                                    }
-                                }
-                            }
+                            self.thread_completion(sequence, section.thread_id, done, &mut tick)?;
                         }
                         Some(Event::FunctionAnnouncement(entry)) => {
                             self.references.paths.insert(entry.call_path_id);
+                            // A slim start: the completion carries the rest.
                             self.tx
                                 .prepare_cached(
                                     "INSERT INTO call (rec, call_id, thread_id, parent_id, call_path_id,
-                                       announced_sequence, entered_ticks, inputs_cas, type_args_cas, manual)
-                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                                       announced_sequence, entered_ticks)
+                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                                      ON CONFLICT (rec, call_id) DO UPDATE SET
                                        conflict = CASE WHEN conflict > 0 THEN conflict
                                          WHEN announced_sequence IS NOT NULL
                                            OR thread_id IS NOT excluded.thread_id
                                            OR parent_id IS NOT excluded.parent_id
-                                           OR manual IS NOT excluded.manual
                                            OR call_path_id IS NOT excluded.call_path_id
                                            OR entered_ticks IS NOT excluded.entered_ticks
                                          THEN 1 ELSE 0 END,
-                                       announced_sequence = excluded.announced_sequence,
-                                       inputs_cas = excluded.inputs_cas,
-                                       type_args_cas = excluded.type_args_cas",
+                                       announced_sequence = excluded.announced_sequence",
                                 )?
                                 .execute(params![
                                     self.rec,
@@ -1263,10 +1203,7 @@ impl<'t> Applier<'t> {
                                     id(entry.parent_id),
                                     i64::from(entry.call_path_id),
                                     sequence_i64(sequence)?,
-                                    tick(entry.entered_at_ticks),
-                                    entry.inputs_cas_id.as_ref().map(cas_id),
-                                    entry.type_args_cas_id.as_ref().map(cas_id),
-                                    entry.manual
+                                    tick(entry.entered_at_ticks)
                                 ])?;
                         }
                         Some(Event::FunctionCompletion(done)) => {
@@ -1280,35 +1217,23 @@ impl<'t> Applier<'t> {
                             let _ = tick(log.at_ticks);
                         }
                         Some(Event::NetworkAnnouncement(entry)) => {
-                            self.network_announcement(
-                                sequence,
-                                section.thread_id,
-                                entry,
-                                &mut tick,
-                            )?;
-                        }
-                        Some(Event::NetworkEvent(observed)) => {
-                            let seq = event_seq(sequence, network_events)?;
-                            network_events += 1;
-                            self.references.network_spans.insert(observed.span_id);
-                            self.tx
-                                .prepare_cached(
-                                    "INSERT INTO network_event (rec, span_id, seq, name, at_ticks, payload_cas)
-                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                                )?
-                                .execute(params![
-                                    self.rec,
-                                    id(observed.span_id),
-                                    seq,
-                                    observed.name,
-                                    tick(observed.at_ticks),
-                                    observed.payload_cas_id.as_ref().map(cas_id)
-                                ])?;
+                            let start = NetworkStart {
+                                span: entry.id,
+                                thread: section.thread_id,
+                                parent: entry.parent_id,
+                                path: entry.call_path_id,
+                                started: tick(entry.started_at_ticks),
+                                method: &entry.method,
+                                url: &entry.url,
+                            };
+                            self.network_start(sequence, &start)?;
                         }
                         Some(Event::NetworkCompletion(done)) => {
                             self.network_completion(sequence, done, &mut tick)?;
                         }
-                        None => {}
+                        // Not written since minor 16: the completion carries
+                        // when a future began running and a request's events.
+                        Some(Event::ThreadRunning(_) | Event::NetworkEvent(_)) | None => {}
                     }
                 }
             }
@@ -1324,6 +1249,84 @@ impl<'t> Applier<'t> {
         Ok(())
     }
 
+    /// A thread's completion: its start (as its definition would give it),
+    /// when it began running, how it ended and its usage. The first
+    /// completion wins; a different one is a conflict.
+    fn thread_completion(
+        &mut self,
+        sequence: u64,
+        thread: u64,
+        done: &proto::ThreadCompletion,
+        tick: &mut impl FnMut(u64) -> Option<i64>,
+    ) -> Result<(), Error> {
+        match thread_start(thread, done) {
+            Some(start) => {
+                let started = tick(start.started_at_ticks);
+                self.thread(sequence, &start, started)?;
+            }
+            // Keep a completion that names no start.
+            None => {
+                self.tx
+                    .prepare_cached(
+                        "INSERT OR IGNORE INTO thread (rec, thread_id, defined) VALUES (?1, ?2, 0)",
+                    )?
+                    .execute(params![self.rec, id(thread)])?;
+            }
+        }
+        let completed = tick(done.completed_at_ticks);
+        let ran = done.running_at_ticks.and_then(&mut *tick);
+        let changed = self
+            .tx
+            .prepare_cached(
+                "UPDATE thread SET completed_ticks = ?3, outcome = ?4, panicked = ?5,
+                   usage = ?6, error_cas = ?7, ran_ticks = ?8, total_usage = ?9
+                 WHERE rec = ?1 AND thread_id = ?2 AND outcome IS NULL",
+            )?
+            .execute(params![
+                self.rec,
+                id(thread),
+                completed,
+                done.outcome,
+                done.panicked,
+                crate::usage::to_json(&crate::usage::from_wire(&done.usage)),
+                done.error_cas_id.as_ref().map(cas_id),
+                ran,
+                crate::usage::to_json(&crate::usage::from_wire(&done.total_usage))
+            ])?;
+        if changed > 0 {
+            return Ok(());
+        }
+        let existing: Option<(Option<i64>, Option<i64>)> = self
+            .tx
+            .prepare_cached(
+                "SELECT completed_ticks, outcome FROM thread WHERE rec = ?1 AND thread_id = ?2",
+            )?
+            .query_row(params![self.rec, id(thread)], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .optional()?;
+        match existing {
+            Some((ticks, outcome))
+                if ticks == completed && outcome == Some(i64::from(done.outcome)) => {}
+            _ => {
+                self.tx
+                    .prepare_cached(
+                        "UPDATE thread SET completion_conflict = 1 WHERE rec = ?1 AND thread_id = ?2",
+                    )?
+                    .execute(params![self.rec, id(thread)])?;
+                self.issue(
+                    sequence,
+                    "thread_completion_conflict",
+                    Some(&thread.to_string()),
+                    "a thread completed twice with different evidence; the first is kept",
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    /// A call's completion, the whole span: it fills in a slim start, or
+    /// makes the row alone.
     fn completion(
         &mut self,
         sequence: u64,
@@ -1332,31 +1335,22 @@ impl<'t> Applier<'t> {
         late: bool,
         tick: &mut impl FnMut(u64) -> Option<i64>,
     ) -> Result<(), Error> {
-        let (outcome, needs_announcement) =
-            evidence::completion(done, late).expect("validated completion flags");
+        let (outcome, _) = evidence::completion(done, late).expect("validated completion flags");
         let (path, reentry) = evidence::split_node(done.node);
         self.references.paths.insert(path);
-        let usage = crate::usage::from_wire(&done.usage);
-        // The first usage stored wins: a second completion is a conflict.
-        let charges = !usage.is_empty()
-            && self
-                .tx
-                .prepare_cached("SELECT usage IS NULL FROM call WHERE rec = ?1 AND call_id = ?2")?
-                .query_row(params![self.rec, id(done.id)], |r| r.get::<_, bool>(0))
-                .optional()?
-                .unwrap_or(true);
         self.tx
             .prepare_cached(
                 "INSERT INTO call (rec, call_id, thread_id, parent_id, call_path_id, reentry,
                    completed_sequence, late, entered_ticks, exited_ticks, self_await_ticks,
-                   outcome, needs_announcement, value_cas, panicked, manual, usage)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+                   outcome, value_cas, panicked, manual, usage, inputs_cas, type_args_cas,
+                   total_usage)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+                   ?17, ?18, ?19)
                  ON CONFLICT (rec, call_id) DO UPDATE SET
                    conflict = CASE WHEN conflict > 0 THEN conflict
                      WHEN completed_sequence IS NOT NULL
                        OR thread_id IS NOT excluded.thread_id
                        OR parent_id IS NOT excluded.parent_id
-                       OR manual IS NOT excluded.manual
                        OR call_path_id IS NOT excluded.call_path_id
                        OR (entered_ticks IS NOT NULL AND entered_ticks IS NOT excluded.entered_ticks)
                      THEN 1 ELSE 0 END,
@@ -1368,10 +1362,13 @@ impl<'t> Applier<'t> {
                    exited_ticks = excluded.exited_ticks,
                    self_await_ticks = excluded.self_await_ticks,
                    outcome = excluded.outcome,
-                   needs_announcement = excluded.needs_announcement,
                    value_cas = excluded.value_cas,
                    panicked = excluded.panicked,
-                   usage = COALESCE(usage, excluded.usage)",
+                   inputs_cas = excluded.inputs_cas,
+                   type_args_cas = excluded.type_args_cas,
+                   -- The first usage stored wins: a second completion is a conflict.
+                   usage = COALESCE(usage, excluded.usage),
+                   total_usage = COALESCE(total_usage, excluded.total_usage)",
             )?
             .execute(params![
                 self.rec,
@@ -1386,68 +1383,49 @@ impl<'t> Applier<'t> {
                 tick(done.exited_at_ticks),
                 tick(done.self_await_ticks),
                 outcome.code(),
-                needs_announcement,
                 done.value_cas_id.as_ref().map(cas_id),
                 done.panicked,
-                done.completion_flags & 32 != 0,
-                crate::usage::to_json(&usage)
+                manual(done),
+                crate::usage::to_json(&crate::usage::from_wire(&done.usage)),
+                done.inputs_cas_id.as_ref().map(cas_id),
+                done.type_args_cas_id.as_ref().map(cas_id),
+                crate::usage::to_json(&crate::usage::from_wire(&done.total_usage))
             ])?;
-        if charges {
-            self.charged.push((id(done.id), usage));
-        }
         Ok(())
     }
 
-    /// The first announcement of a network span wins, filling in a
-    /// placeholder its events or completion left; a different one is a
-    /// conflict.
-    fn network_announcement(
-        &mut self,
-        sequence: u64,
-        thread: u64,
-        entry: &proto::NetworkAnnouncement,
-        tick: &mut impl FnMut(u64) -> Option<i64>,
-    ) -> Result<(), Error> {
-        let path = (entry.call_path_id != 0).then_some(entry.call_path_id);
+    /// The first start of a network span wins, from its slim start record or
+    /// its completion; a different one is a conflict.
+    fn network_start(&mut self, sequence: u64, start: &NetworkStart<'_>) -> Result<(), Error> {
+        self.references.threads.insert(start.thread);
+        let path = (start.path != 0).then_some(start.path);
         self.references.paths.extend(path);
         let values = params![
             self.rec,
-            id(entry.id),
-            id(thread),
-            id(entry.parent_id),
+            id(start.span),
+            id(start.thread),
+            id(start.parent),
             path.map(i64::from),
-            entry.method,
-            entry.url,
-            entry.request_cas_id.as_ref().map(cas_id),
-            tick(entry.started_at_ticks)
+            start.method,
+            start.url,
+            start.started
         ];
         let inserted = self
             .tx
             .prepare_cached(
-                "INSERT OR IGNORE INTO network_span (rec, span_id, defined, thread_id, parent_id,
-                   call_path_id, method, url, request_cas, started_ticks)
-                 VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                "INSERT OR IGNORE INTO network_span (rec, span_id, thread_id, parent_id,
+                   call_path_id, method, url, started_ticks)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             )?
             .execute(values)?;
         if inserted > 0 {
-            return Ok(());
-        }
-        let upgraded = self
-            .tx
-            .prepare_cached(
-                "UPDATE network_span SET defined = 1, thread_id = ?3, parent_id = ?4,
-                   call_path_id = ?5, method = ?6, url = ?7, request_cas = ?8, started_ticks = ?9
-                 WHERE rec = ?1 AND span_id = ?2 AND defined = 0",
-            )?
-            .execute(values)?;
-        if upgraded > 0 {
             return Ok(());
         }
         let same: bool = self
             .tx
             .prepare_cached(
                 "SELECT thread_id = ?3 AND parent_id = ?4 AND call_path_id IS ?5 AND method = ?6
-                   AND url = ?7 AND request_cas IS ?8 AND started_ticks IS ?9
+                   AND url = ?7 AND started_ticks IS ?8
                  FROM network_span WHERE rec = ?1 AND span_id = ?2",
             )?
             .query_row(values, |r| r.get(0))?;
@@ -1456,54 +1434,75 @@ impl<'t> Applier<'t> {
                 .prepare_cached(
                     "UPDATE network_span SET conflict = 1 WHERE rec = ?1 AND span_id = ?2",
                 )?
-                .execute(params![self.rec, id(entry.id)])?;
+                .execute(params![self.rec, id(start.span)])?;
             self.issue(
                 sequence,
                 "network_span_conflict",
-                Some(&entry.id.to_string()),
+                Some(&start.span.to_string()),
                 NETWORK_SPAN_CONFLICT,
             )?;
         }
         Ok(())
     }
 
-    /// The first completion of a network span wins, even before its
-    /// announcement; a different one is a conflict.
+    /// A network span's completion, the whole span: its start, request,
+    /// events and end. The first completion wins, with its events; a
+    /// different one is a conflict.
     fn network_completion(
         &mut self,
         sequence: u64,
         done: &proto::NetworkCompletion,
         tick: &mut impl FnMut(u64) -> Option<i64>,
     ) -> Result<(), Error> {
+        let start = NetworkStart {
+            span: done.span_id,
+            thread: done.thread_id,
+            parent: done.parent_id,
+            path: done.call_path_id,
+            started: tick(done.started_at_ticks),
+            method: &done.method,
+            url: &done.url,
+        };
+        self.network_start(sequence, &start)?;
         let values = params![
             self.rec,
             id(done.span_id),
             tick(done.completed_at_ticks),
             done.outcome,
             done.panicked,
-            done.error_cas_id.as_ref().map(cas_id)
+            done.error_cas_id.as_ref().map(cas_id),
+            done.request_cas_id.as_ref().map(cas_id)
         ];
-        self.tx
-            .prepare_cached(
-                "INSERT OR IGNORE INTO network_span (rec, span_id, defined) VALUES (?1, ?2, 0)",
-            )?
-            .execute(params![self.rec, id(done.span_id)])?;
         let changed = self
             .tx
             .prepare_cached(
                 "UPDATE network_span SET completed_ticks = ?3, outcome = ?4, panicked = ?5,
-                   error_cas = ?6
+                   error_cas = ?6, request_cas = ?7
                  WHERE rec = ?1 AND span_id = ?2 AND outcome IS NULL",
             )?
             .execute(values)?;
         if changed > 0 {
+            let mut insert = self.tx.prepare_cached(
+                "INSERT INTO network_event (rec, span_id, seq, name, at_ticks, payload_cas)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )?;
+            for (seq, event) in done.events.iter().enumerate() {
+                insert.execute(params![
+                    self.rec,
+                    id(done.span_id),
+                    i64::try_from(seq).unwrap_or(i64::MAX),
+                    event.name,
+                    tick(event.at_ticks),
+                    event.payload_cas_id.as_ref().map(cas_id)
+                ])?;
+            }
             return Ok(());
         }
         let same: bool = self
             .tx
             .prepare_cached(
                 "SELECT completed_ticks IS ?3 AND outcome = ?4 AND panicked = ?5
-                   AND error_cas IS ?6
+                   AND error_cas IS ?6 AND request_cas IS ?7
                  FROM network_span WHERE rec = ?1 AND span_id = ?2",
             )?
             .query_row(values, |r| r.get(0))?;
@@ -2005,12 +2004,6 @@ impl<'t> Applier<'t> {
         for epoch in &self.references.epochs {
             placeholder.execute(params![self.rec, id(*epoch)])?;
         }
-        let mut placeholder = self.tx.prepare_cached(
-            "INSERT OR IGNORE INTO network_span (rec, span_id, defined) VALUES (?1, ?2, 0)",
-        )?;
-        for span in &self.references.network_spans {
-            placeholder.execute(params![self.rec, id(*span)])?;
-        }
         // The lowest defined top-level path wins, whatever order files arrive in.
         let mut entry = self.tx.prepare_cached(
             "UPDATE thread SET entry_call_path_id = MIN(COALESCE(entry_call_path_id, ?3), ?3)
@@ -2033,7 +2026,7 @@ impl<'t> Applier<'t> {
                 .prepare_cached(
                     "INSERT INTO issue (rec, sequence, code, subject, detail)
                      VALUES (?1, ?2, 'call_evidence_conflict', ?3,
-                       'evidence for one call disagrees (announcement vs completion, or two completions); its status is conflicted')",
+                       'evidence for one call disagrees (start vs completion, or two completions); its status is conflicted')",
                 )?
                 .execute(params![self.rec, sequence, call_id.ok().map(|id| id.to_string())])?;
         }
@@ -2044,8 +2037,7 @@ impl<'t> Applier<'t> {
             )?
             .execute([self.rec])?;
         forget_nodes(self.tx, self.rec, &self.renamed_functions)?;
-        resolve_nodes(self.tx, self.rec)?;
-        totals::apply(self.tx, self.rec, &self.charged)
+        resolve_nodes(self.tx, self.rec)
     }
 }
 

@@ -73,6 +73,18 @@ impl SealedFile {
     }
 }
 
+/// Where a recording's files go, which decides whether it writes start
+/// records (format minor 16). Every span is whole in its end record; a local
+/// recording also writes a slim record when a span starts, so a local reader
+/// can show calls that are running or never completed. A recording for an
+/// upload writes none: nothing reads them there.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Destination {
+    #[default]
+    Local,
+    Upload,
+}
+
 /// What a host tells a recording about its process.
 pub struct ProcessRecording {
     pub info: btel_types::ProcessInfo,
@@ -143,6 +155,13 @@ impl RecordingBuilder {
             ended: false,
         })
     }
+    /// Where the recording's files go: see [`Destination`].
+    #[must_use]
+    pub fn with_destination(mut self, destination: Destination) -> Self {
+        self.buffer.starts = destination == Destination::Local;
+        self
+    }
+
     /// Expose essential metadata separately for a bounded best-effort cloud journal.
     #[must_use]
     pub fn with_metadata_replay(mut self) -> Self {
@@ -258,6 +277,7 @@ impl RecordingBuilder {
             .next_sequence
             .ok_or(RecordingError::SequenceExhausted)?;
         let ready = self.buffer.take();
+        let definitions_from = self.buffer.needs.seal(sequence.get());
         let process_exit = end
             .then(|| self.process.as_ref().and_then(|p| p.exit.get()))
             .flatten();
@@ -335,6 +355,7 @@ impl RecordingBuilder {
             }),
             // Appended below from its pre-encoded body.
             errors: None,
+            definitions_from,
         };
         // Absent without exceptions, so error-free files keep their bytes.
         let errors_len = if ready.errors.is_empty() {
@@ -381,6 +402,7 @@ impl RecordingBuilder {
         };
         drop(file); // Release converted metadata before potentially blocking delivery.
         self.next_sequence = sequence.get().checked_add(1).and_then(NonZeroU64::new);
+        self.buffer.sequence = self.next_sequence.map_or(u64::MAX, NonZeroU64::get);
         Ok(Some(sealed))
     }
     /// Drain every batch after input chunk recycling, regardless of file sealing.
@@ -461,7 +483,7 @@ impl RecordingBuilder {
         if self.span_credit == 0 {
             terminal(self.admit_spans());
         }
-        let strings = string_bytes(record);
+        let strings = string_bytes(record).saturating_add(carried_bytes(&self.buffer, record));
         if strings != 0 {
             // Preserve the outstanding fixed-record reservation after
             // variable-length strings; later completion writes use that credit.
@@ -541,6 +563,24 @@ fn string_bytes(record: &SpanRecord<Snapshot, Snapshot>) -> usize {
     }
 }
 
+/// Bytes a record's end record writes beyond the fixed per-event bound from
+/// what the recorder kept of its span: a lineage of up to
+/// `LINEAGE_ANCESTORS` IDs, and a request's text and events.
+fn carried_bytes(buffer: &ConversionBuffer, record: &SpanRecord<Snapshot, Snapshot>) -> usize {
+    const LINEAGE_BYTES: usize = 16 + btel_core::recording::LINEAGE_ANCESTORS * 10;
+    match record {
+        SpanRecord::NetworkSpanCompletion(done) => {
+            LINEAGE_BYTES + buffer.open.request_text(done.span.get())
+        }
+        SpanRecord::ThreadSpanCompletion { name, .. } => {
+            LINEAGE_BYTES + name.as_ref().map_or(0, |name| name.len()) + 64
+        }
+        SpanRecord::ManualSpanCompletion(_) => LINEAGE_BYTES + 40,
+        record if record.completion().is_some() => LINEAGE_BYTES + 40,
+        _ => 0,
+    }
+}
+
 fn terminal<T>(result: Result<T, RecordingError>) -> T {
     result.unwrap_or_else(|error| std::panic::panic_any(error))
 }
@@ -575,6 +615,13 @@ impl<F: FnMut(SealedFile), C: FnMut(Snapshot)> RecordingPublisher<F, C> {
             receive_snapshot,
         })
     }
+    /// See [`RecordingBuilder::with_destination`].
+    #[must_use]
+    pub fn with_destination(mut self, destination: Destination) -> Self {
+        self.builder = self.builder.with_destination(destination);
+        self
+    }
+
     /// See [`RecordingBuilder::without_package_identity`].
     #[must_use]
     pub fn without_package_identity(mut self) -> Self {

@@ -130,7 +130,7 @@ fn assert_logs(
         .flat_map(|file| file.spans.iter().flat_map(|spans| &spans.sections))
         .flat_map(|section| &section.events)
         .filter_map(|event| match &event.event {
-            Some(Event::FunctionAnnouncement(entry)) => Some(entry.id),
+            Some(Event::FunctionCompletion(done)) => Some(done.id),
             _ => None,
         })
         .collect();

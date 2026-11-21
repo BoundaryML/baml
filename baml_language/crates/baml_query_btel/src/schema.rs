@@ -9,13 +9,16 @@
 //!   i64; otherwise NULL, with an issue row or overflow meaning explicit.
 //!   Reduced aggregate totals also keep an exact decimal copy.
 //! - `rec` is a surrogate key local to this database file.
-//! - A reference to a thread, call path, function, clock epoch or network
-//!   span whose definition is not indexed yet gets a placeholder row
-//!   (`defined = 0`, or `function_def.state = 0`). Placeholders keep unresolved identities
+//! - A reference to a thread, call path, function or clock epoch whose
+//!   definition is not indexed yet gets a placeholder row (`defined = 0`, or
+//!   `function_def.state = 0`). Placeholders keep unresolved identities
 //!   visible; they never make a thread a root or a path a top-level path.
+//! - Every span is whole in its end record (format minor 16): a call, thread
+//!   or network row takes its fields from its completion, and a local
+//!   recording's slim start record makes a row for a span still running.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 23;
+pub const SCHEMA_VERSION: i64 = 24;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -194,12 +197,14 @@ CREATE TABLE thread (
   defined INTEGER NOT NULL,
   parent_id BLOB,
   spawn_call_path_id INTEGER,
-  -- When it was created: for a spawned future, when it was scheduled.
+  -- When it was created: for a spawned future, when it was scheduled. The
+  -- start fields come from its definition, or its completion, which repeats
+  -- them.
   started_ticks INTEGER,
   epoch_id BLOB,
   announced INTEGER NOT NULL DEFAULT 0,
-  -- When a spawned future's body began running (or it was cancelled before
-  -- it ran); NULL for a root thread and for recordings before format minor 6.
+  -- When a spawned future's body began running, from its completion; NULL
+  -- for a root thread, a future cancelled before it ran, and one running.
   ran_ticks INTEGER,
   completed_ticks INTEGER,
   outcome INTEGER,
@@ -213,8 +218,8 @@ CREATE TABLE thread (
   -- The thread's first top-level synchronous path: the function a root
   -- future ran, which names it when nothing else does.
   entry_call_path_id INTEGER,
-  -- The model usage its first completion carried, and the total under it,
-  -- as on `call`.
+  -- The model usage and total usage its first completion carried, as on
+  -- `call`.
   usage TEXT,
   total_usage TEXT,
   -- The baml.errors.Context of the error it ended with, from its first
@@ -287,7 +292,8 @@ CREATE TABLE sysop (
   PRIMARY KEY (rec, call_path_id)
 ) STRICT, WITHOUT ROWID;
 
--- Retained calls, merged from announcements and completions by identity.
+-- Retained calls: a completion, or a local recording's slim start record
+-- for a call that has not completed (yet), merged by identity.
 CREATE TABLE call (
   rec INTEGER NOT NULL,
   call_id BLOB NOT NULL,
@@ -297,8 +303,9 @@ CREATE TABLE call (
   reentry INTEGER,
   announced_sequence INTEGER,
   entered_ticks INTEGER,
+  -- The captured inputs and a generic call's type arguments (map<string,
+  -- Type>), from the completion.
   inputs_cas BLOB,
-  -- A generic call's type arguments, map<string, Type> (format minor 8).
   type_args_cas BLOB,
   completed_sequence INTEGER,
   late INTEGER,
@@ -308,13 +315,13 @@ CREATE TABLE call (
   outcome INTEGER,
   -- 1 when a panic ended it (outcome is errored).
   panicked INTEGER,
-  needs_announcement INTEGER,
   value_cas BLOB,
   -- The model usage its first completion carried (format minor 13): a JSON
   -- list, one object per provider and model, sorted; NULL without usage.
   usage TEXT,
-  -- The usage charged to it and every node under it ingested so far, in the
-  -- same shape; NULL when none was. Maintained incrementally.
+  -- Its usage and the totals of the spans under it that completed before
+  -- it, as its first completion carried them, in the same shape; NULL when
+  -- none was.
   total_usage TEXT,
   conflict INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (rec, call_id)
@@ -326,19 +333,14 @@ CREATE INDEX call_totaled ON call (rec) WHERE total_usage IS NOT NULL;
 CREATE INDEX call_by_parent ON call (rec, parent_id);
 -- Conflicts not yet reported as issues; normally empty.
 CREATE INDEX call_unreported_conflict ON call (rec) WHERE conflict = 1;
--- Completions still waiting for their input announcement; normally empty.
-CREATE INDEX call_pending ON call (rec)
-  WHERE needs_announcement = 1 AND announced_sequence IS NULL;
 
--- HTTP requests the runtime traced, merged from announcements, events and
--- completions by span ID. Events and completions can arrive before the
--- announcement, and in another thread's section; until it arrives the row
--- is a placeholder (defined = 0).
+-- HTTP requests the runtime traced: a completion, which carries the whole
+-- span, or a local recording's slim start record for a request not
+-- completed (yet), merged by span ID.
 CREATE TABLE network_span (
   rec INTEGER NOT NULL,
   span_id BLOB NOT NULL,
-  defined INTEGER NOT NULL,
-  -- The announcing section's thread: its epoch times every tick of the span.
+  -- The thread that made the request: its epoch times every tick of the span.
   thread_id BLOB,
   parent_id BLOB,
   -- The frame that made the request; NULL outside any.
@@ -346,6 +348,7 @@ CREATE TABLE network_span (
   method TEXT,
   -- Sanitized when recorded: query values and credentials hashed.
   url TEXT,
+  -- {request: {method, url, headers, body}}, from the completion.
   request_cas BLOB,
   started_ticks INTEGER,
   completed_ticks INTEGER,
@@ -353,20 +356,19 @@ CREATE TABLE network_span (
   -- 1 when a panic ended it (outcome is errored).
   panicked INTEGER NOT NULL DEFAULT 0,
   error_cas BLOB,
-  -- Two announcements or two completions disagreed; the first is kept.
+  -- Two starts or two completions disagreed; the first is kept.
   conflict INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (rec, span_id)
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX network_span_by_thread ON network_span (rec, thread_id);
 CREATE INDEX network_span_by_parent ON network_span (rec, parent_id);
 
--- A network span's events: connection, data, end, await, close, drop, or
--- another protocol's names.
+-- A network span's events, from its first completion: connection, data,
+-- end, await, close, drop, or another protocol's names.
 CREATE TABLE network_event (
   rec INTEGER NOT NULL,
   span_id BLOB NOT NULL,
-  -- Recording order: the file's sequence << 32, plus the event's position
-  -- among the file's network events.
+  -- The event's position in its completion: the order they happened in.
   seq INTEGER NOT NULL,
   name TEXT NOT NULL,
   at_ticks INTEGER,
@@ -432,17 +434,6 @@ CREATE TABLE issue (
   detail TEXT NOT NULL
 ) STRICT;
 CREATE INDEX issue_by_rec ON issue (rec);
-
--- Usage on its way into `total_usage` that stopped at a node not ingested yet
--- (waiting 0), or above a thread whose parent is not known yet (waiting 1).
--- Resumes when a later ingest brings it; normally a few rows at most.
-CREATE TABLE usage_pending (
-  rec INTEGER NOT NULL,
-  node BLOB NOT NULL,
-  waiting INTEGER NOT NULL,
-  usage TEXT NOT NULL,
-  PRIMARY KEY (rec, node, waiting)
-) STRICT, WITHOUT ROWID;
 ";
 
 /// Every fact table keyed by `rec`, for per-recording rebuilds.
@@ -463,7 +454,6 @@ pub const FACT_TABLES: &[&str] = &[
     "network_event",
     "profile_part",
     "issue",
-    "usage_pending",
 ];
 
 pub const ALL_TABLES: &[&str] = &[
@@ -488,5 +478,4 @@ pub const ALL_TABLES: &[&str] = &[
     "profile_node",
     "profile_pending",
     "issue",
-    "usage_pending",
 ];

@@ -258,6 +258,7 @@ impl CloudPublisher {
             // BCS has not adopted recording minor 14: cloud files leave the
             // package identity fields out and stay readable as minor 13.
             recording: RecordingBuilder::new(id, recording)?
+                .with_destination(btel_recorder::Destination::Upload)
                 .with_metadata_replay()
                 .without_package_identity(),
             recording_target: recording.target_bytes.get(),
@@ -699,8 +700,21 @@ impl CloudPublisher {
                 || self.recording.encoded_size_hint() >= self.recording_target)
         {
             let sealed = self.recording.flush_recording();
-            self.stage(sealed);
+            self.carry_alone(sealed);
             self.carry(Carry::Pressure);
+        }
+    }
+
+    /// Stage `sealed`, or when nothing was pending to seal, a carrier for the
+    /// queued blobs. A recording for an upload writes no start record (format
+    /// minor 16), so the captures a call starts with can wait with nothing
+    /// else to seal; they must not wait for its end.
+    fn carry_alone(&mut self, sealed: Result<Option<SealedFile>, RecordingError>) {
+        let empty = matches!(sealed, Ok(None));
+        self.stage(sealed);
+        if empty && !self.queue.is_empty() {
+            let carrier = self.recording.flush_carrier();
+            self.stage(carrier);
         }
     }
 
@@ -718,8 +732,13 @@ impl CloudPublisher {
         if self.failure.is_none() {
             match seal {
                 Seal::IfDue => {
+                    let due = self.recording.deadline().is_some_and(|due| now >= due);
                     let sealed = self.recording.flush_if_due(now);
-                    self.stage(sealed);
+                    if due {
+                        self.carry_alone(sealed);
+                    } else {
+                        self.stage(sealed);
+                    }
                     self.carry(Carry::Pressure);
                 }
                 Seal::Now => {
@@ -1021,6 +1040,7 @@ mod tests {
                 &mut publisher,
                 SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
                     node: owned,
+                    total: Vec::new(),
                     entries: vec![btel_records::ModelUsage {
                         provider: "openai".into(),
                         model: Some("gpt-6-sol".into()),
@@ -1057,40 +1077,44 @@ mod tests {
                 .flat_map(|section| &section.events)
                 .filter_map(|event| event.event.clone())
                 .collect();
-            // The owned span is announced under its thread, what it holds hangs under it, and
-            // it closes without an outcome, carrying the usage charged to it.
-            assert!(events.iter().any(|event| matches!(
-                event,
-                Event::FunctionAnnouncement(entry)
-                    if entry.id == owned.get() && entry.parent_id == thread.get()
-            )));
-            assert!(events.iter().any(|event| matches!(
-                event,
-                Event::FunctionAnnouncement(entry)
-                    if entry.id == child.get() && entry.parent_id == owned.get()
-            )));
+            // A recording for an upload writes no start record: what the owned span holds
+            // never completed and is not in it. The owned span closes without an outcome,
+            // under its thread, carrying the usage charged to it.
+            assert!(
+                !events
+                    .iter()
+                    .any(|event| matches!(event, Event::FunctionAnnouncement(_))),
+                "{child:?}"
+            );
             let completion = events.iter().find_map(|event| match event {
                 Event::FunctionCompletion(done) if done.id == owned.get() => Some(done),
                 _ => None,
             });
             let completion = completion.expect("the owned span's completion is delivered");
+            assert_eq!(completion.parent_id, thread.get());
             assert_eq!(completion.completion_flags, 16);
             assert_eq!(completion.usage.len(), 1);
             assert_eq!(completion.usage[0].input_tokens, Some(100));
         }
     }
 
+    /// A capture, in a record a recording for an upload writes: a log's data.
+    /// (A call's start record carries its inputs in memory, and is not
+    /// written for an upload.)
     fn offer(publisher: &mut CloudPublisher, snapshot: Snapshot) {
         let thread = allocate_telemetry_id();
         publisher.span(
             thread,
-            &mut SpanRecord::FunctionSpanAnnouncement {
-                id: allocate_telemetry_id(),
+            &mut SpanRecord::Log {
                 parent_id: thread,
-                call_path: CallPathId::ROOT,
-                entered_at: ClockInstant::from_ticks(1),
-                captured_inputs: Some(snapshot),
-                captured_type_args: None,
+                function: btel_types::FunctionIdAllocator::default()
+                    .allocate()
+                    .unwrap(),
+                pc: 0,
+                at: ClockInstant::from_ticks(1),
+                level: btel_records::LogLevel::Info,
+                event_name: None,
+                captured_data: Some(snapshot),
             },
         );
     }

@@ -129,9 +129,9 @@ async fn trace_capture_reaches_cas_with_exact_values() {
             assert_eq!(done.entered_at_ticks, entry.entered_at_ticks);
             assert_eq!(done.node >> 1, u64::from(entry.call_path_id));
             let flags = CompletionFlags::from_wire(done.completion_flags, false).unwrap();
-            assert!(flags.requires_announcement());
+            assert!(!flags.requires_announcement());
             assert_eq!(
-                read_string_capture(root.path(), entry.inputs_cas_id.unwrap(), true),
+                read_string_capture(root.path(), done.inputs_cas_id.unwrap(), true),
                 input
             );
             let outcome = done.completion_flags & 3;
@@ -348,14 +348,15 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
                         assert!(threads.insert(section.thread_id, done).is_none());
                     }
                     proto::span_event::Event::FunctionAnnouncement(entry) => {
-                        assert!(entry.inputs_cas_id.is_some());
+                        assert!(entry.inputs_cas_id.is_none());
                         announcements += 1;
                     }
                     proto::span_event::Event::FunctionCompletion(done) => {
                         let flags =
                             CompletionFlags::from_wire(done.completion_flags, false).unwrap();
                         assert!(done.value_cas_id.is_some());
-                        assert!(flags.requires_announcement());
+                        assert!(done.inputs_cas_id.is_some());
+                        assert!(!flags.requires_announcement());
                         *completions.entry(done.node).or_default() += 1;
                     }
                     _ => {}

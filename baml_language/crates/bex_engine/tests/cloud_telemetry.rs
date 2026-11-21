@@ -462,9 +462,10 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         let header = file.header.unwrap();
         assert_eq!(header.recording_id, recording_id.as_bytes());
         assert!(header.source_cas_id.is_none(), "cloud sources stay local");
-        // Cloud files carry nothing recording minor 14 added.
+        // Cloud files carry nothing recording minor 14 added, and every span
+        // whole in its end record.
         assert!(header.program_id.is_none() && header.build.is_none());
-        assert!(header.format_minor < btel_core::recording::minor::PACKAGE_IDENTITY);
+        assert_eq!(header.format_minor, btel_core::recording::minor::WHOLE_SPAN);
         // Normal shutdown settles every run: the last uploaded file ends it.
         assert_eq!(file.end.is_some(), index + 1 == prepares.len());
         for definition in file.definitions.unwrap_or_default().functions {
@@ -481,12 +482,10 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         for section in file.spans.unwrap().sections {
             for event in section.events {
                 match event.event.unwrap() {
-                    proto::span_event::Event::FunctionAnnouncement(entry) => {
-                        announcements += 1;
-                        references.insert(snapshot_hex(entry.inputs_cas_id.unwrap()));
-                    }
+                    proto::span_event::Event::FunctionAnnouncement(_) => announcements += 1,
                     proto::span_event::Event::FunctionCompletion(done) => {
                         completions += 1;
+                        references.insert(snapshot_hex(done.inputs_cas_id.unwrap()));
                         references.insert(snapshot_hex(done.value_cas_id.unwrap()));
                     }
                     proto::span_event::Event::ThreadCompletion(done) => {
@@ -534,7 +533,8 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         named_functions,
         BTreeSet::from(["user.leaf".to_owned(), "user.main".to_owned()])
     );
-    assert_eq!((announcements, completions), (2, 2));
+    // A recording for an upload writes no start record.
+    assert_eq!((announcements, completions), (0, 2));
     assert!(threads >= 2);
     assert!(uploaded > 0 && skipped > 0);
     assert!(

@@ -389,7 +389,7 @@ impl BlobSource for QueryContext {
     }
 }
 
-/// Unavailable code of a capture whose announcement is not indexed yet.
+/// Unavailable code of a capture whose span has not completed yet.
 const PENDING: &str = "capture_pending";
 
 /// Structured ordering and opaque-value equality are unsupported.

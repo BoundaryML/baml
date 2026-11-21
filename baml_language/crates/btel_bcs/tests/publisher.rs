@@ -42,15 +42,18 @@ fn capture_at(
         SnapshotValue::Int(value),
         &mut btel_snapshot::Shaper::default(),
     );
+    // A completed call's value: a recording for an upload writes no start
+    // record, so the inputs a start captures ride its completion.
     publisher.span(
         thread,
-        &mut SpanRecord::<Snapshot, Snapshot>::FunctionSpanAnnouncement {
+        &mut SpanRecord::<Snapshot, Snapshot>::FunctionSpanCompletionOk {
             id: allocate_telemetry_id(),
             parent_id: thread,
             call_path,
             entered_at: ClockInstant::from_ticks(1),
-            captured_inputs: Some(snapshot),
-            captured_type_args: None,
+            exited_at: ClockInstant::from_ticks(2),
+            await_time: btel_types::AwaitDuration::ZERO,
+            captured_value: Some(snapshot),
         },
     );
 }

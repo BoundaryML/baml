@@ -51,12 +51,12 @@ fn sdk_completion_is_emitted_only_in_the_terminal_file() {
     assert!(flushed.end.is_none());
     assert_eq!(
         flushed.header.unwrap().format_minor,
-        btel_core::recording::minor::PROCESS_CONTEXT
+        btel_core::recording::minor::WHOLE_SPAN
     );
     let ended = decode(&builder.end_recording().unwrap().unwrap());
     assert_eq!(
         ended.header.unwrap().format_minor,
-        btel_core::recording::minor::UNKNOWN_PROCESS_OUTCOME
+        btel_core::recording::minor::WHOLE_SPAN
     );
     let completion = ended.end.unwrap().process_end.unwrap();
     assert_eq!(completion.status, proto::ProcessStatus::Unknown as i32);
@@ -188,7 +188,7 @@ fn encoding_reservation_rejects_addition_overflow() {
     builder.admit_spans().unwrap();
     builder.buffer.spans.event(
         allocate_telemetry_id(),
-        proto::span_event::Event::FunctionCompletion(proto::FunctionCompletion::default()),
+        &proto::span_event::Event::FunctionCompletion(proto::FunctionCompletion::default()),
     );
     assert_eq!(
         builder.reserve_encoding(usize::MAX),
@@ -538,9 +538,11 @@ fn thread_lifecycle_and_clock_observations_are_forwarded_without_deduplication()
     );
     p.flush_recording().unwrap();
     let file = decode(&files.borrow()[0]);
+    // The thread is defined once, at its start; its completion carries its
+    // start fields itself.
     let definitions = file.definitions.unwrap();
-    assert_eq!(definitions.threads.len(), 2);
-    assert_eq!(definitions.clock_epochs.len(), 2);
+    assert_eq!(definitions.threads.len(), 1);
+    assert_eq!(definitions.clock_epochs.len(), 1);
     let states = file.clock_states.unwrap().states;
     assert_eq!(states.len(), 2);
     assert_eq!(states[0].status, proto::TimingStatus::Valid as i32);
@@ -551,10 +553,19 @@ fn thread_lifecycle_and_clock_observations_are_forwarded_without_deduplication()
         events[0].event,
         Some(proto::span_event::Event::ThreadAnnouncement(_))
     ));
-    assert!(matches!(
-        events[1].event,
-        Some(proto::span_event::Event::ThreadCompletion(_))
-    ));
+    let Some(proto::span_event::Event::ThreadCompletion(done)) = &events[1].event else {
+        panic!("a thread completion");
+    };
+    assert_eq!(done.started_at_ticks, 1);
+    assert_eq!(done.clock_epoch_id, epoch.metadata().epoch.get());
+    assert_eq!(done.parent_id, None);
+    assert_eq!(
+        done.lineage,
+        Some(proto::Lineage {
+            depth: 0,
+            truncated_ancestor_span_ids: Vec::new(),
+        })
+    );
     epoch.finish_thread();
 }
 
@@ -1010,8 +1021,9 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
     let file = decode(&files.borrow()[0]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_core::recording::minor::TYPE_ARGS
+        btel_core::recording::minor::WHOLE_SPAN
     );
+    // A local recording's start record is slim: the completion carries both.
     let event = file.spans.unwrap().sections.remove(0).events.remove(0);
     assert_eq!(
         event.event,
@@ -1021,161 +1033,14 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
             parent_id: thread.get(),
             call_path_id: path.get(),
             entered_at_ticks: 1,
-            inputs_cas_id: Some(inputs_id),
-            type_args_cas_id: Some(type_args_id),
+            inputs_cas_id: None,
+            type_args_cas_id: None,
         }))
     );
-
-    // A call without type arguments keeps its file at the base minor.
     p.span(
         thread,
-        &mut SpanRecord::FunctionSpanAnnouncement {
-            id: allocate_telemetry_id(),
-            parent_id: thread,
-            call_path: path,
-            entered_at: ClockInstant::from_ticks(2),
-            captured_inputs: None,
-            captured_type_args: None,
-        },
-    );
-    p.flush_recording().unwrap();
-    let file = decode(&files.borrow()[1]);
-    assert_eq!(
-        file.header.unwrap().format_minor,
-        btel_core::recording::minor::BASE
-    );
-    let Some(Event::FunctionAnnouncement(entry)) = file
-        .spans
-        .unwrap()
-        .sections
-        .remove(0)
-        .events
-        .remove(0)
-        .event
-    else {
-        panic!("announcement");
-    };
-    assert_eq!(entry.type_args_cas_id, None);
-}
-
-#[test]
-fn network_spans_round_trip_at_minor_seven() {
-    use btel_records::{
-        NetworkAnnouncement, NetworkCompletion, NetworkEventName, NetworkEventRecord,
-    };
-    use proto::span_event::Event;
-
-    let files = RefCell::new(Vec::new());
-    let (thread, _, path) = ids();
-    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
-        files.borrow_mut().push(f);
-    })
-    .unwrap();
-    let span = allocate_telemetry_id();
-    // Longer than a fixed event: the strings reserve their own bytes.
-    let url = format!(
-        "https://example.com/{}",
-        "a".repeat(4 * btel_core::recording::frame::MAX_EVENT_BYTES)
-    );
-    let snapshots = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
-    let capture = |value| {
-        let snapshot = snapshots.try_acquire().unwrap().finish(
-            btel_snapshot::SnapshotValue::Int(value),
-            &mut btel_snapshot::Shaper::default(),
-        );
-        let id = crate::cas_id(&snapshot);
-        (snapshot, id)
-    };
-    let (request, request_id) = capture(1);
-    let (payload, payload_id) = capture(2);
-    let (error, error_id) = capture(3);
-    p.span(
-        thread,
-        &mut SpanRecord::NetworkSpanAnnouncement(Box::new(NetworkAnnouncement {
-            id: span,
-            parent_id: thread,
-            call_path: path,
-            started_at: ClockInstant::from_ticks(1),
-            method: "POST".into(),
-            url: url.as_str().into(),
-            request: Some(request),
-        })),
-    );
-    for (name, at, payload) in [
-        (NetworkEventName::Connection, 2, Some(payload)),
-        (NetworkEventName::Data, 3, None),
-        (NetworkEventName::Other("message_in".into()), 4, None),
-    ] {
-        p.span(
-            thread,
-            &mut SpanRecord::NetworkEvent(Box::new(NetworkEventRecord {
-                span,
-                name,
-                at: ClockInstant::from_ticks(at),
-                payload,
-            })),
-        );
-    }
-    p.span(
-        thread,
-        &mut SpanRecord::NetworkSpanCompletion(Box::new(NetworkCompletion {
-            span,
-            completed_at: ClockInstant::from_ticks(5),
-            outcome: InvocationOutcome::Panicked,
-            error: Some(error),
-        })),
-    );
-    p.flush_recording().unwrap();
-    let file = decode(&files.borrow()[0]);
-    assert_eq!(
-        file.header.unwrap().format_minor,
-        btel_core::recording::minor::NETWORK
-    );
-    let section = file.spans.unwrap().sections.remove(0);
-    assert_eq!(section.thread_id, thread.get());
-    let events = section
-        .events
-        .into_iter()
-        .map(|event| event.event.unwrap())
-        .collect::<Vec<_>>();
-    let event = |name: &str, at_ticks, payload_cas_id| {
-        Event::NetworkEvent(proto::NetworkEvent {
-            span_id: span.get(),
-            name: name.to_owned(),
-            at_ticks,
-            payload_cas_id,
-        })
-    };
-    assert_eq!(
-        events,
-        [
-            Event::NetworkAnnouncement(proto::NetworkAnnouncement {
-                id: span.get(),
-                parent_id: thread.get(),
-                call_path_id: path.get(),
-                started_at_ticks: 1,
-                method: "POST".to_owned(),
-                url,
-                request_cas_id: Some(request_id),
-            }),
-            event("connection", 2, Some(payload_id)),
-            event("data", 3, None),
-            event("message_in", 4, None),
-            Event::NetworkCompletion(proto::NetworkCompletion {
-                span_id: span.get(),
-                completed_at_ticks: 5,
-                outcome: proto::InvocationOutcome::Errored as i32,
-                panicked: true,
-                error_cas_id: Some(error_id),
-            }),
-        ]
-    );
-
-    // The minor belongs to the file that uses it.
-    p.span(
-        thread,
-        &mut SpanRecord::FunctionSpanCompletionOk {
-            id: allocate_telemetry_id(),
+        &mut SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+            id,
             parent_id: thread,
             call_path: path,
             entered_at: ClockInstant::from_ticks(1),
@@ -1185,10 +1050,173 @@ fn network_spans_round_trip_at_minor_seven() {
         },
     );
     p.flush_recording().unwrap();
-    assert_eq!(
-        decode(&files.borrow()[1]).header.unwrap().format_minor,
-        btel_core::recording::minor::BASE
+    let file = decode(&files.borrow()[1]);
+    let Some(Event::FunctionCompletion(done)) = file
+        .spans
+        .unwrap()
+        .sections
+        .remove(0)
+        .events
+        .remove(0)
+        .event
+    else {
+        panic!("completion");
+    };
+    assert_eq!(done.inputs_cas_id, Some(inputs_id));
+    assert_eq!(done.type_args_cas_id, Some(type_args_id));
+    // It needs nothing of the announcement: no flag says so.
+    assert!(
+        !btel_core::recording::CompletionFlags::from_wire(done.completion_flags, false)
+            .unwrap()
+            .requires_announcement()
     );
+}
+
+#[test]
+fn a_request_rides_its_completion_whole_with_its_events() {
+    use btel_records::{
+        NetworkAnnouncement, NetworkCompletion, NetworkEventName, NetworkEventRecord,
+    };
+    use proto::span_event::Event;
+
+    for destination in [crate::Destination::Local, crate::Destination::Upload] {
+        let files = RefCell::new(Vec::new());
+        let (thread, _, path) = ids();
+        let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+            files.borrow_mut().push(f);
+        })
+        .unwrap()
+        .with_destination(destination);
+        let span = allocate_telemetry_id();
+        // Longer than a fixed event: the strings reserve their own bytes.
+        let url = format!(
+            "https://example.com/{}",
+            "a".repeat(4 * btel_core::recording::frame::MAX_EVENT_BYTES)
+        );
+        let snapshots = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
+        let capture = |value| {
+            let snapshot = snapshots.try_acquire().unwrap().finish(
+                btel_snapshot::SnapshotValue::Int(value),
+                &mut btel_snapshot::Shaper::default(),
+            );
+            let id = crate::cas_id(&snapshot);
+            (snapshot, id)
+        };
+        let (request, request_id) = capture(1);
+        let (payload, payload_id) = capture(2);
+        let (error, error_id) = capture(3);
+        let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+        p.span(thread, &mut thread_record(thread, &clock, false));
+        p.span(
+            thread,
+            &mut SpanRecord::NetworkSpanAnnouncement(Box::new(NetworkAnnouncement {
+                id: span,
+                parent_id: thread,
+                call_path: path,
+                started_at: ClockInstant::from_ticks(1),
+                method: "POST".into(),
+                url: url.as_str().into(),
+                request: Some(request),
+            })),
+        );
+        for (name, at, payload) in [
+            (NetworkEventName::Connection, 2, Some(payload)),
+            (NetworkEventName::Data, 3, None),
+            (NetworkEventName::Other("message_in".into()), 4, None),
+        ] {
+            p.span(
+                thread,
+                &mut SpanRecord::NetworkEvent(Box::new(NetworkEventRecord {
+                    span,
+                    name,
+                    at: ClockInstant::from_ticks(at),
+                    payload,
+                })),
+            );
+        }
+        // The completion seals in a later file than the start: it carries all.
+        p.flush_recording().unwrap();
+        p.span(
+            thread,
+            &mut SpanRecord::NetworkSpanCompletion(Box::new(NetworkCompletion {
+                span,
+                completed_at: ClockInstant::from_ticks(5),
+                outcome: InvocationOutcome::Panicked,
+                error: Some(error),
+            })),
+        );
+        p.flush_recording().unwrap();
+        let files = files.borrow();
+        let first = decode(&files[0]);
+        let started = first
+            .spans
+            .iter()
+            .flat_map(|spans| &spans.sections)
+            .flat_map(|section| &section.events)
+            .filter_map(|event| event.event.clone())
+            .filter(|event| !matches!(event, Event::ThreadAnnouncement(_)))
+            .collect::<Vec<_>>();
+        match destination {
+            // A slim start, without the request: the completion carries it.
+            crate::Destination::Local => assert_eq!(
+                started,
+                [Event::NetworkAnnouncement(proto::NetworkAnnouncement {
+                    id: span.get(),
+                    parent_id: thread.get(),
+                    call_path_id: path.get(),
+                    started_at_ticks: 1,
+                    method: "POST".to_owned(),
+                    url: url.clone(),
+                    request_cas_id: None,
+                })]
+            ),
+            crate::Destination::Upload => assert_eq!(started, []),
+        }
+        let second = decode(&files[1]);
+        assert_eq!(
+            second.header.unwrap().format_minor,
+            btel_core::recording::minor::WHOLE_SPAN
+        );
+        let section = second.spans.unwrap().sections.remove(0);
+        let event = |name: &str, at_ticks, payload_cas_id| proto::NetworkEvent {
+            span_id: 0,
+            name: name.to_owned(),
+            at_ticks,
+            payload_cas_id,
+        };
+        assert_eq!(
+            section
+                .events
+                .into_iter()
+                .map(|event| event.event.unwrap())
+                .collect::<Vec<_>>(),
+            [Event::NetworkCompletion(proto::NetworkCompletion {
+                span_id: span.get(),
+                completed_at_ticks: 5,
+                outcome: proto::InvocationOutcome::Errored as i32,
+                panicked: true,
+                error_cas_id: Some(error_id),
+                thread_id: thread.get(),
+                parent_id: thread.get(),
+                call_path_id: path.get(),
+                started_at_ticks: 1,
+                method: "POST".to_owned(),
+                url: url.clone(),
+                request_cas_id: Some(request_id),
+                events: vec![
+                    event("connection", 2, Some(payload_id)),
+                    event("data", 3, None),
+                    event("message_in", 4, None),
+                ],
+                lineage: Some(proto::Lineage {
+                    depth: 1,
+                    truncated_ancestor_span_ids: vec![thread.get()],
+                }),
+            })]
+        );
+        // The thread was defined in the first file, which the second needs.
+        assert_eq!(second.definitions_from, 1);
+    }
 }
 
 #[test]
@@ -1216,7 +1244,8 @@ fn span_usage_rides_its_completion_at_minor_eleven() {
         thread,
         &mut SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
             node: span,
-            entries: vec![entry],
+            entries: vec![entry.clone()],
+            total: vec![entry],
         })),
     );
     // Usage alone seals nothing: it waits for its node's completion, even
@@ -1239,7 +1268,7 @@ fn span_usage_rides_its_completion_at_minor_eleven() {
     let file = decode(&files.borrow()[0]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_core::recording::minor::MODEL_USAGE
+        btel_core::recording::minor::WHOLE_SPAN
     );
     let event = file
         .spans
@@ -1338,8 +1367,10 @@ fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() 
         else {
             panic!()
         };
-        assert_eq!(entry.inputs_cas_id, Some(expected));
+        // The start record is slim; the inputs ride the completion.
+        assert_eq!(entry.inputs_cas_id, None);
     }
+    let _ = expected;
 }
 
 #[test]
@@ -1790,7 +1821,7 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     let file = decode(&files.borrow()[0]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_core::recording::minor::OWNED_SPAN
+        btel_core::recording::minor::WHOLE_SPAN
     );
     let Some(Event::FunctionAnnouncement(entry)) = file
         .spans
@@ -1804,7 +1835,8 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
         panic!("owned entry must use a function announcement");
     };
     assert!(!entry.manual);
-    assert!(entry.type_args_cas_id.is_some());
+    // The start record is slim: the completion carries the type arguments.
+    assert!(entry.type_args_cas_id.is_none());
     p.span(
         thread,
         &mut SpanRecord::ManualSpanCompletion(Box::new(btel_records::ManualSpanCompletion {
@@ -1823,7 +1855,7 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     let file = decode(&files.borrow()[1]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_core::recording::minor::OWNED_SPAN
+        btel_core::recording::minor::WHOLE_SPAN
     );
     let Some(Event::FunctionCompletion(done)) = file
         .spans
@@ -1836,7 +1868,8 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     else {
         panic!("owned completion must use a function completion");
     };
-    assert_eq!(done.completion_flags, 16 | 8);
+    assert_eq!(done.completion_flags, 16);
+    assert!(done.type_args_cas_id.is_some());
     assert_eq!(done.self_await_ticks, 4);
     assert_eq!(done.exited_at_ticks, 9);
 }
@@ -1926,16 +1959,13 @@ fn package_identity_is_recorded_unless_the_destination_declines_it() {
     assert_eq!(header.program_id, Some(vec![4; 16]));
     assert_eq!(header.build.unwrap().origin, "run");
     assert_eq!(unit, Some(vec![7; 32]));
-    assert_eq!(
-        header.format_minor,
-        btel_core::recording::minor::PACKAGE_IDENTITY
-    );
+    assert_eq!(header.format_minor, btel_core::recording::minor::WHOLE_SPAN);
 
     let (header, unit) = record(false);
     assert_eq!(header.program_id, None);
     assert_eq!(header.build, None);
     assert_eq!(unit, None);
-    assert!(header.format_minor < btel_core::recording::minor::PACKAGE_IDENTITY);
+    assert_eq!(header.format_minor, btel_core::recording::minor::WHOLE_SPAN);
 }
 
 #[test]
@@ -2021,14 +2051,10 @@ fn a_log_carries_its_line_and_raises_the_file_minor_only_with_one() {
     assert_eq!(files.len(), cases.len());
     for (file, (function, pc, line)) in files.iter().zip(cases) {
         let file = decode(file);
-        // A file without a line stays readable at the minor logs came with.
+        // Every file is at least minor 16, which has log lines.
         assert_eq!(
             file.header.unwrap().format_minor,
-            if line.is_some() {
-                btel_core::recording::minor::LOG_LINE
-            } else {
-                btel_core::recording::minor::LOG
-            },
+            btel_core::recording::minor::WHOLE_SPAN,
             "pc {pc}"
         );
         let Some(Event::Log(log)) = file
@@ -2121,7 +2147,7 @@ fn a_thread_error_travels_on_its_threads_completion_and_raises_the_file_minor() 
             }
         })
         .collect();
-    let base = btel_core::recording::minor::BASE;
+    let base = btel_core::recording::minor::WHOLE_SPAN;
     assert_eq!(
         completions
             .iter()
@@ -2130,12 +2156,272 @@ fn a_thread_error_travels_on_its_threads_completion_and_raises_the_file_minor() 
         vec![
             (base, plain.get(), None, false),
             (
-                btel_core::recording::minor::THREAD_ERROR,
+                btel_core::recording::minor::WHOLE_SPAN,
                 failed.get(),
                 Some(error_id),
                 true
             ),
             (base, uncaptured.get(), None, false),
         ]
+    );
+}
+
+/// Every event of a file's span sections.
+fn events(file: &proto::RecordingFile) -> Vec<proto::span_event::Event> {
+    file.spans
+        .iter()
+        .flat_map(|spans| &spans.sections)
+        .flat_map(|section| &section.events)
+        .filter_map(|event| event.event.clone())
+        .collect()
+}
+
+#[test]
+fn a_call_is_whole_in_its_end_record_and_only_a_local_recording_writes_its_start() {
+    use proto::span_event::Event;
+
+    for destination in [crate::Destination::Local, crate::Destination::Upload] {
+        let files = RefCell::new(Vec::new());
+        let (thread, function, path) = ids();
+        let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+            files.borrow_mut().push(f);
+        })
+        .unwrap()
+        .with_destination(destination);
+        metadata(&mut p, thread, function, path);
+        let (outer, inner) = (allocate_telemetry_id(), allocate_telemetry_id());
+        for (id, parent) in [(outer, thread), (inner, outer)] {
+            p.span(
+                thread,
+                &mut SpanRecord::FunctionSpanAnnouncement {
+                    id,
+                    parent_id: parent,
+                    call_path: path,
+                    entered_at: ClockInstant::from_ticks(1),
+                    captured_inputs: Some(snapshot()),
+                    captured_type_args: None,
+                },
+            );
+        }
+        p.flush_recording().unwrap();
+        // The inner call's usage, then the outer's own and its total.
+        let usage = |calls| btel_records::ModelUsage {
+            provider: "openai".into(),
+            model: None,
+            calls,
+            input_tokens: None,
+            output_tokens: None,
+            cache_read_tokens: None,
+            cache_write_tokens: None,
+            reasoning_tokens: None,
+        };
+        for (id, parent, own, total) in [(inner, outer, 2, 2), (outer, thread, 1, 3)] {
+            p.span(
+                thread,
+                &mut SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
+                    node: id,
+                    entries: vec![usage(own)],
+                    total: vec![usage(total)],
+                })),
+            );
+            p.span(
+                thread,
+                &mut SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement {
+                    id,
+                    parent_id: parent,
+                    call_path: path,
+                    entered_at: ClockInstant::from_ticks(1),
+                    exited_at: ClockInstant::from_ticks(5),
+                    await_time: AwaitDuration::ZERO,
+                    captured_value: None,
+                },
+            );
+        }
+        p.flush_recording().unwrap();
+        let files = files.borrow();
+        let starts = events(&decode(&files[0]))
+            .into_iter()
+            .filter(|event| {
+                matches!(
+                    event,
+                    Event::FunctionAnnouncement(_) | Event::ThreadAnnouncement(_)
+                )
+            })
+            .count();
+        match destination {
+            crate::Destination::Local => assert_eq!(starts, 3),
+            crate::Destination::Upload => assert_eq!(starts, 0),
+        }
+        let second = decode(&files[1]);
+        // The thread, its path and its function are the first file's.
+        assert_eq!(second.definitions_from, 1);
+        let completions = events(&second)
+            .into_iter()
+            .map(|event| match event {
+                Event::FunctionCompletion(done) => done,
+                other => panic!("only completions: {other:?}"),
+            })
+            .collect::<Vec<_>>();
+        let [inner_done, outer_done] = &completions[..] else {
+            panic!("two completions");
+        };
+        assert!(inner_done.inputs_cas_id.is_some());
+        assert_eq!(
+            inner_done.lineage,
+            Some(proto::Lineage {
+                depth: 2,
+                truncated_ancestor_span_ids: vec![outer.get(), thread.get()],
+            })
+        );
+        assert_eq!(outer_done.lineage.as_ref().unwrap().depth, 1);
+        let calls = |entries: &[proto::ModelUsage]| entries.iter().map(|e| e.calls).sum::<u64>();
+        assert_eq!(
+            (calls(&outer_done.usage), calls(&outer_done.total_usage)),
+            (1, 3)
+        );
+        assert_eq!(
+            (calls(&inner_done.usage), calls(&inner_done.total_usage)),
+            (2, 2)
+        );
+    }
+}
+
+#[test]
+fn a_file_that_defines_what_its_spans_need_names_no_earlier_file() {
+    let files = RefCell::new(Vec::new());
+    let (thread, function, path) = ids();
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap()
+    .with_destination(crate::Destination::Upload);
+    metadata(&mut p, thread, function, path);
+    p.span(
+        thread,
+        &mut SpanRecord::LateFunctionSpanCompletionOk {
+            id: allocate_telemetry_id(),
+            parent_id: thread,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            exited_at: ClockInstant::from_ticks(2),
+            await_time: AwaitDuration::ZERO,
+            captured_value: None,
+        },
+    );
+    p.flush_recording().unwrap();
+    // Definitions alone: a later file with no span needs nothing either.
+    p.aggregate(delta(path));
+    p.flush_recording().unwrap();
+    let files = files.borrow();
+    assert_eq!(decode(&files[0]).definitions_from, 0);
+    assert_eq!(decode(&files[1]).definitions_from, 0);
+    // The late call takes its place under its parent without a start record.
+    let Some(proto::span_event::Event::LateFunctionCompletion(done)) =
+        events(&decode(&files[0])).pop()
+    else {
+        panic!("a late completion");
+    };
+    assert_eq!(done.lineage.unwrap().depth, 1);
+}
+
+#[test]
+fn a_futures_end_record_carries_its_start_its_run_and_its_place_under_its_spawner() {
+    use proto::span_event::Event;
+
+    let files = RefCell::new(Vec::new());
+    let (root, function, path) = ids();
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap()
+    .with_destination(crate::Destination::Upload);
+    metadata(&mut p, root, function, path);
+    let (spawner, future) = (allocate_telemetry_id(), allocate_telemetry_id());
+    p.span(
+        root,
+        &mut SpanRecord::FunctionSpanAnnouncement {
+            id: spawner,
+            parent_id: root,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: None,
+            captured_type_args: None,
+        },
+    );
+    p.span(
+        root,
+        &mut SpanRecord::ThreadSpawned {
+            child: future,
+            parent: spawner,
+        },
+    );
+    // The spawner completes before the future's own records come.
+    p.span(
+        root,
+        &mut SpanRecord::FunctionSpanCompletionOk {
+            id: spawner,
+            parent_id: root,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            exited_at: ClockInstant::from_ticks(2),
+            await_time: AwaitDuration::ZERO,
+            captured_value: None,
+        },
+    );
+    p.flush_recording().unwrap();
+    let clock = ClockRuntime::new(ClockMode::Monotonic).start_run();
+    p.span(
+        future,
+        &mut SpanRecord::ThreadSpanAnnouncement {
+            id: future,
+            parent_id: Some(spawner),
+            spawn_call_path: path,
+            started_at: ClockInstant::from_ticks(3),
+            clock: Arc::clone(&clock),
+            name: Some(Arc::new("worker".into())),
+        },
+    );
+    p.span(
+        future,
+        &mut SpanRecord::ThreadSpanRunning {
+            at: ClockInstant::from_ticks(4),
+        },
+    );
+    p.flush_recording().unwrap();
+    p.span(
+        future,
+        &mut SpanRecord::ThreadSpanCompletion {
+            id: future,
+            parent_id: Some(spawner),
+            spawn_call_path: path,
+            started_at: ClockInstant::from_ticks(3),
+            completed_at: ClockInstant::from_ticks(9),
+            outcome: InvocationOutcome::Ok,
+            clock: Arc::clone(&clock),
+            name: Some(Arc::new("worker".into())),
+        },
+    );
+    p.flush_recording().unwrap();
+    let files = files.borrow();
+    // No start record: the future's definition is all its earlier file holds.
+    assert_eq!(events(&decode(&files[1])), []);
+    let last = decode(&files[2]);
+    // Its own definition is file 2's; its spawn path's is file 1's.
+    assert_eq!(last.definitions_from, 1);
+    let [Event::ThreadCompletion(done)] = &events(&last)[..] else {
+        panic!("one thread completion");
+    };
+    assert_eq!(done.parent_id, Some(spawner.get()));
+    assert_eq!(done.spawn_call_path_id, path.get());
+    assert_eq!(done.started_at_ticks, 3);
+    assert_eq!(done.running_at_ticks, Some(4));
+    assert_eq!(done.clock_epoch_id, clock.metadata().epoch.get());
+    assert_eq!(done.name.as_deref(), Some("worker"));
+    assert_eq!(
+        done.lineage,
+        Some(proto::Lineage {
+            depth: 2,
+            truncated_ancestor_span_ids: vec![spawner.get(), root.get()],
+        })
     );
 }

@@ -161,7 +161,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
             0
         };
         file.header.as_ref().unwrap().format_minor
-            == btel_core::recording::minor::BASE.max(required)
+            == btel_core::recording::minor::WHOLE_SPAN.max(required)
     }));
 
     let cas = CasStore::new(root.path().join("cas"), CasLimits::default());

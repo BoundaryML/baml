@@ -1112,9 +1112,8 @@ dependencies = [
 
 [[package]]
 name = "bcs-sdk"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20c20e0d24ee1bd1d1e750458b50340f4501486a65df6cc7e2958f29725b41ac"
+version = "0.2.0"
+source = "git+ssh://git@github.com/BoundaryML/bcs.git?branch=antoniosarosi/end-spans-format#995c156aebb23653f3beee06d11eddaf101f02dc"
 dependencies = [
  "btel-core",
  "bytes",
@@ -1768,9 +1767,8 @@ dependencies = [
 
 [[package]]
 name = "btel-core"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d139ec292888d3ae5ec52d80640a72d75115667c5738524fd41edb38ec86a2e"
+version = "0.2.0"
+source = "git+ssh://git@github.com/BoundaryML/bcs.git?branch=antoniosarosi/end-spans-format#995c156aebb23653f3beee06d11eddaf101f02dc"
 dependencies = [
  "base64",
  "num-bigint",

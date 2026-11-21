@@ -39,12 +39,37 @@ impl EncodedSpans {
         }
     }
 
+    /// The context the current chunk selected for `thread`.
+    pub(crate) fn context_of(
+        &self,
+        thread: TelemetryId,
+    ) -> Option<crate::proto::thread_section::Context> {
+        self.selected_context
+            .filter(|(selected, _)| *selected == thread)
+            .and_then(|(_, context)| context)
+    }
+
+    /// `event` in a section of `thread` under `context`, whatever the
+    /// current chunk selected; the chunk's own selection stands after it.
+    pub(crate) fn event_in(
+        &mut self,
+        thread: TelemetryId,
+        context: Option<crate::proto::thread_section::Context>,
+        event: &Event,
+    ) {
+        let selected = self.selected_context.replace((thread, context));
+        self.event(thread, event);
+        self.selected_context = selected;
+    }
+
     pub(crate) fn begin_chunk(&mut self) {
         self.selected_context = None;
     }
 
+    /// Every file is at least minor 16: its spans are whole in their end
+    /// records, and a reader of any file of the recording relies on it.
     pub(crate) fn format_minor(&self) -> u32 {
-        minor::BASE.max(self.required_minor)
+        minor::WHOLE_SPAN.max(self.required_minor)
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -63,7 +88,7 @@ impl EncodedSpans {
     }
 
     #[inline]
-    pub(crate) fn event(&mut self, thread: TelemetryId, event: Event) {
+    pub(crate) fn event(&mut self, thread: TelemetryId, event: &Event) {
         if self
             .selected_context
             .is_some_and(|(selected, _)| selected != thread)
@@ -75,27 +100,19 @@ impl EncodedSpans {
             self.select(thread, context);
         }
         match event {
-            // Usage has strings, so its rare completions leave the fixed-size path.
-            Event::FunctionCompletion(m) if !m.usage.is_empty() => {
-                self.require(minor::MODEL_USAGE);
-                self.variable(field::span_event::FUNCTION_COMPLETION, &m);
+            // A completion that carries more than scalars (its lineage, its
+            // inputs, its usage) leaves the fixed-size path.
+            Event::FunctionCompletion(m) if !fixed(m) => {
+                self.variable(field::span_event::FUNCTION_COMPLETION, m);
             }
-            Event::LateFunctionCompletion(m) if !m.usage.is_empty() => {
-                self.require(minor::MODEL_USAGE);
-                self.variable(field::span_event::LATE_FUNCTION_COMPLETION, &m);
-            }
-            Event::ThreadCompletion(m) if !m.usage.is_empty() => {
-                self.require(minor::MODEL_USAGE);
-                if m.error_cas_id.is_some() {
-                    self.require(minor::THREAD_ERROR);
-                }
-                self.variable(field::span_event::THREAD_COMPLETION, &m);
+            Event::LateFunctionCompletion(m) if !fixed(m) => {
+                self.variable(field::span_event::LATE_FUNCTION_COMPLETION, m);
             }
             Event::FunctionCompletion(m) => {
-                self.completion(field::span_event::FUNCTION_COMPLETION, &m);
+                self.completion(field::span_event::FUNCTION_COMPLETION, m);
             }
             Event::LateFunctionCompletion(m) => {
-                self.completion(field::span_event::LATE_FUNCTION_COMPLETION, &m);
+                self.completion(field::span_event::LATE_FUNCTION_COMPLETION, m);
             }
             Event::Log(message) => {
                 self.require(if message.line.is_some() {
@@ -103,28 +120,25 @@ impl EncodedSpans {
                 } else {
                     minor::LOG
                 });
-                self.variable(field::span_event::LOG, &message);
+                self.variable(field::span_event::LOG, message);
             }
             Event::NetworkAnnouncement(message) => {
                 self.require(minor::NETWORK);
-                self.variable(field::span_event::NETWORK_ANNOUNCEMENT, &message);
+                self.variable(field::span_event::NETWORK_ANNOUNCEMENT, message);
             }
             Event::NetworkEvent(message) => {
                 self.require(minor::NETWORK);
-                self.variable(field::span_event::NETWORK_EVENT, &message);
+                self.variable(field::span_event::NETWORK_EVENT, message);
             }
             Event::ThreadAnnouncement(m) => {
-                frame::event(&mut self.bytes, field::span_event::THREAD_ANNOUNCEMENT, &m);
+                frame::event(&mut self.bytes, field::span_event::THREAD_ANNOUNCEMENT, m);
             }
             Event::ThreadCompletion(m) => {
-                if m.error_cas_id.is_some() {
-                    self.require(minor::THREAD_ERROR);
-                }
-                frame::event(&mut self.bytes, field::span_event::THREAD_COMPLETION, &m);
+                self.variable(field::span_event::THREAD_COMPLETION, m);
             }
             Event::ThreadRunning(m) => {
                 self.require(minor::THREAD_RUNNING);
-                frame::event(&mut self.bytes, field::span_event::THREAD_RUNNING, &m);
+                frame::event(&mut self.bytes, field::span_event::THREAD_RUNNING, m);
             }
             Event::FunctionAnnouncement(m) => {
                 if m.manual {
@@ -133,15 +147,10 @@ impl EncodedSpans {
                 if m.type_args_cas_id.is_some() {
                     self.require(minor::TYPE_ARGS);
                 }
-                frame::event(
-                    &mut self.bytes,
-                    field::span_event::FUNCTION_ANNOUNCEMENT,
-                    &m,
-                );
+                frame::event(&mut self.bytes, field::span_event::FUNCTION_ANNOUNCEMENT, m);
             }
             Event::NetworkCompletion(m) => {
-                self.require(minor::NETWORK);
-                frame::event(&mut self.bytes, field::span_event::NETWORK_COMPLETION, &m);
+                self.variable(field::span_event::NETWORK_COMPLETION, m);
             }
         }
     }
@@ -167,6 +176,9 @@ impl EncodedSpans {
         if btel_core::recording::CompletionFlags::manual_bit(flags) {
             self.require(minor::MANUAL_SPAN);
         }
+        // A variable-length event may have used the capacity reserved for
+        // this one; the region must be there whatever came before.
+        self.bytes.reserve(frame::MAX_COMPLETION_BYTES);
         // Indexing stays checked; only publishing initialized bytes is unsafe.
         let start = self.bytes.len();
         let region = &mut self.bytes.spare_capacity_mut()[..frame::MAX_COMPLETION_BYTES];
@@ -270,7 +282,7 @@ mod tests {
             encoded.reserve(frame::MAX_EVENT_BYTES);
             encoded.event(
                 btel_types::allocate_telemetry_id(),
-                Event::ThreadCompletion(proto::ThreadCompletion {
+                &Event::ThreadCompletion(proto::ThreadCompletion {
                     outcome: proto::InvocationOutcome::Errored as i32,
                     usage,
                     error_cas_id: Some(proto::CasId { low: 1, high: 2 }),
@@ -301,7 +313,7 @@ mod tests {
                 high: u64::MAX,
             }),
             panicked: true,
-            usage: Vec::new(),
+            ..proto::FunctionCompletion::default()
         };
         let events = vec![
             Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
@@ -314,6 +326,7 @@ mod tests {
                     low: u64::MAX,
                     high: u64::MAX,
                 }),
+                ..proto::ThreadCompletion::default()
             }),
             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
                 manual: false,
@@ -366,13 +379,14 @@ mod tests {
                     low: u64::MAX,
                     high: u64::MAX,
                 }),
+                ..proto::NetworkCompletion::default()
             }),
         ];
         let mut encoded = EncodedSpans::default();
         for event in &events {
             encoded.reserve(encoded.len() + frame::MAX_EVENT_BYTES);
             let capacity = encoded.capacity();
-            encoded.event(thread, event.clone());
+            encoded.event(thread, event);
             assert_eq!(
                 encoded.capacity(),
                 capacity,
@@ -459,7 +473,7 @@ mod equivalence_tests {
                     .encode_to_vec();
                     let mut writer = EncodedSpans::default();
                     writer.reserve(frame::MAX_EVENT_BYTES);
-                    writer.event(thread, event);
+                    writer.event(thread, &event);
                     assert_eq!(
                         &writer.bytes[writer.section_length + frame::LENGTH_BYTES..],
                         expected
@@ -468,4 +482,13 @@ mod equivalence_tests {
             }
         }
     }
+}
+
+/// A completion of scalars alone, which the fixed-size path writes.
+fn fixed(message: &crate::proto::FunctionCompletion) -> bool {
+    message.usage.is_empty()
+        && message.total_usage.is_empty()
+        && message.lineage.is_none()
+        && message.inputs_cas_id.is_none()
+        && message.type_args_cas_id.is_none()
 }

@@ -212,9 +212,10 @@ async fn retained_callback_context_and_ancestry_survive_parent_completion() {
         let (_, parent) = find("parent");
         let (thread, child) = find("child");
         assert_eq!(threads[thread], Some(parent.id));
-        assert!(parent.inputs_cas_id.is_some());
-        assert!(child.inputs_cas_id.is_none());
         let completion = |id| completions.iter().find(|done| done.id == id).unwrap();
+        // The completions carry the inputs; the start records are slim.
+        assert!(completion(parent.id).inputs_cas_id.is_some());
+        assert!(completion(child.id).inputs_cas_id.is_none());
         assert!(completion(parent.id).value_cas_id.is_some());
         assert!(completion(child.id).value_cas_id.is_none());
     }

@@ -120,16 +120,20 @@ impl Recording {
         let spans = completed
             .into_iter()
             .map(|(thread, done)| {
-                let (entry_thread, entry) = entries.remove(&done.id).expect("span announcement");
+                let (entry_thread, mut entry) =
+                    entries.remove(&done.id).expect("span announcement");
                 assert_ne!(done.id, 0);
                 assert_eq!(thread, entry_thread);
                 assert_eq!(entry.parent_id, done.parent_id);
                 assert_eq!(entry.entered_at_ticks, done.entered_at_ticks);
                 assert_eq!(u64::from(entry.call_path_id), done.node >> 1);
+                // A local start record is slim: the completion carries what the
+                // start captured, and needs nothing of it.
+                assert!(entry.inputs_cas_id.is_none() && entry.type_args_cas_id.is_none());
                 let flags = CompletionFlags::from_wire(done.completion_flags, false).unwrap();
-                if entry.inputs_cas_id.is_some() {
-                    assert!(flags.requires_announcement());
-                }
+                assert!(!flags.requires_announcement());
+                entry.inputs_cas_id = done.inputs_cas_id;
+                entry.type_args_cas_id = done.type_args_cas_id;
                 (thread, entry, done)
             })
             .collect();
