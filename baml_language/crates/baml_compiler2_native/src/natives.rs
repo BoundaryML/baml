@@ -22,6 +22,8 @@ pub(crate) enum Ty {
     Array(&'static Ty),
     /// A map from the builtin's first type parameter to its second.
     Map,
+    /// A map from `string` to values of this type.
+    MapOf(&'static Ty),
     /// A type or `null`.
     Optional(&'static Ty),
     /// The type a call names for the builtin's type parameter at this
@@ -106,6 +108,10 @@ impl Ty {
             Self::Bytes => NativeTy::Bytes,
             Self::Array(element) => NativeTy::Array(Box::new(element.native(db, types))),
             Self::Map => NativeTy::Map(Box::new(types[0].clone()), Box::new(types[1].clone())),
+            Self::MapOf(value) => NativeTy::Map(
+                Box::new(NativeTy::String),
+                Box::new(value.native(db, types)),
+            ),
             Self::Optional(inner) => NativeTy::Optional(Box::new(inner.native(db, types))),
         }
     }

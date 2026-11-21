@@ -118,6 +118,40 @@ pub(crate) struct SlotInfo<'db> {
     pub(crate) falls_back: bool,
 }
 
+/// The code a type has for a dispatched method.
+#[derive(Clone)]
+pub(crate) enum Code<'db> {
+    /// A function of the program.
+    Function(FnKey<'db>),
+    /// An `async` native of the runtime, entered through its stub, which
+    /// is called as a function of the program is.
+    Native(&'static crate::natives::Native),
+}
+
+/// The signature the stub of `native` is entered with by a dispatching
+/// call, without its receiver, when a call laid out for a function of the
+/// program can enter it: the stub takes each argument in the register a
+/// function would and returns its result in the one a function would.
+fn dispatched_native<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    native: &'static crate::natives::Native,
+) -> Option<Signature<'db>> {
+    use crate::natives::Ty;
+    let (signature, flags) = native.callable().ok()?;
+    let in_a_word = |ty: &Ty| {
+        matches!(ty, Ty::Int) || (ty.native(db, &[]).is_ref() && !matches!(ty, Ty::Typed))
+    };
+    let fits = flags.is_async
+        && native.type_args == 0
+        && signature.params.iter().all(in_a_word)
+        && (in_a_word(&signature.result) || matches!(signature.result, Ty::Null | Ty::Bool));
+    let (_, params) = signature.params.split_first()?;
+    fits.then(|| Signature {
+        params: params.iter().map(|ty| ty.native(db, &[])).collect(),
+        result: signature.result.native(db, &[]),
+    })
+}
+
 /// Reachable functions in breadth-first order; the entry is first.
 pub(crate) struct Program<'db> {
     pub(crate) functions: Vec<ProgramFunction<'db>>,
@@ -125,7 +159,7 @@ pub(crate) struct Program<'db> {
     pub(crate) slots: Vec<SlotInfo<'db>>,
     /// The method table's rows: for a type, the function behind each slot
     /// (by position in `slots`) it implements in source.
-    pub(crate) rows: Vec<(NativeTy<'db>, Vec<(usize, FnKey<'db>)>)>,
+    pub(crate) rows: Vec<(NativeTy<'db>, Vec<(usize, Code<'db>)>)>,
     /// Every type an interface value can hold: strings, the boxed scalars,
     /// and each enum and class instantiation the program makes values of.
     pub(crate) types: Vec<NativeTy<'db>>,
@@ -325,8 +359,8 @@ fn lay_out_methods<'db>(
         let mut falls_back = false;
         let mut with_code = Vec::new();
         for (_, ty, target) in resolved.iter().filter(|(slot, ..)| *slot == index) {
-            let key = match target {
-                Some(Target::Function(key)) => key,
+            let code = match target {
+                Some(Target::Function(key)) => Code::Function(key.clone()),
                 Some(Target::ToString) => {
                     falls_back = true;
                     continue;
@@ -336,13 +370,7 @@ fn lay_out_methods<'db>(
                     blockers.push(unsupported("of an array only known when it runs"));
                     continue;
                 }
-                // A native is not called as the table's functions are.
-                Some(Target::Native(_)) => {
-                    blockers.push(unsupported(
-                        "implemented in Rust for a type only known when it runs",
-                    ));
-                    continue;
-                }
+                Some(Target::Native(native)) => Code::Native(native),
                 None => continue,
             };
             // The receiver arrives as the reference the interface value is.
@@ -352,19 +380,35 @@ fn lay_out_methods<'db>(
                 ));
                 continue;
             }
-            if identified_arguments(db, key).contains(&true) {
-                blockers.push(unsupported("a default body that tests its type argument"));
-                continue;
-            }
-            let Ok(mut found) = function_signature(db, key) else {
-                // Reported as its own blocked function.
-                continue;
+            let found = match &code {
+                Code::Function(key) => {
+                    if identified_arguments(db, key).contains(&true) {
+                        blockers.push(unsupported("a default body that tests its type argument"));
+                        continue;
+                    }
+                    let Ok(mut found) = function_signature(db, key) else {
+                        // Reported as its own blocked function.
+                        continue;
+                    };
+                    if found.params.is_empty() {
+                        blockers.push(unsupported("without a receiver"));
+                        continue;
+                    }
+                    found.params.remove(0);
+                    found
+                }
+                // Only the stub of an `async` native is called as the
+                // table's functions are.
+                Code::Native(native) => match dispatched_native(db, native) {
+                    Some(found) => found,
+                    None => {
+                        blockers.push(unsupported(
+                            "implemented in Rust for a type only known when it runs",
+                        ));
+                        continue;
+                    }
+                },
             };
-            if found.params.is_empty() {
-                blockers.push(unsupported("without a receiver"));
-                continue;
-            }
-            found.params.remove(0);
             match &signature {
                 None => signature = Some(found),
                 Some(known) if !same_registers(known, &found) => {
@@ -375,8 +419,8 @@ fn lay_out_methods<'db>(
             }
             with_code.push(ty);
             match program.rows.iter_mut().find(|(row, _)| row == ty) {
-                Some((_, methods)) => methods.push((index, key.clone())),
-                None => program.rows.push((ty.clone(), vec![(index, key.clone())])),
+                Some((_, methods)) => methods.push((index, code)),
+                None => program.rows.push((ty.clone(), vec![(index, code)])),
             }
         }
         let to_string = Slot::to_string_signature();

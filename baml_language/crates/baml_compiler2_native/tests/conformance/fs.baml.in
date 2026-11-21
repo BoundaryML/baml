@@ -1,0 +1,183 @@
+// `baml.fs`, run in a directory the test makes: `{dir}` is its path. Every
+// case leaves the directory as it found it, since each runs once on the
+// interpreter and once for every way a native program runs. The file is
+// not a case file of its own because the path is only known when the test
+// runs.
+
+function fs_at(name: string) -> string {
+  "{dir}/" + name
+}
+function fs_spin(n: int) -> int {
+  let kept: string[] = [];
+  for (let i = 0; i < n; i += 1) { kept.push(`item ${i}`); };
+  kept.length()
+}
+function fs_hex(bytes: uint8array?) -> string {
+  if bytes == null { return "null"; }
+  `[${bytes.to_hex()}]`
+}
+function fs_names(path: string) -> string throws baml.errors.Io {
+  let names: string[] = [];
+  for (let entry in baml.fs.read_dir(path)) {
+    names.push(`${entry.name}:${entry.is_dir}:${entry.is_file}:${entry.is_symlink}`);
+  };
+  names.sort();
+  names.join(",")
+}
+
+function fs_write_read_remove() -> string {
+  let path = fs_at("whole/deep/text.txt");
+  let wrote = baml.fs.write(path, "caf\u{e9} au lait");
+  let moved = fs_spin(20);
+  let text = baml.fs.read(path);
+  let size = baml.fs.size(path);
+  let there = baml.fs.exists(path);
+  baml.fs.remove(path);
+  let gone = baml.fs.exists(path);
+  baml.fs.remove_dir_all(fs_at("whole"));
+  `${wrote} ${moved} ${text} ${size} ${there} ${gone}`
+}
+function fs_file_reads_in_chunks() -> string {
+  let path = fs_at("chunks.bin");
+  let data = b"0123456789";
+  let wrote = baml.fs.write_bytes(path, data);
+  let file = baml.fs.open(path, "r");
+  let none = file.read(0);
+  let first = file.read(4);
+  let moved = fs_spin(20);
+  let rest = file.read(100);
+  let end = file.read(5);
+  let back = file.seek_from("start", 2);
+  let again = file.bytes();
+  let from_end = file.seek_from("end", -3);
+  let tail = file.text();
+  let here = file.seek_from("current", 0);
+  file.close();
+  file.close();
+  baml.fs.remove(path);
+  `${wrote} ${fs_hex(none)} ${fs_hex(first)} ${moved} ${fs_hex(rest)} ${fs_hex(end)} ${back} ${again.to_hex()} ${from_end} ${tail} ${here}`
+}
+function fs_file_writes_and_appends() -> string {
+  let path = fs_at("made/by/open.txt");
+  let file = baml.fs.open(path, "w+");
+  let a = file.write("hello");
+  let b = file.write(b", world");
+  file.flush();
+  file.seek_from("start", 7);
+  let middle = file.text();
+  file.close();
+  let more = baml.fs.open(path, "a");
+  more.write("!");
+  more.close();
+  let both = baml.fs.open(path, "r+");
+  both.write("J");
+  both.close();
+  let text = baml.fs.read(path);
+  baml.fs.remove_dir_all(fs_at("made"));
+  `${a} ${b} ${middle} ${text}`
+}
+function fs_closed_file() -> string {
+  let path = fs_at("closed.txt");
+  baml.fs.write(path, "x");
+  let file = baml.fs.open(path, "r");
+  file.close();
+  let read = file.read(1) catch (e) { baml.errors.Io => { baml.fs.remove(path); return `read: ${e.message}`; } };
+  "read"
+}
+function fs_read_only_file_refuses_a_write() -> string {
+  let path = fs_at("readonly.txt");
+  baml.fs.write(path, "x");
+  let file = baml.fs.open(path, "r");
+  let wrote = file.write("y") catch (e) { baml.errors.Io => -1 };
+  file.close();
+  let text = baml.fs.read(path);
+  baml.fs.remove(path);
+  `${wrote} ${text}`
+}
+function fs_open_missing() -> string {
+  let file = baml.fs.open(fs_at("no/such/file"), "r") catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.InvalidArgument => { return `invalid: ${e.message}`; },
+  };
+  "opened"
+}
+function fs_seek_before_the_start() -> string {
+  let path = fs_at("seek.txt");
+  baml.fs.write(path, "abc");
+  let file = baml.fs.open(path, "r");
+  let at = file.seek_from("start", -1) catch (e) {
+    baml.errors.Io => { file.close(); baml.fs.remove(path); return `io: ${e.message}`; },
+    baml.errors.InvalidArgument => { file.close(); baml.fs.remove(path); return `invalid: ${e.message}`; },
+  };
+  `${at}`
+}
+function fs_directories() -> string {
+  let tree = fs_at("tree");
+  baml.fs.mkdir(tree + "/a/b", baml.fs.MkdirOptions { recursive: true });
+  baml.fs.mkdir(tree + "/c", baml.fs.MkdirOptions { recursive: false });
+  baml.fs.write(tree + "/file.txt", "f");
+  baml.fs.symlink("file.txt", tree + "/link");
+  let listed = fs_names(tree);
+  let through = baml.fs.read(tree + "/link");
+  let again = baml.fs.mkdir(tree + "/c", baml.fs.MkdirOptions { recursive: false }) catch (e) { baml.errors.Io => e.message.includes("Failed to create directory") };
+  let full = baml.fs.remove_dir(tree + "/a") catch (e) { baml.errors.Io => e.message.includes("Failed to remove directory") };
+  let wrong = baml.fs.remove(tree + "/c") catch (e) { baml.errors.Io => e.message.includes("it is a directory; use baml.fs.remove_dir") };
+  baml.fs.remove_dir(tree + "/c");
+  baml.fs.remove_dir_all(tree);
+  baml.fs.remove_dir_all(tree);
+  let unread = fs_names(tree) catch (e) { baml.errors.Io => "unread" };
+  `${listed} ${through} ${again ?? false} ${full ?? false} ${wrong ?? false} ${unread} ${baml.fs.exists(tree)}`
+}
+function fs_chmod_refused(path: string, mode: int) -> string {
+  baml.fs.chmod(path, mode) catch (e) {
+    baml.errors.Io => { return "io"; },
+    baml.errors.InvalidArgument => { return e.message; },
+  };
+  "changed"
+}
+function fs_metadata_and_modes() -> string {
+  let path = fs_at("mode.sh");
+  baml.fs.write(path, "#!/bin/sh\n");
+  baml.fs.chmod(path, 420);
+  let plain = baml.fs.metadata(path);
+  baml.fs.chmod(path, 493);
+  let runs = baml.fs.metadata(path);
+  let directory = baml.fs.metadata(fs_at(""));
+  let large = fs_chmod_refused(path, 4096);
+  let negative = fs_chmod_refused(path, -1);
+  baml.fs.remove(path);
+  let missing = baml.fs.metadata(path) catch (e) { baml.errors.Io => { return `${plain.is_file} ${plain.is_dir} ${plain.is_executable} ${plain.modified_ms != null} ${runs.is_executable} ${directory.is_dir} ${large} ${negative} ${e.message}`; } };
+  "found"
+}
+function fs_rename_canonicalize_write_atomic() -> string {
+  let from = fs_at("before.txt");
+  let to = fs_at("after.txt");
+  baml.fs.write_atomic(from, b"first");
+  baml.fs.write_atomic(from, b"second");
+  baml.fs.rename(from, to);
+  let real = baml.fs.canonicalize(fs_at("./after.txt"));
+  let text = baml.fs.read(to);
+  let listed = fs_names(fs_at(""));
+  baml.fs.remove(to);
+  baml.fs.rename(from, to) catch (e) { baml.errors.Io => { return `${text} ${real.ends_with("/after.txt")} ${real.includes("/./")} ${listed} ${e.message}`; } };
+  "renamed nothing"
+}
+function fs_lock_is_held_once() -> string {
+  let path = fs_at("the.lock");
+  let held = baml.fs.lock(path, 1000);
+  let second = baml.fs.lock(path, 30) catch (e) { baml.errors.Io => { held.close(); held.close(); let third = baml.fs.lock(path, 1000); third.close(); baml.fs.remove(path); return e.message; } };
+  "locked twice"
+}
+function fs_size_of_nothing_uncaught() -> int {
+  baml.fs.size(fs_at("no such file"))
+}
+// Three tasks wait on files at once while a fourth allocates: each goes
+// on with what it held before it waited.
+function fs_files_by_tasks() -> string {
+  let a = spawn { let path = fs_at("task-a"); baml.fs.write(path, "aaaa"); let n = baml.fs.size(path); baml.fs.remove(path); n };
+  let b = spawn { let path = fs_at("task-b"); let kept = fs_spin(30); let file = baml.fs.open(path, "w+"); file.write("bb"); file.seek_from("start", 0); let text = file.text(); file.close(); baml.fs.remove(path); `${text}${kept}` };
+  let c = spawn { baml.fs.exists(fs_at("task-c")) };
+  let busy = spawn { fs_spin(80) };
+  let n = await busy;
+  `${await a} ${await b} ${await c} ${n}`
+}

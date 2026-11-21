@@ -251,6 +251,66 @@ impl<'s> Scope<'s> {
     }
 }
 
+impl Scope<'_> {
+    /// Where field `field` of `object` is and how its slot holds a value.
+    fn field_slot(&self, object: super::ObjRef<'_>, field: usize) -> (usize, Desc) {
+        let class = self.class_of(object).0;
+        let Some((offset, ty)) = class.field_place(field) else {
+            panic!(
+                "a native read field {field} of `{}`, which has none there",
+                class.full_name()
+            );
+        };
+        (super::View::raw(object) + offset, ty)
+    }
+
+    /// The `int`, `float` or `bool` in field `field` of `object`, by its
+    /// position in the declaration, as the value's bits: `None` for
+    /// `null`.
+    pub fn field_bits(&self, object: super::ObjRef<'_>, field: usize) -> Option<u64> {
+        let (slot, ty) = self.field_slot(object, field);
+        // SAFETY: the description says how the slot holds its value: in
+        // place, as two slots, or in a box.
+        unsafe {
+            let word = load(slot);
+            match ty.repr() {
+                crate::json_layout::REPR_PAIR => (load(slot + WORD) != 0).then_some(word as u64),
+                REPR_BOXED => {
+                    let boxed = word != 0
+                        && matches!(
+                            load(word) & TYPE_ID_MASK,
+                            TYPE_BOX_BOOL | TYPE_BOX_INT | TYPE_BOX_FLOAT
+                        );
+                    boxed.then(|| load(word + BOX_VALUE) as u64)
+                }
+                crate::json_layout::REPR_INT
+                | crate::json_layout::REPR_FLOAT
+                | crate::json_layout::REPR_BOOL => Some(word as u64),
+                _ => None,
+            }
+        }
+    }
+
+    /// The object field `field` of `object` refers to, by the field's
+    /// position in the declaration: `None` for `null`.
+    ///
+    /// # Safety
+    ///
+    /// The field's type is `M`, or `M` or `null`.
+    pub unsafe fn field_ref<'a, M: super::Managed>(
+        &'a self,
+        object: super::ObjRef<'a>,
+        field: usize,
+    ) -> Option<M::View<'a>> {
+        let (slot, _) = self.field_slot(object, field);
+        // SAFETY: the caller's contract: the slot is a reference or zero.
+        unsafe {
+            let word = load(slot);
+            (word != 0).then(|| super::View::from_raw(word))
+        }
+    }
+}
+
 impl<'s> Build<'s> {
     /// End the program: a native gave a field what it cannot hold.
     #[cold]

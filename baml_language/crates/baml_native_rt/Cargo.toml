@@ -42,7 +42,8 @@ rustls = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-tokio = { workspace = true, features = [ "fs", "rt-multi-thread", "time" ] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = [ "fs", "io-util", "rt-multi-thread", "sync", "time" ] }
 zmij = { workspace = true }
 
 [build-dependencies]

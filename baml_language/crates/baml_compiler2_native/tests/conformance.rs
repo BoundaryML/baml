@@ -183,6 +183,29 @@ fn closed_port() -> u16 {
     listener.local_addr().expect("a bound address").port()
 }
 
+/// Run every case of `source`, a program of its own, on the interpreter
+/// and every way a native program runs, and fail when two end otherwise.
+async fn cases_agree(source: &str) {
+    let db = setup_test_db(source);
+    assert_no_diagnostic_errors(&db);
+    let engine = engine(&db);
+    let directory = tempfile::tempdir().expect("a temporary directory");
+
+    let mut failures = Vec::new();
+    for (case, _) in cases(source) {
+        let interpreted = interpret(&engine, case).await;
+        let native = run_every_way(&build(&db, case, directory.path()));
+        if native.iter().any(|(_, ending)| *ending != interpreted) {
+            failures.push(format!(
+                "{case}:\n  {:<24} {interpreted:?}{}",
+                "interpreter",
+                report(&native),
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// `baml.http.fetch` against a server in this process: the request is sent
 /// by the runtime's own client, and the `Response` it returns is built in
 /// Rust and owns its unread body.
@@ -198,24 +221,26 @@ async fn http_requests_end_as_the_interpreter_does() {
     let source = include_str!("conformance/http.baml.in")
         .replace("{open}", &format!("http://127.0.0.1:{}", serve_http()))
         .replace("{closed}", &format!("http://127.0.0.1:{}", closed_port()));
-    let db = setup_test_db(&source);
-    assert_no_diagnostic_errors(&db);
-    let engine = engine(&db);
-    let directory = tempfile::tempdir().expect("a temporary directory");
+    cases_agree(&source).await;
+}
 
-    let mut failures = Vec::new();
-    for (case, _) in cases(&source) {
-        let interpreted = interpret(&engine, case).await;
-        let native = run_every_way(&build(&db, case, directory.path()));
-        if native.iter().any(|(_, ending)| *ending != interpreted) {
-            failures.push(format!(
-                "{case}:\n  {:<24} {interpreted:?}{}",
-                "interpreter",
-                report(&native),
-            ));
-        }
-    }
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
+/// `baml.fs` in a directory of the test's own, which every case leaves as
+/// it found it.
+#[tokio::test(flavor = "multi_thread")]
+async fn files_end_as_the_interpreter_does() {
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let path = directory
+        .path()
+        .canonicalize()
+        .expect("the directory exists");
+    let source = include_str!("conformance/fs.baml.in")
+        .replace("{dir}", path.to_str().expect("a path that is UTF-8"));
+    cases_agree(&source).await;
+    let left: Vec<_> = std::fs::read_dir(&path)
+        .expect("the directory is still there")
+        .map(|entry| entry.expect("an entry").file_name())
+        .collect();
+    assert!(left.is_empty(), "a case left {left:?} behind");
 }
 
 /// Build `source`'s `main` and run it every way: what it prints, what it

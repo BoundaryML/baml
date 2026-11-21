@@ -29,9 +29,9 @@ use crate::{
     layout::{
         ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, BYTES_DATA, BYTES_LENGTH, SLICE_MIN_BYTES,
         SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, STORAGE_CAPACITY, STORAGE_ELEMENTS,
-        STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT, TYPE_ARRAY_OF_REFS,
-        TYPE_ARRAY_OF_VALUES, TYPE_ID_MASK, TYPE_STRING, TYPE_STRING_SLICE, WORD, field_offset,
-        instance_size, words,
+        STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
+        TYPE_ARRAY_OF_VALUES, TYPE_BYTES, TYPE_ID_MASK, TYPE_STRING, TYPE_STRING_SLICE, WORD,
+        field_offset, instance_size, words,
     },
 };
 
@@ -524,6 +524,47 @@ impl<'a> View<'a> for MapRef<'a> {
     }
 }
 
+impl<'a> MapRef<'a> {
+    /// How many keys the map has.
+    pub fn len(self) -> usize {
+        // SAFETY: a view is of a live map.
+        unsafe { crate::map::len(self.0) }
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
+
+    /// Hand `each` every key of a map of strings to strings with its
+    /// value, `None` for `null`, in the order the keys were first set.
+    /// What a native takes a `map<string, string>` or a
+    /// `map<string, string?>` apart with.
+    pub fn each_str(self, mut each: impl FnMut(&'a str, Option<&'a str>)) {
+        // SAFETY: a view is of a live map, which the declaration says
+        // holds strings under strings, and neither moves for `'a`.
+        unsafe {
+            crate::map::for_each(self.0, |key, value| {
+                each(
+                    crate::string::text(key),
+                    (value != 0).then(|| crate::string::text(value)),
+                );
+            });
+        }
+    }
+
+    /// The keys and values of a map of strings to strings, copied out: for
+    /// a native that stops. A key whose value is `null` is left out.
+    pub fn to_strings(self) -> Vec<(String, String)> {
+        let mut pairs = Vec::with_capacity(self.len());
+        self.each_str(|key, value| {
+            if let Some(value) = value {
+                pairs.push((key.to_owned(), value.to_owned()));
+            }
+        });
+        pairs
+    }
+}
+
 /// A view of a class instance: its slots, by position.
 #[derive(Clone, Copy)]
 pub struct ObjRef<'a>(usize, PhantomData<&'a ()>);
@@ -876,6 +917,29 @@ impl Elem<'_> {
 
     pub fn is_ref(self) -> bool {
         self.is_ref
+    }
+
+    /// The string a value held as a union holds it is, when it is one.
+    pub fn as_str<'a>(self, _scope: &'a Scope<'_>) -> Option<StrRef<'a>> {
+        let word = self.slot.get();
+        // SAFETY: a value a union holds is zero or a live object, whose
+        // header says what it is, and it moves only when the scope is
+        // borrowed exclusively.
+        unsafe {
+            (self.is_ref && word != 0 && load(word) & TYPE_ID_MASK < STRING_TYPES_END)
+                .then(|| StrRef::from_raw(word))
+        }
+    }
+
+    /// The `uint8array` a value held as a union holds it is, when it is
+    /// one.
+    pub fn as_bytes<'a>(self, _scope: &'a Scope<'_>) -> Option<BytesRef<'a>> {
+        let word = self.slot.get();
+        // SAFETY: as in `Self::as_str`.
+        unsafe {
+            (self.is_ref && word != 0 && load(word) & TYPE_ID_MASK == TYPE_BYTES)
+                .then(|| BytesRef::from_raw(word))
+        }
     }
 }
 
@@ -1600,6 +1664,7 @@ pub(crate) mod build;
 mod crypto;
 pub(crate) mod drive;
 mod env;
+mod failure;
 mod float;
 mod fs;
 mod hash;

@@ -93,7 +93,7 @@ pub(super) fn declare<'db>(
     Ok(())
 }
 
-impl Backend<'_> {
+impl<'db> Backend<'db> {
     /// The stub compiled code calls the `async` native `native` through,
     /// whose symbol takes `params`, the worker first.
     pub(super) fn async_stub(
@@ -125,6 +125,26 @@ impl Backend<'_> {
             .map_err(internal)?;
         self.hooks.stubs.insert(native.path, (stub, symbol));
         Ok(stub)
+    }
+
+    /// The stub of the `async` native `native`, which takes no type
+    /// arguments, for the method table to enter: the classes its
+    /// declaration names are described as for a call of it.
+    pub(super) fn dispatched_stub(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        native: &'static Native,
+    ) -> Result<FuncId, CompileError> {
+        let (signature, _) = native.callable().map_err(internal)?;
+        self.name_classes(db, native)?;
+        let mut params = vec![AbiParam::new(WORD)];
+        for ty in signature.params {
+            params.push(
+                super::native_call::abi_param(ty)
+                    .ok_or_else(|| internal("a native takes no `null`"))?,
+            );
+        }
+        self.async_stub(native, &params)
     }
 }
 

@@ -10,23 +10,18 @@ use std::{
     time::Duration,
 };
 
-use num_bigint::{BigInt, Sign};
-
 use super::{
     Big, Bytes, Map, NativeBamlHttp, NativeBamlHttpResponse, Natives, Obj, Opaque, Root, Scope,
     Str, Thrown,
+    failure::{Failure, limit},
 };
-use crate::layout::{NAMED_HTTP_RESPONSE, NAMED_TIMEOUT};
+use crate::layout::NAMED_HTTP_RESPONSE;
 
 /// The fields of `baml.http.Response`, by position.
 const RESPONSE_STATUS: usize = 0;
 const RESPONSE_HEADERS: usize = 1;
 const RESPONSE_URL: usize = 2;
 const RESPONSE_BODY: usize = 3;
-
-/// The field of `baml.errors.Timeout` that holds the limit that passed, a
-/// `baml.time.Duration` or `null`, by position.
-const TIMEOUT_LIMIT: usize = 1;
 
 /// The limits one request runs under: `total` from connecting to the end
 /// of the body, and `connect` for connecting alone. `None` is no limit.
@@ -36,13 +31,6 @@ struct Limits {
     connect: Option<Duration>,
 }
 
-/// A limit from the nanoseconds `baml.http` passes: none when zero or
-/// negative, and the longest there is when past it.
-fn limit(nanos: &BigInt) -> Option<Duration> {
-    (nanos.sign() == Sign::Plus)
-        .then(|| Duration::from_nanos(u64::try_from(nanos).unwrap_or(u64::MAX)))
-}
-
 /// The body of a response, until it is read, and the limits of the request
 /// it answers, which go on while it is read.
 struct Body {
@@ -50,78 +38,32 @@ struct Body {
     limits: Limits,
 }
 
-/// Why a request failed, as `baml.http` throws it.
-enum Failure {
-    Io(String),
-    Timeout {
-        message: String,
-        limit: Option<Duration>,
-        which: &'static str,
-    },
-}
-
-impl Failure {
-    /// `error` as a failure of the step `context` names. The text names the
-    /// request's URL without the parts that carry credentials.
-    fn of(context: &str, error: &reqwest::Error, limits: Limits) -> Self {
-        let text = error.to_string();
-        let text = match error.url() {
-            Some(url) => text.replace(
-                url.as_str(),
-                &btel_settings::network::sanitize_url(
-                    url.as_str(),
-                    btel_settings::network::Scrub::Log,
-                ),
-            ),
-            None => text,
-        };
-        let message = format!("{context}: {text}");
-        if !error.is_timeout() {
-            return Self::Io(message);
-        }
-        // `reqwest` does not say which limit passed. Only the one on
-        // connecting fails inside the connector.
-        let (which, limit) = if error.is_connect() && limits.connect.is_some() {
-            ("connect_timeout", limits.connect)
-        } else {
-            ("timeout", limits.total)
-        };
-        Self::Timeout {
-            message,
-            limit,
-            which,
-        }
+/// `error` as a failure of the step `context` names. The text names the
+/// request's URL without the parts that carry credentials.
+fn failed(context: &str, error: &reqwest::Error, limits: Limits) -> Failure {
+    let text = error.to_string();
+    let text = match error.url() {
+        Some(url) => text.replace(
+            url.as_str(),
+            &btel_settings::network::sanitize_url(url.as_str(), btel_settings::network::Scrub::Log),
+        ),
+        None => text,
+    };
+    let message = format!("{context}: {text}");
+    if !error.is_timeout() {
+        return Failure::Io(message);
     }
-
-    /// The error to throw: `baml.errors.Io`, or `baml.errors.Timeout` with
-    /// the limit that passed as a `baml.time.Duration`.
-    fn throw<'s>(self, scope: &mut Scope<'s>) -> Thrown<'s> {
-        let (message, limit, which) = match self {
-            Self::Io(message) => return scope.io_error(&message),
-            Self::Timeout {
-                message,
-                limit,
-                which,
-            } => (message, limit, which),
-        };
-        let class = scope.named_class(NAMED_TIMEOUT);
-        let message = scope.alloc_str(&message);
-        let which = scope.alloc_str(which);
-        let limit = limit.map(|limit| {
-            let duration = class
-                .field_class(TIMEOUT_LIMIT)
-                .expect("a timeout's limit is of a class");
-            let nanos = scope.make_big(&BigInt::from(limit.as_nanos()));
-            let mut built = scope.build(duration);
-            built.set(scope, 0, nanos);
-            built.finish()
-        });
-        let mut thrown = scope.build(class);
-        thrown.set(scope, 0, message);
-        thrown.set(scope, TIMEOUT_LIMIT, limit);
-        thrown.set(scope, 2, which);
-        let thrown = thrown.finish();
-        scope.throw(thrown)
+    // `reqwest` does not say which limit passed. Only the one on
+    // connecting fails inside the connector.
+    let (which, limit) = if error.is_connect() && limits.connect.is_some() {
+        ("connect_timeout", limits.connect)
+    } else {
+        ("timeout", limits.total)
+    };
+    Failure::Timeout {
+        message,
+        limit,
+        which,
     }
 }
 
@@ -203,9 +145,8 @@ impl NativeBamlHttp for Natives {
         };
         let sent = scope
             .io(async move {
-                let client = client(limits.connect).map_err(|error| {
-                    Failure::of("HTTP client initialization failed", &error, limits)
-                })?;
+                let client = client(limits.connect)
+                    .map_err(|error| failed("HTTP client initialization failed", &error, limits))?;
                 let mut request = client.get(&url);
                 if let Some(total) = limits.total {
                     request = request.timeout(total);
@@ -213,7 +154,7 @@ impl NativeBamlHttp for Natives {
                 let response = request
                     .send()
                     .await
-                    .map_err(|error| Failure::of("HTTP fetch failed", &error, limits))?;
+                    .map_err(|error| failed("HTTP fetch failed", &error, limits))?;
                 Ok(Head {
                     status: response.status().as_u16(),
                     headers: response
@@ -272,9 +213,11 @@ async fn read_body<'s>(scope: &mut Scope<'s>, response: Root<'s, Obj>) -> Result
                 .unwrap_or_else(PoisonError::into_inner)
                 .take();
             match unread {
-                Some(unread) => unread.bytes().await.map(Vec::from).map_err(|error| {
-                    Failure::of("failed to read response body", &error, body.limits)
-                }),
+                Some(unread) => {
+                    unread.bytes().await.map(Vec::from).map_err(|error| {
+                        failed("failed to read response body", &error, body.limits)
+                    })
+                }
                 None => Err(Failure::Io(
                     "Response body has already been consumed".to_owned(),
                 )),

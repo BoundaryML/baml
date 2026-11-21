@@ -13,7 +13,7 @@ use crate::{
     types::NativeTy,
 };
 
-fn abi_param(ty: &Ty) -> Option<AbiParam> {
+pub(super) fn abi_param(ty: &Ty) -> Option<AbiParam> {
     match ty {
         // An optional scalar is two words, which its user passes one by
         // one; any other optional is a reference.
@@ -23,6 +23,7 @@ fn abi_param(ty: &Ty) -> Option<AbiParam> {
         | Ty::Bytes
         | Ty::Array(_)
         | Ty::Map
+        | Ty::MapOf(_)
         | Ty::Optional(_)
         | Ty::Elem(_)
         | Ty::Any
@@ -210,6 +211,7 @@ impl<'db> Translator<'_, 'db> {
                 | Ty::Bytes
                 | Ty::Array(_)
                 | Ty::Map
+                | Ty::MapOf(_)
                 | Ty::Optional(_)
                 | Ty::Any
                 | Ty::Typed

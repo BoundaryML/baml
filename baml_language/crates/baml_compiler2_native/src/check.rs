@@ -793,6 +793,17 @@ impl<'db> Checker<'_, 'db> {
         }
     }
 
+    /// A native makes instances of the classes its declaration names:
+    /// what it returns and what it throws. An interface value can hold
+    /// one, so each is a type the program makes values of.
+    fn native_constructs(&mut self, native: &crate::natives::Native) {
+        for path in native.classes {
+            if let Some(class) = crate::natives::class_at(self.db, *path) {
+                self.construct(NativeTy::Class(class, Vec::new()));
+            }
+        }
+    }
+
     fn need(&mut self, key: FnKey<'db>, captures: Vec<NativeTy<'db>>) {
         if !self
             .needed
@@ -911,6 +922,7 @@ impl<'db> Checker<'_, 'db> {
                 Ok(Callee::Function(key)) => self.need(key, Vec::new()),
                 // What `baml.json` decodes is made by the runtime.
                 Ok(Callee::Native(native)) => {
+                    self.native_constructs(native);
                     let made = crate::json::check_call(self.db, body, native, args, *ntypeargs);
                     for described in made.unwrap_or_default() {
                         self.construct(match described {
@@ -926,6 +938,14 @@ impl<'db> Checker<'_, 'db> {
             for argument in args {
                 self.operand_needs(argument);
             }
+        }
+        if let Terminator::SysOp {
+            callee: Operand::Constant(Constant::Function(function)),
+            ..
+        } = terminator
+            && let Some(native) = crate::natives::named(&function_display_name(self.db, *function))
+        {
+            self.native_constructs(native);
         }
         let in_loop = loops.start(terminator).is_some() || loops.step(terminator).is_some();
         if let Terminator::VirtualCall {
@@ -943,6 +963,7 @@ impl<'db> Checker<'_, 'db> {
             let args = passed(args, *has_trace);
             match virtual_target(self.db, body, iface, method, args, *ntypeargs, *self_arg) {
                 Ok(Virtual::Static(Target::Function(key))) => self.need(key, Vec::new()),
+                Ok(Virtual::Static(Target::Native(native))) => self.native_constructs(native),
                 Ok(Virtual::Dynamic(slot, interface, type_arguments)) => {
                     let arguments = args
                         .iter()

@@ -782,20 +782,26 @@ impl<'db> Backend<'db> {
             let type_id = self
                 .type_id(db, ty)?
                 .ok_or_else(|| internal("a method table row is for a type with a type id"))?;
-            for (slot, key) in methods {
-                let function = declared
-                    .get(key)
-                    .ok_or_else(|| internal("an implementation is part of the program"))?;
+            for (slot, code) in methods {
+                let function = match code {
+                    crate::program::Code::Function(key) => {
+                        declared
+                            .get(key)
+                            .ok_or_else(|| internal("an implementation is part of the program"))?
+                            .id
+                    }
+                    crate::program::Code::Native(native) => self.dispatched_stub(db, native)?,
+                };
                 let column = program.slots[*slot].column;
                 entries.push((
                     (type_id << program.column_shift) + column * layout::WORD,
-                    function.id,
+                    function,
                 ));
                 if type_id == layout::TYPE_STRING {
                     // A slice is a string: its row is the same.
                     entries.push((
                         (layout::TYPE_STRING_SLICE << program.column_shift) + column * layout::WORD,
-                        function.id,
+                        function,
                     ));
                 }
             }
@@ -1130,6 +1136,15 @@ pub(crate) fn generate<'db>(
         bodies.push((function, mir, typed));
     }
     hooks::declare(&mut backend, program, &declared)?;
+    // The stub of each native the method table enters, declared while
+    // stubs are still to be compiled.
+    for (_, methods) in &program.rows {
+        for (_, code) in methods {
+            if let crate::program::Code::Native(native) = code {
+                backend.dispatched_stub(db, native)?;
+            }
+        }
+    }
 
     let entry = program
         .functions

@@ -101,6 +101,9 @@ enum AbiTy {
     /// A map from the builtin's first type parameter to its second: the
     /// receiver of a method of `Map`.
     Map,
+    /// A map from `string` to values of a reference type, as a parameter
+    /// or a result declares it.
+    MapOf(Box<AbiTy>),
     /// A type or `null`: a reference that may be zero, or for an `int`,
     /// `float` or `bool` a pair of words, the value's bits and whether
     /// there is a value.
@@ -202,8 +205,17 @@ impl AbiTy {
     fn of(ty: &BamlType, scope: &Scope<'_>) -> Option<Self> {
         let generics = &scope.generics;
         match ty {
+            // A union: a value as a union holds it, whose header says
+            // which member it is. A union of string literals is a string.
+            BamlType::Named(name) if name == "union" => Some(Self::Any),
             BamlType::Named(name) => scope.classes.resolve(scope.namespace, name),
             BamlType::RustType => Some(Self::Rust),
+            BamlType::Map(key, value) if **key == BamlType::String => {
+                match Self::of(value, scope)? {
+                    value if value.is_ref() => Some(Self::MapOf(Box::new(value))),
+                    _ => None,
+                }
+            }
             BamlType::Generic(name) => generics
                 .iter()
                 .position(|generic| generic == name)
@@ -221,6 +233,8 @@ impl AbiTy {
             },
             BamlType::Optional(inner) => match Self::of(inner, scope)? {
                 Self::Null | Self::Optional(_) => None,
+                // `null` is already one of a union's values.
+                Self::Any => Some(Self::Any),
                 inner => Some(Self::Optional(Box::new(inner))),
             },
             _ => None,
@@ -234,6 +248,7 @@ impl AbiTy {
             | Self::Bytes
             | Self::Array(_)
             | Self::Map
+            | Self::MapOf(_)
             | Self::Class(..)
             | Self::Rust => true,
             Self::Optional(inner) => inner.is_ref(),
@@ -259,6 +274,7 @@ impl AbiTy {
             Self::Bytes => "Ty::Bytes".to_owned(),
             Self::Array(element) => format!("Ty::Array(&{})", element.table()),
             Self::Map => "Ty::Map".to_owned(),
+            Self::MapOf(value) => format!("Ty::MapOf(&{})", value.table()),
             Self::Optional(inner) => format!("Ty::Optional(&{})", inner.table()),
             Self::Elem(index) => format!("Ty::Elem({index})"),
             Self::Any => "Ty::Any".to_owned(),
@@ -278,7 +294,9 @@ impl AbiTy {
                     into.push(path);
                 }
             }
-            Self::Array(inner) | Self::Optional(inner) => inner.classes(into),
+            Self::Array(inner) | Self::Optional(inner) | Self::MapOf(inner) => {
+                inner.classes(into);
+            }
             _ => {}
         }
     }
@@ -296,6 +314,7 @@ impl AbiTy {
             | Self::Bytes
             | Self::Array(_)
             | Self::Map
+            | Self::MapOf(_)
             | Self::Optional(_)
             | Self::Elem(_)
             | Self::Any
@@ -329,7 +348,7 @@ impl AbiTy {
             Self::Bigint => "Big".to_owned(),
             Self::Bytes => "Bytes".to_owned(),
             Self::Array(element) => format!("Arr<{}>", element.marker()),
-            Self::Map => "Map".to_owned(),
+            Self::Map | Self::MapOf(_) => "Map".to_owned(),
             Self::Class(..) => "Obj".to_owned(),
             Self::Rust => "Opaque".to_owned(),
             Self::Optional(inner) => inner.marker(),
@@ -361,7 +380,7 @@ impl AbiTy {
             (Self::Array(element), false) => {
                 format!("ArrRef<'_, {}>", element.marker())
             }
-            (Self::Map, false) => "MapRef<'_>".to_owned(),
+            (Self::Map | Self::MapOf(_), false) => "MapRef<'_>".to_owned(),
             (Self::Class(..), false) => "ObjRef<'_>".to_owned(),
             (Self::Rust, false) => "OpaqueRef<'_>".to_owned(),
             (_, true) => format!("Root<'s, {}>", self.marker()),
@@ -415,6 +434,7 @@ impl AbiTy {
             | Self::Bytes
             | Self::Array(_)
             | Self::Map
+            | Self::MapOf(_)
             | Self::Class(..)
             | Self::Rust => {
                 format!("{value}.raw(&scope) as u64")
@@ -444,6 +464,7 @@ impl AbiTy {
             | Self::Bytes
             | Self::Array(_)
             | Self::Map
+            | Self::MapOf(_)
             | Self::Class(..)
             | Self::Rust => format!("{value}.raw(&scope)"),
             Self::Optional(inner) if inner.is_ref() => {
