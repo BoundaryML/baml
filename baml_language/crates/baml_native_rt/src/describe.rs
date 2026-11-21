@@ -170,6 +170,21 @@ impl Types {
             })
     }
 
+    /// The size in bytes of an object of the fixed type `type_id`, and the
+    /// offsets of the words of it the collector follows.
+    pub(crate) fn fixed(&self, type_id: usize) -> (usize, &'static [u32]) {
+        // SAFETY: a fixed type is its four words and then the offset of
+        // each of its references, in the executable's data.
+        unsafe {
+            let entry = self.table + type_id;
+            let references = std::slice::from_raw_parts(
+                (entry + crate::layout::TYPE_HEADER) as *const u32,
+                word(entry + 8),
+            );
+            (word(entry + 4), references)
+        }
+    }
+
     /// The list of types the runtime knows by position, which the table's
     /// first word locates: a count, then the type id of each.
     fn listed(&self, position: usize) -> Option<usize> {

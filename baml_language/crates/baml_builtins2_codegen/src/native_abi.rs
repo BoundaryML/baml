@@ -519,12 +519,16 @@ fn abi_of(builtin: &NativeBuiltin, classes: &Classes<'_>) -> Option<Abi> {
     }
     // `baml.json` moves values of any type, as a union holds them, and so
     // do the two defaults a `to_json` and a `from_json` fall back on.
-    // `baml.yaml` returns a `json`.
+    // `baml.yaml` returns a `json`, and what compares two values of any
+    // type is told the static type of each as `baml.json` is.
     let of = if builtin.path.starts_with("baml.json.")
         || builtin.path.starts_with("baml.yaml.")
         || matches!(
             builtin.path.as_str(),
-            "baml._to_json_default" | "baml._from_json_structural_default"
+            "baml._to_json_default"
+                | "baml._from_json_structural_default"
+                | "baml._equals_structural_default"
+                | "baml.ops.equals_equals"
         ) {
         AbiTy::of_json
     } else {

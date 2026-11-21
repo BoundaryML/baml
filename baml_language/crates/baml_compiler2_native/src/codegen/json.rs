@@ -61,6 +61,21 @@ impl<'db> Backend<'db> {
         })
     }
 
+    /// [`Self::describe_native`], or zero for a type with no description.
+    pub(super) fn describe_native_if_any(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        ty: &NativeTy<'db>,
+    ) -> usize {
+        let at = self.json.describe_native_if_any(db, ty);
+        self.identify_described(db);
+        if at == 0 {
+            0
+        } else {
+            (DESCRIBED | at) as usize
+        }
+    }
+
     /// End the type table with the descriptions, and say where they start.
     /// Returns what the table needs of the linker: the address of each
     /// entry a description names.

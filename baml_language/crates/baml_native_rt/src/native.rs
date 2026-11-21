@@ -1615,6 +1615,7 @@ mod regex;
 mod root;
 mod state;
 mod string;
+mod structural;
 mod time;
 mod uint8array;
 mod yaml;

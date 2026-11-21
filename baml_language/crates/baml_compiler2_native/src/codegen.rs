@@ -406,7 +406,10 @@ struct Backend<'db> {
     task_shims: HashMap<ir::Type, FuncId>,
     /// The entries natives call, and the ones `async` natives are called
     /// through.
-    hooks: hooks::Hooks,
+    hooks: hooks::Hooks<'db>,
+    /// Whether the program calls what compares two values of any type,
+    /// which reads the list of the classes with an `eq` of their own.
+    compares_values: bool,
 }
 
 impl<'db> Backend<'db> {
@@ -462,6 +465,7 @@ impl<'db> Backend<'db> {
             unwind: unwind::Tables::default(),
             task_shims: HashMap::new(),
             hooks: hooks::Hooks::default(),
+            compares_values: false,
         })
     }
 
@@ -1041,6 +1045,35 @@ struct Declared<'db> {
 /// leaves below it.
 const UNCHECKED_LEAF_LOCALS: usize = 12;
 
+/// Whether `body` holds a `==` or a `!=` that is a call, where most are
+/// compiled in place.
+fn compares_out_of_line<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    body: &MirFunctionBody<'db>,
+    typed: &Body<'_, 'db>,
+) -> bool {
+    body.blocks
+        .iter()
+        .enumerate()
+        .any(|(index, block)| match &block.terminator {
+            Some(Terminator::Call {
+                has_trace,
+                callee,
+                args,
+                ntypeargs,
+                ..
+            }) if is_intrinsic_call(db, callee) => {
+                typed.enter(index);
+                let args = crate::types::passed(args, *has_trace);
+                !matches!(
+                    call_target(db, typed, callee, args, *ntypeargs),
+                    Ok(Callee::Intrinsic(_)) | Err(_)
+                )
+            }
+            _ => false,
+        })
+}
+
 /// Whether a function must check the stack limit on entry: it calls
 /// another compiled function, or its frame may not be small.
 fn checks_stack<'db>(
@@ -1124,7 +1157,8 @@ pub(crate) fn generate<'db>(
                 entry: function.key.entry,
                 signature,
                 type_ids,
-                checks_stack: checks_stack(db, body, &ArrayLoops::of(db, &typed)),
+                checks_stack: checks_stack(db, body, &ArrayLoops::of(db, &typed))
+                    || compares_out_of_line(db, body, &typed),
             },
         );
         bodies.push((function, mir, typed));
@@ -1243,6 +1277,7 @@ pub(crate) fn generate<'db>(
         &mut clif,
         &mut disassembly,
     )?;
+    backend.define_equals(db)?;
     backend.define_stack_maps()?;
     backend.define_unwind()?;
     backend.define_functions()?;

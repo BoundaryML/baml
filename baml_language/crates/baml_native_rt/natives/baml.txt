@@ -7,3 +7,4 @@ baml._sum_float
 baml._median_float allocates
 baml._is_primitive_array
 baml._rust_sort
+baml._equals_structural_default async

@@ -131,11 +131,24 @@ impl<'db> Translator<'_, 'db> {
             if matches!(ty, Ty::Typed) {
                 // What the value is, as far as its static type says.
                 let found = self.operand_ty(argument)?;
-                if found.is_boxed() {
+                if found.is_boxed() && described {
                     // Only its header will say what the value is.
                     self.describe_program_types();
                 }
-                let id = self.backend.describe_native(self.db, &found)?;
+                let id = if described {
+                    self.backend.describe_native(self.db, &found)?
+                } else {
+                    // What compares two values: it reads the description
+                    // it is given, and the value's header for the rest.
+                    if let Some(class) = self.program.equals_unlisted.first() {
+                        return Err(internal(format!(
+                            "comparing values in a program with a generic class that has an eq \
+                             of its own, which the runtime cannot call: {class}"
+                        )));
+                    }
+                    self.backend.compares_values = true;
+                    self.backend.describe_native_if_any(self.db, &found)
+                };
                 params.push(AbiParam::new(types::I32));
                 values.push(self.builder.ins().iconst(types::I32, super::imm(id)));
             }

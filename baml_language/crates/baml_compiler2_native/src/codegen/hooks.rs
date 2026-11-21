@@ -25,13 +25,14 @@
 
 use std::collections::HashMap;
 
+use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use cranelift_codegen::{
     Context,
     ir::{self, AbiParam, InstBuilder, MemFlags, condcodes::IntCC, types},
     isa::CallConv,
 };
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use cranelift_module::{FuncId, Linkage, Module};
+use cranelift_module::{DataDescription, FuncId, Linkage, Module};
 
 use super::{
     Backend, Declared, Runtime, TRAP_AFTER_PANIC, WORD, internal, mutator_access, offset, unwind,
@@ -42,6 +43,7 @@ use crate::{
     layout,
     natives::Native,
     program::{FnKey, Program},
+    types::class_layout,
 };
 
 // A stub tests for a native that is done by testing for zero.
@@ -51,9 +53,11 @@ const _: () = assert!(layout::STEP_DONE == 0);
 const ENTRY_HANDLER: u32 = 0;
 
 #[derive(Default)]
-pub(super) struct Hooks {
+pub(super) struct Hooks<'db> {
     /// Each entry a native calls, with the BAML function it runs.
     entries: Vec<(FuncId, FuncId)>,
+    /// The entry of the `eq` of each class that has one of its own.
+    equals: Vec<(ClassRef<'db>, FuncId)>,
     /// The stub each `async` native called so far is called through and
     /// the native's own symbol, by the builtin's path.
     stubs: HashMap<&'static str, (FuncId, FuncId)>,
@@ -90,7 +94,59 @@ pub(super) fn declare<'db>(
         entries.insert(*class, ids);
     }
     backend.json = JsonTypes::with_entries(entries);
+    // An `eq` takes two instances.
+    signature.params = vec![AbiParam::new(WORD); 2];
+    for (class, key) in &program.equals {
+        let target = declared
+            .get(key)
+            .ok_or_else(|| internal("a class's own eq is part of the program"))?
+            .id;
+        let name = format!("baml_hook_{}", backend.hooks.entries.len());
+        let entry = backend
+            .module
+            .declare_function(&name, Linkage::Local, &signature)
+            .map_err(internal)?;
+        backend.hooks.entries.push((entry, target));
+        backend.hooks.equals.push((*class, entry));
+    }
     Ok(())
+}
+
+/// The list the runtime finds the `eq` of a class in, when it compares two
+/// instances it meets inside other values.
+const EQUALS_SYMBOL: &str = "baml_native_equals";
+
+impl<'db> Backend<'db> {
+    /// Define the list of the classes with an `eq` of their own, for a
+    /// program that calls what reads it: a count, and for each class its
+    /// type id and the entry of its `eq`, sorted by type id.
+    pub(super) fn define_equals(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+    ) -> Result<(), CompileError> {
+        if !self.compares_values {
+            return Ok(());
+        }
+        let mut classes = Vec::new();
+        for (class, entry) in self.hooks.equals.clone() {
+            let fields = class_layout(db, class, &[]).map_err(internal)?;
+            classes.push((self.class_type(db, class, &[], &fields), entry));
+        }
+        classes.sort_unstable_by_key(|(id, _)| *id);
+        let mut bytes = (classes.len() as u64).to_ne_bytes().to_vec();
+        let mut description = DataDescription::new();
+        for (id, entry) in classes {
+            bytes.extend((id as u64).to_ne_bytes());
+            let entry = self.module.declare_func_in_data(entry, &mut description);
+            description.write_function_addr(super::table_word(bytes.len()), entry);
+            bytes.extend([0; 8]);
+        }
+        let list = self
+            .module
+            .declare_data(EQUALS_SYMBOL, Linkage::Export, false, false)
+            .map_err(internal)?;
+        self.define_data(list, description, bytes)
+    }
 }
 
 impl Backend<'_> {
@@ -146,7 +202,9 @@ pub(super) fn define_all(
     };
     for (entry, target) in backend.hooks.entries.clone() {
         context.func.signature = signature_of(backend, entry);
-        entry_body(backend, target, &mut context.func, builder_context);
+        // The one entry with two arguments is that of an `eq`.
+        let answers = context.func.signature.params.len() == 2;
+        entry_body(backend, target, answers, &mut context.func, builder_context);
         // It has no name in a trace: the function it runs is the frame a
         // program knows.
         super::define(backend, context, entry, "", clif, disassembly)?;
@@ -167,11 +225,15 @@ pub(super) fn define_all(
     Ok(())
 }
 
-/// The body of an entry: call `target` with the one argument, and return
-/// what it returned and zero, or what it threw and one.
+/// The body of an entry: call `target` with the entry's arguments, and
+/// return what it returned and zero, or what it threw and one. With
+/// `answers` the function returns a `bool`, and the entry that as a word:
+/// the native holds what an entry returns where the collector looks for a
+/// reference, which a word of zero or one is taken not to be.
 fn entry_body(
     backend: &mut Backend<'_>,
     target: FuncId,
+    answers: bool,
     function: &mut ir::Function,
     builder_context: &mut FunctionBuilderContext,
 ) {
@@ -179,7 +241,7 @@ fn entry_body(
     let block = builder.create_block();
     builder.append_block_params_for_function_params(block);
     builder.switch_to_block(block);
-    let argument = builder.block_params(block)[0];
+    let arguments = builder.block_params(block).to_vec();
     let target = backend.function_ref(target, builder.func);
     let caught = builder.create_block();
     builder.append_block_param(caught, WORD);
@@ -192,9 +254,14 @@ fn entry_body(
     let returned = unwind::try_call(
         &mut builder,
         &unwind::Called::Direct(target),
-        &[argument],
+        &arguments,
         &[(Some(ENTRY_HANDLER), caught)],
     );
+    let returned = if answers {
+        builder.ins().uextend(WORD, returned)
+    } else {
+        returned
+    };
     let zero = builder.ins().iconst(WORD, 0);
     builder.ins().return_(&[returned, zero]);
 

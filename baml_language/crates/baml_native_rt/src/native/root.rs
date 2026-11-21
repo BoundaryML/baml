@@ -26,6 +26,17 @@ impl NativeBaml for Natives {
         json::to_json_value(scope, types[0], value, false, false).await
     }
 
+    /// The `eq` of a class that writes none: its fields, compared.
+    async fn _equals_structural_default<'s>(
+        scope: &mut Scope<'s>,
+        a_type: TypeId,
+        a: Elem<'s>,
+        b_type: TypeId,
+        b: Elem<'s>,
+    ) -> Result<bool, Thrown<'s>> {
+        super::structural::equals(scope, (a, a_type), (b, b_type)).await
+    }
+
     /// `value` without its fraction, as the nearest `int`: an end of the
     /// 64-bit range for a value past it, and zero for NaN.
     fn _trunc_to_int(value: f64) -> i64 {
