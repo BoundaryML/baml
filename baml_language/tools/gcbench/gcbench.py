@@ -347,15 +347,15 @@ def build_vm(variant, w, n, cache):
     if not ok:
         shutil.rmtree(d, ignore_errors=True)
         return Exe(None, key, error)
-    if complete():  # another invocation published the same entry while this one packed
-        shutil.rmtree(d, ignore_errors=True)
-        return Exe(final / "exe", key)
-    if final.exists():  # an incomplete entry left by an older run
-        shutil.rmtree(final, ignore_errors=True)
+    # Publish with one rename, and never delete a published entry: an entry only
+    # ever appears here complete, so one that exists is another invocation's copy
+    # of the same program, possibly in use.
     try:
         d.rename(final)
-    except OSError:  # lost the race to publish; the other entry is the same program
+    except OSError:
         shutil.rmtree(d, ignore_errors=True)
+        if not complete():
+            return Exe(None, key, f"unusable cache entry {final}: remove it and run again")
     return Exe(final / "exe", key)
 
 
@@ -713,8 +713,7 @@ def prepare(cfg, args, cache):
                                         f"{t['failure'] if t['outcome'] != 'wrong' else repr(t['stdout'][:80])}")
                         dropped.add((inst.label, wid))
                         break
-                    if k == n:
-                        accs[inst.label] = t["acc"]
+                    accs.setdefault(k, {})[inst.label] = t["acc"]
                 if args.gc_probe and (inst.label, wid) not in dropped:
                     probe = {phase: gc_probe(inst, w, built[k].path, args.timeout)
                              for phase, k in (("cold", 1), ("steady", n))}
@@ -723,14 +722,20 @@ def prepare(cfg, args, cache):
                         log(f"  {wid}: {inst.label}: no GC numbers: {errors[0]}")
                     probes[(inst.label, wid)] = probe
             exes[(v.label, wid)] = {k: e.path for k, e in built.items()}
-        # Every row must compute the same accumulated result: the baseline's (or,
-        # without one, the most common). A row that disagrees is dropped.
-        if accs:
-            ref = accs.get(cfg["baseline"]) or max(set(accs.values()), key=list(accs.values()).count)
-            ref_accs[wid] = ref
-            for label, acc in accs.items():
+        # Every row must compute the same accumulated result, in the cold program
+        # and in the steady one: the baseline's (or, without one, the most
+        # common). A row that disagrees is dropped.
+        for k, by_label in accs.items():
+            live = {label: acc for label, acc in by_label.items() if (label, wid) not in dropped}
+            if not live:
+                continue
+            ref = (live[cfg["baseline"]] if cfg["baseline"] in live
+                   else max(set(live.values()), key=list(live.values()).count))
+            ref_accs.setdefault(wid, {})[k] = ref
+            for label, acc in live.items():
                 if acc != ref:
-                    problems.append(f"{label}: FAILED verification (accumulated result {acc!r}, expected {ref!r})")
+                    problems.append(f"{label}: N={k} FAILED verification (accumulated result {acc!r}, "
+                                    f"expected {ref!r})")
                     dropped.add((label, wid))
         for v in variants:
             if all((i.label, wid) in dropped for i in rows if i.variant is v):
@@ -832,9 +837,10 @@ def measure(cfg, args, cache):
                 for phase in ("cold", "steady"):
                     t = run_trial(inst, command(exes, phase, n), timeout=args.timeout)
                     t["outcome"], acc = outcome(w, t)
-                    if t["outcome"] == "ok" and phase == "steady" and acc != plan["accs"].get(w.id, acc):
+                    expected = plan["accs"].get(w.id, {}).get(1 if phase == "cold" else n)
+                    if t["outcome"] == "ok" and expected is not None and acc != expected:
                         t["outcome"] = "wrong"
-                        t["stderr_tail"] = f"accumulated result {acc!r}, expected {plan['accs'][w.id]!r}"
+                        t["stderr_tail"] = f"accumulated result {acc!r}, expected {expected!r}"
                     t["ok"] = t["outcome"] == "ok"
                     if t["outcome"] in ("crash", "wrong"):
                         failures.append(f"{inst.label} {w.id} {phase}: {t['outcome']}: {describe_failure(t)}")
@@ -860,8 +866,9 @@ def measure(cfg, args, cache):
 
 
 def write_atomic(path, text):
-    """Replace a file only once the new contents are fully written."""
-    tmp = path.with_name(path.name + ".tmp")
+    """Replace a file only once the new contents are fully written. The temporary
+    file is this process's own, so two writers to one directory never share it."""
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     tmp.write_text(text)
     os.replace(tmp, path)
 
