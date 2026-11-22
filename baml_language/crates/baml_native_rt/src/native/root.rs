@@ -5,9 +5,6 @@ use super::{
 };
 use crate::layout::{TYPE_BIGINT, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_STRING};
 
-/// The values of an `int` on the interpreter, which keeps one in 63 bits.
-const INTERPRETED_INT: std::ops::RangeInclusive<i64> = -(1 << 62)..=(1 << 62) - 1;
-
 impl NativeBaml for Natives {
     /// What a `from_json` nothing overrides returns: the value read by its
     /// fields, with declared names, each field by its own `from_json`.
@@ -92,44 +89,30 @@ impl NativeBaml for Natives {
         arr
     }
 
-    /// The sum of `values`, or a panic as soon as the running total leaves
-    /// the range of an `int` on the interpreter, which is a bit narrower
-    /// than a native one. A total past that range is one only native code
-    /// could hold, and a total past 64 bits one nothing holds, so neither
-    /// is returned as if it were the sum.
+    /// The sum of `values`, or a panic at the first element the running
+    /// total does not fit an `int` with.
     fn _sum_int<'s>(scope: &mut Scope<'s>, values: Root<'s, Arr<Int>>) -> Result<i64, Thrown<'s>> {
         let slice = values.get(scope).as_slice();
-        // One pass nothing branches in gives the wrapping sum and the bits
-        // any value sets, a negative one counted by its complement. No
-        // value is larger than two to the number of those bits, so when
-        // that many times the count stays in the range, no running total
-        // leaves it, and the wrapping sum is the sum.
-        let (wrapped, bits) = slice.iter().fold((0_i64, 0_i64), |(sum, bits), value| {
-            (sum.wrapping_add(*value), bits | (value ^ (value >> 63)))
+        // One pass nothing branches in: the wrapping sum, and whether any
+        // step overflowed.
+        let (wrapped, overflowed) = slice.iter().fold((0_i64, false), |(sum, any), value| {
+            let (sum, overflowed) = sum.overflowing_add(*value);
+            (sum, any | overflowed)
         });
-        let width = i64::BITS - bits.leading_zeros();
-        let within = width < 62
-            && (slice.len() as u64)
-                .checked_mul(1 << width)
-                .is_some_and(|bound| bound <= INTERPRETED_INT.end().cast_unsigned());
-        if within {
+        if !overflowed {
             return Ok(wrapped);
         }
+        // Again, for the element it was at.
         let mut sum: i64 = 0;
-        let mut overflow = None;
         for value in slice {
             match sum.checked_add(*value) {
-                Some(total) if INTERPRETED_INT.contains(&total) => sum = total,
-                _ => {
-                    overflow = Some(*value);
-                    break;
+                Some(total) => sum = total,
+                None => {
+                    return Err(scope.integer_overflow(&format!("{sum} + {value} overflows int")));
                 }
             }
         }
-        match overflow {
-            Some(value) => Err(scope.integer_overflow(&format!("{sum} + {value} overflows int"))),
-            None => Ok(sum),
-        }
+        Ok(sum)
     }
 
     fn _sum_float(values: ArrRef<'_, Float>) -> f64 {
