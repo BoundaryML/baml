@@ -1,0 +1,247 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+   ╭─[main.baml:5:34]
+ 5 │     let g: (int | string) | C0 = h;
+   ·                                  ┬
+   ·                                  ╰── expected `int | string | C0`, found `int | C1`
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:14:32]
+ 14 │     let g: int | string | C0 = h;
+    ·                                ┬
+    ·                                ╰── expected `int | string | C0`, found `int | C1`
+    ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+    ╭─[main.baml:23:9]
+ 23 │     let g: (int | string) | C0 {} = h;
+    ·         ─────────────────────────
+    ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+    ╭─[main.baml:28:9]
+ 28 │     let g: int | string | C0 {} = h;
+    ·         ───────────────────────
+    ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+    ╭─[main.baml:33:9]
+ 33 │     let g: let k: (int | string) | C0 = h;
+    ·         ─────────────────────────────
+    ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+    ╭─[main.baml:38:9]
+ 38 │     let g: let k: int | string | C0 = h;
+    ·         ───────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:44:16]
+ 44 │         let g: int => 1,
+    ·                ─┬─
+    ·                 ╰── expected `C1`, found `int`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:51:16]
+ 51 │         let g: int | string | C0 => 1,
+    ·                ────────┬────────
+    ·                        ╰── expected `C1`, found `int | string | C0`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:58:16]
+ 58 │         let g: (int | string) | C0 => 1,
+    ·                ─────────┬─────────
+    ·                         ╰── expected `C1`, found `int | string | C0`
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `missingValue`
+    ╭─[main.baml:64:25]
+ 64 │     let g: let k: int = missingValue;
+    ·                         ────────────
+    ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+    ╭─[main.baml:71:9]
+ 71 │     let g: int | Tagged { tag: 1 } = h;
+    ·         ──────────────────────────
+    ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+    ╭─[main.baml:76:9]
+ 76 │     let xs: [..]: int[] = h;
+    ·         ───────────────
+    ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+    ╭─[main.baml:83:9]
+ 83 │     let g: int | Flag { tag: true } = h;
+    ·         ───────────────────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:88:13]
+ 88 │     let xs: [..]: int[] = h;
+    ·             ─────┬─────
+    ·                  ╰── expected `(int | string)[]`, found `int[]`
+    ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+    ╭─[main.baml:95:9]
+ 95 │     let g: C0 {} = h;
+    ·         ────────
+    ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[main.baml:100:9]
+ 100 │     let g: C0 {} = h;
+     ·         ────────
+     ╰────
+
+  [type] E0002
+
+  × unresolved type: Missing
+     ╭─[main.baml:105:33]
+ 105 │     let g: Tagged { tag: let n: Missing } = h;
+     ·                                 ───────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[main.baml:110:19]
+ 110 │     let g: let k: C0 = h;
+     ·                   ─┬
+     ·                    ╰── expected `C1`, found `C0`
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[main.baml:115:9]
+ 115 │     let xs: [let first, let second] = h;
+     ·         ───────────────────────────
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[main.baml:120:9]
+ 120 │     let g: int | (C0 {}, C0 {}) = h;
+     ·         ───────────────────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[main.baml:125:26]
+ 125 │     let g: Tagged { tag: [..] } = h;
+     ·                          ──┬─
+     ·                            ╰── a list pattern never matches a value of type `int`
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[main.baml:133:9]
+ 133 │     let C0 {} | C1 {} = h;
+     ·         ─────────────
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[main.baml:137:9]
+ 137 │     let C0 {} | C1 {} = h;
+     ·         ─────────────
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in for-let binding; refutable patterns belong in `match`
+     ╭─[main.baml:141:14]
+ 141 │     for (let g: C0 {} | C1 {} in [h]) { return 1; }
+     ·              ────────────────
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in for-let binding; refutable patterns belong in `match`
+     ╭─[main.baml:145:14]
+ 145 │     for (let g: C0 {} | C1 {} in [h]) { return 1; }
+     ·              ────────────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[main.baml:151:16]
+ 151 │         let g: int => 1,
+     ·                ─┬─
+     ·                 ╰── expected `string`, found `int`
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[main.baml:158:9]
+ 158 │         (let a: int, let b: int) => 1,
+     ·         ────────────┬───────────
+     ·                     ╰── expected `string`, found `(unknown, unknown)`
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[main.baml:165:9]
+ 165 │         [_, ..]: int[] => 1,
+     ·         ───────┬──────
+     ·                ╰── expected `string[]`, found `int[]`
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type int | C0; missing: C0 {}
+     ╭─[main.baml:171:5]
+ 171 │ ╭─▶     match (h) {
+ 172 │ │           let g: int | (C0 {}, C0 {}) => 1,
+ 173 │ ╰─▶     }
+     ╰────

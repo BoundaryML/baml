@@ -180,14 +180,6 @@ source: crates/baml_tests/src/generated_tests.rs
      ·         ───────────────────────────
      ╰────
 
-  [type] E0111
-
-  × refutable pattern in let binding; refutable patterns belong in `match`
-     ╭─[patterns_class_destructure.baml:223:9]
- 223 │     let Box<string> { value: int } = boxed;
-     ·         ──────────────────────────
-     ╰────
-
   [type] E0001
 
   × mismatched types
@@ -273,14 +265,6 @@ source: crates/baml_tests/src/generated_tests.rs
  277 │ ╭─▶     let Person {
  278 │ │           missing: let renamed
  279 │ ╰─▶     } = Person {
-     ╰────
-
-  [type] E0111
-
-  × refutable pattern in let binding; refutable patterns belong in `match`
-     ╭─[patterns_class_destructure.baml:289:13]
- 289 │         let Person { age: string } = p;
-     ·             ──────────────────────
      ╰────
 
   [type] E0001

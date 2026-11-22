@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+   ╭─[main.baml:5:43]
+ 5 │     let value: (int | string) | Invoice = source;
+   ·                                           ───┬──
+   ·                                              ╰── expected `int | string | Invoice`, found `int | Receipt`
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:10:41]
+ 10 │     let value: int | string | Invoice = source;
+    ·                                         ───┬──
+    ·                                            ╰── expected `int | string | Invoice`, found `int | Receipt`
+    ╰────

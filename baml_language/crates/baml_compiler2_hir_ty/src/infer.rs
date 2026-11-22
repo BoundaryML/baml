@@ -4519,6 +4519,7 @@ impl<'db> InferenceContext<'db> {
                 // (`let xs: [..]: int[]`) record every binding.
                 let subpat = *subpat;
                 let annotation = subpat.and_then(|sub| self.pattern_ascription_ty(body, sub));
+                let check_coverage = subpat.is_some() && annotation.is_none();
                 let settled = match annotation {
                     Some(annotation_ty) => {
                         if let Some(init) = initializer {
@@ -4534,7 +4535,15 @@ impl<'db> InferenceContext<'db> {
                         None => Ty::error(),
                     },
                 };
-                self.lower_pattern(body, pattern, &settled);
+                if check_coverage {
+                    // Equivalent aliases and expanded types must present the same
+                    // constructors to the pattern matrix. Keep open types open.
+                    let resolved = self.table.resolve_completely(&settled);
+                    let input = self.matrix_scrut(&resolved);
+                    self.lower_let_pattern(body, pattern, &input, false);
+                } else {
+                    self.lower_pattern(body, pattern, &settled);
+                }
                 self.finish_let_else(body, else_branch);
             }
             // Destructures: the pattern walk records each binding's type
@@ -4749,25 +4758,10 @@ impl<'db> InferenceContext<'db> {
     /// uses). Structural sub-patterns return None (the destructure walk
     /// owns those).
     fn pattern_ascription_ty(&mut self, body: &ExprBody, sub: PatId) -> Option<Ty> {
-        match &body.patterns[sub] {
-            Pattern::Type(_) => {
-                let type_ref = self.type_refs.pattern_types.get(&sub).copied()?;
-                Some(self.lower_body_annotation(type_ref))
-            }
-            Pattern::Or(alternatives) => {
-                let alternatives = alternatives.clone();
-                let mut members = Vec::new();
-                for alt in alternatives {
-                    if !matches!(body.patterns[alt], Pattern::Type(_)) {
-                        return None;
-                    }
-                    let type_ref = self.type_refs.pattern_types.get(&alt).copied()?;
-                    members.push(self.lower_body_annotation(type_ref));
-                }
-                Some(Ty::union(members))
-            }
-            _ => None,
-        }
+        lower_pattern_ascription(body, sub, |id| {
+            let type_ref = self.type_refs.pattern_types.get(&id).copied()?;
+            Some(self.lower_body_annotation(type_ref))
+        })
     }
 
     /// The `let ... else` tail, shared by the bind and destructure paths.
@@ -16520,6 +16514,64 @@ fn operand_members(lang: baml_base::LangRoots, ty: &Ty) -> Vec<Ty> {
     match ty.kind() {
         InferTy::Union(members) => members.iter().map(|member| widen(lang, member)).collect(),
         _ => vec![widen(lang, ty)],
+    }
+}
+
+/// Flatten syntactic OR patterns in source order, preserving the written type of each leaf.
+fn lower_pattern_ascription(
+    body: &ExprBody,
+    sub: PatId,
+    mut lower_type: impl FnMut(PatId) -> Option<Ty>,
+) -> Option<Ty> {
+    match &body.patterns[sub] {
+        Pattern::Type(_) => lower_type(sub),
+        Pattern::Or(alternatives) => {
+            let mut pending: Vec<_> = alternatives.iter().rev().copied().collect();
+            let mut members = Vec::with_capacity(alternatives.len());
+            while let Some(alt) = pending.pop() {
+                match &body.patterns[alt] {
+                    Pattern::Type(_) => members.push(lower_type(alt)?),
+                    Pattern::Or(nested) => pending.extend(nested.iter().rev().copied()),
+                    _ => return None,
+                }
+            }
+            Some(Ty::union(members))
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod ascription_tests {
+    use super::*;
+    use baml_compiler2_ast::TypeExprKind;
+
+    #[test]
+    fn grouped_and_flat_ascriptions_record_the_same_union() {
+        // BAML diagnostics normalize union types, so only Rust can assert the internal member tree.
+        let mut body = ExprBody::default();
+        let mut leaf = |kind: TypeExprKind| {
+            body.patterns
+                .alloc(Pattern::Type(kind.at(Default::default())))
+        };
+        let int = leaf(TypeExprKind::Int);
+        let null = leaf(TypeExprKind::Null);
+        let string = leaf(TypeExprKind::String);
+        let nested = body.patterns.alloc(Pattern::Or(vec![int, null]));
+        let grouped = body.patterns.alloc(Pattern::Or(vec![nested, string]));
+        let flat = body.patterns.alloc(Pattern::Or(vec![int, null, string]));
+        let wildcard = body.patterns.alloc(Pattern::Wildcard);
+        let mixed = body.patterns.alloc(Pattern::Or(vec![nested, wildcard]));
+        let types =
+            FxHashMap::from_iter([(int, Ty::int()), (null, Ty::null()), (string, Ty::string())]);
+        let lower = |id| types.get(&id).cloned();
+        let expected = Ty::union([Ty::int(), Ty::null(), Ty::string()]);
+        assert_eq!(
+            lower_pattern_ascription(&body, grouped, lower),
+            Some(expected.clone())
+        );
+        assert_eq!(lower_pattern_ascription(&body, flat, lower), Some(expected));
+        assert_eq!(lower_pattern_ascription(&body, mixed, lower), None);
     }
 }
 
