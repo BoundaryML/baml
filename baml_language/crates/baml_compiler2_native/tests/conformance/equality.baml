@@ -173,15 +173,18 @@ function eq_enum_own() -> string {
   `${eq_shade(0) == eq_shade(1)} ${eq_shade(0) == eq_shade(2)} ${eq_shade(1) != eq_shade(0)} ${eq_shade(2) != eq_shade(1)} ${eq_shade(2) == eq_shade(2)}`
 }
 // An array of `float`s compares as `float`s do where nothing says what it
-// holds: a NaN equals itself, and the two zeros are equal.
+// holds, which is so of a field declared `unknown`: a NaN equals itself,
+// and the two zeros are equal. The arrays are made by compiled code, so
+// only what it writes in their headers says they hold `float`s.
 function eq_unknown_floats() -> string {
   let positive: float[] = [float.nan(), halves(0), halves(3)];
   let negative: float[] = [float.nan(), halves(0) * (0.0 - 1.0), halves(3)];
   let changed: float[] = [float.nan(), halves(1), halves(3)];
-  let one: unknown = positive;
-  let other: unknown = negative;
-  let third: unknown = changed;
-  `${one == other} ${one == third}`
+  let pushed: float[] = [];
+  pushed.push(float.nan());
+  pushed.push(halves(0) * (0.0 - 1.0));
+  pushed.push(halves(3));
+  `${EqLoose { held: positive } == EqLoose { held: negative }} ${EqLoose { held: positive } == EqLoose { held: changed }} ${EqLoose { held: positive } == EqLoose { held: pushed }}`
 }
 function eq_unknown_ints() -> string {
   let counted: int[] = [rep("a", 1).length(), 2];
@@ -218,4 +221,58 @@ function eq_float_values_of_maps() -> string {
   let decoded = baml.json.decode<map<string, float>>(rep("{\"a\": 1.5, \"b\": -0.0}", 1));
   let written: map<string, float> = { rep("a", 1): halves(3), rep("b", 1): halves(0) };
   `${EqLoose { held: one } == EqLoose { held: other }} ${EqLoose { held: decoded } == EqLoose { held: written }} ${EqLoose { held: one } == EqLoose { held: written }}`
+}
+
+// A map with `float` keys keeps every NaN as one key and the two zeros as
+// one, so two maps compare key by key whatever each was written with, and
+// whether or not anything says what the keys are. A NaN negated is a NaN
+// of other bits.
+function eq_nan(negative: bool) -> float {
+  let nan = float.nan();
+  if (negative) { -nan } else { nan }
+}
+function eq_zero(negative: bool) -> float {
+  let zero = halves(0);
+  if (negative) { -zero } else { zero }
+}
+function eq_float_keyed(special: float, other: int) -> map<float, int> {
+  let m: map<float, int> = {};
+  m[special] = 1;
+  m[halves(other)] = 2;
+  m
+}
+function eq_nan_keyed_maps() -> string {
+  let one = eq_float_keyed(eq_nan(false), 5);
+  let other = eq_float_keyed(eq_nan(true), 5);
+  let changed = eq_float_keyed(eq_nan(false), 6);
+  `${one == other} ${one == changed} ${other[eq_nan(false)]} ${one[eq_nan(true)]}`
+}
+function eq_zero_keyed_maps() -> string {
+  let one = eq_float_keyed(eq_zero(false), 5);
+  let other = eq_float_keyed(eq_zero(true), 5);
+  let changed = eq_float_keyed(eq_zero(false), 6);
+  `${one == other} ${one == changed} ${other[eq_zero(false)]} ${one[eq_zero(true)]}`
+}
+function eq_nan_keyed_maps_unknown() -> string {
+  let one = eq_float_keyed(eq_nan(false), 5);
+  let other = eq_float_keyed(eq_nan(true), 5);
+  let changed = eq_float_keyed(eq_nan(false), 6);
+  `${EqLoose { held: one } == EqLoose { held: other }} ${EqLoose { held: other } == EqLoose { held: one }} ${EqLoose { held: one } == EqLoose { held: changed }}`
+}
+function eq_zero_keyed_maps_unknown() -> string {
+  let one = eq_float_keyed(eq_zero(false), 5);
+  let other = eq_float_keyed(eq_zero(true), 5);
+  let changed = eq_float_keyed(eq_zero(false), 6);
+  `${EqLoose { held: one } == EqLoose { held: other }} ${EqLoose { held: other } == EqLoose { held: one }} ${EqLoose { held: one } == EqLoose { held: changed }}`
+}
+// The second write of a NaN or of a zero is of the key already there, and
+// a map written as a literal keeps its keys the same way.
+function eq_float_keys_written_twice() -> string {
+  let nans = eq_float_keyed(eq_nan(false), 5);
+  nans[eq_nan(true)] = 10;
+  let zeros = eq_float_keyed(eq_zero(false), 5);
+  zeros[eq_zero(true)] = 10;
+  let nan_literal: map<float, int> = { eq_nan(true): 10, halves(5): 2 };
+  let zero_literal: map<float, int> = { eq_zero(true): 10, halves(5): 2 };
+  `${nans.length()} ${zeros.length()} ${nans == nan_literal} ${zeros == zero_literal} ${EqLoose { held: nans } == EqLoose { held: nan_literal }} ${EqLoose { held: zeros } == EqLoose { held: zero_literal }}`
 }

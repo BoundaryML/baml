@@ -141,10 +141,11 @@ impl<'db> Translator<'_, 'db> {
                 } else {
                     // What compares two values: it reads the description
                     // it is given, and the value's header for the rest.
-                    if let Some(class) = self.program.equals_unlisted.first() {
+                    if let Some(named) = self.program.equals_unlisted.first() {
                         return Err(internal(format!(
-                            "comparing values in a program with a generic class that has an eq \
-                             of its own, which the runtime cannot call: {class}"
+                            "comparing values in a program with a type whose own eq the \
+                             runtime cannot call ({named}), which the check of the program \
+                             refuses"
                         )));
                     }
                     self.backend.compares_values = true;

@@ -179,11 +179,13 @@ enum Runtime {
     StringFromEnum,
     PanicDivisionByZero,
     PanicNegativeShift,
+    PanicAbsOverflow,
     PanicIndexOutOfBounds,
     PanicMapKeyNotFound,
     ErrorMapKeyNotFound,
     ErrorDivisionByZero,
     ErrorNegativeShift,
+    ErrorAbsOverflow,
     ErrorIndexOutOfBounds,
     ErrorContext,
     Throw,
@@ -233,11 +235,13 @@ impl Runtime {
             Self::StringFromEnum => "baml_rt_string_from_enum",
             Self::PanicDivisionByZero => "baml_rt_panic_division_by_zero",
             Self::PanicNegativeShift => "baml_rt_panic_negative_shift",
+            Self::PanicAbsOverflow => "baml_rt_panic_abs_overflow",
             Self::PanicIndexOutOfBounds => "baml_rt_panic_index_out_of_bounds",
             Self::PanicMapKeyNotFound => "baml_rt_panic_map_key_not_found",
             Self::ErrorMapKeyNotFound => "baml_rt_error_map_key_not_found",
             Self::ErrorDivisionByZero => "baml_rt_error_division_by_zero",
             Self::ErrorNegativeShift => "baml_rt_error_negative_shift",
+            Self::ErrorAbsOverflow => "baml_rt_error_abs_overflow",
             Self::ErrorIndexOutOfBounds => "baml_rt_error_index_out_of_bounds",
             Self::ErrorContext => "baml_rt_error_context",
             Self::Throw => "baml_rt_throw",
@@ -292,9 +296,10 @@ impl Runtime {
             }
             Self::BigintNeg => (vec![word, word], vec![word, word]),
             Self::BigintCmp => (vec![word, word, word], vec![word]),
-            Self::PanicDivisionByZero | Self::PanicNegativeShift | Self::PanicStackOverflow => {
-                (vec![word, word], vec![])
-            }
+            Self::PanicDivisionByZero
+            | Self::PanicNegativeShift
+            | Self::PanicAbsOverflow
+            | Self::PanicStackOverflow => (vec![word, word], vec![]),
             Self::PollSlow | Self::AllocSlow | Self::SpawnUnsupported => (vec![], vec![]),
             Self::Await => (vec![word], vec![]),
             Self::TaskStart => (vec![word], vec![word]),
@@ -310,7 +315,9 @@ impl Runtime {
             | Self::Throw
             | Self::Rethrow => (vec![word, word], vec![]),
             Self::ErrorMapKeyNotFound | Self::BigintToNanos => (vec![word], vec![word]),
-            Self::ErrorDivisionByZero | Self::ErrorNegativeShift => (vec![word, word], vec![word]),
+            Self::ErrorDivisionByZero | Self::ErrorNegativeShift | Self::ErrorAbsOverflow => {
+                (vec![word, word], vec![word])
+            }
             Self::ErrorIndexOutOfBounds | Self::ErrorContext => {
                 (vec![word, word, word], vec![word])
             }
@@ -353,6 +360,8 @@ impl Runtime {
 enum Panic {
     DivisionByZero(ir::Value),
     NegativeShift(ir::Value),
+    /// `abs` of the smallest `int`, which is passed.
+    AbsOverflow(ir::Value),
     IndexOutOfBounds(ir::Value, ir::Value),
     MapKeyNotFound,
 }
@@ -2952,6 +2961,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                     (Runtime::ErrorDivisionByZero, vec![mutator, dividend])
                 }
                 Panic::NegativeShift(count) => (Runtime::ErrorNegativeShift, vec![mutator, count]),
+                Panic::AbsOverflow(value) => (Runtime::ErrorAbsOverflow, vec![mutator, value]),
                 Panic::IndexOutOfBounds(index, length) => {
                     (Runtime::ErrorIndexOutOfBounds, vec![mutator, index, length])
                 }
@@ -2969,6 +2979,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                     (Runtime::PanicDivisionByZero, vec![dividend, zero])
                 }
                 Panic::NegativeShift(count) => (Runtime::PanicNegativeShift, vec![count, zero]),
+                Panic::AbsOverflow(value) => (Runtime::PanicAbsOverflow, vec![value, zero]),
                 Panic::IndexOutOfBounds(index, length) => {
                     (Runtime::PanicIndexOutOfBounds, vec![index, length])
                 }
@@ -3769,6 +3780,11 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             (Intrinsic::Scalar(op), [value]) => {
                 let value = self.operand(value)?;
+                if matches!(op, ScalarOp::IntAbs) {
+                    // The smallest `int` has no absolute value.
+                    let smallest = self.builder.ins().icmp_imm(IntCC::Equal, value, i64::MIN);
+                    self.panic_if(smallest, Panic::AbsOverflow(value))?;
+                }
                 let ins = self.builder.ins();
                 Ok(match op {
                     ScalarOp::FloatSqrt => ins.sqrt(value),
@@ -3777,8 +3793,6 @@ impl<'a, 'db> Translator<'a, 'db> {
                     ScalarOp::FloatCeil => ins.ceil(value),
                     ScalarOp::FloatTrunc => ins.trunc(value),
                     ScalarOp::FloatIsNan => ins.fcmp(FloatCC::Unordered, value, value),
-                    // The smallest `int` is its own absolute value: `int`
-                    // wraps.
                     ScalarOp::IntAbs => ins.iabs(value),
                     ScalarOp::IntLeadingZeros => ins.clz(value),
                     ScalarOp::IntTrailingZeros => ins.ctz(value),

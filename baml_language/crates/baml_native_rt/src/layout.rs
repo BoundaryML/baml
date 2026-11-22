@@ -561,6 +561,7 @@ pub const WELL_KNOWN_STACK_OVERFLOW: usize = 4;
 pub const WELL_KNOWN_USER_PANIC: usize = 8;
 pub const WELL_KNOWN_ALLOC_FAILURE: usize = 10;
 pub const WELL_KNOWN_NEGATIVE_BIT_SHIFT: usize = 12;
+pub const WELL_KNOWN_INTEGER_OVERFLOW: usize = 15;
 pub const WELL_KNOWN_INVALID_ARGUMENT: usize = 16;
 pub const WELL_KNOWN_PARSE_ERROR: usize = 17;
 pub const WELL_KNOWN_CONTEXT: usize = 18;

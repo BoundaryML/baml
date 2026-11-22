@@ -14,13 +14,46 @@ function sum_floats(n: int) -> float[] {
 function sum_int() -> int { sum_ints(100).sum() }
 function sum_int_empty() -> int { sum_ints(0).sum() }
 function sum_int_one() -> int { sum_ints(1).sum() }
-// native prints: -9223372036854775808
+// A running total that leaves the range of an `int` panics, and says at
+// which element.
 function sum_int_overflows() -> int {
   let values = sum_ints(0);
   values.push(4611686018427387903);
   values.push(4611686018427387903);
   values.push(2);
   values.sum()
+}
+function sum_int_overflows_by_one() -> int {
+  let values = sum_ints(3);
+  values.push(4611686018427387903);
+  values.push(4);
+  values.sum()
+}
+function sum_int_underflows() -> int {
+  let values = sum_ints(0);
+  values.push(0 - 4611686018427387903);
+  values.push(-1);
+  values.push(-1);
+  values.sum()
+}
+// The totals at the two ends of the range are sums.
+function sum_int_ends() -> string {
+  let most = sum_ints(0);
+  most.push(4611686018427387900);
+  most.push(3);
+  let least = sum_ints(0);
+  least.push(0 - 4611686018427387903);
+  least.push(-1);
+  `${most.sum()} ${least.sum()}`
+}
+function sum_int_overflow_caught() -> string {
+  let values = sum_ints(0);
+  values.push(4611686018427387903);
+  values.push(1);
+  let total = values.sum() catch (e) {
+    baml.panics.IntegerOverflow => { return e.message; },
+  };
+  `${total}`
 }
 function sum_float() -> float { sum_floats(50).sum() }
 function sum_float_empty() -> float { sum_floats(0).sum() }

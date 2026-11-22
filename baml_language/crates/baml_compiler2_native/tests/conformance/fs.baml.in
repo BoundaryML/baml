@@ -181,3 +181,31 @@ function fs_files_by_tasks() -> string {
   let n = await busy;
   `${await a} ${await b} ${await c} ${n}`
 }
+// A `flush` and a `write` reached through the method table, on a receiver
+// that is a file in one turn of the loop and an instance of a class of the
+// program in the next: a file's are natives, entered through their stubs,
+// and a `flush` answers nothing, whatever its stub leaves where an answer
+// would be.
+class FsCounted {
+  flushed int
+  implements baml.io.Write {
+    function write_some(self, data: uint8array) -> int throws baml.errors.Io { data.length() }
+    function flush(self) -> void throws baml.errors.Io { self.flushed += 1; }
+  }
+}
+function fs_flush_dispatched() -> string {
+  let path = fs_at("flushed.txt");
+  let counted = FsCounted { flushed: 0 };
+  let sinks: baml.io.Write[] = [baml.fs.open(path, "w"), counted, baml.fs.open(fs_at("flushed-too.txt"), "w")];
+  let seen: string[] = [];
+  for (let sink in sinks) {
+    let wrote = sink.write("abc");
+    let answered = sink.flush();
+    let held: unknown[] = [answered, wrote];
+    seen.push(`${wrote}:${answered == null}:${held[0] == null}:${held.length()}`);
+  };
+  let text = baml.fs.read(path);
+  baml.fs.remove(path);
+  baml.fs.remove(fs_at("flushed-too.txt"));
+  `${seen.join(",")} ${counted.flushed} ${text}`
+}

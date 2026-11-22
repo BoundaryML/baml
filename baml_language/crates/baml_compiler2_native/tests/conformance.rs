@@ -484,20 +484,40 @@ fn refused(source: &str) -> String {
 
 /// The runtime's walk of two values calls the `eq` of a class by its type
 /// id. What it has no entry for it would compare by variant or by field,
-/// so a program where it could meet one is refused.
+/// so a program where it could meet one is refused, and the refusal names
+/// the type: an enum with an `eq` held in a class, in an array or in a
+/// union, and a class with type parameters.
 #[test]
 fn comparing_values_with_an_eq_the_runtime_cannot_call_is_refused() {
     let refusal = "comparing values in a program with a type whose own eq the runtime cannot call";
-    let of_an_enum = refused(
-        "enum Shade { Light Pale }
+    let shade = "enum Shade { Light Pale }
 implement baml.ops.Equals for Shade {
   function eq(self, other: Self) -> bool throws never { true }
 }
-class Holder { shade Shade }
-function main() -> bool { Holder { shade: Shade.Light } == Holder { shade: Shade.Pale } }
-",
-    );
-    assert!(of_an_enum.contains(refusal), "{of_an_enum}");
+function shade(n: int) -> Shade { if (n == 0) { Shade.Light } else { Shade.Pale } }
+";
+    for (held, compared) in [
+        (
+            "a class",
+            "class Holder { shade Shade }
+function main() -> bool { Holder { shade: shade(0) } == Holder { shade: shade(1) } }",
+        ),
+        (
+            "an array",
+            "function main() -> bool { [shade(0), shade(1)] == [shade(1), shade(0)] }",
+        ),
+        (
+            "a union",
+            "function either(n: int) -> int | Shade { if (n > 5) { n } else { shade(n) } }
+function main() -> string { `${either(0) == either(1)} ${either(7) == either(1)}` }",
+        ),
+    ] {
+        let of_an_enum = refused(&format!("{shade}{compared}\n"));
+        assert!(
+            of_an_enum.contains(refusal) && of_an_enum.contains("Shade"),
+            "in {held}: {of_an_enum}"
+        );
+    }
     let of_a_generic_class = refused(
         "class Wrapped<T> {
   value T
@@ -508,7 +528,18 @@ function main() -> bool { Holder { shade: Shade.Light } == Holder { shade: Shade
 function main() -> bool { Wrapped<int> { value: 1 } == Wrapped<int> { value: 2 } }
 ",
     );
-    assert!(of_a_generic_class.contains(refusal), "{of_a_generic_class}");
+    assert!(
+        of_a_generic_class.contains(refusal) && of_a_generic_class.contains("Wrapped"),
+        "{of_a_generic_class}"
+    );
+    // The enum's `eq` is called where two of its values are compared, and
+    // nothing else in the program is: that compiles.
+    assert_eq!(
+        refused(&format!(
+            "{shade}function main() -> bool {{ shade(0) == shade(1) }}\n"
+        )),
+        "compiled"
+    );
 }
 
 /// Whether the executable built from `source`, as it ships, names

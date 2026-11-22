@@ -5,6 +5,9 @@ use super::{
 };
 use crate::layout::{TYPE_BIGINT, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_STRING};
 
+/// The values of an `int` on the interpreter, which keeps one in 63 bits.
+const INTERPRETED_INT: std::ops::RangeInclusive<i64> = -(1 << 62)..=(1 << 62) - 1;
+
 impl NativeBaml for Natives {
     /// What a `from_json` nothing overrides returns: the value read by its
     /// fields, with declared names, each field by its own `from_json`.
@@ -89,12 +92,27 @@ impl NativeBaml for Natives {
         arr
     }
 
-    /// The sum of `values`, wrapping as `+` does.
-    fn _sum_int(values: ArrRef<'_, Int>) -> i64 {
-        values
-            .as_slice()
-            .iter()
-            .fold(0, |sum, value| sum.wrapping_add(*value))
+    /// The sum of `values`, or a panic as soon as the running total leaves
+    /// the range of an `int` on the interpreter, which is a bit narrower
+    /// than a native one. A total past that range is one only native code
+    /// could hold, and a total past 64 bits one nothing holds, so neither
+    /// is returned as if it were the sum.
+    fn _sum_int<'s>(scope: &mut Scope<'s>, values: Root<'s, Arr<Int>>) -> Result<i64, Thrown<'s>> {
+        let mut sum: i64 = 0;
+        let mut overflow = None;
+        for value in values.get(scope).as_slice() {
+            match sum.checked_add(*value) {
+                Some(total) if INTERPRETED_INT.contains(&total) => sum = total,
+                _ => {
+                    overflow = Some(*value);
+                    break;
+                }
+            }
+        }
+        match overflow {
+            Some(value) => Err(scope.integer_overflow(&format!("{sum} + {value} overflows int"))),
+            None => Ok(sum),
+        }
     }
 
     fn _sum_float(values: ArrRef<'_, Float>) -> f64 {

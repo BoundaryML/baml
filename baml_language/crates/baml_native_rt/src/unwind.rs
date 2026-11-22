@@ -42,7 +42,7 @@ use crate::{
         HANDLER_TAKES_ALL, HANDLER_TAKES_NULL, HANDLER_TAKES_OTHERS, HANDLER_TAKES_PANICS,
         HEADER_PANIC, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_TYPES_END, TYPE_ARRAY_OF_VALUES,
         TYPE_ID_MASK, TYPE_STRING, TYPE_VALUES, WELL_KNOWN_CONTEXT, WELL_KNOWN_DIVISION_BY_ZERO,
-        WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_MAP_KEY_NOT_FOUND,
+        WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_INTEGER_OVERFLOW, WELL_KNOWN_MAP_KEY_NOT_FOUND,
         WELL_KNOWN_NEGATIVE_BIT_SHIFT, WELL_KNOWN_STACK_OVERFLOW, WORD,
     },
 };
@@ -405,6 +405,16 @@ fn negative_shift(mutator: &mut Mutator, count: i64) -> usize {
     )
 }
 
+/// The `baml.panics.IntegerOverflow` of `abs` of the smallest `int`. May
+/// collect.
+fn abs_overflow(mutator: &mut Mutator, value: i64) -> usize {
+    class::well_known(
+        mutator,
+        WELL_KNOWN_INTEGER_OVERFLOW,
+        &[Init::Text(&format!("abs({value}) overflows int"))],
+    )
+}
+
 /// A `baml.panics.IndexOutOfBounds`. May collect.
 fn index_out_of_bounds(mutator: &mut Mutator, index: i64, length: i64) -> usize {
     class::well_known(
@@ -470,6 +480,18 @@ pub(crate) extern "C" fn panic_negative_shift(
 ) {
     mutator.enter(frame);
     let error = negative_shift(mutator, count);
+    unwind(mutator, error, 0, resume);
+}
+
+pub(crate) extern "C" fn panic_abs_overflow(
+    value: i64,
+    _unused: usize,
+    mutator: &mut Mutator,
+    frame: usize,
+    resume: &mut Resume,
+) {
+    mutator.enter(frame);
+    let error = abs_overflow(mutator, value);
     unwind(mutator, error, 0, resume);
 }
 
@@ -560,6 +582,17 @@ crate::stubs::anchored! {
 /// lands with.
 extern "C" fn error_negative_shift(mutator: &mut Mutator, count: i64) -> usize {
     negative_shift(mutator, count)
+}
+
+crate::stubs::anchored! {
+    /// The symbol of [`error_abs_overflow`].
+    baml_rt_error_abs_overflow => error_abs_overflow
+}
+
+/// The `baml.panics.IntegerOverflow` a handler in the function that takes
+/// the absolute value lands with.
+extern "C" fn error_abs_overflow(mutator: &mut Mutator, value: i64) -> usize {
+    abs_overflow(mutator, value)
 }
 
 crate::stubs::anchored! {
