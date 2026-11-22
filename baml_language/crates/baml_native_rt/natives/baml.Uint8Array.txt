@@ -2,8 +2,6 @@
 # Compiled code reads the length and reads and writes one byte itself.
 baml.Uint8Array.length
 baml.Uint8Array.at
-baml.Uint8Array.push allocates
-baml.Uint8Array.pop
 baml.Uint8Array.concat allocates
 baml.Uint8Array.includes
 baml.Uint8Array.index_of

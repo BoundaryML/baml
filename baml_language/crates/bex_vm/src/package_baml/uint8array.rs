@@ -17,19 +17,6 @@ impl BamlClassUint8Array for PackageBamlImpl {
         resolve_index(index, uint8array.len()).map(|i| i64::from(uint8array[i]))
     }
 
-    #[allow(clippy::cast_possible_wrap)]
-    fn push(uint8array: &mut Vec<u8>, item: i64) -> i64 {
-        // Clamp to u8 range per JS TypedArray behavior.
-        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-        let byte = (item & 0xFF) as u8;
-        uint8array.push(byte);
-        uint8array.len() as i64
-    }
-
-    fn pop(uint8array: &mut Vec<u8>) -> Option<i64> {
-        uint8array.pop().map(i64::from)
-    }
-
     fn concat(uint8array: &[u8], other: &[u8]) -> Vec<u8> {
         uint8array.iter().chain(other).copied().collect()
     }

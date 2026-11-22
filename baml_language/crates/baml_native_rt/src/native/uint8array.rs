@@ -33,17 +33,6 @@ impl NativeBamlUint8Array for Natives {
             .map(i64::from)
     }
 
-    fn push<'s>(scope: &mut Scope<'s>, uint8array: Root<'s, Bytes>, item: i64) -> i64 {
-        // The low eight bits, as assigning into a typed array keeps.
-        scope
-            .push_byte(uint8array, item.cast_unsigned() as u8)
-            .cast_signed() as i64
-    }
-
-    fn pop(uint8array: BytesRef<'_>) -> Option<i64> {
-        uint8array.pop().map(i64::from)
-    }
-
     fn concat<'s>(
         scope: &mut Scope<'s>,
         uint8array: Root<'s, Bytes>,
