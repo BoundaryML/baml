@@ -1,3 +1,5 @@
+use baml_types::ir_type::UnionConstructor;
+
 use super::*;
 
 test_deserializer!(test_null, EMPTY_FILE, "null", TypeIR::null(), null);
@@ -1046,3 +1048,147 @@ test_deserializer!(
     ]
   }
 );
+
+fn parse_for_flag_check(schema: &str, mut target_type: TypeIR, raw: &str) -> BamlValueWithFlags {
+    let ir = crate::helpers::load_test_ir(schema);
+    ir.finalize_type(&mut target_type);
+    let target = crate::helpers::render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
+    from_str(&target, &target_type, raw, true).unwrap()
+}
+
+fn has_first_match(value: &BamlValueWithFlags) -> bool {
+    value
+        .conditions()
+        .flags()
+        .iter()
+        .any(|flag| matches!(flag, Flag::FirstMatch(..)))
+}
+
+const SINGLE_CANDIDATE_SCHEMA: &str = r#"
+class Foo {
+  a int
+}
+
+class Bar {
+  b string
+}
+
+class WithColor {
+  color Color
+}
+
+enum Color {
+  RED
+  BLUE
+}
+"#;
+
+#[test_log::test]
+fn test_single_valid_json_has_no_first_match_and_scores_zero() {
+    let cases = vec![
+        (TypeIR::class("Foo"), r#"{"a": 1}"#),
+        (TypeIR::class("WithColor"), r#"{"color": "RED"}"#),
+        (TypeIR::r#enum("Color"), "RED"),
+        (TypeIR::int(), "42"),
+        (TypeIR::int().as_list(), "[1, 2, 3]"),
+        (
+            TypeIR::union(vec![TypeIR::class("Foo"), TypeIR::class("Bar")]),
+            r#"{"a": 1}"#,
+        ),
+    ];
+
+    for (target_type, raw) in cases {
+        let value = parse_for_flag_check(SINGLE_CANDIDATE_SCHEMA, target_type.clone(), raw);
+        assert!(
+            !has_first_match(&value),
+            "unexpected FirstMatch for {target_type} on {raw:?}: flags={:?}",
+            value.conditions().flags()
+        );
+        assert_eq!(
+            value.score(),
+            0,
+            "expected score 0 for {target_type} on {raw:?}: flags={:?}",
+            value.conditions().flags()
+        );
+    }
+}
+
+#[test_log::test]
+fn test_multi_candidate_keeps_first_match() {
+    let two_objects = parse_for_flag_check(
+        SINGLE_CANDIDATE_SCHEMA,
+        TypeIR::class("Foo"),
+        r#"{"a": 1} {"a": 2}"#,
+    );
+    assert!(
+        has_first_match(&two_objects),
+        "expected FirstMatch for multiple JSON objects: flags={:?}",
+        two_objects.conditions().flags()
+    );
+    assert!(two_objects.score() > 0);
+
+    let prose_and_blocks = parse_for_flag_check(
+        SINGLE_CANDIDATE_SCHEMA,
+        TypeIR::class("Foo"),
+        "Here are two candidates:\n```json\n{\"a\": 1}\n```\n```json\n{\"a\": 2}\n```",
+    );
+    assert!(
+        has_first_match(&prose_and_blocks),
+        "expected FirstMatch for multiple markdown blocks: flags={:?}",
+        prose_and_blocks.conditions().flags()
+    );
+    assert!(prose_and_blocks.score() > 0);
+
+    let multi_union = parse_for_flag_check(
+        SINGLE_CANDIDATE_SCHEMA,
+        TypeIR::union(vec![TypeIR::class("Foo"), TypeIR::class("Bar")]),
+        r#"{"a": 1} {"b": "hi"}"#,
+    );
+    assert!(
+        has_first_match(&multi_union),
+        "expected FirstMatch for multiple candidates into union: flags={:?}",
+        multi_union.conditions().flags()
+    );
+    assert!(multi_union.score() > 0);
+}
+
+#[test_log::test]
+fn test_json_array_to_singular_keeps_first_match() {
+    let array_to_class = parse_for_flag_check(
+        SINGLE_CANDIDATE_SCHEMA,
+        TypeIR::class("Foo"),
+        r#"[{"a": 1}]"#,
+    );
+    assert!(
+        has_first_match(&array_to_class),
+        "expected FirstMatch when coercing JSON array to class: flags={:?}",
+        array_to_class.conditions().flags()
+    );
+    assert_eq!(array_to_class.score(), 1);
+
+    let array_to_int = parse_for_flag_check(SINGLE_CANDIDATE_SCHEMA, TypeIR::int(), "[42]");
+    assert!(
+        has_first_match(&array_to_int),
+        "expected FirstMatch when coercing JSON array to int: flags={:?}",
+        array_to_int.conditions().flags()
+    );
+    assert_eq!(array_to_int.score(), 1);
+
+    let array_vs_singular_union = parse_for_flag_check(
+        SINGLE_CANDIDATE_SCHEMA,
+        TypeIR::union(vec![TypeIR::class("Foo"), TypeIR::class("Foo").as_list()]),
+        r#"[{"a": 1}]"#,
+    );
+    assert!(matches!(
+        array_vs_singular_union,
+        BamlValueWithFlags::List(..)
+    ));
+    assert!(!has_first_match(&array_vs_singular_union));
+    assert_eq!(array_vs_singular_union.score(), 0);
+}
