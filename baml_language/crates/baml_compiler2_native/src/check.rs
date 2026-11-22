@@ -113,7 +113,7 @@ impl Intrinsic {
             .map(|argument| operand_ty(db, body, argument))
             .collect();
         // Arguments with no type are reported where the call is checked.
-        found.is_ok_and(|found| self.result(&found).is_some())
+        found.is_ok_and(|found| own_enum_eq(db, &found).is_none() && self.result(&found).is_some())
     }
 
     /// The result type for value arguments of these types, when they fit.
@@ -401,6 +401,20 @@ fn bound_signature<'db>(
     Ok((receiver, signature))
 }
 
+/// The `eq` two operands of these types are compared by, when they are of
+/// one enum that has an `eq` of its own: `==` on them is a call of it.
+fn own_enum_eq<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    operands: &[NativeTy<'db>],
+) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
+    match operands {
+        [NativeTy::Enum(left), NativeTy::Enum(right)] if left == right => {
+            crate::json::enum_eq(db, *left)
+        }
+        _ => None,
+    }
+}
+
 /// Whether a call is of a builtin native code has its own implementation
 /// of.
 pub(crate) fn is_intrinsic_call<'db>(
@@ -428,6 +442,16 @@ pub(crate) fn call_target<'db>(
                 && intrinsic.compiled_in_place(db, body, args, ntypeargs)
             {
                 return Ok(Callee::Intrinsic(intrinsic));
+            }
+            if name == "baml.ops.equals_equals" {
+                let operands: Result<Vec<_>, _> = args
+                    .iter()
+                    .skip(ntypeargs)
+                    .map(|argument| operand_ty(db, body, argument))
+                    .collect();
+                if let Some(eq) = operands.ok().and_then(|found| own_enum_eq(db, &found)) {
+                    return Ok(Callee::Function(FnKey::new(eq, Entry::Direct)));
+                }
             }
             // A method written in Rust that takes a closure has a loop form
             // or a driver written in BAML, which is what native code runs.
@@ -749,6 +773,8 @@ pub(crate) struct Checked<'db> {
     pub(crate) blockers: Vec<Blocker>,
     /// The functions it calls directly or makes values of.
     pub(crate) needed: Vec<Needed<'db>>,
+    /// Whether it has the runtime compare two values.
+    pub(crate) compares: bool,
 }
 
 pub(crate) fn check_function<'db>(
@@ -764,6 +790,7 @@ pub(crate) fn check_function<'db>(
         needed: Vec::new(),
         dispatched: Vec::new(),
         constructed: Vec::new(),
+        compares: false,
     };
     match body_of(mir) {
         Ok(body) => {
@@ -799,6 +826,7 @@ pub(crate) fn check_function<'db>(
         needed: checker.needed,
         dispatched: checker.dispatched,
         constructed: checker.constructed,
+        compares: checker.compares,
     }
 }
 
@@ -809,6 +837,7 @@ struct Checker<'a, 'db> {
     needed: Vec<Needed<'db>>,
     dispatched: Vec<Dispatched<'db>>,
     constructed: Vec<NativeTy<'db>>,
+    compares: bool,
 }
 
 impl<'db> Checker<'_, 'db> {
@@ -822,6 +851,7 @@ impl<'db> Checker<'_, 'db> {
     /// what it returns and what it throws. An interface value can hold
     /// one, so each is a type the program makes values of.
     fn native_constructs(&mut self, native: &crate::natives::Native) {
+        self.compares |= native.compares_values();
         for path in native.classes {
             if let Some(class) = crate::natives::class_at(self.db, *path) {
                 self.construct(NativeTy::Class(class, Vec::new()));

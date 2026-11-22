@@ -23,7 +23,8 @@
 use std::fmt::Write as _;
 
 use super::{
-    MAX_DEPTH, Node, Refused, STRING_MAP_REQUIRED, decode_error, encode, object_get, out::Out,
+    MAX_DEPTH, Node, Refused, STRING_MAP_REQUIRED, decode_error, encode, object_get,
+    out::{Elements, Out},
     string_keyed,
 };
 use crate::{
@@ -32,7 +33,7 @@ use crate::{
     json_layout::{
         HOOK_FROM_JSON, KIND_ARRAY, KIND_BOOL, KIND_BOOL_IS, KIND_CLASS, KIND_ENUM, KIND_FLOAT,
         KIND_INT, KIND_INT_IS, KIND_MAP, KIND_NULL, KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS,
-        KIND_UNION, KIND_VARIANT, REPR_BOXED, REPR_REF,
+        KIND_UNION, KIND_VARIANT, REPR_BOXED, REPR_FLOAT, REPR_REF,
     },
     layout::{ARRAY_DATA, ARRAY_LENGTH, WORD},
     map,
@@ -292,9 +293,13 @@ impl Decoder<'_> {
         place(got, repr, |type_id, bits| self.out.boxed(type_id, bits))
     }
 
-    /// Whether elements or values of the type described are references.
-    fn holds_refs(described: Desc) -> bool {
-        matches!(described.repr(), REPR_REF | REPR_BOXED)
+    /// What an array or a map of values of the type described holds.
+    fn elements(described: Desc) -> Elements {
+        match described.repr() {
+            REPR_REF | REPR_BOXED => Elements::Refs,
+            REPR_FLOAT => Elements::Floats,
+            _ => Elements::Values,
+        }
     }
 
     unsafe fn decode(&mut self, json: usize, described: Desc) -> Result<Got, Misfit> {
@@ -472,7 +477,7 @@ impl Decoder<'_> {
             }
             Ok(Got::Ref(self.out.array(
                 length,
-                Self::holds_refs(element),
+                Self::elements(element),
                 &items,
             )))
         }
@@ -516,7 +521,7 @@ impl Decoder<'_> {
             }
             Ok(Got::Ref(self.out.map(
                 entries.len(),
-                Self::holds_refs(values),
+                Self::elements(values),
                 &entries,
             )))
         }
@@ -624,8 +629,8 @@ impl Decoder<'_> {
             KIND_INT => Got::Int(0),
             KIND_FLOAT => Got::Float(0.0),
             KIND_STRING => Got::Ref(self.out.string("")),
-            KIND_ARRAY => Got::Ref(self.out.array(0, Self::holds_refs(described.of_a()), &[])),
-            KIND_MAP => Got::Ref(self.out.map(0, Self::holds_refs(described.of_b()), &[])),
+            KIND_ARRAY => Got::Ref(self.out.array(0, Self::elements(described.of_a()), &[])),
+            KIND_MAP => Got::Ref(self.out.map(0, Self::elements(described.of_b()), &[])),
             _ if described.is_any() => Got::Null,
             _ => return None,
         })

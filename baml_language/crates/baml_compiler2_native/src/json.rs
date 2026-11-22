@@ -99,6 +99,38 @@ pub(crate) fn hook_functions<'db>(
     ([found[0], found[1]], found[2])
 }
 
+/// The `eq` `enumeration` provides for `baml.ops.Equals`, when it
+/// implements it with a body of its own.
+pub(crate) fn enum_eq<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    enumeration: EnumRef<'db>,
+) -> Option<FunctionLoc<'db>> {
+    let head = enum_head(db, enumeration);
+    package_impl_locs(db, head.root())
+        .iter()
+        .copied()
+        .find_map(|block| {
+            let resolution = impl_facts(db, block);
+            let facts = resolution.resolved()?;
+            let equals = matches!(
+                structural_interface(db, &facts.interface.name),
+                Some(StructuralInterface::Equals)
+            ) && matches!(
+                facts.for_ty_pattern.to_plain(),
+                baml_type::Ty::Enum(of) | baml_type::Ty::EnumVariant(of, _) if of == head
+            );
+            if !equals {
+                return None;
+            }
+            facts.methods.iter().copied().find(|function| {
+                baml_compiler2_hir::item_data::function_data(db, *function)
+                    .name
+                    .as_str()
+                    == "eq"
+            })
+        })
+}
+
 /// The descriptions made so far.
 pub(crate) struct JsonTypes<'db> {
     /// The section from [`JSON_BODY`] on.

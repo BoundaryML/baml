@@ -17,15 +17,15 @@ crate::stubs::anchored! {
     baml_rt_array_new => array_new
 }
 
-/// A new array of `length` zeroed elements, of the array type `array_type`.
+/// A new array of `length` zeroed elements, whose header is `header`.
 ///
 /// # Safety
 ///
-/// Called from compiled code with its mutator; `array_type` is the id of an
-/// array type.
+/// Called from compiled code with its mutator; `header` is the id of an
+/// array type, with the flags of the array.
 pub(crate) unsafe extern "C" fn array_new(
     mutator: &mut Mutator,
-    array_type: usize,
+    header: usize,
     length: usize,
 ) -> usize {
     // One allocation for both objects, so that neither needs rooting while
@@ -38,14 +38,17 @@ pub(crate) unsafe extern "C" fn array_new(
     let array = mutator.allocate(ARRAY_SIZE + storage_size);
     // SAFETY: the allocation has room for the array and its storage.
     unsafe {
-        store(array, array_type);
+        store(array, header);
         store(array + ARRAY_LENGTH, length);
         if length == 0 {
             store(array + ARRAY_DATA, 0);
         } else {
             let storage = array + ARRAY_SIZE;
             let data = storage + STORAGE_ELEMENTS;
-            store(storage, mutator.storage_type(array_type));
+            store(
+                storage,
+                mutator.storage_type(header & crate::layout::TYPE_ID_MASK),
+            );
             store(storage + STORAGE_CAPACITY, length);
             std::ptr::write_bytes(data as *mut usize, 0, length);
             store(array + ARRAY_DATA, data);

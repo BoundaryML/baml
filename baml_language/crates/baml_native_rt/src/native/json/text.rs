@@ -7,7 +7,11 @@
 //! message is `serde_json`'s, found by reading the text again, as the
 //! interpreter finds it.
 
-use super::{MAX_DEPTH, Node, object_get, out::Out, string_keyed};
+use super::{
+    MAX_DEPTH, Node, object_get,
+    out::{Elements, Out},
+    string_keyed,
+};
 use crate::{
     describe::Types,
     heap::load,
@@ -117,7 +121,7 @@ impl Parser<'_> {
                 self.pos += 1;
                 self.depth -= 1;
                 let length = self.items.len() - start;
-                let array = self.out.array(length, true, &self.items[start..]);
+                let array = self.out.array(length, Elements::Refs, &self.items[start..]);
                 self.items.truncate(start);
                 Ok(array)
             }
@@ -154,7 +158,7 @@ impl Parser<'_> {
                     .map(|[key, value]| (*key, *value))
                     .collect();
                 self.items.truncate(start);
-                Ok(self.out.map(entries.len(), true, &entries))
+                Ok(self.out.map(entries.len(), Elements::Refs, &entries))
             }
             b't' => {
                 self.literal("true")?;

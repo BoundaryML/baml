@@ -102,6 +102,8 @@ pub(crate) struct ProgramFunction<'db> {
     pub(crate) blockers: Vec<Blocker>,
     dispatched: Vec<Dispatched<'db>>,
     constructed: Vec<NativeTy<'db>>,
+    /// Whether it has the runtime compare two values.
+    compares: bool,
 }
 
 /// One interface method that some call dispatches when it runs.
@@ -174,9 +176,9 @@ pub(crate) struct Program<'db> {
     /// own, with it: what the runtime calls when it compares two instances
     /// it meets inside other values.
     pub(crate) equals: Vec<(ClassRef<'db>, FnKey<'db>)>,
-    /// The generic classes the program makes values of that have an `eq`
-    /// of their own, which the runtime has no way to call: a program that
-    /// has one cannot ask the runtime to compare two values.
+    /// The generic classes and the enums the program makes values of that
+    /// have an `eq` of their own, which the runtime has no way to call: a
+    /// program that has one cannot ask the runtime to compare two values.
     pub(crate) equals_unlisted: Vec<String>,
 }
 
@@ -285,16 +287,28 @@ pub(crate) fn collect<'db>(
         // A class's own `to_json` and `from_json` are functions to compile
         // too: the runtime calls them, where no call in the program does.
         for ty in &types {
+            let unlisted = match ty {
+                NativeTy::Class(class, arguments) if !arguments.is_empty() => {
+                    crate::json::hook_functions(db, *class)
+                        .1
+                        .map(|_| crate::json::full_class_name(db, *class))
+                }
+                NativeTy::Enum(enumeration) => crate::json::enum_eq(db, *enumeration).map(|_| {
+                    baml_compiler2_hir_ty::layout::enum_head(db, *enumeration)
+                        .name()
+                        .to_string()
+                }),
+                _ => None,
+            };
+            if let Some(name) = unlisted
+                && !program.equals_unlisted.contains(&name)
+            {
+                program.equals_unlisted.push(name);
+            }
             let NativeTy::Class(class, arguments) = ty else {
                 continue;
             };
             if !arguments.is_empty() {
-                let name = crate::json::full_class_name(db, *class);
-                if !program.equals_unlisted.contains(&name)
-                    && crate::json::hook_functions(db, *class).1.is_some()
-                {
-                    program.equals_unlisted.push(name);
-                }
                 continue;
             }
             if hooked.contains(class) {
@@ -325,6 +339,16 @@ pub(crate) fn collect<'db>(
     }
     unsupported.extend(lay_out_methods(db, &mut program, &calls, &resolved));
     unsupported.extend(check_hooks(db, &program));
+    // The runtime's walk of two values compares what it meets of these by
+    // variant or by field, which is not what their `eq` says.
+    if program.functions.iter().any(|function| function.compares) {
+        unsupported.extend(program.equals_unlisted.iter().map(|name| {
+            Blocker::new(
+                "comparing values in a program with a type whose own eq the runtime cannot call",
+                name.clone(),
+            )
+        }));
+    }
     if let Some(entry) = program.functions.first_mut() {
         entry.blockers.extend(unsupported);
     }
@@ -577,6 +601,7 @@ fn visit<'db>(
                     blockers: checked.blockers,
                     dispatched: checked.dispatched,
                     constructed: checked.constructed,
+                    compares: checked.compares,
                 }
             }
             Err(blocker) => ProgramFunction {
@@ -590,6 +615,7 @@ fn visit<'db>(
                 blockers: vec![blocker],
                 dispatched: Vec::new(),
                 constructed: Vec::new(),
+                compares: false,
             },
         };
         program.functions.push(function);

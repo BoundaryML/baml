@@ -214,13 +214,22 @@ calls nothing: it takes such a pair to be equal and hands it out, and the
 native calls the `eq` of each pair once the walk has found nothing else
 unequal.
 
-What the walk does not know, and compares as it finds it:
+An enum with an `eq` of its own, and a generic class with one, have no
+entry in the list. `==` on two values of such an enum, where their type is
+known, is compiled as a call of the `eq`. Anywhere else the walk could meet
+one it would compare it by variant or by field, so a program that makes
+values of one and has the runtime compare values is refused when it is
+checked.
 
-- An enum with an `eq` of its own, and a generic class with one: both are
-  compared as if they had none.
-- The elements of an array of values, and the values of a map, whose
-  static type nothing says (an `unknown` holding a `float[]`): word by
-  word, so a NaN equals only itself bit for bit, and the two zeros differ.
+The words of an array of values do not say whether they are `int`s or
+`float`s, and the two compare differently: a NaN equals itself and the two
+zeros are equal. So an array of `float`s says what it is in its header
+(`HEADER_FLOATS`), and so does a map whose values are `float`s. Whoever
+makes one sets it: compiled code in the constant it gives
+`baml_rt_array_new` and by the value type it gives `baml_rt_map_new`, a
+native by the element type it builds with (`reservation.array::<Float>` or
+`reservation.elements`), and `baml.json` by the description it decodes to.
+The walk reads the flag for an array or a map nothing describes.
 
 ## A native the declaration says throws nothing
 

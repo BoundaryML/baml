@@ -63,7 +63,7 @@ function eq_nested() -> string {
 }
 // A NaN equals itself, and the two zeros are equal.
 function eq_float_fields() -> string {
-  `${eq_named(2, float.nan()) == eq_named(2, float.nan())} ${eq_named(2, 0.0 - halves(0)) == eq_named(2, halves(0))} ${eq_named(2, float.nan()) == eq_named(2, float.inf())}`
+  `${eq_named(2, float.nan()) == eq_named(2, float.nan())} ${eq_named(2, halves(0) * (0.0 - 1.0)) == eq_named(2, halves(0))} ${eq_named(2, float.nan()) == eq_named(2, float.inf())}`
 }
 function eq_optional() -> string {
   let none: EqPoint? = if (rep("a", 1) == "b") { eq_point(0, 0) } else { null };
@@ -76,7 +76,7 @@ function eq_arrays() -> string {
 }
 function eq_float_arrays() -> string {
   let one: float[] = [float.nan(), halves(0), halves(3)];
-  let other: float[] = [float.nan(), 0.0 - halves(0), halves(3)];
+  let other: float[] = [float.nan(), halves(0) * (0.0 - 1.0), halves(3)];
   `${one == other} ${one == [float.nan(), halves(0)]} ${[halves(1)] == [halves(2)]}`
 }
 function eq_nested_arrays() -> string {
@@ -145,4 +145,77 @@ function eq_cyclic() -> string {
 }
 function eq_default_called() -> string {
   `${baml._equals_structural_default(eq_point(1, 2), eq_point(1, 2))} ${baml._equals_structural_default(eq_point(1, 2), eq_point(2, 1))}`
+}
+
+// An enum with an `eq` of its own: two shades are equal when as dark.
+enum EqShade {
+  Light
+  Pale
+  Dark
+}
+implement baml.ops.Equals for EqShade {
+  function eq(self, other: Self) -> bool throws never {
+    eq_darkness(self) == eq_darkness(other)
+  }
+}
+function eq_darkness(shade: EqShade) -> int {
+  match (shade) {
+    EqShade.Light => 1,
+    EqShade.Pale => 1,
+    EqShade.Dark => 2,
+  }
+}
+function eq_shade(n: int) -> EqShade {
+  if (n == 0) { EqShade.Light } else if (n == 1) { EqShade.Pale } else { EqShade.Dark }
+}
+// `==` on two values of the enum is a call of its `eq`.
+function eq_enum_own() -> string {
+  `${eq_shade(0) == eq_shade(1)} ${eq_shade(0) == eq_shade(2)} ${eq_shade(1) != eq_shade(0)} ${eq_shade(2) != eq_shade(1)} ${eq_shade(2) == eq_shade(2)}`
+}
+// An array of `float`s compares as `float`s do where nothing says what it
+// holds: a NaN equals itself, and the two zeros are equal.
+function eq_unknown_floats() -> string {
+  let positive: float[] = [float.nan(), halves(0), halves(3)];
+  let negative: float[] = [float.nan(), halves(0) * (0.0 - 1.0), halves(3)];
+  let changed: float[] = [float.nan(), halves(1), halves(3)];
+  let one: unknown = positive;
+  let other: unknown = negative;
+  let third: unknown = changed;
+  `${one == other} ${one == third}`
+}
+function eq_unknown_ints() -> string {
+  let counted: int[] = [rep("a", 1).length(), 2];
+  let written: int[] = [1, rep("a", 2).length()];
+  let changed: int[] = [1, 3];
+  let one: unknown = counted;
+  let other: unknown = written;
+  let third: unknown = changed;
+  `${one == other} ${one == third}`
+}
+class EqLoose {
+  held unknown
+}
+function eq_floats_made_by_natives() -> string {
+  let source: float[] = [halves(3), float.nan(), halves(0)];
+  let negative: float[] = [halves(3), float.nan(), halves(0) * (0.0 - 1.0)];
+  let both = source.concat(negative);
+  let ones: float[] = baml.Array.filled(2, float.nan());
+  `${EqLoose { held: source.slice(1, 3) } == EqLoose { held: negative.slice(1, 3) }} ${EqLoose { held: both.slice(0, 3) } == EqLoose { held: both.slice(3, 6) }} ${EqLoose { held: ones } == EqLoose { held: [float.nan(), float.nan()] }} ${EqLoose { held: source.reverse() } == EqLoose { held: negative.reverse() }}`
+}
+function eq_floats_of_a_map() -> bool {
+  let one: map<string, float> = { rep("a", 1): float.nan(), rep("b", 1): halves(0) };
+  let other: map<string, float> = { rep("a", 1): float.nan(), rep("b", 1): halves(0) * (0.0 - 1.0) };
+  EqLoose { held: one.values() } == EqLoose { held: other.values() }
+}
+function eq_floats_decoded() -> bool {
+  let one = baml.json.decode<float[]>(rep("[0.0, 1.5]", 1));
+  let other = baml.json.decode<float[]>(rep("[-0.0, 1.5]", 1));
+  EqLoose { held: one } == EqLoose { held: other }
+}
+function eq_float_values_of_maps() -> string {
+  let one: map<string, float> = { rep("a", 1): float.nan(), rep("b", 1): halves(0) };
+  let other: map<string, float> = { rep("a", 1): float.nan(), rep("b", 1): halves(0) * (0.0 - 1.0) };
+  let decoded = baml.json.decode<map<string, float>>(rep("{\"a\": 1.5, \"b\": -0.0}", 1));
+  let written: map<string, float> = { rep("a", 1): halves(3), rep("b", 1): halves(0) };
+  `${EqLoose { held: one } == EqLoose { held: other }} ${EqLoose { held: decoded } == EqLoose { held: written }} ${EqLoose { held: one } == EqLoose { held: written }}`
 }

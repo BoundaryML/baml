@@ -93,15 +93,16 @@ fn remove(array: ArrRef<'_, Slot>, index: usize) -> usize {
     removed
 }
 
-/// A new array holding `count` words, each given by its index.
+/// A new array holding `count` values of the type a call names by
+/// `element`, each given by its index.
 fn build<'s>(
     scope: &mut Scope<'s>,
     count: usize,
-    holds_refs: bool,
+    element: TypeId,
     word: impl Fn(&super::Reservation<'_, 's>, usize) -> usize,
 ) -> Root<'s, Arr<Slot>> {
     let reservation = scope.reserve(array_size(count));
-    let array = reservation.slots(count, holds_refs);
+    let array = reservation.elements(count, element);
     for index in 0..count {
         array.set(index, word(&reservation, index));
     }
@@ -210,42 +211,39 @@ impl NativeBamlArray for Natives {
 
     fn reverse<'s>(
         scope: &mut Scope<'s>,
-        _types: [TypeId; 1],
+        types: [TypeId; 1],
         array: Root<'s, Arr<Slot>>,
     ) -> Root<'s, Arr<Slot>> {
-        let source = array.get(scope);
-        let (length, holds_refs) = (source.len(), source.holds_refs());
-        build(scope, length, holds_refs, |reservation, index| {
+        let length = array.get(scope).len();
+        build(scope, length, types[0], |reservation, index| {
             reservation.get(array).get(length - 1 - index).unwrap_or(0)
         })
     }
 
     fn slice<'s>(
         scope: &mut Scope<'s>,
-        _types: [TypeId; 1],
+        types: [TypeId; 1],
         array: Root<'s, Arr<Slot>>,
         start: i64,
         end: i64,
     ) -> Root<'s, Arr<Slot>> {
-        let source = array.get(scope);
-        let (length, holds_refs) = (source.len(), source.holds_refs());
+        let length = array.get(scope).len();
         let start = slice_bound(start, length);
         let end = slice_bound(end, length).max(start);
-        build(scope, end - start, holds_refs, |reservation, index| {
+        build(scope, end - start, types[0], |reservation, index| {
             reservation.get(array).get(start + index).unwrap_or(0)
         })
     }
 
     fn concat<'s>(
         scope: &mut Scope<'s>,
-        _types: [TypeId; 1],
+        types: [TypeId; 1],
         array: Root<'s, Arr<Slot>>,
         other: Root<'s, Arr<Slot>>,
     ) -> Root<'s, Arr<Slot>> {
-        let source = array.get(scope);
-        let (first, holds_refs) = (source.len(), source.holds_refs());
+        let first = array.get(scope).len();
         let second = other.get(scope).len();
-        build(scope, first + second, holds_refs, |reservation, index| {
+        build(scope, first + second, types[0], |reservation, index| {
             let word = if index < first {
                 reservation.get(array).get(index)
             } else {
@@ -257,12 +255,11 @@ impl NativeBamlArray for Natives {
 
     fn _copy<'s>(
         scope: &mut Scope<'s>,
-        _types: [TypeId; 1],
+        types: [TypeId; 1],
         array: Root<'s, Arr<Slot>>,
     ) -> Root<'s, Arr<Slot>> {
-        let source = array.get(scope);
-        let (length, holds_refs) = (source.len(), source.holds_refs());
-        build(scope, length, holds_refs, |reservation, index| {
+        let length = array.get(scope).len();
+        build(scope, length, types[0], |reservation, index| {
             reservation.get(array).get(index).unwrap_or(0)
         })
     }
@@ -273,18 +270,17 @@ impl NativeBamlArray for Natives {
         array: Root<'s, Arr<Slot>>,
     ) -> Root<'s, Arr<Slot>> {
         let length = array.get(scope).len();
-        let holds_refs = scope.is_reference(types[1]);
-        build(scope, length, holds_refs, |_, _| 0)
+        build(scope, length, types[1], |_, _| 0)
     }
 
     fn filled<'s>(
         scope: &mut Scope<'s>,
-        _types: [TypeId; 1],
+        types: [TypeId; 1],
         length: i64,
         value: Elem<'s>,
     ) -> Root<'s, Arr<Slot>> {
         let length = usize::try_from(length).unwrap_or(0);
-        build(scope, length, value.is_ref(), |reservation, _| {
+        build(scope, length, types[0], |reservation, _| {
             value.get(&*reservation.scope)
         })
     }

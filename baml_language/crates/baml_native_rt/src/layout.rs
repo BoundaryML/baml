@@ -41,6 +41,10 @@ pub const TYPE_ID_MASK: usize = 0xFFFF_FFF8;
 /// handler that takes every error lets pass. A string never has it.
 pub const HEADER_PANIC: usize = 1 << HEADER_PANIC_BIT;
 pub const HEADER_PANIC_BIT: u32 = 63;
+/// Set in the header of an array whose elements are `float`s, and of a map
+/// whose values are: the words alone do not say so, and what compares two
+/// values of no known type reads it. Whoever makes one sets it.
+pub const HEADER_FLOATS: usize = 1 << 60;
 /// The flags of a header.
 pub const HEADER_FLAGS: usize = 0xF << 60;
 

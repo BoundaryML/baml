@@ -25,13 +25,13 @@ fn locked<R>(_map: usize, body: impl FnOnce() -> R) -> R {
 fn column<'s>(
     scope: &mut Scope<'s>,
     map: Root<'s, super::Map>,
-    holds_refs: bool,
+    element: TypeId,
     values: bool,
 ) -> Root<'s, Arr<Slot>> {
     // SAFETY: a live map.
     let length = unsafe { map::len(map.raw(scope)) };
     let reservation = scope.reserve(array_size(length));
-    let array = reservation.slots(length, holds_refs);
+    let array = reservation.elements(length, element);
     let mut next = 0;
     // Read after the reservation: the map may have moved.
     let map = map.raw(reservation.scope);
@@ -131,7 +131,7 @@ impl NativeBamlMap for Natives {
         types: [TypeId; 2],
         map: Root<'s, super::Map>,
     ) -> Root<'s, Arr<Slot>> {
-        column(scope, map, kind(types) == KeyKind::Str, false)
+        column(scope, map, types[0], false)
     }
 
     fn values<'s>(
@@ -139,7 +139,6 @@ impl NativeBamlMap for Natives {
         types: [TypeId; 2],
         map: Root<'s, super::Map>,
     ) -> Root<'s, Arr<Slot>> {
-        let holds_refs = scope.is_reference(types[1]);
-        column(scope, map, holds_refs, true)
+        column(scope, map, types[1], true)
     }
 }

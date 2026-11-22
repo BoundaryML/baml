@@ -768,7 +768,13 @@ unsafe extern "C" fn map_new(
 ) -> usize {
     let value_is_ref = mutator.is_reference(value_type as usize);
     let key_is_ref = KeyKind::of(key_type as usize) == KeyKind::Str;
-    new(mutator, key_is_ref, value_is_ref, count)
+    let map = new(mutator, key_is_ref, value_is_ref, count);
+    if value_type as usize == TYPE_BOX_FLOAT {
+        // Its values do not say they are `float`s: its header does.
+        // SAFETY: the map just made.
+        unsafe { store(map, load(map) | crate::layout::HEADER_FLOATS) };
+    }
+    map
 }
 
 crate::stubs::anchored! {

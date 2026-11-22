@@ -30,7 +30,7 @@ use crate::{
         REPR_REF,
     },
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, BOX_VALUE, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
+        ARRAY_DATA, ARRAY_LENGTH, BOX_VALUE, HEADER_FLOATS, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
         TYPE_ARRAY_OF_VALUES, TYPE_BIGINT, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_BYTES,
         TYPE_FUTURE, TYPE_MAP, TYPE_OWNED, TYPE_PLAIN, WORD,
     },
@@ -104,15 +104,21 @@ fn of_reference(object: usize, described: Option<Desc>) -> Val {
     }
 }
 
-/// A pair of words two containers hold: references, or values whose
-/// words say which only as far as `described` does.
-fn held(left: usize, right: usize, references: bool, described: Option<Desc>) -> (Val, Val) {
+/// A pair of words two containers hold: references, `float`s where
+/// `floats` or `described` says so, or values whose words say no more.
+fn held(
+    left: usize,
+    right: usize,
+    references: bool,
+    floats: bool,
+    described: Option<Desc>,
+) -> (Val, Val) {
     if references {
         (
             of_reference(left, described.map(Desc::not_null)),
             of_reference(right, described.map(Desc::not_null)),
         )
-    } else if described.is_some_and(|described| described.kind() == KIND_FLOAT) {
+    } else if floats || described.is_some_and(|described| described.kind() == KIND_FLOAT) {
         (
             Val::Float(f64::from_bits(left as u64)),
             Val::Float(f64::from_bits(right as u64)),
@@ -203,10 +209,14 @@ impl<F: FnMut(usize, usize)> Walk<'_, F> {
                 return false;
             }
             let references = type_of(a) == TYPE_ARRAY_OF_REFS;
+            // An array of `float`s says so itself, for one nothing
+            // describes.
+            let floats = (load(a) | load(b)) & HEADER_FLOATS != 0;
             let (from, to) = (load(a + ARRAY_DATA), load(b + ARRAY_DATA));
             for index in (0..length).rev() {
                 let (left, right) = (load(from + index * WORD), load(to + index * WORD));
-                self.pending.push(held(left, right, references, element));
+                self.pending
+                    .push(held(left, right, references, floats, element));
             }
         }
         true
@@ -233,6 +243,7 @@ impl<F: FnMut(usize, usize)> Walk<'_, F> {
                 KeyKind::Word
             };
             let references = values_are_refs(a);
+            let floats = (load(a) | load(b)) & HEADER_FLOATS != 0;
             let values = described.map(Desc::of_b);
             let mut every_key = true;
             let mut pairs = Vec::new();
@@ -242,7 +253,8 @@ impl<F: FnMut(usize, usize)> Walk<'_, F> {
                 None => every_key = false,
             });
             for (left, right) in pairs {
-                self.pending.push(held(left, right, references, values));
+                self.pending
+                    .push(held(left, right, references, floats, values));
             }
             every_key
         }

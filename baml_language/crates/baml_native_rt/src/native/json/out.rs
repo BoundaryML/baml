@@ -4,13 +4,21 @@
 use crate::{
     heap::store,
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, BOX_SIZE, BOX_VALUE, STORAGE_CAPACITY,
+        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, BOX_SIZE, BOX_VALUE, HEADER_FLOATS, STORAGE_CAPACITY,
         STORAGE_ELEMENTS, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT, TYPE_ARRAY_OF_REFS,
         TYPE_ARRAY_OF_VALUES, TYPE_REFS, TYPE_STRING, TYPE_VALUES, WORD,
     },
     map,
     native::{array_size, str_size},
 };
+
+/// What the elements of an array being built are, or the values of a map.
+#[derive(Clone, Copy)]
+pub(super) enum Elements {
+    Refs,
+    Floats,
+    Values,
+}
 
 pub(super) struct Out {
     /// The start of the reserved room, zero while only counting.
@@ -107,18 +115,18 @@ impl Out {
     }
 
     /// An array of `length` elements, which are `items` when building.
-    pub(super) fn array(&mut self, length: usize, holds_refs: bool, items: &[usize]) -> usize {
+    pub(super) fn array(&mut self, length: usize, elements: Elements, items: &[usize]) -> usize {
         let array = self.take(array_size(length));
         if array != 0 {
             assert!(items.len() == length, "an array is built of its items");
-            let (array_type, storage_type) = if holds_refs {
-                (TYPE_ARRAY_OF_REFS, TYPE_REFS)
-            } else {
-                (TYPE_ARRAY_OF_VALUES, TYPE_VALUES)
+            let (header, storage_type) = match elements {
+                Elements::Refs => (TYPE_ARRAY_OF_REFS, TYPE_REFS),
+                Elements::Floats => (TYPE_ARRAY_OF_VALUES | HEADER_FLOATS, TYPE_VALUES),
+                Elements::Values => (TYPE_ARRAY_OF_VALUES, TYPE_VALUES),
             };
             // SAFETY: the array has room for itself and its storage.
             unsafe {
-                store(array, array_type);
+                store(array, header);
                 store(array + ARRAY_LENGTH, length);
                 if length == 0 {
                     store(array + ARRAY_DATA, 0);
@@ -141,7 +149,7 @@ impl Out {
     pub(super) fn map(
         &mut self,
         count: usize,
-        values_are_refs: bool,
+        values: Elements,
         entries: &[(usize, usize)],
     ) -> usize {
         let object = self.take(map::size_for(count));
@@ -150,7 +158,10 @@ impl Out {
             // SAFETY: the map has the room `size_for` says, and its keys
             // are strings that hold their text.
             unsafe {
-                map::new_at(object, true, values_are_refs, count);
+                map::new_at(object, true, matches!(values, Elements::Refs), count);
+                if matches!(values, Elements::Floats) {
+                    store(object, crate::heap::load(object) | HEADER_FLOATS);
+                }
                 for (key, value) in entries {
                     map::set_in_place(object, *key, *value);
                 }

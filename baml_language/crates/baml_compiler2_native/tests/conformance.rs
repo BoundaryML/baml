@@ -471,6 +471,46 @@ function main() -> int throws Failure {{
     );
 }
 
+/// Why `source` is not compiled, as the entry `main`.
+fn refused(source: &str) -> String {
+    let db = setup_test_db(source);
+    assert_no_diagnostic_errors(&db);
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    match build(&db, "main", directory.path()) {
+        Ok(_) => "compiled".to_owned(),
+        Err(error) => error,
+    }
+}
+
+/// The runtime's walk of two values calls the `eq` of a class by its type
+/// id. What it has no entry for it would compare by variant or by field,
+/// so a program where it could meet one is refused.
+#[test]
+fn comparing_values_with_an_eq_the_runtime_cannot_call_is_refused() {
+    let refusal = "comparing values in a program with a type whose own eq the runtime cannot call";
+    let of_an_enum = refused(
+        "enum Shade { Light Pale }
+implement baml.ops.Equals for Shade {
+  function eq(self, other: Self) -> bool throws never { true }
+}
+class Holder { shade Shade }
+function main() -> bool { Holder { shade: Shade.Light } == Holder { shade: Shade.Pale } }
+",
+    );
+    assert!(of_an_enum.contains(refusal), "{of_an_enum}");
+    let of_a_generic_class = refused(
+        "class Wrapped<T> {
+  value T
+  implements baml.ops.Equals {
+    function eq(self, other: Self) -> bool throws never { true }
+  }
+}
+function main() -> bool { Wrapped<int> { value: 1 } == Wrapped<int> { value: 2 } }
+",
+    );
+    assert!(of_a_generic_class.contains(refusal), "{of_a_generic_class}");
+}
+
 /// Whether the executable built from `source`, as it ships, names
 /// `symbol`: an import is by name, and so is every function of an
 /// executable that is not stripped.

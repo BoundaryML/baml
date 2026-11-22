@@ -12,7 +12,11 @@
 
 use std::{collections::HashSet, fmt::Write as _};
 
-use super::{Refused, STRING_MAP_REQUIRED, out::Out, string_keyed, type_of, values_are_refs};
+use super::{
+    Refused, STRING_MAP_REQUIRED,
+    out::{Elements, Out},
+    string_keyed, type_of, values_are_refs,
+};
 use crate::{
     describe::{Desc, Types},
     heap::load,
@@ -848,9 +852,11 @@ impl Sink for JsonSink {
 
     fn end_array(&mut self, _: bool) {
         let start = self.starts.pop().unwrap_or(0);
-        let array = self
-            .out
-            .array(self.items.len() - start, true, &self.items[start..]);
+        let array = self.out.array(
+            self.items.len() - start,
+            Elements::Refs,
+            &self.items[start..],
+        );
         self.items.truncate(start);
         self.items.push(array);
     }
@@ -881,7 +887,7 @@ impl Sink for JsonSink {
             .iter()
             .map(|[key, value]| (*key, *value))
             .collect();
-        let map = self.out.map(entries.len(), true, &entries);
+        let map = self.out.map(entries.len(), Elements::Refs, &entries);
         self.items.truncate(start);
         self.items.push(map);
     }

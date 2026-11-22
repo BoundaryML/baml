@@ -200,6 +200,15 @@ pub(crate) fn of<'db>(
 }
 
 impl Native {
+    /// Whether a call of it has the runtime compare two values: `==` on
+    /// what no instruction compares, and the `eq` a class has by default.
+    pub(crate) fn compares_values(&self) -> bool {
+        matches!(
+            self.path,
+            "baml.ops.equals_equals" | "baml._equals_structural_default"
+        )
+    }
+
     /// How to call it, or why compiled code cannot yet.
     pub(crate) fn callable(&self) -> Result<(&Signature, Flags), Blocker> {
         // `map[key]` is compiled as a probe and a panic, and never called:
