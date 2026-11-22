@@ -106,31 +106,20 @@ test "racing_map_set_delete_does_not_crash" {
     assert.is_true(length >= 0 && length <= 2)
 }
 
-function sar_push_bytes(values: uint8array, n: int) -> int {
+function sar_store_bytes(values: uint8array, n: int) -> int {
     let i = 0;
     while (i < n) {
-        values.push(i);
+        values[i % values.length()] = i;
         i += 1
     }
     values.length()
-}
-
-function sar_pop_bytes(values: uint8array, n: int) -> int {
-    let i = 0;
-    while (i < n) {
-        values.pop();
-        i += 1
-    }
-    0
 }
 
 function sar_read_bytes(values: uint8array, n: int) -> int {
     let i = 0;
     let total = 0;
     while (i < n) {
-        if (values.length() > 0) {
-            total += values[0]
-        }
+        total += values[i % values.length()];
         i += 1
     }
     total
@@ -145,59 +134,44 @@ function sar_sort_bytes(values: uint8array, n: int) -> int {
     0
 }
 
-function sar_bytes_push() -> int {
-    let values = b"";
-    let a = spawn { sar_push_bytes(values, 200) };
-    let b = spawn { sar_push_bytes(values, 200) };
-    let c = spawn { sar_push_bytes(values, 200) };
-    let d = spawn { sar_push_bytes(values, 200) };
+function sar_bytes_store() -> int {
+    let values = uint8array.zeroes(64);
+    let a = spawn { sar_store_bytes(values, 200) };
+    let b = spawn { sar_store_bytes(values, 200) };
+    let c = spawn { sar_store_bytes(values, 200) };
+    let d = spawn { sar_store_bytes(values, 200) };
     (await a) + (await b) + (await c) + (await d);
     values.length()
 }
 
-test "racing_uint8array_push_does_not_crash" {
-    let length = sar_bytes_push();
-    assert.is_true(length >= 0 && length <= 800)
+test "racing_uint8array_store_does_not_crash" {
+    assert.is_true(sar_bytes_store() == 64)
 }
 
-function sar_bytes_push_pop() -> int {
-    let values = b"\x01\x02\x03\x04\x05";
-    let push = spawn { sar_push_bytes(values, 500) };
-    let pop = spawn { sar_pop_bytes(values, 500) };
-    (await push) + (await pop);
-    values.length()
-}
-
-test "racing_uint8array_push_pop_does_not_crash" {
-    let length = sar_bytes_push_pop();
-    assert.is_true(length >= 0 && length <= 505)
-}
-
-function sar_bytes_read_grow() -> int {
-    let values = b"\x01";
-    let grow = spawn { sar_push_bytes(values, 1000) };
+function sar_bytes_read_store() -> int {
+    let values = uint8array.zeroes(64);
+    let store = spawn { sar_store_bytes(values, 1000) };
     let read_a = spawn { sar_read_bytes(values, 500) };
     let read_b = spawn { sar_read_bytes(values, 500) };
-    (await grow) + (await read_a) + (await read_b);
-    values.length()
+    let total = (await store) + (await read_a) + (await read_b);
+    total
 }
 
-test "racing_uint8array_index_read_vs_grow_does_not_crash" {
-    let length = sar_bytes_read_grow();
-    assert.is_true(length >= 1 && length <= 1001)
+test "racing_uint8array_index_read_vs_store_does_not_crash" {
+    let total = sar_bytes_read_store();
+    assert.is_true(total >= 64 && total <= 64 + 1000 * 255)
 }
 
-function sar_bytes_sort_grow() -> int {
-    let values = b"\x03\x02\x01";
-    let push = spawn { sar_push_bytes(values, 300) };
+function sar_bytes_sort_store() -> int {
+    let values = uint8array.zeroes(64);
+    let store = spawn { sar_store_bytes(values, 300) };
     let sort = spawn { sar_sort_bytes(values, 100) };
-    (await push) + (await sort);
+    (await store) + (await sort);
     values.length()
 }
 
-test "racing_uint8array_sort_vs_grow_does_not_crash" {
-    let length = sar_bytes_sort_grow();
-    assert.is_true(length >= 3 && length <= 303)
+test "racing_uint8array_sort_vs_store_does_not_crash" {
+    assert.is_true(sar_bytes_sort_store() == 64)
 }
 
 function sar_captured_local_increment() -> int {
