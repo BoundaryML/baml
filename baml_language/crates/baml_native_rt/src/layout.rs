@@ -199,11 +199,11 @@ pub const TYPE_BYTES: usize = 384;
 pub const FIRST_CLASS_TYPE: usize = 400;
 
 /// A `uint8array` is laid out as an array is: its length, in bytes, and the
-/// address of its first byte, zero while it has never held one. The bytes
-/// are packed in a storage object of values, whose capacity is in words as
-/// any storage's is, so the array holds eight times that many bytes before
-/// it grows. The bytes of the storage past the length are whatever was
-/// there.
+/// address of its first byte, zero when it is empty. The length never
+/// changes. The bytes are packed in a storage object of values, whose
+/// capacity is in words as any storage's is: the length rounded up to a
+/// whole word, which is what the collector sizes the storage by. The bytes
+/// of the last word past the length are zero.
 pub const BYTES_LENGTH: usize = ARRAY_LENGTH;
 pub const BYTES_DATA: usize = ARRAY_DATA;
 pub const BYTES_SIZE: usize = ARRAY_SIZE;

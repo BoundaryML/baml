@@ -64,8 +64,8 @@ pub(crate) enum NativeTy<'db> {
     /// A reference to an immutable `bigint` object, whose header says that
     /// it is one: a union holds it as it is.
     Bigint,
-    /// A reference to a `uint8array`: a growable array of bytes, whose
-    /// header says that it is one.
+    /// A reference to a `uint8array`: an array of bytes of a fixed
+    /// length, whose header says that it is one.
     Bytes,
     /// A reference to an instance of a class at these type arguments.
     /// Instantiations whose arguments are the same under [`type_argument`]

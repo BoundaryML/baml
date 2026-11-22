@@ -24,9 +24,8 @@ stops, which is any `async` one before its first `scope.io` or
 cannot be held across the stop, and what compiled code writes into the
 array meanwhile is not seen. `hold` copies today, and is the one place
 that changes when a stop can keep the array's storage block alive and in
-place instead. What it holds is the storage's bytes, never the array: a
-`push` gives the array new storage. A result is made through the scope
-(`alloc_bytes`, `alloc_zeroed_bytes`).
+place instead. A result is made through the scope (`alloc_bytes`,
+`alloc_zeroed_bytes`).
 
 `BytesRef::as_slice` and `as_mut_slice` lend the bytes in place instead.
 They are the only two places a Rust slice is made of bytes in the heap, and

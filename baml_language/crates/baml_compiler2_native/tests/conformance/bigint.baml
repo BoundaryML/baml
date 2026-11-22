@@ -248,8 +248,8 @@ function bigint_duration() -> string {
 // The two halves of `bigint.random`: how many bytes a draw takes, and where
 // its bytes land in the range.
 function big_draw(n: int, byte: int) -> uint8array {
-  let out = b"";
-  for (let i = 0; i < n; i += 1) { out.push(byte); };
+  let out = uint8array.zeroes(n);
+  for (let i = 0; i < n; i += 1) { out[i] = byte; };
   out
 }
 function bigint_random_byte_count() -> string {

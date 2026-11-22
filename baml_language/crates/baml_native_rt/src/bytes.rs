@@ -1,19 +1,16 @@
-//! `uint8array`: a growable array of bytes, laid out by
+//! `uint8array`: an array of bytes whose length never changes, laid out by
 //! [`crate::layout::BYTES_LENGTH`]. Compiled code reads the length and
-//! reads and writes a byte in place inline; the runtime makes the arrays,
-//! grows them and compares them.
+//! reads and writes a byte in place inline; the runtime makes the arrays
+//! and compares them.
 
 use crate::{
-    heap::{Mutator, load, store},
+    heap::{Mutator, store},
     layout::{
-        BYTES_DATA, BYTES_LENGTH, BYTES_MAX, BYTES_SIZE, DATA_CAPACITY, STORAGE_CAPACITY,
-        STORAGE_ELEMENTS, TYPE_BYTES, TYPE_VALUES, WORD, words,
+        BYTES_DATA, BYTES_LENGTH, BYTES_MAX, BYTES_SIZE, STORAGE_CAPACITY, STORAGE_ELEMENTS,
+        TYPE_BYTES, TYPE_VALUES, WORD, words,
     },
     native::{BytesRef, View},
 };
-
-/// The fewest words of storage an array that grows is given.
-const FIRST_CAPACITY: usize = 2;
 
 /// The bytes a `uint8array` of `length` bytes takes when it is made,
 /// storage included.
@@ -48,6 +45,7 @@ pub(crate) unsafe fn init(object: usize, length: usize) -> *mut u8 {
         let storage = object + BYTES_SIZE;
         let data = storage + STORAGE_ELEMENTS;
         store(storage, TYPE_VALUES);
+        // What the collector sizes the storage by, as it does any array's.
         store(storage + STORAGE_CAPACITY, words(length) / WORD);
         store(data + words(length) - WORD, 0);
         store(object + BYTES_DATA, data);
@@ -81,46 +79,6 @@ pub(crate) fn zeroed(mutator: &mut Mutator, length: usize) -> usize {
         }
     }
     object
-}
-
-/// Append `byte` to the `uint8array` at `object` and return its new length.
-/// May collect, when the storage is full.
-///
-/// # Safety
-///
-/// `object` is a live `uint8array`.
-pub(crate) unsafe fn push(mutator: &mut Mutator, mut object: usize, byte: u8) -> usize {
-    // SAFETY: the caller's contract, with the array kept current across the
-    // allocation.
-    unsafe {
-        let length = load(object + BYTES_LENGTH);
-        let mut data = load(object + BYTES_DATA);
-        let capacity = if data == 0 {
-            0
-        } else {
-            load(data.wrapping_add_signed(DATA_CAPACITY as isize))
-        };
-        if length == capacity * WORD {
-            assert!(
-                length < BYTES_MAX,
-                "a uint8array cannot be longer than 4 GiB"
-            );
-            let grown = (capacity * 2).max(FIRST_CAPACITY);
-            mutator.root(&mut object);
-            let storage = mutator.allocate_object(TYPE_VALUES, STORAGE_ELEMENTS + grown * WORD);
-            mutator.unroot(1);
-            store(storage + STORAGE_CAPACITY, grown);
-            let old = load(object + BYTES_DATA);
-            data = storage + STORAGE_ELEMENTS;
-            if old != 0 {
-                std::ptr::copy_nonoverlapping(old as *const u8, data as *mut u8, length);
-            }
-            store(object + BYTES_DATA, data);
-        }
-        *((data + length) as *mut u8) = byte;
-        store(object + BYTES_LENGTH, length + 1);
-        length + 1
-    }
 }
 
 crate::stubs::anchored! {

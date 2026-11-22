@@ -3,11 +3,11 @@
 // `string.from_utf8`. A result is shown as hex, since an entry returns no
 // `uint8array`.
 
-// The bytes 0, step, 2 * step, ... pushed one at a time, so that the array
-// grows on the heap at run time.
+// The bytes 0, step, 2 * step, ... stored one at a time, so that the array
+// is made and filled on the heap at run time.
 function u8_counted(n: int, step: int) -> uint8array {
-  let out = b"";
-  for (let i = 0; i < n; i += 1) { out.push(i * step); };
+  let out = uint8array.zeroes(n);
+  for (let i = 0; i < n; i += 1) { out[i] = i * step; };
   out
 }
 
@@ -25,7 +25,7 @@ function u8_literal_is_fresh() -> string {
   let seen = "";
   for (let i = 0; i < 3; i += 1) {
     let bytes = b"ab";
-    bytes.push(i);
+    bytes[i % 2] = 122;
     seen = `${seen}${bytes.to_hex()} `;
   };
   seen
@@ -101,36 +101,9 @@ function u8_at_outside() -> string {
   `${bytes.at(5) == null} ${bytes.at(-6) == null} ${b"".at(0) == null}`
 }
 
-function u8_push_returns_length() -> int {
-  let bytes = u8_counted(16, 1);
-  bytes.push(1) * 100 + bytes.push(2)
-}
-function u8_push_masks() -> string {
-  let bytes = b"";
-  bytes.push(256);
-  bytes.push(-1);
-  bytes.push(0x1ff);
-  bytes.to_hex()
-}
-function u8_push_many() -> string {
+function u8_store_many() -> string {
   let bytes = u8_counted(5000, 1);
   `${bytes.length()} ${bytes[4999]} ${bytes.slice(254, 258).to_hex()}`
-}
-function u8_pop() -> string {
-  let bytes = u8_counted(3, 5);
-  `${bytes.pop() ?? -1} ${bytes.pop() ?? -1} ${bytes.length()} ${bytes.to_hex()}`
-}
-function u8_pop_empty() -> bool {
-  let bytes = u8_counted(1, 5);
-  bytes.pop();
-  bytes.pop() == null && bytes.length() == 0
-}
-function u8_pop_then_push() -> string {
-  let bytes = u8_counted(8, 1);
-  bytes.pop();
-  bytes.pop();
-  bytes.push(0xaa);
-  bytes.to_hex()
 }
 
 function u8_concat() -> string {
@@ -142,7 +115,7 @@ function u8_concat_empty() -> string {
 function u8_concat_itself() -> string {
   let bytes = u8_counted(3, 1);
   let twice = bytes.concat(bytes);
-  bytes.push(9);
+  bytes[0] = 9;
   `${twice.to_hex()} ${bytes.to_hex()}`
 }
 function u8_concat_large() -> int {
@@ -176,17 +149,12 @@ function u8_slice_is_a_copy() -> string {
   let bytes = u8_counted(4, 1);
   let part = bytes.slice(1, 3);
   bytes[1] = 255;
-  part.push(7);
+  part[1] = 7;
   `${part.to_hex()} ${bytes.to_hex()}`
 }
 
 function u8_zeroes() -> string {
   `${uint8array.zeroes(3).to_hex()} ${uint8array.zeroes(0).length()} ${uint8array.zeroes(100000).length()}`
-}
-function u8_zeroes_then_push() -> string {
-  let bytes = uint8array.zeroes(8);
-  bytes.push(1);
-  bytes.to_hex()
 }
 function u8_zeroes_negative() -> int {
   uint8array.zeroes(0 - u8_counted(1, 1).length()).length()
@@ -268,19 +236,15 @@ function u8_to_string() -> string {
   b"hello, caf\xc3\xa9".to_string()
 }
 function u8_to_string_invalid() -> string {
-  let bytes = b"a";
-  bytes.push(0x80);
-  bytes.push(98);
-  bytes.push(0xff);
-  bytes.to_string()
+  b"a\x80b\xff".to_string()
 }
 function u8_to_string_empty() -> string {
   `[${b"".to_string()}]`
 }
 function u8_interpolated() -> string {
-  let bytes = u8_counted(0, 1);
-  bytes.push(104);
-  bytes.push(105);
+  let bytes = u8_counted(2, 1);
+  bytes[0] = 104;
+  bytes[1] = 105;
   `<${bytes}>`
 }
 
@@ -305,14 +269,10 @@ function u8_from_utf8_empty() -> string {
   `[${string.from_utf8(b"")}]`
 }
 function u8_from_utf8_invalid() -> string {
-  let bytes = rep("ab", 1).to_utf8();
-  bytes.push(0xff);
-  string.from_utf8(bytes)
+  string.from_utf8(rep("ab", 1).to_utf8().concat(b"\xff"))
 }
 function u8_from_utf8_truncated() -> string {
-  let bytes = rep("é", 1).to_utf8();
-  bytes.pop();
-  string.from_utf8(bytes)
+  string.from_utf8(rep("é", 1).to_utf8().slice(0, -1))
 }
 
 // Held in a class, an array and a union, and across collections.
@@ -322,7 +282,7 @@ class U8Holder {
 }
 function u8_in_a_class() -> string {
   let holder = U8Holder { name: rep("n", 3), bytes: u8_counted(4, 1) };
-  holder.bytes.push(255);
+  holder.bytes[3] = 255;
   let filler = rep("x", 200);
   `${holder.name} ${holder.bytes.to_hex()} ${filler.length()}`
 }

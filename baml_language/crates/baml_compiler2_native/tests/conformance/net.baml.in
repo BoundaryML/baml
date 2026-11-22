@@ -178,9 +178,9 @@ class NetShared {
   stop bool
 }
 function net_block(byte: int) -> uint8array {
-  let block = b"";
-  for (let i = 0; i < 1024; i += 1) { block.push(byte); };
-  for (let i = 0; i < 6; i += 1) { block = block.concat(block); };
+  let block = b"\x00";
+  block[0] = byte;
+  for (let i = 0; i < 16; i += 1) { block = block.concat(block); };
   block
 }
 // Fill the connection until a write waits, which it does once the peer's

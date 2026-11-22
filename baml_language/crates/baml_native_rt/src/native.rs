@@ -367,8 +367,7 @@ impl<'a> BytesRef<'a> {
         self.len() == 0
     }
 
-    /// The address of the first byte: null while the array has never held
-    /// one.
+    /// The address of the first byte: null when the array is empty.
     fn data(self) -> *mut u8 {
         // SAFETY: a view is of a live `uint8array`.
         unsafe { load(self.0 + BYTES_DATA) as *mut u8 }
@@ -403,9 +402,7 @@ impl<'a> BytesRef<'a> {
     ///
     /// Today this is a copy, so what is written into the array during the
     /// stop is not seen. It is the one place that changes when a stop can
-    /// instead keep the array's storage block alive and in place: what is
-    /// held is the storage's bytes as they are now, never the array, whose
-    /// storage a `push` replaces.
+    /// instead keep the array's storage block alive and in place.
     pub fn hold(self) -> HeldBytes {
         HeldBytes(self.to_vec())
     }
@@ -456,16 +453,6 @@ impl<'a> BytesRef<'a> {
                 std::ptr::copy(source.data().add(from), self.data().add(at), count);
             }
         }
-    }
-
-    /// Remove the last byte and return it.
-    pub fn pop(self) -> Option<u8> {
-        let last = self.len().checked_sub(1)?;
-        let byte = self.get(last);
-        // SAFETY: a view is of a live `uint8array`, which keeps its
-        // storage.
-        unsafe { store(self.0 + BYTES_LENGTH, last) };
-        byte
     }
 
     /// The bytes, lent in place: for a native that only scans them and
@@ -1185,13 +1172,6 @@ impl<'s> Scope<'s> {
         let object = crate::bytes::zeroed(self.mutator(), length);
         // SAFETY: just made.
         unsafe { self.root_raw(object) }
-    }
-
-    /// Append `byte` to `bytes` and return the new length. May collect.
-    pub fn push_byte(&mut self, bytes: Root<'s, Bytes>, byte: u8) -> usize {
-        let object = bytes.raw(self);
-        // SAFETY: a root holds a live `uint8array`.
-        unsafe { crate::bytes::push(self.mutator(), object, byte) }
     }
 
     /// A new `bigint` holding `value`, or the `baml.panics.AllocFailure` of

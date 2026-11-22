@@ -2,8 +2,8 @@
 // and the system's generator is tested by what any draw has.
 
 function random_seed(n: int, step: int) -> uint8array {
-  let out = b"";
-  for (let i = 0; i < n; i += 1) { out.push((i * step + 7) % 256); };
+  let out = uint8array.zeroes(n);
+  for (let i = 0; i < n; i += 1) { out[i] = (i * step + 7) % 256; };
   out
 }
 
