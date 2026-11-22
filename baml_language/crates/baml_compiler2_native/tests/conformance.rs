@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use baml_db::testing::{assert_no_diagnostic_errors, setup_test_db};
 
 mod common;
-use common::{Built, Ending, WAYS, build, engine, interpret, listed, output, run};
+use common::{Built, Ending, WAYS, build, command, engine, interpret, listed, output, run};
 
 /// Run a program every way of `WAYS`, or report why there is none.
 fn run_every_way(built: &Result<Built, String>) -> Vec<(&'static str, Ending)> {
@@ -189,7 +189,7 @@ fn answer(mut stream: std::net::TcpStream) {
     }
     let mut words = head.split(' ');
     let (method, path) = (words.next().unwrap_or(""), words.next().unwrap_or(""));
-    let echoed;
+    let (echoed, large);
     let (status, kind, body): (&str, &str, &[u8]) = match path {
         "/hello" => (
             "200 OK",
@@ -227,6 +227,101 @@ fn answer(mut stream: std::net::TcpStream) {
             }
             return;
         }
+        // A body that ends before the length the head promised.
+        "/cut" => {
+            let _ = stream.write_all(
+                b"HTTP/1.1 200 OK\r\ncontent-type: text/plain\r\ncontent-length: 1000\r\n\
+                  connection: close\r\n\r\nonly this much",
+            );
+            return;
+        }
+        "/large" => {
+            large = large_body();
+            ("200 OK", "text/plain", large.as_slice())
+        }
+        // An event whose character, whose line end and whose blank line
+        // the chunks split.
+        "/events-split" => {
+            let pieces: [&[u8]; 4] = [
+                b"id: 7\nevent: spl",
+                b"it\ndata: caf\xc3",
+                b"\xa9 au lait\r",
+                b"\n\r\ndata: whole\n\n",
+            ];
+            in_pieces(&mut stream, "text/event-stream", &pieces);
+            return;
+        }
+        // One event, and then a chunk the connection closes in the middle
+        // of.
+        "/events-cut" => {
+            let _ = stream.write_all(
+                b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\n\
+                  transfer-encoding: chunked\r\n\r\nd\r\ndata: first\n\n\r\n",
+            );
+            let _ = stream.flush();
+            std::thread::sleep(std::time::Duration::from_millis(60));
+            let _ = stream.write_all(b"40\r\ndata: never whole");
+            return;
+        }
+        // Three messages of an AWS event stream, in pieces that end inside
+        // a message.
+        "/aws-events" => {
+            let mut frames = aws_frame(
+                &[(":message-type", "event"), (":event-type", "chunk")],
+                b"{\"bytes\":\"aGVsbG8=\"}",
+            );
+            frames.extend(aws_frame(
+                &[
+                    (":message-type", "exception"),
+                    (":exception-type", "throttlingException"),
+                ],
+                b"{\"message\":\"slow down\"}",
+            ));
+            frames.extend(aws_frame(
+                &[
+                    (":message-type", "error"),
+                    (":error-code", "InternalError"),
+                    (":error-message", "it broke"),
+                ],
+                b"",
+            ));
+            let pieces = [
+                &frames[..7],
+                &frames[7..60],
+                &frames[60..150],
+                &frames[150..],
+            ];
+            in_pieces(&mut stream, "application/vnd.amazon.eventstream", &pieces);
+            return;
+        }
+        // A message, and then one whose checksum is wrong.
+        "/aws-events-bad" => {
+            let headers = [(":message-type", "event"), (":event-type", "chunk")];
+            let good = aws_frame(&headers, b"good");
+            let mut bad = aws_frame(&headers, b"bad");
+            *bad.last_mut().expect("a frame has a checksum") ^= 0xFF;
+            in_pieces(
+                &mut stream,
+                "application/vnd.amazon.eventstream",
+                &[&good, &bad],
+            );
+            return;
+        }
+        // A message the connection closes one byte short of.
+        "/aws-events-short" => {
+            let frame = aws_frame(&[(":message-type", "event")], b"cut");
+            in_pieces(
+                &mut stream,
+                "application/vnd.amazon.eventstream",
+                &[&frame[..frame.len() - 1]],
+            );
+            return;
+        }
+        "/aws-events-odd" => {
+            let frame = aws_frame(&[(":message-type", "weird")], b"");
+            in_pieces(&mut stream, "application/vnd.amazon.eventstream", &[&frame]);
+            return;
+        }
         _ => ("404 Not Found", "text/plain", b"nothing here"),
     };
     let head = format!(
@@ -237,6 +332,66 @@ fn answer(mut stream: std::net::TcpStream) {
     // The client may have given up: a late answer has no reader.
     let _ = stream.write_all(head.as_bytes());
     let _ = stream.write_all(body);
+}
+
+/// Answer a request with a body of `kind` that arrives as `pieces`, each
+/// some time after the one before it, and ends when the connection closes.
+fn in_pieces(stream: &mut std::net::TcpStream, kind: &str, pieces: &[&[u8]]) {
+    use std::io::Write as _;
+
+    let head = format!("HTTP/1.1 200 OK\r\ncontent-type: {kind}\r\nconnection: close\r\n\r\n");
+    let _ = stream.write_all(head.as_bytes());
+    for piece in pieces {
+        let _ = stream.write_all(piece);
+        let _ = stream.flush();
+        std::thread::sleep(std::time::Duration::from_millis(60));
+    }
+}
+
+/// A body of several mebibytes of text, no two of its lines alike.
+fn large_body() -> Vec<u8> {
+    let mut body = Vec::new();
+    let mut line = 0_u32;
+    while body.len() < 5 * 1024 * 1024 {
+        body.extend_from_slice(format!("line {line} of a large body\n").as_bytes());
+        line += 1;
+    }
+    body
+}
+
+/// The checksum an AWS event stream carries: CRC-32 as zlib computes it.
+fn crc32(bytes: &[u8]) -> u32 {
+    let mut crc = u32::MAX;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ (0xEDB8_8320 & (crc & 1).wrapping_neg());
+        }
+    }
+    !crc
+}
+
+/// One message of an AWS event stream: its string headers and its payload,
+/// between the lengths and the checksums of the framing.
+fn aws_frame(headers: &[(&str, &str)], payload: &[u8]) -> Vec<u8> {
+    let be =
+        |length: usize, width: usize| length.to_be_bytes()[size_of::<usize>() - width..].to_vec();
+    let mut encoded = Vec::new();
+    for (name, value) in headers {
+        encoded.extend(be(name.len(), 1));
+        encoded.extend_from_slice(name.as_bytes());
+        // The type of a string header.
+        encoded.push(7);
+        encoded.extend(be(value.len(), 2));
+        encoded.extend_from_slice(value.as_bytes());
+    }
+    let mut frame = be(16 + encoded.len() + payload.len(), 4);
+    frame.extend(be(encoded.len(), 4));
+    frame.extend(crc32(&frame).to_be_bytes());
+    frame.extend(encoded);
+    frame.extend_from_slice(payload);
+    frame.extend(crc32(&frame).to_be_bytes());
+    frame
 }
 
 /// Serve HTTP on a loopback port until the test process ends, and return
@@ -256,6 +411,35 @@ fn serve_http() -> u16 {
 fn closed_port() -> u16 {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
     listener.local_addr().expect("a bound address").port()
+}
+
+/// A loopback port where connecting neither succeeds nor is refused: a
+/// listener that accepts nothing, whose queue of connections this fills.
+/// The system drops what asks to connect after that, so a connect waits
+/// until its limit passes. The listener and the connections that fill its
+/// queue stay open until the test process ends.
+fn full_port() -> u16 {
+    static PORT: std::sync::OnceLock<u16> = std::sync::OnceLock::new();
+    *PORT.get_or_init(|| {
+        let socket = tokio::net::TcpSocket::new_v4().expect("a socket");
+        socket
+            .bind("127.0.0.1:0".parse().expect("an address"))
+            .expect("a loopback port");
+        let listener = socket.listen(1).expect("a listener");
+        let address = listener.local_addr().expect("a bound address");
+        std::mem::forget(listener);
+        for _ in 0..64 {
+            let limit = std::time::Duration::from_millis(300);
+            match std::net::TcpStream::connect_timeout(&address, limit) {
+                Ok(queued) => std::mem::forget(queued),
+                Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {
+                    return address.port();
+                }
+                Err(error) => panic!("cannot fill the queue of `{address}`: {error}"),
+            }
+        }
+        panic!("the queue of `{address}` never filled");
+    })
 }
 
 /// Run every case of `source`, a program of its own, on the interpreter
@@ -291,7 +475,8 @@ async fn http_requests_end_as_the_interpreter_does() {
     }
     let source = include_str!("conformance/http.baml.in")
         .replace("{open}", &format!("http://127.0.0.1:{}", serve_http()))
-        .replace("{closed}", &format!("http://127.0.0.1:{}", closed_port()));
+        .replace("{closed}", &format!("http://127.0.0.1:{}", closed_port()))
+        .replace("{full}", &format!("http://127.0.0.1:{}", full_port()));
     cases_agree(&source).await;
 }
 
@@ -327,6 +512,7 @@ async fn sockets_end_as_the_interpreter_does() {
     let source = include_str!("conformance/net.baml.in")
         .replace("{tcp}", &closed_port().to_string())
         .replace("{closed}", &closed_port().to_string())
+        .replace("{full}", &full_port().to_string())
         .replace("{udp_a}", &free_udp_port().to_string())
         .replace("{udp_b}", &free_udp_port().to_string());
     cases_agree(&source).await;
@@ -376,6 +562,94 @@ fn a_program_prints_and_reads_its_own_streams() {
         "ab\nname? \"Ada|Lovelace|\"\n"
     );
     assert_eq!(String::from_utf8_lossy(&output.stderr), "cd\n");
+}
+
+/// Every process there is, as `ps` lists it: its id, its parent's, and
+/// its state with its command.
+fn processes() -> Vec<(u32, u32, String)> {
+    let listed = std::process::Command::new("/bin/ps")
+        .args(["-axo", "pid=,ppid=,stat=,command="])
+        .output()
+        .expect("`ps` runs");
+    String::from_utf8_lossy(&listed.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let pid = fields.next()?.parse().ok()?;
+            let parent = fields.next()?.parse().ok()?;
+            Some((pid, parent, fields.collect::<Vec<_>>().join(" ")))
+        })
+        .collect()
+}
+
+/// A program `baml.sys.run` stops at its limit is gone when the error is
+/// thrown: killed, and waited for, so that it is neither still running nor
+/// left for the system as a process that has ended and that nothing asked
+/// about. No case of the suites above can see another process, so this
+/// looks at the native program's children while it waits for a line of
+/// input after the error, and for the child once the program has ended.
+#[test]
+fn a_program_stopped_at_its_limit_is_killed_and_waited_for() {
+    use std::io::{BufRead as _, Write as _};
+
+    // Nothing else sleeps for this long.
+    let nap = format!("97.{}", std::process::id());
+    let db = setup_test_db(&format!(
+        "function limited() -> string {{
+  let ran = baml.sys.run(\"/bin/sleep\", args = [\"{nap}\"], timeout = baml.time.Duration.from_milliseconds(200)) catch (e) {{
+    baml.errors.Io => {{ return \"io\"; }},
+    baml.errors.Timeout => {{ return \"timed out\"; }},
+    baml.errors.InvalidArgument => {{ return \"invalid\"; }},
+  }};
+  \"ran\"
+}}
+function main() -> string {{
+  baml.io.println(limited());
+  baml.io.input(null)
+}}
+"
+    ));
+    assert_no_diagnostic_errors(&db);
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let built = build(&db, "main", directory.path()).expect("the program compiles");
+    for way in &WAYS {
+        let mut program = command(&built, way)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("the program starts");
+        let mut printed = std::io::BufReader::new(program.stdout.take().expect("a piped output"));
+        let mut line = String::new();
+        printed.read_line(&mut line).expect("a line");
+        let children: Vec<_> = processes()
+            .into_iter()
+            .filter(|(_, parent, _)| *parent == program.id())
+            .collect();
+        program
+            .stdin
+            .take()
+            .expect("a piped input")
+            .write_all(b"\n")
+            .expect("the program reads its input");
+        let status = program.wait().expect("the program ends");
+        let left: Vec<_> = processes()
+            .into_iter()
+            .filter(|(_, _, command)| command.contains(&nap))
+            .collect();
+        for (pid, _, _) in &left {
+            let _ = std::process::Command::new("/bin/kill")
+                .arg(pid.to_string())
+                .status();
+        }
+        let way = way.name;
+        assert_eq!(line, "timed out\n", "{way}");
+        assert_eq!(status.code(), Some(0), "{way}");
+        assert!(
+            children.is_empty() && left.is_empty(),
+            "{way}: while the program waited it had the children {children:?}, and once it had \
+             ended {left:?} was left"
+        );
+    }
 }
 
 /// Build `source`'s `main` and run it every way: what it prints, what it

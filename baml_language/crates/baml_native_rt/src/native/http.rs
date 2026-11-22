@@ -330,7 +330,12 @@ impl Events {
             match events {
                 Ok(events) if !events.is_empty() => return Ok(Some(events::to_json(&events))),
                 Ok(_) => {}
-                Err(message) => return Err(Failure::Io(message)),
+                // Only the binary stream of AWS can be malformed.
+                Err(message) => {
+                    return Err(Failure::Io(format!(
+                        "malformed AWS event stream: {message}"
+                    )));
+                }
             }
         }
     }

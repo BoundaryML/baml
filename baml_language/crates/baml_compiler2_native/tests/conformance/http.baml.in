@@ -1,5 +1,6 @@
 // `baml.http`, run against a server the test starts on a loopback
-// port: `{open}` is its address, and `{closed}` is one nothing listens on.
+// port: `{open}` is its address, `{closed}` is one nothing listens on, and
+// connecting to `{full}` waits for ever.
 // The file is not a case file of its own because the addresses are only
 // known when the test runs.
 
@@ -198,4 +199,106 @@ function http_response_not_streaming_refuses_a_write() -> string {
   let response = baml.http.Response.new(200, {}, b"whole");
   response.write(b"more") catch (e) { baml.errors.Io => { return e.message; } };
   "wrote"
+}
+
+// Connecting to a listener whose queue is full waits, and the limit on
+// connecting is the one that passes.
+function http_connect_times_out() -> string {
+  let request = baml.http.Request.from_url("{full}/").set_method("GET").set_connect_timeout(baml.time.Duration.from_milliseconds(200));
+  let response = baml.http.send(request) catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return `timeout ${e.timeout_type} ${e.duration?.to_milliseconds() ?? 0n} ${e.message}`; },
+    baml.errors.InvalidArgument => { return "invalid"; },
+  };
+  `${response.status_code}`
+}
+function http_sse_refused() -> string {
+  let stream = baml.http.send_sse(baml.http.Request.from_url("{closed}/").set_method("GET")) catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return "timeout"; },
+    baml.errors.InvalidArgument => { return "invalid"; },
+  };
+  `${stream.status_code}`
+}
+// The server closes before the body is as long as its head said: the head
+// was read, and reading the body fails.
+function http_text_cut_short() -> string {
+  let response = baml.http.fetch("{open}/cut");
+  let text = response.text() catch (e) {
+    baml.errors.Io => { return `${response.status_code} io: ${e.message}`; },
+    baml.errors.Timeout => { return "timeout"; },
+  };
+  `read ${text}`
+}
+function http_bytes_cut_short() -> string {
+  let response = baml.http.fetch("{open}/cut");
+  let body = response.bytes() catch (e) {
+    baml.errors.Io => { return `${response.status_code} io: ${e.message}`; },
+    baml.errors.Timeout => { return "timeout"; },
+  };
+  `read ${body.to_hex()}`
+}
+function http_digest(bytes: uint8array) -> string {
+  let hasher = baml.crypto.Sha256.new();
+  hasher.update(bytes);
+  hasher.finish().to_hex()
+}
+// A body of several mebibytes, whole.
+function http_large_text() -> string {
+  let text = baml.http.fetch("{open}/large").text();
+  let moved = http_spin(30);
+  `${text.length()} ${moved} ${text.ends_with("of a large body\n")} ${http_digest(text.to_utf8())}`
+}
+function http_large_bytes() -> string {
+  let body = baml.http.fetch("{open}/large").bytes();
+  let moved = http_spin(30);
+  `${body.length()} ${moved} ${http_digest(body)}`
+}
+// What one `next` of a stream ends as.
+function http_next(stream: baml.http.SseStream) -> string {
+  let batch = stream.next() catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return "timeout"; },
+  };
+  batch ?? "ended"
+}
+// An event whose character, whose line end and whose blank line arrive in
+// two chunks each.
+function http_sse_event_split() -> string {
+  let stream = baml.http.send_sse(baml.http.Request.from_url("{open}/events-split").set_method("GET"));
+  http_events(stream)
+}
+// The connection closes inside a chunk: the event before it is read, the
+// next read fails, and the stream has ended after that.
+function http_sse_cut_mid_stream() -> string {
+  let stream = baml.http.send_sse(baml.http.Request.from_url("{open}/events-cut").set_method("GET"));
+  let first = http_next(stream);
+  let second = http_next(stream);
+  let third = http_next(stream);
+  `${first} | ${second} | ${third}`
+}
+// The binary event stream of AWS: an event, an exception and an error,
+// each read whole whatever chunks it arrived in.
+function http_aws_events() -> string {
+  let stream = baml.http.send_sse(baml.http.Request.from_url("{open}/aws-events").set_method("GET"));
+  `${stream.headers["content-type"]} ${http_events(stream)}`
+}
+// A stream that is malformed fails where it is, and has ended after that:
+// a message whose checksum is wrong, one the body ends inside, and one of
+// a type no event is made of.
+function http_aws_malformed(path: string) -> string {
+  let stream = baml.http.send_sse(baml.http.Request.from_url("{open}" + path).set_method("GET"));
+  let first = http_next(stream);
+  let second = http_next(stream);
+  let third = http_next(stream);
+  `${first} | ${second} | ${third}`
+}
+function http_aws_events_bad_checksum() -> string {
+  http_aws_malformed("/aws-events-bad")
+}
+function http_aws_events_cut_short() -> string {
+  http_aws_malformed("/aws-events-short")
+}
+function http_aws_events_unknown_type() -> string {
+  http_aws_malformed("/aws-events-odd")
 }

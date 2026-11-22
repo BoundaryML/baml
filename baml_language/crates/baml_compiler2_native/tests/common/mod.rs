@@ -129,21 +129,27 @@ pub(crate) const WAYS: [Way; 4] = [
     },
 ];
 
-/// Run a program one way: what it prints, what it reports and how it
-/// exits.
-pub(crate) fn output(built: &Built, way: &Way) -> std::process::Output {
-    let executable = if way.checked {
+/// What starts a program one way: its executable, with the variables of
+/// the way set.
+pub(crate) fn command(built: &Built, way: &Way) -> Command {
+    let mut command = Command::new(if way.checked {
         &built.checked
     } else {
         &built.lean
-    };
-    let mut command = Command::new(executable);
+    });
     for variable in way.variables {
         command.env(variable, "1");
     }
     command
+}
+
+/// Run a program one way: what it prints, what it reports and how it
+/// exits.
+pub(crate) fn output(built: &Built, way: &Way) -> std::process::Output {
+    let mut command = command(built, way);
+    command
         .output()
-        .unwrap_or_else(|error| panic!("`{}` does not start: {error}", executable.display()))
+        .unwrap_or_else(|error| panic!("`{:?}` does not start: {error}", command.get_program()))
 }
 
 /// Run a program one way and say how it ended.

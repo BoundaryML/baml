@@ -1,6 +1,6 @@
 // `baml.net` on loopback ports the test picks: a listener binds `{tcp}`,
-// nothing listens on `{closed}`, and the two UDP sockets bind `{udp_a}`
-// and `{udp_b}`. The file is not a case file of its own because the ports
+// nothing listens on `{closed}`, connecting to `{full}` waits for ever,
+// and the two UDP sockets bind `{udp_a}` and `{udp_b}`. The file is not a case file of its own because the ports
 // are only known when the test runs.
 
 function net_spin(n: int) -> int {
@@ -115,4 +115,132 @@ function net_udp_closed() -> string {
     baml.errors.Timeout => { return "timeout"; },
   };
   "sent"
+}
+
+// Connecting to a listener whose queue is full waits until the limit
+// passes.
+function net_tcp_connect_times_out() -> string {
+  let stream = baml.net.TcpStream.connect("127.0.0.1:{full}", timeout = baml.time.Duration.from_milliseconds(150)) catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return `timeout: ${e.message} ${e.duration?.to_milliseconds() ?? 0n} ${e.timeout_type}`; },
+  };
+  "connected"
+}
+// What the peer wrote before it closed is read, and every read after that
+// finds the end. A write to it is taken until the system has heard that
+// the peer is gone, so it is not shown.
+function net_tcp_read_after_peer_close() -> string {
+  let listener = baml.net.TcpListener.bind("127.0.0.1:{tcp}");
+  let dialer = spawn {
+    let stream = baml.net.TcpStream.connect("127.0.0.1:{tcp}");
+    let wrote = stream.write_some(b"last words");
+    stream.close();
+    wrote
+  };
+  let server = listener.accept();
+  let wrote = await dialer;
+  let moved = net_spin(20);
+  let text = server.as<baml.io.Read>.text();
+  let end = server.read(10);
+  let again = server.read(10);
+  server.close();
+  listener.close();
+  `${wrote} ${moved} ${text} ${net_hex(end)} ${net_hex(again)}`
+}
+// A datagram sent to a port nothing is bound to is sent all the same, and
+// nothing comes back.
+function net_udp_send_to_nothing() -> string {
+  let a = baml.net.UdpSocket.bind("127.0.0.1:{udp_a}");
+  let sent = a.send_to(b"anyone?", "127.0.0.1:{udp_b}", timeout = baml.time.Duration.from_seconds(5)) catch (e) {
+    baml.errors.Io => { a.close(); return `io: ${e.message}`; },
+    baml.errors.Timeout => { a.close(); return "send timed out"; },
+  };
+  let got = a.recv_from(timeout = baml.time.Duration.from_milliseconds(60)) catch (e) {
+    baml.errors.Io => { a.close(); return `${sent} io: ${e.message}`; },
+    baml.errors.Timeout => { a.close(); return `${sent} timeout: ${e.message}`; },
+  };
+  a.close();
+  `${sent} received ${got.data.to_hex()}`
+}
+function net_udp_send_to_no_address() -> string {
+  let a = baml.net.UdpSocket.bind("127.0.0.1:{udp_a}");
+  let sent = a.send_to(b"x", "not an address") catch (e) {
+    baml.errors.Io => { a.close(); return `io: ${e.message}`; },
+    baml.errors.Timeout => { a.close(); return "timeout"; },
+  };
+  a.close();
+  `${sent}`
+}
+
+// What a task shares with the tasks it starts.
+class NetShared {
+  filled int
+  stop bool
+}
+function net_block(byte: int) -> uint8array {
+  let block = b"";
+  for (let i = 0; i < 1024; i += 1) { block.push(byte); };
+  for (let i = 0; i < 6; i += 1) { block = block.concat(block); };
+  block
+}
+// Fill the connection until a write waits, which it does once the peer's
+// buffer and the stream's own are full, and go on when the write that
+// waited is through.
+function net_fill(stream: baml.net.TcpStream, shared: NetShared) -> int throws baml.errors.Io {
+  let filler = net_block(0);
+  while (!shared.stop) {
+    shared.filled += stream.write_some(filler);
+  };
+  shared.filled
+}
+// The bytes a write sends are the array's when it is called. Here the
+// write waits, because the connection is full, while another task writes
+// over the whole array and only then reads the connection empty: what
+// arrives is what the array held before. The other task waits for a hold
+// the writer gives up right before it writes, so it runs after the call.
+function net_write_sends_the_bytes_of_the_call() -> string {
+  let listener = baml.net.TcpListener.bind("127.0.0.1:{tcp}");
+  let stream = baml.net.TcpStream.connect("127.0.0.1:{tcp}");
+  // Native code does not compile an `accept` whose result goes straight
+  // into a variable a task captures, so it goes through one that none
+  // does.
+  let accepted = listener.accept();
+  let server = accepted;
+  let shared = NetShared { filled: 0, stop: false };
+  let filling = spawn { net_fill(stream, shared) };
+  // The filler is waiting once its count stands still.
+  let before = -1;
+  while (before != shared.filled) {
+    before = shared.filled;
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(50));
+  };
+  shared.stop = true;
+  let data = net_block(97);
+  let gate = baml.sync.Semaphore.new(1);
+  let held = gate.acquire();
+  let reading = spawn {
+    let mine = gate.acquire();
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(20));
+    for (let i = 0; i < data.length(); i += 1) { data[i] = 98; };
+    let total = 0;
+    let before = false;
+    let after = false;
+    while (true) {
+      let chunk = server.read(1048576);
+      if chunk == null { break; }
+      total += chunk.length();
+      before = before || chunk.includes(97);
+      after = after || chunk.includes(98);
+    };
+    mine.release();
+    `${total} ${before} ${after}`
+  };
+  held.release();
+  let wrote = stream.write_some(data);
+  let filled = await filling;
+  stream.close();
+  let read = await reading;
+  server.close();
+  listener.close();
+  `${read == `${filled + wrote} true false`} ${wrote > 0} ${data[0]} ${data.includes(97)}`
 }

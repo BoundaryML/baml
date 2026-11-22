@@ -42,4 +42,4 @@ sys_native = { workspace = true, features = [ "bundle-http", "aws-crypto" ] }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = [ "macros", "rt-multi-thread" ] }
+tokio = { workspace = true, features = [ "macros", "net", "rt-multi-thread" ] }

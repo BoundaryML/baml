@@ -209,10 +209,11 @@ fn write_atomic(path: &Path, content: &[u8]) -> std::io::Result<()> {
     }
     temporary.as_file().sync_all()?;
     // Closed before it is moved: the next writer does not find it open.
+    // The error of a move that fails says that it was the move.
     temporary
         .into_temp_path()
         .persist(path)
-        .map_err(|error| error.error)?;
+        .map_err(|error| std::io::Error::other(error.to_string()))?;
     // The directory entry is written through as the contents were.
     #[cfg(unix)]
     std::fs::File::open(parent)?.sync_all()?;

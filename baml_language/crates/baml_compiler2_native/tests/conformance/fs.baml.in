@@ -209,3 +209,126 @@ function fs_flush_dispatched() -> string {
   baml.fs.remove(fs_at("flushed-too.txt"));
   `${seen.join(",")} ${counted.flushed} ${text}`
 }
+
+// What an operation on a path ends as: its result, or the error it throws.
+function fs_do(op: string, path: string) -> string throws baml.errors.Io | baml.errors.ParseError | baml.errors.InvalidArgument {
+  if op == "read" { return baml.fs.read(path); }
+  if op == "size" { return `${baml.fs.size(path)}`; }
+  if op == "exists" { return `${baml.fs.exists(path)}`; }
+  if op == "metadata" { return `${baml.fs.metadata(path).is_dir}`; }
+  if op == "canonicalize" { return `${baml.fs.canonicalize(path).length() > 0}`; }
+  if op == "read_dir" { return fs_names(path); }
+  if op == "write" { return `${baml.fs.write(path, "w")}`; }
+  if op == "write_bytes" { return `${baml.fs.write_bytes(path, b"w")}`; }
+  if op == "write_atomic" { baml.fs.write_atomic(path, b"w"); return "written"; }
+  if op == "mkdir" { baml.fs.mkdir(path, baml.fs.MkdirOptions { recursive: false }); return "made"; }
+  if op == "remove" { baml.fs.remove(path); return "removed"; }
+  if op == "remove_dir" { baml.fs.remove_dir(path); return "removed"; }
+  if op == "remove_dir_all" { baml.fs.remove_dir_all(path); return "removed"; }
+  if op == "rename" { baml.fs.rename(path, path + ".moved"); return "renamed"; }
+  if op == "chmod" { baml.fs.chmod(path, 420); return "changed"; }
+  let file = if (op == "r") { baml.fs.open(path, "r") } else if (op == "w") { baml.fs.open(path, "w") } else if (op == "a") { baml.fs.open(path, "a") } else { baml.fs.open(path, "r+") };
+  let read = fs_file_try("read", file);
+  file.close();
+  `opened, ${read}`
+}
+function fs_try(op: string, path: string) -> string {
+  let ended = fs_do(op, path) catch (e) {
+    baml.errors.Io => `io: ${e.message}`,
+    baml.errors.ParseError => "parse",
+    baml.errors.InvalidArgument => `invalid: ${e.message}`,
+  };
+  `${op}: ${ended}`
+}
+function fs_try_each(ops: string[], path: string) -> string {
+  let ended: string[] = [];
+  for (let op in ops) { ended.push(fs_try(op, path)); };
+  ended.join("; ")
+}
+// What an operation on an open or a closed file ends as.
+function fs_file_do(op: string, file: baml.fs.File) -> string throws baml.errors.Io | baml.errors.ParseError | baml.errors.InvalidArgument {
+  if op == "read" { return fs_hex(file.read(4)); }
+  if op == "write" { return `${file.write("x")}`; }
+  if op == "flush" { file.flush(); return "flushed"; }
+  if op == "seek" { return `${file.seek_from("start", 0)}`; }
+  if op == "text" { return file.text(); }
+  if op == "bytes" { return file.bytes().to_hex(); }
+  file.close();
+  "closed"
+}
+function fs_file_try(op: string, file: baml.fs.File) -> string {
+  let ended = fs_file_do(op, file) catch (e) {
+    baml.errors.Io => `io: ${e.message}`,
+    baml.errors.ParseError => "parse",
+    baml.errors.InvalidArgument => `invalid: ${e.message}`,
+  };
+  `${op}: ${ended}`
+}
+// Every operation that takes a path, on one that is not there. Only
+// `exists` and `remove_dir_all` do not fail.
+function fs_missing_path() -> string {
+  let ops = ["read", "size", "exists", "metadata", "canonicalize", "read_dir", "remove", "remove_dir", "remove_dir_all", "rename", "chmod", "r", "r+"];
+  fs_try_each(ops, fs_at("not/there"))
+}
+function fs_missing_parent() -> string {
+  let ended = fs_try_each(["mkdir", "exists"], fs_at("absent/child"));
+  `${ended} ${baml.fs.exists(fs_at("absent"))}`
+}
+// A directory where a file is expected.
+function fs_directory_for_a_file() -> string {
+  let path = fs_at("a-directory");
+  baml.fs.mkdir(path, baml.fs.MkdirOptions { recursive: false });
+  let ended = fs_try_each(["read", "write", "write_bytes", "write_atomic", "remove", "r", "w", "a", "r+"], path);
+  let listed = fs_names(path);
+  baml.fs.remove_dir(path);
+  `${ended} [${listed}]`
+}
+// A file where a directory is expected: as the directory itself, and as
+// the parent of a path.
+function fs_file_for_a_directory() -> string {
+  let path = fs_at("a-file");
+  baml.fs.write(path, "f");
+  let itself = fs_try_each(["read_dir", "remove_dir", "mkdir"], path);
+  let under = fs_try_each(["read", "exists", "write", "mkdir", "remove", "r", "w"], path + "/child");
+  let text = baml.fs.read(path);
+  baml.fs.remove(path);
+  `${itself} | ${under} | ${text}`
+}
+// A file no one may read or write, and its mode put back before it is
+// removed.
+function fs_file_without_permission() -> string {
+  let path = fs_at("locked.txt");
+  baml.fs.write(path, "kept");
+  baml.fs.chmod(path, 0);
+  let ended = fs_try_each(["read", "write", "write_bytes", "r", "w", "a", "r+", "size", "exists"], path);
+  baml.fs.chmod(path, 420);
+  let text = baml.fs.read(path);
+  baml.fs.remove(path);
+  `${ended} | ${text}`
+}
+// A directory no one may list, search or write in.
+function fs_directory_without_permission() -> string {
+  let path = fs_at("locked");
+  baml.fs.write(path + "/inside.txt", "kept");
+  baml.fs.chmod(path, 0);
+  let itself = fs_try_each(["read_dir", "remove_dir", "remove_dir_all"], path);
+  let inside = fs_try_each(["read", "write", "remove", "size", "exists", "metadata", "r"], path + "/inside.txt");
+  let made = fs_try_each(["write", "mkdir", "w"], path + "/new");
+  baml.fs.chmod(path, 493);
+  let text = baml.fs.read(path + "/inside.txt");
+  baml.fs.remove_dir_all(path);
+  `${itself} | ${inside} | ${made} | ${text}`
+}
+// A file closed twice, and then everything a file does.
+function fs_closed_file_refuses_everything() -> string {
+  let path = fs_at("closed-twice.txt");
+  let file = baml.fs.open(path, "w+");
+  file.write("before");
+  let ended: string[] = [];
+  for (let op in ["close", "close", "read", "write", "flush", "seek", "text", "bytes", "close"]) {
+    ended.push(fs_file_try(op, file));
+  };
+  let text = baml.fs.read(path);
+  baml.fs.remove(path);
+  `${ended.join("; ")} | ${text}`
+}

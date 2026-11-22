@@ -1,6 +1,6 @@
 // `baml.sys`: what the process knows of itself, and running a program to
-// its end. The programs run are `/bin/echo`, `/bin/cat` and
-// `/usr/bin/true`, and paths are relative to the directory the tests run
+// its end. The programs run are `/bin/echo`, `/bin/cat`, `/usr/bin/true`
+// and `/bin/sleep`, and paths are relative to the directory the tests run
 // in, which is this crate's.
 
 function sys_argv() -> int {
@@ -63,4 +63,22 @@ function sys_run_by_tasks() -> string {
   let busy = spawn { task_churn(80) };
   let n = await busy;
   `${await a} ${await b} ${n}`
+}
+// A program that outlasts its limit is killed, and the error says which
+// limit passed.
+function sys_run_times_out() -> string {
+  let ran = baml.sys.run("/bin/sleep", args = [rep("2", 2)], timeout = baml.time.Duration.from_milliseconds(150)) catch (e) {
+    baml.errors.Io => { return `io: ${e.message}`; },
+    baml.errors.Timeout => { return `timeout: ${e.message} ${e.duration?.to_milliseconds() ?? 0n} ${e.timeout_type}`; },
+    baml.errors.InvalidArgument => { return "invalid"; },
+  };
+  `${ran.exit_code}`
+}
+function sys_run_times_out_uncaught() -> int {
+  baml.sys.run("/bin/sleep", args = [rep("2", 2)], capture_output = true, timeout = baml.time.Duration.from_milliseconds(150)).exit_code
+}
+// A limit the program ends within is no limit on what it leaves.
+function sys_run_within_its_limit() -> string {
+  let ran = baml.sys.run("/bin/sleep", args = ["0.05"], timeout = baml.time.Duration.from_seconds(20));
+  `${ran.exit_code} ${ran.signal == null}`
 }
