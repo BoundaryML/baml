@@ -36,6 +36,13 @@ function sum_int_underflows() -> int {
   values.push(-1);
   values.sum()
 }
+// Three values that each fit with room to spare, and two of them together:
+// the panic is at the third.
+function sum_int_overflows_among_equals() -> int {
+  let values = sum_ints(0);
+  for (let i = 0; i < 3; i += 1) { values.push(1729382256910270464); };
+  values.sum()
+}
 // The totals at the two ends of the range are sums.
 function sum_int_ends() -> string {
   let most = sum_ints(0);
