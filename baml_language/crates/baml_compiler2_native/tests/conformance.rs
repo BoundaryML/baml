@@ -816,6 +816,36 @@ function main() -> bool { Wrapped<int> { value: 1 } == Wrapped<int> { value: 2 }
     );
 }
 
+/// A program that calls what of the standard library native code does not
+/// run is refused, and the refusal names the function and says why.
+#[test]
+fn a_refused_standard_library_call_names_the_function_and_says_why() {
+    for (source, why, named) in [
+        (
+            "function main() -> int { baml.archive.entries(b\"x\", \"zip\").length() }",
+            "standard library system operation that is not ported",
+            "baml.archive.entries",
+        ),
+        (
+            "function main() -> string { baml.csv.reader(\"a,b\"); \"read\" }",
+            "standard library native that is not ported",
+            "baml.csv._reader",
+        ),
+        (
+            "class Point { x int }
+function main() -> string { [Point { x: 1 }].join(\",\") }",
+            "baml.Array.join of elements with their own to_string, which the runtime cannot call",
+            "elements are class",
+        ),
+    ] {
+        let refusal = refused(&format!("{source}\n"));
+        assert!(
+            refusal.contains(why) && refusal.contains(named),
+            "{refusal}"
+        );
+    }
+}
+
 /// Whether the executable built from `source`, as it ships, names
 /// `symbol`: an import is by name, and so is every function of an
 /// executable that is not stripped.

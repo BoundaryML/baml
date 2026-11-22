@@ -559,8 +559,11 @@ pub(crate) fn native_type_arguments<'db>(
         )
     {
         return Err(Blocker::new(
-            "Array.join of elements with their own to_string",
-            types.first().map(describe).unwrap_or_default(),
+            "baml.Array.join of elements with their own to_string, which the runtime cannot call",
+            format!(
+                "elements are {}",
+                types.first().map(describe).unwrap_or("of no one type")
+            ),
         ));
     }
     Ok(types)
@@ -712,6 +715,33 @@ pub(crate) struct Dispatched<'db> {
     /// result goes.
     pub(crate) arguments: Vec<NativeTy<'db>>,
     pub(crate) result: NativeTy<'db>,
+}
+
+/// Whether a call of `native` with `passed` value arguments, keeping what
+/// it returns where a `kept` is held, matches the `taken` arguments the
+/// native has and what it `returns`. The refusal says which of the two
+/// does not.
+fn native_call_fits(
+    native: &crate::natives::Native,
+    (passed, taken): (usize, usize),
+    returns: &NativeTy<'_>,
+    kept: &NativeTy<'_>,
+) -> Result<(), Blocker> {
+    let differs = if passed != taken {
+        format!("takes {taken} arguments and is passed {passed}")
+    } else if assignable(kept, returns) {
+        return Ok(());
+    } else {
+        format!(
+            "returns {} where the call keeps {}",
+            describe(returns),
+            describe(kept)
+        )
+    };
+    Err(Blocker::new(
+        "call that does not match its callee's layout",
+        format!("{} {differs}", native.path),
+    ))
 }
 
 /// Whether a call with these value arguments, storing a `result`, matches
@@ -1709,14 +1739,12 @@ fn terminator_supported<'db>(
                     let types = native_type_arguments(db, body, native, args, *ntypeargs)?;
                     crate::json::check_call(db, body, native, args, *ntypeargs)?;
                     let values = &args[*ntypeargs..];
-                    if values.len() != signature.params.len()
-                        || !assignable(&result, &signature.result.native(db, &types))
-                    {
-                        return Err(Blocker::new(
-                            "call that does not match its callee's layout",
-                            native.path,
-                        ));
-                    }
+                    native_call_fits(
+                        native,
+                        (values.len(), signature.params.len()),
+                        &signature.result.native(db, &types),
+                        &result,
+                    )?;
                     all_assignable(
                         db,
                         body,
@@ -1829,16 +1857,18 @@ fn terminator_supported<'db>(
                 }
                 Virtual::Static(Target::Native(native)) => {
                     let (signature, _) = native.callable()?;
-                    if *ntypeargs != 0
-                        || native.type_args != 0
-                        || args.len() != signature.params.len()
-                        || !assignable(&result, &signature.result.native(db, &[]))
-                    {
+                    if *ntypeargs != 0 || native.type_args != 0 {
                         return Err(Blocker::new(
                             "call that does not match its callee's layout",
-                            native.path,
+                            format!("{} takes type arguments", native.path),
                         ));
                     }
+                    native_call_fits(
+                        native,
+                        (args.len(), signature.params.len()),
+                        &signature.result.native(db, &[]),
+                        &result,
+                    )?;
                     all_assignable(
                         db,
                         body,
@@ -1880,14 +1910,12 @@ fn terminator_supported<'db>(
                 // One the runtime implements is called as any native is.
                 let (signature, _) = native.callable()?;
                 let result = place_ty(db, body, destination)?;
-                if args.len() != signature.params.len()
-                    || !assignable(&result, &signature.result.native(db, &[]))
-                {
-                    return Err(Blocker::new(
-                        "call that does not match its callee's layout",
-                        native.path,
-                    ));
-                }
+                native_call_fits(
+                    native,
+                    (args.len(), signature.params.len()),
+                    &signature.result.native(db, &[]),
+                    &result,
+                )?;
                 all_assignable(
                     db,
                     body,
@@ -1896,7 +1924,10 @@ fn terminator_supported<'db>(
                     "argument",
                 )
             } else {
-                Err(Blocker::new("system operation", name))
+                Err(Blocker::new(
+                    "standard library system operation that is not ported",
+                    name,
+                ))
             }
         }
         Terminator::Spawn { plan, future, .. } => {
