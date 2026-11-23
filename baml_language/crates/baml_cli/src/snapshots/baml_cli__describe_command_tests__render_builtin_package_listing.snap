@@ -218,9 +218,9 @@ function         baml.path.parent                 <builtin>/baml/ns_path/path.ba
 function         baml.path.is_absolute            <builtin>/baml/ns_path/path.baml:12
 function         baml.path.absolute               <builtin>/baml/ns_path/path.baml:20
 interface        baml.random.Rng                  <builtin>/baml/ns_random/random.baml:7
-class            baml.random.SystemRandom         <builtin>/baml/ns_random/random.baml:46
-class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:69
-class            baml.random.ChaCha20             <builtin>/baml/ns_random/random.baml:115
+class            baml.random.SystemRandom         <builtin>/baml/ns_random/random.baml:39
+class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:62
+class            baml.random.ChaCha20             <builtin>/baml/ns_random/random.baml:108
 class            baml.regex.Group                 <builtin>/baml/ns_regex/regex.baml:19
 class            baml.regex.Match                 <builtin>/baml/ns_regex/regex.baml:39
 enum             baml.regex.ErrorKind             <builtin>/baml/ns_regex/regex.baml:55

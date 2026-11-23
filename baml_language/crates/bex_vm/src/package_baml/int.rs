@@ -1,11 +1,9 @@
 use super::{BamlClassInt, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmRustFnError};
 
-/// Smallest draw of `Rng.random_int`, which draws 63 random bits so that the
-/// value always has an inline encoding: `[-2^62, 2^62)`.
-const DRAW_MIN: i64 = -(1 << 62);
-/// Number of values `Rng.random_int` draws from.
-const DRAW_SPAN: u128 = 1 << 63;
+/// Number of values `Rng.random_int` draws from: every `int`. One more than
+/// `u64::MAX`, so the rejection arithmetic is in `u128`.
+const DRAW_SPAN: u128 = 1 << 64;
 
 impl BamlClassInt for PackageBamlImpl {
     // ── Magnitude ─────────────────────────────────────────────────────────────
@@ -77,10 +75,10 @@ impl BamlClassInt for PackageBamlImpl {
         if lower >= upper {
             return upper;
         }
+        // At most `2^64 - 1`: the range is half-open.
         let range = (i128::from(upper) - i128::from(lower)).cast_unsigned();
-        // A draw outside `[DRAW_MIN, DRAW_MIN + DRAW_SPAN)` (from an `Rng` that
-        // overrides `random_int`) lands past `zone` and is rejected too.
-        let u = (i128::from(draw) - i128::from(DRAW_MIN)).cast_unsigned();
+        // The draw's offset from `int.min_value()`, in `[0, DRAW_SPAN)`.
+        let u = (i128::from(draw) - i128::from(i64::MIN)).cast_unsigned();
 
         // Reject the remainder above the largest multiple of `range`.
         let zone = DRAW_SPAN / range * range;
@@ -138,4 +136,28 @@ impl BamlClassInt for PackageBamlImpl {
 
     // Note: `max_value()` and `min_value()` are implemented directly in
     // `int.baml` as BAML literal expressions — no Rust trampoline needed.
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BamlClassInt, PackageBamlImpl};
+
+    fn map(draw: i64, lower: i64, upper: i64) -> i64 {
+        PackageBamlImpl::_random_in_range(draw, lower, upper)
+    }
+
+    /// Draws span all 2^64 ints, so the widest range, `[MIN, MAX)`, maps
+    /// each draw to itself and rejects only the one draw past its end.
+    #[test]
+    fn random_in_range_covers_the_full_int_range() {
+        for draw in [i64::MIN, -1, 0, 1, i64::MAX - 1] {
+            assert_eq!(map(draw, i64::MIN, i64::MAX), draw);
+        }
+        assert_eq!(map(i64::MAX, i64::MIN, i64::MAX), i64::MAX);
+        // 2^64 = 1 (mod 5): exactly one draw, the largest, is rejected.
+        assert_eq!(map(i64::MIN, 0, 5), 0);
+        assert_eq!(map(i64::MIN + 4, 0, 5), 4);
+        assert_eq!(map(i64::MAX - 1, 0, 5), 4);
+        assert_eq!(map(i64::MAX, 0, 5), 5);
+    }
 }
