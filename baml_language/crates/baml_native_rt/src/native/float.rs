@@ -2,9 +2,10 @@
 
 use super::{NativeBamlFloat, Natives, Root, Scope, Str, Thrown};
 
-/// The `int`s a `float` converts to: `-2^62 <= value < 2^62`.
-const MIN: f64 = -4_611_686_018_427_387_904.0;
-const MAX_PLUS_ONE: f64 = 4_611_686_018_427_387_904.0;
+/// The `int`s a `float` converts to: `-2^63 <= value < 2^63`. Both ends are
+/// powers of two, so a `float` holds them exactly.
+const MIN: f64 = -9_223_372_036_854_775_808.0;
+const MAX_PLUS_ONE: f64 = 9_223_372_036_854_775_808.0;
 
 fn to_int<'s>(scope: &mut Scope<'s>, value: f64, operation: &str) -> Result<i64, Thrown<'s>> {
     if value.is_nan() {

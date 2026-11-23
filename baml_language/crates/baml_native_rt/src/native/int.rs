@@ -2,13 +2,12 @@
 
 use super::{NativeBamlInt, Natives, Root, Scope, Str, Thrown};
 
-/// The range `int.min_value()..=int.max_value()` names, which `pow`
-/// saturates to and `parse` accepts: `-2^62..2^62`.
-const MIN: i64 = -(1 << 62);
-const MAX: i64 = (1 << 62) - 1;
+/// The smallest draw of `Rng.random_int`, which draws 63 random bits:
+/// `-2^62..2^62`.
+const DRAW_MIN: i64 = -(1 << 62);
 
-/// How many values `MIN..=MAX` holds.
-const SPAN: u128 = 1 << 63;
+/// How many values `Rng.random_int` draws from.
+const DRAW_SPAN: u128 = 1 << 63;
 
 impl NativeBamlInt for Natives {
     /// The smallest int has no positive counterpart and is its own absolute
@@ -26,7 +25,8 @@ impl NativeBamlInt for Natives {
         Ok(int.isqrt())
     }
 
-    /// `int ** exp`, saturating to the range's end on the result's side. A
+    /// `int ** exp`, saturating to the largest or the smallest int, whichever
+    /// is on the result's side. A
     /// negative `exp` gives zero.
     fn pow(int: i64, exp: i64) -> i64 {
         if exp < 0 {
@@ -39,11 +39,8 @@ impl NativeBamlInt for Natives {
         // Past 63 any base other than 0, 1 and -1 overflows, so a larger
         // exponent need not be told apart.
         let exp = u32::try_from(exp).unwrap_or(u32::MAX);
-        match int.checked_pow(exp) {
-            Some(power) if (MIN..=MAX).contains(&power) => power,
-            _ if int >= 0 || even => MAX,
-            _ => MIN,
-        }
+        int.checked_pow(exp)
+            .unwrap_or(if int >= 0 || even { i64::MAX } else { i64::MIN })
     }
 
     fn ilog<'s>(scope: &mut Scope<'s>, int: i64, base: i64) -> Result<i64, Thrown<'s>> {
@@ -84,32 +81,26 @@ impl NativeBamlInt for Natives {
     }
 
     fn parse<'s>(scope: &mut Scope<'s>, text: Root<'s, Str>) -> Result<i64, Thrown<'s>> {
-        let parsed = text.get(scope).as_str().parse::<i64>();
-        let message = match parsed {
-            Ok(value) if (MIN..=MAX).contains(&value) => return Ok(value),
-            Ok(_) => format!(
-                "int.parse: {:?} is outside the representable BAML int range [{MIN}, {MAX}]",
-                text.get(scope).as_str()
-            ),
-            Err(error) => format!(
-                "int.parse: cannot parse {:?} as int: {error}",
-                text.get(scope).as_str()
-            ),
+        let text = text.get(scope).as_str();
+        let message = match text.parse::<i64>() {
+            Ok(value) => return Ok(value),
+            Err(error) => format!("int.parse: cannot parse {text:?} as int: {error}"),
         };
         Err(scope.parse_error(&message))
     }
 
-    /// Map a draw from `MIN..=MAX` onto `lower..upper`, or give `upper` for
-    /// a draw to reject: one past the largest multiple of the range's size,
-    /// which would favour the low end.
+    /// Map a draw from the `DRAW_SPAN` values starting at `DRAW_MIN` onto
+    /// `lower..upper`, or give `upper` for a draw to reject: one past the
+    /// largest multiple of the range's size, which would favour the low end.
     fn _random_in_range(draw: i64, lower: i64, upper: i64) -> i64 {
         if lower >= upper {
             return upper;
         }
         let range = (i128::from(upper) - i128::from(lower)).cast_unsigned();
-        // A draw below `MIN` wraps to far above the zone and is rejected.
-        let offset = (i128::from(draw) - i128::from(MIN)).cast_unsigned();
-        let zone = SPAN / range * range;
+        // A draw outside those values lands past the zone and is rejected:
+        // one below `DRAW_MIN` wraps to far above it.
+        let offset = (i128::from(draw) - i128::from(DRAW_MIN)).cast_unsigned();
+        let zone = DRAW_SPAN / range * range;
         if offset >= zone {
             return upper;
         }

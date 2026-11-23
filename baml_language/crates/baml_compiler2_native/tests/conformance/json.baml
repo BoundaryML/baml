@@ -346,5 +346,4 @@ function json_decode_literal() -> string { baml.json.stringify(baml.json.decode<
 function json_decode_no_member() -> string { baml.json.stringify(baml.json.decode<int | string>(rep("[", 1) + "]")) }
 function json_decode_no_class_member() -> string { baml.json.stringify(baml.json.decode<JsonHolder>(rep("{", 1) + "\"shape\": {\"kind\": \"cube\"}, \"level\": \"low\", \"id\": 1, \"tint\": \"x\", \"amount\": 1}")) }
 function json_decode_syntax() -> int { baml.json.decode<JsonPoint>(rep("{", 1) + "\"x\": 1,}").x }
-// native prints: 4611686018427387904
 function json_decode_past_small_int() -> int { baml.json.decode<int>(rep("4", 1) + "611686018427387904") }

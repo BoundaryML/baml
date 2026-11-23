@@ -14,7 +14,6 @@ function sum_floats(n: int) -> float[] {
 function sum_int() -> int { sum_ints(100).sum() }
 function sum_int_empty() -> int { sum_ints(0).sum() }
 function sum_int_one() -> int { sum_ints(1).sum() }
-// native prints: -9223372036854775808
 function sum_int_overflows() -> int {
   let values = sum_ints(0);
   values.push(4611686018427387903);

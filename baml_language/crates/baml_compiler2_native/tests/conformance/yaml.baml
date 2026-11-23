@@ -59,7 +59,6 @@ function yaml_infinite() -> bool {
 function yaml_int_too_large() -> bool {
   baml.yaml.parse(rep("a: 18446744073709551615\n", 1)) == null
 }
-// native prints: "{\"a\":9223372036854775807}"
 function yaml_int_past_63_bits() -> string {
   baml.json.stringify(baml.yaml.parse(rep("a: 9223372036854775807\n", 1)))
 }

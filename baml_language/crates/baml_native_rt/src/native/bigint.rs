@@ -5,11 +5,6 @@ use num_bigint::{BigInt, Sign};
 use super::{Big, BigRef, Bytes, NativeBamlBigint, Natives, Root, Scope, Str, Thrown};
 use crate::bigint::MAX_BITS;
 
-/// The range an `int` a `bigint` converts to is in, which `int.parse`
-/// accepts too: `-2^62..2^62`.
-const INT_MIN: i64 = -(1 << 62);
-const INT_MAX: i64 = (1 << 62) - 1;
-
 /// The most decimal digits a `bigint` within [`MAX_BITS`] can have.
 const MAX_DECIMAL_DIGITS: usize = (MAX_BITS / 3 + 2) as usize;
 
@@ -123,13 +118,12 @@ impl NativeBamlBigint for Natives {
 
     fn to_int<'s>(scope: &mut Scope<'s>, bigint: Root<'s, Big>) -> Result<i64, Thrown<'s>> {
         let value = bigint.get(scope).value();
-        match i64::try_from(&value) {
-            Ok(int) if (INT_MIN..=INT_MAX).contains(&int) => Ok(int),
-            _ => Err(scope.invalid_argument(&format!(
-                "bigint.to_int: a {}-bit value is outside int's range (int is 63-bit signed)",
+        i64::try_from(&value).map_err(|_| {
+            scope.invalid_argument(&format!(
+                "bigint.to_int: a {}-bit value is outside int's range (int is 64-bit signed)",
                 value.bits()
-            ))),
-        }
+            ))
+        })
     }
 
     /// An optional sign and then decimal digits, and nothing else.

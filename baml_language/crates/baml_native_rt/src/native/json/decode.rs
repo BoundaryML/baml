@@ -323,7 +323,7 @@ impl Decoder<'_> {
                 KIND_INT => match node {
                     Node::Int(value) => Ok(Got::Int(value)),
                     Node::Float(_) => {
-                        self.fail("expected integer in the BAML int range [-2^62, 2^62 - 1]")
+                        self.fail("expected integer in the BAML int range [-2^63, 2^63 - 1]")
                     }
                     _ => self.fail("expected integer"),
                 },

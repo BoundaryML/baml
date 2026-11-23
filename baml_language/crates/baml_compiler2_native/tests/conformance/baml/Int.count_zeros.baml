@@ -5,5 +5,4 @@ function int_count_zeros_mixed() -> int { count(1000).count_zeros() }
 function int_count_zeros_negative() -> int { (0 - count(1000)).count_zeros() }
 function int_count_zeros_large() -> int { (wide(61) - 1 + wide(61)).count_zeros() }
 function int_count_zeros_power() -> int { wide(40).count_zeros() }
-// native prints: 63
 function int_count_zeros_of_the_smallest() -> int { (0 - (wide(62) - 1 + wide(62)) - 1).count_zeros() }

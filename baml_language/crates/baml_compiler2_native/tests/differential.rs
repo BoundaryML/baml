@@ -974,12 +974,8 @@ use Outcome::{Panicked, Printed};
 
 struct Case {
     function: &'static str,
-    /// How native code must end.
+    /// How native code and the interpreter must both end.
     expected: Outcome<'static>,
-    /// Whether the interpreter must end the same way. It does not where the
-    /// answer depends on `int` being 64 bits wide and wrapping: the
-    /// interpreter's `int` is still 63 bits wide and panics on overflow.
-    interpreter_agrees: bool,
     /// Whether the case is small enough to run collecting on every
     /// allocation.
     stressed: bool,
@@ -989,7 +985,6 @@ const fn case(function: &'static str, expected: Outcome<'static>) -> Case {
     Case {
         function,
         expected,
-        interpreter_agrees: true,
         stressed: true,
     }
 }
@@ -999,19 +994,7 @@ const fn heavy(function: &'static str, expected: Outcome<'static>) -> Case {
     Case {
         function,
         expected,
-        interpreter_agrees: true,
         stressed: false,
-    }
-}
-
-/// A case the interpreter is expected to diverge on until its `int` wraps
-/// at 64 bits too.
-const fn wide(function: &'static str, expected: Outcome<'static>) -> Case {
-    Case {
-        function,
-        expected,
-        interpreter_agrees: false,
-        stressed: true,
     }
 }
 
@@ -1041,22 +1024,22 @@ const CASES: &[Case] = &[
         "negative_shift",
         Panicked("baml.panics.NegativeBitShift {message: \"bit shift count is negative: -1\"}"),
     ),
-    wide("largest_int", Printed("9223372036854775807")),
-    wide("int_extremes", Printed("-1")),
-    wide("shift_into_sign", Printed("-9223372036854775808")),
-    wide("add_wraps", Printed("-9223372036854775808")),
-    wide("increment_wraps", Printed("-9223372036854775808")),
-    wide("subtract_wraps", Printed("9223372036854775807")),
-    wide("multiply_wraps", Printed("-9223372036854775808")),
-    wide("multiply_wraps_to_zero", Printed("0")),
-    wide("negate_wraps", Printed("-9223372036854775808")),
-    wide(
+    case("largest_int", Printed("9223372036854775807")),
+    case("int_extremes", Printed("-1")),
+    case("shift_into_sign", Printed("-9223372036854775808")),
+    case("add_wraps", Printed("-9223372036854775808")),
+    case("increment_wraps", Printed("-9223372036854775808")),
+    case("subtract_wraps", Printed("9223372036854775807")),
+    case("multiply_wraps", Printed("-9223372036854775808")),
+    case("multiply_wraps_to_zero", Printed("0")),
+    case("negate_wraps", Printed("-9223372036854775808")),
+    case(
         "smallest_divided_by_minus_one",
         Printed("-9223372036854775808"),
     ),
-    wide("remainder_by_power_of_two_is_zero", Printed("30919031409")),
-    wide("multiply_by_three_five_nine", Printed("-633469")),
-    wide("smallest_remainder_by_minus_one", Printed("0")),
+    case("remainder_by_power_of_two_is_zero", Printed("30919031409")),
+    case("multiply_by_three_five_nine", Printed("-633469")),
+    case("smallest_remainder_by_minus_one", Printed("0")),
     case("int_times_float", Printed("6.5")),
     case("float_shortest_digits", Printed("0.30000000000000004")),
     case(
@@ -1240,22 +1223,13 @@ async fn native_code_ends_as_the_interpreter_does() {
             .map(|way| (way.name, outcome(&run(&built, way))))
             .collect();
         let interpreted = outcome(&interpret(&engine, case.function).await);
-        // A case marked as diverging that the interpreter starts agreeing on
-        // fails too, so that the mark is removed when it stops being true.
-        if native.iter().any(|(_, ending)| *ending != expected)
-            || (interpreted == expected) != case.interpreter_agrees
-        {
+        if native.iter().any(|(_, ending)| *ending != expected) || interpreted != expected {
             failures.push(format!(
-                "{}:\n  {:<24} {expected}{}\n  {:<24} {interpreted}{}",
+                "{}:\n  {:<24} {expected}{}\n  {:<24} {interpreted}",
                 case.function,
                 "expected",
                 listed(&native),
                 "interpreter",
-                if case.interpreter_agrees {
-                    ""
-                } else {
-                    " (expected to differ)"
-                },
             ));
         }
     }

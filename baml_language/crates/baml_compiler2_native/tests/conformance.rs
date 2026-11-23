@@ -4,12 +4,11 @@
 //! every way of `common::WAYS`, and all must end the same way: the same
 //! printed result or the same uncaught throw.
 //!
-//! Native `int` is 64 bits wide and wraps, and the interpreter's is still 63
-//! bits wide and panics on overflow. A case whose answer depends on that says
-//! how native code ends in a comment on the line before it, `// native
-//! prints: <text>` or `// native throws: <text>`, and the interpreter must
-//! then end some other way, so that the comment goes when it stops being
-//! true.
+//! `int` is 64 bits wide and wraps on both, so no answer depends on its
+//! width. A case native code is known to end otherwise for some other reason
+//! says how it ends in a comment on the line before it, `// native prints:
+//! <text>` or `// native throws: <text>`, and the interpreter must then end
+//! some other way, so that the comment goes when it stops being true.
 //!
 //! `support.baml` holds what the cases share. Values come out of loops there
 //! so that they are built at run time, on the heap.
