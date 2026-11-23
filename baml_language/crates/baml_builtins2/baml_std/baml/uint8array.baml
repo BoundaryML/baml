@@ -1,13 +1,13 @@
-/// A mutable, growable array of bytes, each in the range 0–255.
+/// A mutable, fixed-length array of bytes, each in the range 0–255.
 ///
 /// The type for binary data: file contents, network payloads, encoded strings.
-/// `push`, `pop`, and `sort` modify the array in place; every other method here
-/// returns a new one.
+/// The length is set when the array is made. Assigning to an index and `sort`
+/// modify the array in place; every other method here returns a new one.
 ///
-/// The two ways of turning an `int` into a byte disagree deliberately. `push`
-/// silently masks its argument to the low 8 bits, as assigning into a JavaScript
-/// typed array does, while `from_array` throws `baml.errors.InvalidArgument` on
-/// anything outside 0–255.
+/// The two ways of turning an `int` into a byte disagree deliberately. Assigning
+/// to an index silently masks the value to the low 8 bits, as assigning into a
+/// JavaScript typed array does, while `from_array` throws
+/// `baml.errors.InvalidArgument` on anything outside 0–255.
 ///
 /// JavaScript's [`Uint8Array`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array),
 /// Python's [`bytearray`](https://docs.python.org/3/library/stdtypes.html#bytearray).
@@ -31,22 +31,6 @@ class Uint8Array {
     /// b"abc".at(99)  // null
     /// ```
     function at(self, index: int) -> int? throws never {
-        $rust_function
-    }
-
-    /// Appends `item` to the end of the array and returns the new length.
-    ///
-    /// `item` is masked to its low 8 bits rather than rejected: `256` appends `0`,
-    /// and `-1` appends `255`. Use `from_array` when out-of-range input should be
-    /// an error instead.
-    //baml:mut_self
-    function push(self, item: int) -> int throws never {
-        $rust_function
-    }
-
-    /// Removes and returns the last byte, or `null` if the array is empty.
-    //baml:mut_self
-    function pop(self) -> int? throws never {
         $rust_function
     }
 
@@ -138,7 +122,7 @@ class Uint8Array {
 
     /// Creates a `uint8array` from an array of integers, one byte per element.
     ///
-    /// Unlike `push`, this validates rather than masks.
+    /// Unlike assigning to an index, this validates rather than masks.
     ///
     /// # Throws
     ///
