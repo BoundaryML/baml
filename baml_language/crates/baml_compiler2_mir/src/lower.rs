@@ -8806,7 +8806,16 @@ impl<'db> LoweringContext<'db> {
                             .map_or_else(|| Operand::Constant(Constant::Null), Operand::Copy)
                     } else {
                         // Multi-segment receiver (e.g. `user.profile.items`): lower as field chain.
-                        let recv_ty = self.expr_ty(callee)?; // approximation; actual type not critical here
+                        // The receiver's own type: the checker records one per
+                        // path segment. The callee's function type is only the
+                        // fallback for a path it left unresolved.
+                        let recv_ty = match self
+                            .tir_path_segment_type(callee, receiver_segments.len() - 1)
+                            .cloned()
+                        {
+                            Some(ty) => self.convert_tir_ty_for_runtime(&ty),
+                            None => self.expr_ty(callee)?,
+                        };
                         let recv_local = self.builder.temp(recv_ty);
                         self.lower_multi_segment_path_as_field_chain(
                             callee,
