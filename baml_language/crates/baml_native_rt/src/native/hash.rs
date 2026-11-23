@@ -105,9 +105,7 @@ impl NativeBamlHashHasherForDefaultHasher for Natives {
     fn finish(defaulthasher: ObjRef<'_>) -> i64 {
         // SAFETY: a `DefaultHasher` has one field, its state.
         let state = unsafe { defaulthasher.field::<Opaque>(0) }.plain::<Sip13>();
-        // An arithmetic shift keeps the hash in the range of an `int` of
-        // the interpreter, which is one bit narrower.
-        state.get().finish().cast_signed() >> 1
+        state.get().finish().cast_signed()
     }
 }
 

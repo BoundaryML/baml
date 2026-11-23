@@ -83,9 +83,8 @@ fn drawn<'s, R: RngCore + Send + 'static>(
     Ok(scope.alloc_bytes(&drawn))
 }
 
-/// The next `int` of `generator`, whose state is an `R`: 64 bits, shifted
-/// into the range of an `int` of the interpreter, which is one bit
-/// narrower.
+/// The next `int` of `generator`, whose state is an `R`: all 64 bits it
+/// draws, every `int` equally likely.
 fn drawn_int<R: RngCore + Send + 'static>(generator: ObjRef<'_>) -> i64 {
     // SAFETY: a generator has one field, its state.
     let draw = unsafe { generator.field::<Opaque>(0) }
@@ -93,7 +92,7 @@ fn drawn_int<R: RngCore + Send + 'static>(generator: ObjRef<'_>) -> i64 {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .next_u64();
-    draw.cast_signed() >> 1
+    draw.cast_signed()
 }
 
 impl NativeBamlRandomXoshiro256PlusPlus for Natives {
@@ -165,6 +164,6 @@ impl NativeBamlRandomRngForSystemRandom for Natives {
     fn random_int(_systemrandom: usize) -> i64 {
         let mut drawn = [0; 8];
         entropy(&mut drawn);
-        i64::from_le_bytes(drawn) >> 1
+        i64::from_le_bytes(drawn)
     }
 }

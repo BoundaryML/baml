@@ -2,12 +2,9 @@
 
 use super::{NativeBamlInt, Natives, Root, Scope, Str, Thrown};
 
-/// The smallest draw of `Rng.random_int`, which draws 63 random bits:
-/// `-2^62..2^62`.
-const DRAW_MIN: i64 = -(1 << 62);
-
-/// How many values `Rng.random_int` draws from.
-const DRAW_SPAN: u128 = 1 << 63;
+/// How many values `Rng.random_int` draws from: every `int`. One more than a
+/// `u64` holds, so the arithmetic on it is in `u128`.
+const DRAW_SPAN: u128 = 1 << 64;
 
 impl NativeBamlInt for Natives {
     /// The smallest int has no positive counterpart and is its own absolute
@@ -89,7 +86,7 @@ impl NativeBamlInt for Natives {
         Err(scope.parse_error(&message))
     }
 
-    /// Map a draw from the `DRAW_SPAN` values starting at `DRAW_MIN` onto
+    /// Map a draw, any of the `DRAW_SPAN` ints, onto
     /// `lower..upper`, or give `upper` for a draw to reject: one past the
     /// largest multiple of the range's size, which would favour the low end.
     fn _random_in_range(draw: i64, lower: i64, upper: i64) -> i64 {
@@ -97,9 +94,8 @@ impl NativeBamlInt for Natives {
             return upper;
         }
         let range = (i128::from(upper) - i128::from(lower)).cast_unsigned();
-        // A draw outside those values lands past the zone and is rejected:
-        // one below `DRAW_MIN` wraps to far above it.
-        let offset = (i128::from(draw) - i128::from(DRAW_MIN)).cast_unsigned();
+        // How far the draw is above the smallest `int`: under `DRAW_SPAN`.
+        let offset = (i128::from(draw) - i128::from(i64::MIN)).cast_unsigned();
         let zone = DRAW_SPAN / range * range;
         if offset >= zone {
             return upper;

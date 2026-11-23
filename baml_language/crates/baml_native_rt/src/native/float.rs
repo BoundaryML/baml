@@ -167,10 +167,10 @@ impl NativeBamlFloat for Natives {
         })
     }
 
-    /// A float in `[0, 1)` from the 53 bits of `draw` above its low ten.
+    /// A float in `[0, 1)` from the top 53 bits of `draw`.
     fn _unit_from_draw(draw: i64) -> f64 {
         const BITS: u32 = 53;
-        let bits = (draw.cast_unsigned() >> 10) & ((1 << BITS) - 1);
+        let bits = draw.cast_unsigned() >> (u64::BITS - BITS);
         #[expect(
             clippy::cast_precision_loss,
             reason = "53 bits fit a float's mantissa exactly"
