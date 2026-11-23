@@ -142,8 +142,10 @@ fn hex(bytes: &[u8]) -> String {
 /// puts it, or where `BAML_CONFORMANCE_CLI` says. Cargo writes beside it
 /// the list of the files it was built from; one of them newer than the
 /// binary means the binary is stale, and the test stops rather than compare
-/// against it. The files under `.git` are left out of that: the binary
-/// embeds the commit it was built at, which no behavior depends on.
+/// against it. Two kinds of file are left out of that. Those under `.git`:
+/// the binary embeds the commit it was built at, which no behavior depends
+/// on. And those under `target`, which build scripts write from sources
+/// that are in the list themselves, and write again after every commit.
 fn interpreter() -> &'static Interpreter {
     static FOUND: OnceLock<Interpreter> = OnceLock::new();
     FOUND.get_or_init(|| {
@@ -170,8 +172,11 @@ fn interpreter() -> &'static Interpreter {
             )
         });
         let (_, sources) = sources.split_once(": ").expect("a list of sources");
+        let target = Path::new(env!("CARGO_TARGET_TMPDIR"))
+            .parent()
+            .expect("the directory for a test's files is under `target`");
         for source in sources.split_whitespace() {
-            if source.contains("/.git/") {
+            if source.contains("/.git/") || Path::new(source).starts_with(target) {
                 continue;
             }
             let fresh = std::fs::metadata(source)
@@ -188,7 +193,7 @@ fn interpreter() -> &'static Interpreter {
         ));
         // One directory for each binary, and no other left: nothing kept
         // for a binary that is gone is ever read again.
-        let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("conformance");
+        let root = target.join("tmp/conformance");
         let own = root.join(&hash[..16]);
         if !own.exists() {
             let _ = std::fs::remove_dir_all(&root);
