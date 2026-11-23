@@ -83,35 +83,6 @@ pub fn set_dispatch_fn(f: HostDispatchFn) {
     let _ = HOST_DISPATCH_FN.set(f);
 }
 
-/// Invoke the registered dispatch callback.
-///
-/// Returns `true` if the callback was installed and fired, `false` if
-/// no bridge has registered a dispatcher yet. The caller is responsible
-/// for resolving the in-flight `CompletionHandle` on `false`.
-pub fn fire_dispatch(host_value_key: u64, call_id: u32, args: &[u8]) -> bool {
-    match HOST_DISPATCH_FN.get() {
-        Some(f) => {
-            // The dispatch fn is fire-and-return: every bridge hands the call
-            // off to the host (spawning a task / goroutine / threadsafe-fn
-            // callback) and returns promptly, then later resolves the in-flight
-            // `CompletionHandle` via `complete_host_call`. It never blocks on
-            // the host's response, so we call it directly. A
-            // `tokio::task::block_in_place` wrapper would only be needed for a
-            // blocking callee, and it would panic on a current-thread runtime —
-            // neither applies here.
-            f(host_value_key, call_id, args.as_ptr(), args.len());
-            true
-        }
-        None => {
-            tracing::warn!(
-                "_call_host_value invoked before register_host_dispatch_callback: \
-                 no host dispatch fn registered"
-            );
-            false
-        }
-    }
-}
-
 // ============================================================================
 // In-flight call table
 // ============================================================================

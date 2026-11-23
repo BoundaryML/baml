@@ -418,7 +418,7 @@ pub enum StatementKind<'db> {
     /// Only ever targets a local whose `is_captured` is set, and every read,
     /// write, or closure capture of that local is dominated by one of its
     /// `FreshCell`s: that is what makes a deref load discardable
-    /// ([`Rvalue::can_discard`]) and per-iteration closures correct.
+    /// and per-iteration closures correct.
     FreshCell { local: Local, carry_value: bool },
 
     /// Compiler intrinsic — a void side effect (log, send event).
@@ -1190,13 +1190,6 @@ impl<'db> Rvalue<'db> {
         } else {
             None
         }
-    }
-
-    /// Whether an unused evaluation can be erased, including its operand reads.
-    /// Allocation identity is unobservable when the result does not escape, but
-    /// evaluating an initializer can still fail (checked arithmetic or indexing).
-    pub fn can_discard(&self) -> bool {
-        self.can_discard_with(|_| false)
     }
 
     /// A bounds proof applies to this evaluation site, not to the entire local.

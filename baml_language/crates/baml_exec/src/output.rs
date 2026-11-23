@@ -25,19 +25,6 @@ pub enum OutputFormat {
     Json,
 }
 
-/// Write the target's return value to stdout per the selected format.
-///
-/// `json` mode dispatches to the stdlib JSON serializer so the spec's
-/// "no wrapping" rule is enforced by the stdlib serializer (which also
-/// honors user `to_json` overrides). `debug` mode uses [`format_value`].
-pub async fn write_output(
-    engine: &Arc<BexEngine>,
-    value: BexExternalValue,
-    format: OutputFormat,
-) -> Result<()> {
-    write_output_with_context(engine, value, format, &HelperCallContext::disabled(), || {}).await
-}
-
 /// Write a target's return value while preserving logger/cancellation context
 /// for conversion hooks.
 ///

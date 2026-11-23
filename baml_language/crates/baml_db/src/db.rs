@@ -1115,23 +1115,6 @@ impl ProjectDatabase {
         self.file_id_to_path.get(&file_id)
     }
 
-    /// Find a [`SourceFile`] by file path (matches by suffix to handle
-    /// different path formats).
-    pub fn find_source_file(&self, file_path: &str) -> Option<SourceFile> {
-        // Try exact match first
-        if let Some(&file) = self.file_map.get(Path::new(file_path)) {
-            return Some(file);
-        }
-        // Fallback: match by file name suffix (handles editors' relative paths)
-        self.file_map
-            .iter()
-            .find(|(stored_path, _)| {
-                stored_path.ends_with(file_path)
-                    || file_path.ends_with(stored_path.to_string_lossy().as_ref())
-            })
-            .map(|(_, file)| *file)
-    }
-
     /// Add compiler-generated source for a `Session.eval` submission to
     /// `root`, the session's workspace. Session files use the dedicated
     /// CST→AST lowering mode that admits persistent root bindings; ordinary

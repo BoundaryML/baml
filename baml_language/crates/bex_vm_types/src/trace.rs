@@ -325,15 +325,6 @@ pub struct HostDefinition {
 pub type HostDefinitionKey = (String, String, String, String, u32, u32);
 
 impl HostDefinition {
-    /// Bytes the definition's names occupy outside the value.
-    pub fn retained_bytes(&self) -> usize {
-        self.language.capacity()
-            + self.module.capacity()
-            + self.qualified_name.capacity()
-            + self.source_file.capacity()
-            + self.display_name.capacity()
-    }
-
     pub fn key(&self) -> HostDefinitionKey {
         (
             self.language.clone(),

@@ -7,7 +7,7 @@
 //! marker types in [`trivia`]/[`kw`]/[`ctx`]/[`punct`]/[`lit`], and the
 //! [`Token!`](crate::Token)/[`TokenKind!`](crate::TokenKind) macros.
 
-use std::{marker::PhantomData, ops::Range};
+use std::marker::PhantomData;
 
 use logos::Logos;
 use text_size::{TextRange, TextSize};
@@ -879,11 +879,6 @@ impl Tokens {
                 u32::try_from(i).unwrap_or_else(|_| unreachable!("a file never has 2^32 tokens")),
             )
         })
-    }
-
-    /// Tokens in `range`, in order.
-    pub fn between(&self, range: Range<TokenIdx>) -> impl Iterator<Item = TokenIdx> + '_ {
-        (range.start.0..range.end.0).map(TokenIdx)
     }
 
     /// Whether `idx` follows the previous token with no trivia between them.

@@ -382,10 +382,6 @@ impl<T: PoolItem> List<T> {
         Self { start, len }
     }
 
-    pub fn start(self) -> PoolIdx<T> {
-        self.start
-    }
-
     pub fn len(self) -> usize {
         self.len as usize
     }
@@ -444,22 +440,9 @@ impl<T: PoolItem> List1<T> {
         Self { start, len }
     }
 
-    pub fn start(self) -> PoolIdx<T> {
-        self.start
-    }
-
-    pub fn len(self) -> NonZeroU32 {
-        self.len
-    }
-
     /// The same run as a plain list.
     pub fn as_list(self) -> List<T> {
         List::from_raw(self.start, self.len.get())
-    }
-
-    /// The items, read from the arenas that hold the pool; never empty.
-    pub fn get<A: HasPool<T>>(self, arena: &A) -> &[T] {
-        self.as_list().get(arena)
     }
 }
 
@@ -643,10 +626,6 @@ pub struct Bogus {
 impl Bogus {
     pub(crate) fn new(tokens: TokenRange) -> Self {
         Self { tokens }
-    }
-
-    pub fn tokens(self) -> TokenRange {
-        self.tokens
     }
 }
 

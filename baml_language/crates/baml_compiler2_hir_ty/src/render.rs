@@ -292,11 +292,6 @@ impl<'a> Viewpoint<'a> {
         }
     }
 
-    /// The root looking, if this is a user-facing viewpoint.
-    pub fn viewer(&self) -> Option<SourceRoot> {
-        self.viewer
-    }
-
     /// The package prefix of a path from this viewpoint, for display: `None`
     /// inside the viewer's own package (elided — an own-package path then
     /// follows [`path`](Self::path)'s rule: bare in the viewing namespace,

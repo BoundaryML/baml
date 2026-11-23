@@ -132,12 +132,6 @@ pub enum Declaration<T, S = String, N = DeclarationName> {
 }
 
 impl<T, S, N> Declaration<T, S, N> {
-    pub fn name(&self) -> &N {
-        match self {
-            Self::Class(class) => &class.name,
-            Self::Enum(enm) => &enm.name,
-        }
-    }
     fn fields(&self) -> &[Field<T, S>] {
         match self {
             Self::Class(class) => &class.fields,

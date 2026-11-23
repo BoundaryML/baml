@@ -373,10 +373,6 @@ impl Package {
     pub fn session(&self) -> Option<&SessionState> {
         self.session.as_deref()
     }
-
-    pub fn session_mut(&mut self) -> Option<&mut SessionState> {
-        self.session.as_deref_mut()
-    }
 }
 
 /// Compiler-free persistent state of one `reflect.Session`.
@@ -542,20 +538,6 @@ pub struct ImplCoherenceKey {
     /// that param's bounds canonically sorted (a written reorder of
     /// `A + B` cannot fork the key).
     pub generic_param_bounds: Vec<Vec<InterfaceBound>>,
-}
-
-impl ProgramImplRule {
-    /// This rule's identity key. The bake stores the same canonicalized
-    /// bounds the key carries, so a rule and its declaring block compare
-    /// equal by construction.
-    #[must_use]
-    pub fn coherence_key(&self) -> ImplCoherenceKey {
-        ImplCoherenceKey {
-            for_ty_pattern: self.for_ty_pattern.clone(),
-            interface_args: self.interface_args.clone(),
-            generic_param_bounds: self.generic_param_bounds.clone(),
-        }
-    }
 }
 
 /// The global-index-keyed twin of [`MethodImpl`](super::MethodImpl); `fqn` is the

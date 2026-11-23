@@ -1,9 +1,4 @@
 [[production]]
-package = "baml"
-bin = "baml"
-reason = "shipped BAML toolchain wrapper"
-
-[[production]]
 package = "baml_cli"
 bin = "baml-cli"
 reason = "shipped BAML language CLI"
@@ -35,8 +30,45 @@ reason = "build-generated native function implementations"
 
 [[exclude]]
 crate = "bex_vm"
+module = "package_ai::generated"
+reason = "build-generated native function implementations"
+
+[[exclude]]
+crate = "bex_vm"
+module = "package_reflect::generated"
+reason = "build-generated native function implementations"
+
+[[exclude]]
+crate = "bex_vm"
+module = "package_testing::generated"
+reason = "build-generated native function implementations"
+
+[[exclude]]
+crate = "bex_vm"
+module = "package_trace::generated"
+reason = "build-generated native function implementations"
+
+[[exclude]]
+crate = "bex_vm_types"
+module = "resource"
+reason = "build-generated resource traits and their plain data"
+
+[[exclude]]
+crate = "bex_vm"
+module = "vm::compiled_rt"
+reason = "runtime operations called by the Rust that baml_compiler2_rust emits"
+
+[[exclude]]
+crate = "bex_vm"
 file = "crates/bex_vm/src/debug.rs"
 reason = "developer-facing bytecode disassembly and VM debugging utilities"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::ErrorClass::item"
+level = "expect"
+reason = "build-generated builtin metadata"
 
 [[override]]
 lint = "hawk::dead_public"
@@ -70,6 +102,13 @@ reason = "build-generated builtin metadata"
 lint = "hawk::dead_public"
 crate = "bex_vm_types"
 item = "types::ErrorClass::from_name"
+level = "expect"
+reason = "build-generated builtin metadata"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::PanicClass::item"
 level = "expect"
 reason = "build-generated builtin metadata"
 
@@ -131,35 +170,63 @@ reason = "build-generated builtin metadata"
 
 [[override]]
 lint = "hawk::dead_public"
-crate = "baml_type"
-item = "family::CodegenFunctionParamTy::optional"
+crate = "btel_settings"
+item = "overage::MODEL_PROBES"
 level = "expect"
-reason = "shared ty_family macro method; the FunctionParamTy expansion is used by cfg(test) code"
+reason = "read only under cfg(loom) by bex_chunkedringbuffer"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "types::instance::InstanceRef::load_float"
+level = "expect"
+reason = "emitted by baml_builtins2_codegen for float fields of generated accessors"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_vm_types"
+item = "media::MediaValue::write_content"
+level = "expect"
+reason = "sole mutator that the UnsafeCell and lock around MediaContent exist for"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_engine"
+item = "telemetry::<impl BexEngine>::telemetry_metadata_replay_evictions"
+level = "expect"
+reason = "observability accessor documented in the btel_bcs README"
+
+[[override]]
+lint = "hawk::dead_public"
+crate = "bex_engine"
+item = "telemetry::<impl BexEngine>::telemetry_heartbeat_error"
+level = "expect"
+reason = "observability accessor documented in the btel_bcs README"
 
 [[override]]
 lint = "hawk::dead_public"
 crate = "baml_type"
-item = "family::FunctionParamTy::optional"
+item = "call_layout::CallLayout::is_empty"
 level = "expect"
-reason = "shared ty_family macro method used by cfg(test) code"
+reason = "pairs with the public len, as clippy::len_without_is_empty requires"
 
 [[override]]
 lint = "hawk::dead_public"
-crate = "baml_type"
-item = "family::RealizedFunctionParamTy::optional"
+crate = "baml_syntax"
+item = "tree::NodeArena::<T>::is_empty"
 level = "expect"
-reason = "shared ty_family macro method; the FunctionParamTy expansion is used by cfg(test) code"
+reason = "pairs with the public len, as clippy::len_without_is_empty requires"
 
 [[override]]
 lint = "hawk::dead_public"
-crate = "baml_type"
-item = "family::RuntimeFunctionParamTy::optional"
+crate = "btel_snapshot"
+item = "graph::Range::<T>::is_empty"
 level = "expect"
-reason = "shared ty_family macro method; the FunctionParamTy expansion is used by cfg(test) code"
+reason = "pairs with the public len, as clippy::len_without_is_empty requires"
 
 [[override]]
 lint = "hawk::dead_public"
-crate = "baml_type"
-item = "family::TyTemplateFunctionParamTy::optional"
+crate = "btel_snapshot"
+item = "graph::Uint8ArrayData::is_empty"
 level = "expect"
-reason = "shared ty_family macro method; the FunctionParamTy expansion is used by cfg(test) code"
+reason = "pairs with the public len, as clippy::len_without_is_empty requires"

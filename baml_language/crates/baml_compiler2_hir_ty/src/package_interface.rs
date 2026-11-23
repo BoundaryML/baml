@@ -43,13 +43,6 @@ use crate::{
 static STDLIB_HONEST_DERIVATIONS: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(0);
 
-/// Number of stdlib `package_interface`s derived honestly (from source, not
-/// from a seed) since process start. Zero on a warm run whose stdlib interface
-/// seed served every stdlib package; one per stdlib package on a cold run.
-pub fn stdlib_honest_derivations() -> usize {
-    STDLIB_HONEST_DERIVATIONS.load(std::sync::atomic::Ordering::Relaxed)
-}
-
 // ── Data types ─────────────────────────────────────────────────────────────
 
 /// Fully-resolved typed interface for a package.
@@ -2480,21 +2473,6 @@ pub fn package_resolution_context(
 // ── PackageResolutionContext lookup methods ─────────────────────────────────
 
 impl<'db> PackageResolutionContext<'db> {
-    /// The items of the package `root`, when this package can see it: itself
-    /// or a declared dependency.
-    pub fn items_for_root(
-        &'db self,
-        db: &'db dyn baml_compiler2_hir::Db,
-        root: baml_base::SourceRoot,
-    ) -> Option<&'db PackageItems<'db>> {
-        if root == self.own {
-            return Some(&self.own_items);
-        }
-        (self.dep_interfaces.iter().any(|(_, dep, _)| *dep == root)
-            && !is_served_from_interface(db, root))
-        .then(|| baml_compiler2_hir::package::package_items(db, root))
-    }
-
     /// Resolve a type by path: a bare name in the namespace `ns_context`, or
     /// a fully qualified path (`root.…` in this package, `<edge>.…` in a
     /// dependency), read from the head HIR gives it

@@ -76,10 +76,6 @@ impl HeapDebuggerState {
 }
 
 impl BexHeap {
-    pub fn debug_config(&self) -> &HeapDebuggerConfig {
-        self.debug_state().config()
-    }
-
     pub fn verify_quick(&self) {
         let debug = self.debug_state().config();
         if !debug.enabled {

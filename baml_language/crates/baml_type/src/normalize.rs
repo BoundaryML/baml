@@ -65,11 +65,6 @@ impl WellKnownHead {
             Self::AnyClass => baml_base::lang_item!(Reflect: AnyClass),
         }
     }
-
-    /// The declaration's short name at the root namespace of `reflect`.
-    pub fn name(self) -> &'static str {
-        self.item().name().as_str()
-    }
 }
 
 /// A head that recovers a well-known declaration from its language-fixed

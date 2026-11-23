@@ -35,12 +35,6 @@ pub struct ProcessorId(pub usize);
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PairId(usize);
 
-impl PairId {
-    pub fn index(self) -> usize {
-        self.0
-    }
-}
-
 pub use btel_settings::transport::RingConfig as Config;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -288,9 +282,6 @@ pub struct ProducerLease<T, S> {
 impl<T, S> ProducerLease<T, S> {
     pub fn pair_id(&self) -> PairId {
         self.pair.id
-    }
-    pub fn processor_id(&self) -> ProcessorId {
-        self.pair.processor
     }
     fn wake(&self) -> &Wake {
         &self.wake

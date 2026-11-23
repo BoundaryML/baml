@@ -506,14 +506,6 @@ impl VmRustFnError {
             throw_kind: ThrowKind::Fresh,
         }
     }
-
-    #[must_use]
-    pub const fn thrown_rethrow(value: Value) -> Self {
-        Self::Thrown {
-            value,
-            throw_kind: ThrowKind::Rethrow,
-        }
-    }
 }
 
 /// Project-relative path prefix carried by every standard-library source

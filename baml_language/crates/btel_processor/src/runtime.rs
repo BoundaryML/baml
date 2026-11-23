@@ -184,14 +184,6 @@ impl FutureErrorLinks {
             None => FutureErrorLookup::Missing,
         }
     }
-
-    pub fn len(&self) -> usize {
-        self.links.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.links.is_empty()
-    }
 }
 
 impl TelemetryRuntime {

@@ -1465,12 +1465,6 @@ impl Default for RenderOptions {
     }
 }
 
-impl RenderOptions {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 // ============================================================================
 // Clean (owned-type) entry points for trait-based dispatch
 // ============================================================================

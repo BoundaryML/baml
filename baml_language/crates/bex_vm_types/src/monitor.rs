@@ -317,27 +317,6 @@ impl MonitorTable {
         pairs.dedup();
         pairs
     }
-
-    /// How many tasks wait for `key`'s lock right now.
-    pub fn waiting_count(&self, key: HeapPtr) -> usize {
-        self.one(key)
-            .keys
-            .get(&key)
-            .map_or(0, |monitor| monitor.waiters.len())
-    }
-
-    /// How many locks are held right now.
-    pub fn held_count(&self) -> usize {
-        self.shards
-            .iter()
-            .map(|shard| {
-                lock(&shard.0)
-                    .values()
-                    .filter(|monitor| monitor.owner.is_some())
-                    .count()
-            })
-            .sum()
-    }
 }
 
 impl Monitor {

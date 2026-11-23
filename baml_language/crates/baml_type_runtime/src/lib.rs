@@ -739,48 +739,6 @@ pub fn infer_bindings<N: Head>(
     merge_best_effort(bindings, &cons);
 }
 
-pub fn infer_bindings_allow_typevars<N: Head>(
-    formal: &Ty<N>,
-    actual: &Ty<N>,
-    bindings: &mut FxHashMap<ParamTy, Ty<N>>,
-    ctx: &impl TypeContext<N>,
-) {
-    let mut cons = InferenceConstraints::new();
-    cons.record_with(
-        formal,
-        actual,
-        InferOpts {
-            allow_typevar_actuals: true,
-            ..InferOpts::COMPILE_TIME
-        },
-        ctx,
-    );
-    merge_best_effort(bindings, &cons);
-}
-
-/// Like [`infer_bindings`] but treats `rigid` (when `Some`) as a rigid type
-/// variable that is never bound from an argument — the pinned `Self` of an
-/// interface method call. Every other variable infers exactly as before.
-pub fn infer_bindings_rigid_self<N: Head>(
-    formal: &Ty<N>,
-    actual: &Ty<N>,
-    bindings: &mut FxHashMap<ParamTy, Ty<N>>,
-    rigid: Option<&ParamTy>,
-    ctx: &impl TypeContext<N>,
-) {
-    let mut cons = InferenceConstraints::new();
-    cons.record_with(
-        formal,
-        actual,
-        InferOpts {
-            rigid,
-            ..InferOpts::COMPILE_TIME
-        },
-        ctx,
-    );
-    merge_best_effort(bindings, &cons);
-}
-
 /// The runtime value-inference variant (01a/01b): solve a generic call's
 /// `TypeVar`s from types synthesized from argument *values*. Uses the same leaf
 /// decisions as [`infer_bindings`] — a `Class` arm binds only when the formal

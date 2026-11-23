@@ -199,21 +199,6 @@ pub fn to_source_code_with_bytecode(
     .files
 }
 
-pub fn to_source_code_with_bytecode_and_metadata(
-    pool: &SymbolPool,
-    baml_bytecode: &[u8],
-    embedded_baml_toml: &str,
-    naming_convention: NamingConvention,
-) -> HashMap<PathBuf, String> {
-    to_source_code_with_bytecode_and_metadata_and_source_files(
-        pool,
-        baml_bytecode,
-        embedded_baml_toml,
-        &[],
-        naming_convention,
-    )
-}
-
 pub fn to_source_code_with_bytecode_and_metadata_and_source_files(
     pool: &SymbolPool,
     baml_bytecode: &[u8],

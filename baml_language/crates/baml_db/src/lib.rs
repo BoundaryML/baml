@@ -47,6 +47,5 @@ pub use project_resolution::{
 };
 pub use salsa::Setter;
 pub use testing::{
-    OptLevel, assert_no_diagnostic_errors, compile_multi_file, compile_source,
-    compile_source_with_opt, setup_test_db,
+    OptLevel, assert_no_diagnostic_errors, compile_source, compile_source_with_opt, setup_test_db,
 };

@@ -102,12 +102,6 @@ impl ToolchainManifest {
         }
         Ok(())
     }
-
-    pub fn artifact_for_target(&self, target: &str) -> anyhow::Result<&Artifact> {
-        self.artifacts.get(target).ok_or_else(|| {
-            anyhow::anyhow!("target {target} not built for version {}", self.version)
-        })
-    }
 }
 
 fn validate_schema(schema: u32) -> anyhow::Result<()> {

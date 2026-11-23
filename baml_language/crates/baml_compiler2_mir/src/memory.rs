@@ -55,16 +55,6 @@ pub struct Resources {
 }
 
 impl Resources {
-    pub fn is_empty(&self) -> bool {
-        self.locals.is_empty()
-            && self.cells.is_empty()
-            && self.type_slots.is_empty()
-            && self.fields.is_empty()
-            && !self.elements
-            && !self.heap
-            && !self.order
-    }
-
     pub fn extend(&mut self, other: &Resources) {
         self.locals.extend(other.locals.iter().copied());
         self.cells.extend(other.cells.iter().copied());
@@ -313,13 +303,6 @@ pub fn place_cell(place: &Place) -> Option<CellId> {
         Place::Field { base, .. } | Place::Index { base, .. } => place_cell(base),
         Place::Local(_) | Place::Capture(_) => None,
     }
-}
-
-/// Whether evaluating an rvalue reads through a cell anywhere.
-pub fn rvalue_reads_cell(rvalue: &Rvalue<'_>) -> bool {
-    let mut reads = false;
-    walk_rvalue_places(rvalue, &mut |place| reads |= place_cell(place).is_some());
-    reads
 }
 
 /// The cells a body shares with the tasks it spawns: every cell a spawned

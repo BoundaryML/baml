@@ -2701,23 +2701,6 @@ impl CompactCode {
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }
 
-    /// The innermost handler-body range (byte-offset) covering `pc`, or `None`.
-    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
-    /// error whose `baml.errors.Context` lives in the entry's `context_slot`.
-    /// Innermost = largest `handler_pc` among covering ranges.
-    pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
-        self.handler_contexts_for_pc(pc)
-            .max_by_key(|e| e.handler_pc)
-    }
-
-    /// Every handler whose body covers `pc`: the handlers active there,
-    /// innermost and enclosing alike.
-    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &HandlerContextEntry> {
-        self.handler_context_table
-            .iter()
-            .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
-    }
-
     /// Whether the code at byte-offset `pc` runs shielded from cancellation.
     pub fn pc_is_shielded(&self, pc: usize) -> bool {
         pc_in_ranges(&self.shield_table, pc)
@@ -2849,23 +2832,6 @@ impl Bytecode {
         pc: usize,
     ) -> impl Iterator<Item = &ExceptionTableEntry> {
         self.exception_table
-            .iter()
-            .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
-    }
-
-    /// The innermost handler-body range covering `pc`, or `None`.
-    /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
-    /// error whose `baml.errors.Context` lives in the entry's `context_slot`.
-    /// Innermost = largest `handler_pc` among covering ranges.
-    pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
-        self.handler_contexts_for_pc(pc)
-            .max_by_key(|e| e.handler_pc)
-    }
-
-    /// Every handler whose body covers `pc`: the handlers active there,
-    /// innermost and enclosing alike.
-    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &HandlerContextEntry> {
-        self.handler_context_table
             .iter()
             .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
     }

@@ -320,15 +320,6 @@ pub enum MediaKind {
 }
 
 impl MediaKind {
-    /// Every kind, in declaration order.
-    pub const ALL: [Self; 5] = [
-        Self::Image,
-        Self::Audio,
-        Self::Video,
-        Self::Pdf,
-        Self::Generic,
-    ];
-
     /// Tag value used in the BEP-038 `{ kind, source, value, mime }` JSON
     /// shape. `Generic` collapses to `"media"` (any media subtype).
     pub fn tag_str(self) -> &'static str {

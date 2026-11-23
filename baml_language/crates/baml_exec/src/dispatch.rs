@@ -1,4 +1,4 @@
-// `dispatch_target` is the shared entrypoint for both `baml run` and the
+// `dispatch_target_with_context` is the shared entrypoint for both `baml run` and the
 // `baml-pack-host` runtime that packaged binaries ship with.
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
@@ -7,8 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
 use bex_engine::{
-    BexCallArg, BexEngine, BexExternalValue, CallId, EngineError, FunctionCallContext,
-    FunctionCallContextBuilder, RuntimeTy,
+    BexCallArg, BexEngine, BexExternalValue, EngineError, FunctionCallContext, RuntimeTy,
 };
 
 use crate::{
@@ -59,33 +58,6 @@ pub fn validate_help_param_names<'a>(
 /// that `std::process::exit` and C's `exit(int)` take.
 pub fn clamp_exit_code(code: i64) -> i32 {
     i32::try_from(code).unwrap_or(if code < 0 { i32::MIN } else { i32::MAX })
-}
-
-/// Invoke `target_name` with parameters drawn from `cli_values` (and
-/// optionally `json_args`), then write the return value to stdout.
-///
-/// `cli_values` is the already-typed map produced by
-/// [`crate::parse_target_argv`] — by the time we reach dispatch, clap has
-/// done structural validation and `parse_cli_value` has converted each
-/// raw string to a `BexExternalValue`. Dispatch only has to merge the
-/// CLI flags with `--json-args`, build the ordered call vector, and run.
-pub async fn dispatch_target(
-    engine: Arc<BexEngine>,
-    target_name: &str,
-    cli_values: HashMap<String, BexExternalValue>,
-    json_args: Option<serde_json::Value>,
-    output_format: OutputFormat,
-) -> Result<DispatchResult> {
-    Box::pin(dispatch_target_with_context(
-        engine,
-        target_name,
-        cli_values,
-        json_args,
-        output_format,
-        FunctionCallContextBuilder::new(CallId::next()).build(),
-        || {},
-    ))
-    .await
 }
 
 /// Invoke a target with a caller-provided function context.
