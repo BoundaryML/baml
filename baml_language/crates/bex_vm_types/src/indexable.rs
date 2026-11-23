@@ -353,7 +353,9 @@ impl SharedGlobals {
 
     /// Read a global by index.
     ///
-    /// Requires a [`PermitProof`]; see [`Self::len`].
+    /// Requires a [`PermitProof`] witnessing that an active heap permit
+    /// is held. This excludes GC's `forward_roots` (the only writer
+    /// against `inner.values`) for the duration of the read.
     ///
     /// # Panics
     ///
