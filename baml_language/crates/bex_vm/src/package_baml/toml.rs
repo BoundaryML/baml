@@ -145,7 +145,7 @@ fn convert_toml_datetime(
             let epoch = civil - i128::from(offset_ns);
             let zoned = super::copy::time::ZonedDateTime {
                 _nanoseconds: Arc::new(num_bigint::BigInt::from(epoch)),
-                _offset_ns: Value::try_inline_int(offset_ns).expect("offset fits in BAML int"),
+                _offset_ns: vm.int_value(offset_ns),
                 _iana: Value::NULL,
             };
             Ok(zoned.to_value(vm))

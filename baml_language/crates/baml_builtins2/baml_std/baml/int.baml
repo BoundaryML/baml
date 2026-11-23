@@ -268,11 +268,6 @@ class Int {
                 message: `int.random: lower (${lower}) must be less than upper (${upper})`
             };
         }
-        // One `random_int` draw holds 63 bits. A range of more than 2^63
-        // values (only possible when `lower` is negative) draws as a `bigint`.
-        if (lower < 0 && upper > lower + int.max_value() + 1) {
-            return bigint.random(0n + lower, 0n + upper, rng = rng).to_int();
-        }
         // Rust maps each draw; BAML owns retries because it can call `rng` again.
         let r = int._random_in_range(rng.random_int(), lower, upper);
         while (r == upper) {
@@ -296,7 +291,8 @@ class Int {
     }
 
     /// Returns the smallest representable `int`, `-2^63`
-    /// (`-9_223_372_036_854_775_808`). `int.min_value().abs()` panics.
+    /// (`-9_223_372_036_854_775_808`). `int.min_value().abs()` wraps to
+    /// `int.min_value()`.
     function min_value() -> int throws never {
         -9223372036854775808
     }

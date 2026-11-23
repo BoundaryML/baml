@@ -244,7 +244,11 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 33: `int` arithmetic wraps instead of throwing on overflow, so
 /// folded constants and compiled bodies change meaning.
-pub const FORMAT_VERSION: u32 = 33;
+///
+/// Version 34: `Rng.random_int` draws all 64 bits, and the stdlib's
+/// `int.random` and `float.random` read draws that way; a stdlib compiled
+/// earlier would misread them.
+pub const FORMAT_VERSION: u32 = 34;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

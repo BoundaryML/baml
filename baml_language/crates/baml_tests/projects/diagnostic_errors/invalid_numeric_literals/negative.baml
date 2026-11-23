@@ -1,6 +1,6 @@
 // Invalid numeric literals: every case must produce E0152 from
-// baml_base::num_lit validation (except the i63-range case, which is the
-// pre-existing E0150 at type inference). Layout mirrors rustc's
+// baml_base::num_lit validation, except the one in-range literal kept next to
+// the too-large ones, which must produce nothing. Layout mirrors rustc's
 // tests/ui/lexer/lex-bad-numeric-literals.rs.
 
 function bad_literals() -> int {
@@ -28,8 +28,8 @@ function bad_literals() -> int {
   let too_large_binary = 0b11111111111111111111111111111111111111111111111111111111111111111;
   let too_large_octal = 0o2_000_000_000_000_000_000_000;
 
-  // Fits i64 but not the VM's i63 `int`: existing E0150, not E0152.
-  let beyond_int_range = 0x4000_0000_0000_0000;
+  // `int.max_value()` itself fits.
+  let at_int_max = 0x7FFF_FFFF_FFFF_FFFF;
 
   // Bigint literals validate the same way.
   let bigint_no_digits = 0xn;

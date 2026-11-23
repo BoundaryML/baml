@@ -31,7 +31,7 @@ function mode_name(mode: Mode) -> string throws never {
 class Prompt {
     item: string,
     /// The stream state the case was drawn from, as a `bigint`: a state uses
-    /// 63 bits, and an `int` reaches a page through a JavaScript number,
+    /// 64 bits, and an `int` reaches a page through a JavaScript number,
     /// which keeps 53. A `bigint` crosses whole, so the state a page hands
     /// back is the state it was given.
     seed: bigint,

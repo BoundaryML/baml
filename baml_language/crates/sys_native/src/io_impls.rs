@@ -251,9 +251,7 @@ impl io::IoClassRandomSystemRandom for NativeSysOps {
     ) -> SysOpOutput<i64> {
         let mut buf = [0u8; 8];
         match getrandom::getrandom(&mut buf) {
-            // Arithmetic shift right by one maps the uniform 64-bit draw onto
-            // the 63-bit range `[-2^62, 2^62)`, so the int never needs a box.
-            Ok(()) => SysOpOutput::ok(i64::from_le_bytes(buf) >> 1),
+            Ok(()) => SysOpOutput::ok(i64::from_le_bytes(buf)),
             Err(e) => SysOpOutput::err(VmPanic::HostUnavailable {
                 resource: "randomness".to_string(),
                 message: format!("SystemRandom.random_int: system entropy unavailable: {e}"),

@@ -497,10 +497,7 @@ impl BamlClassTimeZonedDateTime for PackageBamlImpl {
             // is validated lazily, on first resolution against the host's
             // timezone database.
             Some(iana) => (Value::NULL, Value::object(vm.alloc_string(iana))),
-            None => (
-                Value::try_inline_int(offset_ns).expect("offset fits in BAML int"),
-                Value::NULL,
-            ),
+            None => (vm.int_value(offset_ns), Value::NULL),
         };
         let zoned = copy::time::ZonedDateTime {
             _nanoseconds: Arc::new(num_bigint::BigInt::from(datetime.unix_timestamp_nanos())),

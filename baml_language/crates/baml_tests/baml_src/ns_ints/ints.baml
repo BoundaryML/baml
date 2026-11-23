@@ -339,8 +339,9 @@ class FixedBytesRng {
     }
 }
 
-// `random_int` keeps 63 of the 64 drawn bits, so it spans [-2^62, 2^62).
-test "random_int_maps_63_bits" {
+// `random_int` reads the 8 drawn bytes as one big-endian int, so it spans
+// every int.
+test "random_int_maps_64_bits" {
     let all_ones = FixedBytesRng { draw: b"\xff\xff\xff\xff\xff\xff\xff\xff" };
     let all_zeros = FixedBytesRng { draw: b"\x00\x00\x00\x00\x00\x00\x00\x00" };
     let low_bit = FixedBytesRng { draw: b"\x00\x00\x00\x00\x00\x00\x00\x01" };
@@ -348,9 +349,9 @@ test "random_int_maps_63_bits" {
     let max = FixedBytesRng { draw: b"\x7f\xff\xff\xff\xff\xff\xff\xff" };
     assert.equal(all_ones.random_int(), -1);
     assert.equal(all_zeros.random_int(), 0);
-    assert.equal(low_bit.random_int(), 0);
-    assert.equal(sign_only.random_int(), -4611686018427387904);
-    assert.equal(max.random_int(), 4611686018427387903)
+    assert.equal(low_bit.random_int(), 1);
+    assert.equal(sign_only.random_int(), int.min_value());
+    assert.equal(max.random_int(), int.max_value())
 }
 
 class RejectionThenAcceptedRng {
@@ -365,13 +366,13 @@ class RejectionThenAcceptedRng {
         function random_int(self) -> int {
             self.calls += 1;
             if (self.calls == 1) {
-                // The maximum draw is in the three-value rejection tail for
-                // [0, 5).
-                (1 << 62) - 1
+                // 2^64 draws leave a one-value rejection tail for [0, 5):
+                // the maximum draw.
+                int.max_value()
             } else {
-                // This maps to 4 after rebiasing from the signed 63-bit draw
+                // This maps to 4 after rebiasing from the signed 64-bit draw
                 // domain.
-                -(1 << 62) + 4
+                int.min_value() + 4
             }
         }
     }
