@@ -166,7 +166,6 @@ function task_error_uncaught() -> int {
   await f
 }
 // A task that recursed past its stack panics, and its spawner goes on.
-// native prints: 3
 function task_overflow_caught() -> int {
   let f = spawn { task_dive(task_count(20000)) };
   let g = spawn { task_count(2) };

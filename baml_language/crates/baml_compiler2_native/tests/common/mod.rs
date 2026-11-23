@@ -1,5 +1,9 @@
 //! What the test suites share: running a function on the interpreter and
 //! as a native executable.
+#![allow(
+    dead_code,
+    reason = "each suite uses its part of what the suites share"
+)]
 
 use std::{
     fmt::Write as _,

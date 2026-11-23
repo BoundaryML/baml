@@ -130,7 +130,6 @@ function json_ints() -> string {
   let j = baml.json.parse(rep("[", 1) + "9007199254740993, -4611686018427387904, 4611686018427387903, 0, -1]");
   baml.json.stringify(j)
 }
-// native throws: baml.json.ParseError {message: "integral JSON number does not fit the native 64-bit int"}
 function json_parse_past_int() -> string {
   baml.json.stringify(baml.json.parse(rep("9", 19) + "0"))
 }

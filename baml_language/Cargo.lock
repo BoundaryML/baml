@@ -617,6 +617,7 @@ dependencies = [
  "cranelift-native",
  "cranelift-object",
  "num-bigint",
+ "sha2 0.10.9",
  "sys_native",
  "sys_ops",
  "sys_types",

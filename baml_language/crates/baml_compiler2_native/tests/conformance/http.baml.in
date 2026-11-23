@@ -154,7 +154,6 @@ function http_sse_events() -> string {
 // Closing a stream ends it: the next read finds nothing. The interpreter's
 // `close` does nothing while the program still holds the stream, so there
 // the events that had arrived are still read.
-// native prints: "true"
 function http_sse_closed_early() -> string {
   let stream = baml.http.send_sse(baml.http.Request.from_url("{open}/events").set_method("GET"));
   stream.close();

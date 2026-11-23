@@ -446,13 +446,11 @@ function unwind_context_outermost() -> string {
 }
 // A native frame has no file and line, and a function inlined into its
 // caller no frame.
-// native prints: "Traceback (most recent call last):\n  in user.unwind_context_text\n  in user.unwind_dive\n  in user.unwind_dive\ntext"
 function unwind_context_text() -> string {
   unwind_dive_text(2) catch (e, context) {
     _ => context.to_string(),
   }
 }
-// native prints: 0
 function unwind_context_line() -> int {
   unwind_dive(1, 2) catch (e, context) {
     _ => context.stack_trace.frames[0].line,

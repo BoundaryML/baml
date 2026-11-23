@@ -122,13 +122,11 @@ function json_hide(value: unknown, n: int) -> unknown {
   for (let i = 0; i < n; i += 1) { held.push(value); };
   held[n - 1]
 }
-// native throws: baml.json.SerializationError {message: "value has no json representation", path: "", reason: "unserializable"}
 function json_unknown_scalar_array() -> string {
   let ids: int[] = [];
   for (let i = 0; i < 3; i += 1) { ids.push(i); };
   baml.json.stringify(json_hide(ids, 2))
 }
-// native throws: baml.json.SerializationError {message: "value has no json representation", path: "", reason: "unserializable"}
 function json_unknown_scalar_map() -> string {
   let counts: map<string, int> = {};
   for (let i = 0; i < 2; i += 1) { counts[rep("k", i + 1)] = i; };
@@ -136,7 +134,6 @@ function json_unknown_scalar_map() -> string {
 }
 // A decode follows a value 128 levels down and no further; the
 // interpreter's limit is on the text it parses only.
-// native prints: "value nests more than 128 levels deep"
 function json_to_deep() -> string {
   let j: json = null;
   for (let i = 0; i < 140; i += 1) { j = { "value": i, "next": j }; };

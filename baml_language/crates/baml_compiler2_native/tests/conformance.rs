@@ -1,49 +1,355 @@
 //! Conformance of the standard library's natives: each file under
 //! `tests/conformance` holds the cases of one native, as functions taking no
-//! arguments. Every case runs on the interpreter and as a native executable
-//! every way of `common::WAYS`, and all must end the same way: the same
-//! printed result or the same uncaught throw.
+//! arguments. Every case runs on the interpreter, as a process of
+//! `baml-cli run`, and as a native executable every way of `common::WAYS`,
+//! and all must behave the same: the same exit code, the same bytes on
+//! stdout and the same on stderr, but for what `comparable` leaves out.
 //!
-//! `int` is 64 bits wide and wraps on both, so no answer depends on its
-//! width. A case native code is known to end otherwise for some other reason
-//! says how it ends in a comment on the line before it, `// native prints:
-//! <text>` or `// native throws: <text>`, and the interpreter must then end
-//! some other way, so that the comment goes when it stops being true.
+//! A file is a program of its own, with the files that declare what it
+//! names: `support.baml`, where values come out of loops so that they are
+//! built at run time, on the heap, and any other file whose helpers it
+//! calls.
 //!
-//! `support.baml` holds what the cases share. Values come out of loops there
-//! so that they are built at run time, on the heap.
+//! What the interpreter does with a case is kept under `target/`, by a key
+//! of the `baml-cli` binary, the text of the case's program and its name.
+//! So a change to native code alone reruns nothing on the interpreter, a
+//! change to a file reruns its cases and those of the files that name what
+//! it declares, and a new `baml-cli` reruns all. The
+//! cases of a `.baml.in` file talk to what lives for one run only, and are
+//! never kept.
+//!
+//! A case native code is known to behave otherwise in is listed in
+//! `tests/conformance/differences.txt`, with why and with what the native
+//! program does. The interpreter must then do something else, so that the
+//! entry goes when it stops being true. A native program a signal killed is
+//! a failure whatever the list says.
+//!
+//! `BAML_CONFORMANCE_ONLY=a.baml,b.baml` runs the cases of those files
+//! alone.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    fmt::Write as _,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::{
+        Mutex, OnceLock,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use baml_db::testing::{assert_no_diagnostic_errors, setup_test_db};
+use sha2::{Digest as _, Sha256};
 
 mod common;
-use common::{Built, Ending, WAYS, build, command, engine, interpret, listed, output, run};
+use common::{Built, WAYS, build, command, output};
 
-/// Run a program every way of `WAYS`, or report why there is none.
-fn run_every_way(built: &Result<Built, String>) -> Vec<(&'static str, Ending)> {
-    WAYS.iter()
-        .map(|way| {
-            let ending = match built {
-                Ok(built) => run(built, way),
-                Err(error) => Ok(error.clone()),
+/// What a program's caller sees of a run: how it exited, and what it wrote.
+#[derive(Clone, PartialEq, Eq)]
+struct Behavior {
+    /// The exit code, or why there is none: the signal that killed the
+    /// process, or why there was no process.
+    exit: Result<i32, String>,
+    stdout: String,
+    stderr: String,
+}
+
+impl Behavior {
+    fn of(output: &std::process::Output) -> Self {
+        Self {
+            exit: output.status.code().ok_or(output.status.to_string()),
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        }
+    }
+}
+
+/// The advice `baml-cli run` gives about the source it ran, which is not
+/// the program's doing.
+const FORMAT_HINT: &str = "warning: code is unformatted; run `baml fmt`";
+
+/// The line that starts the frames of an error report.
+const TRACEBACK: &str = "Traceback (most recent call last):";
+
+/// `behavior` without what the interpreter and a native program are not
+/// held to agree on. This is every such thing, and all of it is on stderr:
+///
+/// - the line of `FORMAT_HINT`, which only `baml-cli` writes;
+/// - the frames of an error report, from the `TRACEBACK` line to the last
+///   indented line after it: a native frame has no file and line;
+/// - where `error: ` stands in a report: `baml-cli` writes it before the
+///   traceback and a native program after, so what precedes `TRACEBACK` on
+///   its line is put before the line that follows the frames.
+fn comparable(behavior: &Behavior) -> Behavior {
+    let mut stderr = String::new();
+    let mut lines = behavior.stderr.split_inclusive('\n').peekable();
+    while let Some(line) = lines.next() {
+        let text = line.strip_suffix('\n').unwrap_or(line);
+        if text == FORMAT_HINT {
+            continue;
+        }
+        match text.strip_suffix(TRACEBACK) {
+            Some(before) => {
+                while lines.next_if(|frame| frame.starts_with("  ")).is_some() {}
+                stderr.push_str(before);
+            }
+            None => stderr.push_str(line),
+        }
+    }
+    Behavior {
+        exit: behavior.exit.clone(),
+        stdout: behavior.stdout.clone(),
+        stderr,
+    }
+}
+
+/// `text` on one line: a backslash doubled, and a line end or any other
+/// control character as Rust writes it in a string. This is how
+/// `differences.txt` holds what a program wrote, and how a report shows it.
+fn escaped(text: &str) -> String {
+    let mut out = String::new();
+    for character in text.chars() {
+        if character == '\\' || character.is_control() {
+            out.extend(character.escape_default());
+        } else {
+            out.push(character);
+        }
+    }
+    out
+}
+
+/// The `baml-cli` this tree builds, and where what it did is kept.
+struct Interpreter {
+    binary: PathBuf,
+    /// The SHA-256 of the binary, in hex.
+    hash: String,
+    /// The directory of the kept behaviors, a file each.
+    kept: PathBuf,
+    /// The `BAML_HOME` its processes run with, so that nothing is read from
+    /// or written to the user's own.
+    home: PathBuf,
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().fold(String::new(), |mut out, byte| {
+        let _ = write!(out, "{byte:02x}");
+        out
+    })
+}
+
+/// Find the interpreter and check that it is this tree's: next to the test
+/// binary's directory, where `cargo build -p baml_cli` with the same profile
+/// puts it, or where `BAML_CONFORMANCE_CLI` says. Cargo writes beside it
+/// the list of the files it was built from; one of them newer than the
+/// binary means the binary is stale, and the test stops rather than compare
+/// against it. The files under `.git` are left out of that: the binary
+/// embeds the commit it was built at, which no behavior depends on.
+fn interpreter() -> &'static Interpreter {
+    static FOUND: OnceLock<Interpreter> = OnceLock::new();
+    FOUND.get_or_init(|| {
+        let how = "build it with `cargo build --profile <the profile of this test run> -p \
+                   baml_cli --bin baml-cli`, or name one with BAML_CONFORMANCE_CLI";
+        let binary = match std::env::var_os("BAML_CONFORMANCE_CLI") {
+            Some(named) => PathBuf::from(named),
+            None => std::env::current_exe()
+                .expect("the test binary has a path")
+                .parent()
+                .and_then(Path::parent)
+                .expect("the test binary is in `deps` under a profile directory")
+                .join("baml-cli"),
+        };
+        let built = std::fs::metadata(&binary)
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or_else(|error| panic!("no `{}` ({error}): {how}", binary.display()));
+        let listed = binary.with_extension("d");
+        let sources = std::fs::read_to_string(&listed).unwrap_or_else(|error| {
+            panic!(
+                "no `{}` ({error}) to check `{}` against its sources: {how}",
+                listed.display(),
+                binary.display()
+            )
+        });
+        let (_, sources) = sources.split_once(": ").expect("a list of sources");
+        for source in sources.split_whitespace() {
+            if source.contains("/.git/") {
+                continue;
+            }
+            let fresh = std::fs::metadata(source)
+                .and_then(|metadata| metadata.modified())
+                .is_ok_and(|changed| changed <= built);
+            assert!(
+                fresh,
+                "`{}` is older than `{source}`, which it was built from: {how}",
+                binary.display()
+            );
+        }
+        let hash = hex(&Sha256::digest(
+            std::fs::read(&binary).expect("a readable interpreter"),
+        ));
+        // One directory for each binary, and no other left: nothing kept
+        // for a binary that is gone is ever read again.
+        let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("conformance");
+        let own = root.join(&hash[..16]);
+        if !own.exists() {
+            let _ = std::fs::remove_dir_all(&root);
+        }
+        let (kept, home) = (own.join("kept"), own.join("home"));
+        for directory in [&kept, &home] {
+            std::fs::create_dir_all(directory).expect("a directory under `target`");
+        }
+        Interpreter {
+            binary,
+            hash,
+            kept,
+            home,
+        }
+    })
+}
+
+/// What the interpreter does with `case` of the program in the directory
+/// `project`: read from the file `key` names where there is a key and the
+/// file, and otherwise run, and kept under the key where there is one.
+fn interpreted(project: &Path, case: &str, key: Option<&str>) -> Behavior {
+    let interpreter = interpreter();
+    let file = key.map(|key| interpreter.kept.join(key));
+    if let Some(kept) = file.as_ref().and_then(|file| std::fs::read(file).ok()) {
+        let kept = String::from_utf8(kept).expect("a kept behavior is UTF-8");
+        let mut parts = kept.splitn(3, '\n');
+        let mut number = || parts.next().and_then(|part| part.parse::<i32>().ok());
+        let (exit, length) = (number(), number());
+        let (stdout, stderr) = parts
+            .next()
+            .expect("a kept behavior has three parts")
+            .split_at(usize::try_from(length.expect("a length")).expect("a length"));
+        return Behavior {
+            exit: Ok(exit.expect("an exit code")),
+            stdout: stdout.to_owned(),
+            stderr: stderr.to_owned(),
+        };
+    }
+    let ran = Command::new(&interpreter.binary)
+        .args(["run", "--quiet", "--agent-skill-check", "off"])
+        .args(["--output-preset", "human", "--color", "never"])
+        .arg("--project-dir")
+        .arg(project)
+        .arg(case)
+        .env("BAML_TELEMETRY", "off")
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
+        .env("BAML_HOME", &interpreter.home)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap_or_else(|error| {
+            panic!("`{}` does not start: {error}", interpreter.binary.display())
+        });
+    let behavior = Behavior::of(&ran);
+    assert!(
+        !behavior.stderr.contains("error: cannot run: "),
+        "the interpreter did not run `{case}`:\n{}",
+        behavior.stderr
+    );
+    if let (Some(file), Ok(exit)) = (file, &behavior.exit) {
+        // Whole or not at all: another run may be reading.
+        let partial = file.with_extension(std::process::id().to_string());
+        let kept = format!(
+            "{exit}\n{}\n{}{}",
+            behavior.stdout.len(),
+            behavior.stdout,
+            behavior.stderr
+        );
+        std::fs::write(&partial, kept).expect("a writable `target`");
+        std::fs::rename(&partial, &file).expect("a writable `target`");
+    }
+    behavior
+}
+
+/// A case native code is known to behave otherwise in: why, and what the
+/// native program does, its output as `escaped` writes it.
+struct Difference {
+    reason: String,
+    exit: i32,
+    stdout: String,
+    stderr: String,
+}
+
+impl Difference {
+    fn is(&self, behavior: &Behavior) -> bool {
+        behavior.exit == Ok(self.exit)
+            && escaped(&behavior.stdout) == self.stdout
+            && escaped(&behavior.stderr) == self.stderr
+    }
+}
+
+/// An entry of `differences.txt` for a case that behaves as `native`.
+fn entry(case: &str, reason: &str, native: &Behavior) -> String {
+    let mut entry = format!("{case}: {reason}\n");
+    if let Ok(exit) = native.exit
+        && exit != 0
+    {
+        let _ = writeln!(entry, "  exit {exit}");
+    }
+    for (stream, written) in [("stdout", &native.stdout), ("stderr", &native.stderr)] {
+        if !written.is_empty() {
+            let _ = writeln!(entry, "  {stream} {}", escaped(written));
+        }
+    }
+    entry
+}
+
+/// The cases of `differences.txt`, by name. An entry is a line `<case>:
+/// <why>` and then, each on a line of its own that two spaces indent, what
+/// the native program does: `exit <code>` unless it is 0, `stdout <text>`
+/// and `stderr <text>` unless the text is empty, after `comparable` and as
+/// `escaped` writes it. A line that starts with `#` is a comment.
+fn differences() -> BTreeMap<String, Difference> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/conformance/differences.txt");
+    let text = std::fs::read_to_string(&path).expect("a readable `differences.txt`");
+    let mut found: Vec<(String, Difference)> = Vec::new();
+    for (number, line) in text.lines().enumerate() {
+        let malformed =
+            || -> ! { panic!("{}:{}: not an entry: {line}", path.display(), number + 1) };
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some(field) = line.strip_prefix("  ") else {
+            let Some((case, reason)) = line.split_once(": ") else {
+                malformed()
             };
-            (way.name, ending)
-        })
-        .collect()
+            found.push((
+                case.to_owned(),
+                Difference {
+                    reason: reason.to_owned(),
+                    exit: 0,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                },
+            ));
+            continue;
+        };
+        let (Some((_, entry)), Some((name, value))) = (found.last_mut(), field.split_once(' '))
+        else {
+            malformed()
+        };
+        match name {
+            "exit" => entry.exit = value.parse().unwrap_or_else(|_| malformed()),
+            "stdout" => value.clone_into(&mut entry.stdout),
+            "stderr" => value.clone_into(&mut entry.stderr),
+            _ => malformed(),
+        }
+    }
+    let count = found.len();
+    let found: BTreeMap<_, _> = found.into_iter().collect();
+    assert_eq!(
+        found.len(),
+        count,
+        "a case is listed twice in `{}`",
+        path.display()
+    );
+    found
 }
 
-/// A line for each way of `endings`, for the report of a case that failed.
-fn report(endings: &[(&'static str, Ending)]) -> String {
-    let endings: Vec<(&str, String)> = endings
-        .iter()
-        .map(|(way, ending)| (*way, format!("{ending:?}")))
-        .collect();
-    listed(&endings)
-}
-
-/// Every `.baml` file under `directory`, in a stable order.
-fn sources(directory: &Path, found: &mut Vec<PathBuf>) {
+/// Every file under `directory` whose name ends with `ending`, in a stable
+/// order.
+fn sources(directory: &Path, ending: &str, found: &mut Vec<PathBuf>) {
     let mut entries: Vec<_> = std::fs::read_dir(directory)
         .unwrap_or_else(|error| panic!("cannot read `{}`: {error}", directory.display()))
         .map(|entry| entry.expect("a directory entry").path())
@@ -51,108 +357,298 @@ fn sources(directory: &Path, found: &mut Vec<PathBuf>) {
     entries.sort();
     for entry in entries {
         if entry.is_dir() {
-            sources(&entry, found);
-        } else if entry
-            .extension()
-            .is_some_and(|extension| extension == "baml")
-        {
+            sources(&entry, ending, found);
+        } else if entry.to_string_lossy().ends_with(ending) {
             found.push(entry);
         }
     }
 }
 
-/// The functions `source` declares without parameters: its cases, each with
-/// how native code ends where the interpreter is expected to end otherwise.
-fn cases(source: &str) -> Vec<(&str, Option<Ending>)> {
-    let mut native = None;
-    let mut found = Vec::new();
-    for line in source.lines() {
-        let declared = native.take();
-        if let Some(text) = line.strip_prefix("// native prints: ") {
-            native = Some(Ok(text.to_owned()));
-        } else if let Some(text) = line.strip_prefix("// native throws: ") {
-            native = Some(Err(text.to_owned()));
-        } else if let Some((name, _)) = line
-            .strip_prefix("function ")
-            .and_then(|rest| rest.split_once("()"))
-        {
-            found.push((name, declared));
-        }
-    }
-    found
+/// The functions `source` declares without parameters: its cases.
+fn cases(source: &str) -> Vec<&str> {
+    source
+        .lines()
+        .filter_map(|line| Some(line.strip_prefix("function ")?.split_once("()")?.0))
+        .collect()
 }
 
-/// The report of a case whose native runs do not all end as expected: as
-/// the interpreter does, or as `diverging` says where the case declares
-/// that native code ends otherwise, which the interpreter then must not.
-fn disagreement(
-    case: &str,
-    interpreted: &Ending,
-    diverging: Option<&Ending>,
-    native: &[(&'static str, Ending)],
-) -> Option<String> {
-    let expected = diverging.unwrap_or(interpreted);
-    let failed = native.iter().any(|(_, ending)| ending != expected)
-        || (interpreted == expected) != diverging.is_none();
-    failed.then(|| {
-        format!(
-            "{case}:\n  {:<24} {interpreted:?}{}{}",
-            "interpreter",
-            match diverging {
-                Some(expected) => format!("\n  {:<24} {expected:?}", "native expected"),
-                None => String::new(),
-            },
-            report(native),
-        )
+/// The names `source` declares at its top level.
+fn declared(source: &str) -> impl Iterator<Item = &str> {
+    source.lines().filter_map(|line| {
+        let rest = ["function ", "class ", "enum ", "interface "]
+            .iter()
+            .find_map(|keyword| line.strip_prefix(keyword))?;
+        rest.split(|character: char| !(character.is_alphanumeric() || character == '_'))
+            .next()
     })
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn natives_end_as_the_interpreter_does() {
+/// The files of `all` that `file` needs to be a program: each that declares
+/// a name `file` has as a word, and each those need. A word in a comment
+/// counts, which only makes a program larger than it has to be.
+fn needed<'a>(
+    file: &'a (String, String),
+    all: &'a [(String, String)],
+) -> Vec<&'a (String, String)> {
+    let mut found = vec![file];
+    let mut at = 0;
+    while let Some((_, text)) = found.get(at) {
+        let words: std::collections::HashSet<&str> = text
+            .split(|character: char| !(character.is_alphanumeric() || character == '_'))
+            .collect();
+        for other in all {
+            if !found.iter().any(|known| std::ptr::eq(*known, other))
+                && declared(&other.1).any(|name| words.contains(name))
+            {
+                found.push(other);
+            }
+        }
+        at += 1;
+    }
+    found.remove(0);
+    found
+}
+
+/// The cases of one file, which with `shared` are a program.
+struct Unit<'a> {
+    /// The file's name, as a report gives it and as the interpreter sees it.
+    file: &'a str,
+    text: &'a str,
+    /// The files that declare what this one names.
+    shared: Vec<&'a (String, String)>,
+    /// Whether what the interpreter does with a case may be kept.
+    kept: bool,
+}
+
+/// The report of a case that does not behave as expected: as the
+/// interpreter does, or as `listed` says where the case is listed, which
+/// the interpreter then must not. Every behavior here is `comparable`.
+fn disagreement(
+    interpreter: &Behavior,
+    native: &[(&'static str, Behavior)],
+    listed: Option<&Difference>,
+) -> Option<String> {
+    let dead = native.iter().any(|(_, behavior)| behavior.exit.is_err());
+    let expected = |behavior: &Behavior| match listed {
+        Some(listed) => listed.is(behavior),
+        None => behavior == interpreter,
+    };
+    let stale = listed.is_some_and(|listed| listed.is(interpreter));
+    if !dead && !stale && native.iter().all(|(_, behavior)| expected(behavior)) {
+        return None;
+    }
+    let mut report = String::new();
+    if dead {
+        report.push_str("  a native program did not run to an exit, which nothing can list\n");
+    }
+    if let Some(listed) = listed.filter(|_| stale) {
+        let _ = writeln!(
+            report,
+            "  listed in `differences.txt` ({}), and the interpreter does as listed",
+            listed.reason
+        );
+    }
+    // The exit, the stdout and the stderr of a run, each on a line.
+    let fields = |behavior: &Behavior| {
+        let exit = match &behavior.exit {
+            Ok(code) => code.to_string(),
+            Err(why) => why.clone(),
+        };
+        [exit, escaped(&behavior.stdout), escaped(&behavior.stderr)]
+    };
+    let interpreted = fields(interpreter);
+    let wanted = listed.map(|listed| {
+        [
+            listed.exit.to_string(),
+            listed.stdout.clone(),
+            listed.stderr.clone(),
+        ]
+    });
+    let native: Vec<_> = native
+        .iter()
+        .map(|(way, behavior)| (way, fields(behavior)))
+        .collect();
+    for (field, name) in ["exit", "stdout", "stderr"].iter().enumerate() {
+        let interpreted = &interpreted[field];
+        let wanted = wanted.as_ref().map(|wanted| &wanted[field]);
+        // A field every run agrees on says nothing.
+        if native
+            .iter()
+            .all(|(_, fields)| fields[field] == *interpreted)
+            && wanted.is_none_or(|wanted| wanted == interpreted)
+        {
+            continue;
+        }
+        let _ = writeln!(report, "  {name}");
+        let _ = writeln!(report, "    {:<26}{interpreted}", "interpreter");
+        if let Some(wanted) = wanted {
+            let _ = writeln!(report, "    {:<26}{wanted}", "listed");
+        }
+        let (_, first) = &native[0];
+        if native
+            .iter()
+            .all(|(_, fields)| fields[field] == first[field])
+        {
+            let _ = writeln!(report, "    {:<26}{}", "native, every way", first[field]);
+            continue;
+        }
+        for (way, fields) in &native {
+            let _ = writeln!(report, "    {way:<26}{}", fields[field]);
+        }
+    }
+    Some(report)
+}
+
+/// Run every case of `unit` on the interpreter and every way a native
+/// program runs. Returns how many cases ran and a report for each that
+/// does not behave as expected.
+fn check(unit: &Unit, differences: &BTreeMap<String, Difference>) -> (usize, Vec<String>) {
+    let program: String = unit
+        .shared
+        .iter()
+        .map(|(_, text)| text.as_str())
+        .chain([unit.text])
+        .collect();
+    let db = setup_test_db(&program);
+    assert_no_diagnostic_errors(&db);
+    let executables = tempfile::tempdir().expect("a temporary directory");
+
+    // The program as the interpreter loads it: its files in a directory.
+    let project = tempfile::tempdir().expect("a temporary directory");
+    let file = Path::new(unit.file)
+        .file_name()
+        .expect("a file has a name")
+        .to_string_lossy();
+    let written = unit
+        .shared
+        .iter()
+        .map(|(name, text)| (name.replace('/', "."), text.as_str()))
+        .chain([(file.trim_end_matches(".in").to_owned(), unit.text)]);
+    for (name, text) in written {
+        std::fs::write(project.path().join(name), text).expect("a writable directory");
+    }
+
+    let mut failures = Vec::new();
+    let found = cases(unit.text);
+    for case in &found {
+        let key = unit.kept.then(|| {
+            let mut hasher = Sha256::new();
+            let parts = [interpreter().hash.as_str(), &program, case];
+            for part in parts {
+                hasher.update(part.len().to_le_bytes());
+                hasher.update(part);
+            }
+            hex(&hasher.finalize())
+        });
+        let interpreter = comparable(&interpreted(project.path(), case, key.as_deref()));
+        let built: Result<Built, String> = build(&db, case, executables.path());
+        let native: Vec<(&'static str, Behavior)> = WAYS
+            .iter()
+            .map(|way| {
+                let behavior = match &built {
+                    Ok(built) => comparable(&Behavior::of(&output(built, way))),
+                    Err(error) => Behavior {
+                        exit: Err(error.clone()),
+                        stdout: String::new(),
+                        stderr: String::new(),
+                    },
+                };
+                (way.name, behavior)
+            })
+            .collect();
+        let listed = differences.get(*case);
+        if let Some(mut report) = disagreement(&interpreter, &native, listed) {
+            let (_, first) = &native[0];
+            if listed.is_none() && native.iter().all(|(_, behavior)| behavior == first) {
+                let _ = write!(report, "  as an entry:\n{}", entry(case, "<why>", first));
+            }
+            failures.push(format!("{}: {case}\n{report}", unit.file));
+        }
+    }
+    (found.len(), failures)
+}
+
+/// The files under `tests/conformance` whose names end with `ending`, each
+/// with its name from there and its text.
+fn texts(ending: &str) -> Vec<(String, String)> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/conformance");
     let mut files = Vec::new();
-    sources(&root, &mut files);
-    let texts: Vec<(String, String)> = files
+    sources(&root, ending, &mut files);
+    files
         .iter()
         .map(|file| {
             let name = file.strip_prefix(&root).expect("under the root");
             let text = std::fs::read_to_string(file).expect("a readable source");
             (name.display().to_string(), text)
         })
-        .collect();
-    // One program for every file: a case names its native, so no two
-    // collide.
-    let program: String = texts.iter().map(|(_, text)| text.as_str()).collect();
+        .collect()
+}
 
-    let db = setup_test_db(&program);
-    assert_no_diagnostic_errors(&db);
-    let engine = engine(&db);
-    let directory = tempfile::tempdir().expect("a temporary directory");
-
-    // While a file is being worked on, its name here runs its cases alone,
-    // or those of each file of a list with commas between. The program is
-    // still every file.
+#[test]
+fn natives_behave_as_the_interpreter_does() {
+    let mut all = texts(".baml");
+    // The longest first, so that no worker is left alone with one at the
+    // end.
+    all.sort_by_key(|(_, text)| std::cmp::Reverse(cases(text).len()));
     let only = std::env::var("BAML_CONFORMANCE_ONLY").ok();
-    let mut ran = 0;
-    let mut failures = Vec::new();
-    for (file, text) in &texts {
-        if only
-            .as_ref()
-            .is_some_and(|only| !only.split(',').any(|name| file.contains(name)))
-        {
-            continue;
+    let units: Vec<Unit> = all
+        .iter()
+        .filter(|(file, _)| {
+            only.as_ref()
+                .is_none_or(|only| only.split(',').any(|name| file.contains(name)))
+        })
+        .map(|file| Unit {
+            file: &file.0,
+            text: &file.1,
+            shared: needed(file, &all),
+            kept: true,
+        })
+        .collect();
+    let differences = differences();
+    // Checked before the workers start, so that a stale interpreter is one
+    // failure and not one a worker.
+    interpreter();
+
+    let next = AtomicUsize::new(0);
+    let results = Mutex::new((0, Vec::new()));
+    let workers = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                while let Some(unit) = units.get(next.fetch_add(1, Ordering::Relaxed)) {
+                    let (ran, failures) = check(unit, &differences);
+                    let mut results = results.lock().expect("no worker panicked with the lock");
+                    results.0 += ran;
+                    results.1.extend(failures);
+                }
+            });
         }
-        for (case, diverging) in cases(text) {
-            ran += 1;
-            let interpreted = interpret(&engine, case).await;
-            let native = run_every_way(&build(&db, case, directory.path()));
-            if let Some(failure) = disagreement(case, &interpreted, diverging.as_ref(), &native) {
-                failures.push(format!("{file}: {failure}"));
-            }
-        }
+    });
+    let (ran, mut failures) = results
+        .into_inner()
+        .expect("no worker panicked with the lock");
+    failures.sort();
+    assert!(ran > 0, "no conformance cases");
+    assert!(
+        failures.is_empty(),
+        "{} of {ran} cases:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+/// An entry of `differences.txt` is checked when its case runs, so one
+/// that names no case would never be.
+#[test]
+fn every_listed_difference_names_a_case() {
+    let all = [texts(".baml"), texts(".baml.in")].concat();
+    let named: Vec<&str> = all.iter().flat_map(|(_, text)| cases(text)).collect();
+    for case in differences().keys() {
+        assert!(
+            named.contains(&case.as_str()),
+            "`differences.txt` lists `{case}`, which is no case"
+        );
     }
-    assert!(ran > 0, "no conformance cases under `{}`", root.display());
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 /// Answer one request on `stream`, and close it.
@@ -441,22 +937,18 @@ fn full_port() -> u16 {
     })
 }
 
-/// Run every case of `source`, a program of its own, on the interpreter
-/// and every way a native program runs, and fail when two end otherwise.
-async fn cases_agree(source: &str) {
-    let db = setup_test_db(source);
-    assert_no_diagnostic_errors(&db);
-    let engine = engine(&db);
-    let directory = tempfile::tempdir().expect("a temporary directory");
-
-    let mut failures = Vec::new();
-    for (case, diverging) in cases(source) {
-        let interpreted = interpret(&engine, case).await;
-        let native = run_every_way(&build(&db, case, directory.path()));
-        if let Some(failure) = disagreement(case, &interpreted, diverging.as_ref(), &native) {
-            failures.push(failure);
-        }
-    }
+/// Run every case of `source`, the text of `file` and a program of its
+/// own, on the interpreter and every way a native program runs, and fail
+/// when one does not behave as expected. What it talks to lives for this
+/// run only, so nothing the interpreter does is kept.
+fn cases_agree(file: &str, source: &str) {
+    let unit = Unit {
+        file,
+        text: source,
+        shared: Vec::new(),
+        kept: false,
+    };
+    let (_, failures) = check(&unit, &differences());
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
@@ -476,13 +968,13 @@ async fn http_requests_end_as_the_interpreter_does() {
         .replace("{open}", &format!("http://127.0.0.1:{}", serve_http()))
         .replace("{closed}", &format!("http://127.0.0.1:{}", closed_port()))
         .replace("{full}", &format!("http://127.0.0.1:{}", full_port()));
-    cases_agree(&source).await;
+    cases_agree("http.baml.in", &source);
 }
 
 /// `baml.fs` in a directory of the test's own, which every case leaves as
 /// it found it.
-#[tokio::test(flavor = "multi_thread")]
-async fn files_end_as_the_interpreter_does() {
+#[test]
+fn files_end_as_the_interpreter_does() {
     let directory = tempfile::tempdir().expect("a temporary directory");
     let path = directory
         .path()
@@ -490,7 +982,7 @@ async fn files_end_as_the_interpreter_does() {
         .expect("the directory exists");
     let source = include_str!("conformance/fs.baml.in")
         .replace("{dir}", path.to_str().expect("a path that is UTF-8"));
-    cases_agree(&source).await;
+    cases_agree("fs.baml.in", &source);
     let left: Vec<_> = std::fs::read_dir(&path)
         .expect("the directory is still there")
         .map(|entry| entry.expect("an entry").file_name())
@@ -514,14 +1006,13 @@ async fn sockets_end_as_the_interpreter_does() {
         .replace("{full}", &full_port().to_string())
         .replace("{udp_a}", &free_udp_port().to_string())
         .replace("{udp_b}", &free_udp_port().to_string());
-    cases_agree(&source).await;
+    cases_agree("net.baml.in", &source);
 }
 
-/// `baml.io` writes to the program's own streams, which no case of the
-/// suites above can show: the interpreter there prints into the test's
-/// output. So this checks the native program alone: what it prints
-/// before its result, in order, on each stream, and a line read from its
-/// input with what was left of the input for the next read.
+/// `baml.io` reads the program's own input, which no case of the suites
+/// above has any of. So this checks the native program alone: what it
+/// prints before its result, in order, on each stream, and a line read from
+/// its input with what was left of the input for the next read.
 #[test]
 fn a_program_prints_and_reads_its_own_streams() {
     use std::io::Write as _;
@@ -689,11 +1180,10 @@ function fail(depth: int, code: int) -> int throws Failure {
 /// A program whose spawned task fails with nothing awaiting it: `baml run`
 /// prints the entry function's result, waits for every task, reports the
 /// error no `await` took and exits with a failure, and so does native code.
-/// The interpreter as this suite runs it only logs such an error, so this
-/// cannot be one of the cases above. The report is `baml run`'s but for the
-/// lines of the traceback, which name no file and line here, and for where
-/// they are: before the error, as for the entry function's own. Tasks are
-/// reported in the order they were spawned in.
+/// The report is `baml run`'s but for the lines of the traceback, which
+/// name no file and line here, and for where they are: before the error, as
+/// for the entry function's own. Tasks are reported in the order they were
+/// spawned in.
 #[test]
 fn an_error_no_await_took_fails_the_program_after_its_result() {
     let source = format!(

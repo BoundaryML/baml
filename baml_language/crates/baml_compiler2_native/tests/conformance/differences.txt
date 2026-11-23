@@ -1,0 +1,46 @@
+# Cases a native program is known to behave otherwise in than the interpreter.
+#
+#   <case>: <why>
+#     exit <code>       unless it is 0
+#     stdout <text>     unless it is empty
+#     stderr <text>     unless it is empty
+#
+# The three are what the native program does, every way it runs, with a line
+# end written `\n` and a backslash doubled. The test fails when the native
+# program does anything else, and when the interpreter does the same: an
+# entry that is no longer true has to go.
+
+# A task's stack does not grow natively.
+task_recursion_too_deep: a task's stack does not grow natively, so the recursion overflows it
+  exit 1
+  stderr error: uncaught throw: baml.panics.StackOverflow {message: "stack overflow"}\n
+task_overflow_caught: a task's stack does not grow natively, so the task panics where the interpreter's goes on
+  stdout 3\n
+
+# JSON.
+json_parse_past_int: a JSON number past 64 bits is a bigint on the interpreter and has no native form
+  exit 1
+  stderr error: uncaught throw: baml.json.ParseError {message: "integral JSON number does not fit the native 64-bit int"}\n
+json_unknown_scalar_array: an array of scalars held as `unknown` has no native JSON form
+  exit 1
+  stderr error: uncaught throw: baml.json.SerializationError {message: "value has no json representation", path: "", reason: "unserializable"}\n
+json_unknown_scalar_map: a map of scalars held as `unknown` has no native JSON form
+  exit 1
+  stderr error: uncaught throw: baml.json.SerializationError {message: "value has no json representation", path: "", reason: "unserializable"}\n
+json_to_deep: a native decode follows a value 128 levels down; the interpreter limits only the text it parses
+  stdout "value nests more than 128 levels deep"\n
+
+# A native frame has no file and line, and a function inlined into its caller
+# no frame.
+unwind_context_text: a native traceback has no file and line, and no frame for an inlined function
+  stdout "Traceback (most recent call last):\\n  in user.unwind_context_text\\n  in user.unwind_dive\\n  in user.unwind_dive\\ntext"\n
+unwind_context_line: a native frame has no line
+  stdout 0\n
+
+# What `baml.sys.argv` holds.
+sys_argv: native argv leaves out the program's own name; under `baml-cli run` it is the binary and the target
+  stdout 0\n
+
+# Closing a stream.
+http_sse_closed_early: a native `close` ends the stream; the interpreter's does nothing while the program still holds it
+  stdout "true"\n

@@ -158,7 +158,6 @@ function task_recursion() -> int {
 }
 
 // A task's stack does not grow yet.
-// native throws: baml.panics.StackOverflow {message: "stack overflow"}
 function task_recursion_too_deep() -> int {
   let f = spawn { task_dive(task_count(20000)) };
   await f
