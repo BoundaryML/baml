@@ -11,7 +11,7 @@ function good_literals() -> int {
   let trailing_underscore = 1_;
   let hex_underscores = 0xFF_FF;
   let underscore_after_prefix = 0x_F;
-  let int_max = 0x3FFF_FFFF_FFFF_FFFF;
+  let int_max = 0x7FFF_FFFF_FFFF_FFFF;
   let negative = -0xFF;
   let big_hex = 0xFFFF_FFFF_FFFF_FFFF_FFFFn;
   let big_underscores = 1_000n;

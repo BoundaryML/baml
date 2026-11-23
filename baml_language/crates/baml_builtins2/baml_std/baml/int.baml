@@ -291,7 +291,8 @@ class Int {
     }
 
     /// Returns the smallest representable `int`, `-2^63`
-    /// (`-9_223_372_036_854_775_808`). `int.min_value().abs()` panics.
+    /// (`-9_223_372_036_854_775_808`). `int.min_value().abs()` wraps to
+    /// `int.min_value()`.
     function min_value() -> int throws never {
         -9223372036854775808
     }

@@ -283,7 +283,7 @@ the derivation. What a learner may say follows from what they are shown, so
 the two can never disagree. Because a case can be generated again from its
 item and seed, the answer never has to be in front of the learner to be
 available when they answer. The seed crosses as a `bigint`: a stream state
-uses 63 bits, and an `int` reaches a page through a JavaScript number, which
+uses 64 bits, and an `int` reaches a page through a JavaScript number, which
 keeps 53.
 
 Nothing crossing into this surface is an enum, nor a class holding one: the
