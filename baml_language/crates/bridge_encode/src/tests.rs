@@ -11,7 +11,7 @@ use baml_sdkgen_types::{
     ClassDescriptor, EnumDescriptor, FieldDescriptor, FunctionDescriptor, ParamDescriptor,
     ProgramDescriptor, Ty, TypeAliasDescriptor,
 };
-use baml_type::{Freshness, FunctionParamMode, Int63, Literal, MediaKind, TypeName};
+use baml_type::{Freshness, FunctionParamMode, Literal, MediaKind, TypeName};
 use bridge_ctypes::{
     HostKey, TableKey,
     baml_bridge::cffi::{
@@ -20,7 +20,6 @@ use bridge_ctypes::{
     },
     proto_ty_to_runtime_ty,
 };
-use num_bigint::BigInt;
 
 use super::*;
 
@@ -80,10 +79,7 @@ impl HostValue for Mock {
     fn shape(&self) -> Result<HostShape<'_, Self>, String> {
         Ok(match self {
             Mock::Null => HostShape::Null,
-            Mock::Int(int) => HostShape::Scalar(match Int63::new(*int) {
-                Some(int) => Scalar::Int(int),
-                None => Scalar::BigInt(BigInt::from(*int)),
-            }),
+            Mock::Int(int) => HostShape::Scalar(Scalar::Int(*int)),
             Mock::Float(float) => HostShape::Scalar(Scalar::Float(*float)),
             Mock::Bool(bool) => HostShape::Scalar(Scalar::Bool(*bool)),
             Mock::Str(_) => HostShape::Scalar(Scalar::String),
@@ -645,14 +641,18 @@ fn scalars_follow_the_slot_and_the_hosts_rules() {
         f.refusal(Mock::Bool(true), "a"),
         "argument `x`: expected int, found Bool(true)"
     );
-    // Beyond the VM's integers the host classifies a bigint.
+    // An int converts exactly into a bigint slot.
     assert!(matches!(
         f.encode_in(Mock::Int(1 << 62), &StatedTy::Bigint).unwrap().value,
         Some(Value::BigintValue(hex)) if hex == "4000000000000000"
     ));
+    // Every `i64` is a VM integer, the extremes included.
     assert_eq!(
-        stated(&f.ok(Mock::List(vec![Mock::Int(1 << 62)]), "g")),
-        Some(list_ty(StatedTy::Bigint))
+        stated(&f.ok(
+            Mock::List(vec![Mock::Int(1 << 62), Mock::Int(i64::MIN)]),
+            "g"
+        )),
+        Some(list_ty(StatedTy::Int))
     );
     assert!(matches!(
         f.encode_in(Mock::Bytes(vec![1, 2]), &StatedTy::Uint8Array).unwrap().value,

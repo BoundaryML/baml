@@ -1251,11 +1251,6 @@ impl<'s> Scope<'s> {
         self.error(crate::layout::WELL_KNOWN_PARSE_ERROR, message)
     }
 
-    /// Throw `baml.panics.IntegerOverflow`.
-    pub fn integer_overflow(&mut self, message: &str) -> Thrown<'s> {
-        self.error(crate::layout::WELL_KNOWN_INTEGER_OVERFLOW, message)
-    }
-
     /// An instance of the well-known error class `class`, whose one field
     /// is its message.
     fn error(&mut self, class: usize, message: &str) -> Thrown<'s> {

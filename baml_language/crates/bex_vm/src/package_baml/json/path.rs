@@ -91,11 +91,7 @@ pub(super) fn select(vm: &mut BexVm, json: Value, selector: &str) -> Result<Valu
         i += 1;
         // An index is what `int.parse` reads: an optional sign and ASCII
         // digits, within `int`'s range.
-        let Some(index) = token
-            .parse::<i64>()
-            .ok()
-            .filter(|index| (Value::INT_MIN..=Value::INT_MAX).contains(index))
-        else {
+        let Ok(index) = token.parse::<i64>() else {
             return Err(refuse(
                 vm,
                 format!("bad bracket token '[{token}]'"),

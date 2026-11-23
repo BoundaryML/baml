@@ -395,6 +395,9 @@ unexpected_cfgs = { level = "warn", check-cfg = [
   "cfg(fuzzing)",
   # Reserved for concurrency model-checked builds.
   "cfg(baml_loom)",
+  # Test-only: shrinks the inline int range of `Value` so tests box ints
+  # (RUSTFLAGS="--cfg baml_narrow_inline_int").
+  "cfg(baml_narrow_inline_int)",
 ] }
 
 [workspace.lints.clippy]

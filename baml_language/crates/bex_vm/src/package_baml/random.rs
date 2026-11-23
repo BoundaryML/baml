@@ -75,12 +75,13 @@ fn fill<R: RngCore>(mutex: &Mutex<R>, n: usize) -> Result<Vec<u8>, VmRustFnError
     Ok(buf)
 }
 
-/// Draw a uniformly random BAML `int` (i63) from a locked generator.
+/// Draw a uniformly random 63-bit `int` in `[-2^62, 2^62)` from a locked
+/// generator: the `Rng.random_int` contract, which keeps draws inline so they
+/// never allocate.
 ///
 /// `next_u64` is uniform over all 64 bits; reinterpreting it as `i64` and
-/// arithmetic-shifting right by one maps it uniformly onto `[INT_MIN, INT_MAX]`
-/// (every i63 value has exactly two u64 preimages), which always fits in
-/// `Value::int`.
+/// arithmetic-shifting right by one maps it uniformly onto that range (every
+/// value has exactly two u64 preimages), which always fits in `Value::int`.
 fn next_i63<R: RngCore>(mutex: &Mutex<R>) -> i64 {
     let r = mutex
         .lock()

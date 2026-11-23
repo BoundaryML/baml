@@ -693,18 +693,18 @@ test "optional_index_with_valid_index_returns_element" {
 }
 
 // ============================================================================
-// §14 — Integer literals at the i63 `int` range boundary (B-266)
+// §14 — Integer literals at the `int` range boundary
 // ============================================================================
 
-// `int.min_value()` (`-2^62`) must remain writable as a negated literal even
-// though `+2^62` is not a legal `int` literal: the leading `-` forms a single
+// `int.min_value()` (`-2^63`) must remain writable as a negated literal even
+// though `+2^63` is not a legal `int` literal: the leading `-` forms a single
 // negative literal. (Mirrors the i64::MIN literal rule in Rust/Java/C#.)
 function negated_int_min_literal_body() -> int {
-    -4611686018427387904
+    -9223372036854775808
 }
 
 test "negated_int_min_literal_is_valid" {
-    assert.equal(negated_int_min_literal_body(), -4611686018427387904)
+    assert.equal(negated_int_min_literal_body(), int.min_value())
 }
 
 // ============================================================================

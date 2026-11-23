@@ -45,10 +45,50 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0063
 
   ⚠ unreachable arm
-     ╭─[exceptions.baml:979:14]
- 979 │         _ => 99
+     ╭─[exceptions.baml:924:14]
+ 924 │         _ => 99
      ·              ──
      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1408:16]
+ 1408 │         int => 2,
+      ·                ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1409:17]
+ 1409 │         bool => 3,
+      ·                 ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1410:17]
+ 1410 │         null => 4,
+      ·                 ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1411:14]
+ 1411 │         _ => 0
+      ·              ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1462:19]
+ 1462 │         string => 1,
+      ·                   ─
+      ╰────
 
   [type] E0063
 
@@ -77,123 +117,83 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0063
 
   ⚠ unreachable arm
-      ╭─[exceptions.baml:1466:14]
- 1466 │         _ => 0
-      ·              ─
-      ╰────
-
-  [type] E0063
-
-  ⚠ unreachable arm
-      ╭─[exceptions.baml:1517:19]
- 1517 │         string => 1,
+      ╭─[exceptions.baml:1481:19]
+ 1481 │         string => 1,
       ·                   ─
       ╰────
 
   [type] E0063
 
   ⚠ unreachable arm
-      ╭─[exceptions.baml:1518:16]
- 1518 │         int => 2,
+      ╭─[exceptions.baml:1482:16]
+ 1482 │         int => 2,
       ·                ─
       ╰────
 
   [type] E0063
 
   ⚠ unreachable arm
-      ╭─[exceptions.baml:1519:17]
- 1519 │         bool => 3,
-      ·                 ─
-      ╰────
-
-  [type] E0063
-
-  ⚠ unreachable arm
-      ╭─[exceptions.baml:1520:17]
- 1520 │         null => 4,
-      ·                 ─
-      ╰────
-
-  [type] E0063
-
-  ⚠ unreachable arm
-      ╭─[exceptions.baml:1536:19]
- 1536 │         string => 1,
-      ·                   ─
-      ╰────
-
-  [type] E0063
-
-  ⚠ unreachable arm
-      ╭─[exceptions.baml:1537:16]
- 1537 │         int => 2,
-      ·                ─
-      ╰────
-
-  [type] E0063
-
-  ⚠ unreachable arm
-      ╭─[exceptions.baml:1539:14]
- 1539 │         _ => 0
+      ╭─[exceptions.baml:1484:14]
+ 1484 │         _ => 0
       ·              ─
       ╰────
 
   [type] E0063
 
   ⚠ unreachable arm
-      ╭─[exceptions.baml:1602:14]
- 1602 │         _ => 0
+      ╭─[exceptions.baml:1547:14]
+ 1547 │         _ => 0
       ·              ─
       ╰────
 
   [type] E0063
 
   ⚠ unreachable arm
-      ╭─[exceptions.baml:1635:30]
- 1635 │         let err2: AuthErr => err2.reason,
+      ╭─[exceptions.baml:1580:30]
+ 1580 │         let err2: AuthErr => err2.reason,
       ·                              ───────────
       ╰────
 
   [type] E0063
 
   ⚠ unreachable arm
-      ╭─[exceptions.baml:1636:34]
- 1636 │         let err3: NotFoundErr => err3.path,
+      ╭─[exceptions.baml:1581:34]
+ 1581 │         let err3: NotFoundErr => err3.path,
       ·                                  ─────────
       ╰────
 
   [type] E0063
 
   ⚠ unreachable arm
-      ╭─[exceptions.baml:1637:25]
- 1637 │         RateLimitErr => "rate limited",
+      ╭─[exceptions.baml:1582:25]
+ 1582 │         RateLimitErr => "rate limited",
       ·                         ──────────────
       ╰────
 
   [type] E0063
 
   ⚠ unreachable arm
-      ╭─[exceptions.baml:1638:14]
- 1638 │         _ => "unknown"
+      ╭─[exceptions.baml:1583:14]
+ 1583 │         _ => "unknown"
       ·              ─────────
       ╰────
 
   [type] E0063
 
   ⚠ unreachable arm
-      ╭─[exceptions.baml:1751:14]
- 1751 │         _ => 3
+      ╭─[exceptions.baml:1696:14]
+ 1696 │         _ => 3
       ·              ─
       ╰────
 
   [type] E0097
 
   ⚠ extraneous throws declaration: baml.errors.ParseError
-      ╭─[exceptions.baml:1872:89]
- 1872 │ ╭─▶ function s20_may_throw(n: int) -> string throws baml.errors.Io | baml.errors.ParseError {
- 1873 │ │       if (n == 42) {
- 1874 │ │           throw baml.errors.Io { message: "io" }
- 1875 │ │       }
- 1876 │ │       "ok"
- 1877 │ ╰─▶ }
+      ╭─[exceptions.baml:1817:89]
+ 1817 │ ╭─▶ function s20_may_throw(n: int) -> string throws baml.errors.Io | baml.errors.ParseError {
+ 1818 │ │       if (n == 42) {
+ 1819 │ │           throw baml.errors.Io { message: "io" }
+ 1820 │ │       }
+ 1821 │ │       "ok"
+ 1822 │ ╰─▶ }
       ╰────

@@ -11,12 +11,10 @@ const MAX: i64 = (1 << 62) - 1;
 const SPAN: u128 = 1 << 63;
 
 impl NativeBamlInt for Natives {
-    /// The smallest int has no positive counterpart, so its absolute value
-    /// is a panic and not itself. Compiled code takes an absolute value
-    /// where it is written, with the same check.
-    fn abs<'s>(scope: &mut Scope<'s>, int: i64) -> Result<i64, Thrown<'s>> {
-        int.checked_abs()
-            .ok_or_else(|| scope.integer_overflow(&format!("abs({int}) overflows int")))
+    /// The smallest int has no positive counterpart and is its own absolute
+    /// value, as it is its own negation.
+    fn abs(_scope: &mut Scope<'_>, int: i64) -> i64 {
+        int.wrapping_abs()
     }
 
     fn isqrt<'s>(scope: &mut Scope<'s>, int: i64) -> Result<i64, Thrown<'s>> {

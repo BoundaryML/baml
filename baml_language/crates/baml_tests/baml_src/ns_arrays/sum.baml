@@ -36,14 +36,14 @@ test "array_sum_int_mixed_magnitudes" {
   assert.equal([1000000, 20, 300].sum(), 1000320)
 }
 
-// A running total that leaves the `int` range raises a catchable
-// `baml.panics.IntegerOverflow`, exactly like the `+` it stands in for.
+// A running total that leaves the `int` range wraps, exactly like the `+` it
+// stands in for.
 function sum_int_overflow_(a: int, b: int) -> int {
-  [a, b].sum() catch (e) { baml.panics.IntegerOverflow => -1 }
+  [a, b].sum()
 }
 
-test "array_sum_int_overflow_throws" {
-  assert.equal(sum_int_overflow_(int.max_value(), 1), -1)
+test "array_sum_int_overflow_wraps" {
+  assert.equal(sum_int_overflow_(int.max_value(), 1), int.min_value())
 }
 
 // Summing right up to the boundary must NOT spuriously overflow:

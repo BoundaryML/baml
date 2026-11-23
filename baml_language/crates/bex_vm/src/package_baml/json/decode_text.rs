@@ -66,11 +66,7 @@ impl TextDecoder<'_, '_> {
         match ty {
             RealizedTy::Null => reader.null().map(|()| Value::NULL),
             RealizedTy::Bool => reader.bool().map(Value::bool),
-            RealizedTy::Int => reader
-                .number()?
-                .as_i64()
-                .and_then(Value::try_int)
-                .ok_or(Stop),
+            RealizedTy::Int => Ok(vm.int_value(reader.number()?.as_i64().ok_or(Stop)?)),
             RealizedTy::Bigint => {
                 let bigint = self.bigint()?;
                 vm.try_alloc_bigint(Arc::new(bigint)).map_err(|_| Stop)
@@ -239,7 +235,7 @@ impl TextDecoder<'_, '_> {
                 Ok(Value::object(vm.alloc_string(expected.as_str())))
             }
             baml_type::Literal::Int(expected) => match reader.number()?.as_i64() {
-                Some(actual) if actual == *expected => Ok(Value::int(actual)),
+                Some(actual) if actual == *expected => Ok(vm.int_value(actual)),
                 _ => Err(Stop),
             },
             baml_type::Literal::Float(expected) => {

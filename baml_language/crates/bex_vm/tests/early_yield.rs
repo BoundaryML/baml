@@ -77,7 +77,7 @@ fn flag_unset_completes_without_early_yield() {
 
     let state = vm.exec().expect("exec");
     match state {
-        VmExecState::Complete(v) if v.is_int() => {
+        VmExecState::Complete(v) if v.as_int().is_some() => {
             assert_eq!(v.as_int().unwrap(), LOOP_ITERATIONS);
         }
         other => panic!("expected Complete(Int({LOOP_ITERATIONS})), got {other:?}"),
@@ -124,7 +124,7 @@ fn yield_then_resume_completes() {
     // the final Complete, bounded by MAX_EXEC_CALLS.
     for _ in 0..MAX_EXEC_CALLS {
         match vm.exec().expect("exec") {
-            VmExecState::Complete(v) if v.is_int() => {
+            VmExecState::Complete(v) if v.as_int().is_some() => {
                 assert_eq!(v.as_int().unwrap(), LOOP_ITERATIONS);
                 return;
             }

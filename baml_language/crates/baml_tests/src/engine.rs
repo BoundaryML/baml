@@ -139,39 +139,13 @@ pub fn display_user_functions_with_options(program: &Program, show_auto_derive: 
 /// anything can display a type, and an unbound head renders as its tag
 /// (`<unresolved type #…>`).
 ///
-/// Float constants with no inline `Value` encoding are boxed into the pool
+/// Numeric constants with no inline `Value` encoding are boxed into the pool
 /// first, exactly as the engine's load path does — `resolve_function_constants`
-/// (inside the heap build) refuses such a raw `ConstValue::Float`.
+/// (inside the heap build) refuses such a raw `ConstValue::Float` or
+/// `ConstValue::Int`.
 pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
     let mut objects = program.objects.0.clone();
-    for index in 0..objects.len() {
-        let Object::Function(function) = &objects[index] else {
-            continue;
-        };
-        let floats: Vec<(usize, f64)> = function
-            .bytecode
-            .constants
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, constant)| match constant {
-                bex_vm_types::ConstValue::Float(value)
-                    if bex_vm_types::Value::try_inline_float(*value).is_none() =>
-                {
-                    Some((slot, *value))
-                }
-                _ => None,
-            })
-            .collect();
-        for (slot, value) in floats {
-            let boxed = objects.len();
-            objects.push(Object::Float(value));
-            let Object::Function(function) = &mut objects[index] else {
-                unreachable!("the object at `index` was a function above");
-            };
-            function.bytecode.constants[slot] =
-                bex_vm_types::ConstValue::Object(bex_vm_types::ObjectIndex::from_raw(boxed));
-        }
-    }
+    bex_vm_types::types::box_compile_time_constants(&mut objects, &[]);
     let mut heap = bex_heap::BexHeap::build_unsealed_default(objects);
     heap.bind_type_heads();
     heap.assert_switch_tables_dispatch();

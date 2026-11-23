@@ -89,30 +89,12 @@ impl NativeBaml for Natives {
         arr
     }
 
-    /// The sum of `values`, or a panic at the first element the running
-    /// total does not fit an `int` with.
-    fn _sum_int<'s>(scope: &mut Scope<'s>, values: Root<'s, Arr<Int>>) -> Result<i64, Thrown<'s>> {
-        let slice = values.get(scope).as_slice();
-        // One pass nothing branches in: the wrapping sum, and whether any
-        // step overflowed.
-        let (wrapped, overflowed) = slice.iter().fold((0_i64, false), |(sum, any), value| {
-            let (sum, overflowed) = sum.overflowing_add(*value);
-            (sum, any | overflowed)
-        });
-        if !overflowed {
-            return Ok(wrapped);
-        }
-        // Again, for the element it was at.
-        let mut sum: i64 = 0;
-        for value in slice {
-            match sum.checked_add(*value) {
-                Some(total) => sum = total,
-                None => {
-                    return Err(scope.integer_overflow(&format!("{sum} + {value} overflows int")));
-                }
-            }
-        }
-        Ok(sum)
+    /// The sum of `values`, wrapping as `+` does.
+    fn _sum_int(values: ArrRef<'_, Int>) -> i64 {
+        values
+            .as_slice()
+            .iter()
+            .fold(0, |sum, value| sum.wrapping_add(*value))
     }
 
     fn _sum_float(values: ArrRef<'_, Float>) -> f64 {

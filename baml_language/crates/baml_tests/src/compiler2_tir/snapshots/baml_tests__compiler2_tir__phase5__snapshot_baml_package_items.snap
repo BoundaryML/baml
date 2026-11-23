@@ -277,7 +277,6 @@ namespace baml.panics:
   class HostContractViolation { methods: [] }
   class HostUnavailable { methods: [] }
   class IndexOutOfBounds { methods: [] }
-  class IntegerOverflow { methods: [] }
   class InvalidFieldAccess { methods: [] }
   class MapKeyNotFound { methods: [] }
   class NegativeBitShift { methods: [] }

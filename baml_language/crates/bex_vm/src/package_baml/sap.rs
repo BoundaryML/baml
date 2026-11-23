@@ -243,7 +243,7 @@ fn read(
             return Ok(FirstRead::Shaped(Box::new(Parsed::of(tree)?.into_owned())));
         }
         let declarations = Declarations::reached_by(vm, &target)?;
-        Ok(FirstRead::Value(to_heap(vm, tree, &declarations, mode)?))
+        Ok(FirstRead::Value(to_heap(vm, tree, &declarations)?))
     });
     let tree = match first {
         Ok(Some(FirstRead::Value(value))) => return NativeCallResult::Done(value),
@@ -1119,18 +1119,15 @@ impl<'s> Parsed<'s> {
     }
 }
 
-/// Allocate `value`: the same value the parser produced, on the heap. A
-/// value the heap cannot hold (the parser's integer is wider than the VM's)
-/// raises `mode`'s mismatch.
+/// Allocate `value`: the same value the parser produced, on the heap.
 fn to_heap(
     vm: &mut BexVm,
     value: &BamlValueWithFlags<'_, '_, '_, NamedTy>,
     declarations: &Declarations,
-    mode: Mode,
 ) -> Result<Value, VmRustFnError> {
     Ok(match &value.value {
         BamlValue::String(s) => Value::object(vm.alloc_string(s.value.as_ref())),
-        BamlValue::Int(i) => heap_int(i.value, mode)?,
+        BamlValue::Int(i) => vm.int_value(i.value),
         BamlValue::Bigint(b) => vm.try_alloc_bigint(Arc::new(b.value.clone()))?,
         BamlValue::Float(f) => vm.float_value(f.value),
         BamlValue::Bool(b) => Value::bool(b.value),
@@ -1151,7 +1148,7 @@ fn to_heap(
             let items = array
                 .value
                 .iter()
-                .map(|item| to_heap(vm, item, declarations, mode))
+                .map(|item| to_heap(vm, item, declarations))
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
         }
@@ -1163,7 +1160,7 @@ fn to_heap(
             let items = tuple
                 .value
                 .iter()
-                .map(|item| to_heap(vm, item, declarations, mode))
+                .map(|item| to_heap(vm, item, declarations))
                 .collect::<Result<Vec<_>, _>>()?;
             heap_tuple(vm, elements, items)?
         }
@@ -1178,10 +1175,7 @@ fn to_heap(
             let value_ty = declarations.realize(&map_ty.value.to_baml_ty())?;
             let mut entries = IndexMap::with_capacity(map.value.len());
             for (k, v) in &map.value {
-                entries.insert(
-                    BexStr::from(k.as_ref()),
-                    to_heap(vm, v, declarations, mode)?,
-                );
+                entries.insert(BexStr::from(k.as_ref()), to_heap(vm, v, declarations)?);
             }
             Value::object(vm.alloc_map(key, value_ty, entries))
         }
@@ -1195,7 +1189,7 @@ fn to_heap(
         BamlValue::Class(c) => heap_instance(vm, declarations, c.name, |vm, field| {
             c.value
                 .get(field)
-                .map(|parsed| to_heap(vm, parsed, declarations, mode))
+                .map(|parsed| to_heap(vm, parsed, declarations))
         })?,
         BamlValue::Shaped(shaped) => {
             return Err(invariant(format!(
@@ -1217,11 +1211,10 @@ fn parsed_to_heap(
     vm: &mut BexVm,
     value: &Parsed<'_>,
     declarations: &Declarations,
-    mode: Mode,
 ) -> Result<Value, VmRustFnError> {
     Ok(match value {
         Parsed::String(s) => Value::object(vm.alloc_string(s.as_ref())),
-        Parsed::Int(i) => heap_int(*i, mode)?,
+        Parsed::Int(i) => vm.int_value(*i),
         Parsed::Bigint(b) => vm.try_alloc_bigint(Arc::new(b.clone()))?,
         Parsed::Float(f) => vm.float_value(*f),
         Parsed::Bool(b) => Value::bool(*b),
@@ -1230,7 +1223,7 @@ fn parsed_to_heap(
             let element = declarations.realize(element)?;
             let items = items
                 .iter()
-                .map(|item| parsed_to_heap(vm, item, declarations, mode))
+                .map(|item| parsed_to_heap(vm, item, declarations))
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
         }
@@ -1241,7 +1234,7 @@ fn parsed_to_heap(
                 .collect::<Result<Vec<_>, _>>()?;
             let items = items
                 .iter()
-                .map(|item| parsed_to_heap(vm, item, declarations, mode))
+                .map(|item| parsed_to_heap(vm, item, declarations))
                 .collect::<Result<Vec<_>, _>>()?;
             heap_tuple(vm, elements, items)?
         }
@@ -1255,7 +1248,7 @@ fn parsed_to_heap(
             for (k, v) in entries {
                 values.insert(
                     BexStr::from(k.as_ref()),
-                    parsed_to_heap(vm, v, declarations, mode)?,
+                    parsed_to_heap(vm, v, declarations)?,
                 );
             }
             Value::object(vm.alloc_map(key, value_ty, values))
@@ -1264,7 +1257,7 @@ fn parsed_to_heap(
         Parsed::Class { name, fields } => heap_instance(vm, declarations, name, |vm, field| {
             fields
                 .get(field)
-                .map(|parsed| parsed_to_heap(vm, parsed, declarations, mode))
+                .map(|parsed| parsed_to_heap(vm, parsed, declarations))
         })?,
         Parsed::Shaped { name, .. } => {
             return Err(invariant(format!(
@@ -1272,17 +1265,6 @@ fn parsed_to_heap(
             )));
         }
         Parsed::Built(value) => *value,
-    })
-}
-
-/// The parser's integer, if the VM's `int` holds it.
-fn heap_int(value: i64, mode: Mode) -> Result<Value, VmRustFnError> {
-    Value::try_int(value).ok_or_else(|| {
-        mode.mismatch(format!(
-            "integer {value} is outside the BAML integer range [{}, {}]",
-            Value::INT_MIN,
-            Value::INT_MAX
-        ))
     })
 }
 
@@ -1423,7 +1405,7 @@ impl ShapedRead {
                     .declarations
                     .as_ref()
                     .unwrap_or_else(|| unreachable!("the declarations were just read"));
-                match parsed_to_heap(vm, &self.tree, declarations, self.mode) {
+                match parsed_to_heap(vm, &self.tree, declarations) {
                     Ok(value) => NativeCallResult::Done(value),
                     Err(error) => NativeCallResult::Error(error),
                 }
@@ -1468,7 +1450,7 @@ impl ShapedRead {
                 continue;
             }
             let ty = declarations.realize(&name.to_ty())?;
-            let shape = parsed_to_heap(vm, shape, declarations, self.mode)?;
+            let shape = parsed_to_heap(vm, shape, declarations)?;
             let build = build_function(vm)?;
             self.building = Some(path);
             return Ok(Some((build, vec![shape], vec![ty])));
@@ -1631,7 +1613,7 @@ pub(super) fn empty_value(
         RealizedTy::String => Value::object(vm.alloc_string("")),
         RealizedTy::Uint8Array => Value::object(vm.alloc_uint8array(Vec::new())),
         RealizedTy::Literal(literal, _) => match literal {
-            Literal::Int(n) => Value::int(*n),
+            Literal::Int(n) => vm.int_value(*n),
             Literal::Bigint(n) => vm.try_alloc_bigint(Arc::new(n.clone()))?,
             Literal::Float(text) => match text.parse::<f64>() {
                 Ok(f) => vm.float_value(f),

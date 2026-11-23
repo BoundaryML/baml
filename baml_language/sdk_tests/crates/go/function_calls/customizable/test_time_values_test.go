@@ -197,9 +197,8 @@ func Test_baml_time_go_constructed_values_round_trip_at_numeric_boundaries(t *te
 	if got, err := baml_sdk.GoTimeTestsRoundTripDuration(ctx, duration); err != nil || !bigIntEqual(got.Nanoseconds, negative) {
 		t.Fatalf("duration round trip = %#v, %v", got, err)
 	}
-	// BAML ints deliberately use the signed 62-bit immediate range even though
-	// the host projection is int64.
-	for _, days := range []int64{-4_611_686_018_427_387_904, -1, 0, 4_611_686_018_427_387_903} {
+	// BAML ints are int64; these days lie past the 63-bit inline range.
+	for _, days := range []int64{-4_611_686_018_427_387_905, -1, 0, 4_611_686_018_427_387_904} {
 		got, err := baml_sdk.GoTimeTestsRoundTripPlainDate(ctx, baml.TimePlainDate{Days: days})
 		if err != nil || got.Days != days {
 			t.Fatalf("plain date %d round trip = %#v, %v", days, got, err)
@@ -427,10 +426,6 @@ func Test_baml_time_malformed_values_fail_at_the_earliest_typed_boundary(t *test
 		},
 		"zoned datetime nil bigint": func() error {
 			_, err := baml_sdk.GoTimeTestsRoundTripZonedDateTime(ctx, baml.TimeZonedDateTime{OffsetNs: timeInt64Pointer(0)})
-			return err
-		},
-		"int outside BAML range": func() error {
-			_, err := baml_sdk.GoTimeTestsRoundTripPlainDate(ctx, baml.TimePlainDate{Days: 4_611_686_018_427_387_904})
 			return err
 		},
 	} {

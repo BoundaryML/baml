@@ -10,8 +10,7 @@ use bex_vm_types::{
 
 use crate::{
     BexVm,
-    errors::VmBamlError,
-    package_baml::{NativeCallResult, NativeFunction, NativeFunctionResult},
+    package_baml::{NativeCallResult, NativeFunction},
 };
 
 #[allow(

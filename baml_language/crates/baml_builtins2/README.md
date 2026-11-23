@@ -34,7 +34,7 @@ Describing what it returns
 
 # Panics
 
-- `baml.panics.IntegerOverflow` describing cases where inputs may cause it to raise this panic
+- `baml.panics.DivisionByZero` describing cases where inputs may cause it to raise this panic
 - etc
 
 # Examples

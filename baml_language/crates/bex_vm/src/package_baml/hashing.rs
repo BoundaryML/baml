@@ -132,6 +132,8 @@ impl HashDriver {
                         ValueKind::Float(value) => hash_float(value),
                         ValueKind::Object(ptr) => match vm.get_object(ptr) {
                             Object::Float(value) => hash_float(*value),
+                            // The same bytes as an inline int of that value.
+                            Object::Int(value) => framed(1, &value.to_le_bytes()),
                             Object::Bigint(value) => framed(4, &value.to_signed_bytes_le()),
                             Object::String(value) => framed(5, value.as_bytes()),
                             Object::Uint8Array(value) => framed(6, &value.lock()),

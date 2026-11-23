@@ -3,7 +3,7 @@
 //! charged to the innermost span. Read natively, so it needs no value capture
 //! and works whether or not the invoke is a span.
 
-use bex_vm_types::{Object, Value, ValueKind};
+use bex_vm_types::{Object, Value};
 use btel_records::ModelUsage;
 
 use crate::BexVm;
@@ -40,10 +40,7 @@ impl BexVm {
                 let usage = self.field(call, "usage").filter(|usage| !usage.is_null())?;
                 let count = |name: &str| {
                     self.field(usage, name)
-                        .and_then(|value| match value.kind() {
-                            ValueKind::Int(n) => u64::try_from(n).ok(),
-                            _ => None,
-                        })
+                        .and_then(|value| u64::try_from(value.as_int()?).ok())
                 };
                 let key = self.field(call, "resolved_model")?;
                 let text = |name: &str| {

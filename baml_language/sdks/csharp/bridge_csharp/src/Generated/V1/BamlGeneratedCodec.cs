@@ -37,7 +37,7 @@ public readonly partial struct BamlGeneratedCodecContext
     public BamlGeneratedValue Bool(bool value) => BamlGeneratedValue.CreateBool(value);
 
     public BamlGeneratedValue Int(long value) =>
-        BamlGeneratedValue.CreateInt(BamlInteger.Require(value, "generated codec"));
+        BamlGeneratedValue.CreateInt(value);
 
     public BamlGeneratedValue Float(double value)
     {
@@ -436,7 +436,7 @@ public readonly partial struct BamlGeneratedCodecContext
     public bool ReadBool(BamlGeneratedValue value) => Require(value).ReadBool();
 
     public long ReadInt(BamlGeneratedValue value) =>
-        BamlInteger.Require(Require(value).ReadInt(), "generated result");
+        Require(value).ReadInt();
 
     public double ReadFloat(BamlGeneratedValue value)
     {

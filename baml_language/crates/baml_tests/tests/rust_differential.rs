@@ -50,6 +50,7 @@ const PROBES: &[&str] = &[
     "ThreadLocalParallel",
     "Scalars",
     "Overflow",
+    "Int64Edges",
     "Containers",
     "Tuples",
     "TupleAccess",

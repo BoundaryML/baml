@@ -372,12 +372,6 @@ throwing_stub! {
 }
 
 throwing_stub! {
-    /// Throw the `baml.panics.IntegerOverflow` of `abs`: takes the `int`
-    /// that has no absolute value.
-    baml_rt_panic_abs_overflow => unwind::panic_abs_overflow
-}
-
-throwing_stub! {
     /// Throw `baml.panics.IndexOutOfBounds`: takes the index and the
     /// length.
     baml_rt_panic_index_out_of_bounds => unwind::panic_index_out_of_bounds

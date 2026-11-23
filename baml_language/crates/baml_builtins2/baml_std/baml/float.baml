@@ -192,8 +192,8 @@ class Float {
     // ─── Rounding to int (fallible) ───────────────────────────────────────────
     //
     // Each of these throws `InvalidArgument` if `self` is NaN, ±∞, or — after
-    // rounding — falls outside the `int` (`i63`) range. The exact threshold is
-    // `[-2^62, 2^62)`; values strictly less than `int.min_value()` or ≥ `2^62`
+    // rounding — falls outside the `int` (`i64`) range. The exact threshold is
+    // `[-2^63, 2^63)`; values strictly less than `int.min_value()` or ≥ `2^63`
     // (one past `int.max_value()`, the smallest value not representable as `int`)
     // throw.
 
@@ -627,10 +627,9 @@ class Float {
 // ─── Internal (private) native helpers ────────────────────────────────────────
 
 /// (internal) Truncates `value` toward zero and returns the integer part,
-/// saturating to the full 64-bit machine range rather than BAML's narrower
-/// 63-bit `int` range, and mapping NaN to `0`. It never throws, so a saturated
-/// result for a very large magnitude or `±∞` input can itself land outside
-/// `[int.min_value(), int.max_value()]`.
+/// saturating to `[int.min_value(), int.max_value()]` and mapping NaN to `0`.
+/// It never throws, so a very large magnitude or `±∞` input gives an end of
+/// the range.
 ///
 /// Backs internal retry-delay math, whose inputs stay well within `int`'s range
 /// in practice. User code should prefer the range-checked `float.itrunc()`, or

@@ -598,7 +598,7 @@ impl Parser<'_> {
 }
 
 /// A number token as an untyped `json` value: an `int` when it is integral
-/// and fits BAML's 63-bit `int`, a `bigint` when it is integral and larger, a
+/// and fits BAML's 64-bit `int`, a `bigint` when it is integral and larger, a
 /// `float` otherwise. A float past `f64`, and an integral token past the
 /// bigint limit, are [`Stop`].
 pub(super) fn number_value(vm: &mut BexVm, number: Number<'_>) -> Result<Value, Stop> {
@@ -606,8 +606,8 @@ pub(super) fn number_value(vm: &mut BexVm, number: Number<'_>) -> Result<Value, 
         let float = number.as_f64().ok_or(Stop)?;
         return Ok(vm.float_value(float));
     }
-    if let Some(int) = number.as_i64().and_then(Value::try_int) {
-        return Ok(int);
+    if let Some(int) = number.as_i64() {
+        return Ok(vm.int_value(int));
     }
     let bigint = number.as_bigint().ok_or(Stop)?;
     Ok(Value::object(vm.alloc(Object::Bigint(Arc::new(bigint)))))

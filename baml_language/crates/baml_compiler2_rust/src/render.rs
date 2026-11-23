@@ -80,7 +80,9 @@ pub(crate) fn coerce(code: &str, from: Repr, to: Repr) -> String {
     use Repr::{Bool, Float, Int, Value};
     match (from, to) {
         (a, b) if a == b => code.to_string(),
-        (Int, Value) => format!("Value::int({code})"),
+        // The int is computed before `vm` is borrowed to box it: `{code}` may
+        // itself borrow `vm` mutably.
+        (Int, Value) => format!("{{ let int: i64 = {code}; vm.int_value(int) }}"),
         (Bool, Value) => format!("Value::bool({code})"),
         (Float, Value) => format!("vm.float_value({code})"),
         // Reject wrong value kinds instead of silently converting them.
@@ -90,6 +92,16 @@ pub(crate) fn coerce(code: &str, from: Repr, to: Repr) -> String {
         // Scalars of different kinds never flow into one another in checked
         // MIR; go through the tagged form so the VM's own rule decides.
         (a, b) => coerce(&coerce(code, a, Value), Value, b),
+    }
+}
+
+/// An `i64` as a Rust literal. `i64::MIN` is spelled by name: its magnitude
+/// alone is not an `i64` literal.
+pub(crate) fn int_literal(n: i64) -> String {
+    if n == i64::MIN {
+        "i64::MIN".to_string()
+    } else {
+        format!("{n}i64")
     }
 }
 

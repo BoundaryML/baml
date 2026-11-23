@@ -219,6 +219,8 @@ impl ToJsonCache {
             return Ok(false);
         };
         let key = match vm.get_object(ptr) {
+            // Like an inline int, a boxed one cannot carry an override.
+            Object::Int(_) => return Ok(false),
             Object::Float(_) => OverrideKey::Float,
             Object::String(_) => OverrideKey::String,
             Object::Bigint(_) => OverrideKey::Bigint,
@@ -501,6 +503,7 @@ struct WritePlan {
 /// What the walk does with a heap value.
 enum Shape {
     Float(f64),
+    Int(i64),
     String,
     Bigint,
     Array(Vec<Value>),
@@ -514,6 +517,7 @@ enum Shape {
 /// What the walk does with a heap value inside an override's result.
 enum JsonShape {
     Float(f64),
+    Int(i64),
     String,
     Bigint,
     Array(Vec<Value>),
@@ -670,6 +674,7 @@ impl Walker<'_, '_> {
         }
         let shape = match vm.get_object(ptr) {
             Object::Float(f) => Shape::Float(*f),
+            Object::Int(i) => Shape::Int(*i),
             Object::String(_) => Shape::String,
             Object::Bigint(_) => Shape::Bigint,
             Object::Array(values) => Shape::Array(values.to_vec()),
@@ -695,6 +700,7 @@ impl Walker<'_, '_> {
         };
         match shape {
             Shape::Float(f) => self.float(vm, value, f, sink)?,
+            Shape::Int(i) => sink.int(vm, i),
             Shape::String => sink.string(vm, value),
             Shape::Bigint => sink.bigint(vm, value),
             Shape::Array(values) => self.open_array(vm, ptr, values, false, sink)?,
@@ -777,6 +783,7 @@ impl Walker<'_, '_> {
     ) -> Result<(), Stopped> {
         let shape = match vm.get_object(ptr) {
             Object::Float(f) => JsonShape::Float(*f),
+            Object::Int(i) => JsonShape::Int(*i),
             Object::String(_) => JsonShape::String,
             Object::Bigint(_) => JsonShape::Bigint,
             Object::Array(values) => JsonShape::Array(values.to_vec()),
@@ -791,6 +798,7 @@ impl Walker<'_, '_> {
         };
         match shape {
             JsonShape::Float(f) => self.float(vm, value, f, sink)?,
+            JsonShape::Int(i) => sink.int(vm, i),
             JsonShape::Null | JsonShape::Variant(None) => sink.null(vm),
             JsonShape::String => sink.string(vm, value),
             JsonShape::Bigint => sink.bigint(vm, value),
@@ -1244,8 +1252,9 @@ impl Sink for ValueSink {
         self.emit(Value::bool(b));
     }
 
-    fn int(&mut self, _: &mut BexVm, i: i64) {
-        self.emit(Value::int(i));
+    fn int(&mut self, vm: &mut BexVm, i: i64) {
+        let value = vm.int_value(i);
+        self.emit(value);
     }
 
     fn float(&mut self, _: &mut BexVm, value: Value, _: f64) {
@@ -1255,10 +1264,14 @@ impl Sink for ValueSink {
     /// A bigint that fits `int` is an `int` in `json`, as `parse` reads it.
     fn bigint(&mut self, vm: &mut BexVm, value: Value) {
         let small = match value.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
-            Some(Object::Bigint(b)) => i64::try_from(&**b).ok().and_then(Value::try_int),
+            Some(Object::Bigint(b)) => i64::try_from(&**b).ok(),
             _ => None,
         };
-        self.emit(small.unwrap_or(value));
+        let value = match small {
+            Some(int) => vm.int_value(int),
+            None => value,
+        };
+        self.emit(value);
     }
 
     fn string(&mut self, _: &mut BexVm, value: Value) {

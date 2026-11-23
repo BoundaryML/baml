@@ -165,7 +165,7 @@ fn alloc_metadata<'a>(
             let value = match value {
                 None => Value::NULL,
                 Some(ContextValue::String(value)) => Value::object(vm.alloc_string(value.as_str())),
-                Some(ContextValue::Int(value)) => Value::int(*value),
+                Some(ContextValue::Int(value)) => vm.int_value(*value),
                 Some(ContextValue::Float(value)) => vm.float_value(*value),
                 Some(ContextValue::Bool(value)) => Value::bool(*value),
             };

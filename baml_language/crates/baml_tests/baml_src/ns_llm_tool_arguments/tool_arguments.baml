@@ -379,7 +379,7 @@ test "a tool whose argument has no JSON form is rejected when it is built" {
 // not the other does not align, and fails as any other mismatch does.
 
 function tool_arg_coerce_wide_int() -> string {
-    let sent = baml.json.parse("4611686018427387904") catch (e) {
+    let sent = baml.json.parse("9223372036854775808") catch (e) {
         _ => baml.sys.panic("the test value is JSON"),
     };
     let n = baml.sap.coerce<int>(sent) catch (e) {
@@ -393,7 +393,7 @@ function tool_arg_coerce_wide_int() -> string {
 test "an integer too wide for an int does not align" {
     assert.equal(tool_arg_coerce_wide_int(), "ParseError");
     assert.is_true(
-        tool_arg_model_call(tool_arg_limit, `{"q": "x", "limit": 4611686018427387904}`)
+        tool_arg_model_call(tool_arg_limit, `{"q": "x", "limit": 9223372036854775808}`)
             .starts_with("InvalidArgument: invalid arguments for tool_arg_limit: "),
     )
 }

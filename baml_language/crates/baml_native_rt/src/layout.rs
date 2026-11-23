@@ -443,7 +443,7 @@ const _: () = {
 /// and the class's name. The compiler emits the type id of each, in this
 /// order, as the `u32`s of its well-known table, after a `u32` count; the
 /// description of the type says where the fields are.
-pub const WELL_KNOWN: [(&str, &str); 26] = [
+pub const WELL_KNOWN: [(&str, &str); 25] = [
     ("panics", "DivisionByZero"),
     ("panics", "IndexOutOfBounds"),
     ("panics", "InvalidFieldAccess"),
@@ -459,7 +459,6 @@ pub const WELL_KNOWN: [(&str, &str); 26] = [
     ("panics", "NegativeBitShift"),
     ("panics", "SdkPanic"),
     ("panics", "HostContractViolation"),
-    ("panics", "IntegerOverflow"),
     ("errors", "InvalidArgument"),
     ("errors", "ParseError"),
     ("errors", "Context"),
@@ -553,7 +552,7 @@ pub const NAMED_GLOB: usize = 33;
 pub const NAMED_YAML_PARSE_ERROR: usize = 34;
 
 /// How many of [`WELL_KNOWN`], from the first, are panics.
-pub const WELL_KNOWN_PANICS: usize = 16;
+pub const WELL_KNOWN_PANICS: usize = 15;
 pub const WELL_KNOWN_DIVISION_BY_ZERO: usize = 0;
 pub const WELL_KNOWN_INDEX_OUT_OF_BOUNDS: usize = 1;
 pub const WELL_KNOWN_MAP_KEY_NOT_FOUND: usize = 3;
@@ -561,17 +560,16 @@ pub const WELL_KNOWN_STACK_OVERFLOW: usize = 4;
 pub const WELL_KNOWN_USER_PANIC: usize = 8;
 pub const WELL_KNOWN_ALLOC_FAILURE: usize = 10;
 pub const WELL_KNOWN_NEGATIVE_BIT_SHIFT: usize = 12;
-pub const WELL_KNOWN_INTEGER_OVERFLOW: usize = 15;
-pub const WELL_KNOWN_INVALID_ARGUMENT: usize = 16;
-pub const WELL_KNOWN_PARSE_ERROR: usize = 17;
-pub const WELL_KNOWN_CONTEXT: usize = 18;
-pub const WELL_KNOWN_STACK_TRACE: usize = 19;
-pub const WELL_KNOWN_STACK_FRAME: usize = 20;
-pub const WELL_KNOWN_JSON_PARSE_ERROR: usize = 21;
-pub const WELL_KNOWN_JSON_DECODE_ERROR: usize = 22;
-pub const WELL_KNOWN_JSON_SERIALIZATION_ERROR: usize = 23;
-pub const WELL_KNOWN_JSON_PATH_ERROR: usize = 24;
-pub const WELL_KNOWN_IO: usize = 25;
+pub const WELL_KNOWN_INVALID_ARGUMENT: usize = 15;
+pub const WELL_KNOWN_PARSE_ERROR: usize = 16;
+pub const WELL_KNOWN_CONTEXT: usize = 17;
+pub const WELL_KNOWN_STACK_TRACE: usize = 18;
+pub const WELL_KNOWN_STACK_FRAME: usize = 19;
+pub const WELL_KNOWN_JSON_PARSE_ERROR: usize = 20;
+pub const WELL_KNOWN_JSON_DECODE_ERROR: usize = 21;
+pub const WELL_KNOWN_JSON_SERIALIZATION_ERROR: usize = 22;
+pub const WELL_KNOWN_JSON_PATH_ERROR: usize = 23;
+pub const WELL_KNOWN_IO: usize = 24;
 
 /// What a handler of the unwind table takes, and what it does with what it
 /// takes. A handler lands with an error when it takes every error, when it

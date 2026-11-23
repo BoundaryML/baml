@@ -2320,7 +2320,6 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::BareDefaultKeyword => DiagnosticId::BareDefaultKeyword,
         TirTypeError::TypeDoesNotImplementInterface { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::BlanketBoundNotSatisfied { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::IntegerLiteralOutOfRange { .. } => DiagnosticId::IntegerLiteralOutOfRange,
         TirTypeError::GenericBoundNotInterface { .. } => DiagnosticId::GenericBoundNotInterface,
         // Builtin interfaces (BEP-062, E0153/E0154).
         TirTypeError::BuiltinInterfaceNotImplementable { .. } => {

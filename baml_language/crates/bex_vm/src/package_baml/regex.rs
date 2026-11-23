@@ -58,7 +58,7 @@ const fn offset_int(chars: usize) -> i64 {
 
 /// Encode an optional error-span codepoint offset as a BAML value.
 fn offset_value(chars: usize) -> Value {
-    Value::try_int(offset_int(chars)).unwrap_or(Value::NULL)
+    Value::try_inline_int(offset_int(chars)).unwrap_or(Value::NULL)
 }
 
 /// Build a capture with a shared substring and precomputed codepoint offsets.

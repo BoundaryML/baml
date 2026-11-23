@@ -65,11 +65,13 @@ fn checked_arithmetic_preserves_catch_and_caller_stack() {
         run(r#"
             function add(a: int, b: int) -> int { 100 + (a + b) }
             function subtract(a: int, b: int) -> int { 100 + (a - b) }
+            function divide(a: int, b: int) -> int { 100 + (a / b) }
+            function remainder(a: int, b: int) -> int { 100 + (a % b) }
             function main() -> int {
-                let first = add(4611686018427387903, 1)
-                    catch (e) { baml.panics.IntegerOverflow => 7 };
-                let second = subtract(-4611686018427387904, 1)
-                    catch (e) { baml.panics.IntegerOverflow => 11 };
+                let first = divide(9223372036854775807, 0)
+                    catch (e) { baml.panics.DivisionByZero => 7 };
+                let second = remainder(-9223372036854775808, 0)
+                    catch (e) { baml.panics.DivisionByZero => 11 };
                 first + second + add(2, 3) + subtract(9, 4)
             }
         "#),

@@ -19,7 +19,7 @@ function schema_error(t: reflect.Type) -> string {
 test "an int schema carries the int range" {
     assert.equal(
         schema_text(int.type()),
-        "{\"type\":\"integer\",\"minimum\":-4611686018427387904,\"maximum\":4611686018427387903}",
+        "{\"type\":\"integer\",\"minimum\":-9223372036854775808,\"maximum\":9223372036854775807}",
     )
 }
 
@@ -55,7 +55,7 @@ test "a uint8array alone has no schema" {
 test "a union drops a member with no JSON form" {
     assert.equal(
         schema_text(reflect.Type.of<uint8array | int | string>()),
-        "{\"anyOf\":[{\"type\":\"integer\",\"minimum\":-4611686018427387904,\"maximum\":4611686018427387903},{\"type\":\"string\"}]}",
+        "{\"anyOf\":[{\"type\":\"integer\",\"minimum\":-9223372036854775808,\"maximum\":9223372036854775807},{\"type\":\"string\"}]}",
     )
 }
 

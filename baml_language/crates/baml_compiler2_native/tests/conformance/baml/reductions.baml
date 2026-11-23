@@ -14,66 +14,12 @@ function sum_floats(n: int) -> float[] {
 function sum_int() -> int { sum_ints(100).sum() }
 function sum_int_empty() -> int { sum_ints(0).sum() }
 function sum_int_one() -> int { sum_ints(1).sum() }
-// A running total that leaves the range of an `int` panics, and says at
-// which element.
-// native throws: baml.panics.IntegerOverflow {message: "9223372036854775806 + 2 overflows int"}
+// native prints: -9223372036854775808
 function sum_int_overflows() -> int {
   let values = sum_ints(0);
   values.push(4611686018427387903);
   values.push(4611686018427387903);
   values.push(2);
-  values.sum()
-}
-// native prints: 4611686018427387904
-function sum_int_overflows_by_one() -> int {
-  let values = sum_ints(3);
-  values.push(4611686018427387903);
-  values.push(4);
-  values.sum()
-}
-// native prints: -4611686018427387905
-function sum_int_underflows() -> int {
-  let values = sum_ints(0);
-  values.push(0 - 4611686018427387903);
-  values.push(-1);
-  values.push(-1);
-  values.sum()
-}
-// Three values that each fit with room to spare, and two of them together:
-// the panic is at the third.
-// native prints: 5188146770730811392
-function sum_int_overflows_among_equals() -> int {
-  let values = sum_ints(0);
-  for (let i = 0; i < 3; i += 1) { values.push(1729382256910270464); };
-  values.sum()
-}
-// The totals at the two ends of the range are sums.
-function sum_int_ends() -> string {
-  let most = sum_ints(0);
-  most.push(4611686018427387900);
-  most.push(3);
-  let least = sum_ints(0);
-  least.push(0 - 4611686018427387903);
-  least.push(-1);
-  `${most.sum()} ${least.sum()}`
-}
-// native prints: "4611686018427387904"
-function sum_int_overflow_caught() -> string {
-  let values = sum_ints(0);
-  values.push(4611686018427387903);
-  values.push(1);
-  let total = values.sum() catch (e) {
-    baml.panics.IntegerOverflow => { return e.message; },
-  };
-  `${total}`
-}
-// A native `int` is 64 bits: the panic is where a total leaves those.
-// native throws: baml.panics.IntegerOverflow {message: "-9223372036854775806 + -3 overflows int"}
-function sum_int_underflows_64_bits() -> int {
-  let values = sum_ints(0);
-  values.push(0 - 4611686018427387903);
-  values.push(0 - 4611686018427387903);
-  values.push(-3);
   values.sum()
 }
 function sum_float() -> float { sum_floats(50).sum() }

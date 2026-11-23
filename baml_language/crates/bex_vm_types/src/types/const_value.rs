@@ -76,11 +76,16 @@ impl ConstValue {
         match self {
             ConstValue::OmittedArg => Value::OMITTED_ARG,
             ConstValue::Null => Value::NULL,
-            ConstValue::Int(v) => Value::int(*v),
+            ConstValue::Int(v) => Value::try_inline_int(*v).unwrap_or_else(|| {
+                panic!(
+                    "ConstValue::Int {v} has no inline encoding and must be heap-boxed \
+                     at engine load time (box_compile_time_constants), not resolved via to_value"
+                )
+            }),
             ConstValue::Float(f) => Value::try_inline_float(*f).unwrap_or_else(|| {
                 panic!(
                     "ConstValue::Float {f} has no inline encoding and must be heap-boxed \
-                     at engine load time (box_compile_time_floats), not resolved via to_value"
+                     at engine load time (box_compile_time_constants), not resolved via to_value"
                 )
             }),
             ConstValue::Bool(v) => Value::bool(*v),

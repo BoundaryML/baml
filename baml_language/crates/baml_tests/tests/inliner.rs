@@ -1013,11 +1013,11 @@ async fn a_panic_in_a_superinstruction_of_an_inlined_callee_reports_both_frames(
     let source = r#"
 function bump(value: int) -> int {
   let next = value + 1
-  next
+  next + 0 / (3 - next)
 }
 
 function main() -> int {
-  let total = 4611686018427387901
+  let total = 0
   for (let i = 0; i < 4; i += 1) {
     total = bump(total)
   }
@@ -1052,8 +1052,8 @@ function main() -> int {
     insta::assert_snapshot!(error, @"
     Traceback (most recent call last):
       File \"test.baml\", line 10, in user.main
-      File \"test.baml\", line 3, in user.bump
-    uncaught throw: baml.panics.IntegerOverflow {message: \"4611686018427387903 + 1 overflows int\"}
+      File \"test.baml\", line 4, in user.bump
+    uncaught throw: baml.panics.DivisionByZero {dividend: 0}
     ");
 }
 

@@ -84,6 +84,11 @@ test "yaml_parse_non_string_map_key_throws" {
     }
 }
 
+test "yaml_parse_integer_past_the_inline_range" {
+    assert.equal(baml.yaml.parse("4611686018427387904"), 4611686018427387904);
+    assert.equal(baml.yaml.parse("9223372036854775807"), int.max_value())
+}
+
 test "yaml_parse_integer_overflow_throws" {
     {
         baml.yaml.parse("9223372036854775808");
