@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.25.2"
+version = "0.26.0"
 dependencies = [
  "hex",
  "indexmap",
@@ -439,6 +439,7 @@ dependencies = [
  "bex_project",
  "bex_vm_types",
  "borsh",
+ "btel-core",
  "btel_bcs",
  "btel_file",
  "btel_recorder",
@@ -697,23 +698,29 @@ dependencies = [
  "serde_json",
  "sys_native",
  "tempfile",
+ "thiserror 2.0.18",
  "tokio",
+ "toml 0.8.23",
 ]
 
 [[package]]
 name = "baml_fmt"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "baml_db",
  "baml_parser",
  "baml_syntax",
+ "bumpalo",
  "caseless",
  "insta",
- "ouroboros",
+ "nunny",
+ "rustc-hash 2.1.2",
  "salsa",
  "text-size",
  "thiserror 2.0.18",
  "unicode-normalization",
+ "unicode-width 0.2.0",
  "walkdir",
 ]
 
@@ -903,8 +910,8 @@ dependencies = [
  "bex_engine",
  "bex_heap",
  "bex_vm_types",
+ "btel-core",
  "btel_clock",
- "btel_reader",
  "btel_recorder",
  "btel_settings",
  "btel_snapshot",
@@ -1022,6 +1029,7 @@ dependencies = [
  "borsh",
  "btel_clock",
  "btel_recorder",
+ "btel_settings",
  "darwin-kperf",
  "darwin-kperf-events",
  "divan",
@@ -1103,18 +1111,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "bcs_api"
-version = "0.0.0-beta"
+name = "bcs-sdk"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfe3612a73f713a53a2e53da7adfee3a7e6153dc8cdf0f2c28c55254bc9ff615"
 dependencies = [
- "baml_env",
+ "btel-core",
  "bytes",
- "dirs",
  "futures",
  "hex",
  "httpdate",
- "prost",
- "prost-build",
- "protoc-bin-vendored",
  "reqwest",
  "rustls",
  "serde",
@@ -1122,11 +1128,20 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.18",
- "tokio",
  "url",
- "uuid",
  "windows-sys 0.61.2",
- "wiremock",
+]
+
+[[package]]
+name = "bcs_api"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_env",
+ "bcs-sdk",
+ "dirs",
+ "reqwest",
+ "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1185,11 +1200,11 @@ dependencies = [
  "bex_vm_types",
  "borsh",
  "bridge_ctypes",
+ "btel-core",
  "btel_bcs",
  "btel_clock",
  "btel_file",
  "btel_processor",
- "btel_reader",
  "btel_recorder",
  "btel_settings",
  "btel_snapshot",
@@ -1546,6 +1561,7 @@ dependencies = [
  "bex_events",
  "bex_project",
  "bridge_ctypes",
+ "btel-core",
  "btel_file",
  "btel_recorder",
  "btel_settings",
@@ -1754,11 +1770,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "btel-core"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a3b895b9ccc97f4a005038bed67f14043ce2b73f957fd93a1991bdd3c40a8af"
+dependencies = [
+ "base64",
+ "num-bigint",
+ "prost",
+ "prost-build",
+ "protoc-bin-vendored",
+ "serde",
+ "serde_json",
+ "uuid",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "btel_bcs"
 version = "0.0.0-beta"
 dependencies = [
  "baml_type",
+ "baml_version",
  "bcs_api",
+ "btel-core",
  "btel_clock",
  "btel_processor",
  "btel_recorder",
@@ -1796,6 +1831,9 @@ dependencies = [
 name = "btel_file"
 version = "0.0.0-beta"
 dependencies = [
+ "bex_chunkedringbuffer",
+ "btel-core",
+ "btel_clock",
  "btel_processor",
  "btel_recorder",
  "btel_records",
@@ -1823,32 +1861,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "btel_reader"
-version = "0.0.0-beta"
-dependencies = [
- "baml_type",
- "base64",
- "bex_chunkedringbuffer",
- "btel_clock",
- "btel_file",
- "btel_processor",
- "btel_recorder",
- "btel_records",
- "btel_settings",
- "btel_snapshot",
- "btel_types",
- "num-bigint",
- "prost",
- "serde_json",
- "tempfile",
- "xxhash-rust",
-]
-
-[[package]]
 name = "btel_recorder"
 version = "0.0.0-beta"
 dependencies = [
  "bex_chunkedringbuffer",
+ "btel-core",
  "btel_clock",
  "btel_processor",
  "btel_records",
@@ -1856,8 +1873,6 @@ dependencies = [
  "btel_snapshot",
  "btel_types",
  "prost",
- "prost-build",
- "protoc-bin-vendored",
  "rustc-hash 2.1.2",
  "web-time",
 ]
@@ -1887,6 +1902,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_env",
  "borsh",
+ "btel-core",
  "serde",
  "sha2 0.10.9",
  "strsim",
@@ -1900,9 +1916,11 @@ name = "btel_snapshot"
 version = "0.0.0-beta"
 dependencies = [
  "baml_type",
+ "baml_version",
  "base64",
  "bex_str",
  "borsh",
+ "btel-core",
  "btel_settings",
  "btel_types",
  "num-bigint",
@@ -1914,6 +1932,7 @@ dependencies = [
 name = "btel_types"
 version = "0.0.0-beta"
 dependencies = [
+ "btel-core",
  "btel_settings",
  "rustc-hash 2.1.2",
  "uuid",

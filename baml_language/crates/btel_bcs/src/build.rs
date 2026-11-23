@@ -1,15 +1,16 @@
 //! Registration of builds with BCS (BEP-088): `POST /v1/builds` with the
 //! build, its package and program, then a PUT of the source to the URL the
 //! answer presigns. Nothing waits on it, and a build that fails to register
-//! loses only its row: a recording names builds by ID alone.
+//! loses only its row in BCS: the recording's header still names it.
 
 use std::time::Duration;
 
-use bcs_api::wire::builds as wire;
 use btel_types::BuildRegistration;
 use bytes::Bytes;
 use reqwest::Client;
 use sha2::{Digest, Sha256};
+
+pub mod wire;
 
 use crate::{
     delivery::{DeliveryConfig, DeliveryError, now_ms, read_response, retryable},
@@ -122,11 +123,15 @@ impl Registration {
         );
         let mut last_failure = None;
         for attempt in 0..config.max_attempts {
-            match bcs_api::telemetry::register_build(
+            // `bcs-sdk` has no call for this endpoint. Its `prepare` is an
+            // authorized JSON POST to the URL it is given, and takes part in
+            // credential renewal as every control request must.
+            match bcs_api::telemetry::prepare(
                 client,
                 &url,
                 config.bearer_token.as_deref(),
                 config.authorization.as_ref(),
+                &self.request.build.build_id,
                 body.clone(),
             )
             .await

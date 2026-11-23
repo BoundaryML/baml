@@ -1,0 +1,90 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f(a: int, b: int, c: int, d: int) -> bool {\\n  g((a < b), (c > (d)))\\n}\\n\")"
+---
+SourceFile@0..78
+  items: FunctionDef@0..78
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..42
+      l: LParen "(" @10..11
+      params: Param@11..17
+        name: Name@11..12
+          token: Word "a" @11..12
+        ascription: TypeAscription@12..17
+          colon: Colon ":" @12..13
+          ty: PathType@14..17
+            head: Name@14..17
+              token: Word "int" @14..17
+      params: Comma "," @17..18
+      params: Param@19..25
+        name: Name@19..20
+          token: Word "b" @19..20
+        ascription: TypeAscription@20..25
+          colon: Colon ":" @20..21
+          ty: PathType@22..25
+            head: Name@22..25
+              token: Word "int" @22..25
+      params: Comma "," @25..26
+      params: Param@27..33
+        name: Name@27..28
+          token: Word "c" @27..28
+        ascription: TypeAscription@28..33
+          colon: Colon ":" @28..29
+          ty: PathType@30..33
+            head: Name@30..33
+              token: Word "int" @30..33
+      params: Comma "," @33..34
+      params: Param@35..41
+        name: Name@35..36
+          token: Word "d" @35..36
+        ascription: TypeAscription@36..41
+          colon: Colon ":" @36..37
+          ty: PathType@38..41
+            head: Name@38..41
+              token: Word "int" @38..41
+      r: RParen ")" @41..42
+    ret: ReturnType@43..50
+      arrow: Arrow "->" @43..45
+      ty: PathType@46..50
+        head: Name@46..50
+          token: Word "bool" @46..50
+    body: Block@51..78
+      l: LBrace "{" @51..52
+      tail: CallExpr@55..76
+        callee: PathExpr@55..56
+          head: Name@55..56
+            token: Word "g" @55..56
+        args: ArgList@56..76
+          l: LParen "(" @56..57
+          args: Arg@57..64
+            value: ParenExpr@57..64
+              l: LParen "(" @57..58
+              inner: BinaryExpr@58..63
+                lhs: PathExpr@58..59
+                  head: Name@58..59
+                    token: Word "a" @58..59
+                op: Less "<" @60..61
+                rhs: PathExpr@62..63
+                  head: Name@62..63
+                    token: Word "b" @62..63
+              r: RParen ")" @63..64
+          args: Comma "," @64..65
+          args: Arg@66..75
+            value: ParenExpr@66..75
+              l: LParen "(" @66..67
+              inner: BinaryExpr@67..74
+                lhs: PathExpr@67..68
+                  head: Name@67..68
+                    token: Word "c" @67..68
+                op: Greater ">" @69..70
+                rhs: ParenExpr@71..74
+                  l: LParen "(" @71..72
+                  inner: PathExpr@72..73
+                    head: Name@72..73
+                      token: Word "d" @72..73
+                  r: RParen ")" @73..74
+              r: RParen ")" @74..75
+          r: RParen ")" @75..76
+      r: RBrace "}" @77..78

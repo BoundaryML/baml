@@ -155,9 +155,9 @@ pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
             .enumerate()
             .filter_map(|(slot, constant)| match constant {
                 bex_vm_types::ConstValue::Float(value)
-                    if bex_vm_types::Value::try_inline_float(*value).is_none() =>
+                    if bex_vm_types::Value::try_inline_float(value.get()).is_none() =>
                 {
-                    Some((slot, *value))
+                    Some((slot, value.get()))
                 }
                 _ => None,
             })

@@ -1,0 +1,18 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(a: int) -> int {
+    let x = // 2
+        // 3
+        -a; // 4
+    let y = /* 2 */
+        /* 3 */
+        -a; /* 4 */
+    let z =
+        // c
+        -a;
+    let w = // c
+        -a;
+    // d
+    x + y + z + w
+}

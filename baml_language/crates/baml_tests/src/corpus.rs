@@ -449,6 +449,12 @@ fn corpus_formatter() {
                     baml_fmt::FormatterError::ParseErrors(e) => {
                         format!("=== PARSER ERROR ===\n{e:?}")
                     }
+                    baml_fmt::FormatterError::Incomplete(e) => {
+                        format!("=== PARSER BUG ===\n{e:?}")
+                    }
+                    baml_fmt::FormatterError::Violation(e) => {
+                        format!("=== FORMATTER BUG ===\n{e}")
+                    }
                 };
                 violations.push(format!("formatter rejected corpus file {rel}:\n{rendered}"));
                 continue;

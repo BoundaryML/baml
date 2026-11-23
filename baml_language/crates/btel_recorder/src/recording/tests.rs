@@ -23,19 +23,20 @@ fn config() -> RecordingConfig {
 #[test]
 fn sdk_completion_is_emitted_only_in_the_terminal_file() {
     let exit = Arc::new(btel_types::ProcessExitSlot::default());
-    let mut builder = RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default())
-        .unwrap()
-        .with_process(ProcessRecording {
-            info: btel_types::ProcessInfo {
-                process_id: [9; 16],
-                ..Default::default()
-            },
-            sources: None,
-            context: None,
-            exit: Arc::clone(&exit),
-            program_id: None,
-            build: None,
-        });
+    let mut builder =
+        RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
+            .unwrap()
+            .with_process(ProcessRecording {
+                info: btel_types::ProcessInfo {
+                    process_id: [9; 16],
+                    ..Default::default()
+                },
+                sources: None,
+                context: None,
+                exit: Arc::clone(&exit),
+                program_id: None,
+                build: None,
+            });
     exit.set(btel_types::ProcessExit {
         status: btel_types::ProcessStatus::Unknown,
         at_unix_ns: 123,
@@ -50,12 +51,12 @@ fn sdk_completion_is_emitted_only_in_the_terminal_file() {
     assert!(flushed.end.is_none());
     assert_eq!(
         flushed.header.unwrap().format_minor,
-        btel_settings::encoding::PROCESS_CONTEXT_FORMAT_MINOR
+        btel_core::recording::minor::PROCESS_CONTEXT
     );
     let ended = decode(&builder.end_recording().unwrap().unwrap());
     assert_eq!(
         ended.header.unwrap().format_minor,
-        btel_settings::encoding::UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR
+        btel_core::recording::minor::UNKNOWN_PROCESS_OUTCOME
     );
     let completion = ended.end.unwrap().process_end.unwrap();
     assert_eq!(completion.status, proto::ProcessStatus::Unknown as i32);
@@ -166,8 +167,9 @@ fn recording_rejects_unrepresentable_deadline() {
 #[test]
 fn span_reservation_rejects_overflow_and_encoder_limit_without_allocating() {
     for records in [
-        encoding::MAX_BUFFER_BYTES / encoding::MAX_EVENT_BYTES + 1,
-        usize::MAX / encoding::MAX_EVENT_BYTES + 1,
+        btel_settings::encoding::MAX_BUFFER_BYTES / btel_core::recording::frame::MAX_EVENT_BYTES
+            + 1,
+        usize::MAX / btel_core::recording::frame::MAX_EVENT_BYTES + 1,
         usize::MAX,
     ] {
         let mut builder =
@@ -193,7 +195,7 @@ fn encoding_reservation_rejects_addition_overflow() {
         Err(RecordingError::EncodingTooLarge)
     );
     assert_eq!(
-        builder.reserve_encoding(encoding::MAX_BUFFER_BYTES),
+        builder.reserve_encoding(btel_settings::encoding::MAX_BUFFER_BYTES),
         Err(RecordingError::EncodingTooLarge)
     );
 }
@@ -254,7 +256,7 @@ fn decode(file: &SealedFile) -> proto::RecordingFile {
 fn aggregates_seal_before_definitions_without_rewriting_earlier_files() {
     let files = RefCell::new(Vec::new());
     let (thread, function, path) = ids();
-    let id = RecordingId::generate();
+    let id = btel_types::new_recording_id();
     let mut p = RecordingPublisher::new(id, config(), |f| files.borrow_mut().push(f)).unwrap();
     p.aggregate(delta(path));
     p.flush();
@@ -286,7 +288,7 @@ fn aggregates_seal_before_definitions_without_rewriting_earlier_files() {
 fn spans_and_announcements_forward_without_parent_or_definition_lookups() {
     let files = RefCell::new(Vec::new());
     let (thread, _, path) = ids();
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
         files.borrow_mut().push(f);
     })
     .unwrap();
@@ -360,7 +362,7 @@ fn size_boundary_recycles_the_input_chunk_before_handoff() {
         .unwrap();
     let files = RefCell::new(Vec::new());
     let copy = pool.clone();
-    let publisher = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+    let publisher = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
         assert_eq!(copy.stats().free_chunks, 2);
         files.borrow_mut().push(f);
     })
@@ -391,9 +393,13 @@ fn size_boundary_recycles_the_input_chunk_before_handoff() {
 fn deadlines_start_once_do_not_slide_and_do_not_emit_empty_files() {
     let files = RefCell::new(Vec::new());
     let (thread, function, path) = ids();
-    let mut p = RecordingPublisher::new(RecordingId::generate(), RecordingConfig::default(), |f| {
-        files.borrow_mut().push(f);
-    })
+    let mut p = RecordingPublisher::new(
+        btel_types::new_recording_id(),
+        RecordingConfig::default(),
+        |f| {
+            files.borrow_mut().push(f);
+        },
+    )
     .unwrap();
     metadata(&mut p, thread, function, path);
     p.after_batch(2);
@@ -416,7 +422,7 @@ fn deadlines_start_once_do_not_slide_and_do_not_emit_empty_files() {
 #[test]
 fn sequence_exhaustion_never_wraps_or_reuses_a_file_number() {
     let files = RefCell::new(Vec::new());
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
         files.borrow_mut().push(f);
     })
     .unwrap();
@@ -459,7 +465,7 @@ fn idle_processor_seals_on_the_recording_deadline_without_more_input() {
     let copy = pool.clone();
     let worker = std::thread::spawn(move || {
         let p = RecordingPublisher::new(
-            RecordingId::generate(),
+            btel_types::new_recording_id(),
             RecordingConfig {
                 flush_interval_duration: Duration::from_millis(10),
                 ..RecordingConfig::default()
@@ -497,7 +503,7 @@ fn idle_processor_seals_on_the_recording_deadline_without_more_input() {
 #[test]
 fn thread_lifecycle_and_clock_observations_are_forwarded_without_deduplication() {
     let files = RefCell::new(Vec::new());
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
         files.borrow_mut().push(f);
     })
     .unwrap();
@@ -555,9 +561,13 @@ fn thread_lifecycle_and_clock_observations_are_forwarded_without_deduplication()
 #[test]
 fn encoded_sections_survive_growth_and_thread_switches() {
     let files = RefCell::new(Vec::new());
-    let mut p = RecordingPublisher::new(RecordingId::generate(), RecordingConfig::default(), |f| {
-        files.borrow_mut().push(f);
-    })
+    let mut p = RecordingPublisher::new(
+        btel_types::new_recording_id(),
+        RecordingConfig::default(),
+        |f| {
+            files.borrow_mut().push(f);
+        },
+    )
     .unwrap();
     let a = allocate_telemetry_id();
     let b = allocate_telemetry_id();
@@ -640,9 +650,13 @@ fn encoded_sections_survive_growth_and_thread_switches() {
 #[test]
 fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
     let files = RefCell::new(Vec::new());
-    let mut p = RecordingPublisher::new(RecordingId::generate(), RecordingConfig::default(), |f| {
-        files.borrow_mut().push(f);
-    })
+    let mut p = RecordingPublisher::new(
+        btel_types::new_recording_id(),
+        RecordingConfig::default(),
+        |f| {
+            files.borrow_mut().push(f);
+        },
+    )
     .unwrap();
     let (thread, _, path) = ids();
     let mut event = SpanRecord::FunctionSpanAnnouncement {
@@ -662,7 +676,7 @@ fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
     p.aggregate(delta(path));
     p.span(thread, &mut event);
     let capacity = p.builder.buffer.spans.capacity();
-    assert!(capacity >= 8 * btel_settings::encoding::MAX_EVENT_BYTES);
+    assert!(capacity >= 8 * btel_core::recording::frame::MAX_EVENT_BYTES);
     for _ in 1..8 {
         p.span(thread, &mut event);
         assert_eq!(p.builder.buffer.spans.capacity(), capacity);
@@ -705,7 +719,7 @@ fn batch_reservation_is_lazy_and_sealing_invalidates_unused_credit() {
 fn size_hint_tracks_encoded_bodies_including_merge_growth_and_overflow() {
     let files = RefCell::new(Vec::new());
     let (thread, function, path) = ids();
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
         files.borrow_mut().push(f);
     })
     .unwrap()
@@ -799,11 +813,14 @@ fn population_outcomes_include_timing_only_calls_and_count_forwarded_spans_once(
         })
         .unwrap();
     let files = RefCell::new(Vec::new());
-    let publisher =
-        RecordingPublisher::new(RecordingId::generate(), RecordingConfig::default(), |f| {
+    let publisher = RecordingPublisher::new(
+        btel_types::new_recording_id(),
+        RecordingConfig::default(),
+        |f| {
             files.borrow_mut().push(f);
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     let mut processor = Processor::with_publisher(pool.bind_consumer().unwrap(), nz(8), publisher);
     let mut producer = pool.register_producer().unwrap();
     let thread = allocate_telemetry_id();
@@ -900,7 +917,7 @@ fn thread_heavy_files_seal_near_the_encoded_target() {
     let files = RefCell::new(Vec::new());
     let target = 64 * 1024;
     let mut p = RecordingPublisher::new(
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         RecordingConfig {
             target_bytes: nz(target),
             ..RecordingConfig::default()
@@ -958,7 +975,7 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
     let received = RefCell::new(Vec::new());
     let (thread, _, path) = ids();
     let mut p = RecordingPublisher::with_snapshot_receiver(
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         config(),
         |f| files.borrow_mut().push(f),
         |snapshot| received.borrow_mut().push(crate::cas_id(&snapshot)),
@@ -993,7 +1010,7 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
     let file = decode(&files.borrow()[0]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_settings::encoding::TYPE_ARGS_FORMAT_MINOR
+        btel_core::recording::minor::TYPE_ARGS
     );
     let event = file.spans.unwrap().sections.remove(0).events.remove(0);
     assert_eq!(
@@ -1025,7 +1042,7 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
     let file = decode(&files.borrow()[1]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_settings::encoding::FORMAT_MINOR
+        btel_core::recording::minor::BASE
     );
     let Some(Event::FunctionAnnouncement(entry)) = file
         .spans
@@ -1050,7 +1067,7 @@ fn network_spans_round_trip_at_minor_seven() {
 
     let files = RefCell::new(Vec::new());
     let (thread, _, path) = ids();
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
         files.borrow_mut().push(f);
     })
     .unwrap();
@@ -1058,7 +1075,7 @@ fn network_spans_round_trip_at_minor_seven() {
     // Longer than a fixed event: the strings reserve their own bytes.
     let url = format!(
         "https://example.com/{}",
-        "a".repeat(4 * encoding::MAX_EVENT_BYTES)
+        "a".repeat(4 * btel_core::recording::frame::MAX_EVENT_BYTES)
     );
     let snapshots = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let capture = |value| {
@@ -1112,7 +1129,7 @@ fn network_spans_round_trip_at_minor_seven() {
     let file = decode(&files.borrow()[0]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_settings::encoding::NETWORK_FORMAT_MINOR
+        btel_core::recording::minor::NETWORK
     );
     let section = file.spans.unwrap().sections.remove(0);
     assert_eq!(section.thread_id, thread.get());
@@ -1170,7 +1187,7 @@ fn network_spans_round_trip_at_minor_seven() {
     p.flush_recording().unwrap();
     assert_eq!(
         decode(&files.borrow()[1]).header.unwrap().format_minor,
-        btel_settings::encoding::FORMAT_MINOR
+        btel_core::recording::minor::BASE
     );
 }
 
@@ -1180,7 +1197,7 @@ fn span_usage_rides_its_completion_at_minor_eleven() {
 
     let files = RefCell::new(Vec::new());
     let (thread, _, path) = ids();
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
         files.borrow_mut().push(f);
     })
     .unwrap();
@@ -1222,7 +1239,7 @@ fn span_usage_rides_its_completion_at_minor_eleven() {
     let file = decode(&files.borrow()[0]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR
+        btel_core::recording::minor::MODEL_USAGE
     );
     let event = file
         .spans
@@ -1291,7 +1308,7 @@ fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() 
     let received = RefCell::new(Vec::new());
     let files = RefCell::new(Vec::new());
     let publisher = RecordingPublisher::with_snapshot_receiver(
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         RecordingConfig::default(),
         |file| files.borrow_mut().push(file),
         |snapshot| {
@@ -1330,7 +1347,7 @@ fn snapshot_receiver_panic_releases_pending_owners() {
     use btel_snapshot::{Limits, SnapshotPool, SnapshotValue};
     let pool = SnapshotPool::unbounded(Limits::default());
     let mut p = RecordingPublisher::with_snapshot_receiver(
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         RecordingConfig::default(),
         |_| {},
         |_: Snapshot| panic!("receiver failed"),
@@ -1379,7 +1396,6 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
         definition_key: None,
         package_name: Some("user".into()),
         compilation_unit_hash: None,
-        build_id: None,
         namespace: Vec::new(),
         argument_layout: Some(btel_types::ArgumentLayout {
             slots: vec![btel_types::ArgumentSlot {
@@ -1393,7 +1409,7 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
     let table = std::sync::Arc::new(btel_types::FunctionMetadataTable {
         functions: vec![metadata_for(known)],
     });
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
         files.borrow_mut().push(f);
     })
     .unwrap()
@@ -1488,7 +1504,7 @@ fn clock_states(file: &proto::RecordingFile) -> Vec<(u64, i32, bool)> {
 #[test]
 fn flush_continues_the_recording_and_end_seals_it_once() {
     let files = RefCell::new(Vec::new());
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
         files.borrow_mut().push(f);
     })
     .unwrap();
@@ -1527,7 +1543,7 @@ fn flush_continues_the_recording_and_end_seals_it_once() {
 
 #[test]
 fn an_empty_recording_ends_with_a_header_only_file() {
-    let id = RecordingId::generate();
+    let id = btel_types::new_recording_id();
     let mut builder = RecordingBuilder::new(id, config()).unwrap();
     let file = decode(&builder.end_recording().unwrap().unwrap());
     assert_eq!(file.sequence, 1);
@@ -1542,7 +1558,7 @@ fn an_empty_recording_ends_with_a_header_only_file() {
 #[test]
 fn already_sealed_data_is_followed_by_an_end_only_file() {
     let (_, _, path) = ids();
-    let mut builder = RecordingBuilder::new(RecordingId::generate(), config()).unwrap();
+    let mut builder = RecordingBuilder::new(btel_types::new_recording_id(), config()).unwrap();
     builder.aggregate(delta(path));
     let data = decode(&builder.flush_recording().unwrap().unwrap());
     assert!(data.end.is_none());
@@ -1556,7 +1572,7 @@ fn already_sealed_data_is_followed_by_an_end_only_file() {
 #[test]
 fn input_after_the_end_is_rejected_by_both_flush_and_end() {
     let (_, _, path) = ids();
-    let mut builder = RecordingBuilder::new(RecordingId::generate(), config()).unwrap();
+    let mut builder = RecordingBuilder::new(btel_types::new_recording_id(), config()).unwrap();
     builder.aggregate(delta(path));
     assert!(
         decode(&builder.end_recording().unwrap().unwrap())
@@ -1577,7 +1593,7 @@ fn input_after_the_end_is_rejected_by_both_flush_and_end() {
 
 #[test]
 fn an_unsettled_clock_keeps_the_recording_unsealed_until_it_settles() {
-    let mut builder = RecordingBuilder::new(RecordingId::generate(), config()).unwrap();
+    let mut builder = RecordingBuilder::new(btel_types::new_recording_id(), config()).unwrap();
     let runtime = ClockRuntime::new(ClockMode::Monotonic);
     let clock = runtime.start_run();
     let epoch = clock.metadata().epoch.get();
@@ -1607,7 +1623,7 @@ fn an_unsettled_clock_keeps_the_recording_unsealed_until_it_settles() {
 
 #[test]
 fn clock_bookkeeping_holds_only_unsettled_runs_and_releases_them_once_final() {
-    let mut builder = RecordingBuilder::new(RecordingId::generate(), config()).unwrap();
+    let mut builder = RecordingBuilder::new(btel_types::new_recording_id(), config()).unwrap();
     let runtime = ClockRuntime::new(ClockMode::Monotonic);
     let (_, _, path) = ids();
     // Runs that settle before conversion are reported final inline and never kept.
@@ -1673,7 +1689,7 @@ fn processor_ends_the_recording_only_after_producers_stop_writing() {
     let (send, recv) = std::sync::mpsc::channel();
     let copy = pool.clone();
     let worker = std::thread::spawn(move || {
-        let p = RecordingPublisher::new(RecordingId::generate(), config(), move |file| {
+        let p = RecordingPublisher::new(btel_types::new_recording_id(), config(), move |file| {
             send.send(file).unwrap();
         })
         .unwrap();
@@ -1753,7 +1769,7 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     let (thread, _, path) = ids();
     let id = allocate_telemetry_id();
     let mut p = RecordingPublisher::with_snapshot_receiver(
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         config(),
         |f| files.borrow_mut().push(f),
         |_| {},
@@ -1774,7 +1790,7 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     let file = decode(&files.borrow()[0]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR
+        btel_core::recording::minor::OWNED_SPAN
     );
     let Some(Event::FunctionAnnouncement(entry)) = file
         .spans
@@ -1807,7 +1823,7 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     let file = decode(&files.borrow()[1]);
     assert_eq!(
         file.header.unwrap().format_minor,
-        btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR
+        btel_core::recording::minor::OWNED_SPAN
     );
     let Some(Event::FunctionCompletion(done)) = file
         .spans
@@ -1826,7 +1842,7 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
 }
 
 /// A recording names its program, its process's platform, and each
-/// function's package and build; only one given no build writes none.
+/// function's package; only one given a build names it in its header.
 #[test]
 fn package_identity_and_build_provenance_are_recorded() {
     use proto::function_definition::Resolution;
@@ -1849,14 +1865,13 @@ fn package_identity_and_build_provenance_are_recorded() {
                 definition_key: None,
                 package_name: Some("user".into()),
                 compilation_unit_hash: Some([7; 32]),
-                build_id: with_build.then_some([1; 16]),
                 namespace: Vec::new(),
                 argument_layout: None,
                 source_map: None,
                 model_invoke: false,
             }],
         });
-        let mut publisher = RecordingPublisher::new(RecordingId::generate(), config(), |file| {
+        let mut publisher = RecordingPublisher::new(btel_types::new_recording_id(), config(), |file| {
             files.borrow_mut().push(file);
         })
         .unwrap()
@@ -1917,10 +1932,9 @@ fn package_identity_and_build_provenance_are_recorded() {
     assert_eq!(header.os.as_deref(), Some("linux"));
     assert_eq!(header.arch.as_deref(), Some("aarch64"));
     assert_eq!(definition.compilation_unit_hash, Some(vec![7; 32]));
-    assert_eq!(definition.build_id, Some(vec![1; 16]));
     assert_eq!(
         header.format_minor,
-        btel_settings::encoding::BUILD_PROVENANCE_FORMAT_MINOR
+        btel_core::recording::minor::PROCESS_PLATFORM
     );
 
     let (header, definition) = record(false);
@@ -1928,10 +1942,9 @@ fn package_identity_and_build_provenance_are_recorded() {
     assert_eq!(header.build, None);
     assert_eq!((header.os, header.arch), (None, None));
     assert_eq!(definition.compilation_unit_hash, Some(vec![7; 32]));
-    assert_eq!(definition.build_id, None);
     assert_eq!(
         header.format_minor,
-        btel_settings::encoding::PACKAGE_IDENTITY_FORMAT_MINOR
+        btel_core::recording::minor::PACKAGE_IDENTITY
     );
 }
 
@@ -1960,7 +1973,6 @@ fn a_log_carries_its_line_and_raises_the_file_minor_only_with_one() {
         definition_key: None,
         package_name: Some("user".into()),
         compilation_unit_hash: None,
-        build_id: None,
         namespace: Vec::new(),
         argument_layout: None,
         source_map,
@@ -1984,7 +1996,7 @@ fn a_log_carries_its_line_and_raises_the_file_minor_only_with_one() {
             metadata_for(unmapped, None),
         ],
     });
-    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+    let mut p = RecordingPublisher::new(btel_types::new_recording_id(), config(), |f| {
         files.borrow_mut().push(f);
     })
     .unwrap()
@@ -2023,9 +2035,9 @@ fn a_log_carries_its_line_and_raises_the_file_minor_only_with_one() {
         assert_eq!(
             file.header.unwrap().format_minor,
             if line.is_some() {
-                btel_settings::encoding::LOG_LINE_FORMAT_MINOR
+                btel_core::recording::minor::LOG_LINE
             } else {
-                btel_settings::encoding::LOG_FORMAT_MINOR
+                btel_core::recording::minor::LOG
             },
             "pc {pc}"
         );
@@ -2052,7 +2064,7 @@ fn a_thread_error_travels_on_its_threads_completion_and_raises_the_file_minor() 
     let files = RefCell::new(Vec::new());
     let received = RefCell::new(Vec::new());
     let mut p = RecordingPublisher::with_snapshot_receiver(
-        RecordingId::generate(),
+        btel_types::new_recording_id(),
         config(),
         |f| files.borrow_mut().push(f),
         |snapshot| received.borrow_mut().push(crate::cas_id(&snapshot)),
@@ -2119,7 +2131,7 @@ fn a_thread_error_travels_on_its_threads_completion_and_raises_the_file_minor() 
             }
         })
         .collect();
-    let base = btel_settings::encoding::FORMAT_MINOR;
+    let base = btel_core::recording::minor::BASE;
     assert_eq!(
         completions
             .iter()
@@ -2128,7 +2140,7 @@ fn a_thread_error_travels_on_its_threads_completion_and_raises_the_file_minor() 
         vec![
             (base, plain.get(), None, false),
             (
-                btel_settings::encoding::THREAD_ERROR_FORMAT_MINOR,
+                btel_core::recording::minor::THREAD_ERROR,
                 failed.get(),
                 Some(error_id),
                 true

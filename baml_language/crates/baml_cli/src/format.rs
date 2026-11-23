@@ -230,8 +230,8 @@ fn format_file(path: &Path, mode: Mode) -> (FileStatus, Option<String>) {
     };
     let formatted = match baml_fmt::format(&source, &FormatOptions::default()) {
         Ok(formatted) => formatted,
-        Err(baml_fmt::FormatterError::ParseErrors(err)) => {
-            crate::reporter::print_error(format_args!("formatting {}: {err:?}", path.display()));
+        Err(err) => {
+            crate::reporter::print_error(format_args!("formatting {}: {err}", path.display()));
             return (FileStatus::Failed, None);
         }
     };

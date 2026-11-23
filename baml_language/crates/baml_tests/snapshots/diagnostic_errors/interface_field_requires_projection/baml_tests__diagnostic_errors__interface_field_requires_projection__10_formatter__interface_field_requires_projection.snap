@@ -11,7 +11,7 @@ interface Named {
 class Linked {
     label: string,
     implements Named {
-        name as label
+        name as label,
     }
 }
 

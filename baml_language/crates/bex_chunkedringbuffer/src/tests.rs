@@ -68,6 +68,30 @@ fn partial_is_private_until_sealed_and_release_flushes_both_streams() {
     });
 }
 
+#[test]
+fn a_timing_batch_fills_and_seals_chunks_as_single_writes_do() {
+    model(|| {
+        let pool = ChunkPool::<usize, usize>::new(config(3, 4)).unwrap();
+        let mut reader = pool.bind_consumer().unwrap();
+        let mut writer = pool.register_producer().unwrap();
+        writer.write_timing(0);
+        let mut batch = vec![1, 2, 3, 4, 5, 6];
+        writer.write_timing_batch(&mut batch);
+        assert!(batch.is_empty());
+        // Two chunks filled and sealed; the seventh record waits in the third.
+        let mut seen = Vec::new();
+        reader.drain(nz(8), |_, v| seen.push(v), |_, _| unreachable!());
+        assert_eq!(seen, [0, 1, 2, 3, 4, 5]);
+        writer.write_timing_batch(&mut Vec::new());
+        writer.seal();
+        reader.drain(nz(8), |_, v| seen.push(v), |_, _| unreachable!());
+        assert_eq!(seen, [0, 1, 2, 3, 4, 5, 6]);
+        pool.close_admission();
+        drop(writer);
+        assert!(reader.drain(nz(8), |_, _| (), |_, _| ()).complete);
+    });
+}
+
 /// Under the model, how often a write reused a recycled chunk (index 0)
 /// and how often it went beyond the lane (index 1), so an assertion that
 /// tolerates either is known to have seen what it tolerates.

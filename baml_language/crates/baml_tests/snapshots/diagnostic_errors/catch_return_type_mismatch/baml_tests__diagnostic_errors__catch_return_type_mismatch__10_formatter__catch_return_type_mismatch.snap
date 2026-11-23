@@ -20,6 +20,6 @@ function caller() -> bool {
     callee() catch (e) {
         Errors.AuthenticationError => {
             return e;
-        }
+        },
     }
 }

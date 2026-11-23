@@ -15,12 +15,8 @@ function features_of(
 ) -> map<string, float> throws never {
     let none: string[] = [];
     let own = trace
-        .map((claim) -> {
-            claim.rule.name
-        })
-        .filter((name) -> {
-            !is_site_rule(name)
-        })
+        .map((claim) -> { claim.rule.name })
+        .filter((name) -> { !is_site_rule(name) })
         .reduce(
             (acc, name) -> {
                 if (acc.includes(name)) {
@@ -31,24 +27,9 @@ function features_of(
             },
             none,
         );
-    let size = tys.reduce(
-        (acc, ty) -> {
-            acc + root.algebra.size(ty)
-        },
-        0,
-    );
-    let depth = tys.reduce(
-        (acc, ty) -> {
-            acc.max(root.algebra.depth(ty))
-        },
-        0,
-    );
-    let width = tys.reduce(
-        (acc, ty) -> {
-            acc.max(root.algebra.union_width(ty))
-        },
-        0,
-    );
+    let size = tys.reduce((acc, ty) -> { acc + root.algebra.size(ty) }, 0);
+    let depth = tys.reduce((acc, ty) -> { acc.max(root.algebra.depth(ty)) }, 0);
+    let width = tys.reduce((acc, ty) -> { acc.max(root.algebra.union_width(ty)) }, 0);
     let features: map<string, float> = {
         "rules": own.length() * 1.0,
         "flips": flips * 1.0,

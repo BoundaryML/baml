@@ -28,7 +28,7 @@ impl FunctionDefinitions {
 
     /// The one-based line of `pc` in `function`'s own source file, as the
     /// function's line table places it: what a reader resolves from the
-    /// published definition (`btel_reader::source_map`). `None` without a
+    /// published definition (`btel_core::reader::source_map`). `None` without a
     /// table, for a PC the table does not cover, and for code inlined from
     /// another file, whose line is not a line of this function's file.
     pub(crate) fn line(&self, function: FunctionId, pc: u32) -> Option<u32> {
@@ -100,7 +100,6 @@ fn convert(m: &FunctionMetadata) -> proto::FunctionMetadata {
         definition_key: m.definition_key.as_ref().map(|key| key.0.clone()),
         package_name: m.package_name.clone(),
         compilation_unit_hash: m.compilation_unit_hash.map(|hash| hash.to_vec()),
-        build_id: m.build_id.map(|id| id.to_vec()),
         namespace: m.namespace.clone(),
         argument_layout: m
             .argument_layout
@@ -178,7 +177,6 @@ mod tests {
             definition_key: None,
             package_name: Some("user".into()),
             compilation_unit_hash: None,
-            build_id: None,
             namespace: Vec::new(),
             argument_layout: None,
             source_map,

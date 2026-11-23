@@ -1,9 +1,11 @@
 use baml_type::{DeclarationName, RealizedTy, TypeName, typetag::TypeTag};
+use btel_core::cas::{
+    DecodeLimits, DecodedBlob, DecodedObject, DecodedRoot, DecodedValue, NodeId, decode_blob,
+};
 
 use super::*;
 use crate::{
-    BlobScratch, Builder, DecodeLimits, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue,
-    Limits, NodeId, Snapshot, SnapshotObject as O, SnapshotPool, SnapshotValue as V, decode_blob,
+    BlobScratch, Builder, Limits, Snapshot, SnapshotObject as O, SnapshotPool, SnapshotValue as V,
 };
 
 fn split(unit_bytes: u64, leaf_bytes: u64) -> Shaper {
@@ -151,7 +153,7 @@ fn map_keys_count_toward_capture_and_decode_value_limits() {
                 ..DecodeLimits::default()
             }
         ),
-        Err(crate::BlobError::Limit("values"))
+        Err(btel_core::cas::BlobError::Limit("values"))
     ));
 }
 
@@ -162,7 +164,7 @@ fn bytes(b: &mut Builder, content: &[u8]) -> V {
 
 /// Every blob's bytes, children first, each checked against what shaping
 /// recorded and against the reader.
-fn written(snapshot: &Snapshot) -> Vec<(Vec<u8>, DecodedSnapshot)> {
+fn written(snapshot: &Snapshot) -> Vec<(Vec<u8>, DecodedBlob)> {
     let mut scratch = BlobScratch::default();
     let mut seen = Vec::new();
     snapshot
@@ -189,7 +191,7 @@ fn written(snapshot: &Snapshot) -> Vec<(Vec<u8>, DecodedSnapshot)> {
         .collect()
 }
 
-fn items(blob: &DecodedSnapshot, node: u32) -> &[DecodedValue] {
+fn items(blob: &DecodedBlob, node: u32) -> &[DecodedValue] {
     match blob.object(NodeId(node)) {
         DecodedObject::List { items, .. } => items,
         other => panic!("expected a list, found {other:?}"),
@@ -241,7 +243,7 @@ fn a_cut_value_is_the_blob_that_capturing_it_alone_produces() {
         items(root, 0),
         [
             DecodedValue::String("small".into()),
-            DecodedValue::External(crate::ChildIndex(0)),
+            DecodedValue::External(btel_core::cas::ChildIndex(0)),
             DecodedValue::Int(7),
         ]
     );
@@ -300,7 +302,7 @@ fn a_cycle_is_one_blob_and_other_blobs_name_its_members() {
     assert_eq!(items(cycle, 0)[0], DecodedValue::Object(NodeId(1)));
     assert_eq!(items(cycle, 1)[0], DecodedValue::Object(NodeId(0)));
     let starts_at_first = items(cycle, 0)[1] == DecodedValue::String("a".repeat(30).into());
-    let child = crate::ChildIndex(0);
+    let child = btel_core::cas::ChildIndex(0);
     let at_root = DecodedValue::External(child);
     let inside = DecodedValue::ExternalNode {
         child,
@@ -476,7 +478,10 @@ fn what_the_root_names_twice_is_cut_and_what_it_names_inside_a_value_is_not() {
     let DecodedRoot::FunctionArgs { slots, .. } = &twice[1].1.root else {
         panic!("expected arguments")
     };
-    assert_eq!(slots[0], DecodedValue::External(crate::ChildIndex(0)));
+    assert_eq!(
+        slots[0],
+        DecodedValue::External(btel_core::cas::ChildIndex(0))
+    );
     assert_eq!(slots[1], slots[0]);
 
     let inside = arguments(true);
@@ -603,8 +608,14 @@ fn keys_split_as_values_while_names_and_declarations_stay_inline() {
     let DecodedObject::Map { entries, .. } = root.object(NodeId(0)) else {
         panic!("expected a map")
     };
-    assert_eq!(entries[0].0, DecodedValue::External(crate::ChildIndex(0)));
-    assert_eq!(entries[0].1, DecodedValue::External(crate::ChildIndex(0)));
+    assert_eq!(
+        entries[0].0,
+        DecodedValue::External(btel_core::cas::ChildIndex(0))
+    );
+    assert_eq!(
+        entries[0].1,
+        DecodedValue::External(btel_core::cas::ChildIndex(0))
+    );
     let DecodedValue::Enum {
         declaration, name, ..
     } = &entries[1].1
@@ -622,7 +633,7 @@ fn keys_split_as_values_while_names_and_declarations_stay_inline() {
     assert_eq!(
         root.object(function),
         &DecodedObject::Descriptive {
-            kind: crate::Description::Function,
+            kind: btel_core::cas::Description::Function,
             name: Some(long.as_str().into()),
         }
     );
@@ -645,7 +656,7 @@ fn equal_values_share_one_blob_and_one_child_slot() {
     let blobs = written(&snapshot);
     assert_eq!(blobs.len(), 3);
     let root = &blobs[2].1;
-    let (string, array) = (crate::ChildIndex(0), crate::ChildIndex(1));
+    let (string, array) = (btel_core::cas::ChildIndex(0), btel_core::cas::ChildIndex(1));
     assert_eq!(
         items(root, 0),
         [
@@ -697,9 +708,15 @@ fn argument_slots_name_cut_values_and_scratch_is_clean_between_captures() {
         panic!("expected arguments")
     };
     assert_eq!(*parameter_count, 4);
-    assert_eq!(slots[0], DecodedValue::External(crate::ChildIndex(0)));
+    assert_eq!(
+        slots[0],
+        DecodedValue::External(btel_core::cas::ChildIndex(0))
+    );
     assert_eq!(slots[1], DecodedValue::OmittedArg);
-    assert_eq!(slots[2], DecodedValue::External(crate::ChildIndex(1)));
+    assert_eq!(
+        slots[2],
+        DecodedValue::External(btel_core::cas::ChildIndex(1))
+    );
     assert_eq!(slots[3], slots[0]);
     assert!(root.objects.is_empty());
 }
@@ -742,20 +759,20 @@ fn media_content_past_the_leaf_size_is_one_blob_its_media_objects_name() {
     let alone = capture(&mut split(1 << 20, 32), |b| text(b, &content));
     assert_eq!(blobs[0].1.id, alone.root_id());
     let root = &blobs[1].1;
-    let external = crate::MediaPayload::External {
-        child: crate::ChildIndex(0),
+    let external = btel_core::cas::MediaPayload::External {
+        child: btel_core::cas::ChildIndex(0),
         text_len: content.len() as u64,
     };
     for (node, expected) in [
         (
             1,
-            crate::DecodedMediaSource::Base64 {
+            btel_core::cas::DecodedMediaSource::Base64 {
                 data: external.clone(),
             },
         ),
         (
             2,
-            crate::DecodedMediaSource::Url {
+            btel_core::cas::DecodedMediaSource::Url {
                 url: "https://example.test/cat.png".into(),
                 data: Some(external),
             },
@@ -764,7 +781,7 @@ fn media_content_past_the_leaf_size_is_one_blob_its_media_objects_name() {
         let DecodedObject::Media(media) = root.object(NodeId(node)) else {
             panic!("expected media, found {:?}", root.object(NodeId(node)));
         };
-        assert_eq!(media.kind, baml_type::MediaKind::Image);
+        assert_eq!(media.kind, btel_core::cas::MediaKind::Image);
         assert_eq!(media.mime_type.as_deref(), Some("image/png"));
         assert_eq!(media.source, expected);
     }

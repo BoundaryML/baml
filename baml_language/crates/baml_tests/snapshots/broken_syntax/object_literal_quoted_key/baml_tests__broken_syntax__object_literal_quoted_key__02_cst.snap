@@ -1,0 +1,72 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== object_literal_quoted_key.baml ===
+SourceFile@178..279
+  items: ClassDef@178..215
+    kw: Class "class" @178..183
+    name: Name@184..187
+      token: Word "Foo" @184..187
+    l: LBrace "{" @188..189
+    members: Field@194..201
+      name: Name@194..195
+        token: Word "a" @194..195
+      colon: Colon ":" @195..196
+      ty: PathType@197..200
+        head: Name@197..200
+          token: Word "int" @197..200
+      sep: Comma "," @200..201
+    members: Field@206..213
+      name: Name@206..207
+        token: Word "b" @206..207
+      colon: Colon ":" @207..208
+      ty: PathType@209..212
+        head: Name@209..212
+          token: Word "int" @209..212
+      sep: Comma "," @212..213
+    r: RBrace "}" @214..215
+  items: FunctionDef@216..279
+    kw: Function "function" @216..224
+    name: Name@225..226
+      token: Word "f" @225..226
+    params: ParamList@226..228
+      l: LParen "(" @226..227
+      r: RParen ")" @227..228
+    ret: ReturnType@229..235
+      arrow: Arrow "->" @229..231
+      ty: PathType@232..235
+        head: Name@232..235
+          token: Word "Foo" @232..235
+    body: Block@236..279
+      l: LBrace "{" @236..237
+      stmts: LetStmt@242..271
+        introducer: Let "let" @242..245
+        pattern: BindingPattern@246..247
+          name: Name@246..247
+            token: Word "s" @246..247
+        eq: Equals "=" @248..249
+        init: ObjectLiteral@250..270
+          ctor: PathExpr@250..253
+            head: Name@250..253
+              token: Word "Foo" @250..253
+          l: LBrace "{" @254..255
+          members: Bogus@256..263
+            tokens: String "\"a\"" @256..259
+            tokens: Colon ":" @259..260
+            tokens: Whitespace " " @260..261
+            tokens: Integer "1" @261..262
+            tokens: Comma "," @262..263
+          members: ObjectField@264..268
+            key: DottedName@264..265
+              head: Name@264..265
+                token: Word "b" @264..265
+            colon: Colon ":" @265..266
+            value: LiteralExpr@267..268
+              token: Integer "2" @267..268
+          r: RBrace "}" @269..270
+        semi: Semicolon ";" @270..271
+      tail: PathExpr@276..277
+        head: Name@276..277
+          token: Word "s" @276..277
+      r: RBrace "}" @278..279
+error @256..259: a field of a constructed object is named by an identifier; a map literal is written without the constructor: `{ "key": value }`

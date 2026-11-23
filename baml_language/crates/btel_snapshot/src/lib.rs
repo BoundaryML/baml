@@ -1,4 +1,5 @@
 //! Independently owned capture graphs. No VM pointers, user-code execution or filesystem dependencies.
+//! Reading a blob back is `btel-core`'s (`btel_core::cas::decode_blob`), as it is for every reader.
 //!
 //! Values are inline. Only identity-bearing objects require graph IDs. Containers
 //! are sampled independently; this is not an atomic snapshot of the entire graph.
@@ -16,8 +17,8 @@ pub use bex_str::BexStr;
 mod arena;
 mod build;
 pub mod context;
-mod decode;
 pub mod definition;
+mod describe;
 mod encoding;
 mod graph;
 mod hash;
@@ -32,14 +33,8 @@ mod tags;
 mod walk;
 
 pub use build::{Builder, Carried, Leaves, Reserved, forget_carried, string_map};
-pub use decode::{
-    BlobError, ChildIndex, DecodeLimits, DecodedDefinition, DecodedMedia, DecodedMediaSource,
-    DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, Entries, FieldType,
-    Fields, MediaPayload, NodeId, Redaction, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription,
-    decode_blob,
-};
-pub use definition::{DefinedHead, DefinitionHead, DefinitionRef};
-pub use encoding::{BLOB_MAGIC, BLOB_VERSION, BlobScratch};
+pub use definition::DefinitionRef;
+pub use encoding::BlobScratch;
 pub use graph::{
     BigintId, Description, FieldEntry, FunctionArgs, LabelId, Limit, MapEntry, MediaSource, NameId,
     ObjectId, OwnedType, Range, RedactionReason, SnapshotObject, SnapshotRoot, SnapshotValue,
@@ -53,5 +48,7 @@ pub use snapshot::CaptureStats;
 pub use snapshot::{Blob, Snapshot};
 pub use split::{Kept, Leaf, Split, Structure};
 
+#[cfg(test)]
+mod decode_tests;
 #[cfg(test)]
 mod tests;

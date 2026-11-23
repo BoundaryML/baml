@@ -36,7 +36,7 @@ impl Recording {
     fn with(project: &Path, id: [u8; 16], minor: u32) -> Self {
         let dir = project
             .join(".baml/btel/recordings")
-            .join(btel_reader::discovery::hex(&id));
+            .join(btel_core::reader::discovery::hex(&id));
         std::fs::create_dir_all(&dir).unwrap();
         Self {
             project: project.to_owned(),
@@ -81,19 +81,22 @@ impl Recording {
         }
     }
 
-    fn blob(&self, id: btel_snapshot::CasId) -> PathBuf {
-        btel_reader::layout::SourceLayout::for_project(&self.project).blob_path(id)
+    fn blob(&self, id: btel_core::cas::CasId) -> PathBuf {
+        btel_core::reader::layout::SourceLayout::for_project(&self.project).blob_path(id)
     }
 
     fn remove(&self, id: &proto::CasId) {
         let mut bytes = [0; 16];
         bytes[..8].copy_from_slice(&id.low.to_le_bytes());
         bytes[8..].copy_from_slice(&id.high.to_le_bytes());
-        std::fs::remove_file(self.blob(btel_snapshot::CasId::from_bytes(bytes))).unwrap();
+        std::fs::remove_file(self.blob(btel_core::cas::CasId::from_bytes(bytes))).unwrap();
     }
 
     fn span(&self, n: u64) -> Json {
-        json!(format!("{}:{n}", btel_reader::discovery::hex(&self.id)))
+        json!(format!(
+            "{}:{n}",
+            btel_core::reader::discovery::hex(&self.id)
+        ))
     }
 }
 
@@ -632,12 +635,12 @@ fn a_body_stored_as_a_blob_of_its_own_is_read_through_its_payload() {
     let data = recording.cas(&json!({
         "event": "message_delta", "data": usage.to_string(), "id": null,
     }));
-    let cas = btel_reader::layout::SourceLayout::for_project(project.path());
+    let cas = btel_core::reader::layout::SourceLayout::for_project(project.path());
     let blobs = |id: &proto::CasId| {
         let mut bytes = [0; 16];
         bytes[..8].copy_from_slice(&id.low.to_le_bytes());
         bytes[8..].copy_from_slice(&id.high.to_le_bytes());
-        let path = cas.blob_path(btel_snapshot::CasId::from_bytes(bytes));
+        let path = cas.blob_path(btel_core::cas::CasId::from_bytes(bytes));
         std::fs::metadata(path).unwrap().len()
     };
     assert!(blobs(&request) < 1024 && blobs(&data) < 1024);
@@ -880,7 +883,7 @@ fn network_spans_have_the_context_they_were_sent_in() {
         assert_eq!(rows(&mut fresh, &query(relation)), expected, "{relation}");
     }
     drop(fresh);
-    let layout = btel_reader::layout::SourceLayout::for_project(project.path());
+    let layout = btel_core::reader::layout::SourceLayout::for_project(project.path());
     std::fs::remove_file(layout.root.join("query.sqlite")).unwrap();
     let mut options = IndexOptions::default();
     options.refresh.fresh_bytes = 0;

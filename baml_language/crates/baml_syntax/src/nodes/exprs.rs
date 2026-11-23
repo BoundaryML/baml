@@ -213,7 +213,7 @@ pub struct IsExpr {
     pub pattern: Result<AnyPattern, Missing>,
 }
 
-/// `-x`, `!x`, `~x`, `++x`, `--x`; the operator is
+/// `-x`, `!x`, `~x`; the operator is
 /// [`UnaryOp::from_kind`](crate::ops::UnaryOp::from_kind) of the token.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct UnaryExpr {
@@ -455,7 +455,8 @@ pub enum AnyObjectMember {
     Bogus(Id<Bogus>),
 }
 
-/// `key: value`, or the shorthand `key`.
+/// `key: value`, or the shorthand `key`. A field is named by an identifier;
+/// a quoted key is reported by the parser (a map has no constructor).
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ObjectField {
     pub key: AnyObjectKey,
@@ -466,8 +467,6 @@ pub struct ObjectField {
 #[derive(AnyNode, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnyObjectKey {
     Name(Id<DottedName>),
-    String(Id<StringLit>),
-    Backtick(Id<BacktickString>),
     Bogus(Id<Bogus>),
 }
 

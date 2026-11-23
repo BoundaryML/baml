@@ -30,8 +30,8 @@ interface Read {
             root.errors.InvalidArgument => {
                 throw root.errors.ParseError {
                     message: "invalid utf-8",
-                }
-            }
+                };
+            },
         }
     }
 }

@@ -66,40 +66,80 @@ extension BamlSlots {
     private static func nativeTuple<each Item>(
         _ items: repeat BamlSlot<each Item>
     ) -> BamlSlot<(repeat each Item)> {
+        // Swift 6.1's IRGen crashes copying a value whose type names a pack
+        // element (here `BamlSlot<each Item>`, captured or passed on). So
+        // only the untyped node leaves the pack, the codec's closures hold
+        // one erased codec per element, and only the pack-generic helpers
+        // below touch the tuple's elements.
         var nodes: [BamlSlotNode] = []
         for item in repeat each items {
             nodes.append(item.node)
         }
+        var slots: [BamlSlotCodec] = []
+        for type in repeat (each Item).self {
+            slots.append(erasedSlot(nodes[slots.count], as: type))
+        }
+        assert(slots.count == nodes.count, "\(slots.count) codecs for \(nodes.count) tuple elements")
         let arity = nodes.count
         let type = BamlTypeDescriptor.tuple(nodes.map(\.type))
         let codec = BamlSlotCodec(
             encode: { value in
-                let value = value as! (repeat each Item)
-                var encoders: [() throws -> BamlInboundValue] = []
-                for (slot, item) in repeat (each items, each value) {
-                    encoders.append { try slot._bamlEncode(item) }
-                }
-                return try BamlInboundValue.tupleNode(stating: type, encoders)
+                let parts = tupleParts(value, as: (repeat each Item).self)
+                return try BamlInboundValue.tupleNode(
+                    stating: type,
+                    zip(slots, parts).map { slot, part in { try slot.encode(part) } }
+                )
             },
             decode: { value in
                 let raw = try tupleItems(value, arity: arity)
-                var index = 0
-                func next<Slot>(_ slot: BamlSlot<Slot>) throws -> Slot {
-                    defer { index += 1 }
-                    return try decodeTupleSlot(raw, index) { try slot._bamlDecode($0) }
+                var parts: [Any] = []
+                parts.reserveCapacity(arity)
+                for (index, slot) in slots.enumerated() {
+                    parts.append(try decodeTupleSlot(raw, index, slot.decode))
                 }
-                return (repeat try next(each items))
+                return tupleBuild(parts, as: (repeat each Item).self)
             },
             equal: { lhs, rhs in
-                let lhs = lhs as! (repeat each Item), rhs = rhs as! (repeat each Item)
-                for (slot, left, right) in repeat (each items, each lhs, each rhs) {
-                    guard slot._bamlEqual(left, right) else { return false }
-                }
-                return true
+                let lhs = tupleParts(lhs, as: (repeat each Item).self)
+                let rhs = tupleParts(rhs, as: (repeat each Item).self)
+                return slots.indices.allSatisfy { slots[$0].equal(lhs[$0], rhs[$0]) }
             }
         )
         return BamlSlot(BamlSlotNode(type: type, shape: .tuple(items: nodes), codec: codec))
     }
+}
+
+/// The slot of `Value` at `node`, with its value type erased.
+private func erasedSlot<Value>(_ node: BamlSlotNode, as _: Value.Type) -> BamlSlotCodec {
+    let slot = BamlSlot<Value>(node)
+    return BamlSlotCodec(
+        encode: { try slot._bamlEncode($0 as! Value) },
+        decode: { try slot._bamlDecode($0) },
+        equal: { slot._bamlEqual($0 as! Value, $1 as! Value) }
+    )
+}
+
+/// The elements of `value`, a native tuple of the given type, in order.
+private func tupleParts<each Item>(_ value: Any, as _: (repeat each Item).Type) -> [Any] {
+    let value = value as! (repeat each Item)
+    var parts: [Any] = []
+    for part in repeat each value {
+        parts.append(part)
+    }
+    return parts
+}
+
+/// The native tuple whose elements are `parts`, which holds exactly one
+/// value of each element type, in order.
+private func tupleBuild<each Item>(_ parts: [Any], as _: (repeat each Item).Type) -> (repeat each Item) {
+    var index = 0
+    func next<Part>(_: Part.Type) -> Part {
+        defer { index += 1 }
+        return parts[index] as! Part
+    }
+    let tuple = (repeat next((each Item).self))
+    assert(index == parts.count, "tuple of \(index) built from \(parts.count) parts")
+    return tuple
 }
 
 extension BamlInboundValue {

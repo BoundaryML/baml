@@ -30,9 +30,7 @@ interface Concrete {
     }
 }
 
-implement<T> Concrete for T {
-
-}
+implement<T> Concrete for T {}
 
 /// The structured value a tagged template literal produces.
 ///

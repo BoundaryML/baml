@@ -78,9 +78,9 @@ class Xoshiro256PlusPlus {
     ///
     /// # Panics
     /// If `seed` is shorter than 32 bytes.
-    function new(
-        seed: uint8array = SystemRandom.get().random(32),
-    ) -> Xoshiro256PlusPlus throws never {
+    function new(seed: uint8array = SystemRandom.get().random(32)) -> Xoshiro256PlusPlus
+        throws never
+    {
         // A `$rust_function` builtin can't fill omitted default args, so this
         // thin wrapper resolves the default seed and forwards to `_new` (whose
         // `seed` is required) — the `net.TcpStream.connect`/`_connect` convention.

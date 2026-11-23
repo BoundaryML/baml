@@ -69,12 +69,9 @@ class Options {
 
     /// Select Span mode and replace all three capture requests, by default
     /// with requests for inputs, output and error, as `trace.span` does.
-    function span(
-        self,
-        inputs: bool? = true,
-        output: bool? = true,
-        error: bool? = true,
-    ) -> Options throws never {
+    function span(self, inputs: bool? = true, output: bool? = true, error: bool? = true) -> Options
+        throws never
+    {
         self._span(inputs, output, error)
     }
 
@@ -149,11 +146,9 @@ function timing() -> Options throws never {
 /// Pass `inputs = false`, `output = false` or `error = false` to leave one
 /// out, or use `empty_span` to record the invocation alone. A value that must
 /// never be recorded is withheld with `@trace.redact` wherever it is captured.
-function span(
-    inputs: bool? = true,
-    output: bool? = true,
-    error: bool? = true,
-) -> Options throws never {
+function span(inputs: bool? = true, output: bool? = true, error: bool? = true) -> Options
+    throws never
+{
     _span(inputs, output, error)
 }
 
@@ -239,11 +234,9 @@ class Span {
     /// Record an error with its existing baml.errors.Context and end the operation.
     //baml:mut_vm
     //baml:fallible
-    function fail_with_context<E>(
-        self,
-        error: E,
-        context: baml.errors.Context,
-    ) -> void throws never {
+    function fail_with_context<E>(self, error: E, context: baml.errors.Context) -> void
+        throws never
+    {
         $rust_function
     }
 

@@ -10,7 +10,8 @@ use std::{
 use bex_engine::{
     BexEngine, BexExternalValue, EngineConfig, FunctionCallContextBuilder, TelemetryRecording,
 };
-use btel_bcs::{delivery::DeliveryConfig, proto::CloudUploadEnvelope};
+use btel_bcs::delivery::DeliveryConfig;
+use btel_core::upload::envelope::UploadEnvelope;
 use btel_recorder::{RecordingConfig, proto};
 use btel_types::context::{Context, ContextPatch, ContextValue};
 use prost::Message as _;
@@ -125,13 +126,13 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         .iter()
         .filter(|request| request.method == "PUT")
     {
-        let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+        let envelope = UploadEnvelope::decode(request.body.as_slice()).unwrap();
         if let Some(bytes) = envelope.recording_file {
             files.push(proto::RecordingFile::decode(bytes.as_slice()).unwrap());
         }
-        for object in envelope.cas_objects {
+        for object in envelope.blobs {
             let snapshot =
-                btel_snapshot::decode_blob(&object.blob, &btel_snapshot::DecodeLimits::default())
+                btel_core::cas::decode_blob(&object.blob, &btel_core::cas::DecodeLimits::default())
                     .unwrap();
             assert_eq!(snapshot.id.as_bytes().as_slice(), object.snapshot_id);
             snapshots.insert(*snapshot.id.as_bytes(), snapshot);
@@ -148,11 +149,11 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
             header.baml_version.as_deref(),
             Some(baml_version::CANONICAL_VERSION)
         );
-        let id: btel_snapshot::CasId = header.initial_context_cas_id.unwrap().into();
+        let id = btel_core::recording::cas_id(header.initial_context_cas_id.unwrap());
         let (identity, metadata) = trace_context::metadata(&snapshots[id.as_bytes()]);
         assert_eq!(
             metadata["baml.ctx.baml_version"],
-            &btel_snapshot::DecodedValue::String(baml_version::CANONICAL_VERSION.into())
+            &btel_core::cas::DecodedValue::String(baml_version::CANONICAL_VERSION.into())
         );
         assert!(
             !metadata.contains_key("baml.ctx.app_version"),
@@ -161,19 +162,19 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
         assert_eq!(identity, Some("launch-user"));
         assert_eq!(
             metadata["root"],
-            &btel_snapshot::DecodedValue::String("launch-value".into())
+            &btel_core::cas::DecodedValue::String("launch-value".into())
         );
         assert_eq!(
             metadata["baml.ctx.os"],
-            &btel_snapshot::DecodedValue::String(std::env::consts::OS.into())
+            &btel_core::cas::DecodedValue::String(std::env::consts::OS.into())
         );
         assert_eq!(
             metadata["baml.ctx.architecture"],
-            &btel_snapshot::DecodedValue::String(std::env::consts::ARCH.into())
+            &btel_core::cas::DecodedValue::String(std::env::consts::ARCH.into())
         );
         assert_eq!(
             metadata["baml.ctx.is_ci"],
-            &btel_snapshot::DecodedValue::Bool(baml_env::raw_var("CI").is_some_and(|value| {
+            &btel_core::cas::DecodedValue::Bool(baml_env::raw_var("CI").is_some_and(|value| {
                 !matches!(
                     value.trim().to_ascii_lowercase().as_str(),
                     "" | "0" | "false" | "no" | "off"
@@ -190,7 +191,7 @@ async fn baml_context_uses_existing_cloud_recording_and_cas_uploads_under_pressu
                         && agent.len() <= 128
                         && !agent.chars().any(char::is_control)
                 })
-                .map(|agent| btel_snapshot::DecodedValue::String(agent.into()))
+                .map(|agent| btel_core::cas::DecodedValue::String(agent.into()))
                 .as_ref()
         );
         let allowed = [
@@ -450,7 +451,7 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
             .unwrap();
         assert!(!put.headers.contains_key("authorization"));
         assert_eq!(put.headers["x-upload-plan"], "required");
-        let envelope = CloudUploadEnvelope::decode(put.body.as_slice()).unwrap();
+        let envelope = UploadEnvelope::decode(put.body.as_slice()).unwrap();
         assert_eq!(envelope.format_version, 1);
         assert_eq!(envelope.plan_id, format!("plan-{sequence}"));
         assert_eq!(envelope.upload_id, format!("recording-{sequence}"));
@@ -468,7 +469,7 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         assert_eq!(header.arch.as_deref(), Some(std::env::consts::ARCH));
         assert_eq!(
             header.format_minor,
-            btel_settings::encoding::BUILD_PROVENANCE_FORMAT_MINOR
+            btel_core::recording::minor::PROCESS_PLATFORM
         );
         // Normal shutdown settles every run: the last uploaded file ends it.
         assert_eq!(file.end.is_some(), index + 1 == prepares.len());
@@ -476,8 +477,6 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
             if let Some(proto::function_definition::Resolution::Metadata(metadata)) =
                 definition.resolution
             {
-                // No host named a build of this program.
-                assert!(metadata.build_id.is_none());
                 if metadata.fqn == "user.leaf" || metadata.fqn == "user.main" {
                     assert!(metadata.compilation_unit_hash.is_some());
                     assert!(metadata.argument_layout.as_ref().unwrap().slots.is_empty());
@@ -505,18 +504,14 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
             }
         }
         let candidates = prepare["candidates"].as_array().unwrap();
-        let actual: BTreeSet<_> = envelope
-            .cas_objects
-            .iter()
-            .map(|c| hex(&c.snapshot_id))
-            .collect();
+        let actual: BTreeSet<_> = envelope.blobs.iter().map(|c| hex(&c.snapshot_id)).collect();
         let expected: BTreeSet<_> = candidates
             .iter()
             .map(|c| c["snapshot_id"].as_str().unwrap().to_owned())
             .filter(|id| id != &skipped_id)
             .collect();
         assert_eq!(actual, expected);
-        assert_eq!(envelope.cas_objects.len(), expected.len());
+        assert_eq!(envelope.blobs.len(), expected.len());
         if candidates
             .iter()
             .any(|candidate| candidate["snapshot_id"] == skipped_id)
@@ -527,16 +522,13 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         for candidate in candidates {
             assert_eq!(
                 candidate["snapshot_format_version"],
-                btel_settings::snapshot::BLOB_VERSION
+                btel_core::cas::VERSION
             );
             offered.insert(candidate["snapshot_id"].as_str().unwrap().to_owned());
         }
-        for object in envelope.cas_objects {
+        for object in envelope.blobs {
             uploaded += 1;
-            assert_eq!(
-                object.snapshot_format_version,
-                btel_settings::snapshot::BLOB_VERSION
-            );
+            assert_eq!(object.snapshot_format_version, btel_core::cas::VERSION);
             assert_eq!(object.snapshot_id.len(), 16);
             assert_eq!(object.blob_sha256.len(), 32);
             assert!(object.blob.len() >= 38);

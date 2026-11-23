@@ -3,7 +3,7 @@ mod common;
 
 use std::{path::Path, process::Command};
 
-use btel_bcs::{proto::CloudUploadEnvelope, wire::PrepareUploadsRequest};
+use btel_core::upload::{PrepareUploadsRequest, envelope::UploadEnvelope};
 use prost::Message as _;
 use wiremock::{
     Mock, MockServer, Request, ResponseTemplate,
@@ -228,7 +228,7 @@ fn baml_run_uploads_from_boundary_env() {
                     assert_eq!(request.method, "PUT");
                     assert!(!request.headers.contains_key("authorization"));
                     assert_eq!(request.headers["x-required"], "signed-value");
-                    let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+                    let envelope = UploadEnvelope::decode(request.body.as_slice()).unwrap();
                     if let Some(bytes) = envelope.recording_file {
                         recordings.push(
                             btel_recorder::proto::RecordingFile::decode(bytes.as_slice()).unwrap(),
@@ -290,9 +290,9 @@ fn baml_run_uploads_from_boundary_env() {
                 )
             );
 
-            // The recording names the program and the build in its header,
-            // where BCS reads a span's build, and the build on each function
-            // of the built package.
+            // The recording names the program and the build in its header.
+            // BCS gives the build to the spans of the functions whose package
+            // the build produced.
             let unit = hex::decode(build["compilation_unit_hash"].as_str().unwrap()).unwrap();
             let build_id = hex::decode(build["build_id"].as_str().unwrap()).unwrap();
             let mut built_functions = 0;
@@ -315,10 +315,7 @@ fn baml_run_uploads_from_boundary_env() {
                         continue;
                     };
                     if metadata.compilation_unit_hash.as_deref() == Some(unit.as_slice()) {
-                        assert_eq!(metadata.build_id.as_deref(), Some(build_id.as_slice()));
                         built_functions += 1;
-                    } else {
-                        assert_eq!(metadata.build_id, None, "no build produced {}", metadata.fqn);
                     }
                 }
             }

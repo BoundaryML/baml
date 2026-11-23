@@ -46,11 +46,7 @@ function open_list_member() -> int {
 }
 
 function open_branch_member(flag: bool) -> int {
-    let b = if (flag) {
-        make(1)
-    } else {
-        make(id("s"))
-    };
+    let b = if (flag) { make(1) } else { make(id("s")) };
     take(b)
 }
 

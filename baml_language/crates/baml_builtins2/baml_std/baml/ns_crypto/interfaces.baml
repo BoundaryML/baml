@@ -52,12 +52,8 @@ interface Aead {
     ///
     /// - `baml.errors.InvalidArgument` if `nonce` is not the algorithm's nonce
     ///   length, or `plaintext` / `aad` exceed the algorithm's size limits.
-    function encrypt(
-        self,
-        nonce: uint8array,
-        plaintext: uint8array,
-        aad: uint8array,
-    ) -> uint8array throws root.errors.InvalidArgument;
+    function encrypt(self, nonce: uint8array, plaintext: uint8array, aad: uint8array) -> uint8array
+        throws root.errors.InvalidArgument;
 
     /// Authenticates and decrypts `ciphertext`.
     ///
@@ -77,12 +73,8 @@ interface Aead {
     ///   length, or `ciphertext` / `aad` exceed the algorithm's size limits.
     /// - `DecryptionFailure` if the ciphertext does not authenticate under this
     ///   key, nonce, and `aad`.
-    function decrypt(
-        self,
-        nonce: uint8array,
-        ciphertext: uint8array,
-        aad: uint8array,
-    ) -> uint8array throws root.errors.InvalidArgument | DecryptionFailure;
+    function decrypt(self, nonce: uint8array, ciphertext: uint8array, aad: uint8array) -> uint8array
+        throws root.errors.InvalidArgument | DecryptionFailure;
 }
 
 /// Implemented by algorithms that can draw a fresh key of their own size.

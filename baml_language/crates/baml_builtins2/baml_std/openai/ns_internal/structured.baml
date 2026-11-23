@@ -42,15 +42,15 @@ class StructuredOutput {
         };
         let parsed = baml.json.parse(text) catch (e) {
             let err: baml.json.ParseError => {
-                throw failed(err.message)
+                throw failed(err.message);
             },
         };
         let body = if (self.wrapped) {
             let object: map<string, baml.json.json> = parsed else {
-                throw failed("expected a JSON object holding `value`")
+                throw failed("expected a JSON object holding `value`");
             };
             if (!object.has("value")) {
-                throw failed("the JSON object has no `value`")
+                throw failed("the JSON object has no `value`");
             }
             object.get("value")
         } else {
@@ -59,7 +59,7 @@ class StructuredOutput {
         let type T = self.output_type;
         let value = baml.sap.coerce<T>(body) catch (e) {
             let err: baml.errors.ParseError => {
-                throw failed(err.message)
+                throw failed(err.message);
             },
         };
         ai.ParsedOutput { value: value }
@@ -74,22 +74,31 @@ function structured_output(output_type: reflect.Type, provider: string) -> Struc
     let type_name = output_type.to_string();
     let reaches_media = ai.internal.reaches_media(output_type) catch (e) {
         let err: baml.errors.Unsupported => {
-            throw _reject(provider, `structured outputs cannot describe \`${type_name}\`: ${err.message}`)
+            throw _reject(
+                provider,
+                `structured outputs cannot describe \`${type_name}\`: ${err.message}`,
+            );
         },
     };
     if (reaches_media) {
         throw _reject(
             provider,
             `structured outputs cannot hold \`${type_name}\`: it can hold media, and a model returns the media it generates as content of its own, not inside JSON`,
-        )
+        );
     }
     let lowered = baml.json.schema(output_type, naming = baml.json.Naming.Aliased) catch (e) {
         let err: baml.errors.Unsupported => {
-            throw _reject(provider, `structured outputs cannot describe \`${type_name}\`: ${err.message}`)
+            throw _reject(
+                provider,
+                `structured outputs cannot describe \`${type_name}\`: ${err.message}`,
+            );
         },
     };
     let top: map<string, baml.json.json> = lowered else {
-        throw _reject(provider, `structured outputs cannot describe \`${type_name}\`: its schema is not an object`)
+        throw _reject(
+            provider,
+            `structured outputs cannot describe \`${type_name}\`: its schema is not an object`,
+        );
     };
     let wrapped = !_is_object_schema(top);
     let schema: baml.json.json = if (wrapped) {
@@ -156,7 +165,10 @@ function _strict(schema: baml.json.json, type_name: string, provider: string) ->
         let rewritten: baml.json.json = match (key) {
             "properties" | "$defs" => {
                 let members: map<string, baml.json.json> = value else {
-                    throw _reject(provider, `structured outputs cannot describe \`${type_name}\`: \`${key}\` is not an object`)
+                    throw _reject(
+                        provider,
+                        `structured outputs cannot describe \`${type_name}\`: \`${key}\` is not an object`,
+                    );
                 };
                 let walked: map<string, baml.json.json> = {};
                 for (let name in members.keys()) {
@@ -166,11 +178,13 @@ function _strict(schema: baml.json.json, type_name: string, provider: string) ->
             },
             "anyOf" => {
                 let members: baml.json.json[] = value else {
-                    throw _reject(provider, `structured outputs cannot describe \`${type_name}\`: \`anyOf\` is not a list`)
+                    throw _reject(
+                        provider,
+                        `structured outputs cannot describe \`${type_name}\`: \`anyOf\` is not a list`,
+                    );
                 };
-                let walked: baml.json.json[] = members.map((member) -> {
-                    _strict(member, type_name, provider)
-                });
+                let walked: baml.json.json[] =
+                    members.map((member) -> { _strict(member, type_name, provider) });
                 walked
             },
             "items" => _strict(value, type_name, provider),
@@ -179,7 +193,7 @@ function _strict(schema: baml.json.json, type_name: string, provider: string) ->
                     throw _reject(
                         provider,
                         `structured outputs cannot describe \`${type_name}\`: it holds a map, which strict mode has no form for`,
-                    )
+                    );
                 }
                 value
             },
@@ -187,7 +201,7 @@ function _strict(schema: baml.json.json, type_name: string, provider: string) ->
                 throw _reject(
                     provider,
                     `structured outputs cannot describe \`${type_name}\`: it holds a map, which strict mode has no form for`,
-                )
+                );
             },
             _ => value,
         };
@@ -228,11 +242,7 @@ function _strict(schema: baml.json.json, type_name: string, provider: string) ->
 function _is_object_type(kind: baml.json.json) -> bool {
     match (kind) {
         let one: string => one == "object",
-        let many: baml.json.json[] => {
-            many.some((member) -> {
-                member == "object"
-            })
-        },
+        let many: baml.json.json[] => { many.some((member) -> { member == "object" }) },
         _ => false,
     }
 }
@@ -254,5 +264,8 @@ function with_structured_output(
         return turn;
     }
     let text = turn.terminal_text() ?? "";
-    ai.ModelTurn { ...turn, parsed_output: structured.decode(provider, text) }
+    ai.ModelTurn {
+        ...turn,
+        parsed_output: structured.decode(provider, text),
+    }
 }

@@ -18,17 +18,18 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [parse] E0010
 
-  × invalid syntax
-    ╭─[test.baml:13:5]
- 13 │     //# collect source material
-    ·     ─────────────┬─────────────
-    ·                  ╰── a `//#` header is a statement inside a block, or the title directly above a function; it is not allowed here
+  × unexpected token
+    ╭─[test.baml:14:11]
+ 14 │     client: VertexGCP
+    ·           ┬
+    ·           ╰── expected `expression`, found `':'`
     ╰────
 
-  [type] E0003
+  [parse] E0010
 
-  × unresolved name: `VertexGCP`
-    ╭─[test.baml:14:13]
- 14 │     client: VertexGCP
-    ·             ─────────
+  × unexpected token
+    ╭─[test.baml:16:11]
+ 16 │     prompt: `
+    ·           ┬
+    ·           ╰── expected `expression`, found `':'`
     ╰────

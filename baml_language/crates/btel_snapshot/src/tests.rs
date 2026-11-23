@@ -254,7 +254,11 @@ fn a_leaf_over_the_leaf_limit_is_cut_and_nothing_else_is() {
         })
         .collect();
     assert_eq!(keys, [Some("12345678"), None, Some("after")]);
-    let decoded = decode_blob(&root_blob_bytes(&snapshot), &DecodeLimits::default()).unwrap();
+    let decoded = btel_core::cas::decode_blob(
+        &root_blob_bytes(&snapshot),
+        &btel_core::cas::DecodeLimits::default(),
+    )
+    .unwrap();
     assert_eq!(decoded.id, snapshot.root_id());
 }
 

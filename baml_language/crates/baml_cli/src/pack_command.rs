@@ -205,6 +205,7 @@ impl PackArgs {
             &manifest,
             btel_settings::artifact::ArtifactKind::Pack,
         )?;
+        let gc = baml_exec::PackGc::from_manifest(&manifest)?;
 
         let (db, root, mut program, needs_format_hint) = self.load_and_compile()?;
         // The build registers before the artifact is written, so the
@@ -226,11 +227,17 @@ impl PackArgs {
             reporter.warning(crate::run_command::FORMAT_HINT);
         }
 
-        // Signature info for target resolution / reserved `help` check.
-        let engine = BexEngine::new(
+        // Signature info for target resolution / reserved `help` check. This
+        // engine never runs a target, so the packer's own `BAML_GC_*` must
+        // neither fail the pack nor matter: it uses the default policy.
+        let engine = BexEngine::new_with_config(
             program.clone(),
             Arc::new(sys_native::SysOps::native()),
             vec![],
+            bex_engine::EngineConfig {
+                gc: bex_engine::GcConfig::fixed(bex_engine::gc_settings::GcSettings::default()),
+                ..Default::default()
+            },
         )
         .map_err(|e| anyhow!("failed to initialize engine for resolution: {e:?}"))?;
 
@@ -251,6 +258,7 @@ impl PackArgs {
                 })
                 .collect(),
             telemetry,
+            gc,
         };
 
         let (serialized, fingerprint) = baml_artifact::encode_with_digest(
@@ -1586,6 +1594,12 @@ mod tests {
                 subcommand_name: "main".to_string(),
             }],
             telemetry: Default::default(),
+            gc: baml_exec::PackGc::from_manifest(
+                &"[pack.gc]\ngrowth = 1.5\nmin_growth = \"8MiB\"\n[pack.env_var_names]\nBAML_GC_GROWTH = \"ACME_GC_GROWTH\""
+                    .parse()
+                    .unwrap(),
+            )
+            .unwrap(),
         };
         let bytes =
             baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope).unwrap();
@@ -1595,6 +1609,11 @@ mod tests {
         assert_eq!(decoded.targets.len(), 1);
         assert_eq!(decoded.targets[0].qualified_name, "user.main");
         assert_eq!(decoded.targets[0].subcommand_name, "main");
+        assert_eq!(decoded.gc, envelope.gc);
+        assert_eq!(decoded.gc.growth_hundredths, Some(150));
+        assert_eq!(decoded.gc.min_growth_bytes, Some(8 << 20));
+        assert_eq!(decoded.gc.growth_env_var, "ACME_GC_GROWTH");
+        assert_eq!(decoded.gc.min_growth_env_var, "BAML_GC_MIN_GROWTH");
     }
 
     // ── canonicalize_function_name ────────────────────────────────────

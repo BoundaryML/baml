@@ -1,0 +1,4 @@
+class Shape {
+    a string @description("a description that is exactly seventy columns wide with its quotes..")
+    b string @description("a description that is seventy-one columns wide with its quotes.......")
+}

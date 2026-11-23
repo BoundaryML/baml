@@ -1,0 +1,6 @@
+function f() -> int {
+    let a = root.engine.next(root.engine.Seed { state: 4294967296 }).value;
+    let b = root.engine.next(root.engine.Seed { state: 4294967296 }).value != 0;
+    let c = root.engine.next(root.engine.Seed { state: 4294967296 }).value.clamp(1, 2);
+    a
+}

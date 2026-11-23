@@ -1,14 +1,20 @@
 # BCS API
 
-Cloud wire contracts and native clients shared by the CLI, bridges, packed programs, and telemetry delivery.
+The BCS client as BAML hosts use it: the CLI, bridges, packed programs, and telemetry delivery. The client is `bcs-sdk`, which BCS publishes; this crate re-exports its modules and adds what is BAML's own: the environment BAML reads and how it words a failure.
+
+- `endpoint`: the Boundary API endpoint, `BOUNDARY_API_URL` before a configured URL before BCS's own.
+- `store`: the saved logins under `$BAML_HOME` (default `~/.baml`).
+- `diagnostics`: credential-safe wording of each failure for BAML's users; a host chooses the operation's outcome.
+
+From `bcs-sdk`:
 
 - `auth`: device login and endpoint selection.
 - `api_keys`: read-only API-key identity and permission introspection.
-- `store` (exposed through `auth::Store`): an AWS-style JSON login cache under `$BAML_HOME/login/cache/` (default `~/.baml/login/cache/`), with one owner-only file per canonical Boundary API endpoint. CLI, bridges and packed programs share the same file format. Files contain the persistent session credential and caller profile; writes replace the file atomically. These files are plaintext and readable by processes running as the same OS user.
+- `Store`: an AWS-style JSON login cache under `<home>/login/cache/`, with one owner-only file per canonical Boundary API endpoint. CLI, bridges and packed programs share the same file format. Files contain the persistent session credential and caller profile; writes replace the file atomically. These files are plaintext and readable by processes running as the same OS user.
 - `credentials`: redacted credentials, optional request targets, and shared process-local access-token state.
 - `query`: blocking NDJSON queries and cancellation.
 - `telemetry`: asynchronous upload preparation and heartbeat, plus protobuf uploads authorized by the upload plan.
-- `wire` and `proto`: telemetry control contracts and the existing `cloud.proto` envelope.
+- `upload`: the upload contract and its envelope, `btel-core`'s (`btel_core::upload`).
 
 Windows cache operations use an owner-only empty `<endpoint-hash>.lock` file to coordinate readers, atomic replacement and logout across hosts. The lock file stays after logout and contains no credentials. Locks cover only local file operations, never HTTP requests. A blocked cache-directory path is a storage error, not an absent login.
 
@@ -42,6 +48,11 @@ embed_telemetry_env = "staging"
 BOUNDARY_PROJECT = "ACME_BOUNDARY_PROJECT"
 BOUNDARY_API_KEY = "ACME_BOUNDARY_API_KEY"
 BAML_TELEMETRY = "ACME_TELEMETRY"
+BAML_GC_GROWTH = "ACME_GC_GROWTH"         # optional, see [pack.gc]
+
+[pack.gc]
+growth = 2
+min_growth = "4MiB"
 
 [bridge]
 on_initial_telemetry_failure = "warn"
@@ -50,6 +61,8 @@ on_initial_telemetry_failure = "warn"
 embed_telemetry_api_key_from_env_var = "BAML_BRIDGE_BOUNDARY_API_KEY"
 embed_telemetry_env = "staging"
 ```
+
+`[pack.gc]` is not telemetry: it bakes the heap's collection policy into the packed binary (`growth`, a multiple of the data that survived a collection, `0.25` to `1000`, default `4`; `min_growth`, a size of at least `"1MiB"`, default `"8MiB"`). `BAML_GC_GROWTH` and `BAML_GC_MIN_GROWTH`, or the names `[pack.env_var_names]` gives them, override it at startup. There is no `[bridge.gc]`: generated SDKs read the variables. See [Memory in ENV_VARS.md](../../ENV_VARS.md#memory).
 
 Pack and bridge settings are independent. An unset, empty, or non-Unicode source variable makes the pack or generate command fail before writing the artifact. Without `--embed-telemetry`, no API key is embedded.
 

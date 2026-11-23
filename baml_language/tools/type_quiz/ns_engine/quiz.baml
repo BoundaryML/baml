@@ -34,9 +34,7 @@ function plan(
     length: int,
     budget: Budget,
 ) -> Question[] throws never {
-    served(session(items, seed, weights, length, budget)).map((turn) -> {
-        question_of(turn)
-    })
+    served(session(items, seed, weights, length, budget)).map((turn) -> { question_of(turn) })
 }
 
 /// The `index`-th question of a sitting, or `null` past its end.
@@ -73,8 +71,16 @@ function report(case: Case) -> Reported throws never {
                 messages: messages_of(failed.diagnostics),
             }
         },
-        let threw: InitThrew => Reported { compiles: true, codes: [], messages: [threw.message] },
-        reflect.Package => Reported { compiles: true, codes: [], messages: [] },
+        let threw: InitThrew => Reported {
+            compiles: true,
+            codes: [],
+            messages: [threw.message],
+        },
+        reflect.Package => Reported {
+            compiles: true,
+            codes: [],
+            messages: [],
+        },
     }
 }
 
@@ -121,22 +127,23 @@ function choosing(knobs: Knobs, seed: Seed) -> bool throws never {
 /// means rendering a second whole program, and the draw above decides
 /// whether it is wanted: a sitting draws candidates by the handful and puts
 /// one of them.
-function put(
-    candidate: Candidate,
-    foil: () -> Foil? throws never,
-    knobs: Knobs,
-    seed: Seed,
-) -> Put throws never {
-    let alone = Put { posed: candidate.case, traps: candidate.served.traps };
+function put(candidate: Candidate, foil: () -> Foil? throws never, knobs: Knobs, seed: Seed) -> Put
+    throws never
+{
+    let alone = Put {
+        posed: candidate.case,
+        traps: candidate.served.traps,
+    };
     if (!choosing(knobs, seed)) {
         return alone;
     }
-    let found = foil()
-        ?? return alone;
+    let found = foil() ?? return alone;
     let order = below(split(seed).right, 2);
-    let choice = contrast(candidate.case, found, order.value == 0)
-        ?? return alone;
-    Put { posed: choice, traps: choice.traps }
+    let choice = contrast(candidate.case, found, order.value == 0) ?? return alone;
+    Put {
+        posed: choice,
+        traps: choice.traps,
+    }
 }
 
 /// How a candidate already in hand is put at `seed`.
@@ -150,9 +157,7 @@ function put(
 function put_drawn(knobs: Knobs, item: Item, seed: Seed, candidate: Candidate) -> Put throws never {
     put(
         candidate,
-        () -> {
-            foil_of(item, seed)
-        },
+        () -> { foil_of(item, seed) },
         knobs,
         pose_seed(seed.state),
     )
@@ -254,11 +259,7 @@ function rubric(revealed: Revealed, said: Said?) -> Claim[] throws never {
 
 function reveal(posed: Posed) -> Revealed throws never {
     let cases = cases_of(posed);
-    let shared = shared_claims(
-        cases.map((case) -> {
-            case.trace
-        }),
-    );
+    let shared = shared_claims(cases.map((case) -> { case.trace }));
     Revealed {
         programs: cases.map((case) -> {
             Verdicted {

@@ -49,7 +49,7 @@ impl Boundary {
             .unwrap_or_else(|| Ok(Self::default()))
     }
     pub fn endpoint(&self) -> bcs_api::error::Result<bcs_api::Endpoint> {
-        bcs_api::Endpoint::with_default(self.api_url.as_deref())
+        bcs_api::endpoint(self.api_url.as_deref())
     }
 }
 pub(crate) fn login_endpoint(project_dir: Option<&Path>) -> Result<bcs_api::Endpoint> {

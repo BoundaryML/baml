@@ -218,7 +218,7 @@ impl TelemetryRecording {
         }
         // An unusable endpoint must not stop the program. Record locally, as
         // without cloud credentials.
-        let endpoint = match bcs_api::Endpoint::with_default(policy.api_url.as_deref()) {
+        let endpoint = match bcs_api::endpoint(policy.api_url.as_deref()) {
             Ok(endpoint) => endpoint,
             Err(error) => {
                 tracing::debug!(%error, "cloud telemetry disabled; recording locally");
@@ -235,18 +235,17 @@ impl TelemetryRecording {
                 let (credential, source) = match api_key {
                     Some(key) => (key, CredentialSource::ApiKey),
                     None => {
-                        let saved =
-                            match bcs_api::Store::new(&endpoint).and_then(|store| store.read()) {
-                                Ok(saved) => saved,
-                                Err(error) => {
-                                    return Err(artifact_configuration_error(
-                                        policy,
-                                        Some(endpoint),
-                                        CredentialSource::SavedLogin,
-                                        error,
-                                    ));
-                                }
-                            };
+                        let saved = match bcs_api::store(&endpoint).read() {
+                            Ok(saved) => saved,
+                            Err(error) => {
+                                return Err(artifact_configuration_error(
+                                    policy,
+                                    Some(endpoint),
+                                    CredentialSource::SavedLogin,
+                                    error,
+                                ));
+                            }
+                        };
                         match saved {
                             Some(saved) => (
                                 saved.refresh_token.expose().to_owned(),
@@ -326,7 +325,7 @@ impl TelemetryRecording {
         if api_key.as_deref() == Some(bcs_api::credentials::LOCAL_API_KEY) {
             return None;
         }
-        let endpoint = match bcs_api::Endpoint::with_default(api_url) {
+        let endpoint = match bcs_api::endpoint(api_url) {
             Ok(endpoint) => endpoint,
             Err(error) => {
                 let mut recording = Self::user_files(RecordingConfig::default());
@@ -349,7 +348,7 @@ impl TelemetryRecording {
         };
         let key = match api_key {
             Some(key) => key,
-            None => match bcs_api::Store::new(&endpoint).and_then(|store| store.read()) {
+            None => match bcs_api::store(&endpoint).read() {
                 Ok(Some(saved)) => saved.refresh_token.expose().to_owned(),
                 Ok(None) => return None,
                 Err(error) => {
@@ -409,7 +408,7 @@ impl TelemetryRecording {
             operation: Operation::Ingest,
         };
         Self {
-            id: RecordingId::generate(),
+            id: btel_types::new_recording_id(),
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),
@@ -434,7 +433,7 @@ impl TelemetryRecording {
     /// File output remains explicitly enabled.
     pub fn local_files(project_root: impl AsRef<Path>, config: RecordingConfig) -> Self {
         Self {
-            id: RecordingId::generate(),
+            id: btel_types::new_recording_id(),
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),
@@ -462,7 +461,7 @@ impl TelemetryRecording {
         let recordings = directory.into();
         let cas = recordings.join("cas");
         Self {
-            id: RecordingId::generate(),
+            id: btel_types::new_recording_id(),
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),
@@ -482,7 +481,7 @@ impl TelemetryRecording {
     /// Intended for packed programs and SDK hosts without a project.
     pub fn user_files(config: RecordingConfig) -> Self {
         Self {
-            id: RecordingId::generate(),
+            id: btel_types::new_recording_id(),
             config,
             host: "unknown".to_owned(),
             sources: Vec::new(),

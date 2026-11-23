@@ -2,7 +2,7 @@
 mod support;
 
 use baml_query_btel::{Index, IndexOptions, QueryRequest};
-use btel_reader::layout::SourceLayout;
+use btel_core::reader::layout::SourceLayout;
 use prost::Message as _;
 use serde_json::json;
 use support::*;
@@ -171,7 +171,7 @@ async fn process_context_empty_legacy_and_missing_cas_in_both_ingesters() {
         .unwrap()
         .initial_context_cas_id
         .unwrap();
-    let cas_path = layout.blob_path(original.into());
+    let cas_path = layout.blob_path(btel_core::recording::cas_id(original));
     let bytes = std::fs::read(&cas_path).unwrap();
     let statement = "SELECT context_distinct_id, baml_kind(context_metadata) FROM processes";
     for fresh_bytes in [u64::MAX, 0] {
@@ -242,8 +242,8 @@ async fn context_queries_are_lazy_and_recover_without_new_recordings() {
         .iter()
         .flat_map(|f| f.spans.iter().flat_map(|s| &s.sections))
     {
-        if let btel_reader::context::ContextReference::Snapshot(id) =
-            btel_reader::context::reference(section)
+        if let btel_core::reader::context::ContextReference::Snapshot(id) =
+            btel_core::reader::context::reference(section)
         {
             let path = layout.blob_path(id);
             saved

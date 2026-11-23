@@ -41,8 +41,8 @@ class Wrap<T> {
     v: T,
 }
 
-implements<T> Source<T> for Wrap<T> {
-    type Item = T
+implement<T> Source<T> for Wrap<T> {
+    type Item = T;
 
     function read<T>(self) -> int throws never {
         0

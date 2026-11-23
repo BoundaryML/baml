@@ -16,14 +16,16 @@ use std::{
     time::{Duration, Instant},
 };
 
-use btel_reader::{
-    discovery::{self, DiscoveredFile, DiscoveredRecording, FileStamp},
-    evidence::{self, ArgumentNames},
-    file::{self, FileError, FileRead},
-    layout::SourceLayout,
-    timing::EpochStatus,
+use btel_core::{
+    reader::{
+        discovery::{self, DiscoveredFile, DiscoveredRecording, FileStamp},
+        evidence::{self, ArgumentNames},
+        file::{self, FileError, FileRead},
+        layout::SourceLayout,
+        timing::EpochStatus,
+    },
+    recording::v2::{self as proto, function_definition::Resolution, span_event::Event},
 };
-use btel_recorder::proto::{self, function_definition::Resolution, span_event::Event};
 use prost::Message as _;
 use rusqlite::{Connection, OptionalExtension as _, Transaction, params, types::ValueRef};
 use serde::Serialize;
@@ -198,7 +200,7 @@ pub fn refresh(
     conn: &mut Connection,
     layout: &SourceLayout,
     options: &RefreshOptions,
-    cas: &btel_reader::cas::CasStore,
+    cas: &btel_core::reader::store::CasStore,
 ) -> Result<RefreshMetrics, Error> {
     let started = Instant::now();
     let mut metrics = RefreshMetrics::default();
@@ -218,7 +220,7 @@ fn refresh_locked(
     conn: &mut Connection,
     layout: &SourceLayout,
     options: &RefreshOptions,
-    cas: &btel_reader::cas::CasStore,
+    cas: &btel_core::reader::store::CasStore,
     metrics: &mut RefreshMetrics,
 ) -> Result<(), Error> {
     metrics.schema_rebuilt = store::ensure_schema(conn)?;
@@ -1183,7 +1185,7 @@ impl<'t> Applier<'t> {
                                      VALUES (?1, ?2, 0)",
                                 )?
                                 .execute(params![self.rec, id(section.thread_id)])?;
-                            let usage = crate::usage::from_proto(&done.usage);
+                            let usage = crate::usage::from_wire(&done.usage);
                             let changed = self
                                 .tx
                                 .prepare_cached(
@@ -1334,7 +1336,7 @@ impl<'t> Applier<'t> {
             evidence::completion(done, late).expect("validated completion flags");
         let (path, reentry) = evidence::split_node(done.node);
         self.references.paths.insert(path);
-        let usage = crate::usage::from_proto(&done.usage);
+        let usage = crate::usage::from_wire(&done.usage);
         // The first usage stored wins: a second completion is a conflict.
         let charges = !usage.is_empty()
             && self
@@ -1557,7 +1559,10 @@ impl<'t> Applier<'t> {
                 let names = layout.map(|layout| ArgumentNames::from_wire(layout).encode());
                 let span = metadata.source_span.as_ref();
                 let map = metadata.source_map.as_ref().map(|map| {
-                    btel_reader::source_map::SourceMap::from_wire(map, span.map(|s| s.file_id))
+                    btel_core::reader::source_map::SourceMap::from_wire(
+                        map,
+                        span.map(|s| s.file_id),
+                    )
                 });
                 if let Some(Err(reason)) = &map {
                     self.issue(
@@ -1822,7 +1827,7 @@ impl<'t> Applier<'t> {
         let utc = epoch
             .utc
             .as_ref()
-            .and_then(btel_reader::timing::UtcAnchor::from_wire);
+            .and_then(btel_core::reader::timing::UtcAnchor::from_wire);
         let values = params![
             self.rec,
             id(epoch.epoch_id),
@@ -2117,9 +2122,9 @@ pub(super) fn resolve_nodes(tx: &Transaction<'_>, rec: i64) -> Result<(), Error>
             let (_, callee, edge) = &waiting[&path];
             let node = match parent_node {
                 Some(None) => None,
-                parent => names
-                    .get(callee)
-                    .map(|name| crate::functions::node_hash(parent.flatten(), name, *edge)),
+                parent => names.get(callee).map(|name| {
+                    btel_core::reader::profile::node_hash(parent.flatten(), name, *edge)
+                }),
             };
             nodes.insert(path, node);
             parent_node = Some(node);

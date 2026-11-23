@@ -117,7 +117,7 @@ fn test_host_callable_hof_receives_a_baml_closure() {
     // BAML hands the callback a closure of its own; it arrives as the
     // callback's declared parameter type, a `BamlFunction`, and each call
     // runs back into BAML. Calling it twice shows the handle outlives a call.
-    let cb = |f: baml_bridge::BamlFunction<(i64,), i64, std::convert::Infallible>| {
+    let cb = |f: baml_sdk::baml_bridge::BamlFunction<(i64,), i64, std::convert::Infallible>| {
         let first = f
             .call_sync((41,))
             .expect("the BAML closure computes `x + 1`");
@@ -178,7 +178,7 @@ fn test_host_callable_void_signatures() {
         move |_value: i64| -> Result<(), ValueError> { Err(raised.clone()) }
     };
     let err = call_throwing_void_callback_sync(failing, 4).unwrap_err();
-    let baml_bridge::Error::Thrown { value, .. } = err else {
+    let baml_sdk::baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the callback's error, got {err}");
     };
     assert_eq!(value.downcast_ref::<ValueError>(), Some(&raised));
@@ -227,7 +227,7 @@ fn test_host_callables_throwing_callable_round_trips_original_python_exception()
     // rehydrated to the original on the same host.
     let err =
         call_with_callback_sync(cb, 1).expect_err("the host throw must surface to the caller");
-    let baml_bridge::Error::Thrown { value, .. } = err else {
+    let baml_sdk::baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the opaque host throw as a HostCallable, got {err}");
     };
     let original = value
@@ -252,7 +252,7 @@ fn test_host_callables_throwing_callable_keyerror_round_trips_with_identity() {
 
     let err =
         call_with_callback_sync(cb, 1).expect_err("the host throw must surface to the caller");
-    let baml_bridge::Error::Thrown { value, .. } = err else {
+    let baml_sdk::baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the opaque host throw, got {err}");
     };
     assert_eq!(value.downcast_ref::<KeyError>(), Some(&raised));
@@ -288,7 +288,7 @@ fn test_host_callables_throwing_callable_custom_python_exception_round_trips_wit
 
     let err =
         call_with_callback_sync(cb, 1).expect_err("the host throw must surface to the caller");
-    let baml_bridge::Error::Thrown { value, .. } = err else {
+    let baml_sdk::baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the opaque host throw, got {err}");
     };
     let original = value
@@ -349,7 +349,7 @@ fn test_host_callables_throwing_callable_bamlerror_propagates_back_with_typed_fi
         .expect_err("the uncaught typed throw must propagate to the caller");
     // The callback's declared throws is a real BAML class, so it propagates as
     // that class: `E = ValidationError`, surfaced in `Error::Thrown`.
-    let baml_bridge::Error::Thrown { value, .. } = err else {
+    let baml_sdk::baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the typed throw, got {err}");
     };
     assert_eq!(value.code, 7);
@@ -376,7 +376,7 @@ fn test_host_callables_throwing_async_callable_round_trips_original_python_excep
 
     let err =
         call_with_callback_sync(cb, 1).expect_err("the host throw must surface to the caller");
-    let baml_bridge::Error::Thrown { value, .. } = err else {
+    let baml_sdk::baml_bridge::Error::Thrown { value, .. } = err else {
         panic!("expected the opaque host throw, got {err}");
     };
     assert_eq!(value.downcast_ref::<ValueError>(), Some(&raised));
@@ -404,8 +404,8 @@ fn test_host_callables_multiple_throws_in_flight_do_not_collide_in_registry() {
     let err_second = call_with_callback_sync(cb_second, 2)
         .expect_err("the host throw must surface to the caller");
     let (
-        baml_bridge::Error::Thrown { value: first, .. },
-        baml_bridge::Error::Thrown { value: second, .. },
+        baml_sdk::baml_bridge::Error::Thrown { value: first, .. },
+        baml_sdk::baml_bridge::Error::Thrown { value: second, .. },
     ) = (err_first, err_second)
     else {
         panic!("expected both opaque host throws");

@@ -74,19 +74,26 @@ fn composites_that_are_not_tokens_split() {
     assert_eq!(sig("...."), vec![(K::DotDotDot, "..."), (K::Dot, ".")]);
     assert_eq!(
         sig("x->y"),
-        vec![(K::Word, "x-"), (K::Greater, ">"), (K::Word, "y")]
+        vec![(K::Word, "x"), (K::Arrow, "->"), (K::Word, "y")]
     );
 }
 
 #[test]
 fn words_hyphens_and_dollars() {
+    // A `-` never joins a name: `a-b` subtracts.
     assert_eq!(
-        sig("gpt-4o a- a--b x-1"),
+        sig("a-b a- -b x-y"),
         vec![
-            (K::Word, "gpt-4o"),
-            (K::Word, "a-"),
-            (K::Word, "a--b"),
-            (K::Word, "x-1")
+            (K::Word, "a"),
+            (K::Minus, "-"),
+            (K::Word, "b"),
+            (K::Word, "a"),
+            (K::Minus, "-"),
+            (K::Minus, "-"),
+            (K::Word, "b"),
+            (K::Word, "x"),
+            (K::Minus, "-"),
+            (K::Word, "y"),
         ]
     );
     assert_eq!(sig("Foo$bar"), vec![(K::Word, "Foo$bar")]);
@@ -107,9 +114,32 @@ fn words_hyphens_and_dollars() {
         ]
     );
     assert_eq!(
-        sig("type-x type"),
-        vec![(K::Word, "type-x"), (K::Type, "type")]
+        sig("type-x typed type"),
+        vec![
+            (K::Type, "type"),
+            (K::Minus, "-"),
+            (K::Word, "x"),
+            (K::Word, "typed"),
+            (K::Type, "type"),
+        ]
     );
+}
+
+#[test]
+fn a_byte_order_mark_is_whitespace() {
+    assert_eq!(
+        toks("\u{feff}class C {}"),
+        vec![
+            (K::Whitespace, "\u{feff}"),
+            (K::Class, "class"),
+            (K::Whitespace, " "),
+            (K::Word, "C"),
+            (K::Whitespace, " "),
+            (K::LBrace, "{"),
+            (K::RBrace, "}"),
+        ]
+    );
+    round_trips("\u{feff}let x = 1;");
 }
 
 #[test]

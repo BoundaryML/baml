@@ -173,8 +173,6 @@ function expression_hole() -> int {
 }
 
 function annotation_hole_into_a_lambda() -> int {
-    let f: (_) -> int throws never = (x) -> {
-        1
-    };
+    let f: (_) -> int throws never = (x) -> { 1 };
     0
 }

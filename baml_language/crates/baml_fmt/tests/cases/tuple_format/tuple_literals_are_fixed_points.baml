@@ -1,0 +1,7 @@
+function f() -> int {
+    let a = (1, "a");
+    let b = (1,);
+    let c = ((1, 2), (3,), [4]);
+    let d = (a, b)[0];
+    0
+}

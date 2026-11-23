@@ -6,10 +6,9 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-use btel_bcs::{
-    delivery::{BcsDelivery, DeliveryConfig, DeliveryError, InitialAuthorization},
-    proto::CloudUploadEnvelope,
-    wire::{Disposition, PrepareUploadsRequest, ProposedUploadTarget, UploadKind},
+use btel_bcs::delivery::{BcsDelivery, DeliveryConfig, DeliveryError, InitialAuthorization};
+use btel_core::upload::{
+    Disposition, PrepareUploadsRequest, ProposedUploadTarget, UploadKind, envelope::UploadEnvelope,
 };
 use btel_processor::{AggregateDelta, Publisher};
 use btel_recorder::{RecordingConfig, RecordingId, RecordingPublisher, SealedFile};
@@ -352,7 +351,7 @@ async fn advisory_heartbeat_failure_does_not_interrupt_draining_uploads() {
         .and(wiremock::matchers::path_regex("uploads:prepare$"))
         .respond_with(move |request: &Request| {
             let mut plan = response(request, &base, &[]);
-            plan.heartbeat = Some(btel_bcs::wire::HeartbeatPolicy {
+            plan.heartbeat = Some(btel_core::upload::HeartbeatPolicy {
                 interval_ms: 10,
                 staleness_threshold_ms: 100,
             });
@@ -556,18 +555,15 @@ async fn mixed_plan_prunes_without_serializing_and_uploads_canonical_envelopes()
         assert!(!request.headers.contains_key("authorization"));
         assert!(!request.headers.contains_key("cookie"));
         assert_eq!(request.headers["x-required"], "signed-value");
-        let body = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
+        let body = UploadEnvelope::decode(request.body.as_slice()).unwrap();
         assert_eq!(body.format_version, 1);
         assert_eq!(body.plan_id, "plan-1");
         assert_eq!(
             body.recording_file.as_ref(),
             (body.upload_id == "1-0").then_some(&recording_bytes)
         );
-        for object in body.cas_objects {
-            assert_eq!(
-                object.snapshot_format_version,
-                btel_settings::snapshot::BLOB_VERSION
-            );
+        for object in body.blobs {
+            assert_eq!(object.snapshot_format_version, btel_core::cas::VERSION);
             assert_eq!(object.blob_sha256, Sha256::digest(&object.blob).to_vec());
             uploaded.push((object.snapshot_id, object.blob));
         }
@@ -1096,8 +1092,8 @@ async fn uploaded_blobs(server: &MockServer) -> Vec<(String, Vec<u8>)> {
     let mut blobs = Vec::new();
     for request in server.received_requests().await.unwrap() {
         if request.method == "PUT" {
-            let envelope = CloudUploadEnvelope::decode(request.body.as_slice()).unwrap();
-            for object in envelope.cas_objects {
+            let envelope = UploadEnvelope::decode(request.body.as_slice()).unwrap();
+            for object in envelope.blobs {
                 assert_eq!(object.blob_sha256, Sha256::digest(&object.blob).to_vec());
                 blobs.push((request.url.path().to_owned(), object.blob));
             }
@@ -1468,7 +1464,7 @@ async fn shutdown_gives_a_stalled_first_connection_only_the_shutdown_timeout() {
     let delivery = Arc::new(
         BcsDelivery::new(
             DeliveryConfig {
-                initial_recording_id: Some(RecordingId::generate()),
+                initial_recording_id: Some(btel_types::new_recording_id()),
                 terminal_initial_connection: true,
                 shutdown_timeout: Duration::from_millis(200),
                 ..DeliveryConfig::new(

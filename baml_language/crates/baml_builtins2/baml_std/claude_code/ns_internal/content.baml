@@ -10,7 +10,10 @@
 /// stdin message. `suffix` is the text the client appends after the prompt:
 /// the folded journal and the tool protocol.
 function stdin_message(prompt: ai.Prompt, suffix: string) -> string {
-    let message: json = { "type": "user", "message": { "role": "user", "content": content_blocks(prompt, suffix) } };
+    let message: json = {
+        "type": "user",
+        "message": { "role": "user", "content": content_blocks(prompt, suffix) },
+    };
     `${baml.json.stringify(message)}\n`
 }
 
@@ -67,10 +70,10 @@ function _media_block(media: ai.MediaPart) -> json {
         let image: baml.media.Image => "image",
         let pdf: baml.media.Pdf => "document",
         let audio: baml.media.Audio => {
-            throw _reject("claude-code does not support audio prompt input")
+            throw _reject("claude-code does not support audio prompt input");
         },
         let video: baml.media.Video => {
-            throw _reject("claude-code does not support video prompt input")
+            throw _reject("claude-code does not support video prompt input");
         },
     };
     let resolved = ai.wire.resolve_media(media, false);
@@ -83,7 +86,7 @@ function _media_block(media: ai.MediaPart) -> json {
         if (!_supported_image_mime(lower)) {
             throw _reject(
                 `claude-code does not accept ${resolved.mime_type} images: it supports image/jpeg, image/png, image/gif and image/webp`,
-            )
+            );
         }
         lower
     } else {
@@ -91,7 +94,11 @@ function _media_block(media: ai.MediaPart) -> json {
     };
     {
         "type": block_type,
-        "source": { "type": "base64", "media_type": media_type, "data": resolved.base64 ?? "" },
+        "source": {
+            "type": "base64",
+            "media_type": media_type,
+            "data": resolved.base64 ?? "",
+        },
     }
 }
 

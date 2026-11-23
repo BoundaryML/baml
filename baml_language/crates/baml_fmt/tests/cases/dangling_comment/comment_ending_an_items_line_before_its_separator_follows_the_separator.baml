@@ -1,0 +1,12 @@
+function f(a: int) -> int {
+    foo(-
+// c
+a//C2
+, 1);
+    let x = [-
+// c
+a //C2
+, 1];
+    bar(a //C3
+    , 1)
+}

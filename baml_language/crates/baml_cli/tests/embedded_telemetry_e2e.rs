@@ -63,29 +63,22 @@ async fn embedding_api(server: &MockServer) {
         .await;
 }
 
-/// Every build the functions of the recordings uploaded in `requests` name.
+/// Every build the headers of the recordings uploaded in `requests` name.
 fn recorded_builds(requests: &[Request]) -> Vec<Vec<u8>> {
     use prost::Message as _;
     let mut builds: Vec<Vec<u8>> = requests
         .iter()
         .filter(|request| request.method == "PUT")
         .filter_map(|request| {
-            btel_bcs::proto::CloudUploadEnvelope::decode(request.body.as_slice())
+            btel_core::upload::envelope::UploadEnvelope::decode(request.body.as_slice())
                 .ok()?
                 .recording_file
         })
-        .flat_map(|bytes| {
-            btel_recorder::proto::RecordingFile::decode(bytes.as_slice())
+        .filter_map(|bytes| {
+            let header = btel_recorder::proto::RecordingFile::decode(bytes.as_slice())
                 .unwrap()
-                .definitions
-                .unwrap()
-                .functions
-        })
-        .filter_map(|function| match function.resolution? {
-            btel_recorder::proto::function_definition::Resolution::Metadata(metadata) => {
-                metadata.build_id
-            }
-            btel_recorder::proto::function_definition::Resolution::Unavailable(_) => None,
+                .header?;
+            Some(header.build?.build_id)
         })
         .collect();
     builds.sort();
@@ -488,12 +481,10 @@ async fn packed_api_key_is_verified_and_fixed_with_endpoint_override() {
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
     let requests = run_server.received_requests().await.unwrap();
     assert!(requests.iter().any(|request| request.method == "PUT"));
-    // The binary's functions name the build that packed it, which runs no
-    // compiler of its own and so registers nothing.
-    assert_eq!(
-        recorded_builds(&requests),
-        [hex::decode(build["build"]["build_id"].as_str().unwrap()).unwrap()]
-    );
+    // The binary runs no compiler of its own, so it registers nothing. It
+    // carries the ID of the build that packed it and not the rest of that
+    // build, so its recordings name no build.
+    assert_eq!(recorded_builds(&requests), Vec::<Vec<u8>>::new());
     assert!(
         requests
             .iter()
@@ -669,7 +660,8 @@ async fn malformed_publisher_settings_fail_before_writing_an_artifact() {
     initial_telemetry_warning_message
     http_bodies
     env_var_names
-    build"#,
+    build
+    gc"#,
         ),
         (
             "bridge",

@@ -1,0 +1,37 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(x: int) -> int {
+    if (x > 0) {
+        x
+    }
+    --x
+}
+
+function g(x: int) -> int {
+    match (x) {
+        _ => 1,
+    } - -x
+}
+
+function h(x: int) -> int {
+    if (x > 0) {
+        x
+    }
+    /* c */ ---x
+}
+
+function i(x: int) -> int {
+    if (x > 0) {
+        x
+    }
+    -(/* c */ -x)
+}
+
+function j(x: int) -> int {
+    if (x > 0) {
+        x
+    }
+    // c
+    --x
+}

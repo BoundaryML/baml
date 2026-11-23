@@ -5,16 +5,17 @@
 //! the launch context. They are fallbacks, never overrides. Running markers
 //! supply timing, not another context capture. A network span has only its
 //! announcement's context.
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
-use btel_reader::{
-    cas::{CasStore, CasUnavailable},
-    context::{ContextReference, reference},
-    discovery::FileStamp,
-    value::{Found, Nav, RenderLimits, Root, Segment, navigate},
+use btel_core::{
+    cas::CasId,
+    reader::{
+        context::{self, ContextReference, reference},
+        discovery::FileStamp,
+        store::{CasStore, CasUnavailable},
+    },
+    recording::v2::{self as proto, span_event::Event},
 };
-use btel_recorder::proto::{self, span_event::Event};
-use btel_snapshot::{CasId, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue};
 use rusqlite::{Connection, Transaction, params};
 
 use crate::Error;
@@ -117,7 +118,7 @@ fn resolve_with(
     cas: &CasStore,
     options: &super::RefreshOptions,
     facts_changed: bool,
-    mut load: impl FnMut(CasId) -> btel_reader::cas::CasLoad,
+    mut load: impl FnMut(CasId) -> btel_core::reader::store::CasLoad,
 ) -> Result<(), Error> {
     if facts_changed {
         conn.execute(
@@ -164,7 +165,7 @@ fn resolve_with(
             bytes = bytes.saturating_add(loaded.bytes_read);
             let (state, identity, failed_stamp) = match loaded.snapshot {
                 Ok(snapshot) => {
-                    let identity = identity(cas, &snapshot);
+                    let identity = context::identity(cas, &snapshot);
                     (
                         if identity.is_ok() { 1 } else { 2 },
                         identity.ok().flatten(),
@@ -208,85 +209,9 @@ fn fingerprint(stamp: FileStamp) -> Vec<u8> {
     .concat()
 }
 
-/// A context's `distinct_id`, or `Err` when the blob is not a context: a map
-/// whose `metadata` is a map of scalars. A long string is a blob of its own,
-/// read from `cas`.
-fn identity(cas: &CasStore, snapshot: &Arc<DecodedSnapshot>) -> Result<Option<String>, ()> {
-    let max_blobs = RenderLimits::default().max_blobs;
-    let find = |path: &[Segment]| navigate(cas, snapshot, Root::Value, None, path, max_blobs);
-    let key = |key: &str| Segment::Key(key.to_owned());
-    let DecodedRoot::Value(DecodedValue::Object(root)) = snapshot.root else {
-        return Err(());
-    };
-    if !matches!(snapshot.object(root), DecodedObject::Map { .. }) {
-        return Err(());
-    }
-    let Nav::Value(metadata) = find(&[key("metadata")]) else {
-        return Err(());
-    };
-    let Found::Object(id) = metadata.value() else {
-        return Err(());
-    };
-    let DecodedObject::Map { entries, .. } = metadata.blob().object(*id) else {
-        return Err(());
-    };
-    for (name, value) in entries {
-        let child;
-        let name = if let DecodedValue::External(index) = name {
-            child = btel_reader::value::BlobSource::load(cas, metadata.blob().child(*index))
-                .map_err(|_| ())?;
-            let DecodedRoot::Value(name) = &child.root else {
-                return Err(());
-            };
-            name
-        } else {
-            name
-        };
-        let DecodedValue::String(name) = name else {
-            return Err(());
-        };
-        let scalar = match value {
-            DecodedValue::String(_)
-            | DecodedValue::Int(_)
-            | DecodedValue::Float(_)
-            | DecodedValue::Bool(_) => true,
-            DecodedValue::External(_) | DecodedValue::ExternalNode { .. } => matches!(
-                find(&[key("metadata"), key(name)]),
-                Nav::Value(found) if matches!(found.value(), Found::String(_))
-            ),
-            DecodedValue::Null
-            | DecodedValue::OmittedArg
-            | DecodedValue::Bigint(_)
-            | DecodedValue::Object(_)
-            | DecodedValue::Type(_)
-            | DecodedValue::Enum { .. }
-            | DecodedValue::Truncated(_)
-            | DecodedValue::Redacted(_) => false,
-        };
-        if !scalar {
-            return Err(());
-        }
-    }
-    match find(&[key("distinct_id")]) {
-        Nav::Value(found) => match found.value() {
-            Found::String(value) => Ok(Some(value.to_string())),
-            Found::Null => Ok(None),
-            Found::Bool(_)
-            | Found::Int(_)
-            | Found::Float(_)
-            | Found::Bigint(_)
-            | Found::Type(_)
-            | Found::Enum { .. }
-            | Found::Object(_)
-            | Found::Redacted(_) => Err(()),
-        },
-        Nav::Arguments(_) | Nav::Missing | Nav::Unavailable(_) => Err(()),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use btel_reader::cas::CasLimits;
+    use btel_core::reader::store::CasLimits;
     use btel_snapshot::{Limits, SnapshotPool};
     use btel_types::context::{Context, ContextPatch};
 

@@ -59,9 +59,19 @@ function prompt_of(question: Question) -> Prompt throws never {
     let item = question.item;
     let seed = question.seed * 1n;
     match (question.posed) {
-        let case: Case => Prompt { item, seed, program: case.files, against: null },
+        let case: Case => Prompt {
+            item,
+            seed,
+            program: case.files,
+            against: null,
+        },
         let choice: Choice => {
-            Prompt { item, seed, program: choice.first().files, against: choice.second().files }
+            Prompt {
+                item,
+                seed,
+                program: choice.first().files,
+                against: choice.second().files,
+            }
         },
     }
 }
@@ -102,7 +112,9 @@ function said_of(word: string) -> Said? throws never {
     } else if (word == "unsure") {
         null
     } else {
-        throw baml.panics.Unreachable { message: `no such answer: ${word}` }
+        throw baml.panics.Unreachable {
+            message: `no such answer: ${word}`,
+        };
     }
 }
 
@@ -189,17 +201,18 @@ function understanding_word(understanding: Understanding) -> string throws never
 /// Judge `answer` against `question`. A function of the two and of nothing
 /// else: whether the answer is right is decided by the key, never by what
 /// the learner wrote.
-function judge(
-    question: Question,
-    answer: Answer,
-    reasoning: Reasoning?,
-) -> Judgement throws never {
+function judge(question: Question, answer: Answer, reasoning: Reasoning?) -> Judgement
+    throws never
+{
     let verdict_correct = match (answer.said) {
         let verdict: VerdictKind => matches_verdict(question.posed, verdict),
         let chose: Chose => matches_choice(question.posed, chose),
         null => null,
     };
-    Judgement { verdict_correct, reasoning }
+    Judgement {
+        verdict_correct,
+        reasoning,
+    }
 }
 
 /// # Panics
@@ -212,7 +225,9 @@ function matches_verdict(posed: Posed, verdict: VerdictKind) -> bool throws neve
     match (posed) {
         let case: Case => verdict == verdict_kind(case.key),
         Choice => {
-            throw baml.panics.Unreachable { message: "a verdict was given for a question that showed two programs" }
+            throw baml.panics.Unreachable {
+                message: "a verdict was given for a question that showed two programs",
+            };
         },
     }
 }
@@ -224,7 +239,9 @@ function matches_verdict(posed: Posed, verdict: VerdictKind) -> bool throws neve
 function matches_choice(posed: Posed, chose: Chose) -> bool throws never {
     match (posed) {
         Case => {
-            throw baml.panics.Unreachable { message: "a choice was given for a question that showed one program" }
+            throw baml.panics.Unreachable {
+                message: "a choice was given for a question that showed one program",
+            };
         },
         let choice: Choice => chose.second == choice.second_compiles(),
     }
@@ -252,11 +269,7 @@ function marked(transcript: Transcript) -> Understanding[] throws never {
 }
 
 function how_many(understandings: Understanding[], of: Understanding) -> int throws never {
-    understandings
-        .filter((u) -> {
-            u == of
-        })
-        .length()
+    understandings.filter((u) -> { u == of }).length()
 }
 
 function tally(transcript: Transcript) -> Score throws never {
@@ -264,14 +277,10 @@ function tally(transcript: Transcript) -> Score throws never {
     Score {
         asked: transcript.exchanges.length(),
         committed: transcript.exchanges
-            .filter((exchange) -> {
-                exchange.judgement.verdict_correct != null
-            })
+            .filter((exchange) -> { exchange.judgement.verdict_correct != null })
             .length(),
         answers_right: transcript.exchanges
-            .filter((exchange) -> {
-                exchange.judgement.verdict_correct == true
-            })
+            .filter((exchange) -> { exchange.judgement.verdict_correct == true })
             .length(),
         sound: how_many(understandings, Understanding.Sound),
         partial: how_many(understandings, Understanding.Partial),
@@ -316,25 +325,27 @@ function exists(path: string) -> bool throws never {
 function transcript_path(dir: string, mode: Mode, seed: int) -> string throws never {
     let stem = `${dir}/${mode_name(mode)}-${seed}`;
     baml.iter.Range.new(0, 1000)
-        .map((n) -> {
-            `${stem}-${n}.json`
-        })
-        .find((path) -> {
-            !exists(path)
-        })
+        .map((n) -> { `${stem}-${n}.json` })
+        .find((path) -> { !exists(path) })
         ?? `${stem}-full.json`
 }
 
 function save(transcript: Transcript, dir: string) -> SaveResult throws never {
     let path = transcript_path(dir, transcript.mode, transcript.seed);
     let written: string | SaveFailed = baml.json.stringify(transcript) catch_all (e) {
-        _ => SaveFailed { path, message: `${e}` },
+        _ => SaveFailed {
+            path,
+            message: `${e}`,
+        },
     };
     match (written) {
         let failed: SaveFailed => failed,
         let text: string => {
             let bytes: int | SaveFailed = baml.fs.write(path, `${text}\n`) catch_all (e) {
-                _ => SaveFailed { path, message: `${e}` },
+                _ => SaveFailed {
+                    path,
+                    message: `${e}`,
+                },
             };
             match (bytes) {
                 let failed: SaveFailed => failed,
@@ -348,13 +359,19 @@ function save(transcript: Transcript, dir: string) -> SaveResult throws never {
 /// the catch binding fits on one line, which the parser needs.
 function decode(path: string, text: string) -> Transcript | LoadFailed throws never {
     baml.json.decode<Transcript>(text) catch_all (e) {
-        _ => LoadFailed { path, message: `${e}` },
+        _ => LoadFailed {
+            path,
+            message: `${e}`,
+        },
     }
 }
 
 function load(path: string) -> LoadResult throws never {
     let read: string | LoadFailed = baml.fs.read(path) catch_all (e) {
-        _ => LoadFailed { path, message: `${e}` },
+        _ => LoadFailed {
+            path,
+            message: `${e}`,
+        },
     };
     match (read) {
         let failed: LoadFailed => failed,

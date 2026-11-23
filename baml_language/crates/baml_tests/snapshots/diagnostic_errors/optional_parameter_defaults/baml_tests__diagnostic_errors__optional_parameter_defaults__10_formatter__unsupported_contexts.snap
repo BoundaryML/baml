@@ -18,9 +18,7 @@ class Counter {
 }
 
 function LambdaDefault() -> int {
-    let f = (x: int = 1) -> int {
-        x
-    };
+    let f = (x: int = 1) -> int { x };
     f(2)
 }
 

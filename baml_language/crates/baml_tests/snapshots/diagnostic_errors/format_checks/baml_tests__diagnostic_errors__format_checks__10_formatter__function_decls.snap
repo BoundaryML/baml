@@ -51,8 +51,7 @@ function SixLongParams(
 }
 
 // ===== Long name alone exceeding limit =====
-function ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded(
-) -> int {
+function ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded() -> int {
     1
 }
 
@@ -86,21 +85,22 @@ function ComplexReturn(x: int) -> int | string | null {
 }
 
 // ===== Return type: nested generics exceeding limit =====
-function NestedGenericReturn(
-) -> map<string, map<string, map<string, int | string | bool | null | float>>> {
+function NestedGenericReturn() -> map<
+    string,
+    map<string, map<string, int | string | bool | null | float>>,
+> {
     { "a": { "b": { "c": 1 } } }
 }
 
 // ===== Return type: deeply nested function type exceeding limit =====
-function DeepFnReturn(
-) -> (
+function DeepFnReturn() -> (
     x: int,
 ) -> (
     (
         y: int,
-    ) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never) throws never
-) throws never
-{
+    ) -> ((z: int) -> ((w: int) -> map<string, int | string | bool> throws never) throws never)
+        throws never
+) throws never {
     1
 }
 
@@ -115,18 +115,21 @@ function DeepParamTypes(
 // ===== Trivia on function declaration (line comments) =====
 // 1 function keyword leading
 function // 2 function keyword trailing
-    // 3 name leading
-    TriviaFunc // 4 name trailing
-    // 5 open paren leading
-    ( // 6 open paren trailing
+// 3 name leading
+TriviaFunc // 4 name trailing
+// 5 open paren leading
+( // 6 open paren trailing
     // 7 param leading
-    x: int, // 11 type trailing
+    x // 8 param name trailing
+        : // 9 colon trailing
+            // 10 type leading
+            int, // 11 type trailing
     // 12 close paren leading
 ) // 13 close paren trailing
     // 14 arrow leading
     -> // 15 arrow trailing
-    // 16 return type leading
-    int // 17 return type trailing
+        // 16 return type leading
+        int // 17 return type trailing
 // 18 body leading
 { // 19 body open trailing
     x
@@ -136,11 +139,23 @@ function // 2 function keyword trailing
 
 // ===== Trivia on function declaration (block comments) =====
 /* 1 function keyword leading */
-function /* 2 function keyword trailing */ /* 3 name leading */ TriviaFuncBlock /* 4 name trailing */ /* 5 open paren leading */ ( /* 6 open paren trailing */
+function /* 2 function keyword trailing */
+/* 3 name leading */
+TriviaFuncBlock /* 4 name trailing */
+/* 5 open paren leading */
+(/* 6 open paren trailing */
     /* 7 param leading */
-    x: /* 9 colon trailing *//* 10 type leading */int, /* 11 type trailing */
+    x /* 8 param name trailing */: /* 9 colon trailing */
+        /* 10 type leading */
+        int /* 11 type trailing */,
     /* 12 close paren leading */
-) /* 13 close paren trailing */ /* 14 arrow leading */ -> /* 15 arrow trailing */ /* 16 return type leading */ int /* 17 return type trailing */ /* 18 body leading */ { /* 19 body open trailing */
+) /* 13 close paren trailing */
+/* 14 arrow leading */
+-> /* 15 arrow trailing */
+    /* 16 return type leading */
+    int /* 17 return type trailing */
+/* 18 body leading */
+{ /* 19 body open trailing */
     x
 } /* 20 body close trailing */
 
@@ -149,9 +164,16 @@ function /* 2 function keyword trailing */ /* 3 name leading */ TriviaFuncBlock 
 // ===== Multiple param trivia (line comments) =====
 function MultiParamTrivia(
     // 1 first param leading
-    a: int, // 6 comma trailing
+    a // 2 first param trailing
+        : // 3 first colon trailing
+            // 4 first type leading
+            int, // 5 first type trailing
+    // 6 comma trailing
     // 7 second param leading
-    b: string, // 11 second type trailing
+    b // 8 second param trailing
+        : // 9 second colon trailing
+            // 10 second type leading
+            string, // 11 second type trailing
 ) -> int {
     a
 }
@@ -159,9 +181,13 @@ function MultiParamTrivia(
 // ===== Multiple param trivia (block comments) =====
 function MultiParamTriviaBlock(
     /* 1 first param leading */
-    a: /* 3 first colon trailing *//* 4 first type leading */int/* 5 first type trailing */, /* 6 comma trailing */
+    a /* 2 first param trailing */: /* 3 first colon trailing */
+        /* 4 first type leading */
+        int /* 5 first type trailing */, /* 6 comma trailing */
     /* 7 second param leading */
-    b: /* 9 second colon trailing *//* 10 second type leading */string, /* 11 second type trailing */
+    b /* 8 second param trailing */: /* 9 second colon trailing */
+        /* 10 second type leading */
+        string /* 11 second type trailing */,
 ) -> int {
     a
 }
@@ -169,22 +195,37 @@ function MultiParamTriviaBlock(
 // ===== Trivia on wrapping function with many params (line comments) =====
 // 1 leading
 function // 2 trailing
-    // 3 leading
-    TriviaWrapParams // 4 trailing
-    ( // 5 trailing
+// 3 leading
+TriviaWrapParams( // 4 trailing
+    // 5 trailing
     // 6 leading
-    first_parameter: int, // 11 trailing
+    first_parameter // 7 trailing
+        : // 8 trailing
+            // 9 leading
+            int, // 10 trailing
+    // 11 trailing
     // 12 leading
-    second_parameter: string, // 17 trailing
+    second_parameter // 13 trailing
+        : // 14 trailing
+            // 15 leading
+            string, // 16 trailing
+    // 17 trailing
     // 18 leading
-    third_parameter: bool, // 23 trailing
+    third_parameter // 19 trailing
+        : // 20 trailing
+            // 21 leading
+            bool, // 22 trailing
+    // 23 trailing
     // 24 leading
-    fourth_parameter: float, // 28 trailing
+    fourth_parameter // 25 trailing
+        : // 26 trailing
+            // 27 leading
+            float, // 28 trailing
 ) // 29 trailing
     // 30 leading
     -> // 31 trailing
-    // 32 leading
-    string // 33 trailing
+        // 32 leading
+        string // 33 trailing
 // 34 leading
 { // 35 trailing
     "result"
@@ -194,46 +235,73 @@ function // 2 trailing
 
 // ===== Trivia on wrapping function with many params (block comments) =====
 /* 1 leading */
-function /* 2 trailing */ /* 3 leading */ TriviaWrapParamsBlock /* 4 trailing */ ( /* 5 trailing */
+function /* 2 trailing */
+/* 3 leading */
+TriviaWrapParamsBlock /* 4 trailing */(/* 5 trailing */
     /* 6 leading */
-    first_parameter: /* 8 trailing *//* 9 leading */int/* 10 trailing */, /* 11 trailing */
+    first_parameter /* 7 trailing */: /* 8 trailing */
+        /* 9 leading */
+        int /* 10 trailing */, /* 11 trailing */
     /* 12 leading */
-    second_parameter: /* 14 trailing *//* 15 leading */string/* 16 trailing */, /* 17 trailing */
+    second_parameter /* 13 trailing */: /* 14 trailing */
+        /* 15 leading */
+        string /* 16 trailing */, /* 17 trailing */
     /* 18 leading */
-    third_parameter: /* 20 trailing *//* 21 leading */bool/* 22 trailing */, /* 23 trailing */
+    third_parameter /* 19 trailing */: /* 20 trailing */
+        /* 21 leading */
+        bool /* 22 trailing */, /* 23 trailing */
     /* 24 leading */
-    fourth_parameter: /* 26 trailing *//* 27 leading */float, /* 28 trailing */
-) /* 29 trailing */ /* 30 leading */ -> /* 31 trailing */ /* 32 leading */ string /* 33 trailing */ /* 34 leading */ { /* 35 trailing */
+    fourth_parameter /* 25 trailing */: /* 26 trailing */
+        /* 27 leading */
+        float /* 28 trailing */,
+) /* 29 trailing */
+/* 30 leading */
+-> /* 31 trailing */
+    /* 32 leading */
+    string /* 33 trailing */
+/* 34 leading */
+{ /* 35 trailing */
     "result"
 } /* 36 trailing */
 
 ///////////////////
 
 // ===== Trivia on wrapping return type (line comments) =====
-function TriviaWrapReturnType(
-    x: int,
-) -> // 1 first member leading
+function TriviaWrapReturnType(x: int) ->
+    // 1 first member leading
     int // 2 first trailing
-    // 3 pipe leading
-    | string // 6 second trailing
-    // 7 pipe leading
-    | bool // 10 third trailing
-    // 11 pipe leading
-    | null // 14 fourth trailing
+        // 3 pipe leading
+        | // 4 pipe trailing
+        // 5 second leading
+        string // 6 second trailing
+        // 7 pipe leading
+        | // 8 pipe trailing
+        // 9 third leading
+        bool // 10 third trailing
+        // 11 pipe leading
+        | // 12 pipe trailing
+        // 13 fourth leading
+        null // 14 fourth trailing
 {
     x
 }
 
 // ===== Trivia on wrapping return type (block comments) =====
-function TriviaWrapReturnTypeBlock(
-    x: int,
-) -> /* 1 first member leading */ int /* 2 first trailing */
-    /* 3 pipe leading */
-    |/* 4 pipe trailing *//* 5 second leading */string /* 6 second trailing */
-    /* 7 pipe leading */
-    |/* 8 pipe trailing *//* 9 third leading */bool /* 10 third trailing */
-    /* 11 pipe leading */
-    |/* 12 pipe trailing *//* 13 fourth leading */null /* 14 fourth trailing */
+function TriviaWrapReturnTypeBlock(x: int) ->
+    /* 1 first member leading */
+    int /* 2 first trailing */
+        /* 3 pipe leading */
+        | /* 4 pipe trailing */
+        /* 5 second leading */
+        string /* 6 second trailing */
+        /* 7 pipe leading */
+        | /* 8 pipe trailing */
+        /* 9 third leading */
+        bool /* 10 third trailing */
+        /* 11 pipe leading */
+        | /* 12 pipe trailing */
+        /* 13 fourth leading */
+        null /* 14 fourth trailing */
 {
     x
 }
@@ -243,18 +311,25 @@ function TriviaWrapReturnTypeBlock(
 // ===== Trivia on wrapping long-name + params + return (line comments) =====
 // 1 leading
 function // 2 trailing
-    // 3 leading
-    TriviaEverythingLong_NameAndParamsAndReturn // 4 trailing
-    ( // 5 trailing
+// 3 leading
+TriviaEverythingLong_NameAndParamsAndReturn( // 4 trailing
+    // 5 trailing
     // 6 leading
-    first_long_param: map<string, int>, // 11 trailing
+    first_long_param // 7 trailing
+        : // 8 trailing
+            // 9 leading
+            map<string, int>, // 10 trailing
+    // 11 trailing
     // 12 leading
-    second_long_param: (int | string | bool)[], // 16 trailing
+    second_long_param // 13 trailing
+        : // 14 trailing
+            // 15 leading
+            (int | string | bool)[], // 16 trailing
 ) // 17 trailing
     // 18 leading
     -> // 19 trailing
-    // 20 leading
-    map<string, int | string | bool | float | null> // 21 trailing
+        // 20 leading
+        map<string, int | string | bool | float | null> // 21 trailing
 // 22 leading
 { // 23 trailing
     { "a": 1 }
@@ -264,15 +339,24 @@ function // 2 trailing
 
 // ===== Trivia on wrapping long-name + params + return (block comments) =====
 /* 1 leading */
-function /* 2 trailing */ /* 3 leading */ TriviaEverythingLong_NameAndParamsAndReturnBlock /* 4 trailing */ ( /* 5 trailing */
+function /* 2 trailing */
+/* 3 leading */
+TriviaEverythingLong_NameAndParamsAndReturnBlock /* 4 trailing */(/* 5 trailing */
     /* 6 leading */
-    first_long_param: /* 8 trailing *//* 9 leading */map<string, int>/* 10 trailing */, /* 11 trailing */
+    first_long_param /* 7 trailing */: /* 8 trailing */
+        /* 9 leading */
+        map<string, int> /* 10 trailing */, /* 11 trailing */
     /* 12 leading */
-    second_long_param: /* 14 trailing *//* 15 leading */(int | string | bool)[], /* 16 trailing */
-) /* 17 trailing */ /* 18 leading */ -> /* 19 trailing */ /* 20 leading */ map<
-    string,
-    int | string | bool | float | null
-> /* 21 trailing */ /* 22 leading */ { /* 23 trailing */
+    second_long_param /* 13 trailing */: /* 14 trailing */
+        /* 15 leading */
+        (int | string | bool)[] /* 16 trailing */,
+) /* 17 trailing */
+/* 18 leading */
+-> /* 19 trailing */
+    /* 20 leading */
+    map<string, int | string | bool | float | null> /* 21 trailing */
+/* 22 leading */
+{ /* 23 trailing */
     { "a": 1 }
 } /* 24 trailing */
 
@@ -323,11 +407,7 @@ function DeeplyNestedBody(a: int, b: int, c: int) -> int {
 function ManyNestedExprs(items: int[]) -> int {
     let a = items[0];
     let b = items[1];
-    let c = if (a > b) {
-        a
-    } else {
-        b
-    };
+    let c = if (a > b) { a } else { b };
     let d = match (c) {
         0 => 1,
         _ => c * 2,
@@ -357,9 +437,7 @@ function NestedLoops(matrix: int[][]) -> int {
             };
             total += processed;
         }
-        ;
     }
-    ;
     return total;
 }
 
@@ -368,7 +446,16 @@ function DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
     if (a > 0) {
         if (b > 0) {
             if (c > 0) {
-                return a * b * c * d + a * b * c + a * b + a + b * c * d + b * c + b + c * d + c + d;
+                return a * b * c * d
+                    + a * b * c
+                    + a * b
+                    + a
+                    + b * c * d
+                    + b * c
+                    + b
+                    + c * d
+                    + c
+                    + d;
             } else {
                 return 0;
             }

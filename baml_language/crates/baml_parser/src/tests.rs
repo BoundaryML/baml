@@ -3,7 +3,7 @@
 
 use std::fmt::Write as _;
 
-use baml_syntax::{nodes::Arenas, token::TokenIdx};
+use baml_syntax::token::TokenIdx;
 
 use crate::parse;
 
@@ -111,6 +111,84 @@ fn function_titles_are_owned() {
     ));
 }
 
+/// A prefix operator binds above every binary operator: `-a * b` is
+/// `(-a) * b`; its operand still takes the postfix forms (`-a.b()`).
+#[test]
+fn prefix_operators_bind_above_binary_operators() {
+    insta::assert_snapshot!(tree(
+        "function f(a: int, b: int) -> int { -a * b + -a.b() }"
+    ));
+}
+
+/// BAML has no `++`/`--`: `--x` is two negations and `++x` is an error at
+/// its first `+`.
+#[test]
+fn there_are_no_increment_operators() {
+    insta::assert_snapshot!(tree(
+        "function f(x: int) -> int {\n  let a = --x;\n  let b = ++x;\n  a\n}\n"
+    ));
+}
+
+/// Headers where no statement can stand never panic: a `let` with nothing
+/// after it, a header before the `}` that ends a body, a signature whose
+/// `->` a comment split (from the formatter fuzz corpus).
+#[test]
+fn header_comment_recovery_never_panics() {
+    insta::assert_snapshot!(tree("let//#\n}"));
+    insta::assert_snapshot!(tree("let//#\n   "));
+    insta::assert_snapshot!(tree(
+        "function classify(n: int) -/*C1*/> string {\n    //# statements\n    let label = match (n) {\n        0 => \"zero\",\n        _ => \"big\",\n    };\n    //# result\n    label\n}\n"
+    ));
+}
+
+/// A `-` opening a line continues the expression before it unless it is
+/// glued to its operand: blanks, trailing blanks, a comment or a line break
+/// after it all subtract; `-1` on a line of its own negates.
+#[test]
+fn a_line_opening_minus_subtracts_unless_glued() {
+    for (name, body) in [
+        ("blank", "a\n  - 1"),
+        ("line_break", "a\n  -\n  1"),
+        ("trailing_blank", "a\n  - \n  1"),
+        ("comment", "a\n  -//c\n  1"),
+        ("glued", "a\n  -1"),
+    ] {
+        insta::assert_snapshot!(
+            format!("line_opening_minus_{name}"),
+            tree(&format!("function f(a: int) -> int {{\n  {body}\n}}\n"))
+        );
+    }
+}
+
+/// Both `;` of a C-style `for` header are required.
+#[test]
+fn a_c_style_for_header_demands_both_semicolons() {
+    insta::assert_snapshot!(tree(
+        "function f() -> int {\n  for (let i = 0 i < 3; i += 1) {}\n  for (let i = 0; i < 3 i += 1) {}\n  for (;;) {}\n  0\n}\n"
+    ));
+}
+
+/// A `<` inside a parenthesised argument is a comparison: the generic
+/// look-ahead skips bracket groups whole and stops at an unmatched closer.
+#[test]
+fn a_comparison_inside_a_parenthesised_argument_is_not_a_generic() {
+    insta::assert_snapshot!(tree(
+        "function f(a: int, b: int, c: int, d: int) -> bool {\n  g((a < b), (c > (d)))\n}\n"
+    ));
+    insta::assert_snapshot!(tree(
+        "function f() -> int {\n  h<(a: int) -> int>(x) + k<int[]>()\n}\n"
+    ));
+}
+
+/// A quoted key in a constructed object is reported where it stands; the
+/// constructor is not left behind as a bare path.
+#[test]
+fn a_quoted_object_key_is_an_error_at_the_key() {
+    insta::assert_snapshot!(tree(
+        "function f() -> Foo {\n  let s = Foo { \"a\": 1, b: 2, `c`: 3 };\n  s\n}\n"
+    ));
+}
+
 /// Shapes whose recovery once consumed nothing and looped forever: a map or
 /// object member at a token that starts no expression, `@@` in an
 /// `implements` body, a catch arm whose pattern fails before its `=>`.
@@ -163,6 +241,51 @@ fn nesting_is_bounded() {
         "]".repeat(n)
     );
     assert!(!parse(&text).errors.is_empty());
+    // A block entered at the limit: its first statement is reported and
+    // skipped, whatever exact level the block itself landed on (no panic at
+    // any depth around the limit; past it, an error).
+    for n in 120..=136 {
+        let text = format!(
+            "function f() -> int {{\n  {}{{ x }}{}\n}}\n",
+            "g(".repeat(n),
+            ")".repeat(n)
+        );
+        let parsed = parse(&text);
+        assert!(n < 130 || !parsed.errors.is_empty(), "{n}");
+    }
+    // Lambdas nest about four levels each; template interpolations one.
+    let text = format!(
+        "function f() -> int {{\n  {}1{}\n}}\n",
+        "g((x) -> {{ let y = g(".repeat(40),
+        "); y }})".repeat(40)
+    );
+    assert!(!parse(&text).errors.is_empty());
+    let text = format!(
+        "function f() -> string {{\n  {}1{}\n}}\n",
+        "`${{".repeat(140),
+        "}}`".repeat(140)
+    );
+    assert!(!parse(&text).errors.is_empty());
+    // A prefix operator or an `await` nests one level per operator.
+    for prefix in ["-", "!", "await "] {
+        let text = format!(
+            "function f() -> int {{\n  {}x\n}}\n",
+            prefix.repeat(100_000)
+        );
+        assert!(!parse(&text).errors.is_empty(), "{prefix:?}");
+    }
+    // A flat assignment chain is not nesting: one error, no stack per link.
+    let text = format!(
+        "function f() -> int {{\n  x {}= 1;\n  1\n}}\n",
+        "= x ".repeat(20_000)
+    );
+    let chain = parse(&text);
+    assert_eq!(
+        chain.errors.len(),
+        1,
+        "{:?}",
+        &chain.errors[..chain.errors.len().min(3)]
+    );
     let text = format!(
         "function f() -> int {{\n  {}1{}\n}}\n",
         "{".repeat(n),
@@ -378,7 +501,7 @@ fn tree_index_links_parents_owners_and_covering_nodes() {
     // Between `)` and `->`: the signature is the smallest node spanning both.
     let gap = text.find(") ->").expect(") ->") + 1;
     assert_eq!(
-        Arenas::kind(index.covering_node(tree, range(gap, gap))),
+        index.covering_node(tree, range(gap, gap)).kind(),
         NodeKind::FunctionDef
     );
 

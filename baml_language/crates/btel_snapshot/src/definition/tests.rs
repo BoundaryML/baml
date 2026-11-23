@@ -1,9 +1,13 @@
 use baml_type::{Name, TypeName, typetag::TypeTag};
+use btel_core::cas::{
+    BlobError, DecodeLimits, DecodedObject, DecodedRoot, DefinitionHead as ReadHead, Type,
+    decode_blob, definition as read,
+};
 
 use super::*;
 use crate::{
-    BlobError, Carried, DecodeLimits, DecodedObject, DecodedRoot, Limits, OwnedType, Shaper,
-    SnapshotPool, SnapshotValue, TypeIdentity, decode_blob,
+    Carried, Limits, OwnedType, Shaper, SnapshotPool, SnapshotValue, TypeIdentity,
+    describe::{Placed, Placement, Value, definition_ref},
 };
 
 type Template<'a> = TyTemplate<Head<'a>>;
@@ -49,7 +53,7 @@ fn id(definitions: &[Definition]) -> [u8; 16] {
     definitions[0].group.id()
 }
 
-fn decode(definition: &Definition) -> crate::DecodedSnapshot {
+fn decode(definition: &Definition) -> btel_core::cas::DecodedBlob {
     decode_blob(definition.group.bytes(), &DecodeLimits::default()).unwrap()
 }
 
@@ -196,18 +200,18 @@ fn a_group_names_the_groups_it_uses_as_children() {
     let DecodedRoot::Definitions(members) = &decoded.root else {
         panic!("a definition group")
     };
-    let Declaration::Class(class) = &members[0] else {
+    let read::Declaration::Class(class) = &members[0] else {
         panic!("a class")
     };
     assert_eq!(class.fields.len(), 3);
-    let resume_ref = DefinitionRef::of(&resume[0]);
+    let resume_ref = definition_ref(&resume[0]);
     assert!(matches!(
         class.fields[0].ty.decoded.as_deref(),
-        Some(TyTemplate::Class(DefinitionHead::Defined(head), _)) if head.definition == resume_ref
+        Some(Type::Class(ReadHead::Defined(head), _)) if head.definition == resume_ref
     ));
     assert_eq!(
         class.fields[2].ty.decoded.as_deref(),
-        Some(&TyTemplate::TypeArgRef(0))
+        Some(&Type::TypeArgRef(0))
     );
 }
 
@@ -256,30 +260,39 @@ fn a_definition_round_trips_with_its_metadata() {
         };
         let decoded = &members[0];
         match (&declaration, decoded) {
-            (Declaration::Class(made), Declaration::Class(read)) => {
+            (Declaration::Class(made), read::Declaration::Class(read)) => {
                 assert_eq!(read.name.to_string(), made.name.to_string());
                 assert_eq!(read.type_params, made.type_params);
-                assert_eq!(read.meta, made.meta);
+                assert_eq!(read.meta, read_meta(&made.meta));
                 assert_eq!(read.stream_done, made.stream_done);
                 let (made, read) = (&made.fields[0], &read.fields[0]);
                 assert_eq!(read.name, made.name);
-                assert_eq!(read.meta, made.meta);
+                assert_eq!(read.meta, read_meta(&made.meta));
                 assert_eq!(
                     (read.skip, read.stream_done, read.must_exist),
                     (true, true, true)
                 );
+                assert_eq!(read.ty.encoded, field_bytes(&made.ty));
                 assert_eq!(
                     read.ty.decoded.as_deref(),
-                    Some(&TyTemplate::Union(Box::new([
-                        TyTemplate::Int,
-                        TyTemplate::Null
-                    ])))
+                    Some(&Type::Union(Box::new([Type::Int, Type::Null])))
                 );
             }
-            (Declaration::Enum(made), Declaration::Enum(read)) => {
+            (Declaration::Enum(made), read::Declaration::Enum(read)) => {
                 assert_eq!(read.name.to_string(), made.name.to_string());
-                assert_eq!(read.meta, made.meta);
-                assert_eq!(read.variants, made.variants);
+                assert_eq!(read.meta, read_meta(&made.meta));
+                let variants =
+                    |name: &str, meta: &Meta, skip| (name.to_owned(), read_meta(meta), skip);
+                assert_eq!(
+                    read.variants
+                        .iter()
+                        .map(|v| (v.name.clone(), v.meta.clone(), v.skip))
+                        .collect::<Vec<_>>(),
+                    made.variants
+                        .iter()
+                        .map(|v| variants(&v.name, &v.meta, v.skip))
+                        .collect::<Vec<_>>()
+                );
             }
             _ => panic!("a different kind"),
         }
@@ -307,6 +320,29 @@ fn definition_ids_are_pinned() {
 const PINNED_LEFT_RIGHT: &str = "c6278ef0511ff9c8f84f9bd7eaad0f92";
 const PINNED_PERSON: &str = "2e6311ca9df8865f07a2f92fdc13b1b7";
 
+/// Metadata as a reader decodes it.
+fn read_meta(meta: &Meta) -> read::Meta {
+    read::Meta {
+        description: meta.description.clone(),
+        alias: meta.alias.clone(),
+        docstring: meta.docstring.clone(),
+        attributes: meta.attributes.clone(),
+    }
+}
+
+/// A field type of a group of one, as its blob holds it.
+fn field_bytes(ty: &Template<'_>) -> Box<[u8]> {
+    let mut out = Vec::new();
+    btel_core::cas::encode::infallible(btel_core::cas::encode::encode_type(
+        Placed {
+            ty,
+            at: Placement::At(&[0]),
+        },
+        &mut out,
+    ));
+    out.into_boxed_slice()
+}
+
 /// A definition blob with no children whose content is `content`, with
 /// the ID it hashes to.
 fn sealed(content: &[u8]) -> Vec<u8> {
@@ -315,8 +351,8 @@ fn sealed(content: &[u8]) -> Vec<u8> {
     h.absorb(content);
     h.size(0);
     h.size(0);
-    let mut bytes = BLOB_MAGIC.to_vec();
-    bytes.extend_from_slice(&BLOB_VERSION.to_le_bytes());
+    let mut bytes = btel_core::cas::MAGIC.to_vec();
+    bytes.extend_from_slice(&btel_core::cas::VERSION.to_le_bytes());
     bytes.extend_from_slice(&h.finish().0);
     bytes.extend_from_slice(&0_u32.to_le_bytes());
     bytes.extend_from_slice(&0_u32.to_le_bytes());
@@ -446,7 +482,7 @@ fn a_stream_carries_a_group_once_and_names_it_after() {
     assert!(decoded.objects.iter().any(|object| matches!(
         object,
         DecodedObject::Declaration { tag: None, definition: Some(definition), .. }
-            if *definition == DefinitionRef::of(&person[0])
+            if *definition == definition_ref(&person[0])
     )));
 
     let other_stream = person_capture(&pool, 1, Some(&person[0]), &mut Carried::default());
@@ -693,6 +729,17 @@ fn indistinguishable_members_get_one_position_in_any_order() {
     assert_ne!(made[0].member, made[1].member);
 }
 
+/// A type leaf's hash input, piece by piece as the encoder gives it.
+struct Streaming<'h>(&'h mut Hasher, usize);
+impl btel_core::cas::encode::Sink for Streaming<'_> {
+    type Error = std::convert::Infallible;
+    fn put(&mut self, bytes: &[u8]) -> Result<(), Self::Error> {
+        self.0.absorb(bytes);
+        self.1 += bytes.len();
+        Ok(())
+    }
+}
+
 /// A leaf hashed in one call has the digest of hashing it piece by piece,
 /// which is how a reader checks it.
 #[test]
@@ -704,7 +751,7 @@ fn type_leaves_hash_as_a_reader_checks_them() {
         OwnedType::List(Box::new(OwnedType::Int)),
         OwnedType::Union(Box::new([
             OwnedType::Class(
-                TypeIdentity::Defined(DefinitionRef::of(&definition)),
+                TypeIdentity::Defined(definition_ref(&definition)),
                 Box::new([]),
             ),
             OwnedType::Null,
@@ -719,7 +766,12 @@ fn type_leaves_hash_as_a_reader_checks_them() {
     ];
     for ty in types {
         let mut streamed = Hasher::new(HashDomain::Type);
-        let len = streamed.borsh(&ty);
+        let mut sink = Streaming(&mut streamed, 0);
+        btel_core::cas::encode::infallible(btel_core::cas::encode::encode_type(
+            Value(&ty),
+            &mut sink,
+        ));
+        let len = sink.1;
         // Twice: a type without parts is made once and remembered.
         for _ in 0..2 {
             let leaf = crate::hash::ty(&ty);

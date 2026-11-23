@@ -68,13 +68,15 @@ lowercase hexadecimal. Snapshot IDs are the existing 16-byte XXH3-128 identities
 not the SHA-256 of their encoded blobs. `recording.sha256` covers the exact sealed
 recording bytes.
 
-The `Idempotency-Key` is `{recording_id}:{recording_file_sequence}`. The server
+The `Idempotency-Key` is `{recording_id}:{recording_file_sequence}`
+(`btel_core::upload::idempotency_key`). The server
 must bind it to the original request contents and return the same immutable plan
 on retry; conflicting immutable contents must fail. Process liveness fields are
 fresh on each attempt and excluded from that idempotency comparison. There is
 no URL-renewal operation.
 
-`bcs_api::wire` is the JSON schema's source of truth. Proposed and returned targets use
+`btel_core::upload`, in the `btel-core` crate BCS publishes, is the JSON schema's source of
+truth, with the contract's limits (`btel_core::upload::limits`). Proposed and returned targets use
 `kind`: `recording`, `cas_batch`, or `cas_object`, with ordered
 `candidate_indices`. Each response disposition uses a nested `disposition` with
 `kind`: `inline_with_recording`, `member_of_batch`, `separate_object`, or
@@ -87,7 +89,8 @@ target even if every snapshot is already available. Availability means validated
 content within the authorized organization, not merely an existing S3 object.
 
 Each surviving target is an ordinary HTTP PUT containing a
-`btel.cloud.v1.CloudUploadEnvelope` from `bcs_api/proto/cloud.proto`, format version 1.
+`btel.upload.v1.UploadEnvelope` (`btel_core::upload::envelope`, the schema
+`proto/upload/v1.proto` of `btel-core`), format version 1, whose framing `btel-core` writes.
 It embeds the exact recording bytes and the canonical CAS v3 blobs. The blob
 SHA-256 is an integrity check separate from the snapshot identity. The body is
 sent with a fixed `Content-Length`, never chunk-encoded.

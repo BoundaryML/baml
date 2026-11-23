@@ -1,0 +1,10 @@
+function f() -> int {
+    if (receiver(item_count(), (p: int) -> int {
+        let q = p;
+        q
+    })) {
+        1
+    } else {
+        2
+    }
+}

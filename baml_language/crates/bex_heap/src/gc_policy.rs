@@ -8,17 +8,281 @@
 //! running VM can hold a bounded amount of unsettled spending. Storage shared
 //! between objects is charged by every object that references it, so spending
 //! overestimates sharing; the census taken by a full collection does not.
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
+//!
+//! How much growth a collection allows is set by [`GcSettings`]: the next
+//! full collection is due once spending reaches `growth` times the bytes the
+//! last one found live, but never less than `min_growth`. Both are read only
+//! when the budget is set (at construction and after each full collection);
+//! settling spending never consults them.
+use std::{
+    fmt,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
+    },
 };
 
 use crate::BexHeap;
 
-pub(crate) const MIN_FULL_BUDGET: usize = 32 * 1024 * 1024;
-const LIVE_HEADROOM: usize = 4;
+const MIB: u64 = 1024 * 1024;
 /// Number of existing VM control-flow checks between pressure/park polls.
 pub const POLL_INTERVAL: u64 = 4096;
+
+/// How much a heap may grow between full collections.
+///
+/// After each full collection the next one is due once the heap has grown by
+/// `growth` times the data that survived, and by at least `min_growth` bytes;
+/// `min_growth` also sets when the first collection happens. Memory in use is
+/// then roughly the live data plus the allowed growth, and a collection needs
+/// extra room while it copies. Lower values use less memory and more collector
+/// time: collector work per allocated byte is about `1 / growth`.
+///
+/// Every value of this type is valid: [`Growth`] and [`GcSettings::new`]
+/// enforce the ranges, so no setting can make the heap collect forever.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GcSettings {
+    growth: Growth,
+    /// Bytes; at least [`GcSettings::MIN_GROWTH_FLOOR`].
+    min_growth: usize,
+}
+
+impl GcSettings {
+    /// The default `min_growth`: 8 MiB. Measured against 32 MiB (the first
+    /// value) on 31 workloads, it costs at most about 2% CPU while cutting
+    /// peak memory by a fifth on allocating programs and by a third to a
+    /// half on small ones, with three to four times shorter pauses.
+    pub const DEFAULT_MIN_GROWTH: usize = 8 * 1024 * 1024;
+    /// The smallest `min_growth`: 1 MiB. Allocators settle spending in
+    /// quanta of up to 64 KiB of payload (and object-slot reservations of a
+    /// similar size), so a smaller allowance would make almost every
+    /// settlement request a collection.
+    pub const MIN_GROWTH_FLOOR: usize = 1024 * 1024;
+    /// The largest `min_growth` the budget counter can represent.
+    pub const MIN_GROWTH_CEILING: usize = isize::MAX.unsigned_abs();
+
+    pub fn new(growth: Growth, min_growth: usize) -> Result<Self, GcSettingError> {
+        if min_growth < Self::MIN_GROWTH_FLOOR {
+            return Err(GcSettingError::MinGrowthOutOfRange { bytes: min_growth });
+        }
+        if min_growth > Self::MIN_GROWTH_CEILING {
+            return Err(GcSettingError::SizeTooLarge {
+                text: format!("{min_growth} bytes"),
+            });
+        }
+        Ok(Self { growth, min_growth })
+    }
+
+    pub fn growth(self) -> Growth {
+        self.growth
+    }
+
+    /// Bytes.
+    pub fn min_growth(self) -> usize {
+        self.min_growth
+    }
+
+    /// The allowance after a full collection that found `live_bytes` live.
+    fn budget_after(self, live_bytes: usize) -> usize {
+        let scaled = live_bytes as u128 * u128::from(self.growth.hundredths) / 100;
+        usize::try_from(scaled)
+            .unwrap_or(usize::MAX)
+            .max(self.min_growth)
+    }
+}
+
+impl Default for GcSettings {
+    fn default() -> Self {
+        Self {
+            growth: Growth::DEFAULT,
+            min_growth: Self::DEFAULT_MIN_GROWTH,
+        }
+    }
+}
+
+/// Allowed growth between full collections as a multiple of the data that
+/// survived the last one, in steps of 0.01, from 0.25 to 1000.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Growth {
+    hundredths: u32,
+}
+
+impl Growth {
+    /// Today's growth: 4.
+    pub const DEFAULT: Self = Self { hundredths: 400 };
+    /// 0.25: collections cost about four times the allocation they free.
+    pub const MIN: Self = Self { hundredths: 25 };
+    /// 1000: a guard against typos, not a technical limit.
+    pub const MAX: Self = Self {
+        hundredths: 100_000,
+    };
+
+    pub fn from_hundredths(hundredths: u32) -> Result<Self, GcSettingError> {
+        let growth = Self { hundredths };
+        if (Self::MIN..=Self::MAX).contains(&growth) {
+            Ok(growth)
+        } else {
+            Err(GcSettingError::GrowthOutOfRange { growth })
+        }
+    }
+
+    pub fn hundredths(self) -> u32 {
+        self.hundredths
+    }
+
+    /// A decimal number with at most two decimal places: `4`, `2.5`, `0.25`.
+    pub fn parse(text: &str) -> Result<Self, GcSettingError> {
+        let invalid = || GcSettingError::InvalidGrowth {
+            text: text.to_owned(),
+        };
+        let text = text.trim();
+        let (whole, fraction) = text.split_once('.').unwrap_or((text, ""));
+        let digits = |part: &str| part.bytes().all(|byte| byte.is_ascii_digit());
+        if whole.is_empty() || !digits(whole) || !digits(fraction) || text.ends_with('.') {
+            return Err(invalid());
+        }
+        // Trailing zeros keep the value exact: `2.500` is `2.5`.
+        let (fraction, rest) = fraction.split_at(fraction.len().min(2));
+        if rest.bytes().any(|byte| byte != b'0') {
+            return Err(GcSettingError::GrowthTooPrecise {
+                text: text.to_owned(),
+            });
+        }
+        let whole: u32 = whole.parse().map_err(|_| GcSettingError::GrowthTooLarge {
+            text: text.to_owned(),
+        })?;
+        let fraction: u32 = format!("{fraction:0<2}").parse().map_err(|_| invalid())?;
+        let hundredths = whole
+            .checked_mul(100)
+            .and_then(|whole| whole.checked_add(fraction))
+            .ok_or_else(|| GcSettingError::GrowthTooLarge {
+                text: text.to_owned(),
+            })?;
+        Self::from_hundredths(hundredths)
+    }
+
+    /// A number from a typed source (a TOML float). It must be a multiple of
+    /// 0.01, within the precision of a double.
+    pub fn from_f64(value: f64) -> Result<Self, GcSettingError> {
+        let text = value.to_string();
+        if !value.is_finite() || value < 0.0 {
+            return Err(GcSettingError::InvalidGrowth { text });
+        }
+        let scaled = value * 100.0;
+        let rounded = scaled.round();
+        if (scaled - rounded).abs() > 1e-6 {
+            return Err(GcSettingError::GrowthTooPrecise { text });
+        }
+        if rounded > f64::from(Self::MAX.hundredths) {
+            return Err(GcSettingError::GrowthTooLarge { text });
+        }
+        // In range and integral: the cast is exact.
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "checked non-negative, integral and at most Growth::MAX above"
+        )]
+        let hundredths = rounded as u32;
+        Self::from_hundredths(hundredths)
+    }
+}
+
+impl fmt::Display for Growth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (whole, fraction) = (self.hundredths / 100, self.hundredths % 100);
+        match fraction {
+            0 => write!(f, "{whole}"),
+            _ if fraction % 10 == 0 => write!(f, "{whole}.{}", fraction / 10),
+            _ => write!(f, "{whole}.{fraction:02}"),
+        }
+    }
+}
+
+/// Parse a `min_growth` size: a whole number of bytes, optionally followed by
+/// a binary unit `B`, `KiB`, `MiB` or `GiB` (case-insensitive, optional space
+/// before it): `"32MiB"`, `"512 KiB"`, `"33554432"`. Decimal units (`MB`) are
+/// rejected rather than guessed.
+pub fn parse_min_growth(text: &str) -> Result<usize, GcSettingError> {
+    let trimmed = text.trim();
+    let split = trimmed
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(trimmed.len());
+    let (number, unit) = trimmed.split_at(split);
+    let unit = unit.trim_start();
+    let invalid = || GcSettingError::InvalidSize {
+        text: text.to_owned(),
+    };
+    if number.is_empty() {
+        return Err(invalid());
+    }
+    let multiplier: u64 = match unit.to_ascii_lowercase().as_str() {
+        "" | "b" => 1,
+        "kib" => 1024,
+        "mib" => MIB,
+        "gib" => 1024 * MIB,
+        "k" | "kb" => return Err(decimal_unit(text, "KiB")),
+        "m" | "mb" => return Err(decimal_unit(text, "MiB")),
+        "g" | "gb" => return Err(decimal_unit(text, "GiB")),
+        _ => return Err(invalid()),
+    };
+    let too_large = || GcSettingError::SizeTooLarge {
+        text: text.to_owned(),
+    };
+    let bytes = number
+        .parse::<u64>()
+        .map_err(|_| too_large())?
+        .checked_mul(multiplier)
+        .ok_or_else(too_large)?;
+    let bytes = usize::try_from(bytes).map_err(|_| too_large())?;
+    if bytes < GcSettings::MIN_GROWTH_FLOOR && unit.is_empty() {
+        return Err(GcSettingError::MinGrowthBareNumber { bytes });
+    }
+    Ok(bytes)
+}
+
+fn decimal_unit(text: &str, suggestion: &'static str) -> GcSettingError {
+    GcSettingError::DecimalUnit {
+        text: text.to_owned(),
+        suggestion,
+    }
+}
+
+/// A GC setting that cannot work. Messages name the value, not where it came
+/// from; callers prefix the variable or `baml.toml` key.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum GcSettingError {
+    #[error(
+        "`{text}` is not a growth factor; use a number from 0.25 to 1000 with at most two decimals, for example 2.5"
+    )]
+    InvalidGrowth { text: String },
+    #[error("`{text}` has more than two decimals; growth goes in steps of 0.01, for example 2.5")]
+    GrowthTooPrecise { text: String },
+    #[error("growth `{text}` is above the maximum of 1000")]
+    GrowthTooLarge { text: String },
+    #[error(
+        "growth {growth} is out of range; use 0.25 to 1000 (below 1 is allowed but costly: collector work per allocated byte is about 1/growth)"
+    )]
+    GrowthOutOfRange { growth: Growth },
+    #[error(
+        "`{text}` is not a size; use a whole number with B, KiB, MiB or GiB, for example \"32MiB\""
+    )]
+    InvalidSize { text: String },
+    #[error("`{text}` uses a decimal unit; use binary units, for example `{suggestion}`")]
+    DecimalUnit {
+        text: String,
+        suggestion: &'static str,
+    },
+    #[error(
+        "{bytes} is a number of bytes, below the minimum of 1 MiB; add a unit, for example \"32MiB\""
+    )]
+    MinGrowthBareNumber { bytes: usize },
+    #[error("min_growth must be at least 1 MiB (got {bytes} bytes)")]
+    MinGrowthOutOfRange { bytes: usize },
+    #[error(
+        "size `{text}` is too large; the largest min_growth this platform accepts is {} bytes",
+        GcSettings::MIN_GROWTH_CEILING
+    )]
+    SizeTooLarge { text: String },
+}
 
 /// Diagnostic snapshot. Concurrent allocation may advance spending while read.
 #[derive(Debug, Clone, Copy)]
@@ -36,15 +300,18 @@ pub(crate) struct AllocationBudget {
     budget: AtomicUsize,
     full_collections: AtomicUsize,
     pressure: Arc<AtomicBool>,
+    /// Fixed for the heap's lifetime; read only where the budget is set.
+    settings: GcSettings,
 }
 
 impl AllocationBudget {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(settings: GcSettings) -> Self {
         Self {
             spent: AtomicIsize::new(0),
-            budget: AtomicUsize::new(MIN_FULL_BUDGET),
+            budget: AtomicUsize::new(settings.min_growth),
             full_collections: AtomicUsize::new(0),
             pressure: Arc::new(AtomicBool::new(false)),
+            settings,
         }
     }
 
@@ -86,18 +353,19 @@ impl AllocationBudget {
     /// spending.
     pub(crate) fn after_full(&self, live_bytes: usize) {
         self.spent.store(0, Ordering::Relaxed);
-        self.budget.store(
-            live_bytes
-                .saturating_mul(LIVE_HEADROOM)
-                .max(MIN_FULL_BUDGET),
-            Ordering::Relaxed,
-        );
+        self.budget
+            .store(self.settings.budget_after(live_bytes), Ordering::Relaxed);
         self.pressure.store(false, Ordering::Relaxed);
         self.full_collections.fetch_add(1, Ordering::Relaxed);
     }
 }
 
 impl BexHeap {
+    /// The collection policy this heap was built with.
+    pub fn gc_settings(&self) -> GcSettings {
+        self.gc_policy.settings
+    }
+
     pub fn gc_budget(&self) -> GcBudgetSnapshot {
         GcBudgetSnapshot {
             bytes_since_full_gc: self.gc_policy.spent.load(Ordering::Relaxed),
@@ -118,11 +386,180 @@ mod tests {
     use super::*;
     use crate::Tlab;
 
+    const MIN_FULL_BUDGET: usize = GcSettings::DEFAULT_MIN_GROWTH;
     const BUDGET: isize = MIN_FULL_BUDGET as isize;
+    const MIB: usize = 1024 * 1024;
+
+    fn settings(growth: &str, min_growth: usize) -> GcSettings {
+        GcSettings::new(Growth::parse(growth).unwrap(), min_growth).unwrap()
+    }
+
+    #[test]
+    fn defaults_are_growth_4_and_min_growth_8_mib() {
+        let defaults = GcSettings::default();
+        assert_eq!(defaults.growth(), Growth::DEFAULT);
+        assert_eq!(defaults.growth().hundredths(), 400);
+        assert_eq!(defaults.min_growth(), 8 * MIB);
+    }
+
+    /// Growth scales the allowance with the survivors, `min_growth` floors it
+    /// and sets the first one; fractions of growth are exact.
+    #[test]
+    fn non_default_settings_shape_the_budget() {
+        let p = AllocationBudget::new(settings("0.25", 2 * MIB));
+        assert_eq!(p.budget.load(Ordering::Relaxed), 2 * MIB, "first budget");
+        assert!(p.adjust((2 * MIB) as isize), "crosses at min_growth");
+        p.after_full(64 * MIB);
+        assert_eq!(p.budget.load(Ordering::Relaxed), 16 * MIB);
+        p.after_full(4 * MIB);
+        assert_eq!(p.budget.load(Ordering::Relaxed), 2 * MIB, "floored");
+
+        let p = AllocationBudget::new(settings("2.5", MIB));
+        p.after_full(10 * MIB);
+        assert_eq!(p.budget.load(Ordering::Relaxed), 25 * MIB);
+        p.after_full(3);
+        assert_eq!(p.budget.load(Ordering::Relaxed), MIB);
+
+        let p = AllocationBudget::new(settings("1000", 512 * MIB));
+        p.after_full(MIB);
+        assert_eq!(p.budget.load(Ordering::Relaxed), 1000 * MIB);
+        p.after_full(usize::MAX);
+        assert_eq!(p.budget.load(Ordering::Relaxed), usize::MAX, "saturates");
+    }
+
+    /// The default policy is `max(4 × live, 8 MiB)`, at the edges too: the
+    /// floor gives way to growth at 2 MiB live.
+    #[test]
+    fn default_budget_is_four_times_live_with_an_8_mib_floor() {
+        let old = |live: usize| live.saturating_mul(4).max(8 * MIB);
+        for live in [
+            0,
+            1,
+            2 * MIB - 1,
+            2 * MIB,
+            2 * MIB + 1,
+            8 * MIB - 1,
+            8 * MIB,
+            usize::MAX / 4,
+            usize::MAX / 4 + 1,
+            usize::MAX,
+        ] {
+            assert_eq!(
+                GcSettings::default().budget_after(live),
+                old(live),
+                "{live}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_size_too_large_says_the_limit() {
+        let message = parse_min_growth("99999999999999GiB")
+            .unwrap_err()
+            .to_string();
+        assert!(
+            message.contains(&GcSettings::MIN_GROWTH_CEILING.to_string()),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn growth_parsing_and_range() {
+        for (text, hundredths) in [
+            ("4", 400),
+            ("2.5", 250),
+            ("2.50", 250),
+            ("0.25", 25),
+            (" 1.05 ", 105),
+            ("1000", 100_000),
+        ] {
+            assert_eq!(
+                Growth::parse(text).unwrap().hundredths(),
+                hundredths,
+                "{text}"
+            );
+        }
+        for text in [
+            "",
+            "x",
+            "4x",
+            "-1",
+            "+1",
+            ".5",
+            "4.",
+            "1e3",
+            "1.2.3",
+            "0",
+            "0.24",
+            "1000.01",
+            "2.555",
+            "99999999999",
+        ] {
+            assert!(Growth::parse(text).is_err(), "{text}");
+        }
+        for text in ["2.500", "2.5000", "4.00", "0.250"] {
+            assert!(Growth::parse(text).is_ok(), "{text}");
+        }
+        assert_eq!(Growth::parse("2.500").unwrap().hundredths(), 250);
+        assert!(matches!(
+            Growth::parse("2.675"),
+            Err(GcSettingError::GrowthTooPrecise { .. })
+        ));
+        assert!(matches!(
+            Growth::parse("2.5001"),
+            Err(GcSettingError::GrowthTooPrecise { .. })
+        ));
+        assert_eq!(Growth::from_f64(2.5).unwrap().hundredths(), 250);
+        assert_eq!(Growth::from_f64(0.29).unwrap().hundredths(), 29);
+        for value in [f64::NAN, f64::INFINITY, -1.0, 0.1, 1000.5, 1.234] {
+            assert!(Growth::from_f64(value).is_err(), "{value}");
+        }
+        for text in ["4", "2.5", "0.25", "1.05"] {
+            assert_eq!(Growth::parse(text).unwrap().to_string(), text);
+        }
+    }
+
+    #[test]
+    fn min_growth_parsing_and_range() {
+        for (text, bytes) in [
+            ("32MiB", 32 * MIB),
+            ("32 MiB", 32 * MIB),
+            ("32mib", 32 * MIB),
+            ("1GiB", 1024 * MIB),
+            ("2048KiB", 2 * MIB),
+            ("1048576", MIB),
+            ("1048576B", MIB),
+        ] {
+            assert_eq!(parse_min_growth(text).unwrap(), bytes, "{text}");
+        }
+        assert!(matches!(
+            parse_min_growth("32MB"),
+            Err(GcSettingError::DecimalUnit {
+                suggestion: "MiB",
+                ..
+            })
+        ));
+        assert!(matches!(
+            parse_min_growth("32"),
+            Err(GcSettingError::MinGrowthBareNumber { bytes: 32 })
+        ));
+        for text in ["", "MiB", "-1MiB", "1.5MiB", "32 megs", "99999999999999GiB"] {
+            assert!(parse_min_growth(text).is_err(), "{text}");
+        }
+        assert!(
+            GcSettings::new(Growth::DEFAULT, 0).is_err(),
+            "never collect-forever"
+        );
+        assert!(GcSettings::new(Growth::DEFAULT, MIB - 1).is_err());
+        assert!(GcSettings::new(Growth::DEFAULT, MIB).is_ok());
+        assert!(GcSettings::new(Growth::DEFAULT, usize::MAX).is_err());
+        assert!(Growth::from_hundredths(24).is_err());
+        assert!(Growth::from_hundredths(100_001).is_err());
+    }
 
     #[test]
     fn full_budget_tracks_spending_and_live_headroom() {
-        let p = AllocationBudget::new();
+        let p = AllocationBudget::new(GcSettings::default());
         assert!(!p.adjust(0));
         assert!(!p.due());
         assert!(!p.adjust(BUDGET - 1));
@@ -146,7 +583,7 @@ mod tests {
 
     #[test]
     fn a_release_takes_spending_and_pressure_back_below_the_budget() {
-        let p = AllocationBudget::new();
+        let p = AllocationBudget::new(GcSettings::default());
         assert!(p.adjust(BUDGET));
         assert!(p.due());
         assert!(!p.adjust(-1));
@@ -261,14 +698,18 @@ mod tests {
         let mut tlab = Tlab::new_empty(heap.clone());
         let text = bex_str::BexStr::from("x".repeat(1 << 20));
         let whole = text.unshared_heap_bytes() as isize;
-        for _ in 0..8 {
+        // Handles to half the budget's worth of 1 MiB text, each charged in
+        // full, plus a slice of each: not yet due.
+        let copies = (MIN_FULL_BUDGET >> 20) / 2;
+        for _ in 0..copies {
             tlab.alloc_string(text.clone());
             tlab.alloc_string(text.byte_slice(1..128));
         }
         tlab.flush_alloc_debt();
         let spent = heap.gc_budget().bytes_since_full_gc;
         let slots = (32 * size_of::<Object>()) as isize;
-        assert_eq!(spent, slots + 8 * whole + 8 * 127);
+        let copies = copies as isize;
+        assert_eq!(spent, slots + copies * whole + copies * 127);
         assert!(!heap.should_gc());
     }
 

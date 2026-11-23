@@ -302,8 +302,10 @@ fn object(builder: &mut Builder, object: SnapshotObject) -> SnapshotValue {
 
 #[cfg(test)]
 mod tests {
+    use btel_core::cas::DecodeLimits;
+
     use super::*;
-    use crate::{DecodeLimits, Limits, SnapshotPool, SnapshotRoot};
+    use crate::{Limits, SnapshotPool, SnapshotRoot};
 
     fn declaration(name: &str, index: usize, variants: Option<Vec<String>>) -> HostDeclaration {
         HostDeclaration {
@@ -342,11 +344,13 @@ mod tests {
             .root_blob()
             .write(&mut crate::BlobScratch::default(), &mut blob)
             .unwrap();
-        let decoded = crate::decode_blob(&blob, &DecodeLimits::default()).unwrap();
-        let crate::DecodedRoot::Value(crate::DecodedValue::Object(id)) = decoded.root else {
+        let decoded = btel_core::cas::decode_blob(&blob, &DecodeLimits::default()).unwrap();
+        let btel_core::cas::DecodedRoot::Value(btel_core::cas::DecodedValue::Object(id)) =
+            decoded.root
+        else {
             panic!("instance")
         };
-        let crate::DecodedObject::Instance {
+        let btel_core::cas::DecodedObject::Instance {
             declaration,
             type_arguments,
             ..
@@ -354,9 +358,12 @@ mod tests {
         else {
             panic!("instance")
         };
-        assert_eq!(type_arguments[0].decoded.as_deref(), Some(&OwnedType::Int));
+        assert_eq!(
+            type_arguments[0].encoded,
+            crate::describe::described(&OwnedType::Int)
+        );
         assert!(
-            matches!(decoded.object(*declaration), crate::DecodedObject::Declaration { tag, .. } if *tag == Some(class.identity.tag()))
+            matches!(decoded.object(*declaration), btel_core::cas::DecodedObject::Declaration { tag, .. } if *tag == Some(btel_core::cas::RuntimeTag(class.identity.tag().as_i64())))
         );
         drop(snapshot);
         let mut deep = HostType::Int;
@@ -418,7 +425,7 @@ mod tests {
             .root_blob()
             .write(&mut crate::BlobScratch::default(), &mut blob)
             .unwrap();
-        crate::decode_blob(&blob, &DecodeLimits::default()).unwrap();
+        btel_core::cas::decode_blob(&blob, &DecodeLimits::default()).unwrap();
     }
 
     #[test]
@@ -447,7 +454,7 @@ mod tests {
             .root_blob()
             .write(&mut crate::BlobScratch::default(), &mut blob)
             .unwrap();
-        crate::decode_blob(&blob, &DecodeLimits::default()).unwrap();
+        btel_core::cas::decode_blob(&blob, &DecodeLimits::default()).unwrap();
     }
 
     #[test]
@@ -466,7 +473,7 @@ mod tests {
             .root_blob()
             .write(&mut crate::BlobScratch::default(), &mut blob)
             .unwrap();
-        crate::decode_blob(&blob, &DecodeLimits::default()).unwrap();
+        btel_core::cas::decode_blob(&blob, &DecodeLimits::default()).unwrap();
         assert!(!snapshot.stats().limited);
     }
 
@@ -486,6 +493,6 @@ mod tests {
             .root_blob()
             .write(&mut crate::BlobScratch::default(), &mut blob)
             .unwrap();
-        crate::decode_blob(&blob, &DecodeLimits::default()).unwrap();
+        btel_core::cas::decode_blob(&blob, &DecodeLimits::default()).unwrap();
     }
 }

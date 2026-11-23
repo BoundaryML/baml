@@ -20,6 +20,7 @@ diagnostics = [  ]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bcs_api.workspace = true
+btel-core = { workspace = true }
 btel_processor = { workspace = true }
 btel_recorder = { workspace = true }
 btel_records = { workspace = true }
@@ -41,6 +42,7 @@ uuid = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 baml_type = { workspace = true }
+baml_version = { workspace = true }
 btel_clock = { workspace = true }
 num-bigint = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "test-util" ] }

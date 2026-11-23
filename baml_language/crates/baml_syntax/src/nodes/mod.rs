@@ -7,9 +7,10 @@
 //! `Bogus` variant for recovered garbage.
 //!
 //! Trivia (whitespace, comments) never appear in a node; they stay in the
-//! token array between the tokens nodes own. The one exception is the `//#`
-//! header line: in a block it is a statement ([`HeaderStmt`]), directly
-//! above a function it is the function's title ([`HeaderLine`]).
+//! token array between the tokens nodes own. A `///` or `//baml:` line is
+//! syntax a declaration owns; a `//#` header line is a statement in a block
+//! ([`HeaderStmt`]) or, directly above a function, the function's title
+//! ([`HeaderLine`]).
 
 mod exprs;
 mod items;
@@ -25,9 +26,12 @@ pub use stmts::*;
 pub use templates::*;
 pub use types::*;
 
+// `Bogus` stands among the node types wherever they are listed (every `Any*`
+// union, `for_each_node_type!`), so it is reachable from here like the rest.
+pub use crate::tree::Bogus;
 use crate::{
     token::punct,
-    tree::{Bogus, Id, SepItem},
+    tree::{Id, SepItem},
 };
 
 crate::define_tree! {

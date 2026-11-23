@@ -116,10 +116,10 @@ function prompt(
         let tagged = body(root.internal.make_role, ctx) catch_all (e) {
             _ => {
                 throw root.errors.PromptRenderError {
-                message: "prompt template rendering threw",
-                cause: e,
-            }
-            }
+                    message: "prompt template rendering threw",
+                    cause: e,
+                };
+            },
         };
         root.internal.assemble_prompt(tagged.parts, tagged.values)
     };
@@ -163,14 +163,12 @@ class FunctionSpec<Out> {
     /// the model. `client` overrides the spec's default; null uses the default.
     function build_request(self, client: Client? = null) -> baml.http.Request {
         let selected = client ?? self.default_client;
-        selected.render(
-            ModelTurnInput {
-                prompt: self.prompt_template,
-                journal: Journal.new(self),
-                toolbox: self.tools(),
-                output_type: self.output_type(),
-            },
-        )
+        selected.render(ModelTurnInput {
+            prompt: self.prompt_template,
+            journal: Journal.new(self),
+            toolbox: self.tools(),
+            output_type: self.output_type(),
+        })
     }
 
     function target(self) -> reflect.AnyFunction {

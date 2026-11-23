@@ -29,14 +29,14 @@ function _from_shorthand(
                 status_code: null,
                 detail: `client "${shorthand}": there is no "azure/<model>" shorthand: an Azure request goes to a deployment, which a model name does not identify; build openai.AzureClient.new(model = "${model}", deployment_id = ..., resource_name = ...)`,
                 raw_body: null,
-            }
+            };
         } else {
             throw root.errors.InvalidRequest {
                 provider: "ai.clients",
                 status_code: null,
                 detail: `no builtin provider for prefix "${prefix}" in client "${shorthand}"; valid prefixes are ${prefixes.join(", ")} (for any other OpenAI-compatible endpoint, build openai.GenericClient.new(base_url = ..., model = "${model}"))`,
                 raw_body: null,
-            }
+            };
         }
     } else {
         throw root.errors.InvalidRequest {
@@ -44,6 +44,6 @@ function _from_shorthand(
             status_code: null,
             detail: `client "${shorthand}" is not a "provider/model" string (no "/"); valid prefixes are ${prefixes.join(", ")}`,
             raw_body: null,
-        }
+        };
     }
 }

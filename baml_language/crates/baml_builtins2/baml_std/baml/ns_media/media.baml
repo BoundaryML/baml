@@ -38,10 +38,9 @@ class Pdf {
     /// - `Io` if the file cannot be opened or read.
     /// - `InvalidArgument` only as `baml.fs.open` declares it: a path that
     ///   cannot be opened is `Io`.
-    function from_file(
-        file: string,
-        mime_type: string?,
-    ) -> pdf throws root.errors.Io | root.errors.InvalidArgument {
+    function from_file(file: string, mime_type: string?) -> pdf
+        throws root.errors.Io | root.errors.InvalidArgument
+    {
         let handle = root.fs.open(file, "r");
         defer { handle.close() }
         Pdf.from_file_content(file, handle.bytes().to_base64(), mime_type)
@@ -50,11 +49,9 @@ class Pdf {
     /// Creates a `Pdf` value from base64-encoded content that was read
     /// from `file`. The value is named by the file's base name. Optionally
     /// specify `mime_type`; otherwise it is inferred from the file's name.
-    function from_file_content(
-        file: string,
-        base64: string,
-        mime_type: string?,
-    ) -> pdf throws never {
+    function from_file_content(file: string, base64: string, mime_type: string?) -> pdf
+        throws never
+    {
         $rust_function
     }
 
@@ -114,10 +111,9 @@ class Audio {
     /// - `Io` if the file cannot be opened or read.
     /// - `InvalidArgument` only as `baml.fs.open` declares it: a path that
     ///   cannot be opened is `Io`.
-    function from_file(
-        file: string,
-        mime_type: string?,
-    ) -> audio throws root.errors.Io | root.errors.InvalidArgument {
+    function from_file(file: string, mime_type: string?) -> audio
+        throws root.errors.Io | root.errors.InvalidArgument
+    {
         let handle = root.fs.open(file, "r");
         defer { handle.close() }
         Audio.from_file_content(file, handle.bytes().to_base64(), mime_type)
@@ -126,11 +122,9 @@ class Audio {
     /// Creates an `Audio` value from base64-encoded content that was read
     /// from `file`. The value is named by the file's base name. Optionally
     /// specify `mime_type`; otherwise it is inferred from the file's name.
-    function from_file_content(
-        file: string,
-        base64: string,
-        mime_type: string?,
-    ) -> audio throws never {
+    function from_file_content(file: string, base64: string, mime_type: string?) -> audio
+        throws never
+    {
         $rust_function
     }
 
@@ -190,10 +184,9 @@ class Video {
     /// - `Io` if the file cannot be opened or read.
     /// - `InvalidArgument` only as `baml.fs.open` declares it: a path that
     ///   cannot be opened is `Io`.
-    function from_file(
-        file: string,
-        mime_type: string?,
-    ) -> video throws root.errors.Io | root.errors.InvalidArgument {
+    function from_file(file: string, mime_type: string?) -> video
+        throws root.errors.Io | root.errors.InvalidArgument
+    {
         let handle = root.fs.open(file, "r");
         defer { handle.close() }
         Video.from_file_content(file, handle.bytes().to_base64(), mime_type)
@@ -202,11 +195,9 @@ class Video {
     /// Creates a `Video` value from base64-encoded content that was read
     /// from `file`. The value is named by the file's base name. Optionally
     /// specify `mime_type`; otherwise it is inferred from the file's name.
-    function from_file_content(
-        file: string,
-        base64: string,
-        mime_type: string?,
-    ) -> video throws never {
+    function from_file_content(file: string, base64: string, mime_type: string?) -> video
+        throws never
+    {
         $rust_function
     }
 
@@ -266,10 +257,9 @@ class Image {
     /// - `Io` if the file cannot be opened or read.
     /// - `InvalidArgument` only as `baml.fs.open` declares it: a path that
     ///   cannot be opened is `Io`.
-    function from_file(
-        file: string,
-        mime_type: string?,
-    ) -> image throws root.errors.Io | root.errors.InvalidArgument {
+    function from_file(file: string, mime_type: string?) -> image
+        throws root.errors.Io | root.errors.InvalidArgument
+    {
         let handle = root.fs.open(file, "r");
         defer { handle.close() }
         Image.from_file_content(file, handle.bytes().to_base64(), mime_type)
@@ -278,11 +268,9 @@ class Image {
     /// Creates an `Image` value from base64-encoded content that was read
     /// from `file`. The value is named by the file's base name. Optionally
     /// specify `mime_type`; otherwise it is inferred from the file's name.
-    function from_file_content(
-        file: string,
-        base64: string,
-        mime_type: string?,
-    ) -> image throws never {
+    function from_file_content(file: string, base64: string, mime_type: string?) -> image
+        throws never
+    {
         $rust_function
     }
 

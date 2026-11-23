@@ -1,0 +1,99 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f() -> int {\\n  for (let i = 0 i < 3; i += 1) {}\\n  for (let i = 0; i < 3 i += 1) {}\\n  for (;;) {}\\n  0\\n}\\n\")"
+---
+SourceFile@0..111
+  items: FunctionDef@0..111
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..12
+      l: LParen "(" @10..11
+      r: RParen ")" @11..12
+    ret: ReturnType@13..19
+      arrow: Arrow "->" @13..15
+      ty: PathType@16..19
+        head: Name@16..19
+          token: Word "int" @16..19
+    body: Block@20..111
+      l: LBrace "{" @20..21
+      stmts: ForStmt@24..56
+        kw: For "for" @24..27
+        header: CForHeader@28..53
+          l: LParen "(" @28..29
+          init: LetStmt@29..38
+            introducer: Let "let" @29..32
+            pattern: BindingPattern@33..34
+              name: Name@33..34
+                token: Word "i" @33..34
+            eq: Equals "=" @35..36
+            init: LiteralExpr@37..38
+              token: Integer "0" @37..38
+          semi1: <missing @39>
+          cond: BinaryExpr@39..44
+            lhs: PathExpr@39..40
+              head: Name@39..40
+                token: Word "i" @39..40
+            op: Less "<" @41..42
+            rhs: LiteralExpr@43..44
+              token: Integer "3" @43..44
+          semi2: Semicolon ";" @44..45
+          step: AssignStmt@46..52
+            target: PathExpr@46..47
+              head: Name@46..47
+                token: Word "i" @46..47
+            op: PlusEquals "+=" @48..50
+            value: LiteralExpr@51..52
+              token: Integer "1" @51..52
+          r: RParen ")" @52..53
+        body: Block@54..56
+          l: LBrace "{" @54..55
+          r: RBrace "}" @55..56
+      stmts: ForStmt@59..91
+        kw: For "for" @59..62
+        header: CForHeader@63..88
+          l: LParen "(" @63..64
+          init: LetStmt@64..73
+            introducer: Let "let" @64..67
+            pattern: BindingPattern@68..69
+              name: Name@68..69
+                token: Word "i" @68..69
+            eq: Equals "=" @70..71
+            init: LiteralExpr@72..73
+              token: Integer "0" @72..73
+          semi1: Semicolon ";" @73..74
+          cond: BinaryExpr@75..80
+            lhs: PathExpr@75..76
+              head: Name@75..76
+                token: Word "i" @75..76
+            op: Less "<" @77..78
+            rhs: LiteralExpr@79..80
+              token: Integer "3" @79..80
+          semi2: <missing @81>
+          step: AssignStmt@81..87
+            target: PathExpr@81..82
+              head: Name@81..82
+                token: Word "i" @81..82
+            op: PlusEquals "+=" @83..85
+            value: LiteralExpr@86..87
+              token: Integer "1" @86..87
+          r: RParen ")" @87..88
+        body: Block@89..91
+          l: LBrace "{" @89..90
+          r: RBrace "}" @90..91
+      stmts: ForStmt@94..105
+        kw: For "for" @94..97
+        header: CForHeader@98..102
+          l: LParen "(" @98..99
+          semi1: Semicolon ";" @99..100
+          semi2: Semicolon ";" @100..101
+          r: RParen ")" @101..102
+        body: Block@103..105
+          l: LBrace "{" @103..104
+          r: RBrace "}" @104..105
+      tail: LiteralExpr@108..109
+        token: Integer "0" @108..109
+      r: RBrace "}" @110..111
+---
+UnexpectedToken { expected: "';'", found: "identifier", range: 39..40 }
+UnexpectedToken { expected: "';'", found: "identifier", range: 81..82 }

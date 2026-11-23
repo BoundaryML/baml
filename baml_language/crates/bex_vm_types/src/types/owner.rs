@@ -172,25 +172,6 @@ pub fn package_compilation_unit_hash(
         .map(|metadata| metadata.compilation_unit_hash)
 }
 
-/// The build that produced the package at `package`
-/// ([`super::Package::build_id`]), or `None` for a null pointer and for a
-/// package no recorded build produced.
-#[must_use]
-pub fn package_build_id(package: HeapPtr) -> Option<[u8; 16]> {
-    if package.is_null() {
-        return None;
-    }
-    // SAFETY: as in `package_compilation_unit_hash`. Read-only.
-    #[expect(
-        unsafe_code,
-        reason = "a function's telemetry metadata reads its package's build"
-    )]
-    let crate::Object::Package(package) = (unsafe { package.get() }) else {
-        unreachable!("a function's owner edge points at a package")
-    };
-    package.build_id
-}
-
 impl Default for Owner {
     fn default() -> Self {
         Self::anonymous()

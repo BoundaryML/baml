@@ -27,7 +27,9 @@ SourceFile@0..319
     body: Whitespace "    " @54..58
     body: Word "provider" @58..66
     body: Whitespace " " @66..67
-    body: Word "vertex-ai" @67..76
+    body: Word "vertex" @67..73
+    body: Minus "-" @73..74
+    body: Word "ai" @74..76
     body: Newline "\n" @76..77
     body: Whitespace "    " @77..81
     body: Word "options" @81..88
@@ -37,9 +39,9 @@ SourceFile@0..319
     body: Whitespace "        " @91..99
     body: Word "model" @99..104
     body: Whitespace " " @104..105
-    body: Word "gemini-2" @105..113
-    body: Dot "." @113..114
-    body: Integer "0" @114..115
+    body: Word "gemini" @105..111
+    body: Minus "-" @111..112
+    body: Float "2.0" @112..115
     body: Minus "-" @115..116
     body: Word "flash" @116..121
     body: Newline "\n" @121..122
@@ -67,41 +69,51 @@ SourceFile@0..319
       ty: PathType@171..173
         head: Name@171..173
           token: Word "Hi" @171..173
-    body: LlmBody@174..319
+    body: Block@174..319
       l: LBrace "{" @174..175
-      fields: ClientField@212..229
-        kw: Client "client" @212..218
-        colon: Colon ":" @218..219
-        value: PathExpr@220..229
+      stmts: HeaderStmt@180..207
+        token: HeaderComment "//# collect source material" @180..207
+      stmts: ExprStmt@212..218
+        expr: PathExpr@212..218
+          head: Name@212..218
+            token: Client "client" @212..218
+      stmts: Bogus@218..219
+        tokens: Colon ":" @218..219
+      stmts: ExprStmt@220..229
+        expr: PathExpr@220..229
           head: Name@220..229
             token: Word "VertexGCP" @220..229
-      fields: PromptField@235..317
-        kw: Prompt "prompt" @235..241
-        colon: Colon ":" @241..242
-        value: BacktickString@243..317
-          open: BacktickStart "`" @243..244
-          parts: TemplateChunk "\n        give short story " @244..270
-          parts: TemplateInterp@270..280
-            open: DollarLBrace "${" @270..272
-            tail: PathExpr@272..279
-              head: Name@272..279
-                token: Word "user_id" @272..279
-            close: RBrace "}" @279..280
-          parts: TemplateChunk "\n        " @280..289
-          parts: TemplateInterp@289..311
-            open: DollarLBrace "${" @289..291
-            tail: CallExpr@291..310
-              callee: PathExpr@291..308
-                head: Name@291..294
-                  token: Word "ctx" @291..294
-                dot: Dot "." @294..295
-                name: Name@295..308
-                  token: Word "output_format" @295..308
-              args: ArgList@308..310
-                l: LParen "(" @308..309
-                r: RParen ")" @309..310
-            close: RBrace "}" @310..311
-          parts: TemplateChunk "\n    " @311..316
-          close: BacktickEnd "`" @316..317
+      stmts: ExprStmt@235..241
+        expr: PathExpr@235..241
+          head: Name@235..241
+            token: Prompt "prompt" @235..241
+      stmts: Bogus@241..242
+        tokens: Colon ":" @241..242
+      tail: BacktickString@243..317
+        open: BacktickStart "`" @243..244
+        parts: TemplateChunk "\n        give short story " @244..270
+        parts: TemplateInterp@270..280
+          open: DollarLBrace "${" @270..272
+          tail: PathExpr@272..279
+            head: Name@272..279
+              token: Word "user_id" @272..279
+          close: RBrace "}" @279..280
+        parts: TemplateChunk "\n        " @280..289
+        parts: TemplateInterp@289..311
+          open: DollarLBrace "${" @289..291
+          tail: CallExpr@291..310
+            callee: PathExpr@291..308
+              head: Name@291..294
+                token: Word "ctx" @291..294
+              dot: Dot "." @294..295
+              name: Name@295..308
+                token: Word "output_format" @295..308
+            args: ArgList@308..310
+              l: LParen "(" @308..309
+              r: RParen ")" @309..310
+          close: RBrace "}" @310..311
+        parts: TemplateChunk "\n    " @311..316
+        close: BacktickEnd "`" @316..317
       r: RBrace "}" @318..319
-error @180..207: a `//#` header is a statement inside a block, or the title directly above a function; it is not allowed here
+error @218..219: expected expression, found ':'
+error @241..242: expected expression, found ':'

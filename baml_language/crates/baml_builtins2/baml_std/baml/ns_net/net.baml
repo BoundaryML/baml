@@ -8,20 +8,18 @@ class TcpStream {
     /// `timeout` bounds how long to wait for the connection to be established;
     /// `null` (the default) waits indefinitely (subject to the OS default). On
     /// expiry this throws `baml.errors.Timeout`.
-    function connect(
-        addr: string,
-        timeout: root.time.Duration? = null,
-    ) -> TcpStream throws root.errors.Io | root.errors.Timeout {
+    function connect(addr: string, timeout: root.time.Duration? = null) -> TcpStream
+        throws root.errors.Io | root.errors.Timeout
+    {
         // Thin wrapper resolving the default: `$rust_io_function` sys-ops don't fill
         // omitted args, so `connect` forwards to the all-required `_connect` sys-op.
         TcpStream._connect(addr, timeout?.to_nanoseconds() ?? 0n)
     }
 
     /// (internal)
-    function _connect(
-        addr: string,
-        timeout_nanos: bigint,
-    ) -> TcpStream throws root.errors.Io | root.errors.Timeout {
+    function _connect(addr: string, timeout_nanos: bigint) -> TcpStream
+        throws root.errors.Io | root.errors.Timeout
+    {
         $rust_io_function
     }
 
@@ -107,12 +105,9 @@ class UdpSocket {
     }
 
     /// (internal)
-    function _send_to(
-        self,
-        data: uint8array,
-        addr: string,
-        timeout_nanos: bigint,
-    ) -> int throws root.errors.Io | root.errors.Timeout {
+    function _send_to(self, data: uint8array, addr: string, timeout_nanos: bigint) -> int
+        throws root.errors.Io | root.errors.Timeout
+    {
         $rust_io_function
     }
 
@@ -122,18 +117,16 @@ class UdpSocket {
     /// `timeout` bounds the wait for a datagram; `null` (the default) blocks
     /// indefinitely. On expiry this throws `baml.errors.Timeout` and the socket
     /// remains usable. Mirrors `UdpSocket::set_read_timeout`.
-    function recv_from(
-        self,
-        timeout: root.time.Duration? = null,
-    ) -> Datagram throws root.errors.Io | root.errors.Timeout {
+    function recv_from(self, timeout: root.time.Duration? = null) -> Datagram
+        throws root.errors.Io | root.errors.Timeout
+    {
         self._recv_from(timeout?.to_nanoseconds() ?? 0n)
     }
 
     /// (internal)
-    function _recv_from(
-        self,
-        timeout_nanos: bigint,
-    ) -> Datagram throws root.errors.Io | root.errors.Timeout {
+    function _recv_from(self, timeout_nanos: bigint) -> Datagram
+        throws root.errors.Io | root.errors.Timeout
+    {
         $rust_io_function
     }
 

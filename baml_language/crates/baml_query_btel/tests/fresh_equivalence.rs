@@ -263,7 +263,7 @@ mod crafted {
         let id = [7_u8; 16];
         let dir = project
             .join(".baml/btel/recordings")
-            .join(btel_reader::discovery::hex(&id));
+            .join(btel_core::reader::discovery::hex(&id));
         std::fs::create_dir_all(&dir).unwrap();
         for (index, mut file) in files.into_iter().enumerate() {
             let sequence = index as u64 + 1;

@@ -1,0 +1,14 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(items: int[]) -> int {
+    let within = items.filter((i) -> { i > 0 }).map((i) -> { i * 2 }).len();
+    let past = items
+        .filter((i) -> { i > 0 })
+        .map((i) -> { i * 2 })
+        .length();
+    let one_link = items.filter((item) -> { item > 0 && item < 100 && item != 50 }).length;
+    let one_call = some_rather_long_receiver_name.method(first_argument, second_argument, 3);
+    let path = root.algebra.Relation.from_pairs(first_argument, second_argument, third_arg);
+    0
+}

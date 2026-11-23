@@ -79,6 +79,9 @@ pub const NATIVE_DEFAULT_MODE: InvocationMode = InvocationMode::Hidden;
 /// **Observability semantics.** AI calls are identified from entry; changing mode affects
 /// announcements and ancestry.
 pub const AI_DEFAULT_MODE: InvocationMode = InvocationMode::Span;
-/// **Fixed implementation.** The VM currently implements one entry. A larger cache needs a
-/// resolver design and nested/alternating-call benchmarks.
-pub const CALL_PATH_CACHE_SLOTS: usize = 1;
+/// **Measure first.** Entries in each VM thread's direct-mapped call-path cache,
+/// which a call checks before the call-path map. A power of two. Each entry is about 48
+/// bytes, allocated when the thread first repeats a call path; two hot call sites that
+/// share an entry miss on every call. Measure with the `timing_*` scenarios of
+/// `telemetry_overhead`.
+pub const CALL_PATH_CACHE_SLOTS: usize = 256;

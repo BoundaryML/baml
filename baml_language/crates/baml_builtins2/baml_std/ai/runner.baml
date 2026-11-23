@@ -67,7 +67,7 @@ class Agent {
         if (schema_attempts < 1) {
             throw baml.errors.InvalidArgument {
                 message: "Agent schema_attempts must be at least 1",
-            }
+            };
         }
         Agent {
             max_steps: max_steps,
@@ -82,7 +82,7 @@ class Agent {
         if (self.schema_attempts < 1) {
             throw baml.errors.InvalidArgument {
                 message: "Agent schema_attempts must be at least 1",
-            }
+            };
         }
         self.schema_attempts
     }
@@ -99,9 +99,12 @@ class Agent {
             let t: root.tools.Tool => {
                 let outcome: string? = t.call(call.args) catch_all (e) {
                     _ => {
-                        j.append_all(
-                            [root.events.ToolFailed { id: call.id, message: e.to_string() }],
-                        );
+                        j.append_all([
+                            root.events.ToolFailed {
+                                id: call.id,
+                                message: e.to_string(),
+                            },
+                        ]);
                         // the per-tool setting wins; null inherits the run's mode
                         if ((t.on_error ?? self.tool_errors) == root.tools.ErrorMode.Raise) {
                             let classified = match (e) {
@@ -113,7 +116,7 @@ class Agent {
                                 name: call.name,
                                 message: e.to_string(),
                                 cause: classified,
-                            }
+                            };
                         } else {
                             null
                         }
@@ -125,14 +128,12 @@ class Agent {
                 null
             },
             null => {
-                j.append_all(
-                    [
-                        root.events.ToolFailed {
-                            id: call.id,
-                            message: `tool is not in the active toolbox: ${call.name}`,
-                        },
-                    ],
-                );
+                j.append_all([
+                    root.events.ToolFailed {
+                        id: call.id,
+                        message: `tool is not in the active toolbox: ${call.name}`,
+                    },
+                ]);
                 null
             },
         }
@@ -151,7 +152,10 @@ class Agent {
         if (form == "mixed" || form == "mixedlist") {
             return root.internal._media_mixed_parts(turn).length() > 0;
         }
-        root.internal._media_of_kind(turn, shape.split(":").at(1) ?? "").length() > 0
+        root.internal
+            ._media_of_kind(turn, shape.split(":").at(1) ?? "")
+            .length()
+            > 0
     }
 
     /// (internal) Build a media-shaped `Out` from the turn's content blocks. Only called
@@ -182,7 +186,7 @@ class Agent {
                     throw root.errors.ParseFailed {
                         provider: provider,
                         raw_output: `Expected one text or image output for ${t.to_string()}, got ${items.length()} parts. Use (image | string)[] to preserve mixed outputs.`,
-                    }
+                    };
                 }
             },
             "list" => {
@@ -201,7 +205,7 @@ class Agent {
                         } else {
                             `Expected zero or one ${kind} output for ${t.to_string()}, got ${parts.length()}. Use ${kind}[] for multiple outputs.`
                         },
-                    }
+                    };
                 }
                 let only: baml.json.json = null;
                 for (let p in parts) {
@@ -215,7 +219,7 @@ class Agent {
                 throw root.errors.ParseFailed {
                     provider: provider,
                     raw_output: `the ${kind} output did not fit ${t.to_string()}: ${e.to_string()}`,
-                }
+                };
             },
         }
     }
@@ -269,14 +273,12 @@ class Agent {
         total: root.events.ModelUsage[],
         attempts_left: int,
     ) -> _AcceptedTurn {
-        let turn = c.invoke(
-            ModelTurnInput {
-                prompt: spec.prompt_template,
-                journal: j,
-                toolbox: spec.tools(),
-                output_type: spec.output_type(),
-            },
-        );
+        let turn = c.invoke(ModelTurnInput {
+            prompt: spec.prompt_template,
+            journal: j,
+            toolbox: spec.tools(),
+            output_type: spec.output_type(),
+        });
         let calls = turn.all_calls();
         root.events.merge_usage(total, root.events.call_usage(calls));
         let provider = turn.resolved_model?.provider ?? "unknown";
@@ -293,7 +295,11 @@ class Agent {
             batch.push(call);
         }
         for (let u in turn.tool_uses()) {
-            batch.push(root.events.ToolRequested { id: u.id, name: u.name, args: u.args });
+            batch.push(root.events.ToolRequested {
+                id: u.id,
+                name: u.name,
+                args: u.args,
+            });
         }
         let candidate = turn.terminal_text() ?? "";
         let text_output: ParsedOutput? = null;
@@ -321,25 +327,33 @@ class Agent {
                         provider: provider,
                         finish_reason: turn.stop_reason,
                         raw_output: candidate,
-                    }
+                    };
                 },
                 root.content.StopReason.Refused => {
-                    throw root.errors.Refused { provider: provider, reason: "the model declined to answer", raw_body: null }
+                    throw root.errors.Refused {
+                        provider: provider,
+                        reason: "the model declined to answer",
+                        raw_body: null,
+                    };
                 },
                 _ => null,
             };
-            _AcceptedTurn { turn: turn, text_output: text_output }
+            _AcceptedTurn {
+                turn: turn,
+                text_output: text_output,
+            }
         } else if (attempts_left > 1) {
-            batch.push(
-                root.events.UserMessage.new(
-                    "The reply did not match the required schema. Answer again with only the corrected value.",
-                ),
-            );
+            batch.push(root.events.UserMessage.new(
+                "The reply did not match the required schema. Answer again with only the corrected value.",
+            ));
             j.append_all(batch);
             self._attempt_turn<Out>(c, spec, j, total, attempts_left - 1)
         } else {
             j.append_all(batch);
-            throw root.errors.ParseFailed { provider: provider, raw_output: candidate }
+            throw root.errors.ParseFailed {
+                provider: provider,
+                raw_output: candidate,
+            };
         }
     }
 
@@ -386,7 +400,9 @@ class Agent {
                 let before = j.entries().length();
                 // execute concurrently; each call appends its correlated result
                 let futures = calls.map((call) -> {
-                    spawn { self._run_one_tool(spec.tools(), call, j) }
+                    spawn {
+                        self._run_one_tool(spec.tools(), call, j)
+                    }
                 });
                 let _ = await baml.future.all(futures);
                 self._deliver(j, delivered);
@@ -397,20 +413,19 @@ class Agent {
                 let i = before;
                 while (i < entries.length()) {
                     if let f: root.events.ToolFailed = entries.at(i) {
-                        let failed_call = calls.find((one: root.content.ToolUse) -> {
-                            one.id == f.id
-                        });
+                        let failed_call =
+                            calls.find((one: root.content.ToolUse) -> { one.id == f.id });
                         if let known: root.content.ToolUse = failed_call {
                             let key = `${known.name}|${f.message}`;
                             let n = (fail_counts.get(key) ?? 0) + 1;
                             let _ = fail_counts.set(key, n);
                             if (n >= 3) {
                                 throw root.errors.ToolFailedError {
-                                        id: known.id,
-                                        name: known.name,
-                                        message: `the same tool call failed ${n} times; stopping the run: ${f.message}`,
-                                        cause: null,
-                                    }
+                                    id: known.id,
+                                    name: known.name,
+                                    message: `the same tool call failed ${n} times; stopping the run: ${f.message}`,
+                                    cause: null,
+                                };
                             }
                         }
                     }
@@ -425,9 +440,14 @@ class Agent {
                 // produced no media for went through the text parse, which is
                 // how absence is expressed (`_fits_without_text`).
                 let provider = turn.resolved_model?.provider ?? "unknown";
-                let value = if let parsed: ParsedOutput = turn.parsed_output ?? accepted.text_output {
+                let value = if let parsed: ParsedOutput = turn.parsed_output
+                    ?? accepted.text_output
+                {
                     let typed: Out = parsed.value else {
-                        throw root.errors.ParseFailed { provider: provider, raw_output: candidate }
+                        throw root.errors.ParseFailed {
+                            provider: provider,
+                            raw_output: candidate,
+                        };
                     };
                     typed
                 } else {
@@ -436,17 +456,25 @@ class Agent {
                 let value_json = baml.json.stringify(value) catch_all (e) {
                     _ => {
                         throw baml.errors.UnknownError.with_message<never>(
-                                e,
-                                "final value serialization failed",
-                            )
+                            e,
+                            "final value serialization failed",
+                        );
                     },
                 };
-                j.append_all([root.events.FinalProduced { value_json: value_json }]);
+                j.append_all([
+                    root.events.FinalProduced {
+                        value_json: value_json,
+                    },
+                ]);
                 self._deliver(j, delivered);
-                return RunResult { value: value, journal: j, usage: total };
+                return RunResult {
+                    value: value,
+                    journal: j,
+                    usage: total,
+                };
             }
         }
-        throw root.errors.StepBudgetExceeded { steps: steps }
+        throw root.errors.StepBudgetExceeded { steps: steps };
     }
 
     implements Runner {
@@ -469,9 +497,16 @@ class Agent {
             }
             inputs["client"] = selected;
             inputs["on_event"] = self.on_event;
-            let span = trace._create_span(spec.target(), inputs = inputs, config = trace._passthrough()) catch_all (e) {
+            let span = trace._create_span(
+                spec.target(),
+                inputs = inputs,
+                config = trace._passthrough(),
+            ) catch_all (e) {
                 _ => {
-                    throw baml.errors.UnknownError.with_message<never>(e, "could not start agent span")
+                    throw baml.errors.UnknownError.with_message<never>(
+                        e,
+                        "could not start agent span",
+                    );
                 },
             };
             span.run(() -> {
@@ -479,23 +514,27 @@ class Agent {
                 let j = Journal.new(spec);
                 let delivered = _Delivered { count: 0 };
                 self._deliver(j, delivered);
-                let result = self._run_steps<Out>(selected, spec, j, delivered, schema_attempts) catch_all (e) {
-                    _ => {
-                        // A turn is on the record before it is judged, so the turn
-                        // that ends the run with an error is in the journal: the
-                        // reply that did not parse and the repair attempts before
-                        // it, the cut-short turn, the refusal, the failed tool.
-                        // Every error passes here, and the listener gets what the
-                        // journal holds before the error propagates.
-                        self._deliver(j, delivered);
-                        throw e
-                    },
-                };
+                let result = self
+                    ._run_steps<Out>(selected, spec, j, delivered, schema_attempts) catch_all (e) {
+                        _ => {
+                            // A turn is on the record before it is judged, so the turn
+                            // that ends the run with an error is in the journal: the
+                            // reply that did not parse and the repair attempts before
+                            // it, the cut-short turn, the refusal, the failed tool.
+                            // Every error passes here, and the listener gets what the
+                            // journal holds before the error propagates.
+                            self._deliver(j, delivered);
+                            throw e;
+                        },
+                    };
                 span.finish(result.value);
                 result
             }) catch_all_panics (e, context) {
                 let e: trace.SpanError => {
-                    let error = baml.errors.UnknownError.with_message<never>(e, "could not enter agent span");
+                    let error = baml.errors.UnknownError.with_message<never>(
+                        e,
+                        "could not enter agent span",
+                    );
                     span.fail_with_context(error, context);
                     throw error;
                 },

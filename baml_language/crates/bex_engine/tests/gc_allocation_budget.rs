@@ -75,12 +75,18 @@ function Async(n: int) -> int {
 }
 "#;
 
+/// The default policy, whatever `BAML_GC_*` the developer or CI exported:
+/// these tests count collections.
 fn engine() -> Arc<BexEngine> {
     Arc::new(
-        BexEngine::new(
+        BexEngine::new_with_config(
             baml_test_support::compile_source(SOURCE),
             Arc::new(sys_native::SysOps::native()),
             vec![],
+            bex_engine::EngineConfig {
+                gc: bex_engine::GcConfig::fixed(bex_engine::gc_settings::GcSettings::default()),
+                ..Default::default()
+            },
         )
         .unwrap(),
     )
@@ -148,7 +154,7 @@ async fn long_compute_collects_before_returning() {
 
 /// Growing an array that already survived a collection spends the budget by
 /// the capacity it gains: 2.1 million pushes reach a 4 Mi-element buffer, which
-/// is 32 MiB, the whole initial allowance.
+/// is 32 MiB, four times the initial 8 MiB allowance.
 #[tokio::test(start_paused = true)]
 async fn existing_old_array_growth_spends_the_budget() {
     let engine = engine();
@@ -208,7 +214,7 @@ async fn large_payloads_trigger_gc_with_few_objects() {
     let collections = engine.heap().gc_budget().full_collections;
     assert!(
         collections >= 2,
-        "{collections} collections for 80 MiB of payload against a 32 MiB budget"
+        "{collections} collections for 80 MiB of payload against an 8 MiB budget"
     );
     engine.collect_garbage().await;
     for value in kept {
@@ -222,9 +228,9 @@ async fn large_payloads_trigger_gc_with_few_objects() {
 
 /// A loop that makes and drops one large buffer per iteration collects
 /// during the call rather than waiting for it to end. The first collection
-/// comes after four 8 MiB iterations spend the 32 MiB budget; it finds the
-/// seed and the current copy live, 16 MiB, so the budget becomes 64 MiB and
-/// the remaining 224 MiB of churn brings at least two more.
+/// comes once one 8 MiB buffer spends the 8 MiB budget; it finds the seed
+/// and the current copy live, 16 MiB, so the budget becomes 64 MiB and the
+/// remaining 240 MiB or so of churn brings at least two more.
 #[tokio::test(start_paused = true)]
 async fn large_buffers_collect_during_the_call() {
     let engine = engine();
@@ -311,7 +317,7 @@ async fn unread_concatenation_is_charged_its_nodes() {
 /// grows: a CSV buffer writer accumulating 256 MiB of text in one call must
 /// bring collections during the call, though the call allocates almost no
 /// heap objects (one two-element record per iteration) and never reads the
-/// text back. The first collection comes at 32 MiB; it finds the buffer live
+/// text back. The first collection comes at 8 MiB; it finds the buffer live
 /// and sets the budget to four times that, so the rest brings at least one
 /// more.
 #[tokio::test(start_paused = true)]
@@ -449,5 +455,71 @@ async fn completed_bridge_call_leaves_debt_for_next_entry_and_preserves_its_hand
         Ext::Int(n)
     );
     assert_eq!(engine.heap().gc_budget().full_collections, 1);
+    engine.shutdown().await;
+}
+
+fn engine_with_gc(growth: &str, min_growth: usize) -> Arc<BexEngine> {
+    use bex_engine::gc_settings::{GcSettings, Growth};
+    let gc = bex_engine::GcConfig::fixed(
+        GcSettings::new(Growth::parse(growth).unwrap(), min_growth).unwrap(),
+    );
+    let engine = BexEngine::new_with_config(
+        baml_test_support::compile_source(SOURCE),
+        Arc::new(sys_native::SysOps::native()),
+        vec![],
+        bex_engine::EngineConfig {
+            gc,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let settings = engine.heap().gc_settings();
+    assert_eq!(settings.growth().to_string(), growth);
+    assert_eq!(settings.min_growth(), min_growth);
+    assert_eq!(engine.heap().gc_budget().full_budget_bytes, min_growth);
+    Arc::new(engine)
+}
+
+/// Collections during 256 MiB of buffer churn with 8 MiB live.
+async fn collections_during_churn(engine: &Arc<BexEngine>) -> usize {
+    engine.collect_garbage().await;
+    let before = engine.heap().gc_budget().full_collections;
+    let size = 8 * 1024 * 1024;
+    call(
+        engine,
+        "Bytes",
+        vec![Ext::Uint8Array(vec![1; size]), Ext::Int(32)],
+        true,
+    )
+    .await;
+    engine.heap().gc_budget().full_collections - before
+}
+
+/// The same program collects more often under a lower growth and less often
+/// under a higher one; a large `min_growth` holds collections off entirely.
+#[tokio::test(start_paused = true)]
+async fn growth_and_min_growth_set_how_often_the_same_program_collects() {
+    const MIB: usize = 1024 * 1024;
+    let mut counts = Vec::new();
+    for growth in ["0.25", "4", "16"] {
+        let engine = engine_with_gc(growth, MIB);
+        counts.push(collections_during_churn(&engine).await);
+        engine.shutdown().await;
+    }
+    let [low, default, high] = counts[..] else {
+        unreachable!()
+    };
+    assert!(
+        low > default && default > high,
+        "collections at growth 0.25 / 4 / 16: {low} / {default} / {high}"
+    );
+    assert!(low >= 16, "growth 0.25 collects about every copy: {low}");
+
+    let engine = engine_with_gc("0.25", 1024 * MIB);
+    assert_eq!(
+        collections_during_churn(&engine).await,
+        0,
+        "256 MiB of churn stays under a 1 GiB min_growth"
+    );
     engine.shutdown().await;
 }

@@ -1422,8 +1422,7 @@ fn object_literal(ctx: &mut LoweringContext, v: View<'_>, id: Id<ObjectLiteral>)
         match member {
             AnyObjectMember::Field(field) => {
                 let field = *v.node(field);
-                // Only a name keys a field of a constructed object (a string
-                // or template key is a map's); the rowan lowering read none.
+                // A `Bogus` key (a quoted one) was reported by the parser.
                 let AnyObjectKey::Name(key) = field.key else {
                     continue;
                 };
@@ -1626,25 +1625,6 @@ fn unary_expr(ctx: &mut LoweringContext, v: View<'_>, id: Id<UnaryExpr>) -> Expr
             },
             span,
         ),
-        // `--x` is `-(-x)`.
-        ops::UnaryOp::PreDec => {
-            let inner = ctx.alloc_expr(
-                Expr::Unary {
-                    op: UnaryOp::Neg,
-                    expr,
-                },
-                span,
-            );
-            ctx.alloc_expr(
-                Expr::Unary {
-                    op: UnaryOp::Neg,
-                    expr: inner,
-                },
-                span,
-            )
-        }
-        // `++x` has no meaning; the operand stands (as in the rowan lowering).
-        ops::UnaryOp::PreInc => expr,
     }
 }
 

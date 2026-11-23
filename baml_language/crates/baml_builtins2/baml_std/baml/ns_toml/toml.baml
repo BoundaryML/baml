@@ -78,7 +78,9 @@ class Table {
                 self.set(key, child);
                 child
             },
-            _ => throw root.errors.InvalidArgument { message: "Expected TOML table: " + key },
+            _ => throw root.errors.InvalidArgument {
+                message: "Expected TOML table: " + key,
+            },
         }
     }
 
@@ -93,7 +95,9 @@ class Table {
             return true;
         }
         if (self.items.has(to)) {
-            throw root.errors.InvalidArgument { message: "TOML key already exists: " + to };
+            throw root.errors.InvalidArgument {
+                message: "TOML key already exists: " + to,
+            };
         }
         let value = self.items.delete(from) ?? root.sys.panic("TOML key disappeared during rename");
         self.items[to] = value;
@@ -192,17 +196,19 @@ function table_from_json(j: root.json.json) -> Table throws root.json.DecodeErro
         map<string, root.json.json> => {
             let items: map<string, Item> = map {};
             for (let key in j.keys()) {
-                items[key]
-                    = match (j[key]) {
-                        null => {
-                            continue;
-                        }, // skip null values
-                        let item => item_from_json(item),
-                    }
+                items[key] = match (j[key]) {
+                    null => {
+                        continue;
+                    }, // skip null values
+                    let item => item_from_json(item),
+                };
             }
             Table { items: items }
         },
-        _ => throw root.json.DecodeError { message: "expected map", path: "" },
+        _ => throw root.json.DecodeError {
+            message: "expected map",
+            path: "",
+        },
     }
 }
 
@@ -244,8 +250,14 @@ function item_to_json(item: Item) -> root.json.json throws root.json.Serializati
 function item_from_json(json: root.json.json) -> Item throws root.json.DecodeError {
     match (json) {
         bool | int | float | string => json,
-        null => throw root.json.DecodeError { message: "TOML does not support null", path: "" },
-        bigint => throw root.json.DecodeError { message: "TOML does not support bigint", path: "" },
+        null => throw root.json.DecodeError {
+            message: "TOML does not support null",
+            path: "",
+        },
+        bigint => throw root.json.DecodeError {
+            message: "TOML does not support bigint",
+            path: "",
+        },
         map<string, root.json.json> => Table.from_json(json),
         root.json.json[] => json.map(item_from_json),
     }

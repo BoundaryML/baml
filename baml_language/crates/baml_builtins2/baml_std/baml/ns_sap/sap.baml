@@ -24,8 +24,7 @@ class _ParseCache<T> {
 }
 
 /// (internal) sentinel returned when an incremental parse needs more text.
-class _NoYield {
-}
+class _NoYield {}
 
 /// (internal) A shape value that `from_llm_output` refused, with the message
 /// it threw. The parser then reads the text as if the type could not hold
@@ -87,7 +86,7 @@ function parse<T>(text: string) -> T throws root.errors.ParseError {
     let cache = _new_parse_cache<T>();
     cache._parse_final(text) catch (_) {
         root.errors.LlmClient { message } => {
-            throw root.errors.ParseError { message: message }
+            throw root.errors.ParseError { message: message };
         },
     }
 }

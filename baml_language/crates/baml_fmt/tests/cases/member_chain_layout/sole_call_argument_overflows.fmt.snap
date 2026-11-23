@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f() -> int {
+    foo(bar(baz(qux(
+        aaaaaaaa,
+        bbbbbbbb,
+        cccccccc,
+    ))))
+}

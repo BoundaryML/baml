@@ -39,8 +39,9 @@
 //! 2. **Lookup/aggregation locality:** [`processor::COMBINING_SLOTS`] trades
 //!    fixed cache footprint against downstream aggregate updates. Measure both
 //!    ns/completion and updates/completion under realistic call-path sequences.
-//!    [`policy::CALL_PATH_CACHE_SLOTS`] describes a separate VM cache: increasing
-//!    it requires a resolver change, not just editing a number.
+//!    [`policy::CALL_PATH_CACHE_SLOTS`] sizes a separate VM cache, the call-path
+//!    lookup in front of each thread's map: fewer entries cost less memory per
+//!    thread, more make two hot call sites less likely to share one.
 //! 3. **Publisher sealing and retained allocation:** [`publisher::TARGET_BYTES`],
 //!    [`publisher::FILE_FLUSH_INTERVAL_DURATION`], [`processor::CACHE_FLUSH_INTERVAL_DURATION`], and publisher
 //!    growth/shrink settings. These affect file/sealing frequency, aggregation

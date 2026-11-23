@@ -17,13 +17,10 @@ btel_records = { workspace = true }
 btel_settings = { workspace = true }
 btel_snapshot = { workspace = true }
 btel_types = { workspace = true }
+btel-core = { workspace = true }
 prost = { workspace = true }
 rustc-hash = { workspace = true }
 web-time = { workspace = true }
-
-[build-dependencies]
-prost-build = { workspace = true }
-protoc-bin-vendored = { workspace = true }
 
 [dev-dependencies]
 bex_chunkedringbuffer = { workspace = true }

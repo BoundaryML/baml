@@ -74,10 +74,11 @@ pub fn capture_with_builder(
 
 #[cfg(test)]
 mod tests {
+    use btel_core::cas::{DecodeLimits, decode_blob};
     use btel_types::context::ContextPatch;
 
     use super::*;
-    use crate::{BlobScratch, DecodeLimits, Limits, SnapshotObject, SnapshotRoot, decode_blob};
+    use crate::{BlobScratch, Limits, SnapshotObject, SnapshotRoot};
 
     fn context() -> Context {
         Context::default().with_patch(&ContextPatch {

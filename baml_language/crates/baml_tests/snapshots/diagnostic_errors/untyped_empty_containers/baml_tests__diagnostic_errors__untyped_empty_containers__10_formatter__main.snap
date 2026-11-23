@@ -2,12 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function fail() -> never throws string {
-    throw "boom"
+    throw "boom";
 }
 
 function catch_array() -> null {
     let values = fail() catch (e) {
-        string => []
+        string => [],
     };
     for (let value in values) {
         log.info(value)

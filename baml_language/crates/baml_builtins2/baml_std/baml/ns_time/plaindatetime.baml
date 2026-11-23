@@ -211,7 +211,10 @@ class PlainDateTime {
                                             _iana: timezone,
                                         }
                                     } else {
-                                        throw AmbiguousTimeError { message: "wall-clock time is ambiguous or skipped in timezone " + timezone }
+                                        throw AmbiguousTimeError {
+                                            message: "wall-clock time is ambiguous or skipped in timezone "
+                                                + timezone,
+                                        };
                                     }
                                 },
                             }
@@ -357,12 +360,18 @@ class PlainDateTime {
                 string => {
                     PlainDateTime.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw root.json.DecodeError { message: message, path: "" }
+                            throw root.json.DecodeError {
+                                message: message,
+                                path: "",
+                            };
                         },
                     }
                 },
                 _ => {
-                    throw root.json.DecodeError { message: "Expected zoneless ISO 8601 string", path: "" }
+                    throw root.json.DecodeError {
+                        message: "Expected zoneless ISO 8601 string",
+                        path: "",
+                    };
                 },
             }
         }
@@ -379,7 +388,10 @@ class PlainDateTime {
         function from_llm_output(shape: string) -> Self throws root.json.DecodeError {
             PlainDateTime.parse(shape) catch (_) {
                 root.errors.ParseError { message } => {
-                    throw root.json.DecodeError { message: message, path: "" }
+                    throw root.json.DecodeError {
+                        message: message,
+                        path: "",
+                    };
                 },
             }
         }
@@ -400,17 +412,19 @@ class PlainDateTime {
                         message: message,
                         path: "",
                         reason: "unserializable",
-                    }
+                    };
                 },
             }
         }
     }
 
-    @@description("An ISO 8601 date and time with no timezone, for example 1979-05-27T07:32:00")
+    @@description(
+        "An ISO 8601 date and time with no timezone, for example 1979-05-27T07:32:00",
+    )
 }
 
 implement root.ops.Add<Duration> for PlainDateTime {
-    type Output = PlainDateTime
+    type Output = PlainDateTime;
     /// Advances the wall-clock reading by `other`.
     ///
     /// Pure civil arithmetic: no timezone is consulted, so adding 24 hours
@@ -422,24 +436,24 @@ implement root.ops.Add<Duration> for PlainDateTime {
     /// value whose accessors and `to_string` then fail.
     function add(self, other: Duration) -> PlainDateTime {
         PlainDateTime {
-            _nanoseconds: self._nanoseconds + other._nanoseconds
+            _nanoseconds: self._nanoseconds + other._nanoseconds,
         }
     }
 }
 
 implement root.ops.Subtract<Duration> for PlainDateTime {
-    type Output = PlainDateTime
+    type Output = PlainDateTime;
     /// Rewinds the wall-clock reading by `other`. Civil arithmetic, with the
     /// same caveats as `PlainDateTime + Duration`.
     function sub(self, other: Duration) -> PlainDateTime {
         PlainDateTime {
-            _nanoseconds: self._nanoseconds - other._nanoseconds
+            _nanoseconds: self._nanoseconds - other._nanoseconds,
         }
     }
 }
 
 implement root.ops.Subtract<PlainDateTime> for PlainDateTime {
-    type Output = Duration
+    type Output = Duration;
     /// The signed gap from `other` to `self`, read off the clock face: positive
     /// when `self` is the later reading, negative when it is the earlier.
     ///
@@ -448,7 +462,7 @@ implement root.ops.Subtract<PlainDateTime> for PlainDateTime {
     /// readings sit in the same UTC offset.
     function sub(self, other: PlainDateTime) -> Duration {
         Duration {
-            _nanoseconds: self._nanoseconds - other._nanoseconds
+            _nanoseconds: self._nanoseconds - other._nanoseconds,
         }
     }
 }

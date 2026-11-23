@@ -17,13 +17,19 @@ class ThinkingConfig {
     /// Turns extended thinking on, with `budget_tokens` reserved for it.
     function enabled(budget_tokens: int) -> ThinkingConfig {
         let budget = budget_tokens;
-        ThinkingConfig { type: "enabled", budget_tokens: budget }
+        ThinkingConfig {
+            type: "enabled",
+            budget_tokens: budget,
+        }
     }
 
     /// Turns extended thinking off.
     function disabled() -> ThinkingConfig {
         let kind = "disabled";
-        ThinkingConfig { type: kind, budget_tokens: null }
+        ThinkingConfig {
+            type: kind,
+            budget_tokens: null,
+        }
     }
 }
 
@@ -39,13 +45,21 @@ class ToolChoice {
     /// The model decides whether to call a tool.
     function auto(disable_parallel_tool_use: bool? = null) -> ToolChoice {
         let parallel = disable_parallel_tool_use;
-        ToolChoice { type: "auto", name: null, disable_parallel_tool_use: parallel }
+        ToolChoice {
+            type: "auto",
+            name: null,
+            disable_parallel_tool_use: parallel,
+        }
     }
 
     /// The model must call one of the tools, its choice which.
     function any(disable_parallel_tool_use: bool? = null) -> ToolChoice {
         let parallel = disable_parallel_tool_use;
-        ToolChoice { type: "any", name: null, disable_parallel_tool_use: parallel }
+        ToolChoice {
+            type: "any",
+            name: null,
+            disable_parallel_tool_use: parallel,
+        }
     }
 
     /// The model must call exactly this tool.
@@ -61,7 +75,11 @@ class ToolChoice {
     /// The model may not call a tool this turn.
     function none() -> ToolChoice {
         let kind = "none";
-        ToolChoice { type: kind, name: null, disable_parallel_tool_use: null }
+        ToolChoice {
+            type: kind,
+            name: null,
+            disable_parallel_tool_use: null,
+        }
     }
 }
 
@@ -169,7 +187,7 @@ class Client {
         }
         throw root.internal._reject(
             `anthropic needs an API key: pass api_key (a literal or env.NAME), or set one of the variables it consulted — ${ai.wire.credential_sources(self.api_key, "ANTHROPIC_API_KEY")}`,
-        )
+        );
     }
 
     /// The request-time base URL, or null for the provider default.

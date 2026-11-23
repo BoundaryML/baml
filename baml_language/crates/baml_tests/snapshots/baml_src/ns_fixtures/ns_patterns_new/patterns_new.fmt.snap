@@ -117,7 +117,7 @@ function fn_pattern(cb: (int) -> int) -> int {
 function for_let_with_narrow(items: int[]) -> int {
     let sum = 0;
     for (let n: int in items) {
-        sum += n
+        sum += n;
     }
     sum
 }
@@ -125,7 +125,7 @@ function for_let_with_narrow(items: int[]) -> int {
 function for_let_ascription(items: int[]) -> int {
     let sum = 0;
     for (let n: int | string in items) {
-        sum += 1
+        sum += 1;
     }
     sum
 }
@@ -134,7 +134,7 @@ function for_let_ascription(items: int[]) -> int {
 function for_let_fn_narrow(items: ((int) -> int throws never)[]) -> int {
     let total = 0;
     for (let f: (int) -> int throws never in items) {
-        total += f(0)
+        total += f(0);
     }
     total
 }
@@ -149,22 +149,22 @@ class AppError {
 
 function risky_error(mode: int) -> int throws AppError | string {
     if (mode == 0) {
-        throw AppError { code: 1 }
+        throw AppError { code: 1 };
     }
-    throw "boom"
+    throw "boom";
 }
 
 // Catch arm with a chain narrow of a union — binds the joined type.
 function catch_chain_union(mode: int) -> int {
     risky_error(mode) catch (e) {
-        AppError | string => 1
+        AppError | string => 1,
     }
 }
 
 // Catch arms with paren-wrapped Or chains, each branch a typed binding.
 function catch_paren_or_chain(mode: int) -> int {
     risky_error(mode) catch (e) {
-        (AppError) | (string) => 1
+        (AppError) | (string) => 1,
     }
 }
 
@@ -172,7 +172,7 @@ function catch_paren_or_chain(mode: int) -> int {
 function catch_widening_chain(mode: int) -> int {
     risky_error(mode) catch (e) {
         let s: string => 1,
-        let app: AppError => 2
+        let app: AppError => 2,
     }
 }
 

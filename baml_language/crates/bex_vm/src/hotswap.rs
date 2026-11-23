@@ -709,7 +709,6 @@ impl BexVm {
             diagnostics: artifact.diagnostics.clone(),
             session: None,
             metadata: artifact.emitted.record.metadata.clone(),
-            build_id: None,
         };
         let patched = vm.alloc(Object::Package(Box::new(patched)));
         // A client that differs from the build is built only when it changed

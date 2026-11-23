@@ -15,7 +15,7 @@ class Widget {
     zq: int,
 }
 
-implements baml.ToString for Widget {
+implement baml.ToString for Widget {
     function to_string(self) -> string throws never {
         "x"
     }

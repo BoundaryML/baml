@@ -27,12 +27,18 @@ class TestCollector {
     testsets: TestSetRegistration[],
 
     function new(prefix: string) -> TestCollector {
-        TestCollector { prefix: prefix, tests: [], testsets: [] }
+        TestCollector {
+            prefix: prefix,
+            tests: [],
+            testsets: [],
+        }
     }
 
     function register_test(self, name: string, body: TestBody, runner: TestRunner?) -> void {
         if (name.includes("::")) {
-            throw InvalidTestName { message: "test name may not contain reserved separator `::`: " + name }
+            throw InvalidTestName {
+                message: "test name may not contain reserved separator `::`: " + name,
+            };
         } else {
             null
         }
@@ -47,7 +53,11 @@ class TestCollector {
         } else {
             full_name
         };
-        let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner });
+        let _ = self.tests.push(TestRegistration {
+            name: final_name,
+            body: body,
+            runner: runner,
+        });
     }
 
     function register_test_set(
@@ -57,7 +67,9 @@ class TestCollector {
         runner: TestSetRunner?,
     ) -> void {
         if (name.includes("::")) {
-            throw InvalidTestName { message: "testset name may not contain reserved separator `::`: " + name }
+            throw InvalidTestName {
+                message: "testset name may not contain reserved separator `::`: " + name,
+            };
         } else {
             null
         }
@@ -72,9 +84,11 @@ class TestCollector {
         } else {
             full_name
         };
-        let _ = self.testsets.push(
-            TestSetRegistration { name: final_name, collector: collector, runner: runner },
-        );
+        let _ = self.testsets.push(TestSetRegistration {
+            name: final_name,
+            collector: collector,
+            runner: runner,
+        });
     }
 
     /// Compiler-only top-level registration entry points. The owner is derived
@@ -87,7 +101,11 @@ class TestCollector {
         body: TestBody,
         runner: TestRunner?,
     ) -> void {
-        let scoped = TestCollector { prefix: owner, tests: self.tests, testsets: self.testsets };
+        let scoped = TestCollector {
+            prefix: owner,
+            tests: self.tests,
+            testsets: self.testsets,
+        };
         scoped.register_test(name, body, runner)
     }
 
@@ -98,7 +116,11 @@ class TestCollector {
         collector: TestSetBody,
         runner: TestSetRunner?,
     ) -> void {
-        let scoped = TestCollector { prefix: owner, tests: self.tests, testsets: self.testsets };
+        let scoped = TestCollector {
+            prefix: owner,
+            tests: self.tests,
+            testsets: self.testsets,
+        };
         scoped.register_test_set(name, collector, runner)
     }
 
@@ -108,7 +130,7 @@ class TestCollector {
                 return ts;
             }
         }
-        throw ("TestSet not found: " + name)
+        throw ("TestSet not found: " + name);
     }
 
     function _find_test(self, name: string) -> TestRegistration {
@@ -117,7 +139,7 @@ class TestCollector {
                 return t;
             }
         }
-        throw ("Test not found: " + name)
+        throw ("Test not found: " + name);
     }
 }
 
@@ -150,7 +172,11 @@ class TestRegistry {
     loading_time_ms: int,
 
     function new(collector: TestCollector) -> TestRegistry {
-        TestRegistry { collector: collector, expansions: {}, loading_time_ms: 0 }
+        TestRegistry {
+            collector: collector,
+            expansions: {},
+            loading_time_ms: 0,
+        }
     }
 
     /// Serialize registry to pure-data list for the UI.
@@ -161,22 +187,26 @@ class TestRegistry {
     function serialize(self) -> SerializedTestDef[] {
         let items: SerializedTestDef[] = [];
         for (let t in self.collector.tests) {
-            items.push(SerializedTest { type: "test", name: t.name })
+            items.push(SerializedTest {
+                type: "test",
+                name: t.name,
+            })
         }
         for (let ts in self.collector.testsets) {
             let expanded = self.expansions.get(ts.name);
             match (expanded) {
                 let sub: TestRegistry => {
-                    items.push(
-                        SerializedTestSet {
-                            name: ts.name,
-                            items: sub.serialize(),
-                            loadingTimeMs: sub.loading_time_ms,
-                        },
-                    )
+                    items.push(SerializedTestSet {
+                        name: ts.name,
+                        items: sub.serialize(),
+                        loadingTimeMs: sub.loading_time_ms,
+                    })
                 },
                 null => {
-                    items.push(SerializedTest { type: "lazyTestSet", name: ts.name })
+                    items.push(SerializedTest {
+                        type: "lazyTestSet",
+                        name: ts.name,
+                    })
                 },
             }
         }
@@ -199,7 +229,7 @@ class TestRegistry {
                 return sub.run_test(name);
             }
         }
-        throw ("Test not found: " + name)
+        throw ("Test not found: " + name);
     }
 
     function run_testset(self, name: string) -> TestSetReport {
@@ -219,7 +249,7 @@ class TestRegistry {
                 return sub.run_testset(name);
             }
         }
-        throw ("TestSet not found: " + name)
+        throw ("TestSet not found: " + name);
     }
 
     function run_all(self) -> TestSetReport {
@@ -235,7 +265,11 @@ class TestRegistry {
     }
 
     function _run_selected_pooled(self, names: string[], pool: _TestPool) -> TestSetReport {
-        root._run_testset(root._testset_children_selected(self, names, pool), null, pool)
+        root._run_testset(
+            root._testset_children_selected(self, names, pool),
+            null,
+            pool,
+        )
     }
 
     /// CLI entry point: glob-filter in BAML, run (honoring testset runners), and
@@ -255,7 +289,13 @@ class TestRegistry {
         // Always discover the selected leaf IDs first. Besides supplying canonical
         // console identities, this makes structural registration errors actionable
         // even when the unfiltered execution path preserves run_all semantics.
-        let selected_names = root._select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude);
+        let selected_names = root._select_names_layered(
+            self,
+            profile_include,
+            profile_exclude,
+            cli_include,
+            cli_exclude,
+        );
         let pool = root._test_pool(max_concurrency, timeout_ms);
         let report = if (
             profile_include.length() == 0
@@ -278,7 +318,13 @@ class TestRegistry {
         cli_include: string[],
         cli_exclude: string[],
     ) -> string[] {
-        root._select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude)
+        root._select_names_layered(
+            self,
+            profile_include,
+            profile_exclude,
+            cli_include,
+            cli_exclude,
+        )
     }
 
     /// Expand a lazy testset by name. Searches recursively through expanded
@@ -298,7 +344,7 @@ class TestRegistry {
                 return sub.expand_set(name);
             }
         }
-        throw ("TestSet not found for expansion: " + name)
+        throw ("TestSet not found for expansion: " + name);
     }
 
     function _expand_testset_registry(self, ts: TestSetRegistration) -> TestRegistry {
@@ -306,7 +352,11 @@ class TestRegistry {
             let existing: TestRegistry => existing,
             null => {
                 let start = baml.time.Instant.now();
-                let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] };
+                let sub_collector = TestCollector {
+                    prefix: ts.name,
+                    tests: [],
+                    testsets: [],
+                };
                 (ts.collector)(sub_collector);
                 // `loading_time_ms` is an `int`, so narrowing the bigint millisecond
                 // count is declared fallible. An expansion would have to run for
@@ -317,7 +367,11 @@ class TestRegistry {
                         baml.sys.panic("testing: expansion duration: " + message)
                     },
                 };
-                let sub_registry = TestRegistry { collector: sub_collector, expansions: {}, loading_time_ms: elapsed };
+                let sub_registry = TestRegistry {
+                    collector: sub_collector,
+                    expansions: {},
+                    loading_time_ms: elapsed,
+                };
                 self.expansions.set(ts.name, sub_registry);
                 sub_registry
             },
@@ -356,11 +410,7 @@ function _testset_children_selected(
         // an exact ts.name match can happen only when a same-named top-level `test`
         // was selected (tests and testsets dedupe in separate collections, so the
         // names can collide). Honoring that would wrongly run the whole testset.
-        if (
-            names.some((n) -> {
-                n.starts_with(prefix)
-            })
-        ) {
+        if (names.some((n) -> { n.starts_with(prefix) })) {
             children.push(root._testset_child_selected(registry, ts, names, pool))
         } else {
             null
@@ -377,9 +427,7 @@ function _test_child(
 ) -> TestSetChild {
     TestSetChild {
         name: name,
-        run: () -> ChildReport {
-            root._run_test(body, runner, timeout_ms)
-        },
+        run: () -> ChildReport { root._run_test(body, runner, timeout_ms) },
         is_container: false,
     }
 }
@@ -443,7 +491,7 @@ function _aggregate_reports(named_results: _NamedChildReport[]) -> TestSetReport
             let report: TestSetReport => report.outcome,
         };
         if (outcome == "pass") {
-            passed += 1
+            passed += 1;
         } else {
             failed += 1;
             let child_failed_names = match (result) {
@@ -460,7 +508,7 @@ function _aggregate_reports(named_results: _NamedChildReport[]) -> TestSetReport
                 failed_names.push(name)
             }
             if (outcome == "error") {
-                has_error = true
+                has_error = true;
             } else {
                 null
             }
@@ -539,26 +587,36 @@ function _test_pool(max_concurrency: int, timeout_ms: int) -> _TestPool {
         tokens.push(1);
         i = i + 1;
     }
-    _TestPool { tokens: tokens, timeout_ms: timeout_ms }
+    _TestPool {
+        tokens: tokens,
+        timeout_ms: timeout_ms,
+    }
 }
 
-function _run_children_parallel(
-    children: TestSetChild[],
-    pool: _TestPool,
-) -> TestSetReport throws never {
+function _run_children_parallel(children: TestSetChild[], pool: _TestPool) -> TestSetReport
+    throws never
+{
     let futures: baml.future.Future<_NamedChildReport, never>[] = [];
     for (let child in children) {
         if (child.is_container) {
             // Containers only spawn and await; admitting them freely cannot
             // oversubscribe the machine, and gating them could deadlock the
             // slots their own leaves need.
-            futures.push(spawn { _NamedChildReport { name: child.name, report: (child.run)() } })
+            futures.push(spawn {
+                _NamedChildReport {
+                    name: child.name,
+                    report: (child.run)(),
+                }
+            })
         } else {
             // Acquire on the dispatcher, before the spawn exists: the whole
             // point is that an inadmissible leaf has no thread yet.
             pool.acquire();
             futures.push(spawn {
-                let named = _NamedChildReport { name: child.name, report: (child.run)() };
+                let named = _NamedChildReport {
+                    name: child.name,
+                    report: (child.run)(),
+                };
                 // `run` is total: a leaf is `run_test`, whose runner arm
                 // catches middleware panics precisely so this release is
                 // reached on every outcome.
@@ -587,20 +645,40 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
         let work: baml.future.Future<RunReport, never> = spawn {
             {
                 body();
-                RunReport { outcome: "pass", duration_ms: 0, message: null }
+                RunReport {
+                    outcome: "pass",
+                    duration_ms: 0,
+                    message: null,
+                }
             } catch_all (e, ctx) {
                 let p: baml.panics.UserPanic => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+                    RunReport {
+                        outcome: "fail",
+                        duration_ms: 0,
+                        message: p.message,
+                    }
                 },
                 let p: baml.panics.AssertionFailed => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+                    RunReport {
+                        outcome: "fail",
+                        duration_ms: 0,
+                        message: p.message,
+                    }
                 },
                 baml.panics.Panic => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
+                    RunReport {
+                        outcome: "fail",
+                        duration_ms: 0,
+                        message: ctx.to_string(),
+                    }
                 },
                 _ => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
-                }
+                    RunReport {
+                        outcome: "fail",
+                        duration_ms: 0,
+                        message: ctx.to_string(),
+                    }
+                },
             }
         };
         let racers: baml.future.Future<RunReport, never>[] = [work];
@@ -610,11 +688,7 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
                 // Read before the race cancels the body: where it is stuck,
                 // and every task it is waiting on.
                 let report = baml.future._task_report(work._id());
-                let stuck = if (report == "") {
-                    ""
-                } else {
-                    "\n" + report
-                };
+                let stuck = if (report == "") { "" } else { "\n" + report };
                 RunReport {
                     outcome: "fail",
                     duration_ms: 0,
@@ -636,7 +710,7 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
                     duration_ms: 0,
                     message: "test task failed unexpectedly",
                 }
-            }
+            },
         };
         // `duration_ms` is an `int`; see the note in expand_testset_registry for
         // why narrowing the bigint millisecond count cannot fail here.
@@ -647,7 +721,13 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
         };
         TestReport {
             outcome: result.outcome,
-            runs: [RunReport { outcome: result.outcome, duration_ms: duration, message: result.message }],
+            runs: [
+                RunReport {
+                    outcome: result.outcome,
+                    duration_ms: duration,
+                    message: result.message,
+                },
+            ],
         }
     };
     match (runner) {
@@ -673,7 +753,7 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
                             },
                         ],
                     }
-                }
+                },
             }
         },
     }
@@ -748,7 +828,7 @@ function _glob_match(subject: string, pattern: string) -> bool {
         let part = parts[i];
         if (part != "") {
             if let idx: int = subject.slice(pos, end_limit).index_of(part) {
-                pos = pos + idx + part.length()
+                pos = pos + idx + part.length();
             } else {
                 return false;
             }
@@ -1003,11 +1083,26 @@ function _count_leaves(results: ChildReport[], tolerated_by_parent: bool) -> _Le
         let delta = match (r) {
             let tr: TestReport => {
                 if (tr.outcome == "pass") {
-                    _LeafCounts { passed: 1, failed: 0, tolerated: 0, total: 1 }
+                    _LeafCounts {
+                        passed: 1,
+                        failed: 0,
+                        tolerated: 0,
+                        total: 1,
+                    }
                 } else if (tolerated_by_parent) {
-                    _LeafCounts { passed: 0, failed: 0, tolerated: 1, total: 1 }
+                    _LeafCounts {
+                        passed: 0,
+                        failed: 0,
+                        tolerated: 1,
+                        total: 1,
+                    }
                 } else {
-                    _LeafCounts { passed: 0, failed: 1, tolerated: 0, total: 1 }
+                    _LeafCounts {
+                        passed: 0,
+                        failed: 1,
+                        tolerated: 0,
+                        total: 1,
+                    }
                 }
             },
             let tsr: TestSetReport => {
@@ -1034,9 +1129,14 @@ function _count_leaves(results: ChildReport[], tolerated_by_parent: bool) -> _Le
         passed += delta.passed;
         failed += delta.failed;
         tolerated += delta.tolerated;
-        total += delta.total
+        total += delta.total;
     }
-    _LeafCounts { passed: passed, failed: failed, tolerated: tolerated, total: total }
+    _LeafCounts {
+        passed: passed,
+        failed: failed,
+        tolerated: tolerated,
+        total: total,
+    }
 }
 
 /// (internal) Flatten a run_all()/run_selected() TestSetReport into the CLI flat report.
@@ -1286,9 +1386,8 @@ function _test_name_count(entries: TestRegistration[], full_name: string) -> int
 }
 
 //baml:vm
-function _testset_name_count(
-    entries: TestSetRegistration[],
-    full_name: string,
-) -> int throws never {
+function _testset_name_count(entries: TestSetRegistration[], full_name: string) -> int
+    throws never
+{
     $rust_function
 }

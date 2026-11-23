@@ -77,6 +77,7 @@ mod bex_work;
 mod conversion;
 mod function_call_context;
 mod future;
+pub mod gc_settings;
 mod hydrate;
 pub use future::LeakedFuture;
 #[cfg(not(target_arch = "wasm32"))]
@@ -148,6 +149,7 @@ pub use function_call_context::{
     BoundaryContext, BoundaryStorageContext, FunctionCallContext, FunctionCallContextBuilder,
     InheritedInvocationState, InvocationCapture,
 };
+pub use gc_settings::{GcConfig, GcConfigError};
 use indexmap::IndexMap;
 use invocation::PreparedInvocation;
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
@@ -1135,6 +1137,9 @@ pub struct EngineConfig {
     pub recording: Option<TelemetryRecording>,
     /// Compiled bodies and the verified digest of the artifact containing `program`.
     pub compiled_bodies: Option<bex_vm::CompiledBodies>,
+    /// The heap's collection policy before the environment: baked values and
+    /// the variable names that override them (`BAML_GC_*` by default).
+    pub gc: GcConfig,
 }
 
 impl Default for EngineConfig {
@@ -1148,6 +1153,7 @@ impl Default for EngineConfig {
             #[cfg(not(target_arch = "wasm32"))]
             recording: None,
             compiled_bodies: None,
+            gc: GcConfig::default(),
         }
     }
 }
@@ -2020,7 +2026,12 @@ impl BexEngine {
             #[cfg(not(target_arch = "wasm32"))]
             recording,
             compiled_bodies,
+            gc,
         } = config;
+        // Before any other work: a bad GC variable stops startup here.
+        let gc = gc
+            .resolve()
+            .map_err(|error| EngineError::Other(error.to_string()))?;
         // Application identity is execution context, independent of recording.
         // Apply it before any package initializer executes, so pack and every
         // bridge inherit the same root metadata. The language version is shared
@@ -2073,9 +2084,9 @@ impl BexEngine {
         #[cfg(not(target_arch = "wasm32"))]
         let trace_scope = recording
             .as_ref()
-            .map_or_else(btel_types::RecordingId::generate, TelemetryRecording::id);
+            .map_or_else(btel_types::new_recording_id, TelemetryRecording::id);
         #[cfg(target_arch = "wasm32")]
-        let trace_scope = btel_types::RecordingId::generate();
+        let trace_scope = btel_types::new_recording_id();
 
         // The init order, before the executable is consumed.
         let init_order = bytecode_program.init_order.clone();
@@ -2138,6 +2149,7 @@ impl BexEngine {
             compile_time_objects,
             &bytecode.packages,
             bytecode.root,
+            gc,
         );
         // Shared with every VM so spawned workers see the same package index
         // without re-resolving it.
@@ -2233,8 +2245,8 @@ impl BexEngine {
             .globals
             .into_iter()
             .map(|cv| match cv {
-                bex_vm_types::ConstValue::Float(f) if float_indices.contains_key(&f.to_bits()) => {
-                    let idx = float_indices[&f.to_bits()];
+                bex_vm_types::ConstValue::Float(f) if float_indices.contains_key(&f) => {
+                    let idx = float_indices[&f];
                     Value::object(heap.compile_time_ptr(idx))
                 }
                 other => other.to_value(|idx| heap.compile_time_ptr(idx.into_raw())),

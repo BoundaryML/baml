@@ -1,7 +1,7 @@
 //! Recording size/time triggers and buffer reuse settings.
 use std::{num::NonZeroUsize, time::Duration};
 
-use crate::{encoding, processor};
+use crate::processor;
 /// **Tune first.** Larger files amortize sealing/delivery overhead but retain more data
 /// before publication. This soft target can be exceeded by a complete batch.
 pub const TARGET_BYTES: NonZeroUsize = NonZeroUsize::new(1024 * 1024).unwrap();
@@ -77,7 +77,7 @@ impl RecordingConfig {
             )
             .ok_or("telemetry batch size overflow")?;
         records
-            .checked_mul(encoding::MAX_EVENT_BYTES)
+            .checked_mul(btel_core::recording::frame::MAX_EVENT_BYTES)
             .and_then(|bytes| u32::try_from(bytes).ok())
             .ok_or("telemetry batch exceeds encoder capacity")?;
         Ok(())
@@ -87,6 +87,7 @@ impl RecordingConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encoding;
     #[test]
     fn recording_validates_duration_and_encoder_limits() {
         let mut transport =
@@ -118,12 +119,12 @@ mod tests {
         let recording = RecordingConfig::default();
         let mut transport =
             crate::transport::ChunkConfig::for_producers(NonZeroUsize::new(1).unwrap());
-        let max_records = encoding::MAX_BUFFER_BYTES / encoding::MAX_EVENT_BYTES;
+        let max_records = encoding::MAX_BUFFER_BYTES / btel_core::recording::frame::MAX_EVENT_BYTES;
         transport.chunk_capacity = NonZeroUsize::new(max_records).unwrap();
         assert!(recording.validate_transport(&transport).is_ok());
         for records in [
             max_records + 1,
-            usize::MAX / encoding::MAX_EVENT_BYTES + 1,
+            usize::MAX / btel_core::recording::frame::MAX_EVENT_BYTES + 1,
             usize::MAX,
         ] {
             transport.chunk_capacity = NonZeroUsize::new(records).unwrap();

@@ -5,9 +5,11 @@
 use std::{collections::BTreeMap, path::Path, sync::Arc, time::Duration};
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
-use btel_reader::cas::{CasLimits, CasStore};
+use btel_core::{
+    cas::{DecodedBlob, DecodedObject, DecodedRoot, DecodedValue},
+    reader::store::{CasLimits, CasStore},
+};
 use btel_recorder::{RecordingConfig, proto};
-use btel_snapshot::{DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue};
 use serde_json::{Value as Json, json};
 use sys_native::SysOpsExt;
 
@@ -232,7 +234,7 @@ fn spans(files: &[proto::RecordingFile]) -> BTreeMap<String, Span> {
                 // require a newer minor than network spans alone.
                 assert!(
                     file.header.as_ref().unwrap().format_minor
-                        >= btel_settings::encoding::NETWORK_FORMAT_MINOR
+                        >= btel_core::recording::minor::NETWORK
                 );
             }
         }
@@ -253,14 +255,14 @@ fn spans(files: &[proto::RecordingFile]) -> BTreeMap<String, Span> {
         .collect()
 }
 
-fn json(cas: &CasStore, snapshot: &DecodedSnapshot) -> Json {
+fn json(cas: &CasStore, snapshot: &DecodedBlob) -> Json {
     let DecodedRoot::Value(value) = &snapshot.root else {
         panic!("network snapshots are values")
     };
     value_json(cas, snapshot, value)
 }
 
-fn value_json(cas: &CasStore, snapshot: &DecodedSnapshot, value: &DecodedValue) -> Json {
+fn value_json(cas: &CasStore, snapshot: &DecodedBlob, value: &DecodedValue) -> Json {
     match value {
         DecodedValue::Null => Json::Null,
         DecodedValue::Int(value) => (*value).into(),
@@ -293,7 +295,7 @@ fn value_json(cas: &CasStore, snapshot: &DecodedSnapshot, value: &DecodedValue) 
     }
 }
 
-fn blob(cas: &CasStore, id: btel_snapshot::CasId) -> std::sync::Arc<DecodedSnapshot> {
+fn blob(cas: &CasStore, id: btel_snapshot::CasId) -> std::sync::Arc<DecodedBlob> {
     cas.load(id)
         .snapshot
         .unwrap_or_else(|error| panic!("network capture was not persisted: {error:?}"))
@@ -319,7 +321,9 @@ fn files_under(directory: &Path, found: &mut Vec<std::path::PathBuf>) {
 /// The recording's spans by path, and its CAS.
 fn read(directory: &Path, engine: &BexEngine) -> (BTreeMap<String, Span>, CasStore) {
     assert_eq!(engine.telemetry_result(), Some(Ok(())));
-    let read = btel_file::read_directory(engine.telemetry_recording_directory().unwrap()).unwrap();
+    let read =
+        btel_core::recording::read_directory(engine.telemetry_recording_directory().unwrap())
+            .unwrap();
     assert!(read.issues.is_empty(), "{:?}", read.issues);
     (
         spans(&read.files),
@@ -328,7 +332,10 @@ fn read(directory: &Path, engine: &BexEngine) -> (BTreeMap<String, Span>, CasSto
 }
 
 fn load(cas: &CasStore, id: Option<proto::CasId>) -> Json {
-    json(cas, &blob(cas, id.expect("captured").into()))
+    json(
+        cas,
+        &blob(cas, btel_core::recording::cas_id(id.expect("captured"))),
+    )
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -652,7 +659,9 @@ async fn a_request_task_starts_running_before_its_handler_calls() {
         .await
         .unwrap();
     assert_eq!(engine.telemetry_result(), Some(Ok(())));
-    let read = btel_file::read_directory(engine.telemetry_recording_directory().unwrap()).unwrap();
+    let read =
+        btel_core::recording::read_directory(engine.telemetry_recording_directory().unwrap())
+            .unwrap();
     assert!(read.issues.is_empty(), "{:?}", read.issues);
 
     // Per thread: when it began running, when it completed, and when each

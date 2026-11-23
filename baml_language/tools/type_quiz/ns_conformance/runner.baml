@@ -22,16 +22,16 @@ function only(question: root.engine.Question) -> root.engine.Case throws never {
     match (question.posed) {
         let case: root.engine.Case => case,
         root.engine.Choice => {
-            throw baml.panics.Unreachable { message: "a sitting planned from a seed alone puts one program at a time" }
+            throw baml.panics.Unreachable {
+                message: "a sitting planned from a seed alone puts one program at a time",
+            };
         },
     }
 }
 
 function planned() -> root.engine.Question[] throws never {
     baml.iter.Range.new(0, length_used())
-        .filter_map((i) -> {
-            root.question_at(seed_used(), length_used(), i)
-        })
+        .filter_map((i) -> { root.question_at(seed_used(), length_used(), i) })
         .collect()
 }
 
@@ -83,12 +83,11 @@ function unverified_questions() -> string[] throws never {
 function unreproducible_questions() -> string[] throws never {
     let items = root.bank.items();
     planned().filter_map((question) -> {
-        let item = items.find((candidate) -> {
-            candidate.id() == question.item
-        })
+        let item = items.find((candidate) -> { candidate.id() == question.item })
             ?? return `${question.item}: no such item`;
-        let regenerated = root.engine.generate(item, root.engine.Seed { state: question.seed })
-            ?? return `${question.item}: seed ${question.seed} generates nothing`;
+        let regenerated = root.engine.generate(item, root.engine.Seed {
+            state: question.seed,
+        }) ?? return `${question.item}: seed ${question.seed} generates nothing`;
         if (root.engine.cases_of(question.posed) == [regenerated.case]) {
             null
         } else {
@@ -98,7 +97,10 @@ function unreproducible_questions() -> string[] throws never {
 }
 
 test "sitting: the same seed plans the same questions, and the end is the end" {
-    assert.equal(planning_report(), "count=8 reported=8 stable=true past_end=true")
+    assert.equal(
+        planning_report(),
+        "count=8 reported=8 stable=true past_end=true",
+    )
 }
 
 test "sitting: only verified items are asked" {
@@ -131,15 +133,19 @@ function prompts_are_bare() -> string throws never {
             null => false,
         }
     });
-    let fields = root.engine.Prompt.type().as_class()?.fields().map((field) -> {
-        field.name
-    })
+    let fields = root.engine.Prompt.type()
+        .as_class()
+        ?.fields()
+        .map((field) -> { field.name })
         ?? [];
     `matching=${matching} fields=${fields}`
 }
 
 test "prompt: the program and where it came from, and nothing else" {
-    assert.equal(prompts_are_bare(), `matching=true fields=["item", "seed", "program", "against"]`)
+    assert.equal(
+        prompts_are_bare(),
+        `matching=true fields=["item", "seed", "program", "against"]`,
+    )
 }
 
 // ─── a driven sitting gives nothing away either ──────────────────────────────
@@ -156,12 +162,10 @@ test "prompt: the program and where it came from, and nothing else" {
 function driven_halves() -> string throws never {
     let asked = root.Asked.type().as_class()?.fields().map((field) -> {
         field.name
-    })
-        ?? [];
+    }) ?? [];
     let marked = root.Marked.type().as_class()?.fields().map((field) -> {
         field.name
-    })
-        ?? [];
+    }) ?? [];
     `asked=${asked} marked=${marked}`
 }
 
@@ -206,7 +210,10 @@ test "driven: the half a learner sees before answering carries only programs" {
 }
 
 test "driven: a step is the sitting's own question, and marks only what was answered" {
-    assert.equal(driven_first_steps(), "same_first=true opening_marked=true second_marked=true")
+    assert.equal(
+        driven_first_steps(),
+        "same_first=true opening_marked=true second_marked=true",
+    )
 }
 
 // ─── answering ───────────────────────────────────────────────────────────────
@@ -217,11 +224,7 @@ function compiles_by_key(question: root.engine.Question) -> bool throws never {
 
 function said(compiles: bool, reasoning: string, mark: string) -> root.Given throws never {
     root.Given {
-        said: if (compiles) {
-            "compiles"
-        } else {
-            "rejected"
-        },
+        said: if (compiles) { "compiles" } else { "rejected" },
         reasoning,
         mark,
         marked_by: "",
@@ -229,7 +232,12 @@ function said(compiles: bool, reasoning: string, mark: string) -> root.Given thr
 }
 
 function unsure() -> root.Given throws never {
-    root.Given { said: "unsure", reasoning: "", mark: "", marked_by: "" }
+    root.Given {
+        said: "unsure",
+        reasoning: "",
+        mark: "",
+        marked_by: "",
+    }
 }
 
 /// Answering with the key's verdict is right and answering with the other is
@@ -238,7 +246,14 @@ function answering_report() -> string throws never {
     let questions = planned();
     let indices = baml.iter.Range.new(0, questions.length()).collect();
     let right = indices.every((i) -> {
-        match (root.answer_at(seed_used(), length_used(), i, said(compiles_by_key(questions[i]), "", ""))) {
+        match (
+            root.answer_at(
+                seed_used(),
+                length_used(),
+                i,
+                said(compiles_by_key(questions[i]), "", ""),
+            )
+        ) {
             let exchange: root.engine.Exchange => {
                 exchange.judgement.verdict_correct == true && exchange.question == questions[i]
             },
@@ -258,7 +273,12 @@ function answering_report() -> string throws never {
             null => false,
         }
     });
-    let past_end = root.answer_at(seed_used(), length_used(), length_used(), said(true, "", "")) == null;
+    let past_end = root.answer_at(
+        seed_used(),
+        length_used(),
+        length_used(),
+        said(true, "", ""),
+    ) == null;
     let abstained = match (root.answer_at(seed_used(), length_used(), 0, unsure())) {
         let exchange: root.engine.Exchange => {
             exchange.judgement.verdict_correct == null && exchange.answer.said == null
@@ -285,7 +305,14 @@ function marking_report() -> string throws never {
             null => "no exchange",
         }
     });
-    let carried = match (root.answer_at(seed_used(), length_used(), 0, said(true, "because", "sound"))) {
+    let carried = match (
+        root.answer_at(
+            seed_used(),
+            length_used(),
+            0,
+            said(true, "because", "sound"),
+        )
+    ) {
         let exchange: root.engine.Exchange => exchange.answer.reasoning == "because",
         null => false,
     };
@@ -293,11 +320,17 @@ function marking_report() -> string throws never {
 }
 
 test "answer: the key decides, at every question and in both directions" {
-    assert.equal(answering_report(), "right=true wrong=true past_end=true abstained=true")
+    assert.equal(
+        answering_report(),
+        "right=true wrong=true past_end=true abstained=true",
+    )
 }
 
 test "answer: every mark the surface offers is understood, and none means none" {
-    assert.equal(marking_report(), `marks=["sound", "partial", "wrong", "unmarked"] carried=true`)
+    assert.equal(
+        marking_report(),
+        `marks=["sound", "partial", "wrong", "unmarked"] carried=true`,
+    )
 }
 
 // ─── quoting the compiler ────────────────────────────────────────────────────
@@ -336,9 +369,7 @@ function misquoted_compiler() -> string[] throws never {
 }
 
 function sorted(values: string[]) -> string[] throws never {
-    values.slice(0, values.length()).sort_by_key((v) -> {
-        v
-    })
+    values.slice(0, values.length()).sort_by_key((v) -> { v })
 }
 
 test "report: the compiler's own words match the key" {
@@ -351,26 +382,38 @@ function question_with(key: root.engine.Verdict) -> root.engine.Question throws 
     root.engine.Question {
         item: "synthetic",
         seed: 1,
-        posed: root.engine.Case { files: root.engine.one_file("case.baml", ""), key, trace: [] },
+        posed: root.engine.Case {
+            files: root.engine.one_file("case.baml", ""),
+            key,
+            trace: [],
+        },
     }
 }
 
 function answered(verdict: root.engine.VerdictKind) -> root.engine.Answer throws never {
-    root.engine.Answer { said: verdict, reasoning: "" }
+    root.engine.Answer {
+        said: verdict,
+        reasoning: "",
+    }
 }
 
 function judging_is_the_key() -> bool throws never {
     let compiles = question_with(root.engine.Compiles { tests: [] });
-    let rejected = question_with(
-        root.engine.Rejected {
-            code: "E0001",
-            more: [],
-            at: root.engine.Region { file: "case.baml", start: 0, end: 1 },
+    let rejected = question_with(root.engine.Rejected {
+        code: "E0001",
+        more: [],
+        at: root.engine.Region {
+            file: "case.baml",
+            start: 0,
+            end: 1,
         },
-    );
+    });
     let said_compiles = answered(root.engine.VerdictKind.Compiles);
     let said_rejected = answered(root.engine.VerdictKind.Rejected);
-    let no_verdict = root.engine.Answer { said: null, reasoning: "" };
+    let no_verdict = root.engine.Answer {
+        said: null,
+        reasoning: "",
+    };
     root.engine.judge(compiles, said_compiles, null).verdict_correct == true
         && root.engine.judge(compiles, said_rejected, null).verdict_correct == false
         && root.engine.judge(rejected, said_compiles, null).verdict_correct == false
@@ -387,20 +430,28 @@ test "judge: the verdict is right exactly when it matches the key, and absent wh
 /// A transcript holding every shape one can hold: both verdicts, a named
 /// marker and a self-mark, every mark, and an unmarked answer.
 function every_shape() -> root.engine.Transcript throws never {
-    let question = question_with(
-        root.engine.Rejected {
-            code: "E0068",
-            more: ["E0068"],
-            at: root.engine.Region { file: "case.baml", start: 3, end: 9 },
+    let question = question_with(root.engine.Rejected {
+        code: "E0068",
+        more: ["E0068"],
+        at: root.engine.Region {
+            file: "case.baml",
+            start: 3,
+            end: 9,
         },
-    );
+    });
     let marks: root.engine.Reasoning?[] = [
-        root.engine.Reasoning { understanding: root.engine.Understanding.Sound, marked_by: null },
+        root.engine.Reasoning {
+            understanding: root.engine.Understanding.Sound,
+            marked_by: null,
+        },
         root.engine.Reasoning {
             understanding: root.engine.Understanding.Partial,
             marked_by: "a-model",
         },
-        root.engine.Reasoning { understanding: root.engine.Understanding.Wrong, marked_by: null },
+        root.engine.Reasoning {
+            understanding: root.engine.Understanding.Wrong,
+            marked_by: null,
+        },
         null,
     ];
     root.engine.Transcript {
@@ -444,7 +495,11 @@ function answers_given() -> root.Given[] throws never {
             if (index % 3 == 2) {
                 unsure()
             } else {
-                said(index % 2 == 0, `reason ${index}`, marks[index % marks.length()])
+                said(
+                    index % 2 == 0,
+                    `reason ${index}`,
+                    marks[index % marks.length()],
+                )
             }
         })
         .collect()
@@ -473,7 +528,9 @@ function download_round_trip() -> string throws never {
 /// The score the interface shows is the engine's own count of the sitting.
 function score_matches_the_sitting() -> bool throws never {
     root.sitting_score(seed_used(), length_used(), true, answers_given())
-        == root.engine.tally(root.sitting_of(seed_used(), length_used(), true, answers_given()))
+        == root.engine.tally(
+            root.sitting_of(seed_used(), length_used(), true, answers_given()),
+        )
 }
 
 test "download: the JSON a learner takes away is what review reads back" {
@@ -531,7 +588,9 @@ function review_round_trip() -> string throws never {
 }
 
 function missing_file_is_reported() -> bool throws never {
-    root.review(`${scratch("missing")}/not-here.json`).starts_with("could not read")
+    root
+        .review(`${scratch("missing")}/not-here.json`)
+        .starts_with("could not read")
 }
 
 test "download: a sitting survives the trip to disk" {
@@ -539,7 +598,9 @@ test "download: a sitting survives the trip to disk" {
 }
 
 test "review: a sat sitting reads back with its cases unchanged" {
-    assert.is_true(review_round_trip().includes("every case still behaves as recorded"))
+    assert.is_true(
+        review_round_trip().includes("every case still behaves as recorded"),
+    )
 }
 
 test "review: a missing file is reported, not thrown" {
@@ -554,5 +615,8 @@ function tally_report() -> string throws never {
 }
 
 test "transcript: a sitting counts up" {
-    assert.equal(tally_report(), "asked=4 committed=4 right=4 sound=1 partial=1 wrong=1 unmarked=1")
+    assert.equal(
+        tally_report(),
+        "asked=4 committed=4 right=4 sound=1 partial=1 wrong=1 unmarked=1",
+    )
 }

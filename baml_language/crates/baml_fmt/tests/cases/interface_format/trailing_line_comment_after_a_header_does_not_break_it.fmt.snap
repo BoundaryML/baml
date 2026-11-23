@@ -1,0 +1,10 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+implement Foo for Bar // why
+{}
+
+function f() -> int throws E // c
+{
+    1
+}

@@ -36,9 +36,11 @@ use crate::{
 #[repr(u8)]
 pub enum TokenKind {
     // ----- trivia -----------------------------------------------------------
+    /// Blanks and tabs; a byte-order mark (U+FEFF) counts as a blank, so a
+    /// file that opens with one lexes like one that does not.
     #[group(trivia)]
     #[describe = "whitespace"]
-    #[regex(r"[ \t]+")]
+    #[regex(r"[ \t\u{feff}]+")]
     Whitespace,
     #[group(trivia)]
     #[describe = "newline"]
@@ -62,8 +64,10 @@ pub enum TokenKind {
     #[group(doc)]
     #[describe = "`//baml:` directive"]
     DirectiveComment,
-    /// `//#…`.
-    #[group(trivia)]
+    /// `//#…`: a section heading — a statement in a block, or the title
+    /// directly above a function. Syntax, not trivia; anywhere else it is an
+    /// error.
+    #[group(doc)]
     #[describe = "`//#` header comment"]
     HeaderComment,
     /// Not nested; closes at the first `*/`.
@@ -180,7 +184,7 @@ pub enum TokenKind {
 
     // ----- contextual keywords: a name anywhere the grammar does not give
     // ----- them meaning. Logos prefers a `#[token]` over a regex of the same
-    // ----- length, so these win over `Word`; a longer word (`type-x`) is a `Word`.
+    // ----- length, so these win over `Word`; a longer word (`typed`) is a `Word`.
     #[group(contextual)]
     #[token("type")]
     Type,
@@ -394,12 +398,6 @@ pub enum TokenKind {
     #[token("~")]
     Tilde,
     #[group(punct)]
-    #[token("++")]
-    PlusPlus,
-    #[group(punct)]
-    #[token("--")]
-    MinusMinus,
-    #[group(punct)]
     #[token("+")]
     Plus,
     #[group(punct)]
@@ -419,12 +417,12 @@ pub enum TokenKind {
     Backslash,
 
     // ----- literals and other variable-text kinds ---------------------------
-    /// `name`, `gpt-4o` (hyphens after the first character), `$name`,
-    /// `Foo$bar`; never ends in `$`.
+    /// `name`, `$name`, `Foo$bar`; never ends in `$`. A `-` is never part
+    /// of a name: `a-b` is a subtraction.
     #[group(literal)]
     #[describe = "identifier"]
     #[regex(r"\$[a-zA-Z_][a-zA-Z0-9_]*")]
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*(\$[a-zA-Z_][a-zA-Z0-9_-]*)*")]
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*(\$[a-zA-Z_][a-zA-Z0-9_]*)*")]
     Word,
     /// Decimal, hex, octal or binary. The prefixed forms over-accept so a
     /// malformed literal stays one token; validation reports it precisely.
@@ -708,9 +706,7 @@ pub mod sets {
 /// The names `Token![Name]` resolves: kinds whose text varies (`Word`,
 /// `String`, `TemplateChunk`, …) and token sets (`Ident`, `LetIntroducer`, …).
 pub mod by_name {
-    // A trivia token is a node's field in exactly one place: a `//#` line that
-    // is a statement.
-    pub use super::{Ident, doc::*, lit::*, sets::*, trivia::HeaderComment};
+    pub use super::{Ident, doc::*, lit::*, sets::*};
     pub use crate::ops::UnaryOpToken;
 }
 

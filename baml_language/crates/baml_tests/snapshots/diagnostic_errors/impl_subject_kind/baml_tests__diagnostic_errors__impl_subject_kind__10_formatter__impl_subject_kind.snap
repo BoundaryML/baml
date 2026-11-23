@@ -17,11 +17,9 @@ interface Flagged {
     function flag(self) -> string throws never;
 }
 
-class Ok {
-}
+class Ok {}
 
-class Aliased {
-}
+class Aliased {}
 
 type AliasedName = Aliased;
 

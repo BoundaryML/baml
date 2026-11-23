@@ -1,0 +1,25 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function f(a: int, b: int) -> int {
+    let x =
+        /* c */
+        // 2
+        // 3
+        -a; // 4
+    let y = foo(
+        // c
+        // d
+        -a,
+        b,
+    );
+    let z = foo(
+        // c
+        // d
+        -a,
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+    );
+    x + y + z;
+    // 5
+    /* comment */ -b
+}

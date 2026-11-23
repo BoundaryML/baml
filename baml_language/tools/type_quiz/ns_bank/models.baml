@@ -55,31 +55,27 @@ function positional_arity(ty: root.algebra.Ty) -> int? throws never {
 
 // ─── constant beliefs ────────────────────────────────────────────────────────
 
-function unrelated(
-    left: root.algebra.Ty,
-    right: root.algebra.Ty,
-) -> root.algebra.Relation? throws never {
+function unrelated(left: root.algebra.Ty, right: root.algebra.Ty) -> root.algebra.Relation?
+    throws never
+{
     root.algebra.Relation.Unrelated
 }
 
-function subset(
-    left: root.algebra.Ty,
-    right: root.algebra.Ty,
-) -> root.algebra.Relation? throws never {
+function subset(left: root.algebra.Ty, right: root.algebra.Ty) -> root.algebra.Relation?
+    throws never
+{
     root.algebra.Relation.Sub
 }
 
-function superset(
-    left: root.algebra.Ty,
-    right: root.algebra.Ty,
-) -> root.algebra.Relation? throws never {
+function superset(left: root.algebra.Ty, right: root.algebra.Ty) -> root.algebra.Relation?
+    throws never
+{
     root.algebra.Relation.Super
 }
 
-function equivalent(
-    left: root.algebra.Ty,
-    right: root.algebra.Ty,
-) -> root.algebra.Relation? throws never {
+function equivalent(left: root.algebra.Ty, right: root.algebra.Ty) -> root.algebra.Relation?
+    throws never
+{
     root.algebra.Relation.Equiv
 }
 
@@ -128,10 +124,8 @@ function typescript() -> root.algebra.Model throws never {
                 }
             },
             "functions/same-positional-count": (left, right) -> {
-                let l = positional_arity(left)
-                    ?? return null;
-                let r = positional_arity(right)
-                    ?? return null;
+                let l = positional_arity(left) ?? return null;
+                let r = positional_arity(right) ?? return null;
                 if (l < r) {
                     root.algebra.Relation.Sub
                 } else if (l > r) {

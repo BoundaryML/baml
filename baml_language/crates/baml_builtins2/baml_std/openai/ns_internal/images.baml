@@ -142,7 +142,7 @@ function _oai_images_collect(blocks: ai.content.Block[], parts: string[]) -> voi
                 null
             },
             let media: ai.content.Media => {
-                throw _oai_images_media_rejected(media.kind())
+                throw _oai_images_media_rejected(media.kind());
             },
         };
     }
@@ -170,7 +170,7 @@ function _oai_images_prompt_text(prompt: ai.Prompt, journal: ai.Journal) -> stri
             status_code: null,
             detail: "Images API request requires a text prompt",
             raw_body: null,
-        }
+        };
     }
     joined
 }
@@ -200,7 +200,8 @@ function _oai_images_trim_slash(url: string) -> string {
 /// `baml.http` has no query-string builder; this covers what a header/query
 /// passthrough realistically carries.
 function _oai_images_escape_query(raw: string) -> string {
-    let escaped = raw.replace_all("%", "%25")
+    let escaped = raw
+        .replace_all("%", "%25")
         .replace_all(" ", "%20")
         .replace_all("&", "%26")
         .replace_all("=", "%3D")
@@ -221,11 +222,7 @@ function _oai_images_with_query(url: string, params: map<string, string>?) -> st
     if (pairs.length() == 0) {
         return url;
     }
-    let separator = if (url.includes("?")) {
-        "&"
-    } else {
-        "?"
-    };
+    let separator = if (url.includes("?")) { "&" } else { "?" };
     `${url}${separator}${pairs.join("&")}`
 }
 
@@ -257,13 +254,16 @@ function images_render(
             status_code: null,
             detail: "the Images API has no tool calling; run tools with a chat client instead",
             raw_body: null,
-        }
+        };
     }
     let journal = ai.wire.sanitize_for_client(input.journal, "openai-images", c.model);
     // The schema block an ordinary client injects is noise for an image
     // endpoint (`Return an image output.` is the only shape it can produce),
     // so the rendered prompt carries the authored text alone.
-    let text = _oai_images_prompt_text((input.prompt)(ai.internal.build_output_format(input.output_type)), journal);
+    let text = _oai_images_prompt_text(
+        (input.prompt)(ai.internal.build_output_format(input.output_type)),
+        journal,
+    );
     let request = OaImagesRequest {
         model: c.model,
         prompt: text,
@@ -317,21 +317,30 @@ function _oai_images_fetch_inline(location: string, fallback_mime: string) -> im
     let response = baml.http.fetch(location) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
-            throw ai.errors.NetworkFailure { status_code: null,
+            throw ai.errors.NetworkFailure {
+                status_code: null,
                 provider: "openai-images",
-                detail: ai.wire.redact_url_secrets(`fetching the generated image at ${location} failed: ${e.to_string()}`),
+                detail: ai.wire.redact_url_secrets(
+                    `fetching the generated image at ${location} failed: ${e.to_string()}`,
+                ),
                 raw_body: null,
-            }
+            };
         },
     };
     if (!response.ok()) {
-        throw ai.errors.NetworkFailure { status_code: null,
+        throw ai.errors.NetworkFailure {
+            status_code: null,
             provider: "openai-images",
-            detail: ai.wire.redact_url_secrets(`fetching the generated image at ${location} returned HTTP ${response.status_code}`),
+            detail: ai.wire.redact_url_secrets(
+                `fetching the generated image at ${location} returned HTTP ${response.status_code}`,
+            ),
             raw_body: null,
-        }
+        };
     }
-    let reported = (response.headers.get("content-type") ?? "").split(";").at(0) ?? "";
+    let reported = (response.headers.get("content-type") ?? "")
+        .split(";")
+        .at(0)
+        ?? "";
     let mime = if (reported.trim() == "") {
         fallback_mime
     } else {
@@ -376,7 +385,7 @@ function images_parse(c: root.ImageClient, resp: OaImagesResponse) -> ai.ModelTu
             message: "the images response contained no image data in data[]",
             raw_body: baml.json.stringify(resp),
             status_code: null,
-        }
+        };
     }
     ai.ModelTurn {
         calls: [],
@@ -410,7 +419,10 @@ function images_invoke(c: root.ImageClient, input: ai.ModelTurnInput) -> ai.Mode
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(images_render(c, input));
     let sent = ai.wire.send_as_with_wire<OaImagesResponse>(
         req,
-        ai.events.ModelKey { provider: c.provider(), model: c.model },
+        ai.events.ModelKey {
+            provider: c.provider(),
+            model: c.model,
+        },
         capture_wire = c.capture_wire,
     );
     ai.internal.with_own_call(

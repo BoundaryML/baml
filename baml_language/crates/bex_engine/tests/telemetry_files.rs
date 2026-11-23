@@ -62,7 +62,7 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
     );
     let prefix = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            let read = btel_file::read_directory(&directory).unwrap();
+            let read = btel_core::recording::read_directory(&directory).unwrap();
             if read
                 .files
                 .iter()
@@ -91,7 +91,7 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
         std::fs::read(directory.join("00000000000000000001.btel")).unwrap(),
         first_bytes
     );
-    let read = btel_file::read_directory(&directory).unwrap();
+    let read = btel_core::recording::read_directory(&directory).unwrap();
     assert!(read.issues.is_empty(), "{:?}", read.issues);
     assert!(read.files.len() > prefix.files.len());
     assert!(
@@ -153,7 +153,10 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
     }
     engine.shutdown().await;
     assert_eq!(
-        btel_file::read_directory(&directory).unwrap().files.len(),
+        btel_core::recording::read_directory(&directory)
+            .unwrap()
+            .files
+            .len(),
         read.files.len()
     );
 }
@@ -418,8 +421,8 @@ async fn telemetry_disabled_inside_an_owned_span_does_not_stop_execution() {
 }
 
 fn assert_cas_blob(project: &std::path::Path, id: proto::CasId) {
-    let id = btel_snapshot::CasId::from(id);
-    let path = btel_file::cas_path(&project.join(".baml/btel/cas"), id);
+    let id = btel_core::recording::cas_id(id);
+    let path = btel_core::cas::cas_path(&project.join(".baml/btel/cas"), id);
     let blob =
         std::fs::read(path).expect("every published CAS reference must have a completed blob");
     assert!(blob.len() >= 38);

@@ -19,12 +19,12 @@
 
 use std::time::Duration;
 
-use baml_bridge::Map;
+use baml_sdk::baml_bridge::Map;
 // SPECULATIVE: the low-level bridge surface mirrors python's `baml_bridge`
 // (`get_runtime`, `call_function`, `BamlCallContext`); provisional until the
 // Rust bridge pins it.
-use baml_bridge::runtime::{BamlCallContext, call_function, get_runtime};
 use baml_sdk::baml::json_sync;
+use baml_sdk::baml_bridge::runtime::{BamlCallContext, call_function, get_runtime};
 // SPECULATIVE: `LoadDocError`, the generated error type for the union
 // `throws ParseError | TimeoutError` contract, is a provisional name — the
 // generator's naming for throws-union enums is not pinned yet.
@@ -43,7 +43,7 @@ const _BAD_JSON: &str = "{not valid json";
 #[test]
 fn test_errors_stdlib_error_surfaces_as_baml_error() {
     match ParseJson_sync(_BAD_JSON.to_string()) {
-        Err(baml_bridge::Error::Thrown { value, .. }) => {
+        Err(baml_sdk::baml_bridge::Error::Thrown { value, .. }) => {
             // `isinstance(..., json::ParseError)` is the static type of `value`.
             let _: json::ParseError = value;
         }
@@ -57,7 +57,7 @@ fn test_errors_stdlib_error_surfaces_as_baml_error() {
 #[test]
 fn test_errors_user_throw_surfaces_declared_instance() {
     match ThrowMyError_sync() {
-        Err(baml_bridge::Error::Thrown { value, .. }) => {
+        Err(baml_sdk::baml_bridge::Error::Thrown { value, .. }) => {
             let _: MyError = value;
         }
         Err(other) => panic!("expected Error::Thrown, got {other:?}"),
@@ -84,7 +84,7 @@ fn test_errors_union_throws_preserves_class_name() {
     // enum, whose variant is the class identity. Both arms naming
     // `ParseError` is the `class_name` agreement.
     match Reparse_sync("x".to_string()) {
-        Err(baml_bridge::Error::Thrown { value, .. }) => {
+        Err(baml_sdk::baml_bridge::Error::Thrown { value, .. }) => {
             let _: ParseError = value;
         }
         Err(other) => panic!("expected Error::Thrown, got {other:?}"),
@@ -92,7 +92,7 @@ fn test_errors_union_throws_preserves_class_name() {
     }
     match LoadDoc_sync("x".to_string()) {
         // SPECULATIVE: the throws-union enum's variant shape is provisional.
-        Err(baml_bridge::Error::Thrown {
+        Err(baml_sdk::baml_bridge::Error::Thrown {
             value: LoadDocError::ParseError(value),
             ..
         }) => {
@@ -123,7 +123,10 @@ fn test_errors_user_panic_surfaces_as_baml_panic() {
     // trace — the `UserPanic`-vs-`SdkPanic` class routing is not decodable
     // host-side, so the arm match is the assertion.
     let result = DoPanic("user-initiated boom".to_string());
-    assert!(matches!(result, Err(baml_bridge::Error::Panic { .. })));
+    assert!(matches!(
+        result,
+        Err(baml_sdk::baml_bridge::Error::Panic { .. })
+    ));
 }
 
 // Async cancellation: python maps it to `asyncio.CancelledError` with a BAML
@@ -150,7 +153,10 @@ async fn test_errors_cancellation_surfaces_as_baml_panic() {
         ),
         _abort_soon
     );
-    assert!(matches!(result, Err(baml_bridge::Error::Panic { .. })));
+    assert!(matches!(
+        result,
+        Err(baml_sdk::baml_bridge::Error::Panic { .. })
+    ));
 }
 
 // `str(e)` is non-empty — guards the `@trace` / telemetry path, which
@@ -208,7 +214,7 @@ fn _python_traceback_line(line: &str) -> String {
 #[test]
 fn test_errors_baml_error_carries_baml_trace() {
     let trace = match ThrowMyError_sync() {
-        Err(baml_bridge::Error::Thrown { trace, .. }) => trace,
+        Err(baml_sdk::baml_bridge::Error::Thrown { trace, .. }) => trace,
         Err(other) => panic!("expected Error::Thrown, got {other:?}"),
         Ok(_) => panic!("expected Error::Thrown, got Ok"),
     };
@@ -240,7 +246,7 @@ fn test_errors_baml_trace_spliced_into_python_traceback() {
     };
     let rendered = err.to_string();
     let wire_trace = match err {
-        baml_bridge::Error::Thrown { trace, .. } => trace,
+        baml_sdk::baml_bridge::Error::Thrown { trace, .. } => trace,
         other => panic!("expected Error::Thrown, got {other:?}"),
     };
 

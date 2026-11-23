@@ -103,7 +103,9 @@ separately as fixed tables. Expected envelope bytes were generated using vendore
 `protoc --encode=btel.cloud.v1.CloudUploadEnvelope`)
 against `../bcs_api/proto/cloud.proto`, supplying the frozen recording/CAS bytes and authored
 plan/upload IDs. They were also decoded using that schema. No production cloud
-envelope encoder or incoming HTTP request produced the expected envelopes.
+envelope encoder or incoming HTTP request produced the expected envelopes. That schema is now
+`btel-core`'s `proto/upload/v1.proto` (`btel.upload.v1.UploadEnvelope`), with the same field
+numbers, so the bytes are unchanged.
 
 The CAS v2 refresh used the manual source-inspection command below to reseal the
 same recording identities and scalar values with v2 snapshot IDs. Prepare
@@ -210,11 +212,13 @@ cargo +1.98.0 test --locked -p btel_bcs --test golden_uploads \
 ```
 
 For independent protobuf inspection, from `crates/btel_bcs`, set `PROTOC` to the
-vendored binary for your platform:
+vendored binary for your platform. The schema ships in the `btel-core` crate:
 
 ```sh
+schema="$(dirname "$(cargo metadata --format-version 1 |
+  jq -r '.packages[] | select(.name == "btel-core") | .manifest_path')")/proto"
 xxd -r -p tests/fixtures/cloud-v1/mixed/recording.hex |
-  "$PROTOC" --decode=btel.cloud.v1.CloudUploadEnvelope ../bcs_api/proto/cloud.proto
+  "$PROTOC" --decode=btel.upload.v1.UploadEnvelope -I "$schema" upload/v1.proto
 ```
 
 Decode then re-encode an envelope with the same schema to check its outer wire

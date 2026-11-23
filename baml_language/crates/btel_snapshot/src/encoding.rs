@@ -25,25 +25,24 @@
 //! child blob. The MIME type, URL and path are strings written in place.
 //!
 //! A declaration (object tag 4) writes how it is identified, then whether it
-//! is an enum: 1, its Borsh `DeclarationName`, then the 16-byte ID of its
-//! recorded definition's group and its u32 position there; or 0, its Borsh
-//! `TypeTag`, then its name, as format 4 wrote it. A type head that names a
-//! recorded definition is Borsh tag 2 of `TypeIdentity`: the group ID and the
-//! position, without the name. The groups a blob names this way follow its value
+//! is an enum: 1, its name, then the 16-byte ID of its recorded definition's
+//! group and its u32 position there; or 0, its runtime tag, then its name, as
+//! format 4 wrote it. A type head that names a recorded definition is tag 2:
+//! the group ID and the position, without the name. The groups a blob names this way follow its value
 //! children in the child table, in first-use order. A definition group's own
 //! blob has root tag 2; [`crate::definition`] describes its content.
 //!
 //! A redacted value (format 6) is tag 13, a u32 body length and the body: a
 //! reason tag, then what that reason carries (see `tags::RedactionTag`).
 //!
-//! Value and object tags mirror hash format 6. Type/declaration metadata uses
-//! its Borsh representation. Floats use raw bits (including NaNs). Bigints use
+//! Value and object tags mirror hash format 6. Type descriptions, names and
+//! declaration identities are `btel-core`'s (`btel_core::cas::encode`), as are
+//! the header and every tag. Floats use raw bits (including NaNs). Bigints use
 //! sign (0 negative, 1 zero, 2 positive), u64 bit length, then ceil(bits/64)
 //! little-endian u64 magnitude limbs. Any encoding change needs a version bump.
 use std::io::{self, Write};
 
-use borsh::BorshSerialize;
-pub use btel_settings::snapshot::{BLOB_MAGIC, BLOB_VERSION};
+use btel_core::cas::encode::{self, IoSink, encode_type};
 use num_bigint::BigInt;
 
 #[cfg(debug_assertions)]
@@ -53,19 +52,17 @@ use crate::{
     graph::{BigintId, Graph, ObjectId, OwnedType, StringId},
     hash::{Digest, TypeLeaf},
     shape::{BlobIndex, Content, HEADER_BYTES, Home, Shape, UNNUMBERED},
-    tags::{self, RootTag, ValueTag},
+    tags,
     walk::{self, DeclarationIdentity, Reference, Resolver, Visitor},
 };
 
 fn size(w: &mut impl Write, n: usize) -> io::Result<()> {
-    u32::try_from(n)
-        .map_err(|_| io::Error::other("snapshot sequence exceeds u32"))?
-        .serialize(w)
+    let n = u32::try_from(n).map_err(|_| io::Error::other("snapshot sequence exceeds u32"))?;
+    encode::u32(&mut IoSink(w), n)
 }
 fn original_len(w: &mut impl Write, n: usize) -> io::Result<()> {
-    u64::try_from(n)
-        .map_err(|_| io::Error::other("snapshot length exceeds u64"))?
-        .serialize(w)
+    let n = u64::try_from(n).map_err(|_| io::Error::other("snapshot length exceeds u64"))?;
+    encode::u64(&mut IoSink(w), n)
 }
 fn string(w: &mut impl Write, value: &BexStr) -> io::Result<()> {
     size(w, value.byte_len())?;
@@ -74,29 +71,13 @@ fn string(w: &mut impl Write, value: &BexStr) -> io::Result<()> {
 
 /// What a blob that is one string writes before the string: the header, no
 /// children, no objects, and a root value that is a string of some length.
-pub(crate) const STRING_BLOB_HEADER_BYTES: usize = 8 + 4 + 16 + 4 + 4 + 1 + 1 + 4;
+pub(crate) const STRING_BLOB_HEADER_BYTES: usize = encode::STRING_BLOB_PREFIX_BYTES;
 const _: () = assert!(STRING_BLOB_HEADER_BYTES as u64 == HEADER_BYTES + 4 + 4 + 1 + 1 + 4);
 
 /// The bytes of the blob `id` that is one string of `len` bytes, up to the
 /// string itself.
 pub(crate) fn string_blob_header(id: CasId, len: u32) -> [u8; STRING_BLOB_HEADER_BYTES] {
-    let mut header = [0; STRING_BLOB_HEADER_BYTES];
-    let mut rest: &mut [u8] = &mut header;
-    let mut put = |bytes: &[u8]| {
-        let (to, after) = std::mem::take(&mut rest).split_at_mut(bytes.len());
-        to.copy_from_slice(bytes);
-        rest = after;
-    };
-    put(&BLOB_MAGIC);
-    put(&BLOB_VERSION.to_le_bytes());
-    put(id.as_bytes());
-    // No children and no objects.
-    put(&0_u32.to_le_bytes());
-    put(&0_u32.to_le_bytes());
-    put(&[RootTag::Value as u8, ValueTag::String as u8]);
-    put(&len.to_le_bytes());
-    debug_assert!(rest.is_empty(), "the header is exactly this long");
-    header
+    encode::string_blob_prefix(id, len)
 }
 
 /// Reusable maps from a capture's objects and blobs to their numbers in the
@@ -126,17 +107,17 @@ impl Blob<'_> {
         let members = &shape.members[entry.members.indexes()];
         let children = &shape.children[entry.children.indexes()];
         let named = &shape.named[entry.named.indexes()];
-        w.write_all(&BLOB_MAGIC)?;
-        BLOB_VERSION.serialize(w)?;
-        w.write_all(entry.id.as_bytes())?;
-        size(w, children.len() + named.len())?;
-        for child in children {
-            w.write_all(shape.blobs[child.0 as usize].id.as_bytes())?;
-        }
-        for group in named {
-            w.write_all(group.as_bytes())?;
-        }
-        size(w, members.len())?;
+        let ids = children
+            .iter()
+            .map(|child| shape.blobs[child.0 as usize].id)
+            .chain(named.iter().copied());
+        encode::header(
+            &mut IoSink(&mut *w),
+            entry.id,
+            children.len() + named.len(),
+            ids,
+            members.len(),
+        )?;
         let mut stored = Stored::new(scratch, s, shape, members, children);
         let mut writer = Writer(w);
         walk::root(&mut writer, &mut stored, s, root)?;
@@ -286,22 +267,22 @@ impl<W: Write> Visitor for Writer<'_, W> {
         string(self.0, text)
     }
     fn bigint(&mut self, value: &BigInt, _: Digest) -> io::Result<()> {
-        tags::bigint_sign(value.sign()).serialize(self.0)?;
-        value.bits().serialize(self.0)?;
-        for digit in value.iter_u64_digits() {
-            digit.serialize(self.0)?;
-        }
-        Ok(())
+        encode::bigint(
+            &mut IoSink(&mut *self.0),
+            tags::bigint_sign(value.sign()),
+            value.bits(),
+            value.iter_u64_digits(),
+        )
     }
     fn ty(&mut self, ty: &OwnedType, _: TypeLeaf) -> io::Result<()> {
-        ty.serialize(self.0)
+        encode_type(crate::describe::Value(ty), &mut IoSink(&mut *self.0))
     }
     fn bytes(&mut self, bytes: &[u8], _: Digest) -> io::Result<()> {
         size(self.0, bytes.len())?;
         self.0.write_all(bytes)
     }
     fn declaration(&mut self, identity: &DeclarationIdentity<'_>) -> io::Result<()> {
-        identity.serialize(self.0)
+        identity.encoded().write(&mut IoSink(&mut *self.0))
     }
     fn begin_range(&mut self, len: usize) -> io::Result<()> {
         size(self.0, len)
@@ -352,8 +333,14 @@ mod tests {
         assert_eq!(snapshot.blobs().len(), 1);
         let bytes = root_blob(&snapshot);
         let mut r = bytes.as_slice();
-        assert_eq!(<[u8; 8]>::deserialize_reader(&mut r).unwrap(), BLOB_MAGIC);
-        assert_eq!(u32::deserialize_reader(&mut r).unwrap(), BLOB_VERSION);
+        assert_eq!(
+            <[u8; 8]>::deserialize_reader(&mut r).unwrap(),
+            btel_core::cas::MAGIC
+        );
+        assert_eq!(
+            u32::deserialize_reader(&mut r).unwrap(),
+            btel_core::cas::VERSION
+        );
         assert_eq!(
             <[u8; 16]>::deserialize_reader(&mut r).unwrap(),
             *snapshot.root_id().as_bytes()

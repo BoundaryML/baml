@@ -94,10 +94,8 @@ interface Client {
     /// Render the provider request shape without performing I/O. Reliability
     /// wrappers use this as a stable request-shape preview: they do not sleep,
     /// rotate, or try fallback members while rendering.
-    function render(
-        self,
-        input: ModelTurnInput,
-    ) -> baml.http.Request throws root.errors.InvokeError;
+    function render(self, input: ModelTurnInput) -> baml.http.Request
+        throws root.errors.InvokeError;
     function invoke(self, input: ModelTurnInput) -> ModelTurn throws root.errors.InvokeError;
     /// The `args` this client uses for a `${cache()}` written with none (or
     /// with null): the object its wire's cache marker carries. Null when the
