@@ -15,27 +15,20 @@ interface Rng {
     ///   (for example, if the underlying system random number generator is unavailable)
     function random(self, bytes: int) -> uint8array throws never;
 
-    /// Returns a uniformly random `int` in `[-2^62, 2^62)`.
-    ///
-    /// This is 63 random bits: one bit of the 64 drawn is discarded so that
-    /// the value always has the runtime's inline encoding and drawing never
-    /// allocates. `int.random` maps these draws onto its range.
+    /// Returns a uniformly random `int`: every value from `int.min_value()`
+    /// to `int.max_value()` is equally likely. `int.random` and `float.random`
+    /// map these draws onto their ranges.
     function random_int(self) -> int throws never {
         let bytes = self.random(8);
-        // The 64 bits fill the whole `int` uniformly; the arithmetic `>> 1`
-        // drops the lowest and keeps the sign, so the 63 that remain tile
-        // `[-2^62, 2^62)`, one draw per value.
-        (
-            (bytes[0] << 56)
-                | (bytes[1] << 48)
-                | (bytes[2] << 40)
-                | (bytes[3] << 32)
-                | (bytes[4] << 24)
-                | (bytes[5] << 16)
-                | (bytes[6] << 8)
-                | bytes[7]
-        )
-            >> 1
+        // Big-endian: the first byte lands on the sign bit.
+        (bytes[0] << 56)
+            | (bytes[1] << 48)
+            | (bytes[2] << 40)
+            | (bytes[3] << 32)
+            | (bytes[4] << 24)
+            | (bytes[5] << 16)
+            | (bytes[6] << 8)
+            | bytes[7]
     }
 }
 

@@ -17,7 +17,7 @@
 // - `struct_excessive_bools`: the option structs mirror `ReaderOptions` /
 //   `WriterOptions`, whose independent boolean knobs are fixed by BEP-060.
 // - `cast_possible_wrap`: every `usize as i64` here is a cell/record/byte
-//   count bounded far below 2^62, so it is an inline int.
+//   count bounded far below 2^63.
 // - `result_large_err`: error values are cold-path BAML exception payloads;
 //   boxing them would only add noise on the hot Ok path.
 // - `used_underscore_items`: the codegen names `$rust_type` accessors and
@@ -126,8 +126,8 @@ impl ErrInfo {
     }
 }
 
-fn opt_int_value(o: Option<i64>) -> Value {
-    o.and_then(Value::try_inline_int).unwrap_or(Value::NULL)
+fn opt_int_value(vm: &mut BexVm, o: Option<i64>) -> Value {
+    o.map_or(Value::NULL, |i| vm.int_value(i))
 }
 
 fn error_value(vm: &mut BexVm, e: &ErrInfo) -> Result<Value, VmRustFnError> {
@@ -151,12 +151,12 @@ fn error_value(vm: &mut BexVm, e: &ErrInfo) -> Result<Value, VmRustFnError> {
     Ok(copy::csv::Error {
         kind,
         message,
-        line: opt_int_value(e.line),
-        record: opt_int_value(e.record),
-        field: opt_int_value(e.field),
+        line: opt_int_value(vm, e.line),
+        record: opt_int_value(vm, e.record),
+        field: opt_int_value(vm, e.field),
         column,
-        expected: opt_int_value(e.expected),
-        found: opt_int_value(e.found),
+        expected: opt_int_value(vm, e.expected),
+        found: opt_int_value(vm, e.found),
     }
     .to_value(vm))
 }
