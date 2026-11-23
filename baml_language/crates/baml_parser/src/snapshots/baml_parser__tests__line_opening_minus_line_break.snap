@@ -1,0 +1,35 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(&format!(\"function f(a: int) -> int {{\\n  {body}\\n}}\\n\"))"
+---
+SourceFile@0..41
+  items: FunctionDef@0..41
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..18
+      l: LParen "(" @10..11
+      params: Param@11..17
+        name: Name@11..12
+          token: Word "a" @11..12
+        ascription: TypeAscription@12..17
+          colon: Colon ":" @12..13
+          ty: PathType@14..17
+            head: Name@14..17
+              token: Word "int" @14..17
+      r: RParen ")" @17..18
+    ret: ReturnType@19..25
+      arrow: Arrow "->" @19..21
+      ty: PathType@22..25
+        head: Name@22..25
+          token: Word "int" @22..25
+    body: Block@26..41
+      l: LBrace "{" @26..27
+      tail: BinaryExpr@30..39
+        lhs: PathExpr@30..31
+          head: Name@30..31
+            token: Word "a" @30..31
+        op: Minus "-" @34..35
+        rhs: LiteralExpr@38..39
+          token: Integer "1" @38..39
+      r: RBrace "}" @40..41

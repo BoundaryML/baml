@@ -1,0 +1,20 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"let//#\\n}\")"
+---
+SourceFile@0..8
+  items: LetItem@0..3
+    stmt: LetStmt@0..3
+      introducer: Let "let" @0..3
+      pattern: <missing @3>
+      eq: <missing @3>
+      init: <missing @3>
+  items: Bogus@3..6
+    tokens: HeaderComment "//#" @3..6
+  items: Bogus@7..8
+    tokens: RBrace "}" @7..8
+---
+UnexpectedToken { expected: "identifier after 'let'", found: "`//#` header comment", range: 3..6 }
+UnexpectedToken { expected: "initializer (=)", found: "`//#` header comment", range: 3..6 }
+InvalidSyntax { message: "a `//#` header is a statement inside a block, or the title directly above a function; it is not allowed here", range: 3..6 }
+UnexpectedToken { expected: "top-level declaration", found: "'}'", range: 7..8 }

@@ -16,12 +16,14 @@ use crate::{
 /// `is`: same precedence as the comparisons.
 pub const IS_BINDING_POWER: (u8, u8) = (18, 19);
 
-/// The operand binding power of a prefix operator.
-//
-// BUG: this is below `*`/`/`/`%` (24, 25), so `-a * b` parses as `-(a * b)`.
-// Kept as-is so the typed parser matches the current one exactly; fix it in
-// its own change (with the lowering and formatter tests that pin the result).
-pub const PREFIX_BINDING_POWER: u8 = 23;
+/// The operand binding power of a prefix operator (`-`, `!`, `~`, `await`):
+/// above every binary operator, so `-a * b` is `(-a) * b`; the postfix forms
+/// (calls, members, indexing) still bind tighter, so `-a.b()` is `-(a.b())`.
+pub const PREFIX_BINDING_POWER: u8 = 26;
+const _: () = assert!(
+    PREFIX_BINDING_POWER > BinaryOp::Mul.binding_power().1,
+    "a prefix operator binds above every binary operator"
+);
 
 macro_rules! define_operators {
     // Split the flattened operator list by how many tokens spell each
@@ -196,8 +198,6 @@ define_operators! {
         Neg = ["-"],
         Not = ["!"],
         BitNot = ["~"],
-        PreInc = ["++"],
-        PreDec = ["--"],
     }
 }
 

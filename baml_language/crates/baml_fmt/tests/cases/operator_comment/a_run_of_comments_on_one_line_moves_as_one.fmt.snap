@@ -13,8 +13,8 @@ function f(x: int, y: int) -> int {
     let c = x /* a */
         /* b */ /* c */
         + y;
-    let d = -
-        /* c */ /* d */ x;
+    let d =
+        /* c */ /* d */ -x;
     let e = x
         // a
         /* b */ /* c */

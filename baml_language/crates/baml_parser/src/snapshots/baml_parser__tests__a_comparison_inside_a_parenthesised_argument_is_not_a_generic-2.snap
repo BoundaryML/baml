@@ -1,0 +1,68 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f() -> int {\\n  h<(a: int) -> int>(x) + k<int[]>()\\n}\\n\")"
+---
+SourceFile@0..60
+  items: FunctionDef@0..60
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..12
+      l: LParen "(" @10..11
+      r: RParen ")" @11..12
+    ret: ReturnType@13..19
+      arrow: Arrow "->" @13..15
+      ty: PathType@16..19
+        head: Name@16..19
+          token: Word "int" @16..19
+    body: Block@20..60
+      l: LBrace "{" @20..21
+      tail: BinaryExpr@24..58
+        lhs: CallExpr@24..45
+          callee: GenericApplyExpr@24..42
+            base: PathExpr@24..25
+              head: Name@24..25
+                token: Word "h" @24..25
+            args: GenericArgs@25..42
+              l: Less "<" @25..26
+              args: FunctionType@26..41
+                l: LParen "(" @26..27
+                params: FunctionTypeParam@27..33
+                  name: Name@27..28
+                    token: Word "a" @27..28
+                  colon: Colon ":" @28..29
+                  ty: PathType@30..33
+                    head: Name@30..33
+                      token: Word "int" @30..33
+                r: RParen ")" @33..34
+                arrow: Arrow "->" @35..37
+                ret: PathType@38..41
+                  head: Name@38..41
+                    token: Word "int" @38..41
+              r: Greater ">" @41..42
+          args: ArgList@42..45
+            l: LParen "(" @42..43
+            args: Arg@43..44
+              value: PathExpr@43..44
+                head: Name@43..44
+                  token: Word "x" @43..44
+            r: RParen ")" @44..45
+        op: Plus "+" @46..47
+        rhs: CallExpr@48..58
+          callee: GenericApplyExpr@48..56
+            base: PathExpr@48..49
+              head: Name@48..49
+                token: Word "k" @48..49
+            args: GenericArgs@49..56
+              l: Less "<" @49..50
+              args: ArrayType@50..55
+                inner: PathType@50..53
+                  head: Name@50..53
+                    token: Word "int" @50..53
+                l: LBracket "[" @53..54
+                r: RBracket "]" @54..55
+              r: Greater ">" @55..56
+          args: ArgList@56..58
+            l: LParen "(" @56..57
+            r: RParen ")" @57..58
+      r: RBrace "}" @59..60

@@ -376,11 +376,11 @@ impl FormatNode for CForHeader {
             d.indent(d.concat([
                 f.line_after_opener(l),
                 init,
-                f.separator(node.semi1, ";"),
+                f.token(f.tree.present(node.semi1)),
                 node.cond.map_or(Doc::NIL, |cond| {
                     d.concat([Doc::SOFT_LINE_OR_SPACE, f.alt(cond)])
                 }),
-                f.separator(node.semi2, ";"),
+                f.token(f.tree.present(node.semi2)),
                 step,
             ])),
             Doc::SOFT_LINE,

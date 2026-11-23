@@ -7,7 +7,6 @@
 //! ([`Mark`]) to the last one consumed — never includes trivia.
 
 use baml_syntax::{
-    Token,
     lexer::lex,
     ops::{OpTok, Operator},
     token::{Ident, KindSet, Token, TokenIdx, TokenKind, TokenSet, TokenType, Tokens},
@@ -431,26 +430,6 @@ impl<'t> Cursor<'t> {
                 TokenKind::BlockComment => self.text_of(i).contains('\n'),
                 _ => false,
             })
-    }
-
-    /// The `//#` header tokens between the last consumed token and the
-    /// current one (or the end of the text), in order.
-    pub(crate) fn headers_ahead(&self) -> impl Iterator<Item = Token![HeaderComment]> + 't {
-        let tokens: &'t Tokens = &self.input.tokens;
-        let to = self.nth(0).unwrap_or_else(|| self.eof_idx());
-        (self.end().0..to.0)
-            .map(TokenIdx)
-            .filter(move |&i| tokens.kind(i) == TokenKind::HeaderComment)
-            .map(|i| Token::new(i, TokenKind::HeaderComment))
-    }
-
-    pub(crate) fn header_ahead(&self) -> bool {
-        self.headers_ahead().next().is_some()
-    }
-
-    /// Whether horizontal whitespace directly follows token `idx`.
-    pub(crate) fn blank_after(&self, idx: TokenIdx) -> bool {
-        self.input.tokens.get(TokenIdx(idx.0 + 1)) == Some(TokenKind::Whitespace)
     }
 
     /// A line break between significant tokens `i` and `j` (`i < j`).

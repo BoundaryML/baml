@@ -40,6 +40,13 @@
 //! and so that the comments between an item and its separator stay in the
 //! order they were written, whichever lines they were on.
 //!
+//! Nothing stands between a prefix operator and its operand: a `-` that
+//! opens a line with anything after it continues the line before instead of
+//! negating. So a comment written after the operator (`- /* c */ x`,
+//! `- // c` then `x`) leads the whole expression — the whole run, when
+//! prefix operators are nested (`-- /* c */ x`) — and the rule that places
+//! the expression places it.
+//!
 //! The rules print a token of the source on a new line when a line comment
 //! is pending on the current one ([`Formatter::token`](crate::format::Formatter::token)), so a comment is
 //! never overtaken by a token it preceded; only the punctuation the
@@ -59,7 +66,7 @@ use std::num::NonZeroU32;
 
 use baml_syntax::{
     index::TreeIndex,
-    nodes::FileTree,
+    nodes::{FileTree, UnaryExpr},
     token::{KindSet, TokenIdx, TokenKind, Tokens},
     tree::AnyNodeId,
 };
@@ -251,10 +258,10 @@ pub fn is_comment(kind: TokenKind) -> bool {
 
 /// The kind of comment a token is, if it is one the formatter places: the
 /// trivia comments. `///` and `//baml:` lines are syntax a declaration owns,
-/// and a `//#` line is a statement where it is allowed.
+/// and a `//#` line is a statement or a function's title where it is allowed.
 fn comment_kind(kind: TokenKind) -> Option<CommentKind> {
     match kind {
-        TokenKind::LineComment | TokenKind::HeaderComment => Some(CommentKind::Line),
+        TokenKind::LineComment => Some(CommentKind::Line),
         TokenKind::BlockComment | TokenKind::UnclosedBlockComment => Some(CommentKind::Block),
         TokenKind::Whitespace | TokenKind::Newline => None,
         kind => {
@@ -488,7 +495,12 @@ impl<'t> Sweep<'t> {
                 after: prev.map(|prev| prev.token),
             },
         );
-        let (node, position) = if let Some(separator) = terminator.or(before_tucked) {
+        let after_prefix_operator = prev.is_some_and(|prev| prev.owner == enclosing)
+            && following.is_some()
+            && enclosing.cast::<UnaryExpr>().is_some();
+        let (node, position) = if after_prefix_operator {
+            (enclosing, Position::Leading)
+        } else if let Some(separator) = terminator.or(before_tucked) {
             (
                 enclosing,
                 Position::Dangling {

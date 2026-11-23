@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × unexpected token
+   ╭─[c_for_missing_semicolon.baml:4:20]
+ 4 │     for (let i = 0 i < 3; i += 1) {}
+   ·                    ┬
+   ·                    ╰── expected `';'`, found `identifier`
+   ╰────
+
+  [parse] E0010
+
+  × unexpected token
+   ╭─[c_for_missing_semicolon.baml:5:27]
+ 5 │     for (let i = 0; i < 3 i += 1) {}
+   ·                           ┬
+   ·                           ╰── expected `';'`, found `identifier`
+   ╰────

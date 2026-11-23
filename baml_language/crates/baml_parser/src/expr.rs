@@ -116,8 +116,6 @@ pub(crate) const EXPR_START: KindSet =
             TokenKind::Minus,
             TokenKind::Not,
             TokenKind::Tilde,
-            TokenKind::PlusPlus,
-            TokenKind::MinusMinus,
             TokenKind::Await,
             TokenKind::Spawn,
         ]));
@@ -173,12 +171,15 @@ pub(crate) fn expr(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, M
 
 /// An expression at the start of a statement line or of a `for` step, the
 /// positions an assignment may stand in: an assignment operator after it is
-/// left for the caller, which reads the assignment.
-pub(crate) fn stmt_expr(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> {
-    p.enter_nesting("an expression")?;
+/// left for the caller, which reads the assignment. Called where an
+/// expression starts; what cannot be read as one — past the nesting limit,
+/// or should [`prefix`] not take what [`at_expression_start`] accepted — is
+/// a `Bogus` that takes the line's place.
+pub(crate) fn stmt_expr(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Id<Bogus>> {
+    p.enter_nesting_in_list("an expression")?;
     let result = expr_bp(p, 0, r);
     p.leave_nesting();
-    result
+    result.map_err(|_missing| p.bogus_one("expression"))
 }
 
 /// `(x = 5)`, `f(x = 5)`, `let y = x = 5`: an assignment where only a value
@@ -189,10 +190,15 @@ fn reject_assignment(p: &mut Parser<'_, '_>, lhs: AnyExpr, r: Restrictions) {
         return;
     }
     let mark = p.mark_of_any(&lhs);
+    // Each further `= value` of a chain is read here, in a loop, so
+    // `x = x = … = 1` costs no stack per link.
     p.probe(|p| {
-        p.cur.eat_op::<AssignOp>();
-        if at_expression_start(p.cur) {
-            let _ = expr(p, r);
+        while p.cur.eat_op::<AssignOp>().is_some() && at_expression_start(p.cur) {
+            let Ok(()) = p.enter_nesting("an expression") else {
+                break;
+            };
+            let _ = expr_bp(p, 0, r);
+            p.leave_nesting();
         }
     });
     let range = p.cur.text_range(p.cur.range_from(mark));
@@ -227,7 +233,7 @@ fn operand(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> 
 fn infix(p: &mut Parser<'_, '_>, mut lhs: AnyExpr, min_bp: u8, r: Restrictions) -> AnyExpr {
     loop {
         // A `//#` line is a statement: it ends the expression before it.
-        if p.cur.header_ahead() || p.cur.at_end() || line_break_ends_expr(p.cur, r) {
+        if p.cur.at(TokenKind::HeaderComment) || p.cur.at_end() || line_break_ends_expr(p.cur, r) {
             break;
         }
         let mark = p.mark_of_any(&lhs);
@@ -442,8 +448,10 @@ fn infix(p: &mut Parser<'_, '_>, mut lhs: AnyExpr, min_bp: u8, r: Restrictions) 
 /// Whether a line break before the current token ends the expression parsed
 /// so far. Calls and indexing never attach across a line break. Where lines
 /// separate items, a token that can begin an expression ends the previous
-/// one — except a `-` not followed by a blank: `a\n- b` subtracts, `a\n-b`
-/// is two expressions. Inside a delimiter a line break is whitespace.
+/// one — except a `-` with anything (a blank, a comment, a line break)
+/// between it and what follows: `a\n- b`, `a\n-\nb` and `a\n- // c\nb`
+/// subtract, `a\n-b` is two expressions. Inside a delimiter a line break is
+/// whitespace.
 fn line_break_ends_expr(cur: Cursor<'_>, r: Restrictions) -> bool {
     if !cur.has_newline_ahead() {
         return false;
@@ -455,7 +463,11 @@ fn line_break_ends_expr(cur: Cursor<'_>, r: Restrictions) -> bool {
         return false;
     }
     if cur.at(TokenKind::Minus) {
-        return !cur.nth(0).is_some_and(|idx| cur.blank_after(idx));
+        // Glued to its operand the `-` negates; else it continues the line.
+        return cur
+            .nth(0)
+            .zip(cur.nth(1))
+            .is_some_and(|(minus, next)| next.0 == minus.0 + 1);
     }
     at_expression_start(cur)
 }
@@ -467,7 +479,11 @@ fn line_break_ends_expr(cur: Cursor<'_>, r: Restrictions) -> bool {
 /// tighter: `!x.f()` is `!(x.f())`.
 fn prefix(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> {
     if let Some(op) = p.cur.eat_in::<UnaryOpToken>() {
+        // A prefix operator nests like a bracket: `- - - … x` recurses once
+        // per operator.
+        p.enter_nesting("an expression")?;
         let operand = expr_bp(p, PREFIX_BINDING_POWER, r);
+        p.leave_nesting();
         return Ok(AnyExpr::Unary(
             p.alloc(Mark::of(op), UnaryExpr { op, operand }),
         ));
@@ -475,7 +491,9 @@ fn prefix(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> {
     if let Some(kw) = p.cur.eat::<kw::Await>() {
         // `await f catch …` catches what the await re-throws: the clause
         // belongs to the whole `await f`.
+        p.enter_nesting("an expression")?;
         let operand = expr_bp(p, PREFIX_BINDING_POWER, r | Restrictions::NO_CATCH);
+        p.leave_nesting();
         return Ok(AnyExpr::Await(
             p.alloc(Mark::of(kw), AwaitExpr { kw, operand }),
         ));
@@ -801,13 +819,25 @@ fn object_literal(
                 let shorthand = p.out.get(key).segments.is_empty()
                     && matches!(p.cur.kind(0), Some(TokenKind::Comma | TokenKind::RBrace));
                 (AnyObjectKey::Name(key), shorthand)
-            } else if let Some(lit) = string_lit(p, StringSite::Expr) {
-                (AnyObjectKey::String(lit), false)
-            } else if let Some(open) = p.cur.eat::<baml_syntax::token::lit::BacktickStart>() {
-                (
-                    AnyObjectKey::Backtick(BacktickString::parse(p, open)),
-                    false,
-                )
+            } else if p.cur.at_in::<StringToken>() || p.cur.at(TokenKind::BacktickStart) {
+                // A quoted key names no field. The member is read for its
+                // extent and is one `Bogus` with the report.
+                let error = ParseError::InvalidSyntax {
+                    message: "a field of a constructed object is named by an identifier; a map literal is written without the constructor: `{ \"key\": value }`".to_string(),
+                    range: p.cur.error_range(),
+                };
+                p.probe(|p| {
+                    if string_lit(p, StringSite::Expr).is_none()
+                        && let Some(open) = p.cur.eat::<baml_syntax::token::lit::BacktickStart>()
+                    {
+                        BacktickString::parse(p, open);
+                    }
+                    if p.cur.eat::<punct::Colon>().is_some() && at_expression_start(p.cur) {
+                        let _ = expr(p, Restrictions::empty());
+                    }
+                });
+                p.cur.eat::<punct::Comma>();
+                return Some((AnyObjectMember::Bogus(p.bogus_since(mark, error)), None));
             } else {
                 p.unexpected("field name, spread element, or '}'");
                 return None;

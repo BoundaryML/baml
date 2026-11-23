@@ -25,7 +25,8 @@ const NUMBER: KindSet = KindSet::new(&[TokenKind::Bigint, TokenKind::Integer, To
 
 /// What may appear inside a `<…>` that is a generic argument list rather than
 /// a comparison: names and paths, type punctuation, literal types, and the
-/// punctuation of a function type.
+/// punctuation of a function type. Bracket groups (a function type's
+/// parameters, an array's `[]`) are skipped whole by the scan.
 const IN_TYPE_ARGS: KindSet =
     PATH_SEGMENT
         .union(StringToken::KINDS)
@@ -34,13 +35,9 @@ const IN_TYPE_ARGS: KindSet =
             TokenKind::Dot,
             TokenKind::Comma,
             TokenKind::Equals,
-            TokenKind::LBracket,
-            TokenKind::RBracket,
             TokenKind::Question,
             TokenKind::Pipe,
             TokenKind::Minus,
-            TokenKind::LParen,
-            TokenKind::RParen,
             TokenKind::Colon,
             TokenKind::Arrow,
             TokenKind::FatArrow,
@@ -127,6 +124,13 @@ pub(crate) fn generic_args_close(cur: Cursor<'_>, open: usize) -> Option<usize> 
                 i = matching_close(cur, i + 1)? + 1;
                 continue;
             }
+            // A bracket group is one unit; a closer with no opener inside
+            // the list means the `<` was a comparison inside that group.
+            TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => {
+                i = matching_close(cur, i)? + 1;
+                continue;
+            }
+            TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => return None,
             TokenKind::Less => depth += 1,
             TokenKind::Greater => {
                 let idx = cur.sig(i)?;
@@ -313,12 +317,8 @@ pub(crate) fn looks_like_as_projection(cur: Cursor<'_>) -> bool {
 /// empty map; a `//#` header right inside says block.
 pub(crate) fn looks_like_map(cur: Cursor<'_>) -> bool {
     debug_assert!(cur.at(TokenKind::LBrace));
-    {
-        let mut inside = cur;
-        inside.skip();
-        if inside.header_ahead() {
-            return false;
-        }
+    if cur.nth_is(1, TokenKind::HeaderComment) {
+        return false;
     }
     if cur.nth_is(1, TokenKind::RBrace) {
         return true;
@@ -384,11 +384,18 @@ pub(crate) fn destructure_brace(cur: Cursor<'_>) -> Option<usize> {
 }
 
 /// Whether the `{` at significant index `open` opens something field-shaped:
-/// `{ name:`, a shorthand `{ name,` / `{ name }`, `{ ...`, or `{}`.
+/// `{ name:`, a shorthand `{ name,` / `{ name }`, `{ ...`, `{}` — or a quoted
+/// `{ "name":`, which the object literal then reports (a field is named by an
+/// identifier) rather than leaving the constructor before it stranded.
 pub(crate) fn brace_looks_like_fields(cur: Cursor<'_>, open: usize) -> bool {
     debug_assert_eq!(cur.kind_at_sig(open), Some(TokenKind::LBrace));
     match cur.kind_at_sig(open + 1) {
         Some(TokenKind::DotDotDot | TokenKind::RBrace) => true,
+        Some(kind) if StringToken::KINDS.contains(kind) => {
+            cur.kind_at_sig(open + 2) == Some(TokenKind::Colon)
+        }
+        Some(TokenKind::BacktickStart) => matching_close(cur, open + 1)
+            .is_some_and(|close| cur.kind_at_sig(close + 1) == Some(TokenKind::Colon)),
         Some(kind) if Ident::KINDS.contains(kind) || kind == TokenKind::Client => {
             let mut i = open + 2;
             while cur.kind_at_sig(i) == Some(TokenKind::Dot) && cur.nth_is_ident_at(i + 1) {
