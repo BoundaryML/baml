@@ -555,6 +555,12 @@ test "items: generation is deterministic" {
     assert.equal(nondeterministic_items().join("\n"), "")
 }
 
+test "items: the nested union regression is verified without entering a sitting" {
+    let item: root.engine.Item = root.bank.NestedUnionLetItem {};
+    assert.equal(item.status() is root.engine.Verified, true);
+    assert.equal(root.engine.can_serve(item), false)
+}
+
 test "items: every item conforms to its declared status" {
     assert.equal(nonconforming_items().join("\n"), "")
 }

@@ -299,7 +299,18 @@ function shared_claims(traces: Claim[][]) -> Claim[] throws never {
 }
 
 /// The compiler agrees with the spec on this item.
-class Verified {}
+class Verified {
+    /// Set for one-sided regression examples kept in compiler conformance.
+    conformance_only: bool?,
+}
+
+function can_serve(item: Item) -> bool throws never {
+    let status = item.status();
+    if (status is Verified) {
+        return !(status.conformance_only ?? false);
+    }
+    false
+}
 
 /// The way the compiler contradicts the spec on a diverging item.
 enum Contradiction {

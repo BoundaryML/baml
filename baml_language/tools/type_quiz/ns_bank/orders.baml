@@ -8,7 +8,7 @@
 /// disagrees with is not one a learner can be asked about, so it has no
 /// place in what we expect them to master.
 function rule_orders(seeds: int) -> root.engine.RuleOrder[] throws never {
-    let servable = items().filter((item) -> { item.status() is root.engine.Verified });
+    let servable = items().filter((item) -> { root.engine.can_serve(item) });
     let traces = servable.flat_map((item) -> {
         let id = item.id();
         baml.iter.Range.new(0, seeds)
