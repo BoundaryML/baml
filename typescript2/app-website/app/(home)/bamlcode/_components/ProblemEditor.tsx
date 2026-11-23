@@ -42,7 +42,6 @@ export function ProblemEditor({
 }: ProblemEditorProps) {
   const editorRef = useRef<EditorInstance | null>(null);
   const monacoRef = useRef<MonacoNs | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const applyDiagnostics = useCallback((diags: LspDiagnostic[]) => {
     const editor = editorRef.current;
@@ -77,12 +76,10 @@ export function ProblemEditor({
     [runtime, applyDiagnostics],
   );
 
+  // The runtime holds an edit back briefly before compiling it, and sends it
+  // at once when a run needs it, so every keystroke goes straight to it.
   const onChange = useCallback(
-    (value?: string) => {
-      const next = value ?? '';
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => runtime.updateSolution(next), 200);
-    },
+    (value?: string) => runtime.updateSolution(value ?? ''),
     [runtime],
   );
 
@@ -97,14 +94,6 @@ export function ProblemEditor({
     editor.setValue(inject.code);
     runtime.updateSolution(inject.code);
   }, [injectSeq, inject, runtime]);
-
-  // Cancel any pending debounced edit if the editor unmounts (route change)
-  // so the callback can't fire against a disposed model.
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
 
   return (
     <Editor

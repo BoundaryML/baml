@@ -84,13 +84,49 @@ function cleanRunError(msg: string): string {
   return lines.at(-1) ?? msg;
 }
 
-/** Strip a leading/trailing markdown code fence (```baml ... ```) from an LSP
- * hover so `baml describe` shows a clean signature, not raw markdown. */
-function stripHoverFences(text: string): string {
-  return text
-    .replace(/^\s*```[a-zA-Z]*\n?/, '')
-    .replace(/\n?```\s*$/, '')
-    .trim();
+/** The text inside `section` if it is exactly one fenced code block. */
+function fencedCode(section: string): string | null {
+  const m = section.trim().match(/^```[a-zA-Z]*\n([\s\S]*?)\n?```$/);
+  return m ? m[1] : null;
+}
+
+/**
+ * An LSP hover as plain text, for `baml describe`.
+ *
+ * The language server writes a hover as Markdown in up to three parts with a
+ * rule between them: a code block naming what the symbol belongs to (`root`
+ * for the project's own code), a code block with its signature, and its
+ * documentation. The console shows text, so the two leading blocks lose their
+ * fences and the rules, and `root` is left out. The documentation is kept as
+ * written. A hover in any other shape is returned unchanged.
+ */
+function hoverText(markdown: string): string {
+  const sections = markdown.trim().split(/\n+---\n+/);
+  const out: string[] = [];
+  for (const [i, section] of sections.entries()) {
+    const code = i < 2 ? fencedCode(section) : null;
+    if (code === null) {
+      out.push(sections.slice(i).join('\n\n---\n\n'));
+      break;
+    }
+    if (i > 0 || code !== 'root') out.push(code);
+  }
+  return out.join('\n\n').trim();
+}
+
+/**
+ * A compiler error from one of the generated files, reworded for a solver who
+ * can't see that file. `error` is `file:line: message`. Other errors are
+ * returned as they are.
+ */
+function explainGeneratedError(error: string, problem: Problem): string {
+  const m = error.match(/^(?:.*\/)?(grader|runner)\.baml:\d+: ([\s\S]*)$/);
+  if (!m) return error;
+  // The grader calls the function the problem asks for, so an error there
+  // means the solution no longer matches the signature.
+  return m[1] === 'grader'
+    ? `${m[2]}. The tests expect \`${problem.signature}\`.`
+    : m[2];
 }
 
 /** The state of the worker's project, as an `updateProject` notification gives it. */
@@ -242,7 +278,7 @@ export async function describeExpr(expr: string): Promise<string> {
   });
   // Clear the scratch so it can't affect grading.
   w.postMessage({ files: { [rel]: '' }, type: 'filesChanged' });
-  const text = stripHoverFences(
+  const text = hoverText(
     flattenHover((hover as { contents?: unknown })?.contents),
   );
   return text || `No description found for \`${e}\`.`;
@@ -268,7 +304,11 @@ async function lspRequest(method: string, params: unknown): Promise<unknown> {
 }
 
 export interface SolveRuntime {
-  /** Push an editor edit (updates diagnostics; marks the project dirty). */
+  /**
+   * Take the solver's code as it is now. It reaches the compiler 200 ms after
+   * the last call, so typing doesn't recompile on every keystroke, and at once
+   * when a run or a describe needs it.
+   */
   updateSolution(code: string): void;
   onDiagnostics(cb: DiagHandler): void;
   /** Latest error-severity diagnostics on the solution file. */
@@ -295,6 +335,20 @@ export function createSolveRuntime(
   let latestDiags: LspDiagnostic[] = [];
   let diagHandler: DiagHandler | undefined;
   let latestCode = initialSolution;
+  // The timer for sending `latestCode` to the worker, while an edit waits.
+  let pendingSend: ReturnType<typeof setTimeout> | null = null;
+
+  /** Sends the solver's code to the worker now, if an edit is waiting. */
+  async function flushSolution(): Promise<void> {
+    if (pendingSend === null) return;
+    clearTimeout(pendingSend);
+    pendingSend = null;
+    const w = await ensureSharedWorker();
+    w.postMessage({
+      files: { [SOLUTION_REL]: latestCode },
+      type: 'filesChanged',
+    });
+  }
 
   const internal: InternalRuntime = {
     onDiag(diags) {
@@ -311,6 +365,7 @@ export function createSolveRuntime(
    * can't.
    */
   async function ready(): Promise<string | null> {
+    await flushSolution();
     const deadline = Date.now() + 10000;
     let state: ProjectState | null = null;
     // One answer normally settles it. Asking again only after an answer has
@@ -324,13 +379,14 @@ export function createSolveRuntime(
     if (state) projectKey = state.project;
     if (state?.current) return null;
     if (!state?.errors.length) return 'the compiler did not finish in time';
-    // An error in the solver's own file reads best with its line. One anywhere
-    // else (the grader calling a function the solution no longer defines, a
-    // bad console call) is reported as the compiler gives it.
+    // An error in the solver's own file reads best with its line. One in a
+    // generated file (the grader calling a function the solution no longer
+    // defines, a bad console call) is reworded, because the solver can't see
+    // that file.
     const own = latestDiags.find((d) => (d.severity ?? 1) === 1);
     return own
       ? `line ${own.range.start.line + 1}: ${own.message}`
-      : state.errors[0];
+      : explainGeneratedError(state.errors[0], problem);
   }
 
   // Put this problem's files in the worker's project (openFiles didOpens each
@@ -449,6 +505,10 @@ export function createSolveRuntime(
     },
     deactivate() {
       if (active === internal) active = null;
+      // An edit still waiting belongs to a page that is going away. Sent
+      // later, it would overwrite the next problem's solution in the worker.
+      if (pendingSend !== null) clearTimeout(pendingSend);
+      pendingSend = null;
       // The shared worker is intentionally NOT terminated - it is reused across
       // problems and remounts.
     },
@@ -465,7 +525,7 @@ export function createSolveRuntime(
         position: { character, line },
         textDocument: { uri: SOLUTION_URI },
       });
-      const text = stripHoverFences(
+      const text = hoverText(
         flattenHover((hover as { contents?: unknown })?.contents),
       );
       return text || `No description available for \`${fnName}\`.`;
@@ -548,12 +608,8 @@ export function createSolveRuntime(
     },
     updateSolution(code: string) {
       latestCode = code;
-      void ensureSharedWorker().then((w) =>
-        w.postMessage({
-          files: { [SOLUTION_REL]: code },
-          type: 'filesChanged',
-        }),
-      );
+      if (pendingSend !== null) clearTimeout(pendingSend);
+      pendingSend = setTimeout(() => void flushSolution(), 200);
     },
   };
 }
