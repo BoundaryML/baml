@@ -210,9 +210,8 @@ impl BamlClassFloat for PackageBamlImpl {
         reason = "bits <= 2^53 - 1 fits f64's mantissa exactly"
     )]
     fn _unit_from_draw(draw: i64) -> f64 {
-        // A `random_int` draw is 63 bits, sign-extended: bit 63 only repeats
-        // bit 62, so use bits 10..=62.
-        let bits = (draw.cast_unsigned() >> 10) & ((1u64 << 53) - 1); // <= 2^53 - 1
+        // A `random_int` draw is 64 uniform bits; use the top 53.
+        let bits = draw.cast_unsigned() >> 11; // <= 2^53 - 1
         bits as f64 * (1.0 / (1u64 << 53) as f64)
     }
 
