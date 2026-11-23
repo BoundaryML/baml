@@ -5,21 +5,19 @@ import type { Problem, ProblemTest } from './types';
  *
  * Each test case becomes a zero-arg `baml_language` grader function:
  *
- *   function bc_grade_0() -> int {
- *     let __ok = baml.deep_equals(TwoSum([2, 7, 11, 15], 9), [0, 1]);
- *     [0][if __ok {0} else {1}]
+ *   function bc_grade_0() -> void {
+ *     assert.equal(TwoSum([2, 7, 11, 15], 9), [0, 1]);
  *   }
  *
- * A passing case indexes `[0][0]` = 0 → the run finishes with status
- * `succeeded`. A wrong answer indexes `[0][1]` → `IndexOutOfBounds`, which
- * propagates to run status `failed`. Grading reads ONLY the terminal run
- * status, so no test value is ever decoded (which the website worker can't do
- * reliably).
+ * `assert.equal` compares with `==`, which is structural over arrays, classes
+ * and nested values, and throws `baml.panics.AssertionFailed` when the two
+ * differ. A passing case returns, and the run finishes with status
+ * `succeeded`. A wrong answer, or a solution that throws, ends the run as
+ * `failed` or `panicked`. Grading reads ONLY the terminal run status, so no
+ * test value is ever decoded.
  *
- * NB: we do NOT use `assert` - assertion failures (and panics) are soft-caught
- * by the run harness, leaving the status `succeeded` even for wrong answers.
- * `baml.deep_equals` is structural over arrays / classes / nested values
- * (plain `==` on `int[]` is a type error).
+ * Both parameters of `assert.equal` are `unknown`, so an expected literal the
+ * compiler can't type alone (`[]`, `null`) needs no annotation.
  */
 
 export const GRADER_PREFIX = 'bc_grade_';
@@ -46,19 +44,9 @@ export function graderCases(problem: Problem): GraderCase[] {
 
 /** The BAML source of one grader function for a test case. */
 function graderFn(fnName: string, test: ProblemTest): string {
-  // Grade via a status-propagating failure, NOT `assert`: assertion failures
-  // (and panics) are soft-caught by the run harness, so the run status stays
-  // `succeeded` even for a wrong answer. Instead compare with the structural
-  // `baml.deep_equals` (plain `==` on `int[]` is a type error) and index a
-  // 1-element array out of bounds on mismatch - `IndexOutOfBounds` DOES
-  // propagate to the run status (`failed`), which is what grading reads.
-  //
-  //   let __ok = baml.deep_equals(<call>, <expected>);
-  //   [0][if __ok {0} else {1}]   // ok → [0][0] = 0 ; wrong → [0][1] → throws
   return [
-    `function ${fnName}() -> int {`,
-    `  let __ok = baml.deep_equals(${test.call}, ${test.expected});`,
-    '  [0][if __ok {0} else {1}]',
+    `function ${fnName}() -> void {`,
+    `  assert.equal(${test.call}, ${test.expected});`,
     '}',
   ].join('\n');
 }
@@ -67,8 +55,8 @@ function graderFn(fnName: string, test: ProblemTest): string {
 export function buildGraderFile(problem: Problem): string {
   const header =
     '// AUTO-GENERATED grading harness - not shown to the solver.\n' +
-    '// One grader per test case; a wrong answer throws IndexOutOfBounds so the\n' +
-    '// run status fails (see harness.ts).\n\n';
+    '// One grader per test case; a wrong answer fails its assertion, which\n' +
+    '// fails the run (see harness.ts).\n\n';
   return (
     header +
     graderCases(problem)

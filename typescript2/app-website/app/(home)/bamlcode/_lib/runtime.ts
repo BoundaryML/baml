@@ -18,6 +18,12 @@ import type { Problem } from './types';
  * `prelude.baml`. Grading calls `startRun` on each zero-arg grader function and
  * reads the terminal run STATUS: `succeeded` = pass, anything else = fail. No
  * test value is ever decoded, and no API key is required.
+ *
+ * The worker holds one project, and the runtime inside it refuses to start a
+ * run until its engine has been rebuilt from the current sources. It reports
+ * the project's state only when asked (`requestState`), so every run first
+ * asks and waits for `isBexCurrent`, or for the compiler's errors (see
+ * `ready`).
  */
 
 export interface LspPos {
@@ -58,7 +64,6 @@ const RUNNER_REL = `${ID}/baml_src/runner.baml`;
 // an intended output from a real error in the user's code.
 const RUN_SENTINEL = 'BCRUN:';
 const SOLUTION_URI = `file://${ROOT}/${SOLUTION_REL}`;
-const PROJECT_FALLBACK = `${ROOT}/${ID}`;
 
 const TERMINAL_RUN_STATUS = new Set([
   'succeeded',
@@ -66,11 +71,6 @@ const TERMINAL_RUN_STATUS = new Set([
   'cancelled',
   'panicked',
 ]);
-
-/** Whether a project key from the worker names the bamlcode project. */
-function projectMatches(projectKey: string): boolean {
-  return projectKey.split('/').includes(ID);
-}
 
 /** Reduce a runtime traceback to its most useful single line. */
 function cleanRunError(msg: string): string {
@@ -93,27 +93,27 @@ function stripHoverFences(text: string): string {
     .trim();
 }
 
-/** Resolves once `cond` holds or `timeoutMs` passes, polling every 40 ms. */
-function waitUntil(cond: () => boolean, timeoutMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    const start = Date.now();
-    const tick = () => {
-      if (cond() || Date.now() - start > timeoutMs) resolve();
-      else setTimeout(tick, 40);
-    };
-    tick();
-  });
+/** The state of the worker's project, as an `updateProject` notification gives it. */
+interface ProjectState {
+  /** The runtime's own key for the project, which a run has to name. */
+  project: string;
+  /** Whether the engine has been rebuilt from the sources as they are now. */
+  current: boolean;
+  /** The compiler's errors across the project's files, as `file:line: message`. */
+  errors: string[];
 }
 
 // ── Shared worker singleton ────────────────────────────────────────────────
 interface InternalRuntime {
   onDiag(diags: LspDiagnostic[]): void;
-  onUpdateProject(project: string): void;
 }
 
 let sharedWorkerPromise: Promise<Worker> | null = null;
 let sharedClientPromise: Promise<RunStoreClient> | null = null;
 let active: InternalRuntime | null = null;
+
+// Callers waiting for the worker's answer to a `requestState`.
+const stateWaiters = new Set<(state: ProjectState) => void>();
 
 // Pending generic LSP requests (hover for `baml describe`), keyed by reqId.
 const pendingLsp = new Map<number, (result: unknown) => void>();
@@ -163,13 +163,45 @@ function ensureSharedWorker(): Promise<Worker> {
       if (d?.type === 'playgroundNotification') {
         const n = d.notification;
         if (n?.type === 'updateProject' && typeof n.project === 'string') {
-          active?.onUpdateProject(n.project);
+          const diagnostics: { severity?: string; message?: string }[] =
+            n.update?.diagnostics ?? [];
+          const state: ProjectState = {
+            current: n.update?.isBexCurrent === true,
+            errors: diagnostics
+              .filter((x) => x.severity === 'error')
+              .map((x) => x.message ?? ''),
+            project: n.project,
+          };
+          for (const waiter of [...stateWaiters]) waiter(state);
         }
       }
     });
     w.postMessage({ initialFiles: {}, rootPath: ROOT, type: 'init' });
   });
   return sharedWorkerPromise;
+}
+
+/**
+ * Asks the worker for its project's state. Resolves with null if no answer
+ * comes within `timeoutMs`.
+ *
+ * The worker applies a file change and rebuilds the engine before it reads its
+ * next message, so the answer describes every change posted before the call.
+ */
+async function requestProjectState(
+  timeoutMs: number,
+): Promise<ProjectState | null> {
+  const w = await ensureSharedWorker();
+  return new Promise((resolve) => {
+    const settle = (state: ProjectState | null) => {
+      clearTimeout(timer);
+      stateWaiters.delete(settle);
+      resolve(state);
+    };
+    const timer = setTimeout(() => settle(null), timeoutMs);
+    stateWaiters.add(settle);
+    w.postMessage({ type: 'requestState' });
+  });
 }
 
 /** The run store client over the shared worker, created on first use. */
@@ -247,7 +279,7 @@ export interface SolveRuntime {
   runCall(call: string): Promise<RunView>;
   /** `baml describe`: the resolved type/signature of a function (LSP hover). */
   describe(fnName: string): Promise<string>;
-  /** Mark this runtime as the one receiving diagnostics/updateProject. */
+  /** Mark this runtime as the one receiving diagnostics. */
   activate(): void;
   /** Stop receiving worker notifications (does NOT tear down the shared worker). */
   deactivate(): void;
@@ -258,8 +290,8 @@ export function createSolveRuntime(
   problem: Problem,
   initialSolution: string,
 ): SolveRuntime {
-  let projectKey = PROJECT_FALLBACK;
-  let recompilePending = true;
+  // The runtime's own key for the project, taken from its last answer.
+  let projectKey = ROOT;
   let latestDiags: LspDiagnostic[] = [];
   let diagHandler: DiagHandler | undefined;
   let latestCode = initialSolution;
@@ -269,17 +301,40 @@ export function createSolveRuntime(
       latestDiags = diags;
       diagHandler?.(diags);
     },
-    onUpdateProject(project) {
-      if (projectMatches(project)) {
-        projectKey = project;
-        recompilePending = false;
-      }
-    },
   };
   active = internal;
 
-  // Register this problem's project on the shared worker (openFiles didOpens
-  // each file, triggering a compile + updateProject/diagnostics).
+  /**
+   * Waits for the engine built from the sources as they are now, or for the
+   * compiler to say they have errors, in which case no engine is coming.
+   * Resolves with null when a run can start, and with the reason when it
+   * can't.
+   */
+  async function ready(): Promise<string | null> {
+    const deadline = Date.now() + 10000;
+    let state: ProjectState | null = null;
+    // One answer normally settles it. Asking again only after an answer has
+    // arrived means none is left in flight to be mistaken for the answer to a
+    // later change.
+    while (Date.now() < deadline) {
+      state = await requestProjectState(deadline - Date.now());
+      if (!state || state.current || state.errors.length > 0) break;
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    if (state) projectKey = state.project;
+    if (state?.current) return null;
+    if (!state?.errors.length) return 'the compiler did not finish in time';
+    // An error in the solver's own file reads best with its line. One anywhere
+    // else (the grader calling a function the solution no longer defines, a
+    // bad console call) is reported as the compiler gives it.
+    const own = latestDiags.find((d) => (d.severity ?? 1) === 1);
+    return own
+      ? `line ${own.range.start.line + 1}: ${own.message}`
+      : state.errors[0];
+  }
+
+  // Put this problem's files in the worker's project (openFiles didOpens each
+  // file, which compiles the project and publishes its diagnostics).
   void ensureSharedWorker().then((w) => {
     // NOTE: no baml.toml - the worker didOpens every file as BAML, so a
     // baml.toml poisons the project with parse errors and the bex never builds.
@@ -288,9 +343,10 @@ export function createSolveRuntime(
     const files: Record<string, string> = {
       [SOLUTION_REL]: src['solution.baml'],
       [GRADER_REL]: src['grader.baml'],
+      // The worker's one project is shared by every problem opened in this
+      // tab, so a problem with no prelude empties the previous one's.
+      [PRELUDE_REL]: src['prelude.baml'] ?? '',
     };
-    if (src['prelude.baml']) files[PRELUDE_REL] = src['prelude.baml'];
-    recompilePending = true;
     w.postMessage({ files, type: 'openFiles' });
   });
 
@@ -327,8 +383,13 @@ export function createSolveRuntime(
         functionName: fnName,
         project: projectKey,
       });
-    } catch {
-      return { errorMessage: 'could not start run', status: 'error' };
+    } catch (e) {
+      console.error(`[bamlcode] could not start ${fnName}:`, e);
+      const reason = e instanceof Error ? e.message : String(e);
+      return {
+        errorMessage: `could not start run: ${reason}`,
+        status: 'error',
+      };
     }
 
     // Read the terminal status straight from the patch/snapshot stream. We
@@ -392,8 +453,7 @@ export function createSolveRuntime(
       // problems and remounts.
     },
     async describe(fnName: string): Promise<string> {
-      await ensureSharedWorker();
-      await waitUntil(() => !recompilePending, 6000);
+      await ready();
       const code = latestCode;
       const decl = code.search(new RegExp(`function\\s+${fnName}\\b`));
       if (decl < 0) return `Define \`${fnName}\` first.`;
@@ -411,17 +471,12 @@ export function createSolveRuntime(
       return text || `No description available for \`${fnName}\`.`;
     },
     async grade(cases: GraderCase[]): Promise<CaseResult[]> {
-      await ensureSharedWorker();
-      // Wait for any in-flight recompile to settle so we grade the latest edit,
-      // not the previous bex.
-      await waitUntil(() => !recompilePending, 8000);
-
-      // A solution that doesn't compile can't be graded - surface the first
-      // error instead of running.
-      const errs = latestDiags.filter((d) => (d.severity ?? 1) === 1);
-      if (errs.length > 0) {
+      // A project that doesn't compile can't be graded: every case reports
+      // the compiler's first error instead of running.
+      const error = await ready();
+      if (error) {
         return cases.map((c) => ({
-          errorMessage: errs[0].message,
+          errorMessage: error,
           fnName: c.fnName,
           index: c.index,
           status: 'error' as const,
@@ -448,14 +503,14 @@ export function createSolveRuntime(
       // so a runner function panics with the JSON-stringified result and we read
       // it back out of the (inline) error message.
       const wrapper =
-        'function bc_run() -> int {\n' +
+        'function bc_run() -> void {\n' +
         `  baml.sys.panic("${RUN_SENTINEL}" + baml.json.stringify((${expr}).to_json()));\n` +
         '}\n';
-      recompilePending = true;
       w.postMessage({ files: { [RUNNER_REL]: wrapper }, type: 'openFiles' });
-      await waitUntil(() => !recompilePending, 8000);
-
-      const outcome = await runOne('bc_run');
+      const error = await ready();
+      const outcome = error
+        ? { errorMessage: error, status: 'error' as const }
+        : await runOne('bc_run');
       // Reset the runner so a bad call can't poison later grading.
       w.postMessage({ files: { [RUNNER_REL]: '' }, type: 'filesChanged' });
 
@@ -493,7 +548,6 @@ export function createSolveRuntime(
     },
     updateSolution(code: string) {
       latestCode = code;
-      recompilePending = true;
       void ensureSharedWorker().then((w) =>
         w.postMessage({
           files: { [SOLUTION_REL]: code },
