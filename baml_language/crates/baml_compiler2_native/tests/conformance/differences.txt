@@ -38,7 +38,7 @@ unwind_context_line: a native frame has no line
   stdout 0\n
 
 # What `baml.sys.argv` holds.
-sys_argv: native argv leaves out the program's own name; under `baml-cli run` it is the binary and the target
+sys_argv: argv is to hold only the program's own arguments, as native does; `baml-cli run` still gives the binary and the target
   stdout 0\n
 
 # Closing a stream.
