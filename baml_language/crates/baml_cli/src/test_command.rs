@@ -9,6 +9,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
+use baml_exec::log_output::{LogFilter, LogOutput};
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
     FunctionCallContextBuilder, WireTy, logger::TraceLogger,
@@ -20,7 +21,6 @@ use sys_native::CallId;
 use crate::{
     ExitCode,
     bytecode_cache::CacheContext,
-    log_output::{LogLevel as TestLogLevel, LogOutput},
     output::{Command, CommandContext, Outcome, Report, Style},
     reporter::Reporter,
     test_filter::TestFilter,
@@ -109,9 +109,9 @@ pub struct TestArgs {
 
     #[arg(
         long = "log",
-        env = "BAML_LOG",
+        env = baml_exec::log_output::LOG_ENV,
         value_enum,
-        default_value_t = TestLogLevel::Info,
+        default_value_t = LogFilter::Info,
         ignore_case = true,
         value_name = "LEVEL",
         help = "Set the BAML log level; overrides BAML_LOG [default: info] [possible values: off, error, warn, info, debug, trace]",
@@ -120,12 +120,12 @@ pub struct TestArgs {
         hide_possible_values = true,
         help_heading = "Test output options"
     )]
-    pub log: TestLogLevel,
+    pub log: LogFilter,
 
     /// Explicit command-line log level, injected by the top-level parser so a
     /// direct scalar value can override the selected profile's value.
     #[arg(skip)]
-    pub(crate) cli_log: Option<TestLogLevel>,
+    pub(crate) cli_log: Option<LogFilter>,
 
     /// Fail any single test that runs longer than this.
     ///
@@ -154,7 +154,7 @@ pub struct TestArgs {
     shutdown: crate::shutdown::ShutdownArgs,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct TestInvocation {
     list: bool,
     profile_include: Vec<String>,
@@ -162,14 +162,14 @@ struct TestInvocation {
     cli_include: Vec<String>,
     cli_exclude: Vec<String>,
     output: crate::output::OutputArgs,
-    logs: TestLogLevel,
+    logs: LogFilter,
 }
 
 #[derive(Debug)]
 struct ParsedProfileArgs {
     test: TestArgs,
     output: TestOutputOverrides,
-    logs: Option<TestLogLevel>,
+    logs: Option<LogFilter>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -276,7 +276,7 @@ struct RunCtx<'a> {
     rt: &'a tokio::runtime::Runtime,
     cancel: &'a CancellationToken,
     unhandled_spawn_failures: &'a AtomicUsize,
-    logs: TestLogLevel,
+    logs: LogFilter,
     shutdown_timeout: crate::optional_duration::OptionalDuration,
     test_timeout: crate::optional_duration::OptionalDuration,
     max_concurrency: Option<u32>,
@@ -1401,7 +1401,7 @@ mod tests {
             .unwrap();
         assert_eq!(parsed.test.include, vec!["root::integration::*"]);
         assert_eq!(parsed.test.exclude, vec!["*::flaky::*"]);
-        assert_eq!(parsed.logs, Some(TestLogLevel::Info));
+        assert_eq!(parsed.logs, Some(LogFilter::Info));
 
         let globals = TestArgs::parse_profile_args(
             "globals",
@@ -1489,6 +1489,6 @@ args = ["--color", "never", "--log", "warn"]
             invocation.output.color,
             Some(crate::output::ColorChoice::Always)
         );
-        assert_eq!(invocation.logs, TestLogLevel::Debug);
+        assert_eq!(invocation.logs, LogFilter::Debug);
     }
 }

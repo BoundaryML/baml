@@ -39,7 +39,7 @@ Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential
 | `BAML_MANIFEST_BASE_URL` | Release manifest mirror, used by the wrapper and the bridges. |
 | `BAML_BUILD_CACHE` | `false` turns off the build cache. |
 | `BAML_BUILD_CACHE_REMOTE`, `BAML_BUILD_CACHE_REMOTE_TOKEN` | Shared build cache for CI. URL must be https (or localhost). |
-| `BAML_LOG` | Level for `log.*` output from `baml run` and `baml test` (same as `--log`): `off`, `error`, `warn`, `info` (default), `debug`, `trace`. |
+| `BAML_LOG` | Level for `log.*` output: `off`, `error`, `warn`, `info`, `debug`, `trace`. For `baml run` and `baml test` it is the same as `--log` and defaults to `info`. A packed program prints none by default; set it to print them to stderr. Its publisher can rename the variable with `[pack.env_var_names]` (`BAML_LOG = "ACME_LOG"`), but cannot turn it off. Telemetry records `log.*` events whatever this is set to. |
 | `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. Set `off` to disable recording and cloud uploads in CLI runs/tests and native generated SDKs/packed programs using the standard control, including when logged in. |
 | `BOUNDARY_API_URL` | Boundary API gateway for login, cloud queries and telemetry. Overrides `[boundary].api_url`; default `https://api.prod.bcs.boundaryml.com`. |
 | `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. The sentinel `local` selects local recordings instead of cloud uploads when the artifact permits this API-key binding. |

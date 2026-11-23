@@ -278,13 +278,17 @@ const PACK_FIELDS: &[&str] = &[
     "gc",
 ];
 const ENVVAR_FIELDS: &[&str] = &["BAML_TELEMETRY", "BOUNDARY_PROJECT", "BOUNDARY_API_KEY"];
-/// Packed programs may also rename the GC variables (see `PackGc`).
-const PACK_ENVVAR_FIELDS: &[&str] = &[
+/// Every variable a packed program reads that `[pack.env_var_names]` may
+/// rename, by its standard name. Packed programs may also rename the GC
+/// variables (see `baml_exec::PackGc`) and the `log.*` filter's (see
+/// `baml_exec::PackLog`).
+pub const PACK_ENVVAR_FIELDS: &[&str] = &[
     "BAML_TELEMETRY",
     "BOUNDARY_PROJECT",
     "BOUNDARY_API_KEY",
     "BAML_GC_GROWTH",
     "BAML_GC_MIN_GROWTH",
+    "BAML_LOG",
 ];
 
 /// Validate publisher-owned namespaces before building artifacts.
@@ -806,7 +810,8 @@ BOUNDARY_API_KE = "CUSTOM_KEY""#,
     BOUNDARY_PROJECT
     BOUNDARY_API_KEY
     BAML_GC_GROWTH
-    BAML_GC_MIN_GROWTH"#,
+    BAML_GC_MIN_GROWTH
+    BAML_LOG"#,
             ),
             (
                 r#"[boundary]

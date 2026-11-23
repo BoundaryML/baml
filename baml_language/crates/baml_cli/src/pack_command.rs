@@ -206,6 +206,7 @@ impl PackArgs {
             btel_settings::artifact::ArtifactKind::Pack,
         )?;
         let gc = baml_exec::PackGc::from_manifest(&manifest)?;
+        let log = baml_exec::PackLog::from_manifest(&manifest)?;
 
         let (db, root, mut program, needs_format_hint) = self.load_and_compile()?;
         // The build registers before the artifact is written, so the
@@ -259,6 +260,7 @@ impl PackArgs {
                 .collect(),
             telemetry,
             gc,
+            log,
         };
 
         let (serialized, fingerprint) = baml_artifact::encode_with_digest(
@@ -1600,6 +1602,10 @@ mod tests {
                     .unwrap(),
             )
             .unwrap(),
+            log: baml_exec::PackLog::from_manifest(
+                &"[pack.env_var_names]\nBAML_LOG = \"ACME_LOG\"".parse().unwrap(),
+            )
+            .unwrap(),
         };
         let bytes =
             baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope).unwrap();
@@ -1614,6 +1620,8 @@ mod tests {
         assert_eq!(decoded.gc.min_growth_bytes, Some(8 << 20));
         assert_eq!(decoded.gc.growth_env_var, "ACME_GC_GROWTH");
         assert_eq!(decoded.gc.min_growth_env_var, "BAML_GC_MIN_GROWTH");
+        assert_eq!(decoded.log, envelope.log);
+        assert_eq!(decoded.log.env_var(), Ok("ACME_LOG"));
     }
 
     // ── canonicalize_function_name ────────────────────────────────────

@@ -9,17 +9,16 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use baml_db::{CheckedWorld, ProjectDatabase, ProjectDiagnostics, SourceRoot};
+use baml_exec::log_output::{LogFilter, LogOutput};
 use bex_engine::{
     BexEngine, FunctionCallContext, FunctionCallContextBuilder, UserFunctionCatalog,
     UserFunctionInfo, logger::TraceLogger,
 };
 // `surface_clap_error` is defined later in this file.
-// For --log-file event sink.
 use clap::Args;
 use sys_native::CallId;
 
 use crate::{
-    log_output::{LogLevel as RunLogLevel, LogOutput},
     output::{CommandContext, RawCommand, Report, Style},
     project_load::{
         find_project_root_from, load_project_or_default, resolve_standalone_file,
@@ -275,9 +274,9 @@ pub struct RunArgs {
     /// to stderr when stdout is structured.
     #[arg(
         long = "log",
-        env = "BAML_LOG",
+        env = baml_exec::log_output::LOG_ENV,
         value_enum,
-        default_value_t = RunLogLevel::Info,
+        default_value_t = LogFilter::Info,
         ignore_case = true,
         value_name = "LEVEL",
         help = "Set the BAML log level; overrides BAML_LOG [default: info] [possible values: off, error, warn, info, debug, trace]",
@@ -286,13 +285,7 @@ pub struct RunArgs {
         hide_possible_values = true,
         help_heading = "Run output options"
     )]
-    pub log: RunLogLevel,
-
-    /// Write CLI diagnostic logs to a file.
-    ///
-    /// Unrelated to `--log`, which prints BAML `log.*` events to stdout.
-    #[arg(long, help_heading = "Run output options")]
-    pub log_file: Option<PathBuf>,
+    pub log: LogFilter,
 
     #[command(flatten)]
     pub shutdown: crate::shutdown::ShutdownArgs,
@@ -2307,8 +2300,7 @@ mod tests {
             file: None,
             list: false,
             output_format: OutputFormat::Text,
-            log: RunLogLevel::Off,
-            log_file: None,
+            log: LogFilter::Off,
             shutdown: crate::shutdown::ShutdownArgs::default(),
             include_generated: false,
             project_dir: None,

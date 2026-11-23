@@ -23,8 +23,11 @@ pub mod envelope;
 pub mod interrupt;
 pub mod json_coerce;
 pub mod launch_context;
+pub mod log_output;
 pub mod output;
+mod pack_env;
 pub mod pack_gc;
+pub mod pack_log;
 
 pub use auto_cli::{is_auto_cli_primitive, parse_cli_value};
 pub use call_context::HelperCallContext;
@@ -50,3 +53,4 @@ pub use launch_context::{
 };
 pub use output::{OutputFormat, format_value, write_output_with_context};
 pub use pack_gc::{PackGc, PackGcError};
+pub use pack_log::{PackLog, PackLogError};

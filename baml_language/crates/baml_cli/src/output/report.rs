@@ -190,8 +190,9 @@ fn jsonl_unsupported() -> ExitCode {
 mod tests {
     /// Only the dispatcher writes stdout, and text is styled only through
     /// the [`super::Style`] it hands to `Report::text` (or a stderr painter).
-    /// `log_output` is the one other stdout writer: it passes a running
-    /// program's `log.*` events through for `run`.
+    /// This covers the CLI's own output. A running program's stdout (what it
+    /// prints, its value and, under `baml run`, its `log.*` events) is
+    /// written outside this crate.
     #[test]
     fn only_the_output_module_writes_or_styles_stdout() {
         fn visit(dir: &std::path::Path, offenders: &mut Vec<String>) {
@@ -213,7 +214,6 @@ mod tests {
                 {
                     continue;
                 }
-                let may_write = name == "log_output.rs";
                 let source = std::fs::read_to_string(&path).unwrap();
                 // Unit tests may print; the command code above them may not.
                 let code = source.split("#[cfg(test)]").next().unwrap_or(&source);
@@ -232,7 +232,7 @@ mod tests {
                             || line.contains("console::Style")
                             || line.contains("accent_style()")
                             || line.contains("secondary_style()"));
-                    if writes_stdout && !may_write || styles_globally {
+                    if writes_stdout || styles_globally {
                         offenders.push(format!("{}:{}", path.display(), number + 1));
                     }
                 }

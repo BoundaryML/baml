@@ -69,4 +69,7 @@ pub struct PackEnvelope {
     /// The heap collection policy from `[pack.gc]` and the environment
     /// variables that may override it.
     pub gc: crate::PackGc,
+
+    /// The variable the `log.*` filter is read from.
+    pub log: crate::PackLog,
 }

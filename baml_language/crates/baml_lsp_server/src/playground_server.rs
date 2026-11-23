@@ -529,7 +529,7 @@ fn drain_logs_and_broadcast(
     for encoded in report.logs {
         let event = LogEventRecord {
             call: encoded.call,
-            level: encoded.metadata.level.clone(),
+            level: Some(encoded.metadata.level.as_str().to_owned()),
             source: encoded.metadata.source.clone(),
             timestamp_ms: encoded.metadata.timestamp_ms,
             message_preview: encoded.metadata.message_preview.clone(),
@@ -578,7 +578,7 @@ fn drain_logs_and_broadcast(
 
         if let Some(patch) = run_store.ingest_log_value_ref(
             encoded.boundary_id,
-            encoded.metadata.level,
+            Some(encoded.metadata.level.as_str().to_owned()),
             encoded
                 .metadata
                 .message_preview
@@ -3045,7 +3045,7 @@ mod tests {
                 trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::int(42));
             (
                 bex_project::TraceLogMetadata {
-                    level: Some("info".to_string()),
+                    level: bex_project::LogLevel::Info,
                     event_name: None,
                     source: None,
                     timestamp_ms: 21,
