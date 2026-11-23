@@ -236,7 +236,11 @@ impl Object {
                     Objects::Program => 0,
                 });
             }
-            Object::Cell(_) | Object::Variant(_) | Object::Float(_) | Object::Tombstone => {}
+            Object::Cell(_)
+            | Object::Variant(_)
+            | Object::Float(_)
+            | Object::Int(_)
+            | Object::Tombstone => {}
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => {}
         }

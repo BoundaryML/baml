@@ -1,5 +1,5 @@
 /// An arbitrary-precision signed integer, like Python's `int` or JavaScript's
-/// `BigInt`. Where `int` panics on overflow, `bigint` grows.
+/// `BigInt`. Where `int` wraps on overflow, `bigint` grows.
 ///
 /// Literals carry a trailing `n` and may be decimal (`42n`), hex (`0xFFn`),
 /// octal (`0o755n`), or binary (`0b1010n`), with `_` digit separators allowed
@@ -128,16 +128,16 @@ class Bigint {
     /// # Throws
     ///
     /// - `baml.errors.InvalidArgument` if `self` falls outside `int`'s range.
-    ///   BAML integers are 63-bit signed, so `int.min_value()` through
-    ///   `int.max_value()` is narrower than a machine 64-bit integer.
+    ///   BAML integers are 64-bit signed, from `int.min_value()` through
+    ///   `int.max_value()`.
     ///
     /// # Examples
     ///
     /// ```baml
     /// (42n).to_int()                          // 42
     /// (-7n).to_int()                          // -7
-    /// (4611686018427387903n).to_int()         // int.max_value()
-    /// (4611686018427387904n).to_int()         // throws — one past int.max_value()
+    /// (9223372036854775807n).to_int()         // int.max_value()
+    /// (9223372036854775808n).to_int()         // throws — one past int.max_value()
     /// (10n).pow(30n).to_int()                 // throws
     /// ```
     function to_int(self) -> int throws root.errors.InvalidArgument {

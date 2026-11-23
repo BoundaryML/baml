@@ -9,8 +9,8 @@
 // The core stream is xorshift32 (Marsaglia's 13/17/5 triple): a full-period
 // permutation of the non-zero 32-bit integers. Every operand is masked to a
 // non-negative value below 2^48 before it is shifted or multiplied, so
-// nothing can overflow BAML's 63-bit `int` (`+` and `*` panic on overflow,
-// `<<` wraps silently), and arithmetic and logical right shift coincide.
+// nothing wraps BAML's 64-bit `int`, and arithmetic and logical right shift
+// coincide.
 
 /// The state of a pure pseudo-random stream. Two seeds with the same `state`
 /// produce the same draws forever.

@@ -42,8 +42,8 @@ function binary_prefix_unwind(divisor: int) -> int {
         catch (e) { baml.panics.DivisionByZero => counter.value + 40 }
 }
 function binary_prefix_overflow() -> int {
-    { 4611686018427387903 + prefix_number(1) }
-        catch (e) { baml.panics.IntegerOverflow => 7 }
+    { 9223372036854775807 / prefix_number(0) }
+        catch (e) { baml.panics.DivisionByZero => 7 }
 }
 function verify_prefixes() -> string {
     if (bt_case_h() != "!hi") { return "interpolation at end" }

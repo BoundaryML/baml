@@ -64,11 +64,11 @@ function repeated_read_after_mutation(xs: int[]) -> int {
 }
 function copied_predicate_after_reassignment(index: int) -> int {
     {
-        let safe = index < 4611686018427387903
-        index = 4611686018427387903
-        if (safe) { let unused = index + 1 }
+        let safe = index != 0
+        index = 0
+        if (safe) { let unused = 100 / index }
         42
-    } catch (e) { baml.panics.IntegerOverflow => 7 }
+    } catch (e) { baml.panics.DivisionByZero => 7 }
 }
 function captured_index_changes() -> int {
     let index = 0
@@ -139,12 +139,12 @@ function handler_invalidates_facts() -> int {
         42
     } catch (e) { baml.panics.IndexOutOfBounds => 7 }
 }
-function may_overflow(value: int) -> int {
-    { let unused = value + 1; 42 }
-        catch (e) { baml.panics.IntegerOverflow => 7 }
+function may_divide_by_zero(value: int) -> int {
+    { let unused = 100 / value; 42 }
+        catch (e) { baml.panics.DivisionByZero => 7 }
 }
 function bounded_arithmetic(value: int) -> int {
-    if (value < 4611686018427387903) { let unused = value + 1 }
+    if (value != 0) { let unused = 100 / value }
     42
 }
 function loop_bound(count: int) -> int {
@@ -170,15 +170,15 @@ function verify_effects() -> bool {
         && projected_bounds(EffectsArrays { values: [] }) == 42
         && projected_bounds(EffectsArrays { values: [1] }) == 42
         && projection_write_invalidates_bounds() == 7 && repeated_read_after_mutation([1]) == 7
-        && copied_predicate_after_reassignment(0) == 7 && captured_index_changes() == 7
+        && copied_predicate_after_reassignment(5) == 7 && captured_index_changes() == 7
         && parameter_default() == 2 && parameter_default(value = 7) == 8
         && parameter_copy_before_write(3) == 3
         && mutation_invalidates_bounds() == 7 && reassignment_invalidates_bounds() == 7
         && index_reassignment_invalidates_bounds() == 7 && stale_length_is_not_a_bounds_proof() == 7
         && unguarded_join(false) == 7 && unguarded_join(true) == 42
         && handler_invalidates_facts() == 7
-        && may_overflow(4611686018427387903) == 7 && may_overflow(0) == 42
-        && bounded_arithmetic(4611686018427387903) == 42 && bounded_arithmetic(0) == 42
+        && may_divide_by_zero(0) == 7 && may_divide_by_zero(9223372036854775807) == 42
+        && bounded_arithmetic(9223372036854775807) == 42 && bounded_arithmetic(0) == 42
         && loop_bound(1000) == 1000
 }
 "#;

@@ -1200,6 +1200,7 @@ fn adopt(object: &mut Object, package_ptr: HeapPtr) {
         | Object::Tuple(_)
         | Object::Map(_)
         | Object::Float(_)
+        | Object::Int(_)
         | Object::Future(_)
         | Object::RustData(_)
         | Object::Tombstone => {}
@@ -1320,6 +1321,14 @@ fn relocate(
                         }
                         float
                     }
+                    ConstValue::Int(value) => {
+                        let int = vm.int_value(*value);
+                        // Likewise a boxed int (outside the inline range).
+                        if let Some(boxed) = int.as_object_ptr() {
+                            floats.push(boxed);
+                        }
+                        int
+                    }
                     other => other.to_value(|index| image.objects[index.raw()]),
                 });
             }
@@ -1361,6 +1370,7 @@ fn relocate(
         | Object::Tuple(_)
         | Object::Map(_)
         | Object::Float(_)
+        | Object::Int(_)
         | Object::Future(_)
         | Object::RustData(_)
         | Object::Tombstone => {}

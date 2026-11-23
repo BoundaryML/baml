@@ -56,11 +56,6 @@ const fn offset_int(chars: usize) -> i64 {
     chars as i64
 }
 
-/// Encode an optional error-span codepoint offset as a BAML value.
-fn offset_value(chars: usize) -> Value {
-    Value::try_int(offset_int(chars)).unwrap_or(Value::NULL)
-}
-
 /// Build a capture with a shared substring and precomputed codepoint offsets.
 fn group_value(vm: &mut BexVm, hay: &BexStr, span: (usize, usize), chars: (usize, usize)) -> Value {
     let text = Value::object(vm.alloc_string(hay.byte_slice(span.0..span.1)));
@@ -176,7 +171,10 @@ fn error_value(vm: &mut BexVm, pattern: &str, err: &BuildError) -> Result<Value,
     let (span_start, span_end) = match err.span {
         Some((start, end)) => {
             let chars = sys_regex::char_offsets(pattern, &[start, end]);
-            (offset_value(chars[0]), offset_value(chars[1]))
+            (
+                vm.int_value(offset_int(chars[0])),
+                vm.int_value(offset_int(chars[1])),
+            )
         }
         None => (Value::NULL, Value::NULL),
     };

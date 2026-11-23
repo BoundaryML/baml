@@ -131,11 +131,9 @@ function handler_observes_store(divisor: int) -> int {
     } catch (e) { baml.panics.DivisionByZero => result }
 }
 function constant_overflow() -> int {
-    {
-        let largest = 4611686018427387903
-        let one = 1
-        largest + one
-    } catch (e) { baml.panics.IntegerOverflow => 7 }
+    let largest = 9223372036854775807
+    let one = 1
+    if (largest + one == -9223372036854775808) { 7 } else { 0 }
 }
 function parameter_copy(value: int) -> int {
     let before = value

@@ -372,6 +372,7 @@ impl BexHeap {
 
             | Object::Type(_)
             | Object::Float(_)
+            | Object::Int(_)
             // `HostClosure` carries no heap references.
             | Object::HostClosure(_)
             | Object::Tombstone => {}

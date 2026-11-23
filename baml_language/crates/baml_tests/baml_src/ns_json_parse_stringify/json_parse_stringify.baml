@@ -82,6 +82,24 @@ test "parse_bigint_disambiguation" {
     assert.is_true(parse_is_bigint())
 }
 
+// `int` is 64-bit: an integral number up to `i64` is an `int`, past it a
+// `bigint`.
+function parse_kind(text: string) -> string {
+    match (baml.json.parse(text)) {
+        let n: int => `int ${n}`
+        let n: bigint => `bigint ${n}`
+        _ => "other"
+    }
+}
+
+test "parse_int_up_to_64_bits" {
+    assert.equal(parse_kind("4611686018427387904"), "int 4611686018427387904");
+    assert.equal(parse_kind("9223372036854775807"), "int 9223372036854775807");
+    assert.equal(parse_kind("-9223372036854775808"), "int -9223372036854775808");
+    assert.equal(parse_kind("9223372036854775808"), "bigint 9223372036854775808");
+    assert.equal(baml.json.stringify(baml.json.parse("[9223372036854775807]")), "[9223372036854775807]")
+}
+
 test "roundtrip_nested_bigint" {
     let source = "{\"foo\":123123123123123123123123}";
     assert.equal(baml.json.stringify(baml.json.parse(source)), source)

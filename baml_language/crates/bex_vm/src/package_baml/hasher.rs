@@ -66,8 +66,7 @@ impl BamlClassHashHasher_for_DefaultHasher for PackageBamlImpl {
     }
 
     fn finish(vm: &BexVm, hasher: &view::hash::DefaultHasher<'_>) -> i64 {
-        // Arithmetic shift maps all u64 hashes into BAML's signed 63-bit range.
-        state(hasher, vm).finish().cast_signed() >> 1
+        state(hasher, vm).finish().cast_signed()
     }
 }
 

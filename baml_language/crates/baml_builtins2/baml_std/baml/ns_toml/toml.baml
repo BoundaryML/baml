@@ -162,10 +162,9 @@ class Table {
     ///
     /// # Throws
     ///
-    /// - `baml.toml.ParseError` if `s` is not valid TOML; if an integer does
-    ///   not fit BAML's 63-bit `int` (TOML integers are 64-bit, so the top and
-    ///   bottom of the TOML range are unrepresentable); or if a datetime names
-    ///   a calendar date that does not exist.
+    /// - `baml.toml.ParseError` if `s` is not valid TOML, or if a datetime
+    ///   names a calendar date that does not exist. TOML integers are 64-bit,
+    ///   like BAML's `int`, so every one of them is representable.
     //baml:mut_vm
     function parse(s: string) -> Table throws ParseError {
         $rust_function
@@ -254,7 +253,7 @@ function item_from_json(json: root.json.json) -> Item throws root.json.DecodeErr
 /// TOML text that cannot be read as a `Table`.
 ///
 /// Covers both syntax errors and values TOML admits but BAML cannot hold,
-/// notably 64-bit integers outside BAML's 63-bit `int`. For a syntax error
+/// such as a datetime naming a date that does not exist. For a syntax error
 /// `message` is the parser's own diagnostic, locating the offending span; for
 /// an unrepresentable value it names the limit instead.
 class ParseError {

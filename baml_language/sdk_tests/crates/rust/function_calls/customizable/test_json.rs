@@ -3,8 +3,8 @@
 //! `sdkgen_rust` projects the recursive stdlib alias onto
 //! `baml_bridge::Json` (`serde_json::Value`, the analogue of Go's `any` and
 //! Python's native values), so every entry point in `go_json_tests` that
-//! touches json alone is emitted. An integer wider than BAML's 63-bit `int`
-//! crosses as a BAML `bigint`, so every `i64`/`u64` round-trips.
+//! touches json alone is emitted. Every `i64` crosses as a BAML `int`, and a
+//! `u64` past `i64::MAX` as a BAML `bigint`, so every `i64`/`u64` round-trips.
 //!
 //! Inbound maps/lists from the Rust bridge carry no element-type annotation
 //! on the wire; the engine must re-annotate them with the `baml.json.json`
@@ -26,7 +26,7 @@ fn canonical_json_fixture() -> Json {
         "null": null,
         "bool": true,
         "int": 42,
-        "int_bounds": [4_611_686_018_427_387_903_i64, -4_611_686_018_427_387_904_i64],
+        "int_bounds": [4_611_686_018_427_387_904_i64, -4_611_686_018_427_387_905_i64],
         "wide_ints": [i64::MAX, i64::MIN, u64::MAX],
         "float": 1.5,
         "integral_float": 2.0,

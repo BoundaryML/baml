@@ -92,14 +92,29 @@ fn push_num_lit_error(
 /// Lower the raw text of an `INTEGER_LITERAL` token (`42`, `1_000`, `0xFF`,
 /// `0o755`, `0b1010`) into its value, emitting diagnostics for invalid
 /// literals and returning `0` as the placeholder (compilation already
-/// failed). Signs are handled by callers; the VM's i63 `int` range is
-/// enforced later in type inference.
+/// failed). Signs are handled by callers.
 pub fn lower_int_literal(
     text: &str,
     token_range: text_size::TextRange,
     diags: &mut Vec<LoweringDiagnostic>,
 ) -> i64 {
     match baml_base::num_lit::parse_int_literal(text) {
+        Ok(v) => v,
+        Err(e) => {
+            push_num_lit_error(e, token_range, diags);
+            0
+        }
+    }
+}
+
+/// [`lower_int_literal`] for a literal written directly under a unary minus:
+/// its negative value, which reaches `i64::MIN`.
+pub fn lower_negated_int_literal(
+    text: &str,
+    token_range: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> i64 {
+    match baml_base::num_lit::parse_negated_int_literal(text) {
         Ok(v) => v,
         Err(e) => {
             push_num_lit_error(e, token_range, diags);

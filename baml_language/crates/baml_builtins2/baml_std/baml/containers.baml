@@ -1014,10 +1014,9 @@ interface Summable {
     /// Adds every element left to right, starting from the additive identity,
     /// so an empty collection sums to that identity.
     ///
-    /// `throws never` does not make summation total: an implementation over a
-    /// bounded integer type overflows the same way repeated `+` does, and
-    /// overflow is a panic rather than an error. See each implementation for
-    /// its range behaviour.
+    /// An implementation over a bounded integer type overflows the same way
+    /// repeated `+` does (`int` wraps). See each implementation for its range
+    /// behaviour.
     function sum(self) -> Self.Sum throws never;
 }
 
@@ -1027,15 +1026,8 @@ implements Summable for int[] {
   /// Adds every element left to right starting from `0`, so an empty array
   /// sums to `0`.
   ///
-  /// The running total is range-checked at every step, exactly as repeated `+`
-  /// is, so a partial sum that leaves the `int` range panics even when the
-  /// final total would have landed back inside it. Fold with a `bigint`
-  /// accumulator, or map to `float`, when the intermediate values can grow past
-  /// `int`.
-  ///
-  /// # Panics
-  /// - `baml.panics.IntegerOverflow` when a running total leaves the `int`
-  ///   range.
+  /// The total wraps exactly as repeated `+` does. Fold with a `bigint`
+  /// accumulator, or map to `float`, when the values can grow past `int`.
   ///
   /// # Examples
   /// ```baml
@@ -1146,12 +1138,8 @@ implements FloatStats for float[] {
 // only public surface; these are the thin native shims they delegate to.
 
 /// (internal) Native backing for `int[].sum()`; call that instead. Adds every
-/// element left to right starting from `0`, range-checking the running total at
-/// each step. The empty array sums to `0`.
-///
-/// # Panics
-/// - `baml.panics.IntegerOverflow` when a running total leaves the `int` range.
-//baml:fallible
+/// element left to right starting from `0`, wrapping like `+`. The empty array
+/// sums to `0`.
 function _sum_int(values: int[]) -> int throws never {
     $rust_function
 }

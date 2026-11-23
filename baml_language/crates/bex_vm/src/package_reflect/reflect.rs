@@ -2130,7 +2130,7 @@ fn prepare_call_any_argument(vm: &mut BexVm, value: Value, expected: &RealizedTy
         }
     }
 
-    if let bex_vm_types::ValueKind::Int(number) = value.kind()
+    if let Some(number) = value.as_int()
         && is_float_slot(expected)
     {
         let widened = number as f64;

@@ -105,18 +105,8 @@ public sealed class BamlValue : IEquatable<BamlValue>
     public static BamlValue Bool(bool value) =>
         new(BamlGeneratedValue.CreateBool(value, "$"));
 
-    public static BamlValue Int(long value)
-    {
-        if (value is < BamlInteger.Minimum or > BamlInteger.Maximum)
-        {
-            throw Mapping(
-                typeof(long),
-                "$",
-                $"The integer is outside [{BamlInteger.Minimum}, {BamlInteger.Maximum}].");
-        }
-
-        return new BamlValue(BamlGeneratedValue.CreateInt(value, "$"));
-    }
+    public static BamlValue Int(long value) =>
+        new(BamlGeneratedValue.CreateInt(value, "$"));
 
     public static BamlValue Float(double value)
     {

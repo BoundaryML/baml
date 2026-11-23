@@ -30,17 +30,17 @@ function cf_partial(x: int) -> int throws CfParse {
     n
 }
 
-// `+` panics on overflow but throws nothing: the channel is empty, yet
+// `/` panics on a zero divisor but throws nothing: the channel is empty, yet
 // the panic arm types by its claim.
 function cf_shout(x: int) -> string throws never {
-    let y = x + 1;
+    let y = 100 / x;
     if (y > 0) { "positive" } else { "non-positive" }
 }
 
 function cf_panic_catch(x: int) -> string throws never {
     let r = cf_shout(x) catch (e) {
      // ^ string
-        let err: baml.panics.IntegerOverflow => err.message
+        let err: baml.panics.DivisionByZero => string.from(err.dividend)
     };
     r
 }

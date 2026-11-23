@@ -29,7 +29,7 @@ use std::{
 };
 
 use baml_sdkgen_types::ProgramDescriptor;
-use baml_type::{Int63, MediaKind, Name, TypeName};
+use baml_type::{MediaKind, Name, TypeName};
 use bridge_cffi::handle_cffi;
 use bridge_ctypes::{
     CffiHandleTableEntry, HANDLE_TABLE, HostKey, TableKey, WireHandle,
@@ -652,9 +652,7 @@ impl<'py> PyValue<'_, 'py> {
 
     /// Python's `int`: the VM's integer when it fits, a `bigint` beyond.
     fn int_scalar(&self) -> PyResult<Scalar> {
-        if let Ok(int) = self.obj.extract::<i64>()
-            && let Some(int) = Int63::new(int)
-        {
+        if let Ok(int) = self.obj.extract::<i64>() {
             return Ok(Scalar::Int(int));
         }
         // `int.__format__` itself, not the object's: a subclass must not get

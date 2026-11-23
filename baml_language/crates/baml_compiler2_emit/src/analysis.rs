@@ -1627,7 +1627,7 @@ fn predecessors_cover_block(
     //   complete for it if the entry block is also a loop header.
     // - a handler block, when the VM unwinds into it. A call's
     //   `unwind` target is a `successors` edge, but a same-frame panic — an
-    //   overflowing `add_int`, a division by zero — reaches the handler from
+    //   division by zero or an out-of-bounds index — reaches the handler from
     //   the middle of a block, with no edge at all. `compute_rpo` has to seed
     //   those handlers separately for exactly this reason, and `collect_def_use`
     //   records the VM's write of the error local there as an implicit use.

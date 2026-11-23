@@ -74,7 +74,7 @@ use indexmap::IndexMap;
 
 use crate::{
     BexVm,
-    errors::{VmBamlError, VmInternalError, VmRustFnError},
+    errors::{VmInternalError, VmRustFnError},
 };
 
 /// Result type for native functions.

@@ -310,8 +310,8 @@ test "path_reports_each_kind_of_bad_selector" {
     assert.equal(path_result(".list[x]"), "PathError: bad bracket token '[x]' | .list[x]");
     assert.equal(path_result(".list[ 1]"), "PathError: bad bracket token '[ 1]' | .list[ 1]");
     assert.equal(
-        path_result(".list[4611686018427387904]"),
-        "PathError: bad bracket token '[4611686018427387904]' | .list[4611686018427387904]",
+        path_result(".list[9223372036854775808]"),
+        "PathError: bad bracket token '[9223372036854775808]' | .list[9223372036854775808]",
     );
     assert.equal(path_result(".list[0]x"), "PathError: expected '.' or '[' at offset 8 | .list[0]x");
     assert.equal(

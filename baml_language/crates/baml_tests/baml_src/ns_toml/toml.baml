@@ -25,6 +25,12 @@ test "toml_parse_scalars" {
     assert.equal(t.to_json(), { "count": 3, "name": "hi", "ok": true, "ratio": 1.5 })
 }
 
+// TOML integers are 64-bit, like `int`: both ends of the range parse.
+test "toml_parse_64_bit_integers" {
+    let t = baml.toml.Table.parse("max = 9223372036854775807\nmin = -9223372036854775808\n");
+    assert.equal(t.to_json(), { "max": int.max_value(), "min": int.min_value() })
+}
+
 // The offset-datetime arm — allocates a `baml.time.ZonedDateTime` — plus its
 // `to_json` reached through the union-valued map projection.
 test "toml_parse_datetime" {

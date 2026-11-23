@@ -52,9 +52,7 @@ impl io::IoClassRandomSystemRandom for WasmRandom {
     ) -> SysOpOutput<i64> {
         let mut buf = [0u8; 8];
         match getrandom_03::fill(&mut buf) {
-            // Arithmetic shift right by one maps the uniform 64-bit draw onto
-            // the BAML i63 range `[INT_MIN, INT_MAX]`.
-            Ok(()) => SysOpOutput::ok(i64::from_le_bytes(buf) >> 1),
+            Ok(()) => SysOpOutput::ok(i64::from_le_bytes(buf)),
             Err(e) => SysOpOutput::err(VmPanic::HostUnavailable {
                 resource: "randomness".to_string(),
                 message: format!("SystemRandom.random_int: system entropy unavailable: {e}"),

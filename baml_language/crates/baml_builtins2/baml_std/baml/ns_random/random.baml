@@ -15,18 +15,12 @@ interface Rng {
     ///   (for example, if the underlying system random number generator is unavailable)
     function random(self, bytes: int) -> uint8array throws never;
 
-    /// Returns a uniformly random `int` over the full `[int.min_value(),
-    /// int.max_value()]` range.
-    ///
-    /// BAML `int` is 63-bit, so this discards a single bit of the 64 drawn (the
-    /// top bit of the first byte). The remaining 63 bits are uniform, and so is
-    /// the value they spell.
+    /// Returns a uniformly random `int`: every value from `int.min_value()`
+    /// to `int.max_value()` is equally likely. `int.random` and `float.random`
+    /// map these draws onto their ranges.
     function random_int(self) -> int throws never {
         let bytes = self.random(8);
-        // `<<` truncates to the 63-bit width, so the first byte's top bit falls
-        // off the end and its bit 6 lands on bit 62, the sign. No branch on
-        // the sign is needed: the 63 surviving bits already tile the whole
-        // signed range, one draw per value.
+        // Big-endian: the first byte lands on the sign bit.
         (bytes[0] << 56)
             | (bytes[1] << 48)
             | (bytes[2] << 40)

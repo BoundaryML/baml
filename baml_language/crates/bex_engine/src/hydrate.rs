@@ -420,13 +420,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
     fn value(&mut self, value: &BexExternalValue) -> Result<Value, Refusal> {
         Ok(match value {
             BexExternalValue::Null => Value::NULL,
-            BexExternalValue::Int(int) => Value::try_int(*int).ok_or_else(|| {
-                self.malformed(format!(
-                    "integer {int} is outside the BAML integer range [{}, {}]",
-                    Value::INT_MIN,
-                    Value::INT_MAX
-                ))
-            })?,
+            BexExternalValue::Int(int) => self.holder.holder_mut().tlab_mut().int_value(*int),
             BexExternalValue::Bigint(big) => {
                 let bits = big.bits();
                 if bits > baml_type::MAX_BIGINT_BITS {

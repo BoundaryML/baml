@@ -616,16 +616,8 @@ fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
         BamlType::RustType => {
             format!("bex_vm_types::Value::object(vm.alloc_rust_data(self.{field_name}))")
         }
-        // `to_value` has no error channel (`fn to_value(self, vm) -> Value`),
-        // so an out-of-i63 native i64 reaches this path only when caller-side
-        // Rust constructed a struct field that violates the i63 BAML
-        // contract. Fail loudly in *both* debug and release rather than
-        // truncating silently via `Value::int`'s `debug_assert`.
-        BamlType::Int => format!(
-            "bex_vm_types::Value::try_int(self.{field_name}).unwrap_or_else(|| panic!(\
-                \"`{field_name}: int` is outside BAML int range [{{}}, {{}}], got {{}}\", \
-                bex_vm_types::Value::INT_MIN, bex_vm_types::Value::INT_MAX, self.{field_name}))"
-        ),
+        // Inline when it fits, boxed otherwise.
+        BamlType::Int => format!("vm.int_value(self.{field_name})"),
         // Bigints are always heap-allocated, and allocation is fallible (the
         // value may exceed `MAX_BIGINT_BITS`). `to_value` has no error channel,
         // so — like the `int` range case above — fail loudly rather than
@@ -1196,8 +1188,19 @@ fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &N
 
     let fallible = is_fallible(b);
 
+    // An int result may need a heap box, which borrows the VM mutably; the
+    // closure returns the raw int so its container guards are released first.
+    let int_return = int_return_kind(&b.return_type);
+
     // Use a closure returning NativeFunctionResult so `?` operators work inside.
-    out.push_str("        let __result: NativeFunctionResult = (|| {\n");
+    match int_return {
+        Some(IntReturn::Int) => out
+            .push_str("        let __result: Result<i64, crate::errors::VmRustFnError> = (|| {\n"),
+        Some(IntReturn::Optional) => out.push_str(
+            "        let __result: Result<Option<i64>, crate::errors::VmRustFnError> = (|| {\n",
+        ),
+        None => out.push_str("        let __result: NativeFunctionResult = (|| {\n"),
+    }
 
     emit_arg_extractions_indented(out, b, "            ", needs_owned, arraymap_needs_owned);
 
@@ -1228,9 +1231,22 @@ fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &N
         }
     }
 
-    emit_result_conversion_ok(out, b, "            ");
+    if int_return.is_some() {
+        out.push_str("            Ok(result)\n");
+    } else {
+        emit_result_conversion_ok(out, b, "            ");
+    }
 
     out.push_str("        })();\n");
+    match int_return {
+        Some(IntReturn::Int) => {
+            out.push_str("        let __result = __result.map(|r| vm.int_value(r));\n");
+        }
+        Some(IntReturn::Optional) => out.push_str(
+            "        let __result = __result.map(|r| match r { Some(v) => vm.int_value(v), None => Value::NULL });\n",
+        ),
+        None => {}
+    }
     out.push_str("        match __result {\n");
     out.push_str("            Ok(v) => NativeCallResult::Done(v),\n");
     out.push_str("            Err(e) => NativeCallResult::Error(e),\n");
@@ -1879,6 +1895,23 @@ fn call_arg_needs_ref(ty: &BamlType) -> bool {
 // Result conversion
 // ============================================================================
 
+/// How a native returns an `int`, when it does.
+#[derive(Clone, Copy)]
+enum IntReturn {
+    Int,
+    Optional,
+}
+
+fn int_return_kind(ty: &BamlType) -> Option<IntReturn> {
+    match ty {
+        BamlType::Int => Some(IntReturn::Int),
+        BamlType::Optional(inner) if matches!(inner.as_ref(), BamlType::Int) => {
+            Some(IntReturn::Optional)
+        }
+        _ => None,
+    }
+}
+
 /// Emit `Ok(...)` return for the inner closure body with the given indentation.
 fn emit_result_conversion_ok(out: &mut String, b: &NativeBuiltin, indent: &str) {
     if b.receiver
@@ -2075,15 +2108,8 @@ fn result_conversion_expr(name: &str, ty: &BamlType, generics: &[String]) -> Str
     match ty {
         BamlType::String => format!("Value::object(vm.alloc_string({name}))"),
         BamlType::Uint8Array => format!("Value::object(vm.alloc_uint8array({name}))"),
-        // Surface out-of-i63 native returns as a normal VM error instead
-        // of silently truncating via the bare `Value::int` constructor's
-        // `debug_assert` (which is a no-op in release).
-        BamlType::Int => format!(
-            "Value::try_int({name}).ok_or_else(|| VmBamlError::InvalidArgument {{ \
-                message: format!(\"native int return value {{}} is outside the BAML int range [{{}}, {{}}]\", \
-                    {name}, Value::INT_MIN, Value::INT_MAX) \
-            }})?"
-        ),
+        // Inline when it fits, boxed otherwise.
+        BamlType::Int => format!("vm.int_value({name})"),
         BamlType::Bigint => format!("vm.try_alloc_bigint({name})?"),
         BamlType::Float => format!("vm.float_value({name})"),
         BamlType::Bool => format!("Value::bool({name})"),

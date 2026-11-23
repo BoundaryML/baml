@@ -149,7 +149,17 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// `LoadVarField`, `LoadVarFieldLocal`, `JumpIfLocalsCmp` and
 /// `JumpIfLocalConstCmp`. Versions 32 and 33 are skipped: unreleased builds
 /// wrote other layouts under them.
-pub const FORMAT_VERSION: u32 = 34;
+///
+/// Version 35: `int` is 64-bit. An int constant may lie outside the 63-bit
+/// inline range of a runtime `Value`; an older runtime would truncate it.
+///
+/// Version 36: `int` arithmetic wraps instead of throwing on overflow, so
+/// folded constants and compiled bodies change meaning.
+///
+/// Version 37: `Rng.random_int` draws all 64 bits, and the stdlib's
+/// `int.random` and `float.random` read draws that way; a stdlib compiled
+/// earlier would misread them.
+pub const FORMAT_VERSION: u32 = 37;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

@@ -5,8 +5,8 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0167
 
   ⚠ this condition is always truthy: a value of type `true` can never be falsy
-     ╭─[operators.baml:200:20]
- 200 │     assert.is_true(true || false)
+     ╭─[operators.baml:205:20]
+ 205 │     assert.is_true(true || false)
      ·                    ────    ──┬──
      ·                      │       ╰── this expression is unreachable
      ╰────
@@ -14,8 +14,8 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0167
 
   ⚠ this condition is always truthy: a value of type `true` can never be falsy
-     ╭─[operators.baml:213:20]
- 213 │     assert.is_true(true || ops_ret_bool())
+     ╭─[operators.baml:218:20]
+ 218 │     assert.is_true(true || ops_ret_bool())
      ·                    ────    ───────┬──────
      ·                      │            ╰── this expression is unreachable
      ╰────

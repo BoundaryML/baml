@@ -474,9 +474,9 @@ test "catch_division_by_zero" {
     assert.equal(catch_division_by_zero_fn(), -1)
 }
 
-// Integer overflow is a catchable panic, parallel to division-by-zero. The
-// helpers take runtime args so the arithmetic isn't constant-folded away — it
-// runs through the VM's checked AddInt/SubInt/MulInt opcodes.
+// Integer overflow wraps instead of panicking, so a protected expression that
+// overflows completes normally. The helpers take runtime args so the
+// arithmetic isn't constant-folded away.
 function s5_add_overflow(x: int) -> int {
     x + 1
 }
@@ -493,56 +493,26 @@ function s5_neg_overflow(x: int) -> int {
     0 - x
 }
 
-function catch_integer_overflow_add_fn() -> int {
-    s5_add_overflow(baml.Int.max_value()) catch (e) {
-        baml.panics.IntegerOverflow => -1
-    }
+test "integer_overflow_wraps_without_panicking" {
+    assert.equal(s5_add_overflow(baml.Int.max_value()), baml.Int.min_value());
+    assert.equal(s5_sub_overflow(baml.Int.min_value()), baml.Int.max_value());
+    assert.equal(s5_mul_overflow(baml.Int.max_value()), -2);
+    assert.equal(s5_neg_overflow(baml.Int.min_value()), baml.Int.min_value())
 }
 
-test "catch_integer_overflow_add" {
-    assert.equal(catch_integer_overflow_add_fn(), -1)
+// A division-by-zero panic is a member of the `baml.panics.Panic` union.
+function s5_divide(x: int, y: int) -> int {
+    x / y
 }
 
-function catch_integer_overflow_sub_fn() -> int {
-    s5_sub_overflow(baml.Int.min_value()) catch (e) {
-        baml.panics.IntegerOverflow => -1
-    }
-}
-
-test "catch_integer_overflow_sub" {
-    assert.equal(catch_integer_overflow_sub_fn(), -1)
-}
-
-function catch_integer_overflow_mul_fn() -> int {
-    s5_mul_overflow(baml.Int.max_value()) catch (e) {
-        baml.panics.IntegerOverflow => -1
-    }
-}
-
-test "catch_integer_overflow_mul" {
-    assert.equal(catch_integer_overflow_mul_fn(), -1)
-}
-
-// `-int.min_value()` overflows (its magnitude is INT_MAX + 1).
-function catch_integer_overflow_neg_fn() -> int {
-    s5_neg_overflow(baml.Int.min_value()) catch (e) {
-        baml.panics.IntegerOverflow => -1
-    }
-}
-
-test "catch_integer_overflow_neg" {
-    assert.equal(catch_integer_overflow_neg_fn(), -1)
-}
-
-// An overflowing panic is a member of the `baml.panics.Panic` union.
-function catch_integer_overflow_via_panic_union_fn() -> int {
-    s5_add_overflow(baml.Int.max_value()) catch (e) {
+function catch_division_by_zero_via_panic_union_fn() -> int {
+    s5_divide(baml.Int.max_value(), 0) catch (e) {
         baml.panics.Panic => -2
     }
 }
 
-test "catch_integer_overflow_via_panic_union" {
-    assert.equal(catch_integer_overflow_via_panic_union_fn(), -2)
+test "catch_division_by_zero_via_panic_union" {
+    assert.equal(catch_division_by_zero_via_panic_union_fn(), -2)
 }
 
 // A negative shift count produces a catchable NegativeBitShift. Runtime args
@@ -625,31 +595,6 @@ function named_panic_binding_division_by_zero_field_fn() -> int | bigint {
 
 test "named_panic_binding_division_by_zero_field" {
     assert.equal(named_panic_binding_division_by_zero_field_fn(), 10)
-}
-
-// String-typed so the protected value and the `err.message` handler unify to
-// one type. `x + 1` overflows and throws before the `if` is reached; `y` is
-// used so the throwing add isn't dead-code-eliminated.
-function s5b_overflow_to_string(x: int) -> string {
-    let y = x + 1;
-    if (y > 0) {
-        "positive"
-    } else {
-        "non-positive"
-    }
-}
-
-function named_panic_binding_integer_overflow_message_fn() -> string {
-    s5b_overflow_to_string(baml.Int.max_value()) catch (e) {
-        let err: baml.panics.IntegerOverflow => err.message
-    }
-}
-
-test "named_panic_binding_integer_overflow_message" {
-    assert.equal(
-        named_panic_binding_integer_overflow_message_fn(),
-        "4611686018427387903 + 1 overflows int",
-    )
 }
 
 function s5b_oob_2() -> int {

@@ -28,18 +28,13 @@ test "int_abs_zero" {
     assert.equal((0).abs(), 0)
 }
 
-// int.min_value() is -2^62; its abs() is 2^62 which exceeds int.max_value().
-test "int_abs_min_value_panics" {
-    {
-        int.min_value().abs();
-        baml.sys.panic("expected int.min_value().abs() to panic")
-    } catch (e) {
-        baml.panics.IntegerOverflow => null
-    }
+// int.min_value() is -2^63; its abs(), 2^63, wraps back to int.min_value().
+test "int_abs_min_value_wraps" {
+    assert.equal(int.min_value().abs(), int.min_value())
 }
 
 test "int_abs_near_min_value_succeeds" {
-    assert.equal((-4611686018427387903).abs(), 4611686018427387903)
+    assert.equal((-9223372036854775807).abs(), 9223372036854775807)
 }
 
 // ─── min / max ────────────────────────────────────────────────────────────────
@@ -96,12 +91,12 @@ test "int_clamp_at_max_boundary" {
 
 // ─── max_value / min_value ────────────────────────────────────────────────────
 
-test "int_max_value_returns_i63_max" {
-    assert.equal(int.max_value(), 4611686018427387903)
+test "int_max_value_returns_i64_max" {
+    assert.equal(int.max_value(), 9223372036854775807)
 }
 
-test "int_min_value_returns_i63_min" {
-    assert.equal(int.min_value(), -4611686018427387904)
+test "int_min_value_returns_i64_min" {
+    assert.equal(int.min_value(), -9223372036854775808)
 }
 
 test "int_max_min_inverse" {
@@ -127,11 +122,11 @@ test "int_parse_explicit_plus_sign" {
 }
 
 test "int_parse_max_value" {
-    assert.equal(int.parse("4611686018427387903"), 4611686018427387903)
+    assert.equal(int.parse("9223372036854775807"), 9223372036854775807)
 }
 
 test "int_parse_min_value" {
-    assert.equal(int.parse("-4611686018427387904"), -4611686018427387904)
+    assert.equal(int.parse("-9223372036854775808"), -9223372036854775808)
 }
 
 test "int_parse_leading_zeros_ok" {
@@ -344,13 +339,17 @@ class FixedBytesRng {
     }
 }
 
-test "random_int_maps_all_i63_bits" {
+// `random_int` reads the 8 drawn bytes as one big-endian int, so it spans
+// every int.
+test "random_int_maps_64_bits" {
     let all_ones = FixedBytesRng { draw: b"\xff\xff\xff\xff\xff\xff\xff\xff" };
     let all_zeros = FixedBytesRng { draw: b"\x00\x00\x00\x00\x00\x00\x00\x00" };
-    let sign_only = FixedBytesRng { draw: b"\x40\x00\x00\x00\x00\x00\x00\x00" };
-    let max = FixedBytesRng { draw: b"\x3f\xff\xff\xff\xff\xff\xff\xff" };
+    let low_bit = FixedBytesRng { draw: b"\x00\x00\x00\x00\x00\x00\x00\x01" };
+    let sign_only = FixedBytesRng { draw: b"\x80\x00\x00\x00\x00\x00\x00\x00" };
+    let max = FixedBytesRng { draw: b"\x7f\xff\xff\xff\xff\xff\xff\xff" };
     assert.equal(all_ones.random_int(), -1);
     assert.equal(all_zeros.random_int(), 0);
+    assert.equal(low_bit.random_int(), 1);
     assert.equal(sign_only.random_int(), int.min_value());
     assert.equal(max.random_int(), int.max_value())
 }
@@ -367,11 +366,12 @@ class RejectionThenAcceptedRng {
         function random_int(self) -> int {
             self.calls += 1;
             if (self.calls == 1) {
-                // The maximum draw is in the three-value rejection tail for
-                // [0, 5).
+                // 2^64 draws leave a one-value rejection tail for [0, 5):
+                // the maximum draw.
                 int.max_value()
             } else {
-                // This maps to 4 after rebiasing from the signed i63 domain.
+                // This maps to 4 after rebiasing from the signed 64-bit draw
+                // domain.
                 int.min_value() + 4
             }
         }
@@ -427,7 +427,7 @@ test "int_isqrt_large" {
 }
 
 test "int_isqrt_max_value" {
-    assert.equal(int.max_value().isqrt(), 2147483647)
+    assert.equal(int.max_value().isqrt(), 3037000499)
 }
 
 test "int_isqrt_negative_throws" {
@@ -497,17 +497,17 @@ test "int_pow_negative_one_huge_even_exp" {
 
 // Overflow: (10)^100 → saturates to int.max_value().
 test "int_pow_overflow_positive_saturates" {
-    assert.equal((10).pow(100), 4611686018427387903)
+    assert.equal((10).pow(100), 9223372036854775807)
 }
 
 // Overflow: (-10)^99 → saturates to int.min_value().
 test "int_pow_overflow_negative_odd_saturates_to_min" {
-    assert.equal((-10).pow(99), -4611686018427387904)
+    assert.equal((-10).pow(99), -9223372036854775808)
 }
 
 // Overflow: (-10)^100 → saturates to int.max_value().
 test "int_pow_overflow_negative_even_saturates_to_max" {
-    assert.equal((-10).pow(100), 4611686018427387903)
+    assert.equal((-10).pow(100), 9223372036854775807)
 }
 
 // ─── ilog ─────────────────────────────────────────────────────────────────────
@@ -659,11 +659,9 @@ test "int_count_zeros_plus_count_ones_equals_64" {
 
 // ─── Operator overflow & boundary arithmetic ────────────────────────────────
 //
-// `+`, `-`, `*` and unary `-` throw a catchable `baml.panics.IntegerOverflow`
-// when the result leaves the i63 range (catch tests live in ns_exceptions).
-// Valid arithmetic right up to the boundary must NOT spuriously throw. Helpers
-// take runtime args so the ops aren't constant-folded — they run through the
-// VM's checked AddInt/SubInt/MulInt opcodes.
+// `+`, `-`, `*`, `/` and unary `-` wrap (two's complement) when the result
+// leaves the 64-bit range. Helpers take runtime args so the ops aren't
+// constant-folded — they run through the VM's AddInt/SubInt/MulInt opcodes.
 function int_add_(a: int, b: int) -> int {
     a + b
 }
@@ -692,6 +690,135 @@ test "int_mul_max_by_one_no_overflow" {
 
 test "int_mul_min_by_one_no_overflow" {
     assert.equal(int_mul_(int.min_value(), 1), int.min_value())
+}
+
+// ─── 64-bit edges ────────────────────────────────────────────────────────────
+//
+// `int` is signed 64-bit. Values of magnitude 2^62 and above live in a heap box
+// in the VM, so these also run arithmetic, comparison, equality, hashing,
+// sorting and map keys over boxed ints.
+function int_div_(a: int, b: int) -> int {
+    a / b
+}
+
+function int_rem_(a: int, b: int) -> int {
+    a % b
+}
+
+function int_neg_(a: int) -> int {
+    -a
+}
+
+function int_shl_(a: int, b: int) -> int {
+    a << b
+}
+
+function int_shr_(a: int, b: int) -> int {
+    a >> b
+}
+
+test "int_max_plus_one_wraps" {
+    assert.equal(int_add_(int.max_value(), 1), int.min_value());
+    assert.equal(int.max_value() + 1, int.min_value())
+}
+
+test "int_min_minus_one_wraps" {
+    assert.equal(int_sub_(int.min_value(), 1), int.max_value());
+    assert.equal(int.min_value() - 1, int.max_value())
+}
+
+test "int_mul_wraps" {
+    assert.equal(int_mul_(int.min_value(), -1), int.min_value());
+    assert.equal(int_mul_(int.max_value(), 2), -2);
+    assert.equal(int_mul_(4611686018427387904, 4), 0);
+    assert.equal(int.max_value() * 2, -2)
+}
+
+test "int_min_div_minus_one_is_min" {
+    assert.equal(int_div_(int.min_value(), -1), int.min_value());
+    assert.equal(int.min_value() / -1, int.min_value())
+}
+
+test "int_min_rem_minus_one_is_zero" {
+    assert.equal(int_rem_(int.min_value(), -1), 0)
+}
+
+test "int_neg_min_is_min" {
+    assert.equal(int_neg_(int.min_value()), int.min_value());
+    assert.equal(-int.min_value(), int.min_value())
+}
+
+test "int_bitnot_min_is_max" {
+    assert.equal(~int.min_value(), int.max_value());
+    assert.equal(~int_add_(int.min_value(), 0), int.max_value())
+}
+
+test "int_division_by_zero_still_panics" {
+    {
+        int_div_(int.max_value(), 0);
+        baml.sys.panic("expected division by zero to panic")
+    } catch (e) {
+        baml.panics.DivisionByZero => null
+    }
+}
+
+test "int_sum_wraps" {
+    assert.equal([int.max_value(), 1].sum(), int.min_value())
+}
+
+test "int_shifts_at_64_bits" {
+    assert.equal(int_shl_(1, 62), 4611686018427387904);
+    assert.equal(int_shl_(1, 63), int.min_value());
+    assert.equal(int_shl_(1, 64), 0);
+    assert.equal(int_shr_(int.min_value(), 63), -1);
+    assert.equal(int_shr_(int.min_value(), 64), -1);
+    assert.equal(int_shr_(int.max_value(), 64), 0);
+    assert.equal(int_shr_(int.max_value(), 62), 1)
+}
+
+test "int_min_literal" {
+    assert.equal(-9223372036854775808, int.min_value());
+    assert.equal(int_add_(-9223372036854775808, 1), -9223372036854775807)
+}
+
+test "int_arithmetic_across_the_inline_boundary" {
+    let below = 4611686018427387903;
+    let above = int_add_(below, 1);
+    assert.equal(above, 4611686018427387904);
+    assert.equal(int_sub_(above, 1), below);
+    assert.equal(int_mul_(above, -2), int.min_value());
+    assert.equal(int_neg_(above), -4611686018427387904);
+    assert.equal(int_div_(int.max_value(), 2), below);
+    assert.equal(int_rem_(int.max_value(), above), below)
+}
+
+test "int_boxed_values_compare_and_hash_by_value" {
+    let a = int_add_(int.max_value() - 10, 5);
+    let b = int_sub_(int.max_value(), 5);
+    assert.is_true(a == b);
+    assert.is_true(!(a != b));
+    assert.is_true(a < int.max_value());
+    assert.is_true(int.min_value() < a);
+    assert.is_true(int_add_(a, 1) > b);
+    let first = baml.hash.DefaultHasher.new();
+    a.hash(first);
+    let second = baml.hash.DefaultHasher.new();
+    b.hash(second);
+    assert.equal(first.finish(), second.finish())
+}
+
+test "int_boxed_values_as_map_keys" {
+    let m: map<int, string> = { 9223372036854775807: "max", -9223372036854775808: "min" };
+    assert.equal(m[int_sub_(int.max_value(), 0)], "max");
+    assert.equal(m[int_add_(int.min_value(), 0)], "min");
+    m[int_add_(4611686018427387903, 1)] = "boundary";
+    assert.equal(m[4611686018427387904], "boundary");
+    assert.equal(m.keys(), [int.max_value(), int.min_value(), 4611686018427387904])
+}
+
+test "int_boxed_values_sort" {
+    let xs = [int.max_value(), 1, int.min_value(), int_add_(4611686018427387903, 1), -1];
+    assert.equal(xs.sort(), [int.min_value(), -1, 1, 4611686018427387904, int.max_value()])
 }
 
 // ─── regression: bare-literal method receiver (B-614) ─────────────────────────
@@ -771,10 +898,9 @@ test "int_underscore_after_prefix" {
     assert.equal(0x_F, 15)
 }
 
-// int.max_value() is 2^62 - 1: the full positive i63 range is reachable in
-// hex.
+// int.max_value() is 2^63 - 1: the full positive range is reachable in hex.
 test "int_hex_max_value" {
-    assert.equal(int.max_value(), 0x3FFF_FFFF_FFFF_FFFF)
+    assert.equal(int.max_value(), 0x7FFF_FFFF_FFFF_FFFF)
 }
 
 // Bitwise ops read naturally with hex/binary operands (previously the bit

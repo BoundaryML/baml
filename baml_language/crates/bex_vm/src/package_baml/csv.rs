@@ -17,7 +17,7 @@
 // - `struct_excessive_bools`: the option structs mirror `ReaderOptions` /
 //   `WriterOptions`, whose independent boolean knobs are fixed by BEP-060.
 // - `cast_possible_wrap`: every `usize as i64` here is a cell/record/byte
-//   count bounded far below 2^62 (BAML int range checks would fail first).
+//   count bounded far below 2^63.
 // - `result_large_err`: error values are cold-path BAML exception payloads;
 //   boxing them would only add noise on the hot Ok path.
 // - `used_underscore_items`: the codegen names `$rust_type` accessors and
@@ -126,8 +126,8 @@ impl ErrInfo {
     }
 }
 
-fn opt_int_value(o: Option<i64>) -> Value {
-    o.and_then(Value::try_int).unwrap_or(Value::NULL)
+fn opt_int_value(vm: &mut BexVm, o: Option<i64>) -> Value {
+    o.map_or(Value::NULL, |i| vm.int_value(i))
 }
 
 fn error_value(vm: &mut BexVm, e: &ErrInfo) -> Result<Value, VmRustFnError> {
@@ -151,12 +151,12 @@ fn error_value(vm: &mut BexVm, e: &ErrInfo) -> Result<Value, VmRustFnError> {
     Ok(copy::csv::Error {
         kind,
         message,
-        line: opt_int_value(e.line),
-        record: opt_int_value(e.record),
-        field: opt_int_value(e.field),
+        line: opt_int_value(vm, e.line),
+        record: opt_int_value(vm, e.record),
+        field: opt_int_value(vm, e.field),
         column,
-        expected: opt_int_value(e.expected),
-        found: opt_int_value(e.found),
+        expected: opt_int_value(vm, e.expected),
+        found: opt_int_value(vm, e.found),
     }
     .to_value(vm))
 }
@@ -317,10 +317,7 @@ fn opt_bool(v: Value) -> Option<bool> {
 }
 
 fn opt_int(v: Value) -> Option<i64> {
-    match v.kind() {
-        ValueKind::Int(i) => Some(i),
-        _ => None,
-    }
+    v.as_int()
 }
 
 fn opt_string_list(vm: &BexVm, v: Value) -> Result<Option<Vec<String>>, VmRustFnError> {
@@ -1430,9 +1427,9 @@ fn convert_cell(vm: &mut BexVm, text: &str, target: &Target) -> Result<Conv, VmR
             if !is_plain_int_text(text) {
                 return Ok(Conv::Bad(format!("cannot convert {text:?} to int")));
             }
-            match text.parse::<i64>().ok().and_then(Value::try_int) {
-                Some(v) => Conv::Ok(v),
-                None => Conv::Bad(format!("integer {text:?} is outside the BAML int range")),
+            match text.parse::<i64>() {
+                Ok(v) => Conv::Ok(vm.int_value(v)),
+                Err(_) => Conv::Bad(format!("integer {text:?} is outside the BAML int range")),
             }
         }
         Target::Bigint => {
@@ -1972,6 +1969,7 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::String(s) => s.as_str().to_string(),
             Object::Float(f) => float_cell_text(*f)?,
+            Object::Int(i) => i.to_string(),
             Object::Bigint(b) => b.to_string(),
             Object::Variant(var) => {
                 let name = match vm.get_object(var.enm) {
