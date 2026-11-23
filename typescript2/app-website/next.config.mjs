@@ -124,11 +124,6 @@ const nextConfig = {
         permanent: true,
       },
       {
-        source: '/baml',
-        destination: '/',
-        permanent: true,
-      },
-      {
         source: '/baml-intro',
         destination: '/',
         permanent: true,

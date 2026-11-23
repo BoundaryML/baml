@@ -1,4 +1,5 @@
 export const markdownPageSlugs = [
+  'baml',
   'index',
   'quickstart',
   'explore',
@@ -8,6 +9,7 @@ export const markdownPageSlugs = [
 export type MarkdownPageSlug = (typeof markdownPageSlugs)[number];
 
 export const markdownCanonicalPaths: Record<MarkdownPageSlug, string> = {
+  baml: '/baml',
   explore: '/explore',
   index: '/',
   pricing: '/pricing',

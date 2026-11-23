@@ -669,3 +669,35 @@ body > footer::before {
     border-color: var(--rule);
   }
 }
+
+/* Diagnostics in the live BAML editors (components/playground/baml-editor.tsx): a tint on the line
+   and the message after it. Monaco adds these classes itself, so they are plain rules. */
+.pg-line-error {
+  background: rgb(229 72 77 / 0.1);
+}
+.pg-line-warning {
+  background: rgb(224 175 104 / 0.1);
+}
+.pg-line-info {
+  background: rgb(163 178 238 / 0.1);
+}
+.pg-msg {
+  font-style: italic;
+}
+.pg-msg-error {
+  color: #f0787c !important;
+}
+.pg-msg-warning {
+  color: #e0af68 !important;
+}
+.pg-msg-info {
+  color: #a3b2ee !important;
+}
+
+/* /baml is set as a post to be read, so its headings are in the body face (Geist), which is
+   narrower than the display face the rest of the site's headings use. */
+.baml-post .blog-prose :where(h1, h2, h3, h4) {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
