@@ -291,18 +291,10 @@ describe('BAML TextMate grammar', () => {
       const at = view.findIndex(([text]) => text === 'upcast');
       expect(view[at][1], receiver).toContain(KEYWORD);
       const inside = view.filter(([, stack]) => stack.includes(UPCAST));
-      expect(inside.map(([text]) => text), receiver).toEqual([
-        '.',
-        'upcast',
-        '<',
-        'Boxed',
-        '<',
-        'int',
-        '>',
-        '>',
-        '(',
-        ')',
-      ]);
+      expect(
+        inside.map(([text]) => text),
+        receiver,
+      ).toEqual(['.', 'upcast', '<', 'Boxed', '<', 'int', '>', '>', '(', ')']);
       const after = view.slice(at).map(([text]) => text);
       expect(after.slice(9, 12), receiver).toEqual(['.', 'name', ';']);
       expect(
