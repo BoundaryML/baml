@@ -1212,6 +1212,99 @@ test "passes" {
     );
 }
 
+/// A detached task that panics with nobody awaiting it fails the run. A panic
+/// is not an error, but an unobserved one reaches the same report a thrown
+/// error does. The test body returns before the task has necessarily run;
+/// the runner waits for background futures at exit (`--shutdown-timeout`),
+/// so the report does not depend on timing.
+#[test]
+fn test_detached_spawn_panic_is_reported_as_unhandled_spawn_error() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"
+function explode() -> int {
+  baml.sys.panic("boom")
+}
+
+test "passes" {
+  spawn with baml.spawn.Root.new() { explode() };
+  assert.is_true(true)
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["test", "--project-dir", "."]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "Expected exit code 1 for an unhandled panic, got: {:?}\nstdout: {stdout}\nstderr: {stderr}",
+        output.status.code(),
+    );
+    assert!(
+        stderr.contains("FAIL testing::unhandled_spawn_error"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains(r#"baml.panics.UserPanic {message: "boom"}"#),
+        "the report names the panic and its payload, stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("1 passed, 1 failed, 2 total"),
+        "the test itself passes; the unhandled panic is the failure, stderr: {stderr}"
+    );
+}
+
+/// Outside the test runner the same panic is visible too: `baml run` prints
+/// the entry point's result, then reports the detached task's panic on stderr
+/// and exits 1.
+#[test]
+fn run_detached_spawn_panic_is_reported_and_fails() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+
+    create_project(
+        tmp.path(),
+        r#"function explode() -> int {
+    baml.sys.panic("boom")
+}
+
+function entry() -> string {
+    spawn with baml.spawn.Root.new() { explode() };
+    "entry returned"
+}
+"#,
+    );
+
+    let output = run_baml_cli(built, tmp.path(), &["run", "entry", "--project-dir", "."]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "Expected exit code 1 for an unhandled panic, got: {:?}\nstdout: {stdout}\nstderr: {stderr}",
+        output.status.code(),
+    );
+    assert!(
+        stdout.contains("entry returned"),
+        "the entry point's own result is still printed, stdout: {stdout}"
+    );
+    assert!(
+        stderr.contains("unhandled spawned task failed"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains(r#"baml.panics.UserPanic {message: "boom"}"#),
+        "the report names the panic and its payload, stderr: {stderr}"
+    );
+}
+
 /// A selector that matches no test must NOT print a green aggregate pass
 /// line: the aggregate of zero tests is a vacuous pass, but stdout that says
 /// PASS when nothing ran misleads anything parsing it.
