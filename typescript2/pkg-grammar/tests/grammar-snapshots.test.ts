@@ -241,6 +241,77 @@ describe('BAML TextMate grammar', () => {
     ]);
   });
 
+  it('reads `upcast` as the interface view only in `.upcast<T>()`', () => {
+    const scopeStacks = (source: string) => {
+      const { tokens } = highlighter.codeToTokens(source, {
+        includeExplanation: 'scopeName',
+        lang: 'baml',
+        theme: THEME,
+      });
+      return tokens
+        .flat()
+        .flatMap(explanationParts)
+        .filter((part) => part.content.trim() !== '')
+        .map((part) => [
+          part.content.trim(),
+          (part.scopes ?? []).map((scope) => scope.scopeName).join(' '),
+        ]);
+    };
+    const UPCAST = 'meta.expression.upcast.baml';
+    const KEYWORD = 'keyword.operator.expression.upcast.baml';
+
+    // Where `upcast` is a member, the scopes are those of any other member
+    // name. A `<` that does not open type arguments followed by `(` must not
+    // open the upcast context: it would swallow the code after it as types.
+    const plain = 'upcasx';
+    for (const body of [
+      'let small = x.upcast < limit;\n  let next = small && true;\n  next',
+      'if (x.upcast < limit) { 1 } else { 2 }',
+      'f(x.upcast < a, b > c)',
+      'let total = x.upcast + x.upcast() + x.upcast(1) + x?.upcast;\n  total',
+      'self.upcast < other.upcast',
+    ]) {
+      const source = (name: string) =>
+        `function F(x: T, limit: int) -> int {\n  ${body.replaceAll('upcast', name)}\n}\nfunction G() -> int {\n  1\n}`;
+      const expected = scopeStacks(source(plain));
+      const found = scopeStacks(source('upcast')).map(([text, stack]) => [
+        text === 'upcast' ? plain : text,
+        stack,
+      ]);
+      expect(found, body).toEqual(expected);
+      expect(JSON.stringify(found), body).not.toContain(UPCAST);
+    }
+
+    // The view: `upcast` is the keyword, the type arguments and the empty
+    // parentheses belong to it, and what follows is scoped as after a call.
+    for (const receiver of ['x', 'self', 'a.b', 'make()', 'xs[0]']) {
+      const view = scopeStacks(
+        `function F() -> string {\n  let name = ${receiver}.upcast<Boxed<int>>().name;\n  name\n}\nfunction G() -> int {\n  1\n}`,
+      );
+      const at = view.findIndex(([text]) => text === 'upcast');
+      expect(view[at][1], receiver).toContain(KEYWORD);
+      const inside = view.filter(([, stack]) => stack.includes(UPCAST));
+      expect(inside.map(([text]) => text), receiver).toEqual([
+        '.',
+        'upcast',
+        '<',
+        'Boxed',
+        '<',
+        'int',
+        '>',
+        '>',
+        '(',
+        ')',
+      ]);
+      const after = view.slice(at).map(([text]) => text);
+      expect(after.slice(9, 12), receiver).toEqual(['.', 'name', ';']);
+      expect(
+        view.find(([text]) => text === 'G'),
+        receiver,
+      ).toEqual(['G', expect.stringContaining('entity.name.function')]);
+    }
+  });
+
   it('separates comma-separated fields on one line', () => {
     const scopes = (source: string) => {
       const { tokens } = highlighter.codeToTokens(source, {

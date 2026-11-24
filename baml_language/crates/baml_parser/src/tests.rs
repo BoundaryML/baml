@@ -513,19 +513,20 @@ fn tree_index_links_parents_owners_and_covering_nodes() {
 
 /// `value.upcast<Interface>()` is the interface view: written like a call,
 /// its parentheses part of the expression. `upcast` is the operator only
-/// before a type argument list that closes; anywhere else it is a member
-/// name, as `as` is.
+/// before a `<` that any other name would read as type arguments; anywhere
+/// else it is a member name, as `as` is.
 #[test]
 fn upcast_is_written_with_call_parentheses() {
     let accepted = parse(
-        "function f(p: P, q: Q, y: int) -> int {\n  p.upcast<Named>().name;\n  self.upcast<I>().m();\n  g().upcast<Boxed<int>>();\n  q.upcast + q.upcast() + q.as + q.as();\n  q.upcast < y\n}\n",
+        "function f(p: P, q: Q, y: int) -> int {\n  p.upcast<Named>().name;\n  self.upcast<I>().m();\n  g().upcast<Boxed<int>>();\n  q.upcast + q.upcast() + q.as + q.as();\n  h(q.upcast < y, y > p);\n  q.upcast < y\n}\n",
     );
     assert_eq!(accepted.errors, [], "the accepted spelling parses clean");
     let tree = accepted.tree.debug_tree();
     assert_eq!(tree.matches("UpcastExpr").count(), 3, "{tree}");
-    // `q.upcast()` and `q.as()` are calls of members; the three views own
-    // their parentheses, so no call wraps them.
-    assert_eq!(tree.matches("CallExpr").count(), 4, "{tree}");
+    // `q.upcast()`, `q.as()` and `h(…)` are calls, `h`'s arguments two
+    // comparisons; the three views own their parentheses, so no call wraps
+    // them.
+    assert_eq!(tree.matches("CallExpr").count(), 5, "{tree}");
 }
 
 /// The spellings of the interface view that are rejected. Each reports

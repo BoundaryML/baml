@@ -5,8 +5,8 @@
 // - Arguments between them report once.
 //
 // Either way the view is still parsed and checked as one, so nothing
-// cascades. `upcast` is the operator only before a type argument list that
-// closes; anywhere else it is an ordinary member name.
+// cascades. `upcast` is the operator only before a `<` that opens type
+// arguments; anywhere else it is an ordinary member name.
 
 interface Named {
     name: string,
