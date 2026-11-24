@@ -1,12 +1,12 @@
 /// The OpenAI image-generation client: POST {base_url}/images/generations.
 ///
-/// `client "openai-images/gpt-image-1"` in an LLM function constructs this
-/// class. Its output type is media — `-> image`, `-> image[]`, `-> image?`,
-/// `-> string | image` — which the runner builds from the turn's media blocks
-/// (ai/runner.baml) instead of parsing text.
+/// `client "openai-images/gpt-image-2.6-sunburst"` in an LLM function
+/// constructs this class. Its output type is media — `-> image`, `-> image[]`,
+/// `-> image?`, `-> string | image` — which the runner builds from the turn's
+/// media blocks (ai/runner.baml) instead of parsing text.
 ///
 ///     function DrawLamp(subject: string) -> image {
-///         client "openai-images/gpt-image-1"
+///         client "openai-images/gpt-image-2.6-sunburst"
 ///         prompt `A studio photograph of ${subject}.`
 ///     }
 ///
@@ -82,7 +82,7 @@ class ImageClient {
     /// declaring one is always safe; credentials and endpoints resolve when a
     /// request is built.
     function new(
-        model: string = "gpt-image-1",
+        model: string = "gpt-image-2.6-sunburst",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
         n: int? = null,

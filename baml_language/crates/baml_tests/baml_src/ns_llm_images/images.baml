@@ -198,6 +198,10 @@ test "openai_images_dalle_response_format" {
     )
 }
 
+test "openai_images_default_model" {
+    assert.equal(openai.ImageClient.new().model, "gpt-image-2.6-sunburst")
+}
+
 // A dall-e `response_format: "url"` answer must still hand user code real
 // bytes: the link expires in 60 minutes, and an image whose `base64()` is empty
 // is silent data loss. The client fetches it once and inlines it, taking the
@@ -1100,18 +1104,18 @@ testset "missing_key" {
 // ─── live ────────────────────────────────────────────────────────────────────
 
 function LiveDrawSquare() -> image {
-    client: "openai-images/gpt-image-1"
+    client: "openai-images/gpt-image-2.6-sunburst"
     prompt: `
         A plain solid red square centered on a white background. No text.
     `
 }
 
-// The cheapest real image this endpoint can make: gpt-image-1, one image, the
-// smallest supported size, lowest quality — roughly $0.01–$0.02 per run at
-// current list prices. Keep n = 1 and quality = "low" when touching this.
+// The cheapest real image this endpoint can make: one image, the smallest
+// supported size, lowest quality. Keep n = 1 and quality = "low" when touching
+// this.
 function live_openai_images_draws() -> string {
     let cl = openai.ImageClient.new(
-        model = "gpt-image-1",
+        model = "gpt-image-2.6-sunburst",
         n = 1,
         size = "1024x1024",
         quality = "low",
