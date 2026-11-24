@@ -19,12 +19,13 @@
 //! never kept.
 //!
 //! A case native code is known to behave otherwise in is listed in
-//! `tests/conformance/differences.txt`, with why and with what the native
-//! program does. The interpreter must then do something else, so that the
-//! entry goes when it stops being true. A native program a signal killed is
-//! a failure whatever the list says, and so is one that does not end: a
-//! program still running at `common::LIMIT` is killed. An interpreter run
-//! killed so is never kept.
+//! `tests/conformance/differences.txt`, with which side is wrong, why, and
+//! what the native program does. The interpreter must then do something
+//! else, so that the entry goes when it stops being true. A native program
+//! a signal killed is a failure whatever the list says, and so is one that
+//! does not end: a program still running at `common::LIMIT` is killed. An
+//! interpreter run killed so is never kept, and a case the list says the
+//! interpreter hangs on is not run on it.
 //!
 //! `BAML_CONFORMANCE_ONLY=a.baml,b.baml` runs the cases of those files
 //! alone.
@@ -266,10 +267,17 @@ fn interpreted(project: &Path, case: &str, key: Option<&str>) -> Behavior {
     behavior
 }
 
-/// A case native code is known to behave otherwise in: why, and what the
-/// native program does, its output as `escaped` writes it.
+/// Which side of a difference is wrong, as `differences.txt` names it.
+const WHO: [&str; 3] = ["interpreter-wrong", "native-wrong", "undecided"];
+
+/// A case native code is known to behave otherwise in: which side is
+/// wrong, one of `WHO`, why, and what the native program does, its output
+/// as `escaped` writes it.
 struct Difference {
+    who: &'static str,
     reason: String,
+    /// The interpreter never ends on the case, so it is not run.
+    hangs: bool,
     exit: i32,
     stdout: String,
     stderr: String,
@@ -285,7 +293,7 @@ impl Difference {
 
 /// An entry of `differences.txt` for a case that behaves as `native`.
 fn entry(case: &str, reason: &str, native: &Behavior) -> String {
-    let mut entry = format!("{case}: {reason}\n");
+    let mut entry = format!("{case} (<who>): {reason}\n");
     if let Ok(exit) = native.exit
         && exit != 0
     {
@@ -299,9 +307,10 @@ fn entry(case: &str, reason: &str, native: &Behavior) -> String {
     entry
 }
 
-/// The cases of `differences.txt`, by name. An entry is a line `<case>:
-/// <why>` and then, each on a line of its own that two spaces indent, what
-/// the native program does: `exit <code>` unless it is 0, `stdout <text>`
+/// The cases of `differences.txt`, by name. An entry is a line `<case>
+/// (<who>): <why>`, `<who>` one of `WHO`, and then, each on a line of its
+/// own that two spaces indent: `interpreter hangs` when it does, and what
+/// the native program does, `exit <code>` unless it is 0, `stdout <text>`
 /// and `stderr <text>` unless the text is empty, after `comparable` and as
 /// `escaped` writes it. A line that starts with `#` is a comment.
 fn differences() -> BTreeMap<String, Difference> {
@@ -315,13 +324,24 @@ fn differences() -> BTreeMap<String, Difference> {
             continue;
         }
         let Some(field) = line.strip_prefix("  ") else {
-            let Some((case, reason)) = line.split_once(": ") else {
+            let Some((head, reason)) = line.split_once(": ") else {
+                malformed()
+            };
+            let Some((case, who)) = head
+                .strip_suffix(')')
+                .and_then(|head| head.split_once(" ("))
+            else {
+                malformed()
+            };
+            let Some(who) = WHO.into_iter().find(|known| *known == who) else {
                 malformed()
             };
             found.push((
                 case.to_owned(),
                 Difference {
+                    who,
                     reason: reason.to_owned(),
+                    hangs: false,
                     exit: 0,
                     stdout: String::new(),
                     stderr: String::new(),
@@ -334,6 +354,7 @@ fn differences() -> BTreeMap<String, Difference> {
             malformed()
         };
         match name {
+            "interpreter" if value == "hangs" => entry.hangs = true,
             "exit" => entry.exit = value.parse().unwrap_or_else(|_| malformed()),
             "stdout" => value.clone_into(&mut entry.stdout),
             "stderr" => value.clone_into(&mut entry.stderr),
@@ -448,8 +469,8 @@ fn disagreement(
     if let Some(listed) = listed.filter(|_| stale) {
         let _ = writeln!(
             report,
-            "  listed in `differences.txt` ({}), and the interpreter does as listed",
-            listed.reason
+            "  listed in `differences.txt` as {} ({}), and the interpreter does as listed",
+            listed.who, listed.reason
         );
     }
     // The exit, the stdout and the stderr of a run, each on a line.
@@ -544,7 +565,15 @@ fn check(unit: &Unit, differences: &BTreeMap<String, Difference>) -> (usize, Vec
             }
             hex(&hasher.finalize())
         });
-        let interpreter = comparable(&interpreted(project.path(), case, key.as_deref()));
+        let listed = differences.get(*case);
+        let interpreter = match listed {
+            Some(listed) if listed.hangs => Behavior {
+                exit: Err("not run: listed as hanging".to_owned()),
+                stdout: String::new(),
+                stderr: String::new(),
+            },
+            _ => comparable(&interpreted(project.path(), case, key.as_deref())),
+        };
         let built: Result<Built, String> = build(&db, case, executables.path());
         let native: Vec<(&'static str, Behavior)> = WAYS
             .iter()
@@ -560,7 +589,6 @@ fn check(unit: &Unit, differences: &BTreeMap<String, Difference>) -> (usize, Vec
                 (way.name, behavior)
             })
             .collect();
-        let listed = differences.get(*case);
         if let Some(mut report) = disagreement(&interpreter, &native, listed) {
             let (_, first) = &native[0];
             if listed.is_none() && native.iter().all(|(_, behavior)| behavior == first) {
