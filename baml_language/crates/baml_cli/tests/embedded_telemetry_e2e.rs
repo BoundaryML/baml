@@ -55,7 +55,75 @@ async fn embedding_api(server: &MockServer) {
         .respond_with(ResponseTemplate::new(200).set_body_json(verification_response()))
         .mount(server)
         .await;
+    // A build registers where its artifact records (BEP-088).
+    Mock::given(method("POST"))
+        .and(path("/v1/builds"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"status":"already_present"})))
+        .mount(server)
+        .await;
 }
+
+/// Every build the headers of the recordings uploaded in `requests` name.
+fn recorded_builds(requests: &[Request]) -> Vec<Vec<u8>> {
+    use prost::Message as _;
+    let mut builds: Vec<Vec<u8>> = requests
+        .iter()
+        .filter(|request| request.method == "PUT")
+        .filter_map(|request| {
+            btel_core::upload::envelope::UploadEnvelope::decode(request.body.as_slice())
+                .ok()?
+                .recording_file
+        })
+        .filter_map(|bytes| {
+            let header = btel_recorder::proto::RecordingFile::decode(bytes.as_slice())
+                .unwrap()
+                .header?;
+            Some(header.build?.build_id)
+        })
+        .collect();
+    builds.sort();
+    builds.dedup();
+    builds
+}
+
+/// The one build `requests` registered, sent with `key`.
+fn registered_build(requests: &[Request], key: &str) -> Value {
+    let [build] = requests
+        .iter()
+        .filter(|request| request.url.path() == "/v1/builds")
+        .collect::<Vec<_>>()[..]
+    else {
+        panic!("one build registers");
+    };
+    assert_eq!(build.headers["authorization"], format!("Bearer {key}"));
+    serde_json::from_slice(&build.body).unwrap()
+}
+/// The build the program `baml generate` embedded under `project` carries.
+fn embedded_build(project: &Path) -> Option<btel_types::BuildRecord> {
+    let bytes = std::fs::read(project.join("generated/baml_sdk/src/_inlinedbaml.bin")).unwrap();
+    let program: bex_vm_types::Program =
+        baml_artifact::decode(baml_artifact::ArtifactKind::Program, &bytes).unwrap();
+    program.build().cloned()
+}
+
+/// `embedded` is the build BCS was sent as `registered`: the generated
+/// client's recordings name the build that is registered.
+fn assert_embeds_registered_build(embedded: &btel_types::BuildRecord, registered: &Value) {
+    let registered = &registered["build"];
+    assert_eq!(hex::encode(embedded.build_id), registered["build_id"]);
+    assert_eq!(embedded.origin.as_str(), registered["origin"]);
+    assert_eq!(
+        embedded.timestamp_unix_ns.to_string(),
+        registered["timestamp_ns"]
+    );
+    assert_eq!(hex::encode(embedded.source_hash), registered["source_hash"]);
+    assert_eq!(
+        hex::encode(embedded.compilation_unit_hash),
+        registered["compilation_unit_hash"]
+    );
+    assert_eq!(embedded.git.is_some(), !registered["git"].is_null());
+}
+
 async fn ingest_api(server: &MockServer) {
     let base = server.uri();
     Mock::given(method("POST"))
@@ -396,8 +464,13 @@ async fn packed_api_key_is_verified_and_fixed_with_endpoint_override() {
         &build_server.uri(),
         &["pack", "main", "--embed-telemetry", "-o", "out"],
     ));
-    assert_eq!(build_server.received_requests().await.unwrap().len(), 1);
+    assert_eq!(build_server.received_requests().await.unwrap().len(), 2);
     let requests = build_server.received_requests().await.unwrap();
+    // The build registers with the key the artifact records with, never
+    // the builder's own, and the binary carries its ID.
+    let build = registered_build(&requests, "bdry_secret_embedded");
+    assert_eq!(build["build"]["origin"], "pack");
+    assert_eq!(build["target"], json!({}));
     assert_eq!(requests[0].url.path(), "/v1/auth/verify");
     assert_eq!(
         serde_json::from_slice::<Value>(&requests[0].body).unwrap(),
@@ -434,6 +507,17 @@ async fn packed_api_key_is_verified_and_fixed_with_endpoint_override() {
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
     let requests = run_server.received_requests().await.unwrap();
     assert!(requests.iter().any(|request| request.method == "PUT"));
+    // The binary runs no compiler of its own, so it registers nothing: it
+    // carries the build that packed it, and its recordings name that one.
+    assert_eq!(
+        recorded_builds(&requests),
+        [hex::decode(build["build"]["build_id"].as_str().unwrap()).unwrap()]
+    );
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.url.path() != "/v1/builds")
+    );
     for request in requests.iter().filter(|request| request.method == "POST") {
         assert_eq!(
             request.headers["authorization"],
@@ -443,7 +527,7 @@ async fn packed_api_key_is_verified_and_fixed_with_endpoint_override() {
         assert_eq!(body.get("buildId"), None);
         assert_eq!(body["target"], json!({}));
     }
-    assert_eq!(build_server.received_requests().await.unwrap().len(), 1);
+    assert_eq!(build_server.received_requests().await.unwrap().len(), 2);
 
     run_server.reset().await;
     Mock::given(method("POST"))
@@ -497,7 +581,8 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
         .unwrap()
         .iter()
         .filter(|request| {
-            request.method == "POST" && !matches!(request.url.path(), "/v1/auth/verify")
+            request.method == "POST"
+                && !matches!(request.url.path(), "/v1/auth/verify" | "/v1/builds")
         })
     {
         assert_eq!(
@@ -557,13 +642,29 @@ async fn generate_embeds_named_api_key_and_plain_generate_omits_it() {
         policy.embedded.as_ref().unwrap().api_key.expose(),
         "bdry_secret_embedded"
     );
-    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 2);
+    let build = registered_build(&requests, "bdry_secret_embedded");
+    assert_eq!(build["build"]["origin"], "generate");
+    // The client carries the whole build, which its runtime names in every
+    // recording.
+    assert_embeds_registered_build(&embedded_build(temp.path()).unwrap(), &build);
     succeeded(&cli(temp.path(), &server.uri(), &["generate"]));
     let inlined =
         std::fs::read_to_string(temp.path().join("generated/baml_sdk/src/_inlinedbaml.rs"))
             .unwrap();
     assert!(!inlined.contains("bdry_secret_embedded"));
-    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    // A client that embeds no credential registers its build where the
+    // project's own runs record: with the builder's key.
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 3);
+    let build = registered_build(&requests[2..], "bdry_secret_builder_do_not_embed");
+    assert_eq!(build["build"]["origin"], "generate");
+    assert_embeds_registered_build(&embedded_build(temp.path()).unwrap(), &build);
+    assert_eq!(
+        build["target"],
+        json!({"project": "ambient/project_must_not_override_manifest"})
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -630,7 +731,8 @@ async fn malformed_publisher_settings_fail_before_writing_an_artifact() {
 
   Valid [boundary] settings:
     project
-    api_url"#,
+    api_url
+    upload_source"#,
         ),
     ] {
         let mut config: toml::Value = manifest("").parse().unwrap();

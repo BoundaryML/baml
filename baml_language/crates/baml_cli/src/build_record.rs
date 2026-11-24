@@ -1,66 +1,133 @@
 //! The record of one build (BEP-088): which commit the package was built
-//! from, the hash of its formatted source, and the package it produced.
+//! from, the hash of its formatted source, the package it produced and the
+//! program it linked.
 //!
-//! Reading git and formatting every source file are not free, so a record is
-//! described by a provider the engine calls only when a recording that keeps
-//! it starts.
+//! Reading git and formatting every source file are not free, so a build
+//! that runs its program is described by a provider the engine calls only
+//! when a recording starts.
 
 use std::path::Path;
 
 use baml_db::{ProjectDatabase, SourceRoot};
-use btel_types::{BuildOrigin, BuildRecord, GitHash, GitInfo};
+use bex_project::build::{BuildFacts, new_build_id, program_record, registration, unix_now_ns};
+use btel_types::{BuildOrigin, BuildRegistration, GitHash, GitInfo};
 use gix::bstr::{BString, ByteSlice};
 
-/// A provider of the record of this build of `package`, whose compiled form
-/// is `program`'s root. `None` when the program's root records no unit hash,
-/// which leaves a build of it nothing to name.
-pub(crate) fn provider(
+/// How to describe this build of `package`, whose compiled form is
+/// `program`'s root. `None` when the root records no unit hash, which leaves
+/// a build of it nothing to name.
+fn describe(
     db: &ProjectDatabase,
     package: SourceRoot,
     program: &bex_vm_types::Program,
     origin: BuildOrigin,
-) -> Option<bex_engine::BuildProvider> {
-    let unit = program
+    build_id: [u8; 16],
+) -> Option<impl FnOnce() -> Option<BuildRegistration> + Send + use<>> {
+    let metadata = program
         .packages
         .get(program.root as usize)?
         .metadata
-        .as_ref()?
-        .compilation_unit_hash;
+        .clone()?;
+    let linked = program_record(program);
     let timestamp_unix_ns = unix_now_ns();
     let db = db.clone();
-    Some(Box::new(move || {
-        let source = match baml_fmt::package_source::package_source(&db, package) {
-            Ok(source) => source,
+    Some(move || {
+        let facts = BuildFacts {
+            build_id,
+            timestamp_unix_ns,
+            origin,
+            git: git_info(package.path(&db)),
+            program: linked,
+        };
+        match registration(&db, package, &metadata, facts) {
+            Ok(registration) => Some(registration),
             Err(error) => {
                 crate::reporter::print_warning(format_args!(
                     "this build is not recorded in telemetry: {error}"
                 ));
-                return None;
+                None
             }
-        };
-        Some(BuildRecord {
-            build_id: *uuid::Uuid::new_v4().as_bytes(),
-            timestamp_unix_ns,
-            origin,
-            git: git_info(package.path(&db)),
-            source_hash: bex_vm_types::identity::package_source_hash(
-                source
-                    .files
-                    .iter()
-                    .map(|(path, text)| (path.as_str(), text.as_bytes())),
-            )
-            .0,
-            compilation_unit_hash: unit.0,
-        })
-    }))
+        }
+    })
 }
 
-fn unix_now_ns() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()
-        .and_then(|elapsed| i64::try_from(elapsed.as_nanos()).ok())
-        .unwrap_or(0)
+/// A provider of the record of this build of `package`, for the engine that
+/// runs `program`. The program names no build of its own: the engine takes
+/// this one.
+pub(crate) fn provider(
+    db: &ProjectDatabase,
+    package: SourceRoot,
+    program: &mut bex_vm_types::Program,
+    origin: BuildOrigin,
+) -> Option<bex_engine::BuildProvider> {
+    program.set_build(None);
+    Some(Box::new(describe(
+        db,
+        package,
+        program,
+        origin,
+        new_build_id(),
+    )?))
+}
+
+/// Where the artifact built under `policy` from the project at
+/// `project_root` registers its build: where the artifact's own recordings
+/// go when it embeds a credential, so its spans find the build there, and
+/// otherwise where this project's do, as for `baml run`. `None` when that
+/// is not Boundary.
+fn destination(
+    policy: &btel_settings::artifact::ArtifactTelemetry,
+    project_root: &Path,
+) -> Option<bex_engine::TelemetryRecording> {
+    let recording = if policy.embedded.is_some() {
+        // The embedded credential alone: the names a deployment binds its
+        // own destination to mean nothing where the artifact is built.
+        let embedded = btel_settings::artifact::ArtifactTelemetry {
+            destination_overrides: btel_settings::artifact::DestinationOverrides::Default,
+            ..policy.clone()
+        };
+        bex_engine::TelemetryRecording::from_artifact(&embedded).ok()?
+    } else {
+        let boundary = crate::cloud_config::Boundary::read(project_root).ok()?;
+        bex_engine::TelemetryRecording::from_boundary_defaults(
+            boundary.project.as_deref(),
+            boundary.api_url.as_deref(),
+        )?
+        .with_source_upload(boundary.upload_source)
+    };
+    recording.registers_builds().then_some(recording)
+}
+
+/// Registers this build of `package` with Boundary now, when the artifact
+/// built under `policy` or the project at `project_root` sends telemetry
+/// there, and stamps `program`'s root with the build, which the artifact
+/// written from it carries to its runtime. For a build that runs
+/// no program (`baml pack`, `baml generate`): a failure prints a warning and
+/// the build goes on.
+pub(crate) fn register(
+    db: &ProjectDatabase,
+    package: SourceRoot,
+    program: &mut bex_vm_types::Program,
+    origin: BuildOrigin,
+    policy: &btel_settings::artifact::ArtifactTelemetry,
+    project_root: &Path,
+) {
+    program.set_build(None);
+    let Some(recording) = destination(policy, project_root) else {
+        return;
+    };
+    let build_id = new_build_id();
+    let Some(registration) =
+        describe(db, package, program, origin, build_id).and_then(|describe| describe())
+    else {
+        return;
+    };
+    program.set_build(Some(registration.build.clone()));
+    if let Err(error) = recording.register_build(registration) {
+        crate::reporter::print_warning(format_args!(
+            "this build was not registered with Boundary: {error}"
+        ));
+    }
 }
 
 /// Where the package at `package_root` sits in git, or `None` when it is not

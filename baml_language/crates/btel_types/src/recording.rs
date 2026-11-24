@@ -18,10 +18,13 @@ pub struct ProcessInfo {
     pub host: String,
     pub command: Vec<String>,
     pub started_at_unix_ns: i64,
+    /// `std::env::consts::OS` and `ARCH` of the process.
+    pub os: String,
+    pub arch: String,
 }
 
 /// A git commit ID, in the repository's object format.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum GitHash {
     Sha1([u8; 20]),
     Sha256([u8; 32]),
@@ -38,7 +41,7 @@ impl GitHash {
 }
 
 /// Where a build's package sat in git when it was built (BEP-088).
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct GitInfo {
     /// URL of `origin` in `https` form with credentials removed; `None`
     /// when the repository has no `origin`.
@@ -58,7 +61,7 @@ pub struct GitInfo {
 }
 
 /// What ran the compiler for a build.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum BuildOrigin {
     Pack,
     Generate,
@@ -84,7 +87,7 @@ impl BuildOrigin {
 /// One run of the compiler building one package (BEP-088's `build` row).
 /// Unlike a package's metadata it is not a function of the package: two
 /// builds of the same code are two records.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct BuildRecord {
     /// Identifies this run of the compiler: a random UUID.
     pub build_id: [u8; 16],
@@ -96,6 +99,42 @@ pub struct BuildRecord {
     pub source_hash: [u8; 32],
     /// The package this build produced.
     pub compilation_unit_hash: [u8; 32],
+}
+
+/// The package a build produced (BEP-088's `packages` row): a function of
+/// the package's content, so equal packages are equal records.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PackageRecord {
+    pub compilation_unit_hash: [u8; 32],
+    pub package_interface: [u8; 32],
+    /// The interface of every package this one was compiled against.
+    pub dependencies: Vec<[u8; 32]>,
+    /// Claimed in `baml.toml`.
+    pub name: String,
+    pub version: Option<String>,
+    pub compiler_version: String,
+}
+
+/// The program a build linked (BEP-088's `programs` row).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProgramRecord {
+    pub program_id: [u8; 16],
+    /// The compilation unit hash of every package linked into the program.
+    pub static_packages: Vec<[u8; 32]>,
+}
+
+/// Everything one build tells BCS (BEP-088): its own row, the package it
+/// produced, the program it linked, and the source it was built from.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BuildRegistration {
+    pub build: BuildRecord,
+    pub package: PackageRecord,
+    /// `None` when the build linked no program: a package compiled at run
+    /// time.
+    pub program: Option<ProgramRecord>,
+    /// The text `build.source_hash` was taken over, by normalized path.
+    /// `None` when the user opted out of uploading source.
+    pub source: Option<std::collections::BTreeMap<String, String>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

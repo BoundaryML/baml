@@ -157,6 +157,25 @@ impl Program {
         Some(crate::identity::linked_program_id(self.root, &packages))
     }
 
+    /// Names `build` as the build that produced the root package, and no
+    /// build for any other: one run of the compiler builds one package
+    /// (BEP-088). `None` clears what a cached or decoded program carried.
+    pub fn set_build(&mut self, build: Option<btel_types::BuildRecord>) {
+        for package in &mut self.packages {
+            package.build = None;
+        }
+        if let Some(root) = self.packages.get_mut(self.root as usize) {
+            root.build = build;
+        }
+    }
+
+    /// The build that produced the root package, when one is named
+    /// ([`Self::set_build`]).
+    #[must_use]
+    pub fn build(&self) -> Option<&btel_types::BuildRecord> {
+        self.packages.get(self.root as usize)?.build.as_ref()
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

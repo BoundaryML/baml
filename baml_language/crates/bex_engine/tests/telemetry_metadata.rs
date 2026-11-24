@@ -116,6 +116,9 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
         if header.program_id.is_some() {
             expected_minor = expected_minor.max(btel_core::recording::minor::PACKAGE_IDENTITY);
         }
+        if header.os.is_some() {
+            expected_minor = expected_minor.max(btel_core::recording::minor::PROCESS_PLATFORM);
+        }
         assert_eq!(header.format_minor, expected_minor);
         let definitions = file.definitions.as_ref().unwrap();
         for function in &definitions.functions {

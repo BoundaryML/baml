@@ -338,14 +338,15 @@ struct ResolvedInvocation {
 
 impl Prepared {
     fn into_engine(self, argv: Vec<String>) -> Result<BexEngine> {
+        let mut program = self.program;
         let build = crate::build_record::provider(
             &self.db,
             self.package,
-            &self.program,
+            &mut program,
             btel_types::BuildOrigin::Run,
         );
         crate::runtime_telemetry::create_engine_with_context(
-            self.program,
+            program,
             argv,
             &self.recording_root,
             self.recording_sources,

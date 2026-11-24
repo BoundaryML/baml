@@ -381,9 +381,19 @@ impl GenerateArgs {
         let pool = baml_ide::build_symbol_pool(&db, package);
 
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
-        let program = db
+        let mut program = db
             .get_bytecode(package)
             .map_err(|e| anyhow!("compilation failed: {e}"))?;
+        // The build registers before the bytecode is embedded, so the
+        // generated client carries the build to every process that loads it.
+        crate::build_record::register(
+            &db,
+            package,
+            &mut program,
+            btel_types::BuildOrigin::Generate,
+            &telemetry,
+            &from,
+        );
         let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
         if self.telemetry.embed_telemetry {

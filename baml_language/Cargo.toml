@@ -72,8 +72,8 @@ bcs_api = { path = "crates/bcs_api", default-features = false }
 # The formats BAML records and BCS stores, and the BCS client, as BCS publishes them. A format change
 # lands in BCS first, readers before writers, and reaches BAML by moving these pins together:
 # bcs-sdk takes exactly the btel-core published beside it.
-bcs-sdk = { version = "=0.1.0", default-features = false }
-btel-core = { version = "=0.1.0" }
+bcs-sdk = { version = "=0.1.1", default-features = false }
+btel-core = { version = "=0.1.1" }
 
 #  Internal dependencies (baml_*)
 btel_bcs = { path = "crates/btel_bcs", default-features = false }

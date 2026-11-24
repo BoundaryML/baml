@@ -26,8 +26,8 @@ pub use definitions::{Definition, DefinitionBlob, DefinitionCell};
 pub use function_lookup::{FunctionLookup, FunctionRegistration};
 pub use functions::*;
 pub use recording::{
-    BuildOrigin, BuildRecord, GitHash, GitInfo, ProcessExit, ProcessExitSlot, ProcessInfo,
-    ProcessStatus, RecordingId, new_recording_id,
+    BuildOrigin, BuildRecord, BuildRegistration, GitHash, GitInfo, PackageRecord, ProcessExit,
+    ProcessExitSlot, ProcessInfo, ProcessStatus, ProgramRecord, RecordingId, new_recording_id,
 };
 
 /// Identity of an individually identified telemetry graph node.

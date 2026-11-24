@@ -772,6 +772,8 @@ fn pack_child_preserves_streams_environment_and_status() {
     );
     let mut child = command(bin)
         .env("BAML_HANDOFF_REMOVE", "inherited")
+        // A saved Boundary login on the machine would add a warning to stderr.
+        .env("BAML_TELEMETRY", "off")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -829,11 +831,14 @@ fn pack_child_survives_cleanup_and_runtime_shutdown() {
         !marker.exists(),
         "the host must exit while its child is still running"
     );
+    // The shell creates the file before `printf` writes to it, so wait for
+    // the text and not for the file.
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(8);
-    while !marker.exists() && std::time::Instant::now() < deadline {
+    let written = || std::fs::read_to_string(&marker).unwrap_or_default();
+    while written() != "completed" && std::time::Instant::now() < deadline {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
-    assert_eq!(std::fs::read_to_string(marker).unwrap(), "completed");
+    assert_eq!(written(), "completed");
 }
 
 /// `[pack.gc]` and its variable names reach a real packed binary: the program

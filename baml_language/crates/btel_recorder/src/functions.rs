@@ -13,17 +13,11 @@ pub(crate) struct FunctionDefinitions {
     host: FxHashMap<FunctionId, FunctionMetadata>,
     // Functions whose metadata this recording already published.
     published: FxHashSet<FunctionId>,
-    // Publish definitions without the hash of the function's package.
-    omit_package_identity: bool,
 }
 
 impl FunctionDefinitions {
     pub(crate) fn set_table(&mut self, table: Arc<FunctionMetadataTable>) {
         self.table = Some(table);
-    }
-
-    pub(crate) fn omit_package_identity(&mut self) {
-        self.omit_package_identity = true;
     }
 
     pub(crate) fn register_host(&mut self, metadata: &FunctionMetadata) {
@@ -67,11 +61,7 @@ impl FunctionDefinitions {
         {
             Some(metadata) => {
                 self.published.insert(function);
-                let mut definition = convert(metadata);
-                if self.omit_package_identity {
-                    definition.compilation_unit_hash = None;
-                }
-                Some(Resolution::Metadata(definition))
+                Some(Resolution::Metadata(convert(metadata)))
             }
             None => Some(Resolution::Unavailable(proto::MetadataUnavailable {})),
         }

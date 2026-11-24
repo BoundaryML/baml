@@ -310,6 +310,16 @@ pub struct RuntimeCompileRequest {
     /// The compile's own edges: each alias to the package it mounts.
     pub aliases: IndexMap<String, RuntimePackageIdentity>,
     pub mode: RuntimeCompileMode,
+    /// Describe the compile as a build (BEP-088), for an engine that reports
+    /// builds to BCS. `None` skips formatting and hashing the source.
+    pub record_build: Option<RecordBuild>,
+}
+
+/// How a runtime compile describes itself as a build.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RecordBuild {
+    /// Keep the source text with the build; without it only its hash.
+    pub upload_source: bool,
 }
 
 /// Severity retained from the compiler diagnostic stream.

@@ -281,6 +281,8 @@ mod crafted {
                 initial_context_cas_id: None,
                 program_id: None,
                 build: None,
+                os: None,
+                arch: None,
             });
             file.sequence = sequence;
             std::fs::write(
