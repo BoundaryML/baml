@@ -888,9 +888,19 @@ module.exports = grammar({
         seq(
           field('object', $._expression),
           field('operator', choice('.', '?.')),
-          field('property', alias($.identifier, $.property_identifier)),
+          field(
+            'property',
+            alias(
+              choice($.identifier, $.upcast_identifier),
+              $.property_identifier,
+            ),
+          ),
         ),
       ),
+
+    // `upcast` is contextual: `x.upcast` and `x.upcast()` name a member, and
+    // only `.upcast<` starts an upcast.
+    upcast_identifier: (_) => prec.dynamic(-1, 'upcast'),
 
     // `t.0`, `t?.1`; `t.0.1` nests, with each slot its own index token.
     tuple_field_expression: ($) =>

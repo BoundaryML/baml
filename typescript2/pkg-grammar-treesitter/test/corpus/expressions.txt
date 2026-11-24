@@ -592,6 +592,38 @@ function read_name(p: Person) -> string {
             (property_identifier)))))))
 
 ==================
+upcast names a member when no type argument follows
+==================
+
+function read(l: Lift) -> int {
+  l.upcast + l.upcast()
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (expression_statement
+        (binary_expression
+          (member_expression
+            (identifier)
+            (property_identifier))
+          (call_expression
+            (member_expression
+              (identifier)
+              (property_identifier))
+            (arguments)))))))
+
+==================
 env access parses as member expression
 ==================
 
