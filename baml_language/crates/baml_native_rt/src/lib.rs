@@ -67,10 +67,45 @@ unsafe extern "C" {
     static baml_native_functions: usize;
 }
 
+#[cfg(not(test))]
+unsafe extern "C" {
+    fn signal(signal: i32, handler: usize) -> usize;
+    fn _exit(status: i32) -> !;
+}
+
+/// The two signals that ask a program to stop, the same number on every
+/// system the runtime is built for.
+#[cfg(not(test))]
+const SIGINT: i32 = 2;
+#[cfg(not(test))]
+const SIGTERM: i32 = 15;
+/// The disposition of a signal that is ignored.
+#[cfg(not(test))]
+const SIG_IGN: usize = 1;
+
+/// End the process as a shell reports a death by `signal`: with 128 more
+/// than its number. Async-signal-safe: it calls `_exit` alone. Nothing
+/// written to stdout is lost, since every write to it flushes before it
+/// returns.
+#[cfg(not(test))]
+extern "C" fn stopped(signal: i32) {
+    // SAFETY: `_exit` may be called from a signal handler.
+    unsafe { _exit(128 + signal) }
+}
+
 /// Process entry point.
 #[cfg(not(test))]
 #[unsafe(no_mangle)]
 pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
+    for stop in [SIGINT, SIGTERM] {
+        // SAFETY: a handler that is async-signal-safe. A signal the
+        // program was started ignoring stays ignored.
+        unsafe {
+            if signal(stop, stopped as *const () as usize) == SIG_IGN {
+                signal(stop, SIG_IGN);
+            }
+        }
+    }
     let stress = std::env::var_os(GC_STRESS_VARIABLE).is_some();
     let migrate = std::env::var_os(MIGRATE_STRESS_VARIABLE).is_some();
     // SAFETY: the linked program defines both symbols as declared.

@@ -1086,6 +1086,50 @@ fn a_program_prints_and_reads_its_own_streams() {
     assert_eq!(String::from_utf8_lossy(&output.stderr), "cd\n");
 }
 
+/// SIGINT and SIGTERM end a program with 128 more than the signal's
+/// number, with what it printed before written out.
+#[test]
+fn a_program_asked_to_stop_exits_with_the_signal_status() {
+    use std::io::Read as _;
+
+    let db = setup_test_db(
+        "function main() -> int {
+  baml.io.print(\"a\");
+  baml.io.println(\"b\");
+  baml.sys.sleep(baml.time.Duration.from_seconds(20));
+  1
+}
+",
+    );
+    assert_no_diagnostic_errors(&db);
+    let directory = tempfile::tempdir().expect("a temporary directory");
+    let built = build(&db, "main", directory.path()).expect("the program compiles");
+    for (signal, status) in [("INT", 130), ("TERM", 143)] {
+        let mut child = std::process::Command::new(&built.lean)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("the program starts");
+        let mut printed = [0; 3];
+        child
+            .stdout
+            .as_mut()
+            .expect("a piped output")
+            .read_exact(&mut printed)
+            .expect("the program prints before it sleeps");
+        let sent = std::process::Command::new("/bin/kill")
+            .arg(format!("-{signal}"))
+            .arg(child.id().to_string())
+            .status()
+            .expect("`kill` runs");
+        assert!(sent.success(), "SIG{signal} is sent");
+        let output = child.wait_with_output().expect("the program ends");
+        assert_eq!(&printed, b"ab\n");
+        assert_eq!(output.status.code(), Some(status), "after SIG{signal}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+    }
+}
+
 /// Every process there is, as `ps` lists it: its id, its parent's, and
 /// its state with its command.
 fn processes() -> Vec<(u32, u32, String)> {
