@@ -1,5 +1,5 @@
 /**
- * The brand's code palette for the workbench's Monaco theme (baml-monarch.ts).
+ * The brand's code palette for the live editors' Monaco theme (baml-monarch.ts).
  * Monaco needs literal hex values, so the site's tokens are spelled out here
  * with the token each one copies.
  *

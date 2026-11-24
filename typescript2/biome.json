@@ -22,7 +22,6 @@
       "!app-developer-docs/next-env.d.ts",
       "!**/.react-email/**",
       "!**/baml_client/**",
-      "!app-website/lib/baml-docs/stdlib.json",
       "!pkg-grammar/baml.tmLanguage.json",
       "!app-vscode-ext/syntaxes/baml.tmLanguage.json",
       "!app-beps/**",
@@ -123,39 +122,6 @@
         "rules": {
           "style": {
             "noCommonJs": "off"
-          }
-        }
-      }
-    },
-    {
-      "assist": {
-        "actions": {
-          "source": {
-            "organizeImports": "off",
-            "useSortedAttributes": "off",
-            "useSortedKeys": "off",
-            "useSortedProperties": "off"
-          }
-        }
-      },
-      "includes": ["app-website/app/(home)/bamlcode/**"],
-      "linter": {
-        "rules": {
-          "a11y": {
-            "noAutofocus": "off",
-            "noSvgWithoutTitle": "off",
-            "useButtonType": "off",
-            "useKeyWithClickEvents": "off"
-          },
-          "security": {
-            "noDangerouslySetInnerHtml": "off"
-          },
-          "style": {
-            "useAtIndex": "off",
-            "useFilenamingConvention": "off"
-          },
-          "suspicious": {
-            "noArrayIndexKey": "off"
           }
         }
       }

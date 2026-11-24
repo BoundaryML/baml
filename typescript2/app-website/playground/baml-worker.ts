@@ -424,46 +424,46 @@ self.onmessage = async (event: MessageEvent) => {
       throw new Error(`${what} is not available in the website playground`);
     };
 
-    runtime = BamlWasmRuntime.create(
-      {
-        env: resolveEnv,
-        exec: async () => notSupported('exec'),
-        fetch: loggingFetch,
-        // Throwing (vs a silent no-op) lets the runtime complete the host
-        // call with an error instead of hanging the VM on it forever.
-        host_dispatch: () => notSupported('host functions'),
-        input: () => notSupported('read_input'),
-        lsp_make_request: () => {},
-        lsp_send_notification: (n: unknown) => {
-          // The marketing playground ignores LSP notifications, but custom
-          // editors (the learn2 Monaco) want positioned diagnostics. Forward
-          // publishDiagnostics so they can render squiggles + ErrorLens.
-          const note = mapsToRecordsDeep(n) as {
-            method?: string;
-            params?: unknown;
-          };
-          if (note?.method === 'textDocument/publishDiagnostics') {
-            self.postMessage({ params: note.params, type: 'lspDiagnostics' });
-          }
-        },
-        lsp_send_response: (response: LspResponse) => {
-          response = mapsToRecordsDeep(response);
-          const resolver = requestPromises.get(response.id);
-          if (resolver) {
-            requestPromises.delete(response.id);
-            resolver(response);
-          }
-        },
-        playground_send_notification: (
-          notification: PlaygroundNotification,
-        ) => {
-          notification = mapsToRecordsDeep(notification);
-          onPlaygroundNotification(notification);
-        },
-        shell: async () => notSupported('shell'),
+    // The wasm's type for `fetch` takes one argument, but the runtime calls it
+    // with five (call id, method, URL, headers as JSON, body), which is what
+    // `loggingFetch` takes. `lsp_make_request` is also absent from that type.
+    // The cast is the one app-promptfiddle's worker makes for the same reason.
+    const callbacks = {
+      env: resolveEnv,
+      exec: async () => notSupported('exec'),
+      fetch: loggingFetch,
+      // Throwing (vs a silent no-op) lets the runtime complete the host
+      // call with an error instead of hanging the VM on it forever.
+      host_dispatch: () => notSupported('host functions'),
+      input: () => notSupported('read_input'),
+      lsp_make_request: () => {},
+      lsp_send_notification: (n: unknown) => {
+        // The marketing playground ignores LSP notifications, but custom
+        // editors (the learn2 Monaco) want positioned diagnostics. Forward
+        // publishDiagnostics so they can render squiggles + ErrorLens.
+        const note = mapsToRecordsDeep(n) as {
+          method?: string;
+          params?: unknown;
+        };
+        if (note?.method === 'textDocument/publishDiagnostics') {
+          self.postMessage({ params: note.params, type: 'lspDiagnostics' });
+        }
       },
-      vfs.wasmVfs,
-    );
+      lsp_send_response: (response: LspResponse) => {
+        response = mapsToRecordsDeep(response);
+        const resolver = requestPromises.get(response.id);
+        if (resolver) {
+          requestPromises.delete(response.id);
+          resolver(response);
+        }
+      },
+      playground_send_notification: (notification: PlaygroundNotification) => {
+        notification = mapsToRecordsDeep(notification);
+        onPlaygroundNotification(notification);
+      },
+      shell: async () => notSupported('shell'),
+    } as unknown as Parameters<typeof BamlWasmRuntime.create>[0];
+    runtime = BamlWasmRuntime.create(callbacks, vfs.wasmVfs);
 
     // Drive the LSP handshake the runtime expects, without a real LSP client.
     await sendLspRequest('initialize', {
@@ -834,6 +834,12 @@ self.onmessage = async (event: MessageEvent) => {
     }
 
     case 'selectProject':
+      return;
+
+    // A lease on a project's runtime only means something to the remote
+    // (WebSocket) transport. The runtime in this worker is always resident.
+    case 'ensureProjectRuntime':
+    case 'releaseProjectRuntime':
       return;
 
     case 'requestState':
