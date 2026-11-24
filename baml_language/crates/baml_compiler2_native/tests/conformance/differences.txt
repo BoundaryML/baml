@@ -51,6 +51,11 @@ unwind_context_line (native-wrong): a native frame has no line
 sys_argv (interpreter-wrong): argv is to hold only the program's own arguments, as native does; `baml-cli run` still gives the binary and the target
   stdout 0\n
 
+# `baml.sys.exit` in a task.
+sys_exit_in_a_task_nothing_awaits (interpreter-wrong): `exit` in a task ends the program with its code once the task's `defer`s have run; the interpreter reports it as an error no `await` took and goes on
+  exit 5
+  stdout inner deferred\n
+
 # Closing a stream.
 http_sse_closed_early (interpreter-wrong): a native `close` ends the stream; the interpreter's does nothing while the program still holds it
   stdout "true"\n

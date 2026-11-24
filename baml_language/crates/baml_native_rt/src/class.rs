@@ -267,12 +267,13 @@ pub(crate) fn well_known_type(mutator: &Mutator, class: usize) -> usize {
     }
 }
 
-/// The `code` of `error` when it is a `baml.panics.Exit`.
+/// The status a `baml.panics.Exit` ends the process with, when `error` is
+/// one: its `code`, or the nearest status to it when it is past an `i32`.
 ///
 /// # Safety
 ///
 /// `error` is zero or a live object.
-pub(crate) unsafe fn exit_code(mutator: &Mutator, error: usize) -> Option<i64> {
+pub(crate) unsafe fn exit_status(mutator: &Mutator, error: usize) -> Option<i32> {
     // SAFETY: the caller's contract; an `Exit` has its code in its one
     // field, as an `int`.
     unsafe {
@@ -284,7 +285,8 @@ pub(crate) unsafe fn exit_code(mutator: &Mutator, error: usize) -> Option<i64> {
             return None;
         }
         let code = load(error + field_at(description(mutator, class)?, 0));
-        Some(i64::from_ne_bytes(code.to_ne_bytes()))
+        let code = i64::from_ne_bytes(code.to_ne_bytes());
+        Some(i32::try_from(code).unwrap_or(if code < 0 { i32::MIN } else { i32::MAX }))
     }
 }
 

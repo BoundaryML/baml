@@ -814,8 +814,15 @@ pub extern "C" fn baml_rt_task_finish(worker: &mut Mutator, value: usize) {
 /// the future keeps it beside the error, for an `await` to throw the two
 /// again as a handler in the task would have, and for the report of an
 /// error no `await` took.
+///
+/// A `baml.panics.Exit` ends the process here with its code, whether or
+/// not anything awaits the task: its `defer`s have run.
 #[unsafe(no_mangle)]
 pub extern "C" fn baml_rt_task_fail(worker: &mut Mutator, error: usize, trace: usize) {
+    // SAFETY: what the task threw is a live object.
+    if let Some(status) = unsafe { crate::class::exit_status(worker, error) } {
+        crate::unwind::end(worker, status);
+    }
     // SAFETY: called on a task.
     unsafe { (*worker.cur_task).flags |= TASK_FAILED };
     settle(worker, error, trace, FUTURE_ERROR);

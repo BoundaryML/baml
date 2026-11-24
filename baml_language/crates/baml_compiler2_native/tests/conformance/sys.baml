@@ -108,15 +108,19 @@ function sys_exit_caught() -> int {
     baml.panics.Exit => { return e.code + 100; },
   }
 }
-// From a task, it is the error of the `await` that takes it.
+// From a task, it ends the program once the task's `defer`s have run.
 function sys_exit_in_a_task() -> int {
   let leaving = spawn { sys_exit_code(4) };
   await leaving
 }
-// With no `await` to take it, it is one more error no `await` took,
-// whatever the program then exits with.
+// Whether or not anything awaits the task.
 function sys_exit_in_a_task_nothing_awaits() -> int {
   let leaving = spawn { sys_exit_code(5) };
   baml.sys.sleep(baml.time.Duration.from_milliseconds(20));
   baml.sys.exit(6)
+}
+// A task can catch it as any error.
+function sys_exit_caught_in_a_task() -> int {
+  let caught = spawn { sys_exit_caught() };
+  await caught
 }
