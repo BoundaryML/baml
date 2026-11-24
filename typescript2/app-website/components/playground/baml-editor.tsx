@@ -2,11 +2,8 @@
 
 import Editor, { type BeforeMount, type OnMount } from '@monaco-editor/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  BAML_THEME,
-  registerBaml,
-} from '@/app/(home)/bamlcode/_lib/baml-monarch';
-import { MONO_FONT } from '@/app/(home)/bamlcode/_lib/code-palette';
+import { BAML_THEME, registerBaml } from './baml-monarch';
+import { MONO_FONT } from './code-palette';
 import {
   type CellHandle,
   createCell,

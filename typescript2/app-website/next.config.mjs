@@ -138,6 +138,12 @@ const nextConfig = {
         destination: '/',
         permanent: true,
       },
+      // /bamlcode and its problem pages, removed.
+      {
+        source: '/bamlcode/:path*',
+        destination: '/',
+        permanent: true,
+      },
       {
         source: '/solutions',
         destination: '/',
