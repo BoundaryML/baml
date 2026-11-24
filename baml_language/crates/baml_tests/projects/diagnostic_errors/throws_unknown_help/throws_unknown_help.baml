@@ -1,0 +1,74 @@
+// E0096 when the type a closed `throws` clause fails to cover is `unknown`:
+// the message carries help that names the ways out.
+
+class Boom {
+    message: string,
+}
+
+class Bang {
+    message: string,
+}
+
+class Tool {
+    run: () -> int throws unknown,
+}
+
+// A stored function type has to write its clause, so `unknown` enters here.
+function stored(tool: Tool) -> int throws Boom {
+    (tool.run)()
+}
+
+function stored_never(tool: Tool) -> int throws never {
+    (tool.run)()
+}
+
+// The callee's parameter writes `throws unknown`, which erases the `Boom`
+// the caller passes in and catches.
+function apply(f: () -> int throws unknown) -> int {
+    f()
+}
+
+function through_callee_parameter() -> int throws never {
+    apply(() -> int {
+        throw Boom { message: "x" };
+    }) catch (e) {
+        Boom => 0,
+    }
+}
+
+// The same through a method reached from a value.
+class Runner {
+    label: string,
+
+    function apply(self, f: () -> int throws unknown) -> int {
+        f()
+    }
+}
+
+function through_method_parameter(runner: Runner) -> int throws never {
+    runner.apply(() -> int {
+        throw Boom { message: "x" };
+    }) catch (e) {
+        Boom => 0,
+    }
+}
+
+// The function's own parameter writes `throws unknown`.
+function own_parameter(f: () -> int throws unknown) -> int throws Boom {
+    f()
+}
+
+// The clause already lists `UnknownError`; one call is still unconverted.
+function half_converted(tool: Tool) -> int throws Boom | baml.errors.UnknownError {
+    (tool.run)()
+}
+
+// A value typed `unknown` is thrown directly.
+function thrown_value(value: unknown) -> int throws Boom {
+    throw value;
+}
+
+// An uncovered type that is not `unknown` gets no help.
+function known_type() -> int throws Boom {
+    throw Bang { message: "y" };
+}

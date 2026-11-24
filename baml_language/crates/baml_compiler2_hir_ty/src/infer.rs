@@ -2299,6 +2299,10 @@ struct InferenceContext<'db> {
     throws_channels: Vec<ThrowsChannel>,
     /// Explicit, closed contracts whose coverage is checked after inference.
     throws_contracts: Vec<ThrowsContract>,
+    /// Calls (keyed by call and by callee expression) whose `unknown` effect
+    /// enters through a function-typed parameter that writes `throws
+    /// unknown`: the parameter an E0096 at that expression names.
+    unknown_throws_params: FxHashMap<ExprId, crate::diagnostics::UnknownThrowsParam>,
     /// Every `_` hole instantiated as a fresh table variable, with the
     /// site it was written at. A hole whose class is still unsolved at
     /// finalize reports E0147 `CannotInferType` there (rustc's E0282
@@ -2409,6 +2413,7 @@ impl<'db> InferenceContext<'db> {
                 contributions: Vec::new(),
             }],
             throws_contracts: Vec::new(),
+            unknown_throws_params: FxHashMap::default(),
             hole_vars: Vec::new(),
             diagnosed_infer_vars: rustc_hash::FxHashSet::default(),
             annotation_cache: FxHashMap::default(),
@@ -6743,6 +6748,15 @@ impl<'db> InferenceContext<'db> {
             return Ty::error();
         };
         let callee_throws = throws.clone();
+        // An `unknown` effect is worth explaining if a closed clause later
+        // refuses it (E0096). The violation reports at the callee, or at the
+        // call when an enclosing `catch` re-records what its arms left.
+        if matches!(callee_throws.kind(), InferTy::Unknown)
+            && let Some(param) = self.unknown_throws_param_of_callee(callee)
+        {
+            self.unknown_throws_params.insert(callee, param.clone());
+            self.unknown_throws_params.insert(call, param);
+        }
         self.record_throw(callee, &callee_throws);
         // A bound method call: the receiver already fills the `self` slot,
         // so written arguments match against the remaining parameters.
@@ -12354,6 +12368,92 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
+    /// What the help of an E0096 whose uncovered type is `unknown` is
+    /// spelled from: `declared` split around `baml.errors.UnknownError`, and
+    /// the parameter recorded for the call at `at`, if any.
+    fn unknown_throws_help(
+        &self,
+        declared: &baml_type::Ty,
+        at: ExprId,
+    ) -> crate::diagnostics::UnknownThrowsHelp {
+        let unknown_error =
+            self.lang_decl(baml_base::LangPackage::Baml, &["errors"], "UnknownError");
+        let is_unknown_error = |ty: &baml_type::Ty| {
+            matches!(ty, baml_type::Ty::Class(name, args)
+                if args.is_empty() && Some(name) == unknown_error.as_ref())
+        };
+        let members: Vec<baml_type::Ty> = match declared {
+            baml_type::Ty::Never => Vec::new(),
+            baml_type::Ty::Union(members) => members.to_vec(),
+            other => vec![other.clone()],
+        };
+        crate::diagnostics::UnknownThrowsHelp {
+            declares_unknown_error: members.iter().any(is_unknown_error),
+            known: throws_clause_union(
+                members
+                    .into_iter()
+                    .filter(|member| !is_unknown_error(member)),
+            )
+            .unwrap_or(baml_type::Ty::Never),
+            param: self.unknown_throws_params.get(&at).cloned(),
+        }
+    }
+
+    /// The function-typed parameter whose WRITTEN `throws unknown` is where
+    /// the `unknown` thrown by calling `callee` enters: a parameter of the
+    /// enclosing function called directly, or a parameter of the source
+    /// function `callee` names. An omitted clause is an effect variable
+    /// solved per call, never `unknown`, so only a written one matches; a
+    /// parameter typed through an alias is skipped because an alias body
+    /// must keep its clause. Asked while the walk is at the call, where the
+    /// callee's scope is current.
+    fn unknown_throws_param_of_callee(
+        &self,
+        callee: ExprId,
+    ) -> Option<crate::diagnostics::UnknownThrowsParam> {
+        fn writes_unknown_throws(ty: &baml_type::Ty) -> bool {
+            match ty {
+                baml_type::Ty::Function { throws, .. } => {
+                    matches!(**throws, baml_type::Ty::Unknown)
+                }
+                baml_type::Ty::Union(members) => members.iter().any(writes_unknown_throws),
+                _ => false,
+            }
+        }
+        if let Some(PathResolution::Local(binding)) = self.path_resolution(callee)
+            && let BindingKind::Parameter(index) = binding.kind
+            && Some(binding.scope) == self.owner_scope
+            && let Some(function) = self.owner_function()
+            && let Some(param_ty) = self.param_tys.get(index)
+            && let InferTy::Function { throws, .. } = param_ty.kind()
+            && matches!(throws.kind(), InferTy::Unknown)
+        {
+            let data = baml_compiler2_hir::item_data::function_data(self.db, function);
+            return Some(crate::diagnostics::UnknownThrowsParam {
+                param: data.params.get(index)?.name.clone(),
+                callee: None,
+            });
+        }
+        // Anything else names its callee through a resolution: a free
+        // function, or a method reached through a value (`tools.apply(f)`).
+        let DeclRef::Source(function) = self.result.callee_resolution(callee)?.callable(self.db)?
+        else {
+            return None;
+        };
+        let param = callable_signature(self.db, DeclRef::Source(function))
+            .params
+            .iter()
+            .find(|param| writes_unknown_throws(&param.ty))?;
+        Some(crate::diagnostics::UnknownThrowsParam {
+            param: param.name.clone()?,
+            callee: Some(
+                baml_compiler2_hir::item_data::function_data(self.db, function)
+                    .name
+                    .clone(),
+            ),
+        })
+    }
+
     /// One effect contribution: a thrown value or a callee's throws,
     /// accumulated into the current channel and, when the owner DECLARED
     /// its clause, checked against that contract - including when the
@@ -14331,6 +14431,15 @@ impl<'db> InferenceContext<'db> {
                         ) else {
                             continue;
                         };
+                        let declared_plain = declared.to_plain();
+                        let unknown_help = match &extra_union {
+                            baml_type::Ty::Unknown => true,
+                            baml_type::Ty::Union(members) => members
+                                .iter()
+                                .any(|member| matches!(member, baml_type::Ty::Unknown)),
+                            _ => false,
+                        }
+                        .then(|| self.unknown_throws_help(&declared_plain, at));
                         // The error-CHANNEL pin (B-1082): a surviving
                         // violation also records on the mismatch channel
                         // at the thrown value. This runs AFTER the
@@ -14342,8 +14451,9 @@ impl<'db> InferenceContext<'db> {
                             .or_insert((declared.clone().into_ty(), extra.clone().into_ty()));
                         diags.push(TirDiagnostic {
                             error: TirTypeError::ThrowsContractViolation {
-                                declared: declared.to_plain(),
+                                declared: declared_plain,
                                 extra: extra_union,
+                                unknown_help,
                             },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Expr(at),
