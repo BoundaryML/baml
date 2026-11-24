@@ -133,6 +133,72 @@ function generic<T>(value: T) -> map<string, T> {
     }
 }
 
+/// A spread copies its operand from ONE state of it: the operand is read by
+/// a single native call that takes the container's lock, never by two reads
+/// another task could change it between.
+///
+/// The interleaving itself cannot be made deterministic in a test (it needs
+/// a task switch between two instructions), so this pins the structure that
+/// rules it out. A map operand is read by `Map._entries` alone: `keys()`
+/// followed by `values()` would let a map that changed between the calls
+/// pair a key with another key's value. A list operand is read by `splice`
+/// alone, which takes the whole list at once: its length is never read
+/// separately from its elements. The only length either lowering reads is
+/// that of a list no other task can reach (the literal under construction,
+/// the snapshot).
+#[test]
+fn a_spread_reads_its_operand_in_one_native_call() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function merge(source: map<string, int>) -> map<string, int> {
+  { "a": 0, ...source, "z": 1 }
+}
+function append(source: int[]) -> int[] {
+  [0, ...source, 1]
+}
+"#,
+    );
+    assert_no_diagnostic_errors(&db);
+    let output = render_mir(&db, file);
+    // A statement or terminator that names the parameter `source`, local `_1`
+    // (and not `_10`, `_11`, ...). Its declaration is not a use.
+    let mentions_source = |line: &str| {
+        !line.trim_start().starts_with("let ")
+            && line.match_indices("_1").any(|(at, _)| {
+                !line[at + 2..]
+                    .chars()
+                    .next()
+                    .is_some_and(|next| next.is_ascii_digit())
+            })
+    };
+
+    let merge = function_mir(&output, "merge");
+    assert_eq!(merge.matches("Map._entries").count(), 1, "{merge}");
+    for other_read in [
+        "Map.keys",
+        "Map.values",
+        "Map.index",
+        "Map.get",
+        "Map.has",
+        "Map.length",
+    ] {
+        assert!(!merge.contains(other_read), "{other_read} in:\n{merge}");
+    }
+    // `source` (`_1`) is an operand of that one call and of nothing else.
+    let reads_of_source = merge.lines().filter(|line| mentions_source(line)).count();
+    assert_eq!(reads_of_source, 1, "{merge}");
+
+    let append = function_mir(&output, "append");
+    assert_eq!(append.matches("Array.splice").count(), 1, "{append}");
+    for other_read in ["Array.length", "Array.at", "Array.slice", "Array.concat"] {
+        assert!(!append.contains(other_read), "{other_read} in:\n{append}");
+    }
+    let reads_of_source = append.lines().filter(|line| mentions_source(line)).count();
+    assert_eq!(reads_of_source, 1, "{append}");
+}
+
 #[test]
 fn primitive_template_holes_skip_the_generic_renderer() {
     let mut db = make_db();

@@ -754,6 +754,81 @@ test "map_spread_copies_at_the_spread_position" {
     assert.is_true(lms_map_copies_at_the_spread_position())
 }
 
+// ─── Maps: the copy is one state of the operand ──────────────────────────────
+// A spread takes every entry of its operand in one read, then sets them into
+// the new map. Setting a key runs its `hash`, which is user code here and
+// changes the operand while the copy is under way. What was copied does not
+// change: it is the operand as it was at the spread, each key with the value
+// it had then.
+
+class LmsTamper {
+    targets: map<LmsTamperKey, int>[],
+    armed: bool,
+    hashed: int,
+}
+
+class LmsTamperKey {
+    id: int,
+    tamper: LmsTamper,
+
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never {
+            self.id == other.id
+        }
+    }
+
+    implements baml.Hash {
+        function hash(self, state: baml.hash.Hasher) -> void throws never {
+            self.tamper.hashed += 1;
+            if (self.tamper.armed) {
+                // Disarm first: emptying the map must not re-enter here.
+                self.tamper.armed = false;
+                self.tamper.targets[0].clear();
+            }
+            self.id.hash(state);
+        }
+    }
+}
+
+function lms_map_copy_is_one_state_of_the_operand() -> bool {
+    let tamper = LmsTamper {
+        targets: [],
+        armed: false,
+        hashed: 0,
+    };
+    let first = LmsTamperKey {
+        id: 1,
+        tamper: tamper,
+    };
+    let second = LmsTamperKey {
+        id: 2,
+        tamper: tamper,
+    };
+    let third = LmsTamperKey {
+        id: 3,
+        tamper: tamper,
+    };
+    let source: map<LmsTamperKey, int> = {};
+    source[first] = 10;
+    source[second] = 20;
+    source[third] = 30;
+    tamper.targets.push(source);
+    tamper.hashed = 0;
+    tamper.armed = true;
+    // The first `set` of the copy hashes `first`, which empties `source`.
+    let copy = { ...source };
+    let ids = copy.keys().map((key: LmsTamperKey) -> int { key.id });
+    tamper.armed == false
+        && source.length() == 0
+        && ids == [1, 2, 3]
+        && copy.values() == [10, 20, 30]
+        && copy[second] == 20
+}
+
+test "map_spread_copy_is_one_state_of_the_operand" {
+    assert.is_true(lms_map_copy_is_one_state_of_the_operand())
+}
+
 // ─── Maps: key types, aliases, generics, narrowing ───────────────────────────
 
 function lms_map_int_keys() -> bool {

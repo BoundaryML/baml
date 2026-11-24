@@ -6210,8 +6210,7 @@ impl<'db> LoweringContext<'db> {
 
             AstExpr::Map { members } => {
                 let (key_ty, value_ty) = self.map_kv_templates(expr_id)?;
-                let map_ty = self.expr_ty(expr_id)?;
-                let map = Place::local(self.builder.temp(map_ty.clone()));
+                let map = Place::local(self.builder.temp(self.expr_ty(expr_id)?));
                 self.builder
                     .assign(map.clone(), Rvalue::Map(key_ty, value_ty, Vec::new()));
                 // Members run strictly in source order, each one landing in
@@ -6234,7 +6233,7 @@ impl<'db> LoweringContext<'db> {
                         AstMapMember::Spread(operand) => {
                             let source = self.builder.temp(self.expr_ty(operand)?);
                             self.lower_expr(operand, Place::local(source))?;
-                            self.emit_map_spread(&map, source, &map_ty);
+                            self.emit_map_spread(&map, source);
                         }
                     }
                 }
@@ -11283,47 +11282,43 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// Copies every entry of the map in `source` into `map`, a map literal
-    /// under construction whose runtime type is `map_ty`: one `set` per
-    /// entry, in `source`'s iteration order.
+    /// under construction: one `set` per entry, in `source`'s iteration
+    /// order.
     ///
-    /// `keys()` and `values()` are index-aligned snapshots, so `source` is
-    /// read exactly twice, here, before any `set` runs: a `set` may run user
-    /// code (a key's `hash`/`equals`) and yield, and nothing that happens to
-    /// `source` from then on changes what is copied. The loop indexes the
-    /// snapshots only, never `source`, and is bounded by both lengths, so it
-    /// cannot read out of range even if another task changed `source`
-    /// between the two snapshot calls. `source` is never written.
+    /// `source` is read exactly once, by one native call that takes the
+    /// map's lock and returns all of its entries together as the flat list
+    /// `[key0, value0, key1, value1, ...]` (`baml.Map._entries`). The copy is
+    /// therefore one state of `source`: every key is paired with the value
+    /// it had in that state, whatever another task does to `source` before,
+    /// between or after the `set`s. Two reads (`keys()`, then `values()`)
+    /// would not give that: the VM can switch tasks when a native call
+    /// returns, and a map changed between them would pair a key with
+    /// another key's value. The loop indexes the snapshot only, never
+    /// `source`, so a `set` that runs user code (a key's `hash`/`equals`)
+    /// and yields changes nothing that is copied. `source` is never written.
     ///
-    /// The snapshots are typed by the literal's own key and value types: the
-    /// checker proved the operand's are subtypes of them, and the lists are
-    /// only read. The operand's static type is not inspected (the checker
-    /// accepted it as a map, aliases included).
-    fn emit_map_spread(&mut self, map: &Place, source: Local, map_ty: &RuntimeTy) {
-        let (key_ty, value_ty) = match map_ty {
-            RuntimeTy::Map { key, value, .. } => ((**key).clone(), (**value).clone()),
-            _ => (RuntimeTy::Unknown, RuntimeTy::Unknown),
-        };
-        let keys = self.builder.temp(RuntimeTy::List(Box::new(key_ty.clone())));
-        self.emit_map_call(
-            "keys",
-            vec![Operand::Copy(Place::local(source))],
-            Place::local(keys),
-        );
-        let values = self
+    /// The snapshot is an `unknown[]` and its elements are read as
+    /// `unknown`: `set` takes them as the values they are, and the checker
+    /// already proved the operand's key and value types fit the literal's.
+    /// The operand's static type is not inspected (the checker accepted it
+    /// as a map, aliases included).
+    fn emit_map_spread(&mut self, map: &Place, source: Local) {
+        let entries = self
             .builder
-            .temp(RuntimeTy::List(Box::new(value_ty.clone())));
+            .temp(RuntimeTy::List(Box::new(RuntimeTy::Unknown)));
         self.emit_map_call(
-            "values",
+            "_entries",
             vec![Operand::Copy(Place::local(source))],
-            Place::local(values),
+            Place::local(entries),
         );
-        let key_count = self.array_len_local(keys);
-        let value_count = self.array_len_local(values);
-        let index = self.const_int_local(0);
+        // Twice the entry count. It is the snapshot's own length, which
+        // nothing else can reach, never `source`'s.
+        let length = self.array_len_local(entries);
+        let key_index = self.const_int_local(0);
         let one = self.const_int_local(1);
+        let two = self.const_int_local(2);
 
         let header = self.builder.create_block();
-        let check_values = self.builder.create_block();
         let body = self.builder.create_block();
         let exit = self.builder.create_block();
         if !self.builder.is_current_terminated() {
@@ -11331,47 +11326,43 @@ impl<'db> LoweringContext<'db> {
         }
 
         self.builder.set_current_block(header);
-        let more_keys = self.builder.temp(RuntimeTy::Bool);
+        let more = self.builder.temp(RuntimeTy::Bool);
         self.builder.assign(
-            Place::local(more_keys),
+            Place::local(more),
             Rvalue::BinaryOp {
                 op: BinOp::Lt,
-                left: Operand::Copy(Place::local(index)),
-                right: Operand::Copy(Place::local(key_count)),
+                left: Operand::Copy(Place::local(key_index)),
+                right: Operand::Copy(Place::local(length)),
             },
         );
         self.builder
-            .branch(Operand::Copy(Place::local(more_keys)), check_values, exit);
-
-        self.builder.set_current_block(check_values);
-        let more_values = self.builder.temp(RuntimeTy::Bool);
-        self.builder.assign(
-            Place::local(more_values),
-            Rvalue::BinaryOp {
-                op: BinOp::Lt,
-                left: Operand::Copy(Place::local(index)),
-                right: Operand::Copy(Place::local(value_count)),
-            },
-        );
-        self.builder
-            .branch(Operand::Copy(Place::local(more_values)), body, exit);
+            .branch(Operand::Copy(Place::local(more)), body, exit);
 
         self.builder.set_current_block(body);
-        let key = self.builder.temp(key_ty);
+        let key = self.builder.temp(RuntimeTy::Unknown);
         self.builder.assign(
             Place::local(key),
             Rvalue::Use(Operand::Copy(Place::Index {
-                base: Box::new(Place::Local(keys)),
-                index,
+                base: Box::new(Place::Local(entries)),
+                index: key_index,
                 kind: IndexKind::Array,
             })),
         );
-        let value = self.builder.temp(value_ty);
+        let value_index = self.builder.temp(RuntimeTy::Int);
+        self.builder.assign(
+            Place::local(value_index),
+            Rvalue::BinaryOp {
+                op: BinOp::Add,
+                left: Operand::Copy(Place::local(key_index)),
+                right: Operand::Copy(Place::local(one)),
+            },
+        );
+        let value = self.builder.temp(RuntimeTy::Unknown);
         self.builder.assign(
             Place::local(value),
             Rvalue::Use(Operand::Copy(Place::Index {
-                base: Box::new(Place::Local(values)),
-                index,
+                base: Box::new(Place::Local(entries)),
+                index: value_index,
                 kind: IndexKind::Array,
             })),
         );
@@ -11386,11 +11377,11 @@ impl<'db> LoweringContext<'db> {
             ignored,
         );
         self.builder.assign(
-            Place::local(index),
+            Place::local(key_index),
             Rvalue::BinaryOp {
                 op: BinOp::Add,
-                left: Operand::Copy(Place::local(index)),
-                right: Operand::Copy(Place::local(one)),
+                left: Operand::Copy(Place::local(key_index)),
+                right: Operand::Copy(Place::local(two)),
             },
         );
         self.builder.goto(header);
