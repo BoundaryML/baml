@@ -1057,6 +1057,18 @@ function Broken(: int = 1, value: int = 2) -> int {
         ));
     }
 
+    /// `upcast` is a keyword only in the interface view, so `env.upcast`
+    /// still reads an environment variable of that name: it is recorded as
+    /// one, as `env.OTHER` is, and is not a path into `env`.
+    #[test]
+    fn env_access_reads_a_variable_named_upcast() {
+        let source = "function f() -> string? { env.upcast ?? env.OTHER }";
+        let (_items, diags, env_var_refs) = lower_file(&parse(source), None, None);
+        assert!(diags.is_empty(), "expected no diagnostics, got: {diags:#?}");
+        let names: Vec<&str> = env_var_refs.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, ["upcast", "OTHER"]);
+    }
+
     #[test]
     fn constructorless_recovered_object_lowers_to_missing() {
         let source = r#"

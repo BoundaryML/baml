@@ -560,3 +560,104 @@ fn the_removed_as_spelling_of_upcast_names_its_replacement() {
         );
     }
 }
+
+/// `upcast` is a keyword only in `.upcast<T>()`. Everywhere a plain word may
+/// stand it reads as that word did before it was a token kind of its own: the
+/// tree and the diagnostics of each source below are those of the same source
+/// with an ordinary word in its place.
+#[test]
+fn upcast_is_an_ordinary_word_outside_the_view() {
+    // The same length as `upcast`, so every range is comparable.
+    const PLAIN: &str = "upcasx";
+    let sources = [
+        // `env.NAME`
+        "function f() -> string { env.upcast }",
+        "function f() -> string? { env.upcast ?? env.OTHER }",
+        // bindings
+        "function f() -> int { let upcast = 1; upcast }",
+        "function f() -> int { const upcast = 1; upcast }",
+        "function f(xs: int[]) -> int { for (let upcast in xs) { upcast; } 0 }",
+        "function f(v: (int, int)) -> int { match (v) { (1, let upcast) => upcast, _ => 0 } }",
+        "function f(v: int?) -> int { if let upcast = v { upcast } else { 0 } }",
+        "function f(v: C) -> int { match (v) { C { upcast } => upcast, _ => 0 } }",
+        "function f(v: C) -> int { match (v) { C { upcast: let n } => n, _ => 0 } }",
+        "function f() -> int { g() catch (upcast) { _ => 1 } }",
+        "function f() -> int { let g = (upcast) => upcast; g(1) }",
+        "function f() -> int { let g = (upcast: int) -> int => upcast; g(1) }",
+        // parameters and arguments
+        "function f(upcast: int) -> int { upcast }",
+        "function f() -> int { g(upcast = 1) }",
+        "function f() -> int { g(1, upcast = 1, other = 2) }",
+        // fields
+        "class C { upcast int }",
+        "class C { upcast: int, other: string }",
+        "class C { other: int, upcast: string? = null }",
+        "function f() -> C { C { upcast: 1 } }",
+        "function f(upcast: int) -> C { C { upcast, other: 2 } }",
+        "function f(c: C) -> int { c.upcast + c?.upcast + c.upcast() }",
+        "function f(c: C) -> int { c.upcast = 1; c.upcast += 1; c.upcast }",
+        "interface I { upcast: int }",
+        "class C { real: int, implements I { upcast as real } }",
+        "class C { upcast: int, implements I { real as upcast } }",
+        // functions and methods
+        "function upcast() -> int { 1 }",
+        "function upcast<T>(x: T) -> T { x }",
+        "function f() -> int { upcast() + upcast(1) + upcast<int>(1) }",
+        "class C { function upcast(self) -> int { 1 } }",
+        "class C { function upcast<T>(self, x: T) -> T { x } }",
+        "interface I { function upcast(self) -> int throws never }",
+        "function f() -> int { C.upcast() + C.upcast }",
+        // types and namespaces
+        "class upcast { x int }",
+        "interface upcast { x: int }",
+        "enum upcast { A, B }",
+        "type upcast = int",
+        "function f(x: upcast) -> upcast { x }",
+        "function f(x: upcast<int>) -> upcast.Inner { x }",
+        "function f<upcast>(x: upcast) -> upcast { x }",
+        "function f() -> int { upcast.Inner.make() + root.upcast.value }",
+        "function f() -> upcast.Inner { upcast.Inner { x: 1 } }",
+        "function f(x: int) -> bool { x is upcast }",
+        "implements upcast for C { }",
+        "implements I for upcast { }",
+        // enum variants
+        "enum E { upcast, Other }",
+        "enum E { Other upcast }",
+        "function f() -> E { E.upcast }",
+        "function f(e: E) -> int { match (e) { E.upcast => 1, _ => 0 } }",
+        // map keys and other literals
+        "function f() -> map<string, int> { { upcast: 1 } }",
+        "function f() -> map<string, int> { map { upcast: 1, other: 2 } }",
+        "function f(upcast: int) -> int[] { [upcast, upcast] }",
+        "function f(upcast: string) -> string { `a ${upcast} b` }",
+        // declarations with their own keywords
+        "test upcast { }",
+        "test \"t\" { let upcast = 1; assert.equal(upcast, 1) }",
+        "function upcast(x: string) -> string { client: \"openai/gpt-4o\" prompt: `hi` }",
+        "function f(upcast: string) -> string { client: upcast prompt: `hi` }",
+        "class C { x int @alias(upcast) @@upcast }",
+        "//baml:upcast\nfunction f() -> int { 1 }",
+    ];
+    let mut differences = String::new();
+    for source in sources {
+        let word = parse(&source.replace("upcast", PLAIN));
+        let keyword = parse(source);
+        let as_word = |text: String| {
+            text.replace("Upcast \"upcast\"", &format!("Word \"{PLAIN}\""))
+                .replace("upcast", PLAIN)
+        };
+        let expected = format!("{}{:#?}", word.tree.debug_tree(), word.errors);
+        let found = as_word(format!(
+            "{}{:#?}",
+            keyword.tree.debug_tree(),
+            keyword.errors
+        ));
+        if expected != found {
+            let _ = writeln!(differences, "{source}");
+        }
+    }
+    assert!(
+        differences.is_empty(),
+        "`upcast` does not read as a plain word in:\n{differences}"
+    );
+}

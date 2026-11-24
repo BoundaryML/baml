@@ -2264,7 +2264,7 @@ pub(crate) fn test_def(
     // A bare identifier can never resolve at the top level: report the fix
     // instead of a downstream "unresolved name".
     if position == TestPosition::Item
-        && p.cur.at(TokenKind::Word)
+        && p.cur.at_set(crate::lookahead::PLAIN_WORD)
         && (p.cur.nth_is(1, TokenKind::LBrace) || p.cur.nth_is(1, TokenKind::With))
     {
         let name = p.cur.text_at(0).unwrap_or_default();

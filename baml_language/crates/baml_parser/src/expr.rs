@@ -38,9 +38,10 @@ use crate::{
     error::ParseError,
     items::{Annotation, StringSite, dotted_name, param_list, string_lit},
     lookahead::{
-        PATH_SEGMENT, at_binding_intro, at_catch_clause_start, brace_literal_before_body,
-        brace_looks_like_fields, looks_like_generic_args, looks_like_generic_lambda,
-        looks_like_lambda, looks_like_map, looks_like_qualified_projection, looks_like_upcast,
+        PATH_SEGMENT, PLAIN_WORD, at_binding_intro, at_catch_clause_start,
+        brace_literal_before_body, brace_looks_like_fields, looks_like_generic_args,
+        looks_like_generic_lambda, looks_like_lambda, looks_like_map,
+        looks_like_qualified_projection, looks_like_upcast,
     },
     parser::{Parse, Parser},
     patterns::{pattern, pattern_after_introducer},
@@ -584,12 +585,12 @@ fn primary(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> 
     // `env.NAME` sugar; `env.get(…)` is an ordinary path.
     if p.cur.at(TokenKind::Env)
         && p.cur.nth_is(1, TokenKind::Dot)
-        && p.cur.nth_is(2, TokenKind::Word)
+        && p.cur.kind(2).is_some_and(|kind| PLAIN_WORD.contains(kind))
         && !p.cur.nth_is(3, TokenKind::LParen)
         && let Some(env) = p.cur.eat::<ctx::Env>()
         && let Some(dot) = p.cur.eat::<punct::Dot>()
     {
-        let name = p.expect_name(KindSet::single(TokenKind::Word), "identifier after 'env.'");
+        let name = p.expect_name(PLAIN_WORD, "identifier after 'env.'");
         return Ok(AnyExpr::EnvAccess(
             p.alloc(Mark::of(env), EnvAccessExpr { env, dot, name }),
         ));

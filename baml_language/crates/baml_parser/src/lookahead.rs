@@ -251,6 +251,13 @@ pub(crate) fn looks_like_paren_type_suffix(cur: Cursor<'_>) -> bool {
     })
 }
 
+/// A word that no grammar rule reads as a keyword at the start of a name:
+/// `Word`, and `upcast`, which is a keyword only in `.upcast<T>()`. The
+/// positions that take a plain word and not every contextual keyword
+/// (`env.NAME`, a bare `test` name) take this set, so `upcast` reads there
+/// as it did before it had a token kind of its own.
+pub(crate) const PLAIN_WORD: KindSet = KindSet::new(&[TokenKind::Word, TokenKind::Upcast]);
+
 /// Tokens that may end the `Self` type of a qualified projection, so that an
 /// `as` after one of them is the projection's and not a name.
 const ENDS_PROJECTION_SELF: KindSet = PATH_SEGMENT.union(KindSet::new(&[
