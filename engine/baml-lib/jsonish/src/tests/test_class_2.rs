@@ -116,7 +116,7 @@ test_deserializer!(
       "type": "component",
       "name": "PostCard",
       "description": "Card component for displaying post preview on home page",
-      "props": "{title: string, excerpt: string, author: Author, date: string, onClick: () => void}"
+      "props": "{\"title\": \"string\", \"excerpt\": \"string\", \"author\": \"Author\", \"date\": \"string\", \"onClick\": \"() => void\"}"
     }
   ]
 );
@@ -162,7 +162,7 @@ test_deserializer!(
       "type": "component",
       "name": "PostCard",
       "description": "Card component for displaying post preview on home page",
-      "props": "{title: string, excerpt: string, author: Author, date: string, onClick: () => void}"
+      "props": "{\"title\": \"string\", \"excerpt\": \"string\", \"author\": \"Author\", \"date\": \"string\", \"onClick\": \"() => void\"}"
     },
     {
       "type": "page",
@@ -222,7 +222,7 @@ test_deserializer!(
       "type": "component",
       "name": "PostCard",
       "description": "Card component for displaying post preview on home page",
-      "props": "{title: string, excerpt: string, author: Author, date: string, onClick: () => void}"
+      "props": "{\"title\": \"string\", \"excerpt\": \"string\", \"author\": \"Author\", \"date\": \"string\", \"onClick\": \"() => void\"}"
     },
     {
       "type": "page",
@@ -485,7 +485,7 @@ Actions:
       "type": "component",
       "name": "CommentSection",
       "description": "Comments display and input component",
-      "props": "{comments: Comment[], postId: string, onAddComment: (content: string) => void}"
+      "props": "{\"comments\": \"Comment[]\", \"postId\": \"string\", \"onAddComment\": \"(content: string) => void\"}"
     },
     {
       "type": "component",

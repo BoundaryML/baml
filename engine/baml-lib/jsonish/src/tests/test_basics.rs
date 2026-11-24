@@ -36,6 +36,46 @@ test_deserializer!(
     "\"hello\""
 );
 
+const TOOL_CALL_SCHEMA: &str = r#"
+class ToolCall {
+    name string
+    arguments string
+}
+"#;
+
+test_deserializer!(
+    test_object_to_string_coercion_preserves_valid_json,
+    TOOL_CALL_SCHEMA,
+    r#"{"name": "create_calendar_event", "arguments": {"summary": "Lunch with Alice", "start_time": "2026-11-06T12:30:00-05:00"}}"#,
+    TypeIR::class("ToolCall"),
+    {
+        "name": "create_calendar_event",
+        "arguments": "{\"summary\": \"Lunch with Alice\", \"start_time\": \"2026-11-06T12:30:00-05:00\"}"
+    }
+);
+
+test_deserializer!(
+    test_nested_object_and_array_to_string_coercion,
+    TOOL_CALL_SCHEMA,
+    r#"{"name": "complex_tool", "arguments": {"nested": {"empty_obj": {}, "empty_arr": []}, "items": [1, true, null, "text"], "escaped": "Line 1\n\"quoted\""}}"#,
+    TypeIR::class("ToolCall"),
+    {
+        "name": "complex_tool",
+        "arguments": "{\"nested\": {\"empty_obj\": {}, \"empty_arr\": []}, \"items\": [1, true, null, \"text\"], \"escaped\": \"Line 1\\n\\\"quoted\\\"\"}"
+    }
+);
+
+test_deserializer!(
+    test_array_to_string_coercion_preserves_valid_json,
+    TOOL_CALL_SCHEMA,
+    r#"{"name": "batch_tool", "arguments": [{"id": 1, "tag": "urgent"}, {"id": 2, "tag": "low"}]}"#,
+    TypeIR::class("ToolCall"),
+    {
+        "name": "batch_tool",
+        "arguments": "[{\"id\": 1, \"tag\": \"urgent\"}, {\"id\": 2, \"tag\": \"low\"}]"
+    }
+);
+
 test_deserializer!(test_bool, EMPTY_FILE, "true", TypeIR::bool(), true);
 test_deserializer!(test_bool_2, EMPTY_FILE, "True", TypeIR::bool(), true);
 test_deserializer!(test_bool_3, EMPTY_FILE, "false", TypeIR::bool(), false);
