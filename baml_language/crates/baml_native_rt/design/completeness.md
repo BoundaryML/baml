@@ -367,6 +367,7 @@ Reported as `runtime builtin (vm)` on the builtin itself.
   ```baml
   function main() -> int { let s = baml.sync.Semaphore.new(1); let p = s.acquire(); let q = s.acquire(); 1 }
   ```
+- [~] **The entry returns while tasks live.** A native program runs every task that can still run and ends once none can. A task at work (a 200 ms sleep, then a print) finishes and prints after the result, status 0, as on the interpreter (`task_main_returns_with_a_task_working`). One that waits for good (a second `acquire` of a held semaphore) is left at once, status 0, nothing said; the interpreter waits out its 15 s shutdown timeout, warns `abandoned 1 leaked background future ...` with the task's stack, status 0 (`differences.txt`, `sync_main_returns_with_a_task_waiting`, undecided).
 - [ ] **A native cannot hold a heap address across an allocation** (`gc.md` "Not built": no pinning, no large-object space). A `uint8array` is copied to be held across a stop (`BytesRef::hold`). Capability limit for any future native that hands a buffer to the OS for a long read.
 - [ ] **An object larger than the space forces a collection into a bigger space; memory is never returned to the OS** (`memory.md`, `gc.md`).
 - [ ] **One I/O thread, one Tokio runtime** (`natives.md` "Not built").

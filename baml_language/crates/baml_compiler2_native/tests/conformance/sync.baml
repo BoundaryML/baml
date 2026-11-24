@@ -167,3 +167,12 @@ function sync_deadlock() -> int {
   let q = s.acquire();
   1
 }
+// The entry returns while a task waits for a hold nothing will release.
+function sync_main_returns_with_a_task_waiting() -> int {
+  let gate = baml.sync.Semaphore.new(1);
+  let held = gate.acquire();
+  let waiting = spawn { let mine = gate.acquire(); baml.io.println("acquired"); mine.release(); 2 };
+  sync_until_queued(gate, 1);
+  baml.io.println(`queued ${gate.queued_count()}`);
+  1
+}

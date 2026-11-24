@@ -218,3 +218,12 @@ function task_timer_during_handoffs() -> int {
   let woke_during = task_spin(order, 5000000);
   (await sleeper) * 10 + woke_during
 }
+// The entry returns while a task nothing awaits is still at work.
+function task_main_returns_with_a_task_working() -> int {
+  let busy = spawn {
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(200));
+    baml.io.println("woke");
+    2
+  };
+  1
+}

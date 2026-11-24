@@ -59,3 +59,7 @@ sync_deadlock (interpreter-wrong): a native program whose every task waits for a
   interpreter hangs
   exit 70
   stderr fatal: deadlock: every task waits for another\n
+
+# The entry returns while a task nothing awaits waits for good.
+sync_main_returns_with_a_task_waiting (undecided): a native program ends once no task can run; the interpreter waits out its shutdown timeout (15 s) and then warns of the task it abandons
+  stdout queued 1\n1\n
