@@ -3,7 +3,7 @@ name = "python-integ-tests"
 version = "0.1.0"
 description = ""
 authors = [{ name = "None" }]
-requires-python = "~=3.9"
+requires-python = ">=3.10,<3.14"
 readme = "README.md"
 dependencies = [
     "flask-httpauth>=4.8.0",
