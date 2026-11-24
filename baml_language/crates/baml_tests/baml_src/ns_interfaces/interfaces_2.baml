@@ -679,8 +679,8 @@ class Fz20D {
 }
 function fz20_main() -> string {
     let d = Fz20D { a_label: "A_val", b_label: "B_val" }
-    let a_val = d.as<Fz20A>.label
-    let b_val = d.as<Fz20B>.label
+    let a_val = d.upcast<Fz20A>().label
+    let b_val = d.upcast<Fz20B>().label
     return a_val + "|" + b_val
 }
 test "fuzz_bug20_as_projection_field_uses_own_view_in_requires_chain" {

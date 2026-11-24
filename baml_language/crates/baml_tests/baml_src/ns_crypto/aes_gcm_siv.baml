@@ -70,11 +70,11 @@ test "aes256_round_trips_through_the_aead_interface" {
     // Key and nonce from the real system CSPRNG, and both directions reached
     // through an `Aead`-typed parameter so the `VirtualCall` resolves the impl
     // on the runtime class.
-    let rng = baml.random.SystemRandom.get().as<baml.random.Rng>;
+    let rng = baml.random.SystemRandom.get().upcast<baml.random.Rng>();
     let cipher = baml.crypto.Aes256GcmSiv.new(baml.crypto.Aes256GcmSiv.random_key(rng));
     assert.is_true(
         seal_and_open(
-            cipher.as<baml.crypto.Aead>,
+            cipher.upcast<baml.crypto.Aead>(),
             rng.random(12),
             b"attack at dawn",
             b"envelope-v1",
@@ -226,7 +226,7 @@ test "aes256_wrong_nonce_length_is_invalid_argument" {
 // ─── Key generation ─────────────────────────────────────────────────────────
 
 test "random_key_draws_the_algorithms_key_length" {
-    let rng = baml.random.SystemRandom.get().as<baml.random.Rng>;
+    let rng = baml.random.SystemRandom.get().upcast<baml.random.Rng>();
     assert.equal(baml.crypto.Aes256GcmSiv.random_key(rng).length(), 32);
     assert.equal(baml.crypto.Aes128GcmSiv.random_key(rng).length(), 16)
 }
@@ -234,7 +234,7 @@ test "random_key_draws_the_algorithms_key_length" {
 test "random_key_feeds_new_directly" {
     // `GenerateKey` returns raw bytes so they can be stored or transported. The
     // contract is that the same algorithm's `new` accepts them as they are.
-    let rng = baml.random.ChaCha20.new().as<baml.random.Rng>;
+    let rng = baml.random.ChaCha20.new().upcast<baml.random.Rng>();
     let cipher = baml.crypto.Aes128GcmSiv.new(baml.crypto.Aes128GcmSiv.random_key(rng));
     let nonce = rng.random(12);
     assert.equal(

@@ -78,5 +78,5 @@ class C1 { v: int }
 function takes_b(b: B1) -> int throws never { 0 }
 
 function two_faults_one_span(c: C1) -> int throws never {
-    takes_b(c.as<A1>)
+    takes_b(c.upcast<A1>())
 }

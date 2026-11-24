@@ -28,6 +28,12 @@ const DOTTED_IDENT = String.raw`${IDENT}(?:${ACCESSOR}${IDENT})*`;
 const TYPE_ARGS_BEFORE_BLOCK = String.raw`(?:<[^{}=;\r\n]*>\s*)?`;
 const BINDING_INTRO = String.raw`(?:let|const)`;
 
+// What follows `upcast` in the interface view `x.upcast<T>()`: a type-argument
+// list that closes on the line, then `(`. Anything else after `.upcast` leaves
+// it an ordinary member: `x.upcast < limit` is a comparison and `x.upcast()` a
+// call, and a `<` that never closes must not open a type-argument context.
+const UPCAST_TAIL = String.raw`\s*<(?:[^(){};&+*/!%^~]|\([^(){};]*\))*>\s*\(`;
+
 // Capturing path regex shared by the type/value reference rules. DOTTED_REF
 // has 4 groups (optional leading segment, its dot, the middle prefix, the final
 // name).
@@ -771,7 +777,14 @@ function memberAccess(key: string, scope: BamlScope, accessor: string): Rule {
 const functionCallExpression: Rule = {
   key: 'function-call-expression',
   scope: 'meta.function-call.baml',
-  begin: DOTTED_REF + CALL_ARGS_LOOKAHEAD,
+  // A path that ends in `.upcast<T>(` is not a call of its last segment: the
+  // path stops before it (dottedExpression) and upcastExpression takes the
+  // rest. A function that is itself named `upcast` is still a call, and so is
+  // `x.upcast()` with no type arguments.
+  begin:
+    String.raw`(?!${IDENT}(?:${ACCESSOR}${IDENT})*?${ACCESSOR}upcast\b${UPCAST_TAIL})` +
+    DOTTED_REF +
+    CALL_ARGS_LOOKAHEAD,
   beginCaptures: {
     '1': expressionPathRootCapture,
     '2': { scope: 'punctuation.accessor.baml' },
@@ -861,30 +874,36 @@ const tupleFieldAccessExpression: Rule = {
 const dottedExpression: Rule = {
   key: 'dotted-expression',
   scope: tm.meta,
-  // A path segment never absorbs an `.as<` projection, so
-  // `self.as<T>` leaves `.as<T>` for upcastExpression instead of reading `as`
-  // as a member and `<`/`>` as comparisons.
-  match: String.raw`\b(${IDENT})((?:${ACCESSOR}(?!as\b\s*<)${IDENT})*)\b`,
+  // A path segment never absorbs an `.upcast<T>()` projection, so
+  // `self.upcast<T>()` leaves `.upcast<T>()` for upcastExpression instead of
+  // reading `upcast` as a member and `<`/`>` as comparisons.
+  match: String.raw`\b(${IDENT})((?:${ACCESSOR}(?!upcast\b${UPCAST_TAIL})${IDENT})*)\b`,
   captures: {
     '1': expressionPathRootCapture,
     '2': expressionPathMemberCapture,
   },
 };
 
-// `base.as<Interface>` is a static interface projection / upcast -- a dedicated
-// expression form, not a method call: `as` is a contextual keyword and the
-// angle brackets hold the target type. Matched only when a `<` follows, so plain
-// `.as` field access and `.as(...)` calls are unaffected.
+// `base.upcast<Interface>()` is a static interface projection / upcast. It is
+// written like a method call and is not one: `upcast` is a contextual keyword,
+// the angle brackets hold the target type, and the parentheses hold nothing.
+// Matched only when closed type arguments and a `(` follow (UPCAST_TAIL), so
+// plain `.upcast` field access, `.upcast(...)` calls and `.upcast < n`
+// comparisons are unaffected. The rule ends after the parentheses.
 const upcastExpression: Rule = {
   key: 'upcast-expression',
   scope: 'meta.expression.upcast.baml',
-  begin: String.raw`(\.)\s*(as)\b(?=\s*<)`,
+  begin: String.raw`(\.)\s*(upcast)\b(?=${UPCAST_TAIL})`,
   beginCaptures: {
     '1': { scope: 'punctuation.accessor.baml' },
-    '2': { scope: 'keyword.operator.expression.as.baml' },
+    '2': { scope: 'keyword.operator.expression.upcast.baml' },
   },
-  end: String.raw`(?<=>)`,
-  patterns: [comments, typeArgumentsRule('upcast-type-arguments', '')],
+  end: String.raw`(?<=\))`,
+  patterns: [
+    comments,
+    typeArgumentsRule('upcast-type-arguments', ''),
+    callArguments,
+  ],
 };
 
 const spawnExpression: Rule = {

@@ -113,13 +113,22 @@ pub struct OptionalFieldAccessExpr {
     pub name: Result<Id<Name>, Missing>,
 }
 
-/// `expr.as<T>`
+/// `expr.upcast<T>()`: the view of a value at one of its interfaces. It is
+/// written like a call and is not one: the parentheses are part of the
+/// expression and hold nothing.
+///
+/// Two rejected spellings are the same node, so that their base and target
+/// stay in the tree: `expr.upcast<T>` without the parentheses, and the
+/// removed `expr.as<T>` (E0098). The parser reports each, and reports
+/// arguments written between the parentheses; `call` is `None` only beside
+/// one of those reports.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct UpcastExpr {
     pub base: AnyExpr,
     pub dot: Token!["."],
-    pub as_kw: Token!["as"],
+    pub upcast_kw: Token![UpcastKw],
     pub args: Result<Id<GenericArgs>, Missing>,
+    pub call: Option<Id<ArgList>>,
 }
 
 /// `F@spec`, `F@stream`, …

@@ -1891,6 +1891,12 @@ fn render_keyword_as() {
 }
 
 #[test]
+fn render_keyword_upcast() {
+    let output = capture_keyword("upcast");
+    insta::assert_snapshot!(output);
+}
+
+#[test]
 fn render_keyword_projection() {
     let output = capture_keyword("projection");
     insta::assert_snapshot!(output);

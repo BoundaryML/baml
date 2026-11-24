@@ -247,9 +247,12 @@ export function registerBaml(monaco: Monaco) {
         { include: '@comments' },
         { include: '@strings' },
         { include: '@attributes' },
+        // The interface view `x.upcast<T>()`: closed type arguments, then
+        // `(`. Without them `upcast` is a member (`x.upcast < n`,
+        // `x.upcast()`) and takes the rules below.
         [
-          /(\.)(\s*)(as)(\s*)(?=<)/,
-          ['operator', '', 'keyword.operator.as', ''],
+          /(\.)(\s*)(upcast)(\s*)(?=<(?:[^(){};&+*\/!%^~]|\([^(){};]*\))*>\s*\()/,
+          ['operator', '', 'keyword.operator.upcast', ''],
         ],
         [
           /(\?\.|[.$])(\s*)(@identifier)(\s*)(?=\()/,

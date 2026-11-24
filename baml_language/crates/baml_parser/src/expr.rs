@@ -27,7 +27,7 @@ use baml_syntax::{
         Ident, KindSet, TokenKind, TokenSet as _, ctx, kw, punct,
         sets::{
             AnyArrow, CatchKw, LetIntroducer, LiteralExprToken, MemberDot, NameToken, SpecSelector,
-            StringToken,
+            StringToken, UpcastKw,
         },
     },
     tree::{AnyNodeId, Bogus, Id, Missing, SepItem},
@@ -38,10 +38,10 @@ use crate::{
     error::ParseError,
     items::{Annotation, StringSite, dotted_name, param_list, string_lit},
     lookahead::{
-        PATH_SEGMENT, at_binding_intro, at_catch_clause_start, brace_literal_before_body,
-        brace_looks_like_fields, looks_like_as_projection, looks_like_generic_args,
+        PATH_SEGMENT, PLAIN_WORD, at_binding_intro, at_catch_clause_start,
+        brace_literal_before_body, brace_looks_like_fields, looks_like_generic_args,
         looks_like_generic_lambda, looks_like_lambda, looks_like_map,
-        looks_like_qualified_projection,
+        looks_like_qualified_projection, looks_like_upcast,
     },
     parser::{Parse, Parser},
     patterns::{pattern, pattern_after_introducer},
@@ -229,6 +229,78 @@ fn operand(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> 
     }
 }
 
+/// `.upcast<T>()` after its base, the lookahead having seen `. upcast < … >`
+/// or the removed `. as < … >`. The parentheses belong to the expression and
+/// hold nothing.
+///
+/// Each rejected spelling is reported once and kept as the same node, so the
+/// base and the target are still checked and nothing cascades: `.as<T>` and
+/// `.as<T>()` are E0098 at the `as`; `.upcast<T>` is told to add `()`;
+/// arguments between the parentheses are an error of their own.
+fn upcast_expr(
+    p: &mut Parser<'_, '_>,
+    mark: Mark,
+    base: AnyExpr,
+    dot: Token!["."],
+    upcast_kw: Token![UpcastKw],
+) -> Id<UpcastExpr> {
+    let args_mark = p.cur.mark();
+    let args = match p.cur.eat::<punct::Less>() {
+        Some(l) => Ok(GenericArgs::parse(p, l)),
+        None => Err(p.missing("'<'")),
+    };
+    let written = p.cur.text_of_range(p.cur.range_from(args_mark)).trim();
+    // Arguments that span lines would break the one-line messages.
+    let written = if written.contains('\n') {
+        "<…>"
+    } else {
+        written
+    };
+    let operator = p.cur.text_range(p.cur.range_from(Mark::of(upcast_kw)));
+    // Like a call's, the parentheses never attach across a line break.
+    let call = if p.cur.at(TokenKind::LParen) && !p.cur.has_newline_ahead() {
+        p.cur.eat::<punct::LParen>().map(|l| {
+            let call = ArgList::parse(p, l);
+            if !p.out.get(call).args.is_empty() {
+                let range = p.cur.text_range(p.cur.range_from(Mark::of(l)));
+                p.error(
+                    format!(
+                        "`.upcast{written}()` takes no arguments; it views the value at an \
+                         interface and is not a method call"
+                    ),
+                    range,
+                );
+            }
+            call
+        })
+    } else {
+        None
+    };
+    if p.cur.tokens().kind(upcast_kw.idx) == TokenKind::As {
+        p.removed(
+            format!("`.as<…>` was renamed to `.upcast<…>()`; write `.upcast{written}()` instead"),
+            p.cur.token_range(upcast_kw.idx),
+        );
+    } else if call.is_none() {
+        p.error(
+            format!(
+                "`.upcast<…>` is written with call parentheses; write `.upcast{written}()` instead"
+            ),
+            operator,
+        );
+    }
+    p.alloc(
+        mark,
+        UpcastExpr {
+            base,
+            dot,
+            upcast_kw,
+            args,
+            call,
+        },
+    )
+}
+
 /// The postfix and infix forms after `lhs`, each binding at least `min_bp`.
 fn infix(p: &mut Parser<'_, '_>, mut lhs: AnyExpr, min_bp: u8, r: Restrictions) -> AnyExpr {
     loop {
@@ -349,23 +421,11 @@ fn infix(p: &mut Parser<'_, '_>, mut lhs: AnyExpr, min_bp: u8, r: Restrictions) 
                     selector,
                 },
             ));
-        } else if looks_like_as_projection(p.cur)
+        } else if looks_like_upcast(p.cur)
             && let Some(dot) = p.cur.eat::<punct::Dot>()
-            && let Some(as_kw) = p.cur.eat::<ctx::As>()
+            && let Some(upcast_kw) = p.cur.eat_in::<UpcastKw>()
         {
-            let args = match p.cur.eat::<punct::Less>() {
-                Some(l) => Ok(GenericArgs::parse(p, l)),
-                None => Err(p.missing("'<'")),
-            };
-            lhs = AnyExpr::Upcast(p.alloc(
-                mark,
-                UpcastExpr {
-                    base: lhs,
-                    dot,
-                    as_kw,
-                    args,
-                },
-            ));
+            lhs = AnyExpr::Upcast(upcast_expr(p, mark, lhs, dot, upcast_kw));
         } else if let Some(dot) = p.cur.eat_in::<MemberDot>() {
             let expected = if p.cur.tokens().kind(dot.idx) == TokenKind::Dollar {
                 "field name after `'$'`"
@@ -566,12 +626,12 @@ fn primary(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> 
     // `env.NAME` sugar; `env.get(…)` is an ordinary path.
     if p.cur.at(TokenKind::Env)
         && p.cur.nth_is(1, TokenKind::Dot)
-        && p.cur.nth_is(2, TokenKind::Word)
+        && p.cur.kind(2).is_some_and(|kind| PLAIN_WORD.contains(kind))
         && !p.cur.nth_is(3, TokenKind::LParen)
         && let Some(env) = p.cur.eat::<ctx::Env>()
         && let Some(dot) = p.cur.eat::<punct::Dot>()
     {
-        let name = p.expect_name(KindSet::single(TokenKind::Word), "identifier after 'env.'");
+        let name = p.expect_name(PLAIN_WORD, "identifier after 'env.'");
         return Ok(AnyExpr::EnvAccess(
             p.alloc(Mark::of(env), EnvAccessExpr { env, dot, name }),
         ));
@@ -645,7 +705,7 @@ impl Parse for PathExpr {
         let head = p.name(head);
         let mut segments = Vec::new();
         loop {
-            if looks_like_as_projection(p.cur) {
+            if looks_like_upcast(p.cur) {
                 break;
             }
             let allowed = if segments.is_empty() {

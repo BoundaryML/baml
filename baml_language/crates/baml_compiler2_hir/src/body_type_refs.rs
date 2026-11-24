@@ -10,7 +10,7 @@
 //!
 //! Collected today: pattern type ascriptions (`let x: T`, type patterns in
 //! match arms), array-pattern ascriptions, explicit expression-position type
-//! args (`f<int>(..)`, `Box<int> { .. }` turbofish), `.as<T>` upcast targets,
+//! args (`f<int>(..)`, `Box<int> { .. }` turbofish), `.upcast<T>()` targets,
 //! match scrutinee annotations, lambda signature slots, and the bounds of a
 //! `let type T extends … = …` binding (its operand is an ordinary body
 //! expression, not a type reference).
@@ -68,7 +68,7 @@ pub struct BodyTypeRefs {
     pub stmt_type_binding_bounds: FxHashMap<StmtId, Box<[BodyTypeRefId]>>,
     /// Written annotations on match scrutinees (`match (value: T)`).
     pub match_scrutinee_types: FxHashMap<ExprId, BodyTypeRefId>,
-    /// `.as<T>` upcast targets.
+    /// `.upcast<T>()` targets.
     pub upcast_targets: FxHashMap<ExprId, BodyTypeRefId>,
     /// The two written halves of a `(Base as Interface).item` reference.
     pub qualified_path_anchors: FxHashMap<ExprId, QualifiedPathTypeRefs>,

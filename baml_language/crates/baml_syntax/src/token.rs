@@ -197,6 +197,10 @@ pub enum TokenKind {
     #[group(contextual)]
     #[token("as")]
     As,
+    /// `value.upcast<Interface>()`: the interface view.
+    #[group(contextual)]
+    #[token("upcast")]
+    Upcast,
     #[group(contextual)]
     #[token("true")]
     True,
@@ -667,6 +671,9 @@ pub mod sets {
         /// `.` or the `$` member separator.
         MemberDot = Dot | Dollar;
         TupleDot = Dot | QuestionDot;
+        /// The keyword of `value.upcast<Interface>()`; `as` is its removed
+        /// spelling, kept only for its diagnostic.
+        UpcastKw = Upcast | As;
         /// The selector of `F@spec`, `F@stream`, ….
         SpecSelector = Spec | Stream | RenderPrompt | BuildRequest | Parse;
         EndTagKw = Endfor | Endif;

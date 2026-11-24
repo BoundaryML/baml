@@ -11,7 +11,7 @@ class File {
     /// - `Io` if an I/O error occurs while reading (for example, the file is closed).
     /// - `ParseError` if the remaining bytes are not valid UTF-8.
     function text(self) -> string throws root.errors.Io | root.errors.ParseError {
-        self.as<root.io.Read>.text()
+        self.upcast<root.io.Read>().text()
     }
 
     /// Reads the entire remaining file contents as raw bytes.
@@ -20,7 +20,7 @@ class File {
     ///
     /// - `Io` if an I/O error occurs while reading (for example, the file is closed).
     function bytes(self) -> uint8array throws root.errors.Io {
-        self.as<root.io.Read>.bytes()
+        self.upcast<root.io.Read>().bytes()
     }
 
     implements root.io.Read {
@@ -88,7 +88,7 @@ class File {
     /// - `Io` if the data cannot be written (for example, the file is closed
     ///   or was opened read-only).
     function write(self, data: string | uint8array) -> int throws root.errors.Io {
-        self.as<root.io.Write>.write(data)
+        self.upcast<root.io.Write>().write(data)
     }
 
     @@rust_type("File")

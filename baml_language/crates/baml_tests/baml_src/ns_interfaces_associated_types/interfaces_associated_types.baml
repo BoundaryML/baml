@@ -174,7 +174,7 @@ function bsp_main() -> string {
     let source = BspTextSource { name: "sample", text: "ok" }
     let wrapped = BspWrapped<BspTextSource> { inner: source }
 
-    return bsp_take_source(source) + ":" + wrapped.as<BspRenderable<Output = string>>.render()
+    return bsp_take_source(source) + ":" + wrapped.upcast<BspRenderable<Output = string>>().render()
 }
 
 test "blanket_impl_self_associated_projection_uses_bounded_typevar" {
@@ -270,7 +270,7 @@ implements<T extends UpcEntity> UpcSummarizes for UpcEntityBox<T> {
     type Key = (T as UpcHasKey).Key
 
     function key(self) -> Self.Key {
-        return self.value.as<UpcHasKey<Key = string>>.key
+        return self.value.upcast<UpcHasKey<Key = string>>().key
     }
 
     function summary(self) -> string {
@@ -279,7 +279,7 @@ implements<T extends UpcEntity> UpcSummarizes for UpcEntityBox<T> {
 }
 
 function upc_entity_key<T extends UpcEntity>(value: T) -> (T as UpcHasKey).Key {
-    return value.as<UpcHasKey<Key = string>>.key
+    return value.upcast<UpcHasKey<Key = string>>().key
 }
 
 function upc_main() -> string {
