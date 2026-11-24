@@ -37,6 +37,13 @@ fn main() {
 /// records to a fresh local directory for the whole run; without it, the
 /// engine has no telemetry.
 fn bench_main(bencher: Bencher, source: &str, recording: bool) {
+    bench_main_parallel(bencher, source, recording, 1);
+}
+
+/// [`bench_main`] with `tasks` calls of `main` at once, on as many runtime
+/// threads, each making its `CALLS` calls: several program threads capture
+/// into one runtime's pool together.
+fn bench_main_parallel(bencher: Bencher, source: &str, recording: bool, tasks: usize) {
     let mut db = ProjectDatabase::new();
     let package = db.workspace(Path::new("."));
     db.file("bench.baml", source);
@@ -68,17 +75,52 @@ fn bench_main(bencher: Bencher, source: &str, recording: bool) {
     let engine = Arc::new(engine);
     let rt = tokio::runtime::Runtime::new().expect("failed to build tokio runtime");
     bencher.bench(|| {
-        let context = FunctionCallContextBuilder::new(CallId::next()).build();
-        black_box(
-            rt.block_on(engine.call_function("main", vec![], context, true))
-                .expect("benchmark execution failed"),
-        )
+        if tasks == 1 {
+            let context = FunctionCallContextBuilder::new(CallId::next()).build();
+            black_box(
+                rt.block_on(engine.call_function("main", vec![], context, true))
+                    .expect("benchmark execution failed"),
+            );
+            return;
+        }
+        rt.block_on(async {
+            let calls: Vec<_> = (0..tasks)
+                .map(|_| {
+                    let engine = Arc::clone(&engine);
+                    tokio::spawn(async move {
+                        let context = FunctionCallContextBuilder::new(CallId::next()).build();
+                        engine.call_function("main", vec![], context, true).await
+                    })
+                })
+                .collect();
+            for call in calls {
+                black_box(
+                    call.await
+                        .expect("benchmark task panicked")
+                        .expect("benchmark execution failed"),
+                );
+            }
+        });
     });
     rt.block_on(engine.shutdown());
 }
 
-/// One scenario: a `main` making `CALLS` calls, benched off and on.
+/// One scenario: a `main` making `CALLS` calls, benched off and on; with
+/// `tasks = N`, N such calls at once.
 macro_rules! scenario {
+    ($name:ident, $source:expr, tasks = $tasks:expr) => {
+        mod $name {
+            use super::*;
+            #[divan::bench]
+            fn off(bencher: Bencher) {
+                bench_main_parallel(bencher, $source, false, $tasks);
+            }
+            #[divan::bench]
+            fn on(bencher: Bencher) {
+                bench_main_parallel(bencher, $source, true, $tasks);
+            }
+        }
+    };
     ($name:ident, $source:expr) => {
         mod $name {
             use super::*;
@@ -253,11 +295,11 @@ scenario!(
     &format!(
         "{TYPES}
 function MakeAndUse(i: int) -> int {{
-    let b = reflect.class.builder(\"Temp\");
-    b.field(\"i\", reflect.Type.of<int>());
-    b.field(\"name\", reflect.Type.of<string>());
+    let b = reflect.Class.builder(\"Temp\");
+    b.field(\"i\", int.type());
+    b.field(\"name\", string.type());
     let t = b.build();
-    type Temp = unreflect(t.as_type())
+    let type Temp = t.as_type();
     None<Temp[]>($trace = trace.span(inputs = true))
 }}
 function main() -> int {{
@@ -274,10 +316,10 @@ scenario!(
     &format!(
         "{TYPES}
 function MakeAndUse(i: int) -> int {{
-    let b = reflect.class.builder(\"Temp\");
-    b.field(\"i\", reflect.Type.of<int>());
+    let b = reflect.Class.builder(\"Temp\");
+    b.field(\"i\", int.type());
     let t = b.build();
-    type Temp = unreflect(t.as_type())
+    let type Temp = t.as_type();
     None<Temp>($trace = trace.span(inputs = true))
 }}
 function main() -> int {{
@@ -320,3 +362,39 @@ function main() -> int {{
     while (i < 10000) {{ let x = Pick(p, $trace = trace.span(inputs = true)); i = i + 1; }}
     i
 }}"));
+
+// 10. Scenario 3 in four program threads at once: four producers take
+// capture storage from one pool while the processor returns it.
+scenario!(parallel_type_args_repeated, &format!("{TYPES}
+function main() -> int {{
+    let t = 0; let i = 0;
+    while (i < 10000) {{ t = t + None<Box<Resume>>($trace = trace.span(inputs = true)); i = i + 1; }}
+    t
+}}"), tasks = 4);
+
+// 11. Scenario 4 in four program threads at once.
+scenario!(parallel_instance_inputs_repeated, &format!("{TYPES}
+function main() -> int {{
+    let r = Resume {{ name: \"ann\", age: 3 }};
+    let i = 0;
+    while (i < 10000) {{ let x = Pick(r, $trace = trace.span(inputs = true)); let s = Pick(Status.Active, $trace = trace.span(inputs = true)); i = i + 1; }}
+    i
+}}"), tasks = 4);
+
+// 12. A busy processor: every span captures a list of 32 instances, so the
+// processor spends far longer on each capture than in scenario 4, and
+// returns storage while the program thread takes it.
+scenario!(
+    wide_inputs_repeated,
+    &format!(
+        "{TYPES}
+function main() -> int {{
+    let rs: Resume[] = [];
+    let j = 0;
+    while (j < 32) {{ rs.push(Resume {{ name: \"ann\", age: j }}); j = j + 1; }}
+    let i = 0;
+    while (i < 2000) {{ let x = Pick(rs, $trace = trace.span(inputs = true)); i = i + 1; }}
+    i
+}}"
+    )
+);
