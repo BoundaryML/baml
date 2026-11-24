@@ -268,13 +268,13 @@ class DrtcX {
 }
 function drtc_main() -> string {
     let x = DrtcX {}
-    return x.as<DrtcA>.tag()
+    return x.upcast<DrtcA>.tag()
 }
 test "default_resolves_to_current_block" {
     assert.equal(drtc_main(), "A!")
 }
 
-// ─── Group N: `.as<I>` projections ───────────────────────────────────────────
+// ─── Group N: `.upcast<I>` projections ───────────────────────────────────────────
 
 // as_projection_same_signature_runtime
 interface ApssSerializer {
@@ -293,7 +293,7 @@ class ApssHybrid {
 }
 function apss_main() -> string {
     let h = ApssHybrid {}
-    return h.as<ApssSerializer>.encode()
+    return h.upcast<ApssSerializer>.encode()
 }
 test "as_projection_same_signature_runtime" {
     assert.equal(apss_main(), "json:{}")
@@ -310,7 +310,7 @@ class ApwuDog {
 }
 function apwu_main() -> string {
     let d = ApwuDog {}
-    return d.as<ApwuAnimal>.speak()
+    return d.upcast<ApwuAnimal>.speak()
 }
 test "as_projection_works_when_unambiguous_runtime" {
     assert.equal(apwu_main(), "Woof!")
@@ -332,7 +332,7 @@ class SapcPolite {
     }
     implements SapcFarewell {
         function bye(self) -> string {
-            return self.as<SapcGreeter>.greet() + " — and goodbye!"
+            return self.upcast<SapcGreeter>.greet() + " — and goodbye!"
         }
     }
 }
@@ -361,7 +361,7 @@ class DapcD {
 }
 function dapc_main() -> string {
     let d = DapcD {}
-    return d.as<DapcLeft>.foo() + ":" + d.as<DapcRight>.foo()
+    return d.upcast<DapcLeft>.foo() + ":" + d.upcast<DapcRight>.foo()
 }
 test "diamond_as_projection_call_runtime" {
     assert.equal(dapc_main(), "Left:Right")
@@ -807,10 +807,10 @@ class SgidMultiFormat {
     }
 }
 function sgid_read_int<T extends SgidConverter<int>>(m: T) -> int {
-    return m.as<SgidConverter<int>>.convert()
+    return m.upcast<SgidConverter<int>>.convert()
 }
 function sgid_read_float<T extends SgidConverter<float>>(m: T) -> float {
-    return m.as<SgidConverter<float>>.convert()
+    return m.upcast<SgidConverter<float>>.convert()
 }
 function sgid_main() -> bool {
     let m = SgidMultiFormat { data: "payload" }
@@ -1033,7 +1033,7 @@ class GbapMultiFormat {
     }
 }
 function gbap_read_int<T extends GbapConverter<int>>(m: T) -> int {
-    return m.as<GbapConverter<int>>.convert()
+    return m.upcast<GbapConverter<int>>.convert()
 }
 function gbap_main() -> int {
     return gbap_read_int<GbapMultiFormat>(GbapMultiFormat { data: "payload" })
@@ -1255,8 +1255,8 @@ class AusiItem {
 }
 function ausi_main() -> bool {
     let i = AusiItem { named_name: "widget", labeled_name: "WIDGET-001" }
-    return i.as<AusiNamed>.name == "widget"
-        && i.as<AusiLabeled>.name == "WIDGET-001"
+    return i.upcast<AusiNamed>.name == "widget"
+        && i.upcast<AusiLabeled>.name == "WIDGET-001"
 }
 test "as_upcast_selects_interface_field_link_runtime" {
     assert.is_true(ausi_main())
@@ -1774,7 +1774,7 @@ implements OobpDebuggable for int {
 function oobp_main() -> string {
     let myInteger: int = 1
     let asDebuggable: OobpDebuggable = myInteger
-    return myInteger.as<OobpDebuggable>.debugOobp() + ":" + asDebuggable.debugOobp()
+    return myInteger.upcast<OobpDebuggable>.debugOobp() + ":" + asDebuggable.debugOobp()
 }
 test "out_of_body_implements_for_primitive_as_projection_runtime" {
     assert.equal(oobp_main(), "int:int")
@@ -1940,8 +1940,8 @@ class RcpmBox {
 }
 function rcpm_main() -> bool {
     let both: RcpmBoth = RcpmBox {}
-    return both.as<RcpmParent<int>>.describe() == "int"
-        && both.as<RcpmParent<string>>.describe() == "string"
+    return both.upcast<RcpmParent<int>>.describe() == "int"
+        && both.upcast<RcpmParent<string>>.describe() == "string"
 }
 test "requires_closure_preserves_multiple_parent_instantiations_runtime" {
     assert.is_true(rcpm_main())

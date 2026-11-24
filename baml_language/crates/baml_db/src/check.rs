@@ -2210,7 +2210,7 @@ fn source_aware_tir_type_error_message(
             }
         }
         // Both spellings that write an interface qualifier report here:
-        // `x.as<T>` and `(Base as T).item`.
+        // `x.upcast<T>` and `(Base as T).item`.
         TirTypeError::InvalidInterfaceUpcastTarget { target } => {
             format!("expected an interface qualifier, got {}", ty(target))
         }

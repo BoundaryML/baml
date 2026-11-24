@@ -248,8 +248,8 @@ export function registerBaml(monaco: Monaco) {
         { include: '@strings' },
         { include: '@attributes' },
         [
-          /(\.)(\s*)(as)(\s*)(?=<)/,
-          ['operator', '', 'keyword.operator.as', ''],
+          /(\.)(\s*)(upcast)(\s*)(?=<)/,
+          ['operator', '', 'keyword.operator.upcast', ''],
         ],
         [
           /(\?\.|[.$])(\s*)(@identifier)(\s*)(?=\()/,

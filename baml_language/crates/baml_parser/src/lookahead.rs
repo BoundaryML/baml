@@ -307,9 +307,12 @@ pub(crate) fn looks_like_qualified_projection(cur: Cursor<'_>) -> bool {
             .is_some_and(|k| crate::types::MEMBER_NAME.contains(k))
 }
 
-/// `. as <` at the cursor: the `.as<T>` upcast.
-pub(crate) fn looks_like_as_projection(cur: Cursor<'_>) -> bool {
-    cur.at(TokenKind::Dot) && cur.nth_is(1, TokenKind::As) && cur.nth_is(2, TokenKind::Less)
+/// `. upcast <` at the cursor: the `.upcast<T>` interface view. `. as <`, its
+/// removed spelling, has the same shape so that it is reported as one.
+pub(crate) fn looks_like_upcast(cur: Cursor<'_>) -> bool {
+    cur.at(TokenKind::Dot)
+        && (cur.nth_is(1, TokenKind::Upcast) || cur.nth_is(1, TokenKind::As))
+        && cur.nth_is(2, TokenKind::Less)
 }
 
 /// Whether the `{` at the cursor opens a map literal rather than a block: a

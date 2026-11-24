@@ -1892,7 +1892,7 @@
     },
     "dotted-expression": {
       "name": "meta.dotted-expression.baml",
-      "match": "\\b(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)((?:\\s*\\.\\s*(?!as\\b\\s*<)\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)*)\\b",
+      "match": "\\b(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)((?:\\s*\\.\\s*(?!upcast\\b\\s*<)\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)*)\\b",
       "captures": {
         "1": {
           "patterns": [
@@ -5015,13 +5015,13 @@
     },
     "upcast-expression": {
       "name": "meta.expression.upcast.baml",
-      "begin": "(\\.)\\s*(as)\\b(?=\\s*<)",
+      "begin": "(\\.)\\s*(upcast)\\b(?=\\s*<)",
       "beginCaptures": {
         "1": {
           "name": "punctuation.accessor.baml"
         },
         "2": {
-          "name": "keyword.operator.expression.as.baml"
+          "name": "keyword.operator.expression.upcast.baml"
         }
       },
       "end": "(?<=>)",

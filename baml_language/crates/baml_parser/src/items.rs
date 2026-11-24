@@ -740,7 +740,7 @@ impl Parse for GenericParamBounds {
         let rest = p.out.alloc_list(rest);
         if p.cur.at(TokenKind::As) {
             // Consumed for recovery and rejected; the tokens stay unowned.
-            p.error_here("generic bound aliases are not supported; use `.as<Interface<...>>()` at call sites");
+            p.error_here("generic bound aliases are not supported; use `.upcast<Interface<...>>()` at call sites");
             p.cur.skip();
             if p.cur.at_ident() {
                 p.cur.skip();

@@ -25,7 +25,7 @@ class EmailNotifier {
 
 function notifier_labels() -> string[] {
     let notifier = EmailNotifier { address: "dev@example.com" };
-    [notifier.as<CustomerLabel>.label(), notifier.as<AuditLabel>.label()]
+    [notifier.upcast<CustomerLabel>.label(), notifier.upcast<AuditLabel>.label()]
 }
 // docs:end excerpt-37
 

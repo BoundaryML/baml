@@ -1,0 +1,57 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_as_upcast.baml:40:27]
+ 40 │             "Dr. " + self.as<Named>.name
+    ·                           ─┬
+    ·                            ╰── `.as<…>` was renamed to `.upcast<…>`; write `.upcast<Named>` instead
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_as_upcast.baml:69:7]
+ 69 │     p.as<Named>.label()
+    ·       ─┬
+    ·        ╰── `.as<…>` was renamed to `.upcast<…>`; write `.upcast<Named>` instead
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_as_upcast.baml:73:7]
+ 73 │     p.as<Named>.name
+    ·       ─┬
+    ·        ╰── `.as<…>` was renamed to `.upcast<…>`; write `.upcast<Named>` instead
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_as_upcast.baml:78:7]
+ 78 │     b.as<Boxed<int>>.get()
+    ·       ─┬
+    ·        ╰── `.as<…>` was renamed to `.upcast<…>`; write `.upcast<Boxed<int>>` instead
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_as_upcast.baml:83:12]
+ 83 │     make().as<Titled>.label()
+    ·            ─┬
+    ·             ╰── `.as<…>` was renamed to `.upcast<…>`; write `.upcast<Titled>` instead
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_as_upcast.baml:88:7]
+ 88 │     p.as<Named>
+    ·       ─┬
+    ·        ╰── `.as<…>` was renamed to `.upcast<…>`; write `.upcast<Named>` instead
+    ╰────

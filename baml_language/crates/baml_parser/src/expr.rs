@@ -27,7 +27,7 @@ use baml_syntax::{
         Ident, KindSet, TokenKind, TokenSet as _, ctx, kw, punct,
         sets::{
             AnyArrow, CatchKw, LetIntroducer, LiteralExprToken, MemberDot, NameToken, SpecSelector,
-            StringToken,
+            StringToken, UpcastKw,
         },
     },
     tree::{AnyNodeId, Bogus, Id, Missing, SepItem},
@@ -39,9 +39,8 @@ use crate::{
     items::{Annotation, StringSite, dotted_name, param_list, string_lit},
     lookahead::{
         PATH_SEGMENT, at_binding_intro, at_catch_clause_start, brace_literal_before_body,
-        brace_looks_like_fields, looks_like_as_projection, looks_like_generic_args,
-        looks_like_generic_lambda, looks_like_lambda, looks_like_map,
-        looks_like_qualified_projection,
+        brace_looks_like_fields, looks_like_generic_args, looks_like_generic_lambda,
+        looks_like_lambda, looks_like_map, looks_like_qualified_projection, looks_like_upcast,
     },
     parser::{Parse, Parser},
     patterns::{pattern, pattern_after_introducer},
@@ -229,6 +228,19 @@ fn operand(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> 
     }
 }
 
+/// E0098 for `.as<T>`, the removed spelling of the `.upcast<T>` interface
+/// view, at its `as`: the replacement is spelled with the type arguments as
+/// written, `args` being their tokens.
+fn removed_as_upcast(p: &mut Parser<'_, '_>, as_kw: Token![UpcastKw], args: Mark) {
+    let args = p.cur.text_of_range(p.cur.range_from(args)).trim();
+    // Arguments that span lines would break the one-line message.
+    let args = if args.contains('\n') { "<…>" } else { args };
+    p.removed(
+        format!("`.as<…>` was renamed to `.upcast<…>`; write `.upcast{args}` instead"),
+        p.cur.token_range(as_kw.idx),
+    );
+}
+
 /// The postfix and infix forms after `lhs`, each binding at least `min_bp`.
 fn infix(p: &mut Parser<'_, '_>, mut lhs: AnyExpr, min_bp: u8, r: Restrictions) -> AnyExpr {
     loop {
@@ -349,20 +361,26 @@ fn infix(p: &mut Parser<'_, '_>, mut lhs: AnyExpr, min_bp: u8, r: Restrictions) 
                     selector,
                 },
             ));
-        } else if looks_like_as_projection(p.cur)
+        } else if looks_like_upcast(p.cur)
             && let Some(dot) = p.cur.eat::<punct::Dot>()
-            && let Some(as_kw) = p.cur.eat::<ctx::As>()
+            && let Some(upcast_kw) = p.cur.eat_in::<UpcastKw>()
         {
+            let args_mark = p.cur.mark();
             let args = match p.cur.eat::<punct::Less>() {
                 Some(l) => Ok(GenericArgs::parse(p, l)),
                 None => Err(p.missing("'<'")),
             };
+            // The removed spelling is reported and kept: the view stays a
+            // node, so its base and target are still checked.
+            if p.cur.tokens().kind(upcast_kw.idx) == TokenKind::As {
+                removed_as_upcast(p, upcast_kw, args_mark);
+            }
             lhs = AnyExpr::Upcast(p.alloc(
                 mark,
                 UpcastExpr {
                     base: lhs,
                     dot,
-                    as_kw,
+                    upcast_kw,
                     args,
                 },
             ));
@@ -645,7 +663,7 @@ impl Parse for PathExpr {
         let head = p.name(head);
         let mut segments = Vec::new();
         loop {
-            if looks_like_as_projection(p.cur) {
+            if looks_like_upcast(p.cur) {
                 break;
             }
             let allowed = if segments.is_empty() {

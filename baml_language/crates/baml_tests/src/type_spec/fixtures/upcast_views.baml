@@ -1,6 +1,6 @@
-// `.as<T>` upcasts (Rust's qualified trait path)
+// `.upcast<T>` upcasts (Rust's qualified trait path)
 //
-// `x.as<UvParent<int>>` is `<X as Parent<i32>>` - the value viewed
+// `x.upcast<UvParent<int>>` is `<X as Parent<i32>>` - the value viewed
 // through a WRITTEN supertype. The base proves the view (implements
 // oracle; var-carrying targets register an anchored Implements
 // obligation) and the result IS the target, so members flow through
@@ -27,9 +27,9 @@ class UvBoth {
 }
 
 function uv_pick(b: UvBoth) -> string throws never {
-    let v = b.as<UvParent<int>>;
+    let v = b.upcast<UvParent<int>>;
      // ^ user.UvParent<int>
-    let s = b.as<UvParent<string>>.describe();
+    let s = b.upcast<UvParent<string>>.describe();
      // ^ string
     s
 }
@@ -74,7 +74,7 @@ implements<T extends UvSource<Item = string>> UvRender for UvBox<T> {
 }
 
 function uv_blanket(w: UvBox<UvText>) -> string throws never {
-    let r = w.as<UvRender<Output = string>>.render();
+    let r = w.upcast<UvRender<Output = string>>.render();
      // ^ string
     r
 }

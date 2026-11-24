@@ -35,7 +35,7 @@ implements<T extends RbeEntity> RbeSummarizes for RbeBox<T> {
     type Key = (T as RbeHasKey).Key
 
     function key(self) -> Self.Key {
-        return self.value.as<RbeHasKey<Key = string>>.key
+        return self.value.upcast<RbeHasKey<Key = string>>.key
     }
 
     function summary(self) -> string {

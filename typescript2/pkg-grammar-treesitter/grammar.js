@@ -38,7 +38,7 @@ const PREC = {
   MUL: 12, //      * / %
   UNARY: 13, //    ! - ~ await
   CALL: 14, //     f(x)  x[i]
-  MEMBER: 15, //   a.b  a?.b  a.as<T>
+  MEMBER: 15, //   a.b  a?.b  a.upcast<T>
 };
 
 // Matches the lexer's Word token: hyphens allowed inside, `$`-joined segments,
@@ -903,14 +903,14 @@ module.exports = grammar({
         ),
       ),
 
-    // `expr.as<Iface>` — explicit interface upcast (BEP-044).
+    // `expr.upcast<Iface>` — explicit interface upcast (BEP-044).
     upcast_expression: ($) =>
       prec(
         PREC.MEMBER,
         seq(
           field('object', $._expression),
           '.',
-          'as',
+          'upcast',
           '<',
           field('type', $._type),
           '>',

@@ -488,7 +488,7 @@ class Person {
 }
 
 function read_name(p: Person) -> string {
-  return p.as<Named>.<[CURSOR]fullname
+  return p.upcast<Named>.<[CURSOR]fullname
 }
 "#,
         );
@@ -522,7 +522,7 @@ class Data {
 }
 
 function pick_text(d: Data) -> string {
-  return d.as<Serializer>.<[CURSOR]encode()
+  return d.upcast<Serializer>.<[CURSOR]encode()
 }
 "#,
         );

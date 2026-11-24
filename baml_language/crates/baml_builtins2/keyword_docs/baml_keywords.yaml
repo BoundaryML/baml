@@ -80,7 +80,7 @@ interfaces:
       return it.next()
     }
   details: |
-    Interfaces are contracts implemented by classes or concrete types. Declare associated types in the interface, bind them inside `implements` blocks with `type Name = Concrete`, constrain them in type positions with `Interface<Name = Type>`, and project them with `T.Name`, `Self.Name`, or `(Concrete as Interface).Name`. Useful related lookups: `baml describe implements`, `baml describe associated`, `baml describe type`, `baml describe Self`, `baml describe generics`, `baml describe projection`, `baml describe as`, `baml describe extends`, and `baml describe default`.
+    Interfaces are contracts implemented by classes or concrete types. Declare associated types in the interface, bind them inside `implements` blocks with `type Name = Concrete`, constrain them in type positions with `Interface<Name = Type>`, and project them with `T.Name`, `Self.Name`, or `(Concrete as Interface).Name`. Useful related lookups: `baml describe implements`, `baml describe associated`, `baml describe type`, `baml describe Self`, `baml describe generics`, `baml describe projection`, `baml describe as`, `baml describe upcast`, `baml describe extends`, and `baml describe default`.
 
 enum:
   summary: "Defines a type with a fixed set of named variants."
@@ -800,7 +800,7 @@ is:
     returns the value as a `T` and leaves `x` as it was.
 
 as:
-  summary: "Projects a value or type through an interface, and maps interface fields to class fields."
+  summary: "Projects a type through an interface, and maps interface fields to class fields."
   syntax: |
     // Field mapping inside an implements block.
     interface HasId {
@@ -817,20 +817,37 @@ as:
       user_id: string
     }
 
-    function label(user: User) -> string {
-      return user.as<HasId>.id
-    }
-
     // Associated type projection in a type position.
     type UserId = (User as HasId).Id
   details: |
-    Use `value.as<Interface>` when a class implements multiple interfaces with the same member name or when you need the interface view. Use `(Type as Interface).Assoc` for qualified associated type projection in a type position; do not write `Type.as<Interface>` as a type. Inside an `implements` block, `interface_field as class_field` maps an interface field to a differently named class field.
+    Use `(Type as Interface).Assoc` for qualified associated type projection in a type position. Inside an `implements` block, `interface_field as class_field` maps an interface field to a differently named class field. To view a value at one of its interfaces, write `value.upcast<Interface>` (see `baml describe upcast`); the earlier `as` spelling of that operator was removed and is a compile error (E0098).
+
+upcast:
+  summary: "Views a value at one of the interfaces it implements."
+  syntax: |
+    interface HasId {
+      id: string
+    }
+
+    class User {
+      implements HasId {
+        id as user_id
+      }
+      full_name: string
+      user_id: string
+    }
+
+    function label(user: User) -> string {
+      return user.upcast<HasId>.id
+    }
+  details: |
+    Use `value.upcast<Interface>` when a class implements multiple interfaces with the same member name or when you need the interface view. It takes one type argument and no call parentheses, as in `obj.upcast<I>.m()` and `self.upcast<I>.field`. The target must be an interface the value's type implements; the expression selects a contract and does not convert the value. Do not write `Type.upcast<Interface>` as a type; use `(Type as Interface).Assoc` for qualified associated type projection in a type position.
 
 projection:
   summary: "Explains interface value projections and associated type projections."
   syntax: |
     function label(user: User) -> string {
-      return user.as<Named>.name
+      return user.upcast<Named>.name
     }
 
     function head<S extends Stream>(stream: S) -> (S as Iterator).Item? {
@@ -839,7 +856,7 @@ projection:
 
     type Parsed = (IntParser as Parser).Output
   details: |
-    `value.as<Interface>` selects an interface view for member access. `T.Assoc`, `Self.Assoc`, and `(T as Interface).Assoc` project associated types in type positions; use the qualified `(T as Interface).Assoc` form when multiple required interfaces define the same associated type name. `Type.as<Interface>` is not type syntax.
+    `value.upcast<Interface>` selects an interface view for member access. `T.Assoc`, `Self.Assoc`, and `(T as Interface).Assoc` project associated types in type positions; use the qualified `(T as Interface).Assoc` form when multiple required interfaces define the same associated type name. `Type.upcast<Interface>` is not type syntax.
 
 requires:
   summary: "Declares that an interface depends on other interfaces."

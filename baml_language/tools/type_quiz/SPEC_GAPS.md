@@ -61,7 +61,7 @@ assume.
 
 Proposed wording, for "Interfaces": either "An inherent member shadows an
 interface member of the same name: an unqualified call resolves to the
-inherent one, and the interface member is reachable only through `.as<I>`",
+inherent one, and the interface member is reachable only through `.upcast<I>`",
 or the opposite, whichever is intended. Whichever is chosen, the union-
 receiver rule should be restated as the special case of it.
 

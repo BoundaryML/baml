@@ -1,5 +1,5 @@
 // A linked interface field is reachable only through the interface view.
-// The access reports E0007 with the `as<...>` hint and nothing else: the
+// The access reports E0007 with the `upcast<...>` hint and nothing else: the
 // failed access must not be restated as a mismatch against `unknown`.
 interface Named {
     name: string,
@@ -22,5 +22,5 @@ function bind_on_concrete(l: Linked) -> string {
 }
 
 function through_view(l: Linked) -> string {
-    l.as<Named>.name
+    l.upcast<Named>.name
 }

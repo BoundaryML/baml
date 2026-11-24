@@ -815,7 +815,7 @@ function reclaim_stale_requests(after_s: int) -> int {
 
 /// `now - s` as an ISO instant, for a PostgREST timestamp filter.
 function iso_seconds_ago(s: int) -> string {
-    baml.time.Instant.now().as<baml.ops.Subtract<baml.time.Duration, Output = baml.time.Instant>>
+    baml.time.Instant.now().upcast<baml.ops.Subtract<baml.time.Duration, Output = baml.time.Instant>>
         .sub(baml.time.Duration.from_seconds(s))
         .to_string()
 }

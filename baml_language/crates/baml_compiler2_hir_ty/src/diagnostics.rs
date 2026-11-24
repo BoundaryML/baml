@@ -920,7 +920,7 @@ pub enum TirTypeError {
     /// no information to pick one. `sources` lists every contributing
     /// interface as a namespace-qualified display string (e.g. `zoo.Animal`)
     /// so colliding same-simple-name interfaces from different namespaces are
-    /// distinguishable and the suggested `as<…>` fix actually compiles.
+    /// distinguishable and the suggested `upcast<…>` fix actually compiles.
     AmbiguousInterfaceMethod {
         class_name: Name,
         method_name: Name,
@@ -952,14 +952,14 @@ pub enum TirTypeError {
         qualified_name: Name,
     },
 
-    /// `.as<T>` is an interface projection/upcast; the target must be an
+    /// `.upcast<T>` is an interface projection/upcast; the target must be an
     /// interface type.
     InvalidInterfaceUpcastTarget {
         target: Ty,
     },
 
     /// Interface members are instance/view members, not static members on the
-    /// interface type. Call through an interface-typed value or `.as<I>`.
+    /// interface type. Call through an interface-typed value or `.upcast<I>`.
     InterfaceMemberRequiresReceiver {
         interface_name: Name,
         member_name: Name,
@@ -992,7 +992,7 @@ pub enum TirTypeError {
     },
 
     /// A `self`-less interface method reached through a VALUE receiver
-    /// (`f.make(5)`, `f.as<I>.make()`): an associated function, not an
+    /// (`f.make(5)`, `f.upcast<I>.make()`): an associated function, not an
     /// instance member — the receiver spellings pass the receiver as `self`,
     /// which the callee has no slot for. Rust's E0599 split.
     SelflessInstanceMember {
@@ -1019,7 +1019,7 @@ pub enum TirTypeError {
     /// BEP-044: bare `default` (not `default.method(...)`) used as a value.
     /// `default` is only meaningful in call position.
     BareDefaultKeyword,
-    /// BEP-044: `value.as<I>` where the concrete `value`'s type does not
+    /// BEP-044: `value.upcast<I>` where the concrete `value`'s type does not
     /// implement interface `I`. A clearer form of the generic type-mismatch.
     TypeDoesNotImplementInterface {
         value_type: Ty,
@@ -2529,7 +2529,7 @@ impl TirTypeError {
                         .join(", ");
                     let hint = sources
                         .iter()
-                        .map(|n| format!("obj.as<{n}>.{method_name}()"))
+                        .map(|n| format!("obj.upcast<{n}>.{method_name}()"))
                         .collect::<Vec<_>>()
                         .join(" or ");
                     write!(
@@ -2551,7 +2551,7 @@ impl TirTypeError {
                         .join(", ");
                     let hint = sources
                         .iter()
-                        .map(|n| format!("obj.as<{n}>.{field_name}"))
+                        .map(|n| format!("obj.upcast<{n}>.{field_name}"))
                         .collect::<Vec<_>>()
                         .join(" or ");
                     write!(
@@ -2565,7 +2565,7 @@ impl TirTypeError {
                     interface_name,
                 } => write!(
                     f,
-                    "field `{field_name}` is an interface field on `{interface_name}`, not a concrete field on class `{class_name}`; use obj.as<{interface_name}>.{field_name}"
+                    "field `{field_name}` is an interface field on `{interface_name}`, not a concrete field on class `{class_name}`; use obj.upcast<{interface_name}>.{field_name}"
                 ),
                 TirTypeError::InterfaceFieldRequiresQualifiedConstruction {
                     field_name,
@@ -2577,7 +2577,7 @@ impl TirTypeError {
                 TirTypeError::InvalidInterfaceUpcastTarget { target } => {
                     write!(
                         f,
-                        "`.as<T>` target must be an interface, got `{}`",
+                        "`.upcast<T>` target must be an interface, got `{}`",
                         target.spell(vp)
                     )
                 }
@@ -2586,7 +2586,7 @@ impl TirTypeError {
                     member_name,
                 } => write!(
                     f,
-                    "interface member `{member_name}` on `{interface_name}` must be accessed through a value; use value.as<{interface_name}>.{member_name}"
+                    "interface member `{member_name}` on `{interface_name}` must be accessed through a value; use value.upcast<{interface_name}>.{member_name}"
                 ),
                 TirTypeError::SelflessInstanceMember {
                     interface_name,

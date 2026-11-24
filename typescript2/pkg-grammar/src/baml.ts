@@ -861,27 +861,27 @@ const tupleFieldAccessExpression: Rule = {
 const dottedExpression: Rule = {
   key: 'dotted-expression',
   scope: tm.meta,
-  // A path segment never absorbs an `.as<` projection, so
-  // `self.as<T>` leaves `.as<T>` for upcastExpression instead of reading `as`
-  // as a member and `<`/`>` as comparisons.
-  match: String.raw`\b(${IDENT})((?:${ACCESSOR}(?!as\b\s*<)${IDENT})*)\b`,
+  // A path segment never absorbs an `.upcast<` projection, so
+  // `self.upcast<T>` leaves `.upcast<T>` for upcastExpression instead of
+  // reading `upcast` as a member and `<`/`>` as comparisons.
+  match: String.raw`\b(${IDENT})((?:${ACCESSOR}(?!upcast\b\s*<)${IDENT})*)\b`,
   captures: {
     '1': expressionPathRootCapture,
     '2': expressionPathMemberCapture,
   },
 };
 
-// `base.as<Interface>` is a static interface projection / upcast -- a dedicated
-// expression form, not a method call: `as` is a contextual keyword and the
+// `base.upcast<Interface>` is a static interface projection / upcast -- a dedicated
+// expression form, not a method call: `upcast` is a contextual keyword and the
 // angle brackets hold the target type. Matched only when a `<` follows, so plain
-// `.as` field access and `.as(...)` calls are unaffected.
+// `.upcast` field access and `.upcast(...)` calls are unaffected.
 const upcastExpression: Rule = {
   key: 'upcast-expression',
   scope: 'meta.expression.upcast.baml',
-  begin: String.raw`(\.)\s*(as)\b(?=\s*<)`,
+  begin: String.raw`(\.)\s*(upcast)\b(?=\s*<)`,
   beginCaptures: {
     '1': { scope: 'punctuation.accessor.baml' },
-    '2': { scope: 'keyword.operator.expression.as.baml' },
+    '2': { scope: 'keyword.operator.expression.upcast.baml' },
   },
   end: String.raw`(?<=>)`,
   patterns: [comments, typeArgumentsRule('upcast-type-arguments', '')],

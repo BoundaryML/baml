@@ -34,10 +34,10 @@
 17:3-9       "return"           source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml keyword.control.flow.return.baml
 17:10-11     "p"                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.dotted-expression.baml variable.other.readwrite.baml
 17:11-12     "."                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml punctuation.accessor.baml
-17:12-14     "as"               source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml keyword.operator.expression.as.baml
-17:14-15     "<"                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
-17:15-20     "Named"            source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
-17:20-21     ">"                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
-17:21-22     "."                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.field-access.baml punctuation.accessor.baml
-17:22-26     "name"             source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.field-access.baml variable.other.readwrite.baml
+17:12-18     "upcast"           source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml keyword.operator.expression.upcast.baml
+17:18-19     "<"                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
+17:19-24     "Named"            source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
+17:24-25     ">"                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
+17:25-26     "."                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.field-access.baml punctuation.accessor.baml
+17:26-30     "name"             source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.field-access.baml variable.other.readwrite.baml
 18:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

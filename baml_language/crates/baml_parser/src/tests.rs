@@ -510,3 +510,53 @@ fn tree_index_links_parents_owners_and_covering_nodes() {
     assert_eq!(all.len(), tree.arenas().all_ids().len());
     assert!(descendants(tree, sum).count() >= 3);
 }
+
+/// `value.upcast<Interface>` is the interface view. The removed
+/// `value.as<Interface>` spelling is E0098 once per use, at its `as`, naming
+/// the replacement with the written type arguments; a base that is a path
+/// does not absorb `.as` as a segment first, and the view is still a node.
+/// Without a `<`, `upcast` and `as` are plain member names.
+#[test]
+fn the_removed_as_spelling_of_upcast_names_its_replacement() {
+    use crate::ParseError;
+
+    let accepted = parse(
+        "function f(p: P, q: Q) -> int {\n  p.upcast<Named>.name;\n  self.upcast<I>.m();\n  g().upcast<Boxed<int>>;\n  q.upcast + q.upcast() + q.as + q.as()\n}\n",
+    );
+    assert_eq!(accepted.errors, [], "the new spelling parses clean");
+    let tree = accepted.tree.debug_tree();
+    assert_eq!(tree.matches("UpcastExpr").count(), 3, "{tree}");
+
+    for (source, replacement) in [
+        ("p.as<Named>.name", "`.upcast<Named>`"),
+        ("self.as<I>.m()", "`.upcast<I>`"),
+        ("a.b.as<Boxed<int>>", "`.upcast<Boxed<int>>`"),
+        (
+            "g().as<Codec<Text, Output = string>>.decode(x)",
+            "`.upcast<Codec<Text, Output = string>>`",
+        ),
+    ] {
+        let text = format!("function f() -> int {{\n  {source}\n}}\n");
+        let removed = parse(&text);
+        let [ParseError::RemovedFeature { message, range }] = removed.errors.as_slice() else {
+            panic!(
+                "expected one removed-feature error for `{source}`, got {:#?}",
+                removed.errors
+            );
+        };
+        assert_eq!(
+            &text[*range], "as",
+            "the report points at `as` in `{source}`"
+        );
+        assert!(
+            message.contains(&format!("write {replacement} instead")),
+            "`{source}`: {message}"
+        );
+        // The view stays a node, so its base and target are still checked.
+        assert_eq!(
+            removed.tree.debug_tree().matches("UpcastExpr").count(),
+            1,
+            "`{source}`"
+        );
+    }
+}

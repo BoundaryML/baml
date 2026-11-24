@@ -56,7 +56,7 @@ class W304P {
     name: string
     implements W304Named {
         function describe(self) -> string {
-            return "default.name=[" + default.name + "] self.name=[" + self.name + "] as=[" + self.as<W304Named>.name + "]"
+            return "default.name=[" + default.name + "] self.name=[" + self.name + "] as=[" + self.upcast<W304Named>.name + "]"
         }
     }
 }
@@ -185,7 +185,7 @@ class W3spPerson {
     implements W3spNamed {
         name as title
         function greet(self) -> string {
-            return "Hi " + self.as<W3spNamed>.name
+            return "Hi " + self.upcast<W3spNamed>.name
         }
     }
 }

@@ -40,7 +40,7 @@ test "expression-position wildcard holes are rejected cleanly" {
                 }
                 function main() -> int {
                     let c = C { v: 5 };
-                    let s = c.as<Show<_>>;
+                    let s = c.upcast<Show<_>>;
                     0
                 }
             `,

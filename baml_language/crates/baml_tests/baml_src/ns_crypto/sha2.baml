@@ -111,7 +111,7 @@ function feed_hasher(h: baml.crypto.Hasher, data: uint8array) -> void {
 test "sha256_hashes_through_the_hasher_interface" {
     // Both methods reached through a `Hasher`-typed binding, so the
     // `VirtualCall` resolves the impl on the runtime class.
-    let h = baml.crypto.Sha256.new().as<baml.crypto.Hasher>;
+    let h = baml.crypto.Sha256.new().upcast<baml.crypto.Hasher>;
     h.update("abc".to_utf8());
     assert.equal(
         h.finish().to_hex(),
@@ -128,7 +128,7 @@ test "sha256_bindings_share_one_hasher" {
     let alias = h;
     h.update("hello".to_utf8());
     alias.update(" ".to_utf8());
-    feed_hasher(h.as<baml.crypto.Hasher>, "world".to_utf8());
+    feed_hasher(h.upcast<baml.crypto.Hasher>, "world".to_utf8());
     assert.equal(
         h.finish().to_hex(),
         "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",

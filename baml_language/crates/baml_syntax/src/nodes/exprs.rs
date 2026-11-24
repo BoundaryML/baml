@@ -113,12 +113,13 @@ pub struct OptionalFieldAccessExpr {
     pub name: Result<Id<Name>, Missing>,
 }
 
-/// `expr.as<T>`
+/// `expr.upcast<T>`. The removed `expr.as<T>` spelling is the same node, so
+/// its base and target stay in the tree; the parser reports it (E0098).
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct UpcastExpr {
     pub base: AnyExpr,
     pub dot: Token!["."],
-    pub as_kw: Token!["as"],
+    pub upcast_kw: Token![UpcastKw],
     pub args: Result<Id<GenericArgs>, Missing>,
 }
 
