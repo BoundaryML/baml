@@ -740,7 +740,7 @@ impl Parse for GenericParamBounds {
         let rest = p.out.alloc_list(rest);
         if p.cur.at(TokenKind::As) {
             // Consumed for recovery and rejected; the tokens stay unowned.
-            p.error_here("generic bound aliases are not supported; use `.as<Interface<...>>()` at call sites");
+            p.error_here("generic bound aliases are not supported; use `.upcast<Interface<...>>()` at call sites");
             p.cur.skip();
             if p.cur.at_ident() {
                 p.cur.skip();
@@ -2264,7 +2264,7 @@ pub(crate) fn test_def(
     // A bare identifier can never resolve at the top level: report the fix
     // instead of a downstream "unresolved name".
     if position == TestPosition::Item
-        && p.cur.at(TokenKind::Word)
+        && p.cur.at_set(crate::lookahead::PLAIN_WORD)
         && (p.cur.nth_is(1, TokenKind::LBrace) || p.cur.nth_is(1, TokenKind::With))
     {
         let name = p.cur.text_at(0).unwrap_or_default();

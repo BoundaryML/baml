@@ -526,7 +526,10 @@ impl ExprBody {
                 format!("{}?.{member}", self.display_expr_inner(*base, depth + 1))
             }
             Expr::Upcast { base, target } => {
-                format!("{}.as<{target}>", self.display_expr_inner(*base, depth + 1))
+                format!(
+                    "{}.upcast<{target}>()",
+                    self.display_expr_inner(*base, depth + 1)
+                )
             }
             Expr::QualifiedPath {
                 qself,
@@ -1051,7 +1054,7 @@ pub enum Expr {
         base: ExprId,
         member: Name,
     },
-    /// Explicit static projection/upcast: `expr.as<T>`.
+    /// Explicit static projection/upcast: `expr.upcast<T>()`.
     Upcast {
         base: ExprId,
         target: TypeExpr,

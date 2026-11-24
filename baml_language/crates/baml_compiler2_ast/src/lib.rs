@@ -786,7 +786,7 @@ function Demo(items: string[]) -> string {
     fn ast_does_not_treat_upcast_target_as_method_type_args() {
         let source = r#"
 function main(m: MultiFormat) -> string {
-  return m.as<Converter<int>>.convert()
+  return m.upcast<Converter<int>>().convert()
 }
 "#;
         let function = first_function(parse_and_lower(source));
@@ -809,7 +809,7 @@ function main(m: MultiFormat) -> string {
         };
         assert!(
             type_args.is_empty(),
-            ".as<Interface> target must not be lowered as method type args"
+            ".upcast<Interface>() target must not be lowered as method type args"
         );
 
         let Expr::MemberAccess { base, member } = &body.exprs[*callee] else {
@@ -1055,6 +1055,18 @@ function Broken(: int = 1, value: int = 2) -> int {
             function.defaults.expr(default_id),
             Expr::Literal(_)
         ));
+    }
+
+    /// `upcast` is a keyword only in the interface view, so `env.upcast`
+    /// still reads an environment variable of that name: it is recorded as
+    /// one, as `env.OTHER` is, and is not a path into `env`.
+    #[test]
+    fn env_access_reads_a_variable_named_upcast() {
+        let source = "function f() -> string? { env.upcast ?? env.OTHER }";
+        let (_items, diags, env_var_refs) = lower_file(&parse(source), None, None);
+        assert!(diags.is_empty(), "expected no diagnostics, got: {diags:#?}");
+        let names: Vec<&str> = env_var_refs.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, ["upcast", "OTHER"]);
     }
 
     #[test]

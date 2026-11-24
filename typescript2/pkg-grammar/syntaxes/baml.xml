@@ -77,12 +77,13 @@
     </list>
 
     <!-- Word-shaped operators. `is`, `in`, `instanceof`, `throws`, `spawn`,
-         `await` are lexer keywords; `as` and `with` are contextual words the
+         `await` are lexer keywords; `as`, `upcast` and `with` are contextual words the
          TextMate grammar also scopes as operators. -->
     <list name="wordoperators">
       <item>in</item>
       <item>is</item>
       <item>as</item>
+      <item>upcast</item>
       <item>instanceof</item>
       <item>throws</item>
       <item>spawn</item>

@@ -251,6 +251,13 @@ pub(crate) fn looks_like_paren_type_suffix(cur: Cursor<'_>) -> bool {
     })
 }
 
+/// A word that no grammar rule reads as a keyword at the start of a name:
+/// `Word`, and `upcast`, which is a keyword only in `.upcast<T>()`. The
+/// positions that take a plain word and not every contextual keyword
+/// (`env.NAME`, a bare `test` name) take this set, so `upcast` reads there
+/// as it did before it had a token kind of its own.
+pub(crate) const PLAIN_WORD: KindSet = KindSet::new(&[TokenKind::Word, TokenKind::Upcast]);
+
 /// Tokens that may end the `Self` type of a qualified projection, so that an
 /// `as` after one of them is the projection's and not a name.
 const ENDS_PROJECTION_SELF: KindSet = PATH_SEGMENT.union(KindSet::new(&[
@@ -307,9 +314,16 @@ pub(crate) fn looks_like_qualified_projection(cur: Cursor<'_>) -> bool {
             .is_some_and(|k| crate::types::MEMBER_NAME.contains(k))
 }
 
-/// `. as <` at the cursor: the `.as<T>` upcast.
-pub(crate) fn looks_like_as_projection(cur: Cursor<'_>) -> bool {
-    cur.at(TokenKind::Dot) && cur.nth_is(1, TokenKind::As) && cur.nth_is(2, TokenKind::Less)
+/// `. upcast < … >` at the cursor: the `.upcast<T>()` interface view, with or
+/// without its parentheses. `. as < … >`, its removed spelling, has the same
+/// shape so that it is reported as one. The `<` is read as it is after any
+/// other name ([`looks_like_generic_args`]): `x.upcast < y` and
+/// `f(x.upcast < a, b > c)` compare a member named `upcast`.
+pub(crate) fn looks_like_upcast(cur: Cursor<'_>) -> bool {
+    cur.at(TokenKind::Dot)
+        && (cur.nth_is(1, TokenKind::Upcast) || cur.nth_is(1, TokenKind::As))
+        && cur.nth_is(2, TokenKind::Less)
+        && looks_like_generic_args(at_sig(cur, cur.pos() + 2))
 }
 
 /// Whether the `{` at the cursor opens a map literal rather than a block: a

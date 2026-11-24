@@ -1,0 +1,84 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[upcast_call_parentheses.baml:42:27]
+ 42 │             "Dr. " + self.upcast<Named>.name
+    ·                           ──────┬──────
+    ·                                 ╰── `.upcast<…>` is written with call parentheses; write `.upcast<Named>()` instead
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[upcast_call_parentheses.baml:71:7]
+ 71 │     p.upcast<Named>.label()
+    ·       ──────┬──────
+    ·             ╰── `.upcast<…>` is written with call parentheses; write `.upcast<Named>()` instead
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[upcast_call_parentheses.baml:75:7]
+ 75 │     p.upcast<Named>.name
+    ·       ──────┬──────
+    ·             ╰── `.upcast<…>` is written with call parentheses; write `.upcast<Named>()` instead
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[upcast_call_parentheses.baml:80:7]
+ 80 │     b.upcast<Boxed<int>>.get()
+    ·       ─────────┬────────
+    ·                ╰── `.upcast<…>` is written with call parentheses; write `.upcast<Boxed<int>>()` instead
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[upcast_call_parentheses.baml:85:12]
+ 85 │     make().upcast<Titled>.label()
+    ·            ───────┬──────
+    ·                   ╰── `.upcast<…>` is written with call parentheses; write `.upcast<Titled>()` instead
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[upcast_call_parentheses.baml:90:7]
+ 90 │     p.upcast<Named>
+    ·       ──────┬──────
+    ·             ╰── `.upcast<…>` is written with call parentheses; write `.upcast<Named>()` instead
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[upcast_call_parentheses.baml:94:7]
+ 94 │     b.upcast<Boxed<int>> == b.upcast<Boxed<int>>()
+    ·       ─────────┬────────
+    ·                ╰── `.upcast<…>` is written with call parentheses; write `.upcast<Boxed<int>>()` instead
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[upcast_call_parentheses.baml:99:20]
+ 99 │     p.upcast<Named>(1).label()
+    ·                    ─┬─
+    ·                     ╰── `.upcast<Named>()` takes no arguments; it views the value at an interface and is not a method call
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+     ╭─[upcast_call_parentheses.baml:103:20]
+ 103 │     p.upcast<Named>(strict = true).label()
+     ·                    ───────┬───────
+     ·                           ╰── `.upcast<Named>()` takes no arguments; it views the value at an interface and is not a method call
+     ╰────

@@ -1,6 +1,6 @@
 //! A `_` inference hole in an *expression-context* type position (call
 //! turbofish `race<T, _>`, object construction `Box<_> { … }`, a bare
-//! generic-apply value `id<_>`, an upcast target `.as<Show<_>>`).
+//! generic-apply value `id<_>`, an upcast target `.upcast<Show<_>>()`).
 //!
 //! `_` type inference is not supported: every `_` is a hard error
 //! (`CannotInferType`, E0147) at type lowering. The active tests here pin the

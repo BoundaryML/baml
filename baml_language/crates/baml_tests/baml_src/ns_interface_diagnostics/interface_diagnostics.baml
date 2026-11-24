@@ -582,7 +582,7 @@ test "unqualified_same_name_interface_field_access_is_ambiguous" {
                 }
             `,
         },
-        "as<Named>",
+        "upcast<Named>()",
     )
 }
 
@@ -921,7 +921,7 @@ test "generic_bound_alias_syntax_is_compile_error" {
                     function convert(self) -> T throws never
                 }
                 function read_int<T extends Converter<int> as Ints>(m: T) -> int {
-                    return m.as<Converter<int>>.convert()
+                    return m.upcast<Converter<int>>().convert()
                 }
             `,
         },
@@ -1329,7 +1329,7 @@ test "as_rejects_interface_downcast" {
                     }
                 }
                 function bad(a: Animal) -> string {
-                    let s = a.as<Swimmer>
+                    let s = a.upcast<Swimmer>()
                     return s.swim()
                 }
             `,
@@ -1351,7 +1351,7 @@ test "as_requires_interface_target" {
                     }
                 }
                 function bad(d: Dog) -> Dog {
-                    return d.as<Dog>
+                    return d.upcast<Dog>()
                 }
             `,
         },
@@ -2826,7 +2826,7 @@ test "fuzz_bug11_ambiguous_generic_field_error_includes_type_args" {
                 }
             `,
         },
-        "as<Box<int>>",
+        "upcast<Box<int>>()",
     )
 }
 
@@ -2919,8 +2919,8 @@ test "fuzz_bug14_generic_overlapping_type_arg_impls_reject_as_projection" {
 
                 function main() -> bool {
                     let p: GenPair<int, string> = GenPair { left: 42, right: "world" }
-                    // Explicit .as<> projection should select the Slot<string> block
-                    let rv = p.as<Slot<string>>.get()
+                    // Explicit .upcast<>() projection should select the Slot<string> block
+                    let rv = p.upcast<Slot<string>>().get()
                     return rv == "world"
                 }
             `,
@@ -3190,7 +3190,7 @@ test "wf3_as_to_unimplemented_interface_message_mentions_implement" {
                 }
                 function main() -> string {
                     let c = Cat {}
-                    return c.as<Vehicle>.drive()
+                    return c.upcast<Vehicle>().drive()
                 }
             `,
         },
@@ -3242,7 +3242,7 @@ test "wf3_self_interface_field_access_in_method_requires_projection" {
                 }
             `,
         },
-        "as<Named>",
+        "upcast<Named>()",
     )
 }
 
@@ -3553,7 +3553,7 @@ test "union_fuzz_f17_projection_failure_names_full_generic_interface" {
                   implements Cargo<T> { payload as inner }
                 }
                 function takeInt(x: Box<int> | Box<string>) -> int {
-                  return x.as<Cargo<int>>.payload
+                  return x.upcast<Cargo<int>>().payload
                 }
                 function main() -> int {
                   let b: Box<int> | Box<string> = Box<string> { inner: "oops" }
@@ -4501,7 +4501,7 @@ test "ambiguous_method_across_namespaces_uses_qualified_interface_names" {
             "ns_farm/farm.baml": `interface Animal { function speak(self) -> string throws never }`,
         },
         "E0121",
-        ["root.zoo.Animal", "root.farm.Animal", "as<root.zoo.Animal>", "as<root.farm.Animal>"],
+        ["root.zoo.Animal", "root.farm.Animal", "upcast<root.zoo.Animal>()", "upcast<root.farm.Animal>()"],
     )
 }
 

@@ -14,5 +14,5 @@ class Person {
 }
 
 function read_name(p: Person) -> string {
-  return p.as<Named>.name
+  return p.upcast<Named>().name
 }

@@ -1045,7 +1045,7 @@ enum PendingDiag<'db> {
     /// BEP-044 method disambiguation: `member` on `base` is declared by
     /// two or more realized-distinct interfaces (rustc's E0034 shape) -
     /// resolving would silently pick one, so the access must qualify
-    /// with `as<I>`.
+    /// with `upcast<I>()`.
     AmbiguousMember {
         expr: ExprId,
         base: Ty,
@@ -1054,7 +1054,7 @@ enum PendingDiag<'db> {
         is_field: bool,
     },
     /// An interface FIELD reached on a concrete receiver: reachable only
-    /// through an explicit `obj.as<I>.field` projection.
+    /// through an explicit `obj.upcast<I>().field` projection.
     FieldRequiresProjection {
         expr: ExprId,
         base: Ty,
@@ -1127,13 +1127,13 @@ enum PendingDiag<'db> {
         class_field: baml_type::Name,
     },
     /// A written interface qualifier that is not an interface at all:
-    /// `.as<T>`, or `(Base as T).item`.
+    /// `.upcast<T>()`, or `(Base as T).item`.
     QualifierNotInterface {
         expr: ExprId,
         target: Ty,
     },
     /// `value` does not implement `interface` (an existential): a written
-    /// qualifier the subject does not implement (`x.as<I>`, `(Base as
+    /// qualifier the subject does not implement (`x.upcast<I>()`, `(Base as
     /// I).item`), or a failed `Implements` goal - the nominal verdict,
     /// never re-judged by subtyping.
     DoesNotImplement {
@@ -8335,7 +8335,7 @@ impl<'db> InferenceContext<'db> {
     /// This is the only spelling that reaches two otherwise-unreachable
     /// members - one declared by several implemented interfaces (the bare
     /// `base.item` is E0121-ambiguous), and one whose `Self` appears in a
-    /// parameter (the existential `base.as<I>.item` is object-safety
+    /// parameter (the existential `base.upcast<I>().item` is object-safety
     /// rejected, and a written `Self` removes the need for a receiver).
     fn qualified_path_value(
         &mut self,
@@ -8372,7 +8372,7 @@ impl<'db> InferenceContext<'db> {
             return Ty::error();
         }
         // The interface-view gate is a STRUCTURE demand, as it is for
-        // `.as<I>`: an alias naming an interface answers as the interface.
+        // `.upcast<I>()`: an alias naming an interface answers as the interface.
         let interface = self.expand_alias_ty(&interface);
         let Some(qualifier) = InferInterface::of_ty(&interface) else {
             self.report(PendingDiag::QualifierNotInterface {
@@ -10293,7 +10293,7 @@ impl<'db> InferenceContext<'db> {
         // A union behaves as the intersection existential over the
         // interfaces every arm provides (TIR's rule): `member` resolves
         // through the SINGLE shared interface that declares it -
-        // inference sugar for `union.as<I>.member`, `Self` bound to the
+        // inference sugar for `union.upcast<I>().member`, `Self` bound to the
         // union itself. An arm's own class fields/methods are never
         // reachable (they need not agree across arms); zero shared
         // declarers report "no common interface", two or more are
@@ -10658,7 +10658,7 @@ impl<'db> InferenceContext<'db> {
         None
     }
 
-    /// A realized interface rendered for a diagnostic's `as<I>` hint: a
+    /// A realized interface rendered for a diagnostic's `upcast<I>()` hint: a
     /// local name inside a namespaced body spells its full `root...` path
     /// (the unqualified spelling may not resolve there), and generic args
     /// ride along so same-interface-different-args sources stay distinct
@@ -10783,7 +10783,7 @@ impl<'db> InferenceContext<'db> {
     }
 
     /// Reject a `self`-less interface method reached through a VALUE receiver
-    /// (`f.make(5)`, `f.as<I>.make()`, union receivers): returns `true` and
+    /// (`f.make(5)`, `f.upcast<I>().make()`, union receivers): returns `true` and
     /// reports when the member is such a method. See
     /// [`Self::interface_member_takes_self`] for why this cannot be allowed
     /// to slide (the receiver would be passed into the first real parameter).
@@ -11622,7 +11622,7 @@ impl<'db> InferenceContext<'db> {
     /// (turbofish, generic-apply values, upcast targets): a written `_`
     /// there is a hard E0147 outright - TIR's rule; expression positions
     /// have no annotation slot for inference to fill (`is Show<_>` /
-    /// `.as<Show<_>>` are ascriptions with no local source). The hole
+    /// `.upcast<Show<_>>()` are ascriptions with no local source). The hole
     /// still instantiates as a fresh var so inference proceeds for
     /// RECOVERY, but the diagnostic is unconditional and immediate,
     /// never dependent on whether the var happens to solve.

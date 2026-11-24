@@ -68,7 +68,7 @@ function fs_file_bytes_reads_past_one_chunk_fn() -> string {
     let direct = file.bytes();
     file.close();
     let again = baml.fs.open(path, "r");
-    let through_read = again.as<baml.io.Read>.bytes();
+    let through_read = again.upcast<baml.io.Read>().bytes();
     again.close();
     baml.fs.remove(path);
     `${direct.length()}|${through_read.length()}|${direct.to_base64() == through_read.to_base64()}`

@@ -90,8 +90,10 @@ export default function baml(hljs) {
       'instanceof',
       'is',
       'dynamic',
-      // contextual keywords (`x.as<T>`, `spawn ... with`, `test ... with`)
+      // contextual keywords (`x.upcast<T>()`, `field as class_field`,
+      // `spawn ... with`, `test ... with`)
       'as',
+      'upcast',
       'with',
     ],
     literal: ['true', 'false', 'null'],

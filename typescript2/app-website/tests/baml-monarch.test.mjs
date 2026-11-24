@@ -202,7 +202,7 @@ test('BAML Monarch tokenizer does not throw on examples and fixtures', (t) => {
       'class Inline { code int }',
       'template_string Welcome(name: string) #"Hello {{ name }} {# plain string #}"#',
       'function bytes() -> string { b"\\x41" }',
-      'function cast(x: unknown) -> string { x.as<Foo>().name }',
+      'function cast(x: unknown) -> string { x.upcast<Foo>().name }',
       'function greet(name: string) -> string { `Hello $' +
         '{name.to_lower_case()}` }',
     ].join('\n'),
@@ -229,8 +229,8 @@ test('BAML Monarch tokenizer does not throw on examples and fixtures', (t) => {
     type: 'entity.name.function.method',
   });
   assertToken(portedGrammarTokens, {
-    text: 'as',
-    type: 'keyword.operator.as',
+    text: 'upcast',
+    type: 'keyword.operator.upcast',
   });
 
   const matchTokens = classicTokensFor(

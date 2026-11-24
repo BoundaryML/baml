@@ -71,6 +71,7 @@
   "const"
   "watch"
   "as"
+  "upcast"
   "with"
   "dynamic"
 ] @keyword

@@ -130,11 +130,11 @@ The bound makes `send` available inside the implementation. `EmailNotifier[]` re
 
 ### Select between same-named methods
 
-When two interfaces provide the same method name, select the intended contract with `as<Interface>`:
+When two interfaces provide the same method name, select the intended contract with `upcast<Interface>()`:
 
 <BamlProject id="listing-11-04" file="baml_src/main.baml" regions={["excerpt-37"]} />
 
-An unqualified `notifier.label()` is ambiguous. The `as<Interface>` expression selects a contract; it doesn't convert the value.
+An unqualified `notifier.label()` is ambiguous. The `upcast<Interface>()` expression selects a contract; it doesn't convert the value.
 
 ### Customize standard conversions
 

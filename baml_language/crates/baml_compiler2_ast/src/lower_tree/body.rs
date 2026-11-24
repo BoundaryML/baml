@@ -1048,7 +1048,7 @@ fn call_expr(
 
 /// The `<…>` on the receiver of a member callee (`Box<T>.from(j)`): the base
 /// of a member-access chain that is itself a generic application, not
-/// reached through an `.as<…>`.
+/// reached through an `.upcast<…>()`.
 fn receiver_generic_args(v: View<'_>, callee: AnyExpr) -> Option<Id<GenericArgs>> {
     let base = match callee {
         AnyExpr::FieldAccess(id) => v.node(id).base,

@@ -23,15 +23,15 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × mismatched types
     ╭─[obligation_diagnostics.baml:81:13]
- 81 │     takes_b(c.as<A1>)
-    ·             ────┬───
-    ·                 ╰── expected `B1`, found `A1`
+ 81 │     takes_b(c.upcast<A1>())
+    ·             ───────┬──────
+    ·                    ╰── expected `B1`, found `A1`
     ╰────
 
   [type] E0001
 
   × type `C1` does not implement interface `A1`
     ╭─[obligation_diagnostics.baml:81:13]
- 81 │     takes_b(c.as<A1>)
-    ·             ────────
+ 81 │     takes_b(c.upcast<A1>())
+    ·             ──────────────
     ╰────
