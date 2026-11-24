@@ -374,3 +374,30 @@ test "an impossible tuple alternative leaves the class for the fallback" {
     assert.equal(tupleAlternativeWithFallback(7), 1);
     assert.equal(tupleAlternativeWithFallback(C0 { number: 42 }), 2)
 }
+
+function identity<T>(value: T) -> T {
+    value
+}
+
+function exhaustiveDirect(h: C0 | C1) -> C0 | C1 {
+    let selected: C0 {} | C1 {} = h;
+    selected
+}
+
+function exhaustiveIdentity(h: C0 | C1) -> C0 | C1 {
+    let selected: C0 {} | C1 {} = identity(h);
+    selected
+}
+
+test "exhaustive direct and generic bindings preserve both class values" {
+    let first = C0 { number: 42 };
+    let second = C1 {};
+    assert.equal(exhaustiveDirect(first) is C0, true);
+    assert.equal(exhaustiveDirect(second) is C1, true);
+    assert.equal(exhaustiveIdentity(first) is C0, true);
+    assert.equal(exhaustiveIdentity(second) is C1, true);
+    assert.equal(exhaustiveDirect(first), first);
+    assert.equal(exhaustiveDirect(second), second);
+    assert.equal(exhaustiveIdentity(first), first);
+    assert.equal(exhaustiveIdentity(second), second)
+}

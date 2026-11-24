@@ -4536,10 +4536,7 @@ impl<'db> InferenceContext<'db> {
                     },
                 };
                 if check_coverage {
-                    // Equivalent aliases and expanded types must present the same
-                    // constructors to the pattern matrix. Keep open types open.
-                    let resolved = self.table.resolve_completely(&settled);
-                    let input = self.matrix_scrut(&resolved);
+                    let input = self.scrutinee_demand(&settled);
                     self.lower_let_pattern(body, pattern, &input, false);
                 } else {
                     self.lower_pattern(body, pattern, &settled);

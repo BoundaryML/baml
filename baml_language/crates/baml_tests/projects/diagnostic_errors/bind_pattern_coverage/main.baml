@@ -172,3 +172,17 @@ function uncoveredTupleAlternative(h: int | C0) -> int {
         let g: int | (C0 {}, C0 {}) => 1,
     }
 }
+
+function identity<T>(value: T) -> T {
+    value
+}
+
+function partialClassDirect(h: C0 | C1) -> C0 {
+    let selected: C0 {} = h;
+    selected
+}
+
+function partialIdentity(h: C0 | C1) -> C0 {
+    let selected: C0 {} = identity(h);
+    selected
+}

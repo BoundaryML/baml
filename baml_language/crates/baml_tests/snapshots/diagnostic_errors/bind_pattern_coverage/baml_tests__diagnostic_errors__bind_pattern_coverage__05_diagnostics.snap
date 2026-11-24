@@ -245,3 +245,19 @@ source: crates/baml_tests/src/generated_tests.rs
  172 │ │           let g: int | (C0 {}, C0 {}) => 1,
  173 │ ╰─▶     }
      ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[main.baml:181:9]
+ 181 │     let selected: C0 {} = h;
+     ·         ───────────────
+     ╰────
+
+  [type] E0111
+
+  × refutable pattern in let binding; refutable patterns belong in `match`
+     ╭─[main.baml:186:9]
+ 186 │     let selected: C0 {} = identity(h);
+     ·         ───────────────
+     ╰────
