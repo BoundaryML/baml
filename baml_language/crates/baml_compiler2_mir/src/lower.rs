@@ -11010,6 +11010,18 @@ impl<'db> LoweringContext<'db> {
         None
     }
 
+    /// The class the path prefix ending at `prefix_idx` denotes, with its
+    /// class arguments: the receiver the next segment's field slot is looked
+    /// up on.
+    ///
+    /// The prefix's type has two sources, the ladder TIR recorded and the
+    /// type the previous slot produced (`current_ty`). Both can name the
+    /// class through an alias. A declared field type reaches them without the
+    /// root unfold that [`Self::convert_tir_ty_for_runtime`] gives an
+    /// expression's type, and the runtime type keeps an alias by name when
+    /// its expansion reaches a recursive alias (`type JsonBox = Box<json>`,
+    /// `type Tree = Box<Tree[]>`). The alias rungs come last, so a prefix
+    /// that already names its class keeps the arguments it carries.
     fn class_receiver_for_path_prefix(
         &self,
         expr_id: AstExprId,
@@ -11025,11 +11037,35 @@ impl<'db> LoweringContext<'db> {
         {
             return Some(target);
         }
-
-        match current_ty {
-            RuntimeTy::Class(tn, type_args) => Some((tn.clone(), type_args.to_vec())),
-            _ => None,
+        if let RuntimeTy::Class(tn, type_args) = current_ty {
+            return Some((tn.clone(), type_args.to_vec()));
         }
+
+        let tir_alias = match tir_prefix_ty {
+            Some(Tir2Ty::TypeAlias(alias)) => Some(alias),
+            _ => None,
+        };
+        let current_alias = match current_ty {
+            RuntimeTy::TypeAlias(alias) => Some(alias),
+            _ => None,
+        };
+        tir_alias
+            .into_iter()
+            .chain(current_alias)
+            .find_map(|alias| self.class_dispatch_target_behind_alias(alias))
+    }
+
+    /// The class `alias` names, or `None` when it names anything else.
+    ///
+    /// Normalization unfolds an alias once at the root, which exposes the
+    /// class head of a recursive alias too (`type Tree = Box<Tree[]>` unfolds
+    /// to `Box<Tree[]>`), so resolving it never visits an alias twice.
+    fn class_dispatch_target_behind_alias(
+        &self,
+        alias: &DeclName,
+    ) -> Option<(DeclName, Vec<RuntimeTy>)> {
+        let unfolded = self.resolve_ty_projections(&Tir2Ty::TypeAlias(alias.clone()));
+        self.class_dispatch_target_for_tir_ty(&unfolded)
     }
 
     fn lower_index(&mut self, base: AstExprId, index: AstExprId, dest: Place) -> Lowered<()> {
