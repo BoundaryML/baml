@@ -488,7 +488,7 @@ function _images_text_answer() -> string {
     body
 }
 
-// `-> image?`: no media block is `null`, not a re-ask and a ParseFailed.
+// `-> image?`: no media block is `null`, not a ParseFailed.
 function images_optional_accepts_absence() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_images_text_answer())],
@@ -532,8 +532,8 @@ test "images_list_accepts_absence" {
 }
 
 // The guard on the other side: a REQUIRED `image` is not satisfied by absence.
-// SAP rejects the media type outright, so the runner re-asks and then reports
-// ParseFailed with the text it was given.
+// SAP rejects the media type outright, so the runner reports ParseFailed with
+// the text it was given.
 function images_required_rejects_absence() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_images_text_answer())],
