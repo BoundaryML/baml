@@ -1956,6 +1956,7 @@ fn new_tir_diagnostic(
         error,
         TirTypeError::TypeMismatch { .. }
             | TirTypeError::UnitExpected { .. }
+            | TirTypeError::SpreadTypeMismatch { .. }
             | TirTypeError::ListPatternNeverMatches { .. }
     ) {
         let base = runtime_type::mismatched_types();
@@ -2266,6 +2267,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ConditionAlwaysConstant { .. }
         | TirTypeError::UncalledFunctionInCondition { .. } => DiagnosticId::ConditionAlwaysConstant,
         TirTypeError::UnitExpected { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::SpreadTypeMismatch { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::InvalidSpreadOperand { .. } => DiagnosticId::InvalidSpreadOperand,
         TirTypeError::NotCallable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIterable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIndexable { .. } => DiagnosticId::NotIndexable,

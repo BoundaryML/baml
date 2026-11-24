@@ -1,0 +1,118 @@
+// The operands a spread in a list or map literal rejects. A list spread needs
+// an operand that is statically a list, a map spread one that is statically a
+// map, after alias expansion. Everything else is E0190: nothing is spread
+// dynamically, and `null` is never read as an empty container.
+//
+// One function per rejection; each reports exactly one diagnostic.
+
+class Point {
+    x: int,
+    y: int,
+}
+
+type IntTree = int | IntTree[];
+
+// ─── Lists ───────────────────────────────────────────────────────────────────
+
+function nullable_list(xs: int[]?) -> int[] {
+    [...xs]
+}
+
+function nullable_list_without_expectation(xs: int[]?) -> int {
+    let ys = [1, ...xs];
+    ys.length()
+}
+
+function union_with_scalar(xs: int[] | string) -> int[] {
+    [...xs]
+}
+
+function union_of_lists(xs: int[] | string[]) -> (int | string)[] {
+    [...xs]
+}
+
+function unknown_into_list(xs: unknown) -> unknown[] {
+    [...xs]
+}
+
+function json_into_list(xs: baml.json.json) -> baml.json.json[] {
+    [...xs]
+}
+
+function recursive_union_alias(xs: IntTree) -> IntTree[] {
+    [...xs]
+}
+
+function map_into_list(m: map<string, int>) -> int[] {
+    [...m]
+}
+
+function class_into_list(p: Point) -> int[] {
+    [...p]
+}
+
+function scalar_into_list(x: int) -> int[] {
+    [0, ...x]
+}
+
+function string_into_list(s: string) -> string[] {
+    [...s]
+}
+
+function type_variable_into_list<T>(xs: T) -> unknown[] {
+    [...xs]
+}
+
+function interface_into_list(xs: baml.iter.Iterable<Item = int>) -> int[] {
+    [...xs]
+}
+
+function element_type_mismatch(xs: string[]) -> int[] {
+    [1, ...xs]
+}
+
+function literal_element_type_mismatch(xs: string[]) -> ("a" | "b")[] {
+    ["a", ...xs]
+}
+
+// ─── Maps ────────────────────────────────────────────────────────────────────
+
+function nullable_map(m: map<string, int>?) -> map<string, int> {
+    { ...m }
+}
+
+function union_with_non_map(m: map<string, int> | int) -> map<string, int> {
+    { ...m }
+}
+
+function unknown_into_map(m: unknown) -> map<string, unknown> {
+    { ...m }
+}
+
+function json_into_map(m: baml.json.json) -> map<string, baml.json.json> {
+    { ...m }
+}
+
+function class_into_map(p: Point) -> map<string, int> {
+    { ...p }
+}
+
+function list_into_map(xs: int[]) -> map<string, int> {
+    { ...xs }
+}
+
+function type_variable_into_map<T>(m: T) -> map<string, unknown> {
+    { "a": 1, ...m }
+}
+
+function value_type_mismatch(m: map<string, string>) -> map<string, int> {
+    { "a": 1, ...m }
+}
+
+function key_type_mismatch(m: map<int, int>) -> map<string, int> {
+    { ...m }
+}
+
+function literal_key_type_mismatch(m: map<string, int>) -> map<"a" | "b", int> {
+    { "a": 1, ...m }
+}

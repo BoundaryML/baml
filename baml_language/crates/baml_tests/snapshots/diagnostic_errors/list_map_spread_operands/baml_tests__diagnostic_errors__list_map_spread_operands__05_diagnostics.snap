@@ -1,0 +1,211 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0190
+
+  × cannot spread a value of type `int[] | null` into a list: the operand of `...` must be a list; the value may be `null`, and `null` is not spread as an empty list: handle it first (`value ?? []`,
+  │ or a test that narrows it)
+    ╭─[list_map_spread_operands.baml:18:9]
+ 18 │     [...xs]
+    ·         ──
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `int[] | null` into a list: the operand of `...` must be a list; the value may be `null`, and `null` is not spread as an empty list: handle it first (`value ?? []`,
+  │ or a test that narrows it)
+    ╭─[list_map_spread_operands.baml:22:21]
+ 22 │     let ys = [1, ...xs];
+    ·                     ──
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `string | int[]` into a list: the operand of `...` must be a list; narrow the value first (`match`, or an `is` test on a local)
+    ╭─[list_map_spread_operands.baml:27:9]
+ 27 │     [...xs]
+    ·         ──
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `int[] | string[]` into a list: the operand of `...` must be a list; narrow the value first (`match`, or an `is` test on a local)
+    ╭─[list_map_spread_operands.baml:31:9]
+ 31 │     [...xs]
+    ·         ──
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `unknown` into a list: the operand of `...` must be a list; narrow the value first (`match`, or an `is` test on a local)
+    ╭─[list_map_spread_operands.baml:35:9]
+ 35 │     [...xs]
+    ·         ──
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `baml.json.json` into a list: the operand of `...` must be a list; narrow the value first (`match`, or an `is` test on a local)
+    ╭─[list_map_spread_operands.baml:39:9]
+ 39 │     [...xs]
+    ·         ──
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `IntTree` into a list: the operand of `...` must be a list; narrow the value first (`match`, or an `is` test on a local)
+    ╭─[list_map_spread_operands.baml:43:9]
+ 43 │     [...xs]
+    ·         ──
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `map<string, int>` into a list: the operand of `...` must be a list
+    ╭─[list_map_spread_operands.baml:47:9]
+ 47 │     [...m]
+    ·         ─
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `Point` into a list: the operand of `...` must be a list
+    ╭─[list_map_spread_operands.baml:51:9]
+ 51 │     [...p]
+    ·         ─
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `int` into a list: the operand of `...` must be a list
+    ╭─[list_map_spread_operands.baml:55:12]
+ 55 │     [0, ...x]
+    ·            ─
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `string` into a list: the operand of `...` must be a list
+    ╭─[list_map_spread_operands.baml:59:9]
+ 59 │     [...s]
+    ·         ─
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `T` into a list: the operand of `...` must be a list; a type parameter is never known to be one
+    ╭─[list_map_spread_operands.baml:63:9]
+ 63 │     [...xs]
+    ·         ──
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `baml.iter.Iterable<Error = never, Item = int>` into a list: the operand of `...` must be a list; narrow the value first (`match`, or an `is` test on a local)
+    ╭─[list_map_spread_operands.baml:67:9]
+ 67 │     [...xs]
+    ·         ──
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[list_map_spread_operands.baml:71:12]
+ 71 │     [1, ...xs]
+    ·            ─┬
+    ·             ╰── expected `int`, found `string`: every element of the spread list must fit the list being built
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[list_map_spread_operands.baml:75:14]
+ 75 │     ["a", ...xs]
+    ·              ─┬
+    ·               ╰── expected `"a" | "b"`, found `string`: every element of the spread list must fit the list being built
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `map<string, int> | null` into a map: the operand of `...` must be a map; the value may be `null`, and `null` is not spread as an empty map: handle it first
+  │ (`value ?? {}`, or a test that narrows it)
+    ╭─[list_map_spread_operands.baml:81:10]
+ 81 │     { ...m }
+    ·          ─
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `int | map<string, int>` into a map: the operand of `...` must be a map; narrow the value first (`match`, or an `is` test on a local)
+    ╭─[list_map_spread_operands.baml:85:10]
+ 85 │     { ...m }
+    ·          ─
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `unknown` into a map: the operand of `...` must be a map; narrow the value first (`match`, or an `is` test on a local)
+    ╭─[list_map_spread_operands.baml:89:10]
+ 89 │     { ...m }
+    ·          ─
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `baml.json.json` into a map: the operand of `...` must be a map; narrow the value first (`match`, or an `is` test on a local)
+    ╭─[list_map_spread_operands.baml:93:10]
+ 93 │     { ...m }
+    ·          ─
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `Point` into a map: the operand of `...` must be a map; a class instance is spread only into a constructor of its own class (`Class { ...value }`)
+    ╭─[list_map_spread_operands.baml:97:10]
+ 97 │     { ...p }
+    ·          ─
+    ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `int[]` into a map: the operand of `...` must be a map
+     ╭─[list_map_spread_operands.baml:101:10]
+ 101 │     { ...xs }
+     ·          ──
+     ╰────
+
+  [type] E0190
+
+  × cannot spread a value of type `T` into a map: the operand of `...` must be a map; a type parameter is never known to be one
+     ╭─[list_map_spread_operands.baml:105:18]
+ 105 │     { "a": 1, ...m }
+     ·                  ─
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[list_map_spread_operands.baml:109:18]
+ 109 │     { "a": 1, ...m }
+     ·                  ┬
+     ·                  ╰── expected `int`, found `string`: every key and value of the spread map must fit the map being built
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[list_map_spread_operands.baml:113:10]
+ 113 │     { ...m }
+     ·          ┬
+     ·          ╰── expected `string`, found `int`: every key and value of the spread map must fit the map being built
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[list_map_spread_operands.baml:117:18]
+ 117 │     { "a": 1, ...m }
+     ·                  ┬
+     ·                  ╰── expected `"a" | "b"`, found `string`: every key and value of the spread map must fit the map being built
+     ╰────

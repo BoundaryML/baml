@@ -927,6 +927,49 @@ impl MapExprEntry {
     }
 }
 
+/// One member of a map literal, in source order. The order is semantic: a
+/// later member overrides an earlier one that has an equal key.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MapExprMember {
+    /// `key: value`
+    Entry(MapExprEntry),
+    /// `...map`: every entry of the map, copied in at this position.
+    Spread(ExprId),
+}
+
+impl MapExprMember {
+    pub fn entry(key: ExprId, value: ExprId) -> Self {
+        Self::Entry(MapExprEntry::explicit(key, value))
+    }
+
+    /// The member's subexpressions, in evaluation order.
+    pub fn exprs(&self) -> impl Iterator<Item = ExprId> + use<> {
+        let (first, second) = match self {
+            Self::Entry(entry) => (entry.key, Some(entry.value)),
+            Self::Spread(expr) => (*expr, None),
+        };
+        std::iter::once(first).chain(second)
+    }
+}
+
+/// One element of a list literal, in source order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrayExprElement {
+    /// `value`
+    Item(ExprId),
+    /// `...list`: every element of the list, copied in at this position.
+    Spread(ExprId),
+}
+
+impl ArrayExprElement {
+    /// The element's expression: the value, or the spread's operand.
+    pub fn expr(self) -> ExprId {
+        match self {
+            Self::Item(expr) | Self::Spread(expr) => expr,
+        }
+    }
+}
+
 /// Expressions — modeled after `Expr` in `body.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
@@ -1031,14 +1074,18 @@ pub enum Expr {
         fields: Vec<ObjectExprField>,
         spreads: Vec<SpreadField>,
     },
+    /// `[a, ...b]`. A spread copies the elements of its operand into the
+    /// new list; it never makes the new list an alias of the operand.
     Array {
-        elements: Vec<ExprId>,
+        elements: Vec<ArrayExprElement>,
     },
     Tuple {
         elements: Vec<ExprId>,
     },
+    /// `{ k: v, ...m }`. A spread copies the entries of its operand into the
+    /// new map.
     Map {
-        entries: Vec<MapExprEntry>,
+        members: Vec<MapExprMember>,
     },
     Block {
         stmts: Vec<StmtId>,

@@ -1,0 +1,35 @@
+---
+source: crates/baml_fmt/tests/cases.rs
+---
+function first(xs: int[]) -> int[] {
+    [...xs, 1]
+}
+
+function middle(xs: int[]) -> int[] {
+    [0, ...xs, 3]
+}
+
+function last(xs: int[]) -> int[] {
+    [0, ...xs]
+}
+
+function only(xs: int[]) -> int[] {
+    [...xs]
+}
+
+function several(xs: int[], ys: int[]) -> int[] {
+    [...xs, ...ys, 1, ...xs]
+}
+
+function nested(xs: int[], ys: int[][]) -> int[][] {
+    [[...xs], ...[...ys, [...xs, 1]], []]
+}
+
+function operand_expressions(xs: int[], b: Box) -> int[] {
+    [
+        ...xs.slice(0, 1),
+        ...b.items,
+        ...(if (b.flag) { xs } else { [] }),
+        ...make<int>(),
+    ]
+}

@@ -955,15 +955,21 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
                 collect_callee_names_expr(body, spread.expr, names);
             }
         }
-        ast::Expr::Array { elements } | ast::Expr::Tuple { elements } => {
+        ast::Expr::Array { elements } => {
+            for element in elements {
+                collect_callee_names_expr(body, element.expr(), names);
+            }
+        }
+        ast::Expr::Tuple { elements } => {
             for element in elements {
                 collect_callee_names_expr(body, *element, names);
             }
         }
-        ast::Expr::Map { entries } => {
-            for entry in entries {
-                collect_callee_names_expr(body, entry.key, names);
-                collect_callee_names_expr(body, entry.value, names);
+        ast::Expr::Map { members } => {
+            for member in members {
+                for expr in member.exprs() {
+                    collect_callee_names_expr(body, expr, names);
+                }
             }
         }
         ast::Expr::Block { stmts, tail_expr } => {

@@ -52,7 +52,7 @@ fn lower_codegen_default(
         ast::Expr::Array { elements } if elements.is_empty() => Some(
             cg::FunctionArgumentDefault::Literal(cg::DefaultLiteral::EmptyList),
         ),
-        ast::Expr::Map { entries } if entries.is_empty() => Some(
+        ast::Expr::Map { members } if members.is_empty() => Some(
             cg::FunctionArgumentDefault::Literal(cg::DefaultLiteral::EmptyMap),
         ),
         // Only empty array/map defaults become structured

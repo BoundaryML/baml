@@ -12,15 +12,16 @@
 use baml_syntax::{
     Token,
     nodes::{
-        AnyElse, AnyExpr, AnyMatchScrutinee, AnyObjectCtor, AnyObjectKey, AnyObjectMember, Arg,
-        ArgList, ArrayElement, ArrayLiteral, AwaitExpr, BacktickString, BinaryExpr, BreakExpr,
-        CallExpr, CatchArm, CatchClause, CatchExpr, ContinueExpr, ElseBranch, EnvAccessExpr,
-        FieldAccessExpr, FieldValue, GenericApplyExpr, GenericArgs, GenericParamList, IfExpr,
-        IfLetExpr, IndexExpr, IsExpr, LambdaExpr, LiteralExpr, MapEntry, MapLiteral, MatchArm,
-        MatchExpr, MatchGuard, MatchParen, ObjectField, ObjectLiteral, OptionalCallExpr,
-        OptionalFieldAccessExpr, OptionalIndexExpr, ParenExpr, PathExpr, PathSegment, ReturnExpr,
-        SpawnExpr, SpecExpr, SpreadElement, TaggedTemplateExpr, ThrowExpr, ThrowsClause,
-        TraceBinding, TupleExpr, TupleFieldExpr, TypeAscription, UnaryExpr, UpcastExpr, WithClause,
+        AnyArrayElement, AnyElse, AnyExpr, AnyMapMember, AnyMatchScrutinee, AnyObjectCtor,
+        AnyObjectKey, AnyObjectMember, Arg, ArgList, ArrayElement, ArrayLiteral, AwaitExpr,
+        BacktickString, BinaryExpr, BreakExpr, CallExpr, CatchArm, CatchClause, CatchExpr,
+        ContinueExpr, ElseBranch, EnvAccessExpr, FieldAccessExpr, FieldValue, GenericApplyExpr,
+        GenericArgs, GenericParamList, IfExpr, IfLetExpr, IndexExpr, IsExpr, LambdaExpr,
+        LiteralExpr, MapEntry, MapLiteral, MatchArm, MatchExpr, MatchGuard, MatchParen,
+        ObjectField, ObjectLiteral, OptionalCallExpr, OptionalFieldAccessExpr, OptionalIndexExpr,
+        ParenExpr, PathExpr, PathSegment, ReturnExpr, SpawnExpr, SpecExpr, SpreadElement,
+        TaggedTemplateExpr, ThrowExpr, ThrowsClause, TraceBinding, TupleExpr, TupleFieldExpr,
+        TypeAscription, UnaryExpr, UpcastExpr, WithClause,
     },
     ops::{AssignOp, BinaryOp, IS_BINDING_POWER, PREFIX_BINDING_POWER, UnaryOpToken},
     token::{
@@ -716,16 +717,33 @@ impl Parse for GenericArgs {
     }
 }
 
-/// `[a, b c]` — commas between elements are optional.
+/// `[a, b c, ...rest]` — commas between elements are optional. An element
+/// led by `...` is a spread: the elements of the list after it are copied in.
 impl Parse for ArrayLiteral {
     type Head = Token!["["];
     fn parse(p: &mut Parser<'_, '_>, l: Self::Head) -> Id<Self> {
         let mut elements = Vec::new();
         while !p.cur.at(TokenKind::RBracket) && !p.cur.at_end() {
-            let Ok(value) = operand(p, Restrictions::empty()) else {
-                // Reported; the token that is not an expression is skipped.
-                p.cur.skip();
-                continue;
+            let mark = p.cur.mark();
+            let value = if let Some(dots) = p.cur.eat::<punct::DotDotDot>() {
+                // A missing operand is reported and kept as `Missing`: the
+                // `...` was consumed, so the loop still advances.
+                let value = operand(p, Restrictions::empty());
+                AnyArrayElement::Spread(p.alloc(
+                    mark,
+                    SpreadElement {
+                        dots,
+                        value,
+                        comma: None,
+                    },
+                ))
+            } else {
+                let Ok(value) = operand(p, Restrictions::empty()) else {
+                    // Reported; the token that is not an expression is skipped.
+                    p.cur.skip();
+                    continue;
+                };
+                AnyArrayElement::Expr(value)
             };
             let comma = p.cur.eat::<punct::Comma>();
             elements.push(ArrayElement { value, comma });
@@ -736,41 +754,60 @@ impl Parse for ArrayLiteral {
     }
 }
 
+/// What may begin a map-literal member, for recovery.
+const MAP_MEMBER_START: KindSet = EXPR_START.union(KindSet::new(&[TokenKind::DotDotDot]));
+
 /// `{ k: v }` / `map { k: v }`: keys and values are expressions, colons
 /// required, commas canonical but omissible before an unambiguous next key.
+/// A member led by `...` is a spread: the entries of the map after it are
+/// copied in.
 impl Parse for MapLiteral {
     type Head = (Option<Token!["map"]>, Token!["{"]);
     fn parse(p: &mut Parser<'_, '_>, (map_kw, l): Self::Head) -> Id<Self> {
         let mark = map_kw.map_or(Mark::of(l), Mark::of);
-        let entries = p.members(TokenKind::RBrace, STATEMENT_KEYWORD, EXPR_START, |p| {
-            if !at_expression_start(p.cur) {
-                p.unexpected("map key or '}'");
-                return None;
-            }
-            let mark = p.cur.mark();
-            let key = expr(p, Restrictions::empty()).ok()?;
-            let colon = p.expect::<punct::Colon>();
-            let value = match colon {
-                Ok(_) if p.cur.at_set(STATEMENT_KEYWORD) => Err(p.missing("map value")),
-                Ok(_) if at_expression_start(p.cur) => expr(p, Restrictions::empty()),
-                Ok(_) => Err(p.missing("map value")),
-                Err(missing) => Err(missing),
-            };
-            let comma = p.cur.eat::<punct::Comma>();
-            let missing_sep = comma.is_none().then_some("',' or '}' after map entry");
-            Some((
-                p.alloc(
-                    mark,
-                    MapEntry {
-                        key,
-                        colon,
-                        value,
-                        comma,
-                    },
-                ),
-                missing_sep,
-            ))
-        });
+        let entries = p.members(
+            TokenKind::RBrace,
+            STATEMENT_KEYWORD,
+            MAP_MEMBER_START,
+            |p| {
+                let mark = p.cur.mark();
+                if let Some(dots) = p.cur.eat::<punct::DotDotDot>() {
+                    let value = operand(p, Restrictions::empty());
+                    let comma = p.cur.eat::<punct::Comma>();
+                    let missing_sep = comma.is_none().then_some("',' or '}' after spread element");
+                    return Some((
+                        AnyMapMember::Spread(p.alloc(mark, SpreadElement { dots, value, comma })),
+                        missing_sep,
+                    ));
+                }
+                if !at_expression_start(p.cur) {
+                    p.unexpected("map key or '}'");
+                    return None;
+                }
+                let key = expr(p, Restrictions::empty()).ok()?;
+                let colon = p.expect::<punct::Colon>();
+                let value = match colon {
+                    Ok(_) if p.cur.at_set(STATEMENT_KEYWORD) => Err(p.missing("map value")),
+                    Ok(_) if at_expression_start(p.cur) => expr(p, Restrictions::empty()),
+                    Ok(_) => Err(p.missing("map value")),
+                    Err(missing) => Err(missing),
+                };
+                let comma = p.cur.eat::<punct::Comma>();
+                let missing_sep = comma.is_none().then_some("',' or '}' after map entry");
+                Some((
+                    AnyMapMember::Entry(p.alloc(
+                        mark,
+                        MapEntry {
+                            key,
+                            colon,
+                            value,
+                            comma,
+                        },
+                    )),
+                    missing_sep,
+                ))
+            },
+        );
         let entries = p.out.alloc_list(entries);
         let r = p.expect::<punct::RBrace>();
         p.alloc(

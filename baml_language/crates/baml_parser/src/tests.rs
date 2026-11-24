@@ -199,6 +199,62 @@ fn zero_progress_shapes_terminate() {
     ));
 }
 
+/// The errors of `text`, one per line, with no tree.
+fn errors(text: &str) -> String {
+    let mut out = String::new();
+    for error in &parse(text).errors {
+        let _ = writeln!(out, "{error:?}");
+    }
+    out
+}
+
+/// A `...operand` is an element of a list literal in any position: first,
+/// middle, last, repeated, before a trailing comma, with no commas at all.
+#[test]
+fn list_spreads_are_elements_in_any_position() {
+    let text = "function f() -> int[] {\n  [...a, 1, ...b, 2, ...c,]\n}\nfunction g() -> int[] {\n  [0 ...a ...b.c() 1]\n}\n";
+    assert_eq!(errors(text), "");
+    insta::assert_snapshot!(tree(text));
+}
+
+/// A `...operand` is a member of a map literal in any position, with or
+/// without the `map` keyword. A `{` followed by `...` is a map, never a
+/// block: no statement begins with `...`.
+#[test]
+fn map_spreads_are_members_in_any_position() {
+    let text = "function f() -> map<string, int> {\n  let only = { ...a };\n  let kw = map { ...a, \"k\": 1 };\n  { ...a, \"k\": 1, ...b, \"j\": 2, ...c, }\n}\n";
+    assert_eq!(errors(text), "");
+    insta::assert_snapshot!(tree(text));
+}
+
+/// Spreads nest: the operand is any expression, a literal with its own
+/// spreads included.
+#[test]
+fn spreads_nest_in_lists_and_maps() {
+    let text = "function f() -> int {\n  let a = [...[...xs, 1], ...{ ...m }.keys()];\n  let b = { ...{ ...m, \"k\": [...xs] } };\n  1\n}\n";
+    assert_eq!(errors(text), "");
+    insta::assert_snapshot!(tree(text));
+}
+
+/// `...` begins no expression: it is an element of a list or map literal (or
+/// a member of a constructed object) and nothing else. A braced body is a
+/// block, so a spread inside one is an error rather than a map; `..` stays
+/// the rest of a pattern.
+#[test]
+fn a_spread_outside_a_literal_is_an_error() {
+    insta::assert_snapshot!(errors(
+        "function f(xs: int[], m: map<string, int>) -> int {\n  let a = (...xs);\n  let b = ...xs;\n  let c = if (true) { ...m } else { m };\n  let d = [..xs];\n  1\n}\n"
+    ));
+}
+
+/// A spread with no operand is reported once and never loops.
+#[test]
+fn a_spread_without_an_operand_is_reported() {
+    insta::assert_snapshot!(tree(
+        "function f() -> int {\n  let a = [...];\n  let b = [..., 1];\n  let c = { ... };\n  let d = { ..., \"k\": 1 };\n  1\n}\n"
+    ));
+}
+
 /// Lookaheads that accepted more than the grammar: a disagreement is a
 /// diagnostic, never a panic.
 #[test]

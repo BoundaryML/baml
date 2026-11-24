@@ -1559,10 +1559,11 @@ fn resolution_external_function<'db>(
 
 // Re-use ExprId from baml_compiler2_ast (already imported above via ExprId)
 use baml_compiler2_ast::{
-    AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, Expr as AstExpr,
-    ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, LoopOrigin,
-    PatId as AstPatId, Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId,
-    TypeExpr as AstTypeExpr, TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
+    ArrayExprElement as AstArrayElement, AssignOp as AstAssignOp, AstSourceMap,
+    BinaryOp as AstBinaryOp, Expr as AstExpr, ExprBody as AstExprBody, ExprId as AstExprId,
+    Literal as AstLiteral, LoopOrigin, MapExprMember as AstMapMember, PatId as AstPatId,
+    Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, TypeExpr as AstTypeExpr,
+    TypeExprKind as AstTypeExprKind, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
@@ -6166,13 +6167,30 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Array { elements } => {
-                let operands: Vec<Operand<'db>> = elements
+                // The elements before the first spread initialize the list.
+                // With no spread that is every element, and the literal is
+                // the one `Rvalue::Array` it has always been.
+                let leading = elements
                     .iter()
-                    .map(|&e| self.lower_to_operand(e))
+                    .take_while(|element| matches!(element, AstArrayElement::Item(_)))
+                    .count();
+                let operands: Vec<Operand<'db>> = elements[..leading]
+                    .iter()
+                    .map(|element| self.lower_to_operand(element.expr()))
                     .collect::<Lowered<Vec<_>>>()?;
                 let element_ty = self.array_element_template(expr_id)?;
-                self.builder
-                    .assign(dest, Rvalue::Array(element_ty, operands));
+                if leading == elements.len() {
+                    self.builder
+                        .assign(dest, Rvalue::Array(element_ty, operands));
+                } else {
+                    self.lower_array_spread_tail(
+                        expr_id,
+                        element_ty,
+                        operands,
+                        &elements[leading..],
+                        dest,
+                    )?;
+                }
             }
 
             AstExpr::Tuple { elements } => {
@@ -6190,20 +6208,35 @@ impl<'db> LoweringContext<'db> {
                 );
             }
 
-            AstExpr::Map { entries } => {
+            AstExpr::Map { members } => {
                 let (key_ty, value_ty) = self.map_kv_templates(expr_id)?;
-                let map = Place::local(self.builder.temp(self.expr_ty(expr_id)?));
+                let map_ty = self.expr_ty(expr_id)?;
+                let map = Place::local(self.builder.temp(map_ty.clone()));
                 self.builder
                     .assign(map.clone(), Rvalue::Map(key_ty, value_ty, Vec::new()));
-                for entry in entries {
-                    let key = self.lower_to_operand(entry.key)?;
-                    let value = self.lower_to_operand(entry.value)?;
-                    let ignored = Place::local(self.builder.temp(RuntimeTy::Unknown));
-                    self.emit_map_call(
-                        "set",
-                        vec![Operand::Copy(map.clone()), key, value],
-                        ignored,
-                    );
+                // Members run strictly in source order, each one landing in
+                // the map before the next is evaluated: an entry is one
+                // `set`, a spread one `set` per entry of its operand. A
+                // later member therefore overrides an earlier one with an
+                // equal key, and `set` keeps that key's first position.
+                for member in members {
+                    match member {
+                        AstMapMember::Entry(entry) => {
+                            let key = self.lower_to_operand(entry.key)?;
+                            let value = self.lower_to_operand(entry.value)?;
+                            let ignored = Place::local(self.builder.temp(RuntimeTy::Unknown));
+                            self.emit_map_call(
+                                "set",
+                                vec![Operand::Copy(map.clone()), key, value],
+                                ignored,
+                            );
+                        }
+                        AstMapMember::Spread(operand) => {
+                            let source = self.builder.temp(self.expr_ty(operand)?);
+                            self.lower_expr(operand, Place::local(source))?;
+                            self.emit_map_spread(&map, source, &map_ty);
+                        }
+                    }
                 }
                 self.builder.assign(dest, Rvalue::Use(Operand::Copy(map)));
             }
@@ -11166,6 +11199,203 @@ impl<'db> LoweringContext<'db> {
             self.builder
                 .assign(dest, Rvalue::Use(Operand::Copy(call_dest)));
         }
+    }
+
+    /// `baml.Array.<method>(args)`: a native list operation as an ordinary
+    /// call, its result in `dest`. Like the map operations, it reads the
+    /// element type from the receiver, not from call type arguments.
+    fn emit_array_call(&mut self, method: &str, args: Vec<Operand<'db>>, dest: Local) {
+        let callee = Operand::Constant(Constant::Function(self.lang_class_method(
+            baml_base::LangPackage::Baml,
+            "Array",
+            method,
+        )));
+        let resume = self.builder.create_block();
+        self.builder.call(callee, args, Place::local(dest), resume);
+        self.builder.set_current_block(resume);
+    }
+
+    /// A list literal from its first spread on: `[a, b, ...xs, c, ...ys]`
+    /// with `leading` holding the already-lowered `a, b`.
+    ///
+    /// The literal is one fresh list, created with the literal's own element
+    /// type before the first spread operand is evaluated, and every later
+    /// element is appended to it in source order as soon as it has been
+    /// evaluated: a plain element with `push`, a spread with one in-place
+    /// `splice` at the end, which reads the operand once and copies its
+    /// element references. So the operand is evaluated exactly once, its
+    /// contents are read at the spread's own position (an element evaluated
+    /// later cannot change what was copied), it is never written, and the
+    /// result never aliases it. Both are ordinary calls of the stdlib's
+    /// native list methods, so every MIR consumer already handles them.
+    ///
+    /// The operand's static type is not inspected here: the checker
+    /// accepted it as a list (aliases included), and `splice` takes the
+    /// value as it is.
+    fn lower_array_spread_tail(
+        &mut self,
+        expr_id: AstExprId,
+        element_ty: TyTemplate,
+        leading: Vec<Operand<'db>>,
+        rest: &[AstArrayElement],
+        dest: Place,
+    ) -> Lowered<()> {
+        let list = self.builder.temp(self.expr_ty(expr_id)?);
+        self.builder
+            .assign(Place::local(list), Rvalue::Array(element_ty, leading));
+        for element in rest {
+            match *element {
+                AstArrayElement::Item(item) => {
+                    let value = self.lower_to_operand(item)?;
+                    let length = self.builder.temp(RuntimeTy::Int);
+                    self.emit_array_call(
+                        "push",
+                        vec![Operand::Copy(Place::local(list)), value],
+                        length,
+                    );
+                }
+                AstArrayElement::Spread(operand) => {
+                    let source = self.builder.temp(self.expr_ty(operand)?);
+                    self.lower_expr(operand, Place::local(source))?;
+                    // `list.splice(list.length(), 0, source)`: insert at the
+                    // end, remove nothing. `start == length()` is always in
+                    // range, so the call's declared `InvalidArgument` cannot
+                    // be raised.
+                    let end = self.array_len_local(list);
+                    let none = self.const_int_local(0);
+                    let ignored = self.builder.temp(RuntimeTy::Null);
+                    self.emit_array_call(
+                        "splice",
+                        vec![
+                            Operand::Copy(Place::local(list)),
+                            Operand::Copy(Place::local(end)),
+                            Operand::Copy(Place::local(none)),
+                            Operand::Copy(Place::local(source)),
+                        ],
+                        ignored,
+                    );
+                }
+            }
+        }
+        self.builder
+            .assign(dest, Rvalue::Use(Operand::Copy(Place::local(list))));
+        Ok(())
+    }
+
+    /// Copies every entry of the map in `source` into `map`, a map literal
+    /// under construction whose runtime type is `map_ty`: one `set` per
+    /// entry, in `source`'s iteration order.
+    ///
+    /// `keys()` and `values()` are index-aligned snapshots, so `source` is
+    /// read exactly twice, here, before any `set` runs: a `set` may run user
+    /// code (a key's `hash`/`equals`) and yield, and nothing that happens to
+    /// `source` from then on changes what is copied. The loop indexes the
+    /// snapshots only, never `source`, and is bounded by both lengths, so it
+    /// cannot read out of range even if another task changed `source`
+    /// between the two snapshot calls. `source` is never written.
+    ///
+    /// The snapshots are typed by the literal's own key and value types: the
+    /// checker proved the operand's are subtypes of them, and the lists are
+    /// only read. The operand's static type is not inspected (the checker
+    /// accepted it as a map, aliases included).
+    fn emit_map_spread(&mut self, map: &Place, source: Local, map_ty: &RuntimeTy) {
+        let (key_ty, value_ty) = match map_ty {
+            RuntimeTy::Map { key, value, .. } => ((**key).clone(), (**value).clone()),
+            _ => (RuntimeTy::Unknown, RuntimeTy::Unknown),
+        };
+        let keys = self.builder.temp(RuntimeTy::List(Box::new(key_ty.clone())));
+        self.emit_map_call(
+            "keys",
+            vec![Operand::Copy(Place::local(source))],
+            Place::local(keys),
+        );
+        let values = self
+            .builder
+            .temp(RuntimeTy::List(Box::new(value_ty.clone())));
+        self.emit_map_call(
+            "values",
+            vec![Operand::Copy(Place::local(source))],
+            Place::local(values),
+        );
+        let key_count = self.array_len_local(keys);
+        let value_count = self.array_len_local(values);
+        let index = self.const_int_local(0);
+        let one = self.const_int_local(1);
+
+        let header = self.builder.create_block();
+        let check_values = self.builder.create_block();
+        let body = self.builder.create_block();
+        let exit = self.builder.create_block();
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(header);
+        }
+
+        self.builder.set_current_block(header);
+        let more_keys = self.builder.temp(RuntimeTy::Bool);
+        self.builder.assign(
+            Place::local(more_keys),
+            Rvalue::BinaryOp {
+                op: BinOp::Lt,
+                left: Operand::Copy(Place::local(index)),
+                right: Operand::Copy(Place::local(key_count)),
+            },
+        );
+        self.builder
+            .branch(Operand::Copy(Place::local(more_keys)), check_values, exit);
+
+        self.builder.set_current_block(check_values);
+        let more_values = self.builder.temp(RuntimeTy::Bool);
+        self.builder.assign(
+            Place::local(more_values),
+            Rvalue::BinaryOp {
+                op: BinOp::Lt,
+                left: Operand::Copy(Place::local(index)),
+                right: Operand::Copy(Place::local(value_count)),
+            },
+        );
+        self.builder
+            .branch(Operand::Copy(Place::local(more_values)), body, exit);
+
+        self.builder.set_current_block(body);
+        let key = self.builder.temp(key_ty);
+        self.builder.assign(
+            Place::local(key),
+            Rvalue::Use(Operand::Copy(Place::Index {
+                base: Box::new(Place::Local(keys)),
+                index,
+                kind: IndexKind::Array,
+            })),
+        );
+        let value = self.builder.temp(value_ty);
+        self.builder.assign(
+            Place::local(value),
+            Rvalue::Use(Operand::Copy(Place::Index {
+                base: Box::new(Place::Local(values)),
+                index,
+                kind: IndexKind::Array,
+            })),
+        );
+        let ignored = Place::local(self.builder.temp(RuntimeTy::Unknown));
+        self.emit_map_call(
+            "set",
+            vec![
+                Operand::Copy(map.clone()),
+                Operand::Copy(Place::local(key)),
+                Operand::Copy(Place::local(value)),
+            ],
+            ignored,
+        );
+        self.builder.assign(
+            Place::local(index),
+            Rvalue::BinaryOp {
+                op: BinOp::Add,
+                left: Operand::Copy(Place::local(index)),
+                right: Operand::Copy(Place::local(one)),
+            },
+        );
+        self.builder.goto(header);
+
+        self.builder.set_current_block(exit);
     }
 
     /// If the expression is a simple local variable reference (single-segment path

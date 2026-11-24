@@ -111,13 +111,19 @@ impl ExprBody {
                 out.extend(fields.iter().map(|field| BodyNode::Expr(field.value)));
                 out.extend(spreads.iter().map(|s| BodyNode::Expr(s.expr)));
             }
-            Expr::Array { elements } | Expr::Tuple { elements } => {
+            Expr::Array { elements } => {
+                out.extend(
+                    elements
+                        .iter()
+                        .map(|element| BodyNode::Expr(element.expr())),
+                );
+            }
+            Expr::Tuple { elements } => {
                 out.extend(elements.iter().copied().map(BodyNode::Expr));
             }
-            Expr::Map { entries } => {
-                for entry in entries {
-                    out.push(BodyNode::Expr(entry.key));
-                    out.push(BodyNode::Expr(entry.value));
+            Expr::Map { members } => {
+                for member in members {
+                    out.extend(member.exprs().map(BodyNode::Expr));
                 }
             }
             Expr::Block { stmts, tail_expr } => {

@@ -1,0 +1,103 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: tree(text)
+---
+SourceFile@0..132
+  items: FunctionDef@0..132
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..12
+      l: LParen "(" @10..11
+      r: RParen ")" @11..12
+    ret: ReturnType@13..32
+      arrow: Arrow "->" @13..15
+      ty: PathType@16..32
+        head: Name@16..19
+          token: Map "map" @16..19
+        args: TypeArgs@19..32
+          l: Less "<" @19..20
+          args: PathType@20..26
+            head: Name@20..26
+              token: Word "string" @20..26
+          args: Comma "," @26..27
+          args: PathType@28..31
+            head: Name@28..31
+              token: Word "int" @28..31
+          r: Greater ">" @31..32
+    body: Block@33..132
+      l: LBrace "{" @33..34
+      stmts: LetStmt@37..57
+        introducer: Let "let" @37..40
+        pattern: BindingPattern@41..45
+          name: Name@41..45
+            token: Word "only" @41..45
+        eq: Equals "=" @46..47
+        init: MapLiteral@48..56
+          l: LBrace "{" @48..49
+          entries: SpreadElement@50..54
+            dots: DotDotDot "..." @50..53
+            value: PathExpr@53..54
+              head: Name@53..54
+                token: Word "a" @53..54
+          r: RBrace "}" @55..56
+        semi: Semicolon ";" @56..57
+      stmts: LetStmt@60..90
+        introducer: Let "let" @60..63
+        pattern: BindingPattern@64..66
+          name: Name@64..66
+            token: Word "kw" @64..66
+        eq: Equals "=" @67..68
+        init: MapLiteral@69..89
+          map_kw: Map "map" @69..72
+          l: LBrace "{" @73..74
+          entries: SpreadElement@75..80
+            dots: DotDotDot "..." @75..78
+            value: PathExpr@78..79
+              head: Name@78..79
+                token: Word "a" @78..79
+            comma: Comma "," @79..80
+          entries: MapEntry@81..87
+            key: StringLit@81..84
+              token: String "\"k\"" @81..84
+            colon: Colon ":" @84..85
+            value: LiteralExpr@86..87
+              token: Integer "1" @86..87
+          r: RBrace "}" @88..89
+        semi: Semicolon ";" @89..90
+      tail: MapLiteral@93..130
+        l: LBrace "{" @93..94
+        entries: SpreadElement@95..100
+          dots: DotDotDot "..." @95..98
+          value: PathExpr@98..99
+            head: Name@98..99
+              token: Word "a" @98..99
+          comma: Comma "," @99..100
+        entries: MapEntry@101..108
+          key: StringLit@101..104
+            token: String "\"k\"" @101..104
+          colon: Colon ":" @104..105
+          value: LiteralExpr@106..107
+            token: Integer "1" @106..107
+          comma: Comma "," @107..108
+        entries: SpreadElement@109..114
+          dots: DotDotDot "..." @109..112
+          value: PathExpr@112..113
+            head: Name@112..113
+              token: Word "b" @112..113
+          comma: Comma "," @113..114
+        entries: MapEntry@115..122
+          key: StringLit@115..118
+            token: String "\"j\"" @115..118
+          colon: Colon ":" @118..119
+          value: LiteralExpr@120..121
+            token: Integer "2" @120..121
+          comma: Comma "," @121..122
+        entries: SpreadElement@123..128
+          dots: DotDotDot "..." @123..126
+          value: PathExpr@126..127
+            head: Name@126..127
+              token: Word "c" @126..127
+          comma: Comma "," @127..128
+        r: RBrace "}" @129..130
+      r: RBrace "}" @131..132

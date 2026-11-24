@@ -1,0 +1,12 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "errors(\"function f(xs: int[], m: map<string, int>) -> int {\\n  let a = (...xs);\\n  let b = ...xs;\\n  let c = if (true) { ...m } else { m };\\n  let d = [..xs];\\n  1\\n}\\n\")"
+---
+UnexpectedToken { expected: "expression", found: "'...'", range: 63..66 }
+UnexpectedToken { expected: "')'", found: "'...'", range: 63..66 }
+UnexpectedToken { expected: "expression", found: "'...'", range: 63..66 }
+UnexpectedToken { expected: "expression", found: "')'", range: 68..69 }
+UnexpectedToken { expected: "expression", found: "'...'", range: 81..84 }
+UnexpectedToken { expected: "expression", found: "'...'", range: 81..84 }
+UnexpectedToken { expected: "expression", found: "'...'", range: 110..113 }
+UnexpectedToken { expected: "expression", found: "'..'", range: 140..142 }

@@ -7,11 +7,11 @@
 use baml_base::{Literal, Name, num_lit};
 use baml_syntax::{
     nodes::{
-        AnyArrayPatternElement, AnyElse, AnyExpr, AnyForHeader, AnyForInit, AnyForStep,
-        AnyMatchScrutinee, AnyObjectCtor, AnyObjectKey, AnyObjectMember, AnyPattern, AnyStmt,
-        AnyTypeArg, ArgList, ArrayPattern, AssignStmt, BindingPattern, Block, DestructurePattern,
-        FileTree, GenericArgs, HeaderStmt, IfExpr, IfLetExpr, LambdaExpr, LetStmt, ObjectLiteral,
-        ParamList, PathExpr, StringLit, TestDef, UnaryExpr, WithClause,
+        AnyArrayElement, AnyArrayPatternElement, AnyElse, AnyExpr, AnyForHeader, AnyForInit,
+        AnyForStep, AnyMapMember, AnyMatchScrutinee, AnyObjectCtor, AnyObjectKey, AnyObjectMember,
+        AnyPattern, AnyStmt, AnyTypeArg, ArgList, ArrayPattern, AssignStmt, BindingPattern, Block,
+        DestructurePattern, FileTree, GenericArgs, HeaderStmt, IfExpr, IfLetExpr, LambdaExpr,
+        LetStmt, ObjectLiteral, ParamList, PathExpr, StringLit, TestDef, UnaryExpr, WithClause,
     },
     ops,
     token::TokenKind,
@@ -23,10 +23,11 @@ use super::{View, templates, types};
 use crate::{
     EnvVarRef, LoweringDiagnostic,
     ast::{
-        ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchClause,
-        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat, FunctionDefaults,
-        LambdaDef, LambdaKind, LetOrigin, LoopOrigin, MapExprEntry, MatchArm, ObjectExprField,
-        Param, PatId, Pattern, SpreadField, Stmt, StmtId, TypeExpr, TypeExprKind, UnaryOp,
+        ArrayExprElement, ArrayRestPat, AssignOp, AstSourceMap, BinaryOp, CallArg, CatchArm,
+        CatchClause, CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat,
+        FunctionDefaults, LambdaDef, LambdaKind, LetOrigin, LoopOrigin, MapExprMember, MatchArm,
+        ObjectExprField, Param, PatId, Pattern, SpreadField, Stmt, StmtId, TypeExpr, TypeExprKind,
+        UnaryOp,
     },
     lower_cst::check_missing_type,
     lower_expr_body::{LoweringContext, strip_raw_string_delimiters, strip_string_delimiters},
@@ -851,29 +852,56 @@ fn expression_in_chain(ctx: &mut LoweringContext, v: View<'_>, expr: AnyExpr) ->
             let elements: Vec<_> = v.tree.list(node.elements).to_vec();
             let elements = elements
                 .into_iter()
-                .map(|element| expression(ctx, v, element.value))
+                .filter_map(|element| array_element(ctx, v, element.value, expression))
                 .collect();
             ctx.alloc_expr(Expr::Array { elements }, span)
         }
         AnyExpr::Map(id) => {
             let node = *v.node(id);
             let entries: Vec<_> = v.tree.list(node.entries).to_vec();
-            let entries = entries
+            let members = entries
                 .into_iter()
-                .filter_map(|entry| {
-                    let entry = *v.node(entry);
-                    let key = expression(ctx, v, entry.key);
-                    // An entry with no value is not one, as in the rowan
-                    // lowering (the parser reported it).
-                    let value = expression(ctx, v, entry.value.ok()?);
-                    Some(MapExprEntry::explicit(key, value))
+                .filter_map(|member| match member {
+                    AnyMapMember::Entry(entry) => {
+                        let entry = *v.node(entry);
+                        let key = expression(ctx, v, entry.key);
+                        // An entry with no value is not one, as in the rowan
+                        // lowering (the parser reported it).
+                        let value = expression(ctx, v, entry.value.ok()?);
+                        Some(MapExprMember::entry(key, value))
+                    }
+                    // A spread with no operand was reported by the parser.
+                    AnyMapMember::Spread(spread) => {
+                        let operand = v.node(spread).value.ok()?;
+                        Some(MapExprMember::Spread(expression(ctx, v, operand)))
+                    }
+                    AnyMapMember::Bogus(_) => None,
                 })
                 .collect();
-            ctx.alloc_expr(Expr::Map { entries }, span)
+            ctx.alloc_expr(Expr::Map { members }, span)
         }
         AnyExpr::Backtick(id) => templates::backtick_expr(ctx, v, id),
         AnyExpr::TaggedTemplate(id) => templates::tagged_template_expr(ctx, v, id),
         AnyExpr::Bogus(_) => ctx.alloc_expr(Expr::Missing, span),
+    }
+}
+
+/// One element of a list literal: a value, lowered by `value`, or a
+/// `...operand`, whose operand is always an ordinary expression. A spread
+/// with no operand was reported by the parser and is no element.
+pub(super) fn array_element(
+    ctx: &mut LoweringContext,
+    v: View<'_>,
+    element: AnyArrayElement,
+    value: impl FnOnce(&mut LoweringContext, View<'_>, AnyExpr) -> ExprId,
+) -> Option<ArrayExprElement> {
+    match element {
+        AnyArrayElement::Expr(expr) => Some(ArrayExprElement::Item(value(ctx, v, expr))),
+        AnyArrayElement::Spread(spread) => {
+            let operand = v.node(spread).value.ok()?;
+            Some(ArrayExprElement::Spread(expression(ctx, v, operand)))
+        }
+        AnyArrayElement::Bogus(_) => None,
     }
 }
 

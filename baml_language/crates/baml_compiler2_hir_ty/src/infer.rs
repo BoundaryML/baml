@@ -28,8 +28,8 @@ pub mod unify;
 use std::{cell::RefCell, path::PathBuf, sync::Arc};
 
 use baml_compiler2_ast::{
-    Expr, ExprBody, ExprId, ObjectExprField, PatId, Pattern, PropertySyntax, Stmt, StmtId,
-    traverse::BodyNode,
+    ArrayExprElement, Expr, ExprBody, ExprId, MapExprMember, ObjectExprField, PatId, Pattern,
+    PropertySyntax, Stmt, StmtId, traverse::BodyNode,
 };
 use baml_compiler2_hir::{
     body::BodyOwnerId,
@@ -63,7 +63,9 @@ use crate::{
         callable_signature, callable_takes_self, callable_throws_of, callable_user_generic_params,
         instantiate_callable_signature,
     },
-    diagnostics::{ImplicitUnitForm, LoopHeaderSlot, ScopedTypeEscapeKind, UnitContext},
+    diagnostics::{
+        ImplicitUnitForm, LoopHeaderSlot, ScopedTypeEscapeKind, SpreadContainer, UnitContext,
+    },
     extern_loc::{
         ClassRef, EnumRef, FunctionRef, ImplRef, InterfaceRef, extern_class_method,
         extern_class_row, extern_function_row, extern_interface_method, mounted_class_loc,
@@ -1237,6 +1239,13 @@ enum PendingDiag<'db> {
         expr: ExprId,
         ty: Ty,
     },
+    /// The operand of a `...spread` in a list or map literal is statically
+    /// no list (no map).
+    InvalidSpreadOperand {
+        expr: ExprId,
+        ty: Ty,
+        container: SpreadContainer,
+    },
     ArgCountMismatch {
         expr: ExprId,
         expected: usize,
@@ -2350,6 +2359,11 @@ struct InferenceContext<'db> {
     /// silently: it reports at the producer, naming the remedy, instead of
     /// as a bare mismatch on the whole expression.
     unit_positions: FxHashMap<ExprId, (ExprId, UnitContext)>,
+    /// Operands of a `...spread` in a list or map literal whose element (or
+    /// key and value) types were checked against the literal's expectation.
+    /// A mismatch recorded at one of them compares those contributed types,
+    /// not the operand's own type, and reports as such.
+    spread_sites: FxHashMap<ExprId, SpreadContainer>,
     /// Implicit units that met no expectation, keyed by the expression whose
     /// value they are: a block carries its tail's, and a join of nothing but
     /// unit values carries its branches'. [`Self::join_units`] reports one
@@ -2424,6 +2438,7 @@ impl<'db> InferenceContext<'db> {
             body_root: None,
             pending_truthy_conditions: Vec::new(),
             unit_positions: FxHashMap::default(),
+            spread_sites: FxHashMap::default(),
             unjudged_units: FxHashMap::default(),
             owner_file,
             overlap_aliases: std::cell::OnceCell::new(),
@@ -3352,11 +3367,34 @@ impl<'db> InferenceContext<'db> {
                 // With an expected element type, elements are CHECKED against
                 // it; otherwise they synthesize and JOIN (fresh literals
                 // widening at the join, per ruling 1's generation-site rule).
+                //
+                // A spread (`...xs`) follows the same rule through its
+                // operand's ELEMENT type: `xs: S[]` contributes `S` exactly
+                // as a plain element of type `S` would. The literal is a
+                // fresh list that the operand's elements are copied into,
+                // so it never aliases the operand, and invariance (spec:
+                // Variance) is not in play between `S[]` and the literal's
+                // own type: `[...dogs]` checked against `Animal[]` needs
+                // `Dog <: Animal`, not `Dog[] <: Animal[]`.
                 let expected_element = self.expected_list_element(expected);
                 match expected_element {
                     Some(element_ty) => {
                         for element in elements {
-                            self.check_expr(body, *element, &element_ty);
+                            match *element {
+                                ArrayExprElement::Item(item) => {
+                                    self.check_expr(body, item, &element_ty);
+                                }
+                                ArrayExprElement::Spread(operand) => {
+                                    if let Some(source) = self.infer_list_spread(body, operand) {
+                                        self.check_spread_part(
+                                            operand,
+                                            &source,
+                                            &element_ty,
+                                            SpreadContainer::List,
+                                        );
+                                    }
+                                }
+                            }
                         }
                         Ty::list(element_ty)
                     }
@@ -3369,14 +3407,31 @@ impl<'db> InferenceContext<'db> {
                         let joined: Vec<Ty> = elements
                             .iter()
                             .map(|element| {
-                                let ty = self.infer_expr(body, *element, &Expectation::None);
+                                let ty = match *element {
+                                    ArrayExprElement::Item(item) => {
+                                        self.infer_expr(body, item, &Expectation::None)
+                                    }
+                                    // A rejected operand was reported; the
+                                    // error type keeps the join quiet.
+                                    ArrayExprElement::Spread(operand) => self
+                                        .infer_list_spread(body, operand)
+                                        .unwrap_or_else(Ty::error),
+                                };
                                 self.widen_fresh(&ty)
                             })
                             .collect();
                         let parts = elements
                             .iter()
                             .zip(&joined)
-                            .map(|(element, ty)| (ty.clone(), self.take_units(*element)))
+                            .map(|(element, ty)| {
+                                // A spread operand's own value is no element:
+                                // only a plain element can be a silent `null`.
+                                let units = match *element {
+                                    ArrayExprElement::Item(item) => self.take_units(item),
+                                    ArrayExprElement::Spread(_) => Vec::new(),
+                                };
+                                (ty.clone(), units)
+                            })
                             .collect();
                         self.join_units(parts, &Expectation::None);
                         // TS's best-common-type adoption (rustc likewise
@@ -3422,46 +3477,98 @@ impl<'db> InferenceContext<'db> {
                     }
                 }
             }
-            Expr::Map { entries } => {
+            Expr::Map { members } => {
                 // With an expected map type, entries are CHECKED against
                 // its key/value (the Array arm's rule; r-a's
                 // expectation-driven literal typing) - `{"input": s}` in
                 // a `map<string, unknown>` position IS that map, not a
                 // synthesized `map<string, string>` tripping invariance.
+                //
+                // A spread (`...m`) follows the same rule through its
+                // operand's key and value types: `m: map<K, V>` contributes
+                // `K` and `V` exactly as an entry `k: v` of those types
+                // would. The literal is a fresh map the entries are copied
+                // into (the Array arm's reasoning).
                 let expected_entry = self.expected_map_entry(expected);
                 if let Some((key_ty, value_ty)) = expected_entry {
-                    for entry in entries {
-                        self.check_expr(body, entry.key, &key_ty);
-                        self.check_expr(body, entry.value, &value_ty);
+                    for member in members {
+                        match member {
+                            MapExprMember::Entry(entry) => {
+                                self.check_expr(body, entry.key, &key_ty);
+                                self.check_expr(body, entry.value, &value_ty);
+                            }
+                            MapExprMember::Spread(operand) => {
+                                if let Some((key, value)) = self.infer_map_spread(body, *operand) {
+                                    // One mismatch is recorded per operand:
+                                    // the key's, else the value's.
+                                    if self.check_spread_part(
+                                        *operand,
+                                        &key,
+                                        &key_ty,
+                                        SpreadContainer::Map,
+                                    ) {
+                                        self.check_spread_part(
+                                            *operand,
+                                            &value,
+                                            &value_ty,
+                                            SpreadContainer::Map,
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     }
                     Ty::intern(InferTy::Map {
                         key: key_ty,
                         value: value_ty,
                     })
-                } else if entries.is_empty() {
+                } else if members.is_empty() {
                     let key = self.table.new_var_ty_of(unify::VarPolicy::MapKeySlot);
                     self.untyped_empty_container_ty(expr, |value| {
                         Ty::intern(InferTy::Map { key, value })
                     })
                 } else {
-                    let (keys, values): (Vec<Ty>, Vec<Ty>) = entries
+                    let (keys, values): (Vec<Ty>, Vec<Ty>) = members
                         .iter()
-                        .map(|entry| {
-                            let key_ty = self.infer_expr(body, entry.key, &Expectation::None);
-                            let value_ty = self.infer_expr(body, entry.value, &Expectation::None);
+                        .map(|member| {
+                            let (key_ty, value_ty) = match member {
+                                MapExprMember::Entry(entry) => (
+                                    self.infer_expr(body, entry.key, &Expectation::None),
+                                    self.infer_expr(body, entry.value, &Expectation::None),
+                                ),
+                                // A rejected operand was reported; the error
+                                // type keeps the joins quiet.
+                                MapExprMember::Spread(operand) => self
+                                    .infer_map_spread(body, *operand)
+                                    .unwrap_or_else(|| (Ty::error(), Ty::error())),
+                            };
                             (self.widen_fresh(&key_ty), self.widen_fresh(&value_ty))
                         })
                         .unzip();
-                    let key_parts = entries
+                    // A spread operand's own value is neither a key nor a
+                    // value: only an entry's can be a silent `null`.
+                    let key_parts = members
                         .iter()
                         .zip(&keys)
-                        .map(|(entry, ty)| (ty.clone(), self.take_units(entry.key)))
+                        .map(|(member, ty)| {
+                            let units = match member {
+                                MapExprMember::Entry(entry) => self.take_units(entry.key),
+                                MapExprMember::Spread(_) => Vec::new(),
+                            };
+                            (ty.clone(), units)
+                        })
                         .collect();
                     self.join_units(key_parts, &Expectation::None);
-                    let value_parts = entries
+                    let value_parts = members
                         .iter()
                         .zip(&values)
-                        .map(|(entry, ty)| (ty.clone(), self.take_units(entry.value)))
+                        .map(|(member, ty)| {
+                            let units = match member {
+                                MapExprMember::Entry(entry) => self.take_units(entry.value),
+                                MapExprMember::Spread(_) => Vec::new(),
+                            };
+                            (ty.clone(), units)
+                        })
                         .collect();
                     self.join_units(value_parts, &Expectation::None);
                     Ty::intern(InferTy::Map {
@@ -11064,6 +11171,97 @@ impl<'db> InferenceContext<'db> {
         )
     }
 
+    /// Types the operand of a `...operand` in a list or map literal and
+    /// answers its type as written and its SHAPE: unsolved variables
+    /// committed from their bounds, aliases expanded (a recursive alias
+    /// exposes its root), unions normalized.
+    ///
+    /// The operand is typed exactly once, with no expectation. The literal's
+    /// own expectation says nothing about the operand as a whole: the
+    /// literal is a fresh container, so only the operand's element (or key
+    /// and value) types meet it, in [`Self::check_spread_part`]. The throws
+    /// and divergence of the operand flow as any subexpression's do.
+    fn spread_operand_shape(&mut self, body: &ExprBody, operand: ExprId) -> (Ty, Ty) {
+        let ty = self.infer_expr(body, operand, &Expectation::None);
+        // The operand's value is consumed here. An implicit unit it carries
+        // is a `null` operand, which the shape test rejects by itself.
+        self.take_units(operand);
+        let shape = self.structurally_resolve(&ty);
+        (ty, shape)
+    }
+
+    /// The element type a `...operand` contributes to a list literal, or
+    /// `None` after reporting that the operand is statically no list.
+    ///
+    /// Only a type whose shape IS a list qualifies. A nullable list, a union
+    /// with any other member (the `baml.json.json` union included),
+    /// `unknown`, a map, a class, an interface existential, a type variable
+    /// (a bound is an interface, never a list) and a variable inference has
+    /// no list evidence for are all rejected: nothing is spread dynamically
+    /// and `null` is never read as an empty list. `never` has no values, so
+    /// it contributes nothing and is accepted as any diverging element is.
+    fn infer_list_spread(&mut self, body: &ExprBody, operand: ExprId) -> Option<Ty> {
+        let (ty, shape) = self.spread_operand_shape(body, operand);
+        match shape.kind() {
+            InferTy::List(element) => Some(element.clone()),
+            InferTy::Never => Some(Ty::never()),
+            _ => {
+                self.reject_spread_operand(operand, ty, &shape, SpreadContainer::List);
+                None
+            }
+        }
+    }
+
+    /// The key and value types a `...operand` contributes to a map literal:
+    /// the map counterpart of [`Self::infer_list_spread`], with the same
+    /// rejections (a class instance is no map, and neither is a list).
+    fn infer_map_spread(&mut self, body: &ExprBody, operand: ExprId) -> Option<(Ty, Ty)> {
+        let (ty, shape) = self.spread_operand_shape(body, operand);
+        match shape.kind() {
+            InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
+            InferTy::Never => Some((Ty::never(), Ty::never())),
+            _ => {
+                self.reject_spread_operand(operand, ty, &shape, SpreadContainer::Map);
+                None
+            }
+        }
+    }
+
+    /// Reports a spread operand that is statically no `container`. An
+    /// operand whose own typing already failed stays quiet.
+    fn reject_spread_operand(
+        &mut self,
+        operand: ExprId,
+        ty: Ty,
+        shape: &Ty,
+        container: SpreadContainer,
+    ) {
+        if ty.has_error() || shape.has_error() {
+            return;
+        }
+        self.report(PendingDiag::InvalidSpreadOperand {
+            expr: operand,
+            ty,
+            container,
+        });
+    }
+
+    /// Checks one type a spread operand contributes (`part`: a list's
+    /// element type, a map's key or value type) against the slot the
+    /// literal's expectation gives it: the subtype check a plain element of
+    /// that type gets. The mismatch is recorded at the operand and reads as
+    /// a spread's, not as a mismatch of the operand's own type.
+    fn check_spread_part(
+        &mut self,
+        operand: ExprId,
+        part: &Ty,
+        expected: &Ty,
+        container: SpreadContainer,
+    ) -> bool {
+        self.spread_sites.insert(operand, container);
+        self.check_fits(operand, part, expected)
+    }
+
     /// Whether `expected` gives `expr` a shape to build at: an aggregate
     /// literal needs a unique list/map arm, a lambda a callback arm. Any
     /// other expression takes the expectation as-is.
@@ -12980,7 +13178,7 @@ impl<'db> InferenceContext<'db> {
             let mut defaulted = false;
             if let Some(body) = body {
                 for (expr, node) in body.exprs.iter() {
-                    if !matches!(node, Expr::Map { entries } if entries.is_empty()) {
+                    if !matches!(node, Expr::Map { members } if members.is_empty()) {
                         continue;
                     }
                     let Some(ty) = self.result.type_of_expr.get(&expr) else {
@@ -13240,6 +13438,22 @@ impl<'db> InferenceContext<'db> {
                         },
                         severity: DiagnosticSeverity::Error,
                         primary: DiagnosticLocation::Expr(tail),
+                        related: Vec::new(),
+                    });
+                    continue;
+                }
+                // A spread operand's mismatch compares what the operand
+                // contributes (its element, key or value type) with the
+                // literal's slot, and says so.
+                if let Some(&container) = self.spread_sites.get(&expr) {
+                    diags.push(TirDiagnostic {
+                        error: TirTypeError::SpreadTypeMismatch {
+                            container,
+                            expected: self.materialize_ty(expected),
+                            got: self.materialize_ty(actual),
+                        },
+                        severity: DiagnosticSeverity::Error,
+                        primary: DiagnosticLocation::Expr(expr),
                         related: Vec::new(),
                     });
                     continue;
@@ -13782,6 +13996,21 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::InvalidSpreadOperand {
+                        expr,
+                        ty,
+                        container,
+                    } => {
+                        let ty = self.plain_finalized(&ty);
+                        // An operand whose type never resolved finalized as
+                        // the error type, which is only ever filled in
+                        // beside a diagnostic of its own (the unannotated
+                        // lambda parameter, the unknown type).
+                        if baml_type::contains_error(&ty) {
+                            continue;
+                        }
+                        (TirTypeError::InvalidSpreadOperand { ty, container }, expr)
+                    }
                     PendingDiag::ArgCountMismatch {
                         expr,
                         expected,

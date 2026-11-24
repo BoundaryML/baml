@@ -113,6 +113,68 @@ impl ImplicitUnitForm {
     }
 }
 
+/// The literal a `...spread` is written in. Its operand must statically be
+/// the same kind of container.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpreadContainer {
+    /// `[a, ...list]`
+    List,
+    /// `{ k: v, ...map }`
+    Map,
+}
+
+impl SpreadContainer {
+    /// `list` or `map`.
+    pub fn noun(self) -> &'static str {
+        match self {
+            Self::List => "list",
+            Self::Map => "map",
+        }
+    }
+
+    /// What the operand's own type contributes to the literal, in the
+    /// singular.
+    pub fn contribution(self) -> &'static str {
+        match self {
+            Self::List => "element",
+            Self::Map => "key and value",
+        }
+    }
+
+    /// What to do about an operand of type `operand` that is no container
+    /// of this kind, as text that continues the message. Empty when the
+    /// type itself says enough.
+    pub fn advice<N: Clone>(self, operand: &baml_type::Ty<N>) -> &'static str {
+        use baml_type::Ty as T;
+        match (self, operand) {
+            // The type was still an inference variable where the spread was
+            // checked, and only resolved from a later use.
+            (Self::List, T::List(_)) | (Self::Map, T::Map { .. }) => {
+                "; its type was not known yet at the spread: annotate the operand's type"
+            }
+            (Self::List, T::Union(members)) if members.iter().any(|m| matches!(m, T::Null)) => {
+                "; the value may be `null`, and `null` is not spread as an empty list: \
+                 handle it first (`value ?? []`, or a test that narrows it)"
+            }
+            (Self::Map, T::Union(members)) if members.iter().any(|m| matches!(m, T::Null)) => {
+                "; the value may be `null`, and `null` is not spread as an empty map: \
+                 handle it first (`value ?? {}`, or a test that narrows it)"
+            }
+            (_, T::Union(_) | T::TypeAlias(_) | T::Unknown | T::Interface(..)) => {
+                "; narrow the value first (`match`, or an `is` test on a local)"
+            }
+            (_, T::TypeVar(_) | T::AssociatedTypeProjection { .. }) => {
+                "; a type parameter is never known to be one"
+            }
+            (Self::Map, T::Class(..)) => {
+                "; a class instance is spread only into a constructor of its own class \
+                 (`Class { ...value }`)"
+            }
+            _ => "",
+        }
+    }
+}
+
 /// Where a value was produced although only the unit type is admitted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnitContext {
@@ -452,6 +514,22 @@ pub enum TirTypeError {
     /// Expression is not iterable (e.g. `for let i in 42 { ... }` where 42 is an int).
     NotIterable {
         ty: Ty,
+    },
+    /// The operand of a `...spread` in a list literal is statically no list,
+    /// or in a map literal no map (`[...maybe_list]` with `maybe_list: int[]?`).
+    /// `ty` is the operand's type.
+    InvalidSpreadOperand {
+        ty: Ty,
+        container: SpreadContainer,
+    },
+    /// A spread operand is the right kind of container, but what it holds
+    /// does not fit the literal's expected type: `got` is the operand's
+    /// element type (for a map, its key or value type) and `expected` the
+    /// slot it was checked against.
+    SpreadTypeMismatch {
+        container: SpreadContainer,
+        expected: Ty,
+        got: Ty,
     },
     /// Expression is not indexable (e.g. `true[0]`).
     NotIndexable {
@@ -1803,6 +1881,29 @@ impl TirTypeError {
                 }
                 TirTypeError::NotIterable { ty } => {
                     write!(f, "cannot iterate over type `{}`", ty.spell(vp))
+                }
+                TirTypeError::InvalidSpreadOperand { ty, container } => {
+                    let noun = container.noun();
+                    write!(
+                        f,
+                        "cannot spread a value of type `{}` into a {noun}: the operand of `...` must be a {noun}{}",
+                        ty.spell(vp),
+                        container.advice(ty)
+                    )
+                }
+                TirTypeError::SpreadTypeMismatch {
+                    container,
+                    expected,
+                    got,
+                } => {
+                    let noun = container.noun();
+                    write!(
+                        f,
+                        "expected `{}`, found `{}`: every {} of the spread {noun} must fit the {noun} being built",
+                        expected.spell(vp),
+                        got.spell(vp),
+                        container.contribution(),
+                    )
                 }
                 TirTypeError::NotIndexable { ty } => {
                     write!(f, "type `{}` is not indexable", ty.spell(vp))?;
