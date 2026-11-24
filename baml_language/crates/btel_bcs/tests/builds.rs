@@ -256,3 +256,51 @@ async fn delivery_registers_a_build_in_the_background_and_drains_it() {
         [("POST", "/v1/builds"), ("PUT", "/put/source")]
     );
 }
+
+/// Answers every registration after `delay`, and remembers when each arrived.
+struct Slow {
+    delay: Duration,
+    arrivals: std::sync::Arc<std::sync::Mutex<Vec<std::time::Instant>>>,
+}
+
+impl wiremock::Respond for Slow {
+    fn respond(&self, _: &wiremock::Request) -> ResponseTemplate {
+        self.arrivals
+            .lock()
+            .unwrap()
+            .push(std::time::Instant::now());
+        ResponseTemplate::new(200)
+            .set_body_json(json!({"status": "not_requested"}))
+            .set_delay(self.delay)
+    }
+}
+
+/// A host that compiles faster than BCS answers holds a bounded number of
+/// registrations in flight: the rest wait in the bounded queue.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn delivery_bounds_the_registrations_in_flight() {
+    let delay = Duration::from_millis(250);
+    let limit = btel_bcs::delivery::MAX_ACTIVE_BUILDS;
+    let server = MockServer::start().await;
+    let arrivals = std::sync::Arc::default();
+    Mock::given(method("POST"))
+        .and(path("/v1/builds"))
+        .respond_with(Slow {
+            delay,
+            arrivals: std::sync::Arc::clone(&arrivals),
+        })
+        .mount(&server)
+        .await;
+    let delivery = BcsDelivery::new(config(&server), |_| {}).unwrap();
+    for id in 0..=limit {
+        let mut build = registration();
+        build.build.build_id = [u8::try_from(id).unwrap() + 1; 16];
+        build.source = None;
+        delivery.handle().register_build(&build);
+    }
+    finish(delivery).await.unwrap();
+    let arrivals = arrivals.lock().unwrap();
+    assert_eq!(arrivals.len(), limit + 1, "every build registers");
+    // The one past the limit is sent only once an earlier one was answered.
+    assert!(arrivals[limit].duration_since(arrivals[0]) >= delay);
+}

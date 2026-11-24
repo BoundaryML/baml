@@ -1068,6 +1068,11 @@ impl BcsDeliveryHandle {
 /// still name it, and BCS has no row for it.
 const MAX_PENDING_BUILDS: usize = 16;
 
+/// Builds registering at once. Past it they wait in the queue, so a host
+/// that compiles faster than BCS answers holds a bounded number of requests
+/// and of the sources they carry.
+pub const MAX_ACTIVE_BUILDS: usize = 4;
+
 /// A runtime for one thread's requests and the client they share.
 pub(crate) fn runtime_and_client(
     config: &DeliveryConfig,
@@ -1859,7 +1864,7 @@ async fn run_worker(
                     shared.fail(DeliveryError::Worker);
                 }
             }
-            build = builds.recv(), if builds_open => {
+            build = builds.recv(), if builds_open && registrations.len() < MAX_ACTIVE_BUILDS => {
                 let Some(build) = build else {
                     builds_open = false;
                     continue;

@@ -122,6 +122,9 @@ impl bex_vm_types::BexRustData for RuntimeCompileArtifactSlot {
             for key in pinned.pins.keys() {
                 meter.bytes(key.capacity());
             }
+            if let Some(build) = &artifact.build {
+                measure_build(meter, build);
+            }
             let emitted = &mut artifact.emitted;
             meter.bytes(emitted.record.interface_blob.capacity());
             let unit = &mut emitted.unit;
@@ -206,6 +209,28 @@ fn measure_session_symbol(meter: &mut bex_vm_types::Meter, symbol: &SessionVisib
     }
 }
 
+/// A build the compile recorded: its own allocation, the text it names, and
+/// the source it was built from, which grows with the package.
+fn measure_build(meter: &mut bex_vm_types::Meter, build: &btel_types::BuildRegistration) {
+    meter.bytes(size_of_val(build));
+    if let Some(git) = &build.build.git {
+        meter.bytes(git.remote.as_ref().map_or(0, String::capacity));
+        meter.bytes(git.branch.as_ref().map_or(0, String::capacity));
+        meter.bytes(git.package_path.capacity());
+    }
+    let package = &build.package;
+    measure_vec(meter, &package.dependencies);
+    meter.bytes(package.name.capacity());
+    meter.bytes(package.version.as_ref().map_or(0, String::capacity));
+    meter.bytes(package.compiler_version.capacity());
+    if let Some(program) = &build.program {
+        measure_vec(meter, &program.static_packages);
+    }
+    for (path, text) in build.source.iter().flatten() {
+        meter.bytes(size_of::<(String, String)>() + path.capacity() + text.capacity());
+    }
+}
+
 fn measure_vec<T>(meter: &mut bex_vm_types::Meter, values: &Vec<T>) {
     meter.bytes(values.capacity() * size_of::<T>());
 }
@@ -275,5 +300,50 @@ mod memory_tests {
         let mut meter = Meter::census();
         slot.measure(&mut meter);
         assert_eq!(meter.total(), 0);
+    }
+
+    /// A compile that records a build keeps the build's source text until
+    /// the artifact is taken.
+    #[test]
+    fn artifact_counts_the_source_of_the_build_it_records() {
+        let slot = RuntimeCompileArtifactSlot::new(PinnedArtifact {
+            artifact: RuntimeCompileArtifact {
+                emitted: EmittedPackage {
+                    unit: baml_linker_types::CompilationUnit::default(),
+                    record: baml_linker_types::PackageRecord::default(),
+                    tail: None,
+                },
+                build: Some(Box::new(btel_types::BuildRegistration {
+                    build: btel_types::BuildRecord {
+                        build_id: [1; 16],
+                        timestamp_unix_ns: 0,
+                        origin: btel_types::BuildOrigin::Dynamic,
+                        git: None,
+                        source_hash: [2; 32],
+                        compilation_unit_hash: [3; 32],
+                    },
+                    package: btel_types::PackageRecord {
+                        compilation_unit_hash: [3; 32],
+                        package_interface: [4; 32],
+                        dependencies: vec![[5; 32]; 8],
+                        name: "user".into(),
+                        version: None,
+                        compiler_version: "0".into(),
+                    },
+                    program: None,
+                    source: Some(std::collections::BTreeMap::from([(
+                        "main.baml".to_owned(),
+                        "z".repeat(200_000),
+                    )])),
+                })),
+                interface_blob: Vec::new(),
+                diagnostics: Vec::new(),
+                kind: ArtifactKind::Package,
+            },
+            pins: IndexMap::new(),
+        });
+        let mut meter = Meter::census();
+        slot.measure(&mut meter);
+        assert!(meter.total() >= 200_000);
     }
 }
