@@ -1,10 +1,6 @@
 # Natives
 
-How compiled code calls the standard library's Rust functions, how a
-native calls back into BAML, and what a native that does I/O costs. The
-flags and their promises are in `natives/README.md`; this document is the
-mechanism and its cost. Numbers are instructions retired, measured unless
-marked estimated; method in `README.md`.
+How compiled code calls the standard library's Rust functions, how a native calls back into BAML, and what a native that does I/O costs. The flags and their promises are in `natives/README.md`; this document is the mechanism and its cost. Numbers are instructions retired, measured unless marked estimated; method in `README.md`.
 
 ## Three kinds of call
 
@@ -14,9 +10,7 @@ marked estimated; method in `README.md`.
 | `allocates` | a 4-instruction anchor stub | yes, first argument | yes | no |
 | `async` | a compiled driver stub, per native | through `x21` | yes | yes |
 
-`build.rs` generates the `extern "C"` symbol of each native from the lists
-in `natives/*.txt` and the standard library's declarations
-(`natives_generated.rs` in the build's `OUT_DIR`).
+`build.rs` generates the `extern "C"` symbol of each native from the lists in `natives/*.txt` and the standard library's declarations (`natives_generated.rs` in the build's `OUT_DIR`).
 
 ## Plain native
 
@@ -40,22 +34,13 @@ _baml_rt_baml_string_byte_length:
   ret
 ```
 
-16.00 instructions per iteration (N 10 M: 174,540,914; 60 M:
-975,003,823): 2 at the call site, 5 in the callee, 9 for the loop and its
-poll. Arguments move from the BAML convention (`x2`...) to the C one
-(`x0`...). Go has no equivalent at this price: a cgo call is on the order
-of 100 times more (not measured here, cgo did not build in this
-environment), and a Go assembly function costs a plain call.
+16.00 instructions per iteration (N 10 M: 174,540,914; 60 M: 975,003,823): 2 at the call site, 5 in the callee, 9 for the loop and its poll. Arguments move from the BAML convention (`x2`...) to the C one (`x0`...). Go has no equivalent at this price: a cgo call is on the order of 100 times more (not measured here, cgo did not build in this environment), and a Go assembly function costs a plain call.
 
-Many small natives never reach this path: `count_ones`, `abs`,
-`leading_zeros` and the like are emitted as instructions.
+Many small natives never reach this path: `count_ones`, `abs`, `leading_zeros` and the like are emitted as instructions.
 
 ## `allocates` native and the anchor stub
 
-A collection walks the stack from the compiled frame that called the
-runtime. That frame's stack pointer, return address and frame pointer are
-the worker's anchor. The stub records them before any Rust runs, so the
-walk does not depend on how rustc lays out the native's frame.
+A collection walks the stack from the compiled frame that called the runtime. That frame's stack pointer, return address and frame pointer are the worker's anchor. The stub records them before any Rust runs, so the walk does not depend on how rustc lays out the native's frame.
 
 `src/stubs.rs`:
 
@@ -76,9 +61,7 @@ macro_rules! anchored {
 }
 ```
 
-The generated wrapper builds a `Scope` over 16 inline root slots, roots the
-reference arguments, calls the trait method, and returns the value beside
-a thrown flag:
+The generated wrapper builds a `Scope` over 16 inline root slots, roots the reference arguments, calls the trait method, and returns the value beside a thrown flag:
 
 ```rust
 unsafe extern "C" fn baml_int_isqrt(mutator: &mut Mutator, int: i64) -> RtResult {
@@ -95,25 +78,13 @@ unsafe extern "C" fn baml_int_isqrt(mutator: &mut Mutator, int: i64) -> RtResult
 s = s + (i + 4).isqrt();
 ```
 
-Single-step trace of one call: 48 instructions, 4 in the stub and 44 in
-the wrapper with `isqrt` inlined (small argument). The caller then tests
-the thrown flag and treats every reference it holds as moved: it reloads
-them from their stack-map slots. The loop total is 96.02 per iteration
-(973,901,214 at 10 M; 5,775,261,298 at 60 M); most of it is `isqrt` itself
-at large arguments.
+Single-step trace of one call: 48 instructions, 4 in the stub and 44 in the wrapper with `isqrt` inlined (small argument). The caller then tests the thrown flag and treats every reference it holds as moved: it reloads them from their stack-map slots. The loop total is 96.02 per iteration (973,901,214 at 10 M; 5,775,261,298 at 60 M); most of it is `isqrt` itself at large arguments.
 
-The fixed cost is the 4-instruction stub plus the reloads after the call.
-`RootSlots::new()` for 16 slots is not free in a native that roots
-nothing; it shows up as part of the 178 instructions of `baml.Map.set`
-(`memory.md`).
+The fixed cost is the 4-instruction stub plus the reloads after the call. `RootSlots::new()` for 16 slots is not free in a native that roots nothing; it shows up as part of the 178 instructions of `baml.Map.set` (`memory.md`).
 
 ## `async` native: the driver is compiled code
 
-An `async` native is a Rust `async fn`. Its state lives in one block on the
-Rust heap (`Head` plus the future, `src/native/drive.rs`). The compiler
-emits one driver stub per native. The stub calls the native's symbol, which
-allocates the block and returns it without running the body, then loops on
-`baml_rt_native_poll`:
+An `async` native is a Rust `async fn`. Its state lives in one block on the Rust heap (`Head` plus the future, `src/native/drive.rs`). The compiler emits one driver stub per native. The stub calls the native's symbol, which allocates the block and returns it without running the body, then loops on `baml_rt_native_poll`:
 
 ```asm
 _baml_async_baml_rt_baml_ops_equals_equals:
@@ -144,10 +115,7 @@ call:
   b    poll
 ```
 
-Every Rust function returns before the task can stop or run BAML. So a
-stopped task has no Rust frame on its stack, and it can resume on another
-thread under another worker: the stub rereads `x21` for each call and
-`native_poll` writes the worker into the native's scope.
+Every Rust function returns before the task can stop or run BAML. So a stopped task has no Rust frame on its stack, and it can resume on another thread under another worker: the stub rereads `x21` for each call and `native_poll` writes the worker into the native's scope.
 
 ```rust
 pub(crate) unsafe extern "C" fn native_poll(worker: *mut Mutator, head: *mut Head,
@@ -175,9 +143,7 @@ pub(crate) unsafe extern "C" fn native_poll(worker: *mut Mutator, head: *mut Hea
 
 ### An `async` native that completes without stopping
 
-Fixed cost of the machinery, from a single-step trace of `==` on two
-instances (`baml.ops.equals_equals`), counting only the driver's own
-functions:
+Fixed cost of the machinery, from a single-step trace of `==` on two instances (`baml.ops.equals_equals`), counting only the driver's own functions:
 
 | part | instructions |
 |---|---|
@@ -199,26 +165,13 @@ class H { item P  count int }
 if (hs[i & 1] == b) { s += 1; }
 ```
 
-3,267.67 instructions per `==` (N 1 M: 3,282,369,033; 6 M:
-19,620,724,016). The trace shows where: five `malloc`/`free` pairs per
-comparison (the block, a `HashMap<(usize, usize), ()>` of visited pairs
-with SipHash, its table, a `Vec` of pairs, a regrow of it) and 334
-instructions of SipHash for two insertions. The structural walk itself is
-about 400.
+3,267.67 instructions per `==` (N 1 M: 3,282,369,033; 6 M: 19,620,724,016). The trace shows where: five `malloc`/`free` pairs per comparison (the block, a `HashMap<(usize, usize), ()>` of visited pairs with SipHash, its table, a `Vec` of pairs, a regrow of it) and 334 instructions of SipHash for two insertions. The structural walk itself is about 400.
 
-This is the worst ratio on the map. Go compares two such structs with a
-few loads and compares. A class with only scalar and acyclic fields needs
-no visited set and no heap block. The known alternatives: emit field-wise
-comparison in compiled code for classes whose shape is closed, or keep the
-visited set and the pair stack inline until a cycle is possible.
+This is the worst ratio on the map. Go compares two such structs with a few loads and compares. A class with only scalar and acyclic fields needs no visited set and no heap block. The known alternatives: emit field-wise comparison in compiled code for classes whose shape is closed, or keep the visited set and the pair stack inline until a cycle is possible.
 
 ### `scope.call_baml`: native to BAML and back
 
-The native builds a request and returns `Pending`. `native_poll` hands the
-stub `STEP_CALL` with a code address. The stub loads four argument words
-from the block and calls a hook: a compiled entry that takes and returns
-values as a union holds them, and calls the real function. The stub polls
-again with the result.
+The native builds a request and returns `Pending`. `native_poll` hands the stub `STEP_CALL` with a code address. The stub loads four argument words from the block and calls a hook: a compiled entry that takes and returns values as a union holds them, and calls the real function. The stub polls again with the result.
 
 ```rust
 pub fn call_baml<'a>(&'a mut self, function: BamlFn, args: &[Elem<'s>])
@@ -264,29 +217,15 @@ One round trip, single-step trace, in order:
 | total | 277 |
 | without the callee | 269 |
 
-An earlier count of this path was 328; at this commit it is 269. The whole `==` with a
-user `eq` is 5,004.07 instructions (N 1 M: 5,023,483,784; 6 M:
-30,043,842,776), 1,736 more than without, because the walk runs twice and
-builds an array of pairs before calling.
+An earlier count of this path was 328; at this commit it is 269. The whole `==` with a user `eq` is 5,004.07 instructions (N 1 M: 5,023,483,784; 6 M: 30,043,842,776), 1,736 more than without, because the walk runs twice and builds an array of pairs before calling.
 
-What dominates: two full polls of the Rust future (state-machine dispatch
-in and out twice, about 110) and the two ends of `call_baml` (110). The
-call itself is 8 + 27. Go calls a method value in about 5 instructions;
-there is nothing to compare the suspension with.
+What dominates: two full polls of the Rust future (state-machine dispatch in and out twice, about 110) and the two ends of `call_baml` (110). The call itself is 8 + 27. Go calls a method value in about 5 instructions; there is nothing to compare the suspension with.
 
-Not built: a direct path for a native that only needs to call BAML and
-cannot be parked across (it would need the native's frame to stay on the
-stack, which the migration rule forbids).
+Not built: a direct path for a native that only needs to call BAML and cannot be parked across (it would need the native's frame to stay on the stack, which the migration rule forbids).
 
 ## The chain to Tokio: `scope.io`
 
-`scope.io(job)` boxes the job, returns `Pending` with a `Request::Io`, and
-the stub calls `baml_rt_io_wait`. That parks the task and starts the job
-on the I/O runtime: a Tokio multi-thread runtime with one worker thread
-named `baml-io`, created at the first job (`drive.rs`, `start_on_tokio`).
-When the job ends, its wrapper calls `Wake::wake`, which pushes the task
-into the worker's inbox under a mutex and signals a condvar. The worker,
-with nothing to run, is asleep on that condvar.
+`scope.io(job)` boxes the job, returns `Pending` with a `Request::Io`, and the stub calls `baml_rt_io_wait`. That parks the task and starts the job on the I/O runtime: a Tokio multi-thread runtime with one worker thread named `baml-io`, created at the first job (`drive.rs`, `start_on_tokio`). When the job ends, its wrapper calls `Wake::wake`, which pushes the task into the worker's inbox under a mutex and signals a condvar. The worker, with nothing to run, is asleep on that condvar.
 
 ```rust
 pub(crate) unsafe extern "C" fn io_park(wait: usize, worker: &mut Mutator, frame: usize) -> usize {
@@ -308,20 +247,13 @@ fn wake(&self, task: usize) {           // Inbox, any thread
 }
 ```
 
-The cheapest native that does this is `baml.env.get`, whose job is a
-`getenv`:
+The cheapest native that does this is `baml.env.get`, whose job is a `getenv`:
 
 ```baml
 let v = baml.env.get("BAML_COSTMAP_UNSET_VARIABLE");
 ```
 
-Chain: BAML `main` -> driver stub -> native (Rust) -> `Pending` -> stub ->
-`baml_rt_io_wait` -> `io_park` -> `tokio::spawn` (remote queue push,
-`mio::Waker::wake`, a `kevent` syscall) -> switch to the worker's stack ->
-`serve` -> `Sched::sleep` -> `pthread_cond_wait`. On `baml-io`: wake from
-`kevent`, run the job, `Inbox::wake` (mutex, `pthread_cond_signal`), park
-again. Worker: wake, `take_woken`, `baml_rt_resume`, stub, `native_poll`,
-native finishes, returns.
+Chain: BAML `main` -> driver stub -> native (Rust) -> `Pending` -> stub -> `baml_rt_io_wait` -> `io_park` -> `tokio::spawn` (remote queue push, `mio::Waker::wake`, a `kevent` syscall) -> switch to the worker's stack -> `serve` -> `Sched::sleep` -> `pthread_cond_wait`. On `baml-io`: wake from `kevent`, run the job, `Inbox::wake` (mutex, `pthread_cond_signal`), park again. Worker: wake, `take_woken`, `baml_rt_resume`, stub, `native_poll`, native finishes, returns.
 
 Whole process, both threads, kernel included:
 
@@ -331,8 +263,7 @@ Whole process, both threads, kernel included:
 | wall time | 20,000 | 120,000 | 0.12 s | 0.74 s | 6.2 microseconds |
 | involuntary context switches | 20,000 | 120,000 | 40,011 | 240,127 | 2.0 |
 
-Worker thread, user mode only (single-step trace in two halves, before the
-sleep and after the wake): 5,565 instructions, of which
+Worker thread, user mode only (single-step trace in two halves, before the sleep and after the wake): 5,565 instructions, of which
 
 | part | instructions |
 |---|---|
@@ -345,18 +276,9 @@ sleep and after the wake): 5,565 instructions, of which
 | mutex and condvar calls into libpthread | 751 |
 | `malloc`/`free`/`memcpy`: 10 allocations per round trip | 3,597 under the debugger, estimated 1,500 to 2,000 outside it |
 
-So about 1,150 instructions are the runtime and Tokio's submit path, and
-about 34,000 of the 39,852 are the kernel and the `baml-io` thread: two
-thread wake-ups, each through a syscall, and Tokio's park and unpark
-around one tiny task.
+So about 1,150 instructions are the runtime and Tokio's submit path, and about 34,000 of the 39,852 are the kernel and the `baml-io` thread: two thread wake-ups, each through a syscall, and Tokio's park and unpark around one tiny task.
 
-Go for the same user-visible operation reads the environment in place:
-271.50 instructions (`os.LookupEnv`, N 200,000: 73,401,569; 1,200,000:
-344,908,852). That is 147 times less. The honest Go comparison for the
-mechanism is a request handed to another goroutine and the answer received
-back on a channel: 3,711.16 instructions per round trip (756,872,544;
-4,468,033,546), 2,957.50 with `GOMAXPROCS=1`. Node, a promise settled by
-`setImmediate`: 18,936.10.
+Go for the same user-visible operation reads the environment in place: 271.50 instructions (`os.LookupEnv`, N 200,000: 73,401,569; 1,200,000: 344,908,852). That is 147 times less. The honest Go comparison for the mechanism is a request handed to another goroutine and the answer received back on a channel: 3,711.16 instructions per round trip (756,872,544; 4,468,033,546), 2,957.50 with `GOMAXPROCS=1`. Node, a promise settled by `setImmediate`: 18,936.10.
 
 ```go
 req, resp := make(chan int), make(chan int)
@@ -366,22 +288,13 @@ for i := 0; i < n; i++ { req <- i; s += <-resp & 1 }
 
 Weak points, in order of cost:
 
-1. Every `scope.io` is two OS thread hand-offs. A job that does not block
-   (`env.get`, most of `time`) should not be a job. The known alternative
-   is to run such work inline in the native; `async` exists on these only
-   to reach `scope.io`.
-2. The worker sleeps in `pthread_cond_wait` whenever its queue is empty,
-   even when a job is one syscall from done. No spinning before the sleep.
-3. Ten Rust heap allocations per round trip: the block, the boxed job, two
-   `Arc`s, the Tokio task, the inbox `Vec` growing from empty each time
-   (`take_woken` takes the vector with `mem::take`, so the next `wake`
-   allocates again).
-4. One `baml-io` thread runs every job. Blocking work goes to Tokio's
-   blocking pool, which adds a third thread and two more hand-offs.
+1. Every `scope.io` is two OS thread hand-offs. A job that does not block (`env.get`, most of `time`) should not be a job. The known alternative is to run such work inline in the native; `async` exists on these only to reach `scope.io`.
+2. The worker sleeps in `pthread_cond_wait` whenever its queue is empty, even when a job is one syscall from done. No spinning before the sleep.
+3. Ten Rust heap allocations per round trip: the block, the boxed job, two `Arc`s, the Tokio task, the inbox `Vec` growing from empty each time (`take_woken` takes the vector with `mem::take`, so the next `wake` allocates again).
+4. One `baml-io` thread runs every job. Blocking work goes to Tokio's blocking pool, which adds a third thread and two more hand-offs.
 
 ## Not built
 
 - Completion without a thread hop for work that is ready immediately.
-- An I/O poller owned by the worker (kqueue or io_uring on the worker
-  thread) in place of a second runtime.
+- An I/O poller owned by the worker (kqueue or io_uring on the worker thread) in place of a second runtime.
 - More than one I/O thread.

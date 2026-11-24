@@ -1,14 +1,10 @@
 # Tasks
 
-`spawn`, `await`, the stack switch, parking and waking. The OS threads
-behind this are in `threads.md`; the I/O chain is measured in
-`natives.md`. Numbers are instructions retired, measured unless marked
-estimated; method in `README.md`.
+`spawn`, `await`, the stack switch, parking and waking. The OS threads behind this are in `threads.md`; the I/O chain is measured in `natives.md`. Numbers are instructions retired, measured unless marked estimated; method in `README.md`.
 
 ## What a task is
 
-A task is a 128-byte record that is never freed or moved, and a stack of
-its own (`src/sched.rs`):
+A task is a 128-byte record that is never freed or moved, and a stack of its own (`src/sched.rs`):
 
 ```rust
 #[repr(C, align(128))]
@@ -28,12 +24,7 @@ pub struct Task {
 }
 ```
 
-A task that is not running keeps its registers in a 160-byte switch frame
-at its saved `sp`: the frame record first, then `x19`, `x20`, `x22`-`x28`,
-`d8`-`d15`, and one result word. `x21` is not saved: whoever resumes the
-task supplies its own worker. A resume ends in `br`, not `ret`, so the
-return predictor is not fed an address no call pushed
-(`src/sched/switch.rs`):
+A task that is not running keeps its registers in a 160-byte switch frame at its saved `sp`: the frame record first, then `x19`, `x20`, `x22`-`x28`, `d8`-`d15`, and one result word. `x21` is not saved: whoever resumes the task supplies its own worker. A resume ends in `br`, not `ret`, so the return predictor is not fed an address no call pushed (`src/sched/switch.rs`):
 
 ```asm
 ; switch_in: go on as the task in x0, on the worker in x21
@@ -49,8 +40,7 @@ return predictor is not fed an address no call pushed
   br   x16
 ```
 
-`switch_in` is 17 instructions. The saving half is 10 (`save!`). A full
-park to the worker's stack and resume from it:
+`switch_in` is 17 instructions. The saving half is 10 (`save!`). A full park to the worker's stack and resume from it:
 
 | part | instructions (single-step trace) |
 |---|---|
@@ -58,18 +48,11 @@ park to the worker's stack and resume from it:
 | `switch_to_worker`: load `g0_sp`, restore, `ret` | 13 |
 | `baml_rt_resume`: save the worker's registers, `switch_in` | 32 |
 
-60 instructions of assembly for a round trip through the worker, plus the
-Rust half that decides (16 to 53, below).
+60 instructions of assembly for a round trip through the worker, plus the Rust half that decides (16 to 53, below).
 
 ## `spawn` runs the child first
 
-`spawn` calls `baml_rt_spawn` with the closure, a task shim (the compiled
-function a task starts in; one per machine result type) and flags. The
-stub builds a switch frame for the parent, calls `spawn_prepare`, and
-switches to the child at once. The parent is left runnable. The child's
-first act (`baml_rt_task_start`) puts the parent on the run queue. A task
-that ends switches straight to the task queued last (`exit_pick`), which
-is the parent, with the future as the stub's result.
+`spawn` calls `baml_rt_spawn` with the closure, a task shim (the compiled function a task starts in; one per machine result type) and flags. The stub builds a switch frame for the parent, calls `spawn_prepare`, and switches to the child at once. The parent is left runnable. The child's first act (`baml_rt_task_start`) puts the parent on the run queue. A task that ends switches straight to the task queued last (`exit_pick`), which is the parent, with the future as the stub's result.
 
 ```rust
 pub(crate) unsafe extern "C" fn spawn_prepare(mut closure: usize, shim: usize, flags: usize,
@@ -90,10 +73,7 @@ pub(crate) unsafe extern "C" fn spawn_prepare(mut closure: usize, shim: usize, f
 }
 ```
 
-`await` is inline when the future has settled: an acquire load of the
-state and a load of the value. Otherwise it calls `baml_rt_await`, which
-links the task into the future's waiter list with a compare-and-swap and
-switches to the worker's stack.
+`await` is inline when the future has settled: an acquire load of the state and a load of the value. Otherwise it calls `baml_rt_await`, which links the task into the future's waiter list with a compare-and-swap and switches to the worker's stack.
 
 ```baml
 for (let i = 0; i < N; i += 1) { s += await spawn { 1 }; };
@@ -118,9 +98,7 @@ for (let i = 0; i < N; i += 1) { s += await spawn { 1 }; };
   ldr  ...                    ; future.value
 ```
 
-466.42 instructions per `spawn` plus `await` (N 200,000: 114,693,203;
-1,200,000: 581,117,318), 33 ns wall. Single-step trace of one iteration,
-464:
+466.42 instructions per `spawn` plus `await` (N 200,000: 114,693,203; 1,200,000: 581,117,318), 33 ns wall. Single-step trace of one iteration, 464:
 
 | part | instructions |
 |---|---|
@@ -154,24 +132,16 @@ for i := 0; i < n; i++ {
 }
 ```
 
-Native is 8 to 10 times cheaper than Go here. The reasons are structural:
-no channel, no lock, the child runs on the parent's worker immediately and
-hands straight back, and the stack is reused from a free list.
+Native is 8 to 10 times cheaper than Go here. The reasons are structural: no channel, no lock, the child runs on the parent's worker immediately and hands straight back, and the stack is reused from a free list.
 
 Weak points:
 
-- 124 of the 464 instructions build a spawn plan whose two lists are
-  always empty, since a plan with semaphores or cancel tokens is rejected
-  (`baml_rt_spawn_unsupported`). Two runtime calls and a 48-byte object
-  per spawn, plus three garbage objects.
-- `exit_pick` looks at the inbox and the timers on every task end (33
-  instructions when both are empty).
+- 124 of the 464 instructions build a spawn plan whose two lists are always empty, since a plan with semaphores or cancel tokens is rejected (`baml_rt_spawn_unsupported`). Two runtime calls and a 48-byte object per spawn, plus three garbage objects.
+- `exit_pick` looks at the inbox and the timers on every task end (33 instructions when both are empty).
 
 ## A task that needs a new stack
 
-The free list is empty when tasks are alive at once. Then `new_task` maps
-a stack: `mmap` of 80 KB and `mprotect` of the guard, and a `Box` for the
-record.
+The free list is empty when tasks are alive at once. Then `new_task` maps a stack: `mmap` of 80 KB and `mprotect` of the guard, and a `Box` for the record.
 
 ```baml
 for (let i = 0; i < N; i += 1) { fs.push(spawn { sleep(1 ms); 1 }); };
@@ -184,47 +154,25 @@ for (let f in fs) { s += await f; };
 | native | 20,000 | 40,000 | 158,932,058 | 276,713,440 | 5,889 |
 | Go, goroutines blocked on a gate | 20,000 | 40,000 | 283,373,782 | 614,368,649 | 16,550 |
 
-Kernel instructions are counted, and they are most of this: two syscalls
-and the first-touch fault of the stack's top page. Tasks whose timers
-fire while the loop is still spawning are reused, so this understates a
-true fresh stack (not isolated). Stacks are never unmapped: a burst of N
-live tasks keeps N x 80 KB of address space and N touched pages for the
-life of the process.
+Kernel instructions are counted, and they are most of this: two syscalls and the first-touch fault of the stack's top page. Tasks whose timers fire while the loop is still spawning are reused, so this understates a true fresh stack (not isolated). Stacks are never unmapped: a burst of N live tasks keeps N x 80 KB of address space and N touched pages for the life of the process.
 
 ## Parking on a timer
 
-`baml.sys.sleep` is compiled to `baml_rt_sleep`. `sleep_park` reads the
-clock, pushes `(when, id, task)` on a binary heap and parks. The worker's
-loop pops tasks whose time has come (`fire_timers`) and wakes them to run
-next.
+`baml.sys.sleep` is compiled to `baml_rt_sleep`. `sleep_park` reads the clock, pushes `(when, id, task)` on a binary heap and parks. The worker's loop pops tasks whose time has come (`fire_timers`) and wakes them to run next.
 
 ```baml
 function nap() -> int { baml.sys.sleep(Duration.from_nanoseconds(1n)) catch (e) { let e => 0 }; 1 }
 s += await spawn { nap() };
 ```
 
-1,816.23 instructions per iteration (N 100,000: 203,012,542; 600,000:
-1,111,130,177), 1,350 more than a spawn that does not sleep. From the
-trace: two clock reads at about 170 each (`Instant::elapsed` to
-`clock_gettime` to `mach_timebase_info`), `sleep_park` 53, the parking
-stub and switch 28, the worker loop 64, `fire_timers` 98 plus a `Vec` it
-allocates and frees on every call that fires anything, `baml_rt_resume`
+1,816.23 instructions per iteration (N 100,000: 203,012,542; 600,000: 1,111,130,177), 1,350 more than a spawn that does not sleep. From the trace: two clock reads at about 170 each (`Instant::elapsed` to `clock_gettime` to `mach_timebase_info`), `sleep_park` 53, the parking stub and switch 28, the worker loop 64, `fire_timers` 98 plus a `Vec` it allocates and frees on every call that fires anything, `baml_rt_resume`
 32.
 
-Weak points: `fire_timers` collects fired tasks into a fresh `Vec` (one
-`malloc`/`free` per wake). `Instant::elapsed` goes through
-`clock_gettime`; `mach_absolute_time` with a cached timebase would be
-about a tenth of the instructions (estimated).
+Weak points: `fire_timers` collects fired tasks into a fresh `Vec` (one `malloc`/`free` per wake). `Instant::elapsed` goes through `clock_gettime`; `mach_absolute_time` with a cached timebase would be about a tenth of the instructions (estimated).
 
 ## Parking on a future
 
-`baml_rt_await` on an unsettled future: `await_park` sets the task
-`PARKING`, links it at the head of the future's waiter list by
-compare-and-swap on the state word, and the stub switches to the worker.
-When the task that owns the future ends, `settle` swaps the state to
-`READY` or `ERROR` and wakes each waiter (`PARKED` to `RUNNABLE`, pushed
-to run next). The value is written before the state, and readers load the
-state first with acquire ordering.
+`baml_rt_await` on an unsettled future: `await_park` sets the task `PARKING`, links it at the head of the future's waiter list by compare-and-swap on the state word, and the stub switches to the worker. When the task that owns the future ends, `settle` swaps the state to `READY` or `ERROR` and wakes each waiter (`PARKED` to `RUNNABLE`, pushed to run next). The value is written before the state, and readers load the state first with acquire ordering.
 
 ```rust
 fn settle(worker: &mut Mutator, value: usize, trace: usize, state: usize) {
@@ -236,16 +184,11 @@ fn settle(worker: &mut Mutator, value: usize, trace: usize, state: usize) {
 }
 ```
 
-Not measured in isolation: with one worker and child-first spawn, an
-`await` meets an unsettled future only when the child itself parked. Its
-cost is the 60-instruction round trip above plus `await_park` and `wake`
-(estimated 60 to 80 more).
+Not measured in isolation: with one worker and child-first spawn, an `await` meets an unsettled future only when the child itself parked. Its cost is the 60-instruction round trip above plus `await_park` and `wake` (estimated 60 to 80 more).
 
 ## Parking on I/O, and the wake from another thread
 
-A task waiting for I/O parks with `baml_rt_io_wait`. The job runs on the
-`baml-io` thread. When it ends, that thread calls `Inbox::wake`: lock a
-mutex, push the task, set an atomic flag, `notify_one` on a condvar.
+A task waiting for I/O parks with `baml_rt_io_wait`. The job runs on the `baml-io` thread. When it ends, that thread calls `Inbox::wake`: lock a mutex, push the task, set an atomic flag, `notify_one` on a condvar.
 
 The worker with nothing runnable blocks in `Sched::sleep`:
 
@@ -263,25 +206,15 @@ fn sleep(&mut self) -> bool {
 }
 ```
 
-That is `pthread_cond_wait` (or `pthread_cond_timedwait_relative_np`),
-which is the `__psynch_cvwait` syscall on macOS. There is no spin phase
-and no futex-style fast path. The wake is `pthread_cond_signal`
-(`__psynch_cvsignal`) from the I/O thread.
+That is `pthread_cond_wait` (or `pthread_cond_timedwait_relative_np`), which is the `__psynch_cvwait` syscall on macOS. There is no spin phase and no futex-style fast path. The wake is `pthread_cond_signal` (`__psynch_cvsignal`) from the I/O thread.
 
-Measured on the cheapest I/O native (`natives.md`): 39,852 instructions,
-6.2 microseconds and 2.0 context switches per round trip, both threads
-and the kernel included. The worker's own share in user mode is about
-5,500 (traced), of which the scheduler is 224.
+Measured on the cheapest I/O native (`natives.md`): 39,852 instructions, 6.2 microseconds and 2.0 context switches per round trip, both threads and the kernel included. The worker's own share in user mode is about 5,500 (traced), of which the scheduler is 224.
 
-Go for a comparable hand-off between two goroutines over unbuffered
-channels: 3,711 instructions per round trip, 2,958 with one P, 260 ns
-wall. Go parks goroutines in user space and only parks threads when a P
-goes idle.
+Go for a comparable hand-off between two goroutines over unbuffered channels: 3,711 instructions per round trip, 2,958 with one P, 260 ns wall. Go parks goroutines in user space and only parks threads when a P goes idle.
 
 ## Not built
 
-- Cancellation (`Task.cancel` is reserved; a spawn plan with cancel
-  tokens or semaphores ends the program).
+- Cancellation (`Task.cancel` is reserved; a spawn plan with cancel tokens or semaphores ends the program).
 - Work stealing, or any second worker (`threads.md`).
 - Stack growth or release.
 - Preemption: a task runs until it parks or ends.

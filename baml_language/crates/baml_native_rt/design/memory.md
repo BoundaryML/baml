@@ -1,14 +1,10 @@
 # Memory
 
-Object layouts, allocation, field and index access, maps, strings. The
-collector is in `gc.md`. Numbers are instructions retired per operation,
-measured unless marked estimated; method in `README.md`.
+Object layouts, allocation, field and index access, maps, strings. The collector is in `gc.md`. Numbers are instructions retired per operation, measured unless marked estimated; method in `README.md`.
 
 ## Layouts
 
-Everything is 8-byte words and 8-byte aligned. A reference is a plain
-address, zero for `null`. Nothing is tagged. `src/layout.rs` is included by
-the compiler by path, so both sides use the same constants.
+Everything is 8-byte words and 8-byte aligned. A reference is a plain address, zero for `null`. Nothing is tagged. `src/layout.rs` is included by the compiler by path, so both sides use the same constants.
 
 Header, one word in every object:
 
@@ -19,8 +15,7 @@ Header, one word in every object:
 | 32..59 | free. A string caches its hash here |
 | 60..63 | flags: bit 63 panic class, bit 60 float elements |
 
-Compiled code reads the type id as the 32-bit word at the object's address
-and writes the whole header as one constant.
+Compiled code reads the type id as the 32-bit word at the object's address and writes the whole header as one constant.
 
 | object | bytes | Go equivalent | Go bytes |
 |---|---|---|---|
@@ -39,14 +34,9 @@ and writes the whole header as one constant.
 | future | 48 | channel of capacity 1 | 96 + element |
 | task (not on the heap) | 128, plus a 64 KB stack and 16 KB guard | `g` | about 450, plus a stack from 8 KB |
 
-A `bool` or enum field takes a full word. An optional scalar takes two
-slots. Go sizes are from the Go 1.26 runtime's types and are not measured
-here.
+A `bool` or enum field takes a full word. An optional scalar takes two slots. Go sizes are from the Go 1.26 runtime's types and are not measured here.
 
-Arrays keep elements in a separate storage object so the array's address
-never changes when it grows. Every element access is therefore two
-dependent loads (array to data address, data to element) unless the data
-address is already in a register.
+Arrays keep elements in a separate storage object so the array's address never changes when it grows. Every element access is therefore two dependent loads (array to data address, data to element) unless the data address is already in a register.
 
 ## Allocation fast path
 
@@ -62,9 +52,7 @@ store(end, mutator + MUTATOR_ALLOC_PTR);
 // slow (cold): scratch = size; call baml_rt_alloc_slow; object = scratch
 ```
 
-The memory is not zeroed. The caller writes the header as one constant and
-then every field. There is one span and it is the whole space (8 MB to
-start), so the limit check fails only when a collection is due.
+The memory is not zeroed. The caller writes the header as one constant and then every field. There is one span and it is the whole space (8 MB to start), so the limit check fails only when a collection is due.
 
 ```baml
 class P { x int }
@@ -75,8 +63,7 @@ function main() -> int {
 }
 ```
 
-The store into `keep` is what keeps scalar replacement
-(`optimize/scalar_replace.rs`) from deleting the object.
+The store into `keep` is what keeps scalar replacement (`optimize/scalar_replace.rs`) from deleting the object.
 
 ```asm
   ldr  x4,  [x21]            ; alloc_ptr
@@ -101,11 +88,7 @@ Six instructions to allocate, two for the header, one per field.
 | Go, `GOGC=off` | 10 M | 20 M | 1,556,006,313 | 3,078,657,222 | 152.26 |
 | Node | 20 M | 120 M | 2,852,411,144 | 15,045,766,104 | 121.93 |
 
-Native: 10 instructions per object, collections included (60 M objects of
-16 bytes is 114 collections with almost nothing live). Go: 146, and the
-same with the collector off, so that is `mallocgc` itself for an 8-byte
-object on this machine (27 ns per allocation wall). Go's count covers all
-its threads and the kernel.
+Native: 10 instructions per object, collections included (60 M objects of 16 bytes is 114 collections with almost nothing live). Go: 146, and the same with the collector off, so that is `mallocgc` itself for an 8-byte object on this machine (27 ns per allocation wall). Go's count covers all its threads and the kernel.
 
 ```go
 type P struct{ x int }
@@ -115,10 +98,7 @@ for i := 0; i < n; i++ { sinkP[i&7] = &P{i} }
 
 ## Arrays and strings are allocated by a runtime call
 
-An array literal calls `baml_rt_array_new` (`src/array.rs`): one
-allocation for the array and its storage, then a `bzero` of the elements.
-A string concatenation calls `baml_rt_string_concat` (`src/string.rs`).
-Both go through a 4-instruction anchor stub (see `natives.md`).
+An array literal calls `baml_rt_array_new` (`src/array.rs`): one allocation for the array and its storage, then a `bzero` of the elements. A string concatenation calls `baml_rt_string_concat` (`src/string.rs`). Both go through a 4-instruction anchor stub (see `natives.md`).
 
 ```baml
 keep[i & 7] = [i, i];                         // array
@@ -132,19 +112,11 @@ keep[i & 7] = parts[i & 1] + parts[(i + 1) & 1];  // 7 + 16 bytes
 | native concat | 222.05 (2,243,068,019; 13,345,676,338) | about 196 | 184 in the call: stub 4, `string_concat` 116, `memmove` 64 |
 | Go concat | 392.77 (3,947,933,854; 23,586,733,744) | about 383 | |
 
-Weak point: a two-element array literal costs 7 times an object of the
-same size class. The length is a constant at the call site, so the
-allocation and both headers could be emitted inline as for a class
-instance. `string_concat` computes the character count of the result and
-handles slices on both sides; 116 instructions for two short flat strings
-is mostly that.
+Weak point: a two-element array literal costs 7 times an object of the same size class. The length is a constant at the call site, so the allocation and both headers could be emitted inline as for a class instance. `string_concat` computes the character count of the result and handles slices on both sides; 116 instructions for two short flat strings is mostly that.
 
 ## Allocation slow path
 
-`baml_rt_alloc_slow` (`src/stubs.rs`) is called with a convention under
-which the callee preserves every register, so the fast path keeps nothing
-in callee-saved registers on its account. The stub saves `x0`-`x17` and
-`q0`-`q31` (25 `stp`), calls `heap::alloc_slow`, restores them:
+`baml_rt_alloc_slow` (`src/stubs.rs`) is called with a convention under which the callee preserves every register, so the fast path keeps nothing in callee-saved registers on its account. The stub saves `x0`-`x17` and `q0`-`q31` (25 `stp`), calls `heap::alloc_slow`, restores them:
 
 ```rust
 pub(crate) extern "C" fn alloc_slow(mutator: &mut Mutator, frame: usize) {
@@ -153,15 +125,11 @@ pub(crate) extern "C" fn alloc_slow(mutator: &mut Mutator, frame: usize) {
 }
 ```
 
-Cost: 59 instructions in the stub (counted from the source, not traced) plus one
-collection (`gc.md`: 235 fixed, 122 per live object). It runs once per
-space: every 8 MB of allocation at the start, less often as the space
-grows to four times the live data.
+Cost: 59 instructions in the stub (counted from the source, not traced) plus one collection (`gc.md`: 235 fixed, 122 per live object). It runs once per space: every 8 MB of allocation at the start, less often as the space grows to four times the live data.
 
 ## Field load and store
 
-One instruction each. There is no write barrier: the collector stops
-everything and copies, so it needs none.
+One instruction each. There is no write barrier: the collector stops everything and copies, so it needs none.
 
 ```baml
 let p = ps[i & 1]; p.x = p.x + p.y;      // scalar fields
@@ -182,11 +150,7 @@ let p = ps[i & 1]; p.next = ps[(i + 1) & 1];   // reference field
 | scalar field update loop | 20.00 (214,508,728 at 10 M; 1,214,617,865 at 60 M) | 9.02 (109,092,634; 560,543,206) |
 | reference store loop | 22.01 (234,515,435; 1,335,052,936) | 14.00 (158,958,808; 859,423,999) |
 
-The field operations are the same count in both. Go pays 5 more for the
-reference store (the write-barrier flag test and the nil check); native
-pays more everywhere else in the loop: the poll (2), and the array's
-length and data pointer reloaded from the array object on every iteration
-(3 to 5).
+The field operations are the same count in both. Go pays 5 more for the reference store (the write-barrier flag test and the nil check); native pays more everywhere else in the loop: the poll (2), and the array's length and data pointer reloaded from the array object on every iteration (3 to 5).
 
 ## Array index
 
@@ -199,30 +163,15 @@ length and data pointer reloaded from the array object on every iteration
   ldr  x2, [x15, x0, lsl #3]
 ```
 
-Two instructions for the bounds check, one for the load, two more when the
-length and data address are not already in registers. The compiler caches
-the pair per block (`codegen.rs`, `array_view`) and drops it at every call
-that can allocate, since a collection moves the storage. A negative index
-counts from the end; that is the cold block.
+Two instructions for the bounds check, one for the load, two more when the length and data address are not already in registers. The compiler caches the pair per block (`codegen.rs`, `array_view`) and drops it at every call that can allocate, since a collection moves the storage. A negative index counts from the end; that is the cold block.
 
-`keep[i & 7] = i` with `keep: int[]` is 16.00 instructions per iteration
-native (174,497,663 at 10 M; 974,876,205 at 60 M) and 5.00 in Go
-(68,822,394; 319,145,572). Go proves `i & 7 < 8` and drops the check, has
-no poll, and keeps the slice in registers. Cranelift does none of the
-three here.
+`keep[i & 7] = i` with `keep: int[]` is 16.00 instructions per iteration native (174,497,663 at 10 M; 974,876,205 at 60 M) and 5.00 in Go (68,822,394; 319,145,572). Go proves `i & 7 < 8` and drops the check, has no poll, and keeps the slice in registers. Cranelift does none of the three here.
 
 ## Maps
 
-A map is an insertion-ordered table (`src/map.rs`): an entries object with
-records in insertion order and a parallel array of 32-bit hashes, and, past
-8 entries, an index object of slots holding hash and record number. Up to 8
-entries are searched without an index by comparing all hashes at once.
+A map is an insertion-ordered table (`src/map.rs`): an entries object with records in insertion order and a parallel array of 32-bit hashes, and, past 8 entries, an index object of slots holding hash and record number. Up to 8 entries are searched without an index by comparing all hashes at once.
 
-Lookup is a hand-written assembly probe with a private convention
-(`baml_rt_map_find_str`, `baml_rt_map_find_int`, in `map.rs`). Compiled
-code reads the string's cached hash from its header inline and calls
-`baml_rt_str_hash` only when it is zero. The probe returns the address of
-the value slot or zero.
+Lookup is a hand-written assembly probe with a private convention (`baml_rt_map_find_str`, `baml_rt_map_find_int`, in `map.rs`). Compiled code reads the string's cached hash from its header inline and calls `baml_rt_str_hash` only when it is zero. The probe returns the address of the value slot or zero.
 
 ```baml
 s += m[keys[i % n]];     // map<string, int>
@@ -250,8 +199,7 @@ s += m[keys[i % n]];     // map<string, int>
 | set existing key, string, 1000 keys | 268 (294.49 - 26.01) | 172 (182.06 - 10.01) | |
 | insert new int key, growing to 6 M | 452.20 | 417.69 | |
 
-Raw counts (N lo 5 M, N hi 30 M; baseline is the same loop taking
-`keys[i % n].length()`):
+Raw counts (N lo 5 M, N hi 30 M; baseline is the same loop taking `keys[i % n].length()`):
 
 ```text
 native map_get.8     339,517,544   1,965,217,307
@@ -270,12 +218,9 @@ go map_int_get.1000  561,439,722   3,274,332,194
 go map_insert (1 M, 6 M) 623,255,825 2,711,746,007
 ```
 
-Lookup is ahead of Go by 3 to 4 times: the hash is cached in the string,
-the probe is 20 instructions, and nothing is spilled around it.
+Lookup is ahead of Go by 3 to 4 times: the hash is cached in the string, the probe is 20 instructions, and nothing is spilled around it.
 
-Store is behind Go. `m[k] = v` does not use the probe. It calls the
-generic native `baml.Map.set`, which takes two type ids and values as a
-union holds them:
+Store is behind Go. `m[k] = v` does not use the probe. It calls the generic native `baml.Map.set`, which takes two type ids and values as a union holds them:
 
 ```rust
 // generated wrapper, natives_generated.rs
@@ -292,16 +237,11 @@ unsafe extern "C" fn baml_map_set(mutator: &mut Mutator, type_0: u32, type_1: u3
 }
 ```
 
-Single-step trace of one store to an existing key: 244 instructions, 4 in
-the anchor stub, 178 in the wrapper and the inlined `set` (root slots,
-type id tests, boxing rules, the store), 21 in `str_hash`, 41 in `find`.
-The known alternative is what `get` already does: probe inline, store
-through the returned slot address, and call the runtime only to insert.
+Single-step trace of one store to an existing key: 244 instructions, 4 in the anchor stub, 178 in the wrapper and the inlined `set` (root slots, type id tests, boxing rules, the store), 21 in `str_hash`, 41 in `find`. The known alternative is what `get` already does: probe inline, store through the returned slot address, and call the runtime only to insert.
 
 ## Not built
 
 - Inline allocation of arrays, strings and maps.
 - Per-worker allocation spans carved from a shared space (`threads.md`).
-- Large-object space: an object larger than the space forces a collection
-  into a bigger space.
+- Large-object space: an object larger than the space forces a collection into a bigger space.
 - Packed fields: every field is a word.
