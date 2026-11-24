@@ -2311,6 +2311,12 @@ struct InferenceContext<'db> {
     /// enters through a function-typed parameter that writes `throws
     /// unknown`: the parameter an E0096 at that expression names.
     unknown_throws_params: FxHashMap<ExprId, crate::diagnostics::UnknownThrowsParam>,
+    /// Callee expressions of direct calls to the owner's own parameter
+    /// whose written clause is `throws unknown`, keyed by the CALLEE only:
+    /// the contribution recorded there is that call's effect alone. A
+    /// `catch` re-records its merged remainder at the call or base
+    /// expression, never here, so a merged fact is never attributed.
+    own_unknown_param_callees: FxHashMap<ExprId, Name>,
     /// Every `_` hole instantiated as a fresh table variable, with the
     /// site it was written at. A hole whose class is still unsolved at
     /// finalize reports E0147 `CannotInferType` there (rustc's E0282
@@ -2422,6 +2428,7 @@ impl<'db> InferenceContext<'db> {
             }],
             throws_contracts: Vec::new(),
             unknown_throws_params: FxHashMap::default(),
+            own_unknown_param_callees: FxHashMap::default(),
             hole_vars: Vec::new(),
             diagnosed_infer_vars: rustc_hash::FxHashSet::default(),
             annotation_cache: FxHashMap::default(),
@@ -6762,6 +6769,10 @@ impl<'db> InferenceContext<'db> {
         if matches!(callee_throws.kind(), InferTy::Unknown)
             && let Some(param) = self.unknown_throws_param_of_callee(callee)
         {
+            if param.callee.is_none() {
+                self.own_unknown_param_callees
+                    .insert(callee, param.param.clone());
+            }
             self.unknown_throws_params.insert(callee, param.clone());
             self.unknown_throws_params.insert(call, param);
         }
@@ -12479,25 +12490,31 @@ impl<'db> InferenceContext<'db> {
         contributions: &[(ExprId, Ty)],
         resolved: &[Ty],
     ) -> Option<Name> {
-        fn carries_unknown(ty: &Ty) -> bool {
+        // Whether an effect may be `unknown` at its root: through unions
+        // and type aliases (`type AnyError = unknown`), not inside
+        // containers. Out of fuel counts as yes, so a deep or recursive
+        // alias never yields an attribution.
+        fn may_be_unknown(this: &InferenceContext<'_>, ty: &Ty, fuel: u8) -> bool {
             match ty.kind() {
                 InferTy::Unknown => true,
-                InferTy::Union(members) => members.iter().any(carries_unknown),
+                InferTy::Union(members) => members
+                    .iter()
+                    .any(|member| may_be_unknown(this, member, fuel)),
+                InferTy::TypeAlias(..) => {
+                    fuel == 0 || may_be_unknown(this, &this.expand_alias_ty(ty), fuel - 1)
+                }
                 _ => false,
             }
         }
         let mut found: Option<Name> = None;
         for ((at, _), ty) in contributions.iter().zip(resolved) {
-            if !carries_unknown(ty) {
+            if !may_be_unknown(self, ty, 8) {
                 continue;
             }
-            let param = self.unknown_throws_params.get(at)?;
-            if param.callee.is_some() {
-                return None;
-            }
+            let param = self.own_unknown_param_callees.get(at)?;
             match &found {
-                Some(name) if *name != param.param => return None,
-                _ => found = Some(param.param.clone()),
+                Some(name) if name != param => return None,
+                _ => found = Some(param.clone()),
             }
         }
         found

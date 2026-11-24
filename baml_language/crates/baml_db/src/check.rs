@@ -2946,6 +2946,63 @@ function caller(tool: Tool) -> int throws never {
     }
 
     #[test]
+    fn unknown_parameter_is_not_blamed_when_a_catch_merges_it_with_another_source() {
+        // The `catch` base calls `f` and the stored `tool.run`; what its arm
+        // leaves is re-recorded as one fact, so neither source is named.
+        let messages = throws_violations(
+            r#"class Boom {
+    message: string,
+}
+
+class Tool {
+    run: () -> int throws unknown,
+}
+
+function apply(tool: Tool, f: (int) -> int throws unknown) -> int {
+    f((tool.run)()) catch (e) {
+        Boom => 0,
+    }
+}
+
+function caller(tool: Tool) -> int throws never {
+    apply(tool, (x: int) -> int { x })
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        assert!(message.contains("may also throw `unknown`"), "{message}");
+        assert!(!message.contains("parameter"), "{message}");
+        assert_eq!(message.lines().count(), 2, "{message}");
+    }
+
+    #[test]
+    fn unknown_parameter_is_not_blamed_when_an_alias_of_unknown_is_also_thrown() {
+        let messages = throws_violations(
+            r#"type AnyError = unknown
+
+function apply(f: () -> int throws unknown, e: AnyError) -> int {
+    let n = f();
+    if (n > 0) {
+        throw e;
+    }
+    n
+}
+
+function caller(e: AnyError) -> int throws never {
+    apply(() -> int { 1 }, e)
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        assert!(message.contains("may also throw"), "{message}");
+        assert!(!message.contains("parameter"), "{message}");
+    }
+
+    #[test]
     fn uncovered_known_type_carries_no_unknown_error_help() {
         let messages = throws_violations(
             r#"class Boom {
