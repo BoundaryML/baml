@@ -2445,7 +2445,7 @@
     },
     "function-call-expression": {
       "name": "meta.function-call.baml",
-      "begin": "\\b(?:(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\s*(\\.)\\s*)?((?:\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*\\s*\\.\\s*)*)(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\b(?=\\s*(?:<(?:[^(){};]|\\([^(){};]*\\))*>\\s*)?\\()",
+      "begin": "(?!\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*(?:\\s*\\.\\s*\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)*?\\s*\\.\\s*upcast\\b\\s*<)\\b(?:(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\s*(\\.)\\s*)?((?:\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*\\s*\\.\\s*)*)(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\b(?=\\s*(?:<(?:[^(){};]|\\([^(){};]*\\))*>\\s*)?\\()",
       "beginCaptures": {
         "1": {
           "patterns": [
@@ -5024,13 +5024,16 @@
           "name": "keyword.operator.expression.upcast.baml"
         }
       },
-      "end": "(?<=>)",
+      "end": "(?<=\\))|(?<=>)(?!\\s*\\()",
       "patterns": [
         {
           "include": "#comments"
         },
         {
           "include": "#upcast-type-arguments"
+        },
+        {
+          "include": "#call-arguments"
         }
       ]
     },

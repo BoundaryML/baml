@@ -1196,7 +1196,7 @@ fn index_parts<'a>(f: &Formatter<'a>, l: TokenIdx, index: AnyExpr, r: TokenIdx) 
 
 /// One step of a postfix chain after its receiver.
 enum Link<'a> {
-    /// `.name`, `?.name`, `<T>`, `.upcast<T>`, `@spec`, a tagged template: glued
+    /// `.name`, `?.name`, `<T>`, `.upcast<T>()`, `@spec`, a tagged template: glued
     /// to what it follows. A `field` is a named access, where the expanded
     /// layout may start a line; a `type_name` is one spelled as a type is
     /// (`Duration` in `baml.time.Duration.from_seconds(…)`), so that a call
@@ -1262,7 +1262,7 @@ impl<'a> Link<'a> {
     }
 }
 
-/// A link that may start a line — `.name`, `?.`, `.0`, `.upcast<T>` — as `dot`
+/// A link that may start a line — `.name`, `?.`, `.0`, `.upcast<T>()` — as `dot`
 /// (the token, with the comments dangling after it) and `rest`: one level
 /// in when it starts a line after a comment that ended the line of what it
 /// follows (`x // c` then `    .y`), and so is what follows a line comment
@@ -1515,11 +1515,18 @@ impl<'a> Chain<'a> {
             }
             AnyExpr::Upcast(upcast) => {
                 let node = tree.get(upcast);
+                // The parentheses are the expression's own and hold nothing:
+                // they stay glued to the type arguments.
+                let call = node.call.map_or(Doc::NIL, |call| f.node(call));
                 self.links.push(Link::Plain {
                     doc: dotted(
                         f,
                         node.dot,
-                        d.concat([f.token(node.upcast_kw), f.node(tree.present(node.args))]),
+                        d.concat([
+                            f.token(node.upcast_kw),
+                            f.node(tree.present(node.args)),
+                            call,
+                        ]),
                     ),
                     field: true,
                     type_name: false,

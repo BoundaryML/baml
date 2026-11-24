@@ -566,7 +566,7 @@ upcast expression
 ==================
 
 function read_name(p: Person) -> string {
-  return p.upcast<Named>.name
+  return p.upcast<Named>().name
 }
 
 ---
@@ -595,8 +595,8 @@ function read_name(p: Person) -> string {
 upcast names a member when no type argument follows
 ==================
 
-function read(l: Lift) -> int {
-  l.upcast + l.upcast()
+function read(l: Lift) -> bool {
+  l.upcast + l.upcast() < l.upcast
 }
 
 ---
@@ -614,14 +614,18 @@ function read(l: Lift) -> int {
     (function_body
       (expression_statement
         (binary_expression
-          (member_expression
-            (identifier)
-            (property_identifier))
-          (call_expression
+          (binary_expression
             (member_expression
               (identifier)
               (property_identifier))
-            (arguments)))))))
+            (call_expression
+              (member_expression
+                (identifier)
+                (property_identifier))
+              (arguments)))
+          (member_expression
+            (identifier)
+            (property_identifier)))))))
 
 ==================
 env access parses as member expression

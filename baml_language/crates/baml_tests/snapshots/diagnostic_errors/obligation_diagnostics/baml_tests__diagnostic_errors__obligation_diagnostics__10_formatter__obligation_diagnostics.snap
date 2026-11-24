@@ -99,5 +99,5 @@ function takes_b(b: B1) -> int throws never {
 }
 
 function two_faults_one_span(c: C1) -> int throws never {
-    takes_b(c.upcast<A1>)
+    takes_b(c.upcast<A1>())
 }

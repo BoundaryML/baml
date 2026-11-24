@@ -157,7 +157,7 @@ class WrapperTelemetry {
         baml.fs.mkdir(parent(self.live_path), baml.fs.MkdirOptions { recursive: true });
         let file = baml.fs.open(self.live_path, "a");
         defer { file.close(); }
-        file.upcast<baml.io.Write>.write(`${body}\n`.to_utf8());
+        file.upcast<baml.io.Write>().write(`${body}\n`.to_utf8());
         self.flushed = false;
         null
     }
@@ -250,7 +250,7 @@ function telemetry_truthy(name: string) -> bool {
 }
 
 function telemetry_random(bytes: int) -> string {
-    baml.random.SystemRandom.get().upcast<baml.random.Rng>.random(bytes).to_hex()
+    baml.random.SystemRandom.get().upcast<baml.random.Rng>().random(bytes).to_hex()
 }
 
 function telemetry_now() -> bigint {

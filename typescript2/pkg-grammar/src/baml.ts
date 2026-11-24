@@ -771,7 +771,13 @@ function memberAccess(key: string, scope: BamlScope, accessor: string): Rule {
 const functionCallExpression: Rule = {
   key: 'function-call-expression',
   scope: 'meta.function-call.baml',
-  begin: DOTTED_REF + CALL_ARGS_LOOKAHEAD,
+  // A path that ends in `.upcast<` is not a call of its last segment: the
+  // path stops before it (dottedExpression) and upcastExpression takes the
+  // rest. A function that is itself named `upcast` is still a call.
+  begin:
+    String.raw`(?!${IDENT}(?:${ACCESSOR}${IDENT})*?${ACCESSOR}upcast\b\s*<)` +
+    DOTTED_REF +
+    CALL_ARGS_LOOKAHEAD,
   beginCaptures: {
     '1': expressionPathRootCapture,
     '2': { scope: 'punctuation.accessor.baml' },
@@ -862,7 +868,7 @@ const dottedExpression: Rule = {
   key: 'dotted-expression',
   scope: tm.meta,
   // A path segment never absorbs an `.upcast<` projection, so
-  // `self.upcast<T>` leaves `.upcast<T>` for upcastExpression instead of
+  // `self.upcast<T>()` leaves `.upcast<T>()` for upcastExpression instead of
   // reading `upcast` as a member and `<`/`>` as comparisons.
   match: String.raw`\b(${IDENT})((?:${ACCESSOR}(?!upcast\b\s*<)${IDENT})*)\b`,
   captures: {
@@ -871,10 +877,12 @@ const dottedExpression: Rule = {
   },
 };
 
-// `base.upcast<Interface>` is a static interface projection / upcast -- a dedicated
-// expression form, not a method call: `upcast` is a contextual keyword and the
-// angle brackets hold the target type. Matched only when a `<` follows, so plain
-// `.upcast` field access and `.upcast(...)` calls are unaffected.
+// `base.upcast<Interface>()` is a static interface projection / upcast. It is
+// written like a method call and is not one: `upcast` is a contextual keyword,
+// the angle brackets hold the target type, and the parentheses hold nothing.
+// Matched only when a `<` follows, so plain `.upcast` field access and
+// `.upcast(...)` calls are unaffected. The rule ends after the parentheses, or
+// after the type arguments when the (required) parentheses are not written.
 const upcastExpression: Rule = {
   key: 'upcast-expression',
   scope: 'meta.expression.upcast.baml',
@@ -883,8 +891,12 @@ const upcastExpression: Rule = {
     '1': { scope: 'punctuation.accessor.baml' },
     '2': { scope: 'keyword.operator.expression.upcast.baml' },
   },
-  end: String.raw`(?<=>)`,
-  patterns: [comments, typeArgumentsRule('upcast-type-arguments', '')],
+  end: String.raw`(?<=\))|(?<=>)(?!\s*\()`,
+  patterns: [
+    comments,
+    typeArgumentsRule('upcast-type-arguments', ''),
+    callArguments,
+  ],
 };
 
 const spawnExpression: Rule = {

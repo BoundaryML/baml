@@ -312,7 +312,7 @@ pub(crate) mod support {
                 format!("{}.{member}", expr_desc(*base, body))
             }
             Expr::Upcast { base, target } => {
-                format!("{}.upcast<{target}>", expr_desc(*base, body))
+                format!("{}.upcast<{target}>()", expr_desc(*base, body))
             }
             Expr::OptionalMemberAccess { base, member } => {
                 format!("{}?.{member}", expr_desc(*base, body))
@@ -1917,7 +1917,7 @@ pub(crate) mod support {
                 }
                 Expr::Upcast { base, target } => {
                     format!(
-                        "{}.upcast<{}>",
+                        "{}.upcast<{}>()",
                         expr_desc_hir(*base, body, prefix, local_type_names),
                         type_expr_to_string_hir(target, prefix, local_type_names)
                     )

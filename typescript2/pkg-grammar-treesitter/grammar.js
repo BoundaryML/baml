@@ -38,7 +38,7 @@ const PREC = {
   MUL: 12, //      * / %
   UNARY: 13, //    ! - ~ await
   CALL: 14, //     f(x)  x[i]
-  MEMBER: 15, //   a.b  a?.b  a.upcast<T>
+  MEMBER: 15, //   a.b  a?.b  a.upcast<T>()
 };
 
 // Matches the lexer's Word token: hyphens allowed inside, `$`-joined segments,
@@ -115,6 +115,10 @@ module.exports = grammar({
     // of `if`, match block, test body, ...). GLR forks; the constructor wins
     // via dynamic precedence only when both parses complete.
     [$.constructor_expression, $._expression],
+    // `x.upcast <` — the type arguments of an upcast vs. a comparison of a
+    // member named `upcast`. GLR forks; the member reading has the lower
+    // dynamic precedence, so it wins only when the upcast does not complete.
+    [$.upcast_expression, $.upcast_identifier],
     // `(x` — lambda parameter list vs. parenthesized expression.
     [$.parameter, $._expression],
     [$.function_type_parameters, $.lambda_parameters],
@@ -899,8 +903,8 @@ module.exports = grammar({
       ),
 
     // `upcast` is contextual: `x.upcast` and `x.upcast()` name a member, and
-    // only `.upcast<` starts an upcast.
-    upcast_identifier: (_) => prec.dynamic(-1, 'upcast'),
+    // only `.upcast<T>()` is an upcast.
+    upcast_identifier: (_) => prec.dynamic(-1, prec(PREC.MEMBER, 'upcast')),
 
     // `t.0`, `t?.1`; `t.0.1` nests, with each slot its own index token.
     tuple_field_expression: ($) =>
@@ -913,7 +917,8 @@ module.exports = grammar({
         ),
       ),
 
-    // `expr.upcast<Iface>` — explicit interface upcast (BEP-044).
+    // `expr.upcast<Iface>()` — explicit interface upcast (BEP-044). Written
+    // like a call; the parentheses are part of the expression and hold nothing.
     upcast_expression: ($) =>
       prec(
         PREC.MEMBER,
@@ -924,6 +929,8 @@ module.exports = grammar({
           '<',
           field('type', $._type),
           '>',
+          '(',
+          ')',
         ),
       ),
 

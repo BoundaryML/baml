@@ -112,7 +112,7 @@ fn vm_metadata_resolves_concrete_associated_type_projection_return() {
         }
 
         function get_public_key(account: AccountRecord) -> (AccountRecord as PublicIdentity).Key {
-            return account.upcast<PublicIdentity<Key = string>>.key
+            return account.upcast<PublicIdentity<Key = string>>().key
         }
         "#,
         "get_public_key",
@@ -251,7 +251,7 @@ fn formatter_accepts_associated_type_syntax() {
         }
 
         function decode_as(doc: Document) -> (Document as Codec<TextFormat, Output = string>).Output {
-            let output: (Document as Codec<TextFormat>).Output = doc.upcast<Codec<TextFormat, Output = string>>.decode("")
+            let output: (Document as Codec<TextFormat>).Output = doc.upcast<Codec<TextFormat, Output = string>>().decode("")
             return output
         }
         "#;

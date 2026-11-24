@@ -4141,7 +4141,7 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// The interface view a WRITTEN qualifier names, for either spelling that
-    /// carries one: `expr.upcast<I>` and `(Base as I).item`. Both pin which
+    /// carries one: `expr.upcast<I>()` and `(Base as I).item`. Both pin which
     /// interface the member dispatches through; only where the receiver comes
     /// from differs, and that is the caller's concern.
     fn written_qualifier_interface_view(
@@ -6219,7 +6219,7 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Upcast { base, .. } => {
-                // `.upcast<I>` is a static type projection. Runtime representation
+                // `.upcast<I>()` is a static type projection. Runtime representation
                 // is the original value.
                 self.lower_expr(base, dest)?;
             }
@@ -7008,7 +7008,7 @@ impl<'db> LoweringContext<'db> {
             // viewed at the declaring interface. TIR typed the root as
             // `RuntimeTy::Interface`, so reuse that and let the interface-prefix
             // routing below resolve the field view (same path as
-            // `self.upcast<I>.field`). Without this the `default` root is not a
+            // `self.upcast<I>().field`). Without this the `default` root is not a
             // local -> null -> `string + null` VM crash.
             let place = self.value_place(self_local);
             let ty = self

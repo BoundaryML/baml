@@ -1,0 +1,1274 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== upcast_call_parentheses.baml ===
+SourceFile@468..3673
+  items: InterfaceDef@468..553
+    kw: Interface "interface" @468..477
+    name: Name@478..483
+      token: Word "Named" @478..483
+    l: LBrace "{" @484..485
+    members: Field@490..503
+      name: Name@490..494
+        token: Word "name" @490..494
+      colon: Colon ":" @494..495
+      ty: PathType@496..502
+        head: Name@496..502
+          token: Word "string" @496..502
+      sep: Comma "," @502..503
+    members: MethodSig@508..551
+      kw: Function "function" @508..516
+      name: Name@517..522
+        token: Word "label" @517..522
+      params: ParamList@522..528
+        l: LParen "(" @522..523
+        params: Param@523..527
+          name: Name@523..527
+            token: SelfValue "self" @523..527
+        r: RParen ")" @527..528
+      ret: ReturnType@529..538
+        arrow: Arrow "->" @529..531
+        ty: PathType@532..538
+          head: Name@532..538
+            token: Word "string" @532..538
+      throws: ThrowsClause@539..551
+        kw: Throws "throws" @539..545
+        ty: PathType@546..551
+          head: Name@546..551
+            token: Word "never" @546..551
+    r: RBrace "}" @552..553
+  items: InterfaceDef@555..623
+    kw: Interface "interface" @555..564
+    name: Name@565..571
+      token: Word "Titled" @565..571
+    l: LBrace "{" @572..573
+    members: MethodSig@578..621
+      kw: Function "function" @578..586
+      name: Name@587..592
+        token: Word "label" @587..592
+      params: ParamList@592..598
+        l: LParen "(" @592..593
+        params: Param@593..597
+          name: Name@593..597
+            token: SelfValue "self" @593..597
+        r: RParen ")" @597..598
+      ret: ReturnType@599..608
+        arrow: Arrow "->" @599..601
+        ty: PathType@602..608
+          head: Name@602..608
+            token: Word "string" @602..608
+      throws: ThrowsClause@609..621
+        kw: Throws "throws" @609..615
+        ty: PathType@616..621
+          head: Name@616..621
+            token: Word "never" @616..621
+    r: RBrace "}" @622..623
+  items: InterfaceDef@625..688
+    kw: Interface "interface" @625..634
+    name: Name@635..640
+      token: Word "Boxed" @635..640
+    generics: GenericParamList@640..643
+      l: Less "<" @640..641
+      params: GenericParam@641..642
+        name: Name@641..642
+          token: Word "T" @641..642
+      r: Greater ">" @642..643
+    l: LBrace "{" @644..645
+    members: MethodSig@650..686
+      kw: Function "function" @650..658
+      name: Name@659..662
+        token: Word "get" @659..662
+      params: ParamList@662..668
+        l: LParen "(" @662..663
+        params: Param@663..667
+          name: Name@663..667
+            token: SelfValue "self" @663..667
+        r: RParen ")" @667..668
+      ret: ReturnType@669..673
+        arrow: Arrow "->" @669..671
+        ty: PathType@672..673
+          head: Name@672..673
+            token: Word "T" @672..673
+      throws: ThrowsClause@674..686
+        kw: Throws "throws" @674..680
+        ty: PathType@681..686
+          head: Name@681..686
+            token: Word "never" @681..686
+    r: RBrace "}" @687..688
+  items: InterfaceDef@690..770
+    kw: Interface "interface" @690..699
+    name: Name@700..705
+      token: Word "Keyed" @700..705
+    l: LBrace "{" @706..707
+    members: AssocTypeDecl@712..720
+      kw: Type "type" @712..716
+      name: Name@717..720
+        token: Word "Key" @717..720
+    members: MethodSig@725..768
+      kw: Function "function" @725..733
+      name: Name@734..737
+        token: Word "key" @734..737
+      params: ParamList@737..743
+        l: LParen "(" @737..738
+        params: Param@738..742
+          name: Name@738..742
+            token: SelfValue "self" @738..742
+        r: RParen ")" @742..743
+      ret: ReturnType@744..755
+        arrow: Arrow "->" @744..746
+        ty: PathType@747..755
+          head: Name@747..751
+            token: Word "Self" @747..751
+          dot: Dot "." @751..752
+          name: Name@752..755
+            token: Word "Key" @752..755
+      throws: ThrowsClause@756..768
+        kw: Throws "throws" @756..762
+        ty: PathType@763..768
+          head: Name@763..768
+            token: Word "never" @763..768
+    r: RBrace "}" @769..770
+  items: ClassDef@772..1099
+    kw: Class "class" @772..777
+    name: Name@778..784
+      token: Word "Person" @778..784
+    l: LBrace "{" @785..786
+    members: Field@791..809
+      name: Name@791..800
+        token: Word "full_name" @791..800
+      colon: Colon ":" @800..801
+      ty: PathType@802..808
+        head: Name@802..808
+          token: Word "string" @802..808
+      sep: Comma "," @808..809
+    members: ImplementsBlock@815..957
+      kw: Implements "implements" @815..825
+      target: PathType@826..831
+        head: Name@826..831
+          token: Word "Named" @826..831
+      l: LBrace "{" @832..833
+      members: InterfaceFieldLink@842..859
+        iface_field: Name@842..846
+          token: Word "name" @842..846
+        as_kw: As "as" @847..849
+        class_field: Name@850..859
+          token: Word "full_name" @850..859
+      members: FunctionDef@869..951
+        kw: Function "function" @869..877
+        name: Name@878..883
+          token: Word "label" @878..883
+        params: ParamList@883..889
+          l: LParen "(" @883..884
+          params: Param@884..888
+            name: Name@884..888
+              token: SelfValue "self" @884..888
+          r: RParen ")" @888..889
+        ret: ReturnType@890..899
+          arrow: Arrow "->" @890..892
+          ty: PathType@893..899
+            head: Name@893..899
+              token: Word "string" @893..899
+        throws: ThrowsClause@900..912
+          kw: Throws "throws" @900..906
+          ty: PathType@907..912
+            head: Name@907..912
+              token: Word "never" @907..912
+        body: Block@913..951
+          l: LBrace "{" @913..914
+          tail: PathExpr@927..941
+            head: Name@927..931
+              token: SelfValue "self" @927..931
+            dot: Dot "." @931..932
+            name: Name@932..941
+              token: Word "full_name" @932..941
+          r: RBrace "}" @950..951
+      r: RBrace "}" @956..957
+    members: ImplementsBlock@963..1097
+      kw: Implements "implements" @963..973
+      target: PathType@974..980
+        head: Name@974..980
+          token: Word "Titled" @974..980
+      l: LBrace "{" @981..982
+      members: FunctionDef@991..1091
+        kw: Function "function" @991..999
+        name: Name@1000..1005
+          token: Word "label" @1000..1005
+        params: ParamList@1005..1011
+          l: LParen "(" @1005..1006
+          params: Param@1006..1010
+            name: Name@1006..1010
+              token: SelfValue "self" @1006..1010
+          r: RParen ")" @1010..1011
+        ret: ReturnType@1012..1021
+          arrow: Arrow "->" @1012..1014
+          ty: PathType@1015..1021
+            head: Name@1015..1021
+              token: Word "string" @1015..1021
+        throws: ThrowsClause@1022..1034
+          kw: Throws "throws" @1022..1028
+          ty: PathType@1029..1034
+            head: Name@1029..1034
+              token: Word "never" @1029..1034
+        body: Block@1035..1091
+          l: LBrace "{" @1035..1036
+          tail: BinaryExpr@1049..1081
+            lhs: StringLit@1049..1055
+              token: String "\"Dr. \"" @1049..1055
+            op: Plus "+" @1056..1057
+            rhs: FieldAccessExpr@1058..1081
+              base: UpcastExpr@1058..1076
+                base: PathExpr@1058..1062
+                  head: Name@1058..1062
+                    token: SelfValue "self" @1058..1062
+                dot: Dot "." @1062..1063
+                upcast_kw: Upcast "upcast" @1063..1069
+                args: GenericArgs@1069..1076
+                  l: Less "<" @1069..1070
+                  args: PathType@1070..1075
+                    head: Name@1070..1075
+                      token: Word "Named" @1070..1075
+                  r: Greater ">" @1075..1076
+              dot: Dot "." @1076..1077
+              name: Name@1077..1081
+                token: Word "name" @1077..1081
+          r: RBrace "}" @1090..1091
+      r: RBrace "}" @1096..1097
+    r: RBrace "}" @1098..1099
+  items: ClassDef@1101..1386
+    kw: Class "class" @1101..1106
+    name: Name@1107..1113
+      token: Word "IntBox" @1107..1113
+    l: LBrace "{" @1114..1115
+    members: Field@1120..1131
+      name: Name@1120..1125
+        token: Word "value" @1120..1125
+      colon: Colon ":" @1125..1126
+      ty: PathType@1127..1130
+        head: Name@1127..1130
+          token: Word "int" @1127..1130
+      sep: Comma "," @1130..1131
+    members: ImplementsBlock@1137..1248
+      kw: Implements "implements" @1137..1147
+      target: PathType@1148..1158
+        head: Name@1148..1153
+          token: Word "Boxed" @1148..1153
+        args: TypeArgs@1153..1158
+          l: Less "<" @1153..1154
+          args: PathType@1154..1157
+            head: Name@1154..1157
+              token: Word "int" @1154..1157
+          r: Greater ">" @1157..1158
+      l: LBrace "{" @1159..1160
+      members: FunctionDef@1169..1242
+        kw: Function "function" @1169..1177
+        name: Name@1178..1181
+          token: Word "get" @1178..1181
+        params: ParamList@1181..1187
+          l: LParen "(" @1181..1182
+          params: Param@1182..1186
+            name: Name@1182..1186
+              token: SelfValue "self" @1182..1186
+          r: RParen ")" @1186..1187
+        ret: ReturnType@1188..1194
+          arrow: Arrow "->" @1188..1190
+          ty: PathType@1191..1194
+            head: Name@1191..1194
+              token: Word "int" @1191..1194
+        throws: ThrowsClause@1195..1207
+          kw: Throws "throws" @1195..1201
+          ty: PathType@1202..1207
+            head: Name@1202..1207
+              token: Word "never" @1202..1207
+        body: Block@1208..1242
+          l: LBrace "{" @1208..1209
+          tail: PathExpr@1222..1232
+            head: Name@1222..1226
+              token: SelfValue "self" @1222..1226
+            dot: Dot "." @1226..1227
+            name: Name@1227..1232
+              token: Word "value" @1227..1232
+          r: RBrace "}" @1241..1242
+      r: RBrace "}" @1247..1248
+    members: ImplementsBlock@1254..1384
+      kw: Implements "implements" @1254..1264
+      target: PathType@1265..1270
+        head: Name@1265..1270
+          token: Word "Keyed" @1265..1270
+      l: LBrace "{" @1271..1272
+      members: AssocTypeDef@1281..1295
+        kw: Type "type" @1281..1285
+        name: Name@1286..1289
+          token: Word "Key" @1286..1289
+        eq: Equals "=" @1290..1291
+        ty: PathType@1292..1295
+          head: Name@1292..1295
+            token: Word "int" @1292..1295
+      members: FunctionDef@1305..1378
+        kw: Function "function" @1305..1313
+        name: Name@1314..1317
+          token: Word "key" @1314..1317
+        params: ParamList@1317..1323
+          l: LParen "(" @1317..1318
+          params: Param@1318..1322
+            name: Name@1318..1322
+              token: SelfValue "self" @1318..1322
+          r: RParen ")" @1322..1323
+        ret: ReturnType@1324..1330
+          arrow: Arrow "->" @1324..1326
+          ty: PathType@1327..1330
+            head: Name@1327..1330
+              token: Word "int" @1327..1330
+        throws: ThrowsClause@1331..1343
+          kw: Throws "throws" @1331..1337
+          ty: PathType@1338..1343
+            head: Name@1338..1343
+              token: Word "never" @1338..1343
+        body: Block@1344..1378
+          l: LBrace "{" @1344..1345
+          tail: PathExpr@1358..1368
+            head: Name@1358..1362
+              token: SelfValue "self" @1358..1362
+            dot: Dot "." @1362..1363
+            name: Name@1363..1368
+              token: Word "value" @1363..1368
+          r: RBrace "}" @1377..1378
+      r: RBrace "}" @1383..1384
+    r: RBrace "}" @1385..1386
+  items: FunctionDef@1388..1449
+    kw: Function "function" @1388..1396
+    name: Name@1397..1401
+      token: Word "make" @1397..1401
+    params: ParamList@1401..1403
+      l: LParen "(" @1401..1402
+      r: RParen ")" @1402..1403
+    ret: ReturnType@1404..1413
+      arrow: Arrow "->" @1404..1406
+      ty: PathType@1407..1413
+        head: Name@1407..1413
+          token: Word "Person" @1407..1413
+    body: Block@1414..1449
+      l: LBrace "{" @1414..1415
+      tail: ObjectLiteral@1420..1447
+        ctor: PathExpr@1420..1426
+          head: Name@1420..1426
+            token: Word "Person" @1420..1426
+        l: LBrace "{" @1427..1428
+        members: ObjectField@1429..1445
+          key: DottedName@1429..1438
+            head: Name@1429..1438
+              token: Word "full_name" @1429..1438
+          colon: Colon ":" @1438..1439
+          value: StringLit@1440..1445
+            token: String "\"Ada\"" @1440..1445
+        r: RBrace "}" @1446..1447
+      r: RBrace "}" @1448..1449
+  items: FunctionDef@1474..1547
+    kw: Function "function" @1474..1482
+    name: Name@1483..1494
+      token: Word "method_call" @1483..1494
+    params: ParamList@1494..1505
+      l: LParen "(" @1494..1495
+      params: Param@1495..1504
+        name: Name@1495..1496
+          token: Word "p" @1495..1496
+        ascription: TypeAscription@1496..1504
+          colon: Colon ":" @1496..1497
+          ty: PathType@1498..1504
+            head: Name@1498..1504
+              token: Word "Person" @1498..1504
+      r: RParen ")" @1504..1505
+    ret: ReturnType@1506..1515
+      arrow: Arrow "->" @1506..1508
+      ty: PathType@1509..1515
+        head: Name@1509..1515
+          token: Word "string" @1509..1515
+    body: Block@1516..1547
+      l: LBrace "{" @1516..1517
+      tail: CallExpr@1522..1545
+        callee: FieldAccessExpr@1522..1543
+          base: UpcastExpr@1522..1537
+            base: PathExpr@1522..1523
+              head: Name@1522..1523
+                token: Word "p" @1522..1523
+            dot: Dot "." @1523..1524
+            upcast_kw: Upcast "upcast" @1524..1530
+            args: GenericArgs@1530..1537
+              l: Less "<" @1530..1531
+              args: PathType@1531..1536
+                head: Name@1531..1536
+                  token: Word "Named" @1531..1536
+              r: Greater ">" @1536..1537
+          dot: Dot "." @1537..1538
+          name: Name@1538..1543
+            token: Word "label" @1538..1543
+        args: ArgList@1543..1545
+          l: LParen "(" @1543..1544
+          r: RParen ")" @1544..1545
+      r: RBrace "}" @1546..1547
+  items: FunctionDef@1549..1620
+    kw: Function "function" @1549..1557
+    name: Name@1558..1570
+      token: Word "field_access" @1558..1570
+    params: ParamList@1570..1581
+      l: LParen "(" @1570..1571
+      params: Param@1571..1580
+        name: Name@1571..1572
+          token: Word "p" @1571..1572
+        ascription: TypeAscription@1572..1580
+          colon: Colon ":" @1572..1573
+          ty: PathType@1574..1580
+            head: Name@1574..1580
+              token: Word "Person" @1574..1580
+      r: RParen ")" @1580..1581
+    ret: ReturnType@1582..1591
+      arrow: Arrow "->" @1582..1584
+      ty: PathType@1585..1591
+        head: Name@1585..1591
+          token: Word "string" @1585..1591
+    body: Block@1592..1620
+      l: LBrace "{" @1592..1593
+      tail: FieldAccessExpr@1598..1618
+        base: UpcastExpr@1598..1613
+          base: PathExpr@1598..1599
+            head: Name@1598..1599
+              token: Word "p" @1598..1599
+          dot: Dot "." @1599..1600
+          upcast_kw: Upcast "upcast" @1600..1606
+          args: GenericArgs@1606..1613
+            l: Less "<" @1606..1607
+            args: PathType@1607..1612
+              head: Name@1607..1612
+                token: Word "Named" @1607..1612
+            r: Greater ">" @1612..1613
+        dot: Dot "." @1613..1614
+        name: Name@1614..1618
+          token: Word "name" @1614..1618
+      r: RBrace "}" @1619..1620
+  items: FunctionDef@1699..1775
+    kw: Function "function" @1699..1707
+    name: Name@1708..1722
+      token: Word "nested_generic" @1708..1722
+    params: ParamList@1722..1733
+      l: LParen "(" @1722..1723
+      params: Param@1723..1732
+        name: Name@1723..1724
+          token: Word "b" @1723..1724
+        ascription: TypeAscription@1724..1732
+          colon: Colon ":" @1724..1725
+          ty: PathType@1726..1732
+            head: Name@1726..1732
+              token: Word "IntBox" @1726..1732
+      r: RParen ")" @1732..1733
+    ret: ReturnType@1734..1740
+      arrow: Arrow "->" @1734..1736
+      ty: PathType@1737..1740
+        head: Name@1737..1740
+          token: Word "int" @1737..1740
+    body: Block@1741..1775
+      l: LBrace "{" @1741..1742
+      tail: CallExpr@1747..1773
+        callee: FieldAccessExpr@1747..1771
+          base: UpcastExpr@1747..1767
+            base: PathExpr@1747..1748
+              head: Name@1747..1748
+                token: Word "b" @1747..1748
+            dot: Dot "." @1748..1749
+            upcast_kw: Upcast "upcast" @1749..1755
+            args: GenericArgs@1755..1767
+              l: Less "<" @1755..1756
+              args: PathType@1756..1766
+                head: Name@1756..1761
+                  token: Word "Boxed" @1756..1761
+                args: TypeArgs@1761..1766
+                  l: Less "<" @1761..1762
+                  args: PathType@1762..1765
+                    head: Name@1762..1765
+                      token: Word "int" @1762..1765
+                  r: Greater ">" @1765..1766
+              r: Greater ">" @1766..1767
+          dot: Dot "." @1767..1768
+          name: Name@1768..1771
+            token: Word "get" @1768..1771
+        args: ArgList@1771..1773
+          l: LParen "(" @1771..1772
+          r: RParen ")" @1772..1773
+      r: RBrace "}" @1774..1775
+  items: FunctionDef@1807..1879
+    kw: Function "function" @1807..1815
+    name: Name@1816..1829
+      token: Word "computed_base" @1816..1829
+    params: ParamList@1829..1831
+      l: LParen "(" @1829..1830
+      r: RParen ")" @1830..1831
+    ret: ReturnType@1832..1841
+      arrow: Arrow "->" @1832..1834
+      ty: PathType@1835..1841
+        head: Name@1835..1841
+          token: Word "string" @1835..1841
+    body: Block@1842..1879
+      l: LBrace "{" @1842..1843
+      tail: CallExpr@1848..1877
+        callee: FieldAccessExpr@1848..1875
+          base: UpcastExpr@1848..1869
+            base: CallExpr@1848..1854
+              callee: PathExpr@1848..1852
+                head: Name@1848..1852
+                  token: Word "make" @1848..1852
+              args: ArgList@1852..1854
+                l: LParen "(" @1852..1853
+                r: RParen ")" @1853..1854
+            dot: Dot "." @1854..1855
+            upcast_kw: Upcast "upcast" @1855..1861
+            args: GenericArgs@1861..1869
+              l: Less "<" @1861..1862
+              args: PathType@1862..1868
+                head: Name@1862..1868
+                  token: Word "Titled" @1862..1868
+              r: Greater ">" @1868..1869
+          dot: Dot "." @1869..1870
+          name: Name@1870..1875
+            token: Word "label" @1870..1875
+        args: ArgList@1875..1877
+          l: LParen "(" @1875..1876
+          r: RParen ")" @1876..1877
+      r: RBrace "}" @1878..1879
+  items: FunctionDef@1952..2014
+    kw: Function "function" @1952..1960
+    name: Name@1961..1970
+      token: Word "bare_view" @1961..1970
+    params: ParamList@1970..1981
+      l: LParen "(" @1970..1971
+      params: Param@1971..1980
+        name: Name@1971..1972
+          token: Word "p" @1971..1972
+        ascription: TypeAscription@1972..1980
+          colon: Colon ":" @1972..1973
+          ty: PathType@1974..1980
+            head: Name@1974..1980
+              token: Word "Person" @1974..1980
+      r: RParen ")" @1980..1981
+    ret: ReturnType@1982..1990
+      arrow: Arrow "->" @1982..1984
+      ty: PathType@1985..1990
+        head: Name@1985..1990
+          token: Word "Named" @1985..1990
+    body: Block@1991..2014
+      l: LBrace "{" @1991..1992
+      tail: UpcastExpr@1997..2012
+        base: PathExpr@1997..1998
+          head: Name@1997..1998
+            token: Word "p" @1997..1998
+        dot: Dot "." @1998..1999
+        upcast_kw: Upcast "upcast" @1999..2005
+        args: GenericArgs@2005..2012
+          l: Less "<" @2005..2006
+          args: PathType@2006..2011
+            head: Name@2006..2011
+              token: Word "Named" @2006..2011
+          r: Greater ">" @2011..2012
+      r: RBrace "}" @2013..2014
+  items: FunctionDef@2016..2117
+    kw: Function "function" @2016..2024
+    name: Name@2025..2043
+      token: Word "before_an_operator" @2025..2043
+    params: ParamList@2043..2054
+      l: LParen "(" @2043..2044
+      params: Param@2044..2053
+        name: Name@2044..2045
+          token: Word "b" @2044..2045
+        ascription: TypeAscription@2045..2053
+          colon: Colon ":" @2045..2046
+          ty: PathType@2047..2053
+            head: Name@2047..2053
+              token: Word "IntBox" @2047..2053
+      r: RParen ")" @2053..2054
+    ret: ReturnType@2055..2062
+      arrow: Arrow "->" @2055..2057
+      ty: PathType@2058..2062
+        head: Name@2058..2062
+          token: Word "bool" @2058..2062
+    body: Block@2063..2117
+      l: LBrace "{" @2063..2064
+      tail: BinaryExpr@2069..2115
+        lhs: UpcastExpr@2069..2089
+          base: PathExpr@2069..2070
+            head: Name@2069..2070
+              token: Word "b" @2069..2070
+          dot: Dot "." @2070..2071
+          upcast_kw: Upcast "upcast" @2071..2077
+          args: GenericArgs@2077..2089
+            l: Less "<" @2077..2078
+            args: PathType@2078..2088
+              head: Name@2078..2083
+                token: Word "Boxed" @2078..2083
+              args: TypeArgs@2083..2088
+                l: Less "<" @2083..2084
+                args: PathType@2084..2087
+                  head: Name@2084..2087
+                    token: Word "int" @2084..2087
+                r: Greater ">" @2087..2088
+            r: Greater ">" @2088..2089
+        op: EqualsEquals "==" @2090..2092
+        rhs: UpcastExpr@2093..2115
+          base: PathExpr@2093..2094
+            head: Name@2093..2094
+              token: Word "b" @2093..2094
+          dot: Dot "." @2094..2095
+          upcast_kw: Upcast "upcast" @2095..2101
+          args: GenericArgs@2101..2113
+            l: Less "<" @2101..2102
+            args: PathType@2102..2112
+              head: Name@2102..2107
+                token: Word "Boxed" @2102..2107
+              args: TypeArgs@2107..2112
+                l: Less "<" @2107..2108
+                args: PathType@2108..2111
+                  head: Name@2108..2111
+                    token: Word "int" @2108..2111
+                r: Greater ">" @2111..2112
+            r: Greater ">" @2112..2113
+          call: ArgList@2113..2115
+            l: LParen "(" @2113..2114
+            r: RParen ")" @2114..2115
+      r: RBrace "}" @2116..2117
+  items: FunctionDef@2155..2236
+    kw: Function "function" @2155..2163
+    name: Name@2164..2180
+      token: Word "with_an_argument" @2164..2180
+    params: ParamList@2180..2191
+      l: LParen "(" @2180..2181
+      params: Param@2181..2190
+        name: Name@2181..2182
+          token: Word "p" @2181..2182
+        ascription: TypeAscription@2182..2190
+          colon: Colon ":" @2182..2183
+          ty: PathType@2184..2190
+            head: Name@2184..2190
+              token: Word "Person" @2184..2190
+      r: RParen ")" @2190..2191
+    ret: ReturnType@2192..2201
+      arrow: Arrow "->" @2192..2194
+      ty: PathType@2195..2201
+        head: Name@2195..2201
+          token: Word "string" @2195..2201
+    body: Block@2202..2236
+      l: LBrace "{" @2202..2203
+      tail: CallExpr@2208..2234
+        callee: FieldAccessExpr@2208..2232
+          base: UpcastExpr@2208..2226
+            base: PathExpr@2208..2209
+              head: Name@2208..2209
+                token: Word "p" @2208..2209
+            dot: Dot "." @2209..2210
+            upcast_kw: Upcast "upcast" @2210..2216
+            args: GenericArgs@2216..2223
+              l: Less "<" @2216..2217
+              args: PathType@2217..2222
+                head: Name@2217..2222
+                  token: Word "Named" @2217..2222
+              r: Greater ">" @2222..2223
+            call: ArgList@2223..2226
+              l: LParen "(" @2223..2224
+              args: Arg@2224..2225
+                value: LiteralExpr@2224..2225
+                  token: Integer "1" @2224..2225
+              r: RParen ")" @2225..2226
+          dot: Dot "." @2226..2227
+          name: Name@2227..2232
+            token: Word "label" @2227..2232
+        args: ArgList@2232..2234
+          l: LParen "(" @2232..2233
+          r: RParen ")" @2233..2234
+      r: RBrace "}" @2235..2236
+  items: FunctionDef@2238..2336
+    kw: Function "function" @2238..2246
+    name: Name@2247..2268
+      token: Word "with_a_named_argument" @2247..2268
+    params: ParamList@2268..2279
+      l: LParen "(" @2268..2269
+      params: Param@2269..2278
+        name: Name@2269..2270
+          token: Word "p" @2269..2270
+        ascription: TypeAscription@2270..2278
+          colon: Colon ":" @2270..2271
+          ty: PathType@2272..2278
+            head: Name@2272..2278
+              token: Word "Person" @2272..2278
+      r: RParen ")" @2278..2279
+    ret: ReturnType@2280..2289
+      arrow: Arrow "->" @2280..2282
+      ty: PathType@2283..2289
+        head: Name@2283..2289
+          token: Word "string" @2283..2289
+    body: Block@2290..2336
+      l: LBrace "{" @2290..2291
+      tail: CallExpr@2296..2334
+        callee: FieldAccessExpr@2296..2332
+          base: UpcastExpr@2296..2326
+            base: PathExpr@2296..2297
+              head: Name@2296..2297
+                token: Word "p" @2296..2297
+            dot: Dot "." @2297..2298
+            upcast_kw: Upcast "upcast" @2298..2304
+            args: GenericArgs@2304..2311
+              l: Less "<" @2304..2305
+              args: PathType@2305..2310
+                head: Name@2305..2310
+                  token: Word "Named" @2305..2310
+              r: Greater ">" @2310..2311
+            call: ArgList@2311..2326
+              l: LParen "(" @2311..2312
+              args: Arg@2312..2325
+                name: Name@2312..2318
+                  token: Word "strict" @2312..2318
+                eq: Equals "=" @2319..2320
+                value: LiteralExpr@2321..2325
+                  token: True "true" @2321..2325
+              r: RParen ")" @2325..2326
+          dot: Dot "." @2326..2327
+          name: Name@2327..2332
+            token: Word "label" @2327..2332
+        args: ArgList@2332..2334
+          l: LParen "(" @2332..2333
+          r: RParen ")" @2333..2334
+      r: RBrace "}" @2335..2336
+  items: FunctionDef@2364..2527
+    kw: Function "function" @2364..2372
+    name: Name@2373..2390
+      token: Word "accepted_spelling" @2373..2390
+    params: ParamList@2390..2412
+      l: LParen "(" @2390..2391
+      params: Param@2391..2400
+        name: Name@2391..2392
+          token: Word "p" @2391..2392
+        ascription: TypeAscription@2392..2400
+          colon: Colon ":" @2392..2393
+          ty: PathType@2394..2400
+            head: Name@2394..2400
+              token: Word "Person" @2394..2400
+      params: Comma "," @2400..2401
+      params: Param@2402..2411
+        name: Name@2402..2403
+          token: Word "b" @2402..2403
+        ascription: TypeAscription@2403..2411
+          colon: Colon ":" @2403..2404
+          ty: PathType@2405..2411
+            head: Name@2405..2411
+              token: Word "IntBox" @2405..2411
+      r: RParen ")" @2411..2412
+    ret: ReturnType@2413..2422
+      arrow: Arrow "->" @2413..2415
+      ty: PathType@2416..2422
+        head: Name@2416..2422
+          token: Word "string" @2416..2422
+    body: Block@2423..2527
+      l: LBrace "{" @2423..2424
+      stmts: LetStmt@2429..2465
+        introducer: Let "let" @2429..2432
+        pattern: BindingPattern@2433..2444
+          name: Name@2433..2437
+            token: Word "view" @2433..2437
+          colon: Colon ":" @2437..2438
+          pattern: TypePattern@2439..2444
+            ty: PathType@2439..2444
+              head: Name@2439..2444
+                token: Word "Named" @2439..2444
+        eq: Equals "=" @2445..2446
+        init: UpcastExpr@2447..2464
+          base: PathExpr@2447..2448
+            head: Name@2447..2448
+              token: Word "p" @2447..2448
+          dot: Dot "." @2448..2449
+          upcast_kw: Upcast "upcast" @2449..2455
+          args: GenericArgs@2455..2462
+            l: Less "<" @2455..2456
+            args: PathType@2456..2461
+              head: Name@2456..2461
+                token: Word "Named" @2456..2461
+            r: Greater ">" @2461..2462
+          call: ArgList@2462..2464
+            l: LParen "(" @2462..2463
+            r: RParen ")" @2463..2464
+        semi: Semicolon ";" @2464..2465
+      tail: BinaryExpr@2470..2525
+        lhs: BinaryExpr@2470..2511
+          lhs: CallExpr@2470..2482
+            callee: PathExpr@2470..2480
+              head: Name@2470..2474
+                token: Word "view" @2470..2474
+              dot: Dot "." @2474..2475
+              name: Name@2475..2480
+                token: Word "label" @2475..2480
+            args: ArgList@2480..2482
+              l: LParen "(" @2480..2481
+              r: RParen ")" @2481..2482
+          op: Plus "+" @2483..2484
+          rhs: CallExpr@2485..2511
+            callee: FieldAccessExpr@2485..2509
+              base: UpcastExpr@2485..2503
+                base: PathExpr@2485..2486
+                  head: Name@2485..2486
+                    token: Word "p" @2485..2486
+                dot: Dot "." @2486..2487
+                upcast_kw: Upcast "upcast" @2487..2493
+                args: GenericArgs@2493..2501
+                  l: Less "<" @2493..2494
+                  args: PathType@2494..2500
+                    head: Name@2494..2500
+                      token: Word "Titled" @2494..2500
+                  r: Greater ">" @2500..2501
+                call: ArgList@2501..2503
+                  l: LParen "(" @2501..2502
+                  r: RParen ")" @2502..2503
+              dot: Dot "." @2503..2504
+              name: Name@2504..2509
+                token: Word "label" @2504..2509
+            args: ArgList@2509..2511
+              l: LParen "(" @2509..2510
+              r: RParen ")" @2510..2511
+        op: Plus "+" @2512..2513
+        rhs: CallExpr@2514..2525
+          callee: PathExpr@2514..2522
+            head: Name@2514..2522
+              token: Word "self_key" @2514..2522
+          args: ArgList@2522..2525
+            l: LParen "(" @2522..2523
+            args: Arg@2523..2524
+              value: PathExpr@2523..2524
+                head: Name@2523..2524
+                  token: Word "b" @2523..2524
+            r: RParen ")" @2524..2525
+      r: RBrace "}" @2526..2527
+  items: FunctionDef@2529..2703
+    kw: Function "function" @2529..2537
+    name: Name@2538..2546
+      token: Word "self_key" @2538..2546
+    params: ParamList@2546..2557
+      l: LParen "(" @2546..2547
+      params: Param@2547..2556
+        name: Name@2547..2548
+          token: Word "b" @2547..2548
+        ascription: TypeAscription@2548..2556
+          colon: Colon ":" @2548..2549
+          ty: PathType@2550..2556
+            head: Name@2550..2556
+              token: Word "IntBox" @2550..2556
+      r: RParen ")" @2556..2557
+    ret: ReturnType@2558..2567
+      arrow: Arrow "->" @2558..2560
+      ty: PathType@2561..2567
+        head: Name@2561..2567
+          token: Word "string" @2561..2567
+    body: Block@2568..2703
+      l: LBrace "{" @2568..2569
+      tail: IfExpr@2574..2701
+        kw: If "if" @2574..2576
+        cond: ParenExpr@2577..2645
+          l: LParen "(" @2577..2578
+          inner: BinaryExpr@2578..2644
+            lhs: CallExpr@2578..2612
+              callee: FieldAccessExpr@2578..2610
+                base: UpcastExpr@2578..2606
+                  base: PathExpr@2578..2579
+                    head: Name@2578..2579
+                      token: Word "b" @2578..2579
+                  dot: Dot "." @2579..2580
+                  upcast_kw: Upcast "upcast" @2580..2586
+                  args: GenericArgs@2586..2604
+                    l: Less "<" @2586..2587
+                    args: PathType@2587..2603
+                      head: Name@2587..2592
+                        token: Word "Keyed" @2587..2592
+                      args: TypeArgs@2592..2603
+                        l: Less "<" @2592..2593
+                        args: AssocTypeBinding@2593..2602
+                          name: Name@2593..2596
+                            token: Word "Key" @2593..2596
+                          eq: Equals "=" @2597..2598
+                          ty: PathType@2599..2602
+                            head: Name@2599..2602
+                              token: Word "int" @2599..2602
+                        r: Greater ">" @2602..2603
+                    r: Greater ">" @2603..2604
+                  call: ArgList@2604..2606
+                    l: LParen "(" @2604..2605
+                    r: RParen ")" @2605..2606
+                dot: Dot "." @2606..2607
+                name: Name@2607..2610
+                  token: Word "key" @2607..2610
+              args: ArgList@2610..2612
+                l: LParen "(" @2610..2611
+                r: RParen ")" @2611..2612
+            op: EqualsEquals "==" @2613..2615
+            rhs: CallExpr@2616..2644
+              callee: FieldAccessExpr@2616..2642
+                base: UpcastExpr@2616..2638
+                  base: PathExpr@2616..2617
+                    head: Name@2616..2617
+                      token: Word "b" @2616..2617
+                  dot: Dot "." @2617..2618
+                  upcast_kw: Upcast "upcast" @2618..2624
+                  args: GenericArgs@2624..2636
+                    l: Less "<" @2624..2625
+                    args: PathType@2625..2635
+                      head: Name@2625..2630
+                        token: Word "Boxed" @2625..2630
+                      args: TypeArgs@2630..2635
+                        l: Less "<" @2630..2631
+                        args: PathType@2631..2634
+                          head: Name@2631..2634
+                            token: Word "int" @2631..2634
+                        r: Greater ">" @2634..2635
+                    r: Greater ">" @2635..2636
+                  call: ArgList@2636..2638
+                    l: LParen "(" @2636..2637
+                    r: RParen ")" @2637..2638
+                dot: Dot "." @2638..2639
+                name: Name@2639..2642
+                  token: Word "get" @2639..2642
+              args: ArgList@2642..2644
+                l: LParen "(" @2642..2643
+                r: RParen ")" @2643..2644
+          r: RParen ")" @2644..2645
+        then_branch: Block@2646..2668
+          l: LBrace "{" @2646..2647
+          tail: StringLit@2656..2662
+            token: String "\"same\"" @2656..2662
+          r: RBrace "}" @2667..2668
+        kw: Else "else" @2669..2673
+        body: Block@2674..2701
+          l: LBrace "{" @2674..2675
+          tail: StringLit@2684..2695
+            token: String "\"different\"" @2684..2695
+          r: RBrace "}" @2700..2701
+      r: RBrace "}" @2702..2703
+  items: ClassDef@2843..2949
+    kw: Class "class" @2843..2848
+    name: Name@2849..2853
+      token: Word "Lift" @2849..2853
+    l: LBrace "{" @2854..2855
+    members: Field@2860..2872
+      name: Name@2860..2866
+        token: Upcast "upcast" @2860..2866
+      colon: Colon ":" @2866..2867
+      ty: PathType@2868..2871
+        head: Name@2868..2871
+          token: Word "int" @2868..2871
+      sep: Comma "," @2871..2872
+    members: FunctionDef@2878..2947
+      kw: Function "function" @2878..2886
+      name: Name@2887..2892
+        token: Word "twice" @2887..2892
+      params: ParamList@2892..2898
+        l: LParen "(" @2892..2893
+        params: Param@2893..2897
+          name: Name@2893..2897
+            token: SelfValue "self" @2893..2897
+        r: RParen ")" @2897..2898
+      ret: ReturnType@2899..2905
+        arrow: Arrow "->" @2899..2901
+        ty: PathType@2902..2905
+          head: Name@2902..2905
+            token: Word "int" @2902..2905
+      body: Block@2906..2947
+        l: LBrace "{" @2906..2907
+        tail: BinaryExpr@2916..2941
+          lhs: PathExpr@2916..2927
+            head: Name@2916..2920
+              token: SelfValue "self" @2916..2920
+            dot: Dot "." @2920..2921
+            name: Name@2921..2927
+              token: Upcast "upcast" @2921..2927
+          op: Plus "+" @2928..2929
+          rhs: PathExpr@2930..2941
+            head: Name@2930..2934
+              token: SelfValue "self" @2930..2934
+            dot: Dot "." @2934..2935
+            name: Name@2935..2941
+              token: Upcast "upcast" @2935..2941
+        r: RBrace "}" @2946..2947
+    r: RBrace "}" @2948..2949
+  items: ClassDef@2951..3018
+    kw: Class "class" @2951..2956
+    name: Name@2957..2963
+      token: Word "Lifter" @2957..2963
+    l: LBrace "{" @2964..2965
+    members: FunctionDef@2970..3016
+      kw: Function "function" @2970..2978
+      name: Name@2979..2985
+        token: Upcast "upcast" @2979..2985
+      params: ParamList@2985..2991
+        l: LParen "(" @2985..2986
+        params: Param@2986..2990
+          name: Name@2986..2990
+            token: SelfValue "self" @2986..2990
+        r: RParen ")" @2990..2991
+      ret: ReturnType@2992..2998
+        arrow: Arrow "->" @2992..2994
+        ty: PathType@2995..2998
+          head: Name@2995..2998
+            token: Word "int" @2995..2998
+      body: Block@2999..3016
+        l: LBrace "{" @2999..3000
+        tail: LiteralExpr@3009..3010
+          token: Integer "1" @3009..3010
+        r: RBrace "}" @3015..3016
+    r: RBrace "}" @3017..3018
+  items: FunctionDef@3020..3148
+    kw: Function "function" @3020..3028
+    name: Name@3029..3042
+      token: Word "plain_members" @3029..3042
+    params: ParamList@3042..3062
+      l: LParen "(" @3042..3043
+      params: Param@3043..3050
+        name: Name@3043..3044
+          token: Word "l" @3043..3044
+        ascription: TypeAscription@3044..3050
+          colon: Colon ":" @3044..3045
+          ty: PathType@3046..3050
+            head: Name@3046..3050
+              token: Word "Lift" @3046..3050
+      params: Comma "," @3050..3051
+      params: Param@3052..3061
+        name: Name@3052..3053
+          token: Word "r" @3052..3053
+        ascription: TypeAscription@3053..3061
+          colon: Colon ":" @3053..3054
+          ty: PathType@3055..3061
+            head: Name@3055..3061
+              token: Word "Lifter" @3055..3061
+      r: RParen ")" @3061..3062
+    ret: ReturnType@3063..3070
+      arrow: Arrow "->" @3063..3065
+      ty: PathType@3066..3070
+        head: Name@3066..3070
+          token: Word "bool" @3066..3070
+    body: Block@3071..3148
+      l: LBrace "{" @3071..3072
+      tail: BinaryExpr@3077..3146
+        lhs: BinaryExpr@3077..3121
+          lhs: BinaryExpr@3077..3110
+            lhs: BinaryExpr@3077..3097
+              lhs: PathExpr@3077..3085
+                head: Name@3077..3078
+                  token: Word "l" @3077..3078
+                dot: Dot "." @3078..3079
+                name: Name@3079..3085
+                  token: Upcast "upcast" @3079..3085
+              op: Plus "+" @3086..3087
+              rhs: CallExpr@3088..3097
+                callee: PathExpr@3088..3095
+                  head: Name@3088..3089
+                    token: Word "l" @3088..3089
+                  dot: Dot "." @3089..3090
+                  name: Name@3090..3095
+                    token: Word "twice" @3090..3095
+                args: ArgList@3095..3097
+                  l: LParen "(" @3095..3096
+                  r: RParen ")" @3096..3097
+            op: Plus "+" @3098..3099
+            rhs: CallExpr@3100..3110
+              callee: PathExpr@3100..3108
+                head: Name@3100..3101
+                  token: Word "r" @3100..3101
+                dot: Dot "." @3101..3102
+                name: Name@3102..3108
+                  token: Upcast "upcast" @3102..3108
+              args: ArgList@3108..3110
+                l: LParen "(" @3108..3109
+                r: RParen ")" @3109..3110
+          op: Less "<" @3111..3112
+          rhs: PathExpr@3113..3121
+            head: Name@3113..3114
+              token: Word "l" @3113..3114
+            dot: Dot "." @3114..3115
+            name: Name@3115..3121
+              token: Upcast "upcast" @3115..3121
+        op: AndAnd "&&" @3122..3124
+        rhs: BinaryExpr@3125..3146
+          lhs: PathExpr@3125..3133
+            head: Name@3125..3126
+              token: Word "l" @3125..3126
+            dot: Dot "." @3126..3127
+            name: Name@3127..3133
+              token: Upcast "upcast" @3127..3133
+          op: Less "<" @3134..3135
+          rhs: CallExpr@3136..3146
+            callee: PathExpr@3136..3144
+              head: Name@3136..3137
+                token: Word "r" @3136..3137
+              dot: Dot "." @3137..3138
+              name: Name@3138..3144
+                token: Upcast "upcast" @3138..3144
+            args: ArgList@3144..3146
+              l: LParen "(" @3144..3145
+              r: RParen ")" @3145..3146
+      r: RBrace "}" @3147..3148
+  items: ClassDef@3331..3529
+    kw: Class "class" @3331..3336
+    name: Name@3337..3343
+      token: Word "Shadow" @3337..3343
+    l: LBrace "{" @3344..3345
+    members: FunctionDef@3350..3411
+      kw: Function "function" @3350..3358
+      name: Name@3359..3365
+        token: Upcast "upcast" @3359..3365
+      generics: GenericParamList@3365..3368
+        l: Less "<" @3365..3366
+        params: GenericParam@3366..3367
+          name: Name@3366..3367
+            token: Word "T" @3366..3367
+        r: Greater ">" @3367..3368
+      params: ParamList@3368..3384
+        l: LParen "(" @3368..3369
+        params: Param@3369..3373
+          name: Name@3369..3373
+            token: SelfValue "self" @3369..3373
+        params: Comma "," @3373..3374
+        params: Param@3375..3383
+          name: Name@3375..3380
+            token: Word "value" @3375..3380
+          ascription: TypeAscription@3380..3383
+            colon: Colon ":" @3380..3381
+            ty: PathType@3382..3383
+              head: Name@3382..3383
+                token: Word "T" @3382..3383
+        r: RParen ")" @3383..3384
+      ret: ReturnType@3385..3389
+        arrow: Arrow "->" @3385..3387
+        ty: PathType@3388..3389
+          head: Name@3388..3389
+            token: Word "T" @3388..3389
+      body: Block@3390..3411
+        l: LBrace "{" @3390..3391
+        tail: PathExpr@3400..3405
+          head: Name@3400..3405
+            token: Word "value" @3400..3405
+        r: RBrace "}" @3410..3411
+    members: ImplementsBlock@3417..3527
+      kw: Implements "implements" @3417..3427
+      target: PathType@3428..3434
+        head: Name@3428..3434
+          token: Word "Titled" @3428..3434
+      l: LBrace "{" @3435..3436
+      members: FunctionDef@3445..3521
+        kw: Function "function" @3445..3453
+        name: Name@3454..3459
+          token: Word "label" @3454..3459
+        params: ParamList@3459..3465
+          l: LParen "(" @3459..3460
+          params: Param@3460..3464
+            name: Name@3460..3464
+              token: SelfValue "self" @3460..3464
+          r: RParen ")" @3464..3465
+        ret: ReturnType@3466..3475
+          arrow: Arrow "->" @3466..3468
+          ty: PathType@3469..3475
+            head: Name@3469..3475
+              token: Word "string" @3469..3475
+        throws: ThrowsClause@3476..3488
+          kw: Throws "throws" @3476..3482
+          ty: PathType@3483..3488
+            head: Name@3483..3488
+              token: Word "never" @3483..3488
+        body: Block@3489..3521
+          l: LBrace "{" @3489..3490
+          tail: StringLit@3503..3511
+            token: String "\"shadow\"" @3503..3511
+          r: RBrace "}" @3520..3521
+      r: RBrace "}" @3526..3527
+    r: RBrace "}" @3528..3529
+  items: FunctionDef@3531..3673
+    kw: Function "function" @3531..3539
+    name: Name@3540..3549
+      token: Word "view_wins" @3540..3549
+    params: ParamList@3549..3560
+      l: LParen "(" @3549..3550
+      params: Param@3550..3559
+        name: Name@3550..3551
+          token: Word "s" @3550..3551
+        ascription: TypeAscription@3551..3559
+          colon: Colon ":" @3551..3552
+          ty: PathType@3553..3559
+            head: Name@3553..3559
+              token: Word "Shadow" @3553..3559
+      r: RParen ")" @3559..3560
+    ret: ReturnType@3561..3570
+      arrow: Arrow "->" @3561..3563
+      ty: PathType@3564..3570
+        head: Name@3564..3570
+          token: Word "string" @3564..3570
+    body: Block@3571..3673
+      l: LBrace "{" @3571..3572
+      stmts: LetStmt@3577..3617
+        introducer: Let "let" @3577..3580
+        pattern: BindingPattern@3581..3595
+          name: Name@3581..3587
+            token: Word "viewed" @3581..3587
+          colon: Colon ":" @3587..3588
+          pattern: TypePattern@3589..3595
+            ty: PathType@3589..3595
+              head: Name@3589..3595
+                token: Word "Titled" @3589..3595
+        eq: Equals "=" @3596..3597
+        init: UpcastExpr@3598..3616
+          base: PathExpr@3598..3599
+            head: Name@3598..3599
+              token: Word "s" @3598..3599
+          dot: Dot "." @3599..3600
+          upcast_kw: Upcast "upcast" @3600..3606
+          args: GenericArgs@3606..3614
+            l: Less "<" @3606..3607
+            args: PathType@3607..3613
+              head: Name@3607..3613
+                token: Word "Titled" @3607..3613
+            r: Greater ">" @3613..3614
+          call: ArgList@3614..3616
+            l: LParen "(" @3614..3615
+            r: RParen ")" @3615..3616
+        semi: Semicolon ";" @3616..3617
+      stmts: LetStmt@3622..3652
+        introducer: Let "let" @3622..3625
+        pattern: BindingPattern@3626..3637
+          name: Name@3626..3632
+            token: Word "called" @3626..3632
+          colon: Colon ":" @3632..3633
+          pattern: TypePattern@3634..3637
+            ty: PathType@3634..3637
+              head: Name@3634..3637
+                token: Word "int" @3634..3637
+        eq: Equals "=" @3638..3639
+        init: CallExpr@3640..3651
+          callee: PathExpr@3640..3648
+            head: Name@3640..3641
+              token: Word "s" @3640..3641
+            dot: Dot "." @3641..3642
+            name: Name@3642..3648
+              token: Upcast "upcast" @3642..3648
+          args: ArgList@3648..3651
+            l: LParen "(" @3648..3649
+            args: Arg@3649..3650
+              value: LiteralExpr@3649..3650
+                token: Integer "1" @3649..3650
+            r: RParen ")" @3650..3651
+        semi: Semicolon ";" @3651..3652
+      tail: CallExpr@3657..3671
+        callee: PathExpr@3657..3669
+          head: Name@3657..3663
+            token: Word "viewed" @3657..3663
+          dot: Dot "." @3663..3664
+          name: Name@3664..3669
+            token: Word "label" @3664..3669
+        args: ArgList@3669..3671
+          l: LParen "(" @3669..3670
+          r: RParen ")" @3670..3671
+      r: RBrace "}" @3672..3673
+error @1063..1076: `.upcast<…>` is written with call parentheses; write `.upcast<Named>()` instead
+error @1524..1537: `.upcast<…>` is written with call parentheses; write `.upcast<Named>()` instead
+error @1600..1613: `.upcast<…>` is written with call parentheses; write `.upcast<Named>()` instead
+error @1749..1767: `.upcast<…>` is written with call parentheses; write `.upcast<Boxed<int>>()` instead
+error @1855..1869: `.upcast<…>` is written with call parentheses; write `.upcast<Titled>()` instead
+error @1999..2012: `.upcast<…>` is written with call parentheses; write `.upcast<Named>()` instead
+error @2071..2089: `.upcast<…>` is written with call parentheses; write `.upcast<Boxed<int>>()` instead
+error @2223..2226: `.upcast<Named>()` takes no arguments; it views the value at an interface and is not a method call
+error @2311..2326: `.upcast<Named>()` takes no arguments; it views the value at an interface and is not a method call

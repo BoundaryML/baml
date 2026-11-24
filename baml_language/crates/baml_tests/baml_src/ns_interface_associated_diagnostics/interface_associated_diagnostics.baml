@@ -134,7 +134,7 @@ test "as_upcast_enforces_associated_type_binding" {
                 }
 
                 function bad(it: IntIterator) -> string? {
-                    return it.upcast<Iterator<Item = string>>.next()
+                    return it.upcast<Iterator<Item = string>>().next()
                 }
             `,
         },
@@ -194,7 +194,7 @@ test "selected_projection_rejects_mismatched_associated_type_binding" {
                 }
 
                 function bad(doc: Document) -> (Document as Codec<TextFormat, Output = int>).Output {
-                    return doc.upcast<Codec<TextFormat, Output = string>>.decode("")
+                    return doc.upcast<Codec<TextFormat, Output = string>>().decode("")
                 }
             `,
         },
@@ -397,7 +397,7 @@ test "selected_union_associated_output_rejects_incompatible_return" {
                 }
 
                 function bad(doc: Document) -> bool {
-                    return doc.upcast<Codec<TextFormat, Output = string | int>>.decode("")
+                    return doc.upcast<Codec<TextFormat, Output = string | int>>().decode("")
                 }
             `,
         },
@@ -1069,7 +1069,7 @@ test "ambiguous_unqualified_projection_across_generic_instantiations_errors" {
                 }
 
                 function bad(doc: Document) -> Document.Output {
-                    return doc.upcast<Codec<TextFormat, Output = string>>.decode("")
+                    return doc.upcast<Codec<TextFormat, Output = string>>().decode("")
                 }
             `,
         },

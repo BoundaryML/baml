@@ -6,7 +6,7 @@ projection — Explains interface value projections and associated type projecti
 
 Syntax:
   function label(user: User) -> string {
-    return user.upcast<Named>.name
+    return user.upcast<Named>().name
   }
   
   function head<S extends Stream>(stream: S) -> (S as Iterator).Item? {
@@ -15,4 +15,4 @@ Syntax:
   
   type Parsed = (IntParser as Parser).Output
 
-`value.upcast<Interface>` selects an interface view for member access. `T.Assoc`, `Self.Assoc`, and `(T as Interface).Assoc` project associated types in type positions; use the qualified `(T as Interface).Assoc` form when multiple required interfaces define the same associated type name. `Type.upcast<Interface>` is not type syntax.
+`value.upcast<Interface>()` selects an interface view for member access. `T.Assoc`, `Self.Assoc`, and `(T as Interface).Assoc` project associated types in type positions; use the qualified `(T as Interface).Assoc` form when multiple required interfaces define the same associated type name. `Type.upcast<Interface>()` is not type syntax.

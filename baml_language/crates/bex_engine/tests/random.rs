@@ -125,7 +125,7 @@ function draw(rng: baml.random.Rng) -> int {
 }
 function main(seed: uint8array) -> bool {
     let direct = baml.random.Xoshiro256PlusPlus.new(seed = seed).random_int();
-    let via_iface = draw(baml.random.Xoshiro256PlusPlus.new(seed = seed).upcast<baml.random.Rng>);
+    let via_iface = draw(baml.random.Xoshiro256PlusPlus.new(seed = seed).upcast<baml.random.Rng>());
     direct == via_iface
 }
 "#;
@@ -151,7 +151,7 @@ function draw(rng: baml.random.Rng) -> int {
     rng.random(24).length()
 }
 function main() -> int {
-    draw(baml.random.SystemRandom.get().upcast<baml.random.Rng>)
+    draw(baml.random.SystemRandom.get().upcast<baml.random.Rng>())
 }
 "#;
     assert_engine_executes(EngineProgram {

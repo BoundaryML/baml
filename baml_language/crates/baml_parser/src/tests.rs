@@ -511,29 +511,100 @@ fn tree_index_links_parents_owners_and_covering_nodes() {
     assert!(descendants(tree, sum).count() >= 3);
 }
 
-/// `value.upcast<Interface>` is the interface view. The removed
-/// `value.as<Interface>` spelling is E0098 once per use, at its `as`, naming
-/// the replacement with the written type arguments; a base that is a path
-/// does not absorb `.as` as a segment first, and the view is still a node.
-/// Without a `<`, `upcast` and `as` are plain member names.
+/// `value.upcast<Interface>()` is the interface view: written like a call,
+/// its parentheses part of the expression. `upcast` is the operator only
+/// before a type argument list that closes; anywhere else it is a member
+/// name, as `as` is.
 #[test]
-fn the_removed_as_spelling_of_upcast_names_its_replacement() {
-    use crate::ParseError;
-
+fn upcast_is_written_with_call_parentheses() {
     let accepted = parse(
-        "function f(p: P, q: Q) -> int {\n  p.upcast<Named>.name;\n  self.upcast<I>.m();\n  g().upcast<Boxed<int>>;\n  q.upcast + q.upcast() + q.as + q.as()\n}\n",
+        "function f(p: P, q: Q, y: int) -> int {\n  p.upcast<Named>().name;\n  self.upcast<I>().m();\n  g().upcast<Boxed<int>>();\n  q.upcast + q.upcast() + q.as + q.as();\n  q.upcast < y\n}\n",
     );
-    assert_eq!(accepted.errors, [], "the new spelling parses clean");
+    assert_eq!(accepted.errors, [], "the accepted spelling parses clean");
     let tree = accepted.tree.debug_tree();
     assert_eq!(tree.matches("UpcastExpr").count(), 3, "{tree}");
+    // `q.upcast()` and `q.as()` are calls of members; the three views own
+    // their parentheses, so no call wraps them.
+    assert_eq!(tree.matches("CallExpr").count(), 4, "{tree}");
+}
 
-    for (source, replacement) in [
-        ("p.as<Named>.name", "`.upcast<Named>`"),
-        ("self.as<I>.m()", "`.upcast<I>`"),
-        ("a.b.as<Boxed<int>>", "`.upcast<Boxed<int>>`"),
+/// The spellings of the interface view that are rejected. Each reports
+/// exactly once and stays an `UpcastExpr`, so its base and target are still
+/// checked and nothing cascades:
+///
+/// - `value.upcast<T>` without the parentheses is told to add them;
+/// - arguments between the parentheses are an error;
+/// - the removed `value.as<T>`, with or without parentheses, is E0098 at its
+///   `as`, and a base that is a path does not absorb `.as` as a segment.
+///
+/// Every message spells the replacement with the written type arguments.
+#[test]
+fn rejected_spellings_of_upcast_name_the_accepted_one() {
+    use crate::ParseError;
+
+    for (source, pointed_at, said) in [
+        // No parentheses.
         (
-            "g().as<Codec<Text, Output = string>>.decode(x)",
-            "`.upcast<Codec<Text, Output = string>>`",
+            "p.upcast<Named>.name",
+            "upcast<Named>",
+            "write `.upcast<Named>()` instead",
+        ),
+        (
+            "p.upcast<Named>",
+            "upcast<Named>",
+            "write `.upcast<Named>()` instead",
+        ),
+        (
+            "g().upcast<Boxed<int>> == p",
+            "upcast<Boxed<int>>",
+            "write `.upcast<Boxed<int>>()` instead",
+        ),
+        // Parentheses never attach across a line break, as for a call.
+        (
+            "p.upcast<Named>\n  (1)",
+            "upcast<Named>",
+            "write `.upcast<Named>()` instead",
+        ),
+        // Arguments.
+        (
+            "p.upcast<Named>(1).name",
+            "(1)",
+            "`.upcast<Named>()` takes no arguments",
+        ),
+        (
+            "p.upcast<Named>(strict = true)",
+            "(strict = true)",
+            "`.upcast<Named>()` takes no arguments",
+        ),
+    ] {
+        let text = format!("function f() -> int {{\n  {source}\n}}\n");
+        let rejected = parse(&text);
+        let [ParseError::InvalidSyntax { message, range }] = rejected.errors.as_slice() else {
+            panic!(
+                "expected one syntax error for `{source}`, got {:#?}",
+                rejected.errors
+            );
+        };
+        assert_eq!(&text[*range], pointed_at, "`{source}`");
+        assert!(message.contains(said), "`{source}`: {message}");
+        assert_eq!(
+            rejected.tree.debug_tree().matches("UpcastExpr").count(),
+            1,
+            "`{source}`"
+        );
+    }
+
+    for (source, said) in [
+        ("p.as<Named>.name", "write `.upcast<Named>()` instead"),
+        ("p.as<Named>().name", "write `.upcast<Named>()` instead"),
+        ("self.as<I>.m()", "write `.upcast<I>()` instead"),
+        (
+            "a.b.as<Boxed<int>>",
+            "write `.upcast<Boxed<int>>()` instead",
+        ),
+        (
+            "g().as<Codec<Text, Output = string>>().decode(x)",
+            "write `.upcast<Codec<Text, Output = string>>()` instead",
         ),
     ] {
         let text = format!("function f() -> int {{\n  {source}\n}}\n");
@@ -544,15 +615,8 @@ fn the_removed_as_spelling_of_upcast_names_its_replacement() {
                 removed.errors
             );
         };
-        assert_eq!(
-            &text[*range], "as",
-            "the report points at `as` in `{source}`"
-        );
-        assert!(
-            message.contains(&format!("write {replacement} instead")),
-            "`{source}`: {message}"
-        );
-        // The view stays a node, so its base and target are still checked.
+        assert_eq!(&text[*range], "as", "`{source}`");
+        assert!(message.contains(said), "`{source}`: {message}");
         assert_eq!(
             removed.tree.debug_tree().matches("UpcastExpr").count(),
             1,

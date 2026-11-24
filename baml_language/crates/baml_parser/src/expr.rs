@@ -229,17 +229,76 @@ fn operand(p: &mut Parser<'_, '_>, r: Restrictions) -> Result<AnyExpr, Missing> 
     }
 }
 
-/// E0098 for `.as<T>`, the removed spelling of the `.upcast<T>` interface
-/// view, at its `as`: the replacement is spelled with the type arguments as
-/// written, `args` being their tokens.
-fn removed_as_upcast(p: &mut Parser<'_, '_>, as_kw: Token![UpcastKw], args: Mark) {
-    let args = p.cur.text_of_range(p.cur.range_from(args)).trim();
-    // Arguments that span lines would break the one-line message.
-    let args = if args.contains('\n') { "<…>" } else { args };
-    p.removed(
-        format!("`.as<…>` was renamed to `.upcast<…>`; write `.upcast{args}` instead"),
-        p.cur.token_range(as_kw.idx),
-    );
+/// `.upcast<T>()` after its base, the lookahead having seen `. upcast < … >`
+/// or the removed `. as < … >`. The parentheses belong to the expression and
+/// hold nothing.
+///
+/// Each rejected spelling is reported once and kept as the same node, so the
+/// base and the target are still checked and nothing cascades: `.as<T>` and
+/// `.as<T>()` are E0098 at the `as`; `.upcast<T>` is told to add `()`;
+/// arguments between the parentheses are an error of their own.
+fn upcast_expr(
+    p: &mut Parser<'_, '_>,
+    mark: Mark,
+    base: AnyExpr,
+    dot: Token!["."],
+    upcast_kw: Token![UpcastKw],
+) -> Id<UpcastExpr> {
+    let args_mark = p.cur.mark();
+    let args = match p.cur.eat::<punct::Less>() {
+        Some(l) => Ok(GenericArgs::parse(p, l)),
+        None => Err(p.missing("'<'")),
+    };
+    let written = p.cur.text_of_range(p.cur.range_from(args_mark)).trim();
+    // Arguments that span lines would break the one-line messages.
+    let written = if written.contains('\n') {
+        "<…>"
+    } else {
+        written
+    };
+    let operator = p.cur.text_range(p.cur.range_from(Mark::of(upcast_kw)));
+    // Like a call's, the parentheses never attach across a line break.
+    let call = if p.cur.at(TokenKind::LParen) && !p.cur.has_newline_ahead() {
+        p.cur.eat::<punct::LParen>().map(|l| {
+            let call = ArgList::parse(p, l);
+            if !p.out.get(call).args.is_empty() {
+                let range = p.cur.text_range(p.cur.range_from(Mark::of(l)));
+                p.error(
+                    format!(
+                        "`.upcast{written}()` takes no arguments; it views the value at an \
+                         interface and is not a method call"
+                    ),
+                    range,
+                );
+            }
+            call
+        })
+    } else {
+        None
+    };
+    if p.cur.tokens().kind(upcast_kw.idx) == TokenKind::As {
+        p.removed(
+            format!("`.as<…>` was renamed to `.upcast<…>()`; write `.upcast{written}()` instead"),
+            p.cur.token_range(upcast_kw.idx),
+        );
+    } else if call.is_none() {
+        p.error(
+            format!(
+                "`.upcast<…>` is written with call parentheses; write `.upcast{written}()` instead"
+            ),
+            operator,
+        );
+    }
+    p.alloc(
+        mark,
+        UpcastExpr {
+            base,
+            dot,
+            upcast_kw,
+            args,
+            call,
+        },
+    )
 }
 
 /// The postfix and infix forms after `lhs`, each binding at least `min_bp`.
@@ -366,25 +425,7 @@ fn infix(p: &mut Parser<'_, '_>, mut lhs: AnyExpr, min_bp: u8, r: Restrictions) 
             && let Some(dot) = p.cur.eat::<punct::Dot>()
             && let Some(upcast_kw) = p.cur.eat_in::<UpcastKw>()
         {
-            let args_mark = p.cur.mark();
-            let args = match p.cur.eat::<punct::Less>() {
-                Some(l) => Ok(GenericArgs::parse(p, l)),
-                None => Err(p.missing("'<'")),
-            };
-            // The removed spelling is reported and kept: the view stays a
-            // node, so its base and target are still checked.
-            if p.cur.tokens().kind(upcast_kw.idx) == TokenKind::As {
-                removed_as_upcast(p, upcast_kw, args_mark);
-            }
-            lhs = AnyExpr::Upcast(p.alloc(
-                mark,
-                UpcastExpr {
-                    base: lhs,
-                    dot,
-                    upcast_kw,
-                    args,
-                },
-            ));
+            lhs = AnyExpr::Upcast(upcast_expr(p, mark, lhs, dot, upcast_kw));
         } else if let Some(dot) = p.cur.eat_in::<MemberDot>() {
             let expected = if p.cur.tokens().kind(dot.idx) == TokenKind::Dollar {
                 "field name after `'$'`"

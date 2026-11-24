@@ -571,7 +571,7 @@ test "out_of_body_method_callable_on_instance" {
                 }
                 function run_describe() -> string {
                     let c = Car { make: "Toyota" }
-                    return c.upcast<Describable>.describe()
+                    return c.upcast<Describable>().describe()
                 }
             `,
         },
@@ -885,7 +885,7 @@ test "namespaced_class_method_body_resolves_root_qualified_interface_type" {
                     }
                     implements root.b.Greeter {
                         function greet(self) -> string {
-                            return "Hi, I am " + self.upcast<root.a.Named>.name()
+                            return "Hi, I am " + self.upcast<root.a.Named>().name()
                         }
                     }
                 }
@@ -947,7 +947,7 @@ test "ambiguous_method_namespace_qualified_fix_compiles" {
                 }
                 function main() -> string {
                     let p = Parrot {}
-                    return p.upcast<root.zoo.Animal>.speak()
+                    return p.upcast<root.zoo.Animal>().speak()
                 }
             `,
             "ns_zoo/zoo.baml": `interface Animal { function speak(self) -> string throws never }`,

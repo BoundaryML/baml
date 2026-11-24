@@ -314,12 +314,15 @@ pub(crate) fn looks_like_qualified_projection(cur: Cursor<'_>) -> bool {
             .is_some_and(|k| crate::types::MEMBER_NAME.contains(k))
 }
 
-/// `. upcast <` at the cursor: the `.upcast<T>` interface view. `. as <`, its
-/// removed spelling, has the same shape so that it is reported as one.
+/// `. upcast < … >` at the cursor: the `.upcast<T>()` interface view, with or
+/// without its parentheses. `. as < … >`, its removed spelling, has the same
+/// shape so that it is reported as one. The `<` must open a type argument
+/// list that closes: `x.upcast < y` compares a member named `upcast`.
 pub(crate) fn looks_like_upcast(cur: Cursor<'_>) -> bool {
     cur.at(TokenKind::Dot)
         && (cur.nth_is(1, TokenKind::Upcast) || cur.nth_is(1, TokenKind::As))
         && cur.nth_is(2, TokenKind::Less)
+        && generic_args_close(cur, cur.pos() + 2).is_some()
 }
 
 /// Whether the `{` at the cursor opens a map literal rather than a block: a

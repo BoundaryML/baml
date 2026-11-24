@@ -626,7 +626,7 @@ test "mixed_generic_args_and_associated_type_bindings_compile" {
                 }
 
                 function decode_as(doc: Document) -> (Document as Codec<TextFormat, Output = string>).Output {
-                    return doc.upcast<Codec<TextFormat, Output = string>>.decode("")
+                    return doc.upcast<Codec<TextFormat, Output = string>>().decode("")
                 }
             `,
         },
@@ -691,7 +691,7 @@ test "associated_type_bindings_allow_trailing_commas_in_type_args" {
                 type Mixed = Codec<TextFormat, Output = string,>
 
                 function decode(doc: Document) -> string {
-                    return doc.upcast<Codec<TextFormat, Output = string,>>.decode("")
+                    return doc.upcast<Codec<TextFormat, Output = string,>>().decode("")
                 }
             `,
         },
@@ -1074,12 +1074,12 @@ test "qualified_projections_disambiguate_union_outputs" {
                     (Document as Codec<TextFormat>).Output | (Document as Codec<CodeFormat>).Output
 
                 function decode_text(doc: Document) -> (Document as Codec<TextFormat>).Output {
-                    return doc.upcast<Codec<TextFormat, Output = string | null>>.decode("")
+                    return doc.upcast<Codec<TextFormat, Output = string | null>>().decode("")
                 }
 
                 function decode_any(doc: Document) ->
                     (Document as Codec<TextFormat>).Output | (Document as Codec<CodeFormat>).Output {
-                    return doc.upcast<Codec<CodeFormat, Output = int | bool>>.decode("")
+                    return doc.upcast<Codec<CodeFormat, Output = int | bool>>().decode("")
                 }
             `,
         },
@@ -1124,9 +1124,9 @@ test "aliased_qualified_projection_unions_resolve_like_inline_unions" {
 
                 function decode_union(doc: Document, text: bool) -> DecodeOutput {
                     if text {
-                        return doc.upcast<Codec<TextFormat, Output = string | int>>.decode("")
+                        return doc.upcast<Codec<TextFormat, Output = string | int>>().decode("")
                     }
-                    return doc.upcast<Codec<CodeFormat, Output = int | bool>>.decode("")
+                    return doc.upcast<Codec<CodeFormat, Output = int | bool>>().decode("")
                 }
             `,
         },
@@ -1415,7 +1415,7 @@ test "qualified_projection_works_in_nested_types" {
                 }
 
                 function decode_many(doc: Document) -> (Document as Codec<TextFormat>).Output[] {
-                    return [doc.upcast<Codec<TextFormat, Output = string>>.decode("")]
+                    return [doc.upcast<Codec<TextFormat, Output = string>>().decode("")]
                 }
             `,
         },
@@ -1447,7 +1447,7 @@ test "qualified_projection_works_in_local_type_annotations" {
                 }
 
                 function decode(doc: Document) -> string {
-                    let output: (Document as Codec<TextFormat>).Output = doc.upcast<Codec<TextFormat, Output = string>>.decode("")
+                    let output: (Document as Codec<TextFormat>).Output = doc.upcast<Codec<TextFormat, Output = string>>().decode("")
                     return output
                 }
             `,

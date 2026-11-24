@@ -23,4 +23,4 @@ Syntax:
   // Associated type projection in a type position.
   type UserId = (User as HasId).Id
 
-Use `(Type as Interface).Assoc` for qualified associated type projection in a type position. Inside an `implements` block, `interface_field as class_field` maps an interface field to a differently named class field. To view a value at one of its interfaces, write `value.upcast<Interface>` (see `baml describe upcast`); the earlier `as` spelling of that operator was removed and is a compile error (E0098).
+Use `(Type as Interface).Assoc` for qualified associated type projection in a type position. Inside an `implements` block, `interface_field as class_field` maps an interface field to a differently named class field. To view a value at one of its interfaces, write `value.upcast<Interface>()` (see `baml describe upcast`); the earlier `as` spelling of that operator was removed and is a compile error (E0098).

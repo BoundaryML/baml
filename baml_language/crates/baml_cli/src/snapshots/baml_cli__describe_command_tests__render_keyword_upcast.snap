@@ -18,7 +18,7 @@ Syntax:
   }
   
   function label(user: User) -> string {
-    return user.upcast<HasId>.id
+    return user.upcast<HasId>().id
   }
 
-Use `value.upcast<Interface>` when a class implements multiple interfaces with the same member name or when you need the interface view. It takes one type argument and no call parentheses, as in `obj.upcast<I>.m()` and `self.upcast<I>.field`. The target must be an interface the value's type implements; the expression selects a contract and does not convert the value. Do not write `Type.upcast<Interface>` as a type; use `(Type as Interface).Assoc` for qualified associated type projection in a type position.
+Use `value.upcast<Interface>()` when a class implements multiple interfaces with the same member name or when you need the interface view. It is written like a call, with one type argument and empty parentheses, as in `obj.upcast<I>().m()` and `self.upcast<I>().field`; it takes no arguments, and `value.upcast<Interface>` without the parentheses is a compile error. The target must be an interface the value's type implements; the expression selects a contract and does not convert the value. Do not write `Type.upcast<Interface>()` as a type; use `(Type as Interface).Assoc` for qualified associated type projection in a type position.

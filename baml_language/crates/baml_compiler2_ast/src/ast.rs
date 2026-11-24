@@ -527,7 +527,7 @@ impl ExprBody {
             }
             Expr::Upcast { base, target } => {
                 format!(
-                    "{}.upcast<{target}>",
+                    "{}.upcast<{target}>()",
                     self.display_expr_inner(*base, depth + 1)
                 )
             }
@@ -1054,7 +1054,7 @@ pub enum Expr {
         base: ExprId,
         member: Name,
     },
-    /// Explicit static projection/upcast: `expr.upcast<T>`.
+    /// Explicit static projection/upcast: `expr.upcast<T>()`.
     Upcast {
         base: ExprId,
         target: TypeExpr,

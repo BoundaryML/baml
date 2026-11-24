@@ -38,6 +38,8 @@
 17:18-19     "<"                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml punctuation.definition.type-arguments.begin.baml
 17:19-24     "Named"            source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml meta.type-reference.baml entity.name.type.baml
 17:24-25     ">"                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.type-arguments.baml punctuation.definition.type-arguments.end.baml
-17:25-26     "."                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.field-access.baml punctuation.accessor.baml
-17:26-30     "name"             source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.field-access.baml variable.other.readwrite.baml
+17:25-26     "("                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.function-call.arguments.baml punctuation.definition.arguments.begin.baml
+17:26-27     ")"                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.expression.upcast.baml meta.function-call.arguments.baml punctuation.definition.arguments.end.baml
+17:27-28     "."                source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.field-access.baml punctuation.accessor.baml
+17:28-32     "name"             source.baml meta.function.baml meta.block.function.baml meta.statement.return.baml meta.field-access.baml variable.other.readwrite.baml
 18:1-2       "}"                source.baml meta.function.baml meta.block.function.baml punctuation.definition.block.end.baml

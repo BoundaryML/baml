@@ -786,7 +786,7 @@ function Demo(items: string[]) -> string {
     fn ast_does_not_treat_upcast_target_as_method_type_args() {
         let source = r#"
 function main(m: MultiFormat) -> string {
-  return m.upcast<Converter<int>>.convert()
+  return m.upcast<Converter<int>>().convert()
 }
 "#;
         let function = first_function(parse_and_lower(source));
@@ -809,7 +809,7 @@ function main(m: MultiFormat) -> string {
         };
         assert!(
             type_args.is_empty(),
-            ".upcast<Interface> target must not be lowered as method type args"
+            ".upcast<Interface>() target must not be lowered as method type args"
         );
 
         let Expr::MemberAccess { base, member } = &body.exprs[*callee] else {

@@ -1,9 +1,9 @@
-// `value.upcast<Interface>` replaced `value.as<Interface>`. Each use of the
+// `value.upcast<Interface>()` replaced `value.as<Interface>`. Each use of the
 // removed spelling reports once (E0098) with the replacement spelled out, and
 // recovers without cascading: the view is still parsed and checked as one.
+// Writing the parentheses after the removed spelling changes nothing.
 // `as` keeps its other meanings, the field link in an `implements` block and
-// the qualified projection `(Type as Interface).Assoc`, and `upcast` stays a
-// plain member name wherever no `<` follows it.
+// the qualified projection `(Type as Interface).Assoc`.
 
 interface Named {
     name: string,
@@ -35,7 +35,6 @@ class Person {
     }
 
     implements Titled {
-        // `self.as<I>.field`
         function label(self) -> string throws never {
             "Dr. " + self.as<Named>.name
         }
@@ -88,30 +87,16 @@ function bare_view(p: Person) -> Named {
     p.as<Named>
 }
 
-// The new spelling, and the two other uses of `as`, are unaffected.
-function new_spelling(p: Person) -> string {
-    p.upcast<Named>.label() + p.upcast<Titled>.label()
+// The removed spelling with the parentheses the new one takes.
+function with_parentheses(p: Person) -> string {
+    p.as<Named>().label()
+}
+
+// The accepted spelling, and the two other uses of `as`, are unaffected.
+function accepted_spelling(p: Person) -> string {
+    p.upcast<Named>().label() + p.upcast<Titled>().label()
 }
 
 function projected(b: IntBox) -> (IntBox as Keyed).Key {
-    b.upcast<Keyed<Key = int>>.key() + b.upcast<Boxed<int>>.get()
-}
-
-// `upcast` with no `<` after it is an ordinary member.
-class Lift {
-    upcast: int,
-
-    function twice(self) -> int {
-        self.upcast + self.upcast
-    }
-}
-
-class Lifter {
-    function upcast(self) -> int {
-        1
-    }
-}
-
-function plain_members(l: Lift, r: Lifter) -> int {
-    l.upcast + l.twice() + r.upcast()
+    b.upcast<Keyed<Key = int>>().key() + b.upcast<Boxed<int>>().get()
 }

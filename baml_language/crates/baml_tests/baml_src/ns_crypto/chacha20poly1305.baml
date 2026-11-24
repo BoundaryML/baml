@@ -105,11 +105,11 @@ test "chacha20poly1305_round_trips_through_the_aead_interface" {
     // through an `Aead`-typed parameter so the `VirtualCall` resolves the impl
     // on the runtime class. `seal_and_open` lives in `aes_gcm_siv.baml`; the
     // point here is that a second cipher family satisfies the same contract.
-    let rng = baml.random.SystemRandom.get().upcast<baml.random.Rng>;
+    let rng = baml.random.SystemRandom.get().upcast<baml.random.Rng>();
     let cipher = baml.crypto.ChaCha20Poly1305.new(baml.crypto.ChaCha20Poly1305.random_key(rng));
     assert.is_true(
         seal_and_open(
-            cipher.upcast<baml.crypto.Aead>,
+            cipher.upcast<baml.crypto.Aead>(),
             rng.random(12),
             b"attack at dawn",
             b"envelope-v1",
@@ -118,11 +118,11 @@ test "chacha20poly1305_round_trips_through_the_aead_interface" {
 }
 
 test "xchacha20poly1305_round_trips_through_the_aead_interface" {
-    let rng = baml.random.SystemRandom.get().upcast<baml.random.Rng>;
+    let rng = baml.random.SystemRandom.get().upcast<baml.random.Rng>();
     let cipher = baml.crypto.XChaCha20Poly1305.new(baml.crypto.XChaCha20Poly1305.random_key(rng));
     assert.is_true(
         seal_and_open(
-            cipher.upcast<baml.crypto.Aead>,
+            cipher.upcast<baml.crypto.Aead>(),
             rng.random(24),
             b"attack at dawn",
             b"envelope-v1",
@@ -254,7 +254,7 @@ test "chacha20poly1305_ciphertext_too_short_to_hold_a_tag_is_named" {
 // ─── Key generation ─────────────────────────────────────────────────────────
 
 test "chacha_random_key_draws_32_bytes" {
-    let rng = baml.random.SystemRandom.get().upcast<baml.random.Rng>;
+    let rng = baml.random.SystemRandom.get().upcast<baml.random.Rng>();
     assert.equal(baml.crypto.ChaCha20Poly1305.random_key(rng).length(), 32);
     assert.equal(baml.crypto.XChaCha20Poly1305.random_key(rng).length(), 32)
 }

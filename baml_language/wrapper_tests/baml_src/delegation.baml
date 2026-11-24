@@ -64,11 +64,11 @@ testset "CLI delegation" {
             stderr = "pipe",
         );
         defer { child.kill(); child.close(); }
-        let out = spawn { (child.stdout ?? baml.sys.panic("missing stdout pipe")).upcast<baml.io.Read>.bytes() };
-        let err = spawn { (child.stderr ?? baml.sys.panic("missing stderr pipe")).upcast<baml.io.Read>.bytes() };
+        let out = spawn { (child.stdout ?? baml.sys.panic("missing stdout pipe")).upcast<baml.io.Read>().bytes() };
+        let err = spawn { (child.stderr ?? baml.sys.panic("missing stderr pipe")).upcast<baml.io.Read>().bytes() };
         let input = payload.to_utf8().concat(uint8array.from_hex("00ff80fe0a"));
         let stdin = child.stdin ?? baml.sys.panic("missing stdin pipe");
-        stdin.upcast<baml.io.Write>.write(input);
+        stdin.upcast<baml.io.Write>().write(input);
         stdin.close();
         root.harness.require(child.wait(timeout = baml.time.Duration.from_seconds(15)).ok(), "duplex child failed");
         root.harness.require(

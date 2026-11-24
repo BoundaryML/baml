@@ -97,7 +97,7 @@ class WideningReader {
 }
 
 // Two conjuncts declaring the same member are siblings — neither shadows the
-// other — so the access is ambiguous and must be qualified with `.upcast<I>`.
+// other — so the access is ambiguous and must be qualified with `.upcast<I>()`.
 // Resolving conjunct-by-conjunct and taking the first hit would silently pick
 // `Sized` here, and which one it picked would depend on the order written.
 interface OtherSized {

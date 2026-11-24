@@ -1199,7 +1199,7 @@ contexts:
     - include: function-call-type-arguments
     - include: call-arguments
   function-call-expression:
-    - match: '\b(?:(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(\.)\s*)?((?:\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*\s*\.\s*)*)(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<(?:[^(){};]|\([^(){};]*\))*>\s*)?\()'
+    - match: '(?!\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*(?:\s*\.\s*\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)*?\s*\.\s*upcast\b\s*<)\b(?:(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\s*(\.)\s*)?((?:\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*\s*\.\s*)*)(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b(?=\s*(?:<(?:[^(){};]|\([^(){};]*\))*>\s*)?\()'
       captures:
         1: variable.other.readwrite.baml
         2: punctuation.accessor.baml
@@ -2524,10 +2524,11 @@ contexts:
       scope: keyword.operator.type.baml
   upcast-expression--body:
     - meta_scope: meta.expression.upcast.baml
-    - match: '(?<=>)'
+    - match: '(?<=\))|(?<=>)(?!\s*\()'
       pop: true
     - include: comments
     - include: upcast-type-arguments
+    - include: call-arguments
   upcast-expression:
     - match: '(\.)\s*(upcast)\b(?=\s*<)'
       captures:

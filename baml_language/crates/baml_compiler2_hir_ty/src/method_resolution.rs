@@ -60,7 +60,7 @@ pub fn lookup_method<'db>(
         // owned by its block (`MethodOwner::Impl`), never listed in
         // `class_data.methods`, and resolves through the impl tier
         // (`lookup_impl_member`). The AMBIGUITY rule - several implemented
-        // interfaces declaring the name need `upcast<I>` qualification even when
+        // interfaces declaring the name need `upcast<I>()` qualification even when
         // a candidate exists - is the callers' `concrete_member_ambiguity`
         // pre-check, not an exclusion here.
         let method = baml_compiler2_hir::item_data::class_data(db, class)
@@ -218,13 +218,13 @@ pub enum InterfaceMemberLookup<'db> {
     Found(InterfaceMember<'db>),
     /// Two or more realized-distinct interfaces declare the member.
     /// `sources` are the realized declaring interfaces, rendered
-    /// qualified at report time for the `upcast<I>` disambiguation hint.
+    /// qualified at report time for the `upcast<I>()` disambiguation hint.
     Ambiguous {
         sources: Vec<InferInterface>,
         is_field: bool,
     },
     /// A concrete receiver reached an interface FIELD: reachable only
-    /// through an explicit `obj.upcast<I>.field` projection (TIR's rule -
+    /// through an explicit `obj.upcast<I>().field` projection (TIR's rule -
     /// a class-owned field of the same name resolves earlier in the
     /// caller's ladder, so this is the interface-only case).
     FieldRequiresProjection {
@@ -470,7 +470,7 @@ pub(crate) fn declared_method_self_restriction<'db>(
 /// The concrete-receiver impl tier's AMBIGUITY verdict alone - consulted
 /// even when the class-inherent tier found a method, because an own
 /// method does not arbitrate an interface clash: two implemented
-/// interfaces declaring the name still need `upcast<I>` qualification
+/// interfaces declaring the name still need `upcast<I>()` qualification
 /// (E0121, TIR's rule).
 pub fn concrete_member_ambiguity<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
@@ -692,7 +692,7 @@ fn lookup_impl_member<'db>(
     }
     // Interface FIELDS on a concrete receiver are projection-only (TIR's
     // rule): a class-owned field of the same name resolved earlier in the
-    // caller's ladder, so a field reached here needs `obj.upcast<I>.field` -
+    // caller's ladder, so a field reached here needs `obj.upcast<I>().field` -
     // and two distinct declaring interfaces make even that ambiguous.
     let field_sources: Vec<InferInterface> = providers
         .iter()
@@ -1756,7 +1756,7 @@ pub(crate) fn self_occurs(ty: &Ty, top_ok: bool) -> bool {
 /// The outcome of resolving a member on a UNION receiver. A union behaves
 /// as the intersection existential over the interfaces every arm
 /// provides: the member resolves through the SINGLE shared interface that
-/// declares it - inference sugar for `union.upcast<I>.member`. Class-owned
+/// declares it - inference sugar for `union.upcast<I>().member`. Class-owned
 /// fields/methods of the arms are never reachable (they need not agree
 /// across arms).
 pub enum UnionMemberLookup<'db> {

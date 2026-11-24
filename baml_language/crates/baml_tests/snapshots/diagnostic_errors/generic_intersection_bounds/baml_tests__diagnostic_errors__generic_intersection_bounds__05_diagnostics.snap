@@ -53,7 +53,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [type] E0121
 
-  × method `size` on class `T` is declared by multiple interfaces: `Sized`, `OtherSized`; unqualified calls will be ambiguous — use obj.upcast<Sized>.size() or obj.upcast<OtherSized>.size()
+  × method `size` on class `T` is declared by multiple interfaces: `Sized`, `OtherSized`; unqualified calls will be ambiguous — use obj.upcast<Sized>().size() or obj.upcast<OtherSized>().size()
     ╭─[generic_intersection_bounds.baml:99:5]
  99 │     item.size()
     ·     ─────────

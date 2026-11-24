@@ -1,4 +1,4 @@
-// BEP-044 §"self Access": `self.upcast<InterfaceName>.method()` works from inside an
+// BEP-044 §"self Access": `self.upcast<InterfaceName>().method()` works from inside an
 // `implements` block to reach a sibling interface's method even when names
 // are flat.
 
@@ -21,7 +21,7 @@ class Polite {
 
   implements Farewell {
     function bye(self) -> string {
-      return self.upcast<Greeter>.greet() + " — and goodbye!"
+      return self.upcast<Greeter>().greet() + " — and goodbye!"
     }
   }
 }
