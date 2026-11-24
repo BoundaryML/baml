@@ -71,3 +71,4 @@ tools/type_quiz/COMPILER_DIVERGENCE.md
 
 # Native runtime design notes
 crates/baml_native_rt/design/*.md
+crates/baml_native_rt/design/**/*.md
