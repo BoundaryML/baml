@@ -4,9 +4,6 @@ import { type NextRequest, NextResponse } from 'next/server';
 // BAML's introduction in Markdown, for agents.
 const ROUTES = new Map<string, { alternate: string; slug: string }>([
   ['/index.md', { alternate: '/index.md', slug: 'index' }],
-  // /baml is a post that gets linked and unfurled, so it always serves HTML. Its Markdown is at
-  // /baml.md only.
-  ['/baml.md', { alternate: '/baml.md', slug: 'baml' }],
   ['/quickstart', { alternate: '/quickstart.md', slug: 'quickstart' }],
   ['/quickstart.md', { alternate: '/quickstart.md', slug: 'quickstart' }],
   ['/explore', { alternate: '/explore.md', slug: 'explore' }],

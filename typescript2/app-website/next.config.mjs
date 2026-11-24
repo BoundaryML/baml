@@ -123,6 +123,16 @@ const nextConfig = {
         destination: '/',
         permanent: true,
       },
+      // /baml is written but not published yet (app/(home)/baml). Until it is, it goes to the
+      // homepage, as it did before the page existed. `next dev` leaves the redirect out, so the
+      // page can still be opened and worked on locally. The redirect is temporary so that no
+      // browser remembers it once the page is live.
+      //
+      // To publish the page, remove this entry and add `/baml.md` back to middleware.ts,
+      // lib/markdown-pages.ts and app/api/markdown-page/route.ts.
+      ...(process.env.NODE_ENV === 'development'
+        ? []
+        : [{ source: '/baml', destination: '/', permanent: false }]),
       {
         source: '/baml-intro',
         destination: '/',

@@ -10,7 +10,6 @@ import {
 export const dynamic = 'force-dynamic';
 
 const MARKDOWN_FILES: Record<MarkdownPageSlug, string> = {
-  baml: 'baml.md',
   explore: 'explore.md',
   index: 'index.md',
   pricing: 'pricing.md',
