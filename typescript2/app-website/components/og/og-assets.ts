@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ALT_LOGO } from '@/components/home/boundary-alt';
+import { GATE_LOGO } from '@/components/home/boundary-gate';
 
 // Shared asset loaders for the Open Graph / link-preview image renderer.
 //
@@ -63,14 +63,14 @@ export function podcastHosts(): { src: string; handle: string }[] {
   ];
 }
 
-// The site's Boundary logo (components/home/boundary-logo.tsx): the alt mark and the wordmark.
+// The site's Boundary logo (components/home/boundary-logo.tsx): the gate and the wordmark.
 /** The logo's width over its height, for sizing it on the card. */
-export const LOGO_ASPECT = ALT_LOGO.width / ALT_LOGO.height;
+export const LOGO_ASPECT = GATE_LOGO.width / GATE_LOGO.height;
 
 /** The white Boundary logo, as an SVG data URI. */
 export function boundaryLogo(): string {
-  const paths = ALT_LOGO.paths.map((d) => `<path d="${d}"/>`).join('');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${ALT_LOGO.viewBox}" fill="#FEFEFE">${paths}</svg>`;
+  const paths = GATE_LOGO.paths.map((d) => `<path d="${d}"/>`).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${GATE_LOGO.viewBox}" fill="#FEFEFE">${paths}</svg>`;
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 }
 

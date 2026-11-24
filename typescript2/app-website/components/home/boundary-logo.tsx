@@ -1,12 +1,13 @@
 import { ALT_LOGO, ALT_MARK } from '@/components/home/boundary-alt';
+import { GATE_LOGO, GATE_MARK } from '@/components/home/boundary-gate';
 import { LAMB_PATHS } from '@/components/home/lamb';
 
 const ALT_MARK_HEIGHT = 144;
 
-// The Boundary marks, drawn from the brand's alt logo. Both use currentColor, so they follow the
-// text color they sit in.
+// The Boundary marks, drawn from the brand's primary logo: the gate and the lowercase wordmark. Both
+// use currentColor, so they follow the text color they sit in.
 
-// The mark on its own.
+// The gate on its own.
 export function BoundaryMark({ className }: { className?: string }) {
   return (
     // biome-ignore lint/a11y/noSvgWithoutTitle: decorative, the text beside it names it
@@ -14,16 +15,16 @@ export function BoundaryMark({ className }: { className?: string }) {
       aria-hidden
       className={className}
       fill="currentColor"
-      viewBox={ALT_MARK.viewBox}
+      viewBox={GATE_MARK.viewBox}
     >
-      {ALT_MARK.paths.map((d) => (
+      {GATE_MARK.paths.map((d) => (
         <path d={d} key={d} />
       ))}
     </svg>
   );
 }
 
-// The full logo: the mark and the lowercase wordmark.
+// The full logo: the gate and the lowercase wordmark.
 export function BoundaryLogo({ className }: { className?: string }) {
   return (
     <svg
@@ -31,9 +32,9 @@ export function BoundaryLogo({ className }: { className?: string }) {
       className={className}
       fill="currentColor"
       role="img"
-      viewBox={ALT_LOGO.viewBox}
+      viewBox={GATE_LOGO.viewBox}
     >
-      {ALT_LOGO.paths.map((d) => (
+      {GATE_LOGO.paths.map((d) => (
         <path d={d} key={d} />
       ))}
     </svg>
@@ -44,7 +45,7 @@ export function BoundaryLogo({ className }: { className?: string }) {
 // in place of its two upper bars. The lamb sits low enough that the piece overlaps its hind legs,
 // so the piece's own top edge cuts the lamb off and the two read as one shape. The lamb is the
 // standalone BAML logomark; it keeps its pixel grid square and sits flush with the piece's left
-// edge. This replaces the brand's older combination mark (the lamb over the gate) on the site.
+// edge. The site does not use it outside /logo-ideas.
 export const LAMB_MARK = {
   /** The mark's box in the alt mark's coordinates: 86 wide, from y -32 to y 144. */
   height: ALT_MARK_HEIGHT + 32,

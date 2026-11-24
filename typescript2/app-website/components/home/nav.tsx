@@ -55,7 +55,7 @@ function NavBar({ children }: { children: ReactNode }) {
             href="/"
           >
             <BoundaryLogo className="hidden h-8 w-auto sm:block" />
-            <BoundaryMark className="h-8 w-auto sm:hidden" />
+            <BoundaryMark className="h-6 w-auto sm:hidden" />
           </Link>
           <div className="flex items-center gap-4 sm:gap-6">
             <PlatformMenu />
