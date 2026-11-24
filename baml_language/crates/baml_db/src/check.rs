@@ -2893,6 +2893,59 @@ function caller(tool: Tool) -> int throws never {
     }
 
     #[test]
+    fn unused_unknown_parameter_of_a_callee_is_not_blamed() {
+        // `f` writes `throws unknown` but `apply` never calls it; the
+        // `unknown` comes from the stored `tool.run`.
+        let messages = throws_violations(
+            r#"class Tool {
+    run: () -> int throws unknown,
+}
+
+function apply(tool: Tool, f: () -> int throws unknown) -> int {
+    (tool.run)()
+}
+
+function caller(tool: Tool) -> int throws never {
+    apply(tool, () -> int { 1 })
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        assert!(message.contains("may also throw `unknown`"), "{message}");
+        assert!(!message.contains("parameter"), "{message}");
+        assert_eq!(message.lines().count(), 2, "{message}");
+    }
+
+    #[test]
+    fn unknown_parameter_of_a_callee_is_not_blamed_when_unknown_also_enters_elsewhere() {
+        // `apply` calls `f`, which writes `throws unknown`, and also the
+        // stored `tool.run`. Removing `f`'s clause would not close the
+        // effect, so `f` is not named.
+        let messages = throws_violations(
+            r#"class Tool {
+    run: () -> int throws unknown,
+}
+
+function apply(tool: Tool, f: () -> int throws unknown) -> int {
+    f() + (tool.run)()
+}
+
+function caller(tool: Tool) -> int throws never {
+    apply(tool, () -> int { 1 })
+}
+"#,
+        );
+        let [message] = messages.as_slice() else {
+            panic!("expected one E0096, got: {messages:?}");
+        };
+        assert!(message.contains("may also throw `unknown`"), "{message}");
+        assert!(!message.contains("parameter"), "{message}");
+        assert_eq!(message.lines().count(), 2, "{message}");
+    }
+
+    #[test]
     fn uncovered_known_type_carries_no_unknown_error_help() {
         let messages = throws_violations(
             r#"class Boom {

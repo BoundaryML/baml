@@ -1567,6 +1567,13 @@ pub struct InferenceResult<'db, T = baml_type::Ty> {
     /// Coercion steps per expression (r-a's `expr_adjustments` shape).
     /// S16: MIR synthesizes the recorded coercions instead of re-deciding.
     pub expr_adjustments: FxHashMap<ExprId, Box<[Adjustment<T>]>>,
+    /// The owner's own parameter that every `unknown` in its INFERRED
+    /// effect traces to: each contribution carrying `unknown` is a call
+    /// of that one parameter, whose written clause is `throws unknown`.
+    /// `None` when the clause is closed, when nothing throws `unknown`, or
+    /// when any `unknown` enters elsewhere. A caller's E0096 help names the
+    /// parameter only from here.
+    pub unknown_throws_param: Option<Name>,
 }
 
 /// The working instantiation: the engine records in its native interned
@@ -1592,6 +1599,7 @@ impl<T> InferenceResult<'_, T> {
             call_plans: FxHashMap::default(),
             type_bindings: FxHashMap::default(),
             expr_adjustments: FxHashMap::default(),
+            unknown_throws_param: None,
         }
     }
 }
@@ -12436,14 +12444,22 @@ impl<'db> InferenceContext<'db> {
         }
         // Anything else names its callee through a resolution: a free
         // function, or a method reached through a value (`tools.apply(f)`).
+        // Its parameter is named only when the callee's own inference traced
+        // every `unknown` it throws to that parameter: an unused parameter
+        // that writes `throws unknown` is not where the effect enters.
         let DeclRef::Source(function) = self.result.callee_resolution(callee)?.callable(self.db)?
         else {
             return None;
         };
+        let traced = infer_function_body(self.db, function)
+            .unknown_throws_param
+            .as_ref()?;
         let param = callable_signature(self.db, DeclRef::Source(function))
             .params
             .iter()
-            .find(|param| writes_unknown_throws(&param.ty))?;
+            .find(|param| {
+                param.name.as_ref() == Some(traced) && writes_unknown_throws(&param.ty)
+            })?;
         Some(crate::diagnostics::UnknownThrowsParam {
             param: param.name.clone()?,
             callee: Some(
@@ -12452,6 +12468,39 @@ impl<'db> InferenceContext<'db> {
                     .clone(),
             ),
         })
+    }
+
+    /// The one own parameter every `unknown` among the owner's effect
+    /// contributions comes from (see `InferenceResult::unknown_throws_param`).
+    /// `contributions` and `resolved` are parallel: the raw entries and
+    /// their finalized types.
+    fn sole_unknown_throws_param(
+        &self,
+        contributions: &[(ExprId, Ty)],
+        resolved: &[Ty],
+    ) -> Option<Name> {
+        fn carries_unknown(ty: &Ty) -> bool {
+            match ty.kind() {
+                InferTy::Unknown => true,
+                InferTy::Union(members) => members.iter().any(carries_unknown),
+                _ => false,
+            }
+        }
+        let mut found: Option<Name> = None;
+        for ((at, _), ty) in contributions.iter().zip(resolved) {
+            if !carries_unknown(ty) {
+                continue;
+            }
+            let param = self.unknown_throws_params.get(at)?;
+            if param.callee.is_some() {
+                return None;
+            }
+            match &found {
+                Some(name) if *name != param.param => return None,
+                _ => found = Some(param.param.clone()),
+            }
+        }
+        found
     }
 
     /// One effect contribution: a thrown value or a callee's throws,
@@ -13200,6 +13249,8 @@ impl<'db> InferenceContext<'db> {
                     .iter()
                     .map(|(_, ty)| self.finalize_ty(ty).into_ty())
                     .collect();
+                self.result.unknown_throws_param =
+                    self.sole_unknown_throws_param(&contributions, &resolved);
                 if let Some(named) = declared {
                     resolved.push(named);
                 }
@@ -16182,6 +16233,7 @@ impl<'db> InferenceContext<'db> {
             call_plans,
             type_bindings,
             expr_adjustments,
+            unknown_throws_param,
         } = working;
         InferenceResult {
             type_of_expr: type_of_expr
@@ -16249,6 +16301,7 @@ impl<'db> InferenceContext<'db> {
                     )
                 })
                 .collect(),
+            unknown_throws_param,
         }
     }
 
