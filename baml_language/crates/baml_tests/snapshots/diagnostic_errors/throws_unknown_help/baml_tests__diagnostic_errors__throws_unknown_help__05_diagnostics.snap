@@ -14,8 +14,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0096
 
   × declared throws is `Boom`, but this function may also throw `unknown`
-  │ help: to keep a closed clause, handle `unknown` where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`, then declare `throws Boom | baml.errors.UnknownError`. Or
-  │ let BAML infer the clause: remove it, or write `throws Boom | _`
+  │ help: declare a specific error type where `unknown` comes from: a function type or interface method written `throws unknown` should name the error type its implementations must throw
+  │ help: if the `unknown` comes from code you don't control, convert it where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`, then declare `throws Boom |
+  │ baml.errors.UnknownError`. Removing the clause, or writing `throws Boom | _`, also compiles, but passes `unknown` on to callers
     ╭─[throws_unknown_help.baml:18:5]
  18 │     (tool.run)()
     ·     ──────────
@@ -24,8 +25,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0096
 
   × declared throws is `never`, but this function may also throw `unknown`
-  │ help: to keep a closed clause, handle `unknown` where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<never>(e) }`, then declare `throws baml.errors.UnknownError`. Or remove
-  │ the `throws` clause to let BAML infer it
+  │ help: declare a specific error type where `unknown` comes from: a function type or interface method written `throws unknown` should name the error type its implementations must throw
+  │ help: if the `unknown` comes from code you don't control, convert it where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<never>(e) }`, then declare `throws
+  │ baml.errors.UnknownError`. Removing the `throws` clause also compiles, but passes `unknown` on to callers
     ╭─[throws_unknown_help.baml:22:5]
  22 │     (tool.run)()
     ·     ──────────
@@ -34,10 +36,10 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0096
 
   × declared throws is `never`, but this function may also throw `unknown`
-  │ help: parameter `f` of `apply` is declared `throws unknown`, which hides what the function passed to it throws. Remove `throws unknown` from that parameter and a call to `apply` throws what its
-  │ argument throws
-  │ help: to keep a closed clause, handle `unknown` where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<never>(e) }`, then declare `throws baml.errors.UnknownError`. Or remove
-  │ the `throws` clause to let BAML infer it
+  │ help: parameter `f` of `apply` is declared `throws unknown`, which hides what the function passed to it throws. Declare the specific error type it must throw instead, or remove `throws unknown`
+  │ so a call to `apply` throws what its argument throws
+  │ help: if the `unknown` comes from code you don't control, convert it where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<never>(e) }`, then declare `throws
+  │ baml.errors.UnknownError`. Removing the `throws` clause also compiles, but passes `unknown` on to callers
     ╭─[throws_unknown_help.baml:32:5]
  32 │ ╭─▶     apply(() -> int {
  33 │ │           throw Boom { message: "x" };
@@ -47,10 +49,10 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0096
 
   × declared throws is `never`, but this function may also throw `unknown`
-  │ help: parameter `f` of `apply` is declared `throws unknown`, which hides what the function passed to it throws. Remove `throws unknown` from that parameter and a call to `apply` throws what its
-  │ argument throws
-  │ help: to keep a closed clause, handle `unknown` where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<never>(e) }`, then declare `throws baml.errors.UnknownError`. Or remove
-  │ the `throws` clause to let BAML infer it
+  │ help: parameter `f` of `apply` is declared `throws unknown`, which hides what the function passed to it throws. Declare the specific error type it must throw instead, or remove `throws unknown`
+  │ so a call to `apply` throws what its argument throws
+  │ help: if the `unknown` comes from code you don't control, convert it where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<never>(e) }`, then declare `throws
+  │ baml.errors.UnknownError`. Removing the `throws` clause also compiles, but passes `unknown` on to callers
     ╭─[throws_unknown_help.baml:49:5]
  49 │ ╭─▶     runner.apply(() -> int {
  50 │ │           throw Boom { message: "x" };
@@ -69,9 +71,10 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0096
 
   × declared throws is `Boom`, but this function may also throw `unknown`
-  │ help: parameter `f` is declared `throws unknown`, which hides what the function passed to it throws. Remove `throws unknown` from that parameter and BAML infers what `f` throws at each call
-  │ help: to keep a closed clause, handle `unknown` where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`, then declare `throws Boom | baml.errors.UnknownError`. Or
-  │ let BAML infer the clause: remove it, or write `throws Boom | _`
+  │ help: parameter `f` is declared `throws unknown`, which hides what the function passed to it throws. Declare the specific error type it must throw instead, or remove `throws unknown` so BAML
+  │ infers what `f` throws at each call
+  │ help: if the `unknown` comes from code you don't control, convert it where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`, then declare `throws Boom |
+  │ baml.errors.UnknownError`. Removing the clause, or writing `throws Boom | _`, also compiles, but passes `unknown` on to callers
     ╭─[throws_unknown_help.baml:58:5]
  58 │     f()
     ·     ─
@@ -89,8 +92,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0096
 
   × declared throws is `baml.errors.UnknownError | Boom`, but this function may also throw `unknown`
-  │ help: to keep a closed clause, handle `unknown` where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`; the clause already lists `baml.errors.UnknownError`. Or
-  │ let BAML infer the clause: remove it, or write `throws baml.errors.UnknownError | Boom | _`
+  │ help: declare a specific error type where `unknown` comes from: a function type or interface method written `throws unknown` should name the error type its implementations must throw
+  │ help: if the `unknown` comes from code you don't control, convert it where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`; the clause already lists
+  │ `baml.errors.UnknownError`. Removing the clause, or writing `throws baml.errors.UnknownError | Boom | _`, also compiles, but passes `unknown` on to callers
     ╭─[throws_unknown_help.baml:63:5]
  63 │     (tool.run)()
     ·     ──────────
@@ -108,8 +112,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0096
 
   × declared throws is `Boom`, but this function may also throw `unknown`
-  │ help: to keep a closed clause, handle `unknown` where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`, then declare `throws Boom | baml.errors.UnknownError`. Or
-  │ let BAML infer the clause: remove it, or write `throws Boom | _`
+  │ help: declare a specific error type where `unknown` comes from: a function type or interface method written `throws unknown` should name the error type its implementations must throw
+  │ help: if the `unknown` comes from code you don't control, convert it where it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`, then declare `throws Boom |
+  │ baml.errors.UnknownError`. Removing the clause, or writing `throws Boom | _`, also compiles, but passes `unknown` on to callers
     ╭─[throws_unknown_help.baml:68:11]
  68 │     throw value;
     ·           ─────

@@ -2665,8 +2665,8 @@ function demo() -> int throws never {
 
     #[test]
     fn uncovered_unknown_from_a_stored_function_type_suggests_unknown_error() {
-        // A stored function type must write its clause, so the help offers
-        // the boundary conversion and the two ways to let BAML infer.
+        // The help leads with declaring a specific error type at the source,
+        // then the `UnknownError` fallback, then what removing the clause does.
         let messages = throws_violations(
             r#"class Boom {
     message: string,
@@ -2687,10 +2687,13 @@ function run_tool(tool: Tool) -> int throws Boom {
         assert_eq!(
             message,
             "declared throws is `Boom`, but this function may also throw `unknown`\n\
-             help: to keep a closed clause, handle `unknown` where it enters: \
-             `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`, \
-             then declare `throws Boom | baml.errors.UnknownError`. Or let BAML infer \
-             the clause: remove it, or write `throws Boom | _`"
+             help: declare a specific error type where `unknown` comes from: a function \
+             type or interface method written `throws unknown` should name the error type \
+             its implementations must throw\n\
+             help: if the `unknown` comes from code you don't control, convert it where \
+             it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`, \
+             then declare `throws Boom | baml.errors.UnknownError`. Removing the clause, or \
+             writing `throws Boom | _`, also compiles, but passes `unknown` on to callers"
         );
     }
 
@@ -2714,10 +2717,13 @@ function run_tool(tool: Tool) -> int throws never {
         assert_eq!(
             message,
             "declared throws is `never`, but this function may also throw `unknown`\n\
-             help: to keep a closed clause, handle `unknown` where it enters: \
-             `catch_all (e) { _ => throw baml.errors.UnknownError.from<never>(e) }`, \
-             then declare `throws baml.errors.UnknownError`. Or remove the `throws` \
-             clause to let BAML infer it"
+             help: declare a specific error type where `unknown` comes from: a function \
+             type or interface method written `throws unknown` should name the error type \
+             its implementations must throw\n\
+             help: if the `unknown` comes from code you don't control, convert it where \
+             it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<never>(e) }`, \
+             then declare `throws baml.errors.UnknownError`. Removing the `throws` clause \
+             also compiles, but passes `unknown` on to callers"
         );
     }
 
@@ -2754,8 +2760,9 @@ function caller() -> int throws never {
         assert_eq!(
             lines[1],
             "help: parameter `f` of `apply` is declared `throws unknown`, which hides what \
-             the function passed to it throws. Remove `throws unknown` from that parameter \
-             and a call to `apply` throws what its argument throws"
+             the function passed to it throws. Declare the specific error type it must throw \
+             instead, or remove `throws unknown` so a call to `apply` throws what its \
+             argument throws"
         );
         assert!(
             lines[2].contains("UnknownError.from<never>(e)"),
@@ -2787,8 +2794,8 @@ function call_it(f: () -> int throws unknown) -> int throws Boom {
         assert_eq!(
             lines[1],
             "help: parameter `f` is declared `throws unknown`, which hides what the function \
-             passed to it throws. Remove `throws unknown` from that parameter and BAML infers \
-             what `f` throws at each call"
+             passed to it throws. Declare the specific error type it must throw instead, or \
+             remove `throws unknown` so BAML infers what `f` throws at each call"
         );
         assert!(lines[2].contains("UnknownError.from<Boom>(e)"), "{message}");
     }
@@ -2855,13 +2862,14 @@ function run_tool(tool: Tool) -> int throws Boom | baml.errors.UnknownError {
             panic!("expected one E0096, got: {messages:?}");
         };
         let lines: Vec<&str> = message.lines().collect();
-        assert_eq!(lines.len(), 2, "{message}");
+        assert_eq!(lines.len(), 3, "{message}");
         assert_eq!(
-            lines[1],
-            "help: to keep a closed clause, handle `unknown` where it enters: \
-             `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`; \
-             the clause already lists `baml.errors.UnknownError`. Or let BAML infer \
-             the clause: remove it, or write `throws baml.errors.UnknownError | Boom | _`"
+            lines[2],
+            "help: if the `unknown` comes from code you don't control, convert it where \
+             it enters: `catch_all (e) { _ => throw baml.errors.UnknownError.from<Boom>(e) }`; \
+             the clause already lists `baml.errors.UnknownError`. Removing the clause, or \
+             writing `throws baml.errors.UnknownError | Boom | _`, also compiles, but passes \
+             `unknown` on to callers"
         );
     }
 
@@ -2889,7 +2897,7 @@ function caller(tool: Tool) -> int throws never {
         };
         assert!(message.contains("may also throw `unknown`"), "{message}");
         assert!(!message.contains("parameter"), "{message}");
-        assert_eq!(message.lines().count(), 2, "{message}");
+        assert_eq!(message.lines().count(), 3, "{message}");
     }
 
     #[test]
@@ -2915,7 +2923,7 @@ function caller(tool: Tool) -> int throws never {
         };
         assert!(message.contains("may also throw `unknown`"), "{message}");
         assert!(!message.contains("parameter"), "{message}");
-        assert_eq!(message.lines().count(), 2, "{message}");
+        assert_eq!(message.lines().count(), 3, "{message}");
     }
 
     #[test]
@@ -2942,7 +2950,7 @@ function caller(tool: Tool) -> int throws never {
         };
         assert!(message.contains("may also throw `unknown`"), "{message}");
         assert!(!message.contains("parameter"), "{message}");
-        assert_eq!(message.lines().count(), 2, "{message}");
+        assert_eq!(message.lines().count(), 3, "{message}");
     }
 
     #[test]
@@ -2974,7 +2982,7 @@ function caller(tool: Tool) -> int throws never {
         };
         assert!(message.contains("may also throw `unknown`"), "{message}");
         assert!(!message.contains("parameter"), "{message}");
-        assert_eq!(message.lines().count(), 2, "{message}");
+        assert_eq!(message.lines().count(), 3, "{message}");
     }
 
     #[test]

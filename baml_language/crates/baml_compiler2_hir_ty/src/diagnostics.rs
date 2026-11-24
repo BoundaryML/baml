@@ -312,6 +312,9 @@ pub fn unknown_throws_violation_help(
     spell: &dyn Fn(&Ty) -> String,
 ) -> String {
     let mut text = String::new();
+    // Lead with a specific error type at the source of `unknown`; the
+    // `UnknownError` conversion is the fallback for code the user does not
+    // control.
     match &help.param {
         Some(UnknownThrowsParam {
             param,
@@ -319,7 +322,7 @@ pub fn unknown_throws_violation_help(
         }) => {
             let _ = write!(
                 text,
-                "\nhelp: parameter `{param}` of `{callee}` is declared `throws unknown`, which hides what the function passed to it throws. Remove `throws unknown` from that parameter and a call to `{callee}` throws what its argument throws"
+                "\nhelp: parameter `{param}` of `{callee}` is declared `throws unknown`, which hides what the function passed to it throws. Declare the specific error type it must throw instead, or remove `throws unknown` so a call to `{callee}` throws what its argument throws"
             );
         }
         Some(UnknownThrowsParam {
@@ -328,15 +331,17 @@ pub fn unknown_throws_violation_help(
         }) => {
             let _ = write!(
                 text,
-                "\nhelp: parameter `{param}` is declared `throws unknown`, which hides what the function passed to it throws. Remove `throws unknown` from that parameter and BAML infers what `{param}` throws at each call"
+                "\nhelp: parameter `{param}` is declared `throws unknown`, which hides what the function passed to it throws. Declare the specific error type it must throw instead, or remove `throws unknown` so BAML infers what `{param}` throws at each call"
             );
         }
-        None => {}
+        None => text.push_str(
+            "\nhelp: declare a specific error type where `unknown` comes from: a function type or interface method written `throws unknown` should name the error type its implementations must throw",
+        ),
     }
     let known = spell(&help.known);
     let _ = write!(
         text,
-        "\nhelp: to keep a closed clause, handle `unknown` where it enters: `catch_all (e) {{ _ => throw baml.errors.UnknownError.from<{known}>(e) }}`"
+        "\nhelp: if the `unknown` comes from code you don't control, convert it where it enters: `catch_all (e) {{ _ => throw baml.errors.UnknownError.from<{known}>(e) }}`"
     );
     if help.declares_unknown_error {
         text.push_str("; the clause already lists `baml.errors.UnknownError`");
@@ -349,11 +354,13 @@ pub fn unknown_throws_violation_help(
         );
     }
     if matches!(declared, Ty::Never) {
-        text.push_str(". Or remove the `throws` clause to let BAML infer it");
+        text.push_str(
+            ". Removing the `throws` clause also compiles, but passes `unknown` on to callers",
+        );
     } else {
         let _ = write!(
             text,
-            ". Or let BAML infer the clause: remove it, or write `throws {} | _`",
+            ". Removing the clause, or writing `throws {} | _`, also compiles, but passes `unknown` on to callers",
             spell(declared)
         );
     }
