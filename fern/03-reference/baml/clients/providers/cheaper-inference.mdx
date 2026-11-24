@@ -1,0 +1,22 @@
+---
+title: Cheaper Inference
+---
+
+[Cheaper Inference](https://cheaperinference.com/docs) supports the OpenAI-compatible API, so you can use the [`openai-generic`](/ref/llm-client-providers/openai-generic) provider with an overridden `base_url`.
+
+Cheaper Inference serves OpenAI-compatible requests at `https://api.cheaperinference.com/v1`.
+
+**Example:**
+
+```baml BAML
+client<llm> CheaperInferenceClient {
+  provider "openai-generic"
+  options {
+    base_url "https://api.cheaperinference.com/v1"
+    api_key env.CHEAPER_INFERENCE_API_KEY
+    model "gpt-5.4"
+  }
+}
+```
+
+See the [Cheaper Inference docs](https://cheaperinference.com/docs) and [API reference](https://cheaperinference.com/api-reference) for model IDs and endpoint details.
