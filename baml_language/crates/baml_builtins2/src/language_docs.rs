@@ -36,16 +36,8 @@ pub fn language_topic(name: &str) -> Option<&'static LanguageTopic> {
     LANGUAGE_TOPICS.get(name)
 }
 
-pub fn language_topics() -> &'static HashMap<String, LanguageTopic> {
-    &LANGUAGE_TOPICS
-}
-
 pub fn typescript_crosswalk_topic(name: &str) -> Option<&'static TypescriptCrosswalkTopic> {
     TYPESCRIPT_CROSSWALK_TOPICS.get(name)
-}
-
-pub fn typescript_crosswalk_topics() -> &'static HashMap<String, TypescriptCrosswalkTopic> {
-    &TYPESCRIPT_CROSSWALK_TOPICS
 }
 
 pub fn has_describe_topic(name: &str) -> bool {

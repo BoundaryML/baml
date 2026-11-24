@@ -8,14 +8,13 @@ pub mod manifest;
 pub mod platforms;
 
 use std::{
-    fs::{self, OpenOptions},
     io::{Cursor, Read},
     path::{Path, PathBuf},
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 pub use manifest::{Artifact, Channel, ToolchainManifest, WrapperManifest};
 use sha2::{Digest, Sha256};
 
@@ -33,25 +32,9 @@ pub fn baml_home() -> PathBuf {
     baml_env::baml_home_from(baml_env::os_var("BAML_HOME"), dirs::home_dir())
 }
 
-/// Downloaded bridge libraries, shared by every language:
-/// `<bridges_dir>/<version>/<target>/<lib>`.
-pub fn bridges_dir() -> PathBuf {
-    baml_home().join("bridges")
-}
-
 /// Content-addressed build cache shared by all projects.
 pub fn build_cache_dir() -> PathBuf {
     baml_home().join("build").join("cache")
-}
-
-/// Local telemetry recordings.
-pub fn btel_dir() -> PathBuf {
-    baml_home().join("btel")
-}
-
-/// Installed toolchains: `<toolchain_dir>/<version>/bin/baml-cli`.
-pub fn toolchain_dir() -> PathBuf {
-    baml_home().join("toolchains")
 }
 
 pub const MANIFEST_SCHEMA: u32 = 1;
@@ -203,181 +186,16 @@ impl Fetcher {
         Ok(archive)
     }
 
-    pub fn fetch_archive(&self) -> Result<Vec<u8>, FetchError> {
-        let archive = self.download_and_verify()?;
-        validate_archive_layout(
-            self.product,
-            &self.spec.target,
-            &archive,
-            &self.artifact_url(),
-        )?;
-        Ok(archive)
-    }
-
     /// Pull a single binary out of the release archive. Used by `baml pack`
-    /// (to embed `baml-pack-host`) and wrapper self-update (to fetch `baml`).
-    /// Deliberately skips `validate_archive_layout` — requiring the playground
-    /// assets / vsix here would make `baml pack` fail on an archive that has a
-    /// perfectly good host binary. Extraction itself errors with
+    /// (to embed `baml-pack-host`). Deliberately skips archive layout
+    /// validation: requiring the playground assets / vsix here would make
+    /// `baml pack` fail on an archive that has a perfectly good host binary.
+    /// Extraction itself errors with
     /// `BinaryNotInArchive` if the requested binary is absent.
     pub fn fetch_binary(&self, binary_name: &str) -> Result<Vec<u8>, FetchError> {
         let url = self.artifact_url();
         let archive = self.download_and_verify()?;
         extract_binary_from_archive(&archive, &url, binary_name)
-    }
-
-    pub fn install_to_toolchain_root(&self, root: &Path) -> Result<PathBuf, FetchError> {
-        self.install_to_toolchain_root_with_force(root, false)
-    }
-
-    /// Stage and validate replacements before moving the usable installation.
-    /// The install lock covers both publication and rollback.
-    pub fn install_to_toolchain_root_with_force(
-        &self,
-        root: &Path,
-        force: bool,
-    ) -> Result<PathBuf, FetchError> {
-        if semver::Version::parse(&self.spec.version).is_err() {
-            return Err(FetchError::InvalidManifest(format!(
-                "invalid toolchain version {:?}",
-                self.spec.version
-            )));
-        }
-        fs::create_dir_all(root)?;
-        let _lock = InstallLock::acquire(&root.join(format!(".{}.lock", self.spec.version)))?;
-        let install_dir = root.join(&self.spec.version);
-        let windows_target = self.spec.target.ends_with("windows-msvc");
-        let binary = if windows_target {
-            "baml-cli.exe"
-        } else {
-            "baml-cli"
-        };
-        if entry_exists(&install_dir)? && !force {
-            if fs::read_to_string(install_dir.join("VERSION"))
-                .map(|v| v.trim() == self.spec.version)
-                .unwrap_or(false)
-                && install_dir.join("bin").join(binary).is_file()
-            {
-                return Ok(install_dir);
-            }
-            return Err(FetchError::InvalidManifest(format!(
-                "toolchain {} is damaged; run baml toolchain install {} --force",
-                self.spec.version, self.spec.version
-            )));
-        }
-        let archive = self.fetch_archive()?;
-        let staging = tempfile::Builder::new()
-            .prefix(&format!(".{}-", self.spec.version))
-            .tempdir_in(root)?;
-        extract_archive_to_dir(&archive, &self.artifact_url(), staging.path())?;
-        // Validate the requested executable before publication can remove a usable
-        // installation. The archive layout checks already reject links and unsafe paths.
-        let cli = staging.path().join("bin").join(binary);
-        let cli_metadata = fs::metadata(&cli)?;
-        if !cli_metadata.is_file() {
-            return Err(FetchError::InvalidManifest(format!(
-                "toolchain binary is not a file: {}",
-                cli.display()
-            )));
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-
-            if !windows_target && cli_metadata.permissions().mode() & 0o111 == 0 {
-                return Err(FetchError::InvalidManifest(format!(
-                    "toolchain binary is not executable: {}",
-                    cli.display()
-                )));
-            }
-        }
-        let metadata = staging.path().join("VERSION");
-        if metadata.exists() && fs::read_to_string(&metadata)?.trim() != self.spec.version {
-            return Err(FetchError::InvalidManifest(
-                "archive VERSION does not match manifest".into(),
-            ));
-        }
-        fs::write(&metadata, format!("{}\n", self.spec.version))?;
-        fs::write(staging.path().join("install.json"), serde_json::json!({
-            "version": self.spec.version, "target": self.spec.target, "archive_url": self.artifact_url(),
-        }).to_string())?;
-        let backup = root.join(format!(".{}.backup", self.spec.version));
-        let replacing = entry_exists(&install_dir)?;
-        if replacing {
-            if entry_exists(&backup)? {
-                remove_entry(&backup)?;
-            }
-            fs::rename(&install_dir, &backup)?;
-        }
-        if let Err(error) = fs::rename(staging.path(), &install_dir) {
-            if replacing {
-                fs::rename(&backup, &install_dir)?;
-            }
-            return Err(error.into());
-        }
-        if replacing {
-            remove_entry(&backup)?;
-        }
-        Ok(install_dir)
-    }
-}
-
-fn entry_exists(path: &Path) -> std::io::Result<bool> {
-    match fs::symlink_metadata(path) {
-        Ok(_) => Ok(true),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error),
-    }
-}
-
-fn remove_entry(path: &Path) -> std::io::Result<()> {
-    let kind = fs::symlink_metadata(path)?.file_type();
-    if kind.is_dir() {
-        fs::remove_dir_all(path)
-    } else if kind.is_symlink() {
-        // Windows distinguishes file links from directory links/junctions.
-        // Neither operation follows the link into the target directory.
-        fs::remove_file(path).or_else(|_| fs::remove_dir(path))
-    } else {
-        fs::remove_file(path)
-    }
-}
-
-struct InstallLock {
-    _file: fs::File,
-}
-
-impl InstallLock {
-    fn acquire(path: &Path) -> Result<Self, FetchError> {
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(path)?;
-        // A competing installer must be able to outlive all download attempts,
-        // retry backoffs, and publication while preserving the single download.
-        let deadline =
-            Instant::now() + DOWNLOAD_TIMEOUT * DOWNLOAD_ATTEMPTS + Duration::from_secs(60);
-        loop {
-            match file.try_lock() {
-                Ok(()) => return Ok(Self { _file: file }),
-                Err(fs::TryLockError::WouldBlock) => {
-                    if Instant::now() >= deadline {
-                        break;
-                    }
-                    thread::sleep(Duration::from_secs(1));
-                }
-                Err(fs::TryLockError::Error(err)) => return Err(FetchError::Io(err)),
-            }
-        }
-        Err(FetchError::Io(std::io::Error::new(
-            std::io::ErrorKind::TimedOut,
-            format!(
-                "timed out waiting for install lock {}; another installer is still running",
-                path.display()
-            ),
-        )))
     }
 }
 
@@ -657,202 +475,10 @@ fn extract_binary_from_zip(archive_bytes: &[u8], binary_name: &str) -> Result<Ve
     })
 }
 
-pub fn extract_archive_to_dir(
-    archive_bytes: &[u8],
-    url: &str,
-    dest: &Path,
-) -> Result<(), FetchError> {
-    if archive_url_is_zip(url) {
-        extract_zip_to_dir(archive_bytes, dest)
-    } else {
-        extract_tar_gz_to_dir(archive_bytes, dest)
-    }
-}
-
-fn safe_join(dest: &Path, entry_path: &Path) -> Result<PathBuf, FetchError> {
-    if entry_path.is_absolute()
-        || entry_path
-            .components()
-            .any(|c| matches!(c, std::path::Component::ParentDir))
-    {
-        return Err(FetchError::UnsafeArchivePath {
-            path: entry_path.display().to_string(),
-        });
-    }
-    Ok(dest.join(entry_path))
-}
-
-fn extract_tar_gz_to_dir(archive_bytes: &[u8], dest: &Path) -> Result<(), FetchError> {
-    let decoder = flate2::read::GzDecoder::new(Cursor::new(archive_bytes));
-    let mut archive = tar::Archive::new(decoder);
-    for entry in archive.entries()? {
-        let mut entry = entry?;
-        let path = entry.path()?.into_owned();
-        let out = safe_join(dest, &path)?;
-        if entry.header().entry_type().is_dir() {
-            fs::create_dir_all(out)?;
-        } else if entry.header().entry_type().is_file() {
-            if let Some(parent) = out.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            entry
-                .unpack(out)
-                .context("extract tar entry")
-                .map_err(|err| FetchError::Io(std::io::Error::other(err)))?;
-        }
-    }
-    Ok(())
-}
-
-fn validate_archive_layout(
-    product: Product,
-    target: &str,
-    archive_bytes: &[u8],
-    url: &str,
-) -> Result<(), FetchError> {
-    let paths = archive_paths(archive_bytes, url)?;
-    let exe_suffix = if target.ends_with("windows-msvc") {
-        ".exe"
-    } else {
-        ""
-    };
-    let required = match product {
-        Product::Toolchain => vec![
-            format!("bin/baml-cli{exe_suffix}"),
-            format!("bin/baml-pack-host{exe_suffix}"),
-            "assets/baml-vscode.vsix".to_string(),
-            "assets/playground/index.html".to_string(),
-            "assets/playground/assets/index.js".to_string(),
-            "assets/playground/assets/index.css".to_string(),
-        ],
-        Product::Wrapper => vec![format!("bin/baml{exe_suffix}")],
-    };
-    for path in &required {
-        if !paths.iter().any(|entry| entry == path) {
-            return Err(FetchError::BinaryNotInArchive { name: path.clone() });
-        }
-    }
-    let forbidden = match product {
-        Product::Toolchain => vec![format!("bin/baml{exe_suffix}")],
-        Product::Wrapper => vec![
-            format!("bin/baml-cli{exe_suffix}"),
-            format!("bin/baml-pack-host{exe_suffix}"),
-            "assets/baml-vscode.vsix".to_string(),
-            "assets/playground/index.html".to_string(),
-            "assets/playground/assets/index.js".to_string(),
-            "assets/playground/assets/index.css".to_string(),
-        ],
-    };
-    for path in &forbidden {
-        if paths.iter().any(|entry| entry == path) {
-            return Err(FetchError::UnsafeArchivePath {
-                path: format!("archive unexpectedly contains {path}"),
-            });
-        }
-    }
-    Ok(())
-}
-
-fn normalize_archive_path(path: &Path) -> Result<String, FetchError> {
-    let mut parts = Vec::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::Normal(part) => parts.push(part.to_string_lossy().to_string()),
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir
-            | std::path::Component::RootDir
-            | std::path::Component::Prefix(_) => {
-                return Err(FetchError::UnsafeArchivePath {
-                    path: path.display().to_string(),
-                });
-            }
-        }
-    }
-    Ok(parts.join("/"))
-}
-
-fn archive_paths(archive_bytes: &[u8], url: &str) -> Result<Vec<String>, FetchError> {
-    if archive_url_is_zip(url) {
-        archive_paths_zip(archive_bytes)
-    } else {
-        archive_paths_tar_gz(archive_bytes)
-    }
-}
-
-fn archive_paths_tar_gz(archive_bytes: &[u8]) -> Result<Vec<String>, FetchError> {
-    let decoder = flate2::read::GzDecoder::new(Cursor::new(archive_bytes));
-    let mut archive = tar::Archive::new(decoder);
-    let mut paths = Vec::new();
-    for entry in archive.entries()? {
-        let entry = entry?;
-        let entry_type = entry.header().entry_type();
-        if entry_type.is_symlink() || entry_type.is_hard_link() {
-            return Err(FetchError::UnsafeArchivePath {
-                path: entry.path()?.display().to_string(),
-            });
-        }
-        // Preflight every entry, including directories, before extraction can
-        // write any files. Only regular files belong in the returned manifest.
-        let path = normalize_archive_path(&entry.path()?)?;
-        if entry_type.is_file() {
-            paths.push(path);
-        }
-    }
-    Ok(paths)
-}
-
-fn archive_paths_zip(archive_bytes: &[u8]) -> Result<Vec<String>, FetchError> {
-    let mut archive = zip::ZipArchive::new(Cursor::new(archive_bytes))?;
-    let mut paths = Vec::new();
-    for i in 0..archive.len() {
-        let file = archive.by_index(i)?;
-        let Some(path) = file.enclosed_name() else {
-            return Err(FetchError::UnsafeArchivePath {
-                path: file.name().to_string(),
-            });
-        };
-        if file
-            .unix_mode()
-            .is_some_and(|mode| mode & 0o170_000 == 0o120_000)
-        {
-            return Err(FetchError::UnsafeArchivePath {
-                path: file.name().to_string(),
-            });
-        }
-        if file.is_file() {
-            paths.push(normalize_archive_path(&path)?);
-        }
-    }
-    Ok(paths)
-}
-
 fn archive_url_is_zip(url: &str) -> bool {
     Path::new(url)
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("zip"))
-}
-
-fn extract_zip_to_dir(archive_bytes: &[u8], dest: &Path) -> Result<(), FetchError> {
-    let mut archive = zip::ZipArchive::new(Cursor::new(archive_bytes))?;
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let Some(path) = file.enclosed_name() else {
-            return Err(FetchError::UnsafeArchivePath {
-                path: file.name().to_string(),
-            });
-        };
-        let out = safe_join(dest, &path)?;
-        if file.is_dir() {
-            fs::create_dir_all(out)?;
-        } else {
-            if let Some(parent) = out.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            let mut output = fs::File::create(out)?;
-            std::io::copy(&mut file, &mut output)?;
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -860,37 +486,6 @@ mod tests {
     use std::ffi::OsString;
 
     use super::*;
-
-    #[test]
-    fn archive_preflight_validates_directory_paths() {
-        use std::io::Write as _;
-        let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        let mut archive = tar::Builder::new(encoder);
-        let body = b"valid first file";
-        let mut file = tar::Header::new_gnu();
-        file.set_size(body.len() as u64);
-        file.set_mode(0o644);
-        file.set_cksum();
-        archive
-            .append_data(&mut file, "valid.txt", &body[..])
-            .unwrap();
-        let mut directory = tar::Header::new_gnu();
-        directory.set_entry_type(tar::EntryType::Directory);
-        directory.set_size(0);
-        directory.set_mode(0o755);
-        // Construct hostile bytes without tar's safe-path builder rejecting them.
-        let name = b"../outside/";
-        directory.as_mut_bytes()[..name.len()].copy_from_slice(name);
-        directory.set_cksum();
-        archive.append(&directory, std::io::empty()).unwrap();
-        let mut encoder = archive.into_inner().unwrap();
-        encoder.flush().unwrap();
-        let data = encoder.finish().unwrap();
-        assert!(matches!(
-            archive_paths(&data, "archive.tar.gz"),
-            Err(FetchError::UnsafeArchivePath { .. })
-        ));
-    }
 
     #[test]
     fn release_redirects_preserve_secure_transport() {
@@ -902,43 +497,6 @@ mod tests {
         assert!(validate_redirect_url(&secure, std::slice::from_ref(&loopback)).is_ok());
         assert!(validate_redirect_url(&loopback, std::slice::from_ref(&secure)).is_err());
         assert!(validate_redirect_url(&insecure, &[secure]).is_err());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn removing_installation_links_preserves_their_targets() {
-        let directory = tempfile::tempdir().unwrap();
-        let target = directory.path().join("target");
-        fs::create_dir(&target).unwrap();
-        let sentinel = target.join("keep");
-        fs::write(&sentinel, "preserve me").unwrap();
-        for (name, destination) in [("directory-link", &target), ("file-link", &sentinel)] {
-            let link = directory.path().join(name);
-            std::os::unix::fs::symlink(destination, &link).unwrap();
-            remove_entry(&link).unwrap();
-            assert!(fs::symlink_metadata(&link).is_err());
-            assert_eq!(fs::read_to_string(&sentinel).unwrap(), "preserve me");
-        }
-    }
-
-    #[test]
-    fn install_lock_releases_without_removing_the_file() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("install.lock");
-        fs::write(&path, "stale metadata").unwrap();
-        let first = InstallLock::acquire(&path).unwrap();
-        let other = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&path)
-            .unwrap();
-        assert!(matches!(
-            other.try_lock(),
-            Err(fs::TryLockError::WouldBlock)
-        ));
-        drop(first);
-        assert!(path.exists());
-        other.try_lock().unwrap();
     }
 
     #[test]
@@ -1090,157 +648,5 @@ mod tests {
             .unwrap(),
             b"fake windows host"
         );
-    }
-
-    #[test]
-    fn test_validate_toolchain_archive_layout_rejects_wrapper_binary() {
-        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        {
-            let mut builder = tar::Builder::new(&mut gzip);
-            for path in [
-                "bin/baml-cli",
-                "bin/baml-pack-host",
-                "assets/baml-vscode.vsix",
-                "assets/playground/index.html",
-                "assets/playground/assets/index.js",
-                "assets/playground/assets/index.css",
-                "bin/baml",
-            ] {
-                let bytes = b"fake";
-                let mut header = tar::Header::new_gnu();
-                header.set_size(bytes.len() as u64);
-                header.set_mode(0o755);
-                header.set_cksum();
-                builder.append_data(&mut header, path, &bytes[..]).unwrap();
-            }
-            builder.finish().unwrap();
-        }
-        let archive = gzip.finish().unwrap();
-        let err = validate_archive_layout(
-            Product::Toolchain,
-            "x86_64-unknown-linux-gnu",
-            &archive,
-            "https://example.com/archive.tar.gz",
-        )
-        .unwrap_err();
-        assert!(format!("{err}").contains("bin/baml"));
-    }
-
-    #[test]
-    fn test_validate_toolchain_archive_layout_accepts_playground_payload() {
-        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        {
-            let mut builder = tar::Builder::new(&mut gzip);
-            for path in [
-                "bin/baml-cli",
-                "bin/baml-pack-host",
-                "assets/baml-vscode.vsix",
-                "assets/playground/index.html",
-                "assets/playground/assets/index.js",
-                "assets/playground/assets/index.css",
-            ] {
-                let bytes = b"fake";
-                let mut header = tar::Header::new_gnu();
-                header.set_size(bytes.len() as u64);
-                header.set_mode(0o755);
-                header.set_cksum();
-                builder.append_data(&mut header, path, &bytes[..]).unwrap();
-            }
-            builder.finish().unwrap();
-        }
-        let archive = gzip.finish().unwrap();
-        validate_archive_layout(
-            Product::Toolchain,
-            "x86_64-unknown-linux-gnu",
-            &archive,
-            "https://example.com/archive.tar.gz",
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn test_validate_windows_toolchain_archive_layout_accepts_playground_payload() {
-        use std::io::Write;
-
-        let mut archive = Cursor::new(Vec::new());
-        {
-            let mut zip = zip::ZipWriter::new(&mut archive);
-            for path in [
-                "bin/baml-cli.exe",
-                "bin/baml-pack-host.exe",
-                "assets/baml-vscode.vsix",
-                "assets/playground/index.html",
-                "assets/playground/assets/index.js",
-                "assets/playground/assets/index.css",
-            ] {
-                zip.start_file(path, zip::write::SimpleFileOptions::default())
-                    .unwrap();
-                zip.write_all(b"fake").unwrap();
-            }
-            zip.finish().unwrap();
-        }
-        validate_archive_layout(
-            Product::Toolchain,
-            "x86_64-pc-windows-msvc",
-            &archive.into_inner(),
-            "https://example.com/archive.zip",
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn test_validate_toolchain_archive_layout_rejects_incomplete_playground_payload() {
-        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        {
-            let mut builder = tar::Builder::new(&mut gzip);
-            for path in [
-                "bin/baml-cli",
-                "bin/baml-pack-host",
-                "assets/baml-vscode.vsix",
-                "assets/playground/index.html",
-                "assets/playground/assets/index.css",
-            ] {
-                let bytes = b"fake";
-                let mut header = tar::Header::new_gnu();
-                header.set_size(bytes.len() as u64);
-                header.set_mode(0o755);
-                header.set_cksum();
-                builder.append_data(&mut header, path, &bytes[..]).unwrap();
-            }
-            builder.finish().unwrap();
-        }
-        let archive = gzip.finish().unwrap();
-        let err = validate_archive_layout(
-            Product::Toolchain,
-            "x86_64-unknown-linux-gnu",
-            &archive,
-            "https://example.com/archive.tar.gz",
-        )
-        .unwrap_err();
-        assert!(format!("{err}").contains("assets/playground/assets/index.js"));
-    }
-
-    #[test]
-    fn test_validate_wrapper_archive_layout_rejects_toolchain_payload() {
-        use std::io::Write;
-
-        let mut archive = Cursor::new(Vec::new());
-        {
-            let mut zip = zip::ZipWriter::new(&mut archive);
-            for path in ["bin/baml.exe", "bin/baml-cli.exe"] {
-                zip.start_file(path, zip::write::SimpleFileOptions::default())
-                    .unwrap();
-                zip.write_all(b"fake").unwrap();
-            }
-            zip.finish().unwrap();
-        }
-        let err = validate_archive_layout(
-            Product::Wrapper,
-            "x86_64-pc-windows-msvc",
-            &archive.into_inner(),
-            "https://example.com/archive.zip",
-        )
-        .unwrap_err();
-        assert!(format!("{err}").contains("baml-cli"));
     }
 }

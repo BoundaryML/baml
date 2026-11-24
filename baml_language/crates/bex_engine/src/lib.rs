@@ -2618,11 +2618,6 @@ impl BexEngine {
     }
 
     #[must_use]
-    pub fn process_euid(&self) -> ProcessEuid {
-        self.process_euid
-    }
-
-    #[must_use]
     pub fn engine_id(&self) -> EngineId {
         self.engine_id
     }
@@ -4694,22 +4689,6 @@ impl BexEngine {
         .and_then(|result| result.value)
     }
 
-    pub async fn call_callable_with_outcome(
-        self: &Arc<Self>,
-        handle: bex_external_types::Handle,
-        args: Vec<BexExternalValue>,
-        call_ctx: FunctionCallContext,
-        copy_objects: bool,
-    ) -> Result<BexCallResult, EngineError> {
-        self.call_callable_with_outcome_impl(
-            handle,
-            CallableArgs::Positional(args),
-            call_ctx,
-            copy_objects,
-        )
-        .await
-    }
-
     /// Invoke a callable for the runtime's own code (a sys-op calling back
     /// into BAML): its arguments are the runtime's own values, and so is its
     /// result ([`Self::runtime_result`]).
@@ -5522,13 +5501,6 @@ impl BexEngine {
         sys_types::resolve_name(&self.resolved_function_names, name)
             .found()
             .map(|(k, _)| k)
-    }
-
-    /// Get the return type for a function by dereferencing its heap object.
-    pub fn function_return_type(&self, name: &str) -> Option<RuntimeTy> {
-        let resolved = self.resolve_function_name(name)?;
-        let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
-        Self::function_return_type_of(*ptr).and_then(|ty| named_ty(&ty).ok())
     }
 
     fn function_return_type_of(function: HeapPtr) -> Option<bex_vm_types::RuntimeTy> {

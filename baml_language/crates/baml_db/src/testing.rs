@@ -235,7 +235,9 @@ pub fn compile_source_with_prefix(prefix: &StdlibPrefix, source: &str, opt: OptL
     compile_multi_file_with_prefix(prefix, &[("test.baml", source)], opt)
 }
 
-/// [`compile_multi_file`] accelerated by `prefix`. See
+/// Compile multiple BAML files at the given relative paths in one project,
+/// accelerated by `prefix`. Use when a test needs cross-file or namespaced
+/// (`ns_<name>/`) layout. See
 /// [`compile_source_with_prefix`] for the guarantees and the panic.
 pub fn compile_multi_file_with_prefix(
     prefix: &StdlibPrefix,
@@ -263,22 +265,6 @@ pub fn compile_multi_file_with_prefix(
         collect_compiler2_diagnostics_narrowed(&db, &|file| user_files.contains(&file), Vec::new());
     checked_world(&diagnostics.merged, root)
         .compile_with(opt, prefix)
-        .expect("compile should succeed for valid test source")
-}
-
-/// Compile multiple BAML files at the given relative paths in one project.
-/// Use when a test needs cross-file or namespaced (`ns_<name>/`) layout,
-/// which `compile_source`'s single-file helper can't express.
-pub fn compile_multi_file(files: &[(&str, &str)]) -> Program {
-    let (mut db, root) = workspace_db();
-    db.add_or_update_files_in(
-        root,
-        files
-            .iter()
-            .map(|(path, content)| (Path::new(*path), *content)),
-    );
-    checked_world(&ProjectDiagnostics::collect(&db), root)
-        .compile(OptLevel::One)
         .expect("compile should succeed for valid test source")
 }
 

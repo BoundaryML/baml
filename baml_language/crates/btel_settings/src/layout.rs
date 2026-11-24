@@ -2,9 +2,6 @@
 // Rust requires a literal in repr(align); this wrapper is the single definition.
 #[repr(align(128))]
 pub struct Padded<T>(pub T);
-/// **Derived from Padded.** Changing padding requires contention and footprint measurements;
-/// edit the wrapper alignment, not this value.
-pub const CACHE_ALIGNMENT: usize = align_of::<Padded<()>>();
 /// **Checked layout.** Change the frame representation first; editing this assertion target
 /// does not reduce runtime storage.
 pub const FRAME_TELEMETRY_BYTES: usize = 40;

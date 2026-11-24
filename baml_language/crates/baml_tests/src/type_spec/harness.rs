@@ -6,7 +6,7 @@
 //! A fixture is a single BAML file. Annotation lines are comments whose first
 //! non-space content after `//` is a caret run; the carets select a byte range
 //! on the nearest preceding non-annotation line, and the rest of the line is
-//! the expected type in `Ty::render_canonical` syntax:
+//! the expected type in canonical render syntax:
 //!
 //! ```text
 //! function f() -> int {

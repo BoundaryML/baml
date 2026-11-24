@@ -677,12 +677,6 @@ impl GlobalState {
         Arc::make_mut(&mut self.open_documents).insert(path, doc);
     }
 
-    pub fn set_document_version(&mut self, path: &Path, version: Option<i32>) {
-        if let Some(doc) = Arc::make_mut(&mut self.open_documents).get_mut(path) {
-            doc.version = version;
-        }
-    }
-
     /// Open documents whose path lies under `root_path`.
     pub fn open_documents_under<'a>(
         &'a self,

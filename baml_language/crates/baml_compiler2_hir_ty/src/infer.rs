@@ -1960,12 +1960,6 @@ pub fn infer_body<'db>(
 /// this near zero for clean files).
 static BODY_INFERENCES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-/// Number of body inferences executed (not served from salsa memos or
-/// seeds) since process start.
-pub fn body_inferences() -> usize {
-    BODY_INFERENCES.load(std::sync::atomic::Ordering::Relaxed)
-}
-
 fn infer_body_impl<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     owner: BodyOwnerId<'db>,

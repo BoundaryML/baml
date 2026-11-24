@@ -204,11 +204,6 @@ impl StartGuard {
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::Release);
     }
-
-    #[must_use]
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Acquire)
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -3703,12 +3703,6 @@ impl BexVm {
             .map(TelemetryState::hidden_spawn_context)
     }
 
-    pub fn set_invocation_ancestry(&mut self, context: &crate::telemetry::ThreadSpawnContext) {
-        if let Some(telemetry) = &mut self.telemetry {
-            telemetry.configure_spawn(context);
-        }
-    }
-
     pub fn set_entry_reservation(&mut self, reservation: &bex_vm_types::trace::ReservedSpanData) {
         self.entry_reservation = Some(reservation.clone());
     }
@@ -4366,12 +4360,8 @@ impl BexVm {
         self.get_object(self.packages.accessible(pkg)?).as_package()
     }
 
-    fn package_for_type(&self, qtn: &baml_type::TypeName) -> Option<&bex_vm_types::types::Package> {
-        self.package_for_type_in(self.current_runtime_package(), qtn)
-    }
-
-    /// [`Self::package_for_type`] against an explicitly chosen runtime package
-    /// rather than the executing frame's.
+    /// The package declaring `qtn`, resolved against an explicitly chosen
+    /// runtime package rather than the executing frame's.
     ///
     /// Reflection resolves names that belong to a package it is *inspecting*,
     /// not the one it is running in: a bound declared inside a
@@ -4399,18 +4389,10 @@ impl BexVm {
         self.package(qtn.package())
     }
 
-    /// Look up a class or enum object by its qualified type name. Classes and
-    /// enums share one type namespace, so a name resolves to at most one object.
-    ///
-    /// Only declared types resolve here: a runtime-created declaration is
-    /// anonymous, so there is no qualified name to look it up by — it is
-    /// reached through heads and mount surfaces instead.
-    pub fn lookup_type(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
-        self.lookup_type_in(self.current_runtime_package(), qtn)
-    }
-
-    /// [`Self::lookup_type`] rooted at an explicitly chosen runtime package
-    /// (a null pointer for the program's root).
+    /// Look up a class or enum object by its qualified type name, rooted at
+    /// an explicitly chosen runtime package. Classes and enums share one type
+    /// namespace, so a name resolves to at most one object. A null pointer
+    /// selects the program's root.
     pub fn lookup_type_in(
         &self,
         current_ptr: HeapPtr,
@@ -4459,16 +4441,6 @@ impl BexVm {
     pub fn class_instance(&self, ptr: HeapPtr) -> Option<(HeapPtr, &[bex_vm_types::RealizedTy])> {
         // SAFETY: as for `get_object`.
         unsafe { Object::class_instance_at(ptr) }
-    }
-
-    /// The declaration of the standard library's error class `class`.
-    pub fn error_class_ptr(&self, class: ErrorClass) -> HeapPtr {
-        self.error_class_ptrs[class as usize]
-    }
-
-    /// Whether `value` is a panic of exactly `class`, by the class's identity.
-    pub fn is_panic_of(&self, value: Value, class: PanicClass) -> bool {
-        self.instance_class(value) == Some(self.panic_class_ptrs[class as usize])
     }
 
     /// Whether `value` is the cancellation panic, `baml.panics.Cancelled`,
@@ -4525,16 +4497,10 @@ impl BexVm {
         Some(bex_vm_types::TypeHead::new(ptr, tag))
     }
 
-    /// Look up an interface object by its qualified type name. The returned
-    /// pointer is the canonical `Object::Interface` for the interface — the same
-    /// pointer that keys every package's [`bex_vm_types::types::Package::impl_rules`], so it can be
-    /// used to resolve an interface's impls in O(1).
-    pub fn lookup_interface(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
-        self.lookup_interface_in(self.current_runtime_package(), qtn)
-    }
-
-    /// [`Self::lookup_interface`] rooted at an explicitly chosen runtime
-    /// package. See `package_for_type_in` (private) for why reflection needs
+    /// Look up an interface object by its qualified type name, rooted at an
+    /// explicitly chosen runtime package. The returned pointer is the
+    /// canonical `Object::Interface`, the same pointer that keys every
+    /// package's [`bex_vm_types::types::Package::impl_rules`]. See `package_for_type_in` (private) for why reflection needs
     /// a root other than the executing frame's.
     pub fn lookup_interface_in(
         &self,
@@ -4586,13 +4552,9 @@ impl BexVm {
         })
     }
 
-    /// The `Object::TypeAlias` pointer for `qtn`, if its package declares one.
-    pub fn lookup_type_alias_ptr(&self, qtn: &baml_type::TypeName) -> Option<HeapPtr> {
-        self.lookup_type_alias_ptr_in(self.current_runtime_package(), qtn)
-    }
-
-    /// [`Self::lookup_type_alias_ptr`] rooted at an explicitly chosen runtime
-    /// package (a null pointer for the program's root).
+    /// The `Object::TypeAlias` pointer for `qtn`, if its package declares
+    /// one, rooted at an explicitly chosen runtime package (a null pointer
+    /// for the program's root).
     pub fn lookup_type_alias_ptr_in(
         &self,
         current_ptr: HeapPtr,
@@ -4606,29 +4568,6 @@ impl BexVm {
             .type_aliases
             .get(&local)
             .copied()
-    }
-
-    /// aliases survive to runtime; non-recursive ones are expanded inline).
-    ///
-    /// Reads through the package's `Object::TypeAlias` rather than a side map —
-    /// the indirection a nominal reference will eventually point at directly.
-    pub fn recursive_type_alias(
-        &self,
-        qtn: &baml_type::TypeName,
-    ) -> Option<&bex_vm_types::RealizedTy> {
-        let local = bex_vm_types::types::LocalName {
-            namespace: qtn.namespace().clone(),
-            name: qtn.name().clone(),
-        };
-        let alias_ptr = *self.package_for_type(qtn)?.type_aliases.get(&local)?;
-        // SAFETY: a package's alias map holds only compile-time
-        // `Object::TypeAlias` pointers, valid for the heap's lifetime.
-        #[expect(unsafe_code, reason = "deref a compile-time alias pointer")]
-        let object = unsafe { alias_ptr.get() };
-        match object {
-            Object::TypeAlias(alias) => Some(&alias.definition),
-            _ => None,
-        }
     }
 
     /// The definition behind a type alias, given the declaration pointer its
@@ -7384,12 +7323,12 @@ impl BexVm {
             })
     }
 
-    pub fn as_tuple(&self, value: &Value) -> Result<&bex_vm_types::Tuple, VmInternalError> {
+    pub(crate) fn as_tuple(&self, value: Value) -> Result<&bex_vm_types::Tuple, VmInternalError> {
         match value.as_object_ptr().map(|ptr| self.get_object(ptr)) {
             Some(Object::Tuple(tuple)) => Ok(tuple),
             _ => Err(VmInternalError::TypeError {
                 expected: Type::Object(ObjectType::Tuple),
-                got: self.type_of(value),
+                got: self.type_of(&value),
             }),
         }
     }

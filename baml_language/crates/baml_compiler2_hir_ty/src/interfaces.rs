@@ -812,34 +812,6 @@ pub fn realize_associated_default(
     baml_type::unify::substitute_ty(default, &bindings)
 }
 
-/// The realized type of a *defaulted* associated `member` for an interface existential
-/// `Ty::Interface(qtn, args, …)`, or `None` when `member` is not a defaulted associated
-/// type of that interface. A *bound* never fills a default this way — its implementor may
-/// override it — which is why this is keyed on the interface-existential base.
-pub fn existential_associated_default(
-    db: &dyn baml_compiler2_hir::Db,
-    res_ctx: &crate::package_interface::PackageResolutionContext<'_>,
-    qtn: &DeclName,
-    args: &[Ty],
-    self_ty: &Ty,
-    member: &Name,
-) -> Option<Ty> {
-    let items = res_ctx.items_for_root(db, qtn.root())?;
-    let Definition::Interface(iface_loc) = items.lookup_type(qtn.namespace(), qtn.name())? else {
-        return None;
-    };
-    let (default, _diagnostics) = interface_associated_type_default(db, iface_loc, member.clone())?;
-    let self_param = interface_self_param(db, iface_loc);
-    let iface_params = crate::lower::interface_declared_params(db, iface_loc);
-    Some(realize_associated_default(
-        &default,
-        &iface_params,
-        args,
-        &self_param,
-        self_ty,
-    ))
-}
-
 fn lower_interface_type_associated_bindings(
     ctx: &InterfaceTypeAssocLowering<'_, '_>,
     diagnostics: &mut Vec<TirTypeError>,
@@ -1508,57 +1480,6 @@ pub fn interface_closure_locs_with_args_and_assoc<'db>(
     }
 
     out
-}
-
-/// Does interface constraint `sub` transitively (and *properly*) require `sup`?
-///
-/// Walks `sub`'s `requires` closure instantiated at `sub`'s generic arguments and
-/// associated-type pins, and looks for an entry matching `sup` by qualified name,
-/// argument list, and every associated-type pin `sup` specifies.
-pub fn interface_requires<'db>(
-    db: &'db dyn baml_compiler2_hir::Db,
-    res_ctx: &'db crate::package_interface::PackageResolutionContext<'db>,
-    sub: &baml_type::Interface,
-    sup: &baml_type::Interface,
-    mut equivalent: impl FnMut(&Ty, &Ty) -> bool,
-) -> bool {
-    if sub.name == sup.name {
-        return false;
-    }
-    let Some(pkg_items) = res_ctx.items_for_root(db, sub.name.root()) else {
-        return false;
-    };
-    let Some(Definition::Interface(sub_loc)) =
-        pkg_items.lookup_type(sub.name.namespace(), sub.name.name())
-    else {
-        return false;
-    };
-    for (iface_loc, iface_args, iface_assoc) in interface_closure_locs_with_args_and_assoc(
-        db,
-        sub_loc,
-        &sub.generics,
-        &sub.associated_types,
-        true,
-    ) {
-        let iface_data = baml_compiler2_hir::item_data::interface_data(db, iface_loc);
-        let iface_qtn = qualify_def(db, Definition::Interface(iface_loc), &iface_data.name);
-        if iface_qtn == sup.name
-            && iface_args.len() == sup.generics.len()
-            && iface_args
-                .iter()
-                .zip(sup.generics.iter())
-                .all(|(a, b)| equivalent(a, b))
-            && sup.associated_types.iter().all(|(sup_name, sup_ty)| {
-                iface_assoc
-                    .iter()
-                    .find(|(iface_name, _)| iface_name == sup_name)
-                    .is_some_and(|(_, iface_ty)| equivalent(iface_ty, sup_ty))
-            })
-        {
-            return true;
-        }
-    }
-    false
 }
 
 // ── Written-type well-formedness: generic-argument bounds ──────────────────

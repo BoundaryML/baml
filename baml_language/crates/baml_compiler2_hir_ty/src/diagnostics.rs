@@ -3548,13 +3548,3 @@ impl fmt::Display for RenderedTirDiagnostic {
 pub struct TypeCheckDiagnostics<'db> {
     pub diagnostics: Vec<TirDiagnostic<'db>>,
 }
-
-impl<'db> TypeCheckDiagnostics<'db> {
-    pub fn is_empty(&self) -> bool {
-        self.diagnostics.is_empty()
-    }
-
-    pub fn extend(&mut self, other: &TypeCheckDiagnostics<'db>) {
-        self.diagnostics.extend(other.diagnostics.iter().cloned());
-    }
-}

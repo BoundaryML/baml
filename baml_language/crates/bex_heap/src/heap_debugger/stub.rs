@@ -30,17 +30,11 @@ impl HeapDebuggerConfig {
     }
 }
 
-pub(crate) struct HeapDebuggerState {
-    config: HeapDebuggerConfig,
-}
+pub(crate) struct HeapDebuggerState;
 
 impl HeapDebuggerState {
-    pub(crate) fn new(config: HeapDebuggerConfig) -> Self {
-        Self { config }
-    }
-
-    pub(crate) fn config(&self) -> &HeapDebuggerConfig {
-        &self.config
+    pub(crate) fn new(_config: HeapDebuggerConfig) -> Self {
+        Self
     }
 
     pub(crate) fn bump_epoch(&self) -> u32 {
@@ -53,11 +47,6 @@ impl HeapDebuggerState {
 }
 
 impl BexHeap {
-    #[inline]
-    pub fn debug_config(&self) -> &HeapDebuggerConfig {
-        self.debug_state().config()
-    }
-
     #[inline]
     pub fn verify_quick(&self) {}
 

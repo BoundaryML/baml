@@ -318,7 +318,7 @@ impl BexVm {
 
     pub fn load_tuple_field(&mut self, tuple: Value, idx: usize) -> Result<Value, Box<VmError>> {
         let load_result = {
-            let tuple = self.as_tuple(&tuple)?;
+            let tuple = self.as_tuple(tuple)?;
             tuple.try_load_slot(idx).ok_or_else(|| tuple.len())
         };
         match load_result {

@@ -450,28 +450,6 @@ impl<N: Clone + PartialEq> Ty<N> {
     /// Recurses into `Union`, `List`, `Map`, and `Optional` so that compound
     /// types like `(1 | 2 | 3)[]` widen to `int[]` at unannotated bindings.
     #[must_use]
-    /// Remove `null` from this type: `T?` gives `T`, a union drops its
-    /// null member (single survivor collapses), bare `null` gives
-    /// `never`, everything else passes through unchanged.
-    pub fn remove_null(&self) -> Ty<N> {
-        match self {
-            Ty::Union(members) => {
-                let filtered: Box<[Ty<N>]> = members
-                    .iter()
-                    .filter(|member| !matches!(member, Ty::Null))
-                    .cloned()
-                    .collect();
-                match filtered.len() {
-                    0 => Ty::Never,
-                    1 => filtered.into_iter().next().expect("length checked"),
-                    _ => Ty::Union(filtered),
-                }
-            }
-            Ty::Null => Ty::Never,
-            _ => self.clone(),
-        }
-    }
-
     pub fn widen_fresh(self) -> Ty<N> {
         match self {
             Ty::Literal(lit, Freshness::Fresh) => {
@@ -498,10 +476,6 @@ impl<N: Clone + PartialEq> Ty<N> {
     /// `T[]` (list) with default attributes.
     pub fn list(inner: Ty<N>) -> Self {
         Ty::List(Box::new(inner))
-    }
-
-    pub fn tuple(elements: impl IntoIterator<Item = Ty<N>>) -> Self {
-        Ty::Tuple(elements.into_iter().collect())
     }
 
     /// `A | B | ...` (union) with default attributes.
@@ -588,11 +562,6 @@ impl<N: Clone> LoweringTy<N> {
     /// `never` with default attributes.
     pub fn never() -> Self {
         LoweringTy::Never
-    }
-
-    /// `unknown` (the top type) with default attributes.
-    pub fn unknown() -> Self {
-        LoweringTy::Unknown
     }
 
     /// The error-recovery sentinel with default attributes.
@@ -761,7 +730,7 @@ pub fn render_tuple(elements: &[String]) -> String {
 /// is; a runtime head answers by reaching its declaration.
 ///
 /// Note this is the compact spelling used by `Display` — the short/dotted
-/// `display_name`, *not* the fully-qualified [`Ty::render_canonical`] form.
+/// `display_name`, *not* the fully-qualified canonical ([`CanonicalTyRender`]) form.
 /// The two renderings differ on purpose and are not interchangeable.
 pub trait HeadDisplay {
     /// This head's compact display name.
@@ -814,41 +783,16 @@ impl Ty<TypeName> {
     pub fn class(name: &str) -> Self {
         Ty::Class(TypeName::local(name.into()), Box::new([]))
     }
-
-    /// `Class(name, args)` at the artifact's own root.
-    pub fn user_class_with_args(name: &str, args: Vec<Self>) -> Self {
-        Ty::Class(TypeName::local(Name::new(name)), args.into())
-    }
-}
-
-impl LoweringTy<TypeName> {
-    /// User-facing rendering of a written (possibly hole-carrying) type;
-    /// see [`Ty::render_user_facing`], whose policy this shares.
-    pub fn render_user_facing(&self) -> String {
-        self.render_with(&CanonicalTyRender { user_facing: true })
-    }
-
-    /// Canonical structural rendering of a written type; see
-    /// [`Ty::render_canonical`], whose policy this shares.
-    pub fn render_canonical(&self) -> String {
-        self.render_with(&CanonicalTyRender { user_facing: false })
-    }
 }
 
 impl Ty<TypeName> {
     /// User-facing rendering of a wire type: identical to the canonical render
-    /// ([`Ty::render_canonical`]) except the artifact's own package is elided
+    /// ([`CanonicalTyRender`] with `user_facing = false`) except the artifact's own package is elided
     /// and synthetic effect params show as `callback`. A compiler type
     /// ([`DeclName`]-headed) has no viewpoint-free rendering; it renders
     /// through a viewpoint-taking [`TyRenderStrategy`].
     pub fn render_user_facing(&self) -> String {
         self.render_with(&CanonicalTyRender { user_facing: true })
-    }
-
-    /// Canonical structural rendering — fully-qualified leaf names (including the
-    /// implicit `user` package). This is what TIR's dump output expects.
-    pub fn render_canonical(&self) -> String {
-        self.render_with(&CanonicalTyRender { user_facing: false })
     }
 }
 
@@ -1023,7 +967,7 @@ impl<N: Clone + HeadDisplay> fmt::Display for Ty<N> {
 /// `user_facing`, the reserved implicit `user` package is elided and synthetic
 /// effect params show as `callback`; otherwise everything renders verbatim (for
 /// dumps and identity). Both keep `(evolving)` annotations and `<_>`
-/// placeholders. [`Ty::render_canonical`] uses `user_facing = false`;
+/// placeholders. Dumps use `user_facing = false`;
 /// [`Ty::render_user_facing`] uses `true`.
 pub struct CanonicalTyRender {
     pub user_facing: bool,

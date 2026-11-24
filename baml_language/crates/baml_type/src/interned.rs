@@ -279,14 +279,6 @@ impl InferFunctionParamTy {
             mode: FunctionParamMode::Required,
         }
     }
-
-    pub fn optional(name: Option<Name>, ty: Ty) -> InferFunctionParamTy {
-        InferFunctionParamTy {
-            name,
-            ty,
-            mode: FunctionParamMode::Optional,
-        }
-    }
 }
 
 impl InferInterface {
@@ -1029,10 +1021,6 @@ impl InterfaceVocabulary for ClosedInterface {
 impl Ty {
     pub fn int() -> Ty {
         Ty::intern(InferTy::Int)
-    }
-
-    pub fn float() -> Ty {
-        Ty::intern(InferTy::Float)
     }
 
     pub fn string() -> Ty {

@@ -137,16 +137,6 @@ impl<'db> CheckedWorld<'db> {
         Self::check(&ProjectDiagnostics::collect(db), root)
     }
 
-    /// The database the world was checked in.
-    pub fn db(&self) -> &'db ProjectDatabase {
-        self.db
-    }
-
-    /// The package the world is rooted at: its program's viewpoint.
-    pub fn root(&self) -> SourceRoot {
-        self.root
-    }
-
     /// The program of the world: every package emitted on its own and the
     /// outputs linked.
     ///

@@ -609,35 +609,6 @@ impl Program {
         idx
     }
 
-    /// Flatten every package's recursive type aliases into one map keyed by
-    /// declaration identity (only recursive aliases survive; non-recursive ones
-    /// are expanded inline), reconstructing each alias's declared name from its
-    /// package + `LocalName`. The shape output-format rendering consumes.
-    ///
-    /// Aliases are `Object::TypeAlias` declarations, so this dereferences each
-    /// through the object pool rather than reading a side map — which is also
-    /// where the identity comes from.
-    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TaggedTypeName, crate::RealizedTy> {
-        let mut out = IndexMap::new();
-        for package in &self.packages {
-            for (local, idx) in &package.type_aliases {
-                let Some(Object::TypeAlias(alias)) = self.objects.get(idx.raw()) else {
-                    // An index that does not resolve to an alias means the pool
-                    // and the package map disagree — skip rather than guess.
-                    continue;
-                };
-                out.insert(
-                    baml_type::TaggedTypeName::new(
-                        alias.type_tag,
-                        baml_type::DeclarationName::Declared(local.under(&package.name)),
-                    ),
-                    alias.definition.clone(),
-                );
-            }
-        }
-        out
-    }
-
     /// Add a global value (`ConstValue`, converted to Value at load time).
     pub fn add_global(&mut self, value: ConstValue) {
         self.globals.push(value);

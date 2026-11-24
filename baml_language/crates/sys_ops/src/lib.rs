@@ -2599,12 +2599,6 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `fs` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_fs<T: io::IoNamespaceFs + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_fs_instance(Arc::new(T::default()))
-    }
-
     /// Override the `glob` namespace with a pre-built instance. A `glob.Glob`'s
     /// methods are its own: whichever instance compiled it serves them.
     #[must_use]
@@ -2704,41 +2698,6 @@ impl IoSysOpsBuilder {
         self
     }
 
-    /// Override the `net` namespace (the `TcpStream` / `TcpListener` /
-    /// `UdpSocket` constructors) with a pre-built instance. A socket's methods
-    /// are its own: whichever instance opened it serves them.
-    #[must_use]
-    pub fn with_net_instance(
-        mut self,
-        instance: Arc<dyn io::IoNamespaceNet + Send + Sync + 'static>,
-    ) -> Self {
-        self.inner.baml_net_tcpstream__connect = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream__connect(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_tcplistener_bind = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcplistener_bind(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_udpsocket_bind = {
-            let t = instance;
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_udpsocket_bind(heap, permit, args, ctx, call_id)
-            })
-        };
-        self
-    }
-
-    /// Override the `net` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_net<T: io::IoNamespaceNet + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_net_instance(Arc::new(T::default()))
-    }
-
     /// Override the `sys` namespace with a pre-built instance.
     #[allow(clippy::needless_pass_by_value)]
     #[must_use]
@@ -2819,12 +2778,6 @@ impl IoSysOpsBuilder {
             })
         };
         self
-    }
-
-    /// Override the `sys` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_sys<T: io::IoNamespaceSys + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_sys_instance(Arc::new(T::default()))
     }
 
     /// Override the `host` namespace (host-callable dispatch) with a pre-built instance.

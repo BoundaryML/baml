@@ -63,8 +63,8 @@ pub const TS_KEYWORDS_YAML: &str = include_str!("../keyword_docs/ts_keywords.yam
 
 mod language_docs;
 pub use language_docs::{
-    LanguageTopic, TypescriptCrosswalkTopic, has_describe_topic, language_topic, language_topics,
-    typescript_crosswalk_topic, typescript_crosswalk_topics,
+    LanguageTopic, TypescriptCrosswalkTopic, has_describe_topic, language_topic,
+    typescript_crosswalk_topic,
 };
 
 /// Builtin registration macro: package, relative virtual path, filesystem include path.

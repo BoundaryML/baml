@@ -759,16 +759,6 @@ impl BexExternalValue {
         }
     }
 
-    /// Return the inner bool if this is a `Bool` value, peeling off any
-    /// surrounding `Union` wrapper. See [`Self::as_string`].
-    pub fn as_bool(&self) -> Option<bool> {
-        match self {
-            BexExternalValue::Bool(value) => Some(*value),
-            BexExternalValue::Union { value, .. } => value.as_bool(),
-            _ => None,
-        }
-    }
-
     /// Human-readable, structural rendering of this value — the form `baml run`
     /// prints in debug mode and the form the CLI surfaces for an uncaught
     /// `throw`.

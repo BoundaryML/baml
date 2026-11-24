@@ -444,15 +444,6 @@ pub fn db_with_root(root: &Path) -> ProjectDatabase {
     db
 }
 
-/// Like `run_test` but at `OptLevel::Two` (includes MIR constant folding).
-pub async fn run_test_mir_optimized(
-    source: &str,
-    entry: &str,
-    args: IndexMap<&str, BexExternalValue>,
-) -> TestOutput {
-    run_test(source, entry, args, OptLevel::Two).await
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

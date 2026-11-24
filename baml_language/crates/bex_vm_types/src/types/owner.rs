@@ -68,15 +68,6 @@ impl Owner {
         }
     }
 
-    /// Every heap edge the owner carries.
-    #[must_use]
-    pub fn edges(&self) -> &[HeapPtr] {
-        match self {
-            Self::Package(package) => std::slice::from_ref(package),
-            Self::Anonymous { .. } => self.witnesses(),
-        }
-    }
-
     /// Every heap edge the owner carries, for the collector to repoint.
     pub fn edges_mut(&mut self) -> &mut [HeapPtr] {
         match self {

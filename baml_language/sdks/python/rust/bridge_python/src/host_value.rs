@@ -310,7 +310,7 @@ fn dispatch_host_callable(
         Vec::new()
     } else {
         // SAFETY: the engine guarantees `args` is valid for `length` bytes
-        // for the duration of this call (see `host_dispatch::fire_dispatch`).
+        // for the duration of this call (see `host_dispatch::fire_dispatch_v2`).
         unsafe { std::slice::from_raw_parts(args, length) }.to_vec()
     };
 

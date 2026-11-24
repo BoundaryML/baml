@@ -37,13 +37,6 @@ pub fn executed() -> Vec<OpCode> {
         .collect()
 }
 
-/// Every opcode the VM defines, in opcode order.
-pub fn all() -> Vec<OpCode> {
-    (0..=u8::MAX)
-        .filter_map(|byte| OpCode::try_from(byte).ok())
-        .collect()
-}
-
 #[cfg(not(target_arch = "wasm32"))]
 fn register_dump() {
     use std::{fmt::Write as _, path::PathBuf, sync::OnceLock};

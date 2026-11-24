@@ -504,10 +504,6 @@ impl Tuple {
     pub fn slot_values(&self) -> impl ExactSizeIterator<Item = Value> + '_ {
         self.slots.iter().copied()
     }
-
-    pub fn ty(&self) -> crate::RealizedTy {
-        crate::RealizedTy::Tuple(self.element_tys.clone())
-    }
 }
 
 /// Heap-mutable array container.
@@ -944,10 +940,6 @@ impl Map {
     /// Locked convenience: whether the map is empty.
     pub fn is_empty(&self) -> bool {
         self.data.lock().data.is_empty()
-    }
-
-    pub fn epoch(&self) -> u64 {
-        self.lock().epoch()
     }
 
     pub fn snapshot_bucket(&self, hash: u64) -> (u64, Vec<(EntryId, MapEntry)>) {

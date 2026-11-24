@@ -211,50 +211,6 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
     }
 }
 
-/// Recursively copy `customizable_dir` into `dst_dir`. Used by the Go, Java,
-/// Swift and TypeScript targets: symlinks would force every parallel test
-/// process to either set `NODE_OPTIONS=--preserve-symlinks` (which breaks the
-/// pnpm CLI, itself a symlinked node script) or let node follow the symlink
-/// and resolve `node_modules` from `customizable/` (which has none). Copying
-/// sidesteps both.
-///
-/// Stages only what `customizable_dir` holds *now* and keeps no record of it,
-/// so a file deleted upstream leaves its copy behind. Callers are responsible
-/// for clearing the destination before re-staging — see [`symlink_customizable`]
-/// for the same contract.
-pub fn copy_customizable(customizable_dir: &Path, dst_dir: &Path) {
-    for entry in fs::read_dir(customizable_dir).unwrap() {
-        let entry = entry.unwrap();
-        let src = entry.path();
-        let file_name = entry.file_name();
-        let dst = dst_dir.join(&file_name);
-
-        if src.is_dir() {
-            fs::create_dir_all(&dst).unwrap_or_else(|e| {
-                panic!(
-                    "Failed to create {} for customizable overlay: {e}",
-                    dst.display()
-                )
-            });
-            copy_customizable(&src, &dst);
-            continue;
-        }
-        if !src.is_file() {
-            continue;
-        }
-        if dst.exists() || dst.symlink_metadata().is_ok() {
-            let _ = fs::remove_file(&dst);
-        }
-        fs::copy(&src, &dst).unwrap_or_else(|e| {
-            panic!(
-                "Failed to copy {} from {}: {e}",
-                file_name.to_string_lossy(),
-                src.display()
-            )
-        });
-    }
-}
-
 /// Symlink every file in `customizable_dir` into `dst_dir`. Used by the C++,
 /// Python and Rust targets, so an edit to a ported test is picked up without
 /// re-staging. On Windows `symlink_file` requires Developer Mode or admin, so

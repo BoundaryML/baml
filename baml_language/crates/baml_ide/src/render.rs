@@ -4,7 +4,7 @@
 //! Three layers, one policy:
 //!
 //! - **Resolved types** ([`display_ty_for_file`], [`display_ty_canonical_for_file`],
-//!   [`display_ty`]): render a [`Ty`] via [`TyRenderStrategy`], so the
+//!   [`Reader::display_ty`]): render a [`Ty`] via [`TyRenderStrategy`], so the
 //!   structural walk lives once in `baml_type` and this module only supplies
 //!   naming policy (shortest unambiguous spelling for the file's
 //!   package/namespace, `callback` for synthetic effect params, the
@@ -283,18 +283,6 @@ pub fn display_ty_canonical_for_file(
     ty.render_with(&IdeTyRender {
         viewpoint: &Viewpoint::for_file(db, file),
         collapse_aliases: Some(lang_roots(db)),
-    })
-}
-
-/// Format a resolved [`Ty`] as a user-friendly string without file context.
-///
-/// Full canonical paths so same-short-name types stay distinguishable;
-/// synthetic effect params show as `callback`. With file context available,
-/// prefer [`display_ty_for_file`].
-pub fn display_ty(db: &dyn baml_compiler2_hir::Db, ty: &Ty) -> String {
-    ty.render_with(&IdeTyRender {
-        viewpoint: &Viewpoint::canonical(db),
-        collapse_aliases: None,
     })
 }
 

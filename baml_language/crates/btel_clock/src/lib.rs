@@ -475,16 +475,6 @@ impl ClockRuntime {
         Self::start_run_locked(&mut state)
     }
 
-    /// Deployment-level OS-clock option, also available at construction.
-    /// Changing mode invalidates active timings rather than mixing domains.
-    pub fn set_mode(&self, mode: ClockMode) -> Arc<ClockEpoch> {
-        let mut state = self.state.lock().expect("clock lifecycle poisoned");
-        Self::invalidate_active(&state, TimingStatus::ModeChanged);
-        state.mode = mode;
-        state.calibrated = Calibrated::new(mode);
-        Self::start_run_locked(&mut state)
-    }
-
     /// Rate-limited execution-boundary check. Force a sample on root completion.
     /// No background task is created; a busy uninterrupted VM region is checked
     /// at its next boundary. Transient jumps between samples can escape detection.

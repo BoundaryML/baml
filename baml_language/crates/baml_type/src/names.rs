@@ -325,27 +325,6 @@ impl QualifiedTypeName<Package> {
         matches!(self.pkg, Package::Local)
     }
 
-    pub fn is_builtin_root_type(&self, name: &str) -> bool {
-        self.package().as_str() == "baml" && self.is_root_item(name)
-    }
-
-    /// [`Self::is_builtin_root_type`] for the `reflect` package's root
-    /// namespace (`reflect.AnyFunction`, `reflect.AnyClass`, …).
-    pub fn is_reflect_root_type(&self, name: &str) -> bool {
-        self.package().as_str() == "reflect" && self.is_root_item(name)
-    }
-
-    /// The flat `[package, ...namespace]` path, matching the legacy
-    /// `TypeName::module_path` representation that fused package and namespace
-    /// into one `Vec`. Allocates — prefer [`package`](Self::package) /
-    /// [`namespace`](Self::namespace) on hot paths; kept for call sites that
-    /// build a fully-qualified dotted string.
-    pub fn module_path(&self) -> Vec<Name> {
-        std::iter::once(self.pkg.as_name().clone())
-            .chain(self.namespace.iter().cloned())
-            .collect()
-    }
-
     /// The user-facing display name (legacy `TypeName::display_name`): the
     /// artifact's own package is elided, dependency packages are kept.
     pub fn display_name(&self) -> Name {
@@ -401,13 +380,6 @@ impl QualifiedTypeName<Package> {
             (false, true) => format!("{}.{}", pkg, self.name),
             (false, false) => format!("{}.{namespace}.{}", pkg, self.name),
         }
-    }
-
-    /// User-facing rendering of the qualified name: identical to the canonical
-    /// [`fmt::Display`] except the artifact's own package is elided. Call this
-    /// instead of post-processing the canonical string.
-    pub fn render_user_facing(&self) -> String {
-        self.render_dotted(true)
     }
 
     /// Return the primitive represented by a builtin companion class.

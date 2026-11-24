@@ -770,11 +770,6 @@ impl DependencyTable {
         }
     }
 
-    /// The package the table belongs to: slot [`DepSlot::SELF`].
-    pub fn owner(&self) -> SourceRoot {
-        self.owner
-    }
-
     /// The slot `root` is (or becomes) bound to. A root the owner has no
     /// direct edge to is located through the nearest package that does: the
     /// path from the owner is interned hop by hop, each hop `via` its
@@ -821,14 +816,6 @@ impl DependencyTable {
             .iter()
             .position(|(bound, _, _)| *bound == root)
             .map(DepSlot::of_dependency_index)
-    }
-
-    /// The root bound to `slot`.
-    pub fn root_of(&self, slot: DepSlot) -> SourceRoot {
-        match slot.dependency_index() {
-            None => self.owner,
-            Some(index) => self.entries[index].0,
-        }
     }
 
     /// The roots bound to slots `1..`, in slot order.

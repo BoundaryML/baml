@@ -236,15 +236,6 @@ where
     }
 }
 
-impl<T, K> Pool<T, K> {
-    pub fn drain<R>(&mut self, range: R) -> std::vec::Drain<'_, T>
-    where
-        R: std::ops::RangeBounds<Index<K>>,
-    {
-        self.0.drain(Index::usize_range(range))
-    }
-}
-
 impl<T, K> std::iter::IntoIterator for Pool<T, K> {
     type Item = T;
     type IntoIter = <Vec<T> as IntoIterator>::IntoIter;
@@ -360,24 +351,11 @@ impl SharedGlobals {
         }
     }
 
-    /// Number of globals in the pool.
-    ///
-    /// Requires a [`PermitProof`] witnessing that an active heap permit
-    /// is held — this excludes GC's `forward_roots` (the only writer
-    /// against `inner.values`) for the duration of the read.
-    pub fn len(&self, _proof: PermitProof<'_>) -> usize {
-        // SAFETY: `_proof` is the runtime witness that no `forward_roots`
-        // can run concurrently. Explicit `&*` produces a `&Box<[Value]>`
-        // so `.len()` doesn't autoref a raw pointer.
-        #[allow(unsafe_code, reason = "UnsafeCell projection gated by `_proof`")]
-        unsafe {
-            (&*self.inner.values.get()).len()
-        }
-    }
-
     /// Read a global by index.
     ///
-    /// Requires a [`PermitProof`]; see [`Self::len`].
+    /// Requires a [`PermitProof`] witnessing that an active heap permit
+    /// is held. This excludes GC's `forward_roots` (the only writer
+    /// against `inner.values`) for the duration of the read.
     ///
     /// # Panics
     ///

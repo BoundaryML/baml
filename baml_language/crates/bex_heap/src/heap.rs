@@ -314,12 +314,6 @@ impl BexHeap {
         Self::build_unsealed_default(compile_time_objects).seal()
     }
 
-    /// Create a new heap with an explicit collection policy.
-    pub fn with_gc(compile_time_objects: Vec<Object>, gc: GcSettings) -> Arc<Self> {
-        Self::build_unsealed_with_gc(compile_time_objects, HeapDebuggerConfig::from_env(), gc)
-            .seal()
-    }
-
     /// Create a new heap with explicit debug configuration.
     pub fn with_debug(compile_time_objects: Vec<Object>, debug: HeapDebuggerConfig) -> Arc<Self> {
         Self::build_unsealed(compile_time_objects, debug).seal()

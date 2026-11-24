@@ -107,16 +107,6 @@ impl<N: Clone> RuntimeTy<N> {
         RuntimeTy::Unknown
     }
 
-    /// Opaque resource handle type (file, socket, HTTP response body).
-    pub fn resource() -> Self {
-        RuntimeTy::Resource
-    }
-
-    /// Opaque structured prompt tree type for LLM calls.
-    pub fn prompt_ast() -> Self {
-        RuntimeTy::PromptAst
-    }
-
     /// Meta-type — a runtime value that wraps a [`RuntimeTy`].
     pub fn type_type() -> Self {
         RuntimeTy::Type

@@ -248,10 +248,6 @@ const HEADER_LEN: usize = 4 + 4 + 32 + 8 + 32;
 pub struct CacheKey([u8; 32]);
 
 impl CacheKey {
-    pub fn from_bytes(bytes: [u8; 32]) -> Self {
-        CacheKey(bytes)
-    }
-
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
@@ -879,14 +875,6 @@ fn unhex32(s: &str) -> Option<[u8; 32]> {
         out[i] = u8::try_from((hi << 4) | lo).ok()?;
     }
     Some(out)
-}
-
-/// SHA-256 of a file's full content. The CLI's manifest writer (`content_hash`
-/// in each [`ManifestFile`]) and the LSP's whole-project-clean seed gate both
-/// hash through here, so a file is compared against the manifest like-for-like
-/// — one definition the two sides cannot drift apart on.
-pub fn content_hash(text: &str) -> [u8; 32] {
-    Sha256::digest(text.as_bytes()).into()
 }
 
 /// `path` relative to `root` as a display string, falling back to the full path

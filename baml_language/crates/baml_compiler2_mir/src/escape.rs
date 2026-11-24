@@ -102,18 +102,6 @@ impl EscapeFacts {
             .is_some_and(|node| !self.shared[node])
     }
 
-    /// Whether the object a field or element access goes through is
-    /// thread-local: the base of `place`. `false` for a place that is not a
-    /// projection.
-    pub fn base_is_thread_local(&self, place: &Place) -> bool {
-        match place {
-            Place::Field { base, .. } | Place::Index { base, .. } => {
-                self.object_is_thread_local(base)
-            }
-            Place::Local(_) | Place::Capture(_) | Place::Deref(_) => false,
-        }
-    }
-
     /// Whether every object `local` can hold is thread-local.
     pub fn local_is_thread_local(&self, local: Local) -> bool {
         self.object_is_thread_local(&Place::Local(local))

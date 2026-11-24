@@ -38,8 +38,8 @@ pub mod clap_reexport {
     pub use clap::{Error, error::ErrorKind};
 }
 pub use dispatch::{
-    DispatchResult, build_args_from_signature, clamp_exit_code, dispatch_target,
-    dispatch_target_with_context, validate_help_param, validate_help_param_names,
+    DispatchResult, build_args_from_signature, clamp_exit_code, dispatch_target_with_context,
+    validate_help_param, validate_help_param_names,
 };
 pub use envelope::{PACK_SECTION_NAME, PackEnvelope, PackMode, TargetEntry};
 #[cfg(not(target_arch = "wasm32"))]
@@ -48,5 +48,5 @@ pub use json_coerce::load_json_source;
 pub use launch_context::{
     CONTEXT_ENV, context_source_from_env, ensure_single_stdin_consumer, load_launch_context,
 };
-pub use output::{OutputFormat, format_value, write_output, write_output_with_context};
+pub use output::{OutputFormat, format_value, write_output_with_context};
 pub use pack_gc::{PackGc, PackGcError};

@@ -35,10 +35,6 @@ use rusqlite::{
 };
 use serde::Serialize;
 
-/// Function names are reserved: user SQL containing this prefix is rejected
-/// before translation, so only the translator and catalog views call them.
-pub const PREFIX: &str = "__btel_";
-
 #[derive(Clone, Copy, Debug)]
 pub struct ValueLimits {
     /// Decoded snapshots kept for the rest of the query.
