@@ -1871,39 +1871,40 @@ fn package_identity_and_build_provenance_are_recorded() {
                 model_invoke: false,
             }],
         });
-        let mut publisher = RecordingPublisher::new(btel_types::new_recording_id(), config(), |file| {
-            files.borrow_mut().push(file);
-        })
-        .unwrap()
-        .with_function_metadata(table)
-        .with_process(ProcessRecording {
-            info: btel_types::ProcessInfo {
-                process_id: [9; 16],
-                os: if with_build {
-                    "linux".into()
-                } else {
-                    String::new()
+        let mut publisher =
+            RecordingPublisher::new(btel_types::new_recording_id(), config(), |file| {
+                files.borrow_mut().push(file);
+            })
+            .unwrap()
+            .with_function_metadata(table)
+            .with_process(ProcessRecording {
+                info: btel_types::ProcessInfo {
+                    process_id: [9; 16],
+                    os: if with_build {
+                        "linux".into()
+                    } else {
+                        String::new()
+                    },
+                    arch: if with_build {
+                        "aarch64".into()
+                    } else {
+                        String::new()
+                    },
+                    ..Default::default()
                 },
-                arch: if with_build {
-                    "aarch64".into()
-                } else {
-                    String::new()
-                },
-                ..Default::default()
-            },
-            sources: None,
-            context: None,
-            exit: Arc::default(),
-            program_id: Some([4; 16]),
-            build: with_build.then_some(btel_types::BuildRecord {
-                build_id: [1; 16],
-                timestamp_unix_ns: 7,
-                origin: btel_types::BuildOrigin::Run,
-                git: None,
-                source_hash: [2; 32],
-                compilation_unit_hash: [7; 32],
-            }),
-        });
+                sources: None,
+                context: None,
+                exit: Arc::default(),
+                program_id: Some([4; 16]),
+                build: with_build.then_some(btel_types::BuildRecord {
+                    build_id: [1; 16],
+                    timestamp_unix_ns: 7,
+                    origin: btel_types::BuildOrigin::Run,
+                    git: None,
+                    source_hash: [2; 32],
+                    compilation_unit_hash: [7; 32],
+                }),
+            });
         publisher.span(
             allocate_telemetry_id(),
             &mut SpanRecord::CallPathDefined {

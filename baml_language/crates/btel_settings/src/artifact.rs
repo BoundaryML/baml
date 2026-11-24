@@ -300,7 +300,11 @@ fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError>
         ));
     }
     for (name, fields, envvar_fields) in [
-        ("boundary", &["project", "api_url", "upload_source"][..], ENVVAR_FIELDS),
+        (
+            "boundary",
+            &["project", "api_url", "upload_source"][..],
+            ENVVAR_FIELDS,
+        ),
         ("pack", PACK_FIELDS, PACK_ENVVAR_FIELDS),
         ("bridge", PRODUCER_FIELDS, ENVVAR_FIELDS),
     ] {
