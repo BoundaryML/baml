@@ -70,11 +70,4 @@ tools/type_quiz/SPEC_GAPS.md
 tools/type_quiz/COMPILER_DIVERGENCE.md
 
 # Native runtime design notes
-crates/baml_native_rt/design/calls.md
-crates/baml_native_rt/design/control.md
-crates/baml_native_rt/design/gc.md
-crates/baml_native_rt/design/memory.md
-crates/baml_native_rt/design/natives.md
-crates/baml_native_rt/design/startup-and-size.md
-crates/baml_native_rt/design/tasks.md
-crates/baml_native_rt/design/threads.md
+crates/baml_native_rt/design/*.md
