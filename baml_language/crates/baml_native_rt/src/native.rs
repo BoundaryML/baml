@@ -27,11 +27,11 @@ use std::{cell::Cell, marker::PhantomData, mem::MaybeUninit, ptr::NonNull};
 use crate::{
     heap::{Mutator, load, store},
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, BYTES_DATA, BYTES_LENGTH, HEADER_FLOATS,
-        SLICE_MIN_BYTES, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, STORAGE_CAPACITY,
-        STORAGE_ELEMENTS, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT, STRING_TYPES_END,
-        TYPE_ARRAY_OF_REFS, TYPE_ARRAY_OF_VALUES, TYPE_BOX_FLOAT, TYPE_BYTES, TYPE_ID_MASK,
-        TYPE_STRING, TYPE_STRING_SLICE, WORD, field_offset, instance_size, words,
+        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, BYTES_DATA, BYTES_LENGTH, HEADER_BOOLS,
+        HEADER_FLOATS, HEADER_INTS, SLICE_MIN_BYTES, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE,
+        STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT,
+        STRING_TYPES_END, TYPE_ARRAY_OF_REFS, TYPE_ARRAY_OF_VALUES, TYPE_BYTES, TYPE_ID_MASK,
+        TYPE_STRING, TYPE_STRING_SLICE, WORD, field_offset, instance_size, scalar_flag, words,
     },
 };
 
@@ -61,8 +61,9 @@ pub trait Element {
     type Value<'a>;
     /// Whether elements are references, which selects the array's type.
     const IS_REF: bool;
-    /// Whether elements are `float`s, which the array's header says.
-    const IS_FLOAT: bool = false;
+    /// The flag the array's header has for what its elements are: see
+    /// [`crate::layout::scalar_flag`].
+    const FLAG: usize = 0;
     /// # Safety
     ///
     /// `word` is an element of an array of this element type that does not
@@ -120,6 +121,7 @@ impl Managed for Map {
 impl Element for Int {
     type Value<'a> = i64;
     const IS_REF: bool = false;
+    const FLAG: usize = HEADER_INTS;
     unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
         word.cast_signed() as i64
     }
@@ -127,7 +129,7 @@ impl Element for Int {
 impl Element for Float {
     type Value<'a> = f64;
     const IS_REF: bool = false;
-    const IS_FLOAT: bool = true;
+    const FLAG: usize = HEADER_FLOATS;
     unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
         f64::from_bits(word as u64)
     }
@@ -135,6 +137,7 @@ impl Element for Float {
 impl Element for Bool {
     type Value<'a> = bool;
     const IS_REF: bool = false;
+    const FLAG: usize = HEADER_BOOLS;
     unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
         word != 0
     }
@@ -1495,13 +1498,13 @@ impl<'s> Reservation<'_, 's> {
 
     /// A new array of `length` elements, each zero.
     pub fn array<E: Element>(&self, length: usize) -> NewArray<'_, E> {
-        self.array_of(length, E::IS_REF, E::IS_FLOAT)
+        self.array_of(length, E::IS_REF, E::FLAG)
     }
 
     /// A new array of `length` words that are references, or are values
     /// that are no `float`s, each zero.
     pub fn slots(&self, length: usize, holds_refs: bool) -> NewArray<'_, Slot> {
-        self.array_of(length, holds_refs, false)
+        self.array_of(length, holds_refs, 0)
     }
 
     /// A new array of `length` values of the type a call names by
@@ -1510,7 +1513,7 @@ impl<'s> Reservation<'_, 's> {
         self.array_of(
             length,
             self.scope.is_reference(element),
-            element.0 as usize == TYPE_BOX_FLOAT,
+            scalar_flag(element.0 as usize),
         )
     }
 
@@ -1518,7 +1521,7 @@ impl<'s> Reservation<'_, 's> {
         &self,
         length: usize,
         holds_refs: bool,
-        floats: bool,
+        flag: usize,
     ) -> NewArray<'_, E> {
         let array = self.take(array_size(length));
         let array_type = if holds_refs {
@@ -1528,14 +1531,7 @@ impl<'s> Reservation<'_, 's> {
         };
         // SAFETY: the array has room for itself and its storage.
         unsafe {
-            store(
-                array,
-                if floats {
-                    array_type | HEADER_FLOATS
-                } else {
-                    array_type
-                },
-            );
+            store(array, array_type | flag);
             store(array + ARRAY_LENGTH, length);
             if length == 0 {
                 store(array + ARRAY_DATA, 0);

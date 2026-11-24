@@ -65,17 +65,38 @@ pub(crate) unsafe fn as_int(object: usize) -> Option<i64> {
 /// collect.
 pub(crate) fn make(mutator: &mut Mutator, value: &BigInt) -> usize {
     let bytes = value.to_signed_bytes_le();
-    let limbs = bytes.len().div_ceil(WORD).max(1);
-    let object = mutator.allocate_object(TYPE_BIGINT, BIGINT_LIMBS + limbs * WORD);
-    let sign = if value.sign() == Sign::Minus { 0xFF } else { 0 };
-    // SAFETY: the object has room for the count and `limbs` limbs.
+    let object = mutator.allocate_object(TYPE_BIGINT, size(&bytes));
+    // SAFETY: the object has the room `size` says.
+    unsafe { fill(object, &bytes) };
+    object
+}
+
+/// The bytes a `bigint` object takes for the value whose two's complement
+/// bytes, least significant first, are `bytes`.
+pub(crate) fn size(bytes: &[u8]) -> usize {
+    BIGINT_LIMBS + bytes.len().div_ceil(WORD).max(1) * WORD
+}
+
+/// Write the count and the limbs of the value whose two's complement bytes
+/// are `bytes` into the `bigint` at `object`.
+///
+/// # Safety
+///
+/// `object` has the room [`size`] says for `bytes`.
+pub(crate) unsafe fn fill(object: usize, bytes: &[u8]) {
+    let limbs = (size(bytes) - BIGINT_LIMBS) / WORD;
+    let sign = if bytes.last().is_some_and(|last| last & 0x80 != 0) {
+        0xFF
+    } else {
+        0
+    };
+    // SAFETY: the caller's contract.
     unsafe {
         store(object + BIGINT_LIMB_COUNT, limbs);
         let data = (object + BIGINT_LIMBS) as *mut u8;
         std::ptr::write_bytes(data, sign, limbs * WORD);
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), data, bytes.len());
     }
-    object
 }
 
 /// A new `bigint` object holding `value`, or the `baml.panics.AllocFailure`

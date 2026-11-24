@@ -33,9 +33,9 @@ use crate::{
     json_layout::{
         HOOK_FROM_JSON, KIND_ARRAY, KIND_BOOL, KIND_BOOL_IS, KIND_CLASS, KIND_ENUM, KIND_FLOAT,
         KIND_INT, KIND_INT_IS, KIND_MAP, KIND_NULL, KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS,
-        KIND_UNION, KIND_VARIANT, REPR_BOXED, REPR_FLOAT, REPR_REF,
+        KIND_UNION, KIND_VARIANT, REPR_BOOL, REPR_BOXED, REPR_FLOAT, REPR_REF,
     },
-    layout::{ARRAY_DATA, ARRAY_LENGTH, WORD},
+    layout::{ARRAY_DATA, ARRAY_LENGTH, HEADER_BOOLS, HEADER_FLOATS, HEADER_INTS, WORD},
     map,
     native::{
         Elem, Scope, Thrown, TypeId, array_size,
@@ -297,8 +297,13 @@ impl Decoder<'_> {
     fn elements(described: Desc) -> Elements {
         match described.repr() {
             REPR_REF | REPR_BOXED => Elements::Refs,
-            REPR_FLOAT => Elements::Floats,
-            _ => Elements::Values,
+            REPR_FLOAT => Elements::Values(HEADER_FLOATS),
+            REPR_BOOL => Elements::Values(HEADER_BOOLS),
+            _ if matches!(described.kind(), KIND_INT | KIND_INT_IS) => {
+                Elements::Values(HEADER_INTS)
+            }
+            // An enum's variants: only the static type says which enum.
+            _ => Elements::Values(0),
         }
     }
 
@@ -322,7 +327,7 @@ impl Decoder<'_> {
                 },
                 KIND_INT => match node {
                     Node::Int(value) => Ok(Got::Int(value)),
-                    Node::Float(_) => {
+                    Node::Bigint(_) | Node::Float(_) => {
                         self.fail("expected integer in the BAML int range [-2^63, 2^63 - 1]")
                     }
                     _ => self.fail("expected integer"),
@@ -330,6 +335,13 @@ impl Decoder<'_> {
                 KIND_FLOAT => match node {
                     Node::Float(value) => Ok(Got::Float(value)),
                     Node::Int(value) => Ok(Got::Float(value as f64)),
+                    // The nearest `float`, as its decimal text reads.
+                    Node::Bigint(object) => Ok(Got::Float(
+                        crate::bigint::value(object)
+                            .to_string()
+                            .parse()
+                            .unwrap_or(f64::INFINITY),
+                    )),
                     _ => self.fail("expected number"),
                 },
                 KIND_STRING => match node {
@@ -708,7 +720,7 @@ impl Decoder<'_> {
         let kind = match node {
             Node::Null => Kind::Null,
             Node::Bool(_) => Kind::Bool,
-            Node::Int(_) | Node::Float(_) => Kind::Number,
+            Node::Int(_) | Node::Bigint(_) | Node::Float(_) => Kind::Number,
             Node::String(_) | Node::Variant(_) => Kind::String,
             Node::Array(_) => Kind::Array,
             Node::Object(_) => Kind::Object,

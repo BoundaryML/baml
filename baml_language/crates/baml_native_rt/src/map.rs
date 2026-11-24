@@ -769,11 +769,10 @@ unsafe extern "C" fn map_new(
     let value_is_ref = mutator.is_reference(value_type as usize);
     let key_is_ref = KeyKind::of(key_type as usize) == KeyKind::Str;
     let map = new(mutator, key_is_ref, value_is_ref, count);
-    if value_type as usize == TYPE_BOX_FLOAT {
-        // Its values do not say they are `float`s: its header does.
-        // SAFETY: the map just made.
-        unsafe { store(map, load(map) | crate::layout::HEADER_FLOATS) };
-    }
+    // Its values do not say what they are: its header does.
+    let flag = crate::layout::scalar_flag(value_type as usize);
+    // SAFETY: the map just made.
+    unsafe { store(map, load(map) | flag) };
     map
 }
 

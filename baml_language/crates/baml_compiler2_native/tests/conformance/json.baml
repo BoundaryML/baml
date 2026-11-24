@@ -133,6 +133,32 @@ function json_ints() -> string {
 function json_parse_past_int() -> string {
   baml.json.stringify(baml.json.parse(rep("9", 19) + "0"))
 }
+// A JSON integer past an `int` is a `bigint`, either way.
+function json_parse_past_int_both_ways() -> string {
+  baml.json.stringify(baml.json.parse(rep("[", 1) + "9223372036854775807, 9223372036854775808, -9223372036854775808, -9223372036854775809, 1" + rep("0", 40) + "]"), indent = 1)
+}
+// Read into an `int`, it is out of range; into a `float`, the nearest one.
+function json_decode_past_int() -> string {
+  let n = baml.json.decode<int>(rep("9", 19) + "0") catch (e) {
+    baml.json.DecodeError => { return e.message; },
+  };
+  `${n}`
+}
+function json_decode_past_int_in_an_array() -> string {
+  let n = baml.json.decode<int[]>(rep("[", 1) + "1, -99999999999999999990]") catch (e) {
+    baml.json.DecodeError => { return `${e.path} ${e.message}`; },
+  };
+  `${n.length()}`
+}
+function json_decode_past_int_as_float() -> float {
+  baml.json.decode<float>(rep("9", 19) + "0")
+}
+function json_to_past_int_in_a_union() -> string {
+  let n = baml.json.to<int | string>(baml.json.parse(rep("9", 19) + "0")) catch (e) {
+    baml.json.DecodeError => { return e.message; },
+  };
+  "fits"
+}
 function json_parse_float_past_range() -> string {
   baml.json.stringify(baml.json.parse(rep("[", 1) + "1,\n 1e400]"))
 }

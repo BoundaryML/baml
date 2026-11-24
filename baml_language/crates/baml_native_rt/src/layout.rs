@@ -42,11 +42,28 @@ pub const TYPE_ID_MASK: usize = 0xFFFF_FFF8;
 pub const HEADER_PANIC: usize = 1 << HEADER_PANIC_BIT;
 pub const HEADER_PANIC_BIT: u32 = 63;
 /// Set in the header of an array whose elements are `float`s, and of a map
-/// whose values are: the words alone do not say so, and what compares two
-/// values of no known type reads it. Whoever makes one sets it.
+/// whose values are: the words alone do not say so, and what compares or
+/// writes as JSON a value of no known type reads it. Whoever makes one sets
+/// it.
 pub const HEADER_FLOATS: usize = 1 << 60;
+/// The same for `int`s.
+pub const HEADER_INTS: usize = 1 << 61;
+/// The same for `bool`s. An array or map of enum variants has none of the
+/// three: only its static type says which enum.
+pub const HEADER_BOOLS: usize = 1 << 62;
 /// The flags of a header.
 pub const HEADER_FLAGS: usize = 0xF << 60;
+
+/// The flag of an array whose elements are values of the type `type_id`,
+/// or of a map whose values are, zero when it has none.
+pub const fn scalar_flag(type_id: usize) -> usize {
+    match type_id {
+        TYPE_BOX_INT => HEADER_INTS,
+        TYPE_BOX_FLOAT => HEADER_FLOATS,
+        TYPE_BOX_BOOL => HEADER_BOOLS,
+        _ => 0,
+    }
+}
 
 /// Offset of slot `index` of a class instance.
 pub const fn field_offset(index: usize) -> usize {

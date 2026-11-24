@@ -35,8 +35,8 @@ use crate::{
     heap::{load, store},
     layout::{
         ARRAY_DATA, ARRAY_LENGTH, BOX_VALUE, MAP_ENTRIES, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
-        TYPE_ARRAY_OF_VALUES, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ENTRIES_KEY_REF,
-        TYPE_ENTRIES_REFS, TYPE_ENTRIES_VALUE_REF, TYPE_ID_MASK, TYPE_MAP,
+        TYPE_ARRAY_OF_VALUES, TYPE_BIGINT, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT,
+        TYPE_ENTRIES_KEY_REF, TYPE_ENTRIES_REFS, TYPE_ENTRIES_VALUE_REF, TYPE_ID_MASK, TYPE_MAP,
         WELL_KNOWN_JSON_DECODE_ERROR, WELL_KNOWN_JSON_PARSE_ERROR, WELL_KNOWN_JSON_PATH_ERROR,
         WELL_KNOWN_JSON_SERIALIZATION_ERROR,
     },
@@ -95,6 +95,8 @@ enum Node {
     Null,
     Bool(bool),
     Int(i64),
+    /// A `bigint` object: an integral number past an `int`.
+    Bigint(usize),
     Float(f64),
     /// A string object.
     String(usize),
@@ -117,6 +119,7 @@ impl Node {
             match type_of(value) {
                 string if string < STRING_TYPES_END => Self::String(value),
                 TYPE_BOX_INT => Self::Int(load(value + BOX_VALUE) as i64),
+                TYPE_BIGINT => Self::Bigint(value),
                 TYPE_BOX_FLOAT => Self::Float(f64::from_bits(load(value + BOX_VALUE) as u64)),
                 TYPE_BOX_BOOL => Self::Bool(load(value + BOX_VALUE) & 0xFF != 0),
                 TYPE_ARRAY_OF_REFS => Self::Array(value),
@@ -136,7 +139,7 @@ impl Node {
     }
 
     fn is_number(self) -> bool {
-        matches!(self, Self::Int(_) | Self::Float(_))
+        matches!(self, Self::Int(_) | Self::Bigint(_) | Self::Float(_))
     }
 
     fn text(self) -> Option<&'static str> {

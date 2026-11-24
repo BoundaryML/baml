@@ -281,7 +281,7 @@ Reported as `runtime builtin (vm)` on the builtin itself.
 - [~] **Defaulted `int` or `float` arguments** of a native: same rule as section 1 (`Constant::OmittedArg`, `cg/types.rs:1093`).
 - [~] **A native behind interface dispatch** must be `async`, take only `int`s and references and return no `float` (`cg/program.rs:137-155`). Otherwise `interface method call (implemented in Rust for a type only known when it runs)`.
 - [~] **A native cannot call back into BAML except through `scope.call_baml`**, used by `baml.json` hooks and `eq`. `to_string`, `hash` and `cmp` of user types are never called from Rust.
-- [~] **`baml.json.parse` of an integer past 64 bits** throws natively, is a `bigint` on the interpreter (`differences.txt`, `json_parse_past_int`). Arrays and maps of scalars held as `unknown` do not serialize (`json_unknown_scalar_array`, `json_unknown_scalar_map`). Decode depth is capped at 128 (`json_to_deep`).
+- [~] **JSON text and `json` values past the static type.** An integer past 64 bits parses to a `bigint` inside a `json`, as on the interpreter, and is written back as its digits; decoded into `int` it is `DecodeError` "expected integer in the BAML int range [-2^63, 2^63 - 1]", into `float` the nearest one (cases `json_parse_past_int*`, `json_decode_past_int*`, `json_to_past_int_in_a_union`). An array or map of `int`, `float` or `bool` held as `unknown` serializes: its header says what its words are (`HEADER_INTS`, `HEADER_FLOATS`, `HEADER_BOOLS` in `rt/layout.rs`, set wherever one is made). Gaps: one of enum variants held as `unknown` does not say which enum and is refused (`differences.txt`, `json_unknown_enum_array`, native-wrong); decode depth is capped at 128 (`json_to_deep`, undecided).
 - [~] **`SseStream.close`** ends the stream natively, does nothing on the interpreter while the program holds it (`http_sse_closed_early`).
 
 ## 3. Language features
@@ -316,7 +316,7 @@ Reported as `runtime builtin (vm)` on the builtin itself.
 - [~] **Unions and optional scalars.** Built (`cg/types.rs:90-99`). Gaps: optional scalars in containers, union arithmetic, `??` on `unknown`.
 - [~] **Pattern matching and type tests.** Built for unions, literals, enums, tuples (`cg/narrow.rs`). Gaps: array types, generic instantiations, shape patterns on unions, truthiness.
 - [~] **Tuples.** Built: construction, destructuring, as results (`cg/types.rs:74-77`, confirmed). Gaps: no JSON, a tuple with an unsupported element is `tuple value` [corpus 15 + 10 + 3].
-- [~] **`bigint`.** Built: literals, arithmetic, `to_string`, 8 of 8 `Bigint` natives. Gaps: no JSON either way, no truthiness.
+- [~] **`bigint`.** Built: literals, arithmetic, `to_string`, 8 of 8 `Bigint` natives, inside a `json` value both ways. Gaps: JSON of a value whose static type is `bigint` is refused, no truthiness.
 - [~] **Closures and bound methods.** Built (`calls.md`). Gaps in section 1.
 - [~] **String formatting.** Scalars only. Section 1.
 - [ ] **Finalizers.** Absent. Section 1.

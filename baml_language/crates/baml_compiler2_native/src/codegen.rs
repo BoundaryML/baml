@@ -3123,8 +3123,10 @@ impl<'a, 'db> Translator<'a, 'db> {
     fn array_type(&mut self, element: &NativeTy<'db>) -> ir::Value {
         self.word_const(match element {
             element if element.is_ref() => layout::TYPE_ARRAY_OF_REFS,
-            // Its words do not say they are `float`s: its header does.
+            // Its words do not say what they are: its header does.
             NativeTy::Float => layout::TYPE_ARRAY_OF_VALUES | layout::HEADER_FLOATS,
+            NativeTy::Int => layout::TYPE_ARRAY_OF_VALUES | layout::HEADER_INTS,
+            NativeTy::Bool => layout::TYPE_ARRAY_OF_VALUES | layout::HEADER_BOOLS,
             _ => layout::TYPE_ARRAY_OF_VALUES,
         })
     }

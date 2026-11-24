@@ -25,8 +25,9 @@ use crate::{
         REPR_FLOAT, REPR_INT, REPR_NULL, REPR_PAIR, REPR_REF,
     },
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, BOX_VALUE, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
-        TYPE_ARRAY_OF_VALUES, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_MAP, WORD,
+        ARRAY_DATA, ARRAY_LENGTH, BOX_VALUE, HEADER_BOOLS, HEADER_FLOATS, HEADER_INTS,
+        STRING_TYPES_END, TYPE_ARRAY_OF_REFS, TYPE_ARRAY_OF_VALUES, TYPE_BIGINT, TYPE_BOX_BOOL,
+        TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_MAP, WORD,
     },
     map,
 };
@@ -47,6 +48,8 @@ pub(super) trait Sink {
     fn null(&mut self);
     fn bool(&mut self, value: bool);
     fn int(&mut self, value: i64);
+    /// A `bigint` object.
+    fn bigint(&mut self, object: usize);
     fn float(&mut self, value: f64);
     /// A string: its text, and the object when it is one already.
     fn string(&mut self, text: &str, object: usize);
@@ -97,6 +100,7 @@ enum Val {
     Null,
     Bool(bool),
     Int(i64),
+    Bigint(usize),
     Float(f64),
     Str(usize),
     /// A variant of the enum described, by position.
@@ -133,6 +137,22 @@ struct Frame {
     /// variant in it is its declared name, and what has no JSON form is
     /// `null`.
     json: bool,
+    /// For an array or a map whose words are values no static type
+    /// describes, the flag its header has for what they are.
+    scalars: usize,
+}
+
+/// The flags of a header that say what the words of an array or a map are.
+const SCALARS: usize = HEADER_INTS | HEADER_FLOATS | HEADER_BOOLS;
+
+/// The value of the word `word` of an array or a map whose header has the
+/// flag `scalars`.
+fn scalar(scalars: usize, word: usize) -> Val {
+    match scalars {
+        HEADER_FLOATS => Val::Float(f64::from_bits(word as u64)),
+        HEADER_BOOLS => Val::Bool(word & 0xFF != 0),
+        _ => Val::Int(word as i64),
+    }
 }
 
 /// What the walk does at a value whose class has a `to_json` of its own.
@@ -216,7 +236,7 @@ pub(super) unsafe fn walk(
             let index = frame.next;
             frame.next += 1;
             let first = index == 0;
-            let json = frame.json;
+            let (json, scalars) = (frame.json, frame.scalars);
             // The word of the child, the one after it, and its type.
             let (word, next, described) = match &frame.rest {
                 Rest::Array { elements } => {
@@ -237,6 +257,7 @@ pub(super) unsafe fn walk(
             };
             let child = match described {
                 Some(described) => walker.of_slot(word, next, described),
+                None if scalars != 0 => scalar(scalars, word),
                 None => walker.of_reference(word, None, json),
             };
             walker.visit(child, json, sink)?;
@@ -449,6 +470,7 @@ impl Walker<'_> {
             match type_of(value) {
                 string if string < STRING_TYPES_END => Val::Str(value),
                 TYPE_BOX_INT => Val::Int(load(value + BOX_VALUE) as i64),
+                TYPE_BIGINT => Val::Bigint(value),
                 TYPE_BOX_FLOAT => Val::Float(f64::from_bits(load(value + BOX_VALUE) as u64)),
                 TYPE_BOX_BOOL => Val::Bool(load(value + BOX_VALUE) & 0xFF != 0),
                 array @ (TYPE_ARRAY_OF_REFS | TYPE_ARRAY_OF_VALUES) => {
@@ -456,16 +478,18 @@ impl Walker<'_> {
                     if elements.is_none()
                         && array == TYPE_ARRAY_OF_VALUES
                         && load(value + ARRAY_LENGTH) != 0
+                        && load(value) & SCALARS == 0
                     {
                         // Its elements are words only the static type
-                        // could tell apart.
+                        // could tell apart: an enum's variants.
                         return Self::no_form(json);
                     }
                     Val::Array(value, elements)
                 }
                 TYPE_MAP => {
                     let described = member(KIND_MAP).map(|map| (map.of_a(), map.of_b()));
-                    if described.is_none() && !values_are_refs(value) {
+                    if described.is_none() && !values_are_refs(value) && load(value) & SCALARS == 0
+                    {
                         return Self::no_form(json);
                     }
                     Val::Map(value, described)
@@ -544,12 +568,21 @@ impl Walker<'_> {
         if let Some(open) = &mut self.open {
             open.insert(object);
         }
+        let scalars = match rest {
+            // SAFETY: a live array or map; only one whose words are values
+            // has one of the flags.
+            Rest::Array { elements: None } | Rest::Map { values: None, .. } => unsafe {
+                load(object) & SCALARS
+            },
+            _ => 0,
+        };
         self.frames.push(Frame {
             object,
             next: 0,
             length,
             rest,
             json,
+            scalars,
         });
         Ok(())
     }
@@ -591,6 +624,7 @@ impl Walker<'_> {
             Val::Null => sink.null(),
             Val::Bool(value) => sink.bool(value),
             Val::Int(value) => sink.int(value),
+            Val::Bigint(object) => sink.bigint(object),
             Val::Float(value) if value.is_finite() || S::KEEPS_NON_FINITE => sink.float(value),
             Val::Float(value) => {
                 return Err(self.refuse(
@@ -746,6 +780,11 @@ impl Sink for TextSink<'_> {
         let _ = write!(self.out, "{value}");
     }
 
+    fn bigint(&mut self, object: usize) {
+        // SAFETY: a live `bigint`.
+        let _ = write!(self.out, "{}", unsafe { crate::bigint::value(object) });
+    }
+
     fn float(&mut self, value: f64) {
         self.out.push_str(zmij::Buffer::new().format_finite(value));
     }
@@ -825,6 +864,12 @@ impl Sink for JsonSink {
     fn int(&mut self, value: i64) {
         let boxed = self.out.boxed(TYPE_BOX_INT, value as usize);
         self.items.push(boxed);
+    }
+
+    fn bigint(&mut self, object: usize) {
+        // A `bigint` is never changed: the copy holds the same one.
+        self.items
+            .push(if self.out.is_building() { object } else { 0 });
     }
 
     fn float(&mut self, value: f64) {

@@ -4,20 +4,21 @@
 use crate::{
     heap::store,
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, BOX_SIZE, BOX_VALUE, HEADER_FLOATS, STORAGE_CAPACITY,
+        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, BOX_SIZE, BOX_VALUE, STORAGE_CAPACITY,
         STORAGE_ELEMENTS, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT, TYPE_ARRAY_OF_REFS,
-        TYPE_ARRAY_OF_VALUES, TYPE_REFS, TYPE_STRING, TYPE_VALUES, WORD,
+        TYPE_ARRAY_OF_VALUES, TYPE_BIGINT, TYPE_REFS, TYPE_STRING, TYPE_VALUES, WORD,
     },
     map,
     native::{array_size, str_size},
 };
 
-/// What the elements of an array being built are, or the values of a map.
+/// What the elements of an array being built are, or the values of a map:
+/// references, or values with the flag their header has for them (see
+/// [`crate::layout::scalar_flag`]).
 #[derive(Clone, Copy)]
 pub(super) enum Elements {
     Refs,
-    Floats,
-    Values,
+    Values(usize),
 }
 
 pub(super) struct Out {
@@ -114,6 +115,20 @@ impl Out {
         object
     }
 
+    /// A `bigint` holding `value`.
+    pub(super) fn bigint(&mut self, value: &num_bigint::BigInt) -> usize {
+        let bytes = value.to_signed_bytes_le();
+        let object = self.take(crate::bigint::size(&bytes));
+        if object != 0 {
+            // SAFETY: the object has the room `size` says.
+            unsafe {
+                store(object, TYPE_BIGINT);
+                crate::bigint::fill(object, &bytes);
+            }
+        }
+        object
+    }
+
     /// An array of `length` elements, which are `items` when building.
     pub(super) fn array(&mut self, length: usize, elements: Elements, items: &[usize]) -> usize {
         let array = self.take(array_size(length));
@@ -121,8 +136,7 @@ impl Out {
             assert!(items.len() == length, "an array is built of its items");
             let (header, storage_type) = match elements {
                 Elements::Refs => (TYPE_ARRAY_OF_REFS, TYPE_REFS),
-                Elements::Floats => (TYPE_ARRAY_OF_VALUES | HEADER_FLOATS, TYPE_VALUES),
-                Elements::Values => (TYPE_ARRAY_OF_VALUES, TYPE_VALUES),
+                Elements::Values(flag) => (TYPE_ARRAY_OF_VALUES | flag, TYPE_VALUES),
             };
             // SAFETY: the array has room for itself and its storage.
             unsafe {
@@ -159,8 +173,8 @@ impl Out {
             // are strings that hold their text.
             unsafe {
                 map::new_at(object, true, matches!(values, Elements::Refs), count);
-                if matches!(values, Elements::Floats) {
-                    store(object, crate::heap::load(object) | HEADER_FLOATS);
+                if let Elements::Values(flag) = values {
+                    store(object, crate::heap::load(object) | flag);
                 }
                 for (key, value) in entries {
                     map::set_in_place(object, *key, *value);

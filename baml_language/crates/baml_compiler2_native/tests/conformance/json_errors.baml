@@ -132,6 +132,22 @@ function json_unknown_scalar_map() -> string {
   for (let i = 0; i < 2; i += 1) { counts[rep("k", i + 1)] = i; };
   baml.json.stringify(json_hide(counts, 2))
 }
+function json_unknown_bools_and_floats() -> string {
+  let flags: bool[] = [];
+  let parts: float[] = [];
+  let marks: map<string, bool> = {};
+  for (let i = 0; i < 3; i += 1) {
+    flags.push(i == 1);
+    parts.push(halves(i));
+    marks[rep("m", i + 1)] = i != 1;
+  };
+  baml.json.stringify([json_hide(flags, 2), json_hide(parts, 2), json_hide(marks, 2)])
+}
+function json_unknown_enum_array() -> string {
+  let shades: JsonShade[] = [];
+  for (let i = 0; i < 2; i += 1) { shades.push(JsonShade.Dark); };
+  baml.json.stringify(json_hide(shades, 2))
+}
 // A decode follows a value 128 levels down and no further; the
 // interpreter's limit is on the text it parses only.
 function json_to_deep() -> string {

@@ -22,9 +22,6 @@ use crate::{
 pub(super) enum Stop {
     /// The text is not JSON.
     Syntax,
-    /// An integral number does not fit an `int`: the interpreter makes a
-    /// `bigint` of it, which native code does not have.
-    Integer,
     /// A number with a fraction or exponent is past `float`: where its
     /// token ends.
     Float(usize),
@@ -317,8 +314,11 @@ impl Parser<'_> {
         }
         let token = &self.src[start..self.pos];
         if integral {
-            let int: i64 = token.parse().map_err(|_| Stop::Integer)?;
-            return Ok(self.out.boxed(TYPE_BOX_INT, int as usize));
+            // One past an `int` is a `bigint`, as in the interpreter.
+            return Ok(match token.parse::<i64>() {
+                Ok(int) => self.out.boxed(TYPE_BOX_INT, int as usize),
+                Err(_) => self.out.bigint(&token.parse().map_err(|_| Stop::Syntax)?),
+            });
         }
         match token.parse::<f64>() {
             Ok(float) if float.is_finite() => {
@@ -395,7 +395,8 @@ pub(super) fn syntax_message(text: &str, stop: &Stop) -> String {
             let column = before[line_start..].chars().count();
             format!("number out of range at line {line} column {column}")
         }
-        _ => "integral JSON number does not fit the native 64-bit int".to_owned(),
+        // `serde_json` refuses all the scanner does.
+        Stop::Syntax => "invalid JSON".to_owned(),
     }
 }
 
