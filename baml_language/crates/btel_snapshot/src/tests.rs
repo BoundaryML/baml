@@ -91,6 +91,86 @@ fn capacity_counts_owners_across_threads_and_reuse_has_no_stale_values() {
     assert_eq!(pool.stats().allocation_misses, 1);
 }
 #[test]
+fn producers_and_a_returning_thread_share_the_pool_without_losing_storage() {
+    // Producers take and finish captures while one thread, like the
+    // processor, lifts their charges and drops them.
+    const PER_THREAD: i64 = if cfg!(miri) { 100 } else { 5_000 };
+    let pool = SnapshotPool::new(64 * 1024, Limits::default());
+    let (send, receive) = std::sync::mpsc::channel::<(i64, Snapshot)>();
+    let returning = std::thread::spawn(move || {
+        for (n, snapshot) in receive {
+            assert!(matches!(snapshot.roots()[0], SnapshotValue::Int(x) if x == n));
+            snapshot.uncharge();
+        }
+    });
+    let producers: Vec<_> = (0..4)
+        .map(|t| {
+            let pool = pool.clone();
+            let send = send.clone();
+            std::thread::spawn(move || {
+                for i in 0..PER_THREAD {
+                    let n = t * 100_000 + i;
+                    let builder = loop {
+                        if let Some(builder) = pool.try_acquire() {
+                            break builder;
+                        }
+                        std::thread::yield_now();
+                    };
+                    let snapshot = builder.finish(SnapshotValue::Int(n), &mut Shaper::default());
+                    send.send((n, snapshot)).unwrap();
+                }
+            })
+        })
+        .collect();
+    drop(send);
+    for producer in producers {
+        producer.join().unwrap();
+    }
+    returning.join().unwrap();
+    let stats = pool.stats();
+    assert_eq!(stats.held_bytes, 0);
+    assert_eq!(stats.in_use, 0);
+    // Every storage is idle, on the return stack or in an exited thread's
+    // free list given back: none was lost or counted twice.
+    assert_eq!(stats.allocated_bytes, stats.idle_bytes);
+    assert!(
+        stats.allocated < usize::try_from(4 * PER_THREAD).unwrap(),
+        "storages are reused"
+    );
+    // What the exited producers held serves this thread now.
+    let misses = stats.allocation_misses;
+    drop(scalar(&pool, 1));
+    assert_eq!(pool.stats().allocation_misses, misses);
+}
+#[test]
+fn a_thread_serving_another_pool_gives_its_storages_back() {
+    let first = SnapshotPool::unbounded(Limits::default());
+    let second = SnapshotPool::unbounded(Limits::default());
+    // Taken from the first pool's returns into this thread's free list.
+    let a = scalar(&first, 1);
+    let b = scalar(&first, 2);
+    drop(a);
+    drop(b);
+    drop(scalar(&first, 3));
+    // Serving the second pool hands the first pool's storages back to it, and
+    // the second's are not mixed with them.
+    drop(scalar(&second, 4));
+    assert_eq!(second.stats().allocated, 1);
+    let first_stats = first.stats();
+    assert_eq!(first_stats.allocated, 2);
+    assert_eq!(first_stats.allocated_bytes, first_stats.idle_bytes);
+    // Another thread finds them on the first pool's return stack.
+    let misses = first_stats.allocation_misses;
+    let other = first.clone();
+    std::thread::spawn(move || drop(scalar(&other, 5)))
+        .join()
+        .unwrap();
+    assert_eq!(first.stats().allocation_misses, misses);
+    // A pool dropped while its storages are idle frees them.
+    drop(first);
+    drop(second);
+}
+#[test]
 fn immutable_leaves_and_pool_survive_the_original_owners() {
     let leaf = Arc::new(BigInt::from(123));
     let weak = Arc::downgrade(&leaf);
