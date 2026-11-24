@@ -82,3 +82,41 @@ function sys_run_within_its_limit() -> string {
   let ran = baml.sys.run("/bin/sleep", args = ["0.05"], timeout = baml.time.Duration.from_seconds(20));
   `${ran.exit_code} ${ran.signal == null}`
 }
+// `exit` ends the program with its code as the status and nothing said,
+// after the `defer`s it is thrown through.
+function sys_exit_code(code: int) -> int {
+  defer { baml.io.println("inner deferred"); }
+  baml.sys.exit(code)
+}
+function sys_exit() -> int {
+  defer { baml.io.println("outer deferred"); }
+  baml.io.println("before");
+  sys_exit_code(3)
+}
+function sys_exit_zero() -> int {
+  baml.sys.exit(0)
+}
+// A status holds less than an `int`.
+function sys_exit_past_a_status() -> int {
+  baml.sys.exit(5000000000)
+}
+function sys_exit_negative() -> int {
+  baml.sys.exit(0 - 1)
+}
+function sys_exit_caught() -> int {
+  sys_exit_code(8) catch (e) {
+    baml.panics.Exit => { return e.code + 100; },
+  }
+}
+// From a task, it is the error of the `await` that takes it.
+function sys_exit_in_a_task() -> int {
+  let leaving = spawn { sys_exit_code(4) };
+  await leaving
+}
+// With no `await` to take it, it is one more error no `await` took,
+// whatever the program then exits with.
+function sys_exit_in_a_task_nothing_awaits() -> int {
+  let leaving = spawn { sys_exit_code(5) };
+  baml.sys.sleep(baml.time.Duration.from_milliseconds(20));
+  baml.sys.exit(6)
+}

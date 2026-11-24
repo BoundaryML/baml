@@ -7,9 +7,11 @@
 
 use std::{
     fmt::Write as _,
+    io::Read as _,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Output, Stdio},
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 use baml_compiler2_native::{CompileOptions, RuntimeBuild, compile, link};
@@ -147,13 +149,57 @@ pub(crate) fn command(built: &Built, way: &Way) -> Command {
     command
 }
 
+/// How long a program may run. No case takes a tenth of it; one that
+/// never ends, as a deadlock the runtime does not see, takes all of it.
+const LIMIT: Duration = Duration::from_secs(30);
+
+/// Run `command` with nothing to read: what it prints, what it reports and
+/// how it exits. One still running at `LIMIT` is killed, and so ends by a
+/// signal.
+pub(crate) fn finished(command: &mut Command) -> Output {
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap_or_else(|error| panic!("`{:?}` does not start: {error}", command.get_program()));
+    let (mut out, mut err) = (child.stdout.take(), child.stderr.take());
+    // Both streams are read as they fill, so that neither holds the
+    // program up.
+    std::thread::scope(|scope| {
+        let stdout = scope.spawn(|| {
+            let mut bytes = Vec::new();
+            let _ = out.as_mut().expect("a pipe").read_to_end(&mut bytes);
+            bytes
+        });
+        let stderr = scope.spawn(|| {
+            let mut bytes = Vec::new();
+            let _ = err.as_mut().expect("a pipe").read_to_end(&mut bytes);
+            bytes
+        });
+        let started = Instant::now();
+        let status = loop {
+            if let Some(status) = child.try_wait().expect("a child to wait for") {
+                break status;
+            }
+            if started.elapsed() > LIMIT {
+                let _ = child.kill();
+                break child.wait().expect("a child to wait for");
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        };
+        Output {
+            status,
+            stdout: stdout.join().expect("the reader does not panic"),
+            stderr: stderr.join().expect("the reader does not panic"),
+        }
+    })
+}
+
 /// Run a program one way: what it prints, what it reports and how it
 /// exits.
-pub(crate) fn output(built: &Built, way: &Way) -> std::process::Output {
-    let mut command = command(built, way);
-    command
-        .output()
-        .unwrap_or_else(|error| panic!("`{:?}` does not start: {error}", command.get_program()))
+pub(crate) fn output(built: &Built, way: &Way) -> Output {
+    finished(&mut command(built, way))
 }
 
 /// Run a program one way and say how it ended.

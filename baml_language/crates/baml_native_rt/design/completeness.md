@@ -350,12 +350,7 @@ Reported as `runtime builtin (vm)` on the builtin itself.
 - [~] **Packages, imports, multi-package projects.** `coverage` and `compile` take a whole database, and the census compiled multi-file, multi-namespace projects through them. `native_pack` loads one file (`examples/native_pack.rs:75-83`). Dependencies between source roots: not confirmed. `reflect.Package` values: absent.
 - [~] **Program arguments.** The entry takes no parameters (`EntryTakesArguments`, confirmed). `baml pack` builds a CLI parser from the signature (`baml_cli/src/pack_command.rs:19-22`); native has none. `baml.sys.argv()` works and holds only the program's own arguments, where `baml-cli run` also gives the binary and the target (`differences.txt`, `sys_argv`).
 - [~] **Entry result.** Must be `int`, `float`, `bool`, `string` or `null` (`EntryResultNotPrintable`, confirmed for a class and an array). `baml-cli run` prints any value.
-- [ ] **Exit codes.** `baml.sys.exit(n)` throws `baml.panics.Exit`, which `baml-cli run` turns into the process status (`bex_engine/src/lib.rs:818`, `baml_cli/src/run_command.rs:1247`). The native runtime treats it as any uncaught throw (`rt/lib.rs:122-126`). Confirmed by running:
-  ```baml
-  function main() -> int { baml.sys.exit(3) }
-  // stderr: error: uncaught throw: baml.panics.Exit {code: 3}
-  // exit status 1, expected 3 and no message
-  ```
+- [x] **Exit codes.** `baml.sys.exit(n)` throws `baml.panics.Exit`, which `baml-cli run` turns into the process status (`bex_engine/src/lib.rs:818`, `baml_cli/src/run_command.rs:1247`), and so does the native runtime when nothing in the entry task catches it (`baml_rt_uncaught`, `rt/unwind.rs`): no message, the `defer`s run, the errors no `await` took are still reported, and a code past an `i32` is the nearest one (so the OS sees its low 8 bits). An `Exit` in a task nothing awaits is an unhandled task error on both, status 1. Cases `sys_exit*` in `tests/conformance/sys.baml`.
 - [x] **stdin.** `baml.io.input` works (ran it; also `a_program_prints_and_reads_its_own_streams`).
 - [ ] **Signals.** No handler is installed anywhere in `rt/`. SIGINT and SIGTERM end the process at once: no `defer`, no finalizer, no flush. What `baml-cli run` does on SIGINT: not confirmed.
 - [ ] **Subprocess handles and pipes.** `baml.sys.run` and `shell` work. `baml.sys.subprocess`, `Subprocess`, `ReadPipe`, `WritePipe` are not ported.
@@ -368,7 +363,7 @@ Reported as `runtime builtin (vm)` on the builtin itself.
 - [ ] **Task cancellation.** `tasks.md` "Not built". Section 3.
 - [ ] **Preemption.** A task runs until it parks or ends (`tasks.md`). A loop that never awaits holds off timers and I/O completions (from the design note; not run).
 - [ ] **More than one worker.** Everything in `threads.md`, "What assumes one worker" (items 1 to 34). `spawn` never runs in parallel.
-- [ ] **Deadlock on a semaphore is not reported.** Ran: a task that acquires a one-permit semaphore twice sleeps forever at 0% CPU. `rt/sched.rs:1113` reports `deadlock: every task waits for another` only when nothing is parked on I/O. The interpreter's behavior: not confirmed.
+- [x] **Deadlock on a semaphore.** A wait for a hold says that only another task can end it (`Scope::wait_for_a_task`), and the worker with nothing to run, no timer and no other I/O asks each such wait whether it is still held up (`Sched::sleep`, `rt/sched.rs`): if all are, `fatal: deadlock: every task waits for another`, status 70. The interpreter waits for good (ran it: killed after 15 s, `interrupted: 1 task still running: ... waiting for a semaphore slot`), so the case is in `differences.txt` (`sync_deadlock`), and the conformance harness now kills any run at 30 s. Assumes one worker: with several, a hold can be released while this one looks.
   ```baml
   function main() -> int { let s = baml.sync.Semaphore.new(1); let p = s.acquire(); let q = s.acquire(); 1 }
   ```
@@ -377,7 +372,6 @@ Reported as `runtime builtin (vm)` on the builtin itself.
 - [ ] **One I/O thread, one Tokio runtime** (`natives.md` "Not built").
 - [ ] **Tail calls** (`calls.md` "Not built"): the collector's stack walk assumes none. Deep mutual tail recursion overflows; the interpreter's limit differs (not confirmed).
 - [~] **Messages that differ from the interpreter.**
-  - `baml.sys.exit`: above.
   - Uncaught throw: `error: uncaught throw: <value>`, exit 1, matching `baml run` (`rt/lib.rs:41-43`). The traceback above it differs.
   - Runtime aborts with no interpreter counterpart: `a throw found no handler` (`rt/unwind.rs:363`, exit 70), `a spawn with semaphores or cancel tokens is not supported by native code yet` (`rt/sched.rs:1080`), `deadlock: every task waits for another` (`rt/sched.rs:1113`), a panic inside a native (runtime built `panic=abort`, hook in `rt/native/drive.rs:217-235`).
   - A Rust native that overruns the guard page dies by signal with no message: not confirmed.
@@ -402,7 +396,7 @@ Capabilities that compile and run with no conformance or differential case.
 
 - [ ] **HTTPS.** Every HTTP case talks to `http://127.0.0.1` (`tests/conformance.rs:973-975`). `a_program_without_http_links_no_tls` checks only what is linked. `rustls`, certificate roots and `TlsConfig` (not ported) are never exercised.
 - [ ] **`baml.sys.shell`.** `_shell` is listed `async` and compiles and ran here (`baml.sys.shell("true").exit_code` printed `0`). No case. `sys.run` has five.
-- [ ] **`baml.sys.exit(n)`.** No case, and it is wrong (section 3).
+- [x] **`baml.sys.exit(n)`.** Cases `sys_exit*`.
 - [ ] **Death by signal** of the native program itself (SIGSEGV on the guard page, SIGINT while parked). The harness records it (`conformance.rs:50-60`) and no case produces it. `ProcessExit.signal` of a child is covered.
 - [ ] **`spawn with` plans, `Future.cancel`, `with_timeout`.** Refused, and no case asserts the refusal text. Only two refusals are pinned: `comparing_values_with_an_eq_the_runtime_cannot_call_is_refused` and `a_refused_standard_library_call_names_the_function_and_says_why`.
 - [ ] **Semaphore deadlock** (section 4).

@@ -149,3 +149,21 @@ function sync_many_tasks_three_holds() -> string {
   for (let task in tasks) { sum += await task; };
   `${sum} ${shared.count} ${shared.most} ${gate.active_count()} ${gate.queued_count()} ${tally.active_count()}`
 }
+// A hold is waited for while the task that has it waits for a program to
+// end: that is no deadlock.
+function sync_held_through_io() -> string {
+  let gate = baml.sync.Semaphore.new(1);
+  let held = gate.acquire();
+  let waiting = spawn { let mine = gate.acquire(); mine.release(); gate.queued_count() };
+  sync_until_queued(gate, 1);
+  let ran = baml.sys.run("/bin/sleep", args = ["0.05"]);
+  held.release();
+  `${ran.exit_code} ${await waiting}`
+}
+// Nothing is left to release the hold the second `acquire` waits for.
+function sync_deadlock() -> int {
+  let s = baml.sync.Semaphore.new(1);
+  let p = s.acquire();
+  let q = s.acquire();
+  1
+}

@@ -195,7 +195,8 @@ The worker with nothing runnable blocks in `Sched::sleep`:
 ```rust
 fn sleep(&mut self) -> bool {
     let until = self.timers.peek().map(|Reverse((when, ..))| *when);
-    if until.is_none() && self.on_io == 0 { return false; }     // deadlock or done
+    let stuck = self.on_io == self.held_up.len() && self.held_up.iter().all(|(_, held_up)| held_up());
+    if until.is_none() && stuck { return false; }               // deadlock or done
     let woken = self.inbox.woken.lock().expect("no thread panics holding it");
     if !woken.is_empty() { return true; }
     match until {

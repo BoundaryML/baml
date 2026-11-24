@@ -44,3 +44,8 @@ sys_argv: argv is to hold only the program's own arguments, as native does; `bam
 # Closing a stream.
 http_sse_closed_early: a native `close` ends the stream; the interpreter's does nothing while the program still holds it
   stdout "true"\n
+
+# A deadlock.
+sync_deadlock: a native program whose every task waits for another says so and ends; the interpreter waits for good, and the test kills it at its limit
+  exit 70
+  stderr fatal: deadlock: every task waits for another\n

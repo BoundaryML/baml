@@ -558,6 +558,7 @@ pub const WELL_KNOWN_INDEX_OUT_OF_BOUNDS: usize = 1;
 pub const WELL_KNOWN_MAP_KEY_NOT_FOUND: usize = 3;
 pub const WELL_KNOWN_STACK_OVERFLOW: usize = 4;
 pub const WELL_KNOWN_USER_PANIC: usize = 8;
+pub const WELL_KNOWN_EXIT: usize = 9;
 pub const WELL_KNOWN_ALLOC_FAILURE: usize = 10;
 pub const WELL_KNOWN_NEGATIVE_BIT_SHIFT: usize = 12;
 pub const WELL_KNOWN_INVALID_ARGUMENT: usize = 15;

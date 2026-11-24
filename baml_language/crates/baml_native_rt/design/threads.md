@@ -80,7 +80,7 @@ Each item: where, what it relies on, what it needs.
 13. `rt/sched.rs:400-424` (`wake`). The state change is a compare-and-swap, the push that follows is onto the plain queue (407, 409). Needs a concurrent queue and a signal to a sleeping worker.
 14. `rt/sched.rs:431-449`, `989-1016`, `285-287`. Timers are this worker's heap, in nanoseconds since this `Sched` started. Needs shared timers and one clock base.
 15. `rt/sched.rs:466`, `1066`. `on_io` is incremented by the parking worker and decremented by whoever empties the inbox. Needs one atomic count.
-16. `rt/sched.rs:477-499` (`sleep`), `1112-1114`. A worker with no timers and `on_io == 0` returns, and `run` reports a deadlock. A push to the run queue does not signal the condvar it sleeps on. Needs global idle accounting.
+16. `rt/sched.rs:477-499` (`sleep`), `1112-1114`. A worker with no timers and nothing parked on I/O but waits another task has to end (`held_up`, each asked whether it still is) returns, and `run` reports a deadlock. Another worker could end such a wait while this one asks. A push to the run queue does not signal the condvar it sleeps on. Needs global idle accounting.
 17. `rt/sched.rs:226`, `1067-1073`. One `Inbox` per `Sched`; a `Wake` holds the parking worker's inbox. Needs a shared inbox or stealing.
 18. `rt/sched.rs:891-922` (`exit_pick`), `1129-1165` (`serve`), `1095-1119` (`run`). The hand-off pops the plain queue; `run` starts one `serve` on the calling thread. Needs N threads and a way to tell that all are idle.
 19. `rt/sched.rs:147`, written at `267-268`, `327`, `809`, `1102`. `Task.flags` is a plain `u32`. Fine while only the running worker writes it.

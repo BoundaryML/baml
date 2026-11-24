@@ -20,8 +20,8 @@ use crate::{
         STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
         TYPE_ARRAY_OF_VALUES, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ENTRIES_KEY_REF,
         TYPE_ENTRIES_REFS, TYPE_ENTRIES_VALUE_REF, TYPE_ID_MASK, TYPE_MAP, TYPE_REFS,
-        WELL_KNOWN_CONTEXT, WELL_KNOWN_PANICS, WELL_KNOWN_STACK_FRAME, WELL_KNOWN_STACK_TRACE,
-        WORD,
+        WELL_KNOWN_CONTEXT, WELL_KNOWN_EXIT, WELL_KNOWN_PANICS, WELL_KNOWN_STACK_FRAME,
+        WELL_KNOWN_STACK_TRACE, WORD,
     },
     map, string,
 };
@@ -264,6 +264,27 @@ pub(crate) fn well_known_type(mutator: &Mutator, class: usize) -> usize {
             "the program names the standard library's panics and errors"
         );
         word(list + 4 + class * 4)
+    }
+}
+
+/// The `code` of `error` when it is a `baml.panics.Exit`.
+///
+/// # Safety
+///
+/// `error` is zero or a live object.
+pub(crate) unsafe fn exit_code(mutator: &Mutator, error: usize) -> Option<i64> {
+    // SAFETY: the caller's contract; an `Exit` has its code in its one
+    // field, as an `int`.
+    unsafe {
+        if error == 0 {
+            return None;
+        }
+        let class = well_known_type(mutator, WELL_KNOWN_EXIT);
+        if load(error) & TYPE_ID_MASK != class {
+            return None;
+        }
+        let code = load(error + field_at(description(mutator, class)?, 0));
+        Some(i64::from_ne_bytes(code.to_ne_bytes()))
     }
 }
 

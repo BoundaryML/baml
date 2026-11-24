@@ -493,12 +493,43 @@ impl<'s> Scope<'s> {
                     *slot.lock().expect("no thread panics holding it") = Some(value);
                 }),
                 start: start_on_tokio,
+                held_up: None,
             })),
         };
         async move {
             stop.await;
             let made = made.lock().expect("the job did not panic").take();
             made.expect("the driver polls again once the job has ended")
+        }
+    }
+
+    /// Wait for what only another task can do: `job` ends once it has, and
+    /// `held_up` says whether it still has to. The task is parked as for
+    /// [`Scope::io`], but a program whose every task waits like this is
+    /// deadlocked, where one that waits on I/O is not.
+    ///
+    /// What the other task does must change the answer of `held_up` as it
+    /// does it, on the worker, and not when the job comes to see it.
+    pub fn wait_for_a_task<'a, J, H>(
+        &'a mut self,
+        job: J,
+        held_up: H,
+    ) -> impl Future<Output = ()> + Send + use<'a, 's, J, H>
+    where
+        J: Future<Output = ()> + Send + 'static,
+        H: Fn() -> bool + Send + 'static,
+    {
+        self.stops("scope.wait_for_a_task");
+        let stop = Stop {
+            scope: Some(self),
+            request: Some(Request::Io(IoWait {
+                job: Box::pin(job),
+                start: start_on_tokio,
+                held_up: Some(Box::new(held_up)),
+            })),
+        };
+        async move {
+            stop.await;
         }
     }
 

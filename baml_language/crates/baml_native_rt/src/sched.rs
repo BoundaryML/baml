@@ -226,6 +226,9 @@ pub(crate) struct Sched {
     inbox: Arc<Inbox>,
     /// How many tasks are parked on I/O, each to arrive in the inbox.
     on_io: usize,
+    /// Those of them whose wait only another task can end, each with what
+    /// says whether it still has to.
+    held_up: Vec<(usize, HeldUp)>,
     /// Under migration stress, which of the two threads serves as the
     /// worker now: see `serve_in_turns`.
     migrate: Option<u32>,
@@ -249,6 +252,7 @@ impl Sched {
                 arrived: Condvar::new(),
             }),
             on_io: 0,
+            held_up: Vec::new(),
             migrate: None,
         }
     }
@@ -464,6 +468,9 @@ impl Sched {
             std::mem::take(&mut *woken)
         };
         self.on_io -= woken.len();
+        if !self.held_up.is_empty() {
+            self.held_up.retain(|(task, _)| !woken.contains(task));
+        }
         for task in woken {
             // SAFETY: a task is put in the inbox once it has parked on
             // I/O, and once for each time.
@@ -473,10 +480,14 @@ impl Sched {
 
     /// With nothing to run: sleep until the next timer fires or a task
     /// arrives in the inbox, whichever is first. Returns false when
-    /// neither can happen.
+    /// neither can happen: no task is parked on I/O but those held up by
+    /// another task, and with nothing to run none of those will be let go.
+    /// One already let go is on its way to the inbox.
     fn sleep(&mut self) -> bool {
         let until = self.timers.peek().map(|Reverse((when, ..))| *when);
-        if until.is_none() && self.on_io == 0 {
+        let stuck =
+            self.on_io == self.held_up.len() && self.held_up.iter().all(|(_, held_up)| held_up());
+        if until.is_none() && stuck {
             return false;
         }
         let woken = self
@@ -1025,7 +1036,14 @@ pub(crate) type Job = std::pin::Pin<Box<dyn Future<Output = ()> + Send>>;
 pub(crate) struct IoWait {
     pub(crate) job: Job,
     pub(crate) start: fn(Job, Wake),
+    /// For a wait only another task can end.
+    pub(crate) held_up: Option<HeldUp>,
 }
+
+/// Whether a wait only another task can end still has to be ended. It is
+/// asked on the worker, and what ends the wait changes the answer there
+/// and then, before the job has seen it.
+pub(crate) type HeldUp = Box<dyn Fn() -> bool + Send>;
 
 /// What hands a task parked on I/O back to a worker, once.
 pub(crate) struct Wake {
@@ -1062,8 +1080,15 @@ pub(crate) unsafe extern "C" fn io_park(wait: usize, worker: &mut Mutator, frame
         (*task).state.store(PARKING, Ordering::Release);
         (*(wait as *mut Option<IoWait>)).take()
     };
-    let IoWait { job, start } = waits_for.expect("a wait is for what a native asked for, once");
+    let IoWait {
+        job,
+        start,
+        held_up,
+    } = waits_for.expect("a wait is for what a native asked for, once");
     sched.on_io += 1;
+    if let Some(held_up) = held_up {
+        sched.held_up.push((task as usize, held_up));
+    }
     start(
         job,
         Wake {

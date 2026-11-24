@@ -1,7 +1,8 @@
 //! `baml.sync.Semaphore`: a count of holds and a queue of those waiting
 //! for one, as Rust state the `Semaphore` owns. A hold that has to wait
 //! waits as I/O does: its task is parked until whoever releases a hold
-//! hands it on, first come first served.
+//! hands it on, first come first served. Only a task can release one, so
+//! the wait says so: see `Scope::wait_for_a_task`.
 //!
 //! The state is behind locks of its own and no part of it is in the heap,
 //! so it is as it stands for several workers. `baml.sync.atomic` is not
@@ -167,13 +168,18 @@ impl NativeBamlSync for Natives {
         held: Root<'s, Opaque>,
     ) -> Result<(), Thrown<'s>> {
         let hold = held.get(scope).share::<Hold>();
+        let waiting = Arc::clone(&hold);
         scope
-            .io(async move {
-                // A hold released while it waits has nothing to wait for.
-                while *locked(&hold.stage) == Stage::Queued {
-                    hold.admitted.notified().await;
-                }
-            })
+            .wait_for_a_task(
+                async move {
+                    // A hold released while it waits has nothing to wait
+                    // for.
+                    while *locked(&hold.stage) == Stage::Queued {
+                        hold.admitted.notified().await;
+                    }
+                },
+                move || *locked(&waiting.stage) == Stage::Queued,
+            )
             .await;
         Ok(())
     }

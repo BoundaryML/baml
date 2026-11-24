@@ -22,7 +22,9 @@
 //! `tests/conformance/differences.txt`, with why and with what the native
 //! program does. The interpreter must then do something else, so that the
 //! entry goes when it stops being true. A native program a signal killed is
-//! a failure whatever the list says.
+//! a failure whatever the list says, and so is one that does not end: a
+//! program still running at `common::LIMIT` is killed. An interpreter run
+//! killed so is never kept.
 //!
 //! `BAML_CONFORMANCE_ONLY=a.baml,b.baml` runs the cases of those files
 //! alone.
@@ -42,7 +44,7 @@ use baml_db::testing::{assert_no_diagnostic_errors, setup_test_db};
 use sha2::{Digest as _, Sha256};
 
 mod common;
-use common::{Built, WAYS, build, command, output};
+use common::{Built, WAYS, build, command, finished, output};
 
 /// What a program's caller sees of a run: how it exited, and what it wrote.
 #[derive(Clone, PartialEq, Eq)]
@@ -232,20 +234,17 @@ fn interpreted(project: &Path, case: &str, key: Option<&str>) -> Behavior {
             stderr: stderr.to_owned(),
         };
     }
-    let ran = Command::new(&interpreter.binary)
-        .args(["run", "--quiet", "--agent-skill-check", "off"])
-        .args(["--output-preset", "human", "--color", "never"])
-        .arg("--project-dir")
-        .arg(project)
-        .arg(case)
-        .env("BAML_TELEMETRY", "off")
-        .env("BAML_CLI_ALLOW_DIRECT", "1")
-        .env("BAML_HOME", &interpreter.home)
-        .stdin(std::process::Stdio::null())
-        .output()
-        .unwrap_or_else(|error| {
-            panic!("`{}` does not start: {error}", interpreter.binary.display())
-        });
+    let ran = finished(
+        Command::new(&interpreter.binary)
+            .args(["run", "--quiet", "--agent-skill-check", "off"])
+            .args(["--output-preset", "human", "--color", "never"])
+            .arg("--project-dir")
+            .arg(project)
+            .arg(case)
+            .env("BAML_TELEMETRY", "off")
+            .env("BAML_CLI_ALLOW_DIRECT", "1")
+            .env("BAML_HOME", &interpreter.home),
+    );
     let behavior = Behavior::of(&ran);
     assert!(
         !behavior.stderr.contains("error: cannot run: "),

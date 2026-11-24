@@ -684,6 +684,10 @@ pub(crate) unsafe fn report(mutator: &Mutator, what: &str, error: usize, trace: 
 /// errors of tasks no `await` took, and end the process. `trace` is zero or
 /// what the error travelled with.
 ///
+/// A `baml.panics.Exit` is not reported: its code is the status the
+/// process ends with, as `baml run` has it, an `int` past what a status
+/// holds taken as the nearest that fits.
+///
 /// # Safety
 ///
 /// Called from the compiled entry function's handler with what it landed
@@ -692,8 +696,16 @@ pub(crate) unsafe fn report(mutator: &Mutator, what: &str, error: usize, trace: 
 #[expect(clippy::exit, reason = "an uncaught throw ends the program")]
 pub unsafe extern "C" fn baml_rt_uncaught(mutator: &mut Mutator, error: usize, trace: usize) -> ! {
     // SAFETY: the caller's contract.
-    unsafe { report(mutator, "", error, trace) };
+    let exit = unsafe { class::exit_code(mutator, error) };
+    if exit.is_none() {
+        // SAFETY: the caller's contract.
+        unsafe { report(mutator, "", error, trace) };
+    }
     crate::sched::report_unhandled(mutator);
     mutator.drop_owned();
-    std::process::exit(crate::UNCAUGHT_EXIT_STATUS)
+    let _ = std::io::stdout().flush();
+    std::process::exit(match exit {
+        Some(code) => i32::try_from(code).unwrap_or(if code < 0 { i32::MIN } else { i32::MAX }),
+        None => crate::UNCAUGHT_EXIT_STATUS,
+    })
 }
