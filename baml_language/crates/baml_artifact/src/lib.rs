@@ -148,7 +148,7 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 ///
 /// Version 33: the packed dispatch envelope carries the heap collection
 /// policy (`[pack.gc]`) and the variables that may override it.
-/// Version 34: a `ProgramPackage` carries the `build_id` of the build that
+/// Version 34: a `ProgramPackage` carries the record of the build that
 /// produced it, and the artifact telemetry policy `omit_source` (BEP-088).
 pub const FORMAT_VERSION: u32 = 34;
 

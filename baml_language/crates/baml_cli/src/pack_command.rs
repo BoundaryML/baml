@@ -209,7 +209,7 @@ impl PackArgs {
 
         let (db, root, mut program, needs_format_hint) = self.load_and_compile()?;
         // The build registers before the artifact is written, so the
-        // artifact carries its ID to every process that runs it.
+        // artifact carries the build to every process that runs it.
         crate::build_record::register(
             &db,
             root,

@@ -236,7 +236,7 @@ use sha2::{Digest, Sha256};
 /// head (its discriminant, 18, is unused), and `ClassCrossing` gained the
 /// appended `HostValue`.
 ///
-/// Version 30: a `ProgramPackage` carries the `build_id` of the build that
+/// Version 30: a `ProgramPackage` carries the record of the build that
 /// produced it (BEP-088). A cached program names none.
 pub const FORMAT_VERSION: u32 = 30;
 

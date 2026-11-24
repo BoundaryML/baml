@@ -432,8 +432,9 @@ pub struct ProgramPackage {
     /// The build that produced the package (BEP-088). Unlike the metadata
     /// it is not a function of the package: whoever ran the compiler stamps
     /// it ([`Program::set_build`](crate::Program::set_build)), and an
-    /// artifact written from the program carries it.
-    pub build_id: Option<[u8; 16]>,
+    /// artifact written from the program carries it to its runtime, whose
+    /// recordings name it.
+    pub build: Option<btel_types::BuildRecord>,
     /// The package's synthesized `$init_test`, if present.
     pub test_init: Option<ObjectIndex>,
     /// The package's synthesized `$init`, if it has `let`s.

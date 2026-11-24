@@ -24,7 +24,7 @@ pub struct ProcessInfo {
 }
 
 /// A git commit ID, in the repository's object format.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum GitHash {
     Sha1([u8; 20]),
     Sha256([u8; 32]),
@@ -41,7 +41,7 @@ impl GitHash {
 }
 
 /// Where a build's package sat in git when it was built (BEP-088).
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct GitInfo {
     /// URL of `origin` in `https` form with credentials removed; `None`
     /// when the repository has no `origin`.
@@ -61,7 +61,7 @@ pub struct GitInfo {
 }
 
 /// What ran the compiler for a build.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum BuildOrigin {
     Pack,
     Generate,
@@ -87,7 +87,7 @@ impl BuildOrigin {
 /// One run of the compiler building one package (BEP-088's `build` row).
 /// Unlike a package's metadata it is not a function of the package: two
 /// builds of the same code are two records.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct BuildRecord {
     /// Identifies this run of the compiler: a random UUID.
     pub build_id: [u8; 16],

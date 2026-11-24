@@ -17,6 +17,7 @@ doctest = false
 [dependencies]
 btel_settings = { workspace = true }
 btel-core = { workspace = true }
+borsh = { workspace = true }
 rustc-hash = { workspace = true }
 uuid = { workspace = true, features = [ "v4" ] }
 

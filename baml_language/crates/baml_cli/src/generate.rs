@@ -385,7 +385,7 @@ impl GenerateArgs {
             .get_bytecode(package)
             .map_err(|e| anyhow!("compilation failed: {e}"))?;
         // The build registers before the bytecode is embedded, so the
-        // generated client carries its ID to every process that loads it.
+        // generated client carries the build to every process that loads it.
         crate::build_record::register(
             &db,
             package,

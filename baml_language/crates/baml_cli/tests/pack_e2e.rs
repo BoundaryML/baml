@@ -772,6 +772,8 @@ fn pack_child_preserves_streams_environment_and_status() {
     );
     let mut child = command(bin)
         .env("BAML_HANDOFF_REMOVE", "inherited")
+        // A saved Boundary login on the machine would add a warning to stderr.
+        .env("BAML_TELEMETRY", "off")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

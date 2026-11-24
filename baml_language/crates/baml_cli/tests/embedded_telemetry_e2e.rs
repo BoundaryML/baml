@@ -98,6 +98,32 @@ fn registered_build(requests: &[Request], key: &str) -> Value {
     assert_eq!(build.headers["authorization"], format!("Bearer {key}"));
     serde_json::from_slice(&build.body).unwrap()
 }
+/// The build the program `baml generate` embedded under `project` carries.
+fn embedded_build(project: &Path) -> Option<btel_types::BuildRecord> {
+    let bytes = std::fs::read(project.join("generated/baml_sdk/src/_inlinedbaml.bin")).unwrap();
+    let program: bex_vm_types::Program =
+        baml_artifact::decode(baml_artifact::ArtifactKind::Program, &bytes).unwrap();
+    program.build().cloned()
+}
+
+/// `embedded` is the build BCS was sent as `registered`: the generated
+/// client's recordings name the build that is registered.
+fn assert_embeds_registered_build(embedded: &btel_types::BuildRecord, registered: &Value) {
+    let registered = &registered["build"];
+    assert_eq!(hex::encode(embedded.build_id), registered["build_id"]);
+    assert_eq!(embedded.origin.as_str(), registered["origin"]);
+    assert_eq!(
+        embedded.timestamp_unix_ns.to_string(),
+        registered["timestamp_ns"]
+    );
+    assert_eq!(hex::encode(embedded.source_hash), registered["source_hash"]);
+    assert_eq!(
+        hex::encode(embedded.compilation_unit_hash),
+        registered["compilation_unit_hash"]
+    );
+    assert_eq!(embedded.git.is_some(), !registered["git"].is_null());
+}
+
 async fn ingest_api(server: &MockServer) {
     let base = server.uri();
     Mock::given(method("POST"))
@@ -481,10 +507,12 @@ async fn packed_api_key_is_verified_and_fixed_with_endpoint_override() {
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
     let requests = run_server.received_requests().await.unwrap();
     assert!(requests.iter().any(|request| request.method == "PUT"));
-    // The binary runs no compiler of its own, so it registers nothing. It
-    // carries the ID of the build that packed it and not the rest of that
-    // build, so its recordings name no build.
-    assert_eq!(recorded_builds(&requests), Vec::<Vec<u8>>::new());
+    // The binary runs no compiler of its own, so it registers nothing: it
+    // carries the build that packed it, and its recordings name that one.
+    assert_eq!(
+        recorded_builds(&requests),
+        [hex::decode(build["build"]["build_id"].as_str().unwrap()).unwrap()]
+    );
     assert!(
         requests
             .iter()
@@ -618,6 +646,9 @@ async fn generate_embeds_named_api_key_and_plain_generate_omits_it() {
     assert_eq!(requests.len(), 2);
     let build = registered_build(&requests, "bdry_secret_embedded");
     assert_eq!(build["build"]["origin"], "generate");
+    // The client carries the whole build, which its runtime names in every
+    // recording.
+    assert_embeds_registered_build(&embedded_build(temp.path()).unwrap(), &build);
     succeeded(&cli(temp.path(), &server.uri(), &["generate"]));
     let inlined =
         std::fs::read_to_string(temp.path().join("generated/baml_sdk/src/_inlinedbaml.rs"))
@@ -629,6 +660,7 @@ async fn generate_embeds_named_api_key_and_plain_generate_omits_it() {
     assert_eq!(requests.len(), 3);
     let build = registered_build(&requests[2..], "bdry_secret_builder_do_not_embed");
     assert_eq!(build["build"]["origin"], "generate");
+    assert_embeds_registered_build(&embedded_build(temp.path()).unwrap(), &build);
     assert_eq!(
         build["target"],
         json!({"project": "ambient/project_must_not_override_manifest"})

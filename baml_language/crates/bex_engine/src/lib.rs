@@ -2082,6 +2082,8 @@ impl BexEngine {
             .source_content_hash
             .map(bex_events::ids::SourceSnapshotId);
         #[cfg(not(target_arch = "wasm32"))]
+        let program_build = bytecode_program.build().cloned();
+        #[cfg(not(target_arch = "wasm32"))]
         let trace_scope = recording
             .as_ref()
             .map_or_else(btel_types::new_recording_id, TelemetryRecording::id);
@@ -2274,6 +2276,7 @@ impl BexEngine {
                     Some(recording) => recording.start(
                         source_snapshot_id.map(|id| id.0),
                         Some(program_id.0),
+                        program_build,
                         Arc::new(heap.static_function_metadata()),
                         &process_context,
                     )?,

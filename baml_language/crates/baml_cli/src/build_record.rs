@@ -52,18 +52,22 @@ fn describe(
 }
 
 /// A provider of the record of this build of `package`, for the engine that
-/// runs `program`: the program's root is stamped with the build's ID, so its
-/// spans name the build whether or not the provider is ever called.
+/// runs `program`. The program names no build of its own: the engine takes
+/// this one.
 pub(crate) fn provider(
     db: &ProjectDatabase,
     package: SourceRoot,
     program: &mut bex_vm_types::Program,
     origin: BuildOrigin,
 ) -> Option<bex_engine::BuildProvider> {
-    let build_id = new_build_id();
-    let describe = describe(db, package, program, origin, build_id);
-    program.set_build(describe.as_ref().map(|_| build_id));
-    Some(Box::new(describe?))
+    program.set_build(None);
+    Some(Box::new(describe(
+        db,
+        package,
+        program,
+        origin,
+        new_build_id(),
+    )?))
 }
 
 /// Where the artifact built under `policy` from the project at
@@ -96,8 +100,8 @@ fn destination(
 
 /// Registers this build of `package` with Boundary now, when the artifact
 /// built under `policy` or the project at `project_root` sends telemetry
-/// there, and stamps `program`'s root with the build's ID, which the
-/// artifact written from it carries to its runtime. For a build that runs
+/// there, and stamps `program`'s root with the build, which the artifact
+/// written from it carries to its runtime. For a build that runs
 /// no program (`baml pack`, `baml generate`): a failure prints a warning and
 /// the build goes on.
 pub(crate) fn register(
@@ -118,7 +122,7 @@ pub(crate) fn register(
     else {
         return;
     };
-    program.set_build(Some(build_id));
+    program.set_build(Some(registration.build.clone()));
     if let Err(error) = recording.register_build(registration) {
         crate::reporter::print_warning(format_args!(
             "this build was not registered with Boundary: {error}"

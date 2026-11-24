@@ -610,7 +610,7 @@ impl TelemetryRecording {
         &self,
         launch_context: &btel_types::context::Context,
         program_id: Option<[u8; 16]>,
-        build: Option<&btel_types::BuildRegistration>,
+        build: Option<btel_types::BuildRecord>,
     ) -> btel_recorder::ProcessRecording {
         let recorded_context = if matches!(self.destination, Destination::Cloud { .. }) {
             environment::context(launch_context)
@@ -654,7 +654,7 @@ impl TelemetryRecording {
             program_id,
             // BCS names the build of a span from the header: it links the
             // functions of the package the build produced to it.
-            build: build.map(|registration| registration.build.clone()),
+            build,
         }
     }
 
@@ -662,6 +662,7 @@ impl TelemetryRecording {
         mut self,
         source_snapshot: Option<[u8; 32]>,
         program_id: Option<[u8; 16]>,
+        program_build: Option<btel_types::BuildRecord>,
         functions: Arc<btel_types::FunctionMetadataTable>,
         launch_context: &btel_types::context::Context,
     ) -> Result<
@@ -673,7 +674,13 @@ impl TelemetryRecording {
     > {
         let transport = btel_settings::transport::ChunkConfig::default();
         let build = self.build();
-        let process = self.process(launch_context, program_id, build.as_ref());
+        // A host that compiled the program describes the build; a program
+        // read from an artifact carries the build that wrote the artifact.
+        let named = build
+            .as_ref()
+            .map(|registration| registration.build.clone())
+            .or(program_build);
+        let process = self.process(launch_context, program_id, named);
         self.config
             .validate_transport(&transport)
             .map_err(|error| EngineError::Other(error.to_owned()))?;
@@ -1432,7 +1439,7 @@ mod source_privacy_tests {
         let local_process = local.process(
             &btel_types::context::Context::default(),
             program_id,
-            described.as_ref(),
+            described.map(|registration| registration.build),
         );
         assert!(local_process.sources.is_some());
         assert_eq!(local_process.build, Some(build().build));
@@ -1449,7 +1456,7 @@ mod source_privacy_tests {
         let cloud_process = cloud.process(
             &btel_types::context::Context::default(),
             program_id,
-            registered.as_ref(),
+            registered.map(|registration| registration.build),
         );
         assert!(cloud_process.sources.is_none());
         assert_eq!(cloud_process.build, Some(build().build));
