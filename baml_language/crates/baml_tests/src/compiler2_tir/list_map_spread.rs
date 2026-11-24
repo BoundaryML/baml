@@ -253,6 +253,76 @@ fn an_operand_that_fails_to_type_reports_once() {
     assert_ne!(diags[0].0, DiagnosticId::InvalidSpreadOperand, "{diags:#?}");
 }
 
+/// E0190 stays quiet when the operand's type finalizes as the error
+/// sentinel. That is only sound because the sentinel is never filled in
+/// without a diagnostic of its own: each of these programs is still rejected.
+#[test]
+fn an_operand_whose_type_never_resolves_is_still_rejected() {
+    for source in [
+        // An unannotated lambda parameter with no context.
+        "function f() -> int { let g = (xs) -> { [...xs] }; 0 }",
+        "function f() -> int { let g = (m) -> { { ...m } }; 0 }",
+        // A generic result nothing instantiates.
+        "function make<T>() -> T { throw \"no\" }\nfunction f() -> int[] { [...make()] }",
+        "function make<T>() -> T { throw \"no\" }\nfunction f() -> int { let ys = [...make()]; 0 }",
+        "function make<T>() -> T { throw \"no\" }\nfunction f() -> map<string, int> { { ...make() } }",
+    ] {
+        let diags = diagnostics(source);
+        assert!(!diags.is_empty(), "accepted: {source}");
+    }
+}
+
+/// An operand whose type is solved only by a later use is rejected at the
+/// spread, where it was not yet known to be a list: the operand shape is
+/// decided there, never deferred.
+#[test]
+fn an_operand_whose_type_is_solved_later_is_rejected() {
+    let diags = diagnostics(
+        r#"function make<T>() -> T { throw "no" }
+function f() -> int[] {
+    let xs = make();
+    let ys = [...xs];
+    let zs: int[] = xs;
+    ys
+}"#,
+    );
+    assert!(
+        diags.iter().any(|(id, message)| {
+            *id == DiagnosticId::InvalidSpreadOperand
+                && message.contains("its type was not known yet at the spread")
+        }),
+        "{diags:#?}"
+    );
+}
+
+/// The `tools` list of an LLM function is a list literal: a bare function
+/// reference is still wrapped as a tool, and a spread operand is an ordinary
+/// expression that must already be a list of tools.
+#[test]
+fn a_tools_list_takes_a_spread_of_tools() {
+    let tools = r#"function lookup(city: string) -> string { city }
+function more_tools() -> ai.tools.Tool[] { [] }
+"#;
+    assert_accepted(&format!(
+        "{tools}function Ask(q: string) -> string {{
+    client: \"openai/gpt-4o-mini\"
+    tools: [lookup, ...more_tools()]
+    prompt: `${{q}}`
+}}"
+    ));
+    let diags = diagnostics(&format!(
+        "{tools}function Ask(q: string) -> string {{
+    client: \"openai/gpt-4o-mini\"
+    tools: [lookup, ...lookup]
+    prompt: `${{q}}`
+}}"
+    ));
+    assert!(
+        matches!(diags.as_slice(), [(DiagnosticId::InvalidSpreadOperand, _)]),
+        "{diags:#?}"
+    );
+}
+
 // ─── Maps ────────────────────────────────────────────────────────────────────
 
 #[test]
