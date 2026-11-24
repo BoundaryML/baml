@@ -240,3 +240,273 @@ test "retry call retains status-less provider failure before success" {
     });
     assert.is_true(preserved)
 }
+
+// ─── Retry judgment for provider-rejected requests ──────────────────────────
+//
+// The default judgment retries an `InvalidRequest` that carries an HTTP status
+// (the provider answered with an error status, which can be transient) and
+// does not retry one raised without a status (BAML refused to build the
+// request, so resending it cannot help). Parity with the legacy BAML DSL's
+// retry policy, which repeated every request answered with an error status.
+
+function rejected_body() -> string {
+    `{"error":{"message":"bad request"}}`
+}
+
+function short_backoff() -> ai.clients.Backoff {
+    ai.clients.Backoff.new(initial_ms = 1, max_ms = 1)
+}
+
+function rejection_label(e: unknown) -> string {
+    match (e) {
+        let invalid: ai.errors.InvalidRequest => `InvalidRequest/${invalid.status_code ?? -1}`,
+        _ => `other:${e.to_string()}`,
+    }
+}
+
+// Invokes a three-attempt Retry over a Responses client against `responses`;
+// reports the outcome and how many requests reached the server.
+function retry_over_http(
+    responses: root.llm_mock.MockResponse[],
+    retry_if: ((ai.errors.Failure) -> bool throws never)? = null,
+) -> string {
+    root.llm_mock.mock_json_serve(responses, (mock: root.llm_mock.MockJsonServer) -> {
+        let cl = ai.clients.Retry.new(
+            openai.ResponsesClient.new(api_key = "test", base_url = mock.base_url()),
+            max_attempts = 3,
+            retry_if = retry_if,
+            backoff = short_backoff(),
+        );
+        let outcome = (cl.invoke(input()).terminal_text() ?? "-") catch_all (e) {
+            _ => rejection_label(e),
+        };
+        `${outcome}|requests=${mock.request_count()}`
+    })
+}
+
+test "default judgment retries an HTTP 400 until an attempt succeeds" {
+    assert.equal(
+        retry_over_http([
+            root.llm_mock.MockResponse.error(400, rejected_body()),
+            root.llm_mock.MockResponse.error(400, rejected_body()),
+            root.llm_mock.MockResponse.ok(completed("ok")),
+        ]),
+        "ok|requests=3",
+    )
+}
+
+test "default judgment stops at max_attempts and rethrows the HTTP 400" {
+    assert.equal(
+        retry_over_http([root.llm_mock.MockResponse.error(400, rejected_body())]),
+        "InvalidRequest/400|requests=3",
+    )
+}
+
+function never_retry_invalid_request(f: ai.errors.Failure) -> bool {
+    match (f) {
+        ai.errors.InvalidRequest => false,
+        _ => ai.clients.default_retry_judgment(f),
+    }
+}
+
+test "a custom retry_if still overrides the default for an HTTP 400" {
+    assert.equal(
+        retry_over_http(
+            [
+                root.llm_mock.MockResponse.error(400, rejected_body()),
+                root.llm_mock.MockResponse.ok(completed("ok")),
+            ],
+            retry_if = never_retry_invalid_request,
+        ),
+        "InvalidRequest/400|requests=1",
+    )
+}
+
+// Throws an `InvalidRequest` carrying `status_code` on every invocation and
+// counts the invocations.
+class RejectingClient {
+    status_code: int?,
+    invocations: int,
+
+    implements ai.Client {
+        function requested_model(self) -> string {
+            "rejecting"
+        }
+        function provider(self) -> string {
+            "test"
+        }
+
+        function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+            let _ = input;
+            baml.http.Request {
+                method: "POST",
+                url: "https://example.invalid/rejecting",
+                headers: {},
+                body: "{}",
+            }
+        }
+
+        function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+            let _ = input;
+            self.invocations += 1;
+            throw ai.errors.InvalidRequest {
+                provider: "test",
+                status_code: self.status_code,
+                detail: "rejected",
+                raw_body: null,
+            };
+        }
+    }
+}
+
+function retry_rejecting(status_code: int?) -> string {
+    let inner = RejectingClient {
+        status_code: status_code,
+        invocations: 0,
+    };
+    let cl = ai.clients.Retry.new(inner, max_attempts = 3, backoff = short_backoff());
+    let outcome = (cl.invoke(input()).terminal_text() ?? "-") catch_all (e) {
+        _ => rejection_label(e),
+    };
+    `${outcome}|invocations=${inner.invocations}`
+}
+
+test "default judgment does not retry an InvalidRequest without a status" {
+    assert.equal(retry_rejecting(null), "InvalidRequest/-1|invocations=1")
+}
+
+test "default judgment retries an InvalidRequest with a status" {
+    assert.equal(retry_rejecting(422), "InvalidRequest/422|invocations=3")
+}
+
+test "default_retry_judgment on InvalidRequest follows its status" {
+    assert.is_true(ai.clients.default_retry_judgment(ai.errors.InvalidRequest {
+        provider: "test",
+        status_code: 400,
+        detail: "http 400",
+        raw_body: null,
+    }));
+    assert.equal(
+        false,
+        ai.clients.default_retry_judgment(ai.errors.InvalidRequest {
+            provider: "client",
+            status_code: null,
+            detail: "bad config",
+            raw_body: null,
+        }),
+    )
+}
+
+test "default_retry_judgment still declines refusals and bad output" {
+    assert.equal(
+        false,
+        ai.clients.default_retry_judgment(ai.errors.Refused {
+            provider: "test",
+            reason: "declined",
+            raw_body: null,
+        }),
+    );
+    assert.equal(
+        false,
+        ai.clients.default_retry_judgment(ai.errors.ParseFailed {
+            provider: "test",
+            raw_output: "{}",
+            message: null,
+        }),
+    );
+    assert.equal(
+        false,
+        ai.clients.default_retry_judgment(ai.errors.FinishReasonError {
+            provider: "test",
+            finish_reason: ai.content.StopReason.MaxTokens,
+            raw_output: "{",
+        }),
+    )
+}
+
+// The streaming path judges a 400 answered before any text delta the same way.
+function sse_completed(text: string) -> string {
+    let events = [
+        root.llm_mock.sse_data(
+            baml.json.stringify({ "type": "response.output_text.delta", "delta": text }),
+        ),
+        root.llm_mock.sse_data(
+            `{"type":"response.completed","response":{"status":"completed","output":[]}}`,
+        ),
+    ];
+    events.join("\n\n") + "\n\n"
+}
+
+function retry_stream_over_http(responses: root.llm_mock.MockResponse[]) -> string {
+    root.llm_mock.mock_json_serve(responses, (mock: root.llm_mock.MockJsonServer) -> {
+        let cl = ai.clients.Retry.new(
+            openai.ResponsesClient.new(api_key = "test", base_url = mock.base_url()),
+            max_attempts = 3,
+            backoff = short_backoff(),
+        );
+        let outcome = (
+            cl.invoke_stream(input()).final_turn().terminal_text() ?? "-"
+        ) catch_all (e) {
+            _ => rejection_label(e),
+        };
+        `${outcome}|requests=${mock.request_count()}`
+    })
+}
+
+test "streamed Retry reopens after an HTTP 400 before the first delta" {
+    assert.equal(
+        retry_stream_over_http([
+            root.llm_mock.MockResponse.error(400, rejected_body()),
+            root.llm_mock.MockResponse.with_headers(200, sse_completed("ok"), {
+                "content-type": "text/event-stream",
+            }),
+        ]),
+        "ok|requests=2",
+    )
+}
+
+test "streamed Retry stops at max_attempts on repeated HTTP 400" {
+    assert.equal(
+        retry_stream_over_http([root.llm_mock.MockResponse.error(400, rejected_body())]),
+        "InvalidRequest/400|requests=3",
+    )
+}
+
+// Fallback advances on any safely retryable failure without consulting the
+// retry judgment, so it moves past a member the provider answered with a 400.
+function fallback_past_http_400() -> string {
+    root.llm_mock.mock_json_serve(
+        [
+            root.llm_mock.MockResponse.error(400, rejected_body()),
+            root.llm_mock.MockResponse.ok(completed("ok")),
+        ],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let first = openai.ResponsesClient.new(
+                model = "first-model",
+                api_key = "test",
+                base_url = mock.base_url(),
+            );
+            let second = openai.ResponsesClient.new(
+                model = "second-model",
+                api_key = "test",
+                base_url = mock.base_url(),
+            );
+            let members: ai.Client[] = [first, second];
+            let turn = ai.clients.Fallback { members: members }.invoke(input());
+            let failed = turn.child_turns
+                .filter((attempt) -> { attempt.error != null })
+                .map((attempt) -> {
+                    `${attempt.requested_model ?? "-"}:${rejection_label(attempt.error)}`
+                })
+                .join(",");
+            `${turn.terminal_text() ?? "-"}|${failed}|requests=${mock.request_count()}`
+        },
+    )
+}
+
+test "Fallback advances past a member answered with HTTP 400" {
+    assert.equal(
+        fallback_past_http_400(),
+        "ok|first-model:InvalidRequest/400|requests=2",
+    )
+}

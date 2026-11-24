@@ -1036,8 +1036,8 @@ test "anthropic_stream_error_auth" {
     )
 }
 
-// BUG 7.4: every streaming transport error used to become a retry-SAFE
-// NetworkFailure, so ai.clients.Retry happily replayed a 400. The status
+// BUG 7.4: every streaming transport error used to become a NetworkFailure,
+// so a 400 lost its class and status. The status
 // `send_sse` reports is now routed through the same classifier the
 // non-streaming path uses.
 function anthropic_stream_http_error(status: int) -> string {

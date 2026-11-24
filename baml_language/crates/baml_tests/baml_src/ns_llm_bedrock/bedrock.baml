@@ -1511,9 +1511,9 @@ test "bedrock_request_is_signed_with_late_bound_keys" {
 
 // ─── 13. error taxonomy ──────────────────────────────────────────────────────
 //
-// The discipline PLAN §7 demands: a 4xx must NOT become a retry-safe
-// `NetworkFailure`, or a Retry policy would replay a request the service
-// already rejected.
+// The discipline PLAN §7 demands: a 4xx must NOT become a `NetworkFailure`;
+// it stays an `InvalidRequest` with its status, so a retry judgment can tell
+// a rejection from a transport failure.
 
 function _invoke_error(status: int, body: string) -> string {
     root.llm_mock.mock_json_serve(

@@ -924,8 +924,8 @@ function _chat_invoke_label(cl: openai.ChatClient, input: ai.ModelTurnInput) -> 
     "no-error"
 }
 
-// A 400 must never become a retry-safe NetworkFailure: an `ai.clients.Retry`
-// wrapper would replay a request the provider already rejected.
+// A 400 must never become a NetworkFailure: it stays an InvalidRequest with
+// its status, so a retry judgment can tell a rejection from a transport failure.
 function chat_classifies_http_errors() -> string {
     root.llm_mock.mock_json_serve(
         [
