@@ -97,7 +97,8 @@ baml local recordings schema
   <table>
 baml cloud
   --env <ENV> [global]
-  --project <ORG/PROJECT> [global]
+  --org <ORG> [global]
+  --project <PROJECT> [global]
 baml cloud auth
 baml cloud auth login
   --no-open [default: false]
@@ -111,6 +112,73 @@ baml cloud recordings query
   <sql>
 baml cloud recordings schema
   <table>
+baml cloud org
+baml cloud org list
+baml cloud org show
+baml cloud org create
+  --allow-email-domain-joining [default: false]
+  --handle <HANDLE>
+  <name>
+baml cloud members
+baml cloud members list
+baml cloud members update
+  --role <ROLE>
+  <user>
+baml cloud members delete
+  --revoke-keys [default: false]
+  <user>
+baml cloud invitations
+baml cloud invitations list
+baml cloud invitations create
+  --role <ROLE> [default: member]
+  <email>
+baml cloud invitations delete
+  <id>
+baml cloud project
+baml cloud project list
+baml cloud project show
+baml cloud project create
+  <name>
+baml cloud env
+baml cloud env list
+baml cloud env show
+  --personal [default: false]
+baml cloud env create
+  --kind <KIND> [default: custom]
+  <name>
+baml cloud env hosting
+  <environment>
+baml cloud dashboards
+baml cloud dashboards list
+baml cloud dashboards show
+  <id>
+baml cloud dashboards create
+  --key <KEY>
+  --name <NAME>
+  <file>
+baml cloud dashboards update
+  --file <PATH>
+  --name <NAME>
+  <id>
+baml cloud dashboards delete
+  <id>
+baml cloud dashboards history
+  <id>
+baml cloud usage
+baml cloud usage show
+  --days <N> [default: 30]
+baml cloud billing
+baml cloud billing show
+baml cloud billing pricing
+baml cloud billing upgrade
+  --preview [default: false]
+  --quote <QUOTE_ID>
+baml cloud billing checkout
+  --no-open [default: false]
+  --plan <PLAN>
+baml cloud billing portal
+  --cancel [default: false]
+  --no-open [default: false]
 baml query
   --max-rows <N>
   --max-wall <DURATION>

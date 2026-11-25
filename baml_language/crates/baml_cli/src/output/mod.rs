@@ -9,6 +9,7 @@ use baml_db::baml_compiler_diagnostics::render::{DiagnosticFormat, RenderConfig}
 use clap::{Args, ValueEnum};
 
 mod report;
+pub(crate) mod table;
 
 #[cfg(test)]
 pub(crate) use report::text_of;

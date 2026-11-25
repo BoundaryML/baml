@@ -306,7 +306,7 @@ fn validate_manifest_settings(manifest: &toml::Value) -> Result<(), PolicyError>
     for (name, fields, envvar_fields) in [
         (
             "boundary",
-            &["project", "api_url", "upload_source"][..],
+            &["project", "api_url", "services_url", "upload_source"][..],
             ENVVAR_FIELDS,
         ),
         ("pack", PACK_FIELDS, PACK_ENVVAR_FIELDS),
@@ -823,6 +823,7 @@ api_ur = "https://api.cloud.boundaryml.com""#,
   Valid [boundary] settings:
     project
     api_url
+    services_url
     upload_source"#,
             ),
         ] {

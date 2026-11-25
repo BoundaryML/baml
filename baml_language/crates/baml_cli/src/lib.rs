@@ -17,6 +17,7 @@ pub(crate) mod bytecode_cache;
 #[cfg(test)]
 mod cache_test_support;
 pub(crate) mod check_command;
+pub(crate) mod cloud;
 mod cloud_config;
 pub(crate) mod codequality_command;
 pub(crate) mod commands;

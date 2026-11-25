@@ -13,8 +13,8 @@ use serde::Serialize;
 
 use crate::{
     ExitCode,
+    cloud::CloudScope,
     output::{Command, CommandContext, Outcome, Report, Style, run_command},
-    recordings::CloudScope,
 };
 
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
@@ -210,7 +210,7 @@ impl Command for Status<'_> {
             .filter(|key| key != bcs_api::credentials::LOCAL_API_KEY)
             .map(bcs_api::Secret::new);
         let project = match (
-            &self.scope.project,
+            self.scope.qualified_project(),
             baml_env::string_var("BOUNDARY_PROJECT")?,
         ) {
             (Some(project), _) => format!("{project} (--project)"),

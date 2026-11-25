@@ -565,3 +565,10 @@ inherits = "release"
 # the earlier size-focused release configuration. Release now prioritizes speed
 # with opt-level=3; artifact size budgets are tracked in `.cargo/size-gate.toml`.
 # wasm32 has no unwinding and behaves as `abort` regardless of the panic setting.
+
+# The `cloud` feature of bcs-sdk (BoundaryML/bcs#362) is not published yet. Until the release that
+# carries it, take bcs-sdk and the btel-core beside it from that pull request's head. Delete this
+# section and move the two pins above when the release is out.
+[patch.crates-io]
+bcs-sdk = { git = "https://github.com/BoundaryML/bcs.git", rev = "ced81d2564533f9111572092651ebd9f49d27e1e" }
+btel-core = { git = "https://github.com/BoundaryML/bcs.git", rev = "ced81d2564533f9111572092651ebd9f49d27e1e" }

@@ -4,6 +4,7 @@ The BCS client as BAML hosts use it: the CLI, bridges, packed programs, and tele
 
 - `endpoint`: the Boundary API endpoint, `BOUNDARY_API_URL` before a configured URL before BCS's own.
 - `store`: the saved logins under `$BAML_HOME` (default `~/.baml`).
+- `services_endpoint` (feature `cloud`): the control plane, `BOUNDARY_CLOUD_SERVICES_URL` before a configured URL before Boundary's own. Only Boundary's own API endpoint has a default control plane, so a login's access token is never sent to a control plane it does not belong to.
 - `diagnostics`: credential-safe wording of each failure for BAML's users; a host chooses the operation's outcome.
 
 From `bcs-sdk`:
@@ -11,6 +12,7 @@ From `bcs-sdk`:
 - `auth`: device login and endpoint selection.
 - `api_keys`: read-only API-key identity and permission introspection.
 - `Store`: an AWS-style JSON login cache under `<home>/login/cache/`, with one owner-only file per canonical Boundary API endpoint. CLI, bridges and packed programs share the same file format. Files contain the persistent session credential and caller profile; writes replace the file atomically. These files are plaintext and readable by processes running as the same OS user.
+- `cloud` (feature `cloud`): `CloudClient`, the control plane's routes for a saved login: organizations, projects, environments, members, invitations, billing and dashboards.
 - `credentials`: redacted credentials, optional request targets, and shared process-local access-token state.
 - `query`: blocking NDJSON queries and cancellation.
 - `telemetry`: asynchronous upload preparation and heartbeat, plus protobuf uploads authorized by the upload plan.

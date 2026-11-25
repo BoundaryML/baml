@@ -16,6 +16,8 @@ pub enum Operation {
     Ingest,
     Query,
     Authentication,
+    /// Managing cloud resources through the control plane.
+    Management,
 }
 impl Operation {
     fn description(self) -> &'static str {
@@ -23,6 +25,7 @@ impl Operation {
             Self::Ingest => "cloud telemetry ingestion",
             Self::Query => "the cloud query",
             Self::Authentication => "the authentication request",
+            Self::Management => "the cloud request",
         }
     }
 }
@@ -32,6 +35,7 @@ pub enum Outcome {
     ExecutionCancelled,
     QueryFailed,
     AuthenticationFailed,
+    CloudCommandFailed,
     TelemetryDisabled,
 }
 impl fmt::Display for Outcome {
@@ -40,6 +44,7 @@ impl fmt::Display for Outcome {
             Self::ExecutionCancelled => "Execution cancelled.",
             Self::QueryFailed => "Query failed.",
             Self::AuthenticationFailed => "Authentication command failed.",
+            Self::CloudCommandFailed => "Cloud command failed.",
             Self::TelemetryDisabled => "Cloud telemetry disabled. Program execution continues.",
         })
     }
@@ -231,7 +236,11 @@ impl Diagnostic {
         self
     }
 
+    /// The API key variable to suggest, if this operation accepts an API key at all.
     fn api_key_name(&self) -> Option<&str> {
+        if self.context.operation == Operation::Management {
+            return None;
+        }
         match &self.recording_override {
             RecordingOverride::Artifact { api_key, .. } => api_key.as_deref(),
             _ => Some("BOUNDARY_API_KEY"),
@@ -415,7 +424,7 @@ impl fmt::Display for Diagnostic {
                             )
                         }
                     }
-                    Operation::Authentication => {
+                    Operation::Authentication | Operation::Management => {
                         writeln!(f, "    • Check the requested project and environment.")
                     }
                 }?;
@@ -440,6 +449,11 @@ impl fmt::Display for Diagnostic {
                         f,
                         "    • Ask your Boundary administrator to check authentication access for this deployment."
                     )?;
+                } else if operation == Operation::Management {
+                    writeln!(
+                        f,
+                        "    • Ask an administrator of the organization for access, or select another organization with --org."
+                    )?;
                 } else {
                     let permission = match operation {
                         Operation::Ingest => "ingestion",
@@ -461,6 +475,14 @@ impl fmt::Display for Diagnostic {
                 writeln!(
                     f,
                     "    • Fix BOUNDARY_API_URL or boundary.api_url in baml.toml."
+                )?;
+            }
+            FailureKind::InvalidConfiguration(reason)
+                if reason.starts_with("Boundary services URL") =>
+            {
+                writeln!(
+                    f,
+                    "    • Set BOUNDARY_CLOUD_SERVICES_URL or boundary.services_url in baml.toml."
                 )?;
             }
             FailureKind::InvalidConfiguration(_) => writeln!(
@@ -531,7 +553,7 @@ impl fmt::Display for Diagnostic {
                 f,
                 "    • Query local recordings: run `baml local recordings query`."
             )?,
-            Operation::Authentication => {}
+            Operation::Authentication | Operation::Management => {}
         }
         write!(f, "\n  {}", self.outcome)
     }

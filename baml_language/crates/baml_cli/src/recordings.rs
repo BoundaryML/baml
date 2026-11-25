@@ -25,7 +25,8 @@ use serde_json::{Value, json};
 
 use crate::{
     ExitCode,
-    output::{Command, CommandContext, Outcome, OutputFormat, Report, Style, run_command},
+    cloud::CloudScope,
+    output::{Command, CommandContext, Outcome, OutputFormat, Report, Style, run_command, table},
     project_load::find_project_root_from,
 };
 
@@ -96,19 +97,6 @@ pub(crate) struct SchemaArgs {
     pub table: Option<String>,
 }
 
-/// Which Boundary Cloud project and environment a cloud command targets.
-/// Defaults come from `[boundary]` in `baml.toml` and `BOUNDARY_PROJECT`.
-#[derive(Debug, Args, Clone, Default)]
-pub(crate) struct CloudScope {
-    /// Boundary Cloud project in org_handle/project_name form.
-    #[arg(long, global = true, value_name = "ORG/PROJECT")]
-    pub project: Option<String>,
-
-    /// Boundary Cloud environment; defaults to your personal environment.
-    #[arg(long, global = true, value_name = "ENV")]
-    pub env: Option<String>,
-}
-
 /// Where a query runs.
 pub(crate) enum Backend<'a> {
     Local,
@@ -165,25 +153,12 @@ impl Report for QueryReport {
                     .collect()
             })
             .collect();
-        let mut widths: Vec<usize> = header.iter().map(|h| h.chars().count()).collect();
-        for row in &cells {
-            for (width, cell) in widths.iter_mut().zip(row) {
-                *width = (*width).max(cell.chars().count());
-            }
-        }
-        let mut line = |values: &[String]| {
-            let parts: Vec<String> = values
-                .iter()
-                .zip(&widths)
-                .map(|(value, width)| format!("{value:<width$}"))
-                .collect();
-            writeln!(out, "{}", parts.join(" | ").trim_end())
-        };
-        line(&header)?;
+        let widths = table::widths(&header, &cells);
+        table::line(out, &header, &widths, " | ")?;
         let rule: Vec<String> = widths.iter().map(|w| "-".repeat(*w)).collect();
-        line(&[rule.join("-+-")])?;
+        writeln!(out, "{}", rule.join("-+-"))?;
         for row in &cells {
-            line(row)?;
+            table::line(out, row, &widths, " | ")?;
         }
         Ok(())
     }
@@ -331,7 +306,7 @@ impl Query<'_> {
             }
             return Err(failed(Some(endpoint), source, bcs_api::Error::MissingCredentials).into());
         };
-        let project = match scope.and_then(|scope| scope.project.clone()) {
+        let project = match scope.and_then(CloudScope::qualified_project) {
             Some(project) => Some(project),
             None => baml_env::string_var("BOUNDARY_PROJECT")?.or(settings.project),
         };
