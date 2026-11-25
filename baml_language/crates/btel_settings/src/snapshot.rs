@@ -14,6 +14,10 @@ pub const MAX_RETAINED_ALLOCATION_BYTES: usize = 256 * 1024;
 /// stay in the pool where every thread can take them.
 pub const LOCAL_FREE_STORAGES: usize = 32;
 pub const LOCAL_FREE_BYTES: usize = 512 * 1024;
+/// What all producer threads' free lists may hold together, in structural
+/// bytes, so that however many threads go quiet holding theirs, the rest of
+/// [`RETENTION_BUDGET_BYTES`] stays for storages coming back.
+pub const LOCAL_FREE_TOTAL_BYTES: usize = 2 * 1024 * 1024;
 
 /// **Tune first under backpressure.** Structural capture memory one runtime's
 /// producers may hold before a capture waits for the processor: the captures

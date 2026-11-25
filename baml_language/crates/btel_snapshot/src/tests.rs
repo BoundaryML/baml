@@ -214,6 +214,53 @@ fn a_thread_that_went_quiet_does_not_keep_what_others_need() {
     );
 }
 #[test]
+#[cfg_attr(miri, ignore = "captures megabytes")]
+fn many_quiet_threads_together_do_not_keep_what_a_busy_one_needs() {
+    // A burst fills the retention budget; then many threads each take one
+    // storage, drop it and stay alive without capturing again.
+    let pool = SnapshotPool::unbounded(Limits::default());
+    let held: Vec<_> = (0..72).map(|_| large(&pool, 120_000)).collect();
+    drop(held);
+    let (park, parked) = std::sync::mpsc::channel::<()>();
+    let parked = Arc::new(std::sync::Mutex::new(parked));
+    let (ready, is_ready) = std::sync::mpsc::channel::<()>();
+    let quiet: Vec<_> = (0..32)
+        .map(|_| {
+            let (pool, ready, parked) = (pool.clone(), ready.clone(), Arc::clone(&parked));
+            std::thread::spawn(move || {
+                drop(large(&pool, 120_000));
+                ready.send(()).unwrap();
+                let _ = parked.lock().unwrap().recv();
+            })
+        })
+        .collect();
+    for _ in &quiet {
+        is_ready.recv().unwrap();
+    }
+    assert!(pool.local_bytes() <= PoolConfig::default().max_local_total_bytes);
+    // A thread keeping two captures in flight still reuses storages.
+    let before = pool.stats().allocation_misses;
+    for _ in 0..1000 {
+        let x = large(&pool, 120_000);
+        let y = large(&pool, 120_000);
+        drop((x, y));
+    }
+    let misses = pool.stats().allocation_misses - before;
+    for _ in &quiet {
+        park.send(()).unwrap();
+    }
+    for thread in quiet {
+        thread.join().unwrap();
+    }
+    assert!(
+        misses <= 2,
+        "{misses} allocations while 32 quiet threads kept storages"
+    );
+    // Exited threads gave their lists back, and their charges with them.
+    drop(scalar(&SnapshotPool::unbounded(Limits::default()), 0));
+    assert_eq!(pool.local_bytes(), 0);
+}
+#[test]
 fn a_thread_keeps_at_most_its_cap_however_much_comes_back() {
     let pool = SnapshotPool::unbounded(Limits::default());
     let other = SnapshotPool::unbounded(Limits::default());

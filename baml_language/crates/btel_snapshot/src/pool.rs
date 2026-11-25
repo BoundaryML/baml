@@ -21,9 +21,10 @@
 //! makes a producer wait. Storages are reused in the order they came back.
 //! The budget's charges, the idle bytes and the counts are atomics.
 //!
-//! The free lists are capped ([`PoolConfig::max_local_storages`],
-//! [`PoolConfig::max_local_bytes`]), so a thread that stops capturing keeps
-//! little of what other threads could reuse. A thread gives its list back
+//! The free lists are capped, each ([`PoolConfig::max_local_storages`],
+//! [`PoolConfig::max_local_bytes`]) and all together
+//! ([`PoolConfig::max_local_total_bytes`]), so threads that stop capturing,
+//! however many, keep little of what other threads could reuse. A thread gives its list back
 //! when it serves another pool, and frees it once its pool is gone, the next
 //! time it takes or returns any storage. A thread that does neither keeps its
 //! list, at most that cap, until it exits.
@@ -88,6 +89,8 @@ pub struct PoolConfig {
     /// structural bytes; at least one is always kept.
     pub max_local_storages: usize,
     pub max_local_bytes: usize,
+    /// What all threads' free lists may hold together, in structural bytes.
+    pub max_local_total_bytes: usize,
 }
 impl Default for PoolConfig {
     fn default() -> Self {
@@ -101,6 +104,7 @@ impl Default for PoolConfig {
             max_retained_allocation_bytes: settings::MAX_RETAINED_ALLOCATION_BYTES,
             max_local_storages: settings::LOCAL_FREE_STORAGES,
             max_local_bytes: settings::LOCAL_FREE_BYTES,
+            max_local_total_bytes: settings::LOCAL_FREE_TOTAL_BYTES,
         }
     }
 }
@@ -144,6 +148,15 @@ struct Spare {
     storage: Box<Storage>,
     idle: usize,
 }
+/// Storages taken off the return stack and not yet handed to a thread, in
+/// runs as they were taken: the oldest run first, and in each run the oldest
+/// storage last. A run joins or leaves in one step, so the lock is held for
+/// at most one thread's share of storages, never for a whole return stack.
+#[derive(Default)]
+struct Spares {
+    runs: VecDeque<Vec<Spare>>,
+    len: usize,
+}
 
 /// What both sides change on every take and return, on one line so that
 /// either side's turn moves it once.
@@ -162,13 +175,16 @@ struct Shared {
     /// producer skips its lock while it is empty. A stale read costs at most
     /// an allocation or a lock taken for nothing.
     spare_len: AtomicUsize,
+    /// What the threads' free lists hold together, as charged when each was
+    /// filled, against [`PoolConfig::max_local_total_bytes`].
+    local_bytes: AtomicUsize,
 }
 pub(crate) struct Pool {
     shared: Padded<Shared>,
     /// Storages taken off the return stack and not yet handed to a thread.
     /// Locked only by producers refilling their free lists and by threads
     /// giving theirs back, never by the processor.
-    spare: Mutex<VecDeque<Spare>>,
+    spare: Mutex<Spares>,
     /// Structural capacity the captures with the producers may hold.
     budget: usize,
     /// What they hold now: the sum of every storage's `charged`. On a line of
@@ -294,8 +310,9 @@ impl SnapshotPool {
                 allocated: AtomicUsize::new(0),
                 misses: AtomicUsize::new(0),
                 spare_len: AtomicUsize::new(0),
+                local_bytes: AtomicUsize::new(0),
             }),
-            spare: Mutex::new(VecDeque::new()),
+            spare: Mutex::new(Spares::default()),
             budget: budget_bytes,
             held: Padded(AtomicUsize::new(0)),
             #[cfg(any(test, feature = "stats"))]
@@ -348,7 +365,8 @@ impl SnapshotPool {
                 let mut local = local.try_borrow_mut().ok()?;
                 local.serve(pool);
                 if local.free.is_empty() {
-                    pool.refill(&mut local.free);
+                    let Local { free, charged, .. } = &mut *local;
+                    pool.refill(free, charged);
                 }
                 local.free.pop()
             })
@@ -387,6 +405,11 @@ impl SnapshotPool {
         // Charged for what it starts with; finishing charges what it grew to.
         lease.recharge_to(pool);
         Builder::new(lease)
+    }
+    /// What the threads' free lists are charged together.
+    #[cfg(test)]
+    pub(crate) fn local_bytes(&self) -> usize {
+        self.0.shared.0.local_bytes.load(Ordering::Relaxed)
     }
     /// Each count is read on its own, so one taken while other threads take
     /// and return storages need not add up with the others.
@@ -451,47 +474,86 @@ impl Pool {
                 .swap(ptr::null_mut(), Ordering::Acquire),
         )
     }
-    /// Fill a thread's empty free list with as many storages as a thread
-    /// keeps, and at least one if there is any. Storages are reused in the
-    /// order they came back, as one unbounded list would: the spare list
-    /// keeps them oldest first, and what came back since joins its end. A
-    /// storage that came back long ago has left the processor's cache; one
-    /// it just emptied would have to be pulled out of it, line by line.
-    fn refill(&self, free: &mut Storages) {
+    /// Fill a thread's empty free list with as many storages as it may
+    /// keep, and at least one if there is any, charging what it keeps beyond
+    /// the one it takes now. Storages are reused in the order they came
+    /// back, as one unbounded list would: a storage that came back long ago
+    /// has left the processor's cache, while one it just emptied would have
+    /// to be pulled out of it, line by line.
+    fn refill(&self, free: &mut Storages, charged: &mut usize) {
         let shared = &self.shared.0;
-        let mut returned = self.take_returned().peekable();
-        if returned.peek().is_none() && shared.spare_len.load(Ordering::Relaxed) == 0 {
+        self.uncharge_local(charged);
+        // Walked before the lock: the stack yields the newest first, so the
+        // run ends with the oldest.
+        let run: Vec<Spare> = self
+            .take_returned()
+            .map(|storage| Spare {
+                // Read while the walk has the storage's link in cache.
+                idle: storage.idle,
+                storage,
+            })
+            .collect();
+        if run.is_empty() && shared.spare_len.load(Ordering::Relaxed) == 0 {
             return;
         }
-        let mut spare = self.lock_spare();
-        let older = spare.len();
-        // The stack yields the newest first: append, then turn that run.
-        spare.extend(returned.map(|storage| Spare {
-            // Read while the walk has the storage's link in cache.
-            idle: storage.idle,
-            storage,
-        }));
-        spare.make_contiguous()[older..].reverse();
-        let mut bytes = 0;
-        while let Some(&Spare { idle, .. }) = spare.front() {
-            if !self.keeps(free.len(), bytes, idle) {
-                break;
+        // Reserve this thread's share of what all free lists may hold.
+        let cap = self.config.max_local_total_bytes;
+        let mut allowance = 0;
+        let _ = shared
+            .local_bytes
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |held| {
+                allowance = self.config.max_local_bytes.min(cap.saturating_sub(held));
+                Some(held + allowance)
+            });
+        let mut kept = 0usize;
+        {
+            let mut spare = self.lock_spare();
+            let Spares { runs, len } = &mut *spare;
+            if !run.is_empty() {
+                *len += run.len();
+                runs.push_back(run);
             }
-            bytes += idle;
-            free.extend(spare.pop_front().map(|spare| spare.storage));
+            while free.len() < self.config.max_local_storages.max(1) {
+                let Some(oldest) = runs.front_mut() else {
+                    break;
+                };
+                let Some(&Spare { idle, .. }) = oldest.last() else {
+                    runs.pop_front();
+                    continue;
+                };
+                // The first is taken now and charged as in use, not idle.
+                if !free.is_empty() {
+                    if kept.saturating_add(idle) > allowance {
+                        break;
+                    }
+                    kept += idle;
+                }
+                free.extend(oldest.pop().map(|spare| spare.storage));
+                *len -= 1;
+                if oldest.is_empty() {
+                    runs.pop_front();
+                }
+            }
+            shared.spare_len.store(*len, Ordering::Relaxed);
         }
-        shared.spare_len.store(spare.len(), Ordering::Relaxed);
+        shared
+            .local_bytes
+            .fetch_sub(allowance - kept, Ordering::Relaxed);
+        *charged = kept;
         // The thread takes from the end of its list: the oldest goes last.
         free.reverse();
     }
-    /// Whether a thread holding `held` storages of `bytes` keeps one more of
-    /// `more` bytes.
-    fn keeps(&self, held: usize, bytes: usize, more: usize) -> bool {
-        held == 0
-            || (held < self.config.max_local_storages
-                && bytes.saturating_add(more) <= self.config.max_local_bytes)
+    /// Lift a free list's charge against what all free lists may hold.
+    fn uncharge_local(&self, charged: &mut usize) {
+        let charged = std::mem::take(charged);
+        if charged != 0 {
+            self.shared
+                .0
+                .local_bytes
+                .fetch_sub(charged, Ordering::Relaxed);
+        }
     }
-    fn lock_spare(&self) -> std::sync::MutexGuard<'_, VecDeque<Spare>> {
+    fn lock_spare(&self) -> std::sync::MutexGuard<'_, Spares> {
         self.spare
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -504,7 +566,9 @@ impl Drop for Pool {
             .spare
             .get_mut()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        spare.drain(..).for_each(|spare| discard(spare.storage));
+        for spare in spare.runs.drain(..).flatten() {
+            discard(spare.storage);
+        }
     }
 }
 
@@ -540,6 +604,9 @@ impl Drop for Returned {
 struct Local {
     pool: Weak<Pool>,
     free: Storages,
+    /// What `free` is charged against all free lists' cap: what it held
+    /// when filled, beyond the storage taken then.
+    charged: usize,
 }
 impl Local {
     /// Hold storages for `pool` from now on.
@@ -553,31 +620,34 @@ impl Local {
     /// Return the unused storages to their pool's spare list, where they stay
     /// counted as idle, or free them if it is gone.
     fn give_back(&mut self) {
+        let Some(pool) = self.pool.upgrade() else {
+            self.charged = 0;
+            self.free.drain(..).for_each(discard);
+            return;
+        };
+        pool.uncharge_local(&mut self.charged);
         if self.free.is_empty() {
             return;
         }
-        match self.pool.upgrade() {
-            Some(pool) => {
-                // They were taken from the spare list's front: back to it,
-                // the oldest first.
-                let mut spare = pool.lock_spare();
-                for storage in self.free.drain(..) {
-                    spare.push_front(Spare {
-                        idle: storage.idle,
-                        storage,
-                    });
-                }
-                pool.shared
-                    .0
-                    .spare_len
-                    .store(spare.len(), Ordering::Relaxed);
-            }
-            None => self.free.drain(..).for_each(discard),
-        }
+        // Taken from the spare list's front, with the oldest last: back to
+        // its front as one run.
+        let run: Vec<Spare> = self
+            .free
+            .drain(..)
+            .map(|storage| Spare {
+                idle: storage.idle,
+                storage,
+            })
+            .collect();
+        let mut spare = pool.lock_spare();
+        spare.len += run.len();
+        spare.runs.push_front(run);
+        pool.shared.0.spare_len.store(spare.len, Ordering::Relaxed);
     }
     /// Free the storages of a pool that is gone.
     fn release_if_orphaned(&mut self) {
         if !self.free.is_empty() && self.pool.strong_count() == 0 {
+            self.charged = 0;
             self.free.drain(..).for_each(discard);
         }
     }
@@ -592,6 +662,7 @@ thread_local! {
         RefCell::new(Local {
             pool: Weak::new(),
             free: Vec::new(),
+            charged: 0,
         })
     };
 }
