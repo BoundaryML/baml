@@ -1,6 +1,8 @@
 # Memory
 
-Object layouts, allocation, field and index access, maps, strings. The collector is in `gc.md`. Numbers are instructions retired per operation, measured unless marked estimated; method in `README.md`.
+Object layouts, allocation, field and index access, maps, strings. The collector is in `gc.md`. Numbers are instructions retired per operation, counted at `881e4c1dfc` unless they say otherwise; method in `README.md`. "Before" is the layout before two-word values, as these notes had it at `39d3ad4c25`. Go and Node numbers are the ones measured then and were not run again.
+
+The structs below are the layouts as documentation: the runtime reads and writes them through the offsets in `src/layout.rs`, which is the source of truth, and has no such Rust types but `Value`.
 
 ## Values
 
@@ -45,6 +47,8 @@ const _: () = assert!(::std::mem::size_of::<Value>() == 16);
 
 A tag is the header word of a value. Its type id (the low 32 bits, the id itself with no shift) says how to read the payload, and for a pointer it is always exactly the id in the header of the object pointed at: when the collector makes a string of a slice it rewrites the tag of every slot that points at it. A function value's tag also carries its call layout id, always exactly. Every other bit of a tag is zero: code that needs a string's cached hash or the panic bit reads the object, and bits 59..63 are zero in every tag (bit 63 is set only in a slot's tag word in memory, while a worker holds the slot).
 
+One word that looks like a tag is not stored anywhere: a native that can throw returns a value in two registers, and bit 59 of its tag (`THROWN`, the collector's forwarded bit, which no tag has) says the value is what it threw. The caller tests it with one `tbnz` (`natives.md`).
+
 Which bits of the header a tag keeps, by kind:
 
 | kind | bits of the header in the tag | how compiled code reads it from an object |
@@ -65,20 +69,20 @@ Immediates. The payload is the value itself, never an address:
 | `BOOL` = 1 | 0 or 1 | |
 | `INT` = 2 | the 64 bits | |
 | `FLOAT` = 3 | the 64 bits | |
-| `OMITTED` = 4 | unused | an argument left to its default. Exists only in a call's arguments; never stored to memory, never a value a program holds ([default-arguments.md](ideas/default-arguments.md)) |
+| `OMITTED` = 4 | 0 | an argument left to its default. Exists only in a call's arguments and in the frame of the function that was passed it, until its default is computed; never stored to an object, never a value a program holds ([default-arguments.md](ideas/default-arguments.md)). The collector in a checked build ends the program on an object slot or a runtime root that holds it |
 
-Everything else is a pointer (an id above 4), and its tag names the layout of the object, one id per struct in "Objects" below. That is the least the collector needs: which struct to read the object as, and so its size and where its slots and pointers are.
+Everything else is a pointer (an id above 4), and its tag names the layout of the object, one id per struct in "Objects" below. The ids in order from 5: `STRING`, `STRING_SLICE`, `INSTANCE`, `ENUM_VARIANT`, `CLASS`, `ARRAY`, `ARRAY_STORAGE`, `MAP`, `MAP_ENTRIES`, `MAP_INDEX`, `CELL`, `FUTURE`, `CLOSURE`, `BOUND_METHOD`, `BIGINT`, `BYTES`, `BYTES_STORAGE`, `TUPLE`, `TYPE`, `OWNED`, `PLAIN`, `RAW_FUNCTION`, `REALIZED_FUNCTION`, `HOST_CLOSURE`, `PACKAGE`, `RUST_INSTANCE` (30); `TAGS_END` is 31. That is the least the collector needs: which struct to read the object as, and so its size and where its slots and pointers are.
 
 | tag | object | from |
 |---|---|---|
 | `INSTANCE` | `InstanceObject` | below |
-| `RUST_INSTANCE` | `RustInstanceObject` | below |
+| `RUST_INSTANCE` | `RustInstanceObject` | below. Reserved: nothing makes one |
 | `ARRAY`, `ARRAY_STORAGE` | `ArrayObject`, `ArrayStorageObject` | below |
 | `MAP`, `MAP_ENTRIES`, `MAP_INDEX` | `MapObject`, `MapEntriesObject`, `MapIndexObject` | below |
 | `STRING`, `STRING_SLICE` | `StringObject`, `StringSliceObject` | below. Kept next to each other so "is a string" is one range test |
 | `TYPE` | `TypeObject` | below |
-| `RAW_FUNCTION`, `REALIZED_FUNCTION` | `RawFunctionObject`, `RealizedFunctionObject` | below |
-| `CLOSURE`, `BOUND_METHOD`, `HOST_CLOSURE` | `ClosureObject`, `BoundMethodObject`, `HostClosureObject` | below |
+| `RAW_FUNCTION`, `REALIZED_FUNCTION` | `RawFunctionObject`, `RealizedFunctionObject` | below. Reserved: nothing makes one |
+| `CLOSURE`, `BOUND_METHOD`, `HOST_CLOSURE` | `ClosureObject`, `BoundMethodObject`, `HostClosureObject` | below. `HOST_CLOSURE` is reserved |
 | `CELL` | `CellObject` | below |
 | `FUTURE` | `FutureObject` | below |
 | `BIGINT` | `BigintObject` | below |
@@ -88,17 +92,17 @@ Everything else is a pointer (an id above 4), and its tag names the layout of th
 | `CLASS`, `PACKAGE` | `ClassObject`, `PackageObject` | below |
 | `OWNED`, `PLAIN` | `OwnedObject`, `PlainObject` | below. Rust data with and without a destructor; `RustInstanceObject` may replace them later |
 
-Gone from today's runtime: the boxes (`TYPE_BOX_INT`, `TYPE_BOX_FLOAT`, `TYPE_BOX_BOOL`), the three cell types and the four map-entry types that differed only in which words were pointers, and the array types split by element kind. A slot's own tag now says whether it is a pointer.
+Gone from the runtime: the boxes (`TYPE_BOX_INT`, `TYPE_BOX_FLOAT`, `TYPE_BOX_BOOL`), the three cell types and the four map-entry types that differed only in which words were pointers, and the array types split by element kind. A slot's own tag now says whether it is a pointer.
 
-Function values carry one more thing in the header. A call through a function value has to know whether the callee takes exactly the arguments the site pushes, because a function with defaulted parameters can stand where a type with fewer parameters is expected ([default-arguments.md](ideas/default-arguments.md)). So the header payload (bits 32..58) of every callable object, `CLOSURE`, `BOUND_METHOD`, `REALIZED_FUNCTION`, `HOST_CLOSURE` and a `RAW_FUNCTION` used as a value, holds its call layout id: a number the compiler gives each distinct parameter layout in the program (the required slots in order, then the named optional ones). A function value's tag carries the same id, so the caller already has it in the register that holds the tag, and every call through a function value compares it with the site's layout, with no load. This is required for correctness, not a later optimization. The id is written when the object is made and never changes.
+Function values carry one more thing in the header. A call through a function value has to know whether the callee takes exactly the arguments the site pushes, because a function with defaulted parameters can stand where a type with fewer parameters is expected ([default-arguments.md](ideas/default-arguments.md)). So the header payload (bits 32..58) of every callable object, `CLOSURE`, `BOUND_METHOD`, `REALIZED_FUNCTION`, `HOST_CLOSURE` and a `RAW_FUNCTION` used as a value, holds its call layout id: a number the compiler gives each distinct parameter layout in the program (the required slots in order, then the named optional ones). A function value's tag carries the same id, so the caller already has it in the register that holds the tag, and every call through a function value compares it with the site's layout, with no load (`calls.md`). This is required for correctness, not a later optimization. The id is written when the object is made and never changes. Ids count from 1, so a header nothing gave a layout fails every check.
 
-Not a fixed id: a class or an enum of the program. Every instance has the one id `INSTANCE`, and the truth about it is its `class_ptr`: `x is Foo` is a tag compare, a load and a pointer compare, and interface dispatch loads the method from the class object's row. A class object or an enum variant may live in the heap (they cannot be made at run time today, but will be), so `class_ptr` is traced and nothing hashes or orders by a class's or a variant's address. A per-class id is the kind of shortcut [type-header-fast-path.md](ideas/type-header-fast-path.md) is about.
+Not a fixed id: a class or an enum of the program. Every instance has the one id `INSTANCE`, and the truth about it is its `class_ptr`: `x is Foo` is a tag compare, a load and a pointer compare, and interface dispatch loads the method from the class object's row. An instance's header is `INSTANCE`, with bit 62 when its class is a panic, and nothing else. A class object or an enum variant may live in the heap (they cannot be made at run time today, but will be), so `class_ptr` is traced and nothing hashes or orders by a class's or a variant's address. A per-class id is the kind of shortcut [type-header-fast-path.md](ideas/type-header-fast-path.md) is about.
 
-Also fixed, though not type ids: the classes of the standard library that the runtime builds instances of and must be able to find without being handed them, 25 today (`WELL_KNOWN` in `src/layout.rs`: the panics, `errors.InvalidArgument`, the `json` errors, `errors.Io` and so on). The runtime finds each one's class object in a table of class object addresses the compiler emits, in the order of `WELL_KNOWN` then `NAMED`, zero for a `NAMED` class the program does not name. Bit 62 of the header marks an instance of a panic class.
+Also fixed, though not type ids: the classes of the standard library that the runtime builds instances of and must be able to find without being handed them, 25 today (`WELL_KNOWN` in `src/layout.rs`: the panics, `errors.InvalidArgument`, the `json` errors, `errors.Io` and so on). The runtime finds each one's class object in a table of class object addresses the compiler emits (`baml_native_types`, at `PROGRAM_CLASSES`), in the order of `WELL_KNOWN` then `NAMED` (35), zero for a `NAMED` class the program does not name. After it comes one word, the address of the list of the program's static built types (`PROGRAM_BUILT_TYPES`), and then the descriptions `baml.json` and the uncaught report read (`PROGRAM_DESCRIPTIONS`). There is no type table. Bit 62 of the header marks an instance of a panic class; it is set from `CLASS_PANIC` in the class object's `kind`.
 
 ## Objects
 
-An object is a 16-byte-aligned dynamically sized type which lives on the heap. It needs to be 16-bit-aligned so it can be aliased with more specific layouts which hold `Value` slots:
+An object is a 16-byte-aligned dynamically sized type which lives on the heap. It needs to be 16-byte-aligned so it can be aliased with more specific layouts which hold `Value` slots:
 
 ```rust
 #[repr(C, align(16))]
@@ -112,7 +116,7 @@ pub struct Object {
 pub struct InstanceObject {
     pub header: ObjectHeader,
     pub class_ptr: NonNull<ClassObject>,
-    /// `[generics ++ fields]`
+    /// `[generics ++ fields]`. A generic slot is `(NULL, 0)` today: not built.
     pub slots: [Value],
 }
 
@@ -132,8 +136,10 @@ pub struct RustInstanceObject {
 pub struct ArrayObject {
     pub header: ObjectHeader,
     pub length: u64,
-    pub ty: NonNull<TypeObject>,
-    pub ptr: NonNull<ArrayStorageObject>,
+    /// Zero today: not built.
+    pub ty: *const TypeObject,
+    /// The storage object, not its first element. Null while the array has never held an element.
+    pub ptr: *mut ArrayStorageObject,
 }
 
 /// Can be aliased over an `Object` with an `ArrayStorage` layout
@@ -149,8 +155,9 @@ pub struct ArrayStorageObject {
 #[repr(C, align(16))]
 pub struct MapObject {
     pub header: ObjectHeader,
-    pub key_ty: NonNull<TypeObject>,
-    pub value_ty: NonNull<TypeObject>,
+    /// Both zero today: not built.
+    pub key_ty: *const TypeObject,
+    pub value_ty: *const TypeObject,
     pub len: u32,
     pub used: u32,
     pub entries: NonNull<MapEntriesObject>,
@@ -214,10 +221,17 @@ pub struct TypeObject {
     pub tag: u64,
     /// The class object to compare `class_ptr` with, or null.
     pub class: *const ClassObject,
-    // /// Once better caching is introduced
-    // canonical_id: u64,
-    pub ty: RealizedTy,
+    /// What `baml.json` and the slow path of `x is T` read: program data, or null.
+    pub description: *const u8,
+    /// `TYPE_KIND_NAMED` (0) or `TYPE_KIND_UNION` (1).
+    pub kind: u32,
+    pub count: u32,
+    /// A union's members, sorted, with no repeats and no union among them.
+    pub arguments: [*const TypeObject],
 }
+// The compiler places the type object of every type the program names in the executable's data.
+// A union built from a function's type arguments when the program runs (`T?`) is found or made by
+// `baml_rt_type_intern`: one object per type, outside the heap, never moved or freed.
 
 /// Can be aliased over an `Object` with a `RawFunction` layout
 /// Equivalent to `bex_vm_types::types::Function`
@@ -234,9 +248,10 @@ pub struct RawFunctionObject {
 pub struct ClosureObject {
     pub header: ObjectHeader,
     pub code: usize,
-    pub function: NonNull<RawFunctionObject>,
+    /// Zero today.
+    pub function: *const RawFunctionObject,
     pub capture_count: u64,
-    /// [generics ++ variable cells]
+    /// Variable cells, each a value pointing at a `CellObject`. No type argument is captured today.
     pub captures: [Value],
 }
 
@@ -255,6 +270,7 @@ pub struct BoundMethodObject {
     pub header: ObjectHeader,
     pub code: usize,
     pub function: NonNull<RawFunctionObject>,
+    /// Zero today, and no type argument follows the receiver.
     pub type_arg_count: u64,
     pub receiver: Value,
     pub type_args: [NonNull<TypeObject>],
@@ -383,27 +399,34 @@ pub struct PlainObject {
 }
 ```
 
-Everything from the table below to the end of this file was measured on the layout before two-word values and is rewritten when that change is built.
+## Sizes
 
-| object | bytes | Go equivalent | Go bytes |
-|---|---|---|---|
-| instance of a class with n slots | 8 + 8n | struct of n words | 8n (rounded to a size class) |
-| `P { x int }` | 16 | `struct{ x int }` | 8 |
-| array (`T[]`) | 24 (header, length, data address) plus storage | slice header (value, not an object) | 24 |
-| array storage of capacity c | 16 + 8c (header, capacity) | backing array | 8c |
-| `[i, i]` | 24 + 32 = 56, one allocation | `[]int{i, i}` | 16 heap + 24 header |
-| string of b bytes | 16 + b rounded up to 8 (header, byte length u32 and char count u32) | string header + bytes | 16 + b |
-| string slice | 32 (header, lengths, parent, offset) | string header | 16 |
-| closure | 24 (header, code, captures) | funcval + captures | 8 + captures |
-| map | 40 (header, len u32 + used u32, entries, index, mask u32 + epoch u32) | `map` header (swiss) | 48 |
-| map entries, capacity c | 16 + 16c + 4c rounded to 8 | group of 8 slots | 8 + 8 x (key + value) |
-| map entry, `map<string,int>` | 20 per slot of capacity, plus an index slot once past 8 entries | `map[string]int` slot | 25 per slot of capacity |
-| future | 48 | channel of capacity 1 | 96 + element |
-| task (not on the heap) | 128, plus a 64 KB stack and 16 KB guard | `g` | about 450, plus a stack from 8 KB |
+Counted from `src/layout.rs` at `881e4c1dfc`. Go sizes are from the Go 1.26 runtime's types and are not measured here.
 
-A `bool` or enum field takes a full word. An optional scalar takes two slots. Go sizes are from the Go 1.26 runtime's types and are not measured here.
+| object | bytes | before | Go equivalent | Go bytes |
+|---|---|---|---|---|
+| instance of a class with n slots | 16 + 16n | 8 + 8n | struct of n words | 8n (rounded to a size class) |
+| `P { x int }` | 32 | 16 | `struct{ x int }` | 8 |
+| array (`T[]`) | 32 (header, length, `ty`, storage address) plus storage | 24 | slice header (value, not an object) | 24 |
+| array storage of capacity c | 16 + 16c (header, capacity) | 16 + 8c | backing array | 8c |
+| `[i, i]` | 32 + 48 = 80, one allocation | 56 | `[]int{i, i}` | 16 heap + 24 header |
+| string of b bytes | 16 + b rounded up to 16 | rounded up to 8 | string header + bytes | 16 + b |
+| string slice | 32 | 32 | string header | 16 |
+| cell | 32 | 16 | | |
+| closure with c captures | 32 + 16c (header, code, function, capture count) | 24 | funcval + captures | 8 + captures |
+| bound method | 48 (header, code, function, type argument count, receiver) | | | |
+| tuple of n | 16 + 16n | | | |
+| map | 64 (header, `key_ty`, `value_ty`, len u32 + used u32, entries, index, mask u32 + epoch u32, padding) | 40 | `map` header (swiss) | 48 |
+| map entries, capacity c | 16 + 32c + 4c rounded to 16 | 16 + 16c + 4c rounded to 8 | group of 8 slots | 8 + 8 x (key + value) |
+| map entry, `map<string,int>` | 36 per slot of capacity, plus an index slot once past 8 entries | 20 | `map[string]int` slot | 25 per slot of capacity |
+| future | 64 | 48 | channel of capacity 1 | 96 + element |
+| class object with m method columns | 56 + 8m rounded to 16 | none | | |
+| enum variant object | 32 | none (a position) | | |
+| task (not on the heap) | 128, plus a 64 KB stack and 16 KB guard | same | `g` | about 450, plus a stack from 8 KB |
 
-Arrays keep elements in a separate storage object so the array's address never changes when it grows. Every element access is therefore two dependent loads (array to data address, data to element) unless the data address is already in a register.
+Every slot is 16 bytes whatever it holds: a `bool`, an enum, an `int?`, a union. An optional scalar is one slot (it was two words). A union or `unknown` holding an `int` is the slot itself; there are no boxes.
+
+Arrays keep elements in a separate storage object so the array's address never changes when it grows. Every element access is therefore two dependent loads (array to storage address, storage to element) unless the storage address is already in a register.
 
 ## Allocation fast path
 
@@ -419,10 +442,10 @@ store(end, mutator + MUTATOR_ALLOC_PTR);
 // slow (cold): scratch = size; call baml_rt_alloc_slow; object = scratch
 ```
 
-The memory is not zeroed. The caller writes the header as one constant and then every field. There is one span and it is the whole space (8 MB to start), so the limit check fails only when a collection is due.
+The memory is not zeroed. The caller writes the header, the class object's address and then both words of every slot, with plain stores: nobody else can reach the object yet. There is one span and it is the whole space (8 MB to start), so the limit check fails only when a collection is due.
 
 ```baml
-class P { x int }
+class P { x: int }
 function main() -> int {
   let keep: P[] = [P { x: 0 }, /* 8 of them */];
   for (let i = 0; i < N; i += 1) { keep[i & 7] = P { x: i }; };
@@ -433,29 +456,33 @@ function main() -> int {
 The store into `keep` is what keeps scalar replacement (`optimize/scalar_replace.rs`) from deleting the object.
 
 ```asm
-  ldr  x4,  [x21]            ; alloc_ptr
-  ldr  x14, [x21, #8]        ; alloc_limit
-  add  x13, x4, #16          ; end
-  cmp  x13, x14
+  ldr  x3, [x21]             ; alloc_ptr
+  ldr  x1, [x21, #0x8]       ; alloc_limit
+  add  x0, x3, #0x20         ; end: 32 bytes
+  cmp  x0, x1
   b.hi alloc_slow            ; cold
-  str  x13, [x21]            ; bump
-  mov  x0, #400              ; header: type id of P
-  str  x0, [x4]
-  str  x3, [x4, #8]          ; x = i
+  str  x0, [x21]             ; bump
+  mov  x4, #0x7              ; header: INSTANCE
+  str  x4, [x3]
+  str  x19, [x3, #0x8]       ; the class object of P, kept in a register across the loop
+  mov  x4, #0x2              ; x: tag INT
+  str  x4, [x3, #0x10]
+  str  x2, [x3, #0x18]       ; x: payload = i
 ```
 
-Six instructions to allocate, two for the header, one per field.
+Twelve instructions: six to allocate, two for the header, one for the class word, three for the field (two where the tag is already in a register). Before it was nine.
 
 | | N lo | N hi | instr lo | instr hi | per iteration |
 |---|---|---|---|---|---|
-| native, allocate and store | 10 M | 60 M | 281,582,920 | 1,582,224,067 | 26.01 |
-| native, store an int instead | 10 M | 60 M | 174,497,663 | 974,876,205 | 16.00 |
-| Go, allocate and store | 10 M | 60 M | 1,534,989,740 | 9,104,700,271 | 151.39 |
-| Go, store an int | 10 M | 60 M | 68,822,394 | 319,145,572 | 5.00 |
-| Go, `GOGC=off` | 10 M | 20 M | 1,556,006,313 | 3,078,657,222 | 152.26 |
-| Node | 20 M | 120 M | 2,852,411,144 | 15,045,766,104 | 121.93 |
+| native, allocate and store | 10 M | 60 M | 405,352,105 | 2,311,843,437 | 38.12 |
+| native, store an int instead | 10 M | 60 M | 195,748,493 | 1,095,843,402 | 18.00 |
+| native, before, allocate and store | 10 M | 60 M | 281,582,920 | 1,582,224,067 | 26.01 |
+| native, before, store an int instead | 10 M | 60 M | 174,497,663 | 974,876,205 | 16.00 |
+| Go, allocate and store (at `39d3ad4c25`) | 10 M | 60 M | 1,534,989,740 | 9,104,700,271 | 151.39 |
+| Go, store an int (at `39d3ad4c25`) | 10 M | 60 M | 68,822,394 | 319,145,572 | 5.00 |
+| Node (at `39d3ad4c25`) | 20 M | 120 M | 2,852,411,144 | 15,045,766,104 | 121.93 |
 
-Native: 10 instructions per object, collections included (60 M objects of 16 bytes is 114 collections with almost nothing live). Go: 146, and the same with the collector off, so that is `mallocgc` itself for an 8-byte object on this machine (27 ns per allocation wall). Go's count covers all its threads and the kernel.
+The difference of the two native loops is 20.12 where it was 10.01, but it is no longer only the allocation. Counted in the listing: the object is 12 instructions (9 before); storing its address into `keep[i & 7]` is a locked store of both words, 9 instructions, where storing an `int` there is 2; and the 0.12 is the collections, one per 8 MB, which is 229 of them for 60 M objects of 32 bytes (114 before). So an object costs about 12 and the rest is the store.
 
 ```go
 type P struct{ x int }
@@ -465,150 +492,162 @@ for i := 0; i < n; i++ { sinkP[i&7] = &P{i} }
 
 ## Arrays and strings are allocated by a runtime call
 
-An array literal calls `baml_rt_array_new` (`src/array.rs`): one allocation for the array and its storage, then a `bzero` of the elements. A string concatenation calls `baml_rt_string_concat` (`src/string.rs`). Both go through a 4-instruction anchor stub (see `natives.md`).
+An array literal calls `baml_rt_array_new(worker, length)` (`src/array.rs`): one allocation for the array and its storage, every element made `null`, then compiled code writes both words of each element with plain stores. A string concatenation calls `baml_rt_string_concat` (`src/string.rs`). Both go through a 4-instruction anchor stub (see `natives.md`).
 
 ```baml
-keep[i & 7] = [i, i];                         // array
+keep[i & 7] = [i, i];                             // array
 keep[i & 7] = parts[i & 1] + parts[(i + 1) & 1];  // 7 + 16 bytes
 ```
 
-| | per iteration | per operation | where it goes (single-step trace) |
+| | per iteration | before | notes |
 |---|---|---|---|
-| native array `[i, i]` | 88.03 (901,565,431 at 10 M; 5,303,154,732 at 60 M) | about 72 | 61 in the call: stub 4, `array_new` 37, `bzero` 20; the rest is argument setup and the two element stores |
-| Go `[]int{i, i}` | 210.41 (2,119,963,964; 12,640,880,851) | about 205 | |
-| native concat | 222.05 (2,243,068,019; 13,345,676,338) | about 196 | 184 in the call: stub 4, `string_concat` 116, `memmove` 64 |
-| Go concat | 392.77 (3,947,933,854; 23,586,733,744) | about 383 | |
+| native array `[i, i]` | 102.03 (1,042,937,573 at 10 M; 6,144,875,870 at 60 M) | 88.03 | 84 over the store-an-int loop, 72 before. The call's share was 61 in a trace of the old layout; not traced again |
+| Go `[]int{i, i}` (at `39d3ad4c25`) | 210.41 | | |
+| native concat | 232.04 (2,342,817,644; 13,945,251,261) | 222.05 | the probe's two strings were written again (7 and 16 bytes of ASCII); the old ones are lost |
+| Go concat (at `39d3ad4c25`) | 392.77 | | |
 
-Weak point: a two-element array literal costs 7 times an object of the same size class. The length is a constant at the call site, so the allocation and both headers could be emitted inline as for a class instance. `string_concat` computes the character count of the result and handles slices on both sides; 116 instructions for two short flat strings is mostly that.
+Weak point, unchanged: a two-element array literal costs several times an object of the same size. The length is a constant at the call site, so the allocation and both headers could be emitted inline as for a class instance.
 
 ## Allocation slow path
 
-`baml_rt_alloc_slow` (`src/stubs.rs`) is called with a convention under which the callee preserves every register, so the fast path keeps nothing in callee-saved registers on its account. The stub saves `x0`-`x17` and `q0`-`q31` (25 `stp`), calls `heap::alloc_slow`, restores them:
-
-```rust
-pub(crate) extern "C" fn alloc_slow(mutator: &mut Mutator, frame: usize) {
-    mutator.enter(frame);                       // record the anchor from the stub's frame record
-    mutator.scratch = mutator.allocate(mutator.scratch);   // collects, then bumps
-}
-```
-
-Cost: 59 instructions in the stub (counted from the source, not traced) plus one collection (`gc.md`: 235 fixed, 122 per live object). It runs once per space: every 8 MB of allocation at the start, less often as the space grows to four times the live data.
+`baml_rt_alloc_slow` (`src/stubs.rs`) is called with a convention under which the callee preserves every register, so the fast path keeps nothing in callee-saved registers on its account. The stub saves `x0`-`x17` and `q0`-`q31`, calls `heap::alloc_slow`, restores them. Its 59 instructions were counted from the source at `39d3ad4c25` and not counted again. It runs once per space: every 8 MB of allocation at the start, less often as the space grows to four times the live data. Objects are twice the bytes they were, so it runs about twice as often for the same program.
 
 ## Field load and store
 
-One instruction each. There is no write barrier: the collector stops everything and copies, so it needs none.
+A slot is two words, tag at the slot's offset and payload 8 above it. What compiled code emits depends on whether the slot's static type fixes its tag, and on the busy bit protocol ("Values" above). There is no write barrier: the collector stops everything and copies.
+
+| access | emitted | instructions |
+|---|---|---|
+| load, type fixes the tag (`int`, a class, a `string`, ...) | `add x, obj, #off+8; ldar` | 2 |
+| store to an `int`, `float` or `bool` slot | `add; stlr` of the payload | 2 |
+| load of a pair (a union, an optional, `unknown`, a function value) | lock, `ldar` payload, `stlr` the tag back | 7, and a constant |
+| store to any other slot, a pointer of fixed type included | lock, `stlr` payload, `stlr` tag | 7, a constant, and the tag |
+| any store into an object not yet reachable | `str`, `str` | 2 |
+
+The atomic instructions take no offset, so each access computes the address first. Before two-word values and the protocol every one of these was one instruction.
 
 ```baml
-let p = ps[i & 1]; p.x = p.x + p.y;      // scalar fields
-let p = ps[i & 1]; p.next = ps[(i + 1) & 1];   // reference field
+let p = ps[i & 1]; p.x = p.x + p.y;            // scalar fields
+let p = ps[i & 1]; p.next = ps[(i + 1) & 1];   // reference field, next: Q?
 ```
 
 ```asm
-  ldr  x1, [x0, #8]          ; p.x
-  ldr  x3, [x0, #16]         ; p.y
-  add  x1, x1, x3
-  str  x1, [x0, #8]          ; p.x = ...
+  add     x0, x1, #0x18          ; p.x: slot 0 is at 16, its payload at 24
+  ldar    x2, [x0]
+  add     x1, x1, #0x28          ; p.y
+  ldar    x1, [x1]
+  add     x1, x2, x1
+  stlr    x1, [x0]               ; p.x = ...: the tag does not change
 
-  str  x0, [x3, #16]         ; p.next = q      (no barrier)
+  mov     x7, #0x7               ; p.next = q: the tag of q, INSTANCE
+  mov     x9, #-0x8000000000000000
+  add     x10, x3, #0x30         ; the slot of next
+  ldsetal x9, x10, [x10]         ; take the busy bit
+  tbnz    x10, #0x3f, <the ldsetal>
+  add     x10, x3, #0x38
+  stlr    x8, [x10]              ; payload
+  add     x11, x3, #0x30
+  stlr    x7, [x11]              ; tag: the release
 ```
 
-| | native per iteration | Go per iteration |
-|---|---|---|
-| scalar field update loop | 20.00 (214,508,728 at 10 M; 1,214,617,865 at 60 M) | 9.02 (109,092,634; 560,543,206) |
-| reference store loop | 22.01 (234,515,435; 1,335,052,936) | 14.00 (158,958,808; 859,423,999) |
+| | native per iteration | before | Go per iteration (at `39d3ad4c25`) |
+|---|---|---|---|
+| scalar field update loop | 24.00 (255,814,219 at 10 M; 1,455,993,089 at 60 M) | 20.00 | 9.02 |
+| reference store loop | 34.00 (355,786,880; 2,056,043,172) | 22.01 | 14.00 |
 
-The field operations are the same count in both. Go pays 5 more for the reference store (the write-barrier flag test and the nil check); native pays more everywhere else in the loop: the poll (2), and the array's length and data pointer reloaded from the array object on every iteration (3 to 5).
+The scalar loop gained 4: three loads that are `add; ldar` where they were `ldr`, and the index's own `add`. The reference loop gained 12: the store is 9 where it was 1, and the two element loads and their indexes are 2 each where they were 1.
+
+Weak point: a store of a pointer whose static type fixes the tag still takes the lock and writes both words. An exempt class for such slots (one atomic payload store) is named and not built in `ideas/uniform-values-convention.md`.
 
 ## Array index
 
 ```asm
-  ldr  x1,  [x0, #8]         ; length
-  ldr  x15, [x0, #16]        ; data address
-  and  x0, x19, #1           ; index
+  ldr  x1, [x0, #0x8]        ; length
+  ldr  x3, [x0, #0x18]       ; storage object
+  and  x0, x2, #0x7          ; index
   cmp  x0, x1
   b.hs slow                  ; cold: negative index wraps, else IndexOutOfBounds
-  ldr  x2, [x15, x0, lsl #3]
+  mov  x4, x0
+  add  x0, x3, x4, lsl #4    ; 16 bytes an element; no addressing mode scales by 16
+  add  x0, x0, #0x18         ; storage header and capacity, then the payload word
+  stlr x2, [x0]              ; keep[i & 7] = i
 ```
 
-Two instructions for the bounds check, one for the load, two more when the length and data address are not already in registers. The compiler caches the pair per block (`codegen.rs`, `array_view`) and drops it at every call that can allocate, since a collection moves the storage. A negative index counts from the end; that is the cold block.
+Two instructions for the bounds check, three for the store (one before), two more when the length and storage address are not already in registers. The compiler caches the pair per block (`codegen.rs`, `array_view`) and drops it at every call that can allocate, since a collection moves the storage.
 
-`keep[i & 7] = i` with `keep: int[]` is 16.00 instructions per iteration native (174,497,663 at 10 M; 974,876,205 at 60 M) and 5.00 in Go (68,822,394; 319,145,572). Go proves `i & 7 < 8` and drops the check, has no poll, and keeps the slice in registers. Cranelift does none of the three here.
+`keep[i & 7] = i` with `keep: int[]` is 18.00 instructions per iteration (195,748,493 at 10 M; 1,095,843,402 at 60 M), 16.00 before, 5.00 in Go (at `39d3ad4c25`).
 
 ## Maps
 
-A map is an insertion-ordered table (`src/map.rs`): an entries object with records in insertion order and a parallel array of 32-bit hashes, and, past 8 entries, an index object of slots holding hash and record number. Up to 8 entries are searched without an index by comparing all hashes at once.
+A map is an insertion-ordered table (`src/map.rs`): an entries object with records in insertion order and a parallel array of 32-bit hashes, and, past 8 entries, an index object of slots holding hash and record number. A record is two values, the key and the value, 32 bytes. Up to 8 entries are searched without an index by comparing all hashes at once (they start at offset 272 of the entries).
 
-Lookup is a hand-written assembly probe with a private convention (`baml_rt_map_find_str`, `baml_rt_map_find_int`, in `map.rs`). Compiled code reads the string's cached hash from its header inline and calls `baml_rt_str_hash` only when it is zero. The probe returns the address of the value slot or zero.
+The key's kind is read from its tag: a string by text, a `float` by canonical bits, an `int` or `bool` by bits, an enum variant by its address and hashed by its index. Lookup of a string or `int` key is a hand-written assembly probe with a private convention (`baml_rt_map_find_str`, `baml_rt_map_find_int`); a `float` or enum key calls `baml_rt_map_find(map, tag, payload)`. Compiled code reads the string's cached hash from its header inline (27 bits) and calls `baml_rt_str_hash` only when it is zero. A probe reads a record's key payload with one `ldar` and returns the address of the value's slot or zero.
 
 ```baml
 s += m[keys[i % n]];     // map<string, int>
 ```
 
 ```asm
-  ldr  w1, [x0, #4]          ; high half of the key's header
-  and  w2, w1, #0x0fffffff   ; cached hash
+  ldr  w1, [x0, #0x4]        ; high half of the key's header
+  and  w2, w1, #0x7ffffff    ; cached hash
   mov  w1, w2
   cbz  x1, hash_slow         ; cold: bl baml_rt_str_hash
-  ldur x0, [sp, #16]         ; map   (spilled: a root across the cold call)
-  ldur x1, [sp, #32]         ; key
-  bl   baml_rt_map_find_str  ; 20 instructions for a hit in a small map (trace)
-  cmp  x0, #0
+  ldur x0, [sp, #0x10]       ; map   (spilled: a root across the cold call)
+  ldur x1, [sp, #0x20]       ; key
+  bl   _baml_rt_map_find_str
+  cmp  x0, #0x0
   b.eq not_found             ; cold: MapKeyNotFound
-  ldr  x0, [x0]              ; the value
+  add  x0, x0, #0x8
+  ldar x1, [x0]              ; the value's payload
 ```
 
-| operation | native | Go | notes |
-|---|---|---|---|
-| get, string key, 8 keys | 39 (65.02 - 26.00) | 155 (164.56 - 10.01) | |
-| get, string key, 1000 keys | 37 (63.20 - 26.01) | 138 (147.86 - 10.01) | Node `Map.get`: about 190 |
-| get, int key, 1000 keys | about 42 (48.73 - 7) | about 103 (108.51 - 5) | baseline estimated from the empty loop |
-| set existing key, string, 8 keys | 289 (315.11 - 26.00) | 170 (180.19 - 10.01) | |
-| set existing key, string, 1000 keys | 268 (294.49 - 26.01) | 172 (182.06 - 10.01) | |
-| insert new int key, growing to 6 M | 452.20 | 417.69 | |
+The probes were written again from the description in these notes (keys `key0`, `key1`, ..., the baseline taking `keys[i % n].length()`); the originals are lost, so a difference of a few instructions from "before" may be the probe.
 
-Raw counts (N lo 5 M, N hi 30 M; baseline is the same loop taking `keys[i % n].length()`):
+| operation | native | before | Go (at `39d3ad4c25`) |
+|---|---|---|---|
+| get, string key, 8 keys | 35 (63.00 - 28.00) | 39 (65.02 - 26.00) | 155 |
+| get, string key, 1000 keys | 33 (61.97 - 29.00) | 37 (63.20 - 26.01) | 138 |
+| get, int key, 1000 keys | 49.46 for the loop | 48.73 for the loop | 108.51 for the loop |
+| set existing key, string, 8 keys | 305 (333.03 - 28.00) | 289 (315.11 - 26.00) | 170 |
+| set existing key, string, 1000 keys | 284 (313.23 - 29.00) | 268 (294.49 - 26.01) | 172 |
+| insert new int key, growing to 6 M | 562.40 | 452.20 | 417.69 |
+
+Raw counts (N lo 5 M, N hi 30 M):
 
 ```text
-native map_get.8     339,517,544   1,965,217,307
-native map_get.1000  330,138,084   1,910,260,844
-native map_base.8    144,475,345     794,544,273
-native map_set.8   1,596,490,945   9,474,370,502
-native map_set.1000 1,496,135,127  8,858,475,130
-native map_int_get.1000 256,356,097 1,474,778,703
-native map_insert (1 M, 6 M) 432,095,626 2,693,131,034
-go map_get.8         841,919,636   4,956,107,107
-go map_get.1000      759,595,668   4,456,218,575
-go map_base.8         68,925,334     319,357,781
-go map_set.8         919,752,185   5,424,649,077
-go map_set.1000      928,329,997   5,479,837,602
-go map_int_get.1000  561,439,722   3,274,332,194
-go map_insert (1 M, 6 M) 623,255,825 2,711,746,007
+native map_get.8      330,768,177   1,905,879,750
+native map_get.1000   327,092,088   1,876,569,951
+native map_base.8     155,785,786     855,820,626
+native map_base.1000  161,724,335     886,777,855
+native map_set.8    1,680,883,548  10,006,694,572
+native map_set.1000 1,581,583,742   9,412,470,033
+native map_int_get.1000 265,071,619 1,501,773,308
+native map_insert (1 M, 6 M) 504,333,714 3,316,348,428
 ```
 
-Lookup is ahead of Go by 3 to 4 times: the hash is cached in the string, the probe is 20 instructions, and nothing is spilled around it.
-
-Store is behind Go. `m[k] = v` does not use the probe. It calls the generic native `baml.Map.set`, which takes two type ids and values as a union holds them:
+Lookup is where it was. Store is still behind Go: `m[k] = v` does not use the probe. It calls the generic native `baml.Map.set`, which now takes the key and the value as two words each and no type ids:
 
 ```rust
 // generated wrapper, natives_generated.rs
-unsafe extern "C" fn baml_map_set(mutator: &mut Mutator, type_0: u32, type_1: u32,
-                                  map: usize, key: usize, value: usize) -> OptionalScalar {
+unsafe extern "C" fn baml_map_set(mutator: &mut Mutator, map: usize,
+                                  key_tag: u64, key: u64, value_tag: u64, value: u64) -> Value {
     let slots = RootSlots::new();
     let mut scope = unsafe { Scope::new(mutator, &slots) };
-    let types = [TypeId(type_0), TypeId(type_1)];
     let map = unsafe { scope.root_raw(map) };
-    let key = unsafe { scope.elem_raw(key, types[0]) };
-    let value = unsafe { scope.elem_raw(value, types[1]) };
-    let value = <Natives as NativeBamlMap>::set(&mut scope, types, map, key, value);
-    OptionalScalar::from(value)
+    let key = unsafe { scope.elem(Value { tag: key_tag as usize, payload: key as usize }) };
+    let value = unsafe { scope.elem(Value { tag: value_tag as usize, payload: value as usize }) };
+    let value = <Natives as NativeBamlMap>::set(&mut scope, map, key, value);
+    value.map_or(Value::NULL, |value| value)
 }
 ```
 
-Single-step trace of one store to an existing key: 244 instructions, 4 in the anchor stub, 178 in the wrapper and the inlined `set` (root slots, type id tests, boxing rules, the store), 21 in `str_hash`, 41 in `find`. The known alternative is what `get` already does: probe inline, store through the returned slot address, and call the runtime only to insert.
+The known alternative is what `get` already does: probe inline, store through the returned slot address, and call the runtime only to insert. Insert costs 110 more than before; not traced. A record is 32 bytes where it was 16, so growing copies twice the bytes and the space fills twice as fast.
 
 ## Not built
 
+- The `ty` word of an array and `key_ty`, `value_ty` of a map: written as zero. An instance's type parameter slots: written as `(NULL, 0)`. So a type test against an array type or between two instantiations of one class is refused when compiled (`ideas/uniform-values-convention.md`, status).
+- `RustInstanceObject`, `RawFunctionObject`, `RealizedFunctionObject`, `HostClosureObject`: the tags are reserved and nothing makes one. A closure's `function` word is zero.
 - Inline allocation of arrays, strings and maps.
 - Per-worker allocation spans carved from a shared space (`threads.md`).
 - Large-object space: an object larger than the space forces a collection into a bigger space.
-- Packed fields: every field is a word.
+- Packed fields: every field is 16 bytes.

@@ -1,6 +1,6 @@
 # Tasks
 
-`spawn`, `await`, the stack switch, parking and waking. The OS threads behind this are in `threads.md`; the I/O chain is measured in `natives.md`. Numbers are instructions retired, measured unless marked estimated; method in `README.md`.
+`spawn`, `await`, the stack switch, parking and waking. The OS threads behind this are in `threads.md`; the I/O chain is measured in `natives.md`. Numbers are instructions retired; method in `README.md`. The `spawn` and `await` total is counted at `881e4c1dfc`; "before" is the layout before two-word values, at `39d3ad4c25`. Every single-step trace, every other native number and every Go and Node number here is from `39d3ad4c25` and was not run again.
 
 ## What a task is
 
@@ -52,16 +52,15 @@ A task that is not running keeps its registers in a 160-byte switch frame at its
 
 ## `spawn` runs the child first
 
-`spawn` calls `baml_rt_spawn` with the closure, a task shim (the compiled function a task starts in; one per machine result type) and flags. The stub builds a switch frame for the parent, calls `spawn_prepare`, and switches to the child at once. The parent is left runnable. The child's first act (`baml_rt_task_start`) puts the parent on the run queue. A task that ends switches straight to the task queued last (`exit_pick`), which is the parent, with the future as the stub's result.
+`spawn` calls `baml_rt_spawn` with the closure and nothing else. A task starts in the task shim, one compiled function per program (`baml_native_task_shim`), whose address the runtime is given once, at `sched::run`. A task's result is a value, two words, so one shim serves every result type and no flag says whether the result is a reference: the future's value slot holds the tag. The stub builds a switch frame for the parent, calls `spawn_prepare`, and switches to the child at once. The parent is left runnable. The child's first act (`baml_rt_task_start`) puts the parent on the run queue. A task that ends switches straight to the task queued last (`exit_pick`), which is the parent, with the future as the stub's result.
 
 ```rust
-pub(crate) unsafe extern "C" fn spawn_prepare(mut closure: usize, shim: usize, flags: usize,
-                                             worker: &mut Mutator, frame: usize) -> *mut Task {
+pub(crate) unsafe extern "C" fn spawn_prepare(mut closure: usize, worker: &mut Mutator, frame: usize) -> *mut Task {
     worker.sched.settle_last_switch();          // free the task that ended last
     worker.enter_switch_frame(frame);           // anchor, for the allocation below
-    let child = worker.sched.new_task(TASK_STACK, shim);
+    let child = worker.sched.new_task(TASK_STACK, worker.sched.task_shim);
     worker.root(&mut closure);
-    let future = worker.allocate_object(TYPE_FUTURE, FUTURE_SIZE);
+    let future = worker.allocate_object(TAG_FUTURE, FUTURE_SIZE);   // 64 bytes
     worker.unroot(1);
     // future fields, child.future, child.entry
     store(frame + SWITCH_FRAME_RESULT, future); // what the parent resumes with
@@ -73,32 +72,64 @@ pub(crate) unsafe extern "C" fn spawn_prepare(mut closure: usize, shim: usize, f
 }
 ```
 
-`await` is inline when the future has settled: an acquire load of the state and a load of the value. Otherwise it calls `baml_rt_await`, which links the task into the future's waiter list with a compare-and-swap and switches to the worker's stack.
+The shim, from a build (`costmap/listings/report.s`):
+
+```asm
+baml_native_task_shim:
+  ...                          ; frame record, every callee-saved register
+  bl   baml_rt_task_start      ; queue the parent; x0 = the closure
+  ldr  x1, [x0]                ; its header
+  lsr  x1, x1, #32             ; its call layout id
+  cmp  x1, #3                  ; the id of the layout () in this program: a task's body takes nothing
+  cset x1, eq ; uxtb w1, w1
+  cbz  x1, trap
+  ldr  x1, [x0, #8]            ; code
+  mov  x2, x0                  ; closure word
+  blr  x1                      ; a call with an exception edge
+  mov  x1, x2 ; mov x2, x3     ; the result: tag, payload
+  mov  x0, x21
+  bl   baml_rt_task_finish     ; (worker, tag, payload): stored into the future as it is
+  ...
+landing:                       ; x0 = tag, x1 = payload of what the body threw
+  mov  x2, x1 ; mov x1, x0
+  ldr  x3, [x21, #32]          ; the trace, from worker.scratch
+  mov  x0, x21
+  bl   baml_rt_task_fail       ; (worker, tag, payload, trace)
+```
+
+`await` is inline when the future has settled: an acquire load of the state and plain loads of the value's two words (the state word is the value's lock, so the busy bit is not taken). Otherwise it calls `baml_rt_await`, which links the task into the future's waiter list with a compare-and-swap and switches to the worker's stack.
 
 ```baml
 for (let i = 0; i < N; i += 1) { s += await spawn { 1 }; };
 ```
 
 ```asm
-  bl   _baml_rt_array_new     ; the spawn plan's two lists (semaphores,
-  bl   _baml_rt_array_new     ; cancel tokens), both empty
-  ...                         ; allocate the 48-byte plan inline, fill it
-  ldr  x1, [x0, #24] ; ldr x1, [x1, #8]     ; length of one list
-  ldr  x2, [x0, #32] ; ldr x2, [x2, #8]     ; length of the other
-  orr  x1, x1, x2
-  cbnz x1, unsupported        ; baml_rt_spawn_unsupported
-  ldr  x0, [x0, #8]           ; plan.body: the closure
-  mov  x2, #0                 ; flags
-  mov  x1, x20                ; the shim
-  bl   _baml_rt_spawn         ; returns after the child has run
-  add  x0, x0, #8
-  ldar x0, [x0]               ; future.state, acquire
-  cmp  x0, #1                 ; FUTURE_READY
-  b.ne slow                   ; baml_rt_await, or an error to rethrow
-  ldr  ...                    ; future.value
+  ...                          ; allocate the closure inline (32 bytes)
+  bl   _baml_rt_array_new      ; the spawn plan's two lists (semaphores,
+  bl   _baml_rt_array_new      ; cancel tokens), both empty
+  ...                          ; allocate the plan inline: an instance of 7 slots, 128 bytes
+  add  x0, x3, #0x58 ; ldar x0, [x0] ; ldr x1, [x0, #0x8]    ; length of one list
+  add  x0, x3, #0x68 ; ldar x0, [x0] ; ldr x0, [x0, #0x8]    ; length of the other
+  orr  x0, x1, x0
+  cbnz x0, unsupported         ; baml_rt_spawn_unsupported
+  mov  x1, #-0x8000000000000000
+  add  x0, x3, #0x30           ; plan.body, a function value: read under its lock
+  ldsetal x1, x2, [x0]
+  tbnz x2, #0x3f, <the ldsetal>
+  add  x0, x3, #0x38
+  ldar x0, [x0]                ; the closure
+  add  x1, x3, #0x30
+  stlr x2, [x1]
+  bl   _baml_rt_spawn          ; returns the future, after the child has run
+  add  x1, x0, #0x8
+  ldar x1, [x1]                ; future.state, acquire
+  cmp  x1, #0x1                ; FUTURE_READY
+  b.ne slow                    ; baml_rt_await, or an error to rethrow
+  ldr  x10, [x9, #0x10]        ; future.value: tag
+  ldr  x9, [x9, #0x18]         ;               payload
 ```
 
-466.42 instructions per `spawn` plus `await` (N 200,000: 114,693,203; 1,200,000: 581,117,318), 33 ns wall. Single-step trace of one iteration, 464:
+499.78 instructions per `spawn` plus `await` (N 200,000: 123,015,846; 1,200,000: 622,805,780), 466.42 before (33 ns wall then; wall time was not taken again). The loop in `main` is 88 instructions in the listing, where the trace of the old layout had 66: the plan is 128 bytes where it was 48, and its body is read under a lock. The rest of the 33 was not traced. Single-step trace of one iteration on the old layout, 464 (not traced again):
 
 | part | instructions |
 |---|---|
@@ -118,8 +149,9 @@ for (let i = 0; i < N; i += 1) { s += await spawn { 1 }; };
 
 | | N lo | N hi | instr lo | instr hi | per spawn+await |
 |---|---|---|---|---|---|
-| native | 200,000 | 1,200,000 | 114,693,203 | 581,117,318 | 466 |
-| Go, goroutine + buffered channel | 200,000 | 1,200,000 | 961,764,490 | 5,606,675,205 | 4,645 |
+| native | 200,000 | 1,200,000 | 123,015,846 | 622,805,780 | 500 |
+| native, before | 200,000 | 1,200,000 | 114,693,203 | 581,117,318 | 466 |
+| Go, goroutine + buffered channel (Go and Node rows at `39d3ad4c25`) | 200,000 | 1,200,000 | 961,764,490 | 5,606,675,205 | 4,645 |
 | Go, same, `GOMAXPROCS=1` | 200,000 | 1,200,000 | 748,347,793 | 4,338,294,216 | 3,590 |
 | Go, goroutine + `WaitGroup` | 200,000 | 1,200,000 | 1,031,340,006 | 6,017,841,657 | 4,987 |
 | Node, `await` of an async function | 2 M | 12 M | 1,882,130,488 | 9,176,419,134 | 729 |
@@ -132,11 +164,11 @@ for i := 0; i < n; i++ {
 }
 ```
 
-Native is 8 to 10 times cheaper than Go here. The reasons are structural: no channel, no lock, the child runs on the parent's worker immediately and hands straight back, and the stack is reused from a free list.
+Native is 7 to 9 times cheaper than Go here. The reasons are structural: no channel, no lock, the child runs on the parent's worker immediately and hands straight back, and the stack is reused from a free list.
 
 Weak points:
 
-- 124 of the 464 instructions build a spawn plan whose two lists are always empty, since a plan with semaphores or cancel tokens is rejected (`baml_rt_spawn_unsupported`). Two runtime calls and a 48-byte object per spawn, plus three garbage objects.
+- 124 of the 464 instructions of the old layout built a spawn plan whose two lists are always empty, since a plan with semaphores or cancel tokens is rejected (`baml_rt_spawn_unsupported`). It is more now: two runtime calls and a 128-byte object per spawn, plus three garbage objects.
 - `exit_pick` looks at the inbox and the timers on every task end (33 instructions when both are empty).
 
 ## A task that needs a new stack
@@ -175,14 +207,16 @@ Weak points: `fire_timers` collects fired tasks into a fresh `Vec` (one `malloc`
 `baml_rt_await` on an unsettled future: `await_park` sets the task `PARKING`, links it at the head of the future's waiter list by compare-and-swap on the state word, and the stub switches to the worker. When the task that owns the future ends, `settle` swaps the state to `READY` or `ERROR` and wakes each waiter (`PARKED` to `RUNNABLE`, pushed to run next). The value is written before the state, and readers load the state first with acquire ordering.
 
 ```rust
-fn settle(worker: &mut Mutator, value: usize, trace: usize, state: usize) {
-    store(future + FUTURE_VALUE, value);
+fn settle(worker: &mut Mutator, value: Value, trace: usize, state: usize) {
+    Value::init(future + FUTURE_VALUE, value);       // both words, plain: the state word is the lock
     store(future + FUTURE_TRACE, trace);
     let before = future_state(future).swap(state, Ordering::AcqRel);
     let mut waiter = (before & !FUTURE_SETTLED) as *mut Task;
     while !waiter.is_null() { let next = (*waiter).link; worker.sched.wake(waiter, true); waiter = next; }
 }
 ```
+
+`baml_rt_await_error(worker, future)` returns the value a failed future settled with, tag in `x0` and payload in `x1`.
 
 Not measured in isolation: with one worker and child-first spawn, an `await` meets an unsettled future only when the child itself parked. Its cost is the 60-instruction round trip above plus `await_park` and `wake` (estimated 60 to 80 more).
 

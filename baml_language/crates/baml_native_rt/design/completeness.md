@@ -2,15 +2,17 @@
 
 A checklist of every capability `baml-cli run` (the bytecode VM) has and the native backend lacks. Measured at `aa1e227301` on `claude/baml-native-backend`, arm64 macOS. Nothing here is about speed.
 
+Re-marked at `881e4c1dfc`, after values became two words. What was done again: the census of the standard library, the conformance directory and `baml_tests/baml_src` ("Second census" at the end), and each snippet whose item below says "now". What was not: the other corpora, the natives table, sections 4 to 6, and every `file:line` reference and bracketed count, which are as they were at `aa1e227301` unless the item says otherwise. An item that says "now" was changed by this re-marking; the snippet under it was run through `native_pack --coverage` again.
+
 Legend: `- [ ]` missing, `- [~]` partial, `- [x]` suspected missing, in fact done. "refused" means `native_pack --coverage` printed the blocker shown. Every snippet was run through `native_pack --coverage <file> main` unless it says "not confirmed". Counts in brackets are from the census at the end: `[stdlib S, corpus C / E]` = S standard library functions and C functions of the test corpora blocked by this kind, in E corpus entry points.
 
 Paths: `cg/` is `crates/baml_compiler2_native/src/`, `rt/` is `crates/baml_native_rt/src/`, `std/` is `crates/baml_builtins2/baml_std/`.
 
 Headline numbers:
 
-- Standard library, BAML source: 1,150 functions with a body. 551 compile with everything they reach when checked as an entry (547 of the 1,021 that are not generic); 678 are themselves inside the subset. The 129 generic ones cannot be judged alone.
-- Standard library, Rust builtins: 650. 387 can be called from native code (310 runtime symbols, 71 compiled inline, 6 trace option makers accepted and ignored). 263 cannot.
-- Test corpora: 12,826 functions checked as entries, 6,946 compile with everything they reach. The conformance suite is 1,634 of 1,634, the speedtest `main`s 77 of 78, `baml_tests/baml_src` 3,678 of 8,611.
+- Standard library, BAML source: 1,150 functions with a body. Now 691 compile with everything they reach when checked as an entry (551 before) and 830 are themselves inside the subset (678). No function that compiled before is refused now.
+- Standard library, Rust builtins: 650. 387 can be called from native code (310 runtime symbols, 71 compiled inline, 6 trace option makers accepted and ignored). 263 cannot. Not counted again.
+- Test corpora, at `aa1e227301`: 12,826 functions checked as entries, 6,946 compile with everything they reach. Now, for the two corpora checked again: `baml_tests/baml_src` 4,073 of 8,611 (3,678 before; 405 newly compile, 10 that compiled are refused, all for a type test); the conformance directory 1,795 of 1,795 (it was 1,559 of 1,559 at `279f25e334`, and has more cases now). The speedtest `main`s were 77 of 78 and were not checked again.
 - 94 distinct blocker kinds are hit in practice. 27 more exist in the code and were never hit.
 - One blocked function anywhere in what the entry reaches fails the whole build. There is no fallback to the interpreter (`cg/lib.rs:179-181`).
 
@@ -35,48 +37,54 @@ Headline numbers:
   }
   // blocked user.main  standard library native that is not ported  baml.media.Image.from_url
   ```
-- [~] **Optional scalars inside containers.** An `int?`, `float?` or `bool?` is a pair of words. It works as a local, parameter, result, field and tuple element. It is refused as an array element (`cg/types.rs:266`), a map value (`274`), a future's value (`283`) and a type argument of a native (`cg/check.rs:547`): `list of unsupported elements value`, `map value`, `future value`. [stdlib 44 + 14 + 1, corpus 289 + 176 + 5 / 2,112]
+- [x] **Optional scalars inside containers.** Now done: an `int?`, `float?` or `bool?` is one value like any other, so it is an array element, a map value, a future's value and a type argument. Both snippets compile.
   ```baml
   function main() -> int { let xs: int?[] = [1, null, 3]; xs.length() }
-  // blocked user.main  list of unsupported elements value  _1
+  // ok
   function main() -> int { let f = spawn { if 1 > 0 { 3 } else { null } }; (await f) ?? 0 }
-  // blocked user.main  spawn  of a plan with another layout
+  // ok
   ```
-- [~] **Maps.** Keys are `string`, `int`, `bool`, an enum or `float` only (`cg/types.rs:171-176`); a value may not be `null` or an optional scalar. `map<K, int>` for a class `K` with its own `hash` is refused.
+- [~] **Maps.** Keys are `string`, `int`, `bool`, an enum or `float` only; in code compiled once for a type parameter the key may be that parameter. Now a value may be an optional scalar (`map<string, int?>` compiles). `map<K, int>` for a class `K` with its own `hash` is still refused.
   ```baml
   class K { a: int }
   function main() -> int { let m: map<K, int> = {}; m.length() }
   // blocked user.main  map value  _2
   ```
-- [~] **Unions.** A union of supported members is a tagged reference and works, with `match`. `union value` appears when a member has no native type (media, `type`, an optional-scalar list). [stdlib 91, corpus 447 / 2,208]
+- [~] **Unions.** A union of supported members is a tag and a payload, with no box, and works, with `match`. `union value` appears when a member has no native type (media, `type`, an optional-scalar list). [stdlib 91, corpus 447 / 2,208]
 - [ ] **`never` as a declared type.** `result is a never value`, `never value`. A function declared `-> never` (`baml.sys.panic`, `baml.sys.exit`, `baml.http.Server.serve`) is refused when it is not inlined away. Called directly from `main` both inline and compile. [stdlib 7, corpus 52 + 37 / 331]
-- [~] **Generics.** Code is compiled per type argument (`cg/program.rs:39-41`), every reference type sharing one copy (`cg/types.rs:158-164`). `type variable value (_N has no one type)`, `result is a type variable value` and `call with type arguments (a type without one type id)` appear when a type argument is not known where the call is written. [stdlib 113 + 40 + 1, corpus 976 + 234 + 95 / 2,971]. Part of this count is the census checking generic functions as entries, which no program does. Confirmed real cases:
+- [~] **Generics.** Now a function with type parameters is compiled once: inside it a value of a type parameter is a tag and a payload, and it takes a type object only for a parameter it tests or hands to `baml.json`. `type variable value`, `result is a type variable value` and `parameter is a type variable value` are gone from the census (they were 113 + 40 + 10 standard library and 778 + 190 + 153 `baml_src` functions). Both snippets that were refused compile:
   ```baml
   function biggest<T extends baml.ops.Compare>(xs: T[]) -> T {
     let best = xs[0]; for (let x in xs) { if x > best { best = x; } } best
   }
   function main() -> int { biggest([3, 9, 2]) }
-  // blocked user.main  type variable value  _7 has no one type
-  // blocked user.main  interface method call  gt: implemented in source for a type kept in a box
-
+  // ok
   class P { x: int }
   function main() -> int { let ps = [P { x: 3 }]; ps.sort_by_key((p: P) -> int { p.x }); ps[0].x }
-  // blocked baml.Array.sort_by_key<unknown, int, _>  type variable value  _9 has no one type
+  // ok
   ```
+  What is left, all because no object says its type arguments (an instance's type parameter slots, an array's and a map's type words are not written; `ideas/uniform-values-convention.md`, status):
+  - `call with type arguments (a type no tag and class object decide)`: a call that names, for a parameter the callee tests, a type such as an array type or a generic class instantiation. [now: stdlib 6, `baml_src` 44]
+  - A type test between two instantiations of one class or against an array type (under "Type tests").
+  - `xs.sort()` and `join` on a `T[]` inside generic code that is not inlined: `interface method call (sort: of elements with a compare of their own)`. Regressed: before, the copy made for `int` sorted.
+    ```baml
+    function sorted<T extends baml.ops.Compare>(xs: T[]) -> T[] { if xs.length() > 100 { return sorted(xs); } xs.sort(); xs }
+    // blocked user.sorted  interface method call  sort: of elements with a compare of their own
+    ```
+  - Two different implementations of one method for one class at different type arguments: `implementations for one class at different type arguments`.
+  - `function value that tests a type argument`, `closure that tests a type argument`: a lambda cannot be passed a type object. [now: `baml_src` 20 + 11]
 
 ### Calls
 
-- [ ] **Defaulted arguments that are not constants, or are optional scalars.** `defaulted argument (of an int or float)` at the call (`cg/check.rs:776`), `(of an optional scalar)` in the callee (`cg/check.rs:1186`), bare at `cg/types.rs:1093`. An `int` or `float` has no bit pattern meaning "omitted" (`cg/types.rs:1128-1138`), so only a constant default works: the caller passes it. [stdlib 43, corpus 1,531 / 2,154]. Second largest kind. `openai.ResponsesClient.new` and every `@spec` projection hit it.
+- [x] **Defaulted arguments.** Now done for every type: an argument left to its default is passed with the tag `OMITTED` and the callee computes the default (`calls.md`, `ideas/default-arguments.md`). `defaulted argument` is gone from the census (43 standard library and 1,329 `baml_src` functions). Both snippets compile. Left: a native or an intrinsic cannot take an omitted operand (`log`'s optional one), and a class's own `to_json`, `from_json` or `eq` with extra defaulted parameters is refused.
   ```baml
   function f(n: int, limit: int? = null) -> int { if n <= 0 { return 0; } 1 + f(n - 1) }
   function main() -> int { f(3) }
-  // blocked user.main  defaulted argument  of an int or float
-  // blocked user.f     defaulted argument  of an optional scalar
-
+  // ok
   function base(n: int) -> int { if n > 50 { base(n - 1) } else { n } }
   function f(n: int, by: int = base(3)) -> int { if n <= 0 { return 0; } by + f(n - 1, by = by) }
   function main() -> int { f(3) }
-  // blocked user.main  defaulted argument  of an int or float
+  // ok
   ```
 - [ ] **Globals (`const`).** `global read` (`cg/types.rs:1101`), `call of a non-function constant` (`cg/check.rs:496`). There is no initializer pass and no storage. [corpus 532 + 7 / 727]
   ```baml
@@ -84,13 +92,12 @@ Headline numbers:
   function main() -> int { LIMIT + 1 }
   // blocked user.main  global read
   ```
-- [~] **Function values.** Closures over cells, plain functions and bound methods work. Refused: a generic function as a value, a function without source, virtual and generic function makers, a bound method with type arguments or on a non-reference receiver. `function value` (`cg/types.rs:1098-1100`, `cg/check.rs:1117-1119`), `bound method value` (`cg/check.rs:1363-1374`), `call of a value that is not a function` (`1694`), `closure that tests a type argument` (`1339`). [stdlib 21 + 19 + 12, corpus 631 + 50 + 12 + 59 + 33 / 2,311]
-- [~] **Interface method dispatch.** Works for classes and enums that implement the method in BAML source with one layout. `interface method call` (`cg/check.rs:661-703`, `cg/dispatch.rs:227-322`, `cg/program.rs:421-492`), by detail, corpus functions blocked:
-  - 201 `implemented in source for a type kept in a box`: an `int`, `float` or `bool` implements the interface and reaches it as an interface value.
-  - 109 `implemented in Rust for a type only known when it runs` (`random_int`, `update`): a builtin behind dynamic dispatch that is not an `async` native of one-word arguments (`cg/program.rs:137-155`).
-  - 73 `on a type with no implementation found`.
-  - 55 `the language's own implementation` (`hash`, `to_json`, `to_string` the compiler synthesizes).
-  - 29 `on an interface of type parameters` or `of a type parameter with no one type`, 13 `of elements with a compare of their own`, 4 `dispatched on a later argument`, 4 `a default body that tests its type argument`, 1 `implementations with different layouts`.
+- [~] **Function values.** Closures over cells, plain functions and bound methods work. Now also: a function with type parameters as a value, a bound method of a generic class, and a function with defaulted parameters where a type with fewer is expected (through a remap thunk). Every call through a value checks the call layout. Refused at `aa1e227301` (not all checked again): a generic function as a value, a function without source, virtual and generic function makers, a bound method with type arguments or on a non-reference receiver. `function value` (`cg/types.rs:1098-1100`, `cg/check.rs:1117-1119`), `bound method value` (`cg/check.rs:1363-1374`), `call of a value that is not a function` (`1694`), `closure that tests a type argument` (`1339`). [stdlib 21 + 19 + 12, corpus 631 + 50 + 12 + 59 + 33 / 2,311]
+- [~] **Interface method dispatch.** Now works for any implementing type, an `int`, a `string` or an array among them (a row per tag beside the rows in class objects), for an implementation with more parameters than the interface (a method-table thunk), and for the operators of `int`, `float`, `bool`, `bigint` and `string` reached through a bound. The snippet below, refused before for `a type kept in a box`, compiles. `interface method call`, by detail, `baml_src` functions blocked now (295; 336 before):
+  - 101 `random_int: implemented in Rust for a type only known when it runs`: a builtin behind dynamic dispatch whose stub a row cannot hold (it is not `async`, or has type parameters, or takes a described type).
+  - 47 `to_json: a default body that tests its type argument`.
+  - 29 `iter`, 16 `to_string`, 13 `lt`: `on a type with no implementation found`.
+  - 15 `sort: of elements with a compare of their own`, 13 `hash: the language's own implementation`.
 
   [stdlib 13, corpus 474 / 517]
   ```baml
@@ -101,7 +108,7 @@ Headline numbers:
   function pick(i: int) -> Sized { if i % 2 == 0 { return C { n: i }; }; return 7; }
   function total(s: Sized, d: int) -> int { if d <= 0 { return s.size(); } total(s, d - 1) }
   function main() -> int { total(pick(1), 3) + total(pick(2), 3) }
-  // blocked user.main  interface method call  size: implemented in source for a type kept in a box
+  // ok
   ```
 - [ ] **Interface fields.** `interface field access` (`cg/check.rs:1120`, store at `1435`). No model at all. It compiles only when the optimizer devirtualizes the read (`speedtest/interfaces/field-access-100k` `main` passes that way). [corpus 138 / 148]
   ```baml
@@ -122,12 +129,16 @@ Headline numbers:
 
 ### Tests and operators
 
-- [~] **Type tests.** `type test` (`cg/check.rs:1472-1531`, `1676`). Works on a union against a class, enum, scalar or `null`. Refused, corpus functions: 625 `of a type without one type id` (a generic class instantiation, a `type` value, a map or array type inside the tested type), 60 `between array types`, 26 `of a literal, on a value of another type or of several`, 21 `of a type argument or an interface, on a value that is not a union`. [stdlib 64, corpus 668 / 2,360]
+- [~] **Type tests.** `type test`. Works on a union, an optional or `unknown` against a class, enum, scalar, `null`, an interface, a type parameter, and a union or literal a description decides. Refused, `baml_src` functions now (394; 438 before): 271 `of a type no tag and class object decide` (a `type` value, a map or array type inside the tested type), 53 `between array types`, 27 `of a literal, on a value of another type or of several`, 22 `of a type argument or an interface, on a value that is not a union`, 21 `between instantiations of one class`. The last is a regression: `x is Box<int>` on a union of two instantiations with scalar arguments compiled when each instantiation had its own type id, and ten `baml_src` functions that compiled are refused now, seven for this.
   ```baml
   function pick(n: int) -> int[] | string[] { if n == 0 { [1] } else { ["a"] } }
   function main() -> int { let v = pick(0); if v is int[] { 1 } else { 2 } }
   // blocked user.main  array construction where no array is expected  union
   // blocked user.main  type test  between array types
+  class Box<T> { v: T }
+  function pick(n: int) -> Box<int> | Box<string> { if n == 0 { Box<int> { v: 1 } } else { Box<string> { v: "a" } } }
+  function main() -> int { let b = pick(0); if b is Box<int> { 1 } else { 2 } }
+  // blocked user.main  type test  between instantiations of one class
   ```
 - [ ] **`??` on `unknown`.** `null coalescing of a non-optional value` (`cg/check.rs:1977`). Works on optionals and on unions with `null`. [stdlib 3, corpus 426 / 2,068]
   ```baml
@@ -275,13 +286,13 @@ Reported as `runtime builtin (vm)` on the builtin itself.
 
 ### Ported, with restrictions
 
-- [~] **Generic natives** take a type argument only as one word: not `null`, not an optional scalar, not a type with no native representation (`cg/check.rs:536-550`). `generic standard library native`, corpus functions: `Array.slice: called with other type arguments` 25, `Array._truncate`, `Map.has`, `Map.keys`, `Map.set`, `Array.clear`, `_is_primitive_array: at a type with no native representation` 17, `Map.index: on unknown` 3, `Map.get: at optional`, `_to_json_default: at null`, `json._to: at null`.
+- [~] **Generic natives.** Now a type argument may be any type with a native representation, an optional scalar among them; seven natives are passed type objects and the rest read tags (`natives.md`). Still refused, `baml_src` functions now (40): `Array.slice: called with other type arguments` 28, `json._to`, `json._decode`, `Array._copy`, `Map.set: at a type with no native representation` 11, `Map.index: on unknown` 1.
 - [~] **`Array.join`**: section 1.
 - [~] **Natives cannot take closures.** None of the 11 closure-taking `Array` methods has a signature. The inliner swaps in a BAML sibling (`baml_compiler2_mir/src/optimize/inline.rs:517-551`, `std/baml/containers.baml`): `_inlined_filter`, `_inlined_map`, `_inlined_some`, `_inlined_every`, `_inlined_find`, `_inlined_find_index`, `_inlined_reduce`, and `_driver_sort_by`, `_driver_find_last`, `_driver_find_last_index`, `_driver_flat_map`. `map`, `filter`, `reduce`, `sort_by` with a closure literal and `map` with a function parameter are confirmed to compile. A `map` whose result element is an optional scalar is refused (`list of unsupported elements value`).
-- [~] **Defaulted `int` or `float` arguments** of a native: same rule as section 1 (`Constant::OmittedArg`, `cg/types.rs:1093`).
-- [~] **A native behind interface dispatch** must be `async`, take only `int`s and references and return no `float` (`cg/program.rs:137-155`). Otherwise `interface method call (implemented in Rust for a type only known when it runs)`.
+- [~] **Defaulted arguments of a native.** Now: a constant default is passed by the caller as before; an omitted operand of any type is refused, since no native computes a default.
+- [~] **A native behind interface dispatch** must now be `async`, have no type parameter and take no parameter that needs its static type described (`cg/program.rs`, `dispatched_native`); its stub takes the two-word convention, so `float`s and unions are no longer a limit. Otherwise `interface method call (implemented in Rust for a type only known when it runs)`.
 - [~] **A native cannot call back into BAML except through `scope.call_baml`**, used by `baml.json` hooks and `eq`. `to_string`, `hash` and `cmp` of user types are never called from Rust.
-- [~] **JSON text and `json` values past the static type.** An integer past 64 bits parses to a `bigint` inside a `json`, as on the interpreter, and is written back as its digits; decoded into `int` it is `DecodeError` "expected integer in the BAML int range [-2^63, 2^63 - 1]", into `float` the nearest one (cases `json_parse_past_int*`, `json_decode_past_int*`, `json_to_past_int_in_a_union`). An array or map of `int`, `float` or `bool` held as `unknown` serializes: its header says what its words are (`HEADER_INTS`, `HEADER_FLOATS`, `HEADER_BOOLS` in `rt/layout.rs`, set wherever one is made). Gaps: one of enum variants held as `unknown` does not say which enum and is refused (`differences.txt`, `json_unknown_enum_array`, native-wrong); decode depth is capped at 128 (`json_to_deep`, undecided).
+- [~] **JSON text and `json` values past the static type.** An integer past 64 bits parses to a `bigint` inside a `json`, as on the interpreter, and is written back as its digits; decoded into `int` it is `DecodeError` "expected integer in the BAML int range [-2^63, 2^63 - 1]", into `float` the nearest one (cases `json_parse_past_int*`, `json_decode_past_int*`, `json_to_past_int_in_a_union`). Now an array or map of anything held as `unknown` serializes: every slot's tag says what it holds, and an enum variant is a pointer to its object, which names its enum (`json_unknown_enum_array` is no longer in `differences.txt`). Gap: decode depth is capped at 128 (`json_to_deep`, undecided).
 - [~] **`SseStream.close`** ends the stream natively, does nothing on the interpreter while the program holds it (`http_sse_closed_early`).
 
 ## 3. Language features
@@ -310,10 +321,10 @@ Reported as `runtime builtin (vm)` on the builtin itself.
 - [ ] **`test` blocks.** Absent. No entry point runs them (`native_pack` takes one function). All 507 `$init_test_*` functions of `baml_tests/baml_src` are refused through what they reach; `testing._test_name_count` is not in the table. `assert.equal` alone compiles.
 - [ ] **Media types.** Absent. Section 1.
 - [ ] **Type builder, dynamic types, reflection, `type` values.** Absent. `reflect` 0 of 94 builtins, `type` has no native representation, `BindType` is refused. `speedtest/interfaces/mint-classes-with-impls-200` is the one speedtest `main` that fails, for this.
-- [~] **Generics.** Monomorphized per scalar, shared per reference. `class Box<T>`, `unbox<T>`, generic closures confirmed. Gaps in section 1.
+- [~] **Generics.** Now compiled once. `class Box<T>`, `unbox<T>`, generic closures, bounds with operators confirmed. Gaps in section 1: no object says its type arguments.
 - [ ] **Interfaces with fields.** Absent. Section 1.
 - [x] **Enums.** Plain variants, `match`, `==`, interpolation, map keys work. Enums carry no data in the language (`std` and the corpus declare none; not confirmed against the grammar).
-- [~] **Unions and optional scalars.** Built (`cg/types.rs:90-99`). Gaps: optional scalars in containers, union arithmetic, `??` on `unknown`.
+- [~] **Unions and optional scalars.** Built. Now optional scalars work in containers. Gaps: union arithmetic, `??` on `unknown` (still refused, checked again).
 - [~] **Pattern matching and type tests.** Built for unions, literals, enums, tuples (`cg/narrow.rs`). Gaps: array types, generic instantiations, shape patterns on unions, truthiness.
 - [~] **Tuples.** Built: construction, destructuring, as results (`cg/types.rs:74-77`, confirmed). Gaps: no JSON, a tuple with an unsupported element is `tuple value` [corpus 15 + 10 + 3].
 - [~] **`bigint`.** Built: literals, arithmetic, `to_string`, 8 of 8 `Bigint` natives, inside a `json` value both ways. Gaps: JSON of a value whose static type is `bigint` is refused, no truthiness.
@@ -553,3 +564,64 @@ About 2,000 entries share one cause: they reach `ai.Agent.run`, and that closure
 ### Natives
 
 650 Rust builtins: 387 callable, 263 not. By package: `baml` 381 of 514, `trace` 6 of 24 (accepted and ignored), `ai` 0 of 16, `reflect` 0 of 94, `testing` 0 of 2. Per module: the table in section 2. Reproduce with `natives.py` over `target/fasttest/build/baml_compiler2_native-*/out/native_table.rs` (newest) and the `skip ... builtin Vm` lines of `census_stdlib.tsv`.
+
+### Second census, at `881e4c1dfc`
+
+The same `census.rs`, unchanged, built at `881e4c1dfc`, over three corpora; "before" is the same program built at `279f25e334`, the commit before two-word values. Compile-only: no corpus program was run. Outputs and the scripts (`analyze.py`, `worse.py`) are in the session scratch directory `scratchpad/uv-impl/census/`.
+
+| corpus | functions checked | inside the subset themselves, before | now | compile with all they reach, before | now |
+|---|---|---|---|---|---|
+| standard library | 1,150 | 678 | 830 | 551 | 691 |
+| `baml_compiler2_native/tests/conformance` (`.baml` files) | 1,559 then, 1,795 now | 1,559 | 1,795 | 1,559 | 1,795 |
+| `baml_tests/baml_src` | 8,611 | 5,552 | 6,161 | 3,678 | 4,073 |
+| of which `$init_test_*` | 507 | 477 | 460 | 0 | 0 |
+
+Standard library: 140 functions newly compile and none that compiled is refused. `baml_src`: 405 newly compile and 10 that compiled are refused, every one for a type test (7 `between instantiations of one class`, 2 `of a literal, on a value of another type or of several`, 1 `of a type no tag and class object decide`). Distinct kinds hit: standard library 45 (54), `baml_src` 82 (91). Counting a function alone, 738 `baml_src` functions moved inside the subset and 129 moved out of it; of those 129, 119 did not compile whole before either, and 103 are now blocked in their own body by a native that is not ported where a function they call was before.
+
+Distinct blocked functions per kind, for every kind whose count changed by 9 or more in `baml_src`, largest change first; then the standard library's counts. A function compiled once has one name where its copies had one each (`f<int, _>`, `f<unknown, _>`), so a falling count is partly fewer names.
+
+| kind | `baml_src` before | now | stdlib before | now |
+|---|---|---|---|---|
+| defaulted argument | 1,329 | 0 | 43 | 0 |
+| type variable value | 778 | 0 | 113 | 0 |
+| media value | 363 | 169 | 16 | 12 |
+| result is a type variable value | 190 | 0 | 40 | 0 |
+| other value (`type`) | 1,564 | 1,377 | 103 | 84 |
+| parameter is a type variable value | 153 | 0 | 10 | 0 |
+| parameter is a class value | 105 | 0 | 28 | 0 |
+| standard library native that is not ported | 1,002 | 1,102 | 86 | 77 |
+| class value | 89 | 0 | 32 | 0 |
+| union value | 227 | 165 | 91 | 57 |
+| list of unsupported elements value | 189 | 134 | 44 | 23 |
+| type test | 438 | 394 | 64 | 55 |
+| function value | 584 | 540 | 21 | 7 |
+| interface method call | 336 | 295 | 13 | 5 |
+| call that does not match its callee's layout | 132 | 94 | 40 | 10 |
+| global read | 190 | 154 | 0 | 0 |
+| call with type arguments | 8 | 44 | 1 | 6 |
+| result is a list of unsupported elements value | 57 | 23 | 17 | 3 |
+| class field that is a type variable value | 34 | 3 | 5 | 0 |
+| parameter is a list of unsupported elements value | 29 | 1 | 13 | 3 |
+| standard library system operation that is not ported | 131 | 108 | 33 | 33 |
+| runtime builtin | 155 | 132 | 64 | 63 |
+| class field that is a function value | 47 | 24 | 19 | 0 |
+| function value that tests a type argument | 0 | 20 | 0 | 1 |
+| result is a other value | 53 | 34 | 5 | 4 |
+| result is a union value | 23 | 6 | 25 | 2 |
+| class field that is a union value | 41 | 24 | 33 | 29 |
+| assignment between different types | 119 | 135 | 0 | 0 |
+| optional scalar or union value | 43 | 28 | 11 | 5 |
+| class field that is a other value | 733 | 719 | 41 | 38 |
+| class field that is a list of unsupported elements value | 31 | 18 | 11 | 8 |
+| parameter is a function value | 11 | 0 | 12 | 0 |
+| await | 43 | 32 | 6 | 4 |
+| closure that tests a type argument | 1 | 11 | 0 | 1 |
+| spawn, result is a never value, never value, compiler intrinsic, null coalescing of a non-optional value | each 9 fewer | | | |
+
+Kinds whose count rose, and why:
+
+- `standard library native that is not ported`, 1,002 to 1,102. Not a native lost: 145 of the new names are blocked by `baml.sys.baml.io.Write$for$WritePipe.write_some`, which was not ported before either. They are functions the checker did not reach or name this way before: 42 were blocked by something else then (`type variable value` 35, `global read` 29), and 103 are the parts of LLM functions (`Extract@build_request` and the like) now checked under one name. No function that compiled is blocked by it.
+- `call with type arguments`, 8 to 44, `function value that tests a type argument`, 0 to 20, `closure that tests a type argument`, 1 to 11: the refusals that replaced `type variable value` where a type argument has to reach code that tests it and cannot (a type no tag and class object decide; a lambda takes no type object). Real gaps, listed under "Generics".
+- `assignment between different types`, 119 to 135 (57 new names, 41 gone; `class to class` 55): follow-on refusals in functions blocked by something else before, most in test lambdas. Not looked at one by one.
+- `call of a value that is not a function` 59 to 67, `generic standard library native` 34 to 40 (`baml.json._to` and `_decode` at a media type), `json of a type with no native form` 0 to 4 (media): functions that were blocked earlier by another kind.
+- In the standard library: `call with type arguments` 1 to 6 (`baml.errors.UnknownError.with_message`, `ai.tools._typed_arguments`, `baml.Array._inlined_map` with a class parameter), `await of the first of several` 3 to 4, and one function each for `function value that tests a type argument`, `closure that tests a type argument`, `field access on a non-class value`, `call of a value that is not a function`.

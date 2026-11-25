@@ -1,6 +1,6 @@
 # Control
 
-Loop polls, the stack check, throw and catch, and how a task's stack is sized. Numbers are instructions retired, measured unless marked estimated; method in `README.md`.
+Loop polls, the stack check, throw and catch, and how a task's stack is sized. Numbers are instructions retired; method in `README.md`. Native totals in "Loop poll" and "Throw and catch" are counted at `881e4c1dfc`; "before" is the layout before two-word values, at `39d3ad4c25`. Everything else here, the single-step trace and every Go and Node number are from `39d3ad4c25` and were not run again.
 
 ## Loop poll
 
@@ -18,7 +18,7 @@ self.builder.ins().brif(requested, slow, &[], resume, &[]);
   cbnz x0, poll_slow          ; cold
 ```
 
-Two instructions, never taken. The empty loop `s = (s ^ i) + 3` is 7.00 instructions per iteration (84,429,491 at 10 M; 434,551,492 at 60 M); 2 are the poll. Go has none and preempts with a signal: 5.00 (69,041,225; 319,479,554).
+Two instructions, never taken. The empty loop `s = (s ^ i) + 3` is 7.00 instructions per iteration (85,726,747 at 10 M; 435,760,649 at 60 M), as before; 2 are the poll. Go has none and preempts with a signal: 5.00 (at `39d3ad4c25`).
 
 Where it is emitted: at the latches of a loop that contains no direct call to a function with an entry stack check (`polled_blocks`). A loop that makes such a call gets no poll, on the grounds that the callee's entry check "asks the same question". Loops whose calls are indirect (interface dispatch, closures), calls to leaf functions and calls to natives keep the poll.
 
@@ -72,25 +72,25 @@ Weak points: the fixed size is both too large (address space and a page per idle
 
 ## Throw and catch
 
-Compiled code throws by calling a stub that never returns to its caller. The stub makes a frame record and calls `unwind::throw`, which returns where to resume; the stub installs `sp`, `fp`, `x0` (error), `x1` (context), `x21` (worker) and branches. No Rust frame is unwound and no register is restored, so nothing is read from the frames in between.
+Compiled code throws by calling a stub that never returns to its caller. A thrown value is two words: the stub is called with `x0` = tag, `x1` = payload (`baml_rt_rethrow` also takes the context in `x2`). It makes a frame record and calls `unwind::throw`, which returns where to resume; the stub installs `sp`, `fp`, `x0` (tag), `x1` (payload), `x21` (worker) and branches. The context (the trace, or a `baml.errors.Context`) does not fit the two registers a landing gets: the unwinder stores it in `worker.scratch` as the last thing it does, and a landing that reads it loads it before anything else. `scratch` is not a root, and nothing allocates between the store and the load. No Rust frame is unwound and no register is restored, so nothing is read from the frames in between.
 
 `src/stubs.rs`:
 
 ```asm
-baml_rt_throw:
+baml_rt_throw:                ; throwing_stub!
   stp  x29, x30, [sp, #-16]!
   mov  x29, sp
-  sub  sp, sp, #48            ; room for a Resume
-  mov  x2, x21 ; mov x3, x29 ; mov x4, sp
+  sub  sp, sp, #48            ; room for a Resume: sp, fp, pc, tag, payload, worker
+  mov  x3, x21 ; mov x4, x29 ; mov x5, sp
   bl   unwind::throw
   ldp  x2, x3, [sp, #0]       ; handler sp, fp
-  ldp  x4, x0, [sp, #16]      ; handler pc, error
-  ldp  x1, x21, [sp, #32]     ; context, worker
+  ldp  x4, x0, [sp, #16]      ; handler pc, tag
+  ldp  x1, x21, [sp, #32]     ; payload, worker
   mov  sp, x2 ; mov x29, x3
   br   x4
 ```
 
-The search walks frame records outward and looks each return address up, by binary search, in a table of call sites that have handlers. Each handler says what it takes (a list of type ids, every error, every panic, `null`), so a handler that would only pass the error on is skipped rather than landed in. `src/unwind.rs`, `unwind`:
+The search walks frame records outward and looks each return address up, by binary search, in a table of call sites that have handlers. Each handler says what it takes (a list, every error, every panic, `null`), so a handler that would only pass the error on is skipped rather than landed in. A list is 64-bit words in the unwind table (version 3), each a tag (`INT`, `STRING`, ...) or the address of a class object: a handler takes a thrown value whose tag is in its list (a slice reads as `STRING`), or which is an instance or an enum variant whose class object is. Whether the value is a panic is bit 62 of the object's header, read only when the tag is a pointer's. `src/unwind.rs`, `unwind`:
 
 ```rust
 'frames: for (pc, fp) in frames(mutator) {
@@ -112,7 +112,7 @@ A stack trace is built only when some handler on the way will read it (it binds 
 The handler table is decoded from the program's data on the first throw (`Unwinder::tables`, a `OnceCell`).
 
 ```baml
-class E { code int }
+class E { code: int }
 function thrower(d: int, x: int) -> int throws E {
   if (d == 0) { throw E { code: x }; }
   return thrower(d - 1, x) + 1;
@@ -130,33 +130,43 @@ The handler, in `main`:
 
 ```asm
   bl   _baml.user.thrower.1   ; a call with an exception edge
-  mov  x4, x2                 ; normal return
-  b    join
-landing:                      ; x0 = error, x1 = context
-  mov  w2, #0
-  cbz  x0, no_match           ; null is not an E
-  ldr  w2, [x0]               ; type id
-  cmp  x2, #400               ; E
-  cset x2, eq
-no_match:
-  cbnz x2, take
-  bl   baml_rt_rethrow        ; not ours: keep going with the same context
+  ...                         ; normal return: the result's payload in x3
+landing:                      ; x0 = tag, x1 = payload. This handler does not read the context
+  sub  w3, w0, #0x7           ; an instance (7) or an enum variant (8)?
+  cmp  w3, #0x1
+  b.ls by_class
+  mov  w3, #0x0               ; anything else is not an E
+  b    tested
+by_class:
+  ldr  x3, [x1, #0x8]         ; its class object
+  ldur x4, [sp, #0x10]        ; E's, kept in a frame slot
+  cmp  x3, x4
+  cset x3, eq
+tested:
+  uxtb w5, w3
+  cbnz x5, take
+  ...                         ; not ours: thrown again
 take:
-  ldr  x4, [x0, #8]           ; e.code
+  add  x7, x1, #0x18
+  ldar x7, [x7]               ; e.code
 ```
+
+`x is E` on a value is the same six instructions wherever it is compiled: a tag test, a load and a pointer compare. The landing also has a dead arm, behind a branch on a constant zero that Cranelift does not fold, which would read the header of address 0; it is never taken.
 
 Cost per iteration, N 100,000 and 600,000:
 
-| frames between throw and catch | native | raw (lo, hi) | Go `panic`/`recover` | raw | Go error return | raw |
-|---|---|---|---|---|---|---|
-| 1 (thrown in the callee) | 249.75 | 39,436,022; 164,313,158 | 3,072.77 | 326,961,923; 1,863,347,778 | 181.23 | 36,264,921; 126,881,014 |
-| 2 | 297.79 | 44,210,987; 193,108,314 | 3,428.42 | 360,019,072; 2,074,233,397 | 194.94 | 37,764,244; 135,235,100 |
-| 12 | 777.67 | 92,230,286; 481,066,068 | 6,334.35 | 646,264,034; 3,813,440,360 | 335.05 | 51,870,081; 219,398,403 |
-| 102 | 5,100.56 | 524,413,760; 3,074,694,809 | 31,855.93 | 3,155,438,712; 19,083,405,465 | 1,604.13 | 178,604,153; 980,673,145 |
+| frames between throw and catch | native | raw (lo, hi) | native, before | Go `panic`/`recover` | Go error return |
+|---|---|---|---|---|---|
+| 1 (thrown in the callee) | 314.42 | 47,155,334; 204,367,125 | 249.75 | 3,072.77 | 181.23 |
+| 2 | 373.47 | 53,233,414; 239,972,030 | 297.79 | 3,428.42 | 194.94 |
+| 12 | 963.99 | 112,308,373; 594,306,193 | 777.67 | 6,334.35 | 335.05 |
+| 102 | 6,277.74 | 643,392,010; 3,782,262,875 | 5,100.56 | 31,855.93 | 1,604.13 |
 
-Per extra frame: native 48, Go panic 285, Go error return 14. Node `try { throw new P(i) } catch` is about 21,500 (22,962,114,278 at 1 M; 130,450,599,868 at 6 M), approximate.
+Go columns are from `39d3ad4c25`. Per extra frame: native 59 (48 before). A throw caught one frame up is 65 more than before. It was not traced, so the split is not known; from the listings, `thrower` allocates a 32-byte `E` in 12 instructions where it took 9, each level of the way down passes and returns two more tag constants, and the landing's type test is a tag test, a load and a compare where it was a load and a compare. The rest is in `unwind`, which now decides by tag and class object.
 
-Single-step trace of one throw caught one frame up, 241 instructions:
+Go panic 285 per extra frame, Go error return 14. Node `try { throw new P(i) } catch` is about 21,500 (22,962,114,278 at 1 M; 130,450,599,868 at 6 M), approximate.
+
+Single-step trace of one throw caught one frame up on the old layout, 241 instructions (not traced again):
 
 | part | instructions |
 |---|---|
@@ -168,7 +178,7 @@ Single-step trace of one throw caught one frame up, 241 instructions:
 
 At 12 frames `unwind` is 604: 39 per frame, each a frame-record load and a binary search that misses. The other 9 per frame are the calls on the way down.
 
-What dominates: the fixed 175 in `unwind` for a table lookup that hits on the first frame. A throw is 12 times cheaper than a Go panic and 1.4 times a Go error return at depth 1, and 3.2 times an error return at depth 102, because each frame costs a search instead of a compare and branch. An obvious improvement is to cache the last handler per throw site.
+What dominates: the fixed 175 in `unwind` for a table lookup that hits on the first frame. A throw is 10 times cheaper than a Go panic and 1.7 times a Go error return at depth 1, and 3.9 times an error return at depth 102 (Go at `39d3ad4c25`), because each frame costs a search instead of a compare and branch. An obvious improvement is to cache the last handler per throw site.
 
 Go equivalents:
 
@@ -191,7 +201,7 @@ func errer(d, x int) (int, error) {
 
 ## Entering a catch region when nothing throws
 
-Nothing is registered at run time: the handler is a row in a static table. But the call inside the region has an exception edge, and a landing arrives with no register restored. Cranelift therefore treats every register as clobbered across that call.
+The numbers in this section are from `39d3ad4c25` and were not measured again. Nothing is registered at run time: the handler is a row in a static table. But the call inside the region has an exception edge, and a landing arrives with no register restored. Cranelift therefore treats every register as clobbered across that call.
 
 ```baml
 s += maybe(0, i) catch (e) { E => e.code & 1 };   // maybe never throws here

@@ -1,6 +1,6 @@
 # Startup and size
 
-What a compiled program costs before its first line runs, and how large it is. Instructions are whole-process `instructions retired` from `/usr/bin/time -l`, best of 7, kernel included; method in `README.md`.
+What a compiled program costs before its first line runs, and how large it is. Instructions are whole-process `instructions retired` from `/usr/bin/time -l`, best of 7, kernel included; method in `README.md`. Everything here is from `39d3ad4c25`, before values were two words, except the rows marked `881e4c1dfc`, which were taken again on a newer macOS where the C floor itself is 0.6 M higher.
 
 ## What runs
 
@@ -35,6 +35,8 @@ function main() -> int { 42 }
 | C `int main(){return 42;}` | 11,073,643 | 16,832 | 1 | 0 |
 | C `printf("42\n")` | 11,368,801 | 33,432 | 1 | 1 |
 | native `main() -> int { 42 }` | 14,514,192 | 573,464 | 2 (libSystem, libiconv) | 66 |
+| C `int main(){return 42;}`, at `881e4c1dfc` | 11,670,648 | 16,840 | 1 | 0 |
+| native `main() -> int { 42 }`, at `881e4c1dfc` | 15,780,398 | 591,896 | 2 (libSystem, libiconv) | 68 |
 | Go `func main() {}` | 16,246,923 | 1,749,218 | 1 | 42 |
 | Go `os.Exit(42)` | 17,927,966 | 2,214,386 | 2 | 57 |
 | Go `fmt.Println(42)` | 18,184,609 | 2,475,682 | 2 | 57 |
@@ -42,7 +44,7 @@ function main() -> int { 42 }
 | native, one `baml.http.fetch` (connection refused) | 29,534,719 | 4,581,864 | 4 (+Security, CoreFoundation) | 153 |
 | Go, `net/http` linked, not called | 34,575,095 | 8,103,042 | 4 | 90 |
 
-The floor on this machine is 11.07 M: `exec`, dyld, and libSystem's initializers for a program that does nothing. The native return-42 is 3.44 M above the floor. Go's empty program is 5.17 M above it.
+The floor on this machine is 11.07 M: `exec`, dyld, and libSystem's initializers for a program that does nothing. The native return-42 is 3.44 M above the floor. Go's empty program is 5.17 M above it. At `881e4c1dfc` the floor is 11.67 M and the native return-42 is 4.11 M above it: 0.67 M more than before, in a binary 18 KB larger with two more imports. The breakdown below was not taken again, so where the 0.67 M goes is not known. The program's data now holds class, package and type objects and 60 words of class object addresses; whether fixing those up at load is part of it was not checked.
 
 Where the 3.44 M goes:
 

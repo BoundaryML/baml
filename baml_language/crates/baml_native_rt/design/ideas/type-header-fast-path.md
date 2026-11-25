@@ -1,6 +1,6 @@
 # Later: the header word as a fast path for types
 
-Status: an idea to come back to, not built and not needed before native has parity with the interpreter. `../memory.md` is the model: every question about a value's type is answered correctly there by following a pointer to its class or type object. This note is about answering the common questions from the header word alone, without the pointer. The bit layout, the kind encoding and the field widths are one candidate, to be chosen by measuring real code (see "Decide by measuring").
+Status: an idea to come back to, not built and not needed before native has parity with the interpreter. `../memory.md` is the model: every question about a value's type is answered correctly there by following a pointer to its class or type object. This note is about answering the common questions from the header word alone, without the pointer. The bit layout, the kind encoding and the field widths are one candidate, to be chosen by measuring real code (see "Decide by measuring"). The header that is built (`../memory.md`, "Values") fixes part of it: bits 0..31 are a dense type id with no shift, one `INSTANCE` id for every class, the collector's bits are 59 and 60, 61 is free, 62 is the panic class and 63 the busy bit, and there is no type table. Where this note still reasons from a per-class id that is a byte offset into a type table, it describes the layout before that.
 
 ## The problem
 
@@ -173,16 +173,19 @@ Candidates to compare:
 
 This is where phases 2 to 4 could end up, not phase 1. Wherever it says "argument list", read "pointer to a type descriptor" in the general case; an inline argument applies only when the argument has an index.
 
-One 64-bit word. The id stays where it is, as a byte offset, so interface dispatch keeps its current sequence (`ldr w0, [obj]; ldr x0, [table, x0]`). Speed wins over having every type bit in one 32-bit word.
+One 64-bit word. The low half and bits 59..63 are as built; what a candidate can still choose is the meaning of the payload.
 
 ```
-bits 0..2    collector (bit 0 forwarded; fixed by the forwarding address)
-bits 3..31   declaration id: byte offset into the type table
+bits 0..31   type id, dense, no shift (as built)
 bits 32..58  payload, meaning set by the kind
-bits 59..61  kind
+bit  59      collector: forwarded. The word is then `address | 1 << 59` (as built)
+bit  60      collector: a mark used only while slices are settled (as built)
+bit  61      free
 bit  62      panic class
 bit  63      busy: set while a slot's two words are being changed (`../memory.md`)
 ```
+
+An earlier draft of this layout had the collector in bits 0..2, the id in bits 3..31 as a byte offset into a type table, and a three-bit kind in 59..61. None of that is built: the kind would now have to come out of the payload, the id, or bit 61, and dispatch reads the method row from the class object, not a table indexed by id.
 
 The busy bit is the sign bit, so testing it is a sign test and taking it is one atomic OR. It is the same bit in a value's tag and in an object's header, since they are one format. The kind sits one bit lower than in earlier drafts to make room, and the payload is 27 bits, not 28.
 

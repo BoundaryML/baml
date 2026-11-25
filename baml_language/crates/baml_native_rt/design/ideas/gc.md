@@ -213,7 +213,7 @@ if !from_space.contains(p) { set_mark(p); return p; }
 for b in blocks { if !marked(b) && b.pins == 0 { unmap(b) } else { clear_mark(b) } }
 ```
 
-The mark is one of the three collector bits already reserved at the bottom of the header. The pin count is in the side table and not in the header, so a Tokio thread never writes to memory the collector reads. `forward` already leaves alone a pointer outside the space being evacuated; what is missing is the mark and the sweep.
+The mark is a header bit: the collector has bits 59 (forwarded) and 60 (used only while a collection settles slices), and bit 61 is free (`../memory.md`, header format). The pin count is in the side table and not in the header, so a Tokio thread never writes to memory the collector reads. `forward` already leaves alone a pointer outside the space being evacuated; what is missing is the mark and the sweep.
 
 ### Threshold
 

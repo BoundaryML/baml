@@ -55,7 +55,7 @@ It does not exercise anything that needs two workers running at once: no data ra
 
 ## What assumes one worker
 
-Each item: where, what it relies on, what it needs.
+Each item: where, what it relies on, what it needs. The `file:line` references are from `39d3ad4c25`; the files have changed since (two-word values) and the lines were not found again.
 
 ### Collector
 
@@ -119,6 +119,7 @@ Each item: where, what it relies on, what it needs.
 
 ## Already written for several workers
 
+- A slot of an object: its two words are read and written under the busy bit of its tag word, by compiled code and by the runtime (`memory.md`, "Values"; `ideas/uniform-values-convention.md`, "The busy bit protocol"). That makes one slot safe and nothing larger: an array's growth, append or removal, a map's insert, delete, growth or compaction and a string's lazy hash still assume one worker, and contention on the bit has only been run by two tests of the runtime, never in compiled code.
 - Task states are atomic and follow a protocol that tolerates a waker racing a parking worker (`rt/sched.rs:14-21`, `146`, `400-424`, `937-956`, `1148-1157`). Future state is an `AtomicUsize`, value written before state (`178-182`, `778-784`); compiled `await` loads it with acquire ordering (`cg/codegen/spawn.rs:218-227`).
 - Spawn runs the child first and the child queues the parent only once the parent's stack is free (`rt/sched.rs:752`, `763-766`). An I/O job starts only after its task is `PARKING` (`1060-1073`).
 - The inbox is thread-safe (`rt/sched.rs:186-204`).

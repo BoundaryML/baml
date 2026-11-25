@@ -1,6 +1,16 @@
 # Uniform values: convention, stack maps and the open items
 
-Status: ruled on (see "Rulings"); being built. The sections after "The busy bit protocol" are the analysis as proposed. It settles on paper the nine open items of the uniform-values handoff, on top of `../memory.md` ("Values", "Tags", "Objects") and `default-arguments.md`.
+Status: built through `52abac7468`, except ruling 11's use of type arguments in objects (below). The as-built description, with emitted code and measured costs, is in `../memory.md`, `../calls.md`, `../natives.md`, `../gc.md`, `../control.md` and `../tasks.md`. The sections after "The busy bit protocol" are the analysis as proposed, kept for the reasoning; its instruction counts are estimates made before building, and the measured ones are in those notes.
+
+Built: rulings 1 to 10 and 12 to 15; of ruling 11, type arguments as raw type-object addresses, a function with type parameters compiled once, and a union of type parameters built and interned when the program runs.
+
+Not built: the words in objects that say their type arguments. An instance's type parameter slots are `(NULL, 0)`, an array's `ty` and a map's `key_ty` and `value_ty` are zero. So `x is Box<int>` on `unknown` or between two instantiations of one class, and `x is int[]`, are refused when compiled ("type test: between instantiations of one class", "between array types"), and so are two different implementations for one class at different type arguments. The first of these was accepted for scalar arguments before this change, when each instantiation had its own type id: of the ten functions of `baml_tests/baml_src` that compiled then and are refused now, seven are refused for this (`../completeness.md`, census). Writing the words in some makers and testing by them would give wrong answers, so none is written. Three questions for the lead stand in the way:
+
+1. Where a closure and a method entered through a row get their type arguments: closure captures of types and `BoundMethodObject.type_args` as `../memory.md` has them, and a method's from its receiver's slots.
+2. What `Self.Item` is at run time: the standard library's adaptor classes make instances such as `Map<Self, Self.Item, U, E>`, whose `Self.Item` is not a type parameter. It needs an associated type looked up on a type object.
+3. Whether every native that makes an array or a map is told the type or copies it: the natives' ABI passes types to seven natives today.
+
+Also open, from building: a store of a pointer whose static type fixes its tag takes the lock and writes both words (an exempt class would make it one atomic store); mutable covariance would put a tag in a slot the exemption for `int`, `float` and `bool` slots assumes never changes; nothing above one slot is safe under several workers (array growth and append, map insert and growth, a string's lazy hash). It settles on paper the nine open items of the uniform-values handoff, on top of `../memory.md` ("Values", "Tags", "Objects") and `default-arguments.md`.
 
 ## Rulings
 

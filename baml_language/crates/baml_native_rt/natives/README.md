@@ -47,12 +47,13 @@ description, by the field's position in the declaration:
 `scope.field_ref::<M>` for a reference, with `Any` for a field that holds
 a union.
 
-A native that implements an interface method (`implements baml.io.Read`
-in the declaration) is listed by the path the build gives it,
-`baml.fs.baml.io.Read$for$File.read`. When it is `async`, takes only
-`int`s and references and returns no `float`, the interface's default
-bodies reach it through the method table, which enters its stub as it
-enters a function of the program.
+A native that implements an interface method (`implements baml.io.Read` in the declaration) is listed by the path the build gives it, `baml.fs.baml.io.Read$for$File.read`. When it is `async`, has no type parameter and takes no parameter the call must name a static type for, the interface's default bodies reach it through the method table: a row holds its stub, which is entered with a tag and a payload for each value as a function of the program is.
+
+## What a native is passed
+
+A parameter whose declared type fixes what the value is (`int`, `float`, `bool`, `string`, `bigint`, `uint8array`, an array, a map, a class, Rust state) is passed as that: the number, or the object's address. Every other parameter (a type parameter's value, a union, an optional, a `json`) is passed as two words, the tag and the payload, which the generated wrapper makes a `Value` of and roots. A native that can throw returns a `Value` whose tag has `THROWN` (`layout.rs`) when it is what was thrown; one that cannot returns its result bare, or a `Value` for a result of the second kind. The mechanism and its cost are in `design/natives.md`.
+
+Only seven natives are passed the types of a call (`TAKES_TYPE_IDS` in `baml_builtins2_codegen/src/native_abi.rs`): the address of a type object for each type parameter, as `types: [TypeRef; N]`. Every other generic native reads what it needs from the tags of the values it holds: `Elem::value` gives both words.
 
 ## What a flag promises
 
@@ -169,7 +170,7 @@ the program if a value does not fit its field or a field that cannot be
 `null` was left unset. `baml.json` writes the instances it decodes with the
 same two functions.
 
-A `Class` is one class at its type arguments, as the program describes it.
+A `Class` is one class as the program describes it, whatever its type arguments: an instance's fields whose type is a type parameter are described as holding any value.
 A native gets one from the type a call names (`scope.class_from`), from an
 object (`scope.class_of`), from the type of a field (`class.field_class`),
 or by position in `layout::NAMED` (`scope.named_class`). A field that holds
@@ -182,39 +183,13 @@ such declaration names ends the program.
 
 ## Comparing two values
 
-`baml.ops.equals_equals` is `==` on the values no instruction compares, and
-`baml._equals_structural_default` is the `eq` of a class that writes none.
-Both are one walk of the two values (`src/native/structural.rs`). A call
-passes the description of each argument's static type, as a call of
-`baml.json` does, and zero for a type `baml.json` has no form for: the walk
-reads a description where it has one, and otherwise the value's header, and
-for an object nothing describes the words the collector follows.
+`baml.ops.equals_equals` is `==` on the values no instruction compares, and `baml._equals_structural_default` is the `eq` of a class that writes none. Both are one walk of the two values (`src/native/structural.rs`). A call passes the type object of each argument's static type, as a call of `baml.json` does, and zero for a type `baml.json` has no form for: the walk reads a description where it has one, and otherwise the value's tag, and for an object nothing describes the slots as their own tags say.
 
-A class with an `eq` of its own is compared by it. The compiler makes an
-entry for each such `eq`, which takes two instances and returns the answer's
-one byte, and lists them in `baml_native_equals`: a count, then the type id
-and the entry of each class, sorted by type id. Only a program that calls
-one of the two natives defines the list, and only they read it. The walk
-calls nothing: it takes such a pair to be equal and hands it out, and the
-native calls the `eq` of each pair once the walk has found nothing else
-unequal.
+A class with an `eq` of its own is compared by it. The compiler makes an entry for each such `eq`, which takes two values and returns the answer as a value (or, with `THROWN` in its tag, what the `eq` threw), and lists them in `baml_native_equals`: a count, then pairs of words sorted by the first, the index of the class (`CLASS_INDEX` of its class object) and the entry. Only a program that calls one of the two natives defines the list, and only they read it. The walk calls nothing: it takes such a pair to be equal and hands it out, and the native calls the `eq` of each pair once the walk has found nothing else unequal.
 
-An enum with an `eq` of its own, and a generic class with one, have no
-entry in the list. `==` on two values of such an enum, where their type is
-known, is compiled as a call of the `eq`. Anywhere else the walk could meet
-one it would compare it by variant or by field, so a program that makes
-values of one and has the runtime compare values is refused when it is
-checked.
+An enum with an `eq` of its own, and a generic class with one, have no entry in the list. `==` on two values of such an enum, where their type is known, is compiled as a call of the `eq`. Anywhere else the walk could meet one it would compare it by variant or by field, so a program that makes values of one and has the runtime compare values is refused when it is checked.
 
-The words of an array of values do not say whether they are `int`s or
-`float`s, and the two compare differently: a NaN equals itself and the two
-zeros are equal. So an array of `float`s says what it is in its header
-(`HEADER_FLOATS`), and so does a map whose values are `float`s. Whoever
-makes one sets it: compiled code in the constant it gives
-`baml_rt_array_new` and by the value type it gives `baml_rt_map_new`, a
-native by the element type it builds with (`reservation.array::<Float>` or
-`reservation.elements`), and `baml.json` by the description it decodes to.
-The walk reads the flag for an array or a map nothing describes.
+An `int` and a `float` compare differently: a NaN equals itself and the two zeros are equal. Every slot says which it holds in its own tag, in an array or a map held as `unknown` too, so the walk needs no flag on the container: there is none.
 
 ## A native the declaration says throws nothing
 

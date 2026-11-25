@@ -1,8 +1,6 @@
 # Defaulted arguments and call layouts
 
-Status: proposed, not built. No TIR or MIR change is needed. It assumes every value is two words, a tag and a payload, in arguments too (`../memory.md`, `type-header-fast-path.md`).
-
-Assembly below is written by hand to show the shape. It is not compiler output, and the register assignment for two-word arguments is not decided (`type-header-fast-path.md`, open item 7); the examples put each argument's tag and payload in consecutive registers from `x2`.
+Status: built, as of `8362bb03c7`, with the differences listed in "As built" at the end. Sections 1 to 8 are the proposal as it was written; its assembly is written by hand to show the shape and is not compiler output. Emitted code is in `../calls.md`.
 
 ## 1. What the frontend gives us
 
@@ -93,8 +91,7 @@ The second is what an indirect call cannot see, so it is fused into the word the
 
 ```asm
 ; x2 = the function value's tag, x3 = its address
-  and  x9, x2, #TYPE_AND_PAYLOAD   ; drop the collector and busy bits
-  cmp  x9, #(CLOSURE | L_SITE << 32)
+  cmp  x2, #(CLOSURE | L_SITE << 32)   ; a tag in a register has no collector or busy bit (they are bits 59..63 of a header)
   b.ne remap                  ; cold: another layout, or another kind of callable
   ...                         ; load the code address, call
 resume:
@@ -172,3 +169,17 @@ Two things would widen this: a standard library function with defaults taken as 
 
 - A type test on a function value (`v is (int) -> int` on an `unknown`). It needs each function's type, with parameter modes, reachable from the value.
 - Removing the VM's run-time mapping.
+
+## As built
+
+- An omitted argument is `(OMITTED, 0)`, tag 4, for every type. A local that may hold one is kept as a pair whatever its type. A captured parameter that may be omitted is a zeroed cell and a one-byte flag beside it, so `OMITTED` is never stored to an object; the collector of a checked build ends the program on one it finds in an object slot or a runtime root.
+- MIR passes a constant default at the call site itself, so `OMITTED` arises only for a default that is not a constant.
+- Direct calls are mapped at compile time (section 3), including calls with fewer operands than parameters.
+- Every indirect site checks, not only the sites section 6 names: the whole-program rule for skipping the check is not built. The check compares the layout field of the tag alone (`lsr #32`, `cmp`), not the whole word as in section 4, so a bound method of the right layout takes the fast path. It is 3 instructions where a remap can follow and 5 where the cold arm is only a trap (`../calls.md`).
+- Layout ids count from 1, so a callable nothing gave a layout fails every check.
+- Remap thunks and method-table thunks are built as sections 4 and 5 describe; a thunk has no name and a traceback has no frame for it. The interface method's layout is taken from the dispatching sites' `argument_layout`. An interface method and a lambda cannot declare a default, so only declared functions and methods have named slots.
+- Code compiled with checks passes the site's layout id after the closure word, and every entry reached through a value ends the program when it is not its own (`CompileOptions::checks`). No committed test makes this assertion, or the collector's `OMITTED` assertion, fire; the entry assertion was made to fire once by hand.
+- The task shim checks its closure against the layout `()` like any indirect site. `scope.call_baml` hooks call a known target whose signature is pinned to one or two required values.
+- Over the conformance programs at `8362bb03c7`: 20 remap thunks in 9 programs, 10 method-table thunks in 2, all in the cases written for them. One standard library function with defaults taken as a value was found by a rough scan (`ai.internal.make_role`), at a type with its own slots.
+
+Not built: a native or an intrinsic taking an omitted operand (`log`'s optional operand among them); a class's own `to_json`, `from_json` or `eq` with extra defaulted parameters (refused when checked); a type test on a function value; removing the VM's run-time mapping; the data table of layout pairs a native that calls closures would need.
