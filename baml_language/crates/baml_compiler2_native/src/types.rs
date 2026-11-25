@@ -487,6 +487,9 @@ pub(crate) struct Body<'a, 'db> {
     narrowed: Vec<Vec<Option<NativeTy<'db>>>>,
     /// Whether any run reaches each block.
     reachable: Vec<bool>,
+    /// The locals that may hold an argument left to its default; see
+    /// [`Self::may_be_omitted`].
+    omitted: Vec<bool>,
     /// The block whose code is being typed, if any is.
     at: Cell<Option<usize>>,
 }
@@ -537,6 +540,7 @@ impl<'a, 'db> Body<'a, 'db> {
             },
             narrowed: Vec::new(),
             reachable: vec![true; body.blocks.len()],
+            omitted: possibly_omitted(body),
             at: Cell::new(None),
         };
         // A local written any other way than by copying has the type it is
@@ -772,6 +776,16 @@ impl<'a, 'db> Body<'a, 'db> {
         self.reachable[block]
     }
 
+    /// Whether `local` may hold an argument left to its default: the body
+    /// asks whether it does, or says that it does. Such a local is a
+    /// parameter with a default, or the local a function inlined here had
+    /// for one. Its value is held with its tag, which alone says whether
+    /// it was omitted; where the local is captured, it is the local's cell
+    /// that is asked.
+    pub(crate) fn may_be_omitted(&self, local: Local) -> bool {
+        self.omitted[local.0]
+    }
+
     /// The type a local of type `type` holds, when it is loaded once.
     pub(crate) fn type_value(&self, operand: &Operand<'db>) -> Option<&'a TyTemplate> {
         match operand {
@@ -791,6 +805,38 @@ impl<'a, 'db> Body<'a, 'db> {
     pub(crate) fn enter(&self, block: usize) {
         self.at.set(Some(block));
     }
+}
+
+/// The local `== const <omitted>` asks about when its left operand is
+/// `operand`: the local itself, or the one whose cell is read.
+fn omission_tested(operand: &Operand<'_>) -> Option<Local> {
+    match operand {
+        Operand::Copy(place) | Operand::Move(place) => match place {
+            Place::Local(local) | Place::Deref(CellId::Local(local)) => Some(*local),
+            _ => None,
+        },
+        Operand::Constant(_) => None,
+    }
+}
+
+/// The locals of `body` that are tested for an omitted argument or
+/// assigned one.
+fn possibly_omitted(body: &MirFunctionBody<'_>) -> Vec<bool> {
+    let mut omitted = vec![false; body.locals.len()];
+    for statement in body.blocks.iter().flat_map(|block| &block.statements) {
+        let StatementKind::Assign { destination, value } = &statement.kind else {
+            continue;
+        };
+        let local = match (destination, value) {
+            (_, Rvalue::BinaryOp { left, right, .. }) if is_omitted(right) => omission_tested(left),
+            (Place::Local(local), Rvalue::Use(operand)) if is_omitted(operand) => Some(*local),
+            _ => None,
+        };
+        if let Some(local) = local {
+            omitted[local.0] = true;
+        }
+    }
+    omitted
 }
 
 /// The type each local of type `type` is loaded with, when it is loaded
@@ -1081,18 +1127,6 @@ pub(crate) fn passed<'a, 'db>(args: &'a [Operand<'db>], has_trace: bool) -> &'a 
 /// Whether `operand` stands for an argument a call leaves to its default.
 pub(crate) fn is_omitted(operand: &Operand<'_>) -> bool {
     matches!(operand, Operand::Constant(Constant::OmittedArg))
-}
-
-/// Whether a parameter of type `ty` can be passed as left to its default:
-/// there is a word no value of the type is. A pair has a tag no value has,
-/// a `bool` a byte that is neither, and a reference an address no object
-/// is at. Every word is an `int` or a `float`.
-pub(crate) fn has_omitted_form(ty: &NativeTy<'_>) -> bool {
-    match ty {
-        NativeTy::Bool => true,
-        NativeTy::Cell(_) => false,
-        other => other.is_traced(),
-    }
 }
 
 /// Whether a value of type `found` can be stored where `expected` is

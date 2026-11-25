@@ -54,11 +54,12 @@ use crate::layout::{
     STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TAG_ARRAY, TAG_ARRAY_STORAGE,
     TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_BYTES_STORAGE, TAG_CELL, TAG_CLASS,
     TAG_CLOSURE, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_FUTURE, TAG_INSTANCE, TAG_INT, TAG_MAP,
-    TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OWNED, TAG_PACKAGE, TAG_PLAIN, TAG_STRING,
-    TAG_STRING_SLICE, TAG_TUPLE, TAG_TYPE, TUPLE_COUNT, TYPE_CLASS, TYPE_ID_MASK, TYPE_SIZE, VALUE,
-    VALUE_PAYLOAD, VARIANT_ENUM, VARIANT_NAME, VARIANT_SIZE, WORD, aligned, bigint_size,
-    bound_size, bytes_storage_size, class_columns, class_size, closure_size, entries_size,
-    index_size, instance_size, is_pointer, plain_size, storage_size, string_size, tag_of,
+    TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OMITTED, TAG_OWNED, TAG_PACKAGE, TAG_PLAIN,
+    TAG_STRING, TAG_STRING_SLICE, TAG_TUPLE, TAG_TYPE, TUPLE_COUNT, TYPE_CLASS, TYPE_ID_MASK,
+    TYPE_SIZE, VALUE, VALUE_PAYLOAD, VARIANT_ENUM, VARIANT_NAME, VARIANT_SIZE, WORD, aligned,
+    bigint_size, bound_size, bytes_storage_size, class_columns, class_size, closure_size,
+    entries_size, index_size, instance_size, is_pointer, plain_size, storage_size, string_size,
+    tag_of,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
@@ -1106,10 +1107,30 @@ impl<'a> Copy<'a> {
     ///
     /// # Safety
     ///
-    /// `slot` is the address of a value: a slot of a live object, of a
-    /// compiled frame or of the runtime's, which stays where it is until
-    /// the collection ends.
+    /// `slot` is the address of a value: a slot of a live object or of the
+    /// runtime's, which stays where it is until the collection ends.
     unsafe fn forward_value(&mut self, slot: usize) {
+        // An argument left to its default is passed and held in a frame
+        // until its default is there, and never stored.
+        #[cfg(checks)]
+        // SAFETY: the caller's contract.
+        if unsafe { load(slot) } == TAG_OMITTED {
+            crate::sched::fatal(&format!(
+                "the slot at {slot:#x} holds an argument left to its default"
+            ));
+        }
+        // SAFETY: the caller's contract.
+        unsafe { self.forward_held(slot) }
+    }
+
+    /// [`Self::forward_value`] for a value compiled code holds in a frame,
+    /// which may be an argument left to its default: not a pointer.
+    ///
+    /// # Safety
+    ///
+    /// `slot` is the address of a value, which stays where it is until
+    /// the collection ends.
+    unsafe fn forward_held(&mut self, slot: usize) {
         // SAFETY: the caller's contract.
         unsafe {
             let tag = load(slot);
@@ -1361,7 +1382,7 @@ impl<'a> Copy<'a> {
                     if entry & STACK_MAP_VALUE == 0 {
                         self.forward_word(sp + entry);
                     } else {
-                        self.forward_value(sp + (entry & !STACK_MAP_VALUE));
+                        self.forward_held(sp + (entry & !STACK_MAP_VALUE));
                     }
                 }
                 if fp >= base {

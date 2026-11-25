@@ -3,10 +3,10 @@
 
 use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BoundFrame, Constant, IntrinsicOp, Local, MirFunction, MirFunctionBody,
-    MirFunctionKind, Operand, OptLevel, Place, RuntimeTy, Rvalue, ShortCircuitKind, StatementKind,
-    SwitchKey, Terminator, TyTemplate, TyTemplateInterface, TypeTest, UnaryOp,
-    function_display_name,
+    AggregateKind, BinOp, BoundFrame, CellId, Constant, IntrinsicOp, Local, MirFunction,
+    MirFunctionBody, MirFunctionKind, Operand, OptLevel, Place, RuntimeTy, Rvalue,
+    ShortCircuitKind, StatementKind, SwitchKey, Terminator, TyTemplate, TyTemplateInterface,
+    TypeTest, UnaryOp, function_display_name,
 };
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
     types::{
         Body, NativeTy, Signature, TypeArg, assignable, binary_typing, class_layout, declared_ty,
         describe, loaded_types, local_ty, narrowed, operand_ty, passed, place_local, place_ty,
-        template_ty, type_argument, unary_typing,
+        storage_ty, template_ty, type_argument, unary_typing,
     },
 };
 
@@ -736,9 +736,9 @@ pub(crate) struct Dispatched<'db> {
     pub(crate) method: String,
     /// The method's own type arguments.
     pub(crate) type_arguments: Vec<TypeArg<'db>>,
-    /// The types of the arguments after the receiver, and of the place the
-    /// result goes.
-    pub(crate) arguments: Vec<NativeTy<'db>>,
+    /// The types of the arguments after the receiver, none for one left
+    /// to its default, and of the place the result goes.
+    pub(crate) arguments: Vec<Option<NativeTy<'db>>>,
     pub(crate) result: NativeTy<'db>,
 }
 
@@ -769,6 +769,27 @@ fn native_call_fits(
     ))
 }
 
+/// Whether `args` can be passed for parameters of the types `params`, one
+/// each: an argument left to its default goes where any parameter is.
+fn arguments_fit<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    body: &Body<'_, 'db>,
+    args: &[Operand<'db>],
+    params: &[NativeTy<'db>],
+) -> Result<bool, Blocker> {
+    if args.len() != params.len() {
+        return Ok(false);
+    }
+    for (argument, expected) in args.iter().zip(params) {
+        if !crate::types::is_omitted(argument)
+            && !assignable(expected, &operand_ty(db, body, argument)?)
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// Whether a call with these value arguments, storing a `result`, matches
 /// the layout of the copy of the function it calls.
 fn call_fits<'db>(
@@ -778,34 +799,10 @@ fn call_fits<'db>(
     args: &[Operand<'db>],
     result: &NativeTy<'db>,
 ) -> Result<(), Blocker> {
-    // An argument left to its default has whatever type its parameter has.
-    let found = args
-        .iter()
-        .map(|argument| {
-            if crate::types::is_omitted(argument) {
-                Ok(None)
-            } else {
-                operand_ty(db, body, argument).map(Some)
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?;
     // A callee outside the subset is reported as its own blocked function;
     // only a callee that will be compiled constrains the call.
     if let Ok(expected) = function_signature(db, key) {
-        if expected
-            .params
-            .iter()
-            .zip(&found)
-            .any(|(expected, found)| found.is_none() && !crate::types::has_omitted_form(expected))
-        {
-            return Err(Blocker::new("defaulted argument", "of an int or float"));
-        }
-        let fits = expected.params.len() == found.len()
-            && expected.params.iter().zip(&found).all(|(expected, found)| {
-                found
-                    .as_ref()
-                    .is_none_or(|found| assignable(expected, found))
-            })
+        let fits = arguments_fit(db, body, args, &expected.params)?
             && assignable(result, &expected.result);
         if !fits {
             return Err(Blocker::new(
@@ -1078,7 +1075,13 @@ impl<'db> Checker<'_, 'db> {
                     let arguments = args
                         .iter()
                         .skip(*ntypeargs + 1)
-                        .map(|argument| operand_ty(self.db, body, argument))
+                        .map(|argument| {
+                            if crate::types::is_omitted(argument) {
+                                Ok(None)
+                            } else {
+                                operand_ty(self.db, body, argument).map(Some)
+                            }
+                        })
                         .collect::<Result<Vec<_>, _>>();
                     let result =
                         place_local(destination).and_then(|local| local_ty(self.db, body, local));
@@ -1203,12 +1206,20 @@ pub(crate) fn rvalue_ty<'db>(
             left,
             right,
         } if crate::types::is_omitted(right) => {
-            match operand_ty(db, body, left)? {
-                ty if crate::types::has_omitted_form(&ty) => Ok(NativeTy::Bool),
-                // Every word is an `int` or a `float`, so every call passes
-                // one: a call that would leave it out is refused.
-                NativeTy::Int | NativeTy::Float => Ok(NativeTy::Bool),
-                _ => Err(Blocker::new("defaulted argument", "of an optional scalar")),
+            // The tag the local arrived with says, whatever its type. A
+            // captured local is asked through its cell.
+            let (local, through_cell) = match left {
+                Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+                    (*local, false)
+                }
+                Operand::Copy(Place::Deref(CellId::Local(local)))
+                | Operand::Move(Place::Deref(CellId::Local(local))) => (*local, true),
+                _ => return Err(Blocker::new("defaulted argument", "tested outside a local")),
+            };
+            if matches!(storage_ty(db, body, local)?, NativeTy::Cell(_)) == through_cell {
+                Ok(NativeTy::Bool)
+            } else {
+                Err(Blocker::new("defaulted argument", "tested outside a local"))
             }
         }
         Rvalue::BinaryOp { op, left, right } => {
@@ -1423,6 +1434,17 @@ fn statement_supported<'db>(
             destination,
             value: Rvalue::LoadType(_),
         } if is_type_value(body, destination) => Ok(()),
+        // A local an inlined function had for a parameter with a default,
+        // at a call that left it out.
+        StatementKind::Assign {
+            destination,
+            value: Rvalue::Use(operand),
+        } if crate::types::is_omitted(operand) => match destination {
+            Place::Local(local) if !matches!(storage_ty(db, body, *local)?, NativeTy::Cell(_)) => {
+                Ok(())
+            }
+            _ => Err(Blocker::new("defaulted argument", "stored outside a local")),
+        },
         StatementKind::Assign { destination, value } => {
             let destination = place_ty(db, body, destination)?;
             let value = rvalue_ty(db, body, loops, value, &destination)?;
@@ -1738,7 +1760,7 @@ fn terminator_supported<'db>(
                     if *ntypeargs != 0 {
                         return Err(Blocker::new("call with type arguments", "function value"));
                     }
-                    let fits = expected.params.len() == args.len()
+                    let fits = arguments_fit(db, body, args, &expected.params)?
                         && assignable(&result, &expected.result);
                     if !fits {
                         return Err(Blocker::new(
@@ -1746,13 +1768,7 @@ fn terminator_supported<'db>(
                             "function value",
                         ));
                     }
-                    all_assignable(
-                        db,
-                        body,
-                        args,
-                        |index| expected.params.get(index).cloned(),
-                        "argument",
-                    )
+                    Ok(())
                 }
                 Callee::Intrinsic(Intrinsic::TraceOptions) => {
                     if only_attached(db, body, place_local(destination)?, 0) {
@@ -1929,6 +1945,7 @@ fn terminator_supported<'db>(
                 // program is known.
                 Virtual::Dynamic(..) => args
                     .iter()
+                    .filter(|argument| !crate::types::is_omitted(argument))
                     .try_for_each(|argument| operand_ty(db, body, argument).map(drop)),
             }
         }

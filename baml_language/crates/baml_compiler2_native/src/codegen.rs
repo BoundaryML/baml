@@ -1314,6 +1314,15 @@ fn entry_shim(
     Ok(())
 }
 
+/// A captured parameter between its arrival and the making of its cell.
+enum Waiting {
+    /// Its value, in a variable unless it is `null`.
+    Value(Option<Variable>),
+    /// The pair the call passed, which may be the tag of an argument left
+    /// to its default.
+    Argument(Variable),
+}
+
 /// Translates one MIR function body into the Cranelift function it borrows.
 struct Translator<'a, 'db> {
     db: &'db dyn baml_compiler2_mir::Db,
@@ -1332,6 +1341,14 @@ struct Translator<'a, 'db> {
     /// local and for a local of a type outside the subset, which a checked
     /// body never reads or writes.
     variables: Vec<Option<Variable>>,
+    /// The locals of a type held as one word whose variable holds a pair
+    /// all the same: one that may be an argument left to its default,
+    /// which only its tag says.
+    tagged: Vec<bool>,
+    /// For each captured parameter that may be left to its default,
+    /// whether it was and nothing has been stored in its cell since. The
+    /// cell itself never holds what the call passed for it.
+    omitted_cells: HashMap<Local, Variable>,
     blocks: Vec<ir::Block>,
     function_refs: HashMap<FuncId, ir::FuncRef>,
     data_refs: HashMap<DataId, ir::GlobalValue>,
@@ -1375,8 +1392,19 @@ impl<'a, 'db> Translator<'a, 'db> {
         builder_context: &'a mut FunctionBuilderContext,
     ) -> Self {
         let mut builder = FunctionBuilder::new(function, builder_context);
+        let mut tagged = vec![false; body.locals.len()];
         let variables = (0..body.locals.len())
             .map(|index| match storage_ty(db, body, Local(index)) {
+                Ok(ty)
+                    if body.may_be_omitted(Local(index))
+                        && !ty.is_pair()
+                        && !matches!(ty, NativeTy::Cell(_)) =>
+                {
+                    tagged[index] = true;
+                    let variable = builder.declare_var(PAIR);
+                    builder.declare_var_needs_stack_map(variable);
+                    Some(variable)
+                }
                 Ok(NativeTy::Null) | Err(_) => None,
                 Ok(ty) => {
                     let variable = builder.declare_var(clif_type(&ty));
@@ -1423,6 +1451,8 @@ impl<'a, 'db> Translator<'a, 'db> {
             closure,
             type_args: Vec::new(),
             variables,
+            tagged,
+            omitted_cells: HashMap::new(),
             blocks,
             function_refs: HashMap::new(),
             data_refs: HashMap::new(),
@@ -1476,6 +1506,20 @@ impl<'a, 'db> Translator<'a, 'db> {
                 // Every argument arrives as its tag and its payload.
                 let tag = arriving.next().expect("a tag per argument");
                 let payload = arriving.next().expect("a payload per argument");
+                if self.body.may_be_omitted(local) {
+                    // Kept as it arrived: the tag says whether the call
+                    // left it out, and then the payload is nothing.
+                    let arrived = self.pair(tag, payload);
+                    if matches!(ty, NativeTy::Cell(_)) {
+                        let waiting = self.builder.declare_var(PAIR);
+                        self.builder.declare_var_needs_stack_map(waiting);
+                        self.builder.def_var(waiting, arrived);
+                        captured.push((local, content.clone(), Waiting::Argument(waiting)));
+                    } else if let Some(variable) = self.variables[local.0] {
+                        self.builder.def_var(variable, arrived);
+                    }
+                    continue;
+                }
                 of_slot_words(&mut self.builder, content, tag, payload)
             };
             if let NativeTy::Cell(content) = &ty {
@@ -1485,9 +1529,9 @@ impl<'a, 'db> Translator<'a, 'db> {
                         self.builder.declare_var_needs_stack_map(waiting);
                     }
                     self.builder.def_var(waiting, value);
-                    captured.push((local, (**content).clone(), Some(waiting)));
+                    captured.push((local, (**content).clone(), Waiting::Value(Some(waiting))));
                 } else {
-                    captured.push((local, NativeTy::Null, None));
+                    captured.push((local, NativeTy::Null, Waiting::Value(None)));
                 }
             } else {
                 self.write_local(local, value);
@@ -1497,8 +1541,13 @@ impl<'a, 'db> Translator<'a, 'db> {
             self.check_stack()?;
         }
         for (local, content, waiting) in captured {
-            let value = waiting.map(|waiting| self.builder.use_var(waiting));
-            let cell = self.new_cell(&content, value)?;
+            let cell = match waiting {
+                Waiting::Value(waiting) => {
+                    let value = waiting.map(|waiting| self.builder.use_var(waiting));
+                    self.new_cell(&content, value)?
+                }
+                Waiting::Argument(waiting) => self.cell_of_argument(local, &content, waiting)?,
+            };
             self.write_local(local, cell);
         }
         let first = self.block(self.body.entry);
@@ -1648,41 +1697,11 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
     }
 
-    /// What a parameter of type `ty` is passed as when the call leaves it
-    /// to its default: a word no value of the type is. The callee tests
-    /// for it first, and puts the default in its place.
-    fn omitted(&mut self, ty: &NativeTy<'db>) -> ir::Value {
-        match ty {
-            // No value has this tag.
-            _ if ty.is_pair() => {
-                let tag = self.word_const(layout::TAG_OMITTED);
-                let nothing = self.word_const(0);
-                self.pair(tag, nothing)
-            }
-            // Neither `false` nor `true`.
-            NativeTy::Bool => self.builder.ins().iconst(types::I8, 2),
-            // No object is at this address, and it is not `null`. The
-            // collector leaves what is outside the heap alone.
-            _ => self.builder.ins().iconst(WORD, 8),
-        }
-    }
-
-    /// The two words a call passes for a parameter of type `ty` it leaves
-    /// to its default: the tag no value has, and as the payload what the
-    /// callee reads as [`Self::omitted`].
-    fn omitted_words(
-        &mut self,
-        ty: &NativeTy<'db>,
-    ) -> Result<(ir::Value, ir::Value), CompileError> {
-        let payload = match ty {
-            _ if ty.is_pair() => self.word_const(0),
-            _ if crate::types::has_omitted_form(ty) => {
-                let omitted = self.omitted(ty);
-                payload_of(&mut self.builder, omitted, ty)
-            }
-            _ => return Err(internal("a checked call omits what has an omitted form")),
-        };
-        Ok((self.word_const(layout::TAG_OMITTED), payload))
+    /// The two words a call passes for a parameter it leaves to its
+    /// default, whatever the parameter's type: the tag no value has, and a
+    /// payload nothing reads.
+    fn omitted_words(&mut self) -> (ir::Value, ir::Value) {
+        (self.word_const(layout::TAG_OMITTED), self.word_const(0))
     }
 
     /// The words a call passes for `args`, the arguments of parameters of
@@ -1708,25 +1727,11 @@ impl<'a, 'db> Translator<'a, 'db> {
         for (value, ty) in values.into_iter().zip(params) {
             let (tag, payload) = match value {
                 Some(value) => slot_words(&mut self.builder, ty, value),
-                None => self.omitted_words(ty)?,
+                None => self.omitted_words(),
             };
             words.extend([tag, payload]);
         }
         Ok(words)
-    }
-
-    /// Whether `value`, of type `ty`, is what a parameter left to its
-    /// default is passed as.
-    fn is_omitted(&mut self, value: ir::Value, ty: &NativeTy<'db>) -> ir::Value {
-        if ty.is_pair() {
-            let (tag, _) = self.builder.ins().isplit(value);
-            return self
-                .builder
-                .ins()
-                .icmp_imm(IntCC::Equal, tag, imm(layout::TAG_OMITTED));
-        }
-        let omitted = self.omitted(ty);
-        self.builder.ins().icmp(IntCC::Equal, value, omitted)
     }
 
     /// Change the representation of `value` from `from` to `to`, which it is
@@ -2172,15 +2177,75 @@ impl<'a, 'db> Translator<'a, 'db> {
     }
 
     fn read_local(&mut self, local: Local) -> ir::Value {
-        match self.variables[local.0] {
-            Some(variable) => self.builder.use_var(variable),
-            None => self.null(),
+        let Some(variable) = self.variables[local.0] else {
+            return self.null();
+        };
+        let held = self.builder.use_var(variable);
+        if self.tagged[local.0] {
+            let ty = self.storage_ty(local);
+            of_pair(&mut self.builder, &ty, held)
+        } else {
+            held
         }
     }
 
     fn write_local(&mut self, local: Local, value: ir::Value) {
-        if let Some(variable) = self.variables[local.0] {
-            self.builder.def_var(variable, value);
+        let Some(variable) = self.variables[local.0] else {
+            return;
+        };
+        let held = if self.tagged[local.0] {
+            let ty = self.storage_ty(local);
+            let (tag, payload) = slot_words(&mut self.builder, &ty, value);
+            self.pair(tag, payload)
+        } else {
+            value
+        };
+        self.builder.def_var(variable, held);
+    }
+
+    /// The variable of a local that may hold an argument left to its
+    /// default, which holds a pair whatever the local's type: the value
+    /// with its tag, or the tag no value has.
+    fn omissible(&self, local: Local) -> Option<Variable> {
+        let held_so = self.tagged[local.0] || self.storage_ty(local).is_pair();
+        self.variables[local.0].filter(|_| self.body.may_be_omitted(local) && held_so)
+    }
+
+    /// `operand` as a local that may be an omitted argument holds it, when
+    /// it is the omitted argument itself or such a local.
+    fn held_omissible(&mut self, operand: &Operand<'db>) -> Option<ir::Value> {
+        if crate::types::is_omitted(operand) {
+            let (tag, payload) = self.omitted_words();
+            return Some(self.pair(tag, payload));
+        }
+        let variable = self.omissible(operand_local(operand)?)?;
+        Some(self.builder.use_var(variable))
+    }
+
+    /// Whether `left`, a local or what a local's cell holds, is an
+    /// argument the call left to its default.
+    fn is_omitted(&mut self, left: &Operand<'db>) -> Result<ir::Value, CompileError> {
+        let (Operand::Copy(place) | Operand::Move(place)) = left else {
+            return Err(internal("a checked test for a default is of a local"));
+        };
+        match place {
+            Place::Local(local) => {
+                let variable = self
+                    .omissible(*local)
+                    .ok_or_else(|| internal("a local tested for a default keeps its tag"))?;
+                let held = self.builder.use_var(variable);
+                let (tag, _) = self.builder.ins().isplit(held);
+                Ok(self
+                    .builder
+                    .ins()
+                    .icmp_imm(IntCC::Equal, tag, imm(layout::TAG_OMITTED)))
+            }
+            // Only a parameter's cell is ever made for an argument.
+            Place::Deref(CellId::Local(local)) => Ok(match self.omitted_cells.get(local) {
+                Some(omitted) => self.builder.use_var(*omitted),
+                None => self.bool_const(false),
+            }),
+            _ => Err(internal("a checked test for a default is of a local")),
         }
     }
 
@@ -2611,6 +2676,47 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(cell)
     }
 
+    /// A new cell for the captured parameter `local`, whose content is of
+    /// type `content` and may have been left to its default: `waiting`
+    /// holds the argument as it arrived. An omitted argument is no value,
+    /// and no slot of the heap holds one: the cell gets the zero of its
+    /// type in its place, and a variable keeps whether it was omitted for
+    /// the test that puts the default there.
+    fn cell_of_argument(
+        &mut self,
+        local: Local,
+        content: &NativeTy<'db>,
+        waiting: Variable,
+    ) -> Result<ir::Value, CompileError> {
+        let arrived = self.builder.use_var(waiting);
+        let (tag, _) = self.builder.ins().isplit(arrived);
+        let was_omitted = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::Equal, tag, imm(layout::TAG_OMITTED));
+        let omitted = self.builder.declare_var(types::I8);
+        self.builder.def_var(omitted, was_omitted);
+        self.omitted_cells.insert(local, omitted);
+
+        let cell = self.allocate(layout::CELL_SIZE)?;
+        let header = self.word_const(layout::TAG_CELL);
+        self.builder.ins().store(slot_access(), header, cell, 0);
+        // Read again: the allocation may have moved what it refers to.
+        let arrived = self.builder.use_var(waiting);
+        let (tag, payload) = self.builder.ins().isplit(arrived);
+        // A slot declared `int`, `float` or `bool` keeps that tag.
+        let zero_tag = self.word_const(immediate_tag(content).unwrap_or(layout::TAG_NULL));
+        let zero = self.word_const(0);
+        let tag = self.builder.ins().select(was_omitted, zero_tag, tag);
+        let payload = self.builder.ins().select(was_omitted, zero, payload);
+        for (word, at) in [(tag, layout::VALUE_TAG), (payload, layout::VALUE_PAYLOAD)] {
+            self.builder
+                .ins()
+                .store(slot_access(), word, cell, offset(layout::CELL_VALUE + at));
+        }
+        Ok(cell)
+    }
+
     /// A new closure over the cells `captured`, each with its type, entered
     /// at `code`: the function value, a pair.
     fn closure(
@@ -2733,8 +2839,15 @@ impl<'a, 'db> Translator<'a, 'db> {
             Place::Capture(_) => return Err(internal("a capture is never assigned")),
             Place::Deref(cell) => {
                 let ty = self.place_ty(place)?;
-                let cell = self.cell(*cell)?;
-                self.slot_store(&ty, value, cell, layout::CELL_VALUE);
+                let at = self.cell(*cell)?;
+                self.slot_store(&ty, value, at, layout::CELL_VALUE);
+                // Whatever the cell was made for, it holds a value now.
+                if let CellId::Local(local) = cell
+                    && let Some(omitted) = self.omitted_cells.get(local).copied()
+                {
+                    let stored = self.bool_const(false);
+                    self.builder.def_var(omitted, stored);
+                }
             }
         }
         Ok(())
@@ -2787,9 +2900,6 @@ impl<'a, 'db> Translator<'a, 'db> {
         operand: &Operand<'db>,
         expected: &NativeTy<'db>,
     ) -> Result<ir::Value, CompileError> {
-        if crate::types::is_omitted(operand) {
-            return Ok(self.omitted(expected));
-        }
         // A union kept as one goes where a union is expected as it is,
         // whatever the block knows it holds.
         if expected.holds_any()
@@ -2816,6 +2926,17 @@ impl<'a, 'db> Translator<'a, 'db> {
                 value: Rvalue::LoadType(_),
                 ..
             } => Ok(()),
+            // A local that may be an argument left to its default takes
+            // one, or another such local, as it is held: with its tag.
+            StatementKind::Assign {
+                destination: Place::Local(local),
+                value: Rvalue::Use(operand),
+            } if let Some(variable) = self.omissible(*local)
+                && let Some(held) = self.held_omissible(operand) =>
+            {
+                self.builder.def_var(variable, held);
+                Ok(())
+            }
             StatementKind::Assign { destination, value } => {
                 let expected = self.place_ty(destination)?;
                 if let Rvalue::Use(operand) = value
@@ -3439,16 +3560,10 @@ impl<'a, 'db> Translator<'a, 'db> {
         left: &Operand<'db>,
         right: &Operand<'db>,
     ) -> Result<ir::Value, CompileError> {
-        let left_ty = self.operand_ty(left)?;
         if crate::types::is_omitted(right) {
-            // Whether a parameter was left to its default. An `int` or a
-            // `float` never is: no checked call omits one.
-            if matches!(left_ty, NativeTy::Int | NativeTy::Float) {
-                return Ok(self.bool_const(false));
-            }
-            let held = self.operand(left)?;
-            return Ok(self.is_omitted(held, &left_ty));
+            return self.is_omitted(left);
         }
+        let left_ty = self.operand_ty(left)?;
         let right_ty = self.operand_ty(right)?;
         let (mode, _) = binary_typing(op, &left_ty, &right_ty).map_err(internal)?;
         let left_value = self.operand(left)?;

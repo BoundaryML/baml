@@ -1,5 +1,5 @@
-// Parameters left to their defaults. An `int` or a `float` has no word that
-// says "omitted", so a call passes the default itself.
+// Parameters left to their defaults. A default that is a constant number
+// is passed by the call itself; any other is put there by the callee.
 
 function default_steps(n: int, by: int = 3, plus: float = 0.5, tag: string = "t") -> float {
   if (n <= 0) {
@@ -32,4 +32,100 @@ function default_negative() -> float { default_below(count(2)) + default_below(c
 function default_of_a_method() -> float {
   let counter = DefaultCounter { base: count(3) };
   counter.bump(count(2)) + counter.bump(count(2), scale = 0.5)
+}
+
+// Every parameter is passed as a tag and a payload, and one left to its
+// default has the tag no value has: so a default is of any type, and the
+// callee puts it there, on every call that leaves the parameter out.
+enum DefaultShade {
+  Light
+  Dark
+}
+class DefaultBox { size: int }
+
+function default_kinds(n: int, i: int = count(7), f: float = halves(3), b: bool = true, s: string = "dflt", e: DefaultShade = DefaultShade.Dark, c: DefaultBox = DefaultBox { size: 3 }, o: int? = null, u: int | string = "u", xs: int[] = [1, 2]) -> string {
+  let pad = rep("-", n);
+  let last = match (u) {
+    let k: int => `int ${k}`,
+    let t: string => `string ${t}`,
+  };
+  `${pad}${i} ${f} ${b} ${s} ${e} ${c.size} ${o ?? -1} ${last} ${xs.length()}`
+}
+function default_of_every_kind() -> string {
+  default_kinds(count(1))
+    + default_kinds(count(2), i = count(3), b = false, e = DefaultShade.Light, o = count(4), xs = [count(5)])
+    + default_kinds(count(3), f = halves(3), s = rep("s", 2), c = DefaultBox { size: count(9) }, u = count(6))
+}
+
+// Named arguments in another order than declared, and every subset of
+// three.
+function default_three(n: int, x: int = 1, y: string = "y", z: float = 0.5) -> string {
+  let pad = rep(".", n);
+  `${pad}${x}${y}${z};`
+}
+function default_every_subset() -> string {
+  default_three(count(1))
+    + default_three(count(1), x = count(2))
+    + default_three(count(1), y = rep("b", 2))
+    + default_three(count(1), z = halves(3))
+    + default_three(count(1), y = rep("c", 1), x = count(3))
+    + default_three(count(1), z = halves(5), x = count(4))
+    + default_three(count(1), z = halves(7), y = rep("d", 3))
+    + default_three(count(1), z = halves(9), y = rep("e", 2), x = count(5))
+}
+
+// A default that is a call runs in the callee, once for each call that
+// leaves the parameter out, after the defaults before it, and may read a
+// parameter before it.
+function default_note(log: string[], what: string) -> int {
+  log.push(what);
+  log.length()
+}
+function default_calls(log: string[], a: int = default_note(log, "a"), b: int = default_note(log, "b") + a, c: string = rep("c", a + b)) -> string {
+  let pad = rep("+", log.length());
+  `${pad}${a} ${b} ${c}|`
+}
+function default_that_is_a_call() -> string {
+  let log: string[] = [];
+  let out = default_calls(log)
+    + default_calls(log, b = count(10))
+    + default_calls(log, a = count(1), c = "given")
+    + default_calls(log, a = count(2), b = count(3), c = rep("g", 2));
+  let noted = "";
+  for (let what in log) { noted = noted + what; };
+  out + noted
+}
+
+// A parameter a closure captures lives in a cell, which never holds an
+// argument that was left out.
+function default_captured(
+  n: int,
+  by: int = count(10),
+  tag: string = "t",
+  scale: float = halves(4),
+) -> () -> string throws never {
+  let pad = rep("c", n);
+  () -> string { `${pad}${by} ${tag} ${scale}` }
+}
+function default_of_a_captured_parameter() -> string {
+  default_captured(count(1))() + default_captured(count(2), by = count(3))() + default_captured(count(1), scale = halves(1), tag = rep("u", 2))()
+}
+
+// A default that collects while the parameters after it are still left
+// out.
+function default_churns(
+  n: int,
+  a: string = rep("a", default_churn(40)),
+  b: DefaultBox = DefaultBox { size: a.length() },
+  c: string = rep("c", b.size),
+) -> string {
+  `${n} ${a.length()} ${b.size} ${c.length()}`
+}
+function default_churn(n: int) -> int {
+  let total = 0;
+  for (let i = 0; i < n; i += 1) { total += rep("x", i % 7 + 20).length() - 19 - i % 7; };
+  total
+}
+function default_collects_before_later_defaults() -> string {
+  default_churns(count(1)) + "|" + default_churns(count(2), b = DefaultBox { size: count(5) })
 }

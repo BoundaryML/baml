@@ -536,14 +536,16 @@ fn lay_out_methods<'db>(
             let Some(slot) = program.slots.iter().find(|slot| slot.slot == call.slot) else {
                 continue;
             };
-            let fits = slot.signature.params.len() == call.arguments.len()
-                && slot
-                    .signature
-                    .params
-                    .iter()
-                    .zip(&call.arguments)
-                    .all(|(expected, found)| assignable(expected, found))
-                && assignable(&call.result, &slot.signature.result);
+            let fits =
+                slot.signature.params.len() == call.arguments.len()
+                    && slot.signature.params.iter().zip(&call.arguments).all(
+                        |(expected, found)| {
+                            found
+                                .as_ref()
+                                .is_none_or(|found| assignable(expected, found))
+                        },
+                    )
+                    && assignable(&call.result, &slot.signature.result);
             if !fits {
                 function.blockers.push(Blocker::new(
                     "call that does not match its callee's layout",
