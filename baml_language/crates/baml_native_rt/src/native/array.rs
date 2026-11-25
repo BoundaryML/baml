@@ -5,13 +5,13 @@
 //! its own is one too.
 
 use super::{
-    Arr, ArrRef, Elem, NativeBamlArray, Natives, Root, Scope, Slot, Str, StrRef, Thrown, View,
-    array_size, string::text_size,
+    Arr, ArrRef, Elem, NativeBamlArray, Natives, Root, Scope, Slot, Str, StrRef, Thrown, TypeRef,
+    View, array_size, string::text_size,
 };
 use crate::{
     array::FIRST_CAPACITY,
     heap::{Value, load, store},
-    layout::{ARRAY_LENGTH, STRING_TAGS_END, TAG_BOOL, TAG_FLOAT, TAG_INT},
+    layout::{ARRAY_LENGTH, STRING_TAGS_END, TAG_BOOL, TAG_FLOAT, TAG_INT, TYPE_TAG},
     string::{INT_DIGITS, float_text, int_digits},
 };
 
@@ -218,11 +218,23 @@ impl NativeBamlArray for Natives {
         })
     }
 
-    /// An array as long as `array`, every element `null`: the caller sets
-    /// each before it reads any.
-    fn _results<'s>(scope: &mut Scope<'s>, array: Root<'s, Arr<Slot>>) -> Root<'s, Arr<Slot>> {
+    /// An array as long as `array` for elements of the second type the
+    /// call names: the caller sets each before it reads any. An `int`, a
+    /// `float` or a `bool` is zero, so that each slot has the tag compiled
+    /// code leaves there when it stores such an element by its payload
+    /// alone; anything else is `null`.
+    fn _results<'s>(
+        scope: &mut Scope<'s>,
+        types: [TypeRef; 2],
+        array: Root<'s, Arr<Slot>>,
+    ) -> Root<'s, Arr<Slot>> {
         let length = array.get(scope).len();
-        scope.alloc_array::<Slot>(length)
+        // SAFETY: a call names each type by its type object.
+        let zero = match unsafe { load(types[1].0 + TYPE_TAG) } {
+            tag @ (TAG_INT | TAG_FLOAT | TAG_BOOL) => Value::immediate(tag, 0),
+            _ => Value::NULL,
+        };
+        build(scope, length, |_, _| zero)
     }
 
     fn filled<'s>(scope: &mut Scope<'s>, length: i64, value: Elem<'s>) -> Root<'s, Arr<Slot>> {

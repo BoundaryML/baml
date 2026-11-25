@@ -20,7 +20,7 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 
 use super::{
     Backend, PAIR, Runtime, TRAP_AFTER_PANIC, Translator, WORD, closure_access, imm, internal,
-    offset, slot_access, unwind,
+    of_slot_words, offset, slot_access, unwind,
 };
 use crate::{
     CompileError, layout,
@@ -239,7 +239,22 @@ impl<'db> Translator<'_, 'db> {
 
         self.builder.switch_to_block(load);
         // What the task's closure returned: a value, whatever its type.
-        let value = self.pair_load(&value_ty, future, layout::FUTURE_VALUE);
+        // Plain loads: the value was written before the state that said
+        // it is there, and nothing writes it again.
+        let tag = self.builder.ins().load(
+            WORD,
+            slot_access(),
+            future,
+            offset(layout::FUTURE_VALUE + layout::VALUE_TAG),
+        );
+        let payload = self.builder.ins().load(
+            WORD,
+            slot_access(),
+            future,
+            offset(layout::FUTURE_VALUE + layout::VALUE_PAYLOAD),
+        );
+        let value = of_slot_words(&mut self.builder, &value_ty, tag, payload);
+        let value = self.track(value, &value_ty);
         let value = self.coerce(value, &value_ty, &expected);
         self.write_local(destination, value);
         let target = self.block(target);

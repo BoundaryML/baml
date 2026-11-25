@@ -90,7 +90,8 @@ pub fn read_native_lists(dir: &Path) -> Result<Vec<NativeListEntry>, String> {
 /// builtin, class parameters first, the address of the type object of its
 /// argument. Every other native reads what it needs of a type from the
 /// tags of the values it is passed.
-const TAKES_TYPE_IDS: [&str; 6] = [
+const TAKES_TYPE_IDS: [&str; 7] = [
+    "baml.Array._results",
     "baml._rust_sort",
     "baml._is_primitive_array",
     "baml._to_json_default",

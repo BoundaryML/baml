@@ -37,25 +37,28 @@
 //! own text. The exception is a string whose slices would together take as
 //! much room as it does, which is kept for them to share.
 
-use std::alloc::{Layout, alloc, dealloc};
+use std::{
+    alloc::{Layout, alloc, dealloc},
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use crate::layout::{
     ARRAY_PTR, ARRAY_SIZE, BIGINT_LIMB_COUNT, BOUND_RECEIVER, BOUND_TYPE_ARG_COUNT, BYTES_PTR,
     BYTES_SIZE, BYTES_STORAGE_CAPACITY, CALLABLE_TAG_MASK, CELL_SIZE, CELL_VALUE, CLASS_KIND,
     CLASS_KIND_ENUM, CLASS_KIND_MASK, CLASS_NAME, CLASS_PACKAGE, CLASS_SLOT_COUNT, CLASS_VARIANTS,
     CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_KEY,
-    ENTRY_SIZE, ENTRY_VALUE, FUTURE_SIZE, FUTURE_TRACE, FUTURE_VALUE, INDEX_SLOT_COUNT,
-    INSTANCE_CLASS, INSTANCE_SLOTS, MAP_ENTRIES, MAP_INDEX, MAP_SIZE, OWNED_KIND, OWNED_SIZE,
-    OWNED_VALUE, PACKAGE_NAME, PACKAGE_SIZE, PLAIN_WORDS, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE,
-    STACK_MAP_VALUE, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TAG_ARRAY,
-    TAG_ARRAY_STORAGE, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_BYTES_STORAGE,
-    TAG_CELL, TAG_CLASS, TAG_CLOSURE, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_FUTURE, TAG_INSTANCE,
-    TAG_INT, TAG_MAP, TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OWNED, TAG_PACKAGE, TAG_PLAIN,
-    TAG_STRING, TAG_STRING_SLICE, TAG_TUPLE, TAG_TYPE, TUPLE_COUNT, TYPE_CLASS, TYPE_ID_MASK,
-    TYPE_SIZE, VALUE, VALUE_PAYLOAD, VARIANT_ENUM, VARIANT_NAME, VARIANT_SIZE, WORD, aligned,
-    bigint_size, bound_size, bytes_storage_size, class_columns, class_size, closure_size,
-    entries_size, index_size, instance_size, is_callable, is_pointer, plain_size, storage_size,
-    string_size,
+    ENTRY_SIZE, ENTRY_VALUE, FUTURE_SIZE, FUTURE_TRACE, FUTURE_VALUE, HEADER_BUSY,
+    INDEX_SLOT_COUNT, INSTANCE_CLASS, INSTANCE_SLOTS, MAP_ENTRIES, MAP_INDEX, MAP_SIZE, OWNED_KIND,
+    OWNED_SIZE, OWNED_VALUE, PACKAGE_NAME, PACKAGE_SIZE, PLAIN_WORDS, SLICE_OFFSET, SLICE_PARENT,
+    SLICE_SIZE, STACK_MAP_VALUE, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT,
+    TAG_ARRAY, TAG_ARRAY_STORAGE, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES,
+    TAG_BYTES_STORAGE, TAG_CELL, TAG_CLASS, TAG_CLOSURE, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_FUTURE,
+    TAG_INSTANCE, TAG_INT, TAG_MAP, TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OWNED,
+    TAG_PACKAGE, TAG_PLAIN, TAG_STRING, TAG_STRING_SLICE, TAG_TUPLE, TAG_TYPE, TUPLE_COUNT,
+    TYPE_CLASS, TYPE_ID_MASK, TYPE_SIZE, VALUE, VALUE_PAYLOAD, VARIANT_ENUM, VARIANT_NAME,
+    VARIANT_SIZE, WORD, aligned, bigint_size, bound_size, bytes_storage_size, class_columns,
+    class_size, closure_size, entries_size, index_size, instance_size, is_callable, is_pointer,
+    plain_size, storage_size, string_size,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
@@ -145,8 +148,13 @@ pub unsafe fn store(address: usize, value: usize) {
 /// `bool` are their bits, `null` is all zero, and anything else is the
 /// address of an object whose header has the tag's type id.
 ///
-/// [`Self::load`] and [`Self::store`] are the only code of the runtime that
-/// reads or writes a slot of an object another worker may reach.
+/// Bit 63 of the tag word in memory is the slot's busy bit: whoever reads
+/// or writes the tag holds it while it touches the payload. [`Self::load`],
+/// [`Self::store`] and [`Self::payload_at`] are the only code of the
+/// runtime that reads or writes a slot of an object another worker may
+/// reach, and a tag one of them returns never has the bit. The collector
+/// runs with every worker stopped outside those three, and reads and
+/// writes slots as plain words.
 #[repr(C, align(16))]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Value {
@@ -262,9 +270,10 @@ impl Value {
         self.payload
     }
 
-    /// Write the slot at `slot` of an object nothing else can reach yet:
-    /// one being laid out, or a future's value, which nothing reads before
-    /// the future's state says it is there.
+    /// Write the slot at `slot` of an object no other worker can reach
+    /// yet: one being laid out, whose address is stored nowhere, or a
+    /// future's value, which nothing reads before the future's state says
+    /// it is there. Two plain stores.
     ///
     /// # Safety
     ///
@@ -275,25 +284,95 @@ impl Value {
         unsafe { *(slot as *mut Self) = value }
     }
 
-    /// Read the slot at `slot`.
+    /// Read the slot at `slot`, which no worker writes or locks any more:
+    /// the value of a future whose state has been seen settled. Two plain
+    /// loads.
+    ///
+    /// # Safety
+    ///
+    /// `slot` is the address of such a slot.
+    pub unsafe fn unshared(slot: usize) -> Self {
+        // SAFETY: the caller's contract.
+        unsafe { *(slot as *const Self) }
+    }
+
+    /// The two words of the slot at `slot` as the atomics other workers
+    /// read and write them through.
+    ///
+    /// # Safety
+    ///
+    /// `slot` is the address of a slot that stays where it is while the
+    /// result is used.
+    unsafe fn words<'a>(slot: usize) -> (&'a AtomicUsize, &'a AtomicUsize) {
+        // SAFETY: the caller's contract. A slot is two aligned words, and
+        // an atomic word has the layout of a word.
+        unsafe {
+            (
+                &*(slot as *const AtomicUsize),
+                &*((slot + VALUE_PAYLOAD) as *const AtomicUsize),
+            )
+        }
+    }
+
+    /// Take the busy bit of the header `tag`, waiting while another worker
+    /// holds it, and return the header as it was, the bit clear. Whoever
+    /// holds the bit is the only one that reads or writes the slot's two
+    /// words, and gives it up by storing a header. Nothing between the two
+    /// may allocate, poll or call into compiled code: the collector expects
+    /// the bit clear on every slot.
+    fn lock(tag: &AtomicUsize) -> usize {
+        loop {
+            let old = tag.fetch_or(HEADER_BUSY, Ordering::SeqCst);
+            if old & HEADER_BUSY == 0 {
+                return old;
+            }
+            std::hint::spin_loop();
+        }
+    }
+
+    /// Read the slot at `slot`, both words, under the busy bit: the pair
+    /// some store wrote whole. This writes the header, so the slot is in
+    /// writable memory.
     ///
     /// # Safety
     ///
     /// `slot` is the address of a slot of a live object.
     pub unsafe fn load(slot: usize) -> Self {
         // SAFETY: the caller's contract.
-        unsafe { *(slot as *const Self) }
+        let (tag, payload) = unsafe { Self::words(slot) };
+        let old = Self::lock(tag);
+        let payload = payload.load(Ordering::SeqCst);
+        tag.store(old, Ordering::SeqCst);
+        Self { tag: old, payload }
     }
 
-    /// Write the slot at `slot`, both words.
+    /// Write the slot at `slot`, both words, under the busy bit.
     ///
     /// # Safety
     ///
-    /// `slot` is the address of a slot of a live object, and `value` a
-    /// value the slot may hold.
+    /// `slot` is the address of a slot of a live object that has been
+    /// given a value before, if only the `null` of zeroed memory: memory
+    /// never written can have the bit set, and this would wait for it.
+    /// `value` is a value the slot may hold.
     pub unsafe fn store(slot: usize, value: Self) {
+        debug_assert_eq!(value.tag & HEADER_BUSY, 0);
         // SAFETY: the caller's contract.
-        unsafe { *(slot as *mut Self) = value }
+        let (tag, payload) = unsafe { Self::words(slot) };
+        Self::lock(tag);
+        payload.store(value.payload, Ordering::SeqCst);
+        tag.store(value.tag, Ordering::SeqCst);
+    }
+
+    /// The payload of the slot at `slot`, for a reader that knows the
+    /// slot's type id without its header: one atomic load. Whichever store
+    /// it follows, the word is a payload of that type.
+    ///
+    /// # Safety
+    ///
+    /// `slot` is the address of a slot of a live object.
+    pub unsafe fn payload_at(slot: usize) -> usize {
+        // SAFETY: the caller's contract.
+        unsafe { Self::words(slot) }.1.load(Ordering::SeqCst)
     }
 }
 
@@ -1048,7 +1127,7 @@ impl<'a> Copy<'a> {
     /// As [`Self::forward_value`].
     #[cfg(checks)]
     unsafe fn check(&self, slot: usize, tag: usize) {
-        if tag & crate::layout::HEADER_BUSY != 0 {
+        if tag & HEADER_BUSY != 0 {
             crate::sched::fatal(&format!(
                 "the slot at {slot:#x} is busy at a collection: its tag is {tag:#x}"
             ));
@@ -1465,8 +1544,8 @@ mod tests {
         // SAFETY: `link` is a fresh instance of two slots, and `head` was
         // kept current across the allocation.
         unsafe {
-            Value::store(link + field_offset(0), Value::int(value));
-            Value::store(link + field_offset(1), Value::reference(*head));
+            Value::init(link + field_offset(0), Value::int(value));
+            Value::init(link + field_offset(1), Value::reference(*head));
         }
         *head = link;
     }
@@ -1510,8 +1589,8 @@ mod tests {
         let mut flagged = new_link(&mut mutator, HEADER_PANIC);
         // SAFETY: `flagged` is a fresh instance of two slots.
         unsafe {
-            Value::store(flagged + field_offset(0), Value::int(7));
-            Value::store(flagged + field_offset(1), Value::NULL);
+            Value::init(flagged + field_offset(0), Value::int(7));
+            Value::init(flagged + field_offset(1), Value::NULL);
         }
         mutator.root(&mut flagged);
         let before = flagged;
@@ -1626,8 +1705,8 @@ mod tests {
             let link = |mutator: &mut Mutator, value: i64, next: &dyn Fn() -> usize| {
                 let link = mutator.allocate_object(TAG_INSTANCE, instance_size(2));
                 store(link + INSTANCE_CLASS, get(CLASS));
-                Value::store(link + field_offset(0), Value::int(value));
-                Value::store(link + field_offset(1), Value::reference(next()));
+                Value::init(link + field_offset(0), Value::int(value));
+                Value::init(link + field_offset(1), Value::reference(next()));
                 link
             };
             let late = link(&mut mutator, 3, &|| table.read());
@@ -1808,7 +1887,7 @@ mod tests {
             for cell in &mut cells {
                 *cell = mutator.allocate_object(TAG_CELL, CELL_SIZE);
                 // SAFETY: a fresh cell, and `part` was kept current.
-                unsafe { Value::store(*cell + CELL_VALUE, Value::reference(part)) };
+                unsafe { Value::init(*cell + CELL_VALUE, Value::reference(part)) };
                 mutator.root(cell);
             }
             mutator.unroot(4);
@@ -2328,5 +2407,120 @@ mod tests {
         assert_eq!(dropped + mutator.owned(), drops.len());
         mutator.drop_owned();
         assert!(drops.iter().all(|counter| *counter == 1));
+    }
+
+    /// A slot several threads read and write: two atomic words have the
+    /// layout of a value.
+    #[repr(C, align(16))]
+    struct SharedSlot([AtomicUsize; 2]);
+
+    impl SharedSlot {
+        fn new(value: Value) -> Self {
+            Self([AtomicUsize::new(value.tag), AtomicUsize::new(value.payload)])
+        }
+
+        fn address(&self) -> usize {
+            std::ptr::from_ref(self) as usize
+        }
+    }
+
+    /// How many times each thread of the tests below reads or writes the
+    /// slot: enough that they meet on it.
+    const CONTENDED_ROUNDS: usize = 200_000;
+
+    #[test]
+    fn a_slot_several_threads_store_and_load_is_never_torn() {
+        // The two low bits of a payload say which tag it was stored with.
+        let int = |round: usize| Value {
+            tag: TAG_INT,
+            payload: round * 4 + 1,
+        };
+        let float = |round: usize| Value {
+            tag: TAG_FLOAT,
+            payload: round * 4 + 2,
+        };
+        let is_whole = |value: Value| match value.tag {
+            TAG_NULL => value.payload == 0,
+            TAG_INT => value.payload & 3 == 1,
+            TAG_FLOAT => value.payload & 3 == 2,
+            _ => false,
+        };
+        let slot = SharedSlot::new(Value::NULL);
+        let (slot, start) = (slot.address(), std::sync::Barrier::new(6));
+        let start = &start;
+        let writers: [&(dyn Fn(usize) -> Value + Sync); 3] = [&int, &float, &|_| Value::NULL];
+        std::thread::scope(|threads| {
+            for value in writers {
+                threads.spawn(move || {
+                    start.wait();
+                    for round in 0..CONTENDED_ROUNDS {
+                        // SAFETY: the slot outlives the scope.
+                        unsafe { Value::store(slot, value(round)) };
+                    }
+                });
+            }
+            for _ in 0..3 {
+                threads.spawn(move || {
+                    start.wait();
+                    for _ in 0..CONTENDED_ROUNDS {
+                        // SAFETY: as above.
+                        let read = unsafe { Value::load(slot) };
+                        assert!(is_whole(read), "a torn or busy value: {read:x?}");
+                    }
+                });
+            }
+        });
+        // SAFETY: every thread is done.
+        assert!(is_whole(unsafe { Value::unshared(slot) }));
+    }
+
+    #[test]
+    fn an_int_slot_takes_payload_stores_beside_locked_ones() {
+        let slot = SharedSlot::new(Value::int(0));
+        let payload = &slot.0[1];
+        let (slot, start) = (slot.address(), std::sync::Barrier::new(6));
+        let start = &start;
+        std::thread::scope(|threads| {
+            // What compiled code does to a slot declared `int`: one store
+            // of the payload, and one load of it.
+            for odd in 0..2 {
+                threads.spawn(move || {
+                    start.wait();
+                    for round in 0..CONTENDED_ROUNDS {
+                        payload.store(round * 4 + 1 + 2 * odd, Ordering::SeqCst);
+                        // SAFETY: the slot outlives the scope.
+                        let read = unsafe { Value::payload_at(slot) };
+                        assert!(read < CONTENDED_ROUNDS * 4);
+                    }
+                });
+            }
+            // What code that does not know the slot's type does: the
+            // locked store, which gives the header back as it was, and
+            // the locked load.
+            for _ in 0..2 {
+                threads.spawn(move || {
+                    start.wait();
+                    for round in 0..CONTENDED_ROUNDS {
+                        let even = Value {
+                            tag: TAG_INT,
+                            payload: round * 4,
+                        };
+                        // SAFETY: as above.
+                        unsafe { Value::store(slot, even) };
+                    }
+                });
+                threads.spawn(move || {
+                    start.wait();
+                    for _ in 0..CONTENDED_ROUNDS {
+                        // SAFETY: as above.
+                        let read = unsafe { Value::load(slot) };
+                        assert_eq!(read.tag, TAG_INT, "a busy or changed header");
+                        assert!(read.payload < CONTENDED_ROUNDS * 4);
+                    }
+                });
+            }
+        });
+        // SAFETY: every thread is done.
+        assert_eq!(unsafe { Value::unshared(slot) }.tag, TAG_INT);
     }
 }

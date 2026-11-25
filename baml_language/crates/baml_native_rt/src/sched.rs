@@ -921,7 +921,7 @@ pub(crate) fn report_unhandled(worker: &Mutator) -> bool {
             crate::unwind::report(
                 worker,
                 "unhandled spawned task failed: ",
-                Value::load(future + FUTURE_VALUE),
+                Value::unshared(future + FUTURE_VALUE),
                 load(future + FUTURE_TRACE),
             );
         }
@@ -1023,7 +1023,7 @@ pub unsafe extern "C" fn baml_rt_await_error(worker: &mut Mutator, future: usize
             store(future + FUTURE_TASK, 0);
             worker.sched.release(task);
         }
-        Value::load(future + FUTURE_VALUE)
+        Value::unshared(future + FUTURE_VALUE)
     }
 }
 
@@ -1394,7 +1394,7 @@ pub(crate) mod tests {
             EVENTS
                 .lock()
                 .expect("no test panicked")
-                .push(1 + Value::load(future + FUTURE_VALUE).payload);
+                .push(1 + Value::unshared(future + FUTURE_VALUE).payload);
         }
     }
 

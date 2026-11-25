@@ -39,7 +39,8 @@ use baml_compiler2_mir::{
 use cranelift_codegen::{
     Context,
     ir::{
-        self, AbiParam, AliasRegion, InstBuilder, MemFlags, StackSlotData, StackSlotKind, TrapCode,
+        self, AbiParam, AliasRegion, AtomicRmwOp, InstBuilder, MemFlags, StackSlotData,
+        StackSlotKind, TrapCode,
         condcodes::{FloatCC, IntCC},
         types,
     },
@@ -153,6 +154,12 @@ fn imm(bytes: usize) -> i64 {
 /// elements of arrays; ...
 fn slot_access() -> MemFlags {
     MemFlags::trusted().with_alias_region(Some(AliasRegion::Heap))
+}
+
+/// The words of a slot other workers may reach are read and written with
+/// atomic instructions, each sequentially consistent.
+fn slot_atomic() -> MemFlags {
+    MemFlags::trusted()
 }
 
 /// ... the length and storage of an array, the capacity of its storage and
@@ -2109,7 +2116,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             .ins()
             .store(slot_access(), count, object, offset(layout::TUPLE_COUNT));
         for (slot, (ty, value)) in elements.iter().zip(values).enumerate() {
-            self.slot_store(ty, value, object, layout::field_offset(slot));
+            self.slot_init(ty, value, object, layout::field_offset(slot));
         }
         Ok(object)
     }
@@ -2148,59 +2155,116 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.pair(tag, pointer)
     }
 
-    /// The two words of the slot at `base + bytes`.
-    fn load_words(&mut self, base: ir::Value, bytes: usize) -> (ir::Value, ir::Value) {
-        (
-            self.builder
-                .ins()
-                .load(WORD, slot_access(), base, offset(bytes + layout::VALUE_TAG)),
-            self.builder.ins().load(
-                WORD,
-                slot_access(),
-                base,
-                offset(bytes + layout::VALUE_PAYLOAD),
-            ),
-        )
+    /// The address of the slot at `base + bytes`: of its tag word.
+    fn slot_address(&mut self, base: ir::Value, bytes: usize) -> ir::Value {
+        if bytes == 0 {
+            base
+        } else {
+            self.builder.ins().iadd_imm(base, imm(bytes))
+        }
+    }
+
+    /// Take the busy bit of the slot whose tag word is at `slot`, and
+    /// return the tag as it was, the bit clear. One atomic or sets the bit
+    /// and says whether another worker had it, in which case nothing
+    /// changed and the or is tried again. From here to the store of a tag
+    /// that gives the bit up, [`Self::slot_store_words`] and
+    /// [`Self::slot_load_words`] emit no call, so no collection sees the
+    /// bit.
+    fn slot_lock(&mut self, slot: ir::Value) -> ir::Value {
+        const _: () = assert!(layout::HEADER_BUSY == 1 << 63);
+        let busy = self.builder.ins().iconst(WORD, i64::MIN);
+        let acquire = self.builder.create_block();
+        let held = self.builder.create_block();
+        self.builder.ins().jump(acquire, &[]);
+        self.builder.switch_to_block(acquire);
+        let old = self
+            .builder
+            .ins()
+            .atomic_rmw(WORD, slot_atomic(), AtomicRmwOp::Or, slot, busy);
+        let taken = self.builder.ins().band(old, busy);
+        self.builder.ins().brif(taken, acquire, &[], held, &[]);
+        self.builder.seal_block(acquire);
+        self.builder.seal_block(held);
+        self.builder.switch_to_block(held);
+        old
+    }
+
+    /// The two words of the slot at `base + bytes`, read under its busy
+    /// bit: a pair some store wrote whole. The tag is stored back as it
+    /// was, which gives the bit up.
+    fn slot_load_words(&mut self, base: ir::Value, bytes: usize) -> (ir::Value, ir::Value) {
+        let slot = self.slot_address(base, bytes);
+        let tag = self.slot_lock(slot);
+        let at = self.slot_address(slot, layout::VALUE_PAYLOAD);
+        let payload = self.builder.ins().atomic_load(WORD, slot_atomic(), at);
+        self.builder.ins().atomic_store(slot_atomic(), tag, slot);
+        (tag, payload)
     }
 
     /// Load the value of type `ty` that the slot at `base + bytes` holds.
-    /// With [`Self::slot_store`], the only code that reads or writes a slot
-    /// of the heap: a field, an element, a map's value, a cell, a capture,
-    /// a future's value.
+    /// With [`Self::slot_store`] and [`Self::slot_init`], the only code
+    /// that reads or writes a slot of the heap: a field, an element, a
+    /// map's value, a cell, a capture.
+    ///
+    /// A pair is read under the slot's busy bit. A type held as one word
+    /// fixes the slot's type id, so only the payload is read, with one
+    /// atomic load: whichever store it follows, the word is a payload of
+    /// that type.
     fn slot_load(&mut self, ty: &NativeTy<'db>, base: ir::Value, bytes: usize) -> ir::Value {
         if *ty == NativeTy::Null {
             return self.null();
         }
         let value = if ty.is_pair() {
-            let (tag, payload) = self.load_words(base, bytes);
+            let (tag, payload) = self.slot_load_words(base, bytes);
             self.pair(tag, payload)
         } else {
-            self.builder.ins().load(
-                clif_type(ty),
-                slot_access(),
-                base,
-                offset(bytes + layout::VALUE_PAYLOAD),
-            )
+            let at = self.slot_address(base, bytes + layout::VALUE_PAYLOAD);
+            let payload = self.builder.ins().atomic_load(WORD, slot_atomic(), at);
+            of_payload(&mut self.builder, payload, ty)
         };
         self.track(value, ty)
     }
 
-    /// Store `value`, of type `ty`, in the slot at `base + bytes`: both
-    /// words.
+    /// Store `value`, of type `ty`, in the slot at `base + bytes`, which
+    /// other workers may reach.
+    ///
+    /// A slot declared exactly `int`, `float` or `bool` got its tag when it
+    /// was made and keeps it, so the store is one atomic store of the
+    /// payload. Any other store writes both words under the busy bit.
     fn slot_store(&mut self, ty: &NativeTy<'db>, value: ir::Value, base: ir::Value, bytes: usize) {
+        if matches!(ty, NativeTy::Int | NativeTy::Float | NativeTy::Bool) {
+            let payload = payload_of(&mut self.builder, value, ty);
+            let at = self.slot_address(base, bytes + layout::VALUE_PAYLOAD);
+            self.builder.ins().atomic_store(slot_atomic(), payload, at);
+            return;
+        }
         let words = slot_words(&mut self.builder, ty, value);
-        self.slot_store_words(ty, words, base, bytes);
+        self.slot_store_words(words, base, bytes);
     }
 
-    /// Store the two words [`slot_words`] gave for a value of type `ty` in
-    /// the slot at `base + bytes`.
+    /// Store the two words [`slot_words`] gave for a value in the slot at
+    /// `base + bytes` under its busy bit: the payload, then the tag, which
+    /// gives the bit up.
     fn slot_store_words(
         &mut self,
-        _ty: &NativeTy<'db>,
         (tag, payload): (ir::Value, ir::Value),
         base: ir::Value,
         bytes: usize,
     ) {
+        let slot = self.slot_address(base, bytes);
+        self.slot_lock(slot);
+        let at = self.slot_address(slot, layout::VALUE_PAYLOAD);
+        self.builder.ins().atomic_store(slot_atomic(), payload, at);
+        self.builder.ins().atomic_store(slot_atomic(), tag, slot);
+    }
+
+    /// Give the slot at `base + bytes` its first value, `value`, of type
+    /// `ty`: both words, with plain stores. Only for a slot of an object
+    /// made here whose address has been stored nowhere yet, so that no
+    /// other worker can reach it.
+    fn slot_init(&mut self, ty: &NativeTy<'db>, value: ir::Value, base: ir::Value, bytes: usize) {
+        let (tag, payload) = slot_words(&mut self.builder, ty, value);
         self.builder
             .ins()
             .store(slot_access(), tag, base, offset(bytes + layout::VALUE_TAG));
@@ -2215,9 +2279,9 @@ impl<'a, 'db> Translator<'a, 'db> {
     /// Load the value of type `ty` from the slot at `base + bytes`, which
     /// holds it as a pair whatever its type: what wrote the slot knew the
     /// value by another type than what reads it. A bound method's
-    /// receiver and a future's value are held so.
+    /// receiver is held so.
     fn pair_load(&mut self, ty: &NativeTy<'db>, base: ir::Value, bytes: usize) -> ir::Value {
-        let (tag, payload) = self.load_words(base, bytes);
+        let (tag, payload) = self.slot_load_words(base, bytes);
         let value = of_slot_words(&mut self.builder, ty, tag, payload);
         self.track(value, ty)
     }
@@ -2482,10 +2546,16 @@ impl<'a, 'db> Translator<'a, 'db> {
         let header = self.word_const(layout::TAG_CELL);
         self.builder.ins().store(slot_access(), header, cell, 0);
         match value {
-            Some(value) => self.slot_store(content, value, cell, layout::CELL_VALUE),
+            Some(value) => self.slot_init(content, value, cell, layout::CELL_VALUE),
+            // A slot declared `int`, `float` or `bool` is later stored to
+            // by its payload alone, so it has that tag from the start.
+            None if immediate_tag(content).is_some() => {
+                let zero = self.zero(content);
+                self.slot_init(content, zero, cell, layout::CELL_VALUE);
+            }
             None => {
                 let null = self.null();
-                self.slot_store(&NativeTy::Null, null, cell, layout::CELL_VALUE);
+                self.slot_init(&NativeTy::Null, null, cell, layout::CELL_VALUE);
             }
         }
         Ok(cell)
@@ -2501,7 +2571,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         let closure = self.allocate(layout::closure_size(captured.len()))?;
         let tag = self.callable(closure, layout::TAG_CLOSURE, code, captured.len());
         for (index, (value, ty)) in captured.iter().enumerate() {
-            self.slot_store(
+            self.slot_init(
                 ty,
                 *value,
                 closure,
@@ -2524,8 +2594,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         // change the type id of what it refers to.
         let bound = self.allocate(layout::bound_size(0))?;
         let tag = self.callable(bound, layout::TAG_BOUND_METHOD, code, 0);
-        let words = slot_words(&mut self.builder, ty, receiver);
-        self.slot_store_words(ty, words, bound, layout::BOUND_RECEIVER);
+        self.slot_init(ty, receiver, bound, layout::BOUND_RECEIVER);
         Ok(self.pair(tag, bound))
     }
 
@@ -3187,10 +3256,10 @@ impl<'a, 'db> Translator<'a, 'db> {
         // The slots of the type parameters hold nothing yet.
         let null = self.null();
         for slot in 0..generics {
-            self.slot_store(&NativeTy::Null, null, object, layout::field_offset(slot));
+            self.slot_init(&NativeTy::Null, null, object, layout::field_offset(slot));
         }
         for (slot, (ty, value)) in layout.iter().zip(values).enumerate() {
-            self.slot_store(ty, value, object, layout::field_offset(generics + slot));
+            self.slot_init(ty, value, object, layout::field_offset(generics + slot));
         }
         Ok(object)
     }
@@ -3216,7 +3285,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                     .ins()
                     .load(WORD, array_access(), array, offset(layout::ARRAY_PTR));
             for (index, value) in values.into_iter().enumerate() {
-                self.slot_store(
+                self.slot_init(
                     element,
                     value,
                     storage,
@@ -3272,7 +3341,9 @@ impl<'a, 'db> Translator<'a, 'db> {
             .ins()
             .ishl_imm(length, Self::element_shift(false));
         let slot = self.builder.ins().iadd(storage, scaled);
-        self.slot_store_words(element, item, slot, layout::STORAGE_ELEMENTS);
+        // Both words under the busy bit, whatever the element type: the
+        // slot past the length has no tag of that type yet.
+        self.slot_store_words(item, slot, layout::STORAGE_ELEMENTS);
         self.builder.ins().store(
             array_access(),
             new_length,

@@ -36,7 +36,7 @@ use crate::{
         INDEX_SLOT_COUNT, INDEX_SLOTS, MAP_ENTRIES, MAP_EPOCH, MAP_INDEX, MAP_KEY_TY, MAP_LEN,
         MAP_MASK, MAP_SIZE, MAP_USED, MAP_VALUE_TY, SMALL_ENTRIES, STRING_HASH_MASK,
         STRING_LENGTHS, STRING_TAGS_END, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_MAP, TAG_MAP_ENTRIES,
-        TAG_MAP_INDEX, TAG_STRING, TYPE_ID_MASK, VALUE_PAYLOAD, VARIANT_INDEX, WORD, entries_size,
+        TAG_MAP_INDEX, TAG_STRING, TYPE_ID_MASK, VARIANT_INDEX, WORD, entries_size,
     },
     string,
 };
@@ -405,7 +405,7 @@ unsafe fn used(map: usize) -> (usize, usize) {
 unsafe fn same_key(kind: KeyKind, at: usize, key: usize) -> bool {
     // SAFETY: a record whose hash matched holds a key.
     unsafe {
-        let kept = load(at + ENTRY_KEY + VALUE_PAYLOAD);
+        let kept = Value::payload_at(at + ENTRY_KEY);
         kept == key
             || (kind == KeyKind::Str
                 && load(kept + STRING_LENGTHS) == load(key + STRING_LENGTHS)
@@ -904,6 +904,9 @@ unsafe extern "C" fn find_str_slow(map: usize, key: usize, _hash: u32) -> usize 
 // record is two slots, so record `n` is at `16 + 32 * n` of the entries
 // and the hashes of entries with no index are at `16 + 32 * 8`.
 // `baml_rt_map_find_int(map, key)`: the same for a key that is its bits.
+// A probe reads of a record only the payload of its key, whose type id the
+// kind of the map fixes: one atomic load (`ldar`), no busy bit. What it
+// returns is a slot's address, which the caller reads or writes as a slot.
 // `baml_rt_str_hash(string)`: computes a string's hash, caches it in its
 // header and returns it.
 #[cfg(target_arch = "aarch64")]
@@ -938,7 +941,8 @@ core::arch::global_asm!(
     // Compare the key of the record whose value is at x9: the same
     // object, or the same lengths and then the same words of text.
     "6:",
-    "ldur  x10, [x9, #-8]",
+    "sub   x10, x9, #8",
+    "ldar  x10, [x10]",
     "cmp   x10, x1",
     "b.eq  20f",
     "ldr   x11, [x10, #8]",
@@ -1037,7 +1041,8 @@ core::arch::global_asm!(
     "34:",
     "lsr   x9, x8, #32",
     "add   x9, x3, x9, lsl #5",
-    "ldur  x10, [x9, #-8]",
+    "sub   x10, x9, #8",
+    "ldar  x10, [x10]",
     "cmp   x10, x1",
     "b.ne  33b",
     "mov   x0, x9",
@@ -1055,7 +1060,8 @@ core::arch::global_asm!(
     "rbit  x9, x8",
     "clz   x12, x9",
     "add   x9, x3, x12, lsl #2",
-    "ldr   x10, [x9, #24]",
+    "add   x10, x9, #24",
+    "ldar  x10, [x10]",
     "cmp   x10, x1",
     "b.eq  38f",
     "mov   x11, #0xff",

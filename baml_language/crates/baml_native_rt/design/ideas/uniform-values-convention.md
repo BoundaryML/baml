@@ -34,7 +34,7 @@ Write, of `(tag, payload)` to a slot whose header may change:
 ```
 retry:
   old = atomic_or(slot.header, BUSY)     ; SeqCst. arm64 with LSE: ldsetal
-  if old & BUSY: spin hint; goto retry   ; someone else holds it; the or changed nothing
+  if old & BUSY: spin hint; goto retry   ; someone else holds it; the or changed nothing (compiled code: no hint)
   atomic_store(slot.payload, payload)    ; SeqCst
   atomic_store(slot.header, tag)         ; SeqCst, bit clear: this is the release
 ```
@@ -61,11 +61,39 @@ Exempt slots, and why:
 - Frames and registers. A spilled pair in a stack slot belongs to one worker.
 - The collector. The world is stopped at safepoints and no protocol sequence contains one, so no slot has the bit set while it runs. It reads and writes slots with plain loads and stores, never sets the bit, and in checked builds asserts the bit is clear on every slot it scans.
 
-One place each. In the compiler the two sequences are `slot_store` and `slot_load` in `codegen.rs`; in the runtime they are `Value::store` and `Value::load` in `heap.rs`. Nothing else touches a shared slot's header.
+One place each. In the compiler (`codegen.rs`): `slot_lock` is the acquire, `slot_store_words` the locked store, `slot_load_words` the locked load; `slot_store` picks between the locked store and the one atomic payload store of an `int`, `float` or `bool` slot, `slot_load` between the locked load and the one atomic payload load, and `slot_init` is the plain store of both words into an object not yet reachable (a new instance, tuple, cell, closure, bound method, array literal). In the runtime (`heap.rs`): `Value::lock`, `Value::store`, `Value::load`, `Value::payload_at` (the one atomic payload load), `Value::init` (plain, unreachable objects and a future's value) and `Value::unshared` (plain read of a settled future's value). The runtime does not know a slot's declared type, so everything it does to a reachable slot is the locked form. Nothing else touches a shared slot's header. The hand-written map probes read only the payload of a record's key, whose type id the map's kind fixes, with one `ldar`; they return the address of the value's slot, which the caller reads or writes through the functions above.
 
-What this does not give. It makes one slot safe. It does not make an array's growth, a map's insert or a string's lazy hash safe under several workers; those need their own rules (`../threads.md`). What is tested with one worker: the sequences run on every access, and checked builds assert the bit is clear at every collection. What is not: contention itself, that is the retry path, and any interleaving. That waits for several workers.
+As built, on arm64 with LSE (the host ISA is detected by `cranelift_native`, which enables `has_lse` on Apple silicon; without it Cranelift emits a load-exclusive loop through fixed registers). Taken from a build of a store and a load of a field `v: int | string` at offset 16 of the instance in `x3` (store) or `x1` (load):
 
-Cheaper variants, not built: a 128-bit compare-and-swap (`casp`) where the target has one, which makes a reader a single load pair that retries; a reader that takes no lock where the static type rules out the header returning to an old word; an exempt class for exact pointer slots whose tag is a constant (a store would be one atomic payload store).
+```asm
+; locked store of (x1, x5)
+  mov     x0, #0x8000000000000000   ; BUSY, once per function
+  add     x4, x3, #16               ; the slot
+  ldsetal x0, x6, [x4]              ; x6 = header, header |= BUSY
+  tbnz    x6, #63, <the ldsetal>    ; held by another worker: again
+  add     x0, x3, #24
+  stlr    x5, [x0]                  ; payload
+  stlr    x1, [x4]                  ; tag: the release
+
+; locked load into (x2, x3)
+  add     x0, x1, #16
+  mov     x5, #0x8000000000000000
+  ldsetal x5, x2, [x0]
+  tbnz    x2, #63, <the ldsetal>
+  add     x1, x1, #24
+  ldar    x3, [x1]                  ; payload
+  stlr    x2, [x0]                  ; the header back: the release
+```
+
+Six instructions each and one for the constant, where two plain stores or loads were. An `int` field store is `add; stlr` and a `string` field load `add; ldar`: the atomic instructions take no offset. Differences from the sequences above: compiled code retries with no spin hint, since Cranelift has no instruction for one and a call would put a safepoint candidate in every function that stores (the runtime's `Value::lock` uses `std::hint::spin_loop`).
+
+What the `int`, `float`, `bool` exemption needs, and what was changed for it: a store of the payload alone leaves whatever tag the slot had, so such a slot must have its tag from the moment it can be stored to. Three places did not give it one. A cell made without a value was `null`; it is now the zero of its content type. `baml.Array._results<U>`, which makes the array `map` fills by index, made `null` slots; it is now passed its types and makes zeros when `U` is `int`, `float` or `bool`. An append in place writes a slot past the length, which is `null`; it always runs the locked store of both words.
+
+Read-only data. A locked load writes the header, so no slot it reaches may be in read-only memory. None is: the objects the compiler places in the executable (strings, bigints, class, variant, package and type objects, closures that capture nothing) have no slots, and the runtime's one static object with slots, the entries every empty map shares, has no record a search can match.
+
+What this does not give. It makes one slot safe. It does not make an array's growth, append or removal, a map's insert, delete, growth or compaction, or a string's lazy hash safe under several workers; those need their own rules (`../threads.md`). In particular a removal that clears a slot to `null` beside a payload-only store to it can leave `null` with a payload. What is tested with one worker: the sequences run on every access of the conformance suite, checked builds assert the bit is clear on every slot the collector scans (object slots, pair entries of stack maps, the runtime's root values), and two runtime tests run `Value::store`, `Value::load` and payload-only stores against each other from six threads on one slot. What is not: contention in compiled code, that is its retry path, and any interleaving of compiled sequences. That waits for several workers.
+
+Cheaper variants, not built: no lock for a slot nothing stores to after it is made (a closure's captures, a bound method's receiver); a 128-bit compare-and-swap (`casp`) where the target has one, which makes a reader a single load pair that retries; a reader that takes no lock where the static type rules out the header returning to an old word; an exempt class for exact pointer slots whose tag is a constant (a store would be one atomic payload store).
 
 How to read it. **Fact** means read in the code or measured, with the place. **Proposal** means a choice made here. **Unverified** means not checked by building or running. All assembly is hand-written to show the shape, not compiler output. "Today" counts are the measured ones from the as-built notes; "new" counts are estimates counted from the hand-written sequences.
 
