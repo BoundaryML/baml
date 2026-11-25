@@ -23,34 +23,37 @@ pub const VALUE_PAYLOAD: usize = WORD;
 /// word in the same format:
 ///
 /// ```text
-/// bits  0..=2   the collector's: bit 0 says the rest is the address the
-///               object was copied to, bit 1 is a mark it keeps only while
-///               it collects. Zero in a tag
-/// bits  3..=31  with the three below read as zeros, the type id: one of
-///               the `TAG_` constants
+/// bits  0..=31  the type id: one of the `TAG_` constants, which count
+///               from zero with no shift
 /// bits 32..=58  the payload of the header. A string caches its hash
 ///               here, zero while it has none ([`STRING_HASH_MASK`]). A
 ///               callable holds its call layout id here ([`call_layout`]),
 ///               and a class object the number of its columns
 ///               ([`class_columns`])
-/// bits 59..=61  free
+/// bit  59       the collector's: the rest of the word is the address
+///               the object was copied to
+/// bit  60       the collector's: a mark it keeps only while it collects
+/// bit  61       free
 /// bit  62       [`HEADER_PANIC`]
 /// bit  63       [`HEADER_BUSY`]
 /// ```
 ///
-/// A tag's type id is always that of the header of the object its payload
-/// points at, and a callable's tag has the object's call layout id.
-/// Nothing else in a tag says anything: a string's hash and the panic bit
-/// are read from the object.
+/// A tag is what [`tag_of`] makes of the header of the object its payload
+/// points at: the type id, and for a callable the call layout id too. Its
+/// other bits are zero: a string's hash and the panic bit are read from
+/// the object, the collector's bits belong to headers, and the busy bit
+/// is set only in a slot's tag word in memory, for as long as a worker is
+/// between the slot's two words.
 ///
 /// Whoever makes an object writes the whole word: compiled code as one
-/// constant, the runtime from the type id and the flags. Compiled code
-/// reads a type id as the 32-bit word at the object's address and tests a
-/// flag in the 64-bit one, so neither masks the other out. The collector
-/// copies the word with the object.
+/// constant, the runtime from the type id and the flags. The low half of
+/// the word is the type id and nothing else, so compiled code reads a type
+/// id as the 32-bit word at the object's address with no mask, and tests a
+/// flag in the 64-bit one. The collector copies the word with the object.
+/// A word is 64 bits on every target.
 pub const HEADER: usize = WORD;
 /// The bits of a header that are the type id.
-pub const TYPE_ID_MASK: usize = 0xFFFF_FFF8;
+pub const TYPE_ID_MASK: usize = 0xFFFF_FFFF;
 /// Where the payload of a header is, and its bits once shifted down.
 pub const HEADER_PAYLOAD_SHIFT: u32 = 32;
 pub const HEADER_PAYLOAD_MASK: usize = 0x07FF_FFFF;
@@ -70,8 +73,19 @@ pub const fn call_layout(header: usize) -> usize {
 }
 
 /// The bits of a callable's header that its tag has: the type id and the
-/// call layout id.
+/// call layout id, which is every bit below the collector's.
 pub const CALLABLE_TAG_MASK: usize = TYPE_ID_MASK | HEADER_PAYLOAD_MASK << HEADER_PAYLOAD_SHIFT;
+
+/// The tag of a value that points at an object with this header: the type
+/// id, and the call layout id when the object is a callable. The payload
+/// of any other header, a string's hash say, and the flags stay out of it.
+pub const fn tag_of(header: usize) -> usize {
+    if is_callable(header) {
+        header & CALLABLE_TAG_MASK
+    } else {
+        header & TYPE_ID_MASK
+    }
+}
 
 /// The tags: the type ids fixed in the runtime, the same in every program.
 ///
@@ -79,10 +93,10 @@ pub const CALLABLE_TAG_MASK: usize = TYPE_ID_MASK | HEADER_PAYLOAD_MASK << HEADE
 /// an address. A zeroed value is `null`, whose payload is always zero.
 /// `TAG_OMITTED` is an argument left to its default, and is never stored.
 pub const TAG_NULL: usize = 0;
-pub const TAG_BOOL: usize = 1 << 3;
-pub const TAG_INT: usize = 2 << 3;
-pub const TAG_FLOAT: usize = 3 << 3;
-pub const TAG_OMITTED: usize = 4 << 3;
+pub const TAG_BOOL: usize = 1;
+pub const TAG_INT: usize = 2;
+pub const TAG_FLOAT: usize = 3;
+pub const TAG_OMITTED: usize = 4;
 /// Every other tag is of a pointer, and names the layout of the object
 /// pointed at.
 ///
@@ -90,43 +104,45 @@ pub const TAG_OMITTED: usize = 4 << 3;
 /// next to each other, so that whether an object is a string is one
 /// comparison of its type id with [`STRING_TAGS_END`]: no object has a
 /// lower id than the first of the two.
-pub const TAG_STRING: usize = 5 << 3;
-pub const TAG_STRING_SLICE: usize = 6 << 3;
+pub const TAG_STRING: usize = 5;
+pub const TAG_STRING_SLICE: usize = 6;
 /// Every type id of an object below this is a string's.
 pub const STRING_TAGS_END: usize = TAG_INSTANCE;
-pub const TAG_INSTANCE: usize = 7 << 3;
-pub const TAG_ENUM_VARIANT: usize = 8 << 3;
-pub const TAG_CLASS: usize = 9 << 3;
-pub const TAG_ARRAY: usize = 10 << 3;
-pub const TAG_ARRAY_STORAGE: usize = 11 << 3;
-pub const TAG_MAP: usize = 12 << 3;
-pub const TAG_MAP_ENTRIES: usize = 13 << 3;
-pub const TAG_MAP_INDEX: usize = 14 << 3;
-pub const TAG_CELL: usize = 15 << 3;
-pub const TAG_FUTURE: usize = 16 << 3;
-pub const TAG_CLOSURE: usize = 17 << 3;
-pub const TAG_BOUND_METHOD: usize = 18 << 3;
-pub const TAG_BIGINT: usize = 19 << 3;
-pub const TAG_BYTES: usize = 20 << 3;
-pub const TAG_BYTES_STORAGE: usize = 21 << 3;
-pub const TAG_TUPLE: usize = 22 << 3;
-pub const TAG_TYPE: usize = 23 << 3;
-pub const TAG_OWNED: usize = 24 << 3;
-pub const TAG_PLAIN: usize = 25 << 3;
-pub const TAG_RAW_FUNCTION: usize = 26 << 3;
-pub const TAG_REALIZED_FUNCTION: usize = 27 << 3;
-pub const TAG_HOST_CLOSURE: usize = 28 << 3;
-pub const TAG_PACKAGE: usize = 29 << 3;
-pub const TAG_RUST_INSTANCE: usize = 30 << 3;
-/// One past the last tag: how many rows a table with a row per tag has,
-/// as a tag is a row's number times eight.
-pub const TAGS_END: usize = 31 << 3;
+pub const TAG_INSTANCE: usize = 7;
+pub const TAG_ENUM_VARIANT: usize = 8;
+pub const TAG_CLASS: usize = 9;
+pub const TAG_ARRAY: usize = 10;
+pub const TAG_ARRAY_STORAGE: usize = 11;
+pub const TAG_MAP: usize = 12;
+pub const TAG_MAP_ENTRIES: usize = 13;
+pub const TAG_MAP_INDEX: usize = 14;
+pub const TAG_CELL: usize = 15;
+pub const TAG_FUTURE: usize = 16;
+pub const TAG_CLOSURE: usize = 17;
+pub const TAG_BOUND_METHOD: usize = 18;
+pub const TAG_BIGINT: usize = 19;
+pub const TAG_BYTES: usize = 20;
+pub const TAG_BYTES_STORAGE: usize = 21;
+pub const TAG_TUPLE: usize = 22;
+pub const TAG_TYPE: usize = 23;
+pub const TAG_OWNED: usize = 24;
+pub const TAG_PLAIN: usize = 25;
+pub const TAG_RAW_FUNCTION: usize = 26;
+pub const TAG_REALIZED_FUNCTION: usize = 27;
+pub const TAG_HOST_CLOSURE: usize = 28;
+pub const TAG_PACKAGE: usize = 29;
+pub const TAG_RUST_INSTANCE: usize = 30;
+/// One past the last tag: how many rows a table with a row per tag has.
+/// A tag is its row's number.
+pub const TAGS_END: usize = 31;
 
 /// Set in the tag a native that can throw returns, and in the one an entry
 /// a native calls returns, when the value is what was thrown. No tag of a
-/// value has it: it is one of the collector's bits, and such a tag is
-/// never stored.
-pub const THROWN: usize = 1;
+/// value has it: it is bit 59, the collector's bit for a copied object,
+/// which only a header has, and a tag with it is never stored. Compiled
+/// code tests the one bit.
+pub const THROWN: usize = 1 << THROWN_BIT;
+pub const THROWN_BIT: u32 = 59;
 
 /// Set in a slot word of a stack map when the frame slot is a value: its
 /// tag at the offset the rest of the word gives, its payload a word after.
@@ -464,11 +480,15 @@ pub const HASH_SET: u32 = 0x8000_0000;
 pub const STRING_HASH_MASK: u32 = HEADER_PAYLOAD_MASK as u32;
 
 const _: () = {
-    assert!(STRING_TAGS_END == TAG_STRING_SLICE + 8);
-    assert!(TAG_RUST_INSTANCE + 8 == TAGS_END);
+    assert!(STRING_TAGS_END == TAG_STRING_SLICE + 1);
+    assert!(TAG_RUST_INSTANCE + 1 == TAGS_END);
     // An instance and an enum's variant are told from every other value
     // by one comparison of the tag.
-    assert!(TAG_ENUM_VARIANT == TAG_INSTANCE + 8);
+    assert!(TAG_ENUM_VARIANT == TAG_INSTANCE + 1);
+    // The call layout id ends where the collector's bits begin, and no
+    // tag has the bit that says thrown.
+    assert!(CALLABLE_TAG_MASK == (1 << 59) - 1);
+    assert!(THROWN & (CALLABLE_TAG_MASK | HEADER_PANIC | HEADER_BUSY) == 0);
     assert!(VARIANT_SIZE.is_multiple_of(VALUE) && TYPE_SIZE.is_multiple_of(VALUE));
     assert!(PACKAGE_SIZE.is_multiple_of(VALUE));
     assert!(SLICE_SIZE.is_multiple_of(VALUE));

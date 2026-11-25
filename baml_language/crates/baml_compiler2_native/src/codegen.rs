@@ -208,14 +208,60 @@ fn immediate_tag(ty: &NativeTy<'_>) -> Option<usize> {
     }
 }
 
+/// The type ids of the callables, a bit each: bit `id` is set when an
+/// object of that type id has a call layout id in its header.
+const CALLABLE_IDS: u64 = {
+    assert!(layout::TAGS_END <= 64);
+    let (mut ids, mut id) = (0, 0);
+    while id < layout::TAGS_END {
+        if layout::is_callable(id) {
+            ids |= 1 << id;
+        }
+        id += 1;
+    }
+    ids
+};
+
+/// The tag of a value that points at the object at `object`, which is not
+/// null, read from the object's header: what [`layout::tag_of`] makes of
+/// it. Every tag compiled code reads from a header is read here.
+///
+/// The low half of a header is the type id and nothing else, so that half
+/// is the whole tag of an object that is not a callable: the hash of a
+/// string and the flags are in the other half. A callable's tag has its
+/// call layout id too, so where the object `may_be_callable` the whole
+/// word is read, and its payload kept only when the type id is a
+/// callable's.
+///
+/// A tag read here is good until the next call: a collection can change
+/// the type id of what a reference points at.
+fn tag_of_object(
+    builder: &mut FunctionBuilder<'_>,
+    object: ir::Value,
+    may_be_callable: bool,
+) -> ir::Value {
+    if !may_be_callable {
+        return builder.ins().uload32(slot_access(), object, 0);
+    }
+    let header = builder.ins().load(WORD, slot_access(), object, 0);
+    // A shift is by the low six bits of its count, which of a header are
+    // those of the type id, and every type id is below 64.
+    let callables = builder.ins().iconst(WORD, CALLABLE_IDS.cast_signed());
+    let is_callable = builder.ins().ushr(callables, header);
+    let is_callable = builder.ins().band_imm(is_callable, 1);
+    let of_callable = builder.ins().iconst(WORD, imm(layout::CALLABLE_TAG_MASK));
+    let of_other = builder.ins().iconst(WORD, imm(layout::TYPE_ID_MASK));
+    let kept = builder.ins().select(is_callable, of_callable, of_other);
+    builder.ins().band(header, kept)
+}
+
 /// The two words a slot of type `ty` holds for `value`: the tag and the
 /// payload. A pair is its own two words. The tag of anything else is a
 /// constant where every value of the type has the same one, and is read
 /// from the object's header otherwise: a string may be a slice. `null`'s
 /// payload is zero.
 ///
-/// A tag read here is good until the next call: a collection can change
-/// the type id of what a reference points at.
+/// A tag read from a header is good until the next call.
 fn slot_words(
     builder: &mut FunctionBuilder<'_>,
     ty: &NativeTy<'_>,
@@ -238,10 +284,10 @@ fn slot_words(
         NativeTy::Enum(_) => layout::TAG_ENUM_VARIANT,
         other => match immediate_tag(other) {
             Some(tag) => tag,
-            // The type id is the low half of the header.
+            // A string, which may be a slice.
             None => {
-                let tag = builder.ins().uload32(slot_access(), value, 0);
-                return (tag, value);
+                debug_assert!(matches!(other, NativeTy::String));
+                return (tag_of_object(builder, value, false), value);
             }
         },
     };
@@ -1953,12 +1999,16 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(self.builder.block_params(done)[0])
     }
 
-    /// What the tag `tag`, with no bits but its type id, has in `column`:
-    /// the word of the column's table of tags at the offset the tag is.
-    fn tag_row_word(&mut self, column: usize, tag: ir::Value) -> Result<ir::Value, CompileError> {
+    /// What the tag whose type id is `id`, a word, has in `column`: the
+    /// word of that number in the column's table of tags. The id is scaled
+    /// to a word where the table is indexed, which is the load's own
+    /// addressing mode.
+    fn tag_row_word(&mut self, column: usize, id: ir::Value) -> Result<ir::Value, CompileError> {
+        const _: () = assert!(layout::WORD == 1 << 3);
         let table = self.backend.tag_row(column)?;
         let table = self.data_address(table);
-        let at = self.builder.ins().iadd(table, tag);
+        let at = self.builder.ins().ishl_imm(id, 3);
+        let at = self.builder.ins().iadd(table, at);
         Ok(self
             .builder
             .ins()
@@ -2134,9 +2184,9 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
     }
 
-    /// The pair that refers to the object at `pointer`, or `null` when
-    /// `pointer` is null: its tag is the type id in the object's header.
-    /// Not for a callable, whose tag has its call layout too.
+    /// The pair that refers to the object at `pointer`, an object of any
+    /// type, or `null` when `pointer` is null: its tag is read from the
+    /// object's header.
     fn pair_of_pointer(&mut self, pointer: ir::Value) -> ir::Value {
         let read = self.builder.create_block();
         let done = self.builder.create_block();
@@ -2147,7 +2197,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             .brif(pointer, read, &[], done, &[null.into()]);
         self.builder.seal_block(read);
         self.builder.switch_to_block(read);
-        let tag = self.builder.ins().uload32(slot_access(), pointer, 0);
+        let tag = tag_of_object(&mut self.builder, pointer, true);
         self.builder.ins().jump(done, &[tag.into()]);
         self.builder.seal_block(done);
         self.builder.switch_to_block(done);
@@ -3129,8 +3179,8 @@ impl<'a, 'db> Translator<'a, 'db> {
             let error = self
                 .emit_runtime_call(function, &arguments)?
                 .ok_or_else(|| internal("the runtime returns the error it makes"))?;
-            // An instance: its tag is its header's type id.
-            let tag = self.builder.ins().uload32(slot_access(), error, 0);
+            // An instance.
+            let tag = tag_of_object(&mut self.builder, error, false);
             let error = self.pair(tag, error);
             self.raise(error, None)?;
         } else {

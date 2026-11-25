@@ -280,7 +280,7 @@ impl<'db> Backend<'db> {
     }
 
     /// The table that holds what each tag has in `column`: a word per tag,
-    /// at the offset the tag is.
+    /// the tag's type id being the number of its word.
     pub(super) fn tag_row(&mut self, column: usize) -> Result<DataId, CompileError> {
         if let Some(id) = self.tag_rows.get(&column) {
             return Ok(*id);
@@ -385,7 +385,7 @@ impl<'db> Backend<'db> {
         }
         let tables: Vec<(usize, DataId)> = self.tag_rows.iter().map(|(c, id)| (*c, *id)).collect();
         for (column, id) in tables {
-            let mut bytes = vec![0; layout::TAGS_END];
+            let mut bytes = vec![0; layout::TAGS_END * layout::WORD];
             let mut description = DataDescription::new();
             for (tag, _, code) in of_tags.iter().filter(|(_, at, _)| *at == column) {
                 // A slice is a string: it has what a string has.
@@ -397,9 +397,10 @@ impl<'db> Backend<'db> {
                             let function = self
                                 .module
                                 .declare_func_in_data(*function, &mut description);
-                            description.write_function_addr(table_word(*tag), function);
+                            description
+                                .write_function_addr(table_word(*tag * layout::WORD), function);
                         }
-                        None => put(&mut bytes, *tag, 1_usize.to_ne_bytes()),
+                        None => put(&mut bytes, *tag * layout::WORD, 1_usize.to_ne_bytes()),
                     }
                 }
             }

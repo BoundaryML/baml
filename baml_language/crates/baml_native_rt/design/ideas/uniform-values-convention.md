@@ -6,7 +6,7 @@ Status: ruled on (see "Rulings"); being built. The sections after "The busy bit 
 
 The lead ruled on section 14 on 2026-11-24. These override the recommendations below wherever they differ; the analysis is kept, and each superseded recommendation is marked where it stands. The principle, in the lead's words: bias toward correctness and simplicity over optimizations; optimization passes come after it all works. Where the simple choice skips an optimization, the skipped one is named.
 
-1. Tag rule. A tag's type id is always exact. A callable's layout id (bits 32..58) is always exact, in the object header and in every tag of a function value. Nothing else in a tag is trusted: code that needs a string's cached hash or the panic bit reads the object. Collector bits in a tag are zero. Consequences: `STRING` never stands for `STRING_SLICE`, so the collector rewrites the tag of every slot that points at a slice it makes a string of; a string's tag is made from the low half of the object's header where it is not already in a register. Supersedes the per-field table of section 1.
+1. Tag rule. A tag's type id (bits 0..31, ruling 15) is always exact. A callable's layout id (bits 32..58) is always exact, in the object header and in every tag of a function value. Nothing else is in a tag: code that needs a string's cached hash or the panic bit reads the object, and bits 59..63 of a tag are zero (ruling 15). Consequences: `STRING` never stands for `STRING_SLICE`, so the collector rewrites the tag of every slot that points at a slice it makes a string of; a string's tag is made from the low half of the object's header where it is not already in a register. Supersedes the per-field table of section 1.
 2. Every store of a value to memory writes both words. No payload-only stores, with the one exception ruling 13 makes for a slot whose header cannot change. Supersedes 2.6.
 3. Argument registers stay as the vendored `tail` convention has them (`x2`..`x7`): closure word, then type arguments, then tag and payload as two `I64` per value; the rest on the stack. Cranelift is not patched. Result in `x2`, `x3`. Supersedes 2.3 (skipped: widening to `x15`).
 4. One `INSTANCE` id for every class; the method row lives in the class object. `class_ptr` is traced by the collector: classes and enum variants cannot be made at run time today but will be, so nothing may assume they live outside the heap. An enum key in a map is hashed by a stable field of the variant object (its index), never by its address.
@@ -15,11 +15,12 @@ The lead ruled on section 14 on 2026-11-24. These override the recommendations b
 7. A map record is `{ key: Value, value: Value }`, with the hashes in the parallel array.
 8. Every indirect call through a function value does the layout check. The whole-program rule for skipping it is not built. Supersedes that bullet of 2.7.
 9. A throw lands with `x0` tag, `x1` payload, and the context through `worker.scratch` as 2.9 describes, taking care that scratch is not a root.
-10. A throwing native returns a `Value` with bit 0 of the tag meaning "thrown". Exact-typed scalar parameters of natives stay unwrapped at the Rust boundary.
+10. A throwing native returns a `Value` with one bit of the tag meaning "thrown". The bit is 59 (`layout::THROWN`), not bit 0, which ruling 15 made part of the type id: 59 is the collector's forwarded bit, which only an object header ever has, so it is zero in every tag, and a tag with it is never stored. The caller's test is one instruction (`tbnz x0, #59`). Exact-typed scalar parameters of natives stay unwrapped at the Rust boundary.
 11. Type arguments are raw type-object pointers, one word each, interned when built at run time.
 12. `OWNED` and `PLAIN` stay in this change; `RustInstanceObject` is later.
 13. The busy bit (63) protocol is built in this change, not merely reserved: several workers are coming. The sequences are in "The busy bit protocol" below. Panic class is bit 62. Supersedes section 8.
 14. Inside a function the compiler may drop a tag it knows statically, but only where that is the simple thing; never at the cost of a second representation in memory or across a call.
+15. The header format (ruled later, overrides every `id << 3` and "bits 0..2" below). Bits 0..31 are the type id, dense, with no shift: `NULL` 0, `BOOL` 1, `INT` 2, `FLOAT` 3, `OMITTED` 4, then the object tags in order. Bits 32..58 are the header payload (a string's hash, a callable's call layout id, a class object's column count). Bit 59 is the collector's forwarded bit, bit 60 its mark while slices are settled, bit 61 is free, 62 is the panic class, 63 the busy bit. A forwarding word is `address | 1 << 59`; a word is 64 bits on every target. A 32-bit read of a header or a tag is the type id with no mask. A table indexed by tag scales the id in the load's addressing mode. Which bits a tag keeps: a callable's tag is bits 0..58 of its header, so a value whose static type can be a callable gets its tag from the 64-bit header word; every other pointer's tag is bits 0..31, read as 32 bits, which drops a string's hash and the panic bit; an immediate's is the id. No mask is applied for the collector's bits, which are zero whenever compiled code runs. For an object whose type is only known at run time the header is read whole and bits 32..58 kept only when the id is a callable's. One helper on each side makes a tag of a header: `tag_of_object` in the compiler, `layout::tag_of` (under `Value::reference`) in the runtime; the collector's checked-build assertion compares a slot's tag with exactly that.
 
 Scope and order: the value model first. The indirect-call layout check, remap thunks, compile-time mapping of direct calls from `argument_layout`, method-table thunks, the checked-build entry assertion and defaulted arguments through `OMITTED` are the last phase, each its own commit. The layout id is in the header from the first commit that touches the header.
 
@@ -130,7 +131,7 @@ Instruction counts, common cases (new is estimated):
 
 ## 1. Tag rules (decide these first, the rest depends on them)
 
-**Proposal**, numbering: `NULL` = 0, `BOOL` = 1, `INT` = 2, `FLOAT` = 3, `OMITTED` = 4, then the object layouts. A tag word is `id << 3`. So a zeroed 16 bytes is a `null` value, "is a pointer" is `cmp w, #(4 << 3); b.hi`, and "is null" is `cbz w`. **Fact**: today no type id is zero (`layout.rs`, `RUNTIME_TYPES`), so nothing relies on a zero header meaning anything.
+**Proposal**, numbering: `NULL` = 0, `BOOL` = 1, `INT` = 2, `FLOAT` = 3, `OMITTED` = 4, then the object layouts. A tag word is `id << 3` (superseded by ruling 15: the id is not shifted, and the collector's bits are 59 and 60). So a zeroed 16 bytes is a `null` value, "is a pointer" is `cmp w, #(4 << 3); b.hi` (now `cmp w, #4; b.hi`), and "is null" is `cbz w`. **Fact**: today no type id is zero (`layout.rs`, `RUNTIME_TYPES`), so nothing relies on a zero header meaning anything.
 
 **Proposal**: a `NULL` value's payload is always 0. `memory.md` says "unused"; this is a change to that table. It lets an optional pointer of exact type be one word inside a function. (The first half stands; the one-word optional is superseded by ruling 5.)
 
@@ -162,7 +163,7 @@ Cost of the two readings, per pointer whose tag must be made (an argument, a res
 
 Strict copy also makes the collector rewrite the tag of every slot that points at a flattened slice.
 
-**Proposal**, the tag invariant, per group of bits (superseded by ruling 1: the id is exact with no `STRING` exception, the hash and the panic bit in a tag are not trusted):
+**Proposal**, the tag invariant, per group of bits (superseded by ruling 1: the id is exact with no `STRING` exception, the hash and the panic bit are not in a tag; and by ruling 15: the id is bits 0..31, the collector's bits are 59 and 60):
 
 | bits | in a value's tag |
 |---|---|
@@ -341,7 +342,7 @@ call:
 by_tag:
   adrp x10, tag_rows$col@PAGE
   add  x10, x10, tag_rows$col@PAGEOFF
-  ldr  x9, [x10, w2, uxtw]    ; the tag word is id << 3: already a byte offset
+  ldr  x9, [x10, w2, uxtw]    ; the tag word is id << 3: already a byte offset (ruling 15: `uxtw #3`, the id is dense)
   b    call                   ; 8 on the other path
 ```
 
@@ -513,7 +514,7 @@ Standard AAPCS64 (Linux) would skip to an even register for a 16-aligned struct.
 - A parameter of exact type stays unwrapped, as today: `i64`, `f64` in a `d` register, `bool`, a raw address for a string, array, map, class or Rust value.
 - A parameter whose type is not exact (`Elem`, `Any`, `BoxedElem`, `Typed`, an optional scalar) is two `u64` parameters, tag then payload, in the generated `extern "C"` signature. The wrapper builds the `Value`. Two scalars, not a struct: the same on every target, no skipped register, and the pair can straddle `x7`.
 - A native that cannot throw returns its exact result in one register, or a `Value` in `x0`, `x1`.
-- A native that can throw always returns a `Value` in `x0`, `x1`. Bit 0 of the tag set means "this is the thrown value". The caller tests `tbnz w0, #0, raise`: one instruction, as `cbnz` on the thrown word is today. Bit 0 is free for this: it is zero in every value's tag (section 1) and this word is never stored. Alternative: a thrown slot in the worker and a flag, which costs a store and a load. `RtResult` and `OptionalScalar` go.
+- A native that can throw always returns a `Value` in `x0`, `x1`. Bit 0 of the tag set means "this is the thrown value". The caller tests `tbnz w0, #0, raise`: one instruction, as `cbnz` on the thrown word is today. Bit 0 is free for this: it is zero in every value's tag (section 1) and this word is never stored. (Superseded by ruling 15: bit 0 is part of the type id; the bit is 59, see ruling 10.) Alternative: a thrown slot in the worker and a flag, which costs a store and a load. `RtResult` and `OptionalScalar` go.
 - `TypeId` parameters become `*const TypeObject` (section 7). Most disappear: `elem_raw(word, type)` needed the id only to know whether the word was a reference.
 - `RootSlots` become 16 `Value` slots (256 bytes); a root's tag says whether to forward it. `Elem` loses `is_ref`.
 - The lists in `natives/*.txt` and the three kinds of call do not change.

@@ -47,30 +47,39 @@ use crate::layout::{
     BYTES_SIZE, BYTES_STORAGE_CAPACITY, CALLABLE_TAG_MASK, CELL_SIZE, CELL_VALUE, CLASS_KIND,
     CLASS_KIND_ENUM, CLASS_KIND_MASK, CLASS_NAME, CLASS_PACKAGE, CLASS_SLOT_COUNT, CLASS_VARIANTS,
     CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_KEY,
-    ENTRY_SIZE, ENTRY_VALUE, FUTURE_SIZE, FUTURE_TRACE, FUTURE_VALUE, HEADER_BUSY,
-    INDEX_SLOT_COUNT, INSTANCE_CLASS, INSTANCE_SLOTS, MAP_ENTRIES, MAP_INDEX, MAP_SIZE, OWNED_KIND,
-    OWNED_SIZE, OWNED_VALUE, PACKAGE_NAME, PACKAGE_SIZE, PLAIN_WORDS, SLICE_OFFSET, SLICE_PARENT,
-    SLICE_SIZE, STACK_MAP_VALUE, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT,
-    TAG_ARRAY, TAG_ARRAY_STORAGE, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES,
-    TAG_BYTES_STORAGE, TAG_CELL, TAG_CLASS, TAG_CLOSURE, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_FUTURE,
-    TAG_INSTANCE, TAG_INT, TAG_MAP, TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OWNED,
-    TAG_PACKAGE, TAG_PLAIN, TAG_STRING, TAG_STRING_SLICE, TAG_TUPLE, TAG_TYPE, TUPLE_COUNT,
-    TYPE_CLASS, TYPE_ID_MASK, TYPE_SIZE, VALUE, VALUE_PAYLOAD, VARIANT_ENUM, VARIANT_NAME,
-    VARIANT_SIZE, WORD, aligned, bigint_size, bound_size, bytes_storage_size, class_columns,
-    class_size, closure_size, entries_size, index_size, instance_size, is_callable, is_pointer,
-    plain_size, storage_size, string_size,
+    ENTRY_SIZE, ENTRY_VALUE, FUTURE_SIZE, FUTURE_TRACE, FUTURE_VALUE, HEADER_BUSY, HEADER_PANIC,
+    HEADER_PAYLOAD_MASK, HEADER_PAYLOAD_SHIFT, INDEX_SLOT_COUNT, INSTANCE_CLASS, INSTANCE_SLOTS,
+    MAP_ENTRIES, MAP_INDEX, MAP_SIZE, OWNED_KIND, OWNED_SIZE, OWNED_VALUE, PACKAGE_NAME,
+    PACKAGE_SIZE, PLAIN_WORDS, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, STACK_MAP_VALUE,
+    STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TAG_ARRAY, TAG_ARRAY_STORAGE,
+    TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_BYTES_STORAGE, TAG_CELL, TAG_CLASS,
+    TAG_CLOSURE, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_FUTURE, TAG_INSTANCE, TAG_INT, TAG_MAP,
+    TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OWNED, TAG_PACKAGE, TAG_PLAIN, TAG_STRING,
+    TAG_STRING_SLICE, TAG_TUPLE, TAG_TYPE, TUPLE_COUNT, TYPE_CLASS, TYPE_ID_MASK, TYPE_SIZE, VALUE,
+    VALUE_PAYLOAD, VARIANT_ENUM, VARIANT_NAME, VARIANT_SIZE, WORD, aligned, bigint_size,
+    bound_size, bytes_storage_size, class_columns, class_size, closure_size, entries_size,
+    index_size, instance_size, is_pointer, plain_size, storage_size, string_size, tag_of,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
-/// header is then its new address.
-const FORWARDED: usize = 1;
+/// header is then its new address, which is below the bit.
+const FORWARDED: usize = 1 << 59;
 /// Set, while slices are settled, in the header of a slice whose text has
-/// been counted and of a string whose header's high half is that count.
-const COUNTED: usize = 2;
-/// The low half of a header: the type id and the collector's bits.
-const HEADER_LOW: usize = 0xFFFF_FFFF;
-/// Where the count of a string's slices' text is in its header.
-const COUNT_SHIFT: u32 = 32;
+/// been counted and of a string whose header's payload is that count.
+const COUNTED: usize = 1 << 60;
+/// The low half of a word: of a header the type id, of a string's second
+/// word its byte length.
+const LOW_HALF: usize = 0xFFFF_FFFF;
+/// Where the count of a string's slices' text is in its header while
+/// slices are settled, and the most it counts to: the header's payload, in
+/// place of the string's hash, which is below the collector's bits.
+const COUNT_SHIFT: u32 = HEADER_PAYLOAD_SHIFT;
+const COUNT_MAX: usize = HEADER_PAYLOAD_MASK;
+
+const _: () = {
+    // Neither bit is one a tag has, or a flag of a header.
+    assert!((FORWARDED | COUNTED) & (CALLABLE_TAG_MASK | HEADER_PANIC | HEADER_BUSY) == 0);
+};
 
 /// The first space of a heap. Spaces grow with the live data.
 const INITIAL_SPACE: usize = 8 << 20;
@@ -221,13 +230,8 @@ impl Value {
         }
         // SAFETY: the caller's contract: an object starts with its header.
         let header = unsafe { load(object) };
-        let mask = if is_callable(header) {
-            CALLABLE_TAG_MASK
-        } else {
-            TYPE_ID_MASK
-        };
         Self {
-            tag: header & mask,
+            tag: tag_of(header),
             payload: object,
         }
     }
@@ -1037,7 +1041,7 @@ impl<'a> Copy<'a> {
         unsafe {
             let count = || load(object + WORD);
             match header & TYPE_ID_MASK {
-                TAG_STRING => string_size(count() & HEADER_LOW),
+                TAG_STRING => string_size(count() & LOW_HALF),
                 TAG_STRING_SLICE => SLICE_SIZE,
                 TAG_ARRAY => ARRAY_SIZE,
                 TAG_ARRAY_STORAGE => storage_size(count()),
@@ -1133,6 +1137,11 @@ impl<'a> Copy<'a> {
             ));
         }
         if !is_pointer(tag) {
+            if tag & !TYPE_ID_MASK != 0 {
+                crate::sched::fatal(&format!(
+                    "the slot at {slot:#x} has the tag {tag:#x}, which is more than a type id"
+                ));
+            }
             return;
         }
         // SAFETY: a pointer's payload is the address of an object, whose
@@ -1147,13 +1156,8 @@ impl<'a> Copy<'a> {
             }
         };
         // What a tag says of its object: the type id, and a callable's call
-        // layout.
-        let said = if is_callable(header) {
-            CALLABLE_TAG_MASK
-        } else {
-            TYPE_ID_MASK
-        };
-        if tag & said != header & said {
+        // layout. It has no other bit.
+        if tag != tag_of(header) {
             crate::sched::fatal(&format!(
                 "the slot at {slot:#x} has the tag {tag:#x} and points at an object whose \
                  header is {header:#x}"
@@ -1235,13 +1239,14 @@ impl<'a> Copy<'a> {
                     continue;
                 }
                 if counted & COUNTED == 0 {
-                    counted = (counted & HEADER_LOW) | COUNTED;
+                    // The count starts at zero where the hash was.
+                    counted = (counted & TYPE_ID_MASK) | COUNTED;
                 }
-                let count = (counted >> COUNT_SHIFT) + Self::text_size(slice);
+                let count = (counted >> COUNT_SHIFT & COUNT_MAX) + Self::text_size(slice);
                 store(slice, header | COUNTED);
                 store(
                     parent,
-                    (counted & HEADER_LOW) | (count.min(HEADER_LOW) << COUNT_SHIFT),
+                    (counted & (TYPE_ID_MASK | COUNTED)) | (count.min(COUNT_MAX) << COUNT_SHIFT),
                 );
             }
             for &entry in &parked {
@@ -1272,8 +1277,9 @@ impl<'a> Copy<'a> {
             let parent = load(slice + SLICE_PARENT);
             let mut reached = load(parent);
             if reached & FORWARDED == 0 {
-                let (count, size) = (reached >> COUNT_SHIFT, Self::text_size(parent));
-                if count < size && count < HEADER_LOW {
+                let count = reached >> COUNT_SHIFT & COUNT_MAX;
+                let size = Self::text_size(parent);
+                if count < size && count < COUNT_MAX {
                     return self.flatten(slice);
                 }
                 // Its slices are no smaller than it is. The count goes,
@@ -1295,7 +1301,7 @@ impl<'a> Copy<'a> {
     unsafe fn text_size(string: usize) -> usize {
         // SAFETY: both keep their byte length in the low half of their
         // second word.
-        unsafe { string_size(load(string + STRING_LENGTHS) & HEADER_LOW) }
+        unsafe { string_size(load(string + STRING_LENGTHS) & LOW_HALF) }
     }
 
     /// Copy the text of the slice at `slice`, whose string is not copied,
@@ -1322,7 +1328,7 @@ impl<'a> Copy<'a> {
             std::ptr::copy_nonoverlapping(
                 text as *const u8,
                 (flat + STRING_TEXT) as *mut u8,
-                lengths & HEADER_LOW,
+                lengths & LOW_HALF,
             );
             store(slice, flat | FORWARDED);
             self.free += size;
@@ -2243,6 +2249,82 @@ mod tests {
             unsafe { string::text(held.payload) },
             &LETTERS.repeat(4)[5..45]
         );
+    }
+
+    /// A function value's tag is the low 59 bits of its closure's header:
+    /// the type id and the call layout id. A tag made of the header by
+    /// [`Value::reference`] has both, in a slot of an object and in a
+    /// root, and still has them after collections, each of which, in a
+    /// build with checks, ends the program on a slot whose tag is not what
+    /// its object's header makes. A string's tag is its type id alone,
+    /// though its header caches its hash where a closure's has its layout.
+    #[test]
+    fn a_function_value_has_its_call_layout_in_its_tag() {
+        use crate::{
+            layout::{
+                CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, CLOSURE_CODE, CLOSURE_FUNCTION,
+                HEADER_PAYLOAD_MASK, HEADER_PAYLOAD_SHIFT, TAG_CLOSURE, call_layout, closure_size,
+            },
+            map::str_hash,
+        };
+
+        // Every bit of a call layout id but one, and both ends.
+        const LAYOUT: usize = HEADER_PAYLOAD_MASK & !0x10;
+        const HEADER: usize = TAG_CLOSURE | LAYOUT << HEADER_PAYLOAD_SHIFT;
+
+        let mut mutator = mutator(true);
+        let mut text = string::from_str(&mut mutator, LETTERS);
+        mutator.root(&mut text);
+        let mut closure = mutator.allocate_object(HEADER, closure_size(1));
+        // SAFETY: `closure` is a fresh closure of one capture, and `text`
+        // was kept current; it caches its hash in its header.
+        unsafe {
+            store(closure + CLOSURE_CODE, 0);
+            store(closure + CLOSURE_FUNCTION, 0);
+            store(closure + CLOSURE_CAPTURE_COUNT, 1);
+            str_hash(text);
+            assert_ne!(load(text) >> HEADER_PAYLOAD_SHIFT, 0);
+            Value::init(closure + CLOSURE_CAPTURES, Value::reference(text));
+        }
+        mutator.root(&mut closure);
+        // Held as any value is: in a slot of an instance and in a root.
+        let mut holder = new_link(&mut mutator, 0);
+        // SAFETY: `holder` is a fresh instance of two slots, and `closure`
+        // and `text` were kept current.
+        let mut rooted = unsafe {
+            Value::init(holder + field_offset(0), Value::reference(closure));
+            Value::init(holder + field_offset(1), Value::reference(text));
+            Value::reference(closure)
+        };
+        assert_eq!(rooted.tag, HEADER);
+        mutator.root(&mut holder);
+        mutator.root_value(&mut rooted);
+        // Every allocation collects.
+        let mut head = 0;
+        mutator.root(&mut head);
+        for value in 0..10 {
+            push_link(&mut mutator, &mut head, value);
+        }
+        mutator.unroot(5);
+        // SAFETY: everything read was kept current.
+        unsafe {
+            assert_eq!(load(closure), HEADER);
+            let held = Value::load(holder + field_offset(0));
+            assert_eq!(held, rooted);
+            assert_eq!(held.payload, closure);
+            assert_eq!(held.tag, HEADER);
+            assert_eq!(held.id(), TAG_CLOSURE);
+            assert_eq!(call_layout(held.tag), LAYOUT);
+            // The hash stays in the string's header.
+            assert_ne!(load(text) >> HEADER_PAYLOAD_SHIFT, 0);
+            for captured in [
+                Value::load(closure + CLOSURE_CAPTURES),
+                Value::load(holder + field_offset(1)),
+            ] {
+                assert_eq!(captured.tag, TAG_STRING);
+                assert_eq!(captured.payload, text);
+            }
+        }
     }
 
     /// A kind whose values are counters of how often they were dropped.

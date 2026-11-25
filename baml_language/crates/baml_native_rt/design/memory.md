@@ -12,12 +12,15 @@ Header format:
 
 | bits | meaning |
 |---|---|
-| 0..2 | collector: bit 0 forwarded, bit 1 a mark used only while slices are settled |
-| 3..31 | type id |
-| 32..58 | payload of the header. A string caches its hash here (27 bits); a function value holds its call layout id here (see "Tags") |
-| 59..61 | kind, if the candidate in [type-header-fast-path.md](ideas/type-header-fast-path.md) is taken; free otherwise |
+| 0..31 | type id, dense, with no shift: `NULL` 0, `BOOL` 1, `INT` 2, `FLOAT` 3, `OMITTED` 4, then the objects |
+| 32..58 | payload of the header. A string caches its hash here (27 bits); a function value holds its call layout id here (see "Tags"); a class object the number of its columns |
+| 59 | collector: forwarded. The word is then `address \| 1 << 59` |
+| 60 | collector: a mark used only while slices are settled |
+| 61 | free |
 | 62 | panic class |
 | 63 | busy bit |
+
+A word is 64 bits on every target. The low half of a header is the type id and nothing else, so a 32-bit read of a header or of a tag is the type id with no mask, even while the collector has its bits set (a forwarded header is an address, not a header). While it settles slices the collector keeps a count in bits 32..58 of a string's header, in place of the hash.
 
 The type id determines how the payload is interpreted: the payload is either an inline scalar primitive (`null`, `int`, `float`, `bool`) or a heap pointer. Except for the scalar primitives, the type id is a fast path only, per [type-header-fast-path.md](ideas/type-header-fast-path.md).
 
@@ -40,7 +43,19 @@ const _: () = assert!(::std::mem::size_of::<Value>() == 16);
 
 ## Tags
 
-A tag is the header word of a value, written `id << 3`. Its type id says how to read the payload, and for a pointer it is always exactly the id in the header of the object pointed at: when the collector makes a string of a slice it rewrites the tag of every slot that points at it. A function value's tag also carries its call layout id, always exactly. Nothing else in a tag is trusted: its collector bits are zero, and code that needs a string's cached hash or the panic bit reads the object. The ids below are fixed when the runtime is compiled and are the same in every program: the collector and the Rust runtime `match` on them with no program in hand, and compiled code compares against them as constants.
+A tag is the header word of a value. Its type id (the low 32 bits, the id itself with no shift) says how to read the payload, and for a pointer it is always exactly the id in the header of the object pointed at: when the collector makes a string of a slice it rewrites the tag of every slot that points at it. A function value's tag also carries its call layout id, always exactly. Every other bit of a tag is zero: code that needs a string's cached hash or the panic bit reads the object, and bits 59..63 are zero in every tag (bit 63 is set only in a slot's tag word in memory, while a worker holds the slot).
+
+Which bits of the header a tag keeps, by kind:
+
+| kind | bits of the header in the tag | how compiled code reads it from an object |
+|---|---|---|
+| immediate | the id | no object |
+| callable (`CLOSURE`, `BOUND_METHOD`, `RAW_FUNCTION`, `REALIZED_FUNCTION`, `HOST_CLOSURE`) | 0..58: the id and the call layout id | the 64-bit word |
+| every other pointer | 0..31: the id | the 32-bit word, which leaves a string's hash and the panic bit behind |
+
+An object whose type is only known at run time may be a callable: its header is read whole and bits 32..58 kept only when the id is a callable's. There is one place that makes a tag of a header on each side: `tag_of_object` in the compiler (`codegen.rs`) and `layout::tag_of` in the runtime, which `Value::reference` uses. In checked builds the collector ends the program on a slot whose tag is not exactly what its object's header makes. No mask is applied for the collector's bits: they are zero whenever compiled code runs.
+
+A table with a row per tag (the method rows of the types that are not classes) is indexed by the id scaled by the load's addressing mode (`ldr x, [table, w_id, uxtw #3]`), with no separate shift. The ids below are fixed when the runtime is compiled and are the same in every program: the collector and the Rust runtime `match` on them with no program in hand, and compiled code compares against them as constants.
 
 Immediates. The payload is the value itself, never an address:
 
@@ -60,7 +75,7 @@ Everything else is a pointer (an id above 4), and its tag names the layout of th
 | `RUST_INSTANCE` | `RustInstanceObject` | below |
 | `ARRAY`, `ARRAY_STORAGE` | `ArrayObject`, `ArrayStorageObject` | below |
 | `MAP`, `MAP_ENTRIES`, `MAP_INDEX` | `MapObject`, `MapEntriesObject`, `MapIndexObject` | below |
-| `STRING`, `STRING_SLICE` | `StringObject`, `StringSliceObject` | below. Kept next to each other so "is a string" is one range test, as today |
+| `STRING`, `STRING_SLICE` | `StringObject`, `StringSliceObject` | below. Kept next to each other so "is a string" is one range test |
 | `TYPE` | `TypeObject` | below |
 | `RAW_FUNCTION`, `REALIZED_FUNCTION` | `RawFunctionObject`, `RealizedFunctionObject` | below |
 | `CLOSURE`, `BOUND_METHOD`, `HOST_CLOSURE` | `ClosureObject`, `BoundMethodObject`, `HostClosureObject` | below |
