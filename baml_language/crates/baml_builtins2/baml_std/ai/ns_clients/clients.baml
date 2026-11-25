@@ -78,12 +78,15 @@ function _may_try_again(cause: Retryable) -> bool {
     }
 }
 
-/// The default judgment: a request the provider rejected does not become
-/// valid by resending.
+/// The default judgment. An `InvalidRequest` with an HTTP status is retried:
+/// the provider answered with an error status, and providers do return
+/// transient 4xx responses (the legacy BAML DSL's retry policy repeated these
+/// too). One without a status is not: BAML refused to build the request, so
+/// resending the identical request cannot help.
 function default_retry_judgment(f: root.errors.Failure) -> bool {
     match (f) {
         let r: root.errors.Refused => false,
-        let i: root.errors.InvalidRequest => false,
+        let i: root.errors.InvalidRequest => i.status_code != null,
         let p: root.errors.ParseFailed => false,
         let f: root.errors.FinishReasonError => false,
         let p: root.errors.ProviderError => _provider_error_retryable(p),

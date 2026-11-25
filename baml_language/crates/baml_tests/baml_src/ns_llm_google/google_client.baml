@@ -1101,9 +1101,9 @@ test "vertex_stream_first_token_timeout" {
 
 // ─── error taxonomy ──────────────────────────────────────────────────────────
 
-// A 400 must classify as InvalidRequest, NOT as a retry-safe NetworkFailure:
-// the Retry policy would otherwise replay an invalid request forever. 429 is
-// RateLimited and 503 is a genuine NetworkFailure.
+// A 400 must classify as InvalidRequest, NOT as a NetworkFailure: a retry
+// judgment tells a provider rejection from a transport failure by its class
+// and status. 429 is RateLimited and 503 is a genuine NetworkFailure.
 function google_error_taxonomy() -> string {
     let outcomes: string[] = [];
     let statuses = [400, 429, 503];
