@@ -45,7 +45,7 @@ impl<'db> Backend<'db> {
     }
 
     /// What a `baml.json` native is passed for the static type of a value:
-    /// zero when only the value's header says what it is.
+    /// zero when only the value's tag says what it is.
     pub(super) fn describe_native(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
@@ -151,7 +151,7 @@ impl<'db> Translator<'_, 'db> {
     }
 
     /// Describe every class and enum the program makes values of: what a
-    /// value written by its header alone can be. One the runtime cannot
+    /// value written by its tag alone can be. One the runtime cannot
     /// write is left out, and writing a value of it is refused when the
     /// program runs.
     pub(super) fn describe_program_types(&mut self) {
@@ -167,15 +167,5 @@ impl<'db> Translator<'_, 'db> {
             }
         }
         self.backend.identify_described(self.db);
-    }
-
-    /// The value a `baml.json` native returned as a union holds it, as a
-    /// value of type `ty`.
-    pub(super) fn unboxed_result(&mut self, value: ir::Value, ty: &NativeTy<'db>) -> ir::Value {
-        if ty.is_boxed() {
-            return value;
-        }
-        self.builder.declare_value_needs_stack_map(value);
-        self.unboxed(value, ty)
     }
 }

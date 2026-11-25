@@ -17,7 +17,7 @@
 use std::collections::HashSet;
 
 use super::{
-    BytesRef, Elem, NativeBamlOps, Natives, Scope, Thrown, TypeId, View, array_size,
+    BytesRef, Elem, NativeBamlOps, Natives, Scope, Slot, Thrown, TypeId, View, array_size,
     drive::BamlFn,
     json::{string_keyed, type_of},
     root::float_order,
@@ -29,9 +29,8 @@ use crate::{
     layout::{
         ARRAY_LENGTH, BOUND_CODE, BOUND_RECEIVER, BOUND_TYPE_ARG_COUNT, BOUND_TYPE_ARGS, BOX_VALUE,
         CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, CLOSURE_CODE, FIRST_CLASS_TYPE, INSTANCE_SLOTS,
-        STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BOX_BOOL,
-        TAG_BOX_FLOAT, TAG_BOX_INT, TAG_BYTES, TAG_CLOSURE, TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL,
-        TAG_TUPLE, TUPLE_COUNT, VALUE, WORD,
+        STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_CLOSURE,
+        TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL, TAG_TUPLE, TUPLE_COUNT, VALUE, WORD,
     },
     map,
 };
@@ -57,7 +56,7 @@ fn own_eq(type_id: usize) -> Option<BamlFn> {
     }
 }
 
-/// What a slot or a reference holds, as far as comparing it goes.
+/// What a value is, as far as comparing it goes.
 #[derive(Clone, Copy)]
 enum Val {
     Null,
@@ -69,33 +68,15 @@ enum Val {
     Ref(usize, Option<Desc>),
 }
 
-/// What the slot `value` holds, which its tag says: a scalar, or what its
-/// object is. `described` is the slot's static type when something says
-/// it.
+/// What `value` is, which its tag says: a scalar, or an object.
+/// `described` is its static type when something says it.
 fn of_value(value: Value, described: Option<Desc>) -> Val {
     match value.id() {
         TAG_NULL => Val::Null,
         TAG_BOOL => Val::Bool(value.payload & 0xFF != 0),
         TAG_INT => Val::Word(value.payload),
         TAG_FLOAT => Val::Float(f64::from_bits(value.payload as u64)),
-        _ => of_reference(value.payload, described.map(Desc::not_null)),
-    }
-}
-
-/// What the reference `object` holds: a scalar out of its box, and
-/// otherwise the object.
-fn of_reference(object: usize, described: Option<Desc>) -> Val {
-    if object == 0 {
-        return Val::Null;
-    }
-    // SAFETY: a reference that is not null is to a live object.
-    unsafe {
-        match type_of(object) {
-            TAG_BOX_INT => Val::Word(load(object + BOX_VALUE)),
-            TAG_BOX_FLOAT => Val::Float(f64::from_bits(load(object + BOX_VALUE) as u64)),
-            TAG_BOX_BOOL => Val::Bool(load(object + BOX_VALUE) & 0xFF != 0),
-            _ => Val::Ref(object, described),
-        }
+        _ => Val::Ref(value.payload, described.map(Desc::not_null)),
     }
 }
 
@@ -288,23 +269,22 @@ impl<F: FnMut(usize, usize)> Walk<'_, F> {
     }
 }
 
-/// Whether `a` and `b`, each a value as a union holds it, are equal as far
-/// as the walk decides, with every pair it leaves to an `eq` handed to
-/// `own`.
+/// Whether the values `a` and `b` are equal as far as the walk decides,
+/// with every pair it leaves to an `eq` handed to `own`.
 ///
 /// # Safety
 ///
-/// Each is null or a live object, of the static type described when one
-/// is, and nothing is allocated meanwhile.
+/// Each is a value as a slot holds one, of the static type described
+/// when one is, and nothing is allocated meanwhile.
 unsafe fn walk(
     types: &Types,
-    (a, a_type): (usize, Option<Desc>),
-    (b, b_type): (usize, Option<Desc>),
+    (a, a_type): (Value, Option<Desc>),
+    (b, b_type): (Value, Option<Desc>),
     own: impl FnMut(usize, usize),
 ) -> bool {
     let mut walk = Walk {
         types,
-        pending: vec![(of_reference(a, a_type), of_reference(b, b_type))],
+        pending: vec![(of_value(a, a_type), of_value(b, b_type))],
         seen: HashSet::new(),
         own,
     };
@@ -326,8 +306,8 @@ pub(super) async fn equals<'s>(
     let equal = unsafe {
         walk(
             &types,
-            (a.get(scope), a_type),
-            (b.get(scope), b_type),
+            (a.value(scope), a_type),
+            (b.value(scope), b_type),
             |_, _| count += 1,
         )
     };
@@ -337,18 +317,18 @@ pub(super) async fn equals<'s>(
     // The pairs left to an `eq`, held where the collector keeps them
     // current while each `eq` runs.
     let reservation = scope.reserve(array_size(2 * count));
-    let array = reservation.elements(2 * count, TypeId(0));
+    let array = reservation.array::<Slot>(2 * count);
     let mut found = 0;
-    // SAFETY: as above: nothing moves while the reservation is open, and
-    // the walk meets the pairs it met before.
+    // SAFETY: as above: nothing moves while the reservation is open, the
+    // walk meets the pairs it met before, and each is two live instances.
     unsafe {
         walk(
             &types,
-            (a.get(reservation.scope), a_type),
-            (b.get(reservation.scope), b_type),
+            (a.value(reservation.scope), a_type),
+            (b.value(reservation.scope), b_type),
             |left, right| {
-                array.set(found, left);
-                array.set(found + 1, right);
+                array.set(found, Value::reference(left));
+                array.set(found + 1, Value::reference(right));
                 found += 2;
             },
         );
@@ -358,22 +338,19 @@ pub(super) async fn equals<'s>(
     for index in 0..count {
         let pair = array.get(scope);
         let (left, right) = (
-            pair.get(2 * index).unwrap_or(0),
-            pair.get(2 * index + 1).unwrap_or(0),
+            pair.get(2 * index).unwrap_or(Value::NULL),
+            pair.get(2 * index + 1).unwrap_or(Value::NULL),
         );
-        // SAFETY: a pair the walk handed out: two live instances of a
-        // class that has an `eq`.
-        let Some(eq) = own_eq(unsafe { type_of(left) }) else {
+        // A pair the walk handed out: two live instances of a class that
+        // has an `eq`.
+        let Some(eq) = own_eq(left.id()) else {
             continue;
         };
         // SAFETY: as above, and none of the three slots is used again.
         let equal = unsafe {
-            let (left, right) = (
-                scope.elem_raw(left, TypeId(0)),
-                scope.elem_raw(right, TypeId(0)),
-            );
+            let (left, right) = (scope.elem(left), scope.elem(right));
             let answer = scope.call_baml(eq, &[left, right]).await?;
-            let equal = answer.get(scope) != 0;
+            let equal = answer.value(scope).payload != 0;
             scope.release_last(3);
             equal
         };

@@ -3,21 +3,23 @@
 //! Every function of the program becomes one object-local function; they
 //! call each other with Cranelift's tail convention and the runtime with the
 //! platform's C convention. Integer arithmetic wraps in two's complement.
-//! A value in a register has no tag: an `int` is an `i64`, a `float` an
-//! `f64`, a `bool` or `null` an `i8`, and a string, class instance or array
-//! a pointer to a heap object laid out as [`crate::layout`] says (zero for
-//! the `null` of an optional). A slot of a heap object holds a value as two
-//! words, a tag and a payload: [`Translator::slot_store`] and
-//! [`Translator::slot_load`] go between the two.
+//! A value whose static type fixes its tag is held without one: an `int` is
+//! an `i64`, a `float` an `f64`, a `bool` or `null` an `i8`, and a string,
+//! class instance or array a pointer to a heap object laid out as
+//! [`crate::layout`] says. A value of any other type (an optional, a union,
+//! an `unknown`, a function value) is a pair, one `i128` with its tag in
+//! the low half and its payload in the high one: the two words a slot of a
+//! heap object holds every value as. [`Translator::slot_store`] and
+//! [`Translator::slot_load`] go between a slot and a value.
 //!
 //! One register is set aside for the whole program: it holds the address of
 //! the running thread's mutator, whose first two words drive inline
 //! allocation.
 //!
 //! Every call is a point where the collector may run and move objects.
-//! References live across a call are spilled to frame slots that a stack map
-//! names and are reloaded afterwards; the maps of all functions are emitted
-//! as one table, [`STACK_MAPS_SYMBOL`].
+//! References and pairs live across a call are spilled to frame slots that
+//! a stack map names and are reloaded afterwards; the maps of all functions
+//! are emitted as one table, [`STACK_MAPS_SYMBOL`].
 //!
 //! The object exports one function, [`ENTRY_SYMBOL`], which calls the entry
 //! function and prints its result through the runtime.
@@ -113,10 +115,11 @@ fn internal(error: impl std::fmt::Display) -> CompileError {
     CompileError::Codegen(error.to_string())
 }
 
+/// The type of a pair: a tag in the low half and a payload in the high
+/// one.
+const PAIR: ir::Type = types::I128;
+
 fn clif_type(ty: &NativeTy<'_>) -> ir::Type {
-    if ty.is_pair() {
-        return types::I128;
-    }
     match ty {
         NativeTy::Int | NativeTy::Enum(_) => types::I64,
         NativeTy::Float => types::F64,
@@ -128,12 +131,11 @@ fn clif_type(ty: &NativeTy<'_>) -> ir::Type {
         | NativeTy::Tuple(_)
         | NativeTy::Array(_)
         | NativeTy::Map(..)
-        | NativeTy::Function(_)
         | NativeTy::Cell(_)
-        | NativeTy::Future(_)
-        | NativeTy::Union(_)
-        | NativeTy::Unknown
-        | NativeTy::Optional(_) => WORD,
+        | NativeTy::Future(_) => WORD,
+        NativeTy::Function(_) | NativeTy::Union(_) | NativeTy::Unknown | NativeTy::Optional(_) => {
+            PAIR
+        }
     }
 }
 
@@ -169,6 +171,119 @@ fn array_access() -> MemFlags {
 /// ... and the mutator.
 fn mutator_access() -> MemFlags {
     MemFlags::trusted().with_alias_region(Some(AliasRegion::Vmctx))
+}
+
+/// The bits of `value`, of a type held as one word, as a payload.
+fn payload_of(builder: &mut FunctionBuilder<'_>, value: ir::Value, ty: &NativeTy<'_>) -> ir::Value {
+    match ty {
+        NativeTy::Float => builder.ins().bitcast(WORD, MemFlags::new(), value),
+        NativeTy::Bool | NativeTy::Null => builder.ins().uextend(WORD, value),
+        _ => value,
+    }
+}
+
+/// The payload `bits` as a value of type `ty`, which is held as one word.
+fn of_payload(builder: &mut FunctionBuilder<'_>, bits: ir::Value, ty: &NativeTy<'_>) -> ir::Value {
+    match ty {
+        NativeTy::Float => builder.ins().bitcast(types::F64, MemFlags::new(), bits),
+        NativeTy::Bool | NativeTy::Null => builder.ins().ireduce(types::I8, bits),
+        _ => bits,
+    }
+}
+
+/// The tag of a value of type `ty` whose bits are its payload. An enum
+/// variant in a slot of its enum's type is the `int` of its position.
+fn immediate_tag(ty: &NativeTy<'_>) -> Option<usize> {
+    match ty {
+        NativeTy::Null => Some(layout::TAG_NULL),
+        NativeTy::Bool => Some(layout::TAG_BOOL),
+        NativeTy::Int | NativeTy::Enum(_) => Some(layout::TAG_INT),
+        NativeTy::Float => Some(layout::TAG_FLOAT),
+        _ => None,
+    }
+}
+
+/// The two words a slot of type `ty` holds for `value`: the tag and the
+/// payload. A pair is its own two words. The tag of anything else is a
+/// constant where every value of the type has the same one, and is read
+/// from the object's header otherwise: a string may be a slice, and a
+/// class's id is its own. `null`'s payload is zero.
+///
+/// A tag read here is good until the next call: a collection can change
+/// the type id of what a reference points at.
+fn slot_words(
+    builder: &mut FunctionBuilder<'_>,
+    ty: &NativeTy<'_>,
+    value: ir::Value,
+) -> (ir::Value, ir::Value) {
+    let constant = match ty {
+        _ if ty.is_pair() => return builder.ins().isplit(value),
+        NativeTy::Null => {
+            let null = builder.ins().iconst(WORD, imm(layout::TAG_NULL));
+            return (null, null);
+        }
+        NativeTy::Cell(_) => layout::TAG_CELL,
+        NativeTy::Array(_) => layout::TAG_ARRAY,
+        NativeTy::Map(..) => layout::TAG_MAP,
+        NativeTy::Future(_) => layout::TAG_FUTURE,
+        NativeTy::Bigint => layout::TAG_BIGINT,
+        NativeTy::Bytes => layout::TAG_BYTES,
+        NativeTy::Tuple(_) => layout::TAG_TUPLE,
+        other => match immediate_tag(other) {
+            Some(tag) => tag,
+            // The type id is the low half of the header.
+            None => {
+                let tag = builder.ins().uload32(slot_access(), value, 0);
+                return (tag, value);
+            }
+        },
+    };
+    let payload = payload_of(builder, value, ty);
+    (builder.ins().iconst(WORD, imm(constant)), payload)
+}
+
+/// The value of type `ty` whose two words in a slot of that type are
+/// `tag` and `payload`.
+fn of_slot_words(
+    builder: &mut FunctionBuilder<'_>,
+    ty: &NativeTy<'_>,
+    tag: ir::Value,
+    payload: ir::Value,
+) -> ir::Value {
+    if ty.is_pair() {
+        builder.ins().iconcat(tag, payload)
+    } else {
+        of_payload(builder, payload, ty)
+    }
+}
+
+/// The value of type `ty` that the pair of `tag` and `payload` holds: the
+/// pair itself, or the one word a value of the type is. An enum variant
+/// is read from its box.
+fn of_pair_words(
+    builder: &mut FunctionBuilder<'_>,
+    ty: &NativeTy<'_>,
+    tag: ir::Value,
+    payload: ir::Value,
+) -> ir::Value {
+    match ty {
+        NativeTy::Enum(_) => builder.ins().load(
+            types::I64,
+            slot_access(),
+            payload,
+            offset(layout::BOX_VALUE),
+        ),
+        _ => of_slot_words(builder, ty, tag, payload),
+    }
+}
+
+/// The pair `value` as a value of type `ty`.
+fn of_pair(builder: &mut FunctionBuilder<'_>, ty: &NativeTy<'_>, value: ir::Value) -> ir::Value {
+    if ty.is_pair() {
+        return value;
+    }
+    let (tag, payload) = builder.ins().isplit(value);
+    of_pair_words(builder, ty, tag, payload)
 }
 
 /// A function of the runtime library, called by symbol.
@@ -301,27 +416,23 @@ impl Runtime {
             Self::PollSlow | Self::AllocSlow | Self::SpawnUnsupported => (vec![], vec![]),
             Self::Await => (vec![word], vec![]),
             Self::TaskStart => (vec![word], vec![word]),
-            Self::TaskFinish => (vec![word, word], vec![]),
-            Self::TaskFail => (vec![word, word, word], vec![]),
-            Self::Spawn => (vec![word, word, word], vec![word]),
-            Self::AwaitError => (vec![word, word], vec![word]),
+            Self::TaskFinish | Self::Throw | Self::Rethrow => (vec![word, word, word], vec![]),
+            Self::TaskFail | Self::Uncaught => (vec![word, word, word, word], vec![]),
+            Self::Spawn => (vec![word, word], vec![word]),
+            Self::AwaitError => (vec![word, word], vec![word, word]),
             Self::PrintFloat => (vec![float], vec![]),
             Self::PrintBool => (vec![byte], vec![]),
-            Self::PanicIndexOutOfBounds
-            | Self::ArraySort
-            | Self::PanicMapKeyNotFound
-            | Self::Throw
-            | Self::Rethrow => (vec![word, word], vec![]),
+            Self::PanicIndexOutOfBounds | Self::ArraySort | Self::PanicMapKeyNotFound => {
+                (vec![word, word], vec![])
+            }
             Self::ErrorMapKeyNotFound | Self::BigintToNanos => (vec![word], vec![word]),
             Self::ErrorDivisionByZero | Self::ErrorNegativeShift => (vec![word, word], vec![word]),
-            Self::ErrorIndexOutOfBounds | Self::ErrorContext => {
+            Self::ErrorIndexOutOfBounds | Self::StringFromAny => {
                 (vec![word, word, word], vec![word])
             }
-            Self::Uncaught => (vec![word, word, word], vec![]),
+            Self::ErrorContext => (vec![word, word, word, word], vec![word]),
             Self::FloatRem => (vec![float, float], vec![float]),
-            Self::StringFromInt | Self::StringFromAny | Self::StringFromBigint => {
-                (vec![word, word], vec![word])
-            }
+            Self::StringFromInt | Self::StringFromBigint => (vec![word, word], vec![word]),
             Self::StringFromFloat => (vec![word, float], vec![word]),
             Self::ArrayNew => (vec![word, word], vec![word]),
             Self::BytesNew | Self::StringConcat | Self::StringFromEnum => {
@@ -362,8 +473,9 @@ enum Panic {
 }
 
 /// The stack maps of one function: for each call, the offset of its return
-/// address in the function and the offsets from the stack pointer of the
-/// slots holding references across it, which may be none.
+/// address in the function and the slots holding references or pairs
+/// across it, which may be none. A slot is its offset from the stack
+/// pointer, with [`layout::STACK_MAP_VALUE`] when it holds a pair.
 type FunctionStackMaps = Vec<(u32, Vec<u32>)>;
 
 struct Backend<'db> {
@@ -386,7 +498,6 @@ struct Backend<'db> {
     /// The type id of each enum's boxes, and the boxes of its variants.
     enum_types: HashMap<EnumRef<'db>, usize>,
     enum_boxes: HashMap<EnumRef<'db>, DataId>,
-    bool_boxes: Option<DataId>,
     /// The method table, once a call dispatches through it.
     methods: Option<DataId>,
     strings: HashMap<String, DataId>,
@@ -400,9 +511,9 @@ struct Backend<'db> {
     functions: Vec<(FuncId, u32)>,
     /// What the unwinder is told about them.
     unwind: unwind::Tables,
-    /// The function a spawned task starts in, by the machine type its
-    /// closure returns; see [`spawn`].
-    task_shims: HashMap<ir::Type, FuncId>,
+    /// The function a spawned task starts in, once a task is spawned; see
+    /// [`spawn`].
+    task_shim: Option<FuncId>,
     /// The entries natives call, and the ones `async` natives are called
     /// through.
     hooks: hooks::Hooks<'db>,
@@ -449,7 +560,6 @@ impl<'db> Backend<'db> {
             function_values: HashMap::new(),
             enum_types: HashMap::new(),
             enum_boxes: HashMap::new(),
-            bool_boxes: None,
             methods: None,
             strings: HashMap::new(),
             bigints: HashMap::new(),
@@ -457,7 +567,7 @@ impl<'db> Backend<'db> {
             stack_maps: Vec::new(),
             functions: Vec::new(),
             unwind: unwind::Tables::default(),
-            task_shims: HashMap::new(),
+            task_shim: None,
             hooks: hooks::Hooks::default(),
             compares_values: false,
         })
@@ -465,6 +575,46 @@ impl<'db> Backend<'db> {
 
     fn call_conv(&self) -> CallConv {
         self.module.isa().default_call_conv()
+    }
+
+    /// The two words of `value`, of type `ty`, held as a pair: what it is
+    /// where nothing but its tag says its type. They are the words a slot
+    /// of the type holds ([`slot_words`]) but for an enum variant, which
+    /// as a pair is a reference to its box, tagged with the box's type.
+    fn pair_words(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        builder: &mut FunctionBuilder<'_>,
+        ty: &NativeTy<'db>,
+        value: ir::Value,
+    ) -> Result<(ir::Value, ir::Value), CompileError> {
+        let NativeTy::Enum(enum_ref) = ty else {
+            return Ok(slot_words(builder, ty, value));
+        };
+        let tag = self.enum_type(db, *enum_ref);
+        let boxes = self.enum_boxes(db, *enum_ref)?;
+        let boxes = self.module.declare_data_in_func(boxes, builder.func);
+        let boxes = builder.ins().symbol_value(WORD, boxes);
+        let scaled = builder.ins().imul_imm(value, imm(layout::BOX_SIZE));
+        Ok((
+            builder.ins().iconst(WORD, imm(tag)),
+            builder.ins().iadd(boxes, scaled),
+        ))
+    }
+
+    /// `value`, of type `ty`, as a pair.
+    fn as_pair(
+        &mut self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        builder: &mut FunctionBuilder<'_>,
+        ty: &NativeTy<'db>,
+        value: ir::Value,
+    ) -> Result<ir::Value, CompileError> {
+        if ty.is_pair() {
+            return Ok(value);
+        }
+        let (tag, payload) = self.pair_words(db, builder, ty, value)?;
+        Ok(builder.ins().iconcat(tag, payload))
     }
 
     /// The signature of a BAML function. Functions call each other with the
@@ -476,12 +626,23 @@ impl<'db> Backend<'db> {
     /// `type_ids` type ids, 32 bits each, one per type parameter of a
     /// function that must be told its type arguments; then the declared
     /// parameters.
+    ///
+    /// A function entered by a call that names it takes each parameter and
+    /// returns its result as a value of the type is held. One entered
+    /// through a value takes every parameter and returns its result as a
+    /// pair, whatever the types: the call was written for a function type,
+    /// which says how many arguments there are and no more of how the
+    /// function it reaches holds them.
     fn clif_signature(signature: &Signature<'_>, entry: Entry, type_ids: usize) -> ir::Signature {
         let mut clif = ir::Signature::new(CallConv::Tail);
         let (closure, receiver) = match entry {
             Entry::Direct => (false, 0),
             Entry::Value => (true, 0),
             Entry::Bound => (true, 1),
+        };
+        let held = |ty: &NativeTy<'_>| match entry {
+            Entry::Direct => clif_type(ty),
+            Entry::Value | Entry::Bound => PAIR,
         };
         clif.params = closure
             .then(|| AbiParam::new(WORD))
@@ -492,10 +653,19 @@ impl<'db> Backend<'db> {
                     .params
                     .iter()
                     .skip(receiver)
-                    .map(|ty| AbiParam::new(clif_type(ty))),
+                    .map(|ty| AbiParam::new(held(ty))),
             )
             .collect();
-        clif.returns = vec![AbiParam::new(clif_type(&signature.result))];
+        clif.returns = vec![AbiParam::new(held(&signature.result))];
+        clif
+    }
+
+    /// The signature of what is entered with nothing known of its types
+    /// but how many values it takes: each one a pair, and a pair returned.
+    fn uniform_signature(values: usize) -> ir::Signature {
+        let mut clif = ir::Signature::new(CallConv::Tail);
+        clif.params = vec![AbiParam::new(PAIR); values];
+        clif.returns = vec![AbiParam::new(PAIR)];
         clif
     }
 
@@ -544,17 +714,18 @@ impl<'db> Backend<'db> {
         self.module.define_data(id, &description).map_err(internal)
     }
 
-    /// The type id in the header of a value of type `ty` held as a
-    /// reference, when every such value has the same one.
+    /// The type id in the tag of a value of type `ty` held as a pair, when
+    /// every such value has the same one. A string that is a slice has
+    /// the id after the one given here.
     fn type_id(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
         ty: &NativeTy<'db>,
     ) -> Result<Option<usize>, CompileError> {
         Ok(Some(match ty {
-            NativeTy::Int => layout::TAG_BOX_INT,
-            NativeTy::Float => layout::TAG_BOX_FLOAT,
-            NativeTy::Bool => layout::TAG_BOX_BOOL,
+            NativeTy::Int => layout::TAG_INT,
+            NativeTy::Float => layout::TAG_FLOAT,
+            NativeTy::Bool => layout::TAG_BOOL,
             NativeTy::String => layout::TAG_STRING,
             NativeTy::Bigint => layout::TAG_BIGINT,
             NativeTy::Bytes => layout::TAG_BYTES,
@@ -642,23 +813,9 @@ impl<'db> Backend<'db> {
         id
     }
 
-    /// Boxes in the executable's data, one after another, each holding the
-    /// next value from zero.
-    fn boxes(&mut self, box_type: usize, count: usize) -> Result<DataId, CompileError> {
-        let mut bytes = Vec::with_capacity(count * layout::BOX_SIZE);
-        for value in 0..count {
-            bytes.extend_from_slice(&box_type.to_ne_bytes());
-            bytes.extend_from_slice(&value.to_ne_bytes());
-        }
-        let id = self
-            .module
-            .declare_anonymous_data(false, false)
-            .map_err(internal)?;
-        self.define_data(id, DataDescription::new(), bytes)?;
-        Ok(id)
-    }
-
-    /// The boxes of an enum's variants, in declaration order.
+    /// The boxes of an enum's variants in the executable's data, one
+    /// after another in declaration order, each holding its variant's
+    /// position: what a variant held as a pair refers to.
     fn enum_boxes(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
@@ -668,18 +825,18 @@ impl<'db> Backend<'db> {
             return Ok(*id);
         }
         let box_type = self.enum_type(db, enum_ref);
-        let id = self.boxes(box_type, enum_variants(db, enum_ref).len())?;
-        self.enum_boxes.insert(enum_ref, id);
-        Ok(id)
-    }
-
-    /// The boxes of `false` and `true`, in that order.
-    fn bool_boxes(&mut self) -> Result<DataId, CompileError> {
-        if let Some(id) = self.bool_boxes {
-            return Ok(id);
+        let count = enum_variants(db, enum_ref).len();
+        let mut bytes = Vec::with_capacity(count * layout::BOX_SIZE);
+        for position in 0..count {
+            bytes.extend_from_slice(&box_type.to_ne_bytes());
+            bytes.extend_from_slice(&position.to_ne_bytes());
         }
-        let id = self.boxes(layout::TAG_BOX_BOOL, 2)?;
-        self.bool_boxes = Some(id);
+        let id = self
+            .module
+            .declare_anonymous_data(false, false)
+            .map_err(internal)?;
+        self.define_data(id, DataDescription::new(), bytes)?;
+        self.enum_boxes.insert(enum_ref, id);
         Ok(id)
     }
 
@@ -718,41 +875,34 @@ impl<'db> Backend<'db> {
     /// Emit the method table: one row per `8` bytes of the type table, so
     /// that a type id shifted by the program's column shift is the offset
     /// of its type's row; a row is one code address per column, zero where
-    /// the type has no code for a method.
+    /// the type has no code for a method. The code is the thunk of the
+    /// type's implementation: `thunks` has one for each method of each of
+    /// the program's rows.
     fn define_methods(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
         program: &Program<'db>,
-        declared: &HashMap<FnKey<'db>, Declared<'db>>,
+        thunks: &[Vec<FuncId>],
     ) -> Result<(), CompileError> {
         let Some(id) = self.methods else {
             return Ok(());
         };
         let mut entries = Vec::new();
-        for (ty, methods) in &program.rows {
+        for ((ty, methods), thunks) in program.rows.iter().zip(thunks) {
             let type_id = self
                 .type_id(db, ty)?
                 .ok_or_else(|| internal("a method table row is for a type with a type id"))?;
-            for (slot, code) in methods {
-                let function = match code {
-                    crate::program::Code::Function(key) => {
-                        declared
-                            .get(key)
-                            .ok_or_else(|| internal("an implementation is part of the program"))?
-                            .id
-                    }
-                    crate::program::Code::Native(native) => self.dispatched_stub(db, native)?,
-                };
+            for ((slot, _), function) in methods.iter().zip(thunks) {
                 let column = program.slots[*slot].column;
                 entries.push((
                     (type_id << program.column_shift) + column * layout::WORD,
-                    function,
+                    *function,
                 ));
                 if type_id == layout::TAG_STRING {
                     // A slice is a string: its row is the same.
                     entries.push((
                         (layout::TAG_STRING_SLICE << program.column_shift) + column * layout::WORD,
-                        function,
+                        *function,
                     ));
                 }
             }
@@ -1213,27 +1363,33 @@ pub(crate) fn generate<'db>(
         &mut clif,
         &mut disassembly,
     )?;
-    for (result, id) in backend.declared_task_shims() {
+    if let Some(id) = backend.declared_task_shim() {
         let mut shim_signature = ir::Signature::new(backend.call_conv());
         shim_signature.params.push(AbiParam::new(WORD));
         context.func.signature = shim_signature;
-        spawn::task_shim(
-            &mut backend,
-            result,
-            &mut context.func,
-            &mut builder_context,
-        )?;
+        spawn::task_shim(&mut backend, &mut context.func, &mut builder_context)?;
         define(
             &mut backend,
             &mut context,
             id,
-            &format!("baml_task_shim_{result}"),
+            spawn::TASK_SHIM,
             &mut clif,
             &mut disassembly,
         )?;
     }
     hooks::define_all(
         &mut backend,
+        db,
+        &mut context,
+        &mut builder_context,
+        &mut clif,
+        &mut disassembly,
+    )?;
+    let thunks = method_thunks(
+        &mut backend,
+        db,
+        program,
+        &declared,
         &mut context,
         &mut builder_context,
         &mut clif,
@@ -1243,7 +1399,7 @@ pub(crate) fn generate<'db>(
     backend.define_stack_maps()?;
     backend.define_unwind()?;
     backend.define_functions()?;
-    backend.define_methods(db, program, &declared)?;
+    backend.define_methods(db, program, &thunks)?;
     backend.define_types(db)?;
 
     let object = backend.module.finish().emit().map_err(internal)?;
@@ -1252,6 +1408,144 @@ pub(crate) fn generate<'db>(
         clif,
         disassembly,
     })
+}
+
+/// The thunk of each method of each row of the method table, compiled
+/// here: what the table holds for the implementation a type has.
+///
+/// A dispatching call knows how many values a method takes and nothing of
+/// how the implementation it reaches holds them, so it passes the receiver
+/// and every argument as a pair and takes a pair back. The thunk reads
+/// each pair as the implementation's own parameter is held, calls it, and
+/// returns its result as a pair. A program that dispatches nothing has no
+/// table and no thunks.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "what compiling a function takes, and the program whose rows these are"
+)]
+fn method_thunks<'db>(
+    backend: &mut Backend<'db>,
+    db: &'db dyn baml_compiler2_mir::Db,
+    program: &Program<'db>,
+    declared: &HashMap<FnKey<'db>, Declared<'db>>,
+    context: &mut Context,
+    builder_context: &mut FunctionBuilderContext,
+    clif: &mut Option<String>,
+    disassembly: &mut Option<String>,
+) -> Result<Vec<Vec<FuncId>>, CompileError> {
+    if backend.methods.is_none() {
+        return Ok(Vec::new());
+    }
+    // The thunk of each implementation, by the function it calls.
+    let mut made: HashMap<FuncId, FuncId> = HashMap::new();
+    let mut rows = Vec::with_capacity(program.rows.len());
+    for (_, methods) in &program.rows {
+        let mut thunks = Vec::with_capacity(methods.len());
+        for (_, code) in methods {
+            let (target, values) = match code {
+                crate::program::Code::Function(key) => {
+                    let callee = declared
+                        .get(key)
+                        .ok_or_else(|| internal("an implementation is part of the program"))?;
+                    (callee.id, callee.signature.params.len())
+                }
+                crate::program::Code::Native(native) => {
+                    let (signature, _) = native.callable().map_err(internal)?;
+                    (backend.dispatched_stub(db, native)?, signature.params.len())
+                }
+            };
+            if let Some(thunk) = made.get(&target) {
+                thunks.push(*thunk);
+                continue;
+            }
+            let signature = Backend::uniform_signature(values);
+            let thunk = backend
+                .module
+                .declare_function(
+                    &format!("baml_method_{}", made.len()),
+                    Linkage::Local,
+                    &signature,
+                )
+                .map_err(internal)?;
+            context.func.signature = signature;
+            thunk_body(
+                backend,
+                db,
+                code,
+                target,
+                declared,
+                &mut context.func,
+                builder_context,
+            )?;
+            // It has no name in a trace: the implementation it calls is
+            // the frame a program knows.
+            define(backend, context, thunk, "", clif, disassembly)?;
+            made.insert(target, thunk);
+            thunks.push(thunk);
+        }
+        rows.push(thunks);
+    }
+    Ok(rows)
+}
+
+/// The body of the thunk of the implementation `code`, which is the
+/// function `target`: see [`method_thunks`].
+fn thunk_body<'db>(
+    backend: &mut Backend<'db>,
+    db: &'db dyn baml_compiler2_mir::Db,
+    code: &crate::program::Code<'db>,
+    target: FuncId,
+    declared: &HashMap<FnKey<'db>, Declared<'db>>,
+    function: &mut ir::Function,
+    builder_context: &mut FunctionBuilderContext,
+) -> Result<(), CompileError> {
+    let mut builder = FunctionBuilder::new(function, builder_context);
+    let block = builder.create_block();
+    builder.append_block_params_for_function_params(block);
+    builder.switch_to_block(block);
+    let passed = builder.block_params(block).to_vec();
+    let target = backend.function_ref(target, builder.func);
+    let result = match code {
+        crate::program::Code::Function(key) => {
+            let callee = declared
+                .get(key)
+                .ok_or_else(|| internal("an implementation is part of the program"))?;
+            let arguments: Vec<ir::Value> = callee
+                .signature
+                .params
+                .iter()
+                .zip(&passed)
+                .map(|(ty, value)| of_pair(&mut builder, ty, *value))
+                .collect();
+            let call = builder.ins().call(target, &arguments);
+            let returned = builder.inst_results(call)[0];
+            backend.as_pair(db, &mut builder, &callee.signature.result, returned)?
+        }
+        // The stub of an `async` native takes what the native does, less
+        // the worker, and returns a pair.
+        crate::program::Code::Native(native) => {
+            let (signature, _) = native.callable().map_err(internal)?;
+            let mut arguments = Vec::new();
+            for (ty, value) in signature.params.iter().zip(&passed) {
+                let expected = ty.native(db, &[]);
+                if ty.is_value() {
+                    let (tag, payload) = builder.ins().isplit(*value);
+                    arguments.extend([tag, payload]);
+                } else if expected.is_pair() {
+                    // The address of Rust state, held as any value is.
+                    arguments.push(builder.ins().isplit(*value).1);
+                } else {
+                    arguments.push(of_pair(&mut builder, &expected, *value));
+                }
+            }
+            let call = builder.ins().call(target, &arguments);
+            builder.inst_results(call)[0]
+        }
+    };
+    builder.ins().return_(&[result]);
+    builder.seal_all_blocks();
+    builder.finalize();
+    Ok(())
 }
 
 /// Compile the function in `context` to machine code under `id`, and keep
@@ -1294,7 +1588,17 @@ fn define(
                     |_| Vec::new(),
                     |index| {
                         mapped += 1;
-                        maps[index].2.entries().map(|(_, slot)| slot).collect()
+                        maps[index]
+                            .2
+                            .entries()
+                            .map(|(ty, slot)| {
+                                if ty == PAIR {
+                                    slot | table_word(layout::STACK_MAP_VALUE)
+                                } else {
+                                    slot
+                                }
+                            })
+                            .collect()
                     },
                 );
             (site.ret_addr, slots)
@@ -1336,14 +1640,18 @@ fn entry_shim(
     // Nothing caught what arrives here: the runtime reports it and ends the
     // process.
     let uncaught = builder.create_block();
-    builder.append_block_param(uncaught, WORD);
+    builder.append_block_param(uncaught, PAIR);
     builder.append_block_param(uncaught, WORD);
     builder.set_cold_block(uncaught);
     let result = unwind::try_call(
         &mut builder,
         &unwind::Called::Direct(callee),
         &[],
-        &[(None, uncaught)],
+        &[unwind::Edge {
+            tag: None,
+            landing: uncaught,
+            reads_context: true,
+        }],
     );
     if let Some((print, enum_type)) = print {
         let print = backend.function_ref(print, builder.func);
@@ -1366,10 +1674,11 @@ fn entry_shim(
         let arriving = builder.block_params(uncaught);
         (arriving[0], arriving[1])
     };
+    let (tag, payload) = builder.ins().isplit(error);
     let worker = builder.ins().get_pinned_reg(WORD);
     let report = backend.runtime(Runtime::Uncaught)?;
     let report = backend.function_ref(report, builder.func);
-    builder.ins().call(report, &[worker, error, trace]);
+    builder.ins().call(report, &[worker, tag, payload, trace]);
     builder.ins().trap(TRAP_AFTER_PANIC);
     builder.seal_all_blocks();
     builder.finalize();
@@ -1441,7 +1750,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 Ok(NativeTy::Null) | Err(_) => None,
                 Ok(ty) => {
                     let variable = builder.declare_var(clif_type(&ty));
-                    if ty.is_ref() {
+                    if ty.is_traced() {
                         builder.declare_var_needs_stack_map(variable);
                     }
                     Some(variable)
@@ -1465,7 +1774,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let done = builder.declare_var(types::I8);
                 let value = (*element != NativeTy::Null).then(|| {
                     let value = builder.declare_var(clif_type(element));
-                    if element.is_ref() {
+                    if element.is_traced() {
                         builder.declare_var_needs_stack_map(value);
                     }
                     value
@@ -1529,14 +1838,19 @@ impl<'a, 'db> Translator<'a, 'db> {
             };
             let value = if index == 1 && self.key.entry == Entry::Bound {
                 let bound = self.builder.use_var(self.closure);
-                self.slot_load(content, bound, layout::BOUND_RECEIVER)
+                self.pair_load(content, bound, layout::BOUND_RECEIVER)
             } else {
-                arriving.next().expect("a parameter per argument")
+                let passed = arriving.next().expect("a parameter per argument");
+                match self.key.entry {
+                    Entry::Direct => passed,
+                    // Every argument arrives as a pair.
+                    Entry::Value | Entry::Bound => of_pair(&mut self.builder, content, passed),
+                }
             };
             if let NativeTy::Cell(content) = &ty {
                 if **content != NativeTy::Null {
                     let waiting = self.builder.declare_var(clif_type(content));
-                    if content.is_ref() {
+                    if content.is_traced() {
                         self.builder.declare_var_needs_stack_map(waiting);
                     }
                     self.builder.def_var(waiting, value);
@@ -1664,13 +1978,50 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.ins().iconst(WORD, imm(value))
     }
 
-    /// Mark a reference so that it is spilled across calls and named in
-    /// their stack maps.
+    /// Mark a reference or a pair so that it is spilled across calls and
+    /// named in their stack maps.
     fn track(&mut self, value: ir::Value, ty: &NativeTy<'db>) -> ir::Value {
-        if ty.is_ref() {
+        if ty.is_traced() {
             self.builder.declare_value_needs_stack_map(value);
         }
         value
+    }
+
+    /// The pair of `tag` and `payload`.
+    fn pair(&mut self, tag: ir::Value, payload: ir::Value) -> ir::Value {
+        self.builder.ins().iconcat(tag, payload)
+    }
+
+    /// `value`, of type `ty`, as a pair, which the collector is told of.
+    fn as_pair(&mut self, ty: &NativeTy<'db>, value: ir::Value) -> Result<ir::Value, CompileError> {
+        let pair = self
+            .backend
+            .as_pair(self.db, &mut self.builder, ty, value)?;
+        self.builder.declare_value_needs_stack_map(pair);
+        Ok(pair)
+    }
+
+    /// The two words of `value`, of type `ty`, as a pair.
+    fn pair_words(
+        &mut self,
+        ty: &NativeTy<'db>,
+        value: ir::Value,
+    ) -> Result<(ir::Value, ir::Value), CompileError> {
+        self.backend
+            .pair_words(self.db, &mut self.builder, ty, value)
+    }
+
+    /// The value of type `ty` every bit of which is zero: `0`, `0.0`,
+    /// `false`, `null`, no object.
+    fn zero(&mut self, ty: &NativeTy<'db>) -> ir::Value {
+        match clif_type(ty) {
+            PAIR => {
+                let zero = self.builder.ins().iconst(WORD, 0);
+                self.builder.ins().iconcat(zero, zero)
+            }
+            types::F64 => self.builder.ins().f64const(0.0),
+            other => self.builder.ins().iconst(other, 0),
+        }
     }
 
     /// What a parameter of type `ty` is passed as when the call leaves it
@@ -1678,6 +2029,12 @@ impl<'a, 'db> Translator<'a, 'db> {
     /// for it first, and puts the default in its place.
     fn omitted(&mut self, ty: &NativeTy<'db>) -> ir::Value {
         match ty {
+            // No value has this tag.
+            _ if ty.is_pair() => {
+                let tag = self.word_const(layout::TAG_OMITTED);
+                let nothing = self.word_const(0);
+                self.pair(tag, nothing)
+            }
             // No variant is at this position.
             NativeTy::Enum(_) => self.builder.ins().iconst(WORD, -1),
             // Neither `false` nor `true`.
@@ -1688,149 +2045,40 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
     }
 
+    /// Whether `value`, of type `ty`, is what a parameter left to its
+    /// default is passed as.
+    fn is_omitted(&mut self, value: ir::Value, ty: &NativeTy<'db>) -> ir::Value {
+        if ty.is_pair() {
+            let (tag, _) = self.builder.ins().isplit(value);
+            return self
+                .builder
+                .ins()
+                .icmp_imm(IntCC::Equal, tag, imm(layout::TAG_OMITTED));
+        }
+        let omitted = self.omitted(ty);
+        self.builder.ins().icmp(IntCC::Equal, value, omitted)
+    }
+
     /// Change the representation of `value` from `from` to `to`, which it is
-    /// assignable to. A reference and its optional are the same bits; an
-    /// optional scalar is a pair to build or take apart; a scalar goes into
-    /// a box where a union is expected and comes out of it where the union
-    /// is known to hold one.
+    /// assignable to. A value held as one word becomes a pair where a pair
+    /// is expected, with the tag its type gives it; a pair gives up its
+    /// payload where it is known to hold a value of one type. Two types
+    /// both held as one word, or both as a pair, hold a value the same
+    /// way.
     fn coerce(
         &mut self,
         value: ir::Value,
         from: &NativeTy<'db>,
         to: &NativeTy<'db>,
     ) -> Result<ir::Value, CompileError> {
-        if from == to {
-            return Ok(value);
-        }
-        Ok(match (from, to) {
-            (from, to) if from.is_boxed() && to.is_boxed() => value,
-            (from, to) if to.is_boxed() => self.boxed(value, from)?,
-            (from, to) if from.is_boxed() => self.unboxed(value, to),
-            (NativeTy::Null, to) if to.is_pair() => {
-                let zero = self.builder.ins().iconst(WORD, 0);
-                self.builder.ins().iconcat(zero, zero)
-            }
-            (NativeTy::Null, _) => self.builder.ins().iconst(WORD, 0),
-            (from, to) if to.is_pair() => {
-                let bits = self.as_slot(value, from);
-                let present = self.builder.ins().iconst(WORD, 1);
-                self.builder.ins().iconcat(bits, present)
-            }
-            (from, to) if from.is_pair() => {
-                let (bits, _) = self.builder.ins().isplit(value);
-                self.slot_as(bits, to)
-            }
-            _ => value,
-        })
-    }
-
-    /// The bits of one word as a value of type `ty`.
-    fn slot_as(&mut self, bits: ir::Value, ty: &NativeTy<'db>) -> ir::Value {
-        match ty {
-            NativeTy::Float => self
-                .builder
-                .ins()
-                .bitcast(types::F64, MemFlags::new(), bits),
-            NativeTy::Bool | NativeTy::Null => self.builder.ins().ireduce(types::I8, bits),
-            _ => bits,
-        }
-    }
-
-    /// `value`, of type `from`, as a union holds it.
-    fn boxed(&mut self, value: ir::Value, from: &NativeTy<'db>) -> Result<ir::Value, CompileError> {
-        Ok(match from {
-            NativeTy::Null => self.builder.ins().iconst(WORD, 0),
-            NativeTy::Int | NativeTy::Float => {
-                let box_type = if *from == NativeTy::Int {
-                    layout::TAG_BOX_INT
-                } else {
-                    layout::TAG_BOX_FLOAT
-                };
-                let object = self.allocate(layout::BOX_SIZE)?;
-                let box_type = self.word_const(box_type);
-                self.builder.ins().store(slot_access(), box_type, object, 0);
-                self.builder
-                    .ins()
-                    .store(slot_access(), value, object, offset(layout::BOX_VALUE));
-                object
-            }
-            // The boxes of bools and of enum variants are in the
-            // executable's data, in order.
-            NativeTy::Bool | NativeTy::Enum(_) => {
-                let (boxes, index) = match from {
-                    NativeTy::Enum(enum_ref) => {
-                        (self.backend.enum_boxes(self.db, *enum_ref)?, value)
-                    }
-                    _ => (
-                        self.backend.bool_boxes()?,
-                        self.builder.ins().uextend(WORD, value),
-                    ),
-                };
-                let boxes = self.data_address(boxes);
-                let scaled = self.builder.ins().imul_imm(index, imm(layout::BOX_SIZE));
-                self.builder.ins().iadd(boxes, scaled)
-            }
-            NativeTy::Optional(inner) if from.is_pair() => {
-                let (bits, present) = self.builder.ins().isplit(value);
-                let some = self.builder.create_block();
-                let done = self.builder.create_block();
-                self.builder.append_block_param(done, WORD);
-                let null = self.builder.ins().iconst(WORD, 0);
-                self.builder
-                    .ins()
-                    .brif(present, some, &[], done, &[null.into()]);
-                self.builder.seal_block(some);
-                self.builder.switch_to_block(some);
-                let inner_value = self.slot_as(bits, inner);
-                let object = self.boxed(inner_value, inner)?;
-                self.builder.ins().jump(done, &[object.into()]);
-                self.builder.seal_block(done);
-                self.builder.switch_to_block(done);
-                let object = self.builder.block_params(done)[0];
-                self.builder.declare_value_needs_stack_map(object);
-                object
-            }
-            _ => value,
-        })
-    }
-
-    /// What the union reference `value` holds, known to be of type `to`.
-    fn unboxed(&mut self, value: ir::Value, to: &NativeTy<'db>) -> ir::Value {
-        match to {
-            NativeTy::Null => self.null(),
-            NativeTy::Int | NativeTy::Float | NativeTy::Bool | NativeTy::Enum(_) => {
-                self.builder.ins().load(
-                    clif_type(to),
-                    slot_access(),
-                    value,
-                    offset(layout::BOX_VALUE),
-                )
-            }
-            NativeTy::Optional(inner) if to.is_pair() => {
-                let some = self.builder.create_block();
-                let done = self.builder.create_block();
-                self.builder.append_block_param(done, WORD);
-                self.builder.append_block_param(done, WORD);
-                let zero = self.builder.ins().iconst(WORD, 0);
-                self.builder
-                    .ins()
-                    .brif(value, some, &[], done, &[zero.into(), zero.into()]);
-                self.builder.seal_block(some);
-                self.builder.switch_to_block(some);
-                let inner_value = self.unboxed(value, inner);
-                let bits = self.as_slot(inner_value, inner);
-                let one = self.builder.ins().iconst(WORD, 1);
-                self.builder.ins().jump(done, &[bits.into(), one.into()]);
-                self.builder.seal_block(done);
-                self.builder.switch_to_block(done);
-                let (bits, present) = (
-                    self.builder.block_params(done)[0],
-                    self.builder.block_params(done)[1],
-                );
-                self.builder.ins().iconcat(bits, present)
-            }
-            _ => value,
-        }
+        let held = match (from.is_pair(), to.is_pair()) {
+            (false, true) => self.as_pair(from, value)?,
+            (true, false) => of_pair(&mut self.builder, to, value),
+            _ => return Ok(value),
+        };
+        // A new value, which the collector has to be told of like the one
+        // it was made from.
+        Ok(self.track(held, to))
     }
 
     /// Whether `value`, of static type `ty`, passes a type test decided as
@@ -1844,7 +2092,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         let test = match plan {
             TypeTestPlan::Always(passes) => return Ok(self.bool_const(*passes)),
             TypeTestPlan::Present(wanted) => {
-                let presence = self.presence(value, ty);
+                let presence = self.presence(value);
                 let condition = if *wanted {
                     IntCC::NotEqual
                 } else {
@@ -1874,107 +2122,114 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             TypeTestPlan::Header(test) => test,
         };
+        debug_assert!(ty.is_pair(), "a test by tag is of a pair");
         let classes::Passing {
             ids,
             panics,
             null: null_passes,
         } = self.passing(test)?;
-        // `null` has no header to read.
-        let may_be_null = match ty {
-            NativeTy::Union(members) => members.contains(&NativeTy::Null),
-            _ => true,
-        };
-        let done = self.builder.create_block();
-        self.builder.append_block_param(done, types::I8);
-        if may_be_null {
-            let read = self.builder.create_block();
-            let fails = self.bool_const(null_passes);
+        // The tag is in a register: nothing is loaded to compare it.
+        let (tag, payload) = self.builder.ins().isplit(value);
+        let id = self.builder.ins().ireduce(types::I32, tag);
+        let mut passes = null_passes.then(|| {
             self.builder
                 .ins()
-                .brif(value, read, &[], done, &[fails.into()]);
-            self.builder.seal_block(read);
-            self.builder.switch_to_block(read);
-        }
-        // Every panic passes: the flag is the highest bit a header has set.
-        let mut passes = panics.then(|| {
-            let whole = self.builder.ins().load(WORD, slot_access(), value, 0);
-            let flag = self
-                .builder
-                .ins()
-                .ushr_imm(whole, i64::from(layout::HEADER_PANIC_BIT));
-            self.builder.ins().ireduce(types::I8, flag)
+                .icmp_imm(IntCC::Equal, id, imm(layout::TAG_NULL))
         });
-        // Not kept when nothing below compares it.
-        let header = self.builder.ins().uload32(slot_access(), value, 0);
+        let mut also = |translator: &mut Self, same: ir::Value| {
+            passes = Some(match passes {
+                Some(passes) => translator.builder.ins().bor(passes, same),
+                None => same,
+            });
+        };
         if let TestKind::Argument(slot) = test {
             let type_id = self
                 .type_ids
                 .get(*slot)
                 .ok_or_else(|| internal("a tested type argument has its type id"))?;
             let type_id = self.builder.use_var(*type_id);
-            let type_id = self.builder.ins().uextend(WORD, type_id);
             // The id passed for `string` is that of one holding its text.
-            let is_string = self.is_string_id(header);
-            let flat = self.word_const(layout::TAG_STRING);
-            let header = self.builder.ins().select(is_string, flat, header);
-            let same = self.builder.ins().icmp(IntCC::Equal, header, type_id);
-            passes = Some(match passes {
-                Some(passes) => self.builder.ins().bor(passes, same),
-                None => same,
-            });
+            let is_string = self.is_string_id(id);
+            let flat = self
+                .builder
+                .ins()
+                .iconst(types::I32, imm(layout::TAG_STRING));
+            let id = self.builder.ins().select(is_string, flat, id);
+            let same = self.builder.ins().icmp(IntCC::Equal, id, type_id);
+            also(self, same);
         }
-        for id in ids {
-            let same = if id == layout::TAG_STRING {
-                self.is_string_id(header)
+        for wanted in ids {
+            let same = if wanted == layout::TAG_STRING {
+                self.is_string_id(id)
             } else {
-                self.builder.ins().icmp_imm(IntCC::Equal, header, imm(id))
+                self.builder.ins().icmp_imm(IntCC::Equal, id, imm(wanted))
             };
-            passes = Some(match passes {
-                Some(passes) => self.builder.ins().bor(passes, same),
-                None => same,
-            });
+            also(self, same);
         }
-        let passes = match passes {
+        if panics {
+            // Every panic passes. Whether an instance is one is a flag of
+            // its own header: a tag does not say.
+            let is_pointer = self.builder.ins().icmp_imm(
+                IntCC::UnsignedGreaterThan,
+                id,
+                imm(layout::TAG_OMITTED),
+            );
+            let read = self.builder.create_block();
+            let done = self.builder.create_block();
+            self.builder.append_block_param(done, types::I8);
+            let no = self.bool_const(false);
+            self.builder
+                .ins()
+                .brif(is_pointer, read, &[], done, &[no.into()]);
+            self.builder.seal_block(read);
+            self.builder.switch_to_block(read);
+            let header = self.builder.ins().load(WORD, slot_access(), payload, 0);
+            let flag = self
+                .builder
+                .ins()
+                .ushr_imm(header, i64::from(layout::HEADER_PANIC_BIT));
+            let flag = self.builder.ins().band_imm(flag, 1);
+            let flag = self.builder.ins().ireduce(types::I8, flag);
+            self.builder.ins().jump(done, &[flag.into()]);
+            self.builder.seal_block(done);
+            self.builder.switch_to_block(done);
+            let is_panic = self.builder.block_params(done)[0];
+            also(self, is_panic);
+        }
+        Ok(match passes {
             Some(passes) => passes,
             // No type in the program passes.
             None => self.bool_const(false),
-        };
-        self.builder.ins().jump(done, &[passes.into()]);
-        self.builder.seal_block(done);
-        self.builder.switch_to_block(done);
-        Ok(self.builder.block_params(done)[0])
+        })
     }
 
-    /// Branch on the header a type tag read gave, or zero for `null`: to
-    /// the first arm whose key is the header's type. Arms that between
-    /// them take every panic class are one test of the header's flag.
+    /// Branch on the tag a type tag read gave: to the first arm whose key
+    /// is the tag's type. A class's type id is its own, so an arm that
+    /// takes every panic class takes each by its id.
     fn switch_on_tag(
         &mut self,
-        header: ir::Value,
+        tag: ir::Value,
         arms: &[(SwitchKey<'db>, BlockId)],
         otherwise: BlockId,
     ) -> Result<(), CompileError> {
         // The type ids each arm takes, first arm first.
         let mut taken: Vec<(usize, BlockId)> = Vec::new();
-        let mut panics: Vec<(usize, BlockId)> = Vec::new();
         for (key, target) in arms {
             let ids = match key {
-                SwitchKey::Class(class) => {
-                    let (id, is_panic) = self.plain_class(*class)?;
-                    if is_panic {
-                        panics.push((id, *target));
-                    }
-                    vec![id]
-                }
+                SwitchKey::Class(class) => vec![self.plain_class(*class)?],
                 SwitchKey::Int(tag) => {
                     let test = TestKind::of_tag(*tag)
                         .ok_or_else(|| internal("a checked type tag names a type"))?;
                     let mut ids = Vec::new();
                     if self.passing_ids(&test, &mut ids)? {
-                        ids.push(0);
+                        ids.push(layout::TAG_NULL);
                     }
                     if ids.contains(&layout::TAG_STRING) {
                         ids.push(layout::TAG_STRING_SLICE);
+                    }
+                    if ids.contains(&classes::ANY_PANIC) {
+                        ids.retain(|id| *id != classes::ANY_PANIC);
+                        ids.extend(self.panic_ids()?);
                     }
                     ids
                 }
@@ -1985,28 +2240,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 }
             }
         }
-        // Every panic class to one block: the flag decides, and no id of a
-        // panic is left to compare.
-        let to_one = panics.first().map(|(_, target)| *target).filter(|target| {
-            panics.len() == layout::WELL_KNOWN_PANICS
-                && panics.iter().all(|(_, other)| other == target)
-        });
-        if let Some(target) = to_one {
-            for (id, _) in &panics {
-                taken.retain(|(seen, _)| seen != id);
-            }
-            // A branch on one bit of the header.
-            let is_panic = self
-                .builder
-                .ins()
-                .band_imm(header, layout::HEADER_PANIC.cast_signed() as i64);
-            let rest = self.builder.create_block();
-            let target = self.block(target);
-            self.builder.ins().brif(is_panic, target, &[], rest, &[]);
-            self.builder.seal_block(rest);
-            self.builder.switch_to_block(rest);
-        }
-        let type_id = self.builder.ins().ireduce(types::I32, header);
+        let type_id = self.builder.ins().ireduce(types::I32, tag);
         let mut switch = Switch::new();
         for (id, target) in taken {
             switch.set_entry(id as u128, self.block(target));
@@ -2016,12 +2250,15 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(())
     }
 
-    /// Whether the type id `id`, read from a header, is a string's: the
-    /// two kinds of string have the lowest ids an object has.
+    /// Whether the type id `id`, of a tag, is a string's: the two kinds of
+    /// string have ids next to each other.
     fn is_string_id(&mut self, id: ir::Value) -> ir::Value {
-        self.builder
-            .ins()
-            .icmp_imm(IntCC::UnsignedLessThan, id, imm(layout::STRING_TAGS_END))
+        let from_first = self.builder.ins().iadd_imm(id, -imm(layout::TAG_STRING));
+        self.builder.ins().icmp_imm(
+            IntCC::UnsignedLessThan,
+            from_first,
+            imm(layout::STRING_TAGS_END - layout::TAG_STRING),
+        )
     }
 
     /// Add to `ids` the type id of every type whose values pass `test`, and
@@ -2070,13 +2307,10 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(false)
     }
 
-    /// Whether an optional holds a value, as a word that is zero for `null`.
-    fn presence(&mut self, value: ir::Value, ty: &NativeTy<'db>) -> ir::Value {
-        if ty.is_pair() {
-            self.builder.ins().isplit(value).1
-        } else {
-            value
-        }
+    /// Whether a pair holds a value, as a word that is zero for `null`:
+    /// its tag.
+    fn presence(&mut self, value: ir::Value) -> ir::Value {
+        self.builder.ins().isplit(value).0
     }
 
     /// The type and byte offset of field `field` of the class instance a
@@ -2143,23 +2377,10 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
     }
 
-    /// The tag of a value of type `ty` that is not a reference: the
-    /// value's bits are the payload. An enum variant is the `int` of its
-    /// position.
-    fn immediate_tag(ty: &NativeTy<'db>) -> Option<usize> {
-        match ty {
-            NativeTy::Null => Some(layout::TAG_NULL),
-            NativeTy::Bool => Some(layout::TAG_BOOL),
-            NativeTy::Int | NativeTy::Enum(_) => Some(layout::TAG_INT),
-            NativeTy::Float => Some(layout::TAG_FLOAT),
-            _ => None,
-        }
-    }
-
-    /// The tag of a reference to the object at `pointer`, as
-    /// [`Self::header_tag`] reads it, or that of `null` when `pointer` is
-    /// null.
-    fn tag_or_null(&mut self, pointer: ir::Value, mask: Option<usize>) -> ir::Value {
+    /// The pair that refers to the object at `pointer`, or `null` when
+    /// `pointer` is null: its tag is the type id in the object's header.
+    /// Not for a callable, whose tag has its call layout too.
+    fn pair_of_pointer(&mut self, pointer: ir::Value) -> ir::Value {
         let read = self.builder.create_block();
         let done = self.builder.create_block();
         self.builder.append_block_param(done, WORD);
@@ -2169,92 +2390,27 @@ impl<'a, 'db> Translator<'a, 'db> {
             .brif(pointer, read, &[], done, &[null.into()]);
         self.builder.seal_block(read);
         self.builder.switch_to_block(read);
-        let tag = self.header_tag(pointer, mask);
+        let tag = self.builder.ins().uload32(slot_access(), pointer, 0);
         self.builder.ins().jump(done, &[tag.into()]);
         self.builder.seal_block(done);
         self.builder.switch_to_block(done);
-        self.builder.block_params(done)[0]
+        let tag = self.builder.block_params(done)[0];
+        self.pair(tag, pointer)
     }
 
-    /// The tag of a reference to the object at `pointer`, which is not
-    /// null, read from the object's header: the type id in its low half,
-    /// or the bits of the whole header that `mask` keeps.
-    fn header_tag(&mut self, pointer: ir::Value, mask: Option<usize>) -> ir::Value {
-        match mask {
-            None => self.builder.ins().uload32(slot_access(), pointer, 0),
-            Some(mask) => {
-                let header = self.builder.ins().load(WORD, slot_access(), pointer, 0);
-                self.builder
-                    .ins()
-                    .band_imm(header, mask.cast_signed() as i64)
-            }
-        }
-    }
-
-    /// The tag of the reference `pointer`, of static type `ty`: the type id
-    /// in the header of the object it points at, and zero for `null`. It
-    /// is a constant where every object of the type has one id, and read
-    /// from the header otherwise: a string may be a slice, a class's id is
-    /// its own, a function value's tag has its call layout, and a union or
-    /// an `unknown` holds whatever its header says. What a union holds has
-    /// no call layout yet, so the low half of its header is its tag.
-    fn pointer_tag(&mut self, ty: &NativeTy<'db>, pointer: ir::Value) -> ir::Value {
-        let (ty, may_be_null) = match ty {
-            NativeTy::Optional(inner) => (&**inner, true),
-            NativeTy::Union(_) | NativeTy::Unknown => (ty, true),
-            _ => (ty, false),
-        };
-        let constant = match ty {
-            NativeTy::Cell(_) => Some(layout::TAG_CELL),
-            NativeTy::Array(_) => Some(layout::TAG_ARRAY),
-            NativeTy::Map(..) => Some(layout::TAG_MAP),
-            NativeTy::Future(_) => Some(layout::TAG_FUTURE),
-            NativeTy::Bigint => Some(layout::TAG_BIGINT),
-            NativeTy::Bytes => Some(layout::TAG_BYTES),
-            NativeTy::Tuple(_) => Some(layout::TAG_TUPLE),
-            _ => None,
-        };
-        let mask = matches!(ty, NativeTy::Function(_)).then_some(layout::CALLABLE_TAG_MASK);
-        match (constant, may_be_null) {
-            (Some(tag), false) => self.word_const(tag),
-            (Some(tag), true) => {
-                let tag = self.word_const(tag);
-                let null = self.word_const(layout::TAG_NULL);
-                self.builder.ins().select(pointer, tag, null)
-            }
-            (None, false) => self.header_tag(pointer, mask),
-            (None, true) => self.tag_or_null(pointer, mask),
-        }
-    }
-
-    /// The two words a slot holds for `value`, of type `ty`: the tag and
-    /// the payload. An optional `int`, `float` or `bool` is `null` or the
-    /// value with its own tag; `null`'s payload is zero.
-    ///
-    /// The tag of a reference is read here, so the words are stored before
-    /// anything that can collect: a collection can change the type id of
-    /// what a reference points at.
-    fn slot_words(&mut self, ty: &NativeTy<'db>, value: ir::Value) -> (ir::Value, ir::Value) {
-        if let NativeTy::Optional(inner) = ty
-            && ty.is_pair()
-        {
-            let (bits, present) = self.builder.ins().isplit(value);
-            let tag = Self::immediate_tag(inner).unwrap_or(layout::TAG_NULL);
-            let tag = self.word_const(tag);
-            let null = self.word_const(layout::TAG_NULL);
-            return (
-                self.builder.ins().select(present, tag, null),
-                self.builder.ins().select(present, bits, null),
-            );
-        }
-        match Self::immediate_tag(ty) {
-            Some(layout::TAG_NULL) => {
-                let null = self.word_const(layout::TAG_NULL);
-                (null, null)
-            }
-            Some(tag) => (self.word_const(tag), self.as_slot(value, ty)),
-            None => (self.pointer_tag(ty, value), value),
-        }
+    /// The two words of the slot at `base + bytes`.
+    fn load_words(&mut self, base: ir::Value, bytes: usize) -> (ir::Value, ir::Value) {
+        (
+            self.builder
+                .ins()
+                .load(WORD, slot_access(), base, offset(bytes + layout::VALUE_TAG)),
+            self.builder.ins().load(
+                WORD,
+                slot_access(),
+                base,
+                offset(bytes + layout::VALUE_PAYLOAD),
+            ),
+        )
     }
 
     /// Load the value of type `ty` that the slot at `base + bytes` holds.
@@ -2265,41 +2421,29 @@ impl<'a, 'db> Translator<'a, 'db> {
         if *ty == NativeTy::Null {
             return self.null();
         }
-        if ty.is_pair() {
-            let tag = self.builder.ins().load(
-                WORD,
-                slot_access(),
-                base,
-                offset(bytes + layout::VALUE_TAG),
-            );
-            let bits = self.builder.ins().load(
-                WORD,
+        let value = if ty.is_pair() {
+            let (tag, payload) = self.load_words(base, bytes);
+            self.pair(tag, payload)
+        } else {
+            self.builder.ins().load(
+                clif_type(ty),
                 slot_access(),
                 base,
                 offset(bytes + layout::VALUE_PAYLOAD),
-            );
-            let present = self.builder.ins().icmp_imm(IntCC::NotEqual, tag, 0);
-            let present = self.builder.ins().uextend(WORD, present);
-            return self.builder.ins().iconcat(bits, present);
-        }
-        let value = self.builder.ins().load(
-            clif_type(ty),
-            slot_access(),
-            base,
-            offset(bytes + layout::VALUE_PAYLOAD),
-        );
+            )
+        };
         self.track(value, ty)
     }
 
     /// Store `value`, of type `ty`, in the slot at `base + bytes`: both
     /// words.
     fn slot_store(&mut self, ty: &NativeTy<'db>, value: ir::Value, base: ir::Value, bytes: usize) {
-        let words = self.slot_words(ty, value);
+        let words = slot_words(&mut self.builder, ty, value);
         self.slot_store_words(ty, words, base, bytes);
     }
 
-    /// Store the two words [`Self::slot_words`] gave for a value of type
-    /// `ty` in the slot at `base + bytes`.
+    /// Store the two words [`slot_words`] gave for a value of type `ty` in
+    /// the slot at `base + bytes`.
     fn slot_store_words(
         &mut self,
         _ty: &NativeTy<'db>,
@@ -2316,6 +2460,16 @@ impl<'a, 'db> Translator<'a, 'db> {
             base,
             offset(bytes + layout::VALUE_PAYLOAD),
         );
+    }
+
+    /// Load the value of type `ty` from the slot at `base + bytes`, which
+    /// holds it as a pair whatever its type: what wrote the slot knew the
+    /// value by another type than what reads it. A bound method's
+    /// receiver and a future's value are held so.
+    fn pair_load(&mut self, ty: &NativeTy<'db>, base: ir::Value, bytes: usize) -> ir::Value {
+        let (tag, payload) = self.load_words(base, bytes);
+        let value = of_pair_words(&mut self.builder, ty, tag, payload);
+        self.track(value, ty)
     }
 
     /// The length of `array` and the address of its storage object, which
@@ -2475,6 +2629,24 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok((self.element(array, position, is_byte)?, is_byte))
     }
 
+    /// The object the place `place` refers to, where MIR projects through
+    /// it: an optional the checker proved is not `null` is read as what it
+    /// holds.
+    fn read_object(&mut self, place: &Place) -> Result<ir::Value, CompileError> {
+        let ty = self.place_ty(place)?;
+        let value = self.read_place(place)?;
+        let held = narrowed(ty.clone());
+        self.coerce(value, &ty, &held)
+    }
+
+    /// [`Self::read_object`] of what an operand names.
+    fn operand_object(&mut self, operand: &Operand<'db>) -> Result<ir::Value, CompileError> {
+        let ty = self.operand_ty(operand)?;
+        let value = self.operand(operand)?;
+        let held = narrowed(ty.clone());
+        self.coerce(value, &ty, &held)
+    }
+
     fn read_place(&mut self, place: &Place) -> Result<ir::Value, CompileError> {
         match place {
             Place::Local(local) => {
@@ -2488,7 +2660,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             Place::Field { base, field } => {
                 let (ty, bytes) = self.field(base, *field)?;
-                let object = self.read_place(base)?;
+                let object = self.read_object(base)?;
                 Ok(self.slot_load(&ty, object, bytes))
             }
             Place::Index {
@@ -2497,7 +2669,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 kind: IndexKind::Tuple,
             } => {
                 let (ty, bytes) = self.tuple_slot(base, *index)?;
-                let tuple = self.read_place(base)?;
+                let tuple = self.read_object(base)?;
                 Ok(self.slot_load(&ty, tuple, bytes))
             }
             Place::Index {
@@ -2506,13 +2678,13 @@ impl<'a, 'db> Translator<'a, 'db> {
                 kind: IndexKind::Map,
             } => {
                 let map_ty = self.place_ty(base)?;
-                let map = self.read_place(base)?;
+                let map = self.read_object(base)?;
                 let key = self.read_local(*index);
                 self.map_index(map, &map_ty, key)
             }
             Place::Index { base, index, .. } => {
                 let ty = self.place_ty(place)?;
-                let array = self.read_place(base)?;
+                let array = self.read_object(base)?;
                 let (element, is_byte) = self.indexed(base, array, *index)?;
                 if is_byte {
                     return Ok(self.builder.ins().uload8(
@@ -2570,14 +2742,14 @@ impl<'a, 'db> Translator<'a, 'db> {
     }
 
     /// A new closure over the cells `captured`, each with its type, entered
-    /// at `code`.
+    /// at `code`: the function value, a pair.
     fn closure(
         &mut self,
         code: FuncId,
         captured: &[(ir::Value, NativeTy<'db>)],
     ) -> Result<ir::Value, CompileError> {
         let closure = self.allocate(layout::closure_size(captured.len()))?;
-        self.callable(closure, layout::TAG_CLOSURE, code, captured.len());
+        let tag = self.callable(closure, layout::TAG_CLOSURE, code, captured.len());
         for (index, (value, ty)) in captured.iter().enumerate() {
             self.slot_store(
                 ty,
@@ -2586,27 +2758,38 @@ impl<'a, 'db> Translator<'a, 'db> {
                 layout::CLOSURE_CAPTURES + index * layout::VALUE,
             );
         }
-        Ok(closure)
+        Ok(self.pair(tag, closure))
     }
 
     /// A new bound method: the method entered at `code`, with the value
-    /// `receiver`, of type `ty`, it is called on.
+    /// `receiver`, of type `ty`, it is called on. The receiver is kept as
+    /// a pair: the method reads it as its own first parameter's type.
     fn bound_method(
         &mut self,
         code: FuncId,
         receiver: ir::Value,
         ty: &NativeTy<'db>,
     ) -> Result<ir::Value, CompileError> {
+        // The receiver's tag is read after the allocation, which can
+        // change the type id of what it refers to.
         let bound = self.allocate(layout::bound_size(0))?;
-        self.callable(bound, layout::TAG_BOUND_METHOD, code, 0);
-        self.slot_store(ty, receiver, bound, layout::BOUND_RECEIVER);
-        Ok(bound)
+        let tag = self.callable(bound, layout::TAG_BOUND_METHOD, code, 0);
+        let words = self.pair_words(ty, receiver)?;
+        self.slot_store_words(ty, words, bound, layout::BOUND_RECEIVER);
+        Ok(self.pair(tag, bound))
     }
 
     /// Write the four words every callable made here starts with, at
     /// `object`: its header, whose call layout id is zero, the address of
     /// `code`, no function, and `count`, the number of what follows.
-    fn callable(&mut self, object: ir::Value, header: usize, code: FuncId, count: usize) {
+    /// Returns the tag of the function value the object is: its header.
+    fn callable(
+        &mut self,
+        object: ir::Value,
+        header: usize,
+        code: FuncId,
+        count: usize,
+    ) -> ir::Value {
         const _: () = assert!(layout::BOUND_CODE == layout::CLOSURE_CODE);
         const _: () = assert!(layout::BOUND_FUNCTION == layout::CLOSURE_FUNCTION);
         const _: () = assert!(layout::BOUND_TYPE_ARG_COUNT == layout::CLOSURE_CAPTURE_COUNT);
@@ -2625,6 +2808,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 .ins()
                 .store(slot_access(), word, object, offset(at));
         }
+        words[0].1
     }
 
     fn declared(&self, key: &FnKey<'db>) -> Result<&'a Declared<'db>, CompileError> {
@@ -2638,7 +2822,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             Place::Local(local) => self.write_local(*local, value),
             Place::Field { base, field } => {
                 let (ty, bytes) = self.field(base, *field)?;
-                let object = self.read_place(base)?;
+                let object = self.read_object(base)?;
                 self.slot_store(&ty, value, object, bytes);
             }
             Place::Index {
@@ -2647,7 +2831,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 kind: IndexKind::Tuple,
             } => {
                 let (ty, bytes) = self.tuple_slot(base, *index)?;
-                let tuple = self.read_place(base)?;
+                let tuple = self.read_object(base)?;
                 self.slot_store(&ty, value, tuple, bytes);
             }
             Place::Index {
@@ -2656,13 +2840,13 @@ impl<'a, 'db> Translator<'a, 'db> {
                 kind: IndexKind::Map,
             } => {
                 let map_ty = self.place_ty(base)?;
-                let map = self.read_place(base)?;
+                let map = self.read_object(base)?;
                 let key = self.read_local(*index);
                 self.map_store(map, &map_ty, key, value)?;
             }
             Place::Index { base, index, .. } => {
                 let ty = self.place_ty(place)?;
-                let array = self.read_place(base)?;
+                let array = self.read_object(base)?;
                 let (element, is_byte) = self.indexed(base, array, *index)?;
                 if is_byte {
                     // The low eight bits, as assigning into a typed array
@@ -2710,7 +2894,10 @@ impl<'a, 'db> Translator<'a, 'db> {
             Operand::Constant(Constant::Function(DeclRef::Source(function))) => {
                 let code = self.declared(&FnKey::new(*function, Entry::Value))?.id;
                 let closure = self.backend.function_value(code)?;
-                Ok(self.data_address(closure))
+                let closure = self.data_address(closure);
+                // The header of the closure in the executable's data.
+                let tag = self.word_const(layout::TAG_CLOSURE);
+                Ok(self.pair(tag, closure))
             }
             Operand::Constant(_) => Err(internal("a checked operand is a supported constant")),
         }
@@ -2727,9 +2914,9 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
         // A union kept as one goes where a union is expected as it is,
         // whatever the block knows it holds.
-        if expected.is_boxed()
+        if expected.holds_any()
             && let Some(local) = operand_local(operand)
-            && self.storage_ty(local).is_boxed()
+            && self.storage_ty(local).holds_any()
         {
             return Ok(self.read_local(local));
         }
@@ -2754,7 +2941,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             StatementKind::Assign { destination, value } => {
                 let expected = self.place_ty(destination)?;
                 if let Rvalue::Use(operand) = value
-                    && expected.is_boxed()
+                    && expected.holds_any()
                     && !operand_local(operand)
                         .is_some_and(|local| self.item_variables.contains_key(&local))
                 {
@@ -2817,32 +3004,30 @@ impl<'a, 'db> Translator<'a, 'db> {
             Rvalue::ConcatStrings(parts) => {
                 let parts = parts
                     .iter()
-                    .map(|part| self.operand(part))
+                    .map(|part| self.operand_as(part, &NativeTy::String))
                     .collect::<Result<Vec<_>, _>>()?;
                 self.concat(&parts)?
             }
-            Rvalue::Discriminant(place) => self.read_place(place)?,
-            // What a switch on the tag reads: the whole header, or zero
-            // for `null`, which has none.
-            Rvalue::TypeTag(place) => {
+            Rvalue::Discriminant(place) => {
+                let ty = self.place_ty(place)?;
                 let value = self.read_place(place)?;
-                let read = self.builder.create_block();
-                let done = self.builder.create_block();
-                self.builder.append_block_param(done, WORD);
-                self.builder
-                    .ins()
-                    .brif(value, read, &[], done, &[value.into()]);
-                self.builder.seal_block(read);
-                self.builder.switch_to_block(read);
-                let header = self.builder.ins().load(WORD, slot_access(), value, 0);
-                self.builder.ins().jump(done, &[header.into()]);
-                self.builder.seal_block(done);
-                self.builder.switch_to_block(done);
-                self.builder.block_params(done)[0]
+                let held = narrowed(ty.clone());
+                self.coerce(value, &ty, &held)?
+            }
+            // What a switch on the tag reads: the tag of the pair as its
+            // variable holds it, whatever the block knows it to be.
+            Rvalue::TypeTag(place) => {
+                let value = match place {
+                    Place::Local(local) if self.storage_ty(*local).is_pair() => {
+                        self.read_local(*local)
+                    }
+                    _ => self.read_place(place)?,
+                };
+                self.presence(value)
             }
             Rvalue::Len(place) => {
                 let length_of = narrowed(self.place_ty(place)?);
-                let array = self.read_place(place)?;
+                let array = self.read_object(place)?;
                 if matches!(length_of, NativeTy::Map(..)) {
                     self.map_length(array)
                 } else {
@@ -2918,6 +3103,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             } => {
                 let ty = self.operand_ty(receiver)?;
                 let receiver = self.operand(receiver)?;
+                let receiver = self.track(receiver, &ty);
                 let code = self.declared(&FnKey::new(*function, Entry::Bound))?.id;
                 self.bound_method(code, receiver, &ty)?
             }
@@ -2949,9 +3135,9 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(result)
     }
 
-    /// Call a runtime function that returns a reference and what it threw
-    /// instead, if anything: the reference, with the throw raised where it
-    /// happened.
+    /// Call a runtime function that returns a reference or what it threw
+    /// instead, as a pair whose tag says which: the reference, with the
+    /// throw raised where it happened.
     fn fallible_runtime(
         &mut self,
         function: Runtime,
@@ -2961,7 +3147,21 @@ impl<'a, 'db> Translator<'a, 'db> {
         let function = self.runtime_ref(function)?;
         let call = self.builder.ins().call(function, arguments);
         let results = self.builder.inst_results(call).to_vec();
-        let (value, thrown) = (results[0], results[1]);
+        let value = self.returned_or_raise(results[0], results[1])?;
+        self.builder.declare_value_needs_stack_map(value);
+        Ok(value)
+    }
+
+    /// What a function of the runtime that can throw returned as the two
+    /// words `tag` and `payload`: the payload, with the throw raised here
+    /// when the tag says the two are what was thrown. What follows is
+    /// generated where nothing was.
+    fn returned_or_raise(
+        &mut self,
+        tag: ir::Value,
+        payload: ir::Value,
+    ) -> Result<ir::Value, CompileError> {
+        let thrown = self.builder.ins().band_imm(tag, imm(layout::THROWN));
         let raise = self.builder.create_block();
         let resume = self.builder.create_block();
         self.builder.set_cold_block(raise);
@@ -2969,11 +3169,11 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.seal_block(raise);
         self.builder.seal_block(resume);
         self.builder.switch_to_block(raise);
-        self.builder.declare_value_needs_stack_map(thrown);
-        self.raise(thrown, None)?;
+        let tag = self.builder.ins().band_imm(tag, !imm(layout::THROWN));
+        let error = self.pair(tag, payload);
+        self.raise(error, None)?;
         self.builder.switch_to_block(resume);
-        self.builder.declare_value_needs_stack_map(value);
-        Ok(value)
+        Ok(payload)
     }
 
     /// The one place a call into the runtime is emitted, whatever it takes
@@ -3094,7 +3294,9 @@ impl<'a, 'db> Translator<'a, 'db> {
             let error = self
                 .emit_runtime_call(function, &arguments)?
                 .ok_or_else(|| internal("the runtime returns the error it makes"))?;
-            self.builder.declare_value_needs_stack_map(error);
+            // An instance: its tag is its header's type id.
+            let tag = self.builder.ins().uload32(slot_access(), error, 0);
+            let error = self.pair(tag, error);
             self.raise(error, None)?;
         } else {
             let zero = self.builder.ins().iconst(WORD, 0);
@@ -3220,15 +3422,6 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(object)
     }
 
-    /// The bits of `value` as one word: what a payload is.
-    fn as_slot(&mut self, value: ir::Value, ty: &NativeTy<'db>) -> ir::Value {
-        match ty {
-            NativeTy::Float => self.builder.ins().bitcast(WORD, MemFlags::new(), value),
-            NativeTy::Bool | NativeTy::Null => self.builder.ins().uextend(WORD, value),
-            _ => value,
-        }
-    }
-
     /// The type id of the type a local of type `type` holds, as a function
     /// that must identify its type arguments is passed it; zero for a type
     /// whose values do not share one type id.
@@ -3301,7 +3494,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         element: &NativeTy<'db>,
     ) -> Result<ir::Value, CompileError> {
         // Nothing between here and either use of the words can collect.
-        let item = self.slot_words(element, item);
+        let item = slot_words(&mut self.builder, element, item);
         let length =
             self.builder
                 .ins()
@@ -3391,8 +3584,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 return Ok(self.bool_const(false));
             }
             let held = self.operand(left)?;
-            let omitted = self.omitted(&left_ty);
-            return Ok(self.builder.ins().icmp(IntCC::Equal, held, omitted));
+            return Ok(self.is_omitted(held, &left_ty));
         }
         let right_ty = self.operand_ty(right)?;
         let (mode, _) = binary_typing(op, &left_ty, &right_ty).map_err(internal)?;
@@ -3451,12 +3643,12 @@ impl<'a, 'db> Translator<'a, 'db> {
             // `null` is the one value of its type.
             BinaryMode::Null => Ok(self.bool_const(op == BinOp::Eq)),
             BinaryMode::NullTest { optional_on_left } => {
-                let (optional, ty) = if optional_on_left {
-                    (left_value, &left_ty)
+                let optional = if optional_on_left {
+                    left_value
                 } else {
-                    (right_value, &right_ty)
+                    right_value
                 };
-                let presence = self.presence(optional, ty);
+                let presence = self.presence(optional);
                 Ok(self.builder.ins().icmp_imm(int_condition, presence, 0))
             }
             BinaryMode::Map => {
@@ -3964,7 +4156,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         iterator: Local,
         target: BlockId,
     ) -> Result<(), CompileError> {
-        let array = self.operand(array)?;
+        let array = self.operand_object(array)?;
         let (array_variable, index_variable) = self.iterator_variables[&iterator];
         self.builder.def_var(array_variable, array);
         let zero = self.builder.ins().iconst(types::I64, 0);
@@ -4002,10 +4194,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             .icmp(IntCC::UnsignedGreaterThanOrEqual, index, length);
         self.builder.def_var(done_variable, done);
         if let Some(variable) = element_variable {
-            let nothing = match element_ty {
-                NativeTy::Float => self.builder.ins().f64const(0.0),
-                _ => self.builder.ins().iconst(clif_type(&element_ty), 0),
-            };
+            let nothing = self.zero(&element_ty);
             self.builder.def_var(variable, nothing);
         }
 
@@ -4104,19 +4293,30 @@ impl<'a, 'db> Translator<'a, 'db> {
                 // The left operand is the whole result on the edge that
                 // skips the right one. Storing it on both edges is harmless:
                 // the other edge overwrites it.
+                let (join, eval_rhs) = (self.block(*join), self.block(*eval_rhs));
+                if *kind == ShortCircuitKind::Coalesce && operand_ty.is_pair() {
+                    // What the operand holds is the result only where it
+                    // holds something: `null` is not read as a value.
+                    let presence = self.presence(value);
+                    let present = self.builder.create_block();
+                    self.builder
+                        .ins()
+                        .brif(presence, present, &[], eval_rhs, &[]);
+                    self.builder.seal_block(present);
+                    self.builder.switch_to_block(present);
+                    let result = self.coerce(value, &operand_ty, &destination_ty)?;
+                    self.write_place(destination, result)?;
+                    self.builder.ins().jump(join, &[]);
+                    return Ok(());
+                }
                 let result = self.coerce(value, &operand_ty, &destination_ty)?;
                 self.write_place(destination, result)?;
-                let (join, eval_rhs) = (self.block(*join), self.block(*eval_rhs));
                 match kind {
                     ShortCircuitKind::And => {
                         self.builder.ins().brif(value, eval_rhs, &[], join, &[]);
                     }
                     ShortCircuitKind::Or => {
                         self.builder.ins().brif(value, join, &[], eval_rhs, &[]);
-                    }
-                    ShortCircuitKind::Coalesce if matches!(operand_ty, NativeTy::Optional(_)) => {
-                        let presence = self.presence(value, &operand_ty);
-                        self.builder.ins().brif(presence, join, &[], eval_rhs, &[]);
                     }
                     // A value that is never null is always the result.
                     ShortCircuitKind::Coalesce => {
@@ -4151,6 +4351,14 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             Terminator::Return => {
                 let value = self.read_local(Local(0));
+                let value = match self.key.entry {
+                    Entry::Direct => value,
+                    // A call through a value takes the result as a pair.
+                    Entry::Value | Entry::Bound => {
+                        let ty = self.storage_ty(Local(0));
+                        self.as_pair(&ty, value)?
+                    }
+                };
                 self.builder.ins().return_(&[value]);
             }
             Terminator::Unreachable => {
@@ -4173,7 +4381,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let (result, produced) = match called {
                     // Nothing reads them: no reference at all.
                     Callee::Intrinsic(Intrinsic::TraceOptions) => {
-                        (self.builder.ins().iconst(WORD, 0), expected.clone())
+                        (self.zero(&expected), expected.clone())
                     }
                     Callee::Intrinsic(intrinsic) => {
                         let arguments = &args[*ntypeargs..];
@@ -4192,11 +4400,15 @@ impl<'a, 'db> Translator<'a, 'db> {
                         else {
                             return Err(internal("a checked call is of a function value"));
                         };
-                        let closure = self.operand(callee)?;
-                        let mut arguments = vec![closure];
+                        // Every argument goes as a pair, whatever its type.
+                        let mut arguments = Vec::new();
                         for (argument, ty) in args.iter().zip(&signature.params) {
-                            arguments.push(self.operand_as(argument, ty)?);
+                            let argument = self.operand_as(argument, ty)?;
+                            arguments.push(self.as_pair(ty, argument)?);
                         }
+                        let function = self.operand(callee)?;
+                        let (_, closure) = self.builder.ins().isplit(function);
+                        arguments.insert(0, closure);
                         // A load marked read-only can be moved above the
                         // test that proved the closure is not `null`.
                         let never_null = operand_local(callee).is_some_and(|local| {
@@ -4218,7 +4430,9 @@ impl<'a, 'db> Translator<'a, 'db> {
                         // The callee can collect, which moves storage.
                         self.forget_arrays();
                         let called = unwind::Called::Indirect(clif, code);
-                        (self.baml_call(&called, &arguments)?, signature.result)
+                        let result = self.baml_call(&called, &arguments)?;
+                        let result = of_pair(&mut self.builder, &signature.result, result);
+                        (result, signature.result)
                     }
                     Callee::Function(key) => {
                         self.call_function(&key, &args[..*ntypeargs], &args[*ntypeargs..])?
@@ -4270,8 +4484,8 @@ impl<'a, 'db> Translator<'a, 'db> {
                         NativeTy::String,
                     ),
                     Virtual::Static(Target::Sort(kind)) => {
-                        let ty = self.operand_ty(&args[*self_arg])?;
-                        let array = self.operand(&args[*self_arg])?;
+                        let ty = narrowed(self.operand_ty(&args[*self_arg])?);
+                        let array = self.operand_object(&args[*self_arg])?;
                         let kind = self.word_const(kind);
                         self.call_runtime(Runtime::ArraySort, &[array, kind])?;
                         (array, ty)
@@ -4387,12 +4601,16 @@ impl<'a, 'db> Translator<'a, 'db> {
             .iter()
             .find(|known| known.slot == *slot)
             .ok_or_else(|| internal("a dispatched method has a slot"))?;
+        // The receiver and every argument go as pairs: the code the row
+        // holds takes them so, whatever the implementation's own types.
         let receiver = self.operand_as(&args[0], &NativeTy::Unknown)?;
         let mut arguments = vec![receiver];
         for (argument, ty) in args[1..].iter().zip(&slot.signature.params) {
-            arguments.push(self.operand_as(argument, ty)?);
+            let argument = self.operand_as(argument, ty)?;
+            arguments.push(self.as_pair(ty, argument)?);
         }
-        let type_id = self.builder.ins().uload32(slot_access(), receiver, 0);
+        let (tag, payload) = self.builder.ins().isplit(receiver);
+        let type_id = self.builder.ins().band_imm(tag, imm(layout::TYPE_ID_MASK));
         let methods = self.backend.methods()?;
         let methods = self.data_address(methods);
         let row = self
@@ -4406,16 +4624,15 @@ impl<'a, 'db> Translator<'a, 'db> {
             row,
             offset(slot.column * layout::WORD),
         );
-        let mut signature = slot.signature.clone();
-        signature.params.insert(0, NativeTy::Unknown);
-        let signature = Backend::clif_signature(&signature, Entry::Direct, 0);
+        let signature = Backend::uniform_signature(arguments.len());
         let signature = self.builder.import_signature(signature);
         // The callee can collect, which moves storage.
         self.forget_arrays();
         let called = unwind::Called::Indirect(signature, code);
+        let produced = slot.signature.result.clone();
         if !slot.falls_back {
             let result = self.baml_call(&called, &arguments)?;
-            return Ok((result, slot.signature.result.clone()));
+            return Ok((of_pair(&mut self.builder, &produced, result), produced));
         }
         // A type that declares no `to_string` has no code in its row: the
         // runtime writes it out.
@@ -4428,15 +4645,16 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.seal_block(own);
         self.builder.seal_block(default);
 
-        self.builder.switch_to_block(own);
-        let text = self.baml_call(&called, &arguments)?;
-        self.builder.ins().jump(done, &[text.into()]);
-
         self.builder.switch_to_block(default);
         let mutator = self.mutator();
         let text = self
-            .call_runtime(Runtime::StringFromAny, &[mutator, receiver])?
+            .call_runtime(Runtime::StringFromAny, &[mutator, tag, payload])?
             .ok_or_else(|| internal("to string returns a string"))?;
+        self.builder.ins().jump(done, &[text.into()]);
+
+        self.builder.switch_to_block(own);
+        let text = self.baml_call(&called, &arguments)?;
+        let text = of_pair(&mut self.builder, &NativeTy::String, text);
         self.builder.ins().jump(done, &[text.into()]);
 
         self.builder.seal_block(done);

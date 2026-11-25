@@ -27,15 +27,17 @@ pub(crate) enum Ty {
     /// A type or `null`.
     Optional(&'static Ty),
     /// The type a call names for the builtin's type parameter at this
-    /// position: passed and returned as the one word an array holds it in.
+    /// position: passed and returned as the two words a slot of that type
+    /// holds it in.
     Elem(usize),
-    /// A value of any type, as a union holds it: a `json`.
+    /// A value of any type: a `json`.
     Any,
     /// An `unknown` parameter of `baml.json`: the id of the description
-    /// of the argument's static type, then the value as a union holds it.
+    /// of the argument's static type, then the value.
     Typed,
-    /// The type a call names for the type parameter at this position, as a
-    /// union holds it: what `baml.json` returns a value it decoded as.
+    /// The type a call names for the type parameter at this position, as
+    /// a value of any type is held: what `baml.json` returns a value it
+    /// decoded as.
     BoxedElem(usize),
     /// An instance of a class of the standard library that takes no type
     /// arguments.
@@ -58,20 +60,14 @@ pub(crate) fn class_at(
 }
 
 impl Ty {
-    /// Whether a value is an optional `int`, `float` or `bool`: two words,
-    /// its bits and whether there is a value.
-    pub(crate) fn is_pair(&self) -> bool {
+    /// Whether a native takes and returns a value of the type as two
+    /// words, a tag and a payload: its tag is only known when the program
+    /// runs. A value of any other type is one word, with no tag.
+    pub(crate) fn is_value(&self) -> bool {
         matches!(
             self,
-            Self::Optional(Self::Int | Self::Float | Self::Bool | Self::Null)
+            Self::Optional(_) | Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_)
         )
-    }
-
-    /// Whether a value is an optional value of a type parameter, which a
-    /// native returns as two words whatever the type: the value's word, and
-    /// whether there is a value.
-    pub(crate) fn is_optional_elem(&self) -> bool {
-        matches!(self, Self::Optional(Self::Elem(_)))
     }
 }
 
@@ -84,8 +80,8 @@ impl Ty {
     ) -> NativeTy<'db> {
         match self {
             Self::Elem(index) | Self::BoxedElem(index) => types[*index].clone(),
-            // Rust state is held as any value is: its object's header says
-            // what it is.
+            // Rust state is held as any value is: its tag says what it
+            // is.
             Self::Any | Self::Typed | Self::Rust => NativeTy::Unknown,
             Self::Class(path) => class_at(db, *path).map_or(NativeTy::Unknown, |class| {
                 NativeTy::Class(class, Vec::new())
@@ -147,13 +143,17 @@ pub(crate) struct Native {
     pub(crate) symbol: &'static str,
     /// `None` when the signature has a type natives cannot take yet.
     pub(crate) signature: Option<Signature>,
-    /// Whether the symbol returns a value and a thrown object, in two
-    /// registers, instead of the bare value.
+    /// Whether the symbol can throw: it then returns two words whatever
+    /// its result is, a tag and a payload, and the tag says whether they
+    /// are what it threw.
     pub(crate) throws: bool,
     /// `None` when the runtime does not implement it yet.
     pub(crate) flags: Option<Flags>,
-    /// How many type ids a call passes before the declared parameters.
+    /// How many type parameters the builtin has.
     pub(crate) type_args: usize,
+    /// How many type ids a call passes before the declared parameters: one
+    /// per type parameter, or none.
+    pub(crate) type_ids: usize,
     /// The classes its declaration names in what it takes, returns and
     /// throws: what it can be passed or make an instance of, each of which
     /// a program that calls it describes to the runtime.

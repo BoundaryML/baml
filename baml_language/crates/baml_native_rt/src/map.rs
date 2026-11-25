@@ -32,11 +32,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::{
     heap::{Mutator, Value, load, store},
     layout::{
-        ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_KEY, ENTRY_SIZE, ENTRY_VALUE, HASH_SET,
+        BOX_VALUE, ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_KEY, ENTRY_SIZE, ENTRY_VALUE, HASH_SET,
         INDEX_SLOT_COUNT, INDEX_SLOTS, MAP_ENTRIES, MAP_EPOCH, MAP_INDEX, MAP_KEY_TY, MAP_LEN,
         MAP_MASK, MAP_SIZE, MAP_USED, MAP_VALUE_TY, SMALL_ENTRIES, STRING_HASH_MASK,
-        STRING_LENGTHS, STRING_TAGS_END, TAG_BOX_FLOAT, TAG_FLOAT, TAG_MAP, TAG_MAP_ENTRIES,
-        TAG_MAP_INDEX, TAG_STRING, TYPE_ID_MASK, VALUE_PAYLOAD, WORD, entries_size,
+        STRING_LENGTHS, STRING_TAGS_END, TAG_FLOAT, TAG_MAP, TAG_MAP_ENTRIES, TAG_MAP_INDEX,
+        TAG_STRING, TYPE_ID_MASK, VALUE_PAYLOAD, WORD, entries_size,
     },
     string,
 };
@@ -90,15 +90,6 @@ pub enum KeyKind {
 }
 
 impl KeyKind {
-    /// The kind of the keys whose type a call names by `type_id`.
-    pub fn of(type_id: usize) -> Self {
-        match type_id {
-            TAG_STRING => Self::Str,
-            TAG_BOX_FLOAT => Self::Float,
-            _ => Self::Word,
-        }
-    }
-
     /// The kind of the keys `key` is one of, by its tag.
     fn of_value(key: Value) -> Self {
         match key.id() {
@@ -755,24 +746,31 @@ crate::stubs::anchored! {
     baml_rt_map_set => map_set
 }
 
-/// `map[key] = value`, when the key may be there already.
+/// `map[key] = value`, when the key may be there already. The key and the
+/// value are each a tag and a payload.
 ///
 /// # Safety
 ///
-/// Called from compiled code with its mutator, a live map of the named
-/// types, and a key and a value of them, each as compiled code holds it.
+/// Called from compiled code with its mutator, a live map, and a key and
+/// a value of the map's types.
 unsafe extern "C" fn map_set(
     mutator: &mut Mutator,
-    key_type: u32,
-    value_type: u32,
     map: usize,
-    key: usize,
-    value: usize,
+    key_tag: usize,
+    key_payload: usize,
+    value_tag: usize,
+    value_payload: usize,
 ) {
+    let key = Value {
+        tag: key_tag,
+        payload: key_payload,
+    };
+    let value = Value {
+        tag: value_tag,
+        payload: value_payload,
+    };
     // SAFETY: the caller's contract.
     unsafe {
-        let key = mutator.value_of(key, key_type as usize);
-        let value = mutator.value_of(value, value_type as usize);
         set(mutator, map, key, value);
     }
 }
@@ -789,49 +787,58 @@ crate::stubs::anchored! {
 /// As [`baml_rt_map_set`], and the map does not have the key.
 unsafe extern "C" fn map_insert_new(
     mutator: &mut Mutator,
-    key_type: u32,
-    value_type: u32,
     map: usize,
-    key: usize,
-    value: usize,
+    key_tag: usize,
+    key_payload: usize,
+    value_tag: usize,
+    value_payload: usize,
 ) {
+    let value = Value {
+        tag: value_tag,
+        payload: value_payload,
+    };
+    let kind = KeyKind::of_value(Value {
+        tag: key_tag,
+        payload: key_payload,
+    });
+    let key = Value {
+        tag: key_tag,
+        payload: kind.canonical(key_payload),
+    };
     // SAFETY: the caller's contract.
     unsafe {
-        let key = mutator.value_of(key, key_type as usize);
-        let value = mutator.value_of(value, value_type as usize);
-        let kind = KeyKind::of_value(key);
-        let key = Value {
-            tag: key.tag,
-            payload: kind.canonical(key.payload),
-        };
         let hash = kind.hash(key.payload);
         insert_new(mutator, map, key, hash, value);
     }
 }
 
-/// The address of the value of `key` in a map of keys of any kind, a slot,
-/// or zero. A leaf: it allocates nothing.
+/// The address of the value of the key of tag `key_tag` and payload
+/// `key_payload` in a map of keys of any kind, a slot, or zero. A leaf: it
+/// allocates nothing.
 ///
 /// # Safety
 ///
-/// Called from compiled code with a live map of keys of the type
-/// `key_type` and one of them, as compiled code holds it.
+/// Called from compiled code with a live map and a key of its key type.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_map_find(map: usize, key_type: u32, key: usize) -> usize {
+pub unsafe extern "C" fn baml_rt_map_find(map: usize, key_tag: usize, key_payload: usize) -> usize {
+    let key = Value {
+        tag: key_tag,
+        payload: key_payload,
+    };
     // SAFETY: the caller's contract.
-    unsafe { slot_of(map, KeyKind::of(key_type as usize), key).unwrap_or(0) }
+    unsafe { get(map, key).unwrap_or(0) }
 }
 
-/// Whether two maps of string keys have the same keys with equal values,
-/// in whatever order. The values are of the type `value_type`: strings,
-/// which are compared by text, floats, or anything that is its bits.
+/// Whether two maps have the same keys with equal values, in whatever
+/// order. Two values are equal when both are strings of the same text,
+/// both are floats that compare equal, both are the same variant of one
+/// enum, or they have the same tag and the same payload.
 ///
 /// # Safety
 ///
-/// Called from compiled code with two live maps of string keys and values
-/// of that type.
+/// Called from compiled code with two live maps of the same types.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_map_eq(left: usize, right: usize, value_type: u32) -> u8 {
+pub unsafe extern "C" fn baml_rt_map_eq(left: usize, right: usize) -> u8 {
     // SAFETY: the caller's contract.
     unsafe {
         if left == right {
@@ -842,19 +849,41 @@ pub unsafe extern "C" fn baml_rt_map_eq(left: usize, right: usize, value_type: u
         }
         let mut equal = true;
         for_each(left, |key, value| {
-            equal = equal
-                && get(right, key).is_some_and(|slot| {
-                    let (value, other) = (value.payload, Value::load(slot).payload);
-                    match value_type as usize {
-                        TAG_STRING => string::baml_rt_string_eq(value, other) != 0,
-                        TAG_BOX_FLOAT => {
-                            f64::from_bits(value as u64) == f64::from_bits(other as u64)
-                        }
-                        _ => value == other,
-                    }
-                });
+            equal = equal && get(right, key).is_some_and(|slot| value_eq(value, Value::load(slot)));
         });
         u8::from(equal)
+    }
+}
+
+/// Whether two values of one map's value type are equal, as
+/// [`baml_rt_map_eq`] has it.
+///
+/// # Safety
+///
+/// Each is a value as a slot holds one.
+unsafe fn value_eq(value: Value, other: Value) -> bool {
+    let is_string = |value: Value| value.is_pointer() && value.id() < STRING_TAGS_END;
+    // SAFETY: the caller's contract: a pointer is to a live object, and an
+    // enum's box is a header and the variant's position.
+    unsafe {
+        if is_string(value) && is_string(other) {
+            return string::baml_rt_string_eq(value.payload, other.payload) != 0;
+        }
+        if value.id() != other.id() {
+            return false;
+        }
+        if value.id() == TAG_FLOAT {
+            return f64::from_bits(value.payload as u64) == f64::from_bits(other.payload as u64);
+        }
+        // Two boxes of one variant are equal wherever each was made. The
+        // caller passes no worker, and the type table is the program's
+        // whichever worker says where it is.
+        let worker = crate::sched::WORKER.load(Ordering::Acquire);
+        value.payload == other.payload
+            || (value.is_pointer()
+                && !worker.is_null()
+                && crate::describe::Types::of_table((*worker).types()).is_enum(value.id())
+                && load(value.payload + BOX_VALUE) == load(other.payload + BOX_VALUE))
     }
 }
 

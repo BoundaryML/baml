@@ -82,14 +82,16 @@ impl Out {
         string
     }
 
-    /// A box of the type `type_id` holding `bits`.
-    pub(super) fn boxed(&mut self, type_id: usize, bits: usize) -> usize {
+    /// A box of the enum whose boxes have the type `type_id`, holding the
+    /// variant at `position`.
+    pub(super) fn boxed(&mut self, type_id: usize, position: usize) -> usize {
         let object = self.take(BOX_SIZE);
         if object != 0 {
-            // SAFETY: a box is a header and one value.
+            // SAFETY: an enum's box is a header and the variant's
+            // position.
             unsafe {
                 store(object, type_id);
-                store(object + BOX_VALUE, bits);
+                store(object + BOX_VALUE, position);
             }
         }
         object

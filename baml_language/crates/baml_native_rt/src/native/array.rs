@@ -1,18 +1,17 @@
 //! `baml.Array`.
 //!
 //! Every native here is generic: an element is the slot the array holds it
-//! in, moved without being looked at, tag and payload. What tag a value
-//! passed on its own has is said by the type id of the call's type
-//! argument.
+//! in, moved without being looked at, tag and payload. A value passed on
+//! its own is one too.
 
 use super::{
-    Arr, ArrRef, Elem, NativeBamlArray, Natives, Root, Scope, Slot, Str, StrRef, Thrown, TypeId,
-    View, array_size, string::text_size,
+    Arr, ArrRef, Elem, NativeBamlArray, Natives, Root, Scope, Slot, Str, StrRef, Thrown, View,
+    array_size, string::text_size,
 };
 use crate::{
     array::FIRST_CAPACITY,
     heap::{Value, load, store},
-    layout::{ARRAY_LENGTH, TAG_BOX_BOOL, TAG_BOX_FLOAT, TAG_BOX_INT, TAG_STRING},
+    layout::{ARRAY_LENGTH, STRING_TAGS_END, TAG_BOOL, TAG_FLOAT, TAG_INT},
     string::{INT_DIGITS, float_text, int_digits},
 };
 
@@ -55,9 +54,8 @@ fn truncate(array: ArrRef<'_, Slot>, length: usize) {
     }
 }
 
-/// Take the element at `index` out, closing the gap, and return its
-/// payload.
-fn remove(array: ArrRef<'_, Slot>, index: usize) -> usize {
+/// Take the element at `index` out, closing the gap, and return it.
+fn remove(array: ArrRef<'_, Slot>, index: usize) -> Value {
     // SAFETY: as in `truncate`.
     let removed = unsafe {
         let removed = Value::load(crate::array::element(array.raw(), index));
@@ -65,19 +63,17 @@ fn remove(array: ArrRef<'_, Slot>, index: usize) -> usize {
         removed
     };
     truncate(array, array.len() - 1);
-    removed.payload
+    removed
 }
 
-/// A new array holding `count` values of the type a call names by
-/// `element`, each given by its index.
+/// A new array holding `count` values, each given by its index.
 fn build<'s>(
     scope: &mut Scope<'s>,
     count: usize,
-    element: TypeId,
     value: impl Fn(&super::Reservation<'_, 's>, usize) -> Value,
 ) -> Root<'s, Arr<Slot>> {
     let reservation = scope.reserve(array_size(count));
-    let array = reservation.elements(count, element);
+    let array = reservation.array::<Slot>(count);
     for index in 0..count {
         array.set_value(index, value(&reservation, index));
     }
@@ -95,7 +91,7 @@ fn ensure_capacity<'s>(scope: &mut Scope<'s>, array: Root<'s, Arr<Slot>>, needed
             return;
         }
         let capacity = needed.max(length * 2).max(FIRST_CAPACITY);
-        crate::array::grow(scope.mutator(), array.0.as_ptr(), capacity);
+        crate::array::grow(scope.mutator(), array.address(), capacity);
     }
 }
 
@@ -135,46 +131,57 @@ fn insert<'s>(
     i64::try_from(length + 1).unwrap_or(i64::MAX)
 }
 
+/// The text `join` writes for `element`, when it is not a string: an
+/// `int`, a `float` or a `bool`, which its tag says.
+fn scalar_text(element: Value, digits: &mut [u8; INT_DIGITS]) -> std::borrow::Cow<'_, str> {
+    use std::borrow::Cow;
+    match element.id() {
+        TAG_INT => Cow::Borrowed(int_digits(element.payload.cast_signed() as i64, digits)),
+        TAG_FLOAT => Cow::Owned(float_text(f64::from_bits(element.payload as u64))),
+        TAG_BOOL => Cow::Borrowed(if element.payload == 0 {
+            "false"
+        } else {
+            "true"
+        }),
+        other => unreachable!("join is compiled for no element with the tag {other}"),
+    }
+}
+
 impl NativeBamlArray for Natives {
-    fn at(_types: [TypeId; 1], array: ArrRef<'_, Slot>, index: i64) -> Option<usize> {
+    fn at(array: ArrRef<'_, Slot>, index: i64) -> Option<Value> {
         element_index(index, array.len()).and_then(|index| array.get(index))
     }
 
-    fn pop(_types: [TypeId; 1], array: ArrRef<'_, Slot>) -> Option<usize> {
+    fn pop(array: ArrRef<'_, Slot>) -> Option<Value> {
         let last = array.len().checked_sub(1)?;
         Some(remove(array, last))
     }
 
-    fn shift(_types: [TypeId; 1], array: ArrRef<'_, Slot>) -> Option<usize> {
+    fn shift(array: ArrRef<'_, Slot>) -> Option<Value> {
         (!array.is_empty()).then(|| remove(array, 0))
     }
 
-    fn remove_at(_types: [TypeId; 1], array: ArrRef<'_, Slot>, index: i64) -> Option<usize> {
+    fn remove_at(array: ArrRef<'_, Slot>, index: i64) -> Option<Value> {
         element_index(index, array.len()).map(|index| remove(array, index))
     }
 
-    fn clear(_types: [TypeId; 1], array: ArrRef<'_, Slot>) {
+    fn clear(array: ArrRef<'_, Slot>) {
         truncate(array, 0);
     }
 
-    fn _truncate(_types: [TypeId; 1], array: ArrRef<'_, Slot>, length: i64) {
+    fn _truncate(array: ArrRef<'_, Slot>, length: i64) {
         truncate(array, usize::try_from(length).unwrap_or(0));
     }
 
-    fn reverse<'s>(
-        scope: &mut Scope<'s>,
-        types: [TypeId; 1],
-        array: Root<'s, Arr<Slot>>,
-    ) -> Root<'s, Arr<Slot>> {
+    fn reverse<'s>(scope: &mut Scope<'s>, array: Root<'s, Arr<Slot>>) -> Root<'s, Arr<Slot>> {
         let length = array.get(scope).len();
-        build(scope, length, types[0], |reservation, index| {
+        build(scope, length, |reservation, index| {
             (reservation.get(array).value(length - 1 - index)).unwrap_or(Value::NULL)
         })
     }
 
     fn slice<'s>(
         scope: &mut Scope<'s>,
-        types: [TypeId; 1],
         array: Root<'s, Arr<Slot>>,
         start: i64,
         end: i64,
@@ -182,20 +189,19 @@ impl NativeBamlArray for Natives {
         let length = array.get(scope).len();
         let start = slice_bound(start, length);
         let end = slice_bound(end, length).max(start);
-        build(scope, end - start, types[0], |reservation, index| {
+        build(scope, end - start, |reservation, index| {
             (reservation.get(array).value(start + index)).unwrap_or(Value::NULL)
         })
     }
 
     fn concat<'s>(
         scope: &mut Scope<'s>,
-        types: [TypeId; 1],
         array: Root<'s, Arr<Slot>>,
         other: Root<'s, Arr<Slot>>,
     ) -> Root<'s, Arr<Slot>> {
         let first = array.get(scope).len();
         let second = other.get(scope).len();
-        build(scope, first + second, types[0], |reservation, index| {
+        build(scope, first + second, |reservation, index| {
             let value = if index < first {
                 reservation.get(array).value(index)
             } else {
@@ -205,52 +211,33 @@ impl NativeBamlArray for Natives {
         })
     }
 
-    fn _copy<'s>(
-        scope: &mut Scope<'s>,
-        types: [TypeId; 1],
-        array: Root<'s, Arr<Slot>>,
-    ) -> Root<'s, Arr<Slot>> {
+    fn _copy<'s>(scope: &mut Scope<'s>, array: Root<'s, Arr<Slot>>) -> Root<'s, Arr<Slot>> {
         let length = array.get(scope).len();
-        build(scope, length, types[0], |reservation, index| {
+        build(scope, length, |reservation, index| {
             (reservation.get(array).value(index)).unwrap_or(Value::NULL)
         })
     }
 
-    fn _results<'s>(
-        scope: &mut Scope<'s>,
-        types: [TypeId; 2],
-        array: Root<'s, Arr<Slot>>,
-    ) -> Root<'s, Arr<Slot>> {
+    /// An array as long as `array`, every element `null`: the caller sets
+    /// each before it reads any.
+    fn _results<'s>(scope: &mut Scope<'s>, array: Root<'s, Arr<Slot>>) -> Root<'s, Arr<Slot>> {
         let length = array.get(scope).len();
-        let reservation = scope.reserve(array_size(length));
-        let results = reservation.elements(length, types[1]).keep();
-        reservation.finish(results)
+        scope.alloc_array::<Slot>(length)
     }
 
-    fn filled<'s>(
-        scope: &mut Scope<'s>,
-        types: [TypeId; 1],
-        length: i64,
-        value: Elem<'s>,
-    ) -> Root<'s, Arr<Slot>> {
+    fn filled<'s>(scope: &mut Scope<'s>, length: i64, value: Elem<'s>) -> Root<'s, Arr<Slot>> {
         let length = usize::try_from(length).unwrap_or(0);
-        build(scope, length, types[0], |reservation, _| {
+        build(scope, length, |reservation, _| {
             value.value(&*reservation.scope)
         })
     }
 
-    fn unshift<'s>(
-        scope: &mut Scope<'s>,
-        _types: [TypeId; 1],
-        array: Root<'s, Arr<Slot>>,
-        item: Elem<'s>,
-    ) -> i64 {
+    fn unshift<'s>(scope: &mut Scope<'s>, array: Root<'s, Arr<Slot>>, item: Elem<'s>) -> i64 {
         insert(scope, array, 0, item)
     }
 
     fn insert<'s>(
         scope: &mut Scope<'s>,
-        _types: [TypeId; 1],
         array: Root<'s, Arr<Slot>>,
         item: Elem<'s>,
         idx: i64,
@@ -266,7 +253,6 @@ impl NativeBamlArray for Natives {
 
     fn splice<'s>(
         scope: &mut Scope<'s>,
-        _types: [TypeId; 1],
         array: Root<'s, Arr<Slot>>,
         start: i64,
         count: i64,
@@ -299,39 +285,26 @@ impl NativeBamlArray for Natives {
 
     fn join<'s>(
         scope: &mut Scope<'s>,
-        types: [TypeId; 1],
         array: Root<'s, Arr<Slot>>,
         separator: Root<'s, Str>,
     ) -> Root<'s, Str> {
         // Measure, reserve once, then write: the text is never anywhere but
-        // in the string.
-        let kind = types[0].0 as usize;
+        // in the string. What an element is its tag says: a string, an
+        // `int`, a `float` or a `bool`.
+        let is_string = |element: Value| element.is_pointer() && element.id() < STRING_TAGS_END;
         let (view, by) = (array.get(scope), separator.get(scope));
         let gaps = view.len().saturating_sub(1);
         let mut bytes = gaps.saturating_mul(by.byte_len());
         let mut chars = gaps.saturating_mul(by.char_count());
         let mut digits = [0; INT_DIGITS];
-        for word in view.iter() {
-            let (more_bytes, more_chars) = match kind {
-                TAG_STRING => {
-                    // SAFETY: the compiler passes this id for an array of
-                    // strings only.
-                    let part = unsafe { StrRef::from_raw(word) };
-                    (part.byte_len(), part.char_count())
-                }
-                TAG_BOX_INT => {
-                    let length = int_digits(word.cast_signed() as i64, &mut digits).len();
-                    (length, length)
-                }
-                TAG_BOX_FLOAT => {
-                    let length = float_text(f64::from_bits(word as u64)).len();
-                    (length, length)
-                }
-                TAG_BOX_BOOL => {
-                    let length = if word == 0 { 5 } else { 4 };
-                    (length, length)
-                }
-                other => unreachable!("join is compiled for no element type with id {other}"),
+        for element in view.iter() {
+            let (more_bytes, more_chars) = if is_string(element) {
+                // SAFETY: the tag says it is a live string.
+                let part = unsafe { StrRef::from_raw(element.payload) };
+                (part.byte_len(), part.char_count())
+            } else {
+                let length = scalar_text(element, &mut digits).len();
+                (length, length)
             };
             bytes = bytes.saturating_add(more_bytes);
             chars += more_chars;
@@ -339,16 +312,15 @@ impl NativeBamlArray for Natives {
         let reservation = scope.reserve(text_size(bytes));
         let mut joined = reservation.new_str(bytes, chars);
         let by = reservation.get(separator).as_str();
-        for (index, word) in reservation.get(array).iter().enumerate() {
+        for (index, element) in reservation.get(array).iter().enumerate() {
             if index != 0 {
                 joined.push(by);
             }
-            match kind {
+            if is_string(element) {
                 // SAFETY: as above.
-                TAG_STRING => joined.push(unsafe { StrRef::from_raw(word) }.as_str()),
-                TAG_BOX_INT => joined.push(int_digits(word.cast_signed() as i64, &mut digits)),
-                TAG_BOX_FLOAT => joined.push(&float_text(f64::from_bits(word as u64))),
-                _ => joined.push(if word == 0 { "false" } else { "true" }),
+                joined.push(unsafe { StrRef::from_raw(element.payload) }.as_str());
+            } else {
+                joined.push(&scalar_text(element, &mut digits));
             }
         }
         let joined = joined.finish().keep();

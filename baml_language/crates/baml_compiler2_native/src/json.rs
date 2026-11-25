@@ -222,6 +222,8 @@ fn repr(ty: &NativeTy<'_>) -> u32 {
         NativeTy::Null => REPR_NULL,
         NativeTy::Union(_) | NativeTy::Unknown => REPR_BOXED,
         NativeTy::Optional(inner) if inner.is_ref() => repr(inner),
+        // A variant held as a pair is a reference to its box.
+        NativeTy::Optional(inner) if matches!(**inner, NativeTy::Enum(_)) => REPR_BOXED,
         NativeTy::Optional(_) => REPR_PAIR,
         _ => REPR_REF,
     }
@@ -797,7 +799,7 @@ impl<'db> JsonTypes<'db> {
             }
             NativeTy::Optional(inner) if !inner.is_ref() => {
                 let inner = self.shown(db, inner);
-                self.description(KIND_OPTIONAL, REPR_PAIR, [inner, 0, 0], "", 0)
+                self.description(KIND_OPTIONAL, repr(ty), [inner, 0, 0], "", 0)
             }
             // A field that holds instances of one class says which, whether
             // or not `baml.json` reads the class: a native that builds the

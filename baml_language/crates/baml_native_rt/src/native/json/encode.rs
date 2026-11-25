@@ -19,8 +19,8 @@ use crate::{
     heap::{Value, load},
     json_layout::{HOOK_TO_JSON, KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_VARIANT},
     layout::{
-        ARRAY_LENGTH, BOX_VALUE, STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_BOX_BOOL,
-        TAG_BOX_FLOAT, TAG_BOX_INT, TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL, TAG_STRING,
+        ARRAY_LENGTH, BOX_VALUE, STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_FLOAT,
+        TAG_INT, TAG_MAP, TAG_NULL, TAG_STRING,
     },
     map,
 };
@@ -55,19 +55,19 @@ pub(super) trait Sink {
 }
 
 /// The text `stringify` writes for one nesting level, from its `indent`
-/// argument: an `int` or a `string`, as a union holds them.
-pub(super) fn indent_text(indent: usize) -> Result<String, Refused> {
-    // SAFETY: an `int | string` is a box or a string, never `null`.
+/// argument: an `int` or a `string`.
+pub(super) fn indent_text(indent: Value) -> Result<String, Refused> {
+    // SAFETY: a value whose tag is a string's refers to a live one.
     let refused = unsafe {
-        if indent != 0 && type_of(indent) == TAG_BOX_INT {
-            let count = load(indent + BOX_VALUE) as i64;
+        if indent.id() == TAG_INT {
+            let count = indent.payload as i64;
             match usize::try_from(count) {
                 Ok(count) if count <= MAX_INDENT => return Ok(" ".repeat(count)),
                 Ok(_) => format!("indent must be at most {MAX_INDENT} spaces, got {count}"),
                 Err(_) => format!("indent must not be negative, got {count}"),
             }
-        } else if indent != 0 && type_of(indent) < STRING_TAGS_END {
-            let text = crate::string::text(indent);
+        } else if indent.is_pointer() && indent.id() < STRING_TAGS_END {
+            let text = crate::string::text(indent.payload);
             let width = text.chars().count();
             if width > MAX_INDENT {
                 format!("indent must be at most {MAX_INDENT} characters, got {width}")
@@ -299,11 +299,11 @@ pub(super) unsafe fn own_to_json(
 ///
 /// # Safety
 ///
-/// `value` is zero or a live object, and nothing is allocated outside
-/// reserved room meanwhile.
+/// `value` is a value as a slot holds one, and nothing is allocated
+/// outside reserved room meanwhile.
 pub(super) unsafe fn overriding(
     types: &Types,
-    value: usize,
+    value: Value,
     options: Options,
     mut each: impl FnMut(usize),
 ) {
@@ -311,9 +311,10 @@ pub(super) unsafe fn overriding(
     // of them to look at.
     let mut open: Vec<(usize, Vec<usize>, usize)> = Vec::new();
     let mut inside: HashSet<usize> = HashSet::new();
-    let mut next = Some(value);
+    // A scalar or `null` leads to no object.
+    let mut next = value.is_pointer().then_some(value.payload);
     loop {
-        if let Some(object) = next.take().filter(|object| *object != 0) {
+        if let Some(object) = next.take() {
             // SAFETY: the caller's contract, for every value reached.
             unsafe {
                 if own_to_json(types, object).is_some() {
@@ -426,10 +427,7 @@ impl Walker<'_> {
         unsafe {
             match type_of(value) {
                 string if string < STRING_TAGS_END => Val::Str(value),
-                TAG_BOX_INT => Val::Int(load(value + BOX_VALUE) as i64),
                 TAG_BIGINT => Val::Bigint(value),
-                TAG_BOX_FLOAT => Val::Float(f64::from_bits(load(value + BOX_VALUE) as u64)),
-                TAG_BOX_BOOL => Val::Bool(load(value + BOX_VALUE) & 0xFF != 0),
                 TAG_ARRAY => Val::Array(value, member(KIND_ARRAY).map(Desc::of_a)),
                 TAG_MAP => Val::Map(value, member(KIND_MAP).map(|map| (map.of_a(), map.of_b()))),
                 other => match self.types.of_type_id(other) {
@@ -760,9 +758,17 @@ pub(super) struct JsonSink {
     out: Out,
     /// The values of the containers being built, innermost last: for an
     /// object, each key before its value.
-    items: Vec<usize>,
+    items: Vec<Value>,
     /// Where in `items` each container being built starts.
     starts: Vec<usize>,
+}
+
+/// The value that refers to an object an [`Out`] made, or to a string or
+/// a `bigint` of the value being written: `null` for the zero an `Out`
+/// gives while it only counts.
+fn built(object: usize) -> Value {
+    // SAFETY: zero or a live object.
+    unsafe { Value::reference(object) }
 }
 
 impl JsonSink {
@@ -774,10 +780,10 @@ impl JsonSink {
         }
     }
 
-    /// The value built, zero while counting, and the `Out` as the build
-    /// left it.
-    pub(super) fn finish(mut self) -> (usize, Out) {
-        (self.items.pop().unwrap_or(0), self.out)
+    /// The value built, and the `Out` as the build left it. While
+    /// counting, every object in the value is `null`.
+    pub(super) fn finish(mut self) -> (Value, Out) {
+        (self.items.pop().unwrap_or(Value::NULL), self.out)
     }
 }
 
@@ -785,28 +791,25 @@ impl Sink for JsonSink {
     const KEEPS_NON_FINITE: bool = true;
 
     fn null(&mut self) {
-        self.items.push(0);
+        self.items.push(Value::NULL);
     }
 
     fn bool(&mut self, value: bool) {
-        let boxed = self.out.boxed(TAG_BOX_BOOL, usize::from(value));
-        self.items.push(boxed);
+        self.items.push(Value::bool(value));
     }
 
     fn int(&mut self, value: i64) {
-        let boxed = self.out.boxed(TAG_BOX_INT, value as usize);
-        self.items.push(boxed);
+        self.items.push(Value::int(value));
     }
 
     fn bigint(&mut self, object: usize) {
         // A `bigint` is never changed: the copy holds the same one.
         self.items
-            .push(if self.out.is_building() { object } else { 0 });
+            .push(built(if self.out.is_building() { object } else { 0 }));
     }
 
     fn float(&mut self, value: f64) {
-        let boxed = self.out.boxed(TAG_BOX_FLOAT, value.to_bits() as usize);
-        self.items.push(boxed);
+        self.items.push(Value::float(value));
     }
 
     fn string(&mut self, text: &str, object: usize) {
@@ -818,7 +821,7 @@ impl Sink for JsonSink {
         } else {
             0
         };
-        self.items.push(string);
+        self.items.push(built(string));
     }
 
     fn begin_array(&mut self) {
@@ -829,14 +832,9 @@ impl Sink for JsonSink {
 
     fn end_array(&mut self, _: bool) {
         let start = self.starts.pop().unwrap_or(0);
-        // SAFETY: each item is zero or a live object: built here, or a
-        // string or a `bigint` of the value being written.
-        let items = self.items[start..]
-            .iter()
-            .map(|item| unsafe { Value::reference(*item) });
-        let array = self.out.array(items);
+        let array = self.out.array(self.items[start..].iter().copied());
         self.items.truncate(start);
-        self.items.push(array);
+        self.items.push(built(array));
     }
 
     fn begin_object(&mut self) {
@@ -854,19 +852,18 @@ impl Sink for JsonSink {
         } else {
             self.out.string(text)
         };
-        self.items.push(key);
+        self.items.push(built(key));
     }
 
     fn end_object(&mut self, _: bool) {
         let start = self.starts.pop().unwrap_or(0);
-        // SAFETY: as in `Self::end_array`.
         let entries = self.items[start..]
             .as_chunks::<2>()
             .0
             .iter()
-            .map(|[key, value]| (*key, unsafe { Value::reference(*value) }));
+            .map(|[key, value]| (key.payload, *value));
         let map = self.out.map(entries);
         self.items.truncate(start);
-        self.items.push(map);
+        self.items.push(built(map));
     }
 }

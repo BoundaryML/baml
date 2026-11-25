@@ -15,17 +15,34 @@ use num_bigint::{BigInt, Sign};
 
 use crate::{
     class::{self, Init},
-    heap::{Mutator, load, store},
+    heap::{Mutator, Value, load, store},
     layout::{
         BIGINT_LEFT_IS_INT as LEFT_IS_INT, BIGINT_LIMB_COUNT, BIGINT_LIMBS,
         BIGINT_OP_ADD as OP_ADD, BIGINT_OP_AND as OP_AND, BIGINT_OP_DIV as OP_DIV,
         BIGINT_OP_MUL as OP_MUL, BIGINT_OP_OR as OP_OR, BIGINT_OP_REM as OP_REM,
         BIGINT_OP_SHL as OP_SHL, BIGINT_OP_SUB as OP_SUB, BIGINT_OP_XOR as OP_XOR,
-        BIGINT_RIGHT_IS_INT as RIGHT_IS_INT, TAG_BIGINT, WELL_KNOWN_ALLOC_FAILURE,
+        BIGINT_RIGHT_IS_INT as RIGHT_IS_INT, TAG_BIGINT, THROWN, WELL_KNOWN_ALLOC_FAILURE,
         WELL_KNOWN_DIVISION_BY_ZERO, WELL_KNOWN_NEGATIVE_BIT_SHIFT, WORD,
     },
-    native::RtResult,
 };
+
+/// What an operator returns to compiled code: the new `bigint` at `made`
+/// as a value, or the instance it throws, with [`THROWN`] set in its tag.
+fn returned(made: Result<usize, usize>) -> Value {
+    // SAFETY: each is an object just made.
+    unsafe {
+        match made {
+            Ok(object) => Value::reference(object),
+            Err(thrown) => {
+                let thrown = Value::reference(thrown);
+                Value {
+                    tag: thrown.tag | THROWN,
+                    payload: thrown.payload,
+                }
+            }
+        }
+    }
+}
 
 /// The most bits a `bigint` may take: the interpreter's limit.
 pub(crate) const MAX_BITS: u64 = 1 << 28;
@@ -153,7 +170,7 @@ impl Operand {
     /// The field of a panic that names the operand.
     fn init(&self) -> Init<'_> {
         match self {
-            Self::Int(value) => Init::BoxedInt(*value),
+            Self::Int(value) => Init::Int(*value),
             Self::Big(value) => Init::Big(value),
         }
     }
@@ -240,7 +257,7 @@ crate::stubs::anchored! {
 }
 
 /// `left op right` where at least one operand is a `bigint`: the result, a
-/// new `bigint`, or what the operator throws.
+/// new `bigint`, or what the operator throws, as [`returned`] has them.
 ///
 /// # Safety
 ///
@@ -252,7 +269,7 @@ unsafe extern "C" fn bigint_binary(
     op: usize,
     left: usize,
     right: usize,
-) -> RtResult {
+) -> Value {
     // SAFETY: the caller's contract. Both are read before anything is
     // allocated, so neither needs to be kept.
     let (left, right) = unsafe {
@@ -275,10 +292,7 @@ unsafe extern "C" fn bigint_binary(
         )),
         Err(Failure::Alloc(message)) => Err(alloc_failure(mutator, &message)),
     };
-    match made {
-        Ok(object) => RtResult::ok(object as u64),
-        Err(thrown) => RtResult { value: 0, thrown },
-    }
+    returned(made)
 }
 
 /// How `left` orders against `right`, at least one of them a `bigint`:
@@ -323,18 +337,16 @@ crate::stubs::anchored! {
     baml_rt_bigint_neg => bigint_neg
 }
 
-/// `-value`.
+/// `-value`: the new `bigint` or what the negation throws, as
+/// [`returned`] has them.
 ///
 /// # Safety
 ///
 /// Called from compiled code with its mutator and a live `bigint`.
-unsafe extern "C" fn bigint_neg(mutator: &mut Mutator, value: usize) -> RtResult {
+unsafe extern "C" fn bigint_neg(mutator: &mut Mutator, value: usize) -> Value {
     // SAFETY: the caller's contract.
     let negated = -unsafe { self::value(value) };
-    match checked(mutator, &negated) {
-        Ok(object) => RtResult::ok(object as u64),
-        Err(thrown) => RtResult { value: 0, thrown },
-    }
+    returned(checked(mutator, &negated))
 }
 
 crate::stubs::anchored! {

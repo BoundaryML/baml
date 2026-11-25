@@ -36,19 +36,19 @@
 use std::alloc::{Layout, alloc, dealloc};
 
 use crate::layout::{
-    ARRAY_PTR, ARRAY_SIZE, BIGINT_LIMB_COUNT, BOUND_RECEIVER, BOUND_TYPE_ARG_COUNT, BOX_SIZE,
-    BYTES_PTR, BYTES_SIZE, BYTES_STORAGE_CAPACITY, CALLABLE_TAG_MASK, CELL_SIZE, CELL_VALUE,
+    ARRAY_PTR, ARRAY_SIZE, BIGINT_LIMB_COUNT, BOUND_RECEIVER, BOUND_TYPE_ARG_COUNT, BYTES_PTR,
+    BYTES_SIZE, BYTES_STORAGE_CAPACITY, CALLABLE_TAG_MASK, CELL_SIZE, CELL_VALUE,
     CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_KEY,
     ENTRY_SIZE, ENTRY_VALUE, FIRST_CLASS_TYPE, FUTURE_SIZE, FUTURE_TRACE, FUTURE_VALUE,
-    INDEX_SLOT_COUNT, INSTANCE_SLOTS, KIND_ENUM, KIND_INSTANCE, MAP_ENTRIES, MAP_INDEX, MAP_SIZE,
-    OWNED_KIND, OWNED_SIZE, OWNED_VALUE, PLAIN_WORDS, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE,
+    INDEX_SLOT_COUNT, INSTANCE_SLOTS, KIND_INSTANCE, MAP_ENTRIES, MAP_INDEX, MAP_SIZE, OWNED_KIND,
+    OWNED_SIZE, OWNED_VALUE, PLAIN_WORDS, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, STACK_MAP_VALUE,
     STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TAG_ARRAY, TAG_ARRAY_STORAGE,
-    TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BOX_BOOL, TAG_BOX_FLOAT, TAG_BOX_INT, TAG_BYTES,
-    TAG_BYTES_STORAGE, TAG_CELL, TAG_CLOSURE, TAG_FLOAT, TAG_FUTURE, TAG_INT, TAG_MAP,
-    TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OWNED, TAG_PLAIN, TAG_STRING, TAG_STRING_SLICE,
-    TAG_TUPLE, TUPLE_COUNT, TYPE_HEADER, TYPE_ID_MASK, VALUE, VALUE_PAYLOAD, WORD, aligned,
-    bigint_size, bound_size, bytes_storage_size, closure_size, entries_size, index_size,
-    instance_size, is_callable, is_pointer, plain_size, storage_size, string_size,
+    TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_BYTES_STORAGE, TAG_CELL, TAG_CLOSURE,
+    TAG_FLOAT, TAG_FUTURE, TAG_INT, TAG_MAP, TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OWNED,
+    TAG_PLAIN, TAG_STRING, TAG_STRING_SLICE, TAG_TUPLE, TUPLE_COUNT, TYPE_HEADER, TYPE_ID_MASK,
+    VALUE, VALUE_PAYLOAD, WORD, aligned, bigint_size, bound_size, bytes_storage_size, closure_size,
+    entries_size, index_size, instance_size, is_callable, is_pointer, plain_size, storage_size,
+    string_size,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
@@ -94,6 +94,10 @@ pub struct RustKind {
     pub(crate) id: fn() -> std::any::TypeId,
     pub(crate) name: fn() -> &'static str,
 }
+
+/// Set in a registered root's address when the slot is a value, which is
+/// aligned as one, and not one word.
+const ROOT_IS_VALUE: usize = 1;
 
 /// What an abandoned space is filled with under stress, so that a reference
 /// the collector failed to update reads as garbage.
@@ -327,7 +331,9 @@ impl Drop for Space {
 
 /// The stack maps of the program: for the return address of every call in
 /// compiled code, the offsets from the caller's stack pointer of the slots
-/// that hold references across that call.
+/// that hold references across that call. A slot is one word, null or an
+/// address, or with [`STACK_MAP_VALUE`] set in its offset a value: a tag
+/// word and then a payload word.
 struct StackMaps {
     /// `(return address, first index into offsets, count)`, sorted. A
     /// call across which no slot holds a reference is here only in a build
@@ -506,7 +512,8 @@ pub struct Mutator {
     heap: Heap,
     /// The tasks, and what runs them.
     pub(crate) sched: crate::sched::Sched,
-    /// Addresses of the runtime's own slots holding references.
+    /// Addresses of the runtime's own slots holding references: each a
+    /// word, or with [`ROOT_IS_VALUE`] set a value.
     roots: Vec<usize>,
     /// Where a throw finds its handler.
     pub(crate) unwind: crate::unwind::Unwinder,
@@ -515,6 +522,10 @@ pub struct Mutator {
     /// The `async` native this worker is polling, for a panic inside it
     /// to name.
     pub(crate) polling: Option<&'static str>,
+    /// The state of the `async` native that ended last on this worker, or
+    /// null: its stub reads the native's value from it, so it is freed
+    /// when the next one ends.
+    pub(crate) spent_native: *mut crate::native::drive::Head,
 }
 
 const _: () = {
@@ -586,6 +597,7 @@ impl Mutator {
             unwind: crate::unwind::Unwinder::new(program.unwind, program.functions),
             on_worker_stack: false,
             polling: None,
+            spent_native: std::ptr::null_mut(),
         };
         mutator.publish_limit();
         mutator
@@ -687,6 +699,19 @@ impl Mutator {
         self.roots.push(slot);
     }
 
+    /// Keep the value in `*slot` current across allocations until the
+    /// matching [`Self::unroot`]: what it points at, when it is a pointer,
+    /// and its tag, which changes when a slice is made a string.
+    pub fn root_value(&mut self, slot: &mut Value) {
+        self.root_value_at(std::ptr::from_mut(slot) as usize);
+    }
+
+    /// Like [`Self::root_value`], for a slot known by address.
+    pub fn root_value_at(&mut self, slot: usize) {
+        debug_assert!(slot.is_multiple_of(VALUE));
+        self.roots.push(slot | ROOT_IS_VALUE);
+    }
+
     /// Drop the last `count` roots.
     pub fn unroot(&mut self, count: usize) {
         self.roots.truncate(self.roots.len() - count);
@@ -724,48 +749,6 @@ impl Mutator {
                 (types + start) as *const u8,
                 length,
             ))
-        }
-    }
-
-    /// The tag of the values of the type a call names by `type_id`, when
-    /// they are immediates: an `int`, a `float`, a `bool`, or an enum's
-    /// variants, which a slot holds as the `int` of their position. None
-    /// for every other type, whose values are references. A call names
-    /// the first three, and an enum, by the type of their boxes; zero
-    /// names a type whose values share no one id, all of which are
-    /// references.
-    pub fn immediate_tag(&self, type_id: usize) -> Option<usize> {
-        match type_id {
-            TAG_BOX_INT => Some(TAG_INT),
-            TAG_BOX_FLOAT => Some(TAG_FLOAT),
-            TAG_BOX_BOOL => Some(TAG_BOOL),
-            // The description of a type with no one type id.
-            described if described & crate::json_layout::DESCRIBED as usize != 0 => None,
-            // SAFETY: an id from here on is an entry of the type table.
-            program if program >= FIRST_CLASS_TYPE => unsafe {
-                (self.info(program).kind == KIND_ENUM).then_some(TAG_INT)
-            },
-            _ => None,
-        }
-    }
-
-    /// Whether values of the type a call names by `type_id` are references.
-    pub fn is_reference(&self, type_id: usize) -> bool {
-        self.immediate_tag(type_id).is_none()
-    }
-
-    /// The value a slot holds for `word`, which is what compiled code
-    /// holds a value of the type a call names by `type_id` as.
-    ///
-    /// # Safety
-    ///
-    /// `word` is a value of that type: when the type's values are
-    /// references, zero or the address of a live object.
-    pub unsafe fn value_of(&self, word: usize, type_id: usize) -> Value {
-        match self.immediate_tag(type_id) {
-            Some(tag) => Value::immediate(tag, word),
-            // SAFETY: the caller's contract.
-            None => unsafe { Value::reference(word) },
         }
     }
 
@@ -879,10 +862,14 @@ impl Mutator {
                     copy.stack(&self.heap.stack_maps, Anchor { sp, pc, fp }, base);
                 }
                 // What the `async` natives the task is inside hold.
-                crate::native::drive::each_root(task, |slot| copy.forward_word(slot));
+                crate::native::drive::each_root(task, |slot| copy.forward_value(slot));
             }
             for &slot in &self.roots {
-                copy.forward_word(slot);
+                if slot & ROOT_IS_VALUE == 0 {
+                    copy.forward_word(slot);
+                } else {
+                    copy.forward_value(slot & !ROOT_IS_VALUE);
+                }
             }
             copy.finish();
         }
@@ -1004,7 +991,8 @@ impl<'a> Copy<'a> {
                 TAG_TUPLE => instance_size(count()),
                 TAG_OWNED => OWNED_SIZE,
                 TAG_PLAIN => plain_size(count()),
-                TAG_BOX_INT | TAG_BOX_FLOAT | TAG_BOX_BOOL => BOX_SIZE,
+                // An enum's box is the size its type says, as an instance
+                // is.
                 id if id >= FIRST_CLASS_TYPE => self.info(header).size as usize,
                 id => unreachable!("an object of the tag {id}, which nothing makes"),
             }
@@ -1049,8 +1037,9 @@ impl<'a> Copy<'a> {
     ///
     /// # Safety
     ///
-    /// `slot` is the address of a slot of a live object, which stays where
-    /// it is until the collection ends.
+    /// `slot` is the address of a value: a slot of a live object, of a
+    /// compiled frame or of the runtime's, which stays where it is until
+    /// the collection ends.
     unsafe fn forward_value(&mut self, slot: usize) {
         // SAFETY: the caller's contract.
         unsafe {
@@ -1296,8 +1285,13 @@ impl<'a> Copy<'a> {
             // SAFETY: `sp` is a compiled frame's stack pointer at the call
             // returning to `pc`, and `fp` its frame record.
             unsafe {
-                for &offset in maps.slots(pc) {
-                    self.forward_word(sp + offset as usize);
+                for &entry in maps.slots(pc) {
+                    let entry = entry as usize;
+                    if entry & STACK_MAP_VALUE == 0 {
+                        self.forward_word(sp + entry);
+                    } else {
+                        self.forward_value(sp + (entry & !STACK_MAP_VALUE));
+                    }
                 }
                 if fp >= base {
                     break;
@@ -1855,6 +1849,109 @@ mod tests {
         );
     }
 
+    /// A frame slot the stack map lists as a value is a tag and a payload:
+    /// the collector follows the payload when the tag is a pointer's, and
+    /// gives the slot the tag of a string when it made one of the slice it
+    /// pointed at. A slot listed as one word is followed as before.
+    #[test]
+    fn a_frame_slot_that_is_a_value_is_followed_by_its_tag() {
+        let code = CODE.as_ptr() as usize;
+        for kept in [false, true] {
+            // One call, 8 bytes into the code, across which the frame
+            // holds a word at 0 and values at 16 and at 32. No call holds
+            // nothing.
+            let stack_maps: Vec<usize> = vec![
+                1,
+                code,
+                1,
+                8,
+                3,
+                0,
+                VALUE | STACK_MAP_VALUE,
+                (2 * VALUE) | STACK_MAP_VALUE,
+                0,
+            ];
+            let program = Program {
+                stack_maps: stack_maps.leak().as_ptr() as usize,
+                types: types().as_ptr() as usize,
+                unwind: 0,
+                functions: 0,
+            };
+            // SAFETY: the tables are in the compiler's formats.
+            let mut mutator = unsafe { Mutator::new(program, true) };
+            let text = LETTERS.repeat(4);
+            let mut parent = string::from_str(&mut mutator, &text);
+            let part = slice(&mut mutator, &mut parent, 5, 45);
+            let frame: &'static mut [Value; 3] = Box::leak(Box::new([Value::NULL; 3]));
+            // The word: the string the slice is of, or null.
+            frame[0].tag = if kept { parent } else { 0 };
+            frame[1] = Value {
+                tag: TAG_STRING_SLICE,
+                payload: part,
+            };
+            // An `int` whose bits are the address of an object that moves.
+            let int = Value {
+                tag: TAG_INT,
+                payload: part,
+            };
+            frame[2] = int;
+            // No task is running, so the walk ends at this one frame.
+            mutator.anchor = Anchor {
+                sp: frame.as_ptr() as usize,
+                pc: code + 8,
+                fp: usize::MAX,
+            };
+            mutator.allocate(VALUE);
+            mutator.anchor = Anchor::default();
+            assert_eq!(frame[2], int, "an immediate is not followed");
+            let held = frame[1];
+            assert_ne!(held.payload, part, "every allocation collects");
+            assert_eq!(is_slice(held.payload), kept);
+            let tag = if kept { TAG_STRING_SLICE } else { TAG_STRING };
+            assert_eq!(held.tag, tag);
+            // SAFETY: the frame's slots were kept current.
+            unsafe {
+                assert_eq!(string::text(held.payload), &text[5..45]);
+                if kept {
+                    assert_ne!(frame[0].tag, parent);
+                    assert_eq!(load(held.payload + SLICE_PARENT), frame[0].tag);
+                    assert_eq!(string::text(frame[0].tag), text);
+                }
+            }
+        }
+    }
+
+    /// A root of the runtime's that is a value is followed by its tag, as
+    /// a slot of the heap is.
+    #[test]
+    fn a_rooted_value_is_followed_by_its_tag() {
+        let mut mutator = mutator(true);
+        let mut parent = string::from_str(&mut mutator, &LETTERS.repeat(4));
+        let part = slice(&mut mutator, &mut parent, 5, 45);
+        let mut held = Value {
+            tag: TAG_STRING_SLICE,
+            payload: part,
+        };
+        let int = Value {
+            tag: TAG_INT,
+            payload: part,
+        };
+        let mut scalar = int;
+        mutator.root_value(&mut held);
+        mutator.root_value(&mut scalar);
+        mutator.allocate(VALUE);
+        mutator.unroot(2);
+        assert_eq!(scalar, int);
+        assert_ne!(held.payload, part);
+        // The slice was alone, so it is a string now, and the tag says so.
+        assert_eq!(held.tag, TAG_STRING);
+        // SAFETY: `held` was kept current.
+        assert_eq!(
+            unsafe { string::text(held.payload) },
+            &LETTERS.repeat(4)[5..45]
+        );
+    }
+
     /// A kind whose values are counters of how often they were dropped.
     static COUNTED: RustKind = RustKind {
         drop: count_drop,
@@ -1915,9 +2012,7 @@ mod tests {
     fn what_an_array_or_a_map_gives_up_is_collected() {
         use crate::{
             map,
-            native::{
-                Arr, ArrRef, NativeBamlArray as _, Natives, RootSlots, Scope, Slot, TypeId, View,
-            },
+            native::{Arr, ArrRef, NativeBamlArray as _, Natives, RootSlots, Scope, Slot, View},
         };
 
         let mut mutator = mutator(true);
@@ -1928,7 +2023,6 @@ mod tests {
                 .filter(|index| drops[*index] == 1)
                 .collect()
         };
-        let types = [TypeId(0)];
         // SAFETY: the calls follow the contracts of compiled code, with the
         // array and the map rooted here in place of a stack map.
         unsafe {
@@ -1944,12 +2038,12 @@ mod tests {
             }
             assert!(dropped(&mut mutator).is_empty());
 
-            Natives::pop(types, ArrRef::<Slot>::from_raw(array));
+            Natives::pop(ArrRef::<Slot>::from_raw(array));
             assert_eq!(dropped(&mut mutator), [7]);
-            Natives::shift(types, ArrRef::<Slot>::from_raw(array));
+            Natives::shift(ArrRef::<Slot>::from_raw(array));
             assert_eq!(dropped(&mut mutator), [0, 7]);
             // Of 1 to 6, the second: 2.
-            Natives::remove_at(types, ArrRef::<Slot>::from_raw(array), 1);
+            Natives::remove_at(ArrRef::<Slot>::from_raw(array), 1);
             assert_eq!(dropped(&mut mutator), [0, 2, 7]);
             {
                 // Of 1, 3, 4, 5, 6, the two from the second on: 3 and 4.
@@ -1957,13 +2051,13 @@ mod tests {
                 let mut scope = Scope::new(&mut mutator, &slots);
                 let held = scope.root_raw::<Arr<Slot>>(array);
                 let nothing = scope.alloc_array::<Slot>(0);
-                assert!(Natives::splice(&mut scope, types, held, 1, 2, nothing).is_ok());
+                assert!(Natives::splice(&mut scope, held, 1, 2, nothing).is_ok());
             }
             assert_eq!(dropped(&mut mutator), [0, 2, 3, 4, 7]);
             // Of 1, 5, 6, all but the first.
-            Natives::_truncate(types, ArrRef::<Slot>::from_raw(array), 1);
+            Natives::_truncate(ArrRef::<Slot>::from_raw(array), 1);
             assert_eq!(dropped(&mut mutator), [0, 2, 3, 4, 5, 6, 7]);
-            Natives::clear(types, ArrRef::<Slot>::from_raw(array));
+            Natives::clear(ArrRef::<Slot>::from_raw(array));
             assert_eq!(dropped(&mut mutator), [0, 1, 2, 3, 4, 5, 6, 7]);
             mutator.unroot(1);
 

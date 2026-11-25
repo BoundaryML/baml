@@ -3,7 +3,10 @@
 use super::{
     Arr, ArrRef, Elem, Float, Int, NativeBaml, Natives, Root, Scope, Slot, Thrown, TypeId, json,
 };
-use crate::layout::{TAG_BIGINT, TAG_BOX_FLOAT, TAG_BOX_INT, TAG_STRING};
+use crate::{
+    heap::Value,
+    layout::{TAG_BIGINT, TAG_FLOAT, TAG_INT, TAG_STRING},
+};
 
 impl NativeBaml for Natives {
     /// What a `from_json` nothing overrides returns: the value read by its
@@ -12,7 +15,7 @@ impl NativeBaml for Natives {
         scope: &mut Scope<'s>,
         types: [TypeId; 1],
         j: Elem<'s>,
-    ) -> Result<usize, Thrown<'s>> {
+    ) -> Result<Value, Thrown<'s>> {
         json::decode::to(scope, types[0], j, false, true).await
     }
 
@@ -22,7 +25,7 @@ impl NativeBaml for Natives {
         scope: &mut Scope<'s>,
         types: [TypeId; 1],
         value: Elem<'s>,
-    ) -> Result<usize, Thrown<'s>> {
+    ) -> Result<Value, Thrown<'s>> {
         json::to_json_value(scope, types[0], value, false, false).await
     }
 
@@ -53,19 +56,20 @@ impl NativeBaml for Natives {
     fn _is_primitive_array(types: [TypeId; 1], _arr: ArrRef<'_, Slot>) -> bool {
         matches!(
             types[0].0 as usize,
-            TAG_BOX_INT | TAG_BOX_FLOAT | TAG_STRING | TAG_BIGINT
+            TAG_INT | TAG_FLOAT | TAG_STRING | TAG_BIGINT
         )
     }
 
     /// Sort `arr` in place by the order of its elements, and return it. The
     /// sort is stable. The call names the type of the elements, where any
     /// other names the type of its argument.
-    fn _rust_sort(types: [TypeId; 1], arr: usize) -> usize {
+    fn _rust_sort(types: [TypeId; 1], arr: Value) -> Value {
+        let array = arr.payload;
         // SAFETY: the compiler passes an array.
-        let mut elements = unsafe { crate::array::values(arr) };
+        let mut elements = unsafe { crate::array::values(array) };
         match types[0].0 as usize {
-            TAG_BOX_INT => elements.sort_by_key(|element| element.payload.cast_signed()),
-            TAG_BOX_FLOAT => elements.sort_by(|a, b| {
+            TAG_INT => elements.sort_by_key(|element| element.payload.cast_signed()),
+            TAG_FLOAT => elements.sort_by(|a, b| {
                 float_order(
                     f64::from_bits(a.payload as u64),
                     f64::from_bits(b.payload as u64),
@@ -90,7 +94,7 @@ impl NativeBaml for Natives {
             other => unreachable!("_rust_sort is compiled for no element type with id {other}"),
         }
         // SAFETY: the array has the elements just read.
-        unsafe { crate::array::put(arr, 0, &elements) };
+        unsafe { crate::array::put(array, 0, &elements) };
         arr
     }
 

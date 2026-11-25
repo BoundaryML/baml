@@ -117,15 +117,20 @@ pub const TAG_REALIZED_FUNCTION: usize = 27 << 3;
 pub const TAG_HOST_CLOSURE: usize = 28 << 3;
 pub const TAG_PACKAGE: usize = 29 << 3;
 pub const TAG_RUST_INSTANCE: usize = 30 << 3;
-/// The boxes of an `int`, a `float` and a `bool`: what a union or an
-/// `unknown` holds one as. They are also the type ids a call passes a
-/// native to name the three types.
-pub const TAG_BOX_INT: usize = 31 << 3;
-pub const TAG_BOX_FLOAT: usize = 32 << 3;
-pub const TAG_BOX_BOOL: usize = 33 << 3;
 /// Where the types of a program's classes and enums begin: every type id
 /// from here on is the byte offset of a type in the program's type table.
-pub const FIRST_CLASS_TYPE: usize = 34 << 3;
+pub const FIRST_CLASS_TYPE: usize = 31 << 3;
+
+/// Set in the tag a native that can throw returns, and in the one an entry
+/// a native calls returns, when the value is what was thrown. No tag of a
+/// value has it: it is one of the collector's bits, and such a tag is
+/// never stored.
+pub const THROWN: usize = 1;
+
+/// Set in a slot word of a stack map when the frame slot is a value: its
+/// tag at the offset the rest of the word gives, its payload a word after.
+/// A slot word without it is the offset of one word, null or an address.
+pub const STACK_MAP_VALUE: usize = 1;
 
 /// Whether a tag is of a pointer.
 pub const fn is_pointer(tag: usize) -> bool {
@@ -243,8 +248,9 @@ pub const fn bound_size(type_args: usize) -> usize {
     aligned(BOUND_TYPE_ARGS + type_args * WORD)
 }
 
-/// Where a union or `unknown` is expected, an `int`, `float`, `bool` or enum
-/// variant is a box: a header whose type says which, and the value.
+/// Where the type of a value is only known when the program runs, an enum
+/// variant is a box: a header whose type says which enum, and the variant's
+/// position. The compiler places one per variant in the executable's data.
 pub const BOX_VALUE: usize = WORD;
 pub const BOX_SIZE: usize = VALUE;
 
@@ -403,8 +409,7 @@ pub const STRING_HASH_MASK: u32 = HEADER_PAYLOAD_MASK as u32;
 
 const _: () = {
     assert!(STRING_TAGS_END == TAG_STRING_SLICE + 8);
-    assert!(TAG_RUST_INSTANCE + 8 == TAG_BOX_INT);
-    assert!(TAG_BOX_BOOL + 8 == FIRST_CLASS_TYPE);
+    assert!(TAG_RUST_INSTANCE + 8 == FIRST_CLASS_TYPE);
     assert!(TYPE_HEADER.is_multiple_of(8));
     assert!(SLICE_SIZE.is_multiple_of(VALUE));
     assert!(ARRAY_SIZE.is_multiple_of(VALUE));
@@ -625,15 +630,18 @@ const _: () = {
 };
 
 /// What the poll of an `async` native tells the compiled stub that drives
-/// it to do next, beside one word: return the word, throw the word with
-/// the trace in the worker's scratch word, call the compiled entry at the
-/// word, or wait for the I/O the word is the address of.
+/// it to do next, beside one word: return the value the native left in its
+/// state, throw that value with the trace in the worker's scratch word,
+/// call the compiled entry at the word, or wait for the I/O the word is the
+/// address of.
 pub const STEP_DONE: usize = 0;
 pub const STEP_THREW: usize = 1;
 pub const STEP_CALL: usize = 2;
 pub const STEP_WAIT: usize = 3;
-/// How many arguments a native passes the compiled entry it calls, and
-/// where the stub finds them in the native's state.
+/// How many words a native passes the compiled entry it calls, two values
+/// as a tag and a payload each, and where the stub finds them in the
+/// native's state. A native that is done, or that threw, leaves its value
+/// in the first two.
 pub const NATIVE_CALL_ARGS: usize = 4;
 pub const NATIVE_STATE_ARGS: usize = 0;
 
@@ -660,8 +668,3 @@ pub const FUTURE_ERROR: usize = 2;
 pub const FUTURE_SETTLED: usize = 3;
 /// Set in a future's flags once an `await` has thrown its error.
 pub const FUTURE_OBSERVED: usize = 1;
-
-/// What a `spawn` tells the runtime of the word its task returns: this,
-/// when the word is a reference, whose tag is its object's; and otherwise
-/// the tag the word has.
-pub const RESULT_IS_REFERENCE: usize = 1;

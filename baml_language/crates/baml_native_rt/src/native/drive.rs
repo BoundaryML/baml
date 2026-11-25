@@ -3,8 +3,10 @@
 //! Only the compiler's transform of an `async fn` into a state machine is
 //! used. The state is one block on the Rust heap, made by the native's
 //! symbol ([`start`]) and polled with a waker that does nothing
-//! ([`native_poll`]). A native stops in one of two ways, both
-//! methods of its [`Scope`]:
+//! ([`native_poll`]). A native that is done leaves its value in the block,
+//! where its stub reads it, so the block outlives the poll that ended the
+//! native: the worker frees it when it next ends one. A native stops in
+//! one of two ways, both methods of its [`Scope`]:
 //!
 //! - [`Scope::call_baml`] runs a compiled function, which may park the
 //!   task or throw like any other. A throw comes back to the native as an
@@ -50,18 +52,23 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-use super::{Elem, RootSlots, RtResult, Scope, Thrown, TypeId};
+use super::{Elem, RootSlots, Scope, Thrown};
 use crate::{
-    heap::Mutator,
-    layout::{NATIVE_CALL_ARGS, NATIVE_STATE_ARGS, STEP_CALL, STEP_DONE, STEP_THREW, STEP_WAIT},
+    heap::{Mutator, Value},
+    layout::{
+        NATIVE_CALL_ARGS, NATIVE_STATE_ARGS, STEP_CALL, STEP_DONE, STEP_THREW, STEP_WAIT, THROWN,
+    },
     sched::{IoWait, Job, Task, Wake},
 };
 
-/// The most arguments a native passes a compiled function.
+/// The words a native passes a compiled function, and the values they
+/// are: a tag and a payload each.
 const CALL_ARGS: usize = NATIVE_CALL_ARGS;
+const CALL_VALUES: usize = CALL_ARGS / 2;
 
 /// A compiled function a native can call: an entry the compiler makes for
-/// the purpose, which takes and returns every value as a union holds it.
+/// the purpose, which takes two values and returns one, each as its tag
+/// and its payload.
 #[derive(Clone, Copy)]
 pub struct BamlFn(usize);
 
@@ -89,7 +96,7 @@ enum Request {
 pub(crate) struct Exchange {
     request: Option<Request>,
     /// What the compiled function returned, or what it threw.
-    word: usize,
+    value: Value,
     threw: bool,
     /// The trace it threw that with.
     context: usize,
@@ -102,14 +109,18 @@ pub(crate) struct Exchange {
 /// collector read of it. The future follows, in the same block.
 #[repr(C)]
 pub(crate) struct Head {
-    /// What the stub passes the compiled function the native asked for.
-    /// First, where the stub reads them.
+    /// What the stub passes the compiled function the native asked for,
+    /// and once the native is done the value it returned or threw, in the
+    /// first two. First, where the stub reads them.
     args: [usize; CALL_ARGS],
     /// The native the task was inside already, which called the compiled
     /// code that called this one.
     outer: *mut Head,
-    poll: unsafe fn(*mut Head) -> Poll<RtResult>,
+    poll: unsafe fn(*mut Head) -> Poll<Value>,
+    /// Drop the future and what the head owns. The block stays.
     drop: unsafe fn(*mut Head),
+    /// Give the block's memory back, once [`Self::drop`] has run.
+    free: unsafe fn(*mut Head),
     /// The builtin's path, for a message about it.
     name: &'static str,
     exchange: Exchange,
@@ -129,7 +140,7 @@ struct Block<F> {
     future: ManuallyDrop<F>,
 }
 
-unsafe fn poll_block<F: Future<Output = RtResult>>(head: *mut Head) -> Poll<RtResult> {
+unsafe fn poll_block<F: Future<Output = Value>>(head: *mut Head) -> Poll<Value> {
     // SAFETY: `head` starts a `Block<F>` that never moves, and nothing
     // else refers to its future.
     unsafe {
@@ -139,12 +150,41 @@ unsafe fn poll_block<F: Future<Output = RtResult>>(head: *mut Head) -> Poll<RtRe
 }
 
 unsafe fn drop_block<F>(head: *mut Head) {
-    // SAFETY: `head` starts a `Block<F>` made by `start`, which nothing
-    // refers to any more. The future goes first: it borrows the head.
+    // SAFETY: `head` starts a `Block<F>` made by `start`, whose future
+    // and scope nothing refers to any more. The future goes first: it
+    // borrows the head. The scope is not dropped: its roots are the
+    // block's, which no mutator lists.
     unsafe {
         let block = head.cast::<Block<F>>();
         ManuallyDrop::drop(&mut (*block).future);
-        drop(Box::from_raw(block));
+        std::ptr::drop_in_place(&raw mut (*head).exchange.request);
+        std::ptr::drop_in_place(&raw mut (*head).waits_for);
+        std::ptr::drop_in_place(&raw mut (*head).slots);
+    }
+}
+
+unsafe fn free_block<F>(head: *mut Head) {
+    // SAFETY: `head` starts a `Block<F>` made by `start` whose parts
+    // `drop_block` has dropped: only the memory is left.
+    unsafe { drop(Box::from_raw(head.cast::<MaybeUninit<Block<F>>>())) };
+}
+
+/// Drop the state of the native at `head`, which is over, and keep its
+/// block until the worker next ends a native: its stub may yet read the
+/// value it left there.
+///
+/// # Safety
+///
+/// `head` is a block made by [`start`] that is on no task's list.
+unsafe fn retire(worker: *mut Mutator, head: *mut Head) {
+    // SAFETY: the caller's contract, and the block the worker kept is one
+    // whose stub read it before it called anything else.
+    unsafe {
+        ((*head).drop)(head);
+        let kept = std::mem::replace(&mut (*worker).spent_native, head);
+        if !kept.is_null() {
+            ((*kept).free)(kept);
+        }
     }
 }
 
@@ -161,7 +201,7 @@ unsafe fn drop_block<F>(head: *mut Head) {
 pub(crate) unsafe fn start<F, S>(mutator: &mut Mutator, name: &'static str, make: S) -> *mut Head
 where
     // `Send`: a native may hold nothing bound to a thread across a stop.
-    F: Future<Output = RtResult> + Send,
+    F: Future<Output = Value> + Send,
     S: FnOnce(&'static mut Scope<'static>) -> F,
 {
     name_native_in_panics();
@@ -178,10 +218,11 @@ where
             outer: (*task).natives,
             poll: poll_block::<F>,
             drop: drop_block::<F>,
+            free: free_block::<F>,
             name,
             exchange: Exchange {
                 request: None,
-                word: 0,
+                value: Value::NULL,
                 threw: false,
                 context: 0,
                 worker,
@@ -248,14 +289,15 @@ pub(crate) struct Step {
     word: usize,
 }
 
-// The two ways a native ends are what its result says of a throw.
-const _: () = assert!(STEP_DONE == 0 && STEP_THREW == 1);
-
 /// Poll the native at `head` once, and say what the stub that drives it
-/// does next. `word` and `threw` are what the compiled function the native
-/// asked for last returned, and whether that was thrown, with its trace in
-/// the worker's scratch word. Both are zero for the first poll and after a
-/// wait.
+/// does next. `tag` and `payload` are the value the compiled function the
+/// native asked for last returned, with [`THROWN`] set in the tag when it
+/// threw the value, whose trace is then in the worker's scratch word. Both
+/// are zero for the first poll and after a wait.
+///
+/// A native that is done has left its value in the first two words of its
+/// state, the tag and then the payload: what it returned, or what it
+/// threw, with the trace in the worker's scratch word.
 ///
 /// `worker` is the stub's pinned register as it calls: after a stop, the
 /// worker the task went on under. The native's scope is told here.
@@ -270,15 +312,18 @@ const _: () = assert!(STEP_DONE == 0 && STEP_THREW == 1);
 pub(crate) unsafe extern "C" fn native_poll(
     worker: *mut Mutator,
     head: *mut Head,
-    word: usize,
-    threw: usize,
+    tag: usize,
+    payload: usize,
 ) -> Step {
     // SAFETY: the caller's contract. The worker is reached through its
     // address: the native reaches it through its scope meanwhile.
     unsafe {
         let exchange = &raw mut (*head).exchange;
-        (*exchange).word = word;
-        (*exchange).threw = threw != 0;
+        (*exchange).value = Value {
+            tag: tag & !THROWN,
+            payload,
+        };
+        (*exchange).threw = tag & THROWN != 0;
         (*exchange).context = (*worker).scratch();
         (*exchange).worker = worker;
         (*worker).polling = Some((*head).name);
@@ -291,10 +336,16 @@ pub(crate) unsafe extern "C" fn native_poll(
                 "natives end innermost first"
             );
             (*task).natives = (*head).outer;
-            ((*head).drop)(head);
+            retire(worker, head);
+            (*head).args[0] = result.tag & !THROWN;
+            (*head).args[1] = result.payload;
             return Step {
-                kind: result.thrown,
-                word: result.value as usize,
+                kind: if result.tag & THROWN == 0 {
+                    STEP_DONE
+                } else {
+                    STEP_THREW
+                },
+                word: 0,
             };
         }
         match (*exchange).request.take() {
@@ -378,6 +429,7 @@ pub(crate) unsafe fn drop_all(task: *mut Task) {
             let head = (*task).natives;
             (*task).natives = (*head).outer;
             ((*head).drop)(head);
+            ((*head).free)(head);
         }
     }
 }
@@ -422,9 +474,9 @@ impl<'s> Scope<'s> {
         );
     }
 
-    /// Call the compiled function `function` with `args`, each a value as
-    /// a union holds it, and return what it returns, held the same way.
-    /// What it throws is the error, to hand on with `?`.
+    /// Call the compiled function `function` with `args`, at most two
+    /// values, and return the value it returns. What it throws is the
+    /// error, to hand on with `?`.
     ///
     /// The call runs between two polls of the native: it may run for as
     /// long as any BAML, park, and collect.
@@ -435,12 +487,15 @@ impl<'s> Scope<'s> {
     ) -> impl Future<Output = Result<Elem<'s>, Thrown<'s>>> + Send + use<'a, 's> {
         self.stops("scope.call_baml");
         assert!(
-            args.len() <= CALL_ARGS,
-            "a native passes a compiled function at most {CALL_ARGS} arguments"
+            args.len() <= CALL_VALUES,
+            "a native passes a compiled function at most {CALL_VALUES} arguments"
         );
+        // An argument not passed is `null`.
         let mut words = [0; CALL_ARGS];
-        for (word, arg) in words.iter_mut().zip(args) {
-            *word = arg.get(self);
+        for (index, arg) in args.iter().enumerate() {
+            let value = arg.value(self);
+            words[2 * index] = value.tag;
+            words[2 * index + 1] = value.payload;
         }
         let stop = Stop {
             scope: Some(self),
@@ -455,9 +510,9 @@ impl<'s> Scope<'s> {
             // with what compiled code returned or threw, and its trace.
             unsafe {
                 let exchange = scope.exchange;
-                let value = scope.elem_raw((*exchange).word, TypeId(0));
+                let value = scope.elem((*exchange).value);
                 if (*exchange).threw {
-                    let context = scope.elem_raw((*exchange).context, TypeId(0));
+                    let context = scope.elem(Value::reference((*exchange).context));
                     Err(Thrown {
                         error: value,
                         context: Some(context),
@@ -552,16 +607,16 @@ impl<'s> Scope<'s> {
         self.mutator().collect(0);
     }
 
-    /// What the symbol of an `async` native returns for an error: the
-    /// error itself with a flag, having left the trace it was caught with
-    /// in the scratch word for the caller to throw it again with.
-    pub fn throw_again(&mut self, thrown: &Thrown<'_>) -> RtResult {
-        let context = thrown.context.map_or(0, |context| context.slot.get());
+    /// What an `async` native ends with for an error: the value thrown
+    /// with [`THROWN`] set in its tag, having left the trace it was caught
+    /// with in the scratch word for the caller to throw it again with.
+    /// Nothing allocates between this and the stub's throw.
+    pub fn throw_again(&mut self, thrown: &Thrown<'_>) -> Value {
+        let context = thrown
+            .context
+            .map_or(0, |context| context.slot.get().payload);
         self.mutator().set_scratch(context);
-        RtResult {
-            value: thrown.error.slot.get() as u64,
-            thrown: 1,
-        }
+        thrown.returned(self)
     }
 }
 
@@ -574,8 +629,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        heap::{Program, load},
-        layout::VALUE,
+        heap::Program,
+        layout::{TAG_INT, TAG_STRING, VALUE},
     };
 
     /// A worker of a program with no compiled code. With `stress` every
@@ -611,7 +666,7 @@ mod tests {
         make: S,
     ) -> (*mut Mutator, Step)
     where
-        F: Future<Output = RtResult> + Send,
+        F: Future<Output = Value> + Send,
         S: FnOnce(&'static mut Scope<'static>) -> F,
     {
         // SAFETY: the caller is on a task of `worker`, and what the native
@@ -619,9 +674,9 @@ mod tests {
         // but the pinned one.
         unsafe {
             let head = start(&mut *worker, name, make);
-            let (mut word, mut threw) = (0, 0);
+            let (mut tag, mut payload) = (0, 0);
             loop {
-                let step = native_poll(worker, head, word, threw);
+                let step = native_poll(worker, head, tag, payload);
                 if step.kind != STEP_CALL {
                     return (worker, step);
                 }
@@ -629,14 +684,71 @@ mod tests {
                 std::arch::asm!(
                     "blr {code}",
                     code = in(reg) step.word,
-                    inout("x0") args[0] => word,
-                    inout("x1") args[1] => threw,
+                    inout("x0") args[0] => tag,
+                    inout("x1") args[1] => payload,
                     inout("x2") args[2] => _,
                     inout("x3") args[3] => _,
                     inout("x21") worker,
                     clobber_abi("C"),
                 );
             }
+        }
+    }
+
+    /// What a native ends with, as its stub reads it: how it ended, and
+    /// the value it left in the first two words of its state.
+    unsafe fn ends_with<F, S>(worker: &mut Mutator, make: S) -> (usize, Value)
+    where
+        F: Future<Output = Value> + Send,
+        S: FnOnce(&'static mut Scope<'static>) -> F,
+    {
+        // SAFETY: the caller is on a task of `worker`; the state is read
+        // as the stub reads it, before anything else is called.
+        unsafe {
+            let head = start(worker, "test.ends", make);
+            let step = native_poll(worker, head, 0, 0);
+            let value = Value {
+                tag: (*head).args[0],
+                payload: (*head).args[1],
+            };
+            (step.kind, value)
+        }
+    }
+
+    /// A native that is done leaves its value in its state, and one that
+    /// threw leaves what it threw there, with the tag the value has: the
+    /// step says which it is. The trace it was caught with, which is none
+    /// for an error the native made, is in the scratch word.
+    #[test]
+    fn a_native_leaves_what_it_returned_or_threw_in_its_state() {
+        let (mut worker, _) = worker_on_a_task(true);
+        // SAFETY: on a worker that runs a task.
+        unsafe {
+            let (kind, value) = ends_with(&mut worker, |_| async { Value::int(7) });
+            assert_eq!((kind, value), (STEP_DONE, Value::int(7)));
+
+            let (kind, value) = ends_with(&mut worker, |scope| async move {
+                let text = scope.alloc_str("made by the native");
+                // One more allocation, which moves the string.
+                scope.alloc_str("and one more");
+                text.value(scope)
+            });
+            assert_eq!((kind, value.tag), (STEP_DONE, TAG_STRING));
+            assert_eq!(crate::string::text(value.payload), "made by the native");
+
+            worker.set_scratch(usize::MAX);
+            let (kind, value) = ends_with(&mut worker, |scope| async move {
+                let thrown = Thrown {
+                    error: scope.elem(Value::int(5)),
+                    context: None,
+                };
+                let returned = thrown.returned(scope);
+                assert_eq!(returned.tag, TAG_INT | THROWN);
+                assert_eq!(scope.throw_again(&thrown), returned);
+                returned
+            });
+            assert_eq!((kind, value), (STEP_THREW, Value::int(5)));
+            assert_eq!(worker.scratch(), 0);
         }
     }
 
@@ -661,7 +773,7 @@ mod tests {
                 let text = scope.alloc_str(TEXT);
                 scope.io(std::future::pending::<()>()).await;
                 drop(held);
-                RtResult::ok(text.raw(scope) as u64)
+                text.value(scope)
             });
             assert!(((*head).poll)(head).is_pending());
 
@@ -670,10 +782,15 @@ mod tests {
             let [root] = roots[..] else {
                 panic!("the native holds one root, not {}", roots.len());
             };
-            let before = load(root);
+            let before = Value::load(root);
             worker.allocate(VALUE);
-            assert_ne!(load(root), before, "a collection moves the string");
-            assert_eq!(crate::string::text(load(root)), TEXT);
+            let held = Value::load(root);
+            assert_ne!(
+                held.payload, before.payload,
+                "a collection moves the string"
+            );
+            assert_eq!(held.tag, before.tag);
+            assert_eq!(crate::string::text(held.payload), TEXT);
 
             drop_all(task);
             assert!(DROPPED.load(Ordering::Acquire), "its destructors ran");
@@ -720,7 +837,7 @@ mod tests {
                 assert_eq!(Arc::strong_count(&shared), 2);
                 drop(shared);
                 assert_eq!(DROPS.load(Ordering::Acquire), 1);
-                RtResult::ok(0)
+                Value::NULL
             });
             assert!(((*head).poll)(head).is_ready());
             drop_all(task);
@@ -733,7 +850,7 @@ mod tests {
     }
 
     /// What compiled code a native calls would be: it sleeps, and returns
-    /// nothing thrown.
+    /// `null`, not thrown.
     #[unsafe(naked)]
     unsafe extern "C" fn sleeps() {
         core::arch::naked_asm!(
@@ -766,7 +883,7 @@ mod tests {
                     slept && std::thread::current().id() == thread,
                     Ordering::Release,
                 );
-                RtResult::ok(0)
+                Value::NULL
             })
         };
         worker
@@ -806,7 +923,7 @@ mod tests {
                     slept && held.get(scope).as_str() == HELD && made.get(scope).as_str() == MADE,
                     Ordering::Release,
                 );
-                RtResult::ok(0)
+                Value::NULL
             })
         };
         worker
@@ -852,7 +969,7 @@ mod tests {
                     slept && intact && last.get(scope).as_str() == "and one more",
                     Ordering::Release,
                 );
-                RtResult::ok(0)
+                Value::NULL
             })
         };
         worker
@@ -939,7 +1056,7 @@ mod tests {
         unsafe {
             drive(&raw mut *worker, "test.stops_for_nothing", |_| async {
                 std::future::pending::<()>().await;
-                RtResult::ok(0)
+                Value::NULL
             });
         }
     }
@@ -952,7 +1069,7 @@ mod tests {
         unsafe {
             drive(&raw mut *worker, "test.awaits_a_tokio_timer", |_| async {
                 tokio::time::sleep(Duration::from_millis(1)).await;
-                RtResult::ok(0)
+                Value::NULL
             });
         }
     }

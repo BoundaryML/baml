@@ -140,8 +140,8 @@ pub const KIND_BOOL_IS: u32 = 14;
 pub const KIND_VARIANT: u32 = 15;
 pub const KIND_OPAQUE: u32 = 16;
 
-/// An `int`, or the position of an enum's variant: the slot has the tag
-/// of an `int`, and its payload is the value.
+/// An `int`, or the position of a variant in a slot of its enum's own
+/// type: the slot has the tag of an `int`, and its payload is the value.
 pub const REPR_INT: u32 = 0;
 /// A `float`: the slot has the tag of one, and its payload is the bits.
 pub const REPR_FLOAT: u32 = 1;
@@ -150,11 +150,13 @@ pub const REPR_BOOL: u32 = 2;
 /// A reference to an object of the type, with the tag of its object;
 /// `null` is the `null` value.
 pub const REPR_REF: u32 = 3;
-/// A reference to an object whose header says what it is, with an `int`,
-/// `float`, `bool` or enum variant in a box; `null` is the `null` value.
+/// A value of any type, which its tag says: `null`, an `int`, a `float` or
+/// a `bool` as itself, an enum's variant as a pointer to a box of the
+/// enum's type, and any other as a pointer to its object. What a union, an
+/// `unknown` and an optional enum are held as.
 pub const REPR_BOXED: u32 = 4;
-/// An optional `int`, `float` or `bool`, in one slot: the `null` value, or
-/// the scalar with its own tag.
+/// An optional `int`, `float` or `bool`: the `null` value, or the scalar
+/// with its own tag.
 pub const REPR_PAIR: u32 = 5;
 /// `null`: the slot holds the `null` value.
 pub const REPR_NULL: u32 = 6;

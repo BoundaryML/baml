@@ -28,11 +28,11 @@ pub(super) struct WellKnown {
     named: [usize; layout::NAMED.len()],
 }
 
-/// The types that pass a test, as a header says them.
+/// The types that pass a test, as a tag says them.
 #[derive(Default)]
 pub(super) struct Passing {
     pub(super) ids: Vec<usize>,
-    /// Every panic passes: decided by the header's flag.
+    /// Every panic passes: decided by the flag of the instance's header.
     pub(super) panics: bool,
     pub(super) null: bool,
 }
@@ -185,20 +185,21 @@ impl<'db> Translator<'_, 'db> {
         Ok(Passing { ids, panics, null })
     }
 
-    /// The type id of `class`, which takes no type arguments, and whether
-    /// its instances are panics.
-    pub(super) fn plain_class(
-        &mut self,
-        class: ClassRef<'db>,
-    ) -> Result<(usize, bool), CompileError> {
+    /// The type id of `class`, which takes no type arguments.
+    pub(super) fn plain_class(&mut self, class: ClassRef<'db>) -> Result<usize, CompileError> {
         if !class_generic_params(self.db, class).is_empty() {
             return Err(internal(
                 "a checked class tag is of a class without type parameters",
             ));
         }
         let fields = class_layout(self.db, class, &[]).map_err(internal)?;
-        let id = self.backend.class_type(self.db, class, &[], &fields);
-        Ok((id, is_panic_class(self.db, class)))
+        Ok(self.backend.class_type(self.db, class, &[], &fields))
+    }
+
+    /// The type id of every panic class.
+    pub(super) fn panic_ids(&mut self) -> Result<Vec<usize>, CompileError> {
+        let known = self.backend.well_known(self.db)?;
+        Ok(known.ids[..layout::WELL_KNOWN_PANICS].to_vec())
     }
 
     /// Whether `id` is the type id of a panic class.

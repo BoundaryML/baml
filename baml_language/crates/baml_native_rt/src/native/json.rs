@@ -35,10 +35,9 @@ use crate::{
     describe::Types,
     heap::{Value, load},
     layout::{
-        BOX_VALUE, STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_BOX_BOOL, TAG_BOX_FLOAT,
-        TAG_BOX_INT, TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL, TYPE_ID_MASK,
-        WELL_KNOWN_JSON_DECODE_ERROR, WELL_KNOWN_JSON_PARSE_ERROR, WELL_KNOWN_JSON_PATH_ERROR,
-        WELL_KNOWN_JSON_SERIALIZATION_ERROR,
+        BOX_VALUE, STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_FLOAT, TAG_INT, TAG_MAP,
+        TAG_NULL, TYPE_ID_MASK, WELL_KNOWN_JSON_DECODE_ERROR, WELL_KNOWN_JSON_PARSE_ERROR,
+        WELL_KNOWN_JSON_PATH_ERROR, WELL_KNOWN_JSON_SERIALIZATION_ERROR,
     },
     map,
 };
@@ -89,8 +88,8 @@ pub(super) unsafe fn type_of(object: usize) -> usize {
     unsafe { load(object) & TYPE_ID_MASK }
 }
 
-/// What a `json` value is, read from the slot that holds it and, when it
-/// is an object, from its header.
+/// What a `json` value is, which its tag says: a scalar, or what its
+/// object is.
 #[derive(Clone, Copy)]
 enum Node {
     Null,
@@ -110,10 +109,12 @@ enum Node {
 impl Node {
     /// # Safety
     ///
-    /// `value` is `null`, a scalar, or refers to a live object.
+    /// `value` is a value as a slot holds one: `null`, a scalar, or a
+    /// pointer to a live object.
     unsafe fn of(types: &Types, value: Value) -> Self {
         let object = value.payload;
-        // SAFETY: the caller's contract: a box is a header and a value.
+        // SAFETY: the caller's contract: an enum's box is a header and the
+        // variant's position.
         unsafe {
             match value.id() {
                 TAG_NULL => Self::Null,
@@ -121,10 +122,7 @@ impl Node {
                 TAG_INT => Self::Int(object as i64),
                 TAG_FLOAT => Self::Float(f64::from_bits(object as u64)),
                 string if string < STRING_TAGS_END => Self::String(object),
-                TAG_BOX_INT => Self::Int(load(object + BOX_VALUE) as i64),
                 TAG_BIGINT => Self::Bigint(object),
-                TAG_BOX_FLOAT => Self::Float(f64::from_bits(load(object + BOX_VALUE) as u64)),
-                TAG_BOX_BOOL => Self::Bool(load(object + BOX_VALUE) & 0xFF != 0),
                 TAG_ARRAY => Self::Array(object),
                 TAG_MAP => Self::Object(object),
                 other => match types.of_type_id(other) {
@@ -188,18 +186,10 @@ unsafe fn object_get(map: usize, key: &str) -> Option<Value> {
     found
 }
 
-/// The word compiled code holds the value of a slot of a `json` as: the
-/// address of its object, or zero for `null`. A `json` holds every scalar
-/// in a box, so a slot that holds one in place is no part of a `json`, and
-/// reads as `null`.
-fn json_word(value: Value) -> usize {
-    if value.is_pointer() { value.payload } else { 0 }
-}
-
 impl NativeBamlJson for Natives {
     // Reading text and decoding recurse as deep as the value nests, which
     // is more than a task's stack keeps for the runtime.
-    fn parse<'s>(scope: &mut Scope<'s>, s: Root<'s, Str>) -> Result<usize, Thrown<'s>> {
+    fn parse<'s>(scope: &mut Scope<'s>, s: Root<'s, Str>) -> Result<Value, Thrown<'s>> {
         scope.with_room(|scope| parse_rooted(scope, s))
     }
 
@@ -208,10 +198,10 @@ impl NativeBamlJson for Natives {
         types: [TypeId; 1],
         s: Root<'s, Str>,
         aliased: bool,
-    ) -> Result<usize, Thrown<'s>> {
+    ) -> Result<Value, Thrown<'s>> {
         let json = scope.with_room(|scope| parse_rooted(scope, s))?;
         // SAFETY: a `json` value just built.
-        let json = unsafe { scope.elem_raw(json, TypeId(0)) };
+        let json = unsafe { scope.elem(json) };
         decode::to(scope, types[0], json, aliased, false).await
     }
 
@@ -227,7 +217,7 @@ impl NativeBamlJson for Natives {
             aliased,
             omit_nulls,
         };
-        let indent = match encode::indent_text(indent.get(scope)) {
+        let indent = match encode::indent_text(indent.value(scope)) {
             Ok(indent) => indent,
             Err(refused) => return Err(serialization_error(scope, &refused)),
         };
@@ -271,7 +261,7 @@ impl NativeBamlJson for Natives {
         value: Elem<'s>,
         aliased: bool,
         omit_nulls: bool,
-    ) -> Result<usize, Thrown<'s>> {
+    ) -> Result<Value, Thrown<'s>> {
         to_json_value(scope, value_type, value, aliased, omit_nulls).await
     }
 
@@ -280,7 +270,7 @@ impl NativeBamlJson for Natives {
         types: [TypeId; 1],
         j: Elem<'s>,
         aliased: bool,
-    ) -> Result<usize, Thrown<'s>> {
+    ) -> Result<Value, Thrown<'s>> {
         decode::to(scope, types[0], j, aliased, false).await
     }
 
@@ -288,26 +278,27 @@ impl NativeBamlJson for Natives {
         scope: &mut Scope<'s>,
         j: Elem<'s>,
         selector: Root<'s, Str>,
-    ) -> Result<usize, Thrown<'s>> {
+    ) -> Result<Value, Thrown<'s>> {
         let types = Types::of(scope);
         // SAFETY: a `json` value, and nothing is allocated while it is
         // walked.
         let found = unsafe { text::select(&types, j.value(scope), selector.get(scope).as_str()) };
-        found.map(json_word).map_err(|message| {
+        found.map_err(|message| {
             let selector = selector.get(scope).as_str().to_owned();
             path_error(scope, &message, &selector)
         })
     }
 
-    fn field(j: usize, key: StrRef<'_>) -> usize {
-        // SAFETY: `j` is zero or a live object, and a map found in a
-        // `json` value has string keys.
+    fn field(j: Value, key: StrRef<'_>) -> Value {
+        let map = j.payload;
+        // SAFETY: a value whose tag is a map's refers to a live one, and
+        // a map found in a `json` value has string keys.
         unsafe {
-            if j == 0 || type_of(j) != TAG_MAP || map::len(j) == 0 || !string_keyed(j) {
-                return 0;
+            if j.id() != TAG_MAP || map::len(map) == 0 || !string_keyed(map) {
+                return Value::NULL;
             }
-            map::get(j, Value::reference(super::View::raw(key)))
-                .map_or(0, |slot| json_word(Value::load(slot)))
+            map::get(map, Value::reference(super::View::raw(key)))
+                .map_or(Value::NULL, |slot| Value::load(slot))
         }
     }
 }
@@ -345,33 +336,35 @@ async fn to_json_of_each<'s>(
     let types = Types::of(scope);
     let mut count = 0;
     // SAFETY: a value compiled code passed, and nothing is allocated.
-    unsafe { encode::overriding(&types, value.get(scope), options, |_| count += 1) };
+    unsafe { encode::overriding(&types, value.value(scope), options, |_| count += 1) };
     if count == 0 {
         return Ok(None);
     }
     let reservation = scope.reserve(array_size(2 * count));
-    let array = reservation.elements(2 * count, TypeId(0));
+    let array = reservation.array::<Slot>(2 * count);
     let mut found = 0;
-    // SAFETY: as above: nothing moves while the reservation is open.
+    // SAFETY: as above: nothing moves while the reservation is open, and
+    // each object handed out is a live instance.
     unsafe {
-        encode::overriding(&types, value.get(reservation.scope), options, |object| {
-            array.set(found, object);
+        let value = value.value(reservation.scope);
+        encode::overriding(&types, value, options, |object| {
+            array.set(found, Value::reference(object));
             found += 1;
         });
     }
     let kept = array.keep();
     let array = reservation.finish(kept);
     for index in 0..count {
-        let object = array.get(scope).get(index).unwrap_or(0);
+        let object = array.get(scope).get(index).unwrap_or(Value::NULL);
         // SAFETY: a live instance, found to have one.
-        let Some(to_json) = (unsafe { encode::own_to_json(&types, object) }) else {
+        let Some(to_json) = (unsafe { encode::own_to_json(&types, object.payload) }) else {
             continue;
         };
         // SAFETY: as above.
-        let instance = unsafe { scope.elem_raw(object, TypeId(0)) };
+        let instance = unsafe { scope.elem(object) };
         let returned = scope.call_baml(to_json, &[instance]).await?;
-        // SAFETY: the array has `2 * count` elements, each a reference,
-        // and neither slot is used again.
+        // SAFETY: the array has `2 * count` elements, and neither slot is
+        // used again.
         unsafe {
             Value::store(
                 crate::array::element(array.raw(scope), count + index),
@@ -392,7 +385,7 @@ pub(super) async fn to_json_value<'s>(
     value: Elem<'s>,
     aliased: bool,
     omit_nulls: bool,
-) -> Result<usize, Thrown<'s>> {
+) -> Result<Value, Thrown<'s>> {
     let options = encode::Options {
         aliased,
         omit_nulls,
@@ -438,7 +431,7 @@ pub(super) async fn to_json_value<'s>(
                 Out::building(base, bytes),
                 &mut overrides,
             );
-            Ok(built.map_or(0, |(root, _)| root))
+            Ok(built.map_or(Value::NULL, |(root, _)| root))
         }
         Err(refused) => Err(serialization_error(scope, &refused)),
     }
@@ -448,7 +441,7 @@ pub(super) async fn to_json_value<'s>(
 pub(super) fn parse_rooted<'s>(
     scope: &mut Scope<'s>,
     s: Root<'s, Str>,
-) -> Result<usize, Thrown<'s>> {
+) -> Result<Value, Thrown<'s>> {
     let counted = text::parse(s.get(scope).as_str(), Out::counting());
     match counted {
         Ok((_, out)) => {
@@ -458,7 +451,7 @@ pub(super) fn parse_rooted<'s>(
             // The text may have moved when the room was made.
             let text = reservation.get(s).as_str();
             let built = text::parse(text, Out::building(base, bytes));
-            Ok(built.map_or(0, |(root, _)| root))
+            Ok(built.map_or(Value::NULL, |(root, _)| root))
         }
         Err(stop) => {
             let message = text::syntax_message(s.get(scope).as_str(), &stop);

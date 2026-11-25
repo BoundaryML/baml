@@ -22,8 +22,8 @@ use crate::{
         KIND_VARIANT, REPR_BOXED,
     },
     layout::{
-        BOX_SIZE, BOX_VALUE, HEADER_PANIC, NAMED, STRING_TAGS_END, TAG_BOOL, TAG_BOX_BOOL,
-        TAG_BOX_FLOAT, TAG_BOX_INT, TAG_FLOAT, TAG_INT, TYPE_ID_MASK,
+        BOX_SIZE, BOX_VALUE, HEADER_PANIC, NAMED, STRING_TAGS_END, TAG_BOOL, TAG_FLOAT, TAG_INT,
+        TYPE_ID_MASK,
     },
 };
 
@@ -41,26 +41,38 @@ pub(crate) enum Got {
     Ref(usize),
 }
 
-/// The value a slot of representation `repr` holds `got` as. Where the
-/// slot holds any of several types, a scalar goes in a box, which `boxed`
-/// makes of a type id and the value's bits: the address of the box, or
-/// zero from one that only counts, and the slot is then `null`.
+impl Got {
+    /// What the value `value` is, which its tag says. An enum's variant
+    /// in a box is the reference to its box.
+    pub(crate) fn of(value: heap::Value) -> Self {
+        match value.id() {
+            TAG_BOOL => Self::Bool(value.payload & 0xFF != 0),
+            TAG_INT => Self::Int(value.payload.cast_signed() as i64),
+            TAG_FLOAT => Self::Float(f64::from_bits(value.payload as u64)),
+            _ if value.is_pointer() => Self::Ref(value.payload),
+            _ => Self::Null,
+        }
+    }
+}
+
+/// The value a slot of representation `repr` holds `got` as. A variant
+/// goes as its position into a slot of its enum's own type, and into any
+/// other as a box, which `boxed` makes of the enum's type id and the
+/// position: the address of the box, or zero from one that only counts,
+/// and the slot is then `null`.
 pub(crate) fn place(got: Got, repr: u32, boxed: impl FnOnce(usize, usize) -> usize) -> heap::Value {
-    let (type_id, value) = match got {
-        Got::Null => return heap::Value::NULL,
+    match got {
+        Got::Null => heap::Value::NULL,
         // SAFETY: what was got is zero or a live object.
-        Got::Ref(object) => return unsafe { heap::Value::reference(object) },
-        Got::Bool(value) => (TAG_BOX_BOOL, heap::Value::bool(value)),
-        Got::Int(value) => (TAG_BOX_INT, heap::Value::int(value)),
-        Got::Float(value) => (TAG_BOX_FLOAT, heap::Value::float(value)),
-        // A slot of an enum's own type holds a variant as its position.
-        Got::Variant(type_id, index) => (type_id, heap::Value::immediate(TAG_INT, index)),
-    };
-    if repr == REPR_BOXED {
+        Got::Ref(object) => unsafe { heap::Value::reference(object) },
+        Got::Bool(value) => heap::Value::bool(value),
+        Got::Int(value) => heap::Value::int(value),
+        Got::Float(value) => heap::Value::float(value),
         // SAFETY: zero or a box just made.
-        unsafe { heap::Value::reference(boxed(type_id, value.payload)) }
-    } else {
-        value
+        Got::Variant(type_id, index) if repr == REPR_BOXED => unsafe {
+            heap::Value::reference(boxed(type_id, index))
+        },
+        Got::Variant(_, index) => heap::Value::immediate(TAG_INT, index),
     }
 }
 
@@ -106,10 +118,7 @@ pub enum Value<'s> {
 
 impl<'s, M> From<Root<'s, M>> for Value<'s> {
     fn from(root: Root<'s, M>) -> Self {
-        Self::Ref(Elem {
-            slot: root.0,
-            immediate: None,
-        })
+        Self::Ref(root.into())
     }
 }
 
@@ -248,10 +257,6 @@ impl Scope<'_> {
         let value = self.field_slot(object, field);
         match value.id() {
             TAG_BOOL | TAG_INT | TAG_FLOAT => Some(value.payload as u64),
-            // SAFETY: a box is a header and one value.
-            TAG_BOX_BOOL | TAG_BOX_INT | TAG_BOX_FLOAT => {
-                Some(unsafe { load(value.payload + BOX_VALUE) } as u64)
-            }
             _ => None,
         }
     }
@@ -291,7 +296,7 @@ impl<'s> Build<'s> {
 
     /// Give field `field`, by its position in the declaration, `value`.
     /// May collect, when the field holds any of several types and the
-    /// value is a scalar.
+    /// value is an enum's variant.
     pub fn set(&mut self, scope: &mut Scope<'s>, field: usize, value: impl Into<Value<'s>>) {
         let Some((offset, ty)) = self.class.field_place(field) else {
             self.misfit(field, "set");
@@ -315,15 +320,10 @@ impl<'s> Build<'s> {
                 Got::Variant(inner.of_a().a(), index)
             }
             Value::Ref(held) => {
-                let object = held.get(scope);
-                // SAFETY: a root holds a live object or zero.
-                let header = if object == 0 {
-                    0
-                } else {
-                    unsafe { load(object) & TYPE_ID_MASK }
-                };
+                let held = held.value(scope);
+                let (object, header) = (held.payload, held.id());
                 let fits = match inner.kind() {
-                    _ if object == 0 => false,
+                    _ if !held.is_pointer() => false,
                     KIND_CLASS => header == inner.a(),
                     KIND_STRING | KIND_STRING_IS => header < STRING_TAGS_END,
                     KIND_BOOL | KIND_INT | KIND_FLOAT | KIND_ENUM | KIND_NULL | KIND_BOOL_IS
@@ -339,10 +339,10 @@ impl<'s> Build<'s> {
         };
         // A reference is placed as it is, so nothing is allocated between
         // reading it from its root and storing it.
-        let placed = place(got, ty.repr(), |type_id, bits| {
+        let placed = place(got, ty.repr(), |type_id, position| {
             let boxed = scope.mutator().allocate_object(type_id, BOX_SIZE);
-            // SAFETY: a box is a header and one value.
-            unsafe { store(boxed + BOX_VALUE, bits) };
+            // SAFETY: an enum's box is a header and the variant's position.
+            unsafe { store(boxed + BOX_VALUE, position) };
             boxed
         });
         // SAFETY: the description says where the field is and how its

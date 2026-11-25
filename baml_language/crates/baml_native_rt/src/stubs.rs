@@ -279,10 +279,12 @@ preserving_stub! {
 }
 
 /// A stub named `$name` that never returns to its caller: it calls
-/// `$throw` with its two arguments, the mutator, its own frame record and
+/// `$throw` with its three arguments, the mutator, its own frame record and
 /// room for an [`unwind::Resume`], and then goes on where that says: in the
-/// handler's frame, with the error and its context in the two registers an
-/// exception edge reads them from, on the worker named.
+/// handler's frame, with the tag and the payload of the value thrown in
+/// the two registers an exception edge reads them from, on the worker
+/// named. The context the value travels with is in that worker's scratch
+/// word.
 ///
 /// On arm64 a handler lands with x0 and x1, on x86-64 with rax and rdx.
 #[cfg(target_arch = "aarch64")]
@@ -300,9 +302,9 @@ macro_rules! throwing_stub {
                 "stp x29, x30, [sp, #-16]!",
                 "mov x29, sp",
                 "sub sp, sp, #48",
-                "mov x2, x21",
-                "mov x3, x29",
-                "mov x4, sp",
+                "mov x3, x21",
+                "mov x4, x29",
+                "mov x5, sp",
                 "bl {throw}",
                 "ldp x2, x3, [sp, #0]",
                 "ldp x4, x0, [sp, #16]",
@@ -332,9 +334,9 @@ macro_rules! throwing_stub {
                 "push rbp",
                 "mov rbp, rsp",
                 "sub rsp, 48",
-                "mov rdx, r15",
-                "mov rcx, rbp",
-                "mov r8, rsp",
+                "mov rcx, r15",
+                "mov r8, rbp",
+                "mov r9, rsp",
                 "call {throw}",
                 "mov rax, [rsp + 24]",
                 "mov rdx, [rsp + 32]",
@@ -350,14 +352,14 @@ macro_rules! throwing_stub {
 }
 
 throwing_stub! {
-    /// `throw`: takes the error and the context it was thrown during the
-    /// handling of, or zero.
+    /// `throw`: takes the tag and the payload of the value thrown, and a
+    /// word it does not read.
     baml_rt_throw => unwind::throw
 }
 
 throwing_stub! {
-    /// Throw a caught error again: takes the error and the context it was
-    /// caught with.
+    /// Throw a caught value again: takes its tag, its payload, and the
+    /// context it was caught with.
     baml_rt_rethrow => unwind::rethrow
 }
 
@@ -379,13 +381,12 @@ throwing_stub! {
 
 throwing_stub! {
     /// Throw `baml.panics.StackOverflow`: a compiled function was entered
-    /// with its stack pointer below the limit. Takes two words it does not
+    /// with its stack pointer below the limit. Takes words it does not
     /// read.
     baml_rt_panic_stack_overflow => unwind::panic_stack_overflow
 }
 
 throwing_stub! {
-    /// Throw `baml.panics.MapKeyNotFound`: takes two words it does not
-    /// read.
+    /// Throw `baml.panics.MapKeyNotFound`: takes words it does not read.
     baml_rt_panic_map_key_not_found => unwind::panic_map_key_not_found
 }

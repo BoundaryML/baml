@@ -107,9 +107,12 @@ fn json_text(text: &str) -> Result<Option<String>, String> {
 impl NativeBamlYaml for Natives {
     // Reading a document and building its value recurse as deep as it
     // nests, which is more than a task's stack keeps for the runtime.
-    fn parse<'s>(scope: &mut Scope<'s>, s: Root<'s, Str>) -> Result<usize, Thrown<'s>> {
+    fn parse<'s>(
+        scope: &mut Scope<'s>,
+        s: Root<'s, Str>,
+    ) -> Result<crate::heap::Value, Thrown<'s>> {
         scope.with_room(|scope| match json_text(s.get(scope).as_str()) {
-            Ok(None) => Ok(0),
+            Ok(None) => Ok(crate::heap::Value::NULL),
             Ok(Some(text)) => {
                 let text = scope.alloc_str(&text);
                 json::parse_rooted(scope, text)

@@ -30,7 +30,7 @@ use crate::{
         ARRAY_LENGTH, ARRAY_SIZE, BYTES_LENGTH, BYTES_PTR, BYTES_STORAGE_DATA, SLICE_MIN_BYTES,
         SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS,
         STRING_TAGS_END, STRING_TEXT, TAG_BOOL, TAG_BYTES, TAG_FLOAT, TAG_INT, TAG_STRING,
-        TAG_STRING_SLICE, TYPE_ID_MASK, WORD, field_offset, instance_size, storage_size,
+        TAG_STRING_SLICE, THROWN, TYPE_ID_MASK, field_offset, instance_size, storage_size,
     },
 };
 
@@ -54,18 +54,19 @@ pub trait View<'a>: Copy {
     fn raw(self) -> usize;
 }
 
-/// What an array holds: [`Int`], [`Float`], [`Bool`], or anything
-/// [`Managed`].
+/// What an array holds: [`Int`], [`Float`], [`Bool`], [`Slot`], or
+/// anything [`Managed`].
 pub trait Element {
     type Value<'a>;
-    /// The tag a slot has for an element whose bits are its payload, or
-    /// nothing when elements are references, whose tag is their object's.
+    /// The tag every element has when the elements are of one immediate
+    /// type, whose zero a new array is filled with. Nothing when a new
+    /// array is filled with `null`.
     const TAG: Option<usize>;
     /// # Safety
     ///
-    /// `word` is the payload of an element of an array of this element
-    /// type that does not move for `'a`.
-    unsafe fn from_word<'a>(word: usize) -> Self::Value<'a>;
+    /// `value` is an element of an array of this element type that does
+    /// not move for `'a`.
+    unsafe fn from_value<'a>(value: heap::Value) -> Self::Value<'a>;
 }
 
 /// A string.
@@ -87,12 +88,15 @@ pub struct Float;
 /// A `bool` array element.
 pub struct Bool;
 /// Marks an array as holding values of a type parameter: whatever a call
-/// names, each read as the payload of its slot. What tag the slots have is
-/// the type's to say, so build one with [`Reservation::elements`], not
-/// [`Reservation::array`], which takes the elements to be references.
+/// names, each read as its slot holds it, tag and payload.
 pub struct Slot;
 
-/// The type id a call passes for one of a builtin's type parameters.
+/// The id a call passes to name a type: for a type parameter of one of the
+/// few builtins that are told theirs, and for the static type of an
+/// `unknown` argument of `baml.json`. It is the tag of an `int`, a `float`,
+/// a `bool` or a string, the type id of a class or of an enum, the offset
+/// of a description ([`crate::json_layout::DESCRIBED`]), or zero for a type
+/// with no one id.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct TypeId(pub u32);
 
@@ -118,37 +122,37 @@ impl Managed for Map {
 impl Element for Int {
     type Value<'a> = i64;
     const TAG: Option<usize> = Some(TAG_INT);
-    unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
-        word.cast_signed() as i64
+    unsafe fn from_value<'a>(value: heap::Value) -> Self::Value<'a> {
+        value.payload.cast_signed() as i64
     }
 }
 impl Element for Float {
     type Value<'a> = f64;
     const TAG: Option<usize> = Some(TAG_FLOAT);
-    unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
-        f64::from_bits(word as u64)
+    unsafe fn from_value<'a>(value: heap::Value) -> Self::Value<'a> {
+        f64::from_bits(value.payload as u64)
     }
 }
 impl Element for Bool {
     type Value<'a> = bool;
     const TAG: Option<usize> = Some(TAG_BOOL);
-    unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
-        word != 0
+    unsafe fn from_value<'a>(value: heap::Value) -> Self::Value<'a> {
+        value.payload != 0
     }
 }
 impl Element for Slot {
-    type Value<'a> = usize;
+    type Value<'a> = heap::Value;
     const TAG: Option<usize> = None;
-    unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
-        word
+    unsafe fn from_value<'a>(value: heap::Value) -> Self::Value<'a> {
+        value
     }
 }
 impl<M: Managed> Element for M {
     type Value<'a> = M::View<'a>;
     const TAG: Option<usize> = None;
-    unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
+    unsafe fn from_value<'a>(value: heap::Value) -> Self::Value<'a> {
         // SAFETY: the caller's contract.
-        unsafe { M::View::from_raw(word) }
+        unsafe { M::View::from_raw(value.payload) }
     }
 }
 
@@ -291,16 +295,16 @@ impl<'a, E: Element> ArrRef<'a, E> {
     }
 
     pub fn get(self, index: usize) -> Option<E::Value<'a>> {
-        // SAFETY: the payload is of an element of this array.
+        // SAFETY: the value is an element of this array.
         self.value(index)
-            .map(|value| unsafe { E::from_word(value.payload) })
+            .map(|value| unsafe { E::from_value(value) })
     }
 
     pub fn iter(self) -> impl ExactSizeIterator<Item = E::Value<'a>> {
-        // SAFETY: each index is below the length, and each payload is of
-        // an element of this array.
+        // SAFETY: each index is below the length, and each value is an
+        // element of this array.
         (0..self.len()).map(move |index| unsafe {
-            E::from_word(heap::Value::load(crate::array::element(self.0, index)).payload)
+            E::from_value(heap::Value::load(crate::array::element(self.0, index)))
         })
     }
 }
@@ -529,15 +533,15 @@ impl<'a> MapRef<'a> {
     }
 }
 
-/// A value as a union holds it, which is not `null`.
+/// An object a value whose type is only known when the program runs
+/// refers to.
 pub struct Any;
 
 impl Managed for Any {
     type View<'a> = AnyRef<'a>;
 }
 
-/// A view of a value a union holds: an object whose header says what it
-/// is.
+/// A view of an object whose header says what it is.
 #[derive(Clone, Copy)]
 pub struct AnyRef<'a>(usize, PhantomData<&'a ()>);
 
@@ -581,8 +585,8 @@ impl<'a> View<'a> for ObjRef<'a> {
 }
 
 impl<'a> ObjRef<'a> {
-    /// The payload of slot `index`: the word compiled code holds the
-    /// field's value as, zero for `null`.
+    /// The payload of slot `index`: the bits of a scalar, the address of
+    /// an object, zero for `null`.
     ///
     /// # Safety
     ///
@@ -604,74 +608,30 @@ impl<'a> ObjRef<'a> {
     }
 }
 
-/// An optional `int`, `float` or `bool` as compiled code holds it: the
-/// value's bits, and whether there is a value at all.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct OptionalScalar {
-    pub payload: u64,
-    pub present: u64,
-}
-
-impl From<Option<i64>> for OptionalScalar {
-    fn from(value: Option<i64>) -> Self {
-        Self {
-            payload: value.unwrap_or_default().cast_unsigned(),
-            present: u64::from(value.is_some()),
-        }
-    }
-}
-
-impl From<Option<f64>> for OptionalScalar {
-    fn from(value: Option<f64>) -> Self {
-        Self {
-            payload: value.unwrap_or_default().to_bits(),
-            present: u64::from(value.is_some()),
-        }
-    }
-}
-
-/// An optional value of a type parameter: its word, and whether there is
-/// one. The word of an absent reference is zero.
-impl From<Option<usize>> for OptionalScalar {
-    fn from(value: Option<usize>) -> Self {
-        Self {
-            payload: value.unwrap_or_default() as u64,
-            present: u64::from(value.is_some()),
-        }
-    }
-}
-
-impl From<Option<bool>> for OptionalScalar {
-    fn from(value: Option<bool>) -> Self {
-        Self {
-            payload: u64::from(value.unwrap_or_default()),
-            present: u64::from(value.is_some()),
-        }
-    }
-}
-
-/// Some of the slots behind the roots of one call: [`ROOTS`] of them, and
-/// which are roots.
+/// Some of the slots behind the roots of one call: [`ROOTS`] of them.
 struct Chunk {
-    slots: MaybeUninit<[Cell<usize>; ROOTS]>,
-    /// Which of the slots are roots, a bit each. The bit of a slot that is
-    /// not held is clear.
-    refs: Cell<u32>,
+    slots: MaybeUninit<[Cell<heap::Value>; ROOTS]>,
     /// The chunk the next slots are in, once a call has held that many:
     /// on the Rust heap, and null until then.
     next: Cell<*mut Chunk>,
 }
 
-const _: () = assert!(ROOTS <= u32::BITS as usize);
-
 impl Chunk {
     fn new() -> Self {
         Self {
             slots: MaybeUninit::uninit(),
-            refs: Cell::new(0),
             next: Cell::new(std::ptr::null_mut()),
         }
+    }
+
+    /// Slot `at` of the chunk, which has been written.
+    ///
+    /// # Safety
+    ///
+    /// The slot has been handed out.
+    unsafe fn slot(&self, at: usize) -> &Cell<heap::Value> {
+        // SAFETY: the caller's contract, and the slot is inside the array.
+        unsafe { &*self.slots.as_ptr().cast::<Cell<heap::Value>>().add(at) }
     }
 }
 
@@ -679,10 +639,12 @@ impl Chunk {
 /// frame of the function compiled code called, or for an `async` native in
 /// the block that holds its state.
 ///
-/// The first [`ROOTS`] slots are here. A call that holds more gets further
-/// chunks of as many, which stay where they are until the call is over: a
-/// root is the address of its slot. A slot is written when it is first
-/// handed out and not before: a call that roots two things pays for two.
+/// A slot is a value, and its tag says whether the collector follows it: a
+/// root is a slot whose value is a pointer. The first [`ROOTS`] slots are
+/// here. A call that holds more gets further chunks of as many, which stay
+/// where they are until the call is over: a root is the address of its
+/// slot. A slot is written when it is first handed out and not before: a
+/// call that roots two things pays for two.
 pub struct RootSlots {
     first: Chunk,
     /// How many slots are held.
@@ -726,8 +688,8 @@ impl RootSlots {
         }
     }
 
-    /// The next slot, holding `word`, which is a reference if `is_ref`.
-    fn hold(&self, word: usize, is_ref: bool) -> &Cell<usize> {
+    /// The next slot, holding `value`.
+    fn hold(&self, value: heap::Value) -> &Cell<heap::Value> {
         let index = self.used.get();
         self.used.set(index + 1);
         let chunk = if index < ROOTS {
@@ -735,8 +697,6 @@ impl RootSlots {
         } else {
             self.further(index / ROOTS)
         };
-        let at = index % ROOTS;
-        chunk.refs.set(chunk.refs.get() | u32::from(is_ref) << at);
         // SAFETY: the slot is inside the chunk's array, a cell may be
         // written through a shared reference, and it is written before the
         // reference to it is made.
@@ -744,11 +704,32 @@ impl RootSlots {
             let slot = chunk
                 .slots
                 .as_ptr()
-                .cast::<Cell<usize>>()
-                .add(at)
+                .cast::<Cell<heap::Value>>()
+                .add(index % ROOTS)
                 .cast_mut();
-            slot.write(Cell::new(word));
+            slot.write(Cell::new(value));
             &*slot
+        }
+    }
+
+    /// Hand `each` every slot held from `first` on, in the order they were
+    /// handed out.
+    fn each_from(&self, first: usize, mut each: impl FnMut(&Cell<heap::Value>)) {
+        let mut chunk = &raw const self.first;
+        let mut index = 0;
+        let used = self.used.get();
+        // SAFETY: a call that holds slots has the chunks they are in, and
+        // every slot below `used` has been written.
+        unsafe {
+            while index < used {
+                if index + ROOTS > first {
+                    for at in first.saturating_sub(index)..(used - index).min(ROOTS) {
+                        each((*chunk).slot(at));
+                    }
+                }
+                index += ROOTS;
+                chunk = (*chunk).next.get();
+            }
         }
     }
 
@@ -756,45 +737,19 @@ impl RootSlots {
     /// roots.
     fn release_to(&self, kept: usize) -> usize {
         let mut dropped = 0;
-        let mut chunk = &raw const self.first;
-        let mut first_slot = 0;
-        // SAFETY: a call that holds slots has the chunks they are in.
-        unsafe {
-            while first_slot < self.used.get() {
-                let refs = (*chunk).refs.get();
-                // The slots of this chunk that stay held.
-                let stay = match kept.saturating_sub(first_slot) {
-                    stay if stay >= ROOTS => u32::MAX,
-                    stay => (1 << stay) - 1,
-                };
-                dropped += (refs & !stay).count_ones() as usize;
-                (*chunk).refs.set(refs & stay);
-                first_slot += ROOTS;
-                chunk = (*chunk).next.get();
-            }
-        }
+        self.each_from(kept, |slot| dropped += usize::from(slot.get().is_pointer()));
         self.used.set(kept);
         dropped
     }
 
-    /// Hand `each` the address of every slot that is a root.
+    /// Hand `each` the address of every slot that is a root: a value
+    /// whose tag is a pointer's.
     pub(crate) fn each_root(&self, mut each: impl FnMut(usize)) {
-        let mut chunk = &raw const self.first;
-        let mut left = self.used.get();
-        // SAFETY: as in `Self::release_to`.
-        unsafe {
-            while left != 0 {
-                let refs = (*chunk).refs.get();
-                let first = (*chunk).slots.as_ptr() as usize;
-                for at in 0..left.min(ROOTS) {
-                    if refs >> at & 1 != 0 {
-                        each(first + at * WORD);
-                    }
-                }
-                left = left.saturating_sub(ROOTS);
-                chunk = (*chunk).next.get();
+        self.each_from(0, |slot| {
+            if slot.get().is_pointer() {
+                each(slot.as_ptr() as usize);
             }
-        }
+        });
     }
 }
 
@@ -816,8 +771,8 @@ impl Drop for RootSlots {
 }
 
 /// A reference the collector keeps current, for as long as the call it was
-/// made in.
-pub struct Root<'s, M>(&'s Cell<usize>, PhantomData<M>);
+/// made in: a slot holding a value that points at an `M`.
+pub struct Root<'s, M>(&'s Cell<heap::Value>, PhantomData<M>);
 
 // SAFETY: a root names a slot of its scope's, and the slot is read and
 // written only by the thread running that scope's native and by a
@@ -856,7 +811,7 @@ impl<M: Managed> Root<'_, M> {
     pub fn get<'a>(self, _scope: &'a Scope<'_>) -> M::View<'a> {
         // SAFETY: the slot holds a live `M`, which moves only when the
         // scope is borrowed exclusively.
-        unsafe { M::View::from_raw(self.0.get()) }
+        unsafe { M::View::from_raw(self.0.get().payload) }
     }
 
     /// The object's address, to hand back to compiled code: good until
@@ -887,88 +842,83 @@ impl<M: Managed> Root<'_, M> {
     /// }
     /// ```
     pub fn raw(self, _scope: &Scope<'_>) -> usize {
-        self.0.get()
+        self.0.get().payload
     }
 }
 
-/// The error a native throws: the object compiled code receives, and what
+impl<M> Root<'_, M> {
+    /// The object as a value, to hand back to compiled code or to store:
+    /// its address with its tag. Good until `scope` allocates or stops.
+    pub fn value(self, _scope: &Scope<'_>) -> heap::Value {
+        self.0.get()
+    }
+
+    /// Where the root keeps its object's address, for a function of the
+    /// runtime that reads it again after it has allocated.
+    pub(crate) fn address(self) -> *const usize {
+        // SAFETY: the payload is the second word of the slot.
+        unsafe { self.0.as_ptr().cast::<usize>().add(1) }
+    }
+}
+
+impl<'s, M> From<Root<'s, M>> for Elem<'s> {
+    fn from(root: Root<'s, M>) -> Self {
+        Self { slot: root.0 }
+    }
+}
+
+/// The error a native throws: the value compiled code receives, and what
 /// it was caught with when compiled code threw it first.
 pub struct Thrown<'s> {
     /// An instance of one of the standard library's error classes, or
-    /// whatever the BAML a native called threw, `null` included.
+    /// whatever the BAML a native called threw: any value, `null` included.
     error: Elem<'s>,
     /// The trace it was caught with, to throw it again with.
     context: Option<Elem<'s>>,
 }
 
-/// A value of a type parameter held across allocations: a root when the
-/// type's values are references, the plain word otherwise.
+impl Thrown<'_> {
+    /// What the symbol of a native that can throw returns for the error:
+    /// the value thrown, with [`THROWN`] set in its tag.
+    pub fn returned(&self, _scope: &Scope<'_>) -> heap::Value {
+        let error = self.error.slot.get();
+        heap::Value {
+            tag: error.tag | THROWN,
+            payload: error.payload,
+        }
+    }
+}
+
+/// A value held across allocations: a slot the collector keeps current
+/// when the value is a pointer. What a native is passed a value of a type
+/// parameter, of `unknown` or of a union as.
 #[derive(Clone, Copy)]
 pub struct Elem<'s> {
-    slot: &'s Cell<usize>,
-    /// The tag a slot has for the value when its type's values are
-    /// immediates, and nothing when they are references.
-    immediate: Option<usize>,
+    slot: &'s Cell<heap::Value>,
 }
 
 // SAFETY: as for `Root`.
 unsafe impl Send for Elem<'_> {}
 
 impl Elem<'_> {
-    /// The value's word, current until the next allocation.
-    pub fn get(self, _scope: &Scope<'_>) -> usize {
+    /// The value, current until the next allocation.
+    pub fn value(self, _scope: &Scope<'_>) -> heap::Value {
         self.slot.get()
     }
 
-    pub fn is_ref(self) -> bool {
-        self.immediate.is_none()
-    }
-
-    /// The value as a slot of the heap holds it, current until the next
-    /// allocation: an immediate has the tag of the type it was held with,
-    /// and a reference the tag of its object.
-    pub(crate) fn value(self, _scope: &Scope<'_>) -> heap::Value {
-        let word = self.slot.get();
-        match self.immediate {
-            Some(tag) => heap::Value::immediate(tag, word),
-            // SAFETY: a reference held is zero or a live object, which
-            // moves only when the scope is borrowed exclusively.
-            None => unsafe { heap::Value::reference(word) },
-        }
-    }
-
-    /// The value as a union holds it, when it is not `null`.
+    /// The object the value points at, when it is a pointer.
     pub fn as_any<'a>(self, _scope: &'a Scope<'_>) -> Option<AnyRef<'a>> {
-        let word = self.slot.get();
-        // SAFETY: a reference a union holds is zero or a live object, which
-        // moves only when the scope is borrowed exclusively.
-        (self.is_ref() && word != 0).then(|| unsafe { AnyRef::from_raw(word) })
+        let value = self.slot.get();
+        // SAFETY: a pointer held is to a live object, which moves only
+        // when the scope is borrowed exclusively.
+        value
+            .is_pointer()
+            .then(|| unsafe { AnyRef::from_raw(value.payload) })
     }
 
-    /// The string a value held as a union holds it is, when it is one.
+    /// The string the value is, when it is one.
     pub fn as_str<'a>(self, scope: &'a Scope<'_>) -> Option<StrRef<'a>> {
         self.as_any(scope).and_then(AnyRef::as_str)
-    }
-}
-
-/// What a native that can throw returns to compiled code, in two registers:
-/// the value's bits, and the thrown object or zero.
-#[repr(C)]
-pub struct RtResult {
-    pub value: u64,
-    pub thrown: usize,
-}
-
-impl RtResult {
-    pub fn ok(value: u64) -> Self {
-        Self { value, thrown: 0 }
-    }
-
-    pub fn thrown(thrown: &Thrown<'_>) -> Self {
-        Self {
-            value: 0,
-            thrown: thrown.error.slot.get(),
-        }
     }
 }
 
@@ -1041,32 +991,32 @@ impl<'s> Scope<'s> {
     ///
     /// `raw` is a live `M`.
     pub unsafe fn root_raw<M: Managed>(&mut self, raw: usize) -> Root<'s, M> {
-        Root(self.hold(raw, true), PhantomData)
+        // SAFETY: the caller's contract.
+        Root(
+            self.hold(unsafe { heap::Value::reference(raw) }),
+            PhantomData,
+        )
     }
 
-    /// Hold `word`, a value of the type a call names by `ty`.
+    /// Hold `value`.
     ///
     /// # Safety
     ///
-    /// `word` is a value of that type: a live object or zero when the
-    /// type's values are references.
-    pub unsafe fn elem_raw(&mut self, word: usize, ty: TypeId) -> Elem<'s> {
-        let immediate = self.immediate_tag(ty);
-        // The slot is this value's whether or not it is a root: a native
-        // can hold two values that are not references.
+    /// `value` is a value as a slot holds one: when its tag is a
+    /// pointer's, its payload is a live object with that tag.
+    pub unsafe fn elem(&mut self, value: heap::Value) -> Elem<'s> {
         Elem {
-            slot: self.hold(word, immediate.is_none()),
-            immediate,
+            slot: self.hold(value),
         }
     }
 
-    /// The next slot, holding `word`. The collector finds the roots of an
+    /// The next slot, holding `value`. The collector finds the roots of an
     /// `async` native through its task, and any other's in the mutator's
-    /// own list.
-    fn hold(&mut self, word: usize, is_ref: bool) -> &'s Cell<usize> {
-        let slot = self.slots.hold(word, is_ref);
-        if is_ref && self.exchange.is_null() {
-            self.mutator().root_at(slot.as_ptr() as usize);
+    /// own list, where a slot is only when it is a root.
+    fn hold(&mut self, value: heap::Value) -> &'s Cell<heap::Value> {
+        let slot = self.slots.hold(value);
+        if value.is_pointer() && self.exchange.is_null() {
+            self.mutator().root_value_at(slot.as_ptr() as usize);
         }
         slot
     }
@@ -1134,19 +1084,6 @@ impl<'s> Scope<'s> {
         // which is over.
         unsafe { self.release_last(self.slots.used.get() - held) };
         result
-    }
-
-    /// Whether values of the type a call names by `ty` are references.
-    pub fn is_reference(&self, ty: TypeId) -> bool {
-        self.immediate_tag(ty).is_none()
-    }
-
-    /// The tag a slot has for a value of the type a call names by `ty`,
-    /// when the type's values are immediates: see
-    /// [`Mutator::immediate_tag`].
-    pub(crate) fn immediate_tag(&self, ty: TypeId) -> Option<usize> {
-        // SAFETY: as in `Self::mutator`.
-        unsafe { self.mutator.as_ref() }.immediate_tag(ty.0 as usize)
     }
 
     /// A new string holding `text`. May collect.
@@ -1274,9 +1211,10 @@ impl<'s> Scope<'s> {
 
     /// Throw `error`, an instance a native built.
     pub fn throw(&mut self, error: Root<'s, Obj>) -> Thrown<'s> {
-        let error = error.raw(self);
-        // SAFETY: a root holds a live object.
-        unsafe { self.thrown(error) }
+        Thrown {
+            error: error.into(),
+            context: None,
+        }
     }
 
     /// A new map of string keys to objects, with room for `count` keys.
@@ -1295,17 +1233,12 @@ impl<'s> Scope<'s> {
         key: Root<'s, Str>,
         value: Option<Root<'s, M>>,
     ) {
-        let (map, key) = (map.raw(self), key.raw(self));
-        let value = value.map_or(0, |value| value.raw(self));
+        let (map, key) = (map.raw(self), key.value(self));
+        let value = value.map_or(heap::Value::NULL, |value| value.value(self));
         // SAFETY: a live map of string keys whose values are references,
-        // a string and an object or zero.
+        // a string and an object or `null`.
         unsafe {
-            crate::map::set(
-                self.mutator(),
-                map,
-                heap::Value::reference(key),
-                heap::Value::reference(value),
-            );
+            crate::map::set(self.mutator(), map, key, value);
         }
     }
 
@@ -1317,7 +1250,7 @@ impl<'s> Scope<'s> {
     unsafe fn thrown(&mut self, error: usize) -> Thrown<'s> {
         Thrown {
             // SAFETY: the caller's contract.
-            error: unsafe { self.elem_raw(error, TypeId(0)) },
+            error: unsafe { self.elem(heap::Value::reference(error)) },
             context: None,
         }
     }
@@ -1460,32 +1393,18 @@ impl<'s> Reservation<'_, 's> {
     /// A new array of `length` elements, each zero: `0`, `0.0`, `false`,
     /// or `null`.
     pub fn array<E: Element>(&self, length: usize) -> NewArray<'_, E> {
-        self.array_of(length, E::TAG)
-    }
-
-    /// A new array of `length` values of the type a call names by
-    /// `element`, each the type's zero: `0`, `0.0`, `false`, an enum's
-    /// first variant, or `null`.
-    pub fn elements(&self, length: usize, element: TypeId) -> NewArray<'_, Slot> {
-        self.array_of(length, self.scope.immediate_tag(element))
-    }
-
-    /// A new array of `length` elements, each the zero of the tag
-    /// `immediate`, or `null` when its elements are references.
-    fn array_of<E: Element>(&self, length: usize, immediate: Option<usize>) -> NewArray<'_, E> {
         let array = self.take(array_size(length));
         // SAFETY: the array has room for itself and its storage, and
         // nothing else reaches it yet.
         unsafe {
             crate::array::format(array, length);
-            if let Some(tag) = immediate {
+            if let Some(tag) = E::TAG {
                 let zero = heap::Value::immediate(tag, 0);
                 crate::array::fill(array, std::iter::repeat_n(zero, length));
             }
         }
         NewArray {
             array,
-            immediate,
             life: PhantomData,
         }
     }
@@ -1574,9 +1493,6 @@ impl<'a> NewStr<'a> {
 /// An array being filled in, inside a reservation.
 pub struct NewArray<'a, E> {
     array: usize,
-    /// The tag of its elements when they are immediates, and nothing when
-    /// they are references.
-    immediate: Option<usize>,
     life: PhantomData<(&'a (), E)>,
 }
 
@@ -1604,51 +1520,38 @@ impl<E: Element> NewArray<'_, E> {
             heap::Value::store(crate::array::element(self.array, index), value);
         }
     }
-
-    /// Store the element compiled code holds as `word`: an immediate of
-    /// the array's tag, or a reference, zero or to a live object.
-    fn put(self, index: usize, word: usize) {
-        self.set_value(
-            index,
-            match self.immediate {
-                Some(tag) => heap::Value::immediate(tag, word),
-                // SAFETY: an element that is a reference is zero or a live
-                // object, which does not move while the reservation is
-                // open.
-                None => unsafe { heap::Value::reference(word) },
-            },
-        );
-    }
 }
 
 impl<'a, M: Managed> NewArray<'a, M> {
     pub fn set(self, index: usize, value: M::View<'a>) {
-        self.put(index, value.raw());
+        // SAFETY: a view is of a live object, which does not move while
+        // the reservation is open.
+        self.set_value(index, unsafe { heap::Value::reference(value.raw()) });
     }
 }
 
 impl NewArray<'_, Slot> {
-    /// Store the word of a value of the array's element type.
-    pub fn set(self, index: usize, word: usize) {
-        self.put(index, word);
+    /// Store a value of the array's element type.
+    pub fn set(self, index: usize, value: heap::Value) {
+        self.set_value(index, value);
     }
 }
 
 impl NewArray<'_, Int> {
     pub fn set(self, index: usize, value: i64) {
-        self.put(index, value.cast_unsigned() as usize);
+        self.set_value(index, heap::Value::int(value));
     }
 }
 
 impl NewArray<'_, Float> {
     pub fn set(self, index: usize, value: f64) {
-        self.put(index, value.to_bits() as usize);
+        self.set_value(index, heap::Value::float(value));
     }
 }
 
 impl NewArray<'_, Bool> {
     pub fn set(self, index: usize, value: bool) {
-        self.put(index, usize::from(value));
+        self.set_value(index, heap::Value::bool(value));
     }
 }
 
@@ -1690,6 +1593,59 @@ mod yaml;
 pub use build::{Build, Class, Value};
 pub use state::{Opaque, OpaqueRef};
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{heap::Program, layout::TAG_STRING};
+
+    /// A held value is a root when its tag is a pointer's: the collector
+    /// keeps it current, payload and tag. An immediate is left as it is,
+    /// whatever its bits.
+    #[test]
+    fn a_held_value_is_followed_only_when_its_tag_is_a_pointers() {
+        let program = Program {
+            stack_maps: crate::tests::NO_STACK_MAPS.as_ptr() as usize,
+            types: crate::tests::NO_TYPES.as_ptr() as usize,
+            unwind: 0,
+            functions: 0,
+        };
+        // SAFETY: both tables are in the compiler's formats, and the scope
+        // is of a program with no compiled frame to walk.
+        unsafe {
+            let mut mutator = Mutator::new(program, true);
+            let slots = RootSlots::new();
+            let mut scope = Scope::new(&mut mutator, &slots);
+            let text = scope.alloc_str("held across a collection");
+            let address = text.raw(&scope);
+            let int = heap::Value {
+                tag: TAG_INT,
+                payload: address,
+            };
+            let scalar = scope.elem(int);
+            let held = scope.elem(text.value(&scope));
+            // More than the first chunk holds, so that chunks on the Rust
+            // heap are walked too. Each allocation collects.
+            let more: Vec<_> = (0..2 * ROOTS)
+                .map(|index| scope.alloc_str(&format!("root {index}")))
+                .collect();
+            assert_eq!(scalar.value(&scope), int, "an immediate is not followed");
+            assert_eq!(held.value(&scope), text.value(&scope));
+            assert_eq!(held.value(&scope).tag, TAG_STRING);
+            let held = held.as_str(&scope).map(StrRef::as_str);
+            assert_eq!(held, Some("held across a collection"));
+            for (index, root) in more.iter().enumerate() {
+                assert_eq!(root.get(&scope).as_str(), format!("root {index}"));
+            }
+            // The roots are the pointers, and giving slots back gives back
+            // as many roots as were among them.
+            let mut roots = 0;
+            slots.each_root(|_| roots += 1);
+            assert_eq!(roots, 2 + 2 * ROOTS);
+            assert_eq!(slots.release_to(1), 1 + 2 * ROOTS);
+        }
+    }
+}
+
 #[allow(
     clippy::all,
     clippy::pedantic,
@@ -1702,10 +1658,13 @@ mod generated {
     #[allow(unused_imports, reason = "what the listed natives need varies")]
     use super::{
         Arr, ArrRef, Big, BigRef, Bool, Bytes, BytesRef, Elem, Float, Int, Map, MapRef, Natives,
-        Obj, ObjRef, Opaque, OpaqueRef, OptionalScalar, Root, RootSlots, RtResult, Scope, Slot,
-        Str, StrRef, Thrown, TypeId, View,
+        Obj, ObjRef, Opaque, OpaqueRef, Root, RootSlots, Scope, Slot, Str, StrRef, Thrown, TypeId,
+        View,
     };
-    use crate::{heap::Mutator, stubs::anchored};
+    use crate::{
+        heap::{Mutator, Value},
+        stubs::anchored,
+    };
 
     include!(concat!(env!("OUT_DIR"), "/natives_generated.rs"));
 }

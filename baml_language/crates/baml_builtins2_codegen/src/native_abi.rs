@@ -86,7 +86,23 @@ pub fn read_native_lists(dir: &Path) -> Result<Vec<NativeListEntry>, String> {
     Ok(entries)
 }
 
+/// The natives a call passes type ids to: one for each type parameter of
+/// the builtin, class parameters first. Every other native reads what it
+/// needs of a type from the tags of the values it is passed.
+const TAKES_TYPE_IDS: [&str; 6] = [
+    "baml._rust_sort",
+    "baml._is_primitive_array",
+    "baml._to_json_default",
+    "baml._from_json_structural_default",
+    "baml.json._decode",
+    "baml.json._to",
+];
+
 /// A type a native call can pass or return.
+///
+/// A value of an exact type is one word: an `int`, a `float`, a `bool`, or
+/// the address of an object. A value of any other type is two, its tag and
+/// then its payload, as a slot of the heap holds it.
 #[derive(Clone, PartialEq, Eq, Debug)]
 enum AbiTy {
     Int,
@@ -101,25 +117,20 @@ enum AbiTy {
     /// A map from the builtin's first type parameter to its second: the
     /// receiver of a method of `Map`.
     Map,
-    /// A map from `string` to values of a reference type, as a parameter
-    /// or a result declares it.
+    /// A map from `string` to objects of one type, as a parameter or a
+    /// result declares it.
     MapOf(Box<AbiTy>),
-    /// A type or `null`: a reference that may be zero, or for an `int`,
-    /// `float` or `bool` a pair of words, the value's bits and whether
-    /// there is a value.
+    /// A type or `null`: a value, which is `null` or of the type.
     Optional(Box<AbiTy>),
     /// The builtin's type parameter at this position, class parameters
-    /// first: a value of whatever type a call names, as the one word an
-    /// array or a field holds it in. Whether that word is a reference is
-    /// known from the call's type id for the parameter.
+    /// first: a value of whatever type a call names.
     Elem(usize),
-    /// A value of any type as a union holds it: a reference whose object's
-    /// header says what it is, zero for `null`. What `baml.json` takes and
-    /// returns a `json` as.
+    /// A value of any type: what `baml.json` takes and returns a `json`
+    /// as, and what a union is.
     Any,
     /// An `unknown` parameter of `baml.json`: the id of the description of
     /// the argument's static type, zero when it has none, and then the
-    /// value as [`Self::Any`].
+    /// value.
     Typed,
     /// The builtin's type parameter at this position, as [`Self::Any`]:
     /// what `baml.json` returns a value it decoded as.
@@ -212,7 +223,7 @@ impl AbiTy {
             BamlType::RustType => Some(Self::Rust),
             BamlType::Map(key, value) if **key == BamlType::String => {
                 match Self::of(value, scope)? {
-                    value if value.is_ref() => Some(Self::MapOf(Box::new(value))),
+                    value if value.holds_object() => Some(Self::MapOf(Box::new(value))),
                     _ => None,
                 }
             }
@@ -241,25 +252,37 @@ impl AbiTy {
         }
     }
 
-    fn is_ref(&self) -> bool {
-        match self {
+    /// Whether a value of the type is the address of an object: one word.
+    fn is_object(&self) -> bool {
+        matches!(
+            self,
             Self::String
-            | Self::Bigint
-            | Self::Bytes
-            | Self::Array(_)
-            | Self::Map
-            | Self::MapOf(_)
-            | Self::Class(..)
-            | Self::Rust => true,
-            Self::Optional(inner) => inner.is_ref(),
-            _ => false,
+                | Self::Bigint
+                | Self::Bytes
+                | Self::Array(_)
+                | Self::Map
+                | Self::MapOf(_)
+                | Self::Class(..)
+                | Self::Rust
+        )
+    }
+
+    /// Whether a value of the type is an object or `null`, and so what a
+    /// native makes only by allocating.
+    fn holds_object(&self) -> bool {
+        match self {
+            Self::Optional(inner) => inner.holds_object(),
+            other => other.is_object(),
         }
     }
 
-    /// Whether a value is an optional `int`, `float` or `bool`, or an
-    /// optional value of a type parameter: two words.
-    fn is_pair(&self) -> bool {
-        matches!(self, Self::Optional(inner) if !inner.is_ref())
+    /// Whether a value of the type is two words, a tag and a payload: any
+    /// type but an exact one.
+    fn is_value(&self) -> bool {
+        matches!(
+            self,
+            Self::Optional(_) | Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_)
+        )
     }
 
     /// The compiler's description of the type.
@@ -301,40 +324,31 @@ impl AbiTy {
         }
     }
 
-    /// The type as the symbol returns it.
+    /// The type as the symbol of a native that cannot throw returns it.
     fn c(&self) -> &'static str {
         match self {
             Self::Int => "i64",
             Self::Float => "f64",
             Self::Bool => "u8",
             Self::Null => "()",
-            Self::Optional(inner) if !inner.is_ref() => "OptionalScalar",
-            Self::String
-            | Self::Bigint
-            | Self::Bytes
-            | Self::Array(_)
-            | Self::Map
-            | Self::MapOf(_)
-            | Self::Optional(_)
-            | Self::Elem(_)
-            | Self::Any
-            | Self::Typed
-            | Self::BoxedElem(_)
-            | Self::Class(..)
-            | Self::Rust => "usize",
+            _ if self.is_value() => "Value",
+            _ => "usize",
         }
     }
 
-    /// The symbol's parameters for a parameter `name` of this type: one,
-    /// or for an optional scalar its bits and then whether it is present.
+    /// The symbol's parameters for a parameter `name` of this type: one
+    /// for an exact type, and for any other the value's tag and then its
+    /// payload, after the id of its static type for an `unknown` of
+    /// `baml.json`.
     fn c_parameters(&self, name: &str) -> Vec<String> {
-        if self.is_pair() {
-            vec![format!("r#{name}: u64"), format!("{name}_present: u64")]
-        } else if *self == Self::Typed {
-            vec![format!("{name}_type: u32"), format!("r#{name}: usize")]
-        } else {
-            vec![format!("r#{name}: {}", self.c())]
+        if !self.is_value() {
+            return vec![format!("r#{name}: {}", self.c())];
         }
+        let mut parameters = vec![format!("{name}_tag: u64"), format!("r#{name}: u64")];
+        if *self == Self::Typed {
+            parameters.insert(0, format!("{name}_type: u32"));
+        }
+        parameters
     }
 
     /// The marker naming what a reference refers to, or an array holds.
@@ -357,15 +371,13 @@ impl AbiTy {
     }
 
     /// The type as a trait method takes it: a root when the native
-    /// `allocates`, a view otherwise.
+    /// `allocates`, a view otherwise, and for a value an `Elem`, which the
+    /// collector keeps current, or the `Value` itself.
     fn parameter(&self, allocates: bool) -> String {
         match (self, allocates) {
-            (Self::Optional(inner), _) if matches!(**inner, Self::Elem(_)) => {
-                "Option<usize>".to_owned()
-            }
             (Self::Optional(inner), _) => format!("Option<{}>", inner.parameter(allocates)),
             (Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_), false) => {
-                "usize".to_owned()
+                "Value".to_owned()
             }
             (Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_), true) => {
                 "Elem<'s>".to_owned()
@@ -387,90 +399,80 @@ impl AbiTy {
         }
     }
 
+    /// The type as a trait method returns it: a root for an object, which
+    /// only a native that `allocates` returns, and for a value of a type
+    /// parameter or of any type the `Value` itself.
+    fn result(&self) -> String {
+        match self {
+            Self::Optional(inner) => format!("Option<{}>", inner.result()),
+            other => other.parameter(other.is_object()),
+        }
+    }
+
     /// The expression making a trait method's argument out of the symbol's
-    /// parameter `name`.
-    fn argument(&self, name: &str, allocates: bool) -> String {
+    /// parameter `name`, of an exact type.
+    fn exact_argument(&self, name: &str, allocates: bool) -> String {
         match (self, allocates) {
-            (Self::Int | Self::Float, _)
-            | (Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_), false) => {
-                name.to_owned()
-            }
-            // Any value at all: a reference, whatever it refers to.
-            (Self::Any | Self::Typed | Self::BoxedElem(_), true) => {
-                format!("unsafe {{ scope.elem_raw({name}, TypeId(0)) }}")
-            }
-            (Self::Elem(index), true) => {
-                format!("unsafe {{ scope.elem_raw({name}, types[{index}]) }}")
-            }
+            (Self::Int | Self::Float, _) => name.to_owned(),
             (Self::Bool, _) => format!("{name} != 0"),
             (Self::Null, _) => "()".to_owned(),
-            (Self::Optional(inner), _) if inner.is_ref() => {
-                format!("({name} != 0).then(|| {})", inner.argument(name, allocates))
-            }
-            (Self::Optional(inner), _) => {
-                let present = format!("{}_present", name.trim_start_matches("r#"));
-                let value = match **inner {
-                    Self::Float => format!("f64::from_bits({name})"),
-                    Self::Bool => format!("{name} != 0"),
-                    _ => format!("{name}.cast_signed()"),
-                };
-                format!("({present} != 0).then_some({value})")
-            }
             (_, false) => format!("unsafe {{ View::from_raw({name}) }}"),
             (_, true) => format!("unsafe {{ scope.root_raw({name}) }}"),
         }
     }
 
-    /// The expression turning a trait method's result `value` into the bits
-    /// of a fallible symbol's value word.
-    fn bits(&self, value: &str) -> String {
+    /// The expression making a trait method's argument out of the symbol's
+    /// parameters for `name`: one word for an exact type, and otherwise a
+    /// tag and a payload.
+    fn argument(&self, name: &str, allocates: bool) -> String {
+        if !self.is_value() {
+            return self.exact_argument(name, allocates);
+        }
+        let tag = format!("{}_tag", name.trim_start_matches("r#"));
+        let value = format!("Value {{ tag: {tag} as usize, payload: {name} as usize }}");
         match self {
-            Self::Int => format!("{value}.cast_unsigned()"),
-            Self::Float => format!("{value}.to_bits()"),
-            Self::Bool => format!("u64::from({value})"),
-            Self::Null => format!("{{ let () = {value}; 0 }}"),
-            Self::String
-            | Self::Bigint
-            | Self::Bytes
-            | Self::Array(_)
-            | Self::Map
-            | Self::MapOf(_)
-            | Self::Class(..)
-            | Self::Rust => {
-                format!("{value}.raw(&scope) as u64")
+            Self::Optional(inner) => {
+                let held = match &**inner {
+                    Self::Int => format!("{name}.cast_signed()"),
+                    Self::Float => format!("f64::from_bits({name})"),
+                    Self::Bool => format!("{name} != 0"),
+                    object => object.exact_argument(&format!("{name} as usize"), allocates),
+                };
+                format!("(!{value}.is_null()).then(|| {held})")
             }
-            Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_) => {
-                format!("{value} as u64")
-            }
-            // An optional scalar has no fallible form: see `listed`.
-            Self::Optional(_) => format!("{value}.map_or(0, |value| value.raw(&scope) as u64)"),
+            _ if allocates => format!("unsafe {{ scope.elem({value}) }}"),
+            _ => value,
         }
     }
 
-    /// The expression turning a trait method's result `value` into what an
-    /// infallible symbol returns.
+    /// The expression turning a trait method's result `value` into the
+    /// value a symbol returns it as: what one that can throw returns, and
+    /// what any returns for a type that is not exact.
+    fn as_value(&self, value: &str) -> String {
+        match self {
+            Self::Int => format!("Value::int({value})"),
+            Self::Float => format!("Value::float({value})"),
+            Self::Bool => format!("Value::bool({value})"),
+            Self::Null => format!("{{ let () = {value}; Value::NULL }}"),
+            Self::Elem(_) | Self::Any | Self::Typed | Self::BoxedElem(_) => value.to_owned(),
+            Self::Optional(inner) => {
+                format!(
+                    "{value}.map_or(Value::NULL, |value| {})",
+                    inner.as_value("value")
+                )
+            }
+            _ => format!("{value}.value(&scope)"),
+        }
+    }
+
+    /// The expression turning a trait method's result `value` into what
+    /// the symbol of a native that cannot throw returns.
     fn returned(&self, value: &str) -> String {
         match self {
-            Self::Int
-            | Self::Float
-            | Self::Null
-            | Self::Elem(_)
-            | Self::Any
-            | Self::Typed
-            | Self::BoxedElem(_) => value.to_owned(),
+            Self::Int | Self::Float | Self::Null => value.to_owned(),
             Self::Bool => format!("u8::from({value})"),
-            Self::String
-            | Self::Bigint
-            | Self::Bytes
-            | Self::Array(_)
-            | Self::Map
-            | Self::MapOf(_)
-            | Self::Class(..)
-            | Self::Rust => format!("{value}.raw(&scope)"),
-            Self::Optional(inner) if inner.is_ref() => {
-                format!("{value}.map_or(0, |value| value.raw(&scope))")
-            }
-            Self::Optional(_) => format!("OptionalScalar::from({value})"),
+            _ if self.is_value() => self.as_value(value),
+            _ => format!("{value}.raw(&scope)"),
         }
     }
 }
@@ -558,8 +560,7 @@ fn abi_of(builtin: &NativeBuiltin, classes: &Classes<'_>) -> Option<Abi> {
     for param in &builtin.params {
         match of(&param.ty, &scope)? {
             AbiTy::Null => return None,
-            // The two words of an optional value of a type parameter are
-            // only ever a result.
+            // An optional value of a type parameter is only ever a result.
             AbiTy::Optional(inner) if matches!(*inner, AbiTy::Elem(_)) => return None,
             ty => params.push((param.name.clone(), ty)),
         }
@@ -593,10 +594,11 @@ fn is_fallible(builtin: &NativeBuiltin) -> bool {
             .is_none_or(|throws| !throws.is_empty())
 }
 
-/// Whether the native's symbol returns a thrown object beside its value. A
-/// native that does not allocate throws nothing, whatever the declaration
-/// allows: an error is an object. One that is `async` can always throw,
-/// since the BAML it calls can.
+/// Whether the native can throw: its symbol then returns a value, whose
+/// tag says whether it is the result or what was thrown. A native that
+/// does not allocate throws nothing, whatever the declaration allows: an
+/// error is an object. One that is `async` can always throw, since the
+/// BAML it calls can.
 fn throws(builtin: &NativeBuiltin, flags: Option<NativeFlags>) -> bool {
     match flags {
         Some(flags) => flags.is_async || (flags.allocates && is_fallible(builtin)),
@@ -604,9 +606,20 @@ fn throws(builtin: &NativeBuiltin, flags: Option<NativeFlags>) -> bool {
     }
 }
 
-/// How many type arguments a call of the builtin passes.
+/// How many type parameters the builtin has, its class's and its own.
 fn type_args(builtin: &NativeBuiltin) -> usize {
     builtin.generics.len()
+}
+
+/// How many type ids a call of the builtin passes: one for each of its
+/// type parameters when it is one of [`TAKES_TYPE_IDS`], and none
+/// otherwise.
+fn type_ids(builtin: &NativeBuiltin) -> usize {
+    if TAKES_TYPE_IDS.contains(&builtin.path.as_str()) {
+        type_args(builtin)
+    } else {
+        0
+    }
 }
 
 fn symbol(builtin: &NativeBuiltin) -> String {
@@ -677,16 +690,8 @@ fn listed<'a>(
                 builtin.return_type
             ));
         }
-        if throws(builtin, Some(entry.flags))
-            && abi_of(builtin, classes).is_some_and(|abi| abi.result.is_pair())
-        {
-            return Err(format!(
-                "`{}` is listed as a native but it throws and returns an optional scalar, which \
-                 takes three registers",
-                entry.path
-            ));
-        }
-        if !entry.flags.allocates && abi_of(builtin, classes).is_some_and(|abi| abi.result.is_ref())
+        if !entry.flags.allocates
+            && abi_of(builtin, classes).is_some_and(|abi| abi.result.holds_object())
         {
             return Err(format!(
                 "`{}` returns an object, so it allocates: list it with `allocates`",
@@ -726,7 +731,7 @@ pub fn generate_native_table(
         let _ = writeln!(
             out,
             "    Native {{ path: {path:?}, symbol: {:?}, signature: {signature}, throws: {}, \
-             flags: {}, type_args: {}, classes: &[{named}] }},",
+             flags: {}, type_args: {}, type_ids: {}, classes: &[{named}] }},",
             symbol(builtin),
             throws(builtin, flags),
             flags.map_or_else(
@@ -737,6 +742,7 @@ pub fn generate_native_table(
                 )
             ),
             type_args(builtin),
+            type_ids(builtin),
         );
     }
     out.push_str("];\n");
@@ -763,7 +769,7 @@ pub fn generate_native_shims(
         let Some(flags) = flags else { continue };
         let abi = abi_of(builtin, classes).expect("checked when listed");
         let fallible = throws(builtin, Some(flags));
-        let type_args = type_args(builtin);
+        let type_args = type_ids(builtin);
         let trait_name = trait_name(builtin);
         let method = method_name(builtin);
         let allocates = flags.allocates;
@@ -773,7 +779,8 @@ pub fn generate_native_shims(
         if allocates {
             parameters.push("scope: &mut Scope<'s>".to_owned());
         }
-        // The type id of each type argument of the call.
+        // The type id of each type argument of the call, for the few
+        // natives that are passed them.
         if type_args != 0 {
             parameters.push(format!("types: [TypeId; {type_args}]"));
         }
@@ -783,7 +790,7 @@ pub fn generate_native_shims(
             }
             parameters.push(format!("r#{name}: {}", ty.parameter(allocates)));
         }
-        let value = abi.result.parameter(allocates && abi.result.is_ref());
+        let value = abi.result.result();
         let returned = if fallible {
             format!("Result<{value}, Thrown<'s>>")
         } else {
@@ -838,11 +845,7 @@ pub fn generate_native_shims(
             if *ty == AbiTy::Typed {
                 arguments.push(format!("TypeId({name}_type)"));
             }
-            let held = matches!(
-                ty,
-                AbiTy::Elem(_) | AbiTy::Any | AbiTy::Typed | AbiTy::BoxedElem(_)
-            );
-            if ty.is_ref() || (allocates && held) {
+            if ty.holds_object() || (allocates && ty.is_value()) {
                 let _ = writeln!(
                     rooting,
                     "    // SAFETY: compiled code passes a live object of the declared type.\n    \
@@ -862,22 +865,22 @@ pub fn generate_native_shims(
             let _ = writeln!(
                 body,
                 "    let make = move |scope: &'static mut Scope<'static>| {{\n{rooting}    async \
-                 move {{\n        match {call}.await {{\n            Ok(value) => \
-                 RtResult::ok({}),\n            Err(thrown) => scope.throw_again(&thrown),\n        \
-                 }}\n    }}\n    }};\n    // SAFETY: called on a task, by the stub compiled code \
-                 calls the native through.\n    unsafe {{ start(mutator, {path:?}, make) }}",
-                abi.result.bits("value")
+                 move {{\n        match {call}.await {{\n            Ok(value) => {},\n            \
+                 Err(thrown) => scope.throw_again(&thrown),\n        }}\n    }}\n    }};\n    // \
+                 SAFETY: called on a task, by the stub compiled code calls the native through.\n    \
+                 unsafe {{ start(mutator, {path:?}, make) }}",
+                abi.result.as_value("value")
             );
             "*mut Head"
         } else if fallible {
             body.push_str(&rooting);
             let _ = writeln!(
                 body,
-                "    match {call} {{\n        Ok(value) => RtResult::ok({}),\n        \
-                 Err(thrown) => RtResult::thrown(&thrown),\n    }}",
-                abi.result.bits("value")
+                "    match {call} {{\n        Ok(value) => {},\n        Err(thrown) => \
+                 thrown.returned(&scope),\n    }}",
+                abi.result.as_value("value")
             );
-            "RtResult"
+            "Value"
         } else {
             body.push_str(&rooting);
             let _ = writeln!(

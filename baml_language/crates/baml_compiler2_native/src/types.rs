@@ -35,19 +35,10 @@ pub(crate) struct Signature<'db> {
     pub(crate) result: NativeTy<'db>,
 }
 
-/// What a value is to the machine: which register class it travels in and
-/// whether the collector follows it.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum Repr {
-    Int,
-    Float,
-    Byte,
-    Ref,
-    Pair,
-}
-
-/// A type whose values native code knows the representation of. There are no
-/// tags: the static type alone says what the bits mean.
+/// A type whose values native code knows the representation of. A value of
+/// a type that fixes its tag is held as one word, its payload. A value of
+/// any other type is a pair: a tag and a payload, as a slot of the heap
+/// holds it. See [`NativeTy::is_pair`].
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub(crate) enum NativeTy<'db> {
     /// A signed 64-bit integer.
@@ -80,21 +71,21 @@ pub(crate) enum NativeTy<'db> {
     /// `string`, an `int`, a `bool`, an enum variant or a `float`, and a
     /// value is one slot.
     Map(Box<NativeTy<'db>>, Box<NativeTy<'db>>),
-    /// A reference to a closure: a function value. Calling it passes the
+    /// A function value: a pair whose payload is a reference to a closure
+    /// and whose tag has the closure's call layout. Calling it passes the
     /// closure and then arguments of these types.
     Function(Box<Signature<'db>>),
     /// A reference to the cell holding a local that a closure captures.
     /// Never the type of a source value: only of the local itself.
     Cell(Box<NativeTy<'db>>),
     /// One of these types, none of them a union and at most one `null`: a
-    /// reference, zero for `null`, whose object's header says which. An
-    /// `int`, `float`, `bool` or enum variant is in a box.
+    /// pair whose tag says which. An enum variant is a reference to a box
+    /// of its enum.
     Union(Vec<NativeTy<'db>>),
-    /// Any value at all, in the representation of a union.
+    /// Any value at all: a pair.
     Unknown,
-    /// A type or `null`. For a reference type it is the same reference,
-    /// with zero for `null`. For an `int`, `float` or `bool` it is a pair of
-    /// words: the value's bits, and whether there is a value at all.
+    /// A type or `null`: a pair, whose tag is that of `null` or of a value
+    /// of the type.
     Optional(Box<NativeTy<'db>>),
     /// A reference to the future of a task that returns a value of this
     /// type, which takes one slot.
@@ -102,7 +93,9 @@ pub(crate) enum NativeTy<'db> {
 }
 
 impl NativeTy<'_> {
-    /// Whether a value is a pointer the collector must know about.
+    /// Whether a value is a reference or `null`, and never an `int`, a
+    /// `float`, a `bool` or an enum variant held as its position. Code
+    /// that only moves such a value is the same for every such type.
     pub(crate) fn is_ref(&self) -> bool {
         match self {
             Self::String
@@ -122,25 +115,27 @@ impl NativeTy<'_> {
         }
     }
 
-    /// Whether a value says what it is in its object's header: a union or
-    /// `unknown`.
-    pub(crate) fn is_boxed(&self) -> bool {
+    /// Whether which of several types a value is, is only known when the
+    /// program runs: a union or `unknown`.
+    pub(crate) fn holds_any(&self) -> bool {
         matches!(self, Self::Union(_) | Self::Unknown)
     }
 
-    /// Whether a value is an optional scalar: a pair of words.
+    /// Whether a value is held as a pair, a tag and a payload: its static
+    /// type does not fix its tag. An optional may be `null`, a union or an
+    /// `unknown` is one of several types, and a function value's tag has
+    /// its call layout. A value of any other type is its payload alone.
     pub(crate) fn is_pair(&self) -> bool {
-        matches!(self, Self::Optional(inner) if !inner.is_ref())
+        matches!(
+            self,
+            Self::Optional(_) | Self::Union(_) | Self::Unknown | Self::Function(_)
+        )
     }
 
-    pub(crate) fn repr(&self) -> Repr {
-        match self {
-            Self::Int | Self::Enum(_) => Repr::Int,
-            Self::Float => Repr::Float,
-            Self::Bool | Self::Null => Repr::Byte,
-            _ if self.is_pair() => Repr::Pair,
-            _ => Repr::Ref,
-        }
+    /// Whether the collector must know where a value is held: a pair,
+    /// whose tag says whether its payload is a reference, or a reference.
+    pub(crate) fn is_traced(&self) -> bool {
+        self.is_pair() || self.is_ref()
     }
 }
 
@@ -151,8 +146,7 @@ pub(crate) type TypeArg<'db> = Option<NativeTy<'db>>;
 
 /// A type as a type argument: every reference type is `unknown`, since code
 /// that only moves a reference is the same for all of them. An `int`,
-/// `float`, `bool`, enum or optional scalar stays itself: it travels in its
-/// own registers, and an enum's box names the enum.
+/// `float`, `bool`, enum or optional scalar stays itself.
 pub(crate) fn type_argument(ty: Option<NativeTy<'_>>) -> TypeArg<'_> {
     ty.map(|ty| if ty.is_ref() { NativeTy::Unknown } else { ty })
 }
@@ -228,9 +222,6 @@ macro_rules! native_type_of {
                         Some(element) => $name(db, element, arguments)?,
                         None => arguments.first()?.clone()?,
                     };
-                    if element.is_pair() {
-                        return None;
-                    }
                     NativeTy::Array(Box::new(element))
                 }
                 $family::Class(head, class_arguments) => {
@@ -255,17 +246,12 @@ macro_rules! native_type_of {
                         .collect::<Option<_>>()?,
                 ),
                 $family::List(element) => {
-                    let element = $name(db, element, arguments)?;
-                    // Elements are one slot each so far.
-                    if element.is_pair() {
-                        return None;
-                    }
-                    NativeTy::Array(Box::new(element))
+                    NativeTy::Array(Box::new($name(db, element, arguments)?))
                 }
                 $family::Map { key, value, .. } => {
                     let key = $name(db, key, arguments)?;
                     let value = $name(db, value, arguments)?;
-                    if !is_map_key(&key) || value.is_pair() || value == NativeTy::Null {
+                    if !is_map_key(&key) {
                         return None;
                     }
                     NativeTy::Map(Box::new(key), Box::new(value))
@@ -273,11 +259,7 @@ macro_rules! native_type_of {
                 // What the task throws is no part of how its future is
                 // held.
                 $family::Future(value, _) => {
-                    let value = $name(db, value, arguments)?;
-                    if value.is_pair() {
-                        return None;
-                    }
-                    NativeTy::Future(Box::new(value))
+                    NativeTy::Future(Box::new($name(db, value, arguments)?))
                 }
                 $family::Function { params, ret, .. } => {
                     let params = params
@@ -455,7 +437,7 @@ pub(crate) fn plan_body<'db>(
         fields.get(PLAN_CANCEL_TOKENS),
     ) {
         (Some(NativeTy::Function(body)), Some(NativeTy::Array(_)), Some(NativeTy::Array(_)))
-            if body.params.is_empty() && !body.result.is_pair() =>
+            if body.params.is_empty() =>
         {
             let body = (**body).clone();
             Some((fields, body))
@@ -671,10 +653,8 @@ impl<'a, 'db> Body<'a, 'db> {
                     )),
                     Written::Value(Rvalue::Array(element, _)) => {
                         match template_ty(db, element, arguments) {
-                            Some(element) if !element.is_pair() => {
-                                Ok(NativeTy::Array(Box::new(element)))
-                            }
-                            _ => continue,
+                            Some(element) => Ok(NativeTy::Array(Box::new(element))),
+                            None => continue,
                         }
                     }
                     Written::Result(
@@ -751,7 +731,7 @@ impl<'a, 'db> Body<'a, 'db> {
                     continue;
                 };
                 // A declaration that can hold what is copied stands. One
-                // that says `unknown` would only put the value in a box.
+                // that says `unknown` would only keep a tag beside it.
                 if declared.is_some_and(|declared| {
                     declared != NativeTy::Unknown && assignable(&declared, &found)
                 }) {
@@ -1102,14 +1082,15 @@ pub(crate) fn is_omitted(operand: &Operand<'_>) -> bool {
 }
 
 /// Whether a parameter of type `ty` can be passed as left to its default:
-/// there is a word no value of the type is. An enum has a position no
-/// variant is at, a `bool` a byte that is neither, and a reference an
-/// address no object is at. Every word is an `int` or a `float`.
+/// there is a word no value of the type is. A pair has a tag no value has,
+/// an enum a position no variant is at, a `bool` a byte that is neither,
+/// and a reference an address no object is at. Every word is an `int` or a
+/// `float`.
 pub(crate) fn has_omitted_form(ty: &NativeTy<'_>) -> bool {
     match ty {
         NativeTy::Enum(_) | NativeTy::Bool => true,
         NativeTy::Cell(_) => false,
-        other => other.is_ref(),
+        other => other.is_traced(),
     }
 }
 
@@ -1121,7 +1102,7 @@ pub(crate) fn assignable(expected: &NativeTy<'_>, found: &NativeTy<'_>) -> bool 
         || match (expected, found) {
             // A union takes whatever the type checker let through, and
             // gives it back where flow analysis proved what it holds.
-            (expected, found) if expected.is_boxed() || found.is_boxed() => {
+            (expected, found) if expected.holds_any() || found.holds_any() => {
                 !matches!(expected, NativeTy::Cell(_)) && !matches!(found, NativeTy::Cell(_))
             }
             (NativeTy::Optional(inner), found) => {
@@ -1158,16 +1139,11 @@ pub(crate) fn assignable(expected: &NativeTy<'_>, found: &NativeTy<'_>) -> bool 
             (NativeTy::Future(expected), NativeTy::Future(found)) => {
                 type_argument(Some((**expected).clone())) == type_argument(Some((**found).clone()))
             }
-            // The type checker has decided the two function types agree;
-            // what is left to ask is that a call passes the same registers.
+            // The type checker has decided the two function types agree,
+            // and a call through a function value passes every argument
+            // and takes the result as a pair, whatever their types.
             (NativeTy::Function(expected), NativeTy::Function(found)) => {
                 expected.params.len() == found.params.len()
-                    && expected.result.repr() == found.result.repr()
-                    && expected
-                        .params
-                        .iter()
-                        .zip(&found.params)
-                        .all(|(expected, found)| expected.repr() == found.repr())
             }
             _ => false,
         }

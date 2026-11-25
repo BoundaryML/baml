@@ -5,7 +5,7 @@ use crate::{
     heap::{Mutator, Value, load, store},
     layout::{
         BOX_VALUE, SLICE_OFFSET, SLICE_PARENT, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS,
-        STRING_TAGS_END, STRING_TEXT, TAG_BOX_BOOL, TAG_BOX_FLOAT, TAG_BOX_INT, TAG_STRING,
+        STRING_TAGS_END, STRING_TEXT, TAG_BOOL, TAG_FLOAT, TAG_INT, TAG_NULL, TAG_STRING,
         TYPE_ID_MASK, VALUE, WORD, string_size,
     },
     native::View as _,
@@ -281,47 +281,48 @@ crate::stubs::anchored! {
     baml_rt_string_from_any => string_from_any
 }
 
-/// The text of a value held as a reference whose type declares no
-/// `to_string` of its own: a string is itself, and a box is the text of
-/// the `int`, `float`, `bool` or enum variant in it.
+/// The text of the value of tag `tag` and payload `payload`, whose type
+/// declares no `to_string` of its own: a string is itself, and an `int`, a
+/// `float`, a `bool`, `null` or an enum's variant is its text.
 ///
 /// # Safety
 ///
-/// Called from compiled code with its mutator; `value` is a live string or
-/// box.
-unsafe extern "C" fn string_from_any(mutator: &mut Mutator, value: usize) -> usize {
-    // SAFETY: the caller's contract: a box is a header and one value.
-    let (type_id, held) = unsafe { (load(value) & TYPE_ID_MASK, load(value + BOX_VALUE)) };
-    match type_id {
-        string if string < STRING_TAGS_END => value,
-        TAG_BOX_INT => from_ascii(
+/// Called from compiled code with its mutator and a value: when the tag
+/// is a pointer's, the payload is a live object.
+unsafe extern "C" fn string_from_any(mutator: &mut Mutator, tag: usize, payload: usize) -> usize {
+    let value = Value { tag, payload };
+    match value.id() {
+        TAG_NULL => from_str(mutator, "null"),
+        TAG_INT => from_ascii(
             mutator,
-            int_digits(held.cast_signed() as i64, &mut [0; INT_DIGITS]),
+            int_digits(payload.cast_signed() as i64, &mut [0; INT_DIGITS]),
         ),
-        TAG_BOX_FLOAT => from_str(mutator, &float_text(f64::from_bits(held as u64))),
-        // SAFETY: the header says it is one.
+        TAG_FLOAT => from_str(mutator, &float_text(f64::from_bits(payload as u64))),
+        TAG_BOOL => from_str(mutator, if payload & 0xFF != 0 { "true" } else { "false" }),
+        string if string < STRING_TAGS_END && value.is_pointer() => payload,
+        // SAFETY: the tag says it is one.
         crate::layout::TAG_BIGINT => {
-            let text = unsafe { crate::bigint::value(value) }.to_string();
+            let text = unsafe { crate::bigint::value(payload) }.to_string();
             from_str(mutator, &text)
         }
-        TAG_BOX_BOOL => from_str(mutator, if held & 0xFF != 0 { "true" } else { "false" }),
         // A `uint8array` has a `to_string` of its own, which is what a
         // union that holds one is written by: its bytes as UTF-8, each
         // sequence that is not replaced.
         crate::layout::TAG_BYTES => {
-            // SAFETY: the header says it is one.
-            let bytes = unsafe { crate::native::BytesRef::from_raw(value) }.to_vec();
+            // SAFETY: the tag says it is one.
+            let bytes = unsafe { crate::native::BytesRef::from_raw(payload) }.to_vec();
             from_str(mutator, &String::from_utf8_lossy(&bytes))
         }
-        enum_type if !mutator.is_reference(enum_type) => {
-            let name = mutator.variant_name(enum_type, held);
+        enum_type if crate::describe::Types::of_table(mutator.types()).is_enum(enum_type) => {
+            // SAFETY: an enum's box is a header and the variant's position.
+            let name = mutator.variant_name(enum_type, unsafe { load(payload + BOX_VALUE) });
             from_str(mutator, name)
         }
         // Anything else is written as an uncaught throw of it is.
         _ => {
             // SAFETY: the caller's contract.
             let text = unsafe {
-                crate::class::context_text(mutator, value).unwrap_or_else(|| {
+                crate::class::context_text(mutator, payload).unwrap_or_else(|| {
                     let mut text = String::new();
                     crate::class::write_value(mutator, &mut text, value, None);
                     text

@@ -16,10 +16,9 @@ use crate::{
         KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_OPAQUE, KIND_VARIANT, REPR_BOOL, REPR_FLOAT, REPR_INT,
     },
     layout::{
-        ARRAY_LENGTH, BOX_SIZE, BOX_VALUE, HEADER, HEADER_PANIC, STRING_TAGS_END, TAG_ARRAY,
-        TAG_BOOL, TAG_BOX_BOOL, TAG_BOX_FLOAT, TAG_BOX_INT, TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL,
-        TYPE_ID_MASK, WELL_KNOWN_CONTEXT, WELL_KNOWN_EXIT, WELL_KNOWN_PANICS,
-        WELL_KNOWN_STACK_FRAME, WELL_KNOWN_STACK_TRACE,
+        ARRAY_LENGTH, BOX_VALUE, HEADER, HEADER_PANIC, STRING_TAGS_END, TAG_ARRAY, TAG_BOOL,
+        TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL, TYPE_ID_MASK, WELL_KNOWN_CONTEXT, WELL_KNOWN_EXIT,
+        WELL_KNOWN_PANICS, WELL_KNOWN_STACK_FRAME, WELL_KNOWN_STACK_TRACE,
     },
     map, string,
 };
@@ -113,65 +112,50 @@ fn write_scalar(mutator: &Mutator, out: &mut String, ty: Option<Desc>, value: Va
     }
 }
 
-/// Write `value`, what a slot holds: a field of an instance, an element of
-/// an array, or a key or a value of a map. Its type is `ty` when something
-/// says it.
+/// Write `value` as an uncaught throw of it is reported: what its tag
+/// says it is and, for an object, what its header does, with what `ty`,
+/// the type of the place it was read from, says of the enum variants held
+/// there as their positions.
 ///
 /// # Safety
 ///
-/// `value` was read from a slot of a live object that holds a value of
-/// the type.
-unsafe fn write_slot(mutator: &Mutator, out: &mut String, ty: Option<Desc>, value: Value) {
+/// `value` is a value as a slot holds one, of the type `ty` when there is
+/// one: when its tag is a pointer's, its payload is a live object.
+pub(crate) unsafe fn write_value(
+    mutator: &Mutator,
+    out: &mut String,
+    value: Value,
+    ty: Option<Desc>,
+) {
     let ty = ty.map(Desc::not_null);
     match value.id() {
         _ if ty.is_some_and(|ty| ty.kind() == KIND_OPAQUE) => out.push_str("<object>"),
         TAG_NULL => out.push_str("null"),
         TAG_BOOL | TAG_INT | TAG_FLOAT => write_scalar(mutator, out, ty, value),
-        // SAFETY: the caller's contract: any other tag is of a reference.
-        _ => unsafe { write_value(mutator, out, value.payload, ty) },
+        // SAFETY: the caller's contract: any other tag is of a pointer.
+        _ => unsafe { write_object(mutator, out, value.payload, ty) },
     }
 }
 
-/// Write the value `value` refers to as an uncaught throw of it is
-/// reported: what its header says it is, and what `ty`, the type of the
-/// place it was read from, says of the enum variants it holds in place.
+/// Write the object at `value`: what its header says it is, and what `ty`
+/// says of what it holds.
 ///
 /// # Safety
 ///
-/// `value` is zero or a live object, of the type `ty` when there is one.
-pub(crate) unsafe fn write_value(
-    mutator: &Mutator,
-    out: &mut String,
-    value: usize,
-    ty: Option<Desc>,
-) {
-    if value == 0 {
-        out.push_str("null");
-        return;
-    }
-    let ty = ty.map(Desc::not_null);
-    // SAFETY: the caller's contract: a box is a header and one value, and
-    // an instance has the fields its type's description names.
+/// `value` is a live object, of the type `ty` when there is one.
+unsafe fn write_object(mutator: &Mutator, out: &mut String, value: usize, ty: Option<Desc>) {
+    // SAFETY: the caller's contract: an enum's box is a header and the
+    // variant's position, and an instance has the fields its type's
+    // description names.
     unsafe {
         let type_id = load(value) & TYPE_ID_MASK;
         match type_id {
             string if string < STRING_TAGS_END => {
                 let _ = write!(out, "{:?}", string::text(value));
             }
-            TAG_BOX_INT => {
-                let _ = write!(out, "{}", load(value + BOX_VALUE).cast_signed());
-            }
             crate::layout::TAG_BIGINT => {
                 let _ = write!(out, "{}", crate::bigint::value(value));
             }
-            TAG_BOX_FLOAT => {
-                out.push_str(&float_text(f64::from_bits(load(value + BOX_VALUE) as u64)));
-            }
-            TAG_BOX_BOOL => out.push_str(if load(value + BOX_VALUE) & 0xFF != 0 {
-                "true"
-            } else {
-                "false"
-            }),
             crate::layout::TAG_BYTES => {
                 let _ = write!(out, "<bytes:{}>", load(value + crate::layout::BYTES_LENGTH));
             }
@@ -183,7 +167,7 @@ pub(crate) unsafe fn write_value(
                         out.push_str(", ");
                     }
                     let held = Value::load(array::element(value, index));
-                    write_slot(mutator, out, element, held);
+                    write_value(mutator, out, held, element);
                 }
                 out.push(']');
             }
@@ -196,13 +180,13 @@ pub(crate) unsafe fn write_value(
                     if !std::mem::take(&mut first) {
                         out.push_str(", ");
                     }
-                    write_slot(mutator, out, key, entry_key);
+                    write_value(mutator, out, entry_key, key);
                     out.push_str(": ");
-                    write_slot(mutator, out, held, entry_value);
+                    write_value(mutator, out, entry_value, held);
                 });
                 out.push('}');
             }
-            enum_type if !mutator.is_reference(enum_type) => {
+            enum_type if Types::of_table(mutator.types()).is_enum(enum_type) => {
                 out.push_str(mutator.variant_name(enum_type, load(value + BOX_VALUE)));
             }
             class => {
@@ -223,7 +207,7 @@ pub(crate) unsafe fn write_value(
                     match field.ty {
                         Some(ty) => {
                             let held = Value::load(value + field.offset);
-                            write_slot(mutator, out, Some(ty), held);
+                            write_value(mutator, out, held, Some(ty));
                         }
                         None => out.push_str("<object>"),
                     }
@@ -237,11 +221,9 @@ pub(crate) unsafe fn write_value(
 /// What the runtime gives a field of an instance it makes.
 #[derive(Clone, Copy)]
 pub(crate) enum Init<'a> {
-    /// An `int` field.
+    /// An `int`, in a field of that type or in one that holds any of
+    /// several types.
     Int(i64),
-    /// A field that holds any of several types, given an `int`: a
-    /// reference to its box.
-    BoxedInt(i64),
     /// A `string` field.
     Text(&'a str),
     /// A field that holds any of several types, given a `bigint`.
@@ -271,19 +253,16 @@ pub(crate) fn well_known_type(mutator: &Mutator, class: usize) -> usize {
 ///
 /// # Safety
 ///
-/// `error` is zero or a live object.
-pub(crate) unsafe fn exit_status(mutator: &Mutator, error: usize) -> Option<i32> {
+/// `error` is a value as a slot holds one.
+pub(crate) unsafe fn exit_status(mutator: &Mutator, error: Value) -> Option<i32> {
     // SAFETY: the caller's contract; an `Exit` has its code in its one
     // field, as an `int`.
     unsafe {
-        if error == 0 {
-            return None;
-        }
         let class = well_known_type(mutator, WELL_KNOWN_EXIT);
-        if load(error) & TYPE_ID_MASK != class {
+        if error.id() != class {
             return None;
         }
-        let code = field(error, description(mutator, class)?, 0).payload;
+        let code = field(error.payload, description(mutator, class)?, 0).payload;
         let code = i64::from_ne_bytes(code.to_ne_bytes());
         Some(i32::try_from(code).unwrap_or(if code < 0 { i32::MIN } else { i32::MAX }))
     }
@@ -335,12 +314,6 @@ pub(crate) fn well_known(mutator: &mut Mutator, class: usize, fields: &[Init<'_>
     for (index, field) in fields.iter().enumerate() {
         let object = match field {
             Init::Int(_) => 0,
-            Init::BoxedInt(value) => {
-                let boxed = mutator.allocate_object(TAG_BOX_INT, BOX_SIZE);
-                // SAFETY: a box is a header and one value.
-                unsafe { store(boxed + BOX_VALUE, usize::from_ne_bytes(value.to_ne_bytes())) };
-                boxed
-            }
             Init::Text(text) => string::from_str(mutator, text),
             Init::Big(value) => crate::bigint::make(mutator, value),
         };
@@ -357,9 +330,7 @@ pub(crate) fn well_known(mutator: &mut Mutator, class: usize, fields: &[Init<'_>
         for (index, field) in fields.iter().enumerate() {
             let value = match field {
                 Init::Int(value) => Value::int(*value),
-                Init::BoxedInt(_) | Init::Text(_) | Init::Big(_) => {
-                    Value::reference(slots.add(index).read())
-                }
+                Init::Text(_) | Init::Big(_) => Value::reference(slots.add(index).read()),
             };
             set_field(object, description, index, value);
         }
@@ -368,14 +339,15 @@ pub(crate) fn well_known(mutator: &mut Mutator, class: usize, fields: &[Init<'_>
 }
 
 /// The `baml.errors.Context` of `error`, thrown through the functions
-/// named, innermost first; its frames are outermost first. Nothing says yet which file and line a frame
-/// was at, so every frame has no file and line zero; and an error has no
-/// cause. May collect.
-pub(crate) fn context(mutator: &mut Mutator, error: usize, functions: &[&str]) -> usize {
-    // The error, the frames, the file every frame names, and what is being
-    // put into the object made next.
-    let mut held = [error, 0, 0, 0];
+/// named, innermost first; its frames are outermost first. Nothing says
+/// yet which file and line a frame was at, so every frame has no file and
+/// line zero; and an error has no cause. May collect.
+pub(crate) fn context(mutator: &mut Mutator, mut error: Value, functions: &[&str]) -> usize {
+    // The frames, the file every frame names, and what is being put into
+    // the object made next.
+    let mut held = [0_usize; 3];
     let slots = held.as_mut_ptr();
+    mutator.root_value(&mut error);
     for index in 0..held.len() {
         // SAFETY: `index` is within `held`, which outlives the roots.
         mutator.root_at(unsafe { slots.add(index) } as usize);
@@ -386,25 +358,26 @@ pub(crate) fn context(mutator: &mut Mutator, error: usize, functions: &[&str]) -
     unsafe {
         let frames = mutator.allocate(array::size(count));
         array::format(frames, count);
-        slots.add(1).write(frames);
-        slots.add(2).write(string::from_str(mutator, ""));
+        slots.add(0).write(frames);
+        slots.add(1).write(string::from_str(mutator, ""));
         for (index, function) in functions.iter().rev().enumerate() {
-            slots.add(3).write(string::from_str(mutator, function));
+            slots.add(2).write(string::from_str(mutator, function));
             let (frame, described) = blank(mutator, WELL_KNOWN_STACK_FRAME);
-            set_field(frame, described, 0, Value::reference(slots.add(2).read()));
-            set_field(frame, described, 2, Value::reference(slots.add(3).read()));
+            set_field(frame, described, 0, Value::reference(slots.add(1).read()));
+            set_field(frame, described, 2, Value::reference(slots.add(2).read()));
             Value::store(
-                array::element(slots.add(1).read(), index),
+                array::element(slots.add(0).read(), index),
                 Value::reference(frame),
             );
         }
         let (trace, described) = blank(mutator, WELL_KNOWN_STACK_TRACE);
-        set_field(trace, described, 0, Value::reference(slots.add(1).read()));
-        slots.add(3).write(trace);
+        set_field(trace, described, 0, Value::reference(slots.add(0).read()));
+        slots.add(2).write(trace);
         let (context, described) = blank(mutator, WELL_KNOWN_CONTEXT);
-        set_field(context, described, 0, Value::reference(slots.add(0).read()));
-        set_field(context, described, 1, Value::reference(slots.add(3).read()));
-        mutator.unroot(held.len());
+        let error = (&raw const error).read_volatile();
+        set_field(context, described, 0, error);
+        set_field(context, described, 1, Value::reference(slots.add(2).read()));
+        mutator.unroot(1 + held.len());
         context
     }
 }
@@ -455,9 +428,9 @@ pub(crate) unsafe fn context_text(mutator: &Mutator, value: usize) -> Option<Str
         for function in context_functions(mutator, value).into_iter().rev() {
             let _ = writeln!(text, "  in {function}");
         }
-        let error = field(value, description(mutator, class)?, 0).payload;
-        if error != 0 && load(error) & TYPE_ID_MASK < STRING_TAGS_END {
-            text.push_str(string::text(error));
+        let error = field(value, description(mutator, class)?, 0);
+        if error.is_pointer() && error.id() < STRING_TAGS_END {
+            text.push_str(string::text(error.payload));
         } else {
             write_value(mutator, &mut text, error, None);
         }

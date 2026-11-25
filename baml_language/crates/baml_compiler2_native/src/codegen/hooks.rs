@@ -2,13 +2,14 @@
 //! both directions.
 //!
 //! A native calls a BAML function (a class's own `to_json`, say) through an
-//! entry made here: a function with the C convention that takes one value
-//! as a union holds it and returns two words. It calls the BAML function
+//! entry made here: a function with the C convention that takes two values,
+//! each a tag and a payload, and returns one. It calls the BAML function
 //! under a handler that takes every error, so nothing ever unwinds into
-//! the Rust frames below it: what the function returns comes back with a
-//! zero, and what it throws with a one, its trace left in the worker's
-//! scratch word. The handler is one the unwinder's look ahead goes past, so
-//! whether the trace is made is still decided by the handlers further out.
+//! the Rust frames below it: what the function returns comes back as a
+//! pair, and what it throws as one with [`layout::THROWN`] set in its tag,
+//! its trace left in the worker's scratch word by the unwinder. The handler
+//! is one the unwinder's look ahead goes past, so whether the trace is made
+//! is still decided by the handlers further out.
 //!
 //! Compiled code calls an `async` native through a stub made here: a
 //! function with the convention of a BAML function, which drives the
@@ -18,24 +19,25 @@
 //! waiting for its I/O. Both are done here, in compiled code, so that no
 //! frame of the runtime is on the stack while the task is stopped or runs
 //! BAML: every call into the runtime returns first. When the poll says the
-//! native is done the stub returns its value, or throws again what the
-//! native says compiled code threw. Through the stub the native's caller
-//! sees a call that returns or unwinds, with the caller's handlers on
-//! record at its return address.
+//! native is done the stub returns the value it left in its state, a pair,
+//! or throws again what the native says compiled code threw. Through the
+//! stub the native's caller sees a call that returns or unwinds, with the
+//! caller's handlers on record at its return address.
 
 use std::collections::HashMap;
 
 use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use cranelift_codegen::{
     Context,
-    ir::{self, AbiParam, InstBuilder, MemFlags, condcodes::IntCC, types},
+    ir::{self, AbiParam, InstBuilder, MemFlags, condcodes::IntCC},
     isa::CallConv,
 };
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_module::{DataDescription, FuncId, Linkage, Module};
 
 use super::{
-    Backend, Declared, Runtime, TRAP_AFTER_PANIC, WORD, internal, mutator_access, offset, unwind,
+    Backend, Declared, PAIR, Runtime, TRAP_AFTER_PANIC, WORD, internal, mutator_access, of_pair,
+    offset, unwind,
 };
 use crate::{
     CompileError,
@@ -43,7 +45,7 @@ use crate::{
     layout,
     natives::Native,
     program::{FnKey, Program},
-    types::class_layout,
+    types::{Signature, class_layout},
 };
 
 // A stub tests for a native that is done by testing for zero.
@@ -54,8 +56,9 @@ const ENTRY_HANDLER: u32 = 0;
 
 #[derive(Default)]
 pub(super) struct Hooks<'db> {
-    /// Each entry a native calls, with the BAML function it runs.
-    entries: Vec<(FuncId, FuncId)>,
+    /// Each entry a native calls, with the BAML function it runs and that
+    /// function's signature.
+    entries: Vec<(FuncId, FuncId, Signature<'db>)>,
     /// The entry of the `eq` of each class that has one of its own.
     equals: Vec<(ClassRef<'db>, FuncId)>,
     /// The stub each `async` native called so far is called through and
@@ -71,44 +74,45 @@ pub(super) fn declare<'db>(
     program: &Program<'db>,
     declared: &HashMap<FnKey<'db>, Declared<'db>>,
 ) -> Result<(), CompileError> {
+    // Every entry takes as many words as a native passes, two values, and
+    // reads as many of them as its function has parameters.
     let mut signature = ir::Signature::new(backend.call_conv());
-    signature.params = vec![AbiParam::new(WORD)];
+    signature.params = vec![AbiParam::new(WORD); layout::NATIVE_CALL_ARGS];
     signature.returns = vec![AbiParam::new(WORD); 2];
     let mut entries = HashMap::new();
-    for (class, functions) in &program.hooks {
-        let mut ids = [None; 2];
-        for (id, key) in ids.iter_mut().zip(functions) {
-            let Some(key) = key else { continue };
-            let target = declared
-                .get(key)
-                .ok_or_else(|| internal("a class's own to_json is part of the program"))?
-                .id;
-            let name = format!("baml_hook_{}", backend.hooks.entries.len());
-            let entry = backend
-                .module
-                .declare_function(&name, Linkage::Local, &signature)
-                .map_err(internal)?;
-            backend.hooks.entries.push((entry, target));
-            *id = Some(entry.as_u32());
-        }
-        entries.insert(*class, ids);
-    }
-    backend.json = JsonTypes::with_entries(entries);
-    // An `eq` takes two instances.
-    signature.params = vec![AbiParam::new(WORD); 2];
-    for (class, key) in &program.equals {
+    let declare = |backend: &mut Backend<'db>, key: &FnKey<'db>, what: &str| {
         let target = declared
             .get(key)
-            .ok_or_else(|| internal("a class's own eq is part of the program"))?
-            .id;
+            .ok_or_else(|| internal(format!("a class's own {what} is part of the program")))?;
+        if 2 * target.signature.params.len() > layout::NATIVE_CALL_ARGS {
+            return Err(internal(format!(
+                "a class's own {what} takes more values than a native passes"
+            )));
+        }
         let name = format!("baml_hook_{}", backend.hooks.entries.len());
         let entry = backend
             .module
             .declare_function(&name, Linkage::Local, &signature)
             .map_err(internal)?;
-        backend.hooks.entries.push((entry, target));
+        backend
+            .hooks
+            .entries
+            .push((entry, target.id, target.signature.clone()));
+        Ok(entry)
+    };
+    for (class, functions) in &program.hooks {
+        let mut ids = [None; 2];
+        for (id, key) in ids.iter_mut().zip(functions) {
+            let Some(key) = key else { continue };
+            *id = Some(declare(backend, key, "to_json")?.as_u32());
+        }
+        entries.insert(*class, ids);
+    }
+    for (class, key) in &program.equals {
+        let entry = declare(backend, key, "eq")?;
         backend.hooks.equals.push((*class, entry));
     }
+    backend.json = JsonTypes::with_entries(entries);
     Ok(())
 }
 
@@ -168,9 +172,10 @@ impl<'db> Backend<'db> {
             .module
             .declare_function(native.symbol, Linkage::Import, &imported)
             .map_err(internal)?;
+        // The stub returns what the native left in its state: a pair.
         let mut signature = ir::Signature::new(CallConv::Tail);
         signature.params = params[1..].to_vec();
-        signature.returns = vec![AbiParam::new(types::I64)];
+        signature.returns = vec![AbiParam::new(PAIR)];
         let stub = self
             .module
             .declare_function(
@@ -195,18 +200,16 @@ impl<'db> Backend<'db> {
         self.name_classes(db, native)?;
         let mut params = vec![AbiParam::new(WORD)];
         for ty in signature.params {
-            params.push(
-                super::native_call::abi_param(ty)
-                    .ok_or_else(|| internal("a native takes no `null`"))?,
-            );
+            params.extend(super::native_call::abi_params(ty)?);
         }
         self.async_stub(native, &params)
     }
 }
 
 /// Compile every entry and every stub declared.
-pub(super) fn define_all(
-    backend: &mut Backend<'_>,
+pub(super) fn define_all<'db>(
+    backend: &mut Backend<'db>,
+    db: &'db dyn baml_compiler2_mir::Db,
     context: &mut Context,
     builder_context: &mut FunctionBuilderContext,
     clif: &mut Option<String>,
@@ -220,11 +223,16 @@ pub(super) fn define_all(
             .signature
             .clone()
     };
-    for (entry, target) in backend.hooks.entries.clone() {
+    for (entry, target, signature) in backend.hooks.entries.clone() {
         context.func.signature = signature_of(backend, entry);
-        // The one entry with two arguments is that of an `eq`.
-        let answers = context.func.signature.params.len() == 2;
-        entry_body(backend, target, answers, &mut context.func, builder_context);
+        entry_body(
+            backend,
+            db,
+            target,
+            &signature,
+            &mut context.func,
+            builder_context,
+        )?;
         // It has no name in a trace: the function it runs is the frame a
         // program knows.
         super::define(backend, context, entry, "", clif, disassembly)?;
@@ -245,26 +253,37 @@ pub(super) fn define_all(
     Ok(())
 }
 
-/// The body of an entry: call `target` with the entry's arguments, and
-/// return what it returned and zero, or what it threw and one. With
-/// `answers` the function returns a `bool`, and the entry that as a word:
-/// the native holds what an entry returns where the collector looks for a
-/// reference, which a word of zero or one is taken not to be.
-fn entry_body(
-    backend: &mut Backend<'_>,
+/// The body of an entry: call `target`, whose signature is `signature`,
+/// with as many of the values the entry was passed as it has parameters,
+/// each read as its parameter's type, and return what it returned as a
+/// pair, or what it threw with [`layout::THROWN`] set in the tag. The
+/// unwinder left the trace of a throw in the worker's scratch word, where
+/// the native reads it before anything else uses the word.
+fn entry_body<'db>(
+    backend: &mut Backend<'db>,
+    db: &'db dyn baml_compiler2_mir::Db,
     target: FuncId,
-    answers: bool,
+    signature: &Signature<'db>,
     function: &mut ir::Function,
     builder_context: &mut FunctionBuilderContext,
-) {
+) -> Result<(), CompileError> {
     let mut builder = FunctionBuilder::new(function, builder_context);
     let block = builder.create_block();
     builder.append_block_params_for_function_params(block);
     builder.switch_to_block(block);
-    let arguments = builder.block_params(block).to_vec();
+    let passed = builder.block_params(block).to_vec();
+    let arguments: Vec<ir::Value> = signature
+        .params
+        .iter()
+        .zip(passed.as_chunks::<2>().0)
+        .map(|(ty, words)| {
+            let value = builder.ins().iconcat(words[0], words[1]);
+            of_pair(&mut builder, ty, value)
+        })
+        .collect();
     let target = backend.function_ref(target, builder.func);
     let caught = builder.create_block();
-    builder.append_block_param(caught, WORD);
+    builder.append_block_param(caught, PAIR);
     builder.append_block_param(caught, WORD);
     builder.set_cold_block(caught);
     backend
@@ -275,33 +294,23 @@ fn entry_body(
         &mut builder,
         &unwind::Called::Direct(target),
         &arguments,
-        &[(Some(ENTRY_HANDLER), caught)],
+        &[unwind::Edge {
+            tag: Some(ENTRY_HANDLER),
+            landing: caught,
+            reads_context: false,
+        }],
     );
-    let returned = if answers {
-        builder.ins().uextend(WORD, returned)
-    } else {
-        returned
-    };
-    let zero = builder.ins().iconst(WORD, 0);
-    builder.ins().return_(&[returned, zero]);
+    let (tag, payload) = backend.pair_words(db, &mut builder, &signature.result, returned)?;
+    builder.ins().return_(&[tag, payload]);
 
     builder.switch_to_block(caught);
-    let (error, trace) = {
-        let arriving = builder.block_params(caught);
-        (arriving[0], arriving[1])
-    };
-    // The native reads the trace before anything else uses the word.
-    let worker = builder.ins().get_pinned_reg(WORD);
-    builder.ins().store(
-        mutator_access(),
-        trace,
-        worker,
-        offset(layout::MUTATOR_SCRATCH),
-    );
-    let one = builder.ins().iconst(WORD, 1);
-    builder.ins().return_(&[error, one]);
+    let error = builder.block_params(caught)[0];
+    let (tag, payload) = builder.ins().isplit(error);
+    let tag = builder.ins().bor_imm(tag, super::imm(layout::THROWN));
+    builder.ins().return_(&[tag, payload]);
     builder.seal_all_blocks();
     builder.finalize();
+    Ok(())
 }
 
 /// The body of a stub: start `native` with the worker and the stub's own
@@ -320,7 +329,7 @@ fn stub_body(
     let rethrow = backend.runtime(Runtime::Rethrow)?;
     let poll = backend.runtime(Runtime::NativePoll)?;
     let wait = backend.runtime(Runtime::IoWait)?;
-    // An entry a native calls, with as many arguments as a native passes.
+    // An entry a native calls, with as many words as a native passes.
     let mut entry = ir::Signature::new(backend.call_conv());
     entry.params = vec![AbiParam::new(WORD); layout::NATIVE_CALL_ARGS];
     entry.returns = vec![AbiParam::new(WORD); 2];
@@ -328,8 +337,8 @@ fn stub_body(
     let mut builder = FunctionBuilder::new(function, builder_context);
     let start = builder.create_block();
     builder.append_block_params_for_function_params(start);
-    // What the entry called last returned and whether it threw that: both
-    // zero before the first poll and after a wait.
+    // The tag and the payload of what the entry called last returned or
+    // threw: both zero before the first poll and after a wait.
     let polling = builder.create_block();
     builder.append_block_param(polling, WORD);
     builder.append_block_param(polling, WORD);
@@ -352,21 +361,37 @@ fn stub_body(
     builder.ins().jump(polling, &[zero.into(), zero.into()]);
 
     builder.switch_to_block(polling);
-    let (returned, threw) = {
+    let (tag, payload) = {
         let last = builder.block_params(polling);
         (last[0], last[1])
     };
     let worker = builder.ins().get_pinned_reg(WORD);
     let poll = backend.function_ref(poll, builder.func);
-    let polled = builder.ins().call(poll, &[worker, state, returned, threw]);
+    let polled = builder.ins().call(poll, &[worker, state, tag, payload]);
     let (step, word) = {
         let results = builder.inst_results(polled);
         (results[0], results[1])
     };
     builder.ins().brif(step, stopped, &[], done, &[]);
 
+    // The value a native that is done, or that threw, left in its state:
+    // read before anything else is called, which may free the state.
+    let left = |builder: &mut FunctionBuilder<'_>| {
+        let word = |builder: &mut FunctionBuilder<'_>, index: usize| {
+            builder.ins().load(
+                WORD,
+                MemFlags::trusted(),
+                state,
+                offset(layout::NATIVE_STATE_ARGS + index * layout::WORD),
+            )
+        };
+        (word(builder, 0), word(builder, 1))
+    };
+
     builder.switch_to_block(done);
-    builder.ins().return_(&[word]);
+    let (tag, payload) = left(&mut builder);
+    let value = builder.ins().iconcat(tag, payload);
+    builder.ins().return_(&[value]);
 
     builder.switch_to_block(stopped);
     let is_throw = builder
@@ -375,6 +400,7 @@ fn stub_body(
     builder.ins().brif(is_throw, raise, &[], asked, &[]);
 
     builder.switch_to_block(raise);
+    let (tag, payload) = left(&mut builder);
     let worker = builder.ins().get_pinned_reg(WORD);
     let trace = builder.ins().load(
         WORD,
@@ -383,7 +409,7 @@ fn stub_body(
         offset(layout::MUTATOR_SCRATCH),
     );
     let rethrow = backend.function_ref(rethrow, builder.func);
-    builder.ins().call(rethrow, &[word, trace]);
+    builder.ins().call(rethrow, &[tag, payload, trace]);
     builder.ins().trap(TRAP_AFTER_PANIC);
 
     builder.switch_to_block(asked);
@@ -408,13 +434,11 @@ fn stub_body(
         .collect();
     let entry = builder.import_signature(entry);
     let called = builder.ins().call_indirect(entry, word, &passed);
-    let (returned, threw) = {
+    let (tag, payload) = {
         let results = builder.inst_results(called);
         (results[0], results[1])
     };
-    builder
-        .ins()
-        .jump(polling, &[returned.into(), threw.into()]);
+    builder.ins().jump(polling, &[tag.into(), payload.into()]);
 
     // Whatever is none of the others is a wait.
     builder.switch_to_block(waiting);

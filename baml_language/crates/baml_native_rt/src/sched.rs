@@ -87,8 +87,7 @@ use crate::{
     heap::{Mutator, Value, load, store},
     layout::{
         FUTURE_ERROR, FUTURE_FLAGS, FUTURE_OBSERVED, FUTURE_READY, FUTURE_SETTLED, FUTURE_SIZE,
-        FUTURE_STATE, FUTURE_TASK, FUTURE_TRACE, FUTURE_VALUE, RESULT_IS_REFERENCE, TAG_FUTURE,
-        WORD,
+        FUTURE_STATE, FUTURE_TASK, FUTURE_TRACE, FUTURE_VALUE, TAG_FUTURE, WORD,
     },
 };
 
@@ -125,9 +124,6 @@ const DEAD: u32 = 6;
 const TASK_MAIN: u32 = 1;
 /// Set in a task's flags when it ended by throwing.
 const TASK_FAILED: u32 = 2;
-/// Where a task's flags say what the word its closure returns is: see
-/// [`RESULT_IS_REFERENCE`].
-const TASK_RESULT_SHIFT: u32 = 8;
 /// Where a task's flags say which thread it last stopped on, under
 /// migration stress: zero for a task that has not run, and otherwise one
 /// more than the thread.
@@ -729,17 +725,11 @@ pub(crate) fn fatal(message: &str) -> ! {
 /// spawning task ready to be resumed with the future. Returns the new task,
 /// which the stub switches to.
 ///
-/// `frame` is the switch frame the stub built; `shim` the compiled function
-/// the new task starts in, which asks for `closure` back; `result` what the
-/// word the closure returns is ([`RESULT_IS_REFERENCE`]).
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a tag of an immediate, or one"
-)]
+/// `frame` is the switch frame the stub built, and `shim` the compiled
+/// function the new task starts in, which asks for `closure` back.
 pub(crate) unsafe extern "C" fn spawn_prepare(
     mut closure: usize,
     shim: usize,
-    result: usize,
     worker: &mut Mutator,
     frame: usize,
 ) -> *mut Task {
@@ -758,7 +748,6 @@ pub(crate) unsafe extern "C" fn spawn_prepare(
     // function's until it is switched to, and `frame` is the stub's.
     unsafe {
         format_future(future, child);
-        (*child).flags |= (result as u32) << TASK_RESULT_SHIFT;
         (*child).future = future;
         (*child).entry = closure;
         store(frame + SWITCH_FRAME_RESULT, future);
@@ -828,39 +817,35 @@ fn settle(worker: &mut Mutator, value: Value, trace: usize, state: usize) {
     }
 }
 
-/// The closure of the task running on `worker` returned `value`, one word:
-/// what its task's flags say it is.
+/// The closure of the task running on `worker` returned the value of tag
+/// `tag` and payload `payload`: its future holds it as it is.
 #[unsafe(no_mangle)]
-pub extern "C" fn baml_rt_task_finish(worker: &mut Mutator, value: usize) {
-    // SAFETY: called on a task, and a word that is a reference is zero or
-    // the address of a live object.
-    let value = unsafe {
-        match ((*worker.cur_task).flags >> TASK_RESULT_SHIFT) as usize {
-            RESULT_IS_REFERENCE => Value::reference(value),
-            tag => Value::immediate(tag, value),
-        }
-    };
-    settle(worker, value, 0, FUTURE_READY);
+pub extern "C" fn baml_rt_task_finish(worker: &mut Mutator, tag: usize, payload: usize) {
+    settle(worker, Value { tag, payload }, 0, FUTURE_READY);
 }
 
-/// The closure of the task running on `worker` threw `error` and nothing
-/// in the task caught it. `trace` is what the task's handler landed with:
-/// the future keeps it beside the error, for an `await` to throw the two
-/// again as a handler in the task would have, and for the report of an
-/// error no `await` took.
+/// The closure of the task running on `worker` threw the value of tag
+/// `tag` and payload `payload`, and nothing in the task caught it. `trace`
+/// is what the task's handler found in the scratch word: the future keeps
+/// it beside the error, for an `await` to throw the two again as a handler
+/// in the task would have, and for the report of an error no `await` took.
 ///
 /// A `baml.panics.Exit` ends the process here with its code, whether or
 /// not anything awaits the task: its `defer`s have run.
 #[unsafe(no_mangle)]
-pub extern "C" fn baml_rt_task_fail(worker: &mut Mutator, error: usize, trace: usize) {
-    // SAFETY: what the task threw is a live object.
+pub extern "C" fn baml_rt_task_fail(
+    worker: &mut Mutator,
+    tag: usize,
+    payload: usize,
+    trace: usize,
+) {
+    let error = Value { tag, payload };
+    // SAFETY: what the task threw is a value.
     if let Some(status) = unsafe { crate::class::exit_status(worker, error) } {
         crate::unwind::end(worker, status);
     }
     // SAFETY: called on a task.
     unsafe { (*worker.cur_task).flags |= TASK_FAILED };
-    // SAFETY: as above, or null.
-    let error = unsafe { Value::reference(error) };
     settle(worker, error, trace, FUTURE_ERROR);
 }
 
@@ -931,7 +916,7 @@ pub(crate) fn report_unhandled(worker: &Mutator) -> bool {
             crate::unwind::report(
                 worker,
                 "unhandled spawned task failed: ",
-                Value::load(future + FUTURE_VALUE).payload,
+                Value::load(future + FUTURE_VALUE),
                 load(future + FUTURE_TRACE),
             );
         }
@@ -1011,15 +996,15 @@ pub(crate) unsafe extern "C" fn await_park(
     }
 }
 
-/// The error an awaited future settled with, for the `await` to throw.
-/// The error now has someone to handle it, so the task that threw it is
-/// done with.
+/// The value an awaited future settled with as its error, for the `await`
+/// to throw. The error now has someone to handle it, so the task that
+/// threw it is done with.
 ///
 /// # Safety
 ///
 /// `future` is a future that settled with an error.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_await_error(worker: &mut Mutator, future: usize) -> usize {
+pub unsafe extern "C" fn baml_rt_await_error(worker: &mut Mutator, future: usize) -> Value {
     worker.sched.settle_last_switch();
     // SAFETY: the caller's contract; a failed future names its task until
     // its error is taken.
@@ -1033,7 +1018,7 @@ pub unsafe extern "C" fn baml_rt_await_error(worker: &mut Mutator, future: usize
             store(future + FUTURE_TASK, 0);
             worker.sched.release(task);
         }
-        Value::load(future + FUTURE_VALUE).payload
+        Value::load(future + FUTURE_VALUE)
     }
 }
 
@@ -1384,7 +1369,7 @@ pub(crate) mod tests {
             let worker = park(switch::baml_rt_sleep, nanos, worker);
             EVENTS.lock().expect("no test panicked").push(nanos);
             if (*task).future != 0 {
-                baml_rt_task_finish(&mut *worker, nanos);
+                baml_rt_task_finish(&mut *worker, TAG_INT, nanos);
             }
         }
     }
@@ -1495,7 +1480,6 @@ pub(crate) mod tests {
                 (*task).wait_value = milliseconds * MILLISECOND;
                 if milliseconds == 20 {
                     (*task).future = future;
-                    (*task).flags |= u32::try_from(TAG_INT).expect("a tag") << TASK_RESULT_SHIFT;
                 }
                 worker.sched.queue.push_front(task);
             }

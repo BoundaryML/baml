@@ -131,22 +131,21 @@ pub(crate) enum Code<'db> {
 }
 
 /// The signature the stub of `native` is entered with by a dispatching
-/// call, without its receiver, when a call laid out for a function of the
-/// program can enter it: the stub takes each argument in the register a
-/// function would and returns its result in the one a function would.
+/// call, without its receiver, when the method table can hold it: the
+/// table's entry passes the stub what a call of the native would, but for
+/// the description of a static type, which a dispatching call has none of.
 fn dispatched_native<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     native: &'static crate::natives::Native,
 ) -> Option<Signature<'db>> {
     use crate::natives::Ty;
     let (signature, flags) = native.callable().ok()?;
-    let in_a_word = |ty: &Ty| {
-        matches!(ty, Ty::Int) || (ty.native(db, &[]).is_ref() && !matches!(ty, Ty::Typed))
-    };
     let fits = flags.is_async
         && native.type_args == 0
-        && signature.params.iter().all(in_a_word)
-        && (in_a_word(&signature.result) || matches!(signature.result, Ty::Null | Ty::Bool));
+        && !signature
+            .params
+            .iter()
+            .any(|ty| matches!(ty, Ty::Typed | Ty::Null));
     let (_, params) = signature.params.split_first()?;
     fits.then(|| Signature {
         params: params.iter().map(|ty| ty.native(db, &[])).collect(),
@@ -371,11 +370,11 @@ fn check_hooks<'db>(db: &'db dyn baml_compiler2_mir::Db, program: &Program<'db>)
             let (takes, returns) = if which == 0 {
                 (
                     signature.params[..] == [own.clone()],
-                    signature.result.is_boxed(),
+                    signature.result.holds_any(),
                 )
             } else {
                 (
-                    matches!(&signature.params[..], [json] if json.is_boxed()),
+                    matches!(&signature.params[..], [json] if json.holds_any()),
                     signature.result == own,
                 )
             };
@@ -437,13 +436,6 @@ fn lay_out_methods<'db>(
                 Some(Target::Native(native)) => Code::Native(native),
                 None => continue,
             };
-            // The receiver arrives as the reference the interface value is.
-            if !ty.is_ref() {
-                blockers.push(unsupported(
-                    "implemented in source for a type kept in a box",
-                ));
-                continue;
-            }
             let found = match &code {
                 Code::Function(key) => {
                     if identified_arguments(db, key).contains(&true) {
@@ -539,9 +531,10 @@ fn lay_out_methods<'db>(
     blockers
 }
 
-/// Whether a call laid out for one signature can enter code compiled for
-/// the other: each argument and the result is the same type, or a
-/// reference either way, which the type checker has let through.
+/// Whether a call written for one signature can enter code compiled for
+/// the other through the method table: each argument and the result is the
+/// same type, or a reference either way, which the type checker has let
+/// through.
 fn same_registers(left: &Signature<'_>, right: &Signature<'_>) -> bool {
     let alike = |left: &NativeTy<'_>, right: &NativeTy<'_>| {
         let reference = |ty: &NativeTy<'_>| ty.is_ref() && !matches!(ty, NativeTy::Cell(_));

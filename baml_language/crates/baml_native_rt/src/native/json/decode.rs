@@ -38,7 +38,7 @@ use crate::{
     layout::{ARRAY_LENGTH, VALUE},
     map,
     native::{
-        Elem, Scope, Thrown, TypeId, array_size,
+        Elem, Scope, Slot, Thrown, TypeId, array_size,
         build::{Got, place},
         drive::BamlFn,
     },
@@ -114,9 +114,9 @@ struct Asked<'s> {
     by_fields: bool,
 }
 
-/// What a run that went to the end made: the value as a union holds it,
-/// the room it took, and the member each union decoded as.
-type Made = (usize, Out, Vec<usize>);
+/// What a run that went to the end made: the value, the room it took, and
+/// the member each union decoded as.
+type Made = (Value, Out, Vec<usize>);
 
 /// One run of the decoder: what it made, and what it noted or has left to
 /// take of what each `from_json` is for.
@@ -153,11 +153,11 @@ fn run(
         match types.described(ty) {
             Some(described) => decoder
                 .decode(json.value(scope), described)
-                .map(|got| decoder.place(got, REPR_BOXED).payload),
+                .map(|got| decoder.place(got, REPR_BOXED)),
             // A type the call does not describe is `unknown`.
             None => decoder
                 .copy(json.value(scope))
-                .map(|got| decoder.place(got, REPR_BOXED).payload),
+                .map(|got| decoder.place(got, REPR_BOXED)),
         }
     };
     (
@@ -167,8 +167,8 @@ fn run(
 }
 
 /// Decode the `json` value `json` as the type a call named by `ty`, and
-/// return it as a union holds it. With `by_fields` the value itself is
-/// read by its fields whatever `from_json` its class has.
+/// return it as a value: an enum's variant as a box. With `by_fields` the
+/// value itself is read by its fields whatever `from_json` its class has.
 ///
 /// Each `from_json` is called here, between runs of the decoder. A run
 /// recurses as deep as the value nests, so it is made where there is room
@@ -179,7 +179,7 @@ pub(in crate::native) async fn to<'s>(
     json: Elem<'s>,
     aliased: bool,
     by_fields: bool,
-) -> Result<usize, Thrown<'s>> {
+) -> Result<Value, Thrown<'s>> {
     let asked = Asked {
         ty,
         json,
@@ -201,7 +201,7 @@ pub(in crate::native) async fn to<'s>(
         let count = entries.len();
         let array = scope.with_room(|scope| {
             let reservation = scope.reserve(array_size(2 * count));
-            let array = reservation.elements(2 * count, TypeId(0)).keep();
+            let array = reservation.array::<Slot>(2 * count).keep();
             let array = reservation.finish(array);
             // Nothing is allocated between the array and the run that
             // fills it, which notes the same values in the same order and
@@ -215,8 +215,8 @@ pub(in crate::native) async fn to<'s>(
             // SAFETY: the array's elements are `json` values and what was
             // returned for them, and neither slot is used again.
             unsafe {
-                let read = Value::load(array::element(array.raw(scope), index)).payload;
-                let read = scope.elem_raw(read, TypeId(0));
+                let read = Value::load(array::element(array.raw(scope), index));
+                let read = scope.elem(read);
                 let made = scope.call_baml(from_json, &[read]).await?;
                 Value::store(
                     array::element(array.raw(scope), count + index),
@@ -244,7 +244,7 @@ pub(in crate::native) async fn to<'s>(
                 choices,
                 Provided::Take(made),
             );
-            built.map_or(0, |(value, ..)| value)
+            built.map_or(Value::NULL, |(value, ..)| value)
         })),
         Err(misfit) => Err(decode_error(
             scope,
@@ -289,8 +289,8 @@ impl Decoder<'_> {
         result
     }
 
-    /// The value a slot of representation `repr` holds `got` as, with a
-    /// box made where this run builds.
+    /// The value a slot of representation `repr` holds `got` as, with the
+    /// box of an enum's variant made where this run builds.
     fn place(&mut self, got: Got, repr: u32) -> Value {
         place(got, repr, |type_id, bits| self.out.boxed(type_id, bits))
     }
@@ -440,11 +440,7 @@ impl Decoder<'_> {
         let (copied, out) = sink.finish();
         self.out = out;
         match walked {
-            Ok(()) => Ok(if copied == 0 {
-                Got::Null
-            } else {
-                Got::Ref(copied)
-            }),
+            Ok(()) => Ok(Got::of(copied)),
             Err(refused) => Err(Misfit {
                 message: refused.message,
                 path: format!("{}{}", self.path, refused.path),
@@ -521,9 +517,7 @@ impl Decoder<'_> {
 
     /// A value of a class with a `from_json` of its own: what that makes
     /// of the `json` in `json`. While a member of a union is tried the
-    /// class is read by its fields, like any other. So is a scalar held in
-    /// place, which is no `json` to hand a `from_json` and is refused
-    /// there.
+    /// class is read by its fields, like any other.
     unsafe fn provided(
         &mut self,
         json: Value,
@@ -533,10 +527,6 @@ impl Decoder<'_> {
     ) -> Result<Got, Misfit> {
         if self.trying != 0 {
             self.tried_provided = true;
-            // SAFETY: the caller's contract.
-            return unsafe { self.class(node, described) };
-        }
-        if !(json.is_pointer() || json.is_null()) {
             // SAFETY: the caller's contract.
             return unsafe { self.class(node, described) };
         }
@@ -555,7 +545,7 @@ impl Decoder<'_> {
                 // returned, in the order a run like this one noted them.
                 let made = unsafe { Value::load(*next) };
                 *next += VALUE;
-                Ok(Got::Ref(made.payload))
+                Ok(Got::of(made))
             }
         }
     }

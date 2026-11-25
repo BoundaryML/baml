@@ -8,8 +8,8 @@
 //! records them by the call's return address, with what each one takes. A
 //! throw whose handler is in the same function is a jump to it. Any other
 //! throw calls the runtime, which walks the frame records and resumes in
-//! the first handler that takes the error, with the error and its trace in
-//! the two payload registers.
+//! the first handler that takes the error, with the error's tag and payload
+//! in the two payload registers and its trace in the worker's scratch word.
 //!
 //! What a handler takes is read off its MIR: a `catch` lowers to a chain of
 //! type tests on the error it landed with, ending in a rethrow for what no
@@ -31,7 +31,7 @@ use cranelift_codegen::{
 };
 use cranelift_module::{DataDescription, FuncId, Linkage, Module};
 
-use super::{Backend, TRAP_AFTER_PANIC, Translator, WORD, internal};
+use super::{Backend, PAIR, TRAP_AFTER_PANIC, Translator, WORD, internal, mutator_access, offset};
 use crate::{
     CompileError, layout,
     narrow::TestKind,
@@ -67,6 +67,24 @@ impl Catch {
             ids: Vec::new(),
         }
     }
+
+    /// Whether the handler does anything with the context it lands with:
+    /// reads it, or throws the error again with it.
+    fn uses_context(&self) -> bool {
+        self.flags & (layout::HANDLER_BINDS_CONTEXT | layout::HANDLER_MAY_RETHROW) != 0
+    }
+}
+
+/// An exception edge of a call: the handler it leads to.
+pub(super) struct Edge {
+    /// The tag the table knows the handler by; none for the handler of the
+    /// function that enters compiled code.
+    pub(super) tag: Option<u32>,
+    /// The block the handler starts in, which takes the error, a pair, and
+    /// its context, a word.
+    pub(super) landing: ir::Block,
+    /// Whether the context the unwinder left is read where the edge lands.
+    pub(super) reads_context: bool,
 }
 
 /// A call with handlers.
@@ -275,11 +293,16 @@ pub(super) enum Called {
 
 /// A `try_call` of `called` with an exception edge to each of `handlers`,
 /// innermost first, and the block the call returns to, which receives its
-/// result. A handler is named by the tag its edge carries; the one without
-/// a tag is the function's that enters compiled code.
+/// result.
 ///
-/// Each edge lands in a block of its own that only jumps to the handler. An
-/// argument of the `try_call`'s own edge is read before the call, so a
+/// Each edge lands in a block of its own, with the error's tag and payload
+/// in the two payload registers. The unwinder left the error's context in
+/// the worker's scratch word, which is no root: the block's first
+/// instruction loads it, before anything can allocate, and only for a
+/// handler that uses it. The block then jumps to the handler with the
+/// error as a pair and the context.
+///
+/// An argument of the `try_call`'s own edge is read before the call, so a
 /// reference passed there would be the one from before any collection in
 /// the callee; as an argument of the jump it is read after the call, from
 /// the slot the collector updated.
@@ -287,7 +310,7 @@ pub(super) fn try_call(
     builder: &mut cranelift_frontend::FunctionBuilder<'_>,
     called: &Called,
     arguments: &[ir::Value],
-    handlers: &[(Option<u32>, ir::Block)],
+    handlers: &[Edge],
 ) -> ir::Value {
     let signature = match called {
         Called::Direct(function) => builder.func.dfg.ext_funcs[*function].signature,
@@ -313,13 +336,13 @@ pub(super) fn try_call(
     let edges: Vec<ExceptionTableItem> = handlers
         .iter()
         .zip(&landed)
-        .map(|((tag, _), landed)| {
+        .map(|(edge, landed)| {
             let thrown = builder
                 .func
                 .dfg
                 .block_call(*landed, &[BlockArg::TryCallExn(0), BlockArg::TryCallExn(1)]);
-            match tag {
-                Some(tag) => ExceptionTableItem::Tag(ExceptionTag::from_u32(*tag), thrown),
+            match edge.tag {
+                Some(tag) => ExceptionTableItem::Tag(ExceptionTag::from_u32(tag), thrown),
                 None => ExceptionTableItem::Default(thrown),
             }
         })
@@ -333,14 +356,26 @@ pub(super) fn try_call(
         Called::Direct(function) => builder.ins().try_call(*function, arguments, table),
         Called::Indirect(_, code) => builder.ins().try_call_indirect(*code, arguments, table),
     };
-    for ((_, landing), landed) in handlers.iter().zip(landed) {
+    for (edge, landed) in handlers.iter().zip(landed) {
         builder.seal_block(landed);
         builder.switch_to_block(landed);
-        let error = builder.block_params(landed)[0];
-        let context = builder.block_params(landed)[1];
+        let context = if edge.reads_context {
+            let worker = builder.ins().get_pinned_reg(WORD);
+            builder.ins().load(
+                WORD,
+                mutator_access(),
+                worker,
+                offset(layout::MUTATOR_SCRATCH),
+            )
+        } else {
+            builder.ins().iconst(WORD, 0)
+        };
+        let tag = builder.block_params(landed)[0];
+        let payload = builder.block_params(landed)[1];
+        let error = builder.ins().iconcat(tag, payload);
         builder
             .ins()
-            .jump(*landing, &[error.into(), context.into()]);
+            .jump(edge.landing, &[error.into(), context.into()]);
     }
     builder.seal_block(returned);
     builder.switch_to_block(returned);
@@ -362,15 +397,15 @@ impl<'db> Translator<'_, 'db> {
         self.body.blocks[self.current].unwind
     }
 
-    /// The block a throw to the handler `pad` jumps to with the error and
-    /// its trace, which is zero when nothing will read one: it puts them in the handler's locals and goes on to
-    /// the handler.
+    /// The block a throw to the handler `pad` jumps to with the error, a
+    /// pair, and its trace, which is zero when nothing will read one: it
+    /// puts them in the handler's locals and goes on to the handler.
     fn landing(&mut self, pad: BlockId) -> ir::Block {
         if let Some(landing) = self.landings.get(&pad.0) {
             return *landing;
         }
         let landing = self.builder.create_block();
-        self.builder.append_block_param(landing, WORD);
+        self.builder.append_block_param(landing, PAIR);
         self.builder.append_block_param(landing, WORD);
         self.builder.set_cold_block(landing);
         self.landings.insert(pad.0, landing);
@@ -571,12 +606,12 @@ impl<'db> Translator<'_, 'db> {
     /// The exception edges of a call in a block that unwinds to `pad`: to
     /// its landing and to that of each handler around it, with the tag the
     /// table knows each by.
-    fn handlers(&mut self, pad: BlockId) -> Result<Vec<(Option<u32>, ir::Block)>, CompileError> {
-        let mut edges = Vec::new();
+    fn handlers(&mut self, pad: BlockId) -> Result<Vec<Edge>, CompileError> {
+        let mut edges: Vec<Edge> = Vec::new();
         let mut next = Some(pad);
         while let Some(pad) = next {
             let tag = u32::try_from(pad.0).map_err(internal)?;
-            if edges.iter().any(|(seen, _)| *seen == Some(tag)) {
+            if edges.iter().any(|edge| edge.tag == Some(tag)) {
                 return Err(internal("a handler is not inside itself"));
             }
             let around = match self.chains.get(&pad.0) {
@@ -588,7 +623,17 @@ impl<'db> Translator<'_, 'db> {
                     around
                 }
             };
-            edges.push((Some(tag), self.landing(pad)));
+            let reads_context = self
+                .backend
+                .unwind
+                .catches
+                .get(&tag)
+                .is_some_and(Catch::uses_context);
+            edges.push(Edge {
+                tag: Some(tag),
+                landing: self.landing(pad),
+                reads_context,
+            });
             next = around;
         }
         Ok(edges)
@@ -611,25 +656,36 @@ impl<'db> Translator<'_, 'db> {
             };
             self.builder.declare_value_needs_stack_map(error);
             self.builder.declare_value_needs_stack_map(context);
+            let Some(landing) = self.body.blocks[pad].landing else {
+                return Err(internal("a handler lands with an error"));
+            };
             // A handler that reads its context reads a `baml.errors.Context`:
             // made here, of the trace it landed with.
-            let binds = self.body.blocks[pad]
-                .landing
-                .is_some_and(|landing| binds_context(self.body, landing));
-            let context = if binds {
+            let context = if binds_context(self.body, landing) {
                 let mutator = self.mutator();
+                let (tag, payload) = self.builder.ins().isplit(error);
                 let made = self
-                    .emit_runtime_call(super::Runtime::ErrorContext, &[mutator, error, context])?
+                    .emit_runtime_call(
+                        super::Runtime::ErrorContext,
+                        &[mutator, tag, payload, context],
+                    )?
                     .ok_or_else(|| internal("the runtime returns the context it makes"))?;
                 self.builder.declare_value_needs_stack_map(made);
                 made
             } else {
                 context
             };
-            if let Some(landing) = self.body.blocks[pad].landing {
-                self.write_local(landing.error_local, error);
-                self.write_local(landing.context_local, context);
-            }
+            // The context is one word, a reference or nothing: its local
+            // holds it as the local's type is held.
+            let context = if self.storage_ty(landing.context_local).is_pair() {
+                let context = self.pair_of_pointer(context);
+                self.builder.declare_value_needs_stack_map(context);
+                context
+            } else {
+                context
+            };
+            self.write_local(landing.error_local, error);
+            self.write_local(landing.context_local, context);
             let handler = self.blocks[pad];
             self.builder.ins().jump(handler, &[]);
         }
@@ -645,10 +701,9 @@ impl<'db> Translator<'_, 'db> {
         });
     }
 
-    /// End the block being generated by throwing `error`, a value in the
-    /// representation of `unknown`, with `context` when it was caught with
-    /// one: a jump to the handler when it is in this function, a call that
-    /// does not return otherwise.
+    /// End the block being generated by throwing `error`, a pair, with
+    /// `context` when it was caught with one: a jump to the handler when it
+    /// is in this function, a call that does not return otherwise.
     pub(super) fn raise(
         &mut self,
         error: ir::Value,
@@ -671,8 +726,9 @@ impl<'db> Translator<'_, 'db> {
             // reads it yet.
             None => (super::Runtime::Throw, self.builder.ins().iconst(WORD, 0)),
         };
+        let (tag, payload) = self.builder.ins().isplit(error);
         // Not through `call_runtime`: this path does not come back.
-        self.emit_runtime_call(function, &[error, context])?;
+        self.emit_runtime_call(function, &[tag, payload, context])?;
         self.builder.ins().trap(TRAP_AFTER_PANIC);
         Ok(())
     }
@@ -690,7 +746,10 @@ impl<'db> Translator<'_, 'db> {
         context: &Operand<'db>,
     ) -> Result<(), CompileError> {
         let error = self.operand_as(value, &NativeTy::Unknown)?;
+        // The context is a reference or nothing, however its local holds
+        // it.
         let context = self.operand_as(context, &NativeTy::Unknown)?;
+        let (_, context) = self.builder.ins().isplit(context);
         self.raise(error, Some(context))
     }
 

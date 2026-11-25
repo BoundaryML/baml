@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     heap::Program,
-    layout::{SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, TAG_BOX_INT, TAG_STRING_SLICE},
+    layout::{SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, TAG_STRING_SLICE},
 };
 
 fn mutator(stress: bool) -> Mutator {
@@ -300,8 +300,8 @@ fn word_keys_are_found_by_their_bits() {
         // A float's zeros are one key, and so is every NaN.
         let mut floats = new(&mut mutator, 0);
         mutator.root(&mut floats);
-        assert_eq!(KeyKind::of(crate::layout::TAG_BOX_FLOAT), KeyKind::Float);
-        assert_eq!(KeyKind::of(TAG_BOX_INT), KeyKind::Word);
+        assert_eq!(KeyKind::of_value(Value::float(1.5)), KeyKind::Float);
+        assert_eq!(KeyKind::of_value(int(1)), KeyKind::Word);
         set(&mut mutator, floats, Value::float(0.0), int(1));
         assert_eq!(
             set(&mut mutator, floats, Value::float(-0.0), int(2)),

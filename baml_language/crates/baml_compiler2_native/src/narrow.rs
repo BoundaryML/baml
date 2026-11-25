@@ -651,7 +651,7 @@ pub(crate) fn block_types<'db>(
         .map(|local| {
             storage_ty(db, body, Local(local))
                 .ok()
-                .filter(NativeTy::is_boxed)
+                .filter(NativeTy::holds_any)
         })
         .collect();
     let analysis = Analysis { db, body, boxed };

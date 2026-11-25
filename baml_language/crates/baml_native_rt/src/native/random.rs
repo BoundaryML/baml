@@ -161,7 +161,7 @@ impl NativeBamlRandomRngForSystemRandom for Natives {
         Ok(scope.alloc_bytes(&drawn))
     }
 
-    fn random_int(_systemrandom: usize) -> i64 {
+    fn random_int(_systemrandom: crate::heap::Value) -> i64 {
         let mut drawn = [0; 8];
         entropy(&mut drawn);
         i64::from_le_bytes(drawn)

@@ -9,7 +9,9 @@
 use baml_compiler2_mir::Operand;
 use cranelift_codegen::ir::{self, AbiParam, InstBuilder, condcodes::IntCC, types};
 
-use super::{Panic, Translator, WORD, array_access, imm, internal, offset, slot_access};
+use super::{
+    Panic, Translator, WORD, array_access, internal, offset, payload_of, slot_access, slot_words,
+};
 use crate::{
     CompileError,
     check::native_type_arguments,
@@ -25,21 +27,6 @@ impl<'db> Translator<'_, 'db> {
             NativeTy::Map(key, value) => Ok((*key, *value)),
             _ => Err(internal("a checked map operation is on a map")),
         }
-    }
-
-    /// The type ids a call of the runtime names a map's key and value types
-    /// by.
-    fn map_type_ids(
-        &mut self,
-        key: &NativeTy<'db>,
-        value: &NativeTy<'db>,
-    ) -> Result<[ir::Value; 2], CompileError> {
-        let key = self.backend.type_id(self.db, key)?.unwrap_or(0);
-        let value = self.backend.type_id(self.db, value)?.unwrap_or(0);
-        Ok([
-            self.builder.ins().iconst(types::I32, imm(key)),
-            self.builder.ins().iconst(types::I32, imm(value)),
-        ])
     }
 
     /// Call a leaf of the runtime: it neither allocates nor throws.
@@ -96,17 +83,16 @@ impl<'db> Translator<'_, 'db> {
             }
             NativeTy::Float => {
                 // The runtime makes the key canonical.
-                let [key_type, _] = self.map_type_ids(key_ty, &NativeTy::Int)?;
-                let key = self.as_slot(key, key_ty);
+                let (tag, key) = slot_words(&mut self.builder, key_ty, key);
                 self.map_leaf(
                     "baml_rt_map_find",
-                    &[WORD, types::I32, WORD],
+                    &[WORD, WORD, WORD],
                     WORD,
-                    &[map, key_type, key],
+                    &[map, tag, key],
                 )
             }
             _ => {
-                let key = self.as_slot(key, key_ty);
+                let key = payload_of(&mut self.builder, key, key_ty);
                 self.map_leaf("baml_rt_map_find_int", &[WORD, WORD], WORD, &[map, key])
             }
         }
@@ -161,7 +147,8 @@ impl<'db> Translator<'_, 'db> {
         Ok(())
     }
 
-    /// Call one of the runtime's two ways to set a key.
+    /// Call one of the runtime's two ways to set a key: the key and the
+    /// value go as the two words a slot of each one's type holds.
     fn map_runtime_set(
         &mut self,
         symbol: &str,
@@ -171,18 +158,15 @@ impl<'db> Translator<'_, 'db> {
         key: ir::Value,
         value: ir::Value,
     ) -> Result<(), CompileError> {
-        let [key_type, value_type] = self.map_type_ids(key_ty, value_ty)?;
-        let key = self.as_slot(key, key_ty);
-        let value = self.as_slot(value, value_ty);
-        let word = AbiParam::new(WORD);
-        let id = AbiParam::new(types::I32);
-        let callee = self.import(symbol, vec![word, id, id, word, word, word], vec![])?;
+        let callee = self.import(symbol, vec![AbiParam::new(WORD); 6], vec![])?;
         // The runtime can collect, which moves storage.
         self.forget_arrays();
         let mutator = self.mutator();
+        let key = slot_words(&mut self.builder, key_ty, key);
+        let value = slot_words(&mut self.builder, value_ty, value);
         self.builder
             .ins()
-            .call(callee, &[mutator, key_type, value_type, map, key, value]);
+            .call(callee, &[mutator, map, key.0, key.1, value.0, value.1]);
         Ok(())
     }
 
@@ -194,14 +178,8 @@ impl<'db> Translator<'_, 'db> {
         left: ir::Value,
         right: ir::Value,
     ) -> Result<ir::Value, CompileError> {
-        let (key_ty, value_ty) = Self::map_types(ty)?;
-        let [_, value_type] = self.map_type_ids(&key_ty, &value_ty)?;
-        self.map_leaf(
-            "baml_rt_map_eq",
-            &[WORD, WORD, types::I32],
-            types::I8,
-            &[left, right, value_type],
-        )
+        Self::map_types(ty)?;
+        self.map_leaf("baml_rt_map_eq", &[WORD, WORD], types::I8, &[left, right])
     }
 
     /// A map literal: the map and room for its entries in one allocation,
@@ -276,7 +254,7 @@ impl<'db> Translator<'_, 'db> {
             let found = self.builder.ins().icmp_imm(IntCC::NotEqual, slot, 0);
             return Ok(Some((found, produced)));
         }
-        // The value's word and whether there is one.
+        // The value as a pair, or `null` for a key the map has not.
         let read = self.builder.create_block();
         let done = self.builder.create_block();
         self.builder.append_block_param(done, WORD);
@@ -288,22 +266,16 @@ impl<'db> Translator<'_, 'db> {
         self.builder.seal_block(read);
         self.builder.switch_to_block(read);
         let found = self.slot_load(&types[1], slot, 0);
-        let word = self.as_slot(found, &types[1]);
-        let one = self.builder.ins().iconst(WORD, 1);
-        self.builder.ins().jump(done, &[word.into(), one.into()]);
+        let (tag, payload) = self.pair_words(&types[1], found)?;
+        self.builder.ins().jump(done, &[tag.into(), payload.into()]);
         self.builder.seal_block(done);
         self.builder.switch_to_block(done);
-        let (word, present) = (
+        let (tag, payload) = (
             self.builder.block_params(done)[0],
             self.builder.block_params(done)[1],
         );
-        let value = if produced.is_ref() {
-            // An absent reference is the zero its word already is.
-            self.builder.declare_value_needs_stack_map(word);
-            word
-        } else {
-            self.builder.ins().iconcat(word, present)
-        };
+        let value = self.pair(tag, payload);
+        self.builder.declare_value_needs_stack_map(value);
         Ok(Some((value, produced)))
     }
 }

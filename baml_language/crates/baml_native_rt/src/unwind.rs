@@ -4,8 +4,11 @@
 //! Compiled code throws by calling one of the stubs of [`crate::stubs`],
 //! which never return to their caller. The stub makes a frame record and
 //! calls a function here with it. That function returns, to the stub, where
-//! to go on: a handler's address, the frame it runs in, and the two words
-//! it lands with. The stub puts those in place and branches. No Rust frame
+//! to go on: a handler's address, the frame it runs in, and the value it
+//! lands with, a tag and a payload. The stub puts those in place and
+//! branches. What the value travels with, its trace or the context a
+//! handler made of that, is left in the worker's scratch word, which the
+//! handler reads before anything else. No Rust frame
 //! is abandoned, and nothing unwinds through Rust.
 //!
 //! The search has two phases. The first pops nothing: it walks the frame
@@ -39,7 +42,7 @@ use crate::{
     heap::{Mutator, Value, load},
     layout::{
         HANDLER_BINDS_CONTEXT, HANDLER_MAY_RETHROW, HANDLER_TAKES_ALL, HANDLER_TAKES_NULL,
-        HANDLER_TAKES_OTHERS, HANDLER_TAKES_PANICS, HEADER_PANIC, STRING_TAGS_END, TAG_STRING,
+        HANDLER_TAKES_OTHERS, HANDLER_TAKES_PANICS, HEADER_PANIC, TAG_STRING, TAG_STRING_SLICE,
         TYPE_ID_MASK, WELL_KNOWN_CONTEXT, WELL_KNOWN_DIVISION_BY_ZERO,
         WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_MAP_KEY_NOT_FOUND,
         WELL_KNOWN_NEGATIVE_BIT_SHIFT, WELL_KNOWN_STACK_OVERFLOW, WORD,
@@ -59,10 +62,10 @@ pub struct Resume {
     fp: usize,
     /// The handler's first instruction.
     pc: usize,
-    /// What the handler lands with: the error and its trace, or zero for
-    /// a trace nothing will read.
-    error: usize,
-    context: usize,
+    /// What the handler lands with: the tag and the payload of the value
+    /// thrown.
+    tag: usize,
+    payload: usize,
     /// The worker the handler runs on.
     worker: usize,
 }
@@ -91,34 +94,29 @@ struct Handler {
     count: usize,
 }
 
-/// What a handler asks of an error to say whether it takes it.
+/// What a handler asks of a thrown value to say whether it takes it.
 #[derive(Clone, Copy)]
 struct Thrown {
     is_null: bool,
     is_panic: bool,
-    /// Its type id; a string's is that of one holding its text.
+    /// The type id of its tag; a string's is that of one holding its text.
     type_id: usize,
 }
 
 impl Thrown {
     /// # Safety
     ///
-    /// `error` is zero or a live object.
-    unsafe fn of(error: usize) -> Self {
-        if error == 0 {
-            return Self {
-                is_null: true,
-                is_panic: false,
-                type_id: 0,
-            };
-        }
-        // SAFETY: the caller's contract.
-        let header = unsafe { load(error) };
-        let type_id = header & TYPE_ID_MASK;
+    /// `error` is a value as a slot holds one: when its tag is a
+    /// pointer's, its payload is a live object.
+    unsafe fn of(error: Value) -> Self {
+        let type_id = error.id();
         Self {
-            is_null: false,
-            is_panic: header & HEADER_PANIC != 0,
-            type_id: if type_id < STRING_TAGS_END {
+            is_null: error.is_null(),
+            // A tag does not say whether its object is a panic: the
+            // object's header does.
+            // SAFETY: the caller's contract.
+            is_panic: error.is_pointer() && unsafe { load(error.payload) } & HEADER_PANIC != 0,
+            type_id: if type_id == TAG_STRING_SLICE {
                 TAG_STRING
             } else {
                 type_id
@@ -316,9 +314,10 @@ fn int_array(mutator: &mut Mutator, addresses: &[usize]) -> usize {
 /// Find the handler of `error`, thrown by the compiled frame that last
 /// called the runtime, and say where to resume. `context` is the trace the
 /// error was caught with, or zero when it has none: a new throw, or one
-/// whose trace nothing was going to read.
-fn unwind(mutator: &mut Mutator, mut error: usize, mut context: usize, resume: &mut Resume) {
-    // SAFETY: compiled code throws null or a live object.
+/// whose trace nothing was going to read. What the handler reads as its
+/// context is left in the worker's scratch word.
+fn unwind(mutator: &mut Mutator, mut error: Value, mut context: usize, resume: &mut Resume) {
+    // SAFETY: compiled code throws a value.
     let thrown = unsafe { Thrown::of(error) };
     // The first phase: nothing is popped. One walk finds the handler to
     // land in and whether the trace is wanted, and when it is, goes on to
@@ -360,7 +359,7 @@ fn unwind(mutator: &mut Mutator, mut error: usize, mut context: usize, resume: &
         fatal("a throw found no handler");
     };
     if wanted == Some(true) {
-        mutator.root(&mut error);
+        mutator.root_value(&mut error);
         context = int_array(mutator, &trace);
         mutator.unroot(1);
     }
@@ -371,10 +370,13 @@ fn unwind(mutator: &mut Mutator, mut error: usize, mut context: usize, resume: &
         sp,
         fp,
         pc,
-        error,
-        context,
+        tag: error.tag,
+        payload: error.payload,
         worker: std::ptr::from_mut(mutator) as usize,
     };
+    // The scratch word is no root: nothing allocates between this store
+    // and the handler's load of it.
+    mutator.set_scratch(context);
 }
 
 #[expect(clippy::exit, reason = "the stack cannot be unwound")]
@@ -383,14 +385,10 @@ fn fatal(message: &str) -> ! {
     std::process::exit(70)
 }
 
-/// A `baml.panics.DivisionByZero`. Its dividend is an `int` or a `bigint`,
-/// so the `int` is in a box. May collect.
+/// A `baml.panics.DivisionByZero`, whose dividend is an `int` here. May
+/// collect.
 fn division_by_zero(mutator: &mut Mutator, dividend: i64) -> usize {
-    class::well_known(
-        mutator,
-        WELL_KNOWN_DIVISION_BY_ZERO,
-        &[Init::BoxedInt(dividend)],
-    )
+    class::well_known(mutator, WELL_KNOWN_DIVISION_BY_ZERO, &[Init::Int(dividend)])
 }
 
 /// A `baml.panics.NegativeBitShift`. May collect.
@@ -422,67 +420,42 @@ fn map_key_not_found(mutator: &mut Mutator) -> usize {
     )
 }
 
-/// `throw`: `frame` is the frame record of the stub compiled code called.
+/// Throw the instance at `error`, which the runtime just made.
+fn throw_instance(mutator: &mut Mutator, error: usize, resume: &mut Resume) {
+    // SAFETY: a live instance.
+    let error = unsafe { Value::reference(error) };
+    unwind(mutator, error, 0, resume);
+}
+
+/// `throw` of the value of tag `tag` and payload `payload`: `frame` is the
+/// frame record of the stub compiled code called.
 pub(crate) extern "C" fn throw(
-    error: usize,
-    _cause: usize,
+    tag: usize,
+    payload: usize,
+    _unused: usize,
     mutator: &mut Mutator,
     frame: usize,
     resume: &mut Resume,
 ) {
     mutator.enter(frame);
-    unwind(mutator, error, 0, resume);
+    unwind(mutator, Value { tag, payload }, 0, resume);
 }
 
-/// A caught error thrown again, with the context it was caught with.
+/// A caught value thrown again, with the context it was caught with.
 pub(crate) extern "C" fn rethrow(
-    error: usize,
+    tag: usize,
+    payload: usize,
     context: usize,
     mutator: &mut Mutator,
     frame: usize,
     resume: &mut Resume,
 ) {
     mutator.enter(frame);
-    unwind(mutator, error, context, resume);
+    unwind(mutator, Value { tag, payload }, context, resume);
 }
 
 pub(crate) extern "C" fn panic_division_by_zero(
     dividend: i64,
-    _unused: usize,
-    mutator: &mut Mutator,
-    frame: usize,
-    resume: &mut Resume,
-) {
-    mutator.enter(frame);
-    let error = division_by_zero(mutator, dividend);
-    unwind(mutator, error, 0, resume);
-}
-
-pub(crate) extern "C" fn panic_negative_shift(
-    count: i64,
-    _unused: usize,
-    mutator: &mut Mutator,
-    frame: usize,
-    resume: &mut Resume,
-) {
-    mutator.enter(frame);
-    let error = negative_shift(mutator, count);
-    unwind(mutator, error, 0, resume);
-}
-
-pub(crate) extern "C" fn panic_index_out_of_bounds(
-    index: i64,
-    length: i64,
-    mutator: &mut Mutator,
-    frame: usize,
-    resume: &mut Resume,
-) {
-    mutator.enter(frame);
-    let error = index_out_of_bounds(mutator, index, length);
-    unwind(mutator, error, 0, resume);
-}
-
-pub(crate) extern "C" fn panic_map_key_not_found(
     _unused: usize,
     _also_unused: usize,
     mutator: &mut Mutator,
@@ -490,8 +463,47 @@ pub(crate) extern "C" fn panic_map_key_not_found(
     resume: &mut Resume,
 ) {
     mutator.enter(frame);
+    let error = division_by_zero(mutator, dividend);
+    throw_instance(mutator, error, resume);
+}
+
+pub(crate) extern "C" fn panic_negative_shift(
+    count: i64,
+    _unused: usize,
+    _also_unused: usize,
+    mutator: &mut Mutator,
+    frame: usize,
+    resume: &mut Resume,
+) {
+    mutator.enter(frame);
+    let error = negative_shift(mutator, count);
+    throw_instance(mutator, error, resume);
+}
+
+pub(crate) extern "C" fn panic_index_out_of_bounds(
+    index: i64,
+    length: i64,
+    _unused: usize,
+    mutator: &mut Mutator,
+    frame: usize,
+    resume: &mut Resume,
+) {
+    mutator.enter(frame);
+    let error = index_out_of_bounds(mutator, index, length);
+    throw_instance(mutator, error, resume);
+}
+
+pub(crate) extern "C" fn panic_map_key_not_found(
+    _unused: usize,
+    _also_unused: usize,
+    _unused_too: usize,
+    mutator: &mut Mutator,
+    frame: usize,
+    resume: &mut Resume,
+) {
+    mutator.enter(frame);
     let error = map_key_not_found(mutator);
-    unwind(mutator, error, 0, resume);
+    throw_instance(mutator, error, resume);
 }
 
 /// What `baml.panics.StackOverflow` says, as the interpreter has it.
@@ -508,6 +520,7 @@ const STACK_OVERFLOW: &str = "stack overflow";
 pub(crate) extern "C" fn panic_stack_overflow(
     _unused: usize,
     _also_unused: usize,
+    _unused_too: usize,
     mutator: &mut Mutator,
     frame: usize,
     resume: &mut Resume,
@@ -523,7 +536,7 @@ pub(crate) extern "C" fn panic_stack_overflow(
         WELL_KNOWN_STACK_OVERFLOW,
         &[Init::Text(STACK_OVERFLOW)],
     );
-    unwind(mutator, error, 0, resume);
+    throw_instance(mutator, error, resume);
 }
 
 crate::stubs::anchored! {
@@ -617,17 +630,22 @@ crate::stubs::anchored! {
     baml_rt_error_context => error_context
 }
 
-/// The `baml.errors.Context` a handler that reads its context lands with:
-/// made of the trace the error travelled with, or the one an earlier
-/// handler made, which is the same error still in flight. A throw in the
-/// handler's own function arrives with no trace: it was thrown through
-/// the frames that are still there.
+/// The `baml.errors.Context` a handler that reads its context makes of
+/// what it landed with: of the trace the error travelled with, or the one
+/// an earlier handler made, which is the same error still in flight. A
+/// throw in the handler's own function arrives with no trace: it was
+/// thrown through the frames that are still there.
 ///
 /// # Safety
 ///
-/// Called from compiled code with its mutator, an error and what the
-/// handler landed with.
-unsafe extern "C" fn error_context(mutator: &mut Mutator, error: usize, trace: usize) -> usize {
+/// Called from compiled code with its mutator, the tag and the payload of
+/// the value a handler landed with, and what it found in the scratch word.
+unsafe extern "C" fn error_context(
+    mutator: &mut Mutator,
+    tag: usize,
+    payload: usize,
+    trace: usize,
+) -> usize {
     // SAFETY: the caller's contract.
     let functions = unsafe {
         if trace == 0 {
@@ -639,7 +657,7 @@ unsafe extern "C" fn error_context(mutator: &mut Mutator, error: usize, trace: u
             thrown_through(mutator, trace)
         }
     };
-    class::context(mutator, error, &functions)
+    class::context(mutator, Value { tag, payload }, &functions)
 }
 
 /// Nothing caught `error`: report it as `baml run` does, after the
@@ -648,9 +666,9 @@ unsafe extern "C" fn error_context(mutator: &mut Mutator, error: usize, trace: u
 ///
 /// # Safety
 ///
-/// `error` is zero or a live object, and `trace` zero, a live trace or a
-/// live `baml.errors.Context`.
-pub(crate) unsafe fn report(mutator: &Mutator, what: &str, error: usize, trace: usize) {
+/// `error` is a value as a slot holds one, and `trace` zero, a live trace
+/// or a live `baml.errors.Context`.
+pub(crate) unsafe fn report(mutator: &Mutator, what: &str, error: Value, trace: usize) {
     let mut report = String::new();
     if trace != 0 {
         // SAFETY: the caller's contract.
@@ -674,9 +692,9 @@ pub(crate) unsafe fn report(mutator: &Mutator, what: &str, error: usize, trace: 
     let _ = write!(std::io::stderr().lock(), "{report}");
 }
 
-/// Nothing in the program's entry task caught `error`: report it, then the
-/// errors of tasks no `await` took, and end the process. `trace` is zero or
-/// what the error travelled with.
+/// Nothing in the program's entry task caught the value of tag `tag` and
+/// payload `payload`: report it, then the errors of tasks no `await` took,
+/// and end the process. `trace` is zero or what the value travelled with.
 ///
 /// A `baml.panics.Exit` is not reported: its code is the status the
 /// process ends with, as `baml run` has it.
@@ -684,9 +702,15 @@ pub(crate) unsafe fn report(mutator: &Mutator, what: &str, error: usize, trace: 
 /// # Safety
 ///
 /// Called from the compiled entry function's handler with what it landed
-/// with.
+/// with and what it found in the scratch word.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_uncaught(mutator: &mut Mutator, error: usize, trace: usize) -> ! {
+pub unsafe extern "C" fn baml_rt_uncaught(
+    mutator: &mut Mutator,
+    tag: usize,
+    payload: usize,
+    trace: usize,
+) -> ! {
+    let error = Value { tag, payload };
     // SAFETY: the caller's contract.
     let status = unsafe { class::exit_status(mutator, error) };
     if status.is_none() {

@@ -11,7 +11,7 @@ use super::{MAX_DEPTH, Node, object_get, out::Out, string_keyed};
 use crate::{
     describe::Types,
     heap::{Value, load},
-    layout::{ARRAY_LENGTH, TAG_BOX_BOOL, TAG_BOX_FLOAT, TAG_BOX_INT},
+    layout::ARRAY_LENGTH,
 };
 
 /// Why a scan stopped.
@@ -23,6 +23,13 @@ pub(super) enum Stop {
     Float(usize),
 }
 
+/// The value that refers to an object an [`Out`] made: `null` for the
+/// zero it gives while it only counts.
+fn built(object: usize) -> Value {
+    // SAFETY: zero or an object just laid out.
+    unsafe { Value::reference(object) }
+}
+
 struct Parser<'t> {
     src: &'t str,
     pos: usize,
@@ -30,13 +37,15 @@ struct Parser<'t> {
     out: Out,
     /// The decoded text of the last string that held an escape.
     scratch: String,
-    /// The values of the containers being read, innermost last.
-    items: Vec<usize>,
+    /// The values of the containers being read, innermost last: for an
+    /// object, each key before its value.
+    items: Vec<Value>,
 }
 
-/// Build the `json` value `text` holds in `out`: the value, zero while
-/// counting, and `out` as the build left it.
-pub(super) fn parse(text: &str, out: Out) -> Result<(usize, Out), Stop> {
+/// Build the `json` value `text` holds in `out`: the value, and `out` as
+/// the build left it. While counting, every object in the value is
+/// `null`.
+pub(super) fn parse(text: &str, out: Out) -> Result<(Value, Out), Stop> {
     let mut parser = Parser {
         src: text,
         pos: 0,
@@ -91,7 +100,7 @@ impl Parser<'_> {
         Ok(())
     }
 
-    fn value(&mut self) -> Result<usize, Stop> {
+    fn value(&mut self) -> Result<Value, Stop> {
         match self.peek().ok_or(Stop::Syntax)? {
             b'"' => {
                 let span = self.string_span()?;
@@ -113,13 +122,9 @@ impl Parser<'_> {
                 }
                 self.pos += 1;
                 self.depth -= 1;
-                // SAFETY: each item is zero or an object built here.
-                let items = self.items[start..]
-                    .iter()
-                    .map(|item| unsafe { Value::reference(*item) });
-                let array = self.out.array(items);
+                let array = self.out.array(self.items[start..].iter().copied());
                 self.items.truncate(start);
-                Ok(array)
+                Ok(built(array))
             }
             b'{' => {
                 self.open()?;
@@ -147,35 +152,34 @@ impl Parser<'_> {
                 }
                 self.pos += 1;
                 self.depth -= 1;
-                // SAFETY: each value is zero or an object built here.
                 let entries = self.items[start..]
                     .as_chunks::<2>()
                     .0
                     .iter()
-                    .map(|[key, value]| (*key, unsafe { Value::reference(*value) }));
+                    .map(|[key, value]| (key.payload, *value));
                 let map = self.out.map(entries);
                 self.items.truncate(start);
-                Ok(map)
+                Ok(built(map))
             }
             b't' => {
                 self.literal("true")?;
-                Ok(self.out.boxed(TAG_BOX_BOOL, 1))
+                Ok(Value::bool(true))
             }
             b'f' => {
                 self.literal("false")?;
-                Ok(self.out.boxed(TAG_BOX_BOOL, 0))
+                Ok(Value::bool(false))
             }
-            b'n' => self.literal("null").map(|()| 0),
+            b'n' => self.literal("null").map(|()| Value::NULL),
             _ => self.number(),
         }
     }
 
     /// The string a span holds, as an object.
-    fn string(&mut self, span: Option<(usize, usize)>) -> usize {
-        match span {
+    fn string(&mut self, span: Option<(usize, usize)>) -> Value {
+        built(match span {
             Some((start, end)) => self.out.string(&self.src[start..end]),
             None => self.out.string(&self.scratch),
-        }
+        })
     }
 
     /// Read a string, from its opening quote: where its text is when it
@@ -276,7 +280,7 @@ impl Parser<'_> {
         self.pos > from
     }
 
-    fn number(&mut self) -> Result<usize, Stop> {
+    fn number(&mut self) -> Result<Value, Stop> {
         let start = self.pos;
         if self.byte(self.pos) == Some(b'-') {
             self.pos += 1;
@@ -316,14 +320,12 @@ impl Parser<'_> {
         if integral {
             // One past an `int` is a `bigint`, as in the interpreter.
             return Ok(match token.parse::<i64>() {
-                Ok(int) => self.out.boxed(TAG_BOX_INT, int as usize),
-                Err(_) => self.out.bigint(&token.parse().map_err(|_| Stop::Syntax)?),
+                Ok(int) => Value::int(int),
+                Err(_) => built(self.out.bigint(&token.parse().map_err(|_| Stop::Syntax)?)),
             });
         }
         match token.parse::<f64>() {
-            Ok(float) if float.is_finite() => {
-                Ok(self.out.boxed(TAG_BOX_FLOAT, float.to_bits() as usize))
-            }
+            Ok(float) if float.is_finite() => Ok(Value::float(float)),
             _ => Err(Stop::Float(self.pos)),
         }
     }
@@ -405,8 +407,8 @@ pub(super) fn syntax_message(text: &str, stop: &Stop) -> String {
 ///
 /// # Safety
 ///
-/// `json` is `null` or refers to a live object, and nothing is allocated
-/// while the result is in use.
+/// `json` is a value as a slot holds one, and nothing is allocated while
+/// the result is in use.
 pub(super) unsafe fn select(types: &Types, json: Value, selector: &str) -> Result<Value, String> {
     if !(selector.starts_with('.') || selector.starts_with('[')) {
         return Err(format!(

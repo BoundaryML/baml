@@ -1,14 +1,15 @@
 //! `spawn` and `await`: starting a task and waiting for its future.
 //!
-//! A `spawn` calls the runtime with the closure to run and the address of a
-//! task shim: the compiled function a new task starts in, which calls the
-//! closure and settles the task's future with what it returns or throws.
-//! There is one shim per machine type a closure can return, since the shim
-//! is what knows which register the result is in. The runtime switches to
-//! the new task before the call returns.
+//! A `spawn` calls the runtime with the closure to run and the address of
+//! the task shim: the compiled function a new task starts in, which calls
+//! the closure and settles the task's future with what it returns or throws.
+//! A closure returns a pair whatever its result's type, so one shim serves
+//! every task. The runtime switches to the new task before the call
+//! returns.
 //!
 //! An `await` reads the future's state itself, and loads the value when the
-//! state says it is there. Otherwise it calls the runtime, which returns
+//! state says it is there: the pair the task's closure returned, read as
+//! the type the future is of. Otherwise it calls the runtime, which returns
 //! once the future has settled, with a value or with an error: the state
 //! is read again to tell which, and an error is thrown where the `await`
 //! is.
@@ -19,7 +20,7 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_module::{FuncId, Linkage, Module};
 
 use super::{
-    Backend, Runtime, TRAP_AFTER_PANIC, Translator, WORD, clif_type, closure_access, imm, internal,
+    Backend, PAIR, Runtime, TRAP_AFTER_PANIC, Translator, WORD, closure_access, imm, internal,
     offset, slot_access, unwind,
 };
 use crate::{
@@ -29,50 +30,40 @@ use crate::{
     },
 };
 
+/// The symbol of the task shim.
+pub(super) const TASK_SHIM: &str = "baml_task_shim";
+
 impl Backend<'_> {
-    /// The shim of tasks whose closure returns a value of the machine type
-    /// `result`, declared the first time one is spawned.
-    fn task_shim(&mut self, result: ir::Type) -> Result<FuncId, CompileError> {
-        if let Some(shim) = self.task_shims.get(&result) {
-            return Ok(*shim);
+    /// The shim tasks start in, declared the first time one is spawned.
+    fn task_shim(&mut self) -> Result<FuncId, CompileError> {
+        if let Some(shim) = self.task_shim {
+            return Ok(shim);
         }
         let mut signature = ir::Signature::new(self.call_conv());
         signature.params.push(AbiParam::new(WORD));
         let shim = self
             .module
-            .declare_function(
-                &format!("baml_task_shim_{result}"),
-                Linkage::Local,
-                &signature,
-            )
+            .declare_function(TASK_SHIM, Linkage::Local, &signature)
             .map_err(internal)?;
-        self.task_shims.insert(result, shim);
+        self.task_shim = Some(shim);
         Ok(shim)
     }
 
-    /// The task shims declared, with the machine type each is for, in a
-    /// stable order.
-    pub(super) fn declared_task_shims(&self) -> Vec<(ir::Type, FuncId)> {
-        let mut shims: Vec<_> = self
-            .task_shims
-            .iter()
-            .map(|(result, id)| (*result, *id))
-            .collect();
-        shims.sort_unstable_by_key(|(_, id)| id.as_u32());
-        shims
+    /// The task shim, when the program spawns a task.
+    pub(super) fn declared_task_shim(&self) -> Option<FuncId> {
+        self.task_shim
     }
 }
 
-/// The body of a task shim: what the runtime's boot code calls, on the new
-/// task's stack and with the worker in the pinned register, to run a
-/// closure that returns a `result`. When it returns the task is over.
+/// The body of the task shim: what the runtime's boot code calls, on the
+/// new task's stack and with the worker in the pinned register, to run the
+/// task's closure. When it returns the task is over.
 ///
 /// Nothing caught what arrives at its handler, which takes every error and
 /// reads its trace as the program's entry does: the task's future settles
 /// with the two, for whoever awaits the future to be thrown them.
 pub(super) fn task_shim(
     backend: &mut Backend<'_>,
-    result: ir::Type,
     function: &mut ir::Function,
     builder_context: &mut FunctionBuilderContext,
 ) -> Result<(), CompileError> {
@@ -81,7 +72,7 @@ pub(super) fn task_shim(
     let fail = backend.runtime(Runtime::TaskFail)?;
     let mut closure_signature = ir::Signature::new(cranelift_codegen::isa::CallConv::Tail);
     closure_signature.params.push(AbiParam::new(WORD));
-    closure_signature.returns.push(AbiParam::new(result));
+    closure_signature.returns.push(AbiParam::new(PAIR));
 
     let mut builder = FunctionBuilder::new(function, builder_context);
     let block = builder.create_block();
@@ -100,25 +91,25 @@ pub(super) fn task_shim(
     );
     let closure_signature = builder.import_signature(closure_signature);
     let uncaught = builder.create_block();
-    builder.append_block_param(uncaught, WORD);
+    builder.append_block_param(uncaught, PAIR);
     builder.append_block_param(uncaught, WORD);
     builder.set_cold_block(uncaught);
     let returned = unwind::try_call(
         &mut builder,
         &unwind::Called::Indirect(closure_signature, code),
         &[closure],
-        &[(None, uncaught)],
+        &[unwind::Edge {
+            tag: None,
+            landing: uncaught,
+            reads_context: true,
+        }],
     );
-    let bits = match result {
-        types::F64 => builder.ins().bitcast(types::I64, MemFlags::new(), returned),
-        types::I8 => builder.ins().uextend(types::I64, returned),
-        _ => returned,
-    };
+    let (tag, payload) = builder.ins().isplit(returned);
     // The worker is read again: the task may have parked since it started,
     // and gone on under another.
     let worker = builder.ins().get_pinned_reg(WORD);
     let finish = backend.function_ref(finish, builder.func);
-    builder.ins().call(finish, &[worker, bits]);
+    builder.ins().call(finish, &[worker, tag, payload]);
     builder.ins().return_(&[]);
 
     builder.switch_to_block(uncaught);
@@ -126,9 +117,10 @@ pub(super) fn task_shim(
         let arriving = builder.block_params(uncaught);
         (arriving[0], arriving[1])
     };
+    let (tag, payload) = builder.ins().isplit(error);
     let worker = builder.ins().get_pinned_reg(WORD);
     let fail = backend.function_ref(fail, builder.func);
-    builder.ins().call(fail, &[worker, error, trace]);
+    builder.ins().call(fail, &[worker, tag, payload, trace]);
     builder.ins().return_(&[]);
     builder.seal_all_blocks();
     builder.finalize();
@@ -144,9 +136,9 @@ impl<'db> Translator<'_, 'db> {
         resume: BlockId,
     ) -> Result<(), CompileError> {
         let plan_ty = narrowed(self.operand_ty(plan)?);
-        let (fields, body) =
+        let (fields, _) =
             plan_body(self.db, &plan_ty).ok_or_else(|| internal("a checked spawn is of a plan"))?;
-        let plan = self.operand(plan)?;
+        let plan = self.operand_object(plan)?;
 
         // A task waits for no semaphore and hears of no cancellation yet,
         // so a plan that names either cannot be started.
@@ -178,15 +170,13 @@ impl<'db> Translator<'_, 'db> {
         self.builder.ins().trap(TRAP_AFTER_PANIC);
 
         self.builder.switch_to_block(start);
-        let closure = self.slot_load(&fields[PLAN_BODY], plan, layout::field_offset(PLAN_BODY));
-        let shim = self.backend.task_shim(clif_type(&body.result))?;
+        let body = self.slot_load(&fields[PLAN_BODY], plan, layout::field_offset(PLAN_BODY));
+        let (_, closure) = self.builder.ins().isplit(body);
+        let shim = self.backend.task_shim()?;
         let shim = self.function_ref(shim);
         let shim = self.builder.ins().func_addr(WORD, shim);
-        // What the one word the closure returns is.
-        let result = self
-            .word_const(Self::immediate_tag(&body.result).unwrap_or(layout::RESULT_IS_REFERENCE));
         let started = self
-            .call_runtime(Runtime::Spawn, &[closure, shim, result])?
+            .call_runtime(Runtime::Spawn, &[closure, shim])?
             .ok_or_else(|| internal("a spawn returns the future"))?;
         self.builder.declare_value_needs_stack_map(started);
         self.write_place(future, started)?;
@@ -207,7 +197,7 @@ impl<'db> Translator<'_, 'db> {
         };
         let destination = place_local(destination).map_err(internal)?;
         let expected = self.local_ty(destination)?;
-        let future = self.read_place(future)?;
+        let future = self.read_object(future)?;
         self.builder.declare_value_needs_stack_map(future);
 
         // The state is read before the value, and in that order: it is
@@ -250,10 +240,15 @@ impl<'db> Translator<'_, 'db> {
         self.builder.seal_block(load);
 
         self.builder.switch_to_block(failed);
+        self.forget_arrays();
         let worker = self.mutator();
-        let error = self
-            .call_runtime(Runtime::AwaitError, &[worker, future])?
-            .ok_or_else(|| internal("a failed future has its error"))?;
+        let take = self.runtime_ref(Runtime::AwaitError)?;
+        let taken = self.builder.ins().call(take, &[worker, future]);
+        let (tag, payload) = {
+            let error = self.builder.inst_results(taken);
+            (error[0], error[1])
+        };
+        let error = self.pair(tag, payload);
         self.builder.declare_value_needs_stack_map(error);
         // Thrown again as a handler in the task would have: with what the
         // task's throw travelled with, so that a handler here reads the
@@ -266,7 +261,8 @@ impl<'db> Translator<'_, 'db> {
         self.raise(error, Some(trace))?;
 
         self.builder.switch_to_block(load);
-        let value = self.slot_load(&value_ty, future, layout::FUTURE_VALUE);
+        // What the task's closure returned: a pair, whatever its type.
+        let value = self.pair_load(&value_ty, future, layout::FUTURE_VALUE);
         let value = self.coerce(value, &value_ty, &expected)?;
         self.write_local(destination, value);
         let target = self.block(target);

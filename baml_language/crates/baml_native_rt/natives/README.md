@@ -39,10 +39,7 @@ A parameter declared `map<string, V>`, for a `V` that is a reference, is a
 map: `MapRef::each_str` hands a native each key and value of a map of
 strings, and `to_strings` copies them out for a native that stops.
 
-A parameter declared as a union is a value as a union holds it (`Elem`,
-or `usize` without `allocates`), whose header says which member it is:
-`Elem::as_any` and then `as_str` or `as_bytes`. A union of string
-literals is a string.
+A parameter declared as a union is a value, a tag and a payload (`Elem`, or `Value` without `allocates`), whose tag says which member it is: `Elem::value` for the two words, and for a member that is an object `Elem::as_any` and then `as_str` or `as_bytes`. So is a parameter of a type parameter's type, and an optional one is an `Option` of what it would be otherwise. A union of string literals is a string.
 
 A native reads a field of an instance it was passed by the class's
 description, by the field's position in the declaration:
@@ -68,13 +65,7 @@ has nothing to allocate with, and it cannot throw, since an error is an
 object. The call is a plain C call: no worker argument, and the caller does
 not expect anything to have moved.
 
-**`allocates`.** The native may allocate, so a collection may run during
-the call and move every object. It is passed a `Scope` and its arguments as
-roots, which the collector keeps current. A view borrows the scope shared
-and an allocation borrows it exclusively, so the compiler rejects a view
-held across an allocation. The call passes the worker first, the caller
-treats the call as a point where objects move, and a native whose
-declaration can throw returns the thrown object beside its value.
+**`allocates`.** The native may allocate, so a collection may run during the call and move every object. It is passed a `Scope` and its arguments as roots, which the collector keeps current. A view borrows the scope shared and an allocation borrows it exclusively, so the compiler rejects a view held across an allocation. The call passes the worker first, the caller treats the call as a point where objects move, and a native whose declaration can throw returns a value whose tag says whether it is the result or what was thrown (`THROWN` of `layout.rs`).
 
 The symbol of such a native is a stub of four instructions that records in
 the worker where compiled code called from (its stack pointer, the return
@@ -84,12 +75,7 @@ from depending on how the Rust compiler lays the native's frame out. A
 native with no flag has no stub: it cannot collect, so nothing is recorded
 and its call costs what a C call costs.
 
-A native holds as many roots as it makes: the first sixteen are in the
-call's own frame, and more spill to chunks on the Rust heap that the
-collector also walks. A loop that makes a few roots each time around runs
-its body in `scope.scoped(|scope, _| ...)`, which gives them back when the
-body returns, and they cannot leave it. A loop that stops in its body
-cannot, and uses the unsafe `scope.release_last`.
+A native holds as many roots as it makes, each a value whose tag says whether the collector follows it: the first sixteen are in the call's own frame, and more spill to chunks on the Rust heap that the collector also walks. A loop that makes a few roots each time around runs its body in `scope.scoped(|scope, _| ...)`, which gives them back when the body returns, and they cannot leave it. A loop that stops in its body cannot, and uses the unsafe `scope.release_last`.
 
 **`async`.** The native may stop and go on later. It implies `allocates`.
 The native is an `async fn`, and it stops in exactly two ways, both methods

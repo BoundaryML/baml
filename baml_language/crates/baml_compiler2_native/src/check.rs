@@ -538,14 +538,9 @@ pub(crate) fn native_type_arguments<'db>(
                 .type_value(argument)
                 .ok_or_else(|| unsupported("a type argument that is not a type loaded once"))?;
             match template_ty(db, template, body.arguments) {
-                // `baml.json` returns a value of a type parameter as a
-                // union holds it, whatever the type.
-                Some(ty) if ty != NativeTy::Null && crate::json::takes_descriptions(native) => {
-                    Ok(ty)
-                }
-                // A native moves a value of a type parameter as one word.
-                Some(ty) if ty != NativeTy::Null && !ty.is_pair() => Ok(ty),
-                Some(ty) => Err(unsupported(&format!("at {}", describe(&ty)))),
+                // A native moves a value of a type parameter as a slot
+                // holds it, whatever the type.
+                Some(ty) => Ok(ty),
                 None => Err(unsupported("at a type with no native representation")),
             }
         })
@@ -681,7 +676,7 @@ pub(crate) fn virtual_target<'db>(
     {
         return Ok(Virtual::Operator(operator));
     }
-    if receiver.is_boxed() {
+    if receiver.holds_any() {
         if self_arg != 0 {
             return Err(unsupported("dispatched on a later argument"));
         }
@@ -1205,7 +1200,7 @@ pub(crate) fn rvalue_ty<'db>(
             )),
         },
         Rvalue::TypeTag(place) => match place_ty(db, body, place)? {
-            boxed if boxed.is_boxed() => Ok(NativeTy::Int),
+            any if any.holds_any() => Ok(NativeTy::Int),
             other => Err(Blocker::new(
                 "type tag read",
                 format!("of {}", describe(&other)),
@@ -1370,7 +1365,7 @@ pub(crate) fn rvalue_ty<'db>(
             }
             let (expected, signature) = bound_signature(db, *function)?;
             let found = operand_ty(db, body, receiver)?;
-            if !found.is_ref() || !assignable(&expected, &found) {
+            if !assignable(&expected, &found) {
                 return Err(Blocker::new("bound method value", describe(&found)));
             }
             Ok(NativeTy::Function(Box::new(signature)))
