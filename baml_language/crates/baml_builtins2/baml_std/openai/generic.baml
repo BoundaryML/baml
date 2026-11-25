@@ -37,10 +37,28 @@ class GenericClient {
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
+    /// Fetch a PDF given by URL and send its bytes inline as `file_data`
+    /// (true, the default), or send the URL itself (false) as
+    /// `{"type": "file", "file": {"type": "input_file", "file_url": <url>, "filename": <name>}}`,
+    /// so the endpoint downloads it rather than this client. A PDF that is
+    /// already inline (base64, read from a file, a `data:` URL) is sent as
+    /// `file_data` either way.
+    ///
+    /// First-party OpenAI Chat Completions does not accept the URL part, so
+    /// leave this true there. Set it false only for an OpenAI-compatible
+    /// server that documents PDF URLs: a server that ignores the part drops
+    /// the document without an error. This is the counterpart of the legacy
+    /// `media_url_handler { pdf "send_url" }` client option.
+    inline_pdf_urls: bool,
 
     /// Creates a client. Construction reads no environment variable, so
     /// declaring one is always safe; credentials and endpoints resolve when a
     /// request is built.
+    ///
+    /// # Parameters
+    ///
+    /// - `inline_pdf_urls`: fetch a PDF URL and send it inline (true), or
+    ///   send the URL itself (false; see the field of the same name).
     function new(
         model: string,
         base_url: ai.Credential? = null,
@@ -55,6 +73,7 @@ class GenericClient {
         stop: string[]? = null,
         seed: int? = null,
         capture_wire: bool = true,
+        inline_pdf_urls: bool = true,
     ) -> GenericClient {
         GenericClient {
             model: model,
@@ -70,6 +89,7 @@ class GenericClient {
             stop: stop,
             seed: seed,
             capture_wire: capture_wire,
+            inline_pdf_urls: inline_pdf_urls,
         }
     }
 
@@ -104,6 +124,7 @@ class GenericClient {
             provider = self.provider(),
             base_url = self.resolved_base_url(),
             collapse_text_content = true,
+            inline_pdf_urls = self.inline_pdf_urls,
         )
     }
 

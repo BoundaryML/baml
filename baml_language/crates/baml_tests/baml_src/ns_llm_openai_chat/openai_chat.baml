@@ -1414,6 +1414,148 @@ test "chat_pdf_base64_and_unfetchable" {
     )
 }
 
+// ─── PDF URL passthrough (`inline_pdf_urls`) ─────────────────────────────────
+//
+// By default the family fetches a PDF URL and inlines it (above). A client
+// built with `inline_pdf_urls = false` sends the URL itself instead, in the
+// part the legacy BAML DSL sent under `media_url_handler { pdf "send_url" }`:
+// `{"type":"file","file":{"type":"input_file","file_url":…,"filename":…}}`.
+// Nothing is fetched, so a request preview can show it. Inline content is
+// unaffected by the flag.
+
+// The document's content part, as the request preview renders it.
+function _chat_pdf_part(cl: ai.Client, doc: pdf) -> json {
+    let request = cl.render(_chat_doc_input(doc));
+    baml.json.path<json>(baml.json.parse(request.body), ".messages[0].content[1]")
+}
+
+// What a preview of `doc` produces: the content part's JSON, or the error class.
+function _chat_pdf_preview(cl: ai.Client, doc: pdf) -> string {
+    baml.json.stringify(_chat_pdf_part(cl, doc)) catch_all (e) {
+        ai.errors.PreviewUnsupported => "PreviewUnsupported",
+        _ => `unexpected: ${e.to_string()}`,
+    }
+}
+
+function _chat_pdf_generic(inline_pdf_urls: bool) -> openai.GenericClient {
+    openai.GenericClient.new(
+        model = "qwen3",
+        base_url = "http://127.0.0.1:9/v1",
+        inline_pdf_urls = inline_pdf_urls,
+    )
+}
+
+function _chat_pdf_chat(inline_pdf_urls: bool) -> openai.ChatClient {
+    openai.ChatClient.new(
+        api_key = "k",
+        base_url = "http://127.0.0.1:9/v1",
+        inline_pdf_urls = inline_pdf_urls,
+    )
+}
+
+test "chat_pdf_inline_by_default" {
+    // The default is unchanged: an inline PDF is `{filename, file_data}` and
+    // nothing else, and previewing a URL PDF refuses rather than show a
+    // request invoke would not send (invoke downloads it).
+    let inline = baml.media.Pdf.from_base64("JVBERi0xLjQ=", "application/pdf");
+    let expected = `{"type":"file","file":{"filename":"document.pdf","file_data":"data:application/pdf;base64,JVBERi0xLjQ="}}`;
+    assert.equal(
+        _chat_pdf_preview(openai.ChatClient.new(api_key = "k"), inline),
+        expected,
+    );
+    assert.equal(
+        _chat_pdf_preview(
+            openai.GenericClient.new(model = "qwen3", base_url = "http://127.0.0.1:9/v1"),
+            inline,
+        ),
+        expected,
+    );
+    let remote = baml.media.Pdf.from_url("https://example.com/reports/q3.pdf", null);
+    assert.equal(
+        _chat_pdf_preview(openai.ChatClient.new(api_key = "k"), remote),
+        "PreviewUnsupported",
+    );
+    assert.equal(
+        _chat_pdf_preview(
+            openai.GenericClient.new(model = "qwen3", base_url = "http://127.0.0.1:9/v1"),
+            remote,
+        ),
+        "PreviewUnsupported",
+    )
+}
+
+test "chat_pdf_url_passthrough_generic" {
+    // The filename is derived from the URL the same way as the inline form
+    // (query stripped), and there is no `file_data` key.
+    let doc = baml.media.Pdf.from_url("https://example.com/reports/q3.pdf?sig=abc", null);
+    assert.equal(
+        _chat_pdf_preview(_chat_pdf_generic(false), doc),
+        `{"type":"file","file":{"type":"input_file","file_url":"https://example.com/reports/q3.pdf?sig=abc","filename":"q3.pdf"}}`,
+    )
+}
+
+test "chat_pdf_url_passthrough_chat" {
+    let doc = baml.media.Pdf.from_url("https://example.com/reports/q3.pdf", null);
+    assert.equal(
+        _chat_pdf_preview(_chat_pdf_chat(false), doc),
+        `{"type":"file","file":{"type":"input_file","file_url":"https://example.com/reports/q3.pdf","filename":"q3.pdf"}}`,
+    );
+    // A scheme the client could not fetch is no obstacle when nothing is fetched.
+    let gs = baml.media.Pdf.from_url("gs://bucket/doc.pdf", null);
+    assert.equal(
+        _chat_pdf_preview(_chat_pdf_chat(false), gs),
+        `{"type":"file","file":{"type":"input_file","file_url":"gs://bucket/doc.pdf","filename":"doc.pdf"}}`,
+    )
+}
+
+test "chat_pdf_url_passthrough_keeps_inline_content" {
+    // Content already in the value still goes as `file_data`, without the
+    // URL form's extra keys.
+    let inline = baml.media.Pdf.from_base64("JVBERi0xLjQ=", "application/pdf");
+    let from_file = baml.media.Pdf.from_file_content("/reports/2026/q3.pdf", "JVBERi0xLjQ=", null);
+    assert.equal(
+        _chat_pdf_preview(_chat_pdf_generic(false), inline),
+        `{"type":"file","file":{"filename":"document.pdf","file_data":"data:application/pdf;base64,JVBERi0xLjQ="}}`,
+    );
+    assert.equal(
+        _chat_pdf_preview(_chat_pdf_chat(false), from_file),
+        `{"type":"file","file":{"filename":"q3.pdf","file_data":"data:application/pdf;base64,JVBERi0xLjQ="}}`,
+    )
+}
+
+// The URL part reaches the socket on invoke, and the PDF URL is never fetched:
+// the mock answers only the chat POST, and `example.invalid` cannot resolve,
+// so a fetch would fail the call.
+function chat_pdf_url_passthrough_invoke() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.GenericClient.new(
+                model = "qwen3",
+                base_url = mock.base_url(),
+                inline_pdf_urls = false,
+            );
+            let doc = baml.media.Pdf.from_url("https://example.invalid/files/report.pdf", null);
+            let _ = cl.invoke(_chat_doc_input(doc));
+            let sent = mock.last_request();
+            let part = baml.json.path<json>(sent.json(), ".messages[0].content[1]");
+            [
+                `requests=${mock.request_count()}`,
+                sent.path(),
+                baml.json.stringify(part),
+            ]
+            .join("|")
+        },
+    )
+}
+
+test "chat_pdf_url_passthrough_invoke" {
+    assert.equal(
+        chat_pdf_url_passthrough_invoke(),
+        `requests=1|/chat/completions|{"type":"file","file":{"type":"input_file","file_url":"https://example.invalid/files/report.pdf","filename":"report.pdf"}}`,
+    )
+}
+
 // A tool's `parameters` is the caller's verbatim JSON Schema: a `null` in it is
 // DATA (`"default": null`, a nullable union member), not an unset option, and
 // pruning it changes the schema the model is shown and breaks strict-schema

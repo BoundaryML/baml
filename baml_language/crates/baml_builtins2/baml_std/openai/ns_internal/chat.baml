@@ -153,9 +153,18 @@ class ChatCompat {
     // Fetch remote image URLs and inline them as base64 data URLs instead of
     // passing the URL through. Ollama's OpenAI-compatible endpoint documents
     // "Base64 encoded image ✓ / Image URL ✗", so an `Image.from_url` prompt is
-    // unusable there unless the client resolves it first. Audio and PDFs are
-    // always inlined (neither wire part has a URL form).
+    // unusable there unless the client resolves it first. Audio is always
+    // inlined (`input_audio` has no URL form); PDFs follow `inline_pdf_urls`.
     inline_image_urls: bool,
+    // Fetch remote PDF URLs and inline them as base64 `file_data` instead of
+    // passing the URL through. First-party Chat Completions has no
+    // document-by-URL part, so this is true on every wrapper by default. When
+    // false, a PDF URL is sent as
+    // `{"type":"file","file":{"type":"input_file","file_url":…,"filename":…}}`,
+    // the part the legacy BAML DSL sent under `media_url_handler { pdf
+    // "send_url" }`, which many OpenAI-compatible servers accept. Inline PDFs
+    // (base64, file-built, `data:`) go out as `file_data` either way.
+    inline_pdf_urls: bool,
     // Send `stream_options: {"include_usage": true}` on streaming requests.
     // Only first-party OpenAI documents it; other servers 400 on it.
     send_stream_options: bool,
@@ -193,6 +202,7 @@ class ChatCompat {
         api_key_required: bool = false,
         collapse_text_content: bool = false,
         inline_image_urls: bool = false,
+        inline_pdf_urls: bool = true,
         send_stream_options: bool = false,
         max_tokens_key: string = "max_tokens",
         default_max_tokens: int? = null,
@@ -211,6 +221,7 @@ class ChatCompat {
             api_key_required: api_key_required,
             collapse_text_content: collapse_text_content,
             inline_image_urls: inline_image_urls,
+            inline_pdf_urls: inline_pdf_urls,
             send_stream_options: send_stream_options,
             max_tokens_key: max_tokens_key,
             default_max_tokens: default_max_tokens,
@@ -301,10 +312,17 @@ class ChatAudioPart {
     input_audio: ChatInputAudio,
 }
 
-/// Inline document: base64 data URL plus a filename (the API requires one).
+/// A document part's `file` object. Inline: `{filename, file_data}`, a base64
+/// data URL plus a filename (the API requires one). By URL, only when the
+/// compat disables `inline_pdf_urls`:
+/// `{type: "input_file", file_url, filename}`. The unset members are null and
+/// `_chat_prune_nulls` keeps them off the wire, so each form carries exactly
+/// its own keys.
 class ChatFileData {
+    type: string?,
+    file_url: string?,
     filename: string,
-    file_data: string,
+    file_data: string?,
 }
 
 class ChatFilePart {
@@ -678,13 +696,41 @@ function _chat_media_part(
             }
         },
         let pdf: baml.media.Pdf => {
-            // Chat completions has NO document-by-URL part: the API's `file`
-            // object is `{filename, file_data, file_id}` and nothing else —
-            // `file_url` + a nested `type: "input_file"` belongs to the
-            // Responses API, and sending it here is silently ignored or 400s.
-            // So a remote PDF is fetched and inlined, exactly like audio. A
-            // scheme the HTTP client cannot fetch (`gs://…`) surfaces as a
-            // media-resolution failure rather than a malformed request.
+            // The API requires a filename; the basename of the source is more
+            // useful than a constant, and this is the same derivation the
+            // Responses client uses (query stripped, `document.pdf` when there
+            // is nothing to derive).
+            let filename = _file_name(pdf.name() ?? pdf.url());
+            if (!compat.inline_pdf_urls) {
+                // The client opted into URL passthrough: nothing is fetched, so
+                // a preview needs no special case, and a `gs://` URL passes
+                // through like any other. Inline content still goes as
+                // `file_data` below.
+                let passthrough = if (preview) {
+                    ai.wire.resolve_media_preview(pdf)
+                } else {
+                    ai.wire.resolve_media(pdf, false)
+                };
+                if let url: string = passthrough.url {
+                    return ChatFilePart {
+                        type: "file",
+                        file: ChatFileData {
+                            type: "input_file",
+                            file_url: url,
+                            filename: filename,
+                            file_data: null,
+                        },
+                    };
+                }
+            }
+            // First-party Chat Completions has NO document-by-URL part: the
+            // API's `file` object is `{filename, file_data, file_id}` and
+            // nothing else — `file_url` + a nested `type: "input_file"` belongs
+            // to the Responses API, and OpenAI's chat endpoint silently ignores
+            // it or 400s. So by default (`inline_pdf_urls`) a remote PDF is fetched
+            // and inlined, exactly like audio. A scheme the HTTP client cannot
+            // fetch (`gs://…`) surfaces as a media-resolution failure rather
+            // than a malformed request.
             let resolved = if (preview) {
                 ai.wire.resolve_media_preview(pdf)
             } else {
@@ -711,11 +757,9 @@ function _chat_media_part(
             ChatFilePart {
                 type: "file",
                 file: ChatFileData {
-                    // The API requires a filename; the basename of the source
-                    // is more useful than a constant, and this is the same
-                    // derivation the Responses client uses (query stripped,
-                    // `document.pdf` when there is nothing to derive).
-                    filename: _file_name(pdf.name() ?? pdf.url()),
+                    type: null,
+                    file_url: null,
+                    filename: filename,
                     file_data: `data:${resolved.mime_type};base64,${data}`,
                 },
             }

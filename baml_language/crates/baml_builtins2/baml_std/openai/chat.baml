@@ -54,6 +54,19 @@ class ChatClient {
     /// no JSON form) is rejected before the request is sent, and so is a call
     /// that streams: streaming does not support it yet.
     structured_output: bool,
+    /// Fetch a PDF given by URL and send its bytes inline as `file_data`
+    /// (true, the default), or send the URL itself (false) as
+    /// `{"type": "file", "file": {"type": "input_file", "file_url": <url>, "filename": <name>}}`,
+    /// so the endpoint downloads it rather than this client. A PDF that is
+    /// already inline (base64, read from a file, a `data:` URL) is sent as
+    /// `file_data` either way.
+    ///
+    /// First-party OpenAI Chat Completions does not accept the URL part, so
+    /// leave this true there. Set it false only for an OpenAI-compatible
+    /// server that documents PDF URLs: a server that ignores the part drops
+    /// the document without an error. This is the counterpart of the legacy
+    /// `media_url_handler { pdf "send_url" }` client option.
+    inline_pdf_urls: bool,
 
     /// Creates a client. Construction reads no environment variable, so
     /// declaring one is always safe; credentials and endpoints resolve when a
@@ -65,6 +78,8 @@ class ChatClient {
     ///   answer strictly (see the field of the same name). The model sees
     ///   the output type's schema, documentation included, so a prompt need
     ///   not include `${ctx.output_format()}`.
+    /// - `inline_pdf_urls`: fetch a PDF URL and send it inline (true), or
+    ///   send the URL itself (false; see the field of the same name).
     function new(
         model: string = "gpt-4o-mini",
         api_key: ai.Credential? = null,
@@ -81,6 +96,7 @@ class ChatClient {
         seed: int? = null,
         capture_wire: bool = true,
         structured_output: bool = false,
+        inline_pdf_urls: bool = true,
     ) -> ChatClient {
         ChatClient {
             model: model,
@@ -98,6 +114,7 @@ class ChatClient {
             seed: seed,
             capture_wire: capture_wire,
             structured_output: structured_output,
+            inline_pdf_urls: inline_pdf_urls,
         }
     }
 
@@ -128,6 +145,7 @@ class ChatClient {
             send_stream_options = true,
             cache_breakpoints = true,
             default_cache_args = self.default_cache_args(),
+            inline_pdf_urls = self.inline_pdf_urls,
         )
     }
 

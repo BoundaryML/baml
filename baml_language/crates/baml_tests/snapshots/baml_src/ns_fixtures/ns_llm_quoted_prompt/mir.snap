@@ -383,7 +383,7 @@ fn .<lambda(QuotedPrompt@spec, 1)>(prefix: string, model: string) -> null | ai.C
     }
 
     bb25: {
-        _0 = call const fn openai.ChatClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn openai.ChatClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
     }
 
     bb26: {
@@ -883,7 +883,7 @@ fn .<lambda(BacktickPrompt@spec, 1)>(prefix: string, model: string) -> null | ai
     }
 
     bb25: {
-        _0 = call const fn openai.ChatClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
+        _0 = call const fn openai.ChatClient.new(copy _2, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>, const <omitted>) -> [bb27];
     }
 
     bb26: {
