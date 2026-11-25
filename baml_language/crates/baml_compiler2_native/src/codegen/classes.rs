@@ -319,7 +319,7 @@ impl<'db> Backend<'db> {
                                 "an implementation is entered with its values alone",
                             ));
                         }
-                        callee.id
+                        self.row_code(callee.id, &callee.layout, &program.slots[*slot].layout)?
                     }
                     Code::Native(native) => self.dispatched_stub(db, native)?,
                 };

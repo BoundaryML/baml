@@ -1115,12 +1115,26 @@ pub(crate) fn generate<'db>(
         }
     }
     hooks::declare(&mut backend, program, &declared)?;
-    // The stub of each native a row enters, declared while stubs are still
-    // to be compiled.
+    // What each row enters that is not an implementation itself, declared
+    // while such code is still to be compiled: the stub of a native, and
+    // the thunk for an implementation that declares more than the calls
+    // that dispatch it push.
     for (_, methods) in &program.rows {
-        for (_, code) in methods {
-            if let crate::program::Code::Native(native) = code {
-                backend.dispatched_stub(db, native)?;
+        for (slot, code) in methods {
+            match code {
+                crate::program::Code::Native(native) => {
+                    backend.dispatched_stub(db, native)?;
+                }
+                crate::program::Code::Function(key) => {
+                    let implementation = declared
+                        .get(key)
+                        .ok_or_else(|| internal("an implementation is part of the program"))?;
+                    backend.row_code(
+                        implementation.id,
+                        &implementation.layout,
+                        &program.slots[*slot].layout,
+                    )?;
+                }
             }
         }
     }
@@ -1230,8 +1244,9 @@ pub(crate) fn generate<'db>(
         &mut clif,
         &mut disassembly,
     )?;
-    layouts::define_remaps(
+    layouts::define_thunks(
         &mut backend,
+        &declared,
         &mut context,
         &mut builder_context,
         &mut clif,

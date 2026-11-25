@@ -211,3 +211,76 @@ function layout_of_a_spawned_function() -> string {
   let plain = spawn with LayoutRuns { body: () -> int { layout_count(9) } } { 0 };
   `${out}${await named} ${await plain}`
 }
+
+// An interface's method has no parameter with a default, and an
+// implementation may add some. A call that dispatches the method pushes
+// the interface's slots and checks nothing: the row of a type whose
+// implementation declares more holds a thunk that leaves them out.
+interface LayoutShape {
+  function area(self, scale: int) -> int throws never
+  function label(self, prefix: string, n: int) -> string throws never
+}
+class LayoutSquare {
+  side: int
+
+  implements LayoutShape {
+    function area(self, scale: int, pad: int = layout_count(1)) -> int throws never {
+      if scale > 100 { return self.area(scale - 100, pad = pad + 1) };
+      self.side * self.side * scale + pad
+    }
+    function label(self, prefix: string, n: int, suffix: string = rep("!", 2), again: int = layout_count(1)) -> string throws never {
+      if again > 3 { return self.label(prefix, n, again = again - 3) };
+      `${prefix}square ${self.side} ${n}${suffix}${again}`
+    }
+  }
+}
+class LayoutCircle {
+  radius: int
+
+  implements LayoutShape {
+    function area(self, scale: int) -> int throws never { self.radius * self.radius * 3 * scale }
+    function label(self, prefix: string, n: int) -> string throws never { `${prefix}circle ${self.radius} ${n}` }
+  }
+}
+implements LayoutShape for int {
+  function area(self, scale: int, pad: int = layout_count(2), more: int = layout_count(3)) -> int throws never {
+    if scale > 100 { return self.area(scale - 100, more = more + 1) };
+    self * scale + pad * 10 + more
+  }
+  function label(self, prefix: string, n: int, suffix: string = rep("#", 1)) -> string throws never {
+    if self > 3 { return (self - 3).label(prefix, n) };
+    `${prefix}int ${self} ${n}${suffix}`
+  }
+}
+implements LayoutShape for string {
+  function area(self, scale: int, pad: string = rep("p", 4), held: string[] = layout_strings(2)) -> int throws never {
+    let churned = layout_churn(20);
+    self.length() * scale + pad.length() + held.length() + churned
+  }
+  function label(self, prefix: string, n: int) -> string throws never { `${prefix}string ${self} ${n}` }
+}
+function layout_shape(i: int) -> LayoutShape {
+  if i % 4 == 0 { LayoutSquare { side: layout_count(i + 2) } }
+  else if i % 4 == 1 { LayoutCircle { radius: layout_count(i + 1) } }
+  else if i % 4 == 2 { layout_count(i + 3) }
+  else { rep("s", i) }
+}
+function layout_measure<T extends LayoutShape>(shape: T, scale: int) -> string {
+  let out = "";
+  for (let i = 0; i < 2; i += 1) { out = out + `${shape.label("a ", i)} ${shape.area(scale + i * 100)};`; };
+  out
+}
+function layout_dispatch_to_more_parameters() -> string {
+  let out = "";
+  for (let i = 0; i < 8; i += 1) {
+    let shape = layout_shape(i);
+    out = out + `${shape.label("the ", i)} ${shape.area(layout_count(i))} ${shape.area(layout_count(i) + 200)},`;
+  };
+  out
+}
+function layout_dispatch_in_generic_code() -> string {
+  layout_measure(LayoutSquare { side: layout_count(3) }, layout_count(2))
+    + layout_measure(LayoutCircle { radius: layout_count(2) }, layout_count(3))
+    + layout_measure(layout_count(5), layout_count(4))
+    + layout_measure(rep("t", 6), layout_count(5))
+}

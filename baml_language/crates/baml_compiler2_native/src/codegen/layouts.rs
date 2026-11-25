@@ -16,6 +16,15 @@
 //! program is compiled whole, so the layouts a call can meet are known:
 //! those of the function values the program makes that the call's layout
 //! can be laid over. The function value itself is never replaced.
+//!
+//! A call that dispatches an interface method checks nothing. It pushes
+//! the layout of the interface's method, and the row of each type holds
+//! code entered with exactly that: the type's implementation where it
+//! declares no more, and otherwise a thunk made here that calls the
+//! implementation with each parameter the interface does not have left to
+//! its default.
+
+use std::collections::HashMap;
 
 use baml_type::CallLayout;
 use cranelift_codegen::{
@@ -25,8 +34,13 @@ use cranelift_codegen::{
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_module::{FuncId, Linkage, Module};
 
-use super::{Backend, Runtime, TRAP_LAYOUT, WORD, closure_access, imm, internal, offset, unwind};
-use crate::{CompileError, layout, program::Entry};
+use super::{
+    Backend, Declared, Runtime, TRAP_LAYOUT, WORD, closure_access, imm, internal, offset, unwind,
+};
+use crate::{
+    CompileError, layout,
+    program::{Entry, FnKey},
+};
 
 /// What a call through a function value knows of itself.
 pub(super) struct ValueSite {
@@ -49,6 +63,12 @@ pub(super) struct Remaps {
     /// Each thunk, by the numbers of its callee's layout and of its
     /// caller's, in the order they were first needed.
     thunks: Vec<((usize, usize), FuncId)>,
+    /// Each thunk a row holds in place of an implementation, by the
+    /// implementation and the number of the layout the row is entered
+    /// with.
+    of_methods: Vec<((FuncId, usize), FuncId)>,
+    /// Whether the thunks are compiled: none can be asked for after.
+    defined: bool,
 }
 
 impl Backend<'_> {
@@ -92,6 +112,7 @@ impl Backend<'_> {
         {
             return Ok(*thunk);
         }
+        self.thunks_open()?;
         let signature = Self::clif_signature(self.layouts[site - 1].len(), Entry::Value, 0);
         let thunk = self
             .module
@@ -104,42 +125,104 @@ impl Backend<'_> {
         self.remaps.thunks.push(((callee, site), thunk));
         Ok(thunk)
     }
+
+    fn thunks_open(&self) -> Result<(), CompileError> {
+        if self.remaps.defined {
+            return Err(internal(
+                "a thunk is first needed after the thunks are compiled",
+            ));
+        }
+        Ok(())
+    }
+
+    /// What the row of a type holds for an interface method whose calls
+    /// push the layout `site`, the receiver's slot first, where the type's
+    /// implementation is `implementation`, whose own layout is `declared`:
+    /// the implementation, or a thunk entered with the call's layout.
+    pub(super) fn row_code(
+        &mut self,
+        implementation: FuncId,
+        declared: &CallLayout,
+        site: &CallLayout,
+    ) -> Result<FuncId, CompileError> {
+        if declared == site {
+            return Ok(implementation);
+        }
+        let key = (implementation, self.layout_id(site)?);
+        if let Some((_, thunk)) = self
+            .remaps
+            .of_methods
+            .iter()
+            .find(|(known, _)| *known == key)
+        {
+            return Ok(*thunk);
+        }
+        self.thunks_open()?;
+        let signature = Self::clif_signature(site.len(), Entry::Direct, 0);
+        let thunk = self
+            .module
+            .declare_function(
+                &format!("baml_method_{}_from_{}", implementation.as_u32(), key.1),
+                Linkage::Local,
+                &signature,
+            )
+            .map_err(internal)?;
+        self.remaps.of_methods.push((key, thunk));
+        Ok(thunk)
+    }
 }
 
-/// Compile every thunk declared. Called once no call is left to compile.
+/// Compile every thunk declared. Called once no call is left to compile
+/// and every row knows what it holds.
 ///
 /// A thunk is an ordinary function: it has a frame record, and calls and
 /// returns, so the collector and the unwinder walk past it as past any
 /// frame. Nothing of its own is live across its call: what it was passed
 /// is the callee's from there on. It has no name in a trace.
-pub(super) fn define_remaps(
-    backend: &mut Backend<'_>,
+pub(super) fn define_thunks<'db>(
+    backend: &mut Backend<'db>,
+    declared: &HashMap<FnKey<'db>, Declared<'db>>,
     context: &mut Context,
     builder_context: &mut FunctionBuilderContext,
     clif: &mut Option<String>,
     disassembly: &mut Option<String>,
 ) -> Result<(), CompileError> {
+    backend.remaps.defined = true;
+    let laid_over = |site: &CallLayout, callee: &CallLayout| {
+        site.map_to(callee)
+            .map_err(|_| internal("a thunk is for a layout its caller's can be laid over"))
+    };
     for ((callee, site), thunk) in backend.remaps.thunks.clone() {
-        let (callee_layout, site_layout) =
-            (&backend.layouts[callee - 1], &backend.layouts[site - 1]);
-        let slots = site_layout
-            .map_to(callee_layout)
-            .map_err(|_| internal("a thunk is for a layout its caller's can be laid over"))?;
+        let (callee, site) = (&backend.layouts[callee - 1], &backend.layouts[site - 1]);
+        let slots = laid_over(site, callee)?;
+        let listed = format!("remap {} from {}", described(callee), described(site));
+        context.func.signature = Backend::clif_signature(site.len(), Entry::Value, 0);
+        thunk_body(&slots, None, &mut context.func, builder_context);
+        let named = super::Named::Listed(&listed);
+        super::define(backend, context, thunk, &named, clif, disassembly)?;
+    }
+    for ((implementation, site), thunk) in backend.remaps.of_methods.clone() {
+        let callee = declared
+            .values()
+            .find(|function| function.id == implementation)
+            .ok_or_else(|| internal("an implementation is part of the program"))?;
+        let site = &backend.layouts[site - 1];
+        let slots = laid_over(site, &callee.layout)?;
         let listed = format!(
-            "remap {} from {}",
-            described(callee_layout),
-            described(site_layout)
+            "method {} from {}",
+            described(&callee.layout),
+            described(site)
         );
-        context.func.signature = Backend::clif_signature(site_layout.len(), Entry::Value, 0);
-        remap_body(&slots, &mut context.func, builder_context);
-        super::define(
-            backend,
-            context,
-            thunk,
-            &super::Named::Listed(&listed),
-            clif,
-            disassembly,
-        )?;
+        context.func.signature = Backend::clif_signature(site.len(), Entry::Direct, 0);
+        let implementation = backend.function_ref(implementation, &mut context.func);
+        thunk_body(
+            &slots,
+            Some(implementation),
+            &mut context.func,
+            builder_context,
+        );
+        let named = super::Named::Listed(&listed);
+        super::define(backend, context, thunk, &named, clif, disassembly)?;
     }
     Ok(())
 }
@@ -157,11 +240,13 @@ fn described(layout: &CallLayout) -> String {
     format!("({})", slots.join(", "))
 }
 
-/// The body of a thunk: the closure it was passed is the callable, and
-/// `slots` says, for each parameter of the callable, which of the
-/// arguments the thunk was passed fills it, if any does.
-fn remap_body(
+/// The body of a thunk. `slots` says, for each parameter of the callee,
+/// which of the arguments the thunk was passed fills it, if any does. The
+/// callee is `implementation`, or without one the callable the thunk was
+/// passed as its closure, which it passes on as the callee's.
+fn thunk_body(
     slots: &[Option<usize>],
+    implementation: Option<ir::FuncRef>,
     function: &mut ir::Function,
     builder_context: &mut FunctionBuilderContext,
 ) {
@@ -170,11 +255,14 @@ fn remap_body(
     builder.append_block_params_for_function_params(block);
     builder.switch_to_block(block);
     let passed = builder.block_params(block).to_vec();
-    let closure = passed[0];
-    let mut arguments = vec![closure];
+    let (closure, passed) = match implementation {
+        Some(_) => (None, &passed[..]),
+        None => (Some(passed[0]), &passed[1..]),
+    };
+    let mut arguments: Vec<ir::Value> = closure.into_iter().collect();
     for slot in slots {
         match slot {
-            Some(at) => arguments.extend([passed[1 + 2 * at], passed[2 + 2 * at]]),
+            Some(at) => arguments.extend([passed[2 * at], passed[2 * at + 1]]),
             None => {
                 let omitted = builder.ins().iconst(WORD, imm(layout::TAG_OMITTED));
                 let nothing = builder.ins().iconst(WORD, 0);
@@ -182,15 +270,21 @@ fn remap_body(
             }
         }
     }
-    let code = builder.ins().load(
-        WORD,
-        closure_access(),
-        closure,
-        offset(layout::CLOSURE_CODE),
-    );
-    let signature = Backend::clif_signature(slots.len(), Entry::Value, 0);
-    let signature = builder.import_signature(signature);
-    let call = builder.ins().call_indirect(signature, code, &arguments);
+    let call = match (implementation, closure) {
+        (Some(implementation), _) => builder.ins().call(implementation, &arguments),
+        (None, Some(closure)) => {
+            let code = builder.ins().load(
+                WORD,
+                closure_access(),
+                closure,
+                offset(layout::CLOSURE_CODE),
+            );
+            let signature = Backend::clif_signature(slots.len(), Entry::Value, 0);
+            let signature = builder.import_signature(signature);
+            builder.ins().call_indirect(signature, code, &arguments)
+        }
+        (None, None) => unreachable!("a thunk without an implementation has a closure"),
+    };
     let returned = builder.inst_results(call).to_vec();
     builder.ins().return_(&returned);
     builder.seal_all_blocks();

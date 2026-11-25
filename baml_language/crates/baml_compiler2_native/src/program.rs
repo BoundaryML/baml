@@ -7,10 +7,13 @@ use std::collections::{HashMap, VecDeque};
 use baml_compiler2_hir::loc::FunctionLoc;
 use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{MirFunction, lower_function};
+use baml_type::CallLayout;
 
 use crate::{
     Blocker,
-    check::{Dispatched, OPT, check_function, function_signature, identified_arguments},
+    check::{
+        Dispatched, OPT, check_function, declared_layout, function_signature, identified_arguments,
+    },
     dispatch::{self, Slot, Target},
     types::{NativeTy, Signature, TypeArg, assignable, type_argument},
 };
@@ -112,8 +115,12 @@ pub(crate) struct SlotInfo<'db> {
     /// Its column in every row. Methods no one type has both of share a
     /// column.
     pub(crate) column: usize,
-    /// The parameters after the receiver, and the result, of every
-    /// implementation.
+    /// The value slots every dispatching call pushes, the receiver's
+    /// first: the layout of the interface's method. What a row holds is
+    /// entered with these, whatever more its implementation declares.
+    pub(crate) layout: CallLayout,
+    /// The parameters after the receiver that a dispatching call passes,
+    /// and the result, of every implementation.
     pub(crate) signature: Signature<'db>,
     /// Whether some type leaves the method to the language's own
     /// `to_string`, for which its row holds no code.
@@ -188,6 +195,8 @@ struct DispatchedMethod<'db> {
     interface: baml_compiler2_mir::TyTemplateInterface,
     method: String,
     type_arguments: Vec<TypeArg<'db>>,
+    /// The layout of the first call met, which every other has too.
+    layout: CallLayout,
 }
 
 /// A type as the program's list of types has it: instantiations of a
@@ -253,13 +262,19 @@ pub(crate) fn collect<'db>(
                 }
             }
             for call in &function.dispatched {
-                if !calls.iter().any(|known| known.slot == call.slot) {
-                    calls.push(DispatchedMethod {
+                match calls.iter().find(|known| known.slot == call.slot) {
+                    Some(known) if known.layout != call.layout => unsupported.push(Blocker::new(
+                        "interface method call",
+                        format!("{}: called with different layouts", call.method),
+                    )),
+                    Some(_) => {}
+                    None => calls.push(DispatchedMethod {
                         slot: call.slot.clone(),
                         interface: call.interface.clone(),
                         method: call.method.clone(),
                         type_arguments: call.type_arguments.clone(),
-                    });
+                        layout: call.layout.clone(),
+                    }),
                 }
             }
         }
@@ -424,7 +439,16 @@ fn lay_out_methods<'db>(
 ) -> Vec<Blocker> {
     let mut blockers = Vec::new();
     let mut implementors: Vec<Vec<NativeTy<'db>>> = Vec::new();
-    for (index, DispatchedMethod { slot, method, .. }) in calls.iter().enumerate() {
+    for (
+        index,
+        DispatchedMethod {
+            slot,
+            method,
+            layout,
+            ..
+        },
+    ) in calls.iter().enumerate()
+    {
         let unsupported =
             |detail: &str| Blocker::new("interface method call", format!("{method}: {detail}"));
         let mut signature = None;
@@ -451,7 +475,9 @@ fn lay_out_methods<'db>(
                         blockers.push(unsupported("a default body that tests its type argument"));
                         continue;
                     }
-                    let Ok(mut found) = function_signature(db, key) else {
+                    let (Ok(found), Ok(declared)) =
+                        (function_signature(db, key), declared_layout(db, key))
+                    else {
                         // Reported as its own blocked function.
                         continue;
                     };
@@ -459,12 +485,33 @@ fn lay_out_methods<'db>(
                         blockers.push(unsupported("without a receiver"));
                         continue;
                     }
-                    found.params.remove(0);
-                    found
+                    // What a dispatching call passes the implementation,
+                    // which may declare more: parameters with defaults the
+                    // interface does not have.
+                    let Ok(slots) = layout.map_to(&declared) else {
+                        blockers.push(unsupported("implementations with different layouts"));
+                        continue;
+                    };
+                    let passed = |pushed: usize| {
+                        slots
+                            .iter()
+                            .position(|slot| *slot == Some(pushed))
+                            .map(|parameter| found.params[parameter].clone())
+                    };
+                    let Some(params) = (1..layout.len()).map(passed).collect() else {
+                        blockers.push(unsupported("implementations with different layouts"));
+                        continue;
+                    };
+                    Signature {
+                        params,
+                        result: found.result,
+                    }
                 }
                 // Only the stub of an `async` native is called as the
                 // table's functions are.
-                Code::Native(native) => match dispatched_native(db, native) {
+                Code::Native(native) => match dispatched_native(db, native)
+                    .filter(|found| *layout == CallLayout::positional(found.params.len() + 1))
+                {
                     Some(found) => found,
                     None => {
                         blockers.push(unsupported(
@@ -521,6 +568,7 @@ fn lay_out_methods<'db>(
         program.slots.push(SlotInfo {
             slot: slot.clone(),
             column,
+            layout: layout.clone(),
             signature: signature.unwrap_or(to_string),
             falls_back,
         });

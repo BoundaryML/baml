@@ -781,6 +781,9 @@ pub(crate) struct Dispatched<'db> {
     pub(crate) method: String,
     /// The method's own type arguments.
     pub(crate) type_arguments: Vec<TypeArg<'db>>,
+    /// The value slots the call pushes, the receiver's first: those of
+    /// the method the call was checked against.
+    pub(crate) layout: CallLayout,
     /// The types of the arguments after the receiver, none for one left
     /// to its default, and of the place the result goes.
     pub(crate) arguments: Vec<Option<NativeTy<'db>>>,
@@ -1133,6 +1136,7 @@ impl<'db> Checker<'_, 'db> {
         let in_loop = loops.start(terminator).is_some() || loops.step(terminator).is_some();
         if let Terminator::VirtualCall {
             has_trace,
+            argument_layout,
             iface,
             method,
             args,
@@ -1162,11 +1166,17 @@ impl<'db> Checker<'_, 'db> {
                     let result =
                         place_local(destination).and_then(|local| local_ty(self.db, body, local));
                     if let (Ok(arguments), Ok(result)) = (arguments, result) {
+                        // A call the compiler made itself pushes required
+                        // slots.
+                        let layout = argument_layout
+                            .clone()
+                            .unwrap_or_else(|| CallLayout::positional(arguments.len() + 1));
                         self.dispatched.push(Dispatched {
                             slot,
                             interface,
                             method: method.clone(),
                             type_arguments,
+                            layout,
                             arguments,
                             result,
                         });
