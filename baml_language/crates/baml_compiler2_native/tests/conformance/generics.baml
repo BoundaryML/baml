@@ -406,6 +406,98 @@ function gen_closures() -> string {
   `${a(1) + 1} ${b(2)} ${c(1) * 2.0} ${d(1) == null} ${n} ${ints[0]}`
 }
 
+// A closure made in a function with type parameters tests a value against
+// one: it holds the type's object before its cells, and its code reads it
+// from there, whatever was allocated since the closure was made.
+function gen_tester<T>(churn: int) -> (unknown) -> bool throws never {
+  let w = 0;
+  for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+  (x) -> {
+    gen_churn(churn);
+    match (x) {
+      let found: T => true,
+      _ => false,
+    }
+  }
+}
+function gen_matching<T>(start: int) -> (unknown) -> int throws never {
+  let w = 0;
+  for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+  let n = start;
+  (x) -> {
+    gen_churn(2);
+    if gen_is<T>(x) { n += 1; };
+    n
+  }
+}
+function gen_tester_of_testers<T>(churn: int) -> (unknown[]) -> int throws never {
+  let w = 0;
+  for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+  let seen = 0;
+  (xs) -> {
+    let one: (unknown) -> bool throws never = (x) -> {
+      gen_churn(1);
+      match (x) {
+        let found: T? => true,
+        _ => false,
+      }
+    };
+    for (let x in xs) { if one(x) { seen += 1; }; };
+    seen
+  }
+}
+function gen_closure_tests_its_type() -> string {
+  let is_int = gen_tester<int>(3);
+  let is_text = gen_tester<string>(3);
+  let is_point = gen_tester<GenPoint>(3);
+  let is_color = gen_tester<GenColor>(3);
+  gen_churn(5);
+  let a = `${is_int(gen_count(1))} ${is_int("a")} ${is_text(gen_text(1))} ${is_text(2.5)}`;
+  let b = `${is_point(GenPoint { x: 1, y: 2 })} ${is_point(GenColor.Red)} ${is_color(GenColor.Blue)} ${is_color(null)}`;
+  `${a} ${b}`
+}
+function gen_closure_with_cells_tests_its_type() -> string {
+  let ints = gen_matching<int>(gen_count(10));
+  let texts = gen_matching<string>(0);
+  ints(gen_text(2));
+  ints(4);
+  texts(gen_text(2));
+  texts(4);
+  let nested = gen_tester_of_testers<float>(1);
+  let n = nested([1.5, 2, null, "x", 2.5]);
+  `${ints(5)} ${ints(null)} ${texts("b")} ${n} ${nested([null])}`
+}
+
+// A method bound to an instance tests a value against its class's type
+// argument: the bound method holds the type's object after its receiver.
+class GenSieve<T> {
+  passed: int
+
+  function takes(self, x: unknown) -> bool {
+    let w = 0;
+    for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+    match (x) {
+      let found: T => {
+        self.passed += 1;
+        true
+      },
+      _ => false,
+    }
+  }
+}
+function gen_bound_method_tests_its_type() -> string {
+  let ints = GenSieve<int> { passed: gen_count(0) };
+  let texts = GenSieve<string> { passed: 0 };
+  let colors = GenSieve<GenColor> { passed: 0 };
+  let is_int = ints.takes;
+  let is_text = texts.takes;
+  let is_color = colors.takes;
+  gen_churn(5);
+  let a = `${is_int(gen_count(1))} ${is_int("a")} ${is_text(gen_text(1))} ${is_text(2.5)}`;
+  let b = `${is_color(GenColor.Red)} ${is_color(1)} ${ints.takes(3)}`;
+  `${a} ${b} ${ints.passed}${texts.passed}${colors.passed}`
+}
+
 // A type made of a type parameter's is made when the program runs: the
 // same one however often, and whatever was allocated since.
 function gen_is_or_null<T>(x: unknown) -> bool {

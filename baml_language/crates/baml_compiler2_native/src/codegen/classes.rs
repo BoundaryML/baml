@@ -246,7 +246,7 @@ impl<'db> Backend<'db> {
     }
 
     /// The object of the package called `name`.
-    fn package_object(&mut self, name: &str) -> Result<DataId, CompileError> {
+    pub(super) fn package_object(&mut self, name: &str) -> Result<DataId, CompileError> {
         if let Some(id) = self.packages.get(name) {
             return Ok(*id);
         }

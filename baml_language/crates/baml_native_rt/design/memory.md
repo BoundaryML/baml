@@ -588,8 +588,8 @@ The sizes of the structs in "Objects". Where the code differs today ("Not built"
 | string of b bytes | 16 + b rounded up to 16 | rounded up to 8 | string header + bytes | 16 + b |
 | string slice | 32 | 32 | string header | 16 |
 | cell | 32 | 16 | | |
-| closure with g type arguments and c captures | 32 + 16(g + c) (header, entry, function, 8 of padding). Same bytes today, with the capture count where the padding is and g = 0 | 24 | funcval + captures | 8 + captures |
-| bound method with t type arguments | 48 + 8t rounded to 16 (header, entry, function, 8 of padding, receiver). Today the padding holds a count and t = 0 | | | |
+| closure with g type arguments and c captures | 32 + 16(g + c) (header, entry, function, 8 of padding) | 24 | funcval + captures | 8 + captures |
+| bound method with t type arguments | 48 + 8t rounded to 16 (header, entry, function, 8 of padding, receiver) | | | |
 | tuple of n | 16 + 16n | | | |
 | map | 64 (header, `key_ty`, `value_ty`, len u32 + used u32, entries, index, mask u32 + epoch u32, padding) | 40 | `map` header (swiss) | 48 |
 | map entries, capacity c | 16 + 32c + 4c rounded to 16 | 16 + 16c + 4c rounded to 8 | group of 8 slots | 8 + 8 x (key + value) |
@@ -826,7 +826,6 @@ The structs in "Objects" are the intended shape. Where the code differs today:
 - None of the copies in "Types and rules are copies" exists.
 - `TypeObject` is not a `RealizedTy`. It is `{ tag, class, description, kind, count, arguments }`, built only for unions, found or made in a table outside the heap (`baml_rt_type_intern`, seeded from the program's `PROGRAM_BUILT_TYPES` list) that is never freed, with members ordered by address. To be replaced, and the collector does not yet drop a type object.
 - The `ty` word of an array and `key_ty`, `value_ty` of a map are written as zero, and an instance's type parameter slots as `(NULL, 0)`. So a type test against an array type or between two instantiations of one class is refused when compiled (`ideas/uniform-values-convention.md`, status).
-- Nothing makes a `RawFunctionObject`. So a closure's `function` word is zero, a closure carries its own `capture_count` word and a bound method its own `type_arg_count` word (the collector sizes them by those), and neither holds a type argument.
 - A call of an interface method is to be resolved through the interface's rules every time. Remembering the answer comes only after type objects have canonical ids.
 - There is no `InterfaceObject` and no `ImplRule`. A class object ends in a row of code addresses, one per method column of the whole program, and an interface call loads the receiver's class and jumps through its column; the types that are not classes have a row per tag. So an implementation chosen by a type argument (`for Box<int>` against `for Box<string>`) is refused. A class object has no list of its methods.
 - An array's `ptr` is zero until it first holds an element, where the intended shape always points at a storage object.

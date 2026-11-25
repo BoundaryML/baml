@@ -188,7 +188,7 @@ Weak points: every read of an interface-typed slot takes the lock. No inline cac
 
 ## Function values
 
-A function value is a callable object: its header holds the tag and, in bits 32..58, its call layout id; the code address is at offset 8 of every callable, and the object itself is the closure word (`layout.rs`, `CLOSURE_CODE = 8`, `CLOSURE_FUNCTION`, `CLOSURE_CAPTURE_COUNT`, captures as values from offset 32). A function value is always held as a pair, and its tag carries the layout id, so the caller has it in a register. A captured local lives in a cell object (header, one value) and the closure's capture is a value pointing at it.
+A function value is a callable object: its header holds the tag and, in bits 32..58, its call layout id; the code address is at offset 8 of every callable, and the object itself is the closure word (`layout.rs`, `CLOSURE_CODE = 8`, `CLOSURE_FUNCTION`, captures as values from offset 32). A function named as a value is its function object, in the executable's data; a closure and a bound method point at theirs, which says how many type objects and cells they hold. A function value is always held as a pair, and its tag carries the layout id, so the caller has it in a register. A captured local lives in a cell object (header, one value) and the closure's capture is a value pointing at it.
 
 Every call through a function value checks that the callee's layout is the site's (`codegen/layouts.rs`, `call_value`). Layout ids count from 1, per distinct parameter layout in the program.
 

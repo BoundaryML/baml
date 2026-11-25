@@ -43,23 +43,24 @@ use std::{
 };
 
 use crate::layout::{
-    ARRAY_PTR, ARRAY_SIZE, BIGINT_LIMB_COUNT, BOUND_RECEIVER, BOUND_TYPE_ARG_COUNT, BYTES_PTR,
-    BYTES_SIZE, BYTES_STORAGE_CAPACITY, CALLABLE_TAG_MASK, CELL_SIZE, CELL_VALUE, CLASS_KIND,
-    CLASS_KIND_ENUM, CLASS_KIND_MASK, CLASS_NAME, CLASS_PACKAGE, CLASS_SLOT_COUNT, CLASS_VARIANTS,
-    CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_KEY,
-    ENTRY_SIZE, ENTRY_VALUE, FUTURE_SIZE, FUTURE_TRACE, FUTURE_VALUE, HEADER_BUSY, HEADER_PANIC,
-    HEADER_PAYLOAD_MASK, HEADER_PAYLOAD_SHIFT, INDEX_SLOT_COUNT, INSTANCE_CLASS, INSTANCE_SLOTS,
-    MAP_ENTRIES, MAP_INDEX, MAP_SIZE, OWNED_KIND, OWNED_SIZE, OWNED_VALUE, PACKAGE_NAME,
-    PACKAGE_SIZE, PLAIN_WORDS, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, STACK_MAP_VALUE,
-    STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TAG_ARRAY, TAG_ARRAY_STORAGE,
-    TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_BYTES_STORAGE, TAG_CELL, TAG_CLASS,
-    TAG_CLOSURE, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_FUTURE, TAG_INSTANCE, TAG_INT, TAG_MAP,
-    TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OMITTED, TAG_OWNED, TAG_PACKAGE, TAG_PLAIN,
-    TAG_STRING, TAG_STRING_SLICE, TAG_TUPLE, TAG_TYPE, TUPLE_COUNT, TYPE_ARGUMENTS, TYPE_CLASS,
-    TYPE_COUNT, TYPE_ID_MASK, VALUE, VALUE_PAYLOAD, VARIANT_ENUM, VARIANT_NAME, VARIANT_SIZE, WORD,
-    aligned, bigint_size, bound_size, bytes_storage_size, class_columns, class_size, closure_size,
-    entries_size, index_size, instance_size, is_pointer, plain_size, storage_size, string_size,
-    tag_of, type_size,
+    ARRAY_PTR, ARRAY_SIZE, BIGINT_LIMB_COUNT, BOUND_FUNCTION, BOUND_RECEIVER, BOUND_TYPE_ARGS,
+    BYTES_PTR, BYTES_SIZE, BYTES_STORAGE_CAPACITY, CALLABLE_TAG_MASK, CELL_SIZE, CELL_VALUE,
+    CLASS_KIND, CLASS_KIND_ENUM, CLASS_KIND_MASK, CLASS_NAME, CLASS_PACKAGE, CLASS_SLOT_COUNT,
+    CLASS_VARIANTS, CLOSURE_CAPTURES, CLOSURE_FUNCTION, ENTRIES_CAPACITY, ENTRIES_RECORDS,
+    ENTRY_KEY, ENTRY_SIZE, ENTRY_VALUE, FUNCTION_CAPTURE_COUNT, FUNCTION_NAME, FUNCTION_OWNER,
+    FUNCTION_SIZE, FUNCTION_TYPE_PARAM_COUNT, FUTURE_SIZE, FUTURE_TRACE, FUTURE_VALUE, HEADER_BUSY,
+    HEADER_PANIC, HEADER_PAYLOAD_MASK, HEADER_PAYLOAD_SHIFT, INDEX_SLOT_COUNT, INSTANCE_CLASS,
+    INSTANCE_SLOTS, MAP_ENTRIES, MAP_INDEX, MAP_SIZE, OWNED_KIND, OWNED_SIZE, OWNED_VALUE,
+    PACKAGE_NAME, PACKAGE_SIZE, PLAIN_WORDS, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE,
+    STACK_MAP_VALUE, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TAG_ARRAY,
+    TAG_ARRAY_STORAGE, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_BYTES_STORAGE,
+    TAG_CELL, TAG_CLASS, TAG_CLOSURE, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_FUTURE, TAG_INSTANCE,
+    TAG_INT, TAG_MAP, TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OMITTED, TAG_OWNED,
+    TAG_PACKAGE, TAG_PLAIN, TAG_RAW_FUNCTION, TAG_STRING, TAG_STRING_SLICE, TAG_TUPLE, TAG_TYPE,
+    TUPLE_COUNT, TYPE_ARGUMENTS, TYPE_CLASS, TYPE_COUNT, TYPE_ID_MASK, VALUE, VALUE_PAYLOAD,
+    VARIANT_ENUM, VARIANT_NAME, VARIANT_SIZE, WORD, aligned, bigint_size, bound_size,
+    bytes_storage_size, class_columns, class_size, closure_size, entries_size, index_size,
+    instance_size, is_pointer, plain_size, storage_size, string_size, tag_of, type_size,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
@@ -141,6 +142,23 @@ pub unsafe fn load(address: usize) -> usize {
 unsafe fn read32(address: usize) -> u32 {
     // SAFETY: the caller's contract.
     unsafe { *(address as *const u32) }
+}
+
+/// How many type objects a closure or a bound method of the function whose
+/// object is at `function` holds, and how many cells a closure of it
+/// captures.
+///
+/// # Safety
+///
+/// `function` is a function's object.
+pub(crate) unsafe fn function_counts(function: usize) -> (usize, usize) {
+    // SAFETY: the caller's contract.
+    unsafe {
+        (
+            read32(function + FUNCTION_TYPE_PARAM_COUNT) as usize,
+            read32(function + FUNCTION_CAPTURE_COUNT) as usize,
+        )
+    }
 }
 
 /// Write the word at `address`.
@@ -1015,18 +1033,41 @@ impl<'a> Copy<'a> {
     ///
     /// `instance` is an instance whose class object is live or copied.
     unsafe fn slot_count(&self, instance: usize) -> usize {
-        // SAFETY: the caller's contract: the header of a copied object is
-        // where its copy is.
-        unsafe {
-            let mut class = load(instance + INSTANCE_CLASS);
-            if self.from.contains(class) {
-                let header = load(class);
-                if header & FORWARDED != 0 {
-                    class = header & !FORWARDED;
-                }
+        // SAFETY: the caller's contract.
+        unsafe { read32(self.current(load(instance + INSTANCE_CLASS)) + CLASS_SLOT_COUNT) as usize }
+    }
+
+    /// How many type objects and how many cells the closure or the bound
+    /// method at `callable` holds, which its function's object says: the
+    /// copy of it, when it was in the space being copied from and has been
+    /// copied, whether or not the callable's word for it has been made to
+    /// point there.
+    ///
+    /// # Safety
+    ///
+    /// `callable` is a closure or a bound method whose function's object
+    /// is live or copied.
+    unsafe fn held_counts(&self, callable: usize) -> (usize, usize) {
+        // SAFETY: the caller's contract.
+        unsafe { function_counts(self.current(load(callable + CLOSURE_FUNCTION))) }
+    }
+
+    /// Where the object at `object` is now: its copy, when it was in the
+    /// space being copied from and has been copied.
+    ///
+    /// # Safety
+    ///
+    /// `object` is an object that is live or copied.
+    unsafe fn current(&self, object: usize) -> usize {
+        if self.from.contains(object) {
+            // SAFETY: the caller's contract: the header of a copied object
+            // is where its copy is.
+            let header = unsafe { load(object) };
+            if header & FORWARDED != 0 {
+                return header & !FORWARDED;
             }
-            read32(class + CLASS_SLOT_COUNT) as usize
         }
+        object
     }
 
     /// How many bytes the object at `object`, whose header is `header`,
@@ -1051,8 +1092,12 @@ impl<'a> Copy<'a> {
                 TAG_MAP_INDEX => index_size(count()),
                 TAG_CELL => CELL_SIZE,
                 TAG_FUTURE => FUTURE_SIZE,
-                TAG_CLOSURE => closure_size(load(object + CLOSURE_CAPTURE_COUNT)),
-                TAG_BOUND_METHOD => bound_size(load(object + BOUND_TYPE_ARG_COUNT)),
+                TAG_CLOSURE => {
+                    let (types, cells) = self.held_counts(object);
+                    closure_size(types + cells)
+                }
+                TAG_BOUND_METHOD => bound_size(self.held_counts(object).0),
+                TAG_RAW_FUNCTION => FUNCTION_SIZE,
                 TAG_BIGINT => bigint_size(count()),
                 TAG_BYTES => BYTES_SIZE,
                 TAG_BYTES_STORAGE => bytes_storage_size(count()),
@@ -1447,10 +1492,26 @@ impl<'a> Copy<'a> {
                         self.forward_value(scan + FUTURE_VALUE);
                         self.forward_word(scan + FUTURE_TRACE);
                     }
+                    // The size of either was read through its function's
+                    // object before the word for it is made to point at
+                    // its copy. A closure's type objects are values like
+                    // its cells.
                     TAG_CLOSURE => {
-                        self.values(scan + CLOSURE_CAPTURES, load(scan + CLOSURE_CAPTURE_COUNT));
+                        self.forward_word(scan + CLOSURE_FUNCTION);
+                        self.values(scan + CLOSURE_CAPTURES, (size - CLOSURE_CAPTURES) / VALUE);
                     }
-                    TAG_BOUND_METHOD => self.forward_value(scan + BOUND_RECEIVER),
+                    TAG_BOUND_METHOD => {
+                        let (types, _) = self.held_counts(scan);
+                        self.forward_word(scan + BOUND_FUNCTION);
+                        self.forward_value(scan + BOUND_RECEIVER);
+                        for index in 0..types {
+                            self.forward_word(scan + BOUND_TYPE_ARGS + index * WORD);
+                        }
+                    }
+                    TAG_RAW_FUNCTION => {
+                        self.forward_word(scan + FUNCTION_OWNER);
+                        self.forward_word(scan + FUNCTION_NAME);
+                    }
                     TAG_TUPLE => self.values(scan + INSTANCE_SLOTS, load(scan + TUPLE_COUNT)),
                     // The size was read through the class object before
                     // the word for it is made to point at its copy.
@@ -2288,11 +2349,15 @@ mod tests {
     /// build with checks, ends the program on a slot whose tag is not what
     /// its object's header makes. A string's tag is its type id alone,
     /// though its header caches its hash where a closure's has its layout.
+    ///
+    /// The closure is of a function whose object is in the heap and is
+    /// copied before it, so each collection reads how long the closure is
+    /// through the address the function's object left where it was.
     #[test]
     fn a_function_value_has_its_call_layout_in_its_tag() {
         use crate::{
             layout::{
-                CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, CLOSURE_CODE, CLOSURE_FUNCTION,
+                CLOSURE_CAPTURES, CLOSURE_CODE, CLOSURE_FUNCTION, FUNCTION_CODE,
                 HEADER_PAYLOAD_MASK, HEADER_PAYLOAD_SHIFT, TAG_CLOSURE, call_layout, closure_size,
             },
             map::str_hash,
@@ -2303,15 +2368,26 @@ mod tests {
         const HEADER: usize = TAG_CLOSURE | LAYOUT << HEADER_PAYLOAD_SHIFT;
 
         let mut mutator = mutator(true);
+        // A function no closure of which holds a type object, and each
+        // of which captures one cell: the count is the high half.
+        let mut function = mutator.allocate_object(TAG_RAW_FUNCTION, FUNCTION_SIZE);
+        // SAFETY: `function` is a fresh function's object.
+        unsafe {
+            store(function + FUNCTION_CODE, 0);
+            store(function + FUNCTION_OWNER, 0);
+            store(function + FUNCTION_NAME, 0);
+            store(function + FUNCTION_TYPE_PARAM_COUNT, 1 << 32);
+        }
+        mutator.root(&mut function);
         let mut text = string::from_str(&mut mutator, LETTERS);
         mutator.root(&mut text);
         let mut closure = mutator.allocate_object(HEADER, closure_size(1));
         // SAFETY: `closure` is a fresh closure of one capture, and `text`
-        // was kept current; it caches its hash in its header.
+        // and `function` were kept current; `text` caches its hash in its
+        // header.
         unsafe {
             store(closure + CLOSURE_CODE, 0);
-            store(closure + CLOSURE_FUNCTION, 0);
-            store(closure + CLOSURE_CAPTURE_COUNT, 1);
+            store(closure + CLOSURE_FUNCTION, function);
             str_hash(text);
             assert_ne!(load(text) >> HEADER_PAYLOAD_SHIFT, 0);
             Value::init(closure + CLOSURE_CAPTURES, Value::reference(text));
@@ -2335,10 +2411,12 @@ mod tests {
         for value in 0..10 {
             push_link(&mut mutator, &mut head, value);
         }
-        mutator.unroot(5);
+        mutator.unroot(6);
         // SAFETY: everything read was kept current.
         unsafe {
             assert_eq!(load(closure), HEADER);
+            assert_eq!(load(closure + CLOSURE_FUNCTION), function);
+            assert_eq!(function_counts(function), (0, 1));
             let held = Value::load(holder + field_offset(0));
             assert_eq!(held, rooted);
             assert_eq!(held.payload, closure);

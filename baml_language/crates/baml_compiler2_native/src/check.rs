@@ -384,14 +384,29 @@ fn identified<'db>(
         let mut calls = Vec::new();
         // The type parameters handed on to `baml.json`.
         let mut handed_on = Vec::new();
+        // The closures it makes: each holds what its lambda needs, named
+        // by this function's type parameters.
+        let mut closures = Vec::new();
         for block in &body.blocks {
             for statement in &block.statements {
-                if let StatementKind::Assign {
-                    value: Rvalue::IsType { test: asked, .. },
-                    ..
-                } = &statement.kind
-                {
-                    test(asked);
+                match &statement.kind {
+                    StatementKind::Assign {
+                        value: Rvalue::IsType { test: asked, .. },
+                        ..
+                    } => test(asked),
+                    StatementKind::Assign {
+                        value:
+                            Rvalue::MakeClosure {
+                                lambda_idx,
+                                type_arg_templates,
+                                ..
+                            },
+                        ..
+                    } => closures.push((
+                        key.lambda(*lambda_idx),
+                        type_arg_templates.iter().collect::<Vec<_>>(),
+                    )),
+                    _ => {}
                 }
             }
             match &block.terminator {
@@ -429,8 +444,11 @@ fn identified<'db>(
             }
         }
         found.extend(handed_on.into_iter().map(|slot| (slot, DESCRIBED)));
-        for (function, templates) in calls {
-            let callee = FnKey::new(function, Entry::Direct);
+        let given = calls
+            .into_iter()
+            .map(|(function, templates)| (FnKey::new(function, Entry::Direct), templates))
+            .chain(closures);
+        for (callee, templates) in given {
             let wanted = identified(db, &callee, visiting, assumed);
             for (template, wanted) in templates.iter().zip(wanted) {
                 match template {
@@ -460,6 +478,52 @@ fn identified<'db>(
     }
     visiting.pop();
     needed
+}
+
+/// The type parameters `key` must be given the type object of when it
+/// runs, each with what it is used for.
+fn needed_type_arguments<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    key: &FnKey<'db>,
+) -> impl Iterator<Item = (usize, u8)> {
+    identified(db, key, &mut Vec::new(), &mut Vec::new())
+        .into_iter()
+        .enumerate()
+        .filter(|(_, uses)| *uses != 0)
+}
+
+/// Whether the code of `body` has the type object of the type `template`
+/// names, to give to a function that puts it to `uses`: a call that names
+/// the function passes it, a closure holds it.
+fn type_argument_known<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    body: &Body<'_, 'db>,
+    template: Option<&TyTemplate>,
+    uses: u8,
+) -> Result<bool, Blocker> {
+    Ok(match template {
+        // This function's own, which it is given in turn.
+        Some(TyTemplate::TypeArgRef(_)) => true,
+        // Made of this function's own when the program runs, for a
+        // function that tests values against it.
+        Some(template) if uses == TESTED && built_from(db, template).is_some() => true,
+        Some(template)
+            if template_ty(db, template, body.arguments).is_some_and(|ty| has_type_id(&ty)) =>
+        {
+            true
+        }
+        // `baml.json` takes any type it has a description of, and a test
+        // one whose description decides it.
+        Some(template)
+            if template.is_fully_concrete()
+                && (uses & TESTED == 0
+                    || decided_by_description(db, &template.substitute_symbolic(&[]))) =>
+        {
+            crate::json::JsonTypes::new().describe(db, &template.substitute_symbolic(&[]))?;
+            true
+        }
+        _ => false,
+    })
 }
 
 /// Whether a value is of type `ty` exactly when it has the type's tag
@@ -984,8 +1048,14 @@ pub(crate) fn check_function<'db>(
         Ok(body) => {
             checker.note(signature(db, mir, body, &[]).map(drop));
             checker.note(declared_layout(db, key).map(drop));
-            // Only a call that names a function passes it type objects.
-            if key.entry != Entry::Direct && identified_arguments(db, key).contains(&true) {
+            // A call that names a function passes it type objects, a
+            // closure holds those of its lambda and a bound method those
+            // of its method. A function that is itself the value holds
+            // none.
+            if key.entry == Entry::Value
+                && key.lambdas.is_empty()
+                && identified_arguments(db, key).contains(&true)
+            {
                 checker.note(Err(Blocker::new(
                     "function value that tests a type argument",
                     "",
@@ -1506,15 +1576,18 @@ pub(crate) fn rvalue_ty<'db>(
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
-            ..
+            type_arg_templates,
         } => {
-            // A lambda names its function's type parameters. What it
-            // cannot have is a type object passed to it.
-            if identified_arguments(db, &body.key.lambda(*lambda_idx))
-                .iter()
-                .any(|needed| *needed)
-            {
-                return Err(Blocker::new("closure that tests a type argument", ""));
+            // A lambda names its function's type parameters. Its closure
+            // holds the type object of each one its code reads.
+            let lambda = body.key.lambda(*lambda_idx);
+            for (slot, uses) in needed_type_arguments(db, &lambda) {
+                if !type_argument_known(db, body, type_arg_templates.get(slot), uses)? {
+                    return Err(Blocker::new(
+                        "closure that tests a type argument",
+                        "a type no tag and class object decide",
+                    ));
+                }
             }
             for capture in captures {
                 if !matches!(operand_ty(db, body, capture)?, NativeTy::Cell(_)) {
@@ -1553,6 +1626,17 @@ pub(crate) fn rvalue_ty<'db>(
                 NativeTy::Class(_, arguments) => arguments,
                 _ => Vec::new(),
             };
+            // The bound method holds the type object of each type
+            // argument its method reads: one the receiver's type names
+            // whole.
+            for (slot, _) in needed_type_arguments(db, &FnKey::new(*function, Entry::Bound)) {
+                if !matches!(frame.get(slot), Some(Some(argument)) if has_type_id(argument)) {
+                    return Err(Blocker::new(
+                        "bound method value",
+                        "of a method that tests a type argument its receiver's type does not say",
+                    ));
+                }
+            }
             let (expected, signature) = bound_signature(db, *function, &frame)?;
             if !assignable(&expected, &found) {
                 return Err(Blocker::new("bound method value", describe(&found)));
@@ -1982,48 +2066,11 @@ fn terminator_supported<'db>(
                     let name = || function_display_name(db, DeclRef::Source(key.loc));
                     // The callee is passed each type argument it tests
                     // values against.
-                    for (slot, uses) in identified(db, &key, &mut Vec::new(), &mut Vec::new())
-                        .into_iter()
-                        .enumerate()
-                        .filter(|(_, uses)| *uses != 0)
-                    {
-                        let passed = args[..*ntypeargs].get(slot);
-                        let known = match passed.and_then(|passed| body.type_value(passed)) {
-                            // This function's own, which it is passed in
-                            // turn.
-                            Some(TyTemplate::TypeArgRef(_)) => true,
-                            // Made of this function's own when the program
-                            // runs, for a callee that tests values
-                            // against it.
-                            Some(template)
-                                if uses == TESTED && built_from(db, template).is_some() =>
-                            {
-                                true
-                            }
-                            Some(template)
-                                if template_ty(db, template, body.arguments)
-                                    .is_some_and(|ty| has_type_id(&ty)) =>
-                            {
-                                true
-                            }
-                            // `baml.json` takes any type it has a
-                            // description of, and a test one whose
-                            // description decides it.
-                            Some(template)
-                                if template.is_fully_concrete()
-                                    && (uses & TESTED == 0
-                                        || decided_by_description(
-                                            db,
-                                            &template.substitute_symbolic(&[]),
-                                        )) =>
-                            {
-                                crate::json::JsonTypes::new()
-                                    .describe(db, &template.substitute_symbolic(&[]))?;
-                                true
-                            }
-                            _ => false,
-                        };
-                        if !known {
+                    for (slot, uses) in needed_type_arguments(db, &key) {
+                        let passed = args[..*ntypeargs]
+                            .get(slot)
+                            .and_then(|passed| body.type_value(passed));
+                        if !type_argument_known(db, body, passed, uses)? {
                             return Err(Blocker::new(
                                 "call with type arguments",
                                 format!("{}: a type no tag and class object decide", name()),

@@ -34,6 +34,10 @@ pub(crate) enum Entry {
 /// One compiled function: a declared function or a lambda inside one,
 /// entered one way. A function with type parameters is compiled once,
 /// whatever types it is called with.
+/// A function of the program whatever way it is entered: a function of
+/// the source and, for a lambda, its position parent by parent.
+pub(crate) type FunctionId<'db> = (FunctionLoc<'db>, Vec<usize>);
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct FnKey<'db> {
     pub(crate) loc: FunctionLoc<'db>,
@@ -62,6 +66,12 @@ impl<'db> FnKey<'db> {
             lambdas,
             entry: Entry::Value,
         }
+    }
+
+    /// The function this is an entry of: one function however it is
+    /// entered.
+    pub(crate) fn function(&self) -> FunctionId<'db> {
+        (self.loc, self.lambdas.clone())
     }
 
     pub(crate) fn mir(

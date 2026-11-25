@@ -57,7 +57,7 @@ impl<'db> Translator<'_, 'db> {
     /// the function was passed for one of its own type parameters, an
     /// object made when the program runs for a union of those, and
     /// otherwise the object of the type the program names.
-    fn type_object(
+    pub(super) fn type_object(
         &mut self,
         template: &baml_compiler2_mir::TyTemplate,
     ) -> Result<ir::Value, CompileError> {

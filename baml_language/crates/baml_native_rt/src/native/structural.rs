@@ -24,14 +24,14 @@ use super::{
 };
 use crate::{
     describe::{Desc, Types},
-    heap::{Value, load},
+    heap::{Value, function_counts, load},
     json_layout::{KIND_ARRAY, KIND_MAP},
     layout::{
-        ARRAY_LENGTH, BOUND_CODE, BOUND_RECEIVER, BOUND_TYPE_ARG_COUNT, BOUND_TYPE_ARGS,
-        CLASS_INDEX, CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, CLOSURE_CODE, INSTANCE_CLASS,
-        INSTANCE_SLOTS, STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD,
-        TAG_BYTES, TAG_CLOSURE, TAG_FLOAT, TAG_INSTANCE, TAG_INT, TAG_MAP, TAG_NULL, TAG_TUPLE,
-        TUPLE_COUNT, VALUE, WORD,
+        ARRAY_LENGTH, BOUND_FUNCTION, BOUND_RECEIVER, BOUND_TYPE_ARGS, CLASS_INDEX,
+        CLOSURE_CAPTURES, CLOSURE_FUNCTION, INSTANCE_CLASS, INSTANCE_SLOTS, STRING_TAGS_END,
+        TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_CLOSURE, TAG_FLOAT,
+        TAG_INSTANCE, TAG_INT, TAG_MAP, TAG_NULL, TAG_TUPLE, TUPLE_COUNT, VALUE, VALUE_PAYLOAD,
+        WORD,
     },
     map,
 };
@@ -156,21 +156,29 @@ impl<F: FnMut(usize, usize)> Walk<'_, F> {
                     let count = load(a + TUPLE_COUNT);
                     count == load(b + TUPLE_COUNT) && self.slots(a, b, INSTANCE_SLOTS, count)
                 }
-                // Two functions are equal when they are the same code
-                // over equal captures, or bound to equal receivers.
+                // Two functions are equal when they are the same
+                // function over equal captures, or bound to equal
+                // receivers.
+                // Of one function, they hold as many type objects and
+                // cells. Two type objects are the same type here when
+                // they are one object.
                 TAG_CLOSURE => {
-                    let count = load(a + CLOSURE_CAPTURE_COUNT);
-                    load(a + CLOSURE_CODE) == load(b + CLOSURE_CODE)
-                        && count == load(b + CLOSURE_CAPTURE_COUNT)
-                        && self.slots(a, b, CLOSURE_CAPTURES, count)
+                    let function = load(a + CLOSURE_FUNCTION);
+                    let (types, cells) = function_counts(function);
+                    let type_arg = |closure: usize, index: usize| {
+                        load(closure + CLOSURE_CAPTURES + index * VALUE + VALUE_PAYLOAD)
+                    };
+                    function == load(b + CLOSURE_FUNCTION)
+                        && (0..types).all(|index| type_arg(a, index) == type_arg(b, index))
+                        && self.slots(a, b, CLOSURE_CAPTURES + types * VALUE, cells)
                 }
                 TAG_BOUND_METHOD => {
-                    let count = load(a + BOUND_TYPE_ARG_COUNT);
+                    let function = load(a + BOUND_FUNCTION);
+                    let (types, _) = function_counts(function);
                     let type_arg =
                         |bound: usize, index: usize| load(bound + BOUND_TYPE_ARGS + index * WORD);
-                    load(a + BOUND_CODE) == load(b + BOUND_CODE)
-                        && count == load(b + BOUND_TYPE_ARG_COUNT)
-                        && (0..count).all(|index| type_arg(a, index) == type_arg(b, index))
+                    function == load(b + BOUND_FUNCTION)
+                        && (0..types).all(|index| type_arg(a, index) == type_arg(b, index))
                         && self.slots(a, b, BOUND_RECEIVER, 1)
                 }
                 TAG_INSTANCE => {

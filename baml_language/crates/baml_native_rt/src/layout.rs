@@ -244,23 +244,41 @@ pub const CELL_SIZE: usize = 2 * VALUE;
 /// address of its code, which takes the object itself as its first
 /// argument, and whose header holds its call layout id.
 ///
-/// A closure is a header, the code, a word for its function, the number of
-/// its captures, and the captures.
-pub const CLOSURE_CODE: usize = WORD;
+/// A function's object says what a function is: one per function of the
+/// program, whatever it is called with. It is a header, the code a call
+/// through the object enters, the address of its package's object, the
+/// address of its name, a string, and two halves: how many type objects a
+/// closure or a bound method of the function holds, and how many cells a
+/// closure of it captures. A function the program names as a value is its
+/// object. One that is never a value is not entered through its object,
+/// and its header has no call layout id, which no call's layout is.
+pub const FUNCTION_CODE: usize = WORD;
+pub const FUNCTION_OWNER: usize = 2 * WORD;
+pub const FUNCTION_NAME: usize = 3 * WORD;
+pub const FUNCTION_TYPE_PARAM_COUNT: usize = 4 * WORD;
+pub const FUNCTION_CAPTURE_COUNT: usize = 4 * WORD + 4;
+pub const FUNCTION_SIZE: usize = 6 * WORD;
+
+/// A closure is a header, the code, the address of its function's object,
+/// a word of padding, and its captures, each a value: the type objects of
+/// the type arguments its code reads, as many as its function's object
+/// says, and then the cells of the variables it captures, as many as the
+/// object says.
+pub const CLOSURE_CODE: usize = FUNCTION_CODE;
 pub const CLOSURE_FUNCTION: usize = 2 * WORD;
-pub const CLOSURE_CAPTURE_COUNT: usize = 3 * WORD;
 pub const CLOSURE_CAPTURES: usize = 4 * WORD;
-/// The bytes of a closure with `captures` captures.
+/// The bytes of a closure with `captures` captures, type objects and
+/// cells together.
 pub const fn closure_size(captures: usize) -> usize {
     CLOSURE_CAPTURES + captures * VALUE
 }
 
-/// A bound method is a header, the code, a word for its function, the
-/// number of its type arguments, the receiver, and the type arguments, a
-/// word each.
-pub const BOUND_CODE: usize = CLOSURE_CODE;
-pub const BOUND_FUNCTION: usize = 2 * WORD;
-pub const BOUND_TYPE_ARG_COUNT: usize = 3 * WORD;
+/// A bound method is a header, the code, the address of its function's
+/// object, a word of padding, the receiver, and the type objects of the
+/// type arguments its code reads, a word each, as many as its function's
+/// object says.
+pub const BOUND_CODE: usize = FUNCTION_CODE;
+pub const BOUND_FUNCTION: usize = CLOSURE_FUNCTION;
 pub const BOUND_RECEIVER: usize = 4 * WORD;
 pub const BOUND_TYPE_ARGS: usize = 6 * WORD;
 /// The bytes of a bound method with `type_args` type arguments.
@@ -535,6 +553,8 @@ const _: () = {
     assert!(OWNED_SIZE.is_multiple_of(VALUE));
     assert!(BYTES_SIZE.is_multiple_of(VALUE));
     assert!(BOUND_RECEIVER.is_multiple_of(VALUE));
+    assert!(CLOSURE_CAPTURES.is_multiple_of(VALUE));
+    assert!(FUNCTION_SIZE.is_multiple_of(VALUE));
     // A header's payload is below the flags and above the type id.
     assert!(
         (HEADER_PAYLOAD_MASK << HEADER_PAYLOAD_SHIFT)
