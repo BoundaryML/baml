@@ -814,18 +814,41 @@ fn native_call_fits(
     ))
 }
 
-/// Whether `args` can be passed for parameters of the types `params`, one
-/// each: an argument left to its default goes where any parameter is.
+/// For each slot of `declared`, the layout of a function, which of the
+/// `passed` arguments of a call checked against the layout `site` fills
+/// it: none for a named slot the call does not have, which the function
+/// is passed as left to its default. A call the compiler made itself has
+/// no layout of its own: its arguments are in its callee's. Nothing when
+/// the call cannot be laid over the function.
+pub(crate) fn call_slots(
+    site: Option<&CallLayout>,
+    passed: usize,
+    declared: &CallLayout,
+) -> Option<Vec<Option<usize>>> {
+    match site {
+        None => (passed == declared.len()).then(|| (0..passed).map(Some).collect()),
+        Some(site) if site.len() == passed => site.map_to(declared).ok(),
+        Some(_) => None,
+    }
+}
+
+/// Whether `args` can be passed for parameters of the types `params`,
+/// where `slots` says which argument fills each, if any: an argument left
+/// to its default goes where any parameter is.
 fn arguments_fit<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     body: &Body<'_, 'db>,
     args: &[Operand<'db>],
     params: &[NativeTy<'db>],
+    slots: &[Option<usize>],
 ) -> Result<bool, Blocker> {
-    if args.len() != params.len() {
+    if slots.len() != params.len() {
         return Ok(false);
     }
-    for (argument, expected) in args.iter().zip(params) {
+    for (slot, expected) in slots.iter().zip(params) {
+        let Some(argument) = slot.map(|at| &args[at]) else {
+            continue;
+        };
         if !crate::types::is_omitted(argument)
             && !assignable(expected, &operand_ty(db, body, argument)?)
         {
@@ -835,20 +858,27 @@ fn arguments_fit<'db>(
     Ok(true)
 }
 
-/// Whether a call with these value arguments, storing a `result`, matches
-/// the layout of the copy of the function it calls.
+/// Whether a call checked against the layout `site`, with these value
+/// arguments and storing a `result`, can be laid over the copy of the
+/// function it calls.
 fn call_fits<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     body: &Body<'_, 'db>,
     key: &FnKey<'db>,
+    site: Option<&CallLayout>,
     args: &[Operand<'db>],
     result: &NativeTy<'db>,
 ) -> Result<(), Blocker> {
     // A callee outside the subset is reported as its own blocked function;
     // only a callee that will be compiled constrains the call.
-    if let Ok(expected) = function_signature(db, key) {
-        let fits = arguments_fit(db, body, args, &expected.params)?
-            && assignable(result, &expected.result);
+    if let (Ok(expected), Ok(declared)) = (function_signature(db, key), declared_layout(db, key)) {
+        let fits = match call_slots(site, args.len(), &declared) {
+            Some(slots) => {
+                arguments_fit(db, body, args, &expected.params, &slots)?
+                    && assignable(result, &expected.result)
+            }
+            None => false,
+        };
         if !fits {
             return Err(Blocker::new(
                 "call that does not match its callee's layout",
@@ -1788,6 +1818,7 @@ fn terminator_supported<'db>(
         }
         Terminator::Call {
             has_trace,
+            argument_layout,
             callee,
             args,
             ntypeargs,
@@ -1806,7 +1837,8 @@ fn terminator_supported<'db>(
                     if *ntypeargs != 0 {
                         return Err(Blocker::new("call with type arguments", "function value"));
                     }
-                    let fits = arguments_fit(db, body, args, &expected.params)?
+                    let slots: Vec<_> = (0..args.len()).map(Some).collect();
+                    let fits = arguments_fit(db, body, args, &expected.params, &slots)?
                         && assignable(&result, &expected.result);
                     if !fits {
                         return Err(Blocker::new(
@@ -1901,12 +1933,20 @@ fn terminator_supported<'db>(
                             ));
                         }
                     }
-                    call_fits(db, body, &key, &args[*ntypeargs..], &result)
+                    call_fits(
+                        db,
+                        body,
+                        &key,
+                        argument_layout.as_ref(),
+                        &args[*ntypeargs..],
+                        &result,
+                    )
                 }
             }
         }
         Terminator::VirtualCall {
             has_trace,
+            argument_layout,
             iface,
             method,
             args,
@@ -1963,7 +2003,7 @@ fn terminator_supported<'db>(
                             format!("{method}: a default body that tests its type argument"),
                         ));
                     }
-                    call_fits(db, body, &key, args, &result)
+                    call_fits(db, body, &key, argument_layout.as_ref(), args, &result)
                 }
                 Virtual::Static(Target::Native(native)) => {
                     let (signature, _) = native.callable()?;

@@ -55,9 +55,9 @@ use cranelift_object::{ObjectBuilder, ObjectModule};
 use crate::{
     CompileError, CompileOptions,
     check::{
-        Callee, Intrinsic, Operator, ScalarOp, TypeTestPlan, Virtual, body_of, call_target,
-        declared_layout, identified_arguments, is_intrinsic_call, narrow_bound, signature,
-        type_test_plan, virtual_target,
+        Callee, Intrinsic, Operator, ScalarOp, TypeTestPlan, Virtual, body_of, call_slots,
+        call_target, declared_layout, identified_arguments, is_intrinsic_call, narrow_bound,
+        signature, type_test_plan, virtual_target,
     },
     dispatch::{Slot, Target},
     flow::{Flow, ProvenIndexes},
@@ -1740,23 +1740,29 @@ impl<'a, 'db> Translator<'a, 'db> {
         (self.word_const(layout::TAG_OMITTED), self.word_const(0))
     }
 
-    /// The words a call passes for `args`, the arguments of parameters of
-    /// the types `params`: the tag and the payload of each, in order.
+    /// The words a call passes for parameters of the types `params`: the
+    /// tag and the payload of each, in order. `args` has the argument of
+    /// each, or none for a parameter the call does not name, which is
+    /// passed as one it leaves to its default.
     ///
     /// Every argument is evaluated before any tag is made: a tag read from
     /// an object's header is good until the next call, and the call these
     /// are for is the next one.
-    fn argument_words(
+    fn argument_words<'o>(
         &mut self,
-        args: &[Operand<'db>],
+        args: impl IntoIterator<Item = Option<&'o Operand<'db>>>,
         params: &[NativeTy<'db>],
-    ) -> Result<Vec<ir::Value>, CompileError> {
-        let mut values = Vec::with_capacity(args.len());
-        for (argument, ty) in args.iter().zip(params) {
-            values.push(if crate::types::is_omitted(argument) {
-                None
-            } else {
-                Some(self.operand_as(argument, ty)?)
+    ) -> Result<Vec<ir::Value>, CompileError>
+    where
+        'db: 'o,
+    {
+        let mut values = Vec::with_capacity(params.len());
+        for (argument, ty) in args.into_iter().zip(params) {
+            values.push(match argument {
+                Some(argument) if !crate::types::is_omitted(argument) => {
+                    Some(self.operand_as(argument, ty)?)
+                }
+                _ => None,
             });
         }
         let mut words = Vec::with_capacity(2 * values.len());
@@ -4401,6 +4407,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             Terminator::Call {
                 has_trace,
+                argument_layout,
                 callee,
                 args,
                 ntypeargs,
@@ -4439,7 +4446,8 @@ impl<'a, 'db> Translator<'a, 'db> {
                         // argument does may collect.
                         let function = self.operand(callee)?;
                         self.builder.declare_value_needs_stack_map(function);
-                        let words = self.argument_words(args, &signature.params)?;
+                        let words =
+                            self.argument_words(args.iter().map(Some), &signature.params)?;
                         let (_, closure) = self.builder.ins().isplit(function);
                         let mut arguments = vec![closure];
                         arguments.extend(words);
@@ -4469,9 +4477,12 @@ impl<'a, 'db> Translator<'a, 'db> {
                             of_slot_words(&mut self.builder, &signature.result, tag, payload);
                         (result, signature.result)
                     }
-                    Callee::Function(key) => {
-                        self.call_function(&key, &args[..*ntypeargs], &args[*ntypeargs..])?
-                    }
+                    Callee::Function(key) => self.call_function(
+                        &key,
+                        argument_layout.as_ref(),
+                        &args[..*ntypeargs],
+                        &args[*ntypeargs..],
+                    )?,
                 };
                 let result = self.track(result, &produced);
                 let result = self.coerce(result, &produced, &expected);
@@ -4481,6 +4492,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             }
             Terminator::VirtualCall {
                 has_trace,
+                argument_layout,
                 iface,
                 method,
                 args,
@@ -4526,7 +4538,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                         (array, ty)
                     }
                     Virtual::Static(Target::Function(key)) => {
-                        self.call_function(&key, &[], args)?
+                        self.call_function(&key, argument_layout.as_ref(), &[], args)?
                     }
                     Virtual::Static(Target::Native(native)) => {
                         self.native_call_out_of_line(native, args, 0)?
@@ -4597,21 +4609,31 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(())
     }
 
-    /// Call one copy of a function with these type and value arguments.
+    /// Call one copy of a function with these type and value arguments,
+    /// from a call checked against the layout `site`. The function is
+    /// known, so the call's slots are laid over its own here: it is
+    /// passed each of its parameters, those the call does not have as
+    /// left to their defaults.
     fn call_function(
         &mut self,
         key: &FnKey<'db>,
+        site: Option<&CallLayout>,
         types: &[Operand<'db>],
         args: &[Operand<'db>],
     ) -> Result<(ir::Value, NativeTy<'db>), CompileError> {
         let callee = self.declared(key)?;
+        let slots = call_slots(site, args.len(), &callee.layout)
+            .ok_or_else(|| internal("a checked call can be laid over its callee"))?;
         let mut arguments = Vec::new();
         if callee.type_args != 0 {
             for argument in types {
                 arguments.push(self.type_argument(argument)?);
             }
         }
-        arguments.extend(self.argument_words(args, &callee.signature.params)?);
+        arguments.extend(self.argument_words(
+            slots.iter().map(|slot| slot.map(|at| &args[at])),
+            &callee.signature.params,
+        )?);
         let produced = callee.signature.result.clone();
         let callee = self.function_ref(callee.id);
         // The callee can collect, which moves storage.
@@ -4641,7 +4663,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         // row is, and the implementation reads it as its own first
         // parameter.
         let receiver = self.operand_as(&args[0], &NativeTy::Unknown)?;
-        let rest = self.argument_words(&args[1..], &slot.signature.params)?;
+        let rest = self.argument_words(args[1..].iter().map(Some), &slot.signature.params)?;
         let (tag, payload) = self.builder.ins().isplit(receiver);
         let mut arguments = vec![tag, payload];
         arguments.extend(rest);

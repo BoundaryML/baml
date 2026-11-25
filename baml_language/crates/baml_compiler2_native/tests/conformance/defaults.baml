@@ -129,3 +129,47 @@ function default_churn(n: int) -> int {
 function default_collects_before_later_defaults() -> string {
   default_churns(count(1)) + "|" + default_churns(count(2), b = DefaultBox { size: count(5) })
 }
+
+// A call that names its callee is laid over the callee's parameters where
+// it is compiled: the implementation of an interface method may have
+// parameters with defaults the interface does not, and a call checked
+// against the interface passes them as left out.
+interface DefaultShape {
+  function area(self, scale: int) -> int throws never
+  function name(self, prefix: string) -> string throws never
+}
+class DefaultSquare {
+  side: int
+  implements DefaultShape {
+    function area(self, scale: int, pad: int = count(1)) -> int throws never {
+      if scale > 100 { return self.area(scale - 100, pad = pad + 1) };
+      self.side * self.side * scale + pad
+    }
+    function name(self, prefix: string, suffix: string = "!", again: int = count(1)) -> string throws never {
+      if again > 3 { return self.name(prefix, again = again - 3) };
+      prefix + "square" + suffix + `${again}`
+    }
+  }
+}
+implements DefaultShape for int {
+  function area(self, scale: int, pad: int = count(2)) -> int throws never {
+    if scale > 100 { return self.area(scale - 100, pad = pad + 1) };
+    self * scale + pad
+  }
+  function name(self, prefix: string, suffix: string = "#") -> string throws never {
+    if self > 3 { return (self - 3).name(prefix) };
+    prefix + `int ${self}` + suffix
+  }
+}
+function default_measure<T extends DefaultShape>(shape: T, scale: int) -> string {
+  `${shape.name("a ")} ${shape.area(scale)};`
+}
+function default_measure_often<T extends DefaultShape>(shape: T, scale: int) -> string {
+  let out = "";
+  for (let i = 0; i < scale; i += 1) { out = out + `${shape.name("a ")} ${shape.area(scale + i * 100)};`; };
+  out
+}
+function default_known_implementation() -> string {
+  let square = DefaultSquare { side: count(3) };
+  default_measure(square, count(2)) + default_measure(count(5), count(3)) + default_measure_often(count(7), count(2)) + ` ${square.area(count(1))} ${square.area(count(1), pad = count(5))} ${square.name("the ", suffix = "?")} ${square.name("one ", again = count(5))}`
+}
