@@ -2,7 +2,7 @@
 
 Status: built through `52abac7468`, except ruling 11's use of type arguments in objects (below). The as-built description, with emitted code and measured costs, is in `../memory.md`, `../calls.md`, `../natives.md`, `../gc.md`, `../control.md` and `../tasks.md`. The sections after "The busy bit protocol" are the analysis as proposed, kept for the reasoning; its instruction counts are estimates made before building, and the measured ones are in those notes.
 
-Built: rulings 1 to 10 and 12 to 15; of ruling 11, type arguments as raw type-object addresses, a function with type parameters compiled once, and a union of type parameters built and interned when the program runs.
+Built: rulings 1 to 10 and 12 to 15; of ruling 11, type arguments as raw type-object addresses, a function with type parameters compiled once, and a union of type parameters built and interned when the program runs. The interning is to be removed: see ruling 11.
 
 Not built: the words in objects that say their type arguments. An instance's type parameter slots are `(NULL, 0)`, an array's `ty` and a map's `key_ty` and `value_ty` are zero. So `x is Box<int>` on `unknown` or between two instantiations of one class, and `x is int[]`, are refused when compiled ("type test: between instantiations of one class", "between array types"), and so are two different implementations for one class at different type arguments. The first of these was accepted for scalar arguments before this change, when each instantiation had its own type id: of the ten functions of `baml_tests/baml_src` that compiled then and are refused now, seven are refused for this (`../completeness.md`, census). Writing the words in some makers and testing by them would give wrong answers, so none is written. Three questions for the lead stand in the way:
 
@@ -26,7 +26,7 @@ The lead ruled on section 14 on 2026-11-24. These override the recommendations b
 8. Every indirect call through a function value does the layout check. The whole-program rule for skipping it is not built. Supersedes that bullet of 2.7.
 9. A throw lands with `x0` tag, `x1` payload, and the context through `worker.scratch` as 2.9 describes, taking care that scratch is not a root.
 10. A throwing native returns a `Value` with one bit of the tag meaning "thrown". The bit is 59 (`layout::THROWN`), not bit 0, which ruling 15 made part of the type id: 59 is the collector's forwarded bit, which only an object header ever has, so it is zero in every tag, and a tag with it is never stored. The caller's test is one instruction (`tbnz x0, #59`). Exact-typed scalar parameters of natives stay unwrapped at the Rust boundary.
-11. Type arguments are raw type-object pointers, one word each, interned when built at run time.
+11. Type arguments are raw type-object pointers, one word each. As first ruled they were interned when built at run time. Superseded: a type object holds a `RealizedTy`, is built by substituting type arguments into the MIR's `TyTemplate`, is compared with `baml_type::normalize`, and is not interned (`../memory.md`, "Objects").
 12. `OWNED` and `PLAIN` stay in this change; `RustInstanceObject` is later.
 13. The busy bit (63) protocol is built in this change, not merely reserved: several workers are coming. The sequences are in "The busy bit protocol" below. Panic class is bit 62. Supersedes section 8.
 14. Inside a function the compiler may drop a tag it knows statically, but only where that is the simple thing; never at the cost of a second representation in memory or across a call.
@@ -537,7 +537,7 @@ Standard AAPCS64 (Linux) would skip to an even register for a 16-aligned struct.
 
 - A type argument is one word, a raw `*TypeObject`, in the same position. Not a value: no tag.
 - The `TypeObject` of every type the program names statically is program data, emitted once per distinct type, never moved. `forward` skips it.
-- A type built at run time (a generic function making a `T[]` needs the type object of `T[]`) is found or made by a runtime call that interns it, so that "is `x` an `int[]`" stays a pointer compare of `x.ty`. Such an object may be in the heap, so a type argument held across a call is a one-word stack map entry.
+- A type built at run time (a generic function making a `T[]` needs the type object of `T[]`) is built by a runtime call. (As first written, the call interned it so that "is `x` an `int[]`" stayed a pointer compare. Superseded: a type object holds a `RealizedTy`, is built by substituting type arguments into the MIR's `TyTemplate`, is compared with `baml_type::normalize`, and is not interned (`../memory.md`, "Objects").) Such an object is in the heap, so a type argument held across a call is a one-word stack map entry.
 - For `x is T` inline, give `TypeObject` a fixed prefix: the tag id its values have (zero when it takes more than a tag to decide) and the class object to compare (zero when none).
 
 ```asm
@@ -786,7 +786,7 @@ Most consequential first.
 9. Indirect-call check: (A) the layout field only, 3 instructions, or (B) the whole tag word against `CLOSURE | L << 32`, 4 instructions? Recommendation: A.
 10. Thrown value lands in `x0`, `x1` with the context in `worker.scratch`, or widen Cranelift's landing registers to three? Recommendation: `scratch`.
 11. A throwing native returns a `Value` with bit 0 of the tag as "thrown": yes or no? Recommendation: yes.
-12. Type arguments as raw `*TypeObject` words, interned when built at run time: yes or no? Recommendation: yes.
+12. Type arguments as raw `*TypeObject` words, interned when built at run time: yes or no? Recommendation: yes. Answered later: raw addresses yes, interning no. Superseded: a type object holds a `RealizedTy`, is built by substituting type arguments into the MIR's `TyTemplate`, is compared with `baml_type::normalize`, and is not interned (`../memory.md`, "Objects").
 13. Keep `OWNED` and `PLAIN` in this change and leave `RustInstanceObject` for later: yes or no? Recommendation: yes.
 14. Busy bit reserved, plain stores now: yes or no? Recommendation: yes.
 15. Can a class or an enum variant object be created at run time and live in the heap? This is a question, not a choice: it decides whether `class_ptr` is traced and whether an enum key can be hashed by address.
