@@ -40,6 +40,7 @@ mod loops;
 mod narrow;
 mod natives;
 mod program;
+mod ty_emit;
 mod types;
 
 use std::fmt;

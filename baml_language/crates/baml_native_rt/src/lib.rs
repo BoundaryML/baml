@@ -33,6 +33,7 @@ pub mod native;
 pub mod sched;
 pub mod string;
 pub mod stubs;
+mod ty;
 mod types;
 pub mod unwind;
 

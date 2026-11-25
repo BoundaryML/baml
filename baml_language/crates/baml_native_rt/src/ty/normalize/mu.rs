@@ -1,0 +1,1701 @@
+// Copied from crates/baml_type/src/normalize/mu.rs: μ-canonicalization of realized types. A
+// change to either file must be made to both.
+
+//! μ-canonicalization: the automaton stage that makes canonical forms unique
+//! representatives of the **equirecursive** equivalence class.
+//!
+//! A recursive type is a regular tree; a canonical `NormalTy` with μ-binders is
+//! one finite spelling of it, and different spellings of the same tree (alias
+//! renamings, partial unfoldings, mutually recursive definitions) differ
+//! structurally. This module quotients those differences away, as a typestate
+//! pipeline — each stage's invariant is carried by its type:
+//!
+//! [`Builder`] → [`Built`] → [`Closed`] → [`Minimal`] → read-back / render
+//!
+//! 1. **Build** ([`Builder::build`]) — intern the term as a term-graph
+//!    automaton: one state per node, a μ-binder is the knot (its state *is* its
+//!    body's state, carrying the alias name), a recursion variable is a
+//!    back-edge.
+//! 2. **ε-closure** ([`Built::epsilon_close`]) — a union member that is itself a
+//!    union state is an ε-edge; per ε-SCC, members become the
+//!    constructor-successors of the component. This is union flattening
+//!    generalized through recursion, and it implements the productivity ruling
+//!    for unguarded self-references: a member reachable only through ε-cycles
+//!    contributes nothing (`type A = A | A[]` ≡ `μX.X[]`), and a
+//!    constructor-free ε-component is uninhabited (`μX.X` ≡ `never`). After
+//!    this step every μ body is constructor-headed (contractive) — the
+//!    precondition of the assumption-set subtype algorithm.
+//! 3. **Minimization + per-state algebra** ([`Closed::minimize_and_absorb`]) —
+//!    Moore-style partition refinement merges bisimilar states (equal unravelled
+//!    trees — every spelling of one tree at any unfolding depth), interleaved to
+//!    a fixpoint with the union algebra per state: members *materialized as
+//!    closed read-backs* feed the real subtype checker (full context), so the
+//!    absorptions the bottom-up pass deferred for open members complete here,
+//!    and completeness collapses apply across merged members.
+//! 4. **Read-back / render** ([`Minimal::read_back`], [`Minimal::render_root`])
+//!    — a deterministic DFS emits the canonical μ-term: a back edge to an
+//!    on-path state becomes a de Bruijn `RecVar`, the revisited state is wrapped
+//!    in `Mu`, off-path revisits re-expand, union members sort by the canonical
+//!    `Ord`. Each emitted binder's [`MuDisplay`] carries the **named-cut**
+//!    rendering of its subterm (recursion folded to alias names at named cycle
+//!    states), computed here while the automaton — which knows the names — is
+//!    in scope.
+//!
+//! # Representation: borrow the input, compare by id
+//!
+//! The automaton borrows from the input term (lifetime `'a`) and interns every
+//! heavy payload — parameter names, leaf terms — into dense
+//! ids at build time ([`Interner`]). A head is the address of its object and
+//! an associated type its position, already integers, so they are held as
+//! they are. All downstream phases (ε-closure,
+//! refinement, absorption bookkeeping) are pure integer work; a string is
+//! compared only at its single intern probe, and owned values are cloned only at
+//! output emission.
+//!
+//! # Determinism
+//!
+//! The result must be a function of the input term alone. Every collection whose
+//! iteration order can reach the output is a `Vec`, `BTreeSet`, or `BTreeMap` —
+//! never a hash map — state ids follow the input walk, and intern ids follow
+//! first encounter. Any hash-iteration order feeding the output is a bug.
+//! Heads order by address, which holds for the length of one call.
+//!
+//! # Termination
+//!
+//! ε-closure and refinement are fixpoint passes over finitely many states. The
+//! canonicalization loop only merges states, removes union members, redirects to
+//! existing states, or rewrites a complete variant set to its enum (which
+//! nothing can reintroduce) — all monotone — so it reaches a fixpoint.
+//!
+//! # Names, covers, and the bail
+//!
+//! At build time every cycle passes through a named state: the only back-edges
+//! the named intermediate contains are alias re-encounters, so every
+//! cycle-closing edge targets a binder state carrying its alias name; redirects
+//! transfer names and merges union them. ε-splicing, however, can *bypass* the
+//! named state — splicing named `u_A` (`type A = int | (A | null)[]`) into the
+//! inner union leaves the surviving cycle nameless. The renderer therefore cuts
+//! cycles two ways: at named cyclic states (`RealizedTy::TypeAlias`), and at **subset
+//! covers** — an unnamed cyclic union containing everything a named cyclic
+//! union holds renders as `name | extras`, which is exact by union semantics.
+//! Absorption is withheld from unnamed cyclic unions so covers survive
+//! ([`algebra_pass`]). A cycle neither names nor covers can cut has no finite
+//! alias-based `Ty` spelling at all; rather than hand a wrong display to a fact
+//! oracle, the renderer **bails** and the pipeline degrades to the sound
+//! pre-automaton form (see [`canonicalize_mu`]).
+
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    ptr::NonNull,
+};
+
+use super::{MuDisplay, NormalParam, NormalTy, TypeContext};
+use crate::ty::{
+    AssocBinding, AssocIndex, ClassObject, CowBox, EnumVariantObject, FunctionParamMode,
+    FunctionParamTy, InterfaceObject, Literal, RealizedTy, Text, TypeObject,
+};
+
+/// Canonicalize a term containing at least one μ-binder.
+///
+/// Falls back to the (already sound, bottom-up-canonicalized) input when the
+/// automaton's rendering bails — see [`Renderer`]: an exotic cycle that no
+/// alias name or subset cover can cut has no exact `RealizedTy` spelling, and a wrong
+/// display must never reach a fact oracle. The fallback degrades only
+/// *completeness* (two such spellings may miss an equivalence), never
+/// soundness.
+pub(super) fn canonicalize_mu<C: TypeContext>(term: NormalTy, ctx: &C) -> NormalTy {
+    let specials = Specials::new();
+    let out = Builder::default()
+        .build(&term, &specials)
+        .epsilon_close()
+        .minimize_and_absorb(ctx)
+        .read_back();
+    out.unwrap_or(term)
+}
+
+/// [`canonicalize_mu`] plus the root rendering for `normalize`: root-unfold-once
+/// (a recursive alias exposes its head constructor; nested recursion folds to
+/// alias names). The bail fallback renders the input term via its interim
+/// (legacy) displays — a correct, merely less-canonical spelling.
+pub(super) fn canonicalize_mu_with_render<C: TypeContext>(
+    term: NormalTy,
+    ctx: &C,
+) -> (NormalTy, RealizedTy) {
+    let specials = Specials::new();
+    let minimal = Builder::default()
+        .build(&term, &specials)
+        .epsilon_close()
+        .minimize_and_absorb(ctx);
+    if let (Some(t), Some(r)) = (minimal.read_back(), minimal.render_root()) {
+        return (t, r);
+    }
+    drop(minimal);
+    let rendered = term.clone().into_ty();
+    (term, rendered)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERNING
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// A parameter name, interned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct StrId(u32);
+
+/// A childless canonical leaf term, interned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct LeafId(u32);
+
+/// First-encounter interning of borrowed values: one ordered probe per
+/// occurrence at build time buys integer comparison everywhere after.
+struct Interner<'a, T: ?Sized + Ord> {
+    ids: BTreeMap<&'a T, u32>,
+    values: Vec<&'a T>,
+}
+
+impl<T: ?Sized + Ord> Default for Interner<'_, T> {
+    fn default() -> Self {
+        Self {
+            ids: BTreeMap::new(),
+            values: Vec::new(),
+        }
+    }
+}
+
+impl<'a, T: ?Sized + Ord> Interner<'a, T> {
+    fn intern(&mut self, value: &'a T) -> u32 {
+        if let Some(&id) = self.ids.get(value) {
+            return id;
+        }
+        let id = self.values.len() as u32;
+        self.ids.insert(value, id);
+        self.values.push(value);
+        id
+    }
+
+    fn get(&self, id: u32) -> &'a T {
+        self.values[id as usize]
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTOMATON CORE
+// ═══════════════════════════════════════════════════════════════════════════
+
+type StateId = usize;
+
+/// One term-graph node. Children are state ids (resolve through
+/// [`Automaton::resolve`] before use); payloads are interned ids. `Leaf` holds
+/// the childless canonical variants *except* enums, which get their own
+/// id-based kinds so the enum-completeness collapse can synthesize an enum
+/// state without owning a term.
+enum Node {
+    Leaf(LeafId),
+    Enum(NonNull<ClassObject>),
+    EnumVariant(NonNull<ClassObject>, NonNull<EnumVariantObject>),
+    Class(NonNull<ClassObject>, Vec<StateId>),
+    Interface(
+        NonNull<InterfaceObject>,
+        Vec<StateId>,
+        Vec<(AssocIndex, StateId)>,
+    ),
+    List(StateId),
+    Map(StateId, StateId),
+    Future(StateId, StateId),
+    Union(Vec<StateId>),
+    Tuple(Vec<StateId>),
+    Function {
+        params: Vec<(Option<StrId>, FunctionParamMode, StateId)>,
+        ret: StateId,
+        throws: StateId,
+    },
+}
+
+struct State {
+    node: Node,
+    /// Alias names denoting this state (μ-binder origins; unioned on merge,
+    /// transferred on redirect), ordered by address.
+    names: BTreeSet<NonNull<TypeObject>>,
+}
+
+/// The special leaves, interned first by [`Automaton::new`] so the hot
+/// special-case probes are id compares.
+///
+/// Owned by the entry point that runs the automaton and borrowed for the
+/// automaton's whole life, exactly like the term being canonicalized: the
+/// [`Interner`] borrows rather than clones, and nothing here asks a head to be
+/// `'static` (the runtime's head is branded by the heap epoch it was read in).
+struct Specials {
+    never: NormalTy,
+    unknown_top: NormalTy,
+    bool_leaf: NormalTy,
+    lit_true: NormalTy,
+    lit_false: NormalTy,
+}
+
+impl Specials {
+    fn new() -> Self {
+        Self {
+            never: NormalTy::Never,
+            unknown_top: NormalTy::Unknown,
+            bool_leaf: NormalTy::Bool,
+            lit_true: NormalTy::Literal(Literal::Bool(true)),
+            lit_false: NormalTy::Literal(Literal::Bool(false)),
+        }
+    }
+}
+
+struct Automaton<'a> {
+    states: Vec<State>,
+    /// Redirect chains from ε singleton collapses, minimization merges, and
+    /// binder knot-tying; [`Self::resolve`] follows them to the live state.
+    redirect: Vec<StateId>,
+    strs: Interner<'a, Text>,
+    leaves: Interner<'a, NormalTy>,
+    /// Pre-interned specials, so the hot special-case probes are id compares.
+    never: LeafId,
+    unknown_top: LeafId,
+    bool_leaf: LeafId,
+    lit_true: LeafId,
+    lit_false: LeafId,
+}
+
+impl<'a> Automaton<'a> {
+    fn new(specials: &'a Specials) -> Self {
+        let mut leaves = Interner::default();
+        let never = LeafId(leaves.intern(&specials.never));
+        let unknown_top = LeafId(leaves.intern(&specials.unknown_top));
+        let bool_leaf = LeafId(leaves.intern(&specials.bool_leaf));
+        let lit_true = LeafId(leaves.intern(&specials.lit_true));
+        let lit_false = LeafId(leaves.intern(&specials.lit_false));
+        Self {
+            states: Vec::new(),
+            redirect: Vec::new(),
+            strs: Interner::default(),
+            leaves,
+            never,
+            unknown_top,
+            bool_leaf,
+            lit_true,
+            lit_false,
+        }
+    }
+
+    fn alloc(&mut self, node: Node) -> StateId {
+        let id = self.states.len();
+        self.states.push(State {
+            node,
+            names: BTreeSet::new(),
+        });
+        self.redirect.push(id);
+        id
+    }
+
+    fn resolve(&self, mut s: StateId) -> StateId {
+        while self.redirect[s] != s {
+            s = self.redirect[s];
+        }
+        s
+    }
+
+    /// Redirect `from` to `to`, transferring names.
+    fn redirect_to(&mut self, from: StateId, to: StateId) {
+        debug_assert_ne!(self.resolve(from), self.resolve(to));
+        let names = std::mem::take(&mut self.states[from].names);
+        let to = self.resolve(to);
+        self.states[to].names.extend(names);
+        self.redirect[from] = to;
+    }
+
+    fn node(&self, s: StateId) -> &Node {
+        &self.states[self.resolve(s)].node
+    }
+
+    fn is_never(&self, s: StateId) -> bool {
+        matches!(self.node(s), Node::Leaf(l) if *l == self.never)
+    }
+
+    fn is_unknown_top(&self, s: StateId) -> bool {
+        matches!(self.node(s), Node::Leaf(l) if *l == self.unknown_top)
+    }
+
+    /// The least alias of `s` by address, if any — the
+    /// deterministic representative for rendering within this call.
+    fn representative_name(&self, s: StateId) -> Option<NonNull<TypeObject>> {
+        self.states[self.resolve(s)].names.first().copied()
+    }
+
+    /// All states reachable from `root` (resolved ids, ascending — the
+    /// deterministic processing order).
+    fn reachable(&self, root: StateId) -> Vec<StateId> {
+        let mut seen = BTreeSet::new();
+        let mut stack = vec![self.resolve(root)];
+        while let Some(s) = stack.pop() {
+            if !seen.insert(s) {
+                continue;
+            }
+            for c in children(self.node(s)) {
+                stack.push(self.resolve(c));
+            }
+        }
+        seen.into_iter().collect()
+    }
+}
+
+/// The child state ids of a node, in canonical child order.
+fn children(node: &Node) -> Vec<StateId> {
+    match node {
+        Node::Leaf(_) | Node::Enum(_) | Node::EnumVariant(..) => Vec::new(),
+        Node::Class(_, args) => args.clone(),
+        Node::Interface(_, args, bindings) => args
+            .iter()
+            .chain(bindings.iter().map(|(_, s)| s))
+            .copied()
+            .collect(),
+        Node::List(inner) => vec![*inner],
+        Node::Map(k, v) | Node::Future(k, v) => vec![*k, *v],
+        Node::Union(members) | Node::Tuple(members) => members.clone(),
+        Node::Function {
+            params,
+            ret,
+            throws,
+        } => params
+            .iter()
+            .map(|(_, _, s)| *s)
+            .chain([*ret, *throws])
+            .collect(),
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STAGE 1: BUILD
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Interns a canonical term into a fresh automaton. Owns the binder stack the
+/// walk needs; consumed by [`Builder::build`].
+#[derive(Default)]
+struct Builder {
+    binders: Vec<StateId>,
+}
+
+impl Builder {
+    fn build<'a>(mut self, term: &'a NormalTy, specials: &'a Specials) -> Built<'a> {
+        let mut auto = Automaton::new(specials);
+        let root = self.intern_term(&mut auto, term);
+        debug_assert!(self.binders.is_empty());
+        Built { auto, root }
+    }
+
+    /// A μ-binder ties the knot: its reserved state either receives the body's
+    /// node (when the body is a direct self-reference this is the ε-self-loop
+    /// `Union([s])`, resolved to `never` by closure) or redirects to the body's
+    /// state, carrying the alias name either way. A recursion variable is an
+    /// edge to the binder state `index` levels up the stack.
+    fn intern_term<'a>(&mut self, auto: &mut Automaton<'a>, term: &'a NormalTy) -> StateId {
+        match term {
+            NormalTy::Mu { binder, body } => {
+                let s = auto.alloc(Node::Union(Vec::new()));
+                if let Some(name) = binder.name {
+                    auto.states[s].names.insert(name);
+                }
+                self.binders.push(s);
+                let b = self.intern_term(auto, body);
+                self.binders.pop();
+                if auto.resolve(b) == s {
+                    // `μX.X`: the body is the back-reference itself — an
+                    // ε-self-loop (constructor-free, hence `never` after closure).
+                    auto.states[s].node = Node::Union(vec![s]);
+                    s
+                } else {
+                    auto.redirect_to(s, b);
+                    auto.resolve(b)
+                }
+            }
+            NormalTy::RecVar(index) => {
+                let i = *index as usize;
+                debug_assert!(i < self.binders.len(), "free RecVar reached the automaton");
+                self.binders[self.binders.len() - 1 - i]
+            }
+            NormalTy::Enum(qn) => auto.alloc(Node::Enum(*qn)),
+            NormalTy::EnumVariant(qn, v) => auto.alloc(Node::EnumVariant(*qn, *v)),
+            NormalTy::Class(qn, args) => {
+                let args = args.iter().map(|a| self.intern_term(auto, a)).collect();
+                auto.alloc(Node::Class(*qn, args))
+            }
+            NormalTy::Interface(qn, args, bindings) => {
+                let args = args.iter().map(|a| self.intern_term(auto, a)).collect();
+                let bindings = bindings
+                    .iter()
+                    .map(|(n, t)| (*n, self.intern_term(auto, t)))
+                    .collect();
+                auto.alloc(Node::Interface(*qn, args, bindings))
+            }
+            NormalTy::List(inner) => {
+                let inner = self.intern_term(auto, inner);
+                auto.alloc(Node::List(inner))
+            }
+            NormalTy::Map { key, value } => {
+                let key = self.intern_term(auto, key);
+                let value = self.intern_term(auto, value);
+                auto.alloc(Node::Map(key, value))
+            }
+            NormalTy::Future(value, error) => {
+                let value = self.intern_term(auto, value);
+                let error = self.intern_term(auto, error);
+                auto.alloc(Node::Future(value, error))
+            }
+            NormalTy::Union(members) => {
+                let members = members.iter().map(|m| self.intern_term(auto, m)).collect();
+                auto.alloc(Node::Union(members))
+            }
+            NormalTy::Tuple(elements) => {
+                let elements = elements.iter().map(|e| self.intern_term(auto, e)).collect();
+                auto.alloc(Node::Tuple(elements))
+            }
+            NormalTy::Function {
+                params,
+                ret,
+                throws,
+            } => {
+                let params = params
+                    .iter()
+                    .map(|p| {
+                        (
+                            p.name.as_ref().map(|n| StrId(auto.strs.intern(n))),
+                            p.mode,
+                            self.intern_term(auto, &p.ty),
+                        )
+                    })
+                    .collect();
+                let ret = self.intern_term(auto, ret);
+                let throws = self.intern_term(auto, throws);
+                auto.alloc(Node::Function {
+                    params,
+                    ret,
+                    throws,
+                })
+            }
+            leaf @ (NormalTy::Int
+            | NormalTy::Bigint
+            | NormalTy::Float
+            | NormalTy::String
+            | NormalTy::Bool
+            | NormalTy::Null
+            | NormalTy::Uint8Array
+            | NormalTy::Media(_)
+            | NormalTy::RustType
+            | NormalTy::Type
+            | NormalTy::Resource
+            | NormalTy::PromptAst
+            | NormalTy::Literal(_)
+            | NormalTy::Never
+            | NormalTy::Unknown) => {
+                let id = LeafId(auto.leaves.intern(leaf));
+                auto.alloc(Node::Leaf(id))
+            }
+        }
+    }
+}
+
+/// Stage invariant: a faithful term-graph of the input — knots tied (every
+/// back-edge targets its binder's state, which carries the alias name), no
+/// transformation applied yet.
+struct Built<'a> {
+    auto: Automaton<'a>,
+    root: StateId,
+}
+
+impl<'a> Built<'a> {
+    fn epsilon_close(mut self) -> Closed<'a> {
+        epsilon_close(&mut self.auto, self.root);
+        Closed {
+            auto: self.auto,
+            root: self.root,
+        }
+    }
+}
+
+/// Stage invariant: ε-closed — no union has a union member, a `never` member,
+/// or an unguarded spine; every μ body is constructor-headed (contractive), so
+/// the assumption-set subtype algorithm's precondition holds for anything read
+/// back from here.
+struct Closed<'a> {
+    auto: Automaton<'a>,
+    root: StateId,
+}
+
+impl<'a> Closed<'a> {
+    /// Interleave partition refinement with the per-state union algebra to a
+    /// fixpoint (an absorption redirect can resurface ε-edges, hence the
+    /// re-closure inside the loop).
+    fn minimize_and_absorb<C: TypeContext>(mut self, ctx: &C) -> Minimal<'a> {
+        loop {
+            minimize(&mut self.auto, self.root);
+            if !algebra_pass(&mut self.auto, self.root, ctx) {
+                break;
+            }
+            epsilon_close(&mut self.auto, self.root);
+        }
+        Minimal {
+            auto: self.auto,
+            root: self.root,
+        }
+    }
+}
+
+/// Stage invariant: the canonical automaton — coarsest bisimulation, union
+/// algebra at fixpoint. Its read-back is the unique canonical μ-term of the
+/// input's equivalence class; its renders are the canonical spellings.
+struct Minimal<'a> {
+    auto: Automaton<'a>,
+    root: StateId,
+}
+
+impl Minimal<'_> {
+    fn read_back(&self) -> Option<NormalTy> {
+        read_back(&self.auto, self.root)
+    }
+
+    /// The `normalize` rendering of the whole type: a *named* recursive root is
+    /// unfolded once (callers rely on `normalize` exposing the head
+    /// constructor — impl-subject classification, dispatch-target resolution,
+    /// pattern-matrix specialization), with nested recursion folded to alias
+    /// names; every other root renders by named-cut directly. `None` when the
+    /// renderer bails (see [`Renderer`]).
+    fn render_root(&self) -> Option<RealizedTy> {
+        let auto = &self.auto;
+        let cyclic = cyclic_states(auto, self.root);
+        let orders = union_orders(auto, self.root)?;
+        let mut renderer = Renderer::new(auto, &cyclic, &orders);
+        let r = auto.resolve(self.root);
+        let mut path = Vec::new();
+        if cyclic.contains(&r) && auto.representative_name(r).is_some() {
+            path.push(r);
+            let rendered = renderer.structural(r, &mut path);
+            path.pop();
+            return rendered;
+        }
+        renderer.render(r, &mut path)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STAGE 2: ε-CLOSURE
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Close every union state over its ε-edges (members that are themselves union
+/// states). Tarjan yields ε-SCCs successors-first, so by the time a component is
+/// processed every union it can still reach through ε is already closed; the
+/// component's final members are the constructor-successors gathered across it.
+fn epsilon_close(auto: &mut Automaton<'_>, root: StateId) {
+    let sccs = epsilon_sccs(auto, root);
+    for scc in sccs {
+        let in_scc: BTreeSet<StateId> = scc.iter().copied().collect();
+        let mut members: BTreeSet<StateId> = BTreeSet::new();
+        for &u in &scc {
+            let Node::Union(ms) = auto.node(u) else {
+                // A prior component's processing may have redirected this state
+                // (nested singleton collapse); nothing left to close.
+                continue;
+            };
+            for m in ms.clone() {
+                let r = auto.resolve(m);
+                if in_scc.contains(&r) {
+                    continue;
+                }
+                match auto.node(r) {
+                    // An already-closed union: splice its (constructor) members.
+                    Node::Union(inner) => {
+                        let inner = inner.clone();
+                        members.extend(inner.into_iter().map(|x| auto.resolve(x)));
+                    }
+                    _ => {
+                        members.insert(r);
+                    }
+                }
+            }
+        }
+        // `never` contributes nothing; `unknown` absorbs everything.
+        members.retain(|&m| !auto.is_never(m));
+        let has_top = members.iter().any(|&m| auto.is_unknown_top(m));
+        for &u in &scc {
+            if auto.resolve(u) != u {
+                continue;
+            }
+            if has_top {
+                auto.states[u].node = Node::Leaf(auto.unknown_top);
+            } else if members.is_empty() {
+                // A constructor-free ε-component: only non-productive circular
+                // derivations exist, so nothing inhabits it (`μX.X` ≡ `never`).
+                auto.states[u].node = Node::Leaf(auto.never);
+            } else if members.len() == 1 {
+                let m = *members
+                    .first()
+                    .unwrap_or_else(|| unreachable!("len checked"));
+                if auto.resolve(m) != u {
+                    auto.redirect_to(u, m);
+                }
+            } else {
+                auto.states[u].node = Node::Union(members.iter().copied().collect());
+            }
+        }
+    }
+}
+
+/// ε-SCCs over union states, in Tarjan completion order (successors first).
+fn epsilon_sccs(auto: &Automaton<'_>, root: StateId) -> Vec<Vec<StateId>> {
+    struct Tarjan<'x, 'a> {
+        auto: &'x Automaton<'a>,
+        index: BTreeMap<StateId, usize>,
+        low: BTreeMap<StateId, usize>,
+        on_stack: BTreeSet<StateId>,
+        stack: Vec<StateId>,
+        next: usize,
+        sccs: Vec<Vec<StateId>>,
+    }
+    impl Tarjan<'_, '_> {
+        fn visit(&mut self, s: StateId) {
+            self.index.insert(s, self.next);
+            self.low.insert(s, self.next);
+            self.next += 1;
+            self.stack.push(s);
+            self.on_stack.insert(s);
+            let Node::Union(members) = self.auto.node(s) else {
+                unreachable!("ε-SCCs are computed over union states only")
+            };
+            let eps: Vec<StateId> = members
+                .iter()
+                .map(|&m| self.auto.resolve(m))
+                .filter(|&r| r != s && matches!(self.auto.node(r), Node::Union(_)))
+                .collect();
+            for t in eps {
+                if !self.index.contains_key(&t) {
+                    self.visit(t);
+                    let l = self.low[&t].min(self.low[&s]);
+                    self.low.insert(s, l);
+                } else if self.on_stack.contains(&t) {
+                    let l = self.index[&t].min(self.low[&s]);
+                    self.low.insert(s, l);
+                }
+            }
+            if self.low[&s] == self.index[&s] {
+                let mut scc = Vec::new();
+                loop {
+                    let t = self
+                        .stack
+                        .pop()
+                        .unwrap_or_else(|| unreachable!("Tarjan stack underflow"));
+                    self.on_stack.remove(&t);
+                    scc.push(t);
+                    if t == s {
+                        break;
+                    }
+                }
+                scc.sort_unstable();
+                self.sccs.push(scc);
+            }
+        }
+    }
+    let mut t = Tarjan {
+        auto,
+        index: BTreeMap::new(),
+        low: BTreeMap::new(),
+        on_stack: BTreeSet::new(),
+        stack: Vec::new(),
+        next: 0,
+        sccs: Vec::new(),
+    };
+    for s in auto.reachable(root) {
+        if matches!(auto.node(s), Node::Union(_)) && !t.index.contains_key(&s) {
+            t.visit(s);
+        }
+    }
+    t.sccs
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STAGE 3: MINIMIZATION + PER-STATE ALGEBRA
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Moore-style partition refinement to the coarsest bisimulation, then merge
+/// each block into its smallest member. Union members refine as a *set* of
+/// blocks (duplicates within a block are one member of the tree).
+fn minimize(auto: &mut Automaton<'_>, root: StateId) {
+    let reach = auto.reachable(root);
+
+    // Initial partition by local shape — pure id comparisons.
+    let mut block: BTreeMap<StateId, usize> = BTreeMap::new();
+    {
+        let mut groups: BTreeMap<LocalKey, Vec<StateId>> = BTreeMap::new();
+        for &s in &reach {
+            groups.entry(local_key(auto, s)).or_default().push(s);
+        }
+        for (i, states) in groups.into_values().enumerate() {
+            for s in states {
+                block.insert(s, i);
+            }
+        }
+    }
+
+    // Refine by child blocks until stable.
+    loop {
+        let mut groups: BTreeMap<(usize, Vec<usize>), Vec<StateId>> = BTreeMap::new();
+        for &s in &reach {
+            let sig = match auto.node(s) {
+                Node::Union(members) => {
+                    let mut bs: Vec<usize> =
+                        members.iter().map(|&m| block[&auto.resolve(m)]).collect();
+                    bs.sort_unstable();
+                    bs.dedup();
+                    bs
+                }
+                other => children(other)
+                    .into_iter()
+                    .map(|c| block[&auto.resolve(c)])
+                    .collect(),
+            };
+            groups.entry((block[&s], sig)).or_default().push(s);
+        }
+        let stable = groups.len() == block.values().collect::<BTreeSet<_>>().len();
+        let mut next: BTreeMap<StateId, usize> = BTreeMap::new();
+        for (i, states) in groups.into_values().enumerate() {
+            for s in states {
+                next.insert(s, i);
+            }
+        }
+        block = next;
+        if stable {
+            break;
+        }
+    }
+
+    // Merge each block into its smallest state id.
+    let mut rep: BTreeMap<usize, StateId> = BTreeMap::new();
+    for &s in &reach {
+        rep.entry(block[&s]).or_insert(s); // reach is ascending
+    }
+    for &s in &reach {
+        let r = rep[&block[&s]];
+        if s != r {
+            auto.redirect_to(s, r);
+        }
+    }
+}
+
+/// The local (childless) shape of a state — everything about a node except its
+/// children, as interned ids. Two states can only ever merge if their local
+/// keys are equal.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum LocalKey {
+    Leaf(LeafId),
+    Enum(NonNull<ClassObject>),
+    EnumVariant(NonNull<ClassObject>, NonNull<EnumVariantObject>),
+    Class(NonNull<ClassObject>, usize),
+    Interface(NonNull<InterfaceObject>, usize, Vec<AssocIndex>),
+    List,
+    Map,
+    Future,
+    Union,
+    Tuple(usize),
+    Function(Vec<(Option<StrId>, FunctionParamMode)>),
+}
+
+fn local_key(auto: &Automaton<'_>, s: StateId) -> LocalKey {
+    match auto.node(s) {
+        Node::Leaf(l) => LocalKey::Leaf(*l),
+        Node::Enum(qn) => LocalKey::Enum(*qn),
+        Node::EnumVariant(qn, v) => LocalKey::EnumVariant(*qn, *v),
+        Node::Class(qn, args) => LocalKey::Class(*qn, args.len()),
+        Node::Interface(qn, args, bindings) => {
+            LocalKey::Interface(*qn, args.len(), bindings.iter().map(|(n, _)| *n).collect())
+        }
+        Node::List(_) => LocalKey::List,
+        Node::Map(..) => LocalKey::Map,
+        Node::Future(..) => LocalKey::Future,
+        Node::Union(_) => LocalKey::Union,
+        Node::Tuple(elements) => LocalKey::Tuple(elements.len()),
+        Node::Function { params, .. } => LocalKey::Function(
+            params
+                .iter()
+                .map(|(name, mode, _)| (*name, *mode))
+                .collect(),
+        ),
+    }
+}
+
+/// Re-run the union algebra per state over the merged automaton: dedup members
+/// that became one state, collapse complete enums, and absorb subtype members —
+/// with each member materialized as its **closed** read-back so the real subtype
+/// checker (full context) decides, completing the absorptions the bottom-up pass
+/// deferred for open members. Returns whether anything changed.
+///
+/// Two classes of union state skip the pairwise absorption (collapses and dedup
+/// still apply):
+/// - a **cyclic unnamed** state: its rendering depends on a named subset cover
+///   ([`Renderer`]), and absorbing a covered member would break the only exact
+///   spelling of the cycle — conservative, spelling-invariant (the decision is a
+///   function of the minimal automaton);
+/// - a state with a member whose materialization **bailed**: no sound `Ty`
+///   spelling exists to hand the fact oracles.
+fn algebra_pass<C: TypeContext>(auto: &mut Automaton<'_>, root: StateId, ctx: &C) -> bool {
+    let cyclic = cyclic_states(auto, root);
+    let mut changed = false;
+    // Member read-backs are pure in the automaton and members recur across
+    // union states (a shared leaf sits in many unions), so memoize them while
+    // the automaton is unmutated: any node rewrite or redirect below clears
+    // the memo (a stale read-back would change absorption decisions).
+    let mut read_backs: BTreeMap<StateId, Option<NormalTy>> = BTreeMap::new();
+    for s in auto.reachable(root) {
+        let Node::Union(raw) = auto.node(s) else {
+            continue;
+        };
+        let before: BTreeSet<StateId> = raw.iter().map(|&m| auto.resolve(m)).collect();
+        let mut members: BTreeSet<StateId> = before.clone();
+        members.retain(|&m| !auto.is_never(m));
+
+        collapse_complete_enums(auto, &mut members, ctx);
+        collapse_complete_bools(auto, &mut members);
+
+        let absorb = !(cyclic.contains(&s) && auto.representative_name(s).is_none());
+        // Materialize members as closed terms; canonical order = term order.
+        let materialized: Option<Vec<(NormalTy, StateId)>> = if absorb {
+            members
+                .iter()
+                .map(|&m| {
+                    read_backs
+                        .entry(m)
+                        .or_insert_with(|| read_back(auto, m))
+                        .clone()
+                        .map(|t| (t, m))
+                })
+                .collect()
+        } else {
+            None
+        };
+        let members: BTreeSet<StateId> = if let Some(mut items) = materialized {
+            items.sort();
+
+            // The pairwise absorption rule of `absorb_subtypes`, over closed terms.
+            let n = items.len();
+            let mut keep = vec![true; n];
+            for i in 0..n {
+                for j in 0..n {
+                    if i == j || !keep[j] {
+                        continue;
+                    }
+                    if !items[i]
+                        .0
+                        .is_subtype_of(&items[j].0, ctx, &mut HashSet::new())
+                    {
+                        continue;
+                    }
+                    let mutual = items[j]
+                        .0
+                        .is_subtype_of(&items[i].0, ctx, &mut HashSet::new());
+                    if !mutual || j < i {
+                        keep[i] = false;
+                        break;
+                    }
+                }
+            }
+            items
+                .into_iter()
+                .zip(&keep)
+                .filter(|&(_, &k)| k)
+                .map(|((_, m), _)| m)
+                .collect()
+        } else {
+            members
+        };
+
+        let state_changed = members != before;
+        changed |= state_changed;
+        match members.len() {
+            0 => {
+                auto.states[s].node = Node::Leaf(auto.never);
+                read_backs.clear();
+            }
+            1 => {
+                let m = *members
+                    .first()
+                    .unwrap_or_else(|| unreachable!("len checked"));
+                if auto.resolve(m) != s {
+                    auto.redirect_to(s, m);
+                    // The redirect may point other unions' members at a union —
+                    // force another closure/refinement round.
+                    changed = true;
+                    read_backs.clear();
+                }
+            }
+            _ => {
+                // The write normalizes the stored member Vec (resolved, sorted,
+                // deduped); with the member set unchanged that is
+                // read-back-invariant (read-back resolves and sorts members
+                // itself), so cached read-backs stay valid.
+                auto.states[s].node = Node::Union(members.into_iter().collect());
+                if state_changed {
+                    read_backs.clear();
+                }
+            }
+        }
+    }
+    changed
+}
+
+/// Replace a complete set of an enum's variant states with the enum state
+/// (`E.A | E.B | … == E`), finding or allocating it.
+fn collapse_complete_enums<C: TypeContext>(
+    auto: &mut Automaton<'_>,
+    members: &mut BTreeSet<StateId>,
+    ctx: &C,
+) {
+    let mut enums: BTreeSet<NonNull<ClassObject>> = BTreeSet::new();
+    for &m in members.iter() {
+        if let Node::EnumVariant(e, _) = auto.node(m) {
+            enums.insert(*e);
+        }
+    }
+    for e in enums {
+        let Some(all) = ctx.enum_variants(&e) else {
+            continue; // unknown enum → no collapse (fail-safe)
+        };
+        let present: BTreeSet<&NonNull<EnumVariantObject>> = members
+            .iter()
+            .filter_map(|&m| match auto.node(m) {
+                Node::EnumVariant(en, v) if *en == e => Some(v),
+                _ => None,
+            })
+            .collect();
+        // ≥2 variants only — mirrors the bottom-up pass: collapsing a
+        // single-variant enum would split one value set into two canonical
+        // spellings (the union spelling collapses, a bare variant cannot).
+        if all.len() >= 2 && all.iter().all(|v| present.contains(v)) {
+            members.retain(|&m| !matches!(auto.node(m), Node::EnumVariant(en, _) if *en == e));
+            let enum_state = (0..auto.states.len())
+                .find(|&s| {
+                    auto.redirect[s] == s && matches!(auto.node(s), Node::Enum(en) if *en == e)
+                })
+                .unwrap_or_else(|| auto.alloc(Node::Enum(e)));
+            members.insert(enum_state);
+        }
+    }
+}
+
+/// Replace the complete pair of bool literal states with the `bool` state
+/// (`true | false == bool` — the bool analogue of enum completeness,
+/// context-free because the variant family is closed). Mirrors the bottom-up
+/// pass; pre-interned leaf ids make the probes integer compares.
+fn collapse_complete_bools(auto: &mut Automaton<'_>, members: &mut BTreeSet<StateId>) {
+    let is_leaf = |auto: &Automaton<'_>, m: StateId, leaf: LeafId| matches!(auto.node(m), Node::Leaf(l) if *l == leaf);
+    let has_true = members.iter().any(|&m| is_leaf(auto, m, auto.lit_true));
+    let has_false = members.iter().any(|&m| is_leaf(auto, m, auto.lit_false));
+    if has_true && has_false {
+        members.retain(|&m| !is_leaf(auto, m, auto.lit_true) && !is_leaf(auto, m, auto.lit_false));
+        let bool_state = (0..auto.states.len())
+            .find(|&s| {
+                auto.redirect[s] == s
+                    && matches!(auto.node(s), Node::Leaf(l) if *l == auto.bool_leaf)
+            })
+            .unwrap_or_else(|| auto.alloc(Node::Leaf(auto.bool_leaf)));
+        members.insert(bool_state);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STAGE 4: READ-BACK & RENDERING
+// ═══════════════════════════════════════════════════════════════════════════
+/// An expansion of the automaton into a tree with explicit back-references —
+/// the intermediate between the graph and the μ-term. `needs_binder` marks the
+/// occurrences whose subtree references them (computed on the way back up, which
+/// is what makes single-pass de Bruijn emission impossible directly).
+enum Rb {
+    Ref(StateId),
+    Node {
+        state: StateId,
+        needs_binder: bool,
+        shape: RbShape,
+    },
+}
+
+enum RbShape {
+    Leaf(LeafId),
+    Enum(NonNull<ClassObject>),
+    EnumVariant(NonNull<ClassObject>, NonNull<EnumVariantObject>),
+    Class(NonNull<ClassObject>, Vec<Rb>),
+    Interface(NonNull<InterfaceObject>, Vec<Rb>, Vec<(AssocIndex, Rb)>),
+    List(Box<Rb>),
+    Map(Box<Rb>, Box<Rb>),
+    Future(Box<Rb>, Box<Rb>),
+    Union(Vec<Rb>),
+    Tuple(Vec<Rb>),
+    Function {
+        params: Vec<(Option<StrId>, FunctionParamMode, Rb)>,
+        ret: Box<Rb>,
+        throws: Box<Rb>,
+    },
+}
+
+/// The canonical μ-term rooted at `root`, or `None` when the display renderer
+/// bails (see [`Renderer`]). Three passes: expand the automaton to a tree with
+/// back-references; convert once with placeholder displays to fix the canonical
+/// union member orders; render every binder state's display; convert again with
+/// the real displays. Also used by the algebra pass to materialize union
+/// members as closed terms (every back-reference is wrapped on the way out, so
+/// the result is always closed).
+fn read_back(auto: &Automaton<'_>, root: StateId) -> Option<NormalTy> {
+    let cyclic = cyclic_states(auto, root);
+    let (rb, _) = expand(auto, root, &mut Vec::new());
+
+    // Pass A: canonical member orders (and the binder set). Displays are
+    // placeholders — equality-transparent, so they cannot affect the sort — and
+    // the pass-A term is dropped.
+    let mut rec = Recorder::default();
+    convert(auto, &rb, &mut Vec::new(), None, &mut rec);
+
+    // Render every binder state's display while the automaton (which knows the
+    // names, cycles, and covers) is in scope.
+    let mut renderer = Renderer::new(auto, &cyclic, &rec.union_orders);
+    let mut displays: BTreeMap<StateId, RealizedTy> = BTreeMap::new();
+    for &s in &rec.binder_states {
+        let rendered = renderer.render(s, &mut Vec::new())?;
+        displays.insert(s, rendered);
+    }
+
+    // Pass B: the real term.
+    let mut rec_b = Recorder::default();
+    Some(convert(
+        auto,
+        &rb,
+        &mut Vec::new(),
+        Some(&displays),
+        &mut rec_b,
+    ))
+}
+
+/// The canonical union member orders of every union state in the expansion,
+/// computed by a placeholder-display read-back — the shared prerequisite of
+/// [`Renderer`] for callers that do not otherwise read back (the root render).
+fn union_orders(auto: &Automaton<'_>, root: StateId) -> Option<BTreeMap<StateId, Vec<StateId>>> {
+    let (rb, _) = expand(auto, root, &mut Vec::new());
+    let mut rec = Recorder::default();
+    convert(auto, &rb, &mut Vec::new(), None, &mut rec);
+    Some(rec.union_orders)
+}
+
+/// Expand state `s` into a tree, cutting at on-path revisits. Returns the tree
+/// and the set of states it references freely (used to decide `needs_binder`
+/// bottom-up).
+fn expand(auto: &Automaton<'_>, s: StateId, path: &mut Vec<StateId>) -> (Rb, BTreeSet<StateId>) {
+    let r = auto.resolve(s);
+    if path.contains(&r) {
+        return (Rb::Ref(r), BTreeSet::from([r]));
+    }
+    path.push(r);
+    let mut refs = BTreeSet::new();
+    let child = |auto: &Automaton<'_>,
+                 c: StateId,
+                 path: &mut Vec<StateId>,
+                 refs: &mut BTreeSet<StateId>| {
+        let (rb, r) = expand(auto, c, path);
+        refs.extend(r);
+        rb
+    };
+    let shape = match auto.node(r) {
+        Node::Leaf(l) => RbShape::Leaf(*l),
+        Node::Enum(qn) => RbShape::Enum(*qn),
+        Node::EnumVariant(qn, v) => RbShape::EnumVariant(*qn, *v),
+        Node::Class(qn, args) => {
+            let (qn, args) = (*qn, args.clone());
+            RbShape::Class(
+                qn,
+                args.into_iter()
+                    .map(|a| child(auto, a, path, &mut refs))
+                    .collect(),
+            )
+        }
+        Node::Interface(qn, args, bindings) => {
+            let (qn, args, bindings) = (*qn, args.clone(), bindings.clone());
+            RbShape::Interface(
+                qn,
+                args.into_iter()
+                    .map(|a| child(auto, a, path, &mut refs))
+                    .collect(),
+                bindings
+                    .into_iter()
+                    .map(|(n, t)| (n, child(auto, t, path, &mut refs)))
+                    .collect(),
+            )
+        }
+        Node::List(inner) => {
+            let inner = *inner;
+            RbShape::List(Box::new(child(auto, inner, path, &mut refs)))
+        }
+        Node::Map(k, v) => {
+            let (k, v) = (*k, *v);
+            RbShape::Map(
+                Box::new(child(auto, k, path, &mut refs)),
+                Box::new(child(auto, v, path, &mut refs)),
+            )
+        }
+        Node::Future(v, e) => {
+            let (v, e) = (*v, *e);
+            RbShape::Future(
+                Box::new(child(auto, v, path, &mut refs)),
+                Box::new(child(auto, e, path, &mut refs)),
+            )
+        }
+        Node::Union(members) => RbShape::Union(
+            members
+                .clone()
+                .into_iter()
+                .map(|m| child(auto, m, path, &mut refs))
+                .collect(),
+        ),
+        Node::Tuple(elements) => RbShape::Tuple(
+            elements
+                .clone()
+                .into_iter()
+                .map(|e| child(auto, e, path, &mut refs))
+                .collect(),
+        ),
+        Node::Function {
+            params,
+            ret,
+            throws,
+        } => {
+            let (params, ret, throws) = (params.clone(), *ret, *throws);
+            RbShape::Function {
+                params: params
+                    .into_iter()
+                    .map(|(n, m, t)| (n, m, child(auto, t, path, &mut refs)))
+                    .collect(),
+                ret: Box::new(child(auto, ret, path, &mut refs)),
+                throws: Box::new(child(auto, throws, path, &mut refs)),
+            }
+        }
+    };
+    path.pop();
+    let needs_binder = refs.remove(&r);
+    (
+        Rb::Node {
+            state: r,
+            needs_binder,
+            shape,
+        },
+        refs,
+    )
+}
+
+/// What a convert pass records for the passes after it: the canonical member
+/// order of every union state (fixed by pass A's term sort, consumed by the
+/// renderer), and the set of states that emit binders (whose displays pass B
+/// needs).
+#[derive(Default)]
+struct Recorder {
+    union_orders: BTreeMap<StateId, Vec<StateId>>,
+    binder_states: BTreeSet<StateId>,
+}
+
+/// Convert the expansion to the canonical μ-term: binder-emitting ancestors form
+/// the de Bruijn context, union members sort by the canonical `Ord`, and each
+/// emitted binder gets its [`MuDisplay`]. With `displays: None` (pass A) the
+/// display payload is a placeholder — [`MuDisplay`] is equality-transparent, so
+/// placeholders cannot affect the member sort — and only the [`Recorder`]
+/// output matters. Owned values are cloned out of the interners here — the
+/// single clone point of the pipeline.
+fn convert(
+    auto: &Automaton<'_>,
+    rb: &Rb,
+    binders: &mut Vec<StateId>,
+    displays: Option<&BTreeMap<StateId, RealizedTy>>,
+    rec: &mut Recorder,
+) -> NormalTy {
+    match rb {
+        Rb::Ref(s) => {
+            let index = binders
+                .iter()
+                .rev()
+                .position(|&b| b == *s)
+                .unwrap_or_else(|| {
+                    unreachable!(
+                        "a back-reference targets an ancestor, and every referenced \
+                         ancestor emits a binder"
+                    )
+                });
+            NormalTy::RecVar(index as u32)
+        }
+        Rb::Node {
+            state,
+            needs_binder,
+            shape,
+        } => {
+            if *needs_binder {
+                binders.push(*state);
+                rec.binder_states.insert(*state);
+            }
+            let body = match shape {
+                RbShape::Leaf(l) => auto.leaves.get(l.0).clone(),
+                RbShape::Enum(qn) => NormalTy::Enum(*qn),
+                RbShape::EnumVariant(qn, v) => NormalTy::EnumVariant(*qn, *v),
+                RbShape::Class(qn, args) => NormalTy::Class(
+                    *qn,
+                    args.iter()
+                        .map(|a| convert(auto, a, binders, displays, rec))
+                        .collect(),
+                ),
+                RbShape::Interface(qn, args, bindings) => NormalTy::Interface(
+                    *qn,
+                    args.iter()
+                        .map(|a| convert(auto, a, binders, displays, rec))
+                        .collect(),
+                    bindings
+                        .iter()
+                        .map(|(n, t)| (*n, convert(auto, t, binders, displays, rec)))
+                        .collect(),
+                ),
+                RbShape::List(inner) => {
+                    NormalTy::List(Box::new(convert(auto, inner, binders, displays, rec)))
+                }
+                RbShape::Map(k, v) => NormalTy::Map {
+                    key: Box::new(convert(auto, k, binders, displays, rec)),
+                    value: Box::new(convert(auto, v, binders, displays, rec)),
+                },
+                RbShape::Future(v, e) => NormalTy::Future(
+                    Box::new(convert(auto, v, binders, displays, rec)),
+                    Box::new(convert(auto, e, binders, displays, rec)),
+                ),
+                RbShape::Tuple(elements) => NormalTy::Tuple(
+                    elements
+                        .iter()
+                        .map(|e| convert(auto, e, binders, displays, rec))
+                        .collect(),
+                ),
+                RbShape::Union(members) => {
+                    let mut converted: Vec<(NormalTy, StateId)> = members
+                        .iter()
+                        .map(|m| {
+                            let state = match m {
+                                Rb::Ref(s) => *s,
+                                Rb::Node { state, .. } => *state,
+                            };
+                            (convert(auto, m, binders, displays, rec), state)
+                        })
+                        .collect();
+                    converted.sort();
+                    converted.dedup_by(|a, b| a.0 == b.0);
+                    rec.union_orders
+                        .entry(*state)
+                        .or_insert_with(|| converted.iter().map(|(_, s)| *s).collect());
+                    let mut members: Vec<NormalTy> =
+                        converted.into_iter().map(|(t, _)| t).collect();
+                    match members.len() {
+                        0 => NormalTy::Never,
+                        1 => members.pop().unwrap_or_else(|| unreachable!("len checked")),
+                        _ => NormalTy::Union(members),
+                    }
+                }
+                RbShape::Function {
+                    params,
+                    ret,
+                    throws,
+                } => NormalTy::Function {
+                    params: params
+                        .iter()
+                        .map(|(name, mode, t)| NormalParam {
+                            name: name.map(|n| auto.strs.get(n.0).clone()),
+                            ty: convert(auto, t, binders, displays, rec),
+                            mode: *mode,
+                        })
+                        .collect(),
+                    ret: Box::new(convert(auto, ret, binders, displays, rec)),
+                    throws: Box::new(convert(auto, throws, binders, displays, rec)),
+                },
+            };
+            if *needs_binder {
+                binders.pop();
+                let rendered = match displays {
+                    Some(map) => map
+                        .get(state)
+                        .cloned()
+                        .unwrap_or_else(|| unreachable!("pass A recorded every binder state")),
+                    // Pass A placeholder: never escapes (the pass-A term is
+                    // dropped), and equality-transparency keeps it out of the
+                    // member sort. The original's is the error sentinel, which a
+                    // realized type has not: any type serves.
+                    None => RealizedTy::Unknown,
+                };
+                NormalTy::Mu {
+                    binder: MuDisplay {
+                        name: auto.representative_name(*state),
+                        rendered: Box::new(rendered),
+                    },
+                    body: Box::new(body),
+                }
+            } else {
+                body
+            }
+        }
+    }
+}
+
+/// States on a cycle (in a nontrivial SCC of the full edge graph, or carrying a
+/// self-edge) — the states whose alias names cut recursion in the rendering.
+fn cyclic_states(auto: &Automaton<'_>, root: StateId) -> BTreeSet<StateId> {
+    struct Tarjan<'x, 'a> {
+        auto: &'x Automaton<'a>,
+        index: BTreeMap<StateId, usize>,
+        low: BTreeMap<StateId, usize>,
+        on_stack: BTreeSet<StateId>,
+        stack: Vec<StateId>,
+        next: usize,
+        cyclic: BTreeSet<StateId>,
+    }
+    impl Tarjan<'_, '_> {
+        fn visit(&mut self, s: StateId) {
+            self.index.insert(s, self.next);
+            self.low.insert(s, self.next);
+            self.next += 1;
+            self.stack.push(s);
+            self.on_stack.insert(s);
+            let succs: Vec<StateId> = children(self.auto.node(s))
+                .into_iter()
+                .map(|c| self.auto.resolve(c))
+                .collect();
+            let mut self_edge = false;
+            for t in succs {
+                if t == s {
+                    self_edge = true;
+                    continue;
+                }
+                if !self.index.contains_key(&t) {
+                    self.visit(t);
+                    let l = self.low[&t].min(self.low[&s]);
+                    self.low.insert(s, l);
+                } else if self.on_stack.contains(&t) {
+                    let l = self.index[&t].min(self.low[&s]);
+                    self.low.insert(s, l);
+                }
+            }
+            if self.low[&s] == self.index[&s] {
+                let mut scc = Vec::new();
+                loop {
+                    let t = self
+                        .stack
+                        .pop()
+                        .unwrap_or_else(|| unreachable!("Tarjan stack underflow"));
+                    self.on_stack.remove(&t);
+                    scc.push(t);
+                    if t == s {
+                        break;
+                    }
+                }
+                if scc.len() > 1 {
+                    self.cyclic.extend(scc);
+                } else if self_edge {
+                    self.cyclic.insert(s);
+                }
+            }
+        }
+    }
+    let mut t = Tarjan {
+        auto,
+        index: BTreeMap::new(),
+        low: BTreeMap::new(),
+        on_stack: BTreeSet::new(),
+        stack: Vec::new(),
+        next: 0,
+        cyclic: BTreeSet::new(),
+    };
+    for s in auto.reachable(root) {
+        if !t.index.contains_key(&s) {
+            t.visit(s);
+        }
+    }
+    t.cyclic
+}
+
+/// The named-cut display renderer: recursion folds to an alias name at every
+/// *named cyclic* state, and — when ε-closure has spliced the named union
+/// through, leaving its cycle nameless — to a **subset cover**: an unnamed
+/// cyclic union `v` whose members include everything a named cyclic union `u`
+/// holds renders as `u | (members(v) − members(u))`, which is exact (union
+/// semantics) and cuts every cycle through `v`. Renders are memoized per state
+/// (completed renders are path-independent: every cycle cut is by name or
+/// cover, never by position).
+///
+/// **Bail (`None`)** when an on-path state re-enters with no exact cut — an
+/// exotic cycle (e.g. covers broken by absorption interleavings) whose tree has
+/// no finite alias-based `Ty` spelling. A wrong display must never reach a fact
+/// oracle, so the caller degrades to the pre-automaton form instead
+/// (sound, less canonical).
+struct Renderer<'x, 'a> {
+    auto: &'x Automaton<'a>,
+    cyclic: &'x BTreeSet<StateId>,
+    orders: &'x BTreeMap<StateId, Vec<StateId>>,
+    /// Named union states — the cover candidates — with their resolved member
+    /// sets, in representative-name order (deterministic cover choice). NOT
+    /// restricted to cyclic states: the splice-bypass case leaves the named
+    /// union *off* the surviving cycle, and its name denotes its tree either
+    /// way.
+    candidates: Vec<(StateId, BTreeSet<StateId>)>,
+    memo: BTreeMap<StateId, RealizedTy>,
+}
+
+impl<'x, 'a> Renderer<'x, 'a> {
+    fn new(
+        auto: &'x Automaton<'a>,
+        cyclic: &'x BTreeSet<StateId>,
+        orders: &'x BTreeMap<StateId, Vec<StateId>>,
+    ) -> Self {
+        // The whole automaton, not the reachable cone: an ε-splice bypasses the
+        // named binder union, leaving it *unreachable* from the root — and that
+        // orphaned state is exactly the cover the surviving cycle needs.
+        let mut candidates: Vec<(StateId, BTreeSet<StateId>)> = (0..auto.states.len())
+            .filter(|&s| {
+                auto.redirect[s] == s
+                    && auto.representative_name(s).is_some()
+                    && matches!(auto.node(s), Node::Union(_))
+            })
+            .map(|s| {
+                let Node::Union(members) = auto.node(s) else {
+                    unreachable!("filtered to unions")
+                };
+                (s, members.iter().map(|&m| auto.resolve(m)).collect())
+            })
+            .collect();
+        candidates.sort_by(|(a, _), (b, _)| {
+            auto.representative_name(*a)
+                .cmp(&auto.representative_name(*b))
+        });
+        Self {
+            auto,
+            cyclic,
+            orders,
+            candidates,
+            memo: BTreeMap::new(),
+        }
+    }
+
+    fn render(&mut self, s: StateId, path: &mut Vec<StateId>) -> Option<RealizedTy> {
+        let r = self.auto.resolve(s);
+        if let Some(t) = self.memo.get(&r) {
+            return Some(t.clone());
+        }
+        if self.cyclic.contains(&r)
+            && let Some(name) = self.auto.representative_name(r)
+        {
+            let t = RealizedTy::TypeAlias(name);
+            self.memo.insert(r, t.clone());
+            return Some(t);
+        }
+        if path.contains(&r) {
+            // On-path re-entry with no name: only a union fully covered by
+            // named states can still cut the cycle exactly; anything else has
+            // no finite alias-based spelling — bail.
+            return self.cover_only(r);
+        }
+        path.push(r);
+        let out = self.structural(r, path);
+        path.pop();
+        if let Some(t) = &out {
+            self.memo.insert(r, t.clone());
+        }
+        out
+    }
+
+    /// The named covers of union state `r`: candidates whose member sets are
+    /// subsets of `r`'s, plus the members they leave uncovered.
+    fn covers_of(&self, r: StateId) -> (Vec<StateId>, BTreeSet<StateId>) {
+        let Node::Union(members) = self.auto.node(r) else {
+            return (Vec::new(), BTreeSet::new());
+        };
+        let members: BTreeSet<StateId> = members.iter().map(|&m| self.auto.resolve(m)).collect();
+        let mut covers = Vec::new();
+        let mut covered: BTreeSet<StateId> = BTreeSet::new();
+        for (u, u_members) in &self.candidates {
+            if *u != r && u_members.is_subset(&members) {
+                covers.push(*u);
+                covered.extend(u_members.iter().copied());
+            }
+        }
+        let uncovered = members.difference(&covered).copied().collect();
+        (covers, uncovered)
+    }
+
+    /// Render an on-path unnamed state via covers alone: exact only when the
+    /// covers leave nothing uncovered.
+    fn cover_only(&mut self, r: StateId) -> Option<RealizedTy> {
+        if !matches!(self.auto.node(r), Node::Union(_)) {
+            return None;
+        }
+        let (covers, uncovered) = self.covers_of(r);
+        if covers.is_empty() || !uncovered.is_empty() {
+            return None;
+        }
+        self.cover_union(&covers, &[], &mut Vec::new())
+    }
+
+    /// Assemble a union `Ty` from cover names plus rendered extras.
+    fn cover_union(
+        &mut self,
+        covers: &[StateId],
+        extras: &[StateId],
+        path: &mut Vec<StateId>,
+    ) -> Option<RealizedTy> {
+        let mut parts: Vec<RealizedTy> = Vec::new();
+        for &u in covers {
+            let name = self
+                .auto
+                .representative_name(u)
+                .unwrap_or_else(|| unreachable!("candidates are named"));
+            parts.push(RealizedTy::TypeAlias(name));
+        }
+        for &m in extras {
+            parts.push(self.render(m, path)?);
+        }
+        Some(match parts.len() {
+            0 => RealizedTy::Never,
+            1 => parts.pop().unwrap_or_else(|| unreachable!("len checked")),
+            _ => RealizedTy::Union(parts.into()),
+        })
+    }
+
+    /// Render `r`'s node one level, children through [`Self::render`]. Public
+    /// to the module so the root render can unfold a *named* root once
+    /// (exposing its head constructor) while nested occurrences fold to the
+    /// name.
+    fn structural(&mut self, r: StateId, path: &mut Vec<StateId>) -> Option<RealizedTy> {
+        let auto = self.auto;
+        Some(match auto.node(r) {
+            Node::Leaf(l) => auto.leaves.get(l.0).clone().into_ty(),
+            Node::Enum(qn) => RealizedTy::Enum(*qn),
+            Node::EnumVariant(_, v) => RealizedTy::EnumVariant(*v),
+            Node::Class(qn, args) => {
+                let (qn, args) = (*qn, args.clone());
+                let mut out = Vec::with_capacity(args.len());
+                for a in args {
+                    out.push(self.render(a, path)?);
+                }
+                RealizedTy::Class(qn, out.into())
+            }
+            Node::Interface(qn, args, bindings) => {
+                let (qn, args, bindings) = (*qn, args.clone(), bindings.clone());
+                let mut out_args = Vec::with_capacity(args.len());
+                for a in args {
+                    out_args.push(self.render(a, path)?);
+                }
+                let mut out_bindings = Vec::with_capacity(bindings.len());
+                for (n, t) in bindings {
+                    out_bindings.push(AssocBinding {
+                        member: n,
+                        ty: self.render(t, path)?,
+                    });
+                }
+                RealizedTy::Interface(qn, out_args.into(), out_bindings.into())
+            }
+            Node::List(inner) => {
+                let inner = *inner;
+                RealizedTy::List(CowBox::new(self.render(inner, path)?))
+            }
+            Node::Map(k, v) => {
+                let (k, v) = (*k, *v);
+                RealizedTy::Map {
+                    key: CowBox::new(self.render(k, path)?),
+                    value: CowBox::new(self.render(v, path)?),
+                }
+            }
+            Node::Future(v, e) => {
+                let (v, e) = (*v, *e);
+                RealizedTy::Future(
+                    CowBox::new(self.render(v, path)?),
+                    CowBox::new(self.render(e, path)?),
+                )
+            }
+            Node::Tuple(elements) => {
+                let elements = elements.clone();
+                let mut out = Vec::with_capacity(elements.len());
+                for e in elements {
+                    out.push(self.render(e, path)?);
+                }
+                RealizedTy::Tuple(out.into())
+            }
+            Node::Union(_) => {
+                // Cyclic unnamed unions fold their covered members to alias
+                // names — the splice-bypass case (`type A = int | (A | null)[]`
+                // renders the inner union as `A | null`). Everything else
+                // renders member-wise in the canonical order fixed by pass A.
+                let ordered: Vec<StateId> = match self.orders.get(&r) {
+                    Some(o) => o.clone(),
+                    // Defensive: a union outside the recorded expansion —
+                    // resolved, deduplicated, id-ordered (deterministic).
+                    None => {
+                        let Node::Union(members) = auto.node(r) else {
+                            unreachable!("matched Union above")
+                        };
+                        let set: BTreeSet<StateId> =
+                            members.iter().map(|&m| auto.resolve(m)).collect();
+                        set.into_iter().collect()
+                    }
+                };
+                if self.cyclic.contains(&r) && auto.representative_name(r).is_none() {
+                    let (covers, _) = self.covers_of(r);
+                    let covered: BTreeSet<StateId> = self
+                        .candidates
+                        .iter()
+                        .filter(|(u, _)| covers.contains(u))
+                        .flat_map(|(_, ms)| ms.iter().copied())
+                        .collect();
+                    let extras: Vec<StateId> = ordered
+                        .iter()
+                        .copied()
+                        .filter(|m| !covered.contains(m))
+                        .collect();
+                    if covers.is_empty() {
+                        // No name and no cover: the members render structurally
+                        // only if no cycle re-enters this state (the `render`
+                        // on-path check catches re-entry and bails).
+                        let mut parts = Vec::with_capacity(ordered.len());
+                        for m in ordered {
+                            parts.push(self.render(m, path)?);
+                        }
+                        return Some(match parts.len() {
+                            0 => RealizedTy::Never,
+                            1 => parts.pop().unwrap_or_else(|| unreachable!("len checked")),
+                            _ => RealizedTy::Union(parts.into()),
+                        });
+                    }
+                    return self.cover_union(&covers, &extras, path);
+                }
+                let mut parts = Vec::with_capacity(ordered.len());
+                for m in ordered {
+                    parts.push(self.render(m, path)?);
+                }
+                match parts.len() {
+                    0 => RealizedTy::Never,
+                    1 => parts.pop().unwrap_or_else(|| unreachable!("len checked")),
+                    _ => RealizedTy::Union(parts.into()),
+                }
+            }
+            Node::Function {
+                params,
+                ret,
+                throws,
+            } => {
+                let (params, ret, throws) = (params.clone(), *ret, *throws);
+                let mut out_params = Vec::with_capacity(params.len());
+                for (name, mode, t) in params {
+                    out_params.push(FunctionParamTy {
+                        name: name.map(|n| auto.strs.get(n.0).clone()),
+                        ty: self.render(t, path)?,
+                        mode,
+                    });
+                }
+                RealizedTy::Function {
+                    params: out_params.into(),
+                    ret: CowBox::new(self.render(ret, path)?),
+                    throws: CowBox::new(self.render(throws, path)?),
+                }
+            }
+        })
+    }
+}
