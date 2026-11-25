@@ -19,22 +19,21 @@ use std::collections::HashSet;
 use super::{
     BytesRef, Elem, NativeBamlOps, Natives, Scope, Thrown, TypeId, View, array_size,
     drive::BamlFn,
-    json::{string_keyed, type_of, values_are_refs},
+    json::{string_keyed, type_of},
     root::float_order,
 };
 use crate::{
     describe::{Desc, Types},
-    heap::load,
-    json_layout::{
-        KIND_ARRAY, KIND_FLOAT, KIND_MAP, REPR_BOOL, REPR_BOXED, REPR_FLOAT, REPR_NULL, REPR_PAIR,
-        REPR_REF,
-    },
+    heap::{Value, load},
+    json_layout::{KIND_ARRAY, KIND_MAP},
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, BOX_VALUE, HEADER_FLOATS, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
-        TYPE_ARRAY_OF_VALUES, TYPE_BIGINT, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_BYTES,
-        TYPE_FUTURE, TYPE_MAP, TYPE_OWNED, TYPE_PLAIN, WORD,
+        ARRAY_LENGTH, BOUND_CODE, BOUND_RECEIVER, BOUND_TYPE_ARG_COUNT, BOUND_TYPE_ARGS, BOX_VALUE,
+        CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, CLOSURE_CODE, FIRST_CLASS_TYPE, INSTANCE_SLOTS,
+        STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BOX_BOOL,
+        TAG_BOX_FLOAT, TAG_BOX_INT, TAG_BYTES, TAG_CLOSURE, TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL,
+        TAG_TUPLE, TUPLE_COUNT, VALUE, WORD,
     },
-    map::{self, KeyKind},
+    map,
 };
 
 unsafe extern "C" {
@@ -70,20 +69,16 @@ enum Val {
     Ref(usize, Option<Desc>),
 }
 
-/// What the slot holding `word`, and `next` after it, holds: a value of the
-/// type described.
-unsafe fn of_slot(word: usize, next: usize, described: Desc) -> Val {
-    let scalar = |repr: u32, bits: usize| match repr {
-        REPR_FLOAT => Val::Float(f64::from_bits(bits as u64)),
-        REPR_BOOL => Val::Bool(bits & 0xFF != 0),
-        _ => Val::Word(bits),
-    };
-    match described.repr() {
-        REPR_NULL => Val::Null,
-        REPR_PAIR if next == 0 => Val::Null,
-        REPR_PAIR => scalar(described.not_null().repr(), word),
-        REPR_REF | REPR_BOXED => of_reference(word, Some(described.not_null())),
-        repr => scalar(repr, word),
+/// What the slot `value` holds, which its tag says: a scalar, or what its
+/// object is. `described` is the slot's static type when something says
+/// it.
+fn of_value(value: Value, described: Option<Desc>) -> Val {
+    match value.id() {
+        TAG_NULL => Val::Null,
+        TAG_BOOL => Val::Bool(value.payload & 0xFF != 0),
+        TAG_INT => Val::Word(value.payload),
+        TAG_FLOAT => Val::Float(f64::from_bits(value.payload as u64)),
+        _ => of_reference(value.payload, described.map(Desc::not_null)),
     }
 }
 
@@ -96,35 +91,11 @@ fn of_reference(object: usize, described: Option<Desc>) -> Val {
     // SAFETY: a reference that is not null is to a live object.
     unsafe {
         match type_of(object) {
-            TYPE_BOX_INT => Val::Word(load(object + BOX_VALUE)),
-            TYPE_BOX_FLOAT => Val::Float(f64::from_bits(load(object + BOX_VALUE) as u64)),
-            TYPE_BOX_BOOL => Val::Bool(load(object + BOX_VALUE) & 0xFF != 0),
+            TAG_BOX_INT => Val::Word(load(object + BOX_VALUE)),
+            TAG_BOX_FLOAT => Val::Float(f64::from_bits(load(object + BOX_VALUE) as u64)),
+            TAG_BOX_BOOL => Val::Bool(load(object + BOX_VALUE) & 0xFF != 0),
             _ => Val::Ref(object, described),
         }
-    }
-}
-
-/// A pair of words two containers hold: references, `float`s where
-/// `floats` or `described` says so, or values whose words say no more.
-fn held(
-    left: usize,
-    right: usize,
-    references: bool,
-    floats: bool,
-    described: Option<Desc>,
-) -> (Val, Val) {
-    if references {
-        (
-            of_reference(left, described.map(Desc::not_null)),
-            of_reference(right, described.map(Desc::not_null)),
-        )
-    } else if floats || described.is_some_and(|described| described.kind() == KIND_FLOAT) {
-        (
-            Val::Float(f64::from_bits(left as u64)),
-            Val::Float(f64::from_bits(right as u64)),
-        )
-    } else {
-        (Val::Word(left), Val::Word(right))
     }
 }
 
@@ -170,60 +141,94 @@ impl<F: FnMut(usize, usize)> Walk<'_, F> {
         // SAFETY: the caller's contract, for every object reached.
         unsafe {
             let (kind, other) = (type_of(a), type_of(b));
-            if kind < STRING_TYPES_END && other < STRING_TYPES_END {
+            if kind < STRING_TAGS_END && other < STRING_TAGS_END {
                 return crate::string::text(a) == crate::string::text(b);
             }
             if kind != other {
                 return false;
             }
             match kind {
-                TYPE_BIGINT => return crate::bigint::value(a) == crate::bigint::value(b),
+                TAG_BIGINT => return crate::bigint::value(a) == crate::bigint::value(b),
                 // Both are scanned once and nothing runs meanwhile: a copy
                 // of either would be made only to be compared.
-                TYPE_BYTES => {
+                TAG_BYTES => {
                     return BytesRef::from_raw(a).as_slice() == BytesRef::from_raw(b).as_slice();
                 }
-                // Each is what it is and nothing else.
-                TYPE_FUTURE | TYPE_OWNED | TYPE_PLAIN => return false,
                 _ => {}
             }
             if !self.seen.insert((a.min(b), a.max(b))) {
                 return true;
             }
             match kind {
-                TYPE_ARRAY_OF_REFS | TYPE_ARRAY_OF_VALUES => self.arrays(a, b, described),
-                TYPE_MAP => self.maps(a, b, described),
-                _ => self.instances(a, b, kind),
+                TAG_ARRAY => self.arrays(a, b, described),
+                TAG_MAP => self.maps(a, b, described),
+                TAG_TUPLE => {
+                    let count = load(a + TUPLE_COUNT);
+                    count == load(b + TUPLE_COUNT) && self.slots(a, b, INSTANCE_SLOTS, count)
+                }
+                // Two functions are equal when they are the same code
+                // over equal captures, or bound to equal receivers.
+                TAG_CLOSURE => {
+                    let count = load(a + CLOSURE_CAPTURE_COUNT);
+                    load(a + CLOSURE_CODE) == load(b + CLOSURE_CODE)
+                        && count == load(b + CLOSURE_CAPTURE_COUNT)
+                        && self.slots(a, b, CLOSURE_CAPTURES, count)
+                }
+                TAG_BOUND_METHOD => {
+                    let count = load(a + BOUND_TYPE_ARG_COUNT);
+                    let type_arg =
+                        |bound: usize, index: usize| load(bound + BOUND_TYPE_ARGS + index * WORD);
+                    load(a + BOUND_CODE) == load(b + BOUND_CODE)
+                        && count == load(b + BOUND_TYPE_ARG_COUNT)
+                        && (0..count).all(|index| type_arg(a, index) == type_arg(b, index))
+                        && self.slots(a, b, BOUND_RECEIVER, 1)
+                }
+                class if class >= FIRST_CLASS_TYPE => self.instances(a, b, class),
+                // Any other object is what it is and nothing else.
+                _ => false,
             }
         }
+    }
+
+    /// Leave the `count` slots from `first` on of the objects at `a` and
+    /// `b`, which nothing describes, to be compared pair by pair.
+    unsafe fn slots(&mut self, a: usize, b: usize, first: usize, count: usize) -> bool {
+        for index in (0..count).rev() {
+            let offset = first + index * VALUE;
+            // SAFETY: both objects have that many slots there.
+            let (left, right) = unsafe { (Value::load(a + offset), Value::load(b + offset)) };
+            self.pending
+                .push((of_value(left, None), of_value(right, None)));
+        }
+        true
     }
 
     unsafe fn arrays(&mut self, a: usize, b: usize, described: Option<Desc>) -> bool {
         let element = described
             .filter(|described| described.kind() == KIND_ARRAY)
             .map(Desc::of_a);
-        // SAFETY: two live arrays of one type.
+        // SAFETY: two live arrays.
         unsafe {
             let length = load(a + ARRAY_LENGTH);
             if length != load(b + ARRAY_LENGTH) {
                 return false;
             }
-            let references = type_of(a) == TYPE_ARRAY_OF_REFS;
-            // An array of `float`s says so itself, for one nothing
-            // describes.
-            let floats = (load(a) | load(b)) & HEADER_FLOATS != 0;
-            let (from, to) = (load(a + ARRAY_DATA), load(b + ARRAY_DATA));
             for index in (0..length).rev() {
-                let (left, right) = (load(from + index * WORD), load(to + index * WORD));
+                let (left, right) = (
+                    Value::load(crate::array::element(a, index)),
+                    Value::load(crate::array::element(b, index)),
+                );
                 self.pending
-                    .push(held(left, right, references, floats, element));
+                    .push((of_value(left, element), of_value(right, element)));
             }
         }
         true
     }
 
     unsafe fn maps(&mut self, a: usize, b: usize, described: Option<Desc>) -> bool {
-        let described = described.filter(|described| described.kind() == KIND_MAP);
+        let values = described
+            .filter(|described| described.kind() == KIND_MAP)
+            .map(Desc::of_b);
         // SAFETY: two live maps, which nothing changes during the walk.
         unsafe {
             if map::len(a) != map::len(b) {
@@ -232,36 +237,28 @@ impl<F: FnMut(usize, usize)> Walk<'_, F> {
             if map::len(a) == 0 {
                 return true;
             }
-            if string_keyed(a) != string_keyed(b) || values_are_refs(a) != values_are_refs(b) {
+            // A key of one is looked for in the other as a key of its
+            // own kind.
+            if string_keyed(a) != string_keyed(b) {
                 return false;
             }
-            let kind = if string_keyed(a) {
-                KeyKind::Str
-            } else if described.is_some_and(|map| map.of_a().kind() == KIND_FLOAT) {
-                KeyKind::Float
-            } else {
-                KeyKind::Word
-            };
-            let references = values_are_refs(a);
-            let floats = (load(a) | load(b)) & HEADER_FLOATS != 0;
-            let values = described.map(Desc::of_b);
             let mut every_key = true;
             let mut pairs = Vec::new();
-            map::for_each(a, |key, value| match map::get(b, kind, key) {
+            map::for_each(a, |key, value| match map::get(b, key) {
                 // Where the value is, in a map nothing changes meanwhile.
-                Some(other) => pairs.push((value, load(other))),
+                Some(other) => pairs.push((value, Value::load(other))),
                 None => every_key = false,
             });
             for (left, right) in pairs {
                 self.pending
-                    .push(held(left, right, references, floats, values));
+                    .push((of_value(left, values), of_value(right, values)));
             }
             every_key
         }
     }
 
-    /// Two objects of one type that is none of the runtime's own: two
-    /// instances of a class, two tuples, two variants of an enum.
+    /// Two objects of one type of the program's: two instances of a class,
+    /// or two boxes of an enum's variants.
     unsafe fn instances(&mut self, a: usize, b: usize, type_id: usize) -> bool {
         if own_eq(type_id).is_some() {
             (self.own)(a, b);
@@ -269,39 +266,25 @@ impl<F: FnMut(usize, usize)> Walk<'_, F> {
         }
         // SAFETY: two live objects of the type.
         unsafe {
+            if self.types.is_enum(type_id) {
+                return load(a + BOX_VALUE) == load(b + BOX_VALUE);
+            }
             if let Some(class) = self.types.of_class(type_id) {
                 let fields: Vec<_> = (0..class.count())
                     .filter_map(|field| class.field_place(field))
                     .collect();
                 for (offset, described) in fields.into_iter().rev() {
-                    let next = |object: usize| {
-                        if described.repr() == REPR_PAIR {
-                            load(object + offset + WORD)
-                        } else {
-                            1
-                        }
-                    };
                     self.pending.push((
-                        of_slot(load(a + offset), next(a), described),
-                        of_slot(load(b + offset), next(b), described),
+                        of_value(Value::load(a + offset), Some(described)),
+                        of_value(Value::load(b + offset), Some(described)),
                     ));
                 }
                 return true;
             }
-            // Nothing describes the fields: a word the collector follows
-            // is a reference, and any other is compared as it is.
-            let (size, references) = self.types.fixed(type_id);
-            for offset in (WORD..size).step_by(WORD) {
-                let (left, right) = (load(a + offset), load(b + offset));
-                if references.contains(&(offset as u32)) {
-                    self.pending
-                        .push((of_reference(left, None), of_reference(right, None)));
-                } else if left != right {
-                    return false;
-                }
-            }
+            // Nothing describes the fields: each slot says what it holds.
+            let count = (self.types.instance_size(type_id) - INSTANCE_SLOTS) / VALUE;
+            self.slots(a, b, INSTANCE_SLOTS, count)
         }
-        true
     }
 }
 
@@ -354,7 +337,7 @@ pub(super) async fn equals<'s>(
     // The pairs left to an `eq`, held where the collector keeps them
     // current while each `eq` runs.
     let reservation = scope.reserve(array_size(2 * count));
-    let array = reservation.slots(2 * count, true);
+    let array = reservation.elements(2 * count, TypeId(0));
     let mut found = 0;
     // SAFETY: as above: nothing moves while the reservation is open, and
     // the walk meets the pairs it met before.

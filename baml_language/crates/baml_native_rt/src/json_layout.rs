@@ -34,7 +34,8 @@
 //!
 //! ```text
 //! +0   u32  kind, one of the `KIND_` constants
-//! +4   u32  how a slot holds a value of the type, one of `REPR_`
+//! +4   u32  how a slot holds a value of the type, one of `REPR_`: a slot
+//!           is a tag word and a payload word (`VALUE` of `layout.rs`)
 //! +8   u32  a   } what they are depends on the kind
 //! +12  u32  b   }
 //! +16  u32  c   }
@@ -82,7 +83,9 @@
 //! +16  u32  offset of the name with aliased names
 //! +20  u32  its length
 //! +24  u32  offset of the description of the field's type
-//! +28  u32  byte offset of the field in an instance
+//! +28  u32  byte offset of the field's slot in an instance: the address
+//!           of its tag word, the payload a word after it. Every field
+//!           is one slot
 //! +32  u32  flags ([`MEMBER_SKIP`], [`FIELD_OMIT_NULL`],
 //!           [`FIELD_MAY_BE_ABSENT`])
 //! ```
@@ -137,21 +140,23 @@ pub const KIND_BOOL_IS: u32 = 14;
 pub const KIND_VARIANT: u32 = 15;
 pub const KIND_OPAQUE: u32 = 16;
 
-/// An `int`, or the position of an enum's variant: the slot's word.
+/// An `int`, or the position of an enum's variant: the slot has the tag
+/// of an `int`, and its payload is the value.
 pub const REPR_INT: u32 = 0;
-/// A `float`: the slot's bits.
+/// A `float`: the slot has the tag of one, and its payload is the bits.
 pub const REPR_FLOAT: u32 = 1;
-/// A `bool`: zero or not.
+/// A `bool`: the slot has the tag of one, and its payload is zero or one.
 pub const REPR_BOOL: u32 = 2;
-/// A reference to an object of the type, zero for `null`.
+/// A reference to an object of the type, with the tag of its object;
+/// `null` is the `null` value.
 pub const REPR_REF: u32 = 3;
 /// A reference to an object whose header says what it is, with an `int`,
-/// `float`, `bool` or enum variant in a box; zero for `null`.
+/// `float`, `bool` or enum variant in a box; `null` is the `null` value.
 pub const REPR_BOXED: u32 = 4;
-/// Two slots: the bits of an `int`, `float` or `bool`, then whether there
-/// is one.
+/// An optional `int`, `float` or `bool`, in one slot: the `null` value, or
+/// the scalar with its own tag.
 pub const REPR_PAIR: u32 = 5;
-/// `null`: the slot says nothing.
+/// `null`: the slot holds the `null` value.
 pub const REPR_NULL: u32 = 6;
 
 /// The description is of the `json` alias.

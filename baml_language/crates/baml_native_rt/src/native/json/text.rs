@@ -7,15 +7,11 @@
 //! message is `serde_json`'s, found by reading the text again, as the
 //! interpreter finds it.
 
-use super::{
-    MAX_DEPTH, Node, object_get,
-    out::{Elements, Out},
-    string_keyed,
-};
+use super::{MAX_DEPTH, Node, object_get, out::Out, string_keyed};
 use crate::{
     describe::Types,
-    heap::load,
-    layout::{ARRAY_DATA, ARRAY_LENGTH, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, WORD},
+    heap::{Value, load},
+    layout::{ARRAY_LENGTH, TAG_BOX_BOOL, TAG_BOX_FLOAT, TAG_BOX_INT},
 };
 
 /// Why a scan stopped.
@@ -117,8 +113,11 @@ impl Parser<'_> {
                 }
                 self.pos += 1;
                 self.depth -= 1;
-                let length = self.items.len() - start;
-                let array = self.out.array(length, Elements::Refs, &self.items[start..]);
+                // SAFETY: each item is zero or an object built here.
+                let items = self.items[start..]
+                    .iter()
+                    .map(|item| unsafe { Value::reference(*item) });
+                let array = self.out.array(items);
                 self.items.truncate(start);
                 Ok(array)
             }
@@ -148,22 +147,23 @@ impl Parser<'_> {
                 }
                 self.pos += 1;
                 self.depth -= 1;
-                let entries: Vec<(usize, usize)> = self.items[start..]
+                // SAFETY: each value is zero or an object built here.
+                let entries = self.items[start..]
                     .as_chunks::<2>()
                     .0
                     .iter()
-                    .map(|[key, value]| (*key, *value))
-                    .collect();
+                    .map(|[key, value]| (*key, unsafe { Value::reference(*value) }));
+                let map = self.out.map(entries);
                 self.items.truncate(start);
-                Ok(self.out.map(entries.len(), Elements::Refs, &entries))
+                Ok(map)
             }
             b't' => {
                 self.literal("true")?;
-                Ok(self.out.boxed(TYPE_BOX_BOOL, 1))
+                Ok(self.out.boxed(TAG_BOX_BOOL, 1))
             }
             b'f' => {
                 self.literal("false")?;
-                Ok(self.out.boxed(TYPE_BOX_BOOL, 0))
+                Ok(self.out.boxed(TAG_BOX_BOOL, 0))
             }
             b'n' => self.literal("null").map(|()| 0),
             _ => self.number(),
@@ -316,13 +316,13 @@ impl Parser<'_> {
         if integral {
             // One past an `int` is a `bigint`, as in the interpreter.
             return Ok(match token.parse::<i64>() {
-                Ok(int) => self.out.boxed(TYPE_BOX_INT, int as usize),
+                Ok(int) => self.out.boxed(TAG_BOX_INT, int as usize),
                 Err(_) => self.out.bigint(&token.parse().map_err(|_| Stop::Syntax)?),
             });
         }
         match token.parse::<f64>() {
             Ok(float) if float.is_finite() => {
-                Ok(self.out.boxed(TYPE_BOX_FLOAT, float.to_bits() as usize))
+                Ok(self.out.boxed(TAG_BOX_FLOAT, float.to_bits() as usize))
             }
             _ => Err(Stop::Float(self.pos)),
         }
@@ -400,20 +400,20 @@ pub(super) fn syntax_message(text: &str, stop: &Stop) -> String {
     }
 }
 
-/// The node `selector` picks out of the `json` value `json`, or the
-/// message of the `PathError`.
+/// The node `selector` picks out of the `json` value `json`, as the slot
+/// that holds it, or the message of the `PathError`.
 ///
 /// # Safety
 ///
-/// `json` is zero or a live object, and nothing is allocated while the
-/// result is in use.
-pub(super) unsafe fn select(types: &Types, json: usize, selector: &str) -> Result<usize, String> {
+/// `json` is `null` or refers to a live object, and nothing is allocated
+/// while the result is in use.
+pub(super) unsafe fn select(types: &Types, json: Value, selector: &str) -> Result<Value, String> {
     if !(selector.starts_with('.') || selector.starts_with('[')) {
         return Err(format!(
             "selector must start with '.' or '[' (jq style), got '{selector}'"
         ));
     }
-    let field = |current: usize, key: &str| {
+    let field = |current: Value, key: &str| {
         // SAFETY: the caller's contract.
         let found = unsafe {
             match Node::of(types, current) {
@@ -498,7 +498,7 @@ pub(super) unsafe fn select(types: &Types, json: usize, selector: &str) -> Resul
         match usize::try_from(index) {
             Ok(at) if at < length => {
                 // SAFETY: element `at` is inside the storage.
-                current = unsafe { load(load(array + ARRAY_DATA) + at * WORD) };
+                current = unsafe { Value::load(crate::array::element(array, at)) };
             }
             _ => return Err(format!("index [{index}] out of bounds (length {length})")),
         }

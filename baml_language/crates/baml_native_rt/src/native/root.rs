@@ -3,7 +3,7 @@
 use super::{
     Arr, ArrRef, Elem, Float, Int, NativeBaml, Natives, Root, Scope, Slot, Thrown, TypeId, json,
 };
-use crate::layout::{TYPE_BIGINT, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_STRING};
+use crate::layout::{TAG_BIGINT, TAG_BOX_FLOAT, TAG_BOX_INT, TAG_STRING};
 
 impl NativeBaml for Natives {
     /// What a `from_json` nothing overrides returns: the value read by its
@@ -53,52 +53,54 @@ impl NativeBaml for Natives {
     fn _is_primitive_array(types: [TypeId; 1], _arr: ArrRef<'_, Slot>) -> bool {
         matches!(
             types[0].0 as usize,
-            TYPE_BOX_INT | TYPE_BOX_FLOAT | TYPE_STRING | TYPE_BIGINT
+            TAG_BOX_INT | TAG_BOX_FLOAT | TAG_STRING | TAG_BIGINT
         )
     }
 
     /// Sort `arr` in place by the order of its elements, and return it. The
     /// sort is stable. The call names the type of the elements, where any
-    /// other names the type of its argument: the words of an `int[]` and of
-    /// a `float[]` do not say which they are.
+    /// other names the type of its argument.
     fn _rust_sort(types: [TypeId; 1], arr: usize) -> usize {
-        // SAFETY: the compiler passes an array, which nothing else reads
-        // while a native that does not allocate runs.
-        let words = unsafe { super::array::elements(arr) };
+        // SAFETY: the compiler passes an array.
+        let mut elements = unsafe { crate::array::values(arr) };
         match types[0].0 as usize {
-            TYPE_BOX_INT => words.sort_by_key(|word| word.cast_signed()),
-            TYPE_BOX_FLOAT => words
-                .sort_by(|a, b| float_order(f64::from_bits(*a as u64), f64::from_bits(*b as u64))),
+            TAG_BOX_INT => elements.sort_by_key(|element| element.payload.cast_signed()),
+            TAG_BOX_FLOAT => elements.sort_by(|a, b| {
+                float_order(
+                    f64::from_bits(a.payload as u64),
+                    f64::from_bits(b.payload as u64),
+                )
+            }),
             // SAFETY: every element of a `string[]` is a live string.
-            TYPE_STRING => words
-                .sort_by(|a, b| unsafe { crate::string::text(*a).cmp(crate::string::text(*b)) }),
-            TYPE_BIGINT => {
+            TAG_STRING => elements.sort_by(|a, b| unsafe {
+                crate::string::text(a.payload).cmp(crate::string::text(b.payload))
+            }),
+            TAG_BIGINT => {
                 // Each value is read out of its object once.
                 // SAFETY: every element of a `bigint[]` is a live `bigint`.
-                let mut keyed: Vec<_> = words
+                let mut keyed: Vec<_> = elements
                     .iter()
-                    .map(|word| (unsafe { crate::bigint::value(*word) }, *word))
+                    .map(|element| (unsafe { crate::bigint::value(element.payload) }, *element))
                     .collect();
                 keyed.sort_by(|a, b| a.0.cmp(&b.0));
-                for (word, (_, sorted)) in words.iter_mut().zip(keyed) {
-                    *word = sorted;
+                for (element, (_, sorted)) in elements.iter_mut().zip(keyed) {
+                    *element = sorted;
                 }
             }
             other => unreachable!("_rust_sort is compiled for no element type with id {other}"),
         }
+        // SAFETY: the array has the elements just read.
+        unsafe { crate::array::put(arr, 0, &elements) };
         arr
     }
 
     /// The sum of `values`, wrapping as `+` does.
     fn _sum_int(values: ArrRef<'_, Int>) -> i64 {
-        values
-            .as_slice()
-            .iter()
-            .fold(0, |sum, value| sum.wrapping_add(*value))
+        values.iter().fold(0, i64::wrapping_add)
     }
 
     fn _sum_float(values: ArrRef<'_, Float>) -> f64 {
-        values.as_slice().iter().sum()
+        values.iter().sum()
     }
 
     /// The middle of `values` in the order of `float`, which ranks NaN
@@ -107,7 +109,7 @@ impl NativeBaml for Natives {
         scope: &mut Scope<'s>,
         values: Root<'s, Arr<Float>>,
     ) -> Result<f64, Thrown<'s>> {
-        let mut sorted = values.get(scope).as_slice().to_vec();
+        let mut sorted: Vec<f64> = values.get(scope).iter().collect();
         if sorted.is_empty() {
             return Err(
                 scope.invalid_argument("float[].median: cannot take the median of an empty array")

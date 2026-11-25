@@ -25,8 +25,7 @@ use super::{
 use crate::{
     CompileError, layout,
     types::{
-        NativeTy, PLAN_BODY, PLAN_CANCEL_TOKENS, PLAN_SEMAPHORES, field_slots, narrowed,
-        place_local, plan_body,
+        NativeTy, PLAN_BODY, PLAN_CANCEL_TOKENS, PLAN_SEMAPHORES, narrowed, place_local, plan_body,
     },
 };
 
@@ -147,15 +146,13 @@ impl<'db> Translator<'_, 'db> {
         let plan_ty = narrowed(self.operand_ty(plan)?);
         let (fields, body) =
             plan_body(self.db, &plan_ty).ok_or_else(|| internal("a checked spawn is of a plan"))?;
-        let slots = field_slots(&fields);
-        let field = |index: usize| layout::field_offset(slots[index]);
         let plan = self.operand(plan)?;
 
         // A task waits for no semaphore and hears of no cancellation yet,
         // so a plan that names either cannot be started.
         let mut limited = None;
         for index in [PLAN_SEMAPHORES, PLAN_CANCEL_TOKENS] {
-            let array = self.load_slot(&fields[index], plan, field(index));
+            let array = self.slot_load(&fields[index], plan, layout::field_offset(index));
             let length = self.builder.ins().load(
                 types::I64,
                 slot_access(),
@@ -181,17 +178,15 @@ impl<'db> Translator<'_, 'db> {
         self.builder.ins().trap(TRAP_AFTER_PANIC);
 
         self.builder.switch_to_block(start);
-        let closure = self.load_slot(&fields[PLAN_BODY], plan, field(PLAN_BODY));
+        let closure = self.slot_load(&fields[PLAN_BODY], plan, layout::field_offset(PLAN_BODY));
         let shim = self.backend.task_shim(clif_type(&body.result))?;
         let shim = self.function_ref(shim);
         let shim = self.builder.ins().func_addr(WORD, shim);
-        let flags = self.word_const(if body.result.is_ref() {
-            layout::FUTURE_VALUE_IS_REF
-        } else {
-            0
-        });
+        // What the one word the closure returns is.
+        let result = self
+            .word_const(Self::immediate_tag(&body.result).unwrap_or(layout::RESULT_IS_REFERENCE));
         let started = self
-            .call_runtime(Runtime::Spawn, &[closure, shim, flags])?
+            .call_runtime(Runtime::Spawn, &[closure, shim, result])?
             .ok_or_else(|| internal("a spawn returns the future"))?;
         self.builder.declare_value_needs_stack_map(started);
         self.write_place(future, started)?;
@@ -271,7 +266,7 @@ impl<'db> Translator<'_, 'db> {
         self.raise(error, Some(trace))?;
 
         self.builder.switch_to_block(load);
-        let value = self.load_slot(&value_ty, future, layout::FUTURE_VALUE);
+        let value = self.slot_load(&value_ty, future, layout::FUTURE_VALUE);
         let value = self.coerce(value, &value_ty, &expected)?;
         self.write_local(destination, value);
         let target = self.block(target);

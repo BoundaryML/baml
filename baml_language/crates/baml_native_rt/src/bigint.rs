@@ -21,7 +21,7 @@ use crate::{
         BIGINT_OP_ADD as OP_ADD, BIGINT_OP_AND as OP_AND, BIGINT_OP_DIV as OP_DIV,
         BIGINT_OP_MUL as OP_MUL, BIGINT_OP_OR as OP_OR, BIGINT_OP_REM as OP_REM,
         BIGINT_OP_SHL as OP_SHL, BIGINT_OP_SUB as OP_SUB, BIGINT_OP_XOR as OP_XOR,
-        BIGINT_RIGHT_IS_INT as RIGHT_IS_INT, TYPE_BIGINT, WELL_KNOWN_ALLOC_FAILURE,
+        BIGINT_RIGHT_IS_INT as RIGHT_IS_INT, TAG_BIGINT, WELL_KNOWN_ALLOC_FAILURE,
         WELL_KNOWN_DIVISION_BY_ZERO, WELL_KNOWN_NEGATIVE_BIT_SHIFT, WORD,
     },
     native::RtResult,
@@ -65,7 +65,7 @@ pub(crate) unsafe fn as_int(object: usize) -> Option<i64> {
 /// collect.
 pub(crate) fn make(mutator: &mut Mutator, value: &BigInt) -> usize {
     let bytes = value.to_signed_bytes_le();
-    let object = mutator.allocate_object(TYPE_BIGINT, size(&bytes));
+    let object = mutator.allocate_object(TAG_BIGINT, size(&bytes));
     // SAFETY: the object has the room `size` says.
     unsafe { fill(object, &bytes) };
     object
@@ -74,7 +74,12 @@ pub(crate) fn make(mutator: &mut Mutator, value: &BigInt) -> usize {
 /// The bytes a `bigint` object takes for the value whose two's complement
 /// bytes, least significant first, are `bytes`.
 pub(crate) fn size(bytes: &[u8]) -> usize {
-    BIGINT_LIMBS + bytes.len().div_ceil(WORD).max(1) * WORD
+    crate::layout::bigint_size(limbs(bytes))
+}
+
+/// How many limbs hold the value whose two's complement bytes are `bytes`.
+fn limbs(bytes: &[u8]) -> usize {
+    bytes.len().div_ceil(WORD).max(1)
 }
 
 /// Write the count and the limbs of the value whose two's complement bytes
@@ -84,7 +89,7 @@ pub(crate) fn size(bytes: &[u8]) -> usize {
 ///
 /// `object` has the room [`size`] says for `bytes`.
 pub(crate) unsafe fn fill(object: usize, bytes: &[u8]) {
-    let limbs = (size(bytes) - BIGINT_LIMBS) / WORD;
+    let limbs = limbs(bytes);
     let sign = if bytes.last().is_some_and(|last| last & 0x80 != 0) {
         0xFF
     } else {

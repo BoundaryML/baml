@@ -38,7 +38,7 @@ use crate::{
         REPR_FLOAT, REPR_INT, REPR_NULL, REPR_PAIR, REPR_REF,
     },
     layout,
-    types::{NativeTy, TypeArg, class_layout, field_slots, native_ty, type_argument},
+    types::{NativeTy, TypeArg, class_layout, native_ty, type_argument},
 };
 
 /// A class or an enum whose type id a description is waiting for.
@@ -629,7 +629,6 @@ impl<'db> JsonTypes<'db> {
             .json_omit_nulls;
         let fields = baml_compiler2_hir_ty::lower::resolve_class_fields(db, class_loc);
         let layout = class_layout(db, class, &[])?;
-        let slots = field_slots(&layout);
         // The description goes in first, for a field that holds the class
         // again to refer to.
         let mark = self.body.len();
@@ -646,7 +645,7 @@ impl<'db> JsonTypes<'db> {
         self.classes.insert(class, at);
         let aliases = resolved_aliases_for_package(db, head.root());
         let mut records = Vec::new();
-        for ((own, ty, attrs), slot) in fields.iter().zip(slots) {
+        for (slot, (own, ty, attrs)) in fields.iter().enumerate() {
             if attrs.json_flatten || attrs.json_fallback {
                 self.forget(mark);
                 return blocked(
@@ -749,7 +748,7 @@ impl<'db> JsonTypes<'db> {
         self.shown_classes.insert(key, at);
         let mut records = Vec::new();
         let declared = class_fields(db, class);
-        for (((own, declared), ty), slot) in declared.iter().zip(fields).zip(field_slots(fields)) {
+        for (slot, ((own, declared), ty)) in declared.iter().zip(fields).enumerate() {
             let field = if matches!(declared, baml_type::Ty::RustType) {
                 // Rust state: nothing writes it, and a native that builds
                 // the class must give it.

@@ -1,8 +1,9 @@
 //! `baml.Map`.
 //!
-//! Every native here is generic: a key or a value is the one word a record
-//! holds it in. How keys are hashed and compared, and whether values are
-//! references, is known from the type ids of the call's type arguments.
+//! Every native here is generic: a key or a value is the slot a record
+//! holds it in. How keys are hashed and compared is said by a key's tag,
+//! and what tag a key or a value passed on its own has by the type ids of
+//! the call's type arguments.
 //!
 //! A map shared between tasks is locked for the length of each of these.
 //! There is one task so far and no lock: `locked` is where it goes.
@@ -10,10 +11,28 @@
 use super::{
     Arr, Elem, MapRef, NativeBamlMap, Natives, Root, Scope, Slot, TypeId, View, array_size,
 };
-use crate::map::{self, KeyKind};
+use crate::{
+    heap::Value,
+    layout::{TAG_BOX_FLOAT, TAG_FLOAT, TAG_INT, TAG_STRING},
+    map,
+};
 
-fn kind(types: [TypeId; 2]) -> KeyKind {
-    KeyKind::of(types[0].0 as usize)
+/// The key to search a map for, given as compiled code holds it. A search
+/// reads of a key's tag only whether it is a string, a `float` or anything
+/// else, which is its bits, so every key of the last kind is given the tag
+/// of an `int`.
+///
+/// # Safety
+///
+/// `key` is a key of the type the call names: a live string when that is
+/// `string`.
+unsafe fn sought(types: [TypeId; 2], key: usize) -> Value {
+    match types[0].0 as usize {
+        // SAFETY: the caller's contract.
+        TAG_STRING => unsafe { Value::reference(key) },
+        TAG_BOX_FLOAT => Value::immediate(TAG_FLOAT, key),
+        _ => Value::immediate(TAG_INT, key),
+    }
 }
 
 /// Run `body` with the map at `map` held against other tasks.
@@ -39,7 +58,7 @@ fn column<'s>(
         // SAFETY: a live map, and nothing allocates inside a reservation.
         unsafe {
             map::for_each(map, |key, value| {
-                array.set(next, if values { value } else { key });
+                array.set_value(next, if values { value } else { key });
                 next += 1;
             });
         }
@@ -58,7 +77,7 @@ impl NativeBamlMap for Natives {
     fn has(types: [TypeId; 2], map: MapRef<'_>, key: usize) -> bool {
         // SAFETY: a live map of the named key type and a key of it.
         locked(map.raw(), || unsafe {
-            map::get(map.raw(), kind(types), key).is_some()
+            map::get(map.raw(), sought(types, key)).is_some()
         })
     }
 
@@ -66,14 +85,14 @@ impl NativeBamlMap for Natives {
         locked(map.raw(), || {
             // SAFETY: a live map of the named key type and a key of it;
             // the value is read at once.
-            unsafe { map::get(map.raw(), kind(types), key).map(|slot| crate::heap::load(slot)) }
+            unsafe { map::get(map.raw(), sought(types, key)).map(|slot| Value::load(slot).payload) }
         })
     }
 
     fn delete(types: [TypeId; 2], map: MapRef<'_>, key: usize) -> Option<usize> {
         // SAFETY: a live map of the named key type and a key of it.
         locked(map.raw(), || unsafe {
-            map::delete(map.raw(), kind(types), key)
+            map::delete(map.raw(), sought(types, key)).map(|value| value.payload)
         })
     }
 
@@ -84,43 +103,35 @@ impl NativeBamlMap for Natives {
 
     fn set<'s>(
         scope: &mut Scope<'s>,
-        types: [TypeId; 2],
+        _types: [TypeId; 2],
         map: Root<'s, super::Map>,
         key: Elem<'s>,
         value: Elem<'s>,
     ) -> Option<usize> {
-        let (map, key, is_ref, value) = (
-            map.raw(scope),
-            key.get(scope),
-            value.is_ref(),
-            value.get(scope),
-        );
+        let (map, key, value) = (map.raw(scope), key.value(scope), value.value(scope));
         // SAFETY: a live map of the named types, and a key and a value of
         // them.
         locked(map, || unsafe {
-            map::set(scope.mutator(), map, kind(types), is_ref, key, value)
+            map::set(scope.mutator(), map, key, value).map(|before| before.payload)
         })
     }
 
     fn get_or_insert<'s>(
         scope: &mut Scope<'s>,
-        types: [TypeId; 2],
+        _types: [TypeId; 2],
         map: Root<'s, super::Map>,
         key: Elem<'s>,
         default: Elem<'s>,
     ) -> usize {
-        let (kind, is_ref) = (kind(types), default.is_ref());
-        let key = kind.canonical(key.get(scope));
         locked(map.raw(scope), || {
             // SAFETY: a live map of the named types, and a key and a value
             // of them.
             unsafe {
-                if let Some(slot) = map::get(map.raw(scope), kind, key) {
-                    return crate::heap::load(slot);
+                if let Some(slot) = map::get(map.raw(scope), key.value(scope)) {
+                    return Value::load(slot).payload;
                 }
-                let hash = kind.hash(key);
-                let (map, value) = (map.raw(scope), default.get(scope));
-                map::insert_new(scope.mutator(), map, kind, is_ref, key, hash, value);
+                let (map, key, value) = (map.raw(scope), key.value(scope), default.value(scope));
+                map::set(scope.mutator(), map, key, value);
             }
             default.get(scope)
         })

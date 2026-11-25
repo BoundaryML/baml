@@ -9,21 +9,21 @@
 //! library the runtime names, the program's table of them
 //! ([`Scope::named_class`]).
 //!
-//! `baml.json` builds the instances it decodes through the same two
-//! functions, [`place`] and [`put`], in room it has reserved.
+//! `baml.json` gives the fields of the instances it decodes, in room it
+//! has reserved, the values the same function makes: [`place`].
 
 use super::{Elem, Obj, Root, Scope, TypeId};
 use crate::{
     describe::{Desc, Types},
-    heap::{load, store},
+    heap::{self, load, store},
     json_layout::{
         KIND_BOOL, KIND_BOOL_IS, KIND_CLASS, KIND_ENUM, KIND_FLOAT, KIND_INT, KIND_INT_IS,
         KIND_NULL, KIND_OPAQUE, KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS, KIND_UNION,
-        KIND_VARIANT, REPR_BOXED, REPR_PAIR,
+        KIND_VARIANT, REPR_BOXED,
     },
     layout::{
-        BOX_SIZE, BOX_VALUE, HEADER_PANIC, NAMED, STRING_TYPES_END, TYPE_BOX_BOOL, TYPE_BOX_FLOAT,
-        TYPE_BOX_INT, TYPE_ID_MASK, WORD,
+        BOX_SIZE, BOX_VALUE, HEADER_PANIC, NAMED, STRING_TAGS_END, TAG_BOOL, TAG_BOX_BOOL,
+        TAG_BOX_FLOAT, TAG_BOX_INT, TAG_FLOAT, TAG_INT, TYPE_ID_MASK,
     },
 };
 
@@ -41,49 +41,26 @@ pub(crate) enum Got {
     Ref(usize),
 }
 
-/// The words a place of representation `repr` holds `got` as: the slot,
-/// and for an optional scalar whether there is a value. Where the place
-/// holds any of several types, a scalar goes in a box, which `boxed` makes
-/// of a type id and the value's bits.
-pub(crate) fn place(
-    got: Got,
-    repr: u32,
-    boxed: impl FnOnce(usize, usize) -> usize,
-) -> (usize, usize) {
-    let (type_id, bits) = match got {
-        Got::Null => return (0, 0),
-        Got::Ref(object) => return (object, 1),
-        Got::Bool(value) => (TYPE_BOX_BOOL, usize::from(value)),
-        Got::Int(value) => (TYPE_BOX_INT, value.cast_unsigned() as usize),
-        Got::Float(value) => (TYPE_BOX_FLOAT, value.to_bits() as usize),
-        Got::Variant(type_id, index) => (type_id, index),
+/// The value a slot of representation `repr` holds `got` as. Where the
+/// slot holds any of several types, a scalar goes in a box, which `boxed`
+/// makes of a type id and the value's bits: the address of the box, or
+/// zero from one that only counts, and the slot is then `null`.
+pub(crate) fn place(got: Got, repr: u32, boxed: impl FnOnce(usize, usize) -> usize) -> heap::Value {
+    let (type_id, value) = match got {
+        Got::Null => return heap::Value::NULL,
+        // SAFETY: what was got is zero or a live object.
+        Got::Ref(object) => return unsafe { heap::Value::reference(object) },
+        Got::Bool(value) => (TAG_BOX_BOOL, heap::Value::bool(value)),
+        Got::Int(value) => (TAG_BOX_INT, heap::Value::int(value)),
+        Got::Float(value) => (TAG_BOX_FLOAT, heap::Value::float(value)),
+        // A slot of an enum's own type holds a variant as its position.
+        Got::Variant(type_id, index) => (type_id, heap::Value::immediate(TAG_INT, index)),
     };
     if repr == REPR_BOXED {
-        (boxed(type_id, bits), 1)
+        // SAFETY: zero or a box just made.
+        unsafe { heap::Value::reference(boxed(type_id, value.payload)) }
     } else {
-        (bits, 1)
-    }
-}
-
-/// Write what [`place`] made into the field at `offset` of `instance`,
-/// whose representation is `repr`.
-///
-/// # Safety
-///
-/// `instance` is an instance with a field of that representation there,
-/// and the words are a value of the field's type.
-pub(crate) unsafe fn put(
-    instance: usize,
-    offset: usize,
-    repr: u32,
-    (word, present): (usize, usize),
-) {
-    // SAFETY: the caller's contract: an optional scalar is two slots.
-    unsafe {
-        store(instance + offset, word);
-        if repr == REPR_PAIR {
-            store(instance + offset + WORD, present);
-        }
+        value
     }
 }
 
@@ -131,7 +108,7 @@ impl<'s, M> From<Root<'s, M>> for Value<'s> {
     fn from(root: Root<'s, M>) -> Self {
         Self::Ref(Elem {
             slot: root.0,
-            is_ref: true,
+            immediate: None,
         })
     }
 }
@@ -166,7 +143,7 @@ impl From<bool> for Value<'_> {
     }
 }
 
-/// An instance being built: every slot zero until its field is set.
+/// An instance being built: every slot `null` until its field is set.
 pub struct Build<'s> {
     class: Desc,
     object: Root<'s, Obj>,
@@ -174,8 +151,8 @@ pub struct Build<'s> {
     set: u64,
 }
 
-/// Whether a field of the type `ty` may be left unset: its zero slot is
-/// then `null`.
+/// Whether a field of the type `ty` may be left unset: its slot is then
+/// `null`.
 fn admits_null(ty: Desc) -> bool {
     match ty.kind() {
         KIND_NULL | KIND_OPTIONAL => true,
@@ -236,11 +213,10 @@ impl<'s> Scope<'s> {
         } else {
             0
         };
-        let object = self.mutator().allocate_object(type_id | flags, size);
-        // SAFETY: the instance is `size` bytes, and zero is a slot's empty
-        // value whatever it holds.
+        let object = self.mutator().allocate(size);
+        // SAFETY: the instance is `size` bytes.
         let object = unsafe {
-            std::ptr::write_bytes((object + WORD) as *mut u8, 0, size - WORD);
+            crate::class::format(object, type_id | flags, size);
             self.root_raw(object)
         };
         Build {
@@ -252,42 +228,31 @@ impl<'s> Scope<'s> {
 }
 
 impl Scope<'_> {
-    /// Where field `field` of `object` is and how its slot holds a value.
-    fn field_slot(&self, object: super::ObjRef<'_>, field: usize) -> (usize, Desc) {
+    /// The slot of field `field` of `object`.
+    fn field_slot(&self, object: super::ObjRef<'_>, field: usize) -> heap::Value {
         let class = self.class_of(object).0;
-        let Some((offset, ty)) = class.field_place(field) else {
+        let Some((offset, _)) = class.field_place(field) else {
             panic!(
                 "a native read field {field} of `{}`, which has none there",
                 class.full_name()
             );
         };
-        (super::View::raw(object) + offset, ty)
+        // SAFETY: the description says where the field is in the instance.
+        unsafe { heap::Value::load(super::View::raw(object) + offset) }
     }
 
     /// The `int`, `float` or `bool` in field `field` of `object`, by its
     /// position in the declaration, as the value's bits: `None` for
     /// `null`.
     pub fn field_bits(&self, object: super::ObjRef<'_>, field: usize) -> Option<u64> {
-        let (slot, ty) = self.field_slot(object, field);
-        // SAFETY: the description says how the slot holds its value: in
-        // place, as two slots, or in a box.
-        unsafe {
-            let word = load(slot);
-            match ty.repr() {
-                crate::json_layout::REPR_PAIR => (load(slot + WORD) != 0).then_some(word as u64),
-                REPR_BOXED => {
-                    let boxed = word != 0
-                        && matches!(
-                            load(word) & TYPE_ID_MASK,
-                            TYPE_BOX_BOOL | TYPE_BOX_INT | TYPE_BOX_FLOAT
-                        );
-                    boxed.then(|| load(word + BOX_VALUE) as u64)
-                }
-                crate::json_layout::REPR_INT
-                | crate::json_layout::REPR_FLOAT
-                | crate::json_layout::REPR_BOOL => Some(word as u64),
-                _ => None,
+        let value = self.field_slot(object, field);
+        match value.id() {
+            TAG_BOOL | TAG_INT | TAG_FLOAT => Some(value.payload as u64),
+            // SAFETY: a box is a header and one value.
+            TAG_BOX_BOOL | TAG_BOX_INT | TAG_BOX_FLOAT => {
+                Some(unsafe { load(value.payload + BOX_VALUE) } as u64)
             }
+            _ => None,
         }
     }
 
@@ -302,12 +267,10 @@ impl Scope<'_> {
         object: super::ObjRef<'a>,
         field: usize,
     ) -> Option<M::View<'a>> {
-        let (slot, _) = self.field_slot(object, field);
-        // SAFETY: the caller's contract: the slot is a reference or zero.
-        unsafe {
-            let word = load(slot);
-            (word != 0).then(|| super::View::from_raw(word))
-        }
+        let value = self.field_slot(object, field);
+        // SAFETY: the caller's contract: the slot is a reference or
+        // `null`.
+        (!value.is_null()).then(|| unsafe { super::View::from_raw(value.payload) })
     }
 }
 
@@ -362,7 +325,7 @@ impl<'s> Build<'s> {
                 let fits = match inner.kind() {
                     _ if object == 0 => false,
                     KIND_CLASS => header == inner.a(),
-                    KIND_STRING | KIND_STRING_IS => header < STRING_TYPES_END,
+                    KIND_STRING | KIND_STRING_IS => header < STRING_TAGS_END,
                     KIND_BOOL | KIND_INT | KIND_FLOAT | KIND_ENUM | KIND_NULL | KIND_BOOL_IS
                     | KIND_INT_IS | KIND_VARIANT => false,
                     _ => true,
@@ -384,7 +347,7 @@ impl<'s> Build<'s> {
         });
         // SAFETY: the description says where the field is and how its
         // slot holds the value, which was checked to be one of its type.
-        unsafe { put(self.object.raw(scope), offset, ty.repr(), placed) };
+        unsafe { heap::Value::store(self.object.raw(scope) + offset, placed) };
         self.set |= 1 << field;
     }
 

@@ -17,7 +17,9 @@ use crate::{
         KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, MEMBER_ALIASED, MEMBER_DECLARED, MEMBER_SKIP,
         REPR_REF, VARIANT_FLAGS, VARIANT_RECORD,
     },
-    layout::{KIND_FIXED, TYPE_DESCRIBED, TYPE_STRING, WELL_KNOWN, WELL_KNOWN_PANICS},
+    layout::{
+        FIRST_CLASS_TYPE, KIND_INSTANCE, TAG_STRING, TYPE_DESCRIBED, WELL_KNOWN, WELL_KNOWN_PANICS,
+    },
     native::{Scope, TypeId, drive::BamlFn},
 };
 
@@ -115,7 +117,7 @@ impl Types {
         }
         match id as usize {
             0 => None,
-            TYPE_STRING => Some(Desc {
+            TAG_STRING => Some(Desc {
                 section: STRING.as_ptr() as usize,
                 at: STRING.as_ptr() as usize,
             }),
@@ -155,34 +157,28 @@ impl Types {
 
     /// The description of the class whose instances have the type id
     /// `type_id`, which the class's type locates: every class has one,
-    /// whether or not `baml.json` can write its instances.
+    /// whether or not `baml.json` can write its instances. Nothing for a
+    /// type id that is not a class's.
     pub(crate) fn of_class(&self, type_id: usize) -> Option<Desc> {
-        // SAFETY: a type is four words: the first its kind, and the last
-        // of a class's where its description is.
+        if self.section == 0 || type_id < FIRST_CLASS_TYPE {
+            return None;
+        }
+        // SAFETY: a type of the program's is four words: the first its
+        // kind, and the last of a class's where its description is.
         let (kind, described) =
             unsafe { (word(self.table + type_id), word(self.table + type_id + 12)) };
-        (self.section != 0
-            && kind == KIND_FIXED as usize
-            && described & TYPE_DESCRIBED as usize != 0)
-            .then(|| Desc {
-                section: self.section,
-                at: self.section + (described & !(TYPE_DESCRIBED as usize)),
-            })
+        (kind == KIND_INSTANCE as usize && described & TYPE_DESCRIBED as usize != 0).then(|| Desc {
+            section: self.section,
+            at: self.section + (described & !(TYPE_DESCRIBED as usize)),
+        })
     }
 
-    /// The size in bytes of an object of the fixed type `type_id`, and the
-    /// offsets of the words of it the collector follows.
-    pub(crate) fn fixed(&self, type_id: usize) -> (usize, &'static [u32]) {
-        // SAFETY: a fixed type is its four words and then the offset of
-        // each of its references, in the executable's data.
-        unsafe {
-            let entry = self.table + type_id;
-            let references = std::slice::from_raw_parts(
-                (entry + crate::layout::TYPE_HEADER) as *const u32,
-                word(entry + 8),
-            );
-            (word(entry + 4), references)
-        }
+    /// Whether `type_id` is the type of an enum's boxes.
+    pub(crate) fn is_enum(&self, type_id: usize) -> bool {
+        // SAFETY: a type of the program's is four words, the first its
+        // kind.
+        type_id >= FIRST_CLASS_TYPE
+            && unsafe { word(self.table + type_id) } == crate::layout::KIND_ENUM as usize
     }
 
     /// The list of types the runtime knows by position, which the table's

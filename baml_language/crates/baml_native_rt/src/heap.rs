@@ -2,11 +2,12 @@
 //!
 //! # Objects
 //!
-//! [`crate::layout`] gives the layout of every object. Nothing in an object
-//! is tagged: the type in its header says which of its words are references,
-//! and a reference is a plain address, zero for `null`. Objects the compiler
-//! places in the executable's data (string constants) have the same layout
-//! and are never moved or freed.
+//! [`crate::layout`] gives the layout of every object. A slot of an object
+//! is a [`Value`]: a tag word and a payload word. The tag says whether the
+//! payload is an address, and the type in an object's header says where its
+//! slots are and which of its other words are addresses. Objects the
+//! compiler places in the executable's data (string constants) have the
+//! same layout and are never moved or freed.
 //!
 //! # Allocation
 //!
@@ -35,12 +36,19 @@
 use std::alloc::{Layout, alloc, dealloc};
 
 use crate::layout::{
-    ARRAY_DATA, ARRAY_SIZE, ENTRIES_CAPACITY, ENTRIES_RECORDS, FUTURE_ERROR, FUTURE_FLAGS,
-    FUTURE_READY, FUTURE_SETTLED, FUTURE_STATE, FUTURE_TRACE, FUTURE_VALUE, FUTURE_VALUE_IS_REF,
-    KIND_ARRAY, KIND_ENTRIES, KIND_FIXED, KIND_FUTURE, KIND_OWNED, KIND_REFS, KIND_SLICE,
-    KIND_STRING, KIND_VALUES, OWNED_KIND, OWNED_SIZE, OWNED_VALUE, SLICE_OFFSET, SLICE_PARENT,
-    STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TYPE_HEADER, TYPE_ID_MASK,
-    TYPE_OWNED, TYPE_STRING, WORD, words,
+    ARRAY_PTR, ARRAY_SIZE, BIGINT_LIMB_COUNT, BOUND_RECEIVER, BOUND_TYPE_ARG_COUNT, BOX_SIZE,
+    BYTES_PTR, BYTES_SIZE, BYTES_STORAGE_CAPACITY, CALLABLE_TAG_MASK, CELL_SIZE, CELL_VALUE,
+    CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_KEY,
+    ENTRY_SIZE, ENTRY_VALUE, FIRST_CLASS_TYPE, FUTURE_SIZE, FUTURE_TRACE, FUTURE_VALUE,
+    INDEX_SLOT_COUNT, INSTANCE_SLOTS, KIND_ENUM, KIND_INSTANCE, MAP_ENTRIES, MAP_INDEX, MAP_SIZE,
+    OWNED_KIND, OWNED_SIZE, OWNED_VALUE, PLAIN_WORDS, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE,
+    STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TAG_ARRAY, TAG_ARRAY_STORAGE,
+    TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BOX_BOOL, TAG_BOX_FLOAT, TAG_BOX_INT, TAG_BYTES,
+    TAG_BYTES_STORAGE, TAG_CELL, TAG_CLOSURE, TAG_FLOAT, TAG_FUTURE, TAG_INT, TAG_MAP,
+    TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OWNED, TAG_PLAIN, TAG_STRING, TAG_STRING_SLICE,
+    TAG_TUPLE, TUPLE_COUNT, TYPE_HEADER, TYPE_ID_MASK, VALUE, VALUE_PAYLOAD, WORD, aligned,
+    bigint_size, bound_size, bytes_storage_size, closure_size, entries_size, index_size,
+    instance_size, is_callable, is_pointer, plain_size, storage_size, string_size,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
@@ -91,17 +99,16 @@ pub struct RustKind {
 /// the collector failed to update reads as garbage.
 const POISON: u8 = 0xA5;
 
-/// What the collector needs to know about a kind of object: an entry of the
-/// program's type table. `pointer_count` field offsets, in bytes from the
-/// start of the object, follow the struct.
+/// The type of a class or of an enum's boxes: an entry of the program's
+/// type table.
 #[repr(C)]
 struct TypeInfo {
     kind: u32,
-    /// Bytes an object occupies, header included; fixed objects and arrays.
+    /// Bytes an object occupies, header included.
     size: u32,
-    pointer_count: u32,
-    /// The type id of an array's storage.
-    storage: u32,
+    unused: u32,
+    /// Where an enum's names are, or a class's description.
+    extra: u32,
 }
 
 const _: () = assert!(size_of::<TypeInfo>() == TYPE_HEADER);
@@ -124,6 +131,163 @@ pub unsafe fn load(address: usize) -> usize {
 pub unsafe fn store(address: usize, value: usize) {
     // SAFETY: the caller's contract.
     unsafe { *(address as *mut usize) = value }
+}
+
+/// A slot of the heap: a tag word in the format of an object's header, and
+/// a payload word the tag says how to read. An `int`, a `float` and a
+/// `bool` are their bits, `null` is all zero, and anything else is the
+/// address of an object whose header has the tag's type id.
+///
+/// [`Self::load`] and [`Self::store`] are the only code of the runtime that
+/// reads or writes a slot of an object another worker may reach.
+#[repr(C, align(16))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Value {
+    pub tag: usize,
+    pub payload: usize,
+}
+
+const _: () = {
+    assert!(size_of::<Value>() == VALUE);
+    assert!(std::mem::offset_of!(Value, payload) == VALUE_PAYLOAD);
+};
+
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a word is 64 bits wherever the runtime is built"
+)]
+impl Value {
+    pub const NULL: Self = Self {
+        tag: TAG_NULL,
+        payload: 0,
+    };
+
+    pub const fn int(value: i64) -> Self {
+        Self {
+            tag: TAG_INT,
+            payload: value.cast_unsigned() as usize,
+        }
+    }
+
+    pub const fn float(value: f64) -> Self {
+        Self {
+            tag: TAG_FLOAT,
+            payload: value.to_bits() as usize,
+        }
+    }
+
+    pub const fn bool(value: bool) -> Self {
+        Self {
+            tag: TAG_BOOL,
+            payload: value as usize,
+        }
+    }
+
+    /// The immediate of tag `tag` whose bits are `bits`: an `int`, a
+    /// `float`, a `bool`, or `null`, whose payload is zero whatever the
+    /// bits.
+    pub const fn immediate(tag: usize, bits: usize) -> Self {
+        debug_assert!(!is_pointer(tag));
+        Self {
+            tag,
+            payload: if tag == TAG_NULL { 0 } else { bits },
+        }
+    }
+
+    /// The value that refers to the object at `object`, or `null` for
+    /// zero: its tag is read from the object's header.
+    ///
+    /// # Safety
+    ///
+    /// `object` is zero or the address of a live object.
+    pub unsafe fn reference(object: usize) -> Self {
+        if object == 0 {
+            return Self::NULL;
+        }
+        // SAFETY: the caller's contract: an object starts with its header.
+        let header = unsafe { load(object) };
+        let mask = if is_callable(header) {
+            CALLABLE_TAG_MASK
+        } else {
+            TYPE_ID_MASK
+        };
+        Self {
+            tag: header & mask,
+            payload: object,
+        }
+    }
+
+    /// What this value is once a collection has left `payload` in the root
+    /// that held its payload: the collector moves the object, and makes a
+    /// string of a slice, which changes the tag.
+    ///
+    /// # Safety
+    ///
+    /// When this value is a pointer, `payload` is where its object is now.
+    #[must_use]
+    pub unsafe fn kept(self, payload: usize) -> Self {
+        if self.is_pointer() {
+            // SAFETY: the caller's contract.
+            unsafe { Self::reference(payload) }
+        } else {
+            self
+        }
+    }
+
+    /// The type id of the tag.
+    pub const fn id(self) -> usize {
+        self.tag & TYPE_ID_MASK
+    }
+
+    pub const fn is_null(self) -> bool {
+        self.id() == TAG_NULL
+    }
+
+    /// Whether the payload is the address of an object.
+    pub const fn is_pointer(self) -> bool {
+        is_pointer(self.tag)
+    }
+
+    /// The word compiled code holds the value as when its static type is
+    /// one type or an optional reference: the payload, which is zero for
+    /// `null`.
+    pub const fn word(self) -> usize {
+        self.payload
+    }
+
+    /// Write the slot at `slot` of an object nothing else can reach yet:
+    /// one being laid out, or a future's value, which nothing reads before
+    /// the future's state says it is there.
+    ///
+    /// # Safety
+    ///
+    /// `slot` is the address of a slot of such an object, and `value` a
+    /// value the slot may hold.
+    pub unsafe fn init(slot: usize, value: Self) {
+        // SAFETY: the caller's contract.
+        unsafe { *(slot as *mut Self) = value }
+    }
+
+    /// Read the slot at `slot`.
+    ///
+    /// # Safety
+    ///
+    /// `slot` is the address of a slot of a live object.
+    pub unsafe fn load(slot: usize) -> Self {
+        // SAFETY: the caller's contract.
+        unsafe { *(slot as *const Self) }
+    }
+
+    /// Write the slot at `slot`, both words.
+    ///
+    /// # Safety
+    ///
+    /// `slot` is the address of a slot of a live object, and `value` a
+    /// value the slot may hold.
+    pub unsafe fn store(slot: usize, value: Self) {
+        // SAFETY: the caller's contract.
+        unsafe { *(slot as *mut Self) = value }
+    }
 }
 
 /// A contiguous block objects are allocated in.
@@ -533,6 +697,17 @@ impl Mutator {
         self.heap.types
     }
 
+    /// The type at `type_id` of the program's type table.
+    ///
+    /// # Safety
+    ///
+    /// `type_id` is the id of a class or of an enum's boxes.
+    unsafe fn info(&self, type_id: usize) -> &'static TypeInfo {
+        // SAFETY: the caller's contract: the id is the offset of an entry
+        // of the type table, which lives in the executable's data.
+        unsafe { &*((self.heap.types + type_id) as *const TypeInfo) }
+    }
+
     /// The name of variant `index` of the enum whose boxes have the type
     /// `enum_type`.
     pub fn variant_name(&self, enum_type: usize, index: usize) -> &'static str {
@@ -541,7 +716,7 @@ impl Mutator {
         // fourth word locates its names, which live in the executable's
         // data.
         unsafe {
-            let names = types + (*((types + enum_type) as *const TypeInfo)).storage as usize;
+            let names = types + self.info(enum_type).extra as usize;
             let word = |position: usize| *((names + position * 4) as *const u32) as usize;
             assert!(index < word(0), "an enum value names one of its variants");
             let (start, length) = (word(1 + 2 * index), word(2 + 2 * index));
@@ -552,42 +727,54 @@ impl Mutator {
         }
     }
 
-    /// Whether values of the type a call names by `type_id` are references:
-    /// every type but `int`, `float`, `bool` and the enums, whose ids are
-    /// those of their boxes. Zero names a type whose values share no one
-    /// id, all of which are references.
-    pub fn is_reference(&self, type_id: usize) -> bool {
+    /// The tag of the values of the type a call names by `type_id`, when
+    /// they are immediates: an `int`, a `float`, a `bool`, or an enum's
+    /// variants, which a slot holds as the `int` of their position. None
+    /// for every other type, whose values are references. A call names
+    /// the first three, and an enum, by the type of their boxes; zero
+    /// names a type whose values share no one id, all of which are
+    /// references.
+    pub fn immediate_tag(&self, type_id: usize) -> Option<usize> {
         match type_id {
-            0 => true,
+            TAG_BOX_INT => Some(TAG_INT),
+            TAG_BOX_FLOAT => Some(TAG_FLOAT),
+            TAG_BOX_BOOL => Some(TAG_BOOL),
             // The description of a type with no one type id.
-            described if described & crate::json_layout::DESCRIBED as usize != 0 => true,
-            crate::layout::TYPE_BOX_INT
-            | crate::layout::TYPE_BOX_FLOAT
-            | crate::layout::TYPE_BOX_BOOL => false,
-            // SAFETY: any other id is an entry of the type table. An enum's
-            // boxes hold no reference and locate the enum's names; a class
-            // locates its description, and says that it is one.
-            _ => unsafe {
-                let info = &*((self.heap.types + type_id) as *const TypeInfo);
-                !(info.kind == KIND_FIXED
-                    && info.pointer_count == 0
-                    && info.storage != 0
-                    && info.storage & crate::layout::TYPE_DESCRIBED == 0)
+            described if described & crate::json_layout::DESCRIBED as usize != 0 => None,
+            // SAFETY: an id from here on is an entry of the type table.
+            program if program >= FIRST_CLASS_TYPE => unsafe {
+                (self.info(program).kind == KIND_ENUM).then_some(TAG_INT)
             },
+            _ => None,
         }
     }
 
-    /// The type id of the storage behind arrays of type `array_type`.
-    pub fn storage_type(&self, array_type: usize) -> usize {
-        // SAFETY: an array's type id is an entry of the type table.
-        unsafe { (*((self.heap.types + array_type) as *const TypeInfo)).storage as usize }
+    /// Whether values of the type a call names by `type_id` are references.
+    pub fn is_reference(&self, type_id: usize) -> bool {
+        self.immediate_tag(type_id).is_none()
     }
 
-    /// Allocate `size` bytes (a whole number of words) and return their
-    /// address. The memory is not initialized. May collect: every reference
-    /// the caller holds must be rooted.
+    /// The value a slot holds for `word`, which is what compiled code
+    /// holds a value of the type a call names by `type_id` as.
+    ///
+    /// # Safety
+    ///
+    /// `word` is a value of that type: when the type's values are
+    /// references, zero or the address of a live object.
+    pub unsafe fn value_of(&self, word: usize, type_id: usize) -> Value {
+        match self.immediate_tag(type_id) {
+            Some(tag) => Value::immediate(tag, word),
+            // SAFETY: the caller's contract.
+            None => unsafe { Value::reference(word) },
+        }
+    }
+
+    /// Allocate `size` bytes (a whole number of values) and return their
+    /// address, which is aligned as an object is. The memory is not
+    /// initialized. May collect: every reference the caller holds must be
+    /// rooted.
     pub fn allocate(&mut self, size: usize) -> usize {
-        debug_assert!(size.is_multiple_of(WORD));
+        debug_assert!(size.is_multiple_of(VALUE));
         if self.heap.stress || self.alloc_ptr + size > self.span_end {
             self.collect(size);
         }
@@ -597,11 +784,11 @@ impl Mutator {
         address
     }
 
-    /// Allocate an object of `size` bytes whose type id is `type_id`.
-    pub fn allocate_object(&mut self, type_id: usize, size: usize) -> usize {
+    /// Allocate an object of `size` bytes whose header is `header`.
+    pub fn allocate_object(&mut self, header: usize, size: usize) -> usize {
         let object = self.allocate(size);
         // SAFETY: `object` is `size >= WORD` fresh bytes.
-        unsafe { store(object, type_id) };
+        unsafe { store(object, header) };
         object
     }
 
@@ -612,7 +799,7 @@ impl Mutator {
         if self.heap.owned_since >= self.heap.owned_trigger {
             self.collect(OWNED_SIZE);
         }
-        let object = self.allocate_object(TYPE_OWNED, OWNED_SIZE);
+        let object = self.allocate_object(TAG_OWNED, OWNED_SIZE);
         // SAFETY: the object has two words after its header.
         unsafe {
             store(object + OWNED_VALUE, value);
@@ -669,7 +856,7 @@ impl Mutator {
     /// Copy everything reachable into a space of at least `least` bytes and
     /// of the size the next space is to have, and allocate from there.
     fn copy_into(&mut self, least: usize) {
-        let size = words(self.heap.next_space.max(least));
+        let size = aligned(self.heap.next_space.max(least));
         let to = match self.heap.spare.take() {
             Some(spare) if spare.size >= size => spare,
             _ => Space::new(size),
@@ -685,17 +872,17 @@ impl Mutator {
             for task in self.sched.tasks() {
                 let roots = crate::sched::task_roots(task, self.cur_task);
                 for slot in roots.slots {
-                    copy.forward(slot);
+                    copy.forward_word(slot);
                 }
                 if let Some((result, [sp, pc, fp], base)) = roots.stack {
-                    copy.forward(result);
+                    copy.forward_word(result);
                     copy.stack(&self.heap.stack_maps, Anchor { sp, pc, fp }, base);
                 }
                 // What the `async` natives the task is inside hold.
-                crate::native::drive::each_root(task, |slot| copy.forward(slot));
+                crate::native::drive::each_root(task, |slot| copy.forward_word(slot));
             }
             for &slot in &self.roots {
-                copy.forward(slot);
+                copy.forward_word(slot);
             }
             copy.finish();
         }
@@ -748,6 +935,10 @@ unsafe fn drop_value(object: usize) {
     }
 }
 
+/// Set in an entry of the slots set aside when the slot is the payload of
+/// a value, whose tag is the word before it.
+const OF_VALUE: usize = 1;
+
 /// One copying pass from a space into a new one.
 struct Copy<'a> {
     from: &'a Space,
@@ -756,7 +947,7 @@ struct Copy<'a> {
     /// Where the next copied object goes.
     free: usize,
     /// The slots found holding a reference to a slice of a string that had
-    /// not been reached.
+    /// not been reached, each with [`OF_VALUE`] when it is a value's.
     parked: Vec<usize>,
 }
 
@@ -772,36 +963,50 @@ impl<'a> Copy<'a> {
         }
     }
 
-    /// The type of an object from its header.
+    /// The type of an instance or of a box from its header.
     ///
     /// # Safety
     ///
-    /// `header` is the header of an object that has not been forwarded.
+    /// `header` is the header of an object of a type of the program's.
     unsafe fn info(&self, header: usize) -> &'static TypeInfo {
-        // SAFETY: a type id is the offset of an entry of the type table,
-        // which lives in the executable's data.
+        // SAFETY: a type id past the tags is the offset of an entry of the
+        // type table, which lives in the executable's data.
         unsafe { &*((self.types + (header & TYPE_ID_MASK)) as *const TypeInfo) }
     }
 
-    /// How many bytes the object at `object` occupies.
+    /// How many bytes the object at `object`, whose header is `header`,
+    /// occupies.
     ///
     /// # Safety
     ///
-    /// `object` is a live object of type `info`.
-    unsafe fn size(object: usize, info: &TypeInfo) -> usize {
-        // SAFETY: storage keeps its capacity, and a string its byte length
-        // in the low half, in its second word.
+    /// `object` is a live object with that header.
+    unsafe fn size(&self, object: usize, header: usize) -> usize {
+        // SAFETY: an object that is as long as it has something of keeps
+        // the count in its second word, a string its byte length in the
+        // low half of it.
         unsafe {
-            match info.kind {
-                KIND_FIXED | KIND_ARRAY | KIND_SLICE | KIND_FUTURE | KIND_OWNED => {
-                    info.size as usize
-                }
-                KIND_VALUES | KIND_REFS => {
-                    STORAGE_ELEMENTS + load(object + STORAGE_CAPACITY) * WORD
-                }
-                KIND_STRING => STRING_TEXT + words(load(object + STRING_LENGTHS) & 0xFFFF_FFFF),
-                KIND_ENTRIES => crate::layout::entries_size(load(object + ENTRIES_CAPACITY)),
-                kind => unreachable!("an object of unknown kind {kind}"),
+            let count = || load(object + WORD);
+            match header & TYPE_ID_MASK {
+                TAG_STRING => string_size(count() & HEADER_LOW),
+                TAG_STRING_SLICE => SLICE_SIZE,
+                TAG_ARRAY => ARRAY_SIZE,
+                TAG_ARRAY_STORAGE => storage_size(count()),
+                TAG_MAP => MAP_SIZE,
+                TAG_MAP_ENTRIES => entries_size(count()),
+                TAG_MAP_INDEX => index_size(count()),
+                TAG_CELL => CELL_SIZE,
+                TAG_FUTURE => FUTURE_SIZE,
+                TAG_CLOSURE => closure_size(load(object + CLOSURE_CAPTURE_COUNT)),
+                TAG_BOUND_METHOD => bound_size(load(object + BOUND_TYPE_ARG_COUNT)),
+                TAG_BIGINT => bigint_size(count()),
+                TAG_BYTES => BYTES_SIZE,
+                TAG_BYTES_STORAGE => bytes_storage_size(count()),
+                TAG_TUPLE => instance_size(count()),
+                TAG_OWNED => OWNED_SIZE,
+                TAG_PLAIN => plain_size(count()),
+                TAG_BOX_INT | TAG_BOX_FLOAT | TAG_BOX_BOOL => BOX_SIZE,
+                id if id >= FIRST_CLASS_TYPE => self.info(header).size as usize,
+                id => unreachable!("an object of the tag {id}, which nothing makes"),
             }
         }
     }
@@ -825,39 +1030,93 @@ impl<'a> Copy<'a> {
         copy
     }
 
-    /// The address of the copy of the object at `object`, which is not a
-    /// slice, copying it first if this is the first reference to it seen.
-    /// An address outside the space being collected, null included, is
-    /// returned as it is.
-    ///
-    /// # Safety
-    ///
-    /// `object` is null or the address of an object that is not a slice.
-    unsafe fn copied(&mut self, object: usize) -> usize {
-        if !self.from.contains(object) {
-            return object;
-        }
-        // SAFETY: every object in the space being copied from has a header
-        // that is a type id or a forwarding address.
-        unsafe {
-            let header = load(object);
-            if header & FORWARDED != 0 {
-                return header & !FORWARDED;
-            }
-            let size = Self::size(object, self.info(header));
-            self.copy_out(object, size)
-        }
-    }
-
-    /// Make the reference in `*slot` point at the copy of its object. A
-    /// reference to a slice of a string not reached yet is left as it is
-    /// until [`Self::settle_slices`].
+    /// Make the reference in the word at `slot` point at the copy of its
+    /// object, copying it first if this is the first reference to it seen.
+    /// A word that is not an address in the space being collected, null
+    /// included, is left as it is.
     ///
     /// # Safety
     ///
     /// `slot` is the address of a word that holds null or a reference, and
     /// stays where it is until the collection ends.
-    unsafe fn forward(&mut self, slot: usize) {
+    unsafe fn forward_word(&mut self, slot: usize) {
+        // SAFETY: the caller's contract.
+        unsafe { self.forward(slot, 0) }
+    }
+
+    /// Make the value at `slot` point at the copy of its object, when it
+    /// is a pointer.
+    ///
+    /// # Safety
+    ///
+    /// `slot` is the address of a slot of a live object, which stays where
+    /// it is until the collection ends.
+    unsafe fn forward_value(&mut self, slot: usize) {
+        // SAFETY: the caller's contract.
+        unsafe {
+            let tag = load(slot);
+            #[cfg(checks)]
+            self.check(slot, tag);
+            if is_pointer(tag) {
+                self.forward(slot + VALUE_PAYLOAD, OF_VALUE);
+            }
+        }
+    }
+
+    /// End the program unless the tag of the value at `slot` is one a slot
+    /// may hold while the world is stopped: not busy, and of the type id
+    /// in the header of the object it points at, with its call layout when
+    /// that is a callable.
+    ///
+    /// # Safety
+    ///
+    /// As [`Self::forward_value`].
+    #[cfg(checks)]
+    unsafe fn check(&self, slot: usize, tag: usize) {
+        if tag & crate::layout::HEADER_BUSY != 0 {
+            crate::sched::fatal(&format!(
+                "the slot at {slot:#x} is busy at a collection: its tag is {tag:#x}"
+            ));
+        }
+        if !is_pointer(tag) {
+            return;
+        }
+        // SAFETY: a pointer's payload is the address of an object, whose
+        // header is its own or the address of its copy.
+        let header = unsafe {
+            let object = load(slot + VALUE_PAYLOAD);
+            match load(object) {
+                copied if self.from.contains(object) && copied & FORWARDED != 0 => {
+                    load(copied & !FORWARDED)
+                }
+                header => header,
+            }
+        };
+        // What a tag says of its object: the type id, and a callable's call
+        // layout.
+        let said = if is_callable(header) {
+            CALLABLE_TAG_MASK
+        } else {
+            TYPE_ID_MASK
+        };
+        if tag & said != header & said {
+            crate::sched::fatal(&format!(
+                "the slot at {slot:#x} has the tag {tag:#x} and points at an object whose \
+                 header is {header:#x}"
+            ));
+        }
+    }
+
+    /// Make the reference in `*slot` point at the copy of its object. A
+    /// reference to a slice of a string not reached yet is left as it is
+    /// until [`Self::settle_slices`], which is told by `of_value` whether
+    /// the word is the payload of a value.
+    ///
+    /// # Safety
+    ///
+    /// `slot` is the address of a word that holds null or a reference, and
+    /// stays where it is until the collection ends.
+    unsafe fn forward(&mut self, slot: usize, of_value: usize) {
         // SAFETY: the caller's contract, and every object in the space
         // being copied from has a header that is a type id or a forwarding
         // address.
@@ -871,19 +1130,18 @@ impl<'a> Copy<'a> {
                 store(slot, header & !FORWARDED);
                 return;
             }
-            let info = self.info(header);
-            if info.kind == KIND_SLICE {
+            if header & TYPE_ID_MASK == TAG_STRING_SLICE {
                 let parent = load(object + SLICE_PARENT);
                 if self.from.contains(parent) {
                     let reached = load(parent);
                     if reached & FORWARDED == 0 {
-                        self.parked.push(slot);
+                        self.parked.push(slot | of_value);
                         return;
                     }
                     store(object + SLICE_PARENT, reached & !FORWARDED);
                 }
             }
-            let size = Self::size(object, info);
+            let size = self.size(object, header);
             store(slot, self.copy_out(object, size));
         }
     }
@@ -893,6 +1151,11 @@ impl<'a> Copy<'a> {
     ///
     /// Nothing here needs scanning afterwards: a string holds no
     /// reference, and a slice copied here already points at a copy.
+    ///
+    /// A slice that is made a string of its own changes its type id, so
+    /// every value that points at one is given the tag of what it points
+    /// at now. Each such value was set aside: a slice is made a string
+    /// only if no reference to it was followed before.
     ///
     /// # Safety
     ///
@@ -906,8 +1169,8 @@ impl<'a> Copy<'a> {
         unsafe {
             // How much room the text of each unreached string's slices
             // would take as strings of their own, each slice counted once.
-            for &slot in &parked {
-                let slice = load(slot);
+            for &entry in &parked {
+                let slice = load(entry & !OF_VALUE);
                 let header = load(slice);
                 if header & (FORWARDED | COUNTED) != 0 {
                     continue;
@@ -927,31 +1190,46 @@ impl<'a> Copy<'a> {
                     (counted & HEADER_LOW) | (count.min(HEADER_LOW) << COUNT_SHIFT),
                 );
             }
-            for &slot in &parked {
-                let slice = load(slot);
-                let header = load(slice);
-                if header & FORWARDED != 0 {
-                    store(slot, header & !FORWARDED);
-                    continue;
+            for &entry in &parked {
+                let slot = entry & !OF_VALUE;
+                let settled = self.settle(load(slot));
+                store(slot, settled);
+                if entry & OF_VALUE != 0 {
+                    store(slot - VALUE_PAYLOAD, load(settled) & TYPE_ID_MASK);
                 }
-                let parent = load(slice + SLICE_PARENT);
-                let mut reached = load(parent);
-                if reached & FORWARDED == 0 {
-                    let (count, size) = (reached >> COUNT_SHIFT, Self::text_size(parent));
-                    if count < size && count < HEADER_LOW {
-                        store(slot, self.flatten(slice));
-                        continue;
-                    }
-                    // Its slices are no smaller than it is. The count goes,
-                    // and so would a hash kept where it was.
-                    store(parent, TYPE_STRING);
-                    reached = self.copy_out(parent, size) | FORWARDED;
-                }
-                store(slice, header & !COUNTED);
-                store(slice + SLICE_PARENT, reached & !FORWARDED);
-                let size = Self::size(slice, self.info(header));
-                store(slot, self.copy_out(slice, size));
             }
+        }
+    }
+
+    /// The address of what the slice at `slice`, a reference to which was
+    /// set aside, is copied as.
+    ///
+    /// # Safety
+    ///
+    /// As [`Self::settle_slices`], which has counted the text of every
+    /// slice set aside.
+    unsafe fn settle(&mut self, slice: usize) -> usize {
+        // SAFETY: the caller's contract.
+        unsafe {
+            let header = load(slice);
+            if header & FORWARDED != 0 {
+                return header & !FORWARDED;
+            }
+            let parent = load(slice + SLICE_PARENT);
+            let mut reached = load(parent);
+            if reached & FORWARDED == 0 {
+                let (count, size) = (reached >> COUNT_SHIFT, Self::text_size(parent));
+                if count < size && count < HEADER_LOW {
+                    return self.flatten(slice);
+                }
+                // Its slices are no smaller than it is. The count goes,
+                // and so would a hash kept where it was.
+                store(parent, TAG_STRING);
+                reached = self.copy_out(parent, size) | FORWARDED;
+            }
+            store(slice, header & !COUNTED);
+            store(slice + SLICE_PARENT, reached & !FORWARDED);
+            self.copy_out(slice, SLICE_SIZE)
         }
     }
 
@@ -963,7 +1241,7 @@ impl<'a> Copy<'a> {
     unsafe fn text_size(string: usize) -> usize {
         // SAFETY: both keep their byte length in the low half of their
         // second word.
-        unsafe { STRING_TEXT + words(load(string + STRING_LENGTHS) & HEADER_LOW) }
+        unsafe { string_size(load(string + STRING_LENGTHS) & HEADER_LOW) }
     }
 
     /// Copy the text of the slice at `slice`, whose string is not copied,
@@ -983,9 +1261,9 @@ impl<'a> Copy<'a> {
             let lengths = load(slice + STRING_LENGTHS);
             let size = Self::text_size(slice);
             let text = load(slice + SLICE_PARENT) + STRING_TEXT + load(slice + SLICE_OFFSET);
-            store(flat, TYPE_STRING);
-            // The last word first, for the zeros after the text.
-            store(flat + size - WORD, 0);
+            // The end first, for the zeros after the text.
+            *((flat + size - VALUE) as *mut Value) = Value::NULL;
+            store(flat, TAG_STRING);
             store(flat + STRING_LENGTHS, lengths);
             std::ptr::copy_nonoverlapping(
                 text as *const u8,
@@ -1019,7 +1297,7 @@ impl<'a> Copy<'a> {
             // returning to `pc`, and `fp` its frame record.
             unsafe {
                 for &offset in maps.slots(pc) {
-                    self.forward(sp + offset as usize);
+                    self.forward_word(sp + offset as usize);
                 }
                 if fp >= base {
                     break;
@@ -1035,6 +1313,18 @@ impl<'a> Copy<'a> {
         }
     }
 
+    /// Forward the `count` values from `first` on.
+    ///
+    /// # Safety
+    ///
+    /// They are slots of a copied object.
+    unsafe fn values(&mut self, first: usize, count: usize) {
+        for index in 0..count {
+            // SAFETY: the caller's contract.
+            unsafe { self.forward_value(first + index * VALUE) };
+        }
+    }
+
     /// Copy everything reachable from what has been copied so far.
     ///
     /// # Safety
@@ -1043,66 +1333,45 @@ impl<'a> Copy<'a> {
     unsafe fn finish(&mut self) {
         let mut scan = self.to.start;
         while scan < self.free {
-            // SAFETY: `scan` is the start of a copied object.
+            // SAFETY: `scan` is the start of a copied object, whose header
+            // says where its slots and its other references are.
             unsafe {
-                let info = self.info(load(scan));
-                match info.kind {
-                    KIND_FIXED => {
-                        let offsets =
-                            (std::ptr::from_ref(info) as usize + TYPE_HEADER) as *const u32;
-                        for index in 0..info.pointer_count as usize {
-                            self.forward(scan + *offsets.add(index) as usize);
-                        }
+                let header = load(scan);
+                let size = self.size(scan, header);
+                match header & TYPE_ID_MASK {
+                    TAG_ARRAY => self.forward_word(scan + ARRAY_PTR),
+                    TAG_BYTES => self.forward_word(scan + BYTES_PTR),
+                    // Storage is scanned to its capacity: what an array
+                    // gives up it clears.
+                    TAG_ARRAY_STORAGE => {
+                        self.values(scan + STORAGE_ELEMENTS, load(scan + STORAGE_CAPACITY));
                     }
-                    // An array holds the address of its first element, which
-                    // is inside its storage object.
-                    KIND_ARRAY => {
-                        let data = load(scan + ARRAY_DATA);
-                        if data != 0 {
-                            let storage = self.copied(data - STORAGE_ELEMENTS);
-                            store(scan + ARRAY_DATA, storage + STORAGE_ELEMENTS);
-                        }
+                    TAG_MAP => {
+                        self.forward_word(scan + MAP_ENTRIES);
+                        self.forward_word(scan + MAP_INDEX);
                     }
-                    KIND_REFS => {
-                        for index in 0..load(scan + STORAGE_CAPACITY) {
-                            self.forward(scan + STORAGE_ELEMENTS + index * WORD);
-                        }
+                    // A record not in use is zero: two `null`s.
+                    TAG_MAP_ENTRIES => {
+                        self.values(scan + ENTRIES_RECORDS, 2 * load(scan + ENTRIES_CAPACITY));
                     }
-                    // A map's entries: the references of each record, at
-                    // the same offsets in every one. A record not in use
-                    // is zero.
-                    KIND_ENTRIES => {
-                        let offsets =
-                            (std::ptr::from_ref(info) as usize + TYPE_HEADER) as *const u32;
-                        let stride = info.size as usize;
-                        for record in 0..load(scan + ENTRIES_CAPACITY) {
-                            for index in 0..info.pointer_count as usize {
-                                self.forward(
-                                    scan + ENTRIES_RECORDS
-                                        + record * stride
-                                        + *offsets.add(index) as usize,
-                                );
-                            }
-                        }
+                    TAG_CELL => self.forward_value(scan + CELL_VALUE),
+                    // What a task returned or threw, and the trace it was
+                    // thrown with. Until it settles both are zero.
+                    TAG_FUTURE => {
+                        self.forward_value(scan + FUTURE_VALUE);
+                        self.forward_word(scan + FUTURE_TRACE);
                     }
-                    // What a task threw is a reference, and so is the trace
-                    // it was thrown with; what it returned is one when the
-                    // future's flags say so. Until it settles both words
-                    // are zero.
-                    KIND_FUTURE => {
-                        let settled = load(scan + FUTURE_STATE) & FUTURE_SETTLED;
-                        if settled == FUTURE_ERROR {
-                            self.forward(scan + FUTURE_VALUE);
-                            self.forward(scan + FUTURE_TRACE);
-                        } else if settled == FUTURE_READY
-                            && load(scan + FUTURE_FLAGS) & FUTURE_VALUE_IS_REF != 0
-                        {
-                            self.forward(scan + FUTURE_VALUE);
-                        }
+                    TAG_CLOSURE => {
+                        self.values(scan + CLOSURE_CAPTURES, load(scan + CLOSURE_CAPTURE_COUNT));
+                    }
+                    TAG_BOUND_METHOD => self.forward_value(scan + BOUND_RECEIVER),
+                    TAG_TUPLE => self.values(scan + INSTANCE_SLOTS, load(scan + TUPLE_COUNT)),
+                    id if id >= FIRST_CLASS_TYPE && self.info(header).kind == KIND_INSTANCE => {
+                        self.values(scan + INSTANCE_SLOTS, (size - INSTANCE_SLOTS) / VALUE);
                     }
                     _ => {}
                 }
-                scan += Self::size(scan, info);
+                scan += size;
             }
         }
         // SAFETY: the scan is done.
@@ -1110,7 +1379,15 @@ impl<'a> Copy<'a> {
     }
 }
 
-const _: () = assert!(ARRAY_SIZE == 3 * WORD);
+const _: () = {
+    // Each of these keeps a count in its second word, which is what
+    // `Copy::size` reads.
+    assert!(STORAGE_CAPACITY == WORD && ENTRIES_CAPACITY == WORD && INDEX_SLOT_COUNT == WORD);
+    assert!(BIGINT_LIMB_COUNT == WORD && BYTES_STORAGE_CAPACITY == WORD);
+    assert!(TUPLE_COUNT == WORD && PLAIN_WORDS == WORD && STRING_LENGTHS == WORD);
+    // A record is two values, one after the other.
+    assert!(ENTRY_KEY == 0 && ENTRY_VALUE == VALUE && ENTRY_SIZE == 2 * VALUE);
+};
 
 /// The slow path of allocation in compiled code: the mutator's span cannot
 /// take the bytes asked for in its scratch word, which is left holding the
@@ -1132,10 +1409,7 @@ mod tests {
     use super::*;
     use crate::{
         array::{array_new, array_push_slow},
-        layout::{
-            ARRAY_LENGTH, FIRST_CLASS_TYPE, RUNTIME_TYPES, SLICE_SIZE, TYPE_ARRAY_OF_REFS,
-            TYPE_STRING_SLICE, field_offset, instance_size,
-        },
+        layout::{ARRAY_LENGTH, INSTANCE_CLASS, field_offset},
         string,
     };
 
@@ -1143,21 +1417,14 @@ mod tests {
     /// instance, in [`types`].
     const LINK: usize = FIRST_CLASS_TYPE;
 
-    /// A type table holding the fixed types and `LINK`.
+    /// A type table holding `LINK`.
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "the sizes and offsets of a two-slot class"
+        reason = "the size of a two-slot class"
     )]
     fn types() -> &'static [u32] {
-        let mut table = RUNTIME_TYPES.to_vec();
-        table.extend([
-            KIND_FIXED,
-            instance_size(2) as u32,
-            1,
-            0,
-            field_offset(1) as u32,
-            0,
-        ]);
+        let mut table = vec![0; FIRST_CLASS_TYPE / 4];
+        table.extend([KIND_INSTANCE, instance_size(2) as u32, 0, 0]);
         table.leak()
     }
 
@@ -1173,24 +1440,31 @@ mod tests {
     }
 
     /// Push a link holding `value` onto the list in `*head`.
-    fn push_link(mutator: &mut Mutator, head: &mut usize, value: usize) {
+    fn push_link(mutator: &mut Mutator, head: &mut usize, value: i64) {
         let link = mutator.allocate_object(LINK, instance_size(2));
         // SAFETY: `link` is a fresh instance of two slots, and `head` was
         // kept current across the allocation.
         unsafe {
-            store(link + field_offset(0), value);
-            store(link + field_offset(1), *head);
+            store(link + INSTANCE_CLASS, 0);
+            Value::store(link + field_offset(0), Value::int(value));
+            Value::store(link + field_offset(1), Value::reference(*head));
         }
         *head = link;
     }
 
-    fn list_values(mut link: usize) -> Vec<usize> {
+    fn list_values(mut link: usize) -> Vec<i64> {
         let mut values = Vec::new();
         while link != 0 {
             // SAFETY: `link` is a live instance of `LINK`.
             unsafe {
-                values.push(load(link + field_offset(0)));
-                link = load(link + field_offset(1));
+                let (value, next) = (
+                    Value::load(link + field_offset(0)),
+                    Value::load(link + field_offset(1)),
+                );
+                assert_eq!(value.tag, TAG_INT);
+                assert!(next == Value::NULL || next.tag == LINK);
+                values.push(value.payload.cast_signed() as i64);
+                link = next.payload;
             }
         }
         values
@@ -1210,14 +1484,15 @@ mod tests {
 
     #[test]
     fn a_copied_object_keeps_the_flags_of_its_header() {
-        use crate::layout::{HEADER_PANIC, TYPE_ID_MASK};
+        use crate::layout::HEADER_PANIC;
 
         let mut mutator = mutator(true);
         let mut flagged = mutator.allocate_object(LINK | HEADER_PANIC, instance_size(2));
         // SAFETY: `flagged` is a fresh instance of two slots.
         unsafe {
-            store(flagged + field_offset(0), 7);
-            store(flagged + field_offset(1), 0);
+            store(flagged + INSTANCE_CLASS, 0);
+            Value::store(flagged + field_offset(0), Value::int(7));
+            Value::store(flagged + field_offset(1), Value::NULL);
         }
         mutator.root(&mut flagged);
         let before = flagged;
@@ -1238,7 +1513,7 @@ mod tests {
         let mut head = 0;
         mutator.root(&mut head);
         let links = 2 * INITIAL_SPACE / instance_size(2);
-        for value in 0..links {
+        for value in (0..).take(links) {
             push_link(&mut mutator, &mut head, value);
         }
         mutator.unroot(1);
@@ -1252,20 +1527,19 @@ mod tests {
         // SAFETY: the calls follow the contracts of compiled code, with the
         // array rooted here in place of a stack map.
         unsafe {
-            let mut array = array_new(&mut mutator, TYPE_ARRAY_OF_REFS, 0);
+            let mut array = array_new(&mut mutator, 0);
             mutator.root(&mut array);
             for index in 0..100 {
                 let text = string::from_str(&mut mutator, &format!("item {index}"));
-                array_push_slow(&mut mutator, array, text);
+                array_push_slow(&mut mutator, array, TAG_STRING, text);
             }
             mutator.unroot(1);
             assert_eq!(load(array + ARRAY_LENGTH), 100);
-            let data = load(array + ARRAY_DATA);
+            let elements = load(array + ARRAY_PTR) + STORAGE_ELEMENTS;
             for index in 0..100 {
-                assert_eq!(
-                    string::text(load(data + index * WORD)),
-                    format!("item {index}")
-                );
+                let element = Value::load(elements + index * VALUE);
+                assert_eq!(element.tag, TAG_STRING);
+                assert_eq!(string::text(element.payload), format!("item {index}"));
             }
         }
     }
@@ -1274,7 +1548,7 @@ mod tests {
     /// ASCII.
     fn slice(mutator: &mut Mutator, parent: &mut usize, from: usize, to: usize) -> usize {
         mutator.root(parent);
-        let slice = mutator.allocate_object(TYPE_STRING_SLICE, SLICE_SIZE);
+        let slice = mutator.allocate_object(TAG_STRING_SLICE, SLICE_SIZE);
         mutator.unroot(1);
         let length = to - from;
         // SAFETY: a fresh slice of four words.
@@ -1288,7 +1562,7 @@ mod tests {
 
     fn is_slice(string: usize) -> bool {
         // SAFETY: `string` is a live string.
-        unsafe { load(string) & TYPE_ID_MASK == TYPE_STRING_SLICE }
+        unsafe { load(string) & TYPE_ID_MASK == TAG_STRING_SLICE }
     }
 
     const LETTERS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -1301,14 +1575,56 @@ mod tests {
         let mut again = part;
         mutator.root(&mut part);
         mutator.root(&mut again);
-        mutator.allocate(WORD);
+        mutator.allocate(VALUE);
         mutator.unroot(2);
         assert!(!is_slice(part));
         assert_eq!(part, again);
         // SAFETY: `part` was kept current.
         assert_eq!(unsafe { string::text(part) }, &LETTERS.repeat(4)[5..45]);
         let live = mutator.alloc_ptr - mutator.heap.space.start;
-        assert_eq!(live, STRING_TEXT + words(40) + WORD);
+        assert_eq!(live, string_size(40) + VALUE);
+    }
+
+    /// A value's tag names what it points at: the slots that held a slice
+    /// the collector made a string of say so afterwards, and a slot that
+    /// holds a slice it kept still says that.
+    #[test]
+    fn a_value_that_pointed_at_a_slice_made_a_string_is_tagged_a_string() {
+        for kept in [false, true] {
+            let mut mutator = mutator(true);
+            let mut parent = string::from_str(&mut mutator, &LETTERS.repeat(4));
+            let mut part = slice(&mut mutator, &mut parent, 5, 45);
+            mutator.root(&mut parent);
+            mutator.root(&mut part);
+            let mut cells = [0; 2];
+            for cell in &mut cells {
+                *cell = mutator.allocate_object(TAG_CELL, CELL_SIZE);
+                // SAFETY: a fresh cell, and `part` was kept current.
+                unsafe { Value::store(*cell + CELL_VALUE, Value::reference(part)) };
+                mutator.root(cell);
+            }
+            mutator.unroot(4);
+            for cell in &mut cells {
+                mutator.root(cell);
+            }
+            if kept {
+                mutator.root(&mut parent);
+            }
+            mutator.allocate(VALUE);
+            mutator.unroot(if kept { 3 } else { 2 });
+            for cell in cells {
+                // SAFETY: the cells were kept current.
+                let value = unsafe { Value::load(cell + CELL_VALUE) };
+                assert_eq!(is_slice(value.payload), kept);
+                let tag = if kept { TAG_STRING_SLICE } else { TAG_STRING };
+                assert_eq!(value.tag, tag);
+                // SAFETY: a live string.
+                assert_eq!(
+                    unsafe { string::text(value.payload) },
+                    &LETTERS.repeat(4)[5..45]
+                );
+            }
+        }
     }
 
     #[test]
@@ -1324,7 +1640,7 @@ mod tests {
                 mutator.root(&mut part);
                 mutator.root(&mut parent);
             }
-            mutator.allocate(WORD);
+            mutator.allocate(VALUE);
             mutator.unroot(2);
             assert!(is_slice(part));
             // SAFETY: both were kept current.
@@ -1345,13 +1661,13 @@ mod tests {
             *part = slice(&mut mutator, &mut parent, index, index + 60);
             mutator.root(part);
         }
-        mutator.allocate(WORD);
+        mutator.allocate(VALUE);
         mutator.unroot(3);
         // SAFETY: the parts were kept current.
         unsafe {
             let shared = load(parts[0] + SLICE_PARENT);
             assert_eq!(string::text(shared), text);
-            assert_eq!(load(shared), TYPE_STRING);
+            assert_eq!(load(shared), TAG_STRING);
             for (index, &part) in parts.iter().enumerate() {
                 assert!(is_slice(part));
                 assert_eq!(load(part + SLICE_PARENT), shared);
@@ -1370,7 +1686,7 @@ mod tests {
             *part = slice(&mut mutator, &mut parent, index * 100, index * 100 + 40);
             mutator.root(part);
         }
-        mutator.allocate(WORD);
+        mutator.allocate(VALUE);
         mutator.unroot(3);
         for (index, &part) in parts.iter().enumerate() {
             assert!(!is_slice(part));
@@ -1381,22 +1697,22 @@ mod tests {
             );
         }
         let live = mutator.alloc_ptr - mutator.heap.space.start;
-        assert_eq!(live, 3 * (STRING_TEXT + words(40)) + WORD);
+        assert_eq!(live, 3 * string_size(40) + VALUE);
     }
 
     /// What a string's header caches is nothing or the hash of its text,
-    /// and its flags are clear.
+    /// and the bits above it are clear.
     #[expect(clippy::cast_possible_truncation, reason = "the high half of a header")]
     fn assert_hash_is_sound(string: usize) {
         use crate::{
-            layout::{HEADER_FLAGS, STRING_HASH_MASK},
+            layout::{HEADER_PAYLOAD_MASK, HEADER_PAYLOAD_SHIFT, STRING_HASH_MASK},
             map::{str_hash, text_hash},
         };
         // SAFETY: `string` is a live string.
         unsafe {
             let expected = text_hash(string::text(string).as_bytes());
             let header = load(string);
-            assert_eq!(header & HEADER_FLAGS, 0);
+            assert_eq!(header >> HEADER_PAYLOAD_SHIFT & !HEADER_PAYLOAD_MASK, 0);
             let cached = (header >> 32) as u32 & STRING_HASH_MASK;
             assert!(cached == 0 || cached == expected, "a stale cached hash");
             assert_eq!(str_hash(string), expected);
@@ -1438,7 +1754,7 @@ mod tests {
             mutator.root_at(std::ptr::from_mut(&mut early) as usize);
             mutator.roots.rotate_right(1);
             mutator.root(&mut late);
-            mutator.allocate(WORD);
+            mutator.allocate(VALUE);
             mutator.unroot(5);
             for (index, &part) in parts.iter().enumerate() {
                 // SAFETY: the parts were kept current.
@@ -1514,15 +1830,15 @@ mod tests {
     #[test]
     fn a_frame_whose_call_holds_no_reference_or_is_the_runtimes_has_no_roots() {
         // A call of compiled code that is listed as holding nothing.
-        with_a_frame_returning_into_code(8, true).allocate(WORD);
+        with_a_frame_returning_into_code(8, true).allocate(VALUE);
         // A return address outside compiled code: a frame of the runtime.
-        with_a_frame_returning_into_code(CODE.len() + 64, false).allocate(WORD);
+        with_a_frame_returning_into_code(CODE.len() + 64, false).allocate(VALUE);
     }
 
     #[test]
     #[ignore = "ends its process: run by the test below"]
     fn collects_with_a_compiled_frame_that_has_no_stack_map() {
-        with_a_frame_returning_into_code(8, false).allocate(WORD);
+        with_a_frame_returning_into_code(8, false).allocate(VALUE);
     }
 
     /// A return address into compiled code with no stack map is a map the
@@ -1572,7 +1888,7 @@ mod tests {
         // Several collections more: nothing is dropped twice, and nothing
         // alive is dropped.
         for _ in 0..3 {
-            mutator.allocate(WORD);
+            mutator.allocate(VALUE);
         }
         assert_eq!(mutator.owned(), 10);
         for (index, counter) in drops.iter().enumerate() {
@@ -1598,7 +1914,7 @@ mod tests {
     #[test]
     fn what_an_array_or_a_map_gives_up_is_collected() {
         use crate::{
-            map::{self, KeyKind},
+            map,
             native::{
                 Arr, ArrRef, NativeBamlArray as _, Natives, RootSlots, Scope, Slot, TypeId, View,
             },
@@ -1607,7 +1923,7 @@ mod tests {
         let mut mutator = mutator(true);
         let drops = counters(8);
         let dropped = |mutator: &mut Mutator| -> Vec<usize> {
-            mutator.allocate(WORD);
+            mutator.allocate(VALUE);
             (0..drops.len())
                 .filter(|index| drops[*index] == 1)
                 .collect()
@@ -1616,14 +1932,14 @@ mod tests {
         // SAFETY: the calls follow the contracts of compiled code, with the
         // array and the map rooted here in place of a stack map.
         unsafe {
-            let mut array = array_new(&mut mutator, TYPE_ARRAY_OF_REFS, 0);
+            let mut array = array_new(&mut mutator, 0);
             mutator.root(&mut array);
             for counter in drops {
                 let mut object =
                     mutator.allocate_owned(std::ptr::from_ref(counter) as usize, &COUNTED);
                 // The object is held by nothing until it is in the array.
                 mutator.root(&mut object);
-                array_push_slow(&mut mutator, array, object);
+                array_push_slow(&mut mutator, array, TAG_OWNED, object);
                 mutator.unroot(1);
             }
             assert!(dropped(&mut mutator).is_empty());
@@ -1653,7 +1969,7 @@ mod tests {
 
             // A map from strings to objects: one key deleted, then all.
             let drops = counters(3);
-            let mut held = map::new(&mut mutator, true, true, 0);
+            let mut held = map::new(&mut mutator, 0);
             mutator.root(&mut held);
             let mut keys = [0; 3];
             for key in &mut keys {
@@ -1664,17 +1980,22 @@ mod tests {
                 let mut object =
                     mutator.allocate_owned(std::ptr::from_ref(counter) as usize, &COUNTED);
                 mutator.root(&mut object);
-                map::set(&mut mutator, held, KeyKind::Str, true, keys[index], object);
+                map::set(
+                    &mut mutator,
+                    held,
+                    Value::reference(keys[index]),
+                    Value::reference(object),
+                );
                 mutator.unroot(1);
             }
             let dropped = |mutator: &mut Mutator| -> Vec<usize> {
-                mutator.allocate(WORD);
+                mutator.allocate(VALUE);
                 (0..drops.len())
                     .filter(|index| drops[*index] == 1)
                     .collect()
             };
             assert!(dropped(&mut mutator).is_empty());
-            map::delete(held, KeyKind::Str, keys[1]);
+            map::delete(held, Value::reference(keys[1]));
             assert_eq!(dropped(&mut mutator), [1]);
             map::clear(held);
             assert_eq!(dropped(&mut mutator), [0, 1, 2]);

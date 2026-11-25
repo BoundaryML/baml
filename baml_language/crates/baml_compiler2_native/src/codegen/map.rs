@@ -112,20 +112,6 @@ impl<'db> Translator<'_, 'db> {
         }
     }
 
-    /// Store a value in a record of a map's entries. Every store compiled
-    /// code makes into entries is this one.
-    fn store_map_value(&mut self, ty: &NativeTy<'db>, value: ir::Value, slot: ir::Value) {
-        let value = self.as_slot(value, ty);
-        self.builder.ins().store(slot_access(), value, slot, 0);
-    }
-
-    /// Load the value a probe found.
-    fn load_map_value(&mut self, ty: &NativeTy<'db>, slot: ir::Value) -> ir::Value {
-        let word = self.builder.ins().load(WORD, slot_access(), slot, 0);
-        let value = self.slot_as(word, ty);
-        self.track(value, ty)
-    }
-
     /// `map[key]`: the key's value, or a panic.
     pub(super) fn map_index(
         &mut self,
@@ -137,7 +123,7 @@ impl<'db> Translator<'_, 'db> {
         let slot = self.map_probe(map, key, &key_ty)?;
         let missing = self.builder.ins().icmp_imm(IntCC::Equal, slot, 0);
         self.panic_if(missing, Panic::MapKeyNotFound)?;
-        Ok(self.load_map_value(&value_ty, slot))
+        Ok(self.slot_load(&value_ty, slot, 0))
     }
 
     /// `map[key] = value`: one probe, and an insertion that does not
@@ -158,7 +144,7 @@ impl<'db> Translator<'_, 'db> {
         self.builder.seal_block(replace);
         self.builder.seal_block(insert);
         self.builder.switch_to_block(replace);
-        self.store_map_value(&value_ty, value, slot);
+        self.slot_store(&value_ty, value, slot, 0);
         self.builder.ins().jump(done, &[]);
         self.builder.switch_to_block(insert);
         self.map_runtime_set(
@@ -236,17 +222,12 @@ impl<'db> Translator<'_, 'db> {
                 ))
             })
             .collect::<Result<Vec<_>, CompileError>>()?;
-        let [key_type, value_type] = self.map_type_ids(&key_ty, &value_ty)?;
         let word = AbiParam::new(WORD);
-        let id = AbiParam::new(types::I32);
-        let callee = self.import("baml_rt_map_new", vec![word, id, id, word], vec![word])?;
+        let callee = self.import("baml_rt_map_new", vec![word, word], vec![word])?;
         self.forget_arrays();
         let mutator = self.mutator();
         let count = self.word_const(entries.len());
-        let call = self
-            .builder
-            .ins()
-            .call(callee, &[mutator, key_type, value_type, count]);
+        let call = self.builder.ins().call(callee, &[mutator, count]);
         let map = self.builder.inst_results(call)[0];
         self.builder.declare_value_needs_stack_map(map);
         for (key, value) in entries {
@@ -306,7 +287,8 @@ impl<'db> Translator<'_, 'db> {
             .brif(slot, read, &[], done, &[zero.into(), zero.into()]);
         self.builder.seal_block(read);
         self.builder.switch_to_block(read);
-        let word = self.builder.ins().load(WORD, slot_access(), slot, 0);
+        let found = self.slot_load(&types[1], slot, 0);
+        let word = self.as_slot(found, &types[1]);
         let one = self.builder.ins().iconst(WORD, 1);
         self.builder.ins().jump(done, &[word.into(), one.into()]);
         self.builder.seal_block(done);

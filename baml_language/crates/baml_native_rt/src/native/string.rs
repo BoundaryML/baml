@@ -664,7 +664,7 @@ impl NativeBamlString for Natives {
         let view = unicode.get(scope);
         let mut bytes = 0;
         let mut invalid = None;
-        for (index, &value) in view.as_slice().iter().enumerate() {
+        for (index, value) in view.iter().enumerate() {
             match code_point(value) {
                 Some(character) => bytes += character.len_utf8(),
                 None => {
@@ -681,7 +681,7 @@ impl NativeBamlString for Natives {
         let chars = view.len();
         let reservation = scope.reserve(text_size(bytes));
         let mut string = reservation.new_str(bytes, chars);
-        for &value in reservation.get(unicode).as_slice() {
+        for value in reservation.get(unicode).iter() {
             if let Some(character) = code_point(value) {
                 string.push_char(character);
             }

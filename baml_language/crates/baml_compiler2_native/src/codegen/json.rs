@@ -10,7 +10,6 @@ use crate::{
     CompileError,
     json::Described,
     json_layout::{DESCRIBED, JSON_SECTION},
-    layout,
     natives::Native,
     types::NativeTy,
 };
@@ -81,7 +80,7 @@ impl<'db> Backend<'db> {
     /// entry a description names.
     pub(super) fn append_descriptions(&mut self) -> DataDescription {
         let json = std::mem::replace(&mut self.json, crate::json::JsonTypes::new());
-        self.types.resize(layout::words(self.types.len()), 0);
+        self.align_types();
         let start = super::table_word(self.types.len());
         self.types[JSON_SECTION..JSON_SECTION + 4].copy_from_slice(&start.to_ne_bytes());
         let mut description = DataDescription::new();
@@ -92,7 +91,7 @@ impl<'db> Backend<'db> {
             description.write_function_addr(start + at, entry);
         }
         self.types.extend(json.section());
-        self.types.resize(layout::words(self.types.len()), 0);
+        self.align_types();
         description
     }
 }

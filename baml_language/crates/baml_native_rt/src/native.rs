@@ -25,13 +25,12 @@
 use std::{cell::Cell, marker::PhantomData, mem::MaybeUninit, ptr::NonNull};
 
 use crate::{
-    heap::{Mutator, load, store},
+    heap::{self, Mutator, load, store},
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, BYTES_DATA, BYTES_LENGTH, HEADER_BOOLS,
-        HEADER_FLOATS, HEADER_INTS, SLICE_MIN_BYTES, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE,
-        STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TEXT,
-        STRING_TYPES_END, TYPE_ARRAY_OF_REFS, TYPE_ARRAY_OF_VALUES, TYPE_BYTES, TYPE_ID_MASK,
-        TYPE_STRING, TYPE_STRING_SLICE, WORD, field_offset, instance_size, scalar_flag, words,
+        ARRAY_LENGTH, ARRAY_SIZE, BYTES_LENGTH, BYTES_PTR, BYTES_STORAGE_DATA, SLICE_MIN_BYTES,
+        SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS,
+        STRING_TAGS_END, STRING_TEXT, TAG_BOOL, TAG_BYTES, TAG_FLOAT, TAG_INT, TAG_STRING,
+        TAG_STRING_SLICE, TYPE_ID_MASK, WORD, field_offset, instance_size, storage_size,
     },
 };
 
@@ -59,15 +58,13 @@ pub trait View<'a>: Copy {
 /// [`Managed`].
 pub trait Element {
     type Value<'a>;
-    /// Whether elements are references, which selects the array's type.
-    const IS_REF: bool;
-    /// The flag the array's header has for what its elements are: see
-    /// [`crate::layout::scalar_flag`].
-    const FLAG: usize = 0;
+    /// The tag a slot has for an element whose bits are its payload, or
+    /// nothing when elements are references, whose tag is their object's.
+    const TAG: Option<usize>;
     /// # Safety
     ///
-    /// `word` is an element of an array of this element type that does not
-    /// move for `'a`.
+    /// `word` is the payload of an element of an array of this element
+    /// type that does not move for `'a`.
     unsafe fn from_word<'a>(word: usize) -> Self::Value<'a>;
 }
 
@@ -90,9 +87,9 @@ pub struct Float;
 /// A `bool` array element.
 pub struct Bool;
 /// Marks an array as holding values of a type parameter: whatever a call
-/// names, each as the one word it is stored in. Whether the words are
-/// references is the array's own type, so build one with
-/// [`Reservation::slots`], not [`Reservation::array`].
+/// names, each read as the payload of its slot. What tag the slots have is
+/// the type's to say, so build one with [`Reservation::elements`], not
+/// [`Reservation::array`], which takes the elements to be references.
 pub struct Slot;
 
 /// The type id a call passes for one of a builtin's type parameters.
@@ -120,38 +117,35 @@ impl Managed for Map {
 
 impl Element for Int {
     type Value<'a> = i64;
-    const IS_REF: bool = false;
-    const FLAG: usize = HEADER_INTS;
+    const TAG: Option<usize> = Some(TAG_INT);
     unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
         word.cast_signed() as i64
     }
 }
 impl Element for Float {
     type Value<'a> = f64;
-    const IS_REF: bool = false;
-    const FLAG: usize = HEADER_FLOATS;
+    const TAG: Option<usize> = Some(TAG_FLOAT);
     unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
         f64::from_bits(word as u64)
     }
 }
 impl Element for Bool {
     type Value<'a> = bool;
-    const IS_REF: bool = false;
-    const FLAG: usize = HEADER_BOOLS;
+    const TAG: Option<usize> = Some(TAG_BOOL);
     unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
         word != 0
     }
 }
 impl Element for Slot {
     type Value<'a> = usize;
-    const IS_REF: bool = false;
+    const TAG: Option<usize> = None;
     unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
         word
     }
 }
 impl<M: Managed> Element for M {
     type Value<'a> = M::View<'a>;
-    const IS_REF: bool = true;
+    const TAG: Option<usize> = None;
     unsafe fn from_word<'a>(word: usize) -> Self::Value<'a> {
         // SAFETY: the caller's contract.
         unsafe { M::View::from_raw(word) }
@@ -210,7 +204,7 @@ impl<'a> StrRef<'a> {
         // SAFETY: a view is of a live string, and a slice is of a string
         // that holds its text.
         let (holder, start) = unsafe {
-            if load(self.0) & TYPE_ID_MASK == TYPE_STRING {
+            if load(self.0) & TYPE_ID_MASK == TAG_STRING {
                 (self.0, 0)
             } else {
                 (load(self.0 + SLICE_PARENT), load(self.0 + SLICE_OFFSET))
@@ -288,53 +282,26 @@ impl<'a, E: Element> ArrRef<'a, E> {
         self.len() == 0
     }
 
-    /// The elements, as the words they are stored in.
-    fn words(self) -> &'a [usize] {
-        let length = self.len();
-        if length == 0 {
-            return &[];
-        }
-        // SAFETY: an array that has elements has storage holding `length`
-        // of them at its data address, and neither moves for `'a`.
-        unsafe { std::slice::from_raw_parts(load(self.0 + ARRAY_DATA) as *const usize, length) }
+    /// The slot of element `index`, as it is: its tag and its payload.
+    pub(crate) fn value(self, index: usize) -> Option<heap::Value> {
+        // SAFETY: an array has storage holding its length of elements,
+        // checked here.
+        (index < self.len())
+            .then(|| unsafe { heap::Value::load(crate::array::element(self.0, index)) })
     }
 
     pub fn get(self, index: usize) -> Option<E::Value<'a>> {
-        // SAFETY: the word is an element of this array.
-        self.words()
-            .get(index)
-            .map(|&word| unsafe { E::from_word(word) })
+        // SAFETY: the payload is of an element of this array.
+        self.value(index)
+            .map(|value| unsafe { E::from_word(value.payload) })
     }
 
     pub fn iter(self) -> impl ExactSizeIterator<Item = E::Value<'a>> {
-        // SAFETY: each word is an element of this array.
-        self.words()
-            .iter()
-            .map(|&word| unsafe { E::from_word(word) })
-    }
-}
-
-impl ArrRef<'_, Slot> {
-    /// Whether the elements are references.
-    pub fn holds_refs(self) -> bool {
-        // SAFETY: a view is of a live array.
-        unsafe { load(self.0) & TYPE_ID_MASK == TYPE_ARRAY_OF_REFS }
-    }
-}
-
-impl<'a> ArrRef<'a, Int> {
-    pub fn as_slice(self) -> &'a [i64] {
-        let words = self.words();
-        // SAFETY: an `int` element is the word itself.
-        unsafe { std::slice::from_raw_parts(words.as_ptr().cast(), words.len()) }
-    }
-}
-
-impl<'a> ArrRef<'a, Float> {
-    pub fn as_slice(self) -> &'a [f64] {
-        let words = self.words();
-        // SAFETY: a `float` element is the word's bits.
-        unsafe { std::slice::from_raw_parts(words.as_ptr().cast(), words.len()) }
+        // SAFETY: each index is below the length, and each payload is of
+        // an element of this array.
+        (0..self.len()).map(move |index| unsafe {
+            E::from_word(heap::Value::load(crate::array::element(self.0, index)).payload)
+        })
     }
 }
 
@@ -372,8 +339,12 @@ impl<'a> BytesRef<'a> {
 
     /// The address of the first byte: null when the array is empty.
     fn data(self) -> *mut u8 {
-        // SAFETY: a view is of a live `uint8array`.
-        unsafe { load(self.0 + BYTES_DATA) as *mut u8 }
+        // SAFETY: a view is of a live `uint8array`, whose bytes are in its
+        // storage object when it has any.
+        match unsafe { load(self.0 + BYTES_PTR) } {
+            0 => std::ptr::null_mut(),
+            storage => (storage + BYTES_STORAGE_DATA) as *mut u8,
+        }
     }
 
     /// The byte at `index`.
@@ -538,8 +509,8 @@ impl<'a> MapRef<'a> {
         unsafe {
             crate::map::for_each(self.0, |key, value| {
                 each(
-                    crate::string::text(key),
-                    (value != 0).then(|| crate::string::text(value)),
+                    crate::string::text(key.payload),
+                    (!value.is_null()).then(|| crate::string::text(value.payload)),
                 );
             });
         }
@@ -587,12 +558,12 @@ impl<'a> AnyRef<'a> {
 
     /// The string the value is, when it is one.
     pub fn as_str(self) -> Option<StrRef<'a>> {
-        (self.type_id() < STRING_TYPES_END).then_some(StrRef(self.0, PhantomData))
+        (self.type_id() < STRING_TAGS_END).then_some(StrRef(self.0, PhantomData))
     }
 
     /// The `uint8array` the value is, when it is one.
     pub fn as_bytes(self) -> Option<BytesRef<'a>> {
-        (self.type_id() == TYPE_BYTES).then_some(BytesRef(self.0, PhantomData))
+        (self.type_id() == TAG_BYTES).then_some(BytesRef(self.0, PhantomData))
     }
 }
 
@@ -610,14 +581,15 @@ impl<'a> View<'a> for ObjRef<'a> {
 }
 
 impl<'a> ObjRef<'a> {
-    /// The word in slot `index`.
+    /// The payload of slot `index`: the word compiled code holds the
+    /// field's value as, zero for `null`.
     ///
     /// # Safety
     ///
     /// The instance has that slot.
     pub unsafe fn slot(self, index: usize) -> usize {
         // SAFETY: the caller's contract.
-        unsafe { load(self.0 + field_offset(index)) }
+        unsafe { heap::Value::load(self.0 + field_offset(index)).payload }
     }
 
     /// The object slot `index` refers to.
@@ -868,12 +840,12 @@ impl<'s, M: Managed> Root<'s, Arr<M>> {
     pub fn set(self, scope: &mut Scope<'s>, index: usize, value: Option<Root<'s, M>>) {
         let array = self.raw(scope);
         // SAFETY: a root holds a live array, which has storage for its
-        // length, checked here.
+        // length, checked here, and the other a live object.
         unsafe {
             assert!(index < load(array + ARRAY_LENGTH), "past the array's end");
-            store(
-                load(array + ARRAY_DATA) + index * WORD,
-                value.map_or(0, |value| value.raw(scope)),
+            heap::Value::store(
+                crate::array::element(array, index),
+                heap::Value::reference(value.map_or(0, |value| value.raw(scope))),
             );
         }
     }
@@ -934,7 +906,9 @@ pub struct Thrown<'s> {
 #[derive(Clone, Copy)]
 pub struct Elem<'s> {
     slot: &'s Cell<usize>,
-    is_ref: bool,
+    /// The tag a slot has for the value when its type's values are
+    /// immediates, and nothing when they are references.
+    immediate: Option<usize>,
 }
 
 // SAFETY: as for `Root`.
@@ -947,7 +921,20 @@ impl Elem<'_> {
     }
 
     pub fn is_ref(self) -> bool {
-        self.is_ref
+        self.immediate.is_none()
+    }
+
+    /// The value as a slot of the heap holds it, current until the next
+    /// allocation: an immediate has the tag of the type it was held with,
+    /// and a reference the tag of its object.
+    pub(crate) fn value(self, _scope: &Scope<'_>) -> heap::Value {
+        let word = self.slot.get();
+        match self.immediate {
+            Some(tag) => heap::Value::immediate(tag, word),
+            // SAFETY: a reference held is zero or a live object, which
+            // moves only when the scope is borrowed exclusively.
+            None => unsafe { heap::Value::reference(word) },
+        }
     }
 
     /// The value as a union holds it, when it is not `null`.
@@ -955,7 +942,7 @@ impl Elem<'_> {
         let word = self.slot.get();
         // SAFETY: a reference a union holds is zero or a live object, which
         // moves only when the scope is borrowed exclusively.
-        (self.is_ref && word != 0).then(|| unsafe { AnyRef::from_raw(word) })
+        (self.is_ref() && word != 0).then(|| unsafe { AnyRef::from_raw(word) })
     }
 
     /// The string a value held as a union holds it is, when it is one.
@@ -1064,12 +1051,12 @@ impl<'s> Scope<'s> {
     /// `word` is a value of that type: a live object or zero when the
     /// type's values are references.
     pub unsafe fn elem_raw(&mut self, word: usize, ty: TypeId) -> Elem<'s> {
-        let is_ref = self.is_reference(ty);
+        let immediate = self.immediate_tag(ty);
         // The slot is this value's whether or not it is a root: a native
         // can hold two values that are not references.
         Elem {
-            slot: self.hold(word, is_ref),
-            is_ref,
+            slot: self.hold(word, immediate.is_none()),
+            immediate,
         }
     }
 
@@ -1151,8 +1138,15 @@ impl<'s> Scope<'s> {
 
     /// Whether values of the type a call names by `ty` are references.
     pub fn is_reference(&self, ty: TypeId) -> bool {
+        self.immediate_tag(ty).is_none()
+    }
+
+    /// The tag a slot has for a value of the type a call names by `ty`,
+    /// when the type's values are immediates: see
+    /// [`Mutator::immediate_tag`].
+    pub(crate) fn immediate_tag(&self, ty: TypeId) -> Option<usize> {
         // SAFETY: as in `Self::mutator`.
-        unsafe { self.mutator.as_ref() }.is_reference(ty.0 as usize)
+        unsafe { self.mutator.as_ref() }.immediate_tag(ty.0 as usize)
     }
 
     /// A new string holding `text`. May collect.
@@ -1212,18 +1206,19 @@ impl<'s> Scope<'s> {
     }
 
     /// A new instance of the class with the type id `type_id` and `slots`
-    /// slots, each zero. May collect.
+    /// slots, each `null`. May collect.
     ///
     /// # Safety
     ///
     /// `type_id` is the id of a class with that many slots, each of which
-    /// may hold zero.
+    /// may hold `null`.
     pub unsafe fn alloc_instance(&mut self, type_id: usize, slots: usize) -> Root<'s, Obj> {
         let size = instance_size(slots);
-        let object = self.mutator().allocate_object(type_id, size);
-        // SAFETY: the object has `slots` words after its header.
+        let object = self.mutator().allocate(size);
+        // SAFETY: the object is the size of an instance of that many
+        // slots.
         unsafe {
-            std::ptr::write_bytes((object + field_offset(0)) as *mut usize, 0, slots);
+            crate::class::format(object, type_id, size);
             self.root_raw(object)
         }
     }
@@ -1287,7 +1282,7 @@ impl<'s> Scope<'s> {
     /// A new map of string keys to objects, with room for `count` keys.
     /// May collect.
     pub fn alloc_str_map(&mut self, count: usize) -> Root<'s, Map> {
-        let map = crate::map::new(self.mutator(), true, true, count);
+        let map = crate::map::new(self.mutator(), count);
         // SAFETY: just made.
         unsafe { self.root_raw(map) }
     }
@@ -1308,10 +1303,8 @@ impl<'s> Scope<'s> {
             crate::map::set(
                 self.mutator(),
                 map,
-                crate::map::KeyKind::Str,
-                true,
-                key,
-                value,
+                heap::Value::reference(key),
+                heap::Value::reference(value),
             );
         }
     }
@@ -1327,12 +1320,6 @@ impl<'s> Scope<'s> {
             error: unsafe { self.elem_raw(error, TypeId(0)) },
             context: None,
         }
-    }
-
-    /// The type id of the storage behind arrays of type `array_type`.
-    pub(crate) fn storage_type(&self, array_type: usize) -> usize {
-        // SAFETY: as in `Self::mutator`.
-        unsafe { self.mutator.as_ref() }.storage_type(array_type)
     }
 }
 
@@ -1351,9 +1338,7 @@ impl Drop for Scope<'_> {
 }
 
 /// The bytes a string of `bytes` bytes of text takes.
-pub const fn str_size(bytes: usize) -> usize {
-    STRING_TEXT + words(bytes)
-}
+pub use crate::layout::string_size as str_size;
 
 /// The bytes [`Reservation::part`] takes for a part of `bytes` bytes of
 /// text: a copy is never larger than a slice, so it is the smaller of the
@@ -1372,7 +1357,7 @@ pub const fn array_size(length: usize) -> usize {
     if length == 0 {
         ARRAY_SIZE
     } else {
-        ARRAY_SIZE + STORAGE_ELEMENTS + length * WORD
+        ARRAY_SIZE + storage_size(length)
     }
 }
 
@@ -1407,22 +1392,11 @@ impl<'s> Reservation<'_, 's> {
 
     /// A new string holding `text`, which has `chars` characters.
     pub fn counted_str(&self, text: &str, chars: usize) -> StrRef<'_> {
-        assert!(
-            u32::try_from(text.len()).is_ok(),
-            "a string cannot be longer than 4 GiB"
-        );
         debug_assert_eq!(text.chars().count(), chars);
-        let size = str_size(text.len());
-        let string = self.take(size);
-        // SAFETY: the string has room for its two words and the text. The
-        // last word first, for the zeros after the text.
+        let string = self.take(str_size(text.len()));
+        // SAFETY: the string has room for its two words and the text.
         unsafe {
-            store(string + size - WORD, 0);
-            store(string, TYPE_STRING);
-            store(
-                string + STRING_LENGTHS,
-                text.len() | (chars << STRING_CHAR_COUNT_SHIFT),
-            );
+            crate::string::format(string, text.len(), chars);
             std::ptr::copy_nonoverlapping(
                 text.as_ptr(),
                 (string + STRING_TEXT) as *mut u8,
@@ -1458,7 +1432,7 @@ impl<'s> Reservation<'_, 's> {
         let slice = self.take(SLICE_SIZE);
         // SAFETY: the slice has room for its four words.
         unsafe {
-            store(slice, TYPE_STRING_SLICE);
+            store(slice, TAG_STRING_SLICE);
             store(
                 slice + STRING_LENGTHS,
                 bytes | (chars << STRING_CHAR_COUNT_SHIFT),
@@ -1472,22 +1446,9 @@ impl<'s> Reservation<'_, 's> {
     /// A new string of `bytes` bytes of text and `chars` characters, its
     /// text to be written front to back.
     pub fn new_str(&self, bytes: usize, chars: usize) -> NewStr<'_> {
-        assert!(
-            u32::try_from(bytes).is_ok(),
-            "a string cannot be longer than 4 GiB"
-        );
-        let size = str_size(bytes);
-        let string = self.take(size);
-        // SAFETY: the string has room for its two words. The last word
-        // first, for the zeros after the text.
-        unsafe {
-            store(string + size - WORD, 0);
-            store(string, TYPE_STRING);
-            store(
-                string + STRING_LENGTHS,
-                bytes | (chars << STRING_CHAR_COUNT_SHIFT),
-            );
-        }
+        let string = self.take(str_size(bytes));
+        // SAFETY: the string has room for its two words and the text.
+        unsafe { crate::string::format(string, bytes, chars) };
         NewStr {
             string,
             written: 0,
@@ -1496,55 +1457,37 @@ impl<'s> Reservation<'_, 's> {
         }
     }
 
-    /// A new array of `length` elements, each zero.
+    /// A new array of `length` elements, each zero: `0`, `0.0`, `false`,
+    /// or `null`.
     pub fn array<E: Element>(&self, length: usize) -> NewArray<'_, E> {
-        self.array_of(length, E::IS_REF, E::FLAG)
-    }
-
-    /// A new array of `length` words that are references, or are values
-    /// that are no `float`s, each zero.
-    pub fn slots(&self, length: usize, holds_refs: bool) -> NewArray<'_, Slot> {
-        self.array_of(length, holds_refs, 0)
+        self.array_of(length, E::TAG)
     }
 
     /// A new array of `length` values of the type a call names by
-    /// `element`, each zero.
+    /// `element`, each the type's zero: `0`, `0.0`, `false`, an enum's
+    /// first variant, or `null`.
     pub fn elements(&self, length: usize, element: TypeId) -> NewArray<'_, Slot> {
-        self.array_of(
-            length,
-            self.scope.is_reference(element),
-            scalar_flag(element.0 as usize),
-        )
+        self.array_of(length, self.scope.immediate_tag(element))
     }
 
-    fn array_of<E: Element>(
-        &self,
-        length: usize,
-        holds_refs: bool,
-        flag: usize,
-    ) -> NewArray<'_, E> {
+    /// A new array of `length` elements, each the zero of the tag
+    /// `immediate`, or `null` when its elements are references.
+    fn array_of<E: Element>(&self, length: usize, immediate: Option<usize>) -> NewArray<'_, E> {
         let array = self.take(array_size(length));
-        let array_type = if holds_refs {
-            TYPE_ARRAY_OF_REFS
-        } else {
-            TYPE_ARRAY_OF_VALUES
-        };
-        // SAFETY: the array has room for itself and its storage.
+        // SAFETY: the array has room for itself and its storage, and
+        // nothing else reaches it yet.
         unsafe {
-            store(array, array_type | flag);
-            store(array + ARRAY_LENGTH, length);
-            if length == 0 {
-                store(array + ARRAY_DATA, 0);
-            } else {
-                let storage = array + ARRAY_SIZE;
-                let data = storage + STORAGE_ELEMENTS;
-                store(storage, self.scope.storage_type(array_type));
-                store(storage + STORAGE_CAPACITY, length);
-                std::ptr::write_bytes(data as *mut usize, 0, length);
-                store(array + ARRAY_DATA, data);
+            crate::array::format(array, length);
+            if let Some(tag) = immediate {
+                let zero = heap::Value::immediate(tag, 0);
+                crate::array::fill(array, std::iter::repeat_n(zero, length));
             }
         }
-        NewArray(array, PhantomData)
+        NewArray {
+            array,
+            immediate,
+            life: PhantomData,
+        }
     }
 
     /// Close the reservation, keeping an object built in it.
@@ -1629,7 +1572,13 @@ impl<'a> NewStr<'a> {
 }
 
 /// An array being filled in, inside a reservation.
-pub struct NewArray<'a, E>(usize, PhantomData<(&'a (), E)>);
+pub struct NewArray<'a, E> {
+    array: usize,
+    /// The tag of its elements when they are immediates, and nothing when
+    /// they are references.
+    immediate: Option<usize>,
+    life: PhantomData<(&'a (), E)>,
+}
 
 impl<E> Clone for NewArray<'_, E> {
     fn clone(&self) -> Self {
@@ -1641,15 +1590,34 @@ impl<E> Copy for NewArray<'_, E> {}
 impl<E: Element> NewArray<'_, E> {
     /// The array, to finish its reservation with.
     pub fn keep(self) -> Built<Arr<E>> {
-        Built(self.0, PhantomData)
+        Built(self.array, PhantomData)
     }
 
-    fn put(self, index: usize, word: usize) {
+    /// Store `value` in slot `index`.
+    pub(crate) fn set_value(self, index: usize, value: heap::Value) {
         // SAFETY: a new array has storage for its length, checked here.
         unsafe {
-            assert!(index < load(self.0 + ARRAY_LENGTH), "past the array's end");
-            store(load(self.0 + ARRAY_DATA) + index * WORD, word);
+            assert!(
+                index < load(self.array + ARRAY_LENGTH),
+                "past the array's end"
+            );
+            heap::Value::store(crate::array::element(self.array, index), value);
         }
+    }
+
+    /// Store the element compiled code holds as `word`: an immediate of
+    /// the array's tag, or a reference, zero or to a live object.
+    fn put(self, index: usize, word: usize) {
+        self.set_value(
+            index,
+            match self.immediate {
+                Some(tag) => heap::Value::immediate(tag, word),
+                // SAFETY: an element that is a reference is zero or a live
+                // object, which does not move while the reservation is
+                // open.
+                None => unsafe { heap::Value::reference(word) },
+            },
+        );
     }
 }
 

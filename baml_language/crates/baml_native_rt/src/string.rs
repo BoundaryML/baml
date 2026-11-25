@@ -2,11 +2,11 @@
 //! `length()` is a load.
 
 use crate::{
-    heap::{Mutator, load, store},
+    heap::{Mutator, Value, load, store},
     layout::{
         BOX_VALUE, SLICE_OFFSET, SLICE_PARENT, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS,
-        STRING_TEXT, STRING_TYPES_END, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ID_MASK,
-        TYPE_STRING, WORD, words,
+        STRING_TAGS_END, STRING_TEXT, TAG_BOX_BOOL, TAG_BOX_FLOAT, TAG_BOX_INT, TAG_STRING,
+        TYPE_ID_MASK, VALUE, WORD, string_size,
     },
     native::View as _,
 };
@@ -26,7 +26,7 @@ pub unsafe fn text<'a>(string: usize) -> &'a str {
     // a slice's words are read of a slice only.
     unsafe {
         let length = load(string + STRING_LENGTHS) & 0xFFFF_FFFF;
-        let start = if load(string) & TYPE_ID_MASK == TYPE_STRING {
+        let start = if load(string) & TYPE_ID_MASK == TAG_STRING {
             string + STRING_TEXT
         } else {
             load(string + SLICE_PARENT) + STRING_TEXT + load(string + SLICE_OFFSET)
@@ -35,25 +35,36 @@ pub unsafe fn text<'a>(string: usize) -> &'a str {
     }
 }
 
-/// Allocate a string of `bytes` bytes and `chars` characters with its text
-/// left to be written. May collect.
-fn allocate(mutator: &mut Mutator, bytes: usize, chars: usize) -> usize {
+/// Lay out a string of `bytes` bytes and `chars` characters at `string`,
+/// with its text left to be written and the bytes after it zero.
+///
+/// # Safety
+///
+/// `string` is `string_size(bytes)` fresh bytes.
+pub(crate) unsafe fn format(string: usize, bytes: usize, chars: usize) {
     assert!(
         u32::try_from(bytes).is_ok(),
         "a string cannot be longer than 4 GiB"
     );
-    let size = STRING_TEXT + words(bytes);
-    let string = mutator.allocate_object(TYPE_STRING, size);
-    // SAFETY: the object is at least `STRING_TEXT` bytes. The last word
-    // first, for the zeros after the text: whole words of it are hashed and
-    // compared.
+    // SAFETY: the caller's contract. The end first, for the zeros after the
+    // text: whole words of it are hashed and compared. A string with no
+    // text ends at its lengths, which are written after.
     unsafe {
-        store(string + size - WORD, 0);
+        *((string + string_size(bytes) - VALUE) as *mut Value) = Value::NULL;
+        store(string, TAG_STRING);
         store(
             string + STRING_LENGTHS,
             bytes | (chars << STRING_CHAR_COUNT_SHIFT),
         );
-    };
+    }
+}
+
+/// Allocate a string of `bytes` bytes and `chars` characters with its text
+/// left to be written. May collect.
+fn allocate(mutator: &mut Mutator, bytes: usize, chars: usize) -> usize {
+    let string = mutator.allocate(string_size(bytes));
+    // SAFETY: the room the string takes.
+    unsafe { format(string, bytes, chars) };
     string
 }
 
@@ -282,22 +293,22 @@ unsafe extern "C" fn string_from_any(mutator: &mut Mutator, value: usize) -> usi
     // SAFETY: the caller's contract: a box is a header and one value.
     let (type_id, held) = unsafe { (load(value) & TYPE_ID_MASK, load(value + BOX_VALUE)) };
     match type_id {
-        string if string < STRING_TYPES_END => value,
-        TYPE_BOX_INT => from_ascii(
+        string if string < STRING_TAGS_END => value,
+        TAG_BOX_INT => from_ascii(
             mutator,
             int_digits(held.cast_signed() as i64, &mut [0; INT_DIGITS]),
         ),
-        TYPE_BOX_FLOAT => from_str(mutator, &float_text(f64::from_bits(held as u64))),
+        TAG_BOX_FLOAT => from_str(mutator, &float_text(f64::from_bits(held as u64))),
         // SAFETY: the header says it is one.
-        crate::layout::TYPE_BIGINT => {
+        crate::layout::TAG_BIGINT => {
             let text = unsafe { crate::bigint::value(value) }.to_string();
             from_str(mutator, &text)
         }
-        TYPE_BOX_BOOL => from_str(mutator, if held & 0xFF != 0 { "true" } else { "false" }),
+        TAG_BOX_BOOL => from_str(mutator, if held & 0xFF != 0 { "true" } else { "false" }),
         // A `uint8array` has a `to_string` of its own, which is what a
         // union that holds one is written by: its bytes as UTF-8, each
         // sequence that is not replaced.
-        crate::layout::TYPE_BYTES => {
+        crate::layout::TAG_BYTES => {
             // SAFETY: the header says it is one.
             let bytes = unsafe { crate::native::BytesRef::from_raw(value) }.to_vec();
             from_str(mutator, &String::from_utf8_lossy(&bytes))

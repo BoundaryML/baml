@@ -72,8 +72,7 @@ pub(crate) enum NativeTy<'db> {
     /// are laid out alike and share a type id.
     Class(ClassRef<'db>, Vec<TypeArg<'db>>),
     /// A reference to a tuple of these element types: an object with one
-    /// slot per element, two for an optional scalar, as a class instance
-    /// has for its fields.
+    /// slot per element, as a class instance has for its fields.
     Tuple(Vec<NativeTy<'db>>),
     /// A reference to a growable array of the element type.
     Array(Box<NativeTy<'db>>),
@@ -142,11 +141,6 @@ impl NativeTy<'_> {
             _ if self.is_pair() => Repr::Pair,
             _ => Repr::Ref,
         }
-    }
-
-    /// How many slots a value takes in an object.
-    pub(crate) fn slots(&self) -> usize {
-        if self.is_pair() { 2 } else { 1 }
     }
 }
 
@@ -392,24 +386,6 @@ pub(crate) fn type_kind(ty: &RuntimeTy) -> &'static str {
 
 fn unsupported_type(ty: &RuntimeTy, detail: impl Into<String>) -> Blocker {
     Blocker::new(format!("{} value", type_kind(ty)), detail)
-}
-
-/// The slot each field of a layout starts at: fields take their slots in
-/// declaration order.
-pub(crate) fn field_slots(layout: &[NativeTy<'_>]) -> Vec<usize> {
-    layout
-        .iter()
-        .scan(0, |next, field| {
-            let slot = *next;
-            *next += field.slots();
-            Some(slot)
-        })
-        .collect()
-}
-
-/// How many slots an instance with this layout has.
-pub(crate) fn layout_slots(layout: &[NativeTy<'_>]) -> usize {
-    layout.iter().map(NativeTy::slots).sum()
 }
 
 /// The types of the fields of a class at these type arguments, in

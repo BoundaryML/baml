@@ -23,8 +23,8 @@ use super::{Managed, Root, Scope, View};
 use crate::{
     heap::{RustKind, load, store},
     layout::{
-        OWNED_KIND, OWNED_VALUE, PLAIN_KIND, PLAIN_VALUE, PLAIN_WORDS, TYPE_ID_MASK, TYPE_OWNED,
-        TYPE_PLAIN, WORD, words,
+        OWNED_KIND, OWNED_VALUE, PLAIN_KIND, PLAIN_VALUE, PLAIN_WORDS, TAG_OWNED, TAG_PLAIN,
+        TYPE_ID_MASK, WORD, plain_size,
     },
 };
 
@@ -65,14 +65,13 @@ impl<T: Copy + 'static> Kinds<T> {
         id: TypeId::of::<T>,
         name: std::any::type_name::<T>,
     };
-    /// The words of a plain object after its header and its count: its
-    /// kind and the value.
+    /// The words of the value in a plain object.
     const WORDS: usize = {
         assert!(
             align_of::<T>() <= WORD,
             "plain data is aligned as a word is"
         );
-        1 + words(size_of::<T>()) / WORD
+        size_of::<T>().div_ceil(WORD)
     };
 }
 
@@ -92,8 +91,8 @@ fn mismatched(object: usize, expected: &RustKind, form: &str) -> ! {
     // SAFETY: a live object, whose header says whether it has a kind.
     let found = unsafe {
         match load(object) & TYPE_ID_MASK {
-            TYPE_OWNED => ((*(load(object + OWNED_KIND) as *const RustKind)).name)(),
-            TYPE_PLAIN => ((*(load(object + PLAIN_KIND) as *const RustKind)).name)(),
+            TAG_OWNED => ((*(load(object + OWNED_KIND) as *const RustKind)).name)(),
+            TAG_PLAIN => ((*(load(object + PLAIN_KIND) as *const RustKind)).name)(),
             _ => "no Rust state at all",
         }
     };
@@ -119,7 +118,7 @@ impl<'a> OpaqueRef<'a> {
         // SAFETY: a view is of a live object, which has the two words of
         // an owned value when its header says it is one.
         unsafe {
-            if load(self.0) & TYPE_ID_MASK != TYPE_OWNED
+            if load(self.0) & TYPE_ID_MASK != TAG_OWNED
                 || !is_kind(load(self.0 + OWNED_KIND), expected)
             {
                 mismatched(self.0, expected, "owned");
@@ -155,7 +154,7 @@ impl<'a> OpaqueRef<'a> {
         // kind when its header and its kind say so. A cell may be written
         // through a shared reference, and compiled code reads none of it.
         unsafe {
-            if load(self.0) & TYPE_ID_MASK != TYPE_PLAIN
+            if load(self.0) & TYPE_ID_MASK != TAG_PLAIN
                 || !is_kind(load(self.0 + PLAIN_KIND), expected)
             {
                 mismatched(self.0, expected, "plain");
@@ -179,14 +178,13 @@ impl<'s> Scope<'s> {
     /// A new object holding `value` in place. May collect.
     pub fn alloc_plain<T: Copy + 'static>(&mut self, value: T) -> Root<'s, Opaque> {
         let count = Kinds::<T>::WORDS;
-        let object = self
-            .mutator()
-            .allocate_object(TYPE_PLAIN, PLAIN_KIND + count * WORD);
-        // SAFETY: the object has `count` words after its count, the last of
-        // which is zeroed first for the bytes `T` does not fill.
+        let size = plain_size(count);
+        let object = self.mutator().allocate_object(TAG_PLAIN, size);
+        // SAFETY: the object has its count, its kind and `count` words for
+        // the value, all zeroed first for the bytes `T` does not fill.
         unsafe {
+            std::ptr::write_bytes((object + PLAIN_WORDS) as *mut u8, 0, size - PLAIN_WORDS);
             store(object + PLAIN_WORDS, count);
-            store(object + PLAIN_KIND + (count - 1) * WORD, 0);
             store(
                 object + PLAIN_KIND,
                 std::ptr::from_ref(Kinds::<T>::PLAIN) as usize,

@@ -83,10 +83,10 @@ impl<'db> Translator<'_, 'db> {
         // slice: the two words read of a string that is not one are its
         // own text, and are not used.
         let header = self.builder.ins().uload32(slot_access(), string, 0);
-        let holds_text =
-            self.builder
-                .ins()
-                .icmp_imm(IntCC::Equal, header, imm(layout::TYPE_STRING));
+        let holds_text = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::Equal, header, imm(layout::TAG_STRING));
         let its_parent =
             self.builder
                 .ins()
@@ -103,7 +103,7 @@ impl<'db> Translator<'_, 'db> {
             .ins()
             .ishl_imm(count, i64::from(layout::STRING_CHAR_COUNT_SHIFT));
         let lengths = self.builder.ins().bor(count, shifted);
-        let slice_type = self.word_const(layout::TYPE_STRING_SLICE);
+        let slice_type = self.word_const(layout::TAG_STRING_SLICE);
         let ins = self.builder.ins();
         ins.store(slot_access(), slice_type, slice, 0);
         let ins = self.builder.ins();

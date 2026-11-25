@@ -84,10 +84,11 @@ use switch::{
 };
 
 use crate::{
-    heap::{Mutator, load, store},
+    heap::{Mutator, Value, load, store},
     layout::{
         FUTURE_ERROR, FUTURE_FLAGS, FUTURE_OBSERVED, FUTURE_READY, FUTURE_SETTLED, FUTURE_SIZE,
-        FUTURE_STATE, FUTURE_TASK, FUTURE_TRACE, FUTURE_VALUE, TYPE_FUTURE, WORD,
+        FUTURE_STATE, FUTURE_TASK, FUTURE_TRACE, FUTURE_VALUE, RESULT_IS_REFERENCE, TAG_FUTURE,
+        WORD,
     },
 };
 
@@ -124,6 +125,9 @@ const DEAD: u32 = 6;
 const TASK_MAIN: u32 = 1;
 /// Set in a task's flags when it ended by throwing.
 const TASK_FAILED: u32 = 2;
+/// Where a task's flags say what the word its closure returns is: see
+/// [`RESULT_IS_REFERENCE`].
+const TASK_RESULT_SHIFT: u32 = 8;
 /// Where a task's flags say which thread it last stopped on, under
 /// migration stress: zero for a task that has not run, and otherwise one
 /// more than the thread.
@@ -726,11 +730,16 @@ pub(crate) fn fatal(message: &str) -> ! {
 /// which the stub switches to.
 ///
 /// `frame` is the switch frame the stub built; `shim` the compiled function
-/// the new task starts in, which asks for `closure` back.
+/// the new task starts in, which asks for `closure` back; `result` what the
+/// word the closure returns is ([`RESULT_IS_REFERENCE`]).
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a tag of an immediate, or one"
+)]
 pub(crate) unsafe extern "C" fn spawn_prepare(
     mut closure: usize,
     shim: usize,
-    flags: usize,
+    result: usize,
     worker: &mut Mutator,
     frame: usize,
 ) -> *mut Task {
@@ -743,16 +752,13 @@ pub(crate) unsafe extern "C" fn spawn_prepare(
     worker.enter_switch_frame(frame);
     let child = worker.sched.new_task(TASK_STACK, shim);
     worker.root(&mut closure);
-    let future = worker.allocate_object(TYPE_FUTURE, FUTURE_SIZE);
+    let future = worker.allocate_object(TAG_FUTURE, FUTURE_SIZE);
     worker.unroot(1);
     // SAFETY: the future is the object just allocated, the child is this
     // function's until it is switched to, and `frame` is the stub's.
     unsafe {
-        store(future + FUTURE_STATE, 0);
-        store(future + FUTURE_VALUE, 0);
-        store(future + FUTURE_TASK, child as usize);
-        store(future + FUTURE_FLAGS, flags);
-        store(future + FUTURE_TRACE, 0);
+        format_future(future, child);
+        (*child).flags |= (result as u32) << TASK_RESULT_SHIFT;
         (*child).future = future;
         (*child).entry = closure;
         store(frame + SWITCH_FRAME_RESULT, future);
@@ -779,14 +785,34 @@ pub extern "C" fn baml_rt_task_start(worker: &mut Mutator) -> usize {
     unsafe { std::mem::take(&mut (*worker.cur_task).entry) }
 }
 
+/// Lay out a future that the task `task` settles at `future`.
+///
+/// # Safety
+///
+/// `future` is `FUTURE_SIZE` fresh bytes whose header is written.
+unsafe fn format_future(future: usize, task: *mut Task) {
+    // SAFETY: the caller's contract.
+    unsafe {
+        store(future + FUTURE_STATE, 0);
+        Value::init(future + FUTURE_VALUE, Value::NULL);
+        store(future + FUTURE_TASK, task as usize);
+        store(future + FUTURE_FLAGS, 0);
+        store(future + FUTURE_TRACE, 0);
+        store(future + FUTURE_TRACE + WORD, 0);
+    }
+}
+
 /// Settle the future of the task running on `worker` as `state` with
 /// `value` and, for an error, the `trace` it was thrown with, and wake what
 /// waits for it.
-fn settle(worker: &mut Mutator, value: usize, trace: usize, state: usize) {
+///
+/// The value is written before the state, which is what makes it visible:
+/// nothing reads it until the state says the future has settled.
+fn settle(worker: &mut Mutator, value: Value, trace: usize, state: usize) {
     // SAFETY: called on a task, whose future is live.
     unsafe {
         let future = (*worker.cur_task).future;
-        store(future + FUTURE_VALUE, value);
+        Value::init(future + FUTURE_VALUE, value);
         store(future + FUTURE_TRACE, trace);
         if state == FUTURE_READY {
             // Nothing asks a task that returned for anything more.
@@ -802,10 +828,18 @@ fn settle(worker: &mut Mutator, value: usize, trace: usize, state: usize) {
     }
 }
 
-/// The closure of the task running on `worker` returned `value`, the bits
-/// of one slot.
+/// The closure of the task running on `worker` returned `value`, one word:
+/// what its task's flags say it is.
 #[unsafe(no_mangle)]
 pub extern "C" fn baml_rt_task_finish(worker: &mut Mutator, value: usize) {
+    // SAFETY: called on a task, and a word that is a reference is zero or
+    // the address of a live object.
+    let value = unsafe {
+        match ((*worker.cur_task).flags >> TASK_RESULT_SHIFT) as usize {
+            RESULT_IS_REFERENCE => Value::reference(value),
+            tag => Value::immediate(tag, value),
+        }
+    };
     settle(worker, value, 0, FUTURE_READY);
 }
 
@@ -825,6 +859,8 @@ pub extern "C" fn baml_rt_task_fail(worker: &mut Mutator, error: usize, trace: u
     }
     // SAFETY: called on a task.
     unsafe { (*worker.cur_task).flags |= TASK_FAILED };
+    // SAFETY: as above, or null.
+    let error = unsafe { Value::reference(error) };
     settle(worker, error, trace, FUTURE_ERROR);
 }
 
@@ -895,7 +931,7 @@ pub(crate) fn report_unhandled(worker: &Mutator) -> bool {
             crate::unwind::report(
                 worker,
                 "unhandled spawned task failed: ",
-                load(future + FUTURE_VALUE),
+                Value::load(future + FUTURE_VALUE).payload,
                 load(future + FUTURE_TRACE),
             );
         }
@@ -997,7 +1033,7 @@ pub unsafe extern "C" fn baml_rt_await_error(worker: &mut Mutator, future: usize
             store(future + FUTURE_TASK, 0);
             worker.sched.release(task);
         }
-        load(future + FUTURE_VALUE)
+        Value::load(future + FUTURE_VALUE).payload
     }
 }
 
@@ -1312,7 +1348,7 @@ pub(crate) mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::{heap::Program, layout::RUNTIME_TYPES};
+    use crate::{heap::Program, layout::TAG_INT};
     /// What the tasks of the test did, in the order they did it.
     static EVENTS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
 
@@ -1367,7 +1403,7 @@ pub(crate) mod tests {
             EVENTS
                 .lock()
                 .expect("no test panicked")
-                .push(1 + load(future + FUTURE_VALUE));
+                .push(1 + Value::load(future + FUTURE_VALUE).payload);
         }
     }
 
@@ -1419,7 +1455,7 @@ pub(crate) mod tests {
         for migrate in [false, true] {
             let program = Program {
                 stack_maps: crate::tests::NO_STACK_MAPS.as_ptr() as usize,
-                types: RUNTIME_TYPES.to_vec().leak().as_ptr() as usize,
+                types: crate::tests::NO_TYPES.as_ptr() as usize,
                 unwind: 0,
                 functions: 0,
             };
@@ -1440,7 +1476,7 @@ pub(crate) mod tests {
         const MILLISECOND: usize = 1_000_000;
         let program = Program {
             stack_maps: crate::tests::NO_STACK_MAPS.as_ptr() as usize,
-            types: RUNTIME_TYPES.to_vec().leak().as_ptr() as usize,
+            types: crate::tests::NO_TYPES.as_ptr() as usize,
             unwind: 0,
             functions: 0,
         };
@@ -1448,16 +1484,8 @@ pub(crate) mod tests {
         // made before anything runs, and the future is a fresh object.
         let status = unsafe {
             let mut worker = Mutator::new(program, false);
-            let future = worker.allocate_object(TYPE_FUTURE, FUTURE_SIZE);
-            for field in [
-                FUTURE_STATE,
-                FUTURE_VALUE,
-                FUTURE_TASK,
-                FUTURE_FLAGS,
-                FUTURE_TRACE,
-            ] {
-                store(future + field, 0);
-            }
+            let future = worker.allocate_object(TAG_FUTURE, FUTURE_SIZE);
+            format_future(future, std::ptr::null_mut());
             // The shortest sleep starts first, so that no delay between
             // the starts can reorder the three.
             for milliseconds in [10, 20, 30] {
@@ -1467,6 +1495,7 @@ pub(crate) mod tests {
                 (*task).wait_value = milliseconds * MILLISECOND;
                 if milliseconds == 20 {
                     (*task).future = future;
+                    (*task).flags |= u32::try_from(TAG_INT).expect("a tag") << TASK_RESULT_SHIFT;
                 }
                 worker.sched.queue.push_front(task);
             }

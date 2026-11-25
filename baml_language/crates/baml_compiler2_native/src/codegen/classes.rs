@@ -161,7 +161,7 @@ impl<'db> Backend<'db> {
         {
             self.types.extend_from_slice(&word.to_ne_bytes());
         }
-        self.types.resize(layout::words(self.types.len()), 0);
+        self.align_types();
         Ok(())
     }
 }

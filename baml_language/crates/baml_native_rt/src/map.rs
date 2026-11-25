@@ -13,14 +13,14 @@
 //! the entries double. Either way the index is rebuilt from the kept
 //! hashes alone: no key is read.
 //!
-//! A key is one word: a `string`'s is a reference to a string that holds
-//! its own text, and an `int`, `bool`, enum variant or `float` is its bits,
-//! a float's made canonical first. Keys of any other type are not handled
-//! here.
+//! A record is two values, the key and what it is set to. A `string` key
+//! is a reference to a string that holds its own text, and an `int`,
+//! `bool`, enum variant or `float` is its bits, a float's made canonical
+//! first. Keys of any other type are not handled here.
 //!
 //! Compiled code searches a map through the leaf probes at the end of this
-//! file. What a probe returns is the address of a record's value, good only
-//! until the next allocation.
+//! file. What a probe returns is the address of a record's value, a slot,
+//! good only until the next allocation.
 
 #![allow(
     clippy::cast_possible_truncation,
@@ -30,13 +30,13 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::{
-    heap::{Mutator, load, store},
+    heap::{Mutator, Value, load, store},
     layout::{
-        ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_SIZE, ENTRY_VALUE, HASH_SET, MAP_ENTRIES,
-        MAP_EPOCH, MAP_INDEX, MAP_LEN, MAP_MASK, MAP_SIZE, MAP_USED, SMALL_ENTRIES,
-        STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_HASH_MASK, STRING_LENGTHS, TYPE_BOX_FLOAT,
-        TYPE_ENTRIES, TYPE_ENTRIES_KEY_REF, TYPE_ENTRIES_REFS, TYPE_ENTRIES_VALUE_REF,
-        TYPE_ID_MASK, TYPE_MAP, TYPE_STRING, TYPE_VALUES, WORD, entries_size,
+        ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_KEY, ENTRY_SIZE, ENTRY_VALUE, HASH_SET,
+        INDEX_SLOT_COUNT, INDEX_SLOTS, MAP_ENTRIES, MAP_EPOCH, MAP_INDEX, MAP_KEY_TY, MAP_LEN,
+        MAP_MASK, MAP_SIZE, MAP_USED, MAP_VALUE_TY, SMALL_ENTRIES, STRING_HASH_MASK,
+        STRING_LENGTHS, STRING_TAGS_END, TAG_BOX_FLOAT, TAG_FLOAT, TAG_MAP, TAG_MAP_ENTRIES,
+        TAG_MAP_INDEX, TAG_STRING, TYPE_ID_MASK, VALUE_PAYLOAD, WORD, entries_size,
     },
     string,
 };
@@ -69,7 +69,7 @@ struct EmptyEntries([usize; entries_size(SMALL_ENTRIES) / WORD]);
 
 static EMPTY_ENTRIES: EmptyEntries = {
     let mut words = [0; entries_size(SMALL_ENTRIES) / WORD];
-    words[0] = TYPE_ENTRIES;
+    words[0] = TAG_MAP_ENTRIES;
     EmptyEntries(words)
 };
 
@@ -93,13 +93,22 @@ impl KeyKind {
     /// The kind of the keys whose type a call names by `type_id`.
     pub fn of(type_id: usize) -> Self {
         match type_id {
-            TYPE_STRING => Self::Str,
-            TYPE_BOX_FLOAT => Self::Float,
+            TAG_STRING => Self::Str,
+            TAG_BOX_FLOAT => Self::Float,
             _ => Self::Word,
         }
     }
 
-    /// The word a key is kept and searched for as.
+    /// The kind of the keys `key` is one of, by its tag.
+    fn of_value(key: Value) -> Self {
+        match key.id() {
+            TAG_FLOAT => Self::Float,
+            string if string < STRING_TAGS_END && key.is_pointer() => Self::Str,
+            _ => Self::Word,
+        }
+    }
+
+    /// The payload a key is kept and searched for as.
     pub fn canonical(self, key: usize) -> usize {
         match self {
             Self::Float => {
@@ -116,7 +125,7 @@ impl KeyKind {
         }
     }
 
-    /// The hash of a key, as entries keep it.
+    /// The hash of the key whose payload is `key`, as entries keep it.
     ///
     /// # Safety
     ///
@@ -214,17 +223,17 @@ fn hash_slot(entries: usize, capacity: usize, number: usize) -> usize {
     record(entries, capacity) + number * 4
 }
 
-/// Write a record. Every store of a reference into entries is here or in
+/// Write a record. Every store into entries is here or in
 /// [`store_value`].
 ///
 /// # Safety
 ///
 /// `at` is a record of live entries.
-unsafe fn store_record(at: usize, key: usize, value: usize) {
+unsafe fn store_record(at: usize, key: Value, value: Value) {
     // SAFETY: the caller's contract.
     unsafe {
-        store(at, key);
-        store(at + ENTRY_VALUE, value);
+        Value::store(at + ENTRY_KEY, key);
+        Value::store(at + ENTRY_VALUE, value);
     }
 }
 
@@ -233,20 +242,9 @@ unsafe fn store_record(at: usize, key: usize, value: usize) {
 /// # Safety
 ///
 /// `slot` is the value of a record of live entries.
-pub unsafe fn store_value(slot: usize, value: usize) {
+pub unsafe fn store_value(slot: usize, value: Value) {
     // SAFETY: the caller's contract.
-    unsafe { store(slot, value) }
-}
-
-/// The type of the entries of a map whose keys and values are or are not
-/// references.
-fn entries_type(key_is_ref: bool, value_is_ref: bool) -> usize {
-    match (key_is_ref, value_is_ref) {
-        (false, false) => TYPE_ENTRIES,
-        (true, false) => TYPE_ENTRIES_KEY_REF,
-        (false, true) => TYPE_ENTRIES_VALUE_REF,
-        (true, true) => TYPE_ENTRIES_REFS,
-    }
+    unsafe { Value::store(slot, value) }
 }
 
 /// The capacity entries have to hold `count` records.
@@ -258,7 +256,7 @@ fn capacity_for(count: usize) -> usize {
 /// they are searched without one, and otherwise two slots a record.
 fn index_size(capacity: usize) -> usize {
     if capacity > SMALL_ENTRIES {
-        STORAGE_ELEMENTS + 2 * capacity * WORD
+        crate::layout::index_size(2 * capacity)
     } else {
         0
     }
@@ -271,19 +269,19 @@ fn index_size(capacity: usize) -> usize {
 /// # Safety
 ///
 /// `entries` is `entries_size(capacity) + index_size(capacity)` fresh bytes.
-unsafe fn format(entries: usize, entries_type: usize, capacity: usize) -> usize {
+unsafe fn format(entries: usize, capacity: usize) -> usize {
     // SAFETY: the caller's contract.
     unsafe {
         let size = entries_size(capacity);
         std::ptr::write_bytes(entries as *mut u8, 0, size + index_size(capacity));
-        store(entries, entries_type);
+        store(entries, TAG_MAP_ENTRIES);
         store(entries + ENTRIES_CAPACITY, capacity);
         if capacity <= SMALL_ENTRIES {
             return 0;
         }
         let index = entries + size;
-        store(index, TYPE_VALUES);
-        store(index + STORAGE_CAPACITY, 2 * capacity);
+        store(index, TAG_MAP_INDEX);
+        store(index + INDEX_SLOT_COUNT, 2 * capacity);
         index
     }
 }
@@ -294,7 +292,7 @@ unsafe fn format(entries: usize, entries_type: usize, capacity: usize) -> usize 
 ///
 /// `index` is a live index of `mask + 1` slots, not all in use.
 unsafe fn index_insert(index: usize, mask: usize, hash: u32, number: usize) {
-    let slots = index + STORAGE_ELEMENTS;
+    let slots = index + INDEX_SLOTS;
     let mut at = hash as usize & mask;
     // SAFETY: the caller's contract.
     unsafe {
@@ -306,37 +304,10 @@ unsafe fn index_insert(index: usize, mask: usize, hash: u32, number: usize) {
 }
 
 /// A new map with room for `count` keys, in one allocation. May collect.
-pub fn new(mutator: &mut Mutator, key_is_ref: bool, value_is_ref: bool, count: usize) -> usize {
-    let map = if count == 0 {
-        let map = mutator.allocate_object(TYPE_MAP, MAP_SIZE);
-        // SAFETY: the object is `MAP_SIZE` bytes.
-        unsafe {
-            store(map + MAP_ENTRIES, empty_entries());
-            store(map + MAP_INDEX, 0);
-        }
-        map
-    } else {
-        let capacity = capacity_for(count);
-        let map = mutator.allocate_object(
-            TYPE_MAP,
-            MAP_SIZE + entries_size(capacity) + index_size(capacity),
-        );
-        // SAFETY: the allocation has room for the three objects.
-        unsafe {
-            let entries = map + MAP_SIZE;
-            let index = format(entries, entries_type(key_is_ref, value_is_ref), capacity);
-            store(map + MAP_ENTRIES, entries);
-            store(map + MAP_INDEX, index);
-        }
-        map
-    };
-    // SAFETY: the object is `MAP_SIZE` bytes.
-    unsafe {
-        store(map + MAP_LEN, 0);
-        let capacity = load(load(map + MAP_ENTRIES) + ENTRIES_CAPACITY);
-        store(map + MAP_MASK, (2 * capacity).wrapping_sub(1) & 0xFFFF_FFFF);
-    }
-    map
+pub fn new(mutator: &mut Mutator, count: usize) -> usize {
+    let map = mutator.allocate(size_for(count));
+    // SAFETY: the allocation is the room the map takes.
+    unsafe { new_at(map, count) }
 }
 
 /// The bytes of a map with room for `count` keys, as [`new_at`] makes it.
@@ -356,26 +327,24 @@ pub fn size_for(count: usize) -> usize {
 /// # Safety
 ///
 /// `map` is `size_for(count)` fresh bytes.
-pub unsafe fn new_at(map: usize, key_is_ref: bool, value_is_ref: bool, count: usize) -> usize {
+pub unsafe fn new_at(map: usize, count: usize) -> usize {
     // SAFETY: the caller's contract.
     unsafe {
-        store(map, TYPE_MAP);
+        std::ptr::write_bytes(map as *mut u8, 0, MAP_SIZE);
+        store(map, TAG_MAP);
+        store(map + MAP_KEY_TY, 0);
+        store(map + MAP_VALUE_TY, 0);
         if count == 0 {
             store(map + MAP_ENTRIES, empty_entries());
             store(map + MAP_INDEX, 0);
         } else {
             let entries = map + MAP_SIZE;
-            let index = format(
-                entries,
-                entries_type(key_is_ref, value_is_ref),
-                capacity_for(count),
-            );
+            let index = format(entries, capacity_for(count));
             store(map + MAP_ENTRIES, entries);
             store(map + MAP_INDEX, index);
         }
-        store(map + MAP_LEN, 0);
         let capacity = load(load(map + MAP_ENTRIES) + ENTRIES_CAPACITY);
-        store(map + MAP_MASK, (2 * capacity).wrapping_sub(1) & 0xFFFF_FFFF);
+        write32(map + MAP_MASK, (2 * capacity).wrapping_sub(1) as u32);
     }
     map
 }
@@ -389,10 +358,10 @@ pub unsafe fn new_at(map: usize, key_is_ref: bool, value_is_ref: bool, count: us
 /// `map` is a live map of string keys with an unused record, `key` a
 /// string that holds its own text, and `value` a value of the map's value
 /// type.
-pub unsafe fn set_in_place(map: usize, key: usize, value: usize) {
+pub unsafe fn set_in_place(map: usize, key: usize, value: Value) {
     // SAFETY: the caller's contract.
     unsafe {
-        debug_assert_eq!(load(key) & TYPE_ID_MASK, TYPE_STRING);
+        debug_assert_eq!(load(key) & TYPE_ID_MASK, TAG_STRING);
         let hash = KeyKind::Str.hash(key);
         if let Some(found) = find(map, KeyKind::Str, key, hash) {
             store_value(
@@ -404,7 +373,7 @@ pub unsafe fn set_in_place(map: usize, key: usize, value: usize) {
         let (number, entries) = used(map);
         let capacity = load(entries + ENTRIES_CAPACITY);
         assert!(number < capacity, "a map built in place has room");
-        store_record(record(entries, number), key, value);
+        store_record(record(entries, number), Value::reference(key), value);
         write32(hash_slot(entries, capacity, number), hash);
         let index = load(map + MAP_INDEX);
         if index != 0 {
@@ -432,11 +401,12 @@ unsafe fn used(map: usize) -> (usize, usize) {
     unsafe { (read32(map + MAP_USED) as usize, load(map + MAP_ENTRIES)) }
 }
 
-/// Whether the key of the record at `at` is `key`.
+/// Whether the payload of the key of the record at `at` is `key`, or is a
+/// string of the same text.
 unsafe fn same_key(kind: KeyKind, at: usize, key: usize) -> bool {
     // SAFETY: a record whose hash matched holds a key.
     unsafe {
-        let kept = load(at);
+        let kept = load(at + ENTRY_KEY + VALUE_PAYLOAD);
         kept == key
             || (kind == KeyKind::Str
                 && load(kept + STRING_LENGTHS) == load(key + STRING_LENGTHS)
@@ -451,11 +421,12 @@ struct Found {
     slot: usize,
 }
 
-/// Search the map at `map` for `key`, canonical and of hash `hash`.
+/// Search the map at `map` for the key whose payload is `key`, canonical
+/// and of hash `hash`.
 ///
 /// # Safety
 ///
-/// `map` is a live map of keys of `kind`, and `key` one of them.
+/// `map` is a live map of keys of `kind`, and `key` the payload of one.
 unsafe fn find(map: usize, kind: KeyKind, key: usize, hash: u32) -> Option<Found> {
     // SAFETY: the caller's contract and the layout.
     unsafe {
@@ -471,7 +442,7 @@ unsafe fn find(map: usize, kind: KeyKind, key: usize, hash: u32) -> Option<Found
                 .map(|number| Found { number, slot: 0 });
         }
         let mask = read32(map + MAP_MASK) as usize;
-        let slots = index + STORAGE_ELEMENTS;
+        let slots = index + INDEX_SLOTS;
         let mut at = hash as usize & mask;
         loop {
             let slot = load(slots + at * WORD);
@@ -492,19 +463,30 @@ unsafe fn find(map: usize, kind: KeyKind, key: usize, hash: u32) -> Option<Found
     }
 }
 
-/// The address of the value of `key` in the map at `map`, good until the
-/// next allocation.
+/// The address of the value of the key whose payload is `key` in the map
+/// at `map`, a slot, good until the next allocation.
 ///
 /// # Safety
 ///
-/// `map` is a live map of keys of `kind`, and `key` one of them.
-pub unsafe fn get(map: usize, kind: KeyKind, key: usize) -> Option<usize> {
+/// `map` is a live map of keys of `kind`, and `key` the payload of one.
+unsafe fn slot_of(map: usize, kind: KeyKind, key: usize) -> Option<usize> {
     let key = kind.canonical(key);
     // SAFETY: the caller's contract.
     unsafe {
         find(map, kind, key, kind.hash(key))
             .map(|found| record(load(map + MAP_ENTRIES), found.number) + ENTRY_VALUE)
     }
+}
+
+/// The address of the value of `key` in the map at `map`, a slot, good
+/// until the next allocation.
+///
+/// # Safety
+///
+/// `map` is a live map, and `key` a value of its key type.
+pub unsafe fn get(map: usize, key: Value) -> Option<usize> {
+    // SAFETY: the caller's contract.
+    unsafe { slot_of(map, KeyKind::of_value(key), key.payload) }
 }
 
 /// Squeeze the dead records out of the entries of the map at `map`.
@@ -522,13 +504,17 @@ unsafe fn compact(map: usize) {
             }
             if live != number {
                 let from = record(entries, number);
-                store_record(record(entries, live), load(from), load(from + ENTRY_VALUE));
+                store_record(
+                    record(entries, live),
+                    Value::load(from + ENTRY_KEY),
+                    Value::load(from + ENTRY_VALUE),
+                );
                 write32(hash_slot(entries, capacity, live), hash);
             }
             live += 1;
         }
         for number in live..used {
-            store_record(record(entries, number), 0, 0);
+            store_record(record(entries, number), Value::NULL, Value::NULL);
             write32(hash_slot(entries, capacity, number), 0);
         }
         write32(map + MAP_USED, live as u32);
@@ -536,7 +522,7 @@ unsafe fn compact(map: usize) {
         let index = load(map + MAP_INDEX);
         if index != 0 {
             let mask = read32(map + MAP_MASK) as usize;
-            std::ptr::write_bytes((index + STORAGE_ELEMENTS) as *mut usize, 0, mask + 1);
+            std::ptr::write_bytes((index + INDEX_SLOTS) as *mut usize, 0, mask + 1);
             for number in 0..live {
                 index_insert(
                     index,
@@ -551,7 +537,7 @@ unsafe fn compact(map: usize) {
 
 /// Make room for one more record in the map at `*map`, whose records are
 /// all used. May collect: `map` is a root of the caller's.
-unsafe fn grow(mutator: &mut Mutator, map: *const usize, entries_type: usize) {
+unsafe fn grow(mutator: &mut Mutator, map: *const usize) {
     // SAFETY: the caller's contract and the layout. The collector writes
     // the root, so it is read again after the allocation.
     unsafe {
@@ -563,7 +549,7 @@ unsafe fn grow(mutator: &mut Mutator, map: *const usize, entries_type: usize) {
         }
         let capacity = capacity_for(live + 1);
         let entries = mutator.allocate(entries_size(capacity) + index_size(capacity));
-        let index = format(entries, entries_type, capacity);
+        let index = format(entries, capacity);
         let mask = 2 * capacity - 1;
         let map = map.read_volatile();
         let old = load(map + MAP_ENTRIES);
@@ -575,7 +561,11 @@ unsafe fn grow(mutator: &mut Mutator, map: *const usize, entries_type: usize) {
                 continue;
             }
             let from = record(old, number);
-            store_record(record(entries, next), load(from), load(from + ENTRY_VALUE));
+            store_record(
+                record(entries, next),
+                Value::load(from + ENTRY_KEY),
+                Value::load(from + ENTRY_VALUE),
+            );
             write32(hash_slot(entries, capacity, next), hash);
             if index != 0 {
                 index_insert(index, mask, hash, next);
@@ -597,31 +587,25 @@ unsafe fn grow(mutator: &mut Mutator, map: *const usize, entries_type: usize) {
 ///
 /// # Safety
 ///
-/// `map` is a live map of keys of `kind` that does not have `key`, which
-/// is canonical and of hash `hash`; `value` is a value of its value type.
-pub unsafe fn insert_new(
-    mutator: &mut Mutator,
-    map: usize,
-    kind: KeyKind,
-    value_is_ref: bool,
-    key: usize,
-    hash: u32,
-    value: usize,
-) {
-    let mut held = [map, key, value];
-    let key_is_ref = kind == KeyKind::Str;
-    let roots = 1 + usize::from(key_is_ref) + usize::from(value_is_ref);
+/// `map` is a live map that does not have `key`, a value of its key type
+/// whose payload is canonical and of hash `hash`; `value` is a value of
+/// its value type.
+unsafe fn insert_new(mutator: &mut Mutator, map: usize, key: Value, hash: u32, value: Value) {
+    let mut held = [map, key.payload, value.payload];
+    let key_is_string = KeyKind::of_value(key) == KeyKind::Str;
+    let roots = 1 + usize::from(key_is_string) + usize::from(value.is_pointer());
     mutator.root(&mut held[0]);
-    if key_is_ref {
+    if key_is_string {
         mutator.root(&mut held[1]);
     }
-    if value_is_ref {
+    if value.is_pointer() {
         mutator.root(&mut held[2]);
     }
+    let mut key_tag = key.tag;
     // SAFETY: the caller's contract; what is allocated here is reached
     // through the roots just made.
     unsafe {
-        if key_is_ref && load(held[1]) & TYPE_ID_MASK != TYPE_STRING {
+        if key_is_string && key.id() != TAG_STRING {
             // A kept key holds its own text: it is compared a word at a
             // time, and keeps no other string alive.
             let flat = string::copy_flat(mutator, &raw const held[1]);
@@ -630,18 +614,22 @@ pub unsafe fn insert_new(
                 load(flat) | ((hash & STRING_HASH_MASK) as usize) << 32,
             );
             held[1] = flat;
+            key_tag = TAG_STRING;
         }
-        let (mut number, mut entries) = used(held[0]);
+        let (mut number, mut entries) = used((&raw const held[0]).read_volatile());
         if number == load(entries + ENTRIES_CAPACITY) {
-            grow(
-                mutator,
-                &raw const held[0],
-                entries_type(key_is_ref, value_is_ref),
-            );
-            (number, entries) = used(held[0]);
+            grow(mutator, &raw const held[0]);
+            (number, entries) = used((&raw const held[0]).read_volatile());
         }
-        let [map, key, value] = held;
-        store_record(record(entries, number), key, value);
+        let [map, key, payload] = (&raw const held).read_volatile();
+        store_record(
+            record(entries, number),
+            Value {
+                tag: key_tag,
+                payload: key,
+            },
+            value.kept(payload),
+        );
         let capacity = load(entries + ENTRIES_CAPACITY);
         write32(hash_slot(entries, capacity, number), hash);
         let index = load(map + MAP_INDEX);
@@ -660,27 +648,24 @@ pub unsafe fn insert_new(
 ///
 /// # Safety
 ///
-/// `map` is a live map of keys of `kind`, `key` one of them and `value` a
-/// value of its value type.
-pub unsafe fn set(
-    mutator: &mut Mutator,
-    map: usize,
-    kind: KeyKind,
-    value_is_ref: bool,
-    key: usize,
-    value: usize,
-) -> Option<usize> {
-    let key = kind.canonical(key);
+/// `map` is a live map, `key` a value of its key type and `value` a value
+/// of its value type.
+pub unsafe fn set(mutator: &mut Mutator, map: usize, key: Value, value: Value) -> Option<Value> {
+    let kind = KeyKind::of_value(key);
+    let key = Value {
+        tag: key.tag,
+        payload: kind.canonical(key.payload),
+    };
     // SAFETY: the caller's contract.
     unsafe {
-        let hash = kind.hash(key);
-        if let Some(found) = find(map, kind, key, hash) {
+        let hash = kind.hash(key.payload);
+        if let Some(found) = find(map, kind, key.payload, hash) {
             let slot = record(load(map + MAP_ENTRIES), found.number) + ENTRY_VALUE;
-            let before = load(slot);
+            let before = Value::load(slot);
             store_value(slot, value);
             return Some(before);
         }
-        insert_new(mutator, map, kind, value_is_ref, key, hash, value);
+        insert_new(mutator, map, key, hash, value);
     }
     None
 }
@@ -689,16 +674,17 @@ pub unsafe fn set(
 ///
 /// # Safety
 ///
-/// `map` is a live map of keys of `kind`, and `key` one of them.
-pub unsafe fn delete(map: usize, kind: KeyKind, key: usize) -> Option<usize> {
-    let key = kind.canonical(key);
+/// `map` is a live map, and `key` a value of its key type.
+pub unsafe fn delete(map: usize, key: Value) -> Option<Value> {
+    let kind = KeyKind::of_value(key);
+    let key = kind.canonical(key.payload);
     // SAFETY: the caller's contract and the layout.
     unsafe {
         let found = find(map, kind, key, kind.hash(key))?;
         let entries = load(map + MAP_ENTRIES);
         let at = record(entries, found.number);
-        let value = load(at + ENTRY_VALUE);
-        store_record(at, 0, 0);
+        let value = Value::load(at + ENTRY_VALUE);
+        store_record(at, Value::NULL, Value::NULL);
         write32(
             hash_slot(entries, load(entries + ENTRIES_CAPACITY), found.number),
             0,
@@ -736,7 +722,7 @@ pub unsafe fn clear(map: usize) {
 /// # Safety
 ///
 /// `map` is a live map, and `each` neither allocates nor changes it.
-pub unsafe fn for_each(map: usize, mut each: impl FnMut(usize, usize)) {
+pub unsafe fn for_each(map: usize, mut each: impl FnMut(Value, Value)) {
     // SAFETY: the caller's contract and the layout.
     unsafe {
         let (used, entries) = used(map);
@@ -744,7 +730,7 @@ pub unsafe fn for_each(map: usize, mut each: impl FnMut(usize, usize)) {
         for number in 0..used {
             if read32(hash_slot(entries, capacity, number)) != 0 {
                 let at = record(entries, number);
-                each(load(at), load(at + ENTRY_VALUE));
+                each(Value::load(at + ENTRY_KEY), Value::load(at + ENTRY_VALUE));
             }
         }
     }
@@ -755,25 +741,13 @@ crate::stubs::anchored! {
     baml_rt_map_new => map_new
 }
 
-/// A new map of keys of the type `key_type` with room for `count`.
+/// A new map with room for `count` keys.
 ///
 /// # Safety
 ///
 /// Called from compiled code with its mutator.
-unsafe extern "C" fn map_new(
-    mutator: &mut Mutator,
-    key_type: u32,
-    value_type: u32,
-    count: usize,
-) -> usize {
-    let value_is_ref = mutator.is_reference(value_type as usize);
-    let key_is_ref = KeyKind::of(key_type as usize) == KeyKind::Str;
-    let map = new(mutator, key_is_ref, value_is_ref, count);
-    // Its values do not say what they are: its header does.
-    let flag = crate::layout::scalar_flag(value_type as usize);
-    // SAFETY: the map just made.
-    unsafe { store(map, load(map) | flag) };
-    map
+unsafe extern "C" fn map_new(mutator: &mut Mutator, count: usize) -> usize {
+    new(mutator, count)
 }
 
 crate::stubs::anchored! {
@@ -786,7 +760,7 @@ crate::stubs::anchored! {
 /// # Safety
 ///
 /// Called from compiled code with its mutator, a live map of the named
-/// types, and a key and a value of them.
+/// types, and a key and a value of them, each as compiled code holds it.
 unsafe extern "C" fn map_set(
     mutator: &mut Mutator,
     key_type: u32,
@@ -795,10 +769,12 @@ unsafe extern "C" fn map_set(
     key: usize,
     value: usize,
 ) {
-    let value_is_ref = mutator.is_reference(value_type as usize);
-    let kind = KeyKind::of(key_type as usize);
     // SAFETY: the caller's contract.
-    unsafe { set(mutator, map, kind, value_is_ref, key, value) };
+    unsafe {
+        let key = mutator.value_of(key, key_type as usize);
+        let value = mutator.value_of(value, value_type as usize);
+        set(mutator, map, key, value);
+    }
 }
 
 crate::stubs::anchored! {
@@ -819,27 +795,31 @@ unsafe extern "C" fn map_insert_new(
     key: usize,
     value: usize,
 ) {
-    let value_is_ref = mutator.is_reference(value_type as usize);
-    let kind = KeyKind::of(key_type as usize);
-    let key = kind.canonical(key);
     // SAFETY: the caller's contract.
     unsafe {
-        let hash = kind.hash(key);
-        insert_new(mutator, map, kind, value_is_ref, key, hash, value);
+        let key = mutator.value_of(key, key_type as usize);
+        let value = mutator.value_of(value, value_type as usize);
+        let kind = KeyKind::of_value(key);
+        let key = Value {
+            tag: key.tag,
+            payload: kind.canonical(key.payload),
+        };
+        let hash = kind.hash(key.payload);
+        insert_new(mutator, map, key, hash, value);
     }
 }
 
-/// The address of the value of `key` in a map of keys of any kind, or
-/// zero. A leaf: it allocates nothing.
+/// The address of the value of `key` in a map of keys of any kind, a slot,
+/// or zero. A leaf: it allocates nothing.
 ///
 /// # Safety
 ///
 /// Called from compiled code with a live map of keys of the type
-/// `key_type` and one of them.
+/// `key_type` and one of them, as compiled code holds it.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_rt_map_find(map: usize, key_type: u32, key: usize) -> usize {
     // SAFETY: the caller's contract.
-    unsafe { get(map, KeyKind::of(key_type as usize), key).unwrap_or(0) }
+    unsafe { slot_of(map, KeyKind::of(key_type as usize), key).unwrap_or(0) }
 }
 
 /// Whether two maps of string keys have the same keys with equal values,
@@ -863,11 +843,11 @@ pub unsafe extern "C" fn baml_rt_map_eq(left: usize, right: usize, value_type: u
         let mut equal = true;
         for_each(left, |key, value| {
             equal = equal
-                && get(right, KeyKind::Str, key).is_some_and(|slot| {
-                    let other = load(slot);
+                && get(right, key).is_some_and(|slot| {
+                    let (value, other) = (value.payload, Value::load(slot).payload);
                     match value_type as usize {
-                        TYPE_STRING => string::baml_rt_string_eq(value, other) != 0,
-                        TYPE_BOX_FLOAT => {
+                        TAG_STRING => string::baml_rt_string_eq(value, other) != 0,
+                        TAG_BOX_FLOAT => {
                             f64::from_bits(value as u64) == f64::from_bits(other as u64)
                         }
                         _ => value == other,
@@ -881,7 +861,7 @@ pub unsafe extern "C" fn baml_rt_map_eq(left: usize, right: usize, value_type: u
 /// What the string probe calls for a key that is a slice.
 unsafe extern "C" fn find_str_slow(map: usize, key: usize, _hash: u32) -> usize {
     // SAFETY: the probe's caller passed a live map and string.
-    unsafe { get(map, KeyKind::Str, key).unwrap_or(0) }
+    unsafe { slot_of(map, KeyKind::Str, key).unwrap_or(0) }
 }
 
 // The leaf probes. They use no stack and only registers a call may
@@ -890,7 +870,9 @@ unsafe extern "C" fn find_str_slow(map: usize, key: usize, _hash: u32) -> usize 
 // functions moves the rest.
 //
 // `baml_rt_map_find_str(map, key, hash)`: `hash` is the key's cached hash,
-// not zero. Returns the address of the key's value, or zero.
+// not zero. Returns the address of the key's value, a slot, or zero. A
+// record is two slots, so record `n` is at `16 + 32 * n` of the entries
+// and the hashes of entries with no index are at `16 + 32 * 8`.
 // `baml_rt_map_find_int(map, key)`: the same for a key that is its bits.
 // `baml_rt_str_hash(string)`: computes a string's hash, caches it in its
 // header and returns it.
@@ -922,11 +904,11 @@ core::arch::global_asm!(
     "b     3b",
     "5:",
     "lsr   x9, x8, #32",
-    "add   x9, x3, x9, lsl #4",
-    // Compare the key of the record at x9: the same object, or the same
-    // lengths and then the same words of text.
+    "add   x9, x3, x9, lsl #5",
+    // Compare the key of the record whose value is at x9: the same
+    // object, or the same lengths and then the same words of text.
     "6:",
-    "ldr   x10, [x9]",
+    "ldur  x10, [x9, #-8]",
     "cmp   x10, x1",
     "b.eq  20f",
     "ldr   x11, [x10, #8]",
@@ -946,13 +928,13 @@ core::arch::global_asm!(
     "cmp   w5, #16",
     "b.hi  22f",
     "20:",
-    "add   x0, x9, #8",
+    "mov   x0, x9",
     "ret",
     "21:",
     "cbnz  x4, 4b",
     // No index: clear the byte of the record just tried, take the next.
     "sub   x14, x9, x3",
-    "lsr   x14, x14, #1",
+    "lsr   x14, x14, #2",
     "sub   x14, x14, #8",
     "mov   x15, #0xff",
     "lsl   x15, x15, x14",
@@ -963,7 +945,7 @@ core::arch::global_asm!(
     "ret",
     // No index: the eight hashes after the eight records, at once.
     "7:",
-    "ldp   q0, q1, [x3, #144]",
+    "ldp   q0, q1, [x3, #{hashes}]",
     "dup   v2.4s, w2",
     "cmeq  v0.4s, v0.4s, v2.4s",
     "cmeq  v1.4s, v1.4s, v2.4s",
@@ -974,8 +956,8 @@ core::arch::global_asm!(
     "8:",
     "rbit  x9, x8",
     "clz   x9, x9",
-    "add   x9, x3, x9, lsl #1",
-    "add   x9, x9, #16",
+    "add   x9, x3, x9, lsl #2",
+    "add   x9, x9, #32",
     "b     6b",
     // More than two words of text.
     "22:",
@@ -1024,14 +1006,14 @@ core::arch::global_asm!(
     "b     32b",
     "34:",
     "lsr   x9, x8, #32",
-    "add   x9, x3, x9, lsl #4",
-    "ldr   x10, [x9]",
+    "add   x9, x3, x9, lsl #5",
+    "ldur  x10, [x9, #-8]",
     "cmp   x10, x1",
     "b.ne  33b",
-    "add   x0, x9, #8",
+    "mov   x0, x9",
     "ret",
     "36:",
-    "ldp   q0, q1, [x3, #144]",
+    "ldp   q0, q1, [x3, #{hashes}]",
     "dup   v2.4s, w2",
     "cmeq  v0.4s, v0.4s, v2.4s",
     "cmeq  v1.4s, v1.4s, v2.4s",
@@ -1042,8 +1024,8 @@ core::arch::global_asm!(
     "cbz   x8, 39f",
     "rbit  x9, x8",
     "clz   x12, x9",
-    "add   x9, x3, x12, lsl #1",
-    "ldr   x10, [x9, #16]",
+    "add   x9, x3, x12, lsl #2",
+    "ldr   x10, [x9, #24]",
     "cmp   x10, x1",
     "b.eq  38f",
     "mov   x11, #0xff",
@@ -1051,7 +1033,7 @@ core::arch::global_asm!(
     "bic   x8, x8, x11",
     "b     37b",
     "38:",
-    "add   x0, x9, #24",
+    "add   x0, x9, #32",
     "ret",
     "39:",
     "mov   x0, #0",
@@ -1090,7 +1072,7 @@ core::arch::global_asm!(
     "umulh x6, x4, x7",
     "eor   x5, x5, x6",
     "lsr   x5, x5, #32",
-    "ands  w5, w5, #0x0fffffff",
+    "ands  w5, w5, #{hash_mask}",
     "csinc w5, w5, wzr, ne",
     "ldr   x6, [x0]",
     "orr   x6, x6, x5, lsl #32",
@@ -1136,7 +1118,9 @@ core::arch::global_asm!(
     str_hash = sym baml_rt_str_hash,
     find_str_slow = sym find_str_slow,
     str_hash_slow = sym str_hash_slow,
-    string = const TYPE_STRING,
+    string = const TAG_STRING,
+    hashes = const ENTRIES_RECORDS + SMALL_ENTRIES * ENTRY_SIZE,
+    hash_mask = const STRING_HASH_MASK,
     entries = const MAP_ENTRIES,
     mask = const MAP_MASK,
     seed = const crate::layout::MUTATOR_HASH_SEED,
@@ -1159,7 +1143,7 @@ unsafe extern "C" {
 /// written on an arm64 host.
 #[cfg(not(target_arch = "aarch64"))]
 mod portable {
-    use super::{KeyKind, get, str_hash};
+    use super::{KeyKind, slot_of, str_hash};
 
     /// # Safety
     ///
@@ -1167,7 +1151,7 @@ mod portable {
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn baml_rt_map_find_str(map: usize, key: usize, _hash: u32) -> usize {
         // SAFETY: the caller's contract.
-        unsafe { get(map, KeyKind::Str, key).unwrap_or(0) }
+        unsafe { slot_of(map, KeyKind::Str, key).unwrap_or(0) }
     }
 
     /// # Safety
@@ -1177,7 +1161,7 @@ mod portable {
     #[unsafe(no_mangle)]
     pub unsafe extern "C" fn baml_rt_map_find_int(map: usize, key: usize) -> usize {
         // SAFETY: the caller's contract.
-        unsafe { get(map, KeyKind::Word, key).unwrap_or(0) }
+        unsafe { slot_of(map, KeyKind::Word, key).unwrap_or(0) }
     }
 
     /// # Safety

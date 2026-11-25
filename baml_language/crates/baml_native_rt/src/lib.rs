@@ -212,6 +212,10 @@ pub(crate) mod tests {
     /// a reference, and no call holds none.
     pub(crate) static NO_STACK_MAPS: [usize; 2] = [0; 2];
 
+    /// The type table of a program with no class and no enum.
+    pub(crate) static NO_TYPES: [u32; crate::layout::FIRST_CLASS_TYPE / 4] =
+        [0; crate::layout::FIRST_CLASS_TYPE / 4];
+
     /// Run the ignored test at `path` in a process of its own, which it
     /// does not survive, and return what it wrote to stderr.
     pub(crate) fn in_a_process_of_its_own(path: &str) -> String {

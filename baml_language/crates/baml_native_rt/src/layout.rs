@@ -10,24 +10,37 @@
     reason = "every constant here is a small offset or size"
 )]
 
-/// Size of every slot, and the alignment of every object.
+/// Size of a machine word: a pointer, a header, a tag, a payload.
 pub const WORD: usize = 8;
+/// Size of a value: a tag word, then a payload word. Every slot of the heap
+/// is one, every object is aligned to it and its size a multiple of it.
+pub const VALUE: usize = 2 * WORD;
+/// Where a value's tag and payload are.
+pub const VALUE_TAG: usize = 0;
+pub const VALUE_PAYLOAD: usize = WORD;
 
-/// Every object starts with one header word:
+/// Every object starts with one header word, and every value with a tag
+/// word in the same format:
 ///
 /// ```text
 /// bits  0..=2   the collector's: bit 0 says the rest is the address the
 ///               object was copied to, bit 1 is a mark it keeps only while
-///               it collects
-/// bits  3..=31  with the three below read as zeros, the type id: the byte
-///               offset of the object's type in the program's type table
-/// bits 32..=59  free in every object: an identity hash or a lock word
-///               later. A string caches its hash here, zero while it has
-///               none ([`STRING_HASH_MASK`]). The collector counts in the
-///               bits of a string only slices reach, and such a string and
-///               a slice made a string of its own come out with them zero
-/// bits 60..=63  flags, in every object; bit 63 is [`HEADER_PANIC`]
+///               it collects. Zero in a tag
+/// bits  3..=31  with the three below read as zeros, the type id: one of
+///               the `TAG_` constants, or the byte offset in the program's
+///               type table of the type of a class or of an enum's boxes
+/// bits 32..=58  the payload of the header. A string caches its hash
+///               here, zero while it has none ([`STRING_HASH_MASK`]). A
+///               callable holds its call layout id here ([`call_layout`])
+/// bits 59..=61  free
+/// bit  62       [`HEADER_PANIC`]
+/// bit  63       [`HEADER_BUSY`]
 /// ```
+///
+/// A tag's type id is always that of the header of the object its payload
+/// points at, and a callable's tag has the object's call layout id.
+/// Nothing else in a tag says anything: a string's hash and the panic bit
+/// are read from the object.
 ///
 /// Whoever makes an object writes the whole word: compiled code as one
 /// constant, the runtime from the type id and the flags. Compiled code
@@ -37,124 +50,226 @@ pub const WORD: usize = 8;
 pub const HEADER: usize = WORD;
 /// The bits of a header that are the type id.
 pub const TYPE_ID_MASK: usize = 0xFFFF_FFF8;
+/// Where the payload of a header is, and its bits once shifted down.
+pub const HEADER_PAYLOAD_SHIFT: u32 = 32;
+pub const HEADER_PAYLOAD_MASK: usize = 0x07FF_FFFF;
 /// Set in the header of an instance of a class of `baml.panics`: what a
 /// handler that takes every error lets pass. A string never has it.
 pub const HEADER_PANIC: usize = 1 << HEADER_PANIC_BIT;
-pub const HEADER_PANIC_BIT: u32 = 63;
-/// Set in the header of an array whose elements are `float`s, and of a map
-/// whose values are: the words alone do not say so, and what compares or
-/// writes as JSON a value of no known type reads it. Whoever makes one sets
-/// it.
-pub const HEADER_FLOATS: usize = 1 << 60;
-/// The same for `int`s.
-pub const HEADER_INTS: usize = 1 << 61;
-/// The same for `bool`s. An array or map of enum variants has none of the
-/// three: only its static type says which enum.
-pub const HEADER_BOOLS: usize = 1 << 62;
-/// The flags of a header.
-pub const HEADER_FLAGS: usize = 0xF << 60;
+pub const HEADER_PANIC_BIT: u32 = 62;
+/// The lock of a slot that several workers read and write: set in the tag
+/// word of the slot while one of them is between its two words. No object
+/// header has it, and no tag has it while the collector runs.
+pub const HEADER_BUSY: usize = 1 << 63;
 
-/// The flag of an array whose elements are values of the type `type_id`,
-/// or of a map whose values are, zero when it has none.
-pub const fn scalar_flag(type_id: usize) -> usize {
-    match type_id {
-        TYPE_BOX_INT => HEADER_INTS,
-        TYPE_BOX_FLOAT => HEADER_FLOATS,
-        TYPE_BOX_BOOL => HEADER_BOOLS,
-        _ => 0,
-    }
+/// The call layout id in the header of a callable, or in the tag of a
+/// function value.
+pub const fn call_layout(header: usize) -> usize {
+    (header >> HEADER_PAYLOAD_SHIFT) & HEADER_PAYLOAD_MASK
 }
 
-/// Offset of slot `index` of a class instance.
+/// The bits of a callable's header that its tag has: the type id and the
+/// call layout id.
+pub const CALLABLE_TAG_MASK: usize = TYPE_ID_MASK | HEADER_PAYLOAD_MASK << HEADER_PAYLOAD_SHIFT;
+
+/// The tags: the type ids fixed in the runtime, the same in every program.
+///
+/// The first five are immediates: the payload is the value itself, never
+/// an address. A zeroed value is `null`, whose payload is always zero.
+/// `TAG_OMITTED` is an argument left to its default, and is never stored.
+pub const TAG_NULL: usize = 0;
+pub const TAG_BOOL: usize = 1 << 3;
+pub const TAG_INT: usize = 2 << 3;
+pub const TAG_FLOAT: usize = 3 << 3;
+pub const TAG_OMITTED: usize = 4 << 3;
+/// Every other tag is of a pointer, and names the layout of the object
+/// pointed at.
+///
+/// A string that holds its text and one that is a slice of another are
+/// next to each other, so that whether an object is a string is one
+/// comparison of its type id with [`STRING_TAGS_END`]: no object has a
+/// lower id than the first of the two.
+pub const TAG_STRING: usize = 5 << 3;
+pub const TAG_STRING_SLICE: usize = 6 << 3;
+/// Every type id of an object below this is a string's.
+pub const STRING_TAGS_END: usize = TAG_INSTANCE;
+pub const TAG_INSTANCE: usize = 7 << 3;
+pub const TAG_ENUM_VARIANT: usize = 8 << 3;
+pub const TAG_CLASS: usize = 9 << 3;
+pub const TAG_ARRAY: usize = 10 << 3;
+pub const TAG_ARRAY_STORAGE: usize = 11 << 3;
+pub const TAG_MAP: usize = 12 << 3;
+pub const TAG_MAP_ENTRIES: usize = 13 << 3;
+pub const TAG_MAP_INDEX: usize = 14 << 3;
+pub const TAG_CELL: usize = 15 << 3;
+pub const TAG_FUTURE: usize = 16 << 3;
+pub const TAG_CLOSURE: usize = 17 << 3;
+pub const TAG_BOUND_METHOD: usize = 18 << 3;
+pub const TAG_BIGINT: usize = 19 << 3;
+pub const TAG_BYTES: usize = 20 << 3;
+pub const TAG_BYTES_STORAGE: usize = 21 << 3;
+pub const TAG_TUPLE: usize = 22 << 3;
+pub const TAG_TYPE: usize = 23 << 3;
+pub const TAG_OWNED: usize = 24 << 3;
+pub const TAG_PLAIN: usize = 25 << 3;
+pub const TAG_RAW_FUNCTION: usize = 26 << 3;
+pub const TAG_REALIZED_FUNCTION: usize = 27 << 3;
+pub const TAG_HOST_CLOSURE: usize = 28 << 3;
+pub const TAG_PACKAGE: usize = 29 << 3;
+pub const TAG_RUST_INSTANCE: usize = 30 << 3;
+/// The boxes of an `int`, a `float` and a `bool`: what a union or an
+/// `unknown` holds one as. They are also the type ids a call passes a
+/// native to name the three types.
+pub const TAG_BOX_INT: usize = 31 << 3;
+pub const TAG_BOX_FLOAT: usize = 32 << 3;
+pub const TAG_BOX_BOOL: usize = 33 << 3;
+/// Where the types of a program's classes and enums begin: every type id
+/// from here on is the byte offset of a type in the program's type table.
+pub const FIRST_CLASS_TYPE: usize = 34 << 3;
+
+/// Whether a tag is of a pointer.
+pub const fn is_pointer(tag: usize) -> bool {
+    tag & TYPE_ID_MASK > TAG_OMITTED
+}
+
+/// Whether the object with this header is called through its code address
+/// ([`CLOSURE_CODE`]), and so has a call layout id.
+pub const fn is_callable(header: usize) -> bool {
+    matches!(
+        header & TYPE_ID_MASK,
+        TAG_CLOSURE
+            | TAG_BOUND_METHOD
+            | TAG_RAW_FUNCTION
+            | TAG_REALIZED_FUNCTION
+            | TAG_HOST_CLOSURE
+    )
+}
+
+/// Round a byte count up to the size of an object.
+pub const fn aligned(bytes: usize) -> usize {
+    (bytes + VALUE - 1) & !(VALUE - 1)
+}
+
+/// A class instance is a header, a word for its class, and its slots.
+pub const INSTANCE_CLASS: usize = HEADER;
+pub const INSTANCE_SLOTS: usize = VALUE;
+
+/// Offset of slot `index` of a class instance, and of a tuple.
 pub const fn field_offset(index: usize) -> usize {
-    HEADER + index * WORD
+    INSTANCE_SLOTS + index * VALUE
 }
 
-/// Size of a class instance with `slots` slots.
+/// Size of a class instance with `slots` slots, and of a tuple with as
+/// many.
 pub const fn instance_size(slots: usize) -> usize {
-    HEADER + slots * WORD
+    INSTANCE_SLOTS + slots * VALUE
 }
 
-/// An array is its length and the address of its first element, which is
-/// zero while the array has never held one. The elements live in a separate
-/// storage object so that the array can grow without moving.
-pub const ARRAY_LENGTH: usize = field_offset(0);
-pub const ARRAY_DATA: usize = field_offset(1);
-pub const ARRAY_SIZE: usize = instance_size(2);
+/// A tuple is a header, the number of its slots, and the slots.
+pub const TUPLE_COUNT: usize = HEADER;
 
-/// Storage is a header, a capacity, and that many 8-byte elements. An
-/// array's data address points past the first two.
+/// An array is its length, a word for its type, and the address of its
+/// storage object, which is zero while the array has never held an
+/// element. The elements live in a separate storage object so that the
+/// array can grow without moving.
+pub const ARRAY_LENGTH: usize = WORD;
+pub const ARRAY_TY: usize = 2 * WORD;
+pub const ARRAY_PTR: usize = 3 * WORD;
+pub const ARRAY_SIZE: usize = 4 * WORD;
+
+/// Storage is a header, a capacity, and that many values.
 pub const STORAGE_CAPACITY: usize = HEADER;
-pub const STORAGE_ELEMENTS: usize = HEADER + WORD;
-/// Where the capacity is, from an array's data address.
-pub const DATA_CAPACITY: i32 = -(WORD as i32);
+pub const STORAGE_ELEMENTS: usize = VALUE;
+/// The bytes of storage with room for `capacity` elements.
+pub const fn storage_size(capacity: usize) -> usize {
+    STORAGE_ELEMENTS + capacity * VALUE
+}
 
 /// A string is a header, one word holding the byte length (low half) and the
 /// character count (high half), and then either its UTF-8 text or, for a
 /// slice, where its text is: the string it is a part of and the byte of
 /// that string's text it starts at. The lengths are a slice's own. What a
-/// slice is a part of is never itself a slice.
+/// slice is a part of is never itself a slice. The bytes after the text of
+/// a string, to the end of the object, are zero.
 pub const STRING_LENGTHS: usize = HEADER;
 pub const STRING_TEXT: usize = HEADER + WORD;
 pub const STRING_CHAR_COUNT_SHIFT: u32 = 32;
 pub const SLICE_PARENT: usize = HEADER + WORD;
 pub const SLICE_OFFSET: usize = HEADER + 2 * WORD;
 pub const SLICE_SIZE: usize = HEADER + 3 * WORD;
+/// The bytes of a string of `bytes` bytes of text.
+pub const fn string_size(bytes: usize) -> usize {
+    aligned(STRING_TEXT + bytes)
+}
 /// The fewest bytes of text a slice is made for: a shorter part of a string
 /// is copied, which takes no more room than a slice. A string with this
 /// much text is itself at least as large as a slice, which is what lets
 /// compiled code read a slice's words of a string it has not yet told from
 /// one.
 pub const SLICE_MIN_BYTES: usize = 2 * WORD + 1;
-const _: () = assert!(STRING_TEXT + words(SLICE_MIN_BYTES - 1) <= SLICE_SIZE);
-const _: () = assert!(STRING_TEXT + words(SLICE_MIN_BYTES) >= SLICE_SIZE);
+const _: () = assert!(string_size(SLICE_MIN_BYTES - 1) <= SLICE_SIZE);
+const _: () = assert!(string_size(SLICE_MIN_BYTES) >= SLICE_SIZE);
 
-/// A cell holds a local that a closure captures: a header and the value, one
-/// slot, or two for an optional scalar.
-pub const CELL_VALUE: usize = field_offset(0);
+/// A cell holds a local that a closure captures: a header, a word of
+/// padding, and the value.
+pub const CELL_VALUE: usize = VALUE;
+pub const CELL_SIZE: usize = 2 * VALUE;
 
-/// A function value is a closure: a header, the address of the code, and
-/// what the code reads its environment from. The code takes the closure
-/// itself as its first argument.
-pub const CLOSURE_CODE: usize = field_offset(0);
-pub const CLOSURE_CAPTURES: usize = field_offset(1);
+/// A function value is a callable: an object whose second word is the
+/// address of its code, which takes the object itself as its first
+/// argument, and whose header holds its call layout id.
+///
+/// A closure is a header, the code, a word for its function, the number of
+/// its captures, and the captures.
+pub const CLOSURE_CODE: usize = WORD;
+pub const CLOSURE_FUNCTION: usize = 2 * WORD;
+pub const CLOSURE_CAPTURE_COUNT: usize = 3 * WORD;
+pub const CLOSURE_CAPTURES: usize = 4 * WORD;
+/// The bytes of a closure with `captures` captures.
+pub const fn closure_size(captures: usize) -> usize {
+    CLOSURE_CAPTURES + captures * VALUE
+}
+
+/// A bound method is a header, the code, a word for its function, the
+/// number of its type arguments, the receiver, and the type arguments, a
+/// word each.
+pub const BOUND_CODE: usize = CLOSURE_CODE;
+pub const BOUND_FUNCTION: usize = 2 * WORD;
+pub const BOUND_TYPE_ARG_COUNT: usize = 3 * WORD;
+pub const BOUND_RECEIVER: usize = 4 * WORD;
+pub const BOUND_TYPE_ARGS: usize = 6 * WORD;
+/// The bytes of a bound method with `type_args` type arguments.
+pub const fn bound_size(type_args: usize) -> usize {
+    aligned(BOUND_TYPE_ARGS + type_args * WORD)
+}
 
 /// Where a union or `unknown` is expected, an `int`, `float`, `bool` or enum
 /// variant is a box: a header whose type says which, and the value.
-pub const BOX_VALUE: usize = field_offset(0);
-pub const BOX_SIZE: usize = instance_size(1);
+pub const BOX_VALUE: usize = WORD;
+pub const BOX_SIZE: usize = VALUE;
 
-/// The kinds of object a type describes to the collector.
-pub const KIND_FIXED: u32 = 0;
-pub const KIND_VALUES: u32 = 1;
-pub const KIND_REFS: u32 = 2;
-pub const KIND_STRING: u32 = 3;
-pub const KIND_ARRAY: u32 = 4;
-pub const KIND_SLICE: u32 = 5;
-pub const KIND_ENTRIES: u32 = 6;
-/// A future: its value slot holds a reference when it settled with an error,
-/// or with a value its flags say is one, and its trace slot when it settled
-/// with an error.
-pub const KIND_FUTURE: u32 = 7;
-/// A Rust value the object owns: see [`OWNED_VALUE`]. It holds no
-/// reference, and the collector drops the value of one it does not copy.
-pub const KIND_OWNED: u32 = 8;
+/// The kinds of the types of a program's type table.
+///
+/// A class: an instance is `size` bytes, a header, a word for its class
+/// and slots.
+pub const KIND_INSTANCE: u32 = 0;
+/// An enum: the type is of its boxes.
+pub const KIND_ENUM: u32 = 1;
 
 /// Set in the fourth `u32` of a class's type; the other bits are the
 /// offset of the class's description in the section of descriptions that
 /// ends the type table (see `json_layout.rs`).
 pub const TYPE_DESCRIBED: u32 = 1 << 31;
 
-/// A type is four `u32`s: its kind; the size in bytes of an object, for a
-/// fixed one; the number of reference fields; and one more that depends on
-/// the type. The byte offset of each reference field follows, a `u32` each.
+/// The type table starts with [`FIRST_CLASS_TYPE`] bytes no type lives at,
+/// so that no type of the program has the id of a tag. A type is four
+/// `u32`s: its kind; the size in bytes of an object; zero; and one more
+/// that depends on the kind.
 ///
-/// The fourth `u32` of an array's type is the type id of its storage.
-///
-/// The type of an enum's boxes has no reference fields, and its fourth
-/// `u32` is the offset in the table of the enum's variant names: a `u32`
-/// count, then for each variant the offset in the table and the length in
-/// bytes of its name, a `u32` each.
+/// The fourth `u32` of the type of an enum's boxes is the offset in the
+/// table of the enum's variant names: a `u32` count, then for each variant
+/// the offset in the table and the length in bytes of its name, a `u32`
+/// each.
 ///
 /// The fourth `u32` of a class's type is [`TYPE_DESCRIBED`] and the offset
 /// of the class's description in the section of descriptions: its name,
@@ -164,66 +279,20 @@ pub const TYPE_DESCRIBED: u32 = 1 << 31;
 /// instances by it.
 pub const TYPE_HEADER: usize = 16;
 
-/// The types every program has, at fixed ids at the start of its type table.
-///
-/// A string that holds its text and one that is a slice of another come
-/// first and next to each other, so that whether an object is a string is
-/// one comparison of its type id with [`STRING_TYPES_END`]: no type has a
-/// lower id than the first of the two.
-pub const TYPE_STRING: usize = 8;
-pub const TYPE_STRING_SLICE: usize = 24;
-/// Every type id below this is a string's.
-pub const STRING_TYPES_END: usize = 40;
-pub const TYPE_VALUES: usize = 40;
-pub const TYPE_REFS: usize = 56;
-pub const TYPE_ARRAY_OF_VALUES: usize = 72;
-pub const TYPE_ARRAY_OF_REFS: usize = 88;
-/// Cells holding one slot that is not a reference, one that is, and two
-/// that are not.
-pub const TYPE_CELL_VALUE: usize = 104;
-pub const TYPE_CELL_REF: usize = 120;
-pub const TYPE_CELL_PAIR: usize = 144;
-/// The boxes of an `int`, a `float` and a `bool`.
-pub const TYPE_BOX_INT: usize = 160;
-pub const TYPE_BOX_FLOAT: usize = 176;
-pub const TYPE_BOX_BOOL: usize = 192;
-/// A map: see [`MAP_SIZE`].
-pub const TYPE_MAP: usize = 208;
-/// The entries of a map, by which words of a record are references:
-/// neither, the key, the value, both. The second `u32` of such a type is
-/// the size of a record, and its reference offsets are within one.
-pub const TYPE_ENTRIES: usize = 232;
-pub const TYPE_ENTRIES_KEY_REF: usize = 248;
-pub const TYPE_ENTRIES_VALUE_REF: usize = 272;
-pub const TYPE_ENTRIES_REFS: usize = 296;
-/// What a `spawn` returns and an `await` waits on: see [`FUTURE_STATE`].
-pub const TYPE_FUTURE: usize = 320;
-/// A `bigint`: see [`BIGINT_LIMBS`]. The collector copies it as it does an
-/// array's storage of values: a count of words and that many words, none a
-/// reference.
-pub const TYPE_BIGINT: usize = 336;
-/// A Rust value owned by the heap: what a `$rust_type` field refers to
-/// when the value has a destructor. See [`OWNED_VALUE`].
-pub const TYPE_OWNED: usize = 352;
-/// Plain Rust data kept in the heap: what a `$rust_type` field refers to
-/// when the value is `Copy`. See [`PLAIN_KIND`]. The collector copies it
-/// as it does an array's storage of values.
-pub const TYPE_PLAIN: usize = 368;
-/// A `uint8array`: see [`BYTES_LENGTH`]. The collector copies it as it
-/// does an array, whose storage it finds from the data address.
-pub const TYPE_BYTES: usize = 384;
-/// Where the types of a program's classes begin.
-pub const FIRST_CLASS_TYPE: usize = 400;
-
-/// A `uint8array` is laid out as an array is: its length, in bytes, and the
-/// address of its first byte, zero when it is empty. The length never
-/// changes. The bytes are packed in a storage object of values, whose
-/// capacity is in words as any storage's is: the length rounded up to a
-/// whole word, which is what the collector sizes the storage by. The bytes
-/// of the last word past the length are zero.
-pub const BYTES_LENGTH: usize = ARRAY_LENGTH;
-pub const BYTES_DATA: usize = ARRAY_DATA;
-pub const BYTES_SIZE: usize = ARRAY_SIZE;
+/// A `uint8array` is its length, in bytes, and the address of its storage
+/// object, zero when it is empty. The length never changes.
+pub const BYTES_LENGTH: usize = WORD;
+pub const BYTES_PTR: usize = 2 * WORD;
+pub const BYTES_SIZE: usize = 4 * WORD;
+/// The storage of a `uint8array` is a header, its capacity in bytes, and
+/// the bytes, packed. The bytes past the capacity, to the end of the
+/// object, are zero.
+pub const BYTES_STORAGE_CAPACITY: usize = HEADER;
+pub const BYTES_STORAGE_DATA: usize = VALUE;
+/// The bytes of the storage of `capacity` bytes.
+pub const fn bytes_storage_size(capacity: usize) -> usize {
+    aligned(BYTES_STORAGE_DATA + capacity)
+}
 /// The most bytes a `uint8array` holds: what a string's text may be.
 pub const BYTES_MAX: usize = u32::MAX as usize;
 
@@ -232,16 +301,20 @@ pub const BYTES_MAX: usize = u32::MAX as usize;
 /// runtime knows of the value's type, its destructor first. The second
 /// word is also how a native checks that the value is of the type it
 /// expects.
-pub const OWNED_VALUE: usize = field_offset(0);
-pub const OWNED_KIND: usize = field_offset(1);
-pub const OWNED_SIZE: usize = instance_size(2);
+pub const OWNED_VALUE: usize = WORD;
+pub const OWNED_KIND: usize = 2 * WORD;
+pub const OWNED_SIZE: usize = 4 * WORD;
 
-/// Plain Rust data is a header, the number of words that follow, the
+/// Plain Rust data is a header, the number of words of the value, the
 /// address of what the runtime knows of the value's type, and the value's
 /// own bytes, in whole words.
-pub const PLAIN_WORDS: usize = STORAGE_CAPACITY;
-pub const PLAIN_KIND: usize = STORAGE_ELEMENTS;
-pub const PLAIN_VALUE: usize = STORAGE_ELEMENTS + WORD;
+pub const PLAIN_WORDS: usize = WORD;
+pub const PLAIN_KIND: usize = 2 * WORD;
+pub const PLAIN_VALUE: usize = 3 * WORD;
+/// The bytes of plain data of `words` words.
+pub const fn plain_size(words: usize) -> usize {
+    aligned(PLAIN_VALUE + words * WORD)
+}
 
 /// What `baml_rt_array_sort` orders the elements of an array as.
 pub const SORT_INTS: usize = 0;
@@ -253,8 +326,12 @@ pub const SORT_BIGINTS: usize = 3;
 /// words, least significant first, in two's complement, as few as hold the
 /// value with its sign and never none. Two that are equal are the same
 /// words.
-pub const BIGINT_LIMB_COUNT: usize = STORAGE_CAPACITY;
-pub const BIGINT_LIMBS: usize = STORAGE_ELEMENTS;
+pub const BIGINT_LIMB_COUNT: usize = WORD;
+pub const BIGINT_LIMBS: usize = 2 * WORD;
+/// The bytes of a `bigint` of `limbs` limbs.
+pub const fn bigint_size(limbs: usize) -> usize {
+    aligned(BIGINT_LIMBS + limbs * WORD)
+}
 
 /// The operators of `baml_rt_bigint_binary`, in the low byte of its
 /// `op`.
@@ -273,34 +350,47 @@ pub const BIGINT_LEFT_IS_INT: usize = 1 << 8;
 /// Set in an `op` whose right operand is an `int`.
 pub const BIGINT_RIGHT_IS_INT: usize = 1 << 9;
 
-/// A map is a header, whose high half is kept for a lock word, and four
-/// words: the number of keys it has and of records used, dead ones
+/// A map is a header and: a word each for the types of its keys and of its
+/// values; the number of keys it has and of records used, dead ones
 /// included, a `u32` each; its entries object; its index object, zero while
 /// the entries are few enough to search without one; and the index's slot
 /// count less one and a count of the times its membership has changed, a
 /// `u32` each.
-pub const MAP_LEN: usize = HEADER;
-pub const MAP_USED: usize = HEADER + 4;
-pub const MAP_ENTRIES: usize = 2 * WORD;
-pub const MAP_INDEX: usize = 3 * WORD;
-pub const MAP_MASK: usize = 4 * WORD;
-pub const MAP_EPOCH: usize = 4 * WORD + 4;
-pub const MAP_SIZE: usize = 5 * WORD;
+pub const MAP_KEY_TY: usize = WORD;
+pub const MAP_VALUE_TY: usize = 2 * WORD;
+pub const MAP_LEN: usize = 3 * WORD;
+pub const MAP_USED: usize = 3 * WORD + 4;
+pub const MAP_ENTRIES: usize = 4 * WORD;
+pub const MAP_INDEX: usize = 5 * WORD;
+pub const MAP_MASK: usize = 6 * WORD;
+pub const MAP_EPOCH: usize = 6 * WORD + 4;
+pub const MAP_SIZE: usize = 8 * WORD;
 
-/// Entries are a header, a capacity, that many records of a key and a
-/// value in insertion order, and then that many `u32` hashes. A record
-/// never used or deleted is all zero, and so is its hash. Record `n` is at
-/// `(n + 1) * ENTRY_SIZE`.
+/// Entries are a header, a capacity, that many records in insertion order,
+/// and then that many `u32` hashes. A record is two values, the key and
+/// then what it is set to. A record never used or deleted is all zero,
+/// and so is its hash.
 pub const ENTRIES_CAPACITY: usize = HEADER;
-pub const ENTRIES_RECORDS: usize = 2 * WORD;
-pub const ENTRY_VALUE: usize = WORD;
-pub const ENTRY_SIZE: usize = 2 * WORD;
+pub const ENTRIES_RECORDS: usize = VALUE;
+pub const ENTRY_KEY: usize = 0;
+pub const ENTRY_VALUE: usize = VALUE;
+pub const ENTRY_SIZE: usize = 2 * VALUE;
 /// The most records searched without an index, and the fewest entries
 /// have: their hashes are compared all at once.
 pub const SMALL_ENTRIES: usize = 8;
 /// The bytes of entries with room for `capacity` records.
 pub const fn entries_size(capacity: usize) -> usize {
-    ENTRIES_RECORDS + capacity * ENTRY_SIZE + words(capacity * 4)
+    ENTRIES_RECORDS + capacity * ENTRY_SIZE + aligned(capacity * 4)
+}
+
+/// An index is a header, the number of its slots, and the slots, a word
+/// each: the hash of a record in the low half and its number plus one in
+/// the high half.
+pub const INDEX_SLOT_COUNT: usize = HEADER;
+pub const INDEX_SLOTS: usize = VALUE;
+/// The bytes of an index of `slots` slots, an even number.
+pub const fn index_size(slots: usize) -> usize {
+    aligned(INDEX_SLOTS + slots * WORD)
 }
 
 /// A hash as entries and an index hold it has this bit set, so that it is
@@ -308,148 +398,29 @@ pub const fn entries_size(capacity: usize) -> usize {
 /// holds no entry: 0 for one never used, 1 for one whose entry was deleted.
 pub const HASH_SET: u32 = 0x8000_0000;
 /// The bits of a string's header's high half that cache its hash, zero
-/// while it has not been computed. The four above them are flags.
-pub const STRING_HASH_MASK: u32 = 0x0FFF_FFFF;
-
-/// The start of every type table, as `u32`s: eight bytes no type lives at,
-/// so that no id is zero, then the fixed types.
-pub const RUNTIME_TYPES: [u32; FIRST_CLASS_TYPE / 4] = [
-    0,
-    0,
-    KIND_STRING,
-    0,
-    0,
-    0,
-    // The collector follows a slice's one reference by its own rule, so it
-    // is not listed.
-    KIND_SLICE,
-    SLICE_SIZE as u32,
-    0,
-    0,
-    KIND_VALUES,
-    0,
-    0,
-    0,
-    KIND_REFS,
-    0,
-    0,
-    0,
-    KIND_ARRAY,
-    ARRAY_SIZE as u32,
-    0,
-    TYPE_VALUES as u32,
-    KIND_ARRAY,
-    ARRAY_SIZE as u32,
-    0,
-    TYPE_REFS as u32,
-    KIND_FIXED,
-    instance_size(1) as u32,
-    0,
-    0,
-    KIND_FIXED,
-    instance_size(1) as u32,
-    1,
-    0,
-    CELL_VALUE as u32,
-    0,
-    KIND_FIXED,
-    instance_size(2) as u32,
-    0,
-    0,
-    KIND_FIXED,
-    BOX_SIZE as u32,
-    0,
-    0,
-    KIND_FIXED,
-    BOX_SIZE as u32,
-    0,
-    0,
-    KIND_FIXED,
-    BOX_SIZE as u32,
-    0,
-    0,
-    KIND_FIXED,
-    MAP_SIZE as u32,
-    2,
-    0,
-    MAP_ENTRIES as u32,
-    MAP_INDEX as u32,
-    KIND_ENTRIES,
-    ENTRY_SIZE as u32,
-    0,
-    0,
-    KIND_ENTRIES,
-    ENTRY_SIZE as u32,
-    1,
-    0,
-    0,
-    0,
-    KIND_ENTRIES,
-    ENTRY_SIZE as u32,
-    1,
-    0,
-    ENTRY_VALUE as u32,
-    0,
-    KIND_ENTRIES,
-    ENTRY_SIZE as u32,
-    2,
-    0,
-    0,
-    ENTRY_VALUE as u32,
-    KIND_FUTURE,
-    FUTURE_SIZE as u32,
-    0,
-    0,
-    KIND_VALUES,
-    0,
-    0,
-    0,
-    KIND_OWNED,
-    OWNED_SIZE as u32,
-    0,
-    0,
-    KIND_VALUES,
-    0,
-    0,
-    0,
-    KIND_ARRAY,
-    BYTES_SIZE as u32,
-    0,
-    TYPE_VALUES as u32,
-];
+/// while it has not been computed: the payload of the header.
+pub const STRING_HASH_MASK: u32 = HEADER_PAYLOAD_MASK as u32;
 
 const _: () = {
-    assert!(RUNTIME_TYPES[TYPE_STRING / 4] == KIND_STRING);
-    assert!(RUNTIME_TYPES[TYPE_STRING_SLICE / 4] == KIND_SLICE);
-    assert!(RUNTIME_TYPES[TYPE_VALUES / 4] == KIND_VALUES);
-    assert!(RUNTIME_TYPES[TYPE_REFS / 4] == KIND_REFS);
-    assert!(RUNTIME_TYPES[TYPE_ARRAY_OF_REFS / 4 + 3] == TYPE_REFS as u32);
-    assert!(RUNTIME_TYPES[TYPE_CELL_REF / 4 + 2] == 1);
-    assert!(RUNTIME_TYPES[TYPE_BOX_BOOL / 4 + 1] == BOX_SIZE as u32);
-    assert!(RUNTIME_TYPES[TYPE_BOX_INT / 4 + 1] == BOX_SIZE as u32);
-    assert!(TYPE_BOX_BOOL + TYPE_HEADER == TYPE_MAP);
-    assert!(RUNTIME_TYPES[TYPE_MAP / 4 + 1] == MAP_SIZE as u32);
-    assert!(RUNTIME_TYPES[TYPE_MAP / 4 + 5] == MAP_INDEX as u32);
-    assert!(RUNTIME_TYPES[TYPE_ENTRIES / 4] == KIND_ENTRIES);
-    assert!(RUNTIME_TYPES[TYPE_ENTRIES_KEY_REF / 4 + 2] == 1);
-    assert!(RUNTIME_TYPES[TYPE_ENTRIES_VALUE_REF / 4 + 4] == ENTRY_VALUE as u32);
-    assert!(RUNTIME_TYPES[TYPE_ENTRIES_REFS / 4 + 5] == ENTRY_VALUE as u32);
-    assert!(TYPE_ENTRIES_REFS + TYPE_HEADER + 2 * 4 == TYPE_FUTURE);
-    assert!(RUNTIME_TYPES[TYPE_FUTURE / 4] == KIND_FUTURE);
-    assert!(RUNTIME_TYPES[TYPE_FUTURE / 4 + 1] == FUTURE_SIZE as u32);
-    assert!(TYPE_FUTURE + TYPE_HEADER == TYPE_BIGINT);
-    assert!(RUNTIME_TYPES[TYPE_BIGINT / 4] == KIND_VALUES);
-    assert!(TYPE_BIGINT + TYPE_HEADER == TYPE_OWNED);
-    assert!(RUNTIME_TYPES[TYPE_OWNED / 4] == KIND_OWNED);
-    assert!(RUNTIME_TYPES[TYPE_OWNED / 4 + 1] == OWNED_SIZE as u32);
-    assert!(RUNTIME_TYPES[TYPE_PLAIN / 4] == KIND_VALUES);
-    assert!(TYPE_PLAIN + TYPE_HEADER == TYPE_BYTES);
-    assert!(RUNTIME_TYPES[TYPE_BYTES / 4] == KIND_ARRAY);
-    assert!(RUNTIME_TYPES[TYPE_BYTES / 4 + 3] == TYPE_VALUES as u32);
-    assert!(TYPE_BYTES + TYPE_HEADER == FIRST_CLASS_TYPE);
-    // A string's cached hash is in the bits every object has free, below
-    // the flags.
-    assert!((STRING_HASH_MASK as usize) << 32 & (HEADER_FLAGS | TYPE_ID_MASK | 7) == 0);
+    assert!(STRING_TAGS_END == TAG_STRING_SLICE + 8);
+    assert!(TAG_RUST_INSTANCE + 8 == TAG_BOX_INT);
+    assert!(TAG_BOX_BOOL + 8 == FIRST_CLASS_TYPE);
+    assert!(TYPE_HEADER.is_multiple_of(8));
+    assert!(SLICE_SIZE.is_multiple_of(VALUE));
+    assert!(ARRAY_SIZE.is_multiple_of(VALUE));
+    assert!(MAP_SIZE.is_multiple_of(VALUE));
+    assert!(MAP_INDEX == MAP_ENTRIES + WORD);
+    assert!(FUTURE_SIZE.is_multiple_of(VALUE));
+    assert!(FUTURE_VALUE.is_multiple_of(VALUE));
+    assert!(OWNED_SIZE.is_multiple_of(VALUE));
+    assert!(BYTES_SIZE.is_multiple_of(VALUE));
+    assert!(BOUND_RECEIVER.is_multiple_of(VALUE));
+    // A header's payload is below the flags and above the type id.
+    assert!(
+        (HEADER_PAYLOAD_MASK << HEADER_PAYLOAD_SHIFT)
+            & (HEADER_PANIC | HEADER_BUSY | TYPE_ID_MASK | 7)
+            == 0
+    );
 };
 
 /// The classes of the standard library the runtime makes instances of: the
@@ -666,32 +637,31 @@ pub const STEP_WAIT: usize = 3;
 pub const NATIVE_CALL_ARGS: usize = 4;
 pub const NATIVE_STATE_ARGS: usize = 0;
 
-/// A future is a header and five words. The state is zero or the address of
-/// the first task waiting (tasks are aligned, so its low bits are clear)
-/// while the task has not finished, then [`FUTURE_READY`] or
-/// [`FUTURE_ERROR`], written once with the value already in place: a reader
-/// loads the state first, with acquire ordering, and the value after.
-pub const FUTURE_STATE: usize = field_offset(0);
-/// What the task returned, as the bits of one slot, or what it threw.
-pub const FUTURE_VALUE: usize = field_offset(1);
+/// A future is a header and: its state, a value, and three words. The state
+/// is zero or the address of the first task waiting (tasks are aligned, so
+/// its low bits are clear) while the task has not finished, then
+/// [`FUTURE_READY`] or [`FUTURE_ERROR`], written once with the value
+/// already in place: a reader loads the state first, with acquire
+/// ordering, and the value after.
+pub const FUTURE_STATE: usize = WORD;
+/// What the task returned, or what it threw. `null` until it settles.
+pub const FUTURE_VALUE: usize = 2 * WORD;
 /// The task settling it, which is not a heap object, or zero.
-pub const FUTURE_TASK: usize = field_offset(2);
-pub const FUTURE_FLAGS: usize = field_offset(3);
+pub const FUTURE_TASK: usize = 4 * WORD;
+pub const FUTURE_FLAGS: usize = 5 * WORD;
 /// What the error it settled with travels with, for the `await` that throws
 /// it again: the trace of the task's throw, or the context a handler in the
-/// task made of that. Zero until then.
-pub const FUTURE_TRACE: usize = field_offset(4);
-pub const FUTURE_SIZE: usize = instance_size(5);
+/// task made of that. Zero until then, and then a reference.
+pub const FUTURE_TRACE: usize = 6 * WORD;
+pub const FUTURE_SIZE: usize = 8 * WORD;
 pub const FUTURE_READY: usize = 1;
 pub const FUTURE_ERROR: usize = 2;
 /// The bits of the state that say it is settled.
 pub const FUTURE_SETTLED: usize = 3;
-/// Set in a future's flags when the value its task returns is a reference.
-pub const FUTURE_VALUE_IS_REF: usize = 1;
 /// Set in a future's flags once an `await` has thrown its error.
-pub const FUTURE_OBSERVED: usize = 2;
+pub const FUTURE_OBSERVED: usize = 1;
 
-/// Round a byte count up to whole words.
-pub const fn words(bytes: usize) -> usize {
-    (bytes + WORD - 1) & !(WORD - 1)
-}
+/// What a `spawn` tells the runtime of the word its task returns: this,
+/// when the word is a reference, whose tag is its object's; and otherwise
+/// the tag the word has.
+pub const RESULT_IS_REFERENCE: usize = 1;

@@ -2,10 +2,13 @@
 //!
 //! Every function of the program becomes one object-local function; they
 //! call each other with Cranelift's tail convention and the runtime with the
-//! platform's C convention. Integer arithmetic wraps in two's complement. Values have no tags: an `int` is an
-//! `i64`, a `float` an `f64`, a `bool` or `null` an `i8`, and a string, class
-//! instance or array a pointer to a heap object laid out as
-//! [`crate::layout`] says (zero for the `null` of an optional).
+//! platform's C convention. Integer arithmetic wraps in two's complement.
+//! A value in a register has no tag: an `int` is an `i64`, a `float` an
+//! `f64`, a `bool` or `null` an `i8`, and a string, class instance or array
+//! a pointer to a heap object laid out as [`crate::layout`] says (zero for
+//! the `null` of an optional). A slot of a heap object holds a value as two
+//! words, a tag and a payload: [`Translator::slot_store`] and
+//! [`Translator::slot_load`] go between the two.
 //!
 //! One register is set aside for the whole program: it holds the address of
 //! the running thread's mutator, whose first two words drive inline
@@ -59,9 +62,9 @@ use crate::{
     narrow::TestKind,
     program::{Entry, FnKey, Program},
     types::{
-        BinaryMode, Body, NativeTy, Signature, TypeArg, binary_typing, class_layout, field_slots,
-        is_comparison, layout_slots, local_ty, narrowed, operand_ty, place_local, place_ty,
-        storage_ty, template_ty, tuple_element, type_argument, unary_typing,
+        BinaryMode, Body, NativeTy, Signature, TypeArg, binary_typing, class_layout, is_comparison,
+        local_ty, narrowed, operand_ty, place_local, place_ty, storage_ty, template_ty,
+        tuple_element, type_argument, unary_typing,
     },
 };
 
@@ -320,11 +323,12 @@ impl Runtime {
                 (vec![word, word], vec![word])
             }
             Self::StringFromFloat => (vec![word, float], vec![word]),
-            Self::ArrayNew | Self::BytesNew | Self::StringConcat | Self::StringFromEnum => {
+            Self::ArrayNew => (vec![word, word], vec![word]),
+            Self::BytesNew | Self::StringConcat | Self::StringFromEnum => {
                 (vec![word, word, word], vec![word])
             }
             Self::PrintEnum => (vec![word, word, word], vec![]),
-            Self::ArrayPushSlow => (vec![word, word, word], vec![]),
+            Self::ArrayPushSlow => (vec![word, word, word, word], vec![]),
             Self::StringEq | Self::BytesEq => (vec![word, word], vec![AbiParam::new(types::I8)]),
             Self::StringCmp => (vec![word, word], vec![word]),
         };
@@ -365,8 +369,8 @@ type FunctionStackMaps = Vec<(u32, Vec<u32>)>;
 struct Backend<'db> {
     module: ObjectModule,
     runtime: HashMap<Runtime, FuncId>,
-    /// The program's type table so far: the fixed types, then one entry per
-    /// class met.
+    /// The program's type table so far: the bytes no type lives at, then
+    /// one entry per class and enum met.
     types: Vec<u8>,
     /// The descriptions of the program's classes, and of the types calls
     /// of `baml.json` name: the last section of the type table.
@@ -376,11 +380,6 @@ struct Backend<'db> {
     class_types: HashMap<(ClassRef<'db>, Vec<TypeArg<'db>>), usize>,
     /// The classes the runtime makes instances of, once they are needed.
     well_known: Option<classes::WellKnown>,
-    /// The type id of closures, by which of their captured words are
-    /// references.
-    closure_types: HashMap<Vec<bool>, usize>,
-    /// The type id of tuples, by which of their slots are references.
-    tuple_types: HashMap<Vec<bool>, usize>,
     /// The closure standing for each function used as a value without
     /// capturing anything.
     function_values: HashMap<FuncId, DataId>,
@@ -443,15 +442,10 @@ impl<'db> Backend<'db> {
         Ok(Self {
             module: ObjectModule::new(builder),
             runtime: HashMap::new(),
-            types: layout::RUNTIME_TYPES
-                .iter()
-                .flat_map(|word| word.to_ne_bytes())
-                .collect(),
+            types: vec![0; layout::FIRST_CLASS_TYPE],
             json: crate::json::JsonTypes::new(),
             class_types: HashMap::new(),
             well_known: None,
-            closure_types: HashMap::new(),
-            tuple_types: HashMap::new(),
             function_values: HashMap::new(),
             enum_types: HashMap::new(),
             enum_boxes: HashMap::new(),
@@ -538,7 +532,7 @@ impl<'db> Backend<'db> {
         Ok(id)
     }
 
-    /// Read-only data of the object, aligned to a word.
+    /// Read-only data of the object, aligned as an object of the heap is.
     fn define_data(
         &mut self,
         id: DataId,
@@ -546,7 +540,7 @@ impl<'db> Backend<'db> {
         bytes: Vec<u8>,
     ) -> Result<(), CompileError> {
         description.define(bytes.into_boxed_slice());
-        description.set_align(layout::WORD as u64);
+        description.set_align(layout::VALUE as u64);
         self.module.define_data(id, &description).map_err(internal)
     }
 
@@ -558,12 +552,12 @@ impl<'db> Backend<'db> {
         ty: &NativeTy<'db>,
     ) -> Result<Option<usize>, CompileError> {
         Ok(Some(match ty {
-            NativeTy::Int => layout::TYPE_BOX_INT,
-            NativeTy::Float => layout::TYPE_BOX_FLOAT,
-            NativeTy::Bool => layout::TYPE_BOX_BOOL,
-            NativeTy::String => layout::TYPE_STRING,
-            NativeTy::Bigint => layout::TYPE_BIGINT,
-            NativeTy::Bytes => layout::TYPE_BYTES,
+            NativeTy::Int => layout::TAG_BOX_INT,
+            NativeTy::Float => layout::TAG_BOX_FLOAT,
+            NativeTy::Bool => layout::TAG_BOX_BOOL,
+            NativeTy::String => layout::TAG_STRING,
+            NativeTy::Bigint => layout::TAG_BIGINT,
+            NativeTy::Bytes => layout::TAG_BYTES,
             NativeTy::Enum(enum_ref) => self.enum_type(db, *enum_ref),
             NativeTy::Class(class, arguments) => {
                 let fields = class_layout(db, *class, arguments).map_err(internal)?;
@@ -574,8 +568,8 @@ impl<'db> Backend<'db> {
     }
 
     /// The type id of a class, adding its entry to the type table the first
-    /// time: what the collector needs to copy and scan an instance, and
-    /// what the runtime needs to write one.
+    /// time: what the collector needs to copy an instance, and what the
+    /// runtime needs to write one.
     fn class_type(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
@@ -590,77 +584,31 @@ impl<'db> Backend<'db> {
         if let Some(id) = self.class_types.get(&key) {
             return *id;
         }
-        let references: Vec<usize> = fields
-            .iter()
-            .zip(field_slots(fields))
-            .filter(|(field, _)| field.is_ref())
-            .map(|(_, slot)| layout::field_offset(slot))
-            .collect();
-        let id = self.fixed_type(layout::instance_size(layout_slots(fields)), &references);
+        let id = self.add_type([
+            layout::KIND_INSTANCE,
+            table_word(layout::instance_size(fields.len())),
+            0,
+            0,
+        ]);
         self.class_types.insert(key, id);
         self.describe_class(db, id, class, arguments, fields);
         id
     }
 
-    /// A new type of objects of `size` bytes with references at these byte
-    /// offsets.
-    fn fixed_type(&mut self, size: usize, references: &[usize]) -> usize {
+    /// A new type of the type table, and its id.
+    fn add_type(&mut self, entry: [u32; layout::TYPE_HEADER / 4]) -> usize {
         let id = self.types.len();
-        let entry = [
-            layout::KIND_FIXED,
-            table_word(size),
-            table_word(references.len()),
-            0,
-        ];
-        for word in entry
-            .into_iter()
-            .chain(references.iter().map(|offset| table_word(*offset)))
-        {
+        for word in entry {
             self.types.extend_from_slice(&word.to_ne_bytes());
         }
-        // Entries start on a word, so that an id leaves the low header bits
-        // to the collector.
-        self.types.resize(layout::words(self.types.len()), 0);
         id
     }
 
-    /// The type id of tuples of these element types. Tuples whose slots
-    /// are references in the same places share one.
-    fn tuple_type(&mut self, elements: &[NativeTy<'db>]) -> usize {
-        let references: Vec<bool> = elements
-            .iter()
-            .flat_map(|element| std::iter::repeat_n(element.is_ref(), element.slots()))
-            .collect();
-        if let Some(id) = self.tuple_types.get(&references) {
-            return *id;
-        }
-        let offsets: Vec<usize> = references
-            .iter()
-            .enumerate()
-            .filter(|(_, is_ref)| **is_ref)
-            .map(|(slot, _)| layout::field_offset(slot))
-            .collect();
-        let id = self.fixed_type(layout::instance_size(references.len()), &offsets);
-        self.tuple_types.insert(references, id);
-        id
-    }
-
-    /// The type id of closures whose captured words are references where
-    /// `references` says so.
-    fn closure_type(&mut self, references: &[bool]) -> usize {
-        if let Some(id) = self.closure_types.get(references) {
-            return *id;
-        }
-        let offsets: Vec<usize> = references
-            .iter()
-            .enumerate()
-            .filter(|(_, is_ref)| **is_ref)
-            .map(|(index, _)| layout::CLOSURE_CAPTURES + index * layout::WORD)
-            .collect();
-        let size = layout::CLOSURE_CAPTURES + references.len() * layout::WORD;
-        let id = self.fixed_type(size, &offsets);
-        self.closure_types.insert(references.to_vec(), id);
-        id
+    /// End what follows a type on a word: the next type's id leaves the low
+    /// header bits to the collector.
+    fn align_types(&mut self) {
+        self.types
+            .resize(self.types.len().next_multiple_of(layout::WORD), 0);
     }
 
     /// The type id of the boxes of an enum's variants. The type carries the
@@ -670,16 +618,15 @@ impl<'db> Backend<'db> {
             return *id;
         }
         let variants = enum_variants(db, enum_ref);
-        let id = self.types.len();
-        let names = id + layout::TYPE_HEADER;
-        let mut text = names + 4 * (1 + 2 * variants.len());
-        let mut words = vec![
-            layout::KIND_FIXED,
+        let names = self.types.len() + layout::TYPE_HEADER;
+        let id = self.add_type([
+            layout::KIND_ENUM,
             table_word(layout::BOX_SIZE),
             0,
             table_word(names),
-            table_word(variants.len()),
-        ];
+        ]);
+        let mut text = names + 4 * (1 + 2 * variants.len());
+        let mut words = vec![table_word(variants.len())];
         for variant in &variants {
             words.extend([table_word(text), table_word(variant.as_str().len())]);
             text += variant.as_str().len();
@@ -690,7 +637,7 @@ impl<'db> Backend<'db> {
         for variant in &variants {
             self.types.extend_from_slice(variant.as_str().as_bytes());
         }
-        self.types.resize(layout::words(self.types.len()), 0);
+        self.align_types();
         self.enum_types.insert(enum_ref, id);
         id
     }
@@ -731,7 +678,7 @@ impl<'db> Backend<'db> {
         if let Some(id) = self.bool_boxes {
             return Ok(id);
         }
-        let id = self.boxes(layout::TYPE_BOX_BOOL, 2)?;
+        let id = self.boxes(layout::TAG_BOX_BOOL, 2)?;
         self.bool_boxes = Some(id);
         Ok(id)
     }
@@ -742,8 +689,8 @@ impl<'db> Backend<'db> {
         if let Some(id) = self.function_values.get(&function) {
             return Ok(*id);
         }
-        let mut bytes = vec![0; layout::CLOSURE_CAPTURES];
-        bytes[..layout::HEADER].copy_from_slice(&self.closure_type(&[]).to_ne_bytes());
+        let mut bytes = vec![0; layout::closure_size(0)];
+        bytes[..layout::HEADER].copy_from_slice(&layout::TAG_CLOSURE.to_ne_bytes());
         let mut description = DataDescription::new();
         let code = self.module.declare_func_in_data(function, &mut description);
         description.write_function_addr(table_word(layout::CLOSURE_CODE), code);
@@ -801,10 +748,10 @@ impl<'db> Backend<'db> {
                     (type_id << program.column_shift) + column * layout::WORD,
                     function,
                 ));
-                if type_id == layout::TYPE_STRING {
+                if type_id == layout::TAG_STRING {
                     // A slice is a string: its row is the same.
                     entries.push((
-                        (layout::TYPE_STRING_SLICE << program.column_shift) + column * layout::WORD,
+                        (layout::TAG_STRING_SLICE << program.column_shift) + column * layout::WORD,
                         function,
                     ));
                 }
@@ -840,8 +787,8 @@ impl<'db> Backend<'db> {
             return Ok(*id);
         }
         let lengths = text.len() | (text.chars().count() << layout::STRING_CHAR_COUNT_SHIFT);
-        let mut bytes = vec![0; layout::STRING_TEXT + layout::words(text.len())];
-        bytes[..layout::HEADER].copy_from_slice(&layout::TYPE_STRING.to_ne_bytes());
+        let mut bytes = vec![0; layout::string_size(text.len())];
+        bytes[..layout::HEADER].copy_from_slice(&layout::TAG_STRING.to_ne_bytes());
         bytes[layout::STRING_LENGTHS..layout::STRING_TEXT].copy_from_slice(&lengths.to_ne_bytes());
         bytes[layout::STRING_TEXT..layout::STRING_TEXT + text.len()]
             .copy_from_slice(text.as_bytes());
@@ -890,8 +837,8 @@ impl<'db> Backend<'db> {
         } else {
             0
         };
-        let mut bytes = vec![sign; layout::BIGINT_LIMBS + limbs * layout::WORD];
-        bytes[..layout::HEADER].copy_from_slice(&layout::TYPE_BIGINT.to_ne_bytes());
+        let mut bytes = vec![sign; layout::bigint_size(limbs)];
+        bytes[..layout::HEADER].copy_from_slice(&layout::TAG_BIGINT.to_ne_bytes());
         bytes[layout::BIGINT_LIMB_COUNT..layout::BIGINT_LIMBS]
             .copy_from_slice(&limbs.to_ne_bytes());
         bytes[layout::BIGINT_LIMBS..layout::BIGINT_LIMBS + digits.len()].copy_from_slice(&digits);
@@ -1454,8 +1401,8 @@ struct Translator<'a, 'db> {
     proven: ProvenIndexes,
     /// The MIR block being translated.
     current: usize,
-    /// The length and data address already read from each array value in the
-    /// code being generated; see [`Self::array_view`].
+    /// The length and storage address already read from each array value in
+    /// the code being generated; see [`Self::array_view`].
     array_views: HashMap<ir::Value, (ir::Value, ir::Value)>,
     /// The position behind each (index, length) pair already checked in
     /// that same code.
@@ -1581,14 +1528,8 @@ impl<'a, 'db> Translator<'a, 'db> {
                 other => other,
             };
             let value = if index == 1 && self.key.entry == Entry::Bound {
-                let closure = self.builder.use_var(self.closure);
-                let receiver = self.builder.ins().load(
-                    clif_type(content),
-                    closure_access(),
-                    closure,
-                    offset(layout::CLOSURE_CAPTURES),
-                );
-                self.track(receiver, content)
+                let bound = self.builder.use_var(self.closure);
+                self.slot_load(content, bound, layout::BOUND_RECEIVER)
             } else {
                 arriving.next().expect("a parameter per argument")
             };
@@ -1783,7 +1724,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         })
     }
 
-    /// A whole slot's bits as a value of type `ty`.
+    /// The bits of one word as a value of type `ty`.
     fn slot_as(&mut self, bits: ir::Value, ty: &NativeTy<'db>) -> ir::Value {
         match ty {
             NativeTy::Float => self
@@ -1801,9 +1742,9 @@ impl<'a, 'db> Translator<'a, 'db> {
             NativeTy::Null => self.builder.ins().iconst(WORD, 0),
             NativeTy::Int | NativeTy::Float => {
                 let box_type = if *from == NativeTy::Int {
-                    layout::TYPE_BOX_INT
+                    layout::TAG_BOX_INT
                 } else {
-                    layout::TYPE_BOX_FLOAT
+                    layout::TAG_BOX_FLOAT
                 };
                 let object = self.allocate(layout::BOX_SIZE)?;
                 let box_type = self.word_const(box_type);
@@ -1954,7 +1895,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             self.builder.seal_block(read);
             self.builder.switch_to_block(read);
         }
-        // Every panic passes: the flag is the top bit of the whole header.
+        // Every panic passes: the flag is the highest bit a header has set.
         let mut passes = panics.then(|| {
             let whole = self.builder.ins().load(WORD, slot_access(), value, 0);
             let flag = self
@@ -1974,7 +1915,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             let type_id = self.builder.ins().uextend(WORD, type_id);
             // The id passed for `string` is that of one holding its text.
             let is_string = self.is_string_id(header);
-            let flat = self.word_const(layout::TYPE_STRING);
+            let flat = self.word_const(layout::TAG_STRING);
             let header = self.builder.ins().select(is_string, flat, header);
             let same = self.builder.ins().icmp(IntCC::Equal, header, type_id);
             passes = Some(match passes {
@@ -1983,7 +1924,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             });
         }
         for id in ids {
-            let same = if id == layout::TYPE_STRING {
+            let same = if id == layout::TAG_STRING {
                 self.is_string_id(header)
             } else {
                 self.builder.ins().icmp_imm(IntCC::Equal, header, imm(id))
@@ -2032,8 +1973,8 @@ impl<'a, 'db> Translator<'a, 'db> {
                     if self.passing_ids(&test, &mut ids)? {
                         ids.push(0);
                     }
-                    if ids.contains(&layout::TYPE_STRING) {
-                        ids.push(layout::TYPE_STRING_SLICE);
+                    if ids.contains(&layout::TAG_STRING) {
+                        ids.push(layout::TAG_STRING_SLICE);
                     }
                     ids
                 }
@@ -2076,11 +2017,11 @@ impl<'a, 'db> Translator<'a, 'db> {
     }
 
     /// Whether the type id `id`, read from a header, is a string's: the
-    /// two kinds of string have the lowest ids there are.
+    /// two kinds of string have the lowest ids an object has.
     fn is_string_id(&mut self, id: ir::Value) -> ir::Value {
         self.builder
             .ins()
-            .icmp_imm(IntCC::UnsignedLessThan, id, imm(layout::STRING_TYPES_END))
+            .icmp_imm(IntCC::UnsignedLessThan, id, imm(layout::STRING_TAGS_END))
     }
 
     /// Add to `ids` the type id of every type whose values pass `test`, and
@@ -2093,7 +2034,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         match test {
             TestKind::Exactly(NativeTy::Null) => return Ok(true),
             TestKind::AnyArray => {
-                ids.extend([layout::TYPE_ARRAY_OF_VALUES, layout::TYPE_ARRAY_OF_REFS]);
+                ids.push(layout::TAG_ARRAY);
             }
             TestKind::Exactly(ty) => ids.push(
                 self.backend
@@ -2145,8 +2086,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             return Err(internal("a checked field access is on a class instance"));
         };
         let layout = class_layout(self.db, class, &arguments).map_err(internal)?;
-        let slot = field_slots(&layout)[field];
-        Ok((layout[field].clone(), layout::field_offset(slot)))
+        Ok((layout[field].clone(), layout::field_offset(field)))
     }
 
     /// The type and byte offset of the element the local `index` names of
@@ -2162,8 +2102,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         let element = tuple_element(self.body, index)
             .filter(|element| *element < elements.len())
             .ok_or_else(|| internal("a checked tuple index is a constant"))?;
-        let slot = field_slots(&elements)[element];
-        Ok((elements[element].clone(), layout::field_offset(slot)))
+        Ok((elements[element].clone(), layout::field_offset(element)))
     }
 
     /// A new tuple of these element types holding these values.
@@ -2178,14 +2117,15 @@ impl<'a, 'db> Translator<'a, 'db> {
             .zip(elements)
             .map(|(field, ty)| self.operand_as(field, ty))
             .collect::<Result<Vec<_>, _>>()?;
-        let tuple_type = self.backend.tuple_type(elements);
-        let object = self.allocate(layout::instance_size(layout_slots(elements)))?;
-        let tuple_type = self.word_const(tuple_type);
+        let object = self.allocate(layout::instance_size(elements.len()))?;
+        let header = self.word_const(layout::TAG_TUPLE);
+        self.builder.ins().store(slot_access(), header, object, 0);
+        let count = self.word_const(elements.len());
         self.builder
             .ins()
-            .store(slot_access(), tuple_type, object, 0);
-        for ((ty, value), slot) in elements.iter().zip(values).zip(field_slots(elements)) {
-            self.store_slot(ty, value, object, layout::field_offset(slot));
+            .store(slot_access(), count, object, offset(layout::TUPLE_COUNT));
+        for (slot, (ty, value)) in elements.iter().zip(values).enumerate() {
+            self.slot_store(ty, value, object, layout::field_offset(slot));
         }
         Ok(object)
     }
@@ -2203,33 +2143,190 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
     }
 
-    /// Load a slot of type `ty` at `base + bytes`.
-    fn load_slot(&mut self, ty: &NativeTy<'db>, base: ir::Value, bytes: usize) -> ir::Value {
+    /// The tag of a value of type `ty` that is not a reference: the
+    /// value's bits are the payload. An enum variant is the `int` of its
+    /// position.
+    fn immediate_tag(ty: &NativeTy<'db>) -> Option<usize> {
+        match ty {
+            NativeTy::Null => Some(layout::TAG_NULL),
+            NativeTy::Bool => Some(layout::TAG_BOOL),
+            NativeTy::Int | NativeTy::Enum(_) => Some(layout::TAG_INT),
+            NativeTy::Float => Some(layout::TAG_FLOAT),
+            _ => None,
+        }
+    }
+
+    /// The tag of a reference to the object at `pointer`, as
+    /// [`Self::header_tag`] reads it, or that of `null` when `pointer` is
+    /// null.
+    fn tag_or_null(&mut self, pointer: ir::Value, mask: Option<usize>) -> ir::Value {
+        let read = self.builder.create_block();
+        let done = self.builder.create_block();
+        self.builder.append_block_param(done, WORD);
+        let null = self.word_const(layout::TAG_NULL);
+        self.builder
+            .ins()
+            .brif(pointer, read, &[], done, &[null.into()]);
+        self.builder.seal_block(read);
+        self.builder.switch_to_block(read);
+        let tag = self.header_tag(pointer, mask);
+        self.builder.ins().jump(done, &[tag.into()]);
+        self.builder.seal_block(done);
+        self.builder.switch_to_block(done);
+        self.builder.block_params(done)[0]
+    }
+
+    /// The tag of a reference to the object at `pointer`, which is not
+    /// null, read from the object's header: the type id in its low half,
+    /// or the bits of the whole header that `mask` keeps.
+    fn header_tag(&mut self, pointer: ir::Value, mask: Option<usize>) -> ir::Value {
+        match mask {
+            None => self.builder.ins().uload32(slot_access(), pointer, 0),
+            Some(mask) => {
+                let header = self.builder.ins().load(WORD, slot_access(), pointer, 0);
+                self.builder
+                    .ins()
+                    .band_imm(header, mask.cast_signed() as i64)
+            }
+        }
+    }
+
+    /// The tag of the reference `pointer`, of static type `ty`: the type id
+    /// in the header of the object it points at, and zero for `null`. It
+    /// is a constant where every object of the type has one id, and read
+    /// from the header otherwise: a string may be a slice, a class's id is
+    /// its own, a function value's tag has its call layout, and a union or
+    /// an `unknown` holds whatever its header says. What a union holds has
+    /// no call layout yet, so the low half of its header is its tag.
+    fn pointer_tag(&mut self, ty: &NativeTy<'db>, pointer: ir::Value) -> ir::Value {
+        let (ty, may_be_null) = match ty {
+            NativeTy::Optional(inner) => (&**inner, true),
+            NativeTy::Union(_) | NativeTy::Unknown => (ty, true),
+            _ => (ty, false),
+        };
+        let constant = match ty {
+            NativeTy::Cell(_) => Some(layout::TAG_CELL),
+            NativeTy::Array(_) => Some(layout::TAG_ARRAY),
+            NativeTy::Map(..) => Some(layout::TAG_MAP),
+            NativeTy::Future(_) => Some(layout::TAG_FUTURE),
+            NativeTy::Bigint => Some(layout::TAG_BIGINT),
+            NativeTy::Bytes => Some(layout::TAG_BYTES),
+            NativeTy::Tuple(_) => Some(layout::TAG_TUPLE),
+            _ => None,
+        };
+        let mask = matches!(ty, NativeTy::Function(_)).then_some(layout::CALLABLE_TAG_MASK);
+        match (constant, may_be_null) {
+            (Some(tag), false) => self.word_const(tag),
+            (Some(tag), true) => {
+                let tag = self.word_const(tag);
+                let null = self.word_const(layout::TAG_NULL);
+                self.builder.ins().select(pointer, tag, null)
+            }
+            (None, false) => self.header_tag(pointer, mask),
+            (None, true) => self.tag_or_null(pointer, mask),
+        }
+    }
+
+    /// The two words a slot holds for `value`, of type `ty`: the tag and
+    /// the payload. An optional `int`, `float` or `bool` is `null` or the
+    /// value with its own tag; `null`'s payload is zero.
+    ///
+    /// The tag of a reference is read here, so the words are stored before
+    /// anything that can collect: a collection can change the type id of
+    /// what a reference points at.
+    fn slot_words(&mut self, ty: &NativeTy<'db>, value: ir::Value) -> (ir::Value, ir::Value) {
+        if let NativeTy::Optional(inner) = ty
+            && ty.is_pair()
+        {
+            let (bits, present) = self.builder.ins().isplit(value);
+            let tag = Self::immediate_tag(inner).unwrap_or(layout::TAG_NULL);
+            let tag = self.word_const(tag);
+            let null = self.word_const(layout::TAG_NULL);
+            return (
+                self.builder.ins().select(present, tag, null),
+                self.builder.ins().select(present, bits, null),
+            );
+        }
+        match Self::immediate_tag(ty) {
+            Some(layout::TAG_NULL) => {
+                let null = self.word_const(layout::TAG_NULL);
+                (null, null)
+            }
+            Some(tag) => (self.word_const(tag), self.as_slot(value, ty)),
+            None => (self.pointer_tag(ty, value), value),
+        }
+    }
+
+    /// Load the value of type `ty` that the slot at `base + bytes` holds.
+    /// With [`Self::slot_store`], the only code that reads or writes a slot
+    /// of the heap: a field, an element, a map's value, a cell, a capture,
+    /// a future's value.
+    fn slot_load(&mut self, ty: &NativeTy<'db>, base: ir::Value, bytes: usize) -> ir::Value {
         if *ty == NativeTy::Null {
             return self.null();
         }
-        let value = self
-            .builder
-            .ins()
-            .load(clif_type(ty), slot_access(), base, offset(bytes));
+        if ty.is_pair() {
+            let tag = self.builder.ins().load(
+                WORD,
+                slot_access(),
+                base,
+                offset(bytes + layout::VALUE_TAG),
+            );
+            let bits = self.builder.ins().load(
+                WORD,
+                slot_access(),
+                base,
+                offset(bytes + layout::VALUE_PAYLOAD),
+            );
+            let present = self.builder.ins().icmp_imm(IntCC::NotEqual, tag, 0);
+            let present = self.builder.ins().uextend(WORD, present);
+            return self.builder.ins().iconcat(bits, present);
+        }
+        let value = self.builder.ins().load(
+            clif_type(ty),
+            slot_access(),
+            base,
+            offset(bytes + layout::VALUE_PAYLOAD),
+        );
         self.track(value, ty)
     }
 
-    fn store_slot(&mut self, ty: &NativeTy<'db>, value: ir::Value, base: ir::Value, bytes: usize) {
-        if *ty != NativeTy::Null {
-            self.builder
-                .ins()
-                .store(slot_access(), value, base, offset(bytes));
-        }
+    /// Store `value`, of type `ty`, in the slot at `base + bytes`: both
+    /// words.
+    fn slot_store(&mut self, ty: &NativeTy<'db>, value: ir::Value, base: ir::Value, bytes: usize) {
+        let words = self.slot_words(ty, value);
+        self.slot_store_words(ty, words, base, bytes);
     }
 
-    /// The length of `array` and the address of its first element.
+    /// Store the two words [`Self::slot_words`] gave for a value of type
+    /// `ty` in the slot at `base + bytes`.
+    fn slot_store_words(
+        &mut self,
+        _ty: &NativeTy<'db>,
+        (tag, payload): (ir::Value, ir::Value),
+        base: ir::Value,
+        bytes: usize,
+    ) {
+        self.builder
+            .ins()
+            .store(slot_access(), tag, base, offset(bytes + layout::VALUE_TAG));
+        self.builder.ins().store(
+            slot_access(),
+            payload,
+            base,
+            offset(bytes + layout::VALUE_PAYLOAD),
+        );
+    }
+
+    /// The length of `array` and the address of its storage object, which
+    /// for a `uint8array` is at another offset.
     ///
     /// Both are read once and reused until something that could change them
     /// or move the storage: a call, an append, or the end of the MIR block.
     /// Cranelift merges such loads only inside one of its own blocks, and
     /// every bounds check ends one.
-    fn array_view(&mut self, array: ir::Value) -> (ir::Value, ir::Value) {
+    fn array_view(&mut self, array: ir::Value, is_bytes: bool) -> (ir::Value, ir::Value) {
+        const _: () = assert!(layout::BYTES_LENGTH == layout::ARRAY_LENGTH);
         // A variable read after a join can come back as an alias of the
         // value read before it.
         let array = self.builder.func.dfg.resolve_aliases(array);
@@ -2240,10 +2337,15 @@ impl<'a, 'db> Translator<'a, 'db> {
             self.builder
                 .ins()
                 .load(WORD, array_access(), array, offset(layout::ARRAY_LENGTH));
+        let storage = if is_bytes {
+            layout::BYTES_PTR
+        } else {
+            layout::ARRAY_PTR
+        };
         let data = self
             .builder
             .ins()
-            .load(WORD, array_access(), array, offset(layout::ARRAY_DATA));
+            .load(WORD, array_access(), array, offset(storage));
         self.array_views.insert(array, (length, data));
         (length, data)
     }
@@ -2314,16 +2416,19 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(self.builder.block_params(done)[0])
     }
 
-    /// The address of element `index` of `array`, after checking the index.
-    /// Every element access goes through here. An element is `1 << shift`
-    /// bytes: a word, or a byte of a `uint8array`.
+    /// Where element `index` of `array` is, after checking the index: its
+    /// address less the offset of the first element in the storage
+    /// ([`layout::STORAGE_ELEMENTS`], or [`layout::BYTES_STORAGE_DATA`] of a
+    /// `uint8array`). Every element access goes through here. An element
+    /// is a value, or a byte of a `uint8array`.
     fn element(
         &mut self,
         array: ir::Value,
         index: ir::Value,
-        shift: i64,
+        is_bytes: bool,
     ) -> Result<ir::Value, CompileError> {
-        let (length, data) = self.array_view(array);
+        let shift = Self::element_shift(is_bytes);
+        let (length, data) = self.array_view(array, is_bytes);
         let index = self.builder.func.dfg.resolve_aliases(index);
         // An index already checked against this length, with nothing since
         // that could have changed the length, needs no second check.
@@ -2339,9 +2444,15 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(self.builder.ins().iadd(data, scaled))
     }
 
-    /// The address of the element of `array`, read from `base`, that the
-    /// local `index` names, and whether the element is a byte: `base` is a
-    /// `uint8array`.
+    /// The power of two the size of an element is.
+    fn element_shift(is_bytes: bool) -> i64 {
+        const _: () = assert!(layout::VALUE == 1 << 4);
+        if is_bytes { 0 } else { 4 }
+    }
+
+    /// Where the element of `array`, read from `base`, that the local
+    /// `index` names is, as [`Self::element`] gives it, and whether the
+    /// element is a byte: `base` is a `uint8array`.
     fn indexed(
         &mut self,
         base: &Place,
@@ -2349,17 +2460,19 @@ impl<'a, 'db> Translator<'a, 'db> {
         index: Local,
     ) -> Result<(ir::Value, bool), CompileError> {
         let is_byte = narrowed(self.place_ty(base)?) == NativeTy::Bytes;
-        let shift = if is_byte { 0 } else { 3 };
         let position = self.read_local(index);
         if let Place::Local(base) = base
             && self.proven.holds(self.current, *base, index)
         {
             // A counted loop over this array: the index names an element.
-            let (_, data) = self.array_view(array);
-            let scaled = self.builder.ins().ishl_imm(position, shift);
+            let (_, data) = self.array_view(array, is_byte);
+            let scaled = self
+                .builder
+                .ins()
+                .ishl_imm(position, Self::element_shift(is_byte));
             return Ok((self.builder.ins().iadd(data, scaled), is_byte));
         }
-        Ok((self.element(array, position, shift)?, is_byte))
+        Ok((self.element(array, position, is_byte)?, is_byte))
     }
 
     fn read_place(&mut self, place: &Place) -> Result<ir::Value, CompileError> {
@@ -2376,7 +2489,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             Place::Field { base, field } => {
                 let (ty, bytes) = self.field(base, *field)?;
                 let object = self.read_place(base)?;
-                Ok(self.load_slot(&ty, object, bytes))
+                Ok(self.slot_load(&ty, object, bytes))
             }
             Place::Index {
                 base,
@@ -2385,7 +2498,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             } => {
                 let (ty, bytes) = self.tuple_slot(base, *index)?;
                 let tuple = self.read_place(base)?;
-                Ok(self.load_slot(&ty, tuple, bytes))
+                Ok(self.slot_load(&ty, tuple, bytes))
             }
             Place::Index {
                 base,
@@ -2402,28 +2515,28 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let array = self.read_place(base)?;
                 let (element, is_byte) = self.indexed(base, array, *index)?;
                 if is_byte {
-                    return Ok(self
-                        .builder
-                        .ins()
-                        .uload8(types::I64, slot_access(), element, 0));
+                    return Ok(self.builder.ins().uload8(
+                        types::I64,
+                        slot_access(),
+                        element,
+                        offset(layout::BYTES_STORAGE_DATA),
+                    ));
                 }
-                Ok(self.load_slot(&ty, element, 0))
+                Ok(self.slot_load(&ty, element, layout::STORAGE_ELEMENTS))
             }
             Place::Capture(index) => {
+                let ty = self.place_ty(place)?;
                 let closure = self.builder.use_var(self.closure);
-                let cell = self.builder.ins().load(
-                    WORD,
-                    closure_access(),
+                Ok(self.slot_load(
+                    &ty,
                     closure,
-                    offset(layout::CLOSURE_CAPTURES + index * layout::WORD),
-                );
-                self.builder.declare_value_needs_stack_map(cell);
-                Ok(cell)
+                    layout::CLOSURE_CAPTURES + index * layout::VALUE,
+                ))
             }
             Place::Deref(cell) => {
                 let ty = self.place_ty(place)?;
                 let cell = self.cell(*cell)?;
-                Ok(self.load_slot(&ty, cell, layout::CELL_VALUE))
+                Ok(self.slot_load(&ty, cell, layout::CELL_VALUE))
             }
         }
     }
@@ -2443,60 +2556,75 @@ impl<'a, 'db> Translator<'a, 'db> {
         content: &NativeTy<'db>,
         value: Option<ir::Value>,
     ) -> Result<ir::Value, CompileError> {
-        let (cell_type, slots) = if content.is_pair() {
-            (layout::TYPE_CELL_PAIR, 2)
-        } else if content.is_ref() {
-            (layout::TYPE_CELL_REF, 1)
-        } else {
-            (layout::TYPE_CELL_VALUE, 1)
-        };
-        let cell = self.allocate(layout::instance_size(slots))?;
-        let cell_type = self.word_const(cell_type);
-        self.builder.ins().store(slot_access(), cell_type, cell, 0);
+        let cell = self.allocate(layout::CELL_SIZE)?;
+        let header = self.word_const(layout::TAG_CELL);
+        self.builder.ins().store(slot_access(), header, cell, 0);
         match value {
-            Some(value) => self.store_slot(content, value, cell, layout::CELL_VALUE),
+            Some(value) => self.slot_store(content, value, cell, layout::CELL_VALUE),
             None => {
-                let zero = self.word_const(0);
-                for slot in 0..slots {
-                    self.builder.ins().store(
-                        slot_access(),
-                        zero,
-                        cell,
-                        offset(layout::field_offset(slot)),
-                    );
-                }
+                let null = self.null();
+                self.slot_store(&NativeTy::Null, null, cell, layout::CELL_VALUE);
             }
         }
         Ok(cell)
     }
 
-    /// A new closure over `captured`, entered at `code`.
+    /// A new closure over the cells `captured`, each with its type, entered
+    /// at `code`.
     fn closure(
         &mut self,
         code: FuncId,
-        captured: &[(ir::Value, bool)],
+        captured: &[(ir::Value, NativeTy<'db>)],
     ) -> Result<ir::Value, CompileError> {
-        let references: Vec<bool> = captured.iter().map(|(_, is_ref)| *is_ref).collect();
-        let closure_type = self.backend.closure_type(&references);
-        let closure = self.allocate(layout::CLOSURE_CAPTURES + captured.len() * layout::WORD)?;
-        let closure_type = self.word_const(closure_type);
-        self.builder
-            .ins()
-            .store(slot_access(), closure_type, closure, 0);
-        let code = self.function_ref(code);
-        let code = self.builder.ins().func_addr(WORD, code);
-        self.builder
-            .ins()
-            .store(slot_access(), code, closure, offset(layout::CLOSURE_CODE));
-        for (index, (value, _)) in captured.iter().enumerate() {
-            self.builder.ins().store(
-                slot_access(),
+        let closure = self.allocate(layout::closure_size(captured.len()))?;
+        self.callable(closure, layout::TAG_CLOSURE, code, captured.len());
+        for (index, (value, ty)) in captured.iter().enumerate() {
+            self.slot_store(
+                ty,
                 *value,
                 closure,
-                offset(layout::CLOSURE_CAPTURES + index * layout::WORD),
+                layout::CLOSURE_CAPTURES + index * layout::VALUE,
             );
         }
         Ok(closure)
+    }
+
+    /// A new bound method: the method entered at `code`, with the value
+    /// `receiver`, of type `ty`, it is called on.
+    fn bound_method(
+        &mut self,
+        code: FuncId,
+        receiver: ir::Value,
+        ty: &NativeTy<'db>,
+    ) -> Result<ir::Value, CompileError> {
+        let bound = self.allocate(layout::bound_size(0))?;
+        self.callable(bound, layout::TAG_BOUND_METHOD, code, 0);
+        self.slot_store(ty, receiver, bound, layout::BOUND_RECEIVER);
+        Ok(bound)
+    }
+
+    /// Write the four words every callable made here starts with, at
+    /// `object`: its header, whose call layout id is zero, the address of
+    /// `code`, no function, and `count`, the number of what follows.
+    fn callable(&mut self, object: ir::Value, header: usize, code: FuncId, count: usize) {
+        const _: () = assert!(layout::BOUND_CODE == layout::CLOSURE_CODE);
+        const _: () = assert!(layout::BOUND_FUNCTION == layout::CLOSURE_FUNCTION);
+        const _: () = assert!(layout::BOUND_TYPE_ARG_COUNT == layout::CLOSURE_CAPTURE_COUNT);
+        let code = self.function_ref(code);
+        let words = [
+            (0, self.word_const(header)),
+            (
+                layout::CLOSURE_CODE,
+                self.builder.ins().func_addr(WORD, code),
+            ),
+            (layout::CLOSURE_FUNCTION, self.word_const(0)),
+            (layout::CLOSURE_CAPTURE_COUNT, self.word_const(count)),
+        ];
+        for (at, word) in words {
+            self.builder
+                .ins()
+                .store(slot_access(), word, object, offset(at));
+        }
     }
 
     fn declared(&self, key: &FnKey<'db>) -> Result<&'a Declared<'db>, CompileError> {
@@ -2511,7 +2639,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             Place::Field { base, field } => {
                 let (ty, bytes) = self.field(base, *field)?;
                 let object = self.read_place(base)?;
-                self.store_slot(&ty, value, object, bytes);
+                self.slot_store(&ty, value, object, bytes);
             }
             Place::Index {
                 base,
@@ -2520,7 +2648,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             } => {
                 let (ty, bytes) = self.tuple_slot(base, *index)?;
                 let tuple = self.read_place(base)?;
-                self.store_slot(&ty, value, tuple, bytes);
+                self.slot_store(&ty, value, tuple, bytes);
             }
             Place::Index {
                 base,
@@ -2539,16 +2667,21 @@ impl<'a, 'db> Translator<'a, 'db> {
                 if is_byte {
                     // The low eight bits, as assigning into a typed array
                     // keeps.
-                    self.builder.ins().istore8(slot_access(), value, element, 0);
+                    self.builder.ins().istore8(
+                        slot_access(),
+                        value,
+                        element,
+                        offset(layout::BYTES_STORAGE_DATA),
+                    );
                 } else {
-                    self.store_slot(&ty, value, element, 0);
+                    self.slot_store(&ty, value, element, layout::STORAGE_ELEMENTS);
                 }
             }
             Place::Capture(_) => return Err(internal("a capture is never assigned")),
             Place::Deref(cell) => {
                 let ty = self.place_ty(place)?;
                 let cell = self.cell(*cell)?;
-                self.store_slot(&ty, value, cell, layout::CELL_VALUE);
+                self.slot_store(&ty, value, cell, layout::CELL_VALUE);
             }
         }
         Ok(())
@@ -2638,7 +2771,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 };
                 let carried = if *carry_value {
                     let old = self.read_local(*local);
-                    Some(self.load_slot(&content, old, layout::CELL_VALUE))
+                    Some(self.slot_load(&content, old, layout::CELL_VALUE))
                 } else {
                     None
                 };
@@ -2713,7 +2846,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 if matches!(length_of, NativeTy::Map(..)) {
                     self.map_length(array)
                 } else {
-                    self.array_view(array).0
+                    self.array_view(array, length_of == NativeTy::Bytes).0
                 }
             }
             Rvalue::Uint8Array(bytes) => {
@@ -2773,7 +2906,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             } => {
                 let cells = captures
                     .iter()
-                    .map(|capture| Ok((self.operand(capture)?, true)))
+                    .map(|capture| Ok((self.operand(capture)?, self.operand_ty(capture)?)))
                     .collect::<Result<Vec<_>, CompileError>>()?;
                 let code = self.declared(&self.key.lambda(*lambda_idx))?.id;
                 self.closure(code, &cells)?
@@ -2783,9 +2916,10 @@ impl<'a, 'db> Translator<'a, 'db> {
                 receiver,
                 ..
             } => {
+                let ty = self.operand_ty(receiver)?;
                 let receiver = self.operand(receiver)?;
                 let code = self.declared(&FnKey::new(*function, Entry::Bound))?.id;
-                self.closure(code, &[(receiver, true)])?
+                self.bound_method(code, receiver, &ty)?
             }
             _ => return Err(internal("a checked rvalue is supported")),
         })
@@ -3064,7 +3198,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             .collect::<Result<Vec<_>, _>>()?;
         let class_type = self.backend.class_type(self.db, class, arguments, &layout);
         let header = Backend::class_header(self.db, class, class_type);
-        let object = self.allocate(layout::instance_size(layout_slots(&layout)))?;
+        let object = self.allocate(layout::instance_size(layout.len()))?;
         // The flags are the top bits of the word, so it is no size.
         let class_type = self
             .builder
@@ -3073,13 +3207,20 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder
             .ins()
             .store(slot_access(), class_type, object, 0);
-        for ((ty, value), slot) in layout.iter().zip(values).zip(field_slots(&layout)) {
-            self.store_slot(ty, value, object, layout::field_offset(slot));
+        let no_class = self.word_const(0);
+        self.builder.ins().store(
+            slot_access(),
+            no_class,
+            object,
+            offset(layout::INSTANCE_CLASS),
+        );
+        for (slot, (ty, value)) in layout.iter().zip(values).enumerate() {
+            self.slot_store(ty, value, object, layout::field_offset(slot));
         }
         Ok(object)
     }
 
-    /// The bits of `value` as a whole slot.
+    /// The bits of `value` as one word: what a payload is.
     fn as_slot(&mut self, value: ir::Value, ty: &NativeTy<'db>) -> ir::Value {
         match ty {
             NativeTy::Float => self.builder.ins().bitcast(WORD, MemFlags::new(), value),
@@ -3119,18 +3260,6 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(self.builder.ins().iconst(types::I32, imm(id)))
     }
 
-    /// The id of the type of arrays of `element`.
-    fn array_type(&mut self, element: &NativeTy<'db>) -> ir::Value {
-        self.word_const(match element {
-            element if element.is_ref() => layout::TYPE_ARRAY_OF_REFS,
-            // Its words do not say what they are: its header does.
-            NativeTy::Float => layout::TYPE_ARRAY_OF_VALUES | layout::HEADER_FLOATS,
-            NativeTy::Int => layout::TYPE_ARRAY_OF_VALUES | layout::HEADER_INTS,
-            NativeTy::Bool => layout::TYPE_ARRAY_OF_VALUES | layout::HEADER_BOOLS,
-            _ => layout::TYPE_ARRAY_OF_VALUES,
-        })
-    }
-
     /// A new array holding `elements`.
     fn array_literal(
         &mut self,
@@ -3141,24 +3270,22 @@ impl<'a, 'db> Translator<'a, 'db> {
             .iter()
             .map(|operand| self.operand_as(operand, element))
             .collect::<Result<Vec<_>, _>>()?;
-        let array_type = self.array_type(element);
         let length = self.word_const(values.len());
         let mutator = self.mutator();
         let array = self
-            .call_runtime(Runtime::ArrayNew, &[mutator, array_type, length])?
+            .call_runtime(Runtime::ArrayNew, &[mutator, length])?
             .ok_or_else(|| internal("array construction returns the array"))?;
         if !values.is_empty() {
             let storage =
                 self.builder
                     .ins()
-                    .load(WORD, array_access(), array, offset(layout::ARRAY_DATA));
+                    .load(WORD, array_access(), array, offset(layout::ARRAY_PTR));
             for (index, value) in values.into_iter().enumerate() {
-                let value = self.as_slot(value, element);
-                self.builder.ins().store(
-                    slot_access(),
+                self.slot_store(
+                    element,
                     value,
                     storage,
-                    offset(index * layout::WORD),
+                    layout::STORAGE_ELEMENTS + index * layout::VALUE,
                 );
             }
         }
@@ -3173,7 +3300,8 @@ impl<'a, 'db> Translator<'a, 'db> {
         item: ir::Value,
         element: &NativeTy<'db>,
     ) -> Result<ir::Value, CompileError> {
-        let item = self.as_slot(item, element);
+        // Nothing between here and either use of the words can collect.
+        let item = self.slot_words(element, item);
         let length =
             self.builder
                 .ins()
@@ -3181,7 +3309,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         let storage =
             self.builder
                 .ins()
-                .load(WORD, array_access(), array, offset(layout::ARRAY_DATA));
+                .load(WORD, array_access(), array, offset(layout::ARRAY_PTR));
         let new_length = self.builder.ins().iadd_imm(length, 1);
 
         let has_storage = self.builder.create_block();
@@ -3194,17 +3322,22 @@ impl<'a, 'db> Translator<'a, 'db> {
             .brif(storage, has_storage, &[], grow, &[]);
 
         self.builder.switch_to_block(has_storage);
-        let capacity =
-            self.builder
-                .ins()
-                .load(WORD, array_access(), storage, layout::DATA_CAPACITY);
+        let capacity = self.builder.ins().load(
+            WORD,
+            array_access(),
+            storage,
+            offset(layout::STORAGE_CAPACITY),
+        );
         let full = self.builder.ins().icmp(IntCC::Equal, length, capacity);
         self.builder.ins().brif(full, grow, &[], in_place, &[]);
 
         self.builder.switch_to_block(in_place);
-        let scaled = self.builder.ins().ishl_imm(length, 3);
+        let scaled = self
+            .builder
+            .ins()
+            .ishl_imm(length, Self::element_shift(false));
         let slot = self.builder.ins().iadd(storage, scaled);
-        self.builder.ins().store(slot_access(), item, slot, 0);
+        self.slot_store_words(element, item, slot, layout::STORAGE_ELEMENTS);
         self.builder.ins().store(
             array_access(),
             new_length,
@@ -3215,7 +3348,7 @@ impl<'a, 'db> Translator<'a, 'db> {
 
         self.builder.switch_to_block(grow);
         let mutator = self.mutator();
-        self.call_runtime(Runtime::ArrayPushSlow, &[mutator, array, item])?;
+        self.call_runtime(Runtime::ArrayPushSlow, &[mutator, array, item.0, item.1])?;
         self.builder.ins().jump(done, &[]);
 
         self.builder.switch_to_block(done);
@@ -3885,10 +4018,13 @@ impl<'a, 'db> Translator<'a, 'db> {
             let storage =
                 self.builder
                     .ins()
-                    .load(WORD, array_access(), array, offset(layout::ARRAY_DATA));
-            let scaled = self.builder.ins().ishl_imm(index, 3);
+                    .load(WORD, array_access(), array, offset(layout::ARRAY_PTR));
+            let scaled = self
+                .builder
+                .ins()
+                .ishl_imm(index, Self::element_shift(false));
             let slot = self.builder.ins().iadd(storage, scaled);
-            let element = self.load_slot(&element_ty, slot, 0);
+            let element = self.slot_load(&element_ty, slot, layout::STORAGE_ELEMENTS);
             self.builder.def_var(variable, element);
         }
         let next = self.builder.ins().iadd_imm(index, 1);

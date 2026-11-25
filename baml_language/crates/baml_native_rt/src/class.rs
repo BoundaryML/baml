@@ -8,20 +8,18 @@
 use std::fmt::Write as _;
 
 use crate::{
+    array,
     describe::{Desc, Types},
     float_text,
-    heap::{Mutator, load, store},
+    heap::{Mutator, Value, load, store},
     json_layout::{
-        KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_OPAQUE, KIND_VARIANT, REPR_BOOL, REPR_BOXED,
-        REPR_FLOAT, REPR_INT, REPR_NULL, REPR_PAIR, REPR_REF,
+        KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_OPAQUE, KIND_VARIANT, REPR_BOOL, REPR_FLOAT, REPR_INT,
     },
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, BOX_SIZE, BOX_VALUE, HEADER_PANIC, MAP_ENTRIES,
-        STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_TYPES_END, TYPE_ARRAY_OF_REFS,
-        TYPE_ARRAY_OF_VALUES, TYPE_BOX_BOOL, TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ENTRIES_KEY_REF,
-        TYPE_ENTRIES_REFS, TYPE_ENTRIES_VALUE_REF, TYPE_ID_MASK, TYPE_MAP, TYPE_REFS,
-        WELL_KNOWN_CONTEXT, WELL_KNOWN_EXIT, WELL_KNOWN_PANICS, WELL_KNOWN_STACK_FRAME,
-        WELL_KNOWN_STACK_TRACE, WORD,
+        ARRAY_LENGTH, BOX_SIZE, BOX_VALUE, HEADER, HEADER_PANIC, STRING_TAGS_END, TAG_ARRAY,
+        TAG_BOOL, TAG_BOX_BOOL, TAG_BOX_FLOAT, TAG_BOX_INT, TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL,
+        TYPE_ID_MASK, WELL_KNOWN_CONTEXT, WELL_KNOWN_EXIT, WELL_KNOWN_PANICS,
+        WELL_KNOWN_STACK_FRAME, WELL_KNOWN_STACK_TRACE,
     },
     map, string,
 };
@@ -55,73 +53,88 @@ fn field_at(description: Desc, index: usize) -> usize {
         .expect("the standard library declares the field")
 }
 
-/// Write `bits`, a scalar of the type `ty`, as an uncaught throw writes
-/// it.
-fn write_scalar(mutator: &Mutator, out: &mut String, ty: Desc, bits: usize) {
-    match (ty.kind(), ty.repr()) {
-        (KIND_ENUM, _) => out.push_str(mutator.variant_name(ty.a(), bits)),
-        (KIND_VARIANT, _) => out.push_str(mutator.variant_name(ty.of_a().a(), bits)),
-        (KIND_OPAQUE, _) => out.push_str("<object>"),
-        (_, REPR_INT) => {
+/// The value in slot `index` of the instance at `object` of the class
+/// `description` is of.
+///
+/// # Safety
+///
+/// `object` is a live instance of that class.
+unsafe fn field(object: usize, description: Desc, index: usize) -> Value {
+    // SAFETY: the caller's contract: the description says where the field
+    // is.
+    unsafe { Value::load(object + field_at(description, index)) }
+}
+
+/// Give field `index` of the instance at `object` of the class
+/// `description` is of the value `value`.
+///
+/// # Safety
+///
+/// `object` is a live instance of that class, and `value` a value of the
+/// field's type in the form its slot holds.
+unsafe fn set_field(object: usize, description: Desc, index: usize, value: Value) {
+    // SAFETY: the caller's contract.
+    unsafe { Value::store(object + field_at(description, index), value) }
+}
+
+/// Lay out an instance of `size` bytes whose header is `header` at
+/// `object`: its word for its class zero, and every slot `null`.
+///
+/// # Safety
+///
+/// `object` is `size` fresh bytes, the size of an instance.
+pub(crate) unsafe fn format(object: usize, header: usize, size: usize) {
+    // SAFETY: the caller's contract. A zeroed slot is `null`.
+    unsafe {
+        std::ptr::write_bytes((object + HEADER) as *mut u8, 0, size - HEADER);
+        store(object, header);
+    }
+}
+
+/// Write the scalar `value`, of the type `ty` when something says it, as
+/// an uncaught throw writes it: an enum's variant by its name, and
+/// anything else as its tag says.
+fn write_scalar(mutator: &Mutator, out: &mut String, ty: Option<Desc>, value: Value) {
+    let bits = value.payload;
+    // The enum a variant held as its position is of.
+    let variant_of = ty.and_then(|ty| match ty.kind() {
+        KIND_ENUM => Some(ty),
+        KIND_VARIANT => Some(ty.of_a()),
+        _ => None,
+    });
+    match (value.id(), variant_of) {
+        (TAG_INT, Some(of)) => out.push_str(mutator.variant_name(of.a(), bits)),
+        (TAG_INT, None) => {
             let _ = write!(out, "{}", bits.cast_signed());
         }
-        (_, REPR_FLOAT) => out.push_str(&float_text(f64::from_bits(bits as u64))),
-        (_, REPR_BOOL) => out.push_str(if bits & 0xFF != 0 { "true" } else { "false" }),
+        (TAG_FLOAT, _) => out.push_str(&float_text(f64::from_bits(bits as u64))),
+        (TAG_BOOL, _) => out.push_str(if bits & 0xFF != 0 { "true" } else { "false" }),
         _ => out.push_str("<object>"),
     }
 }
 
-/// Whether one word that is not a reference is all of a value of the type
-/// `ty`, which [`write_scalar`] then writes.
-fn is_scalar(ty: Desc) -> bool {
-    ty.kind() != KIND_OPAQUE && matches!(ty.repr(), REPR_INT | REPR_FLOAT | REPR_BOOL)
-}
-
-/// Write the value in the slot at `slot`, whose type is `ty`.
+/// Write `value`, what a slot holds: a field of an instance, an element of
+/// an array, or a key or a value of a map. Its type is `ty` when something
+/// says it.
 ///
 /// # Safety
 ///
-/// `slot` is a slot of a live object that holds a value of the type.
-unsafe fn write_slot(mutator: &Mutator, out: &mut String, ty: Desc, slot: usize) {
-    // SAFETY: the caller's contract: an optional scalar is two slots, the
-    // second whether there is a value.
-    unsafe {
-        match ty.repr() {
-            _ if ty.kind() == KIND_OPAQUE => out.push_str("<object>"),
-            REPR_NULL => out.push_str("null"),
-            REPR_REF | REPR_BOXED => write_value(mutator, out, load(slot), Some(ty)),
-            REPR_PAIR if load(slot + WORD) == 0 => out.push_str("null"),
-            REPR_PAIR => write_scalar(mutator, out, ty.not_null(), load(slot)),
-            _ => write_scalar(mutator, out, ty, load(slot)),
-        }
-    }
-}
-
-/// Write `held`, an element of an array or a key or a value of a map,
-/// whose type is `ty` when something says it.
-///
-/// # Safety
-///
-/// `held` is a reference, zero or to a live object, when `is_ref`.
-unsafe fn write_held(
-    mutator: &Mutator,
-    out: &mut String,
-    ty: Option<Desc>,
-    held: usize,
-    is_ref: bool,
-) {
-    match ty {
-        // SAFETY: the caller's contract.
-        _ if is_ref => unsafe { write_value(mutator, out, held, ty) },
-        Some(ty) => write_scalar(mutator, out, ty, held),
-        None => out.push_str("<object>"),
+/// `value` was read from a slot of a live object that holds a value of
+/// the type.
+unsafe fn write_slot(mutator: &Mutator, out: &mut String, ty: Option<Desc>, value: Value) {
+    let ty = ty.map(Desc::not_null);
+    match value.id() {
+        _ if ty.is_some_and(|ty| ty.kind() == KIND_OPAQUE) => out.push_str("<object>"),
+        TAG_NULL => out.push_str("null"),
+        TAG_BOOL | TAG_INT | TAG_FLOAT => write_scalar(mutator, out, ty, value),
+        // SAFETY: the caller's contract: any other tag is of a reference.
+        _ => unsafe { write_value(mutator, out, value.payload, ty) },
     }
 }
 
 /// Write the value `value` refers to as an uncaught throw of it is
 /// reported: what its header says it is, and what `ty`, the type of the
-/// place it was read from, says of the words of an array or a map that
-/// are not references.
+/// place it was read from, says of the enum variants it holds in place.
 ///
 /// # Safety
 ///
@@ -142,67 +155,50 @@ pub(crate) unsafe fn write_value(
     unsafe {
         let type_id = load(value) & TYPE_ID_MASK;
         match type_id {
-            string if string < STRING_TYPES_END => {
+            string if string < STRING_TAGS_END => {
                 let _ = write!(out, "{:?}", string::text(value));
             }
-            TYPE_BOX_INT => {
+            TAG_BOX_INT => {
                 let _ = write!(out, "{}", load(value + BOX_VALUE).cast_signed());
             }
-            crate::layout::TYPE_BIGINT => {
+            crate::layout::TAG_BIGINT => {
                 let _ = write!(out, "{}", crate::bigint::value(value));
             }
-            TYPE_BOX_FLOAT => {
+            TAG_BOX_FLOAT => {
                 out.push_str(&float_text(f64::from_bits(load(value + BOX_VALUE) as u64)));
             }
-            TYPE_BOX_BOOL => out.push_str(if load(value + BOX_VALUE) & 0xFF != 0 {
+            TAG_BOX_BOOL => out.push_str(if load(value + BOX_VALUE) & 0xFF != 0 {
                 "true"
             } else {
                 "false"
             }),
-            crate::layout::TYPE_BYTES => {
+            crate::layout::TAG_BYTES => {
                 let _ = write!(out, "<bytes:{}>", load(value + crate::layout::BYTES_LENGTH));
             }
-            TYPE_ARRAY_OF_REFS | TYPE_ARRAY_OF_VALUES => {
+            TAG_ARRAY => {
                 let element = ty.filter(|ty| ty.kind() == KIND_ARRAY).map(Desc::of_a);
-                let is_ref = type_id == TYPE_ARRAY_OF_REFS;
-                let length = load(value + ARRAY_LENGTH);
-                if !is_ref && length != 0 && !element.is_some_and(is_scalar) {
-                    // Words only their type could tell apart.
-                    out.push_str("<object>");
-                    return;
-                }
                 out.push('[');
-                for index in 0..length {
+                for index in 0..load(value + ARRAY_LENGTH) {
                     if index != 0 {
                         out.push_str(", ");
                     }
-                    let held = load(load(value + ARRAY_DATA) + index * WORD);
-                    write_held(mutator, out, element, held, is_ref);
+                    let held = Value::load(array::element(value, index));
+                    write_slot(mutator, out, element, held);
                 }
                 out.push(']');
             }
-            TYPE_MAP => {
+            TAG_MAP => {
                 let described = ty.filter(|ty| ty.kind() == KIND_MAP);
                 let (key, held) = (described.map(Desc::of_a), described.map(Desc::of_b));
-                let entries = load(load(value + MAP_ENTRIES)) & TYPE_ID_MASK;
-                let key_is_ref = matches!(entries, TYPE_ENTRIES_KEY_REF | TYPE_ENTRIES_REFS);
-                let held_is_ref = matches!(entries, TYPE_ENTRIES_VALUE_REF | TYPE_ENTRIES_REFS);
-                if map::len(value) != 0
-                    && !((key_is_ref || key.is_some_and(is_scalar))
-                        && (held_is_ref || held.is_some_and(is_scalar)))
-                {
-                    out.push_str("<object>");
-                    return;
-                }
                 out.push('{');
                 let mut first = true;
                 map::for_each(value, |entry_key, entry_value| {
                     if !std::mem::take(&mut first) {
                         out.push_str(", ");
                     }
-                    write_held(mutator, out, key, entry_key, key_is_ref);
+                    write_slot(mutator, out, key, entry_key);
                     out.push_str(": ");
-                    write_held(mutator, out, held, entry_value, held_is_ref);
+                    write_slot(mutator, out, held, entry_value);
                 });
                 out.push('}');
             }
@@ -225,7 +221,10 @@ pub(crate) unsafe fn write_value(
                     out.push_str(field.name);
                     out.push_str(": ");
                     match field.ty {
-                        Some(ty) => write_slot(mutator, out, ty, value + field.offset),
+                        Some(ty) => {
+                            let held = Value::load(value + field.offset);
+                            write_slot(mutator, out, Some(ty), held);
+                        }
                         None => out.push_str("<object>"),
                     }
                 }
@@ -284,14 +283,15 @@ pub(crate) unsafe fn exit_status(mutator: &Mutator, error: usize) -> Option<i32>
         if load(error) & TYPE_ID_MASK != class {
             return None;
         }
-        let code = load(error + field_at(description(mutator, class)?, 0));
+        let code = field(error, description(mutator, class)?, 0).payload;
         let code = i64::from_ne_bytes(code.to_ne_bytes());
         Some(i32::try_from(code).unwrap_or(if code < 0 { i32::MIN } else { i32::MAX }))
     }
 }
 
-/// A new instance of the well-known class `class` with every field zero,
-/// and where each of its fields is. May collect.
+/// A new instance of the well-known class `class` with every field the
+/// zero of its type, `0`, `0.0`, `false` or `null`, and where each of its
+/// fields is. May collect.
 fn blank(mutator: &mut Mutator, class: usize) -> (usize, Desc) {
     let type_id = well_known_type(mutator, class);
     // SAFETY: a well-known type is a class's: its entry says how large an
@@ -305,8 +305,21 @@ fn blank(mutator: &mut Mutator, class: usize) -> (usize, Desc) {
         } else {
             0
         };
-        let object = mutator.allocate_object(type_id | flags, size);
-        std::ptr::write_bytes((object + WORD) as *mut u8, 0, size - WORD);
+        let object = mutator.allocate(size);
+        format(object, type_id | flags, size);
+        for field in description.fields() {
+            let zero = match field
+                .ty
+                .filter(|ty| ty.kind() != KIND_OPAQUE)
+                .map(Desc::repr)
+            {
+                Some(REPR_INT) => Value::int(0),
+                Some(REPR_FLOAT) => Value::float(0.0),
+                Some(REPR_BOOL) => Value::bool(false),
+                _ => continue,
+            };
+            Value::store(object + field.offset, zero);
+        }
         (object, description)
     }
 }
@@ -323,7 +336,7 @@ pub(crate) fn well_known(mutator: &mut Mutator, class: usize, fields: &[Init<'_>
         let object = match field {
             Init::Int(_) => 0,
             Init::BoxedInt(value) => {
-                let boxed = mutator.allocate_object(TYPE_BOX_INT, BOX_SIZE);
+                let boxed = mutator.allocate_object(TAG_BOX_INT, BOX_SIZE);
                 // SAFETY: a box is a header and one value.
                 unsafe { store(boxed + BOX_VALUE, usize::from_ne_bytes(value.to_ne_bytes())) };
                 boxed
@@ -343,10 +356,12 @@ pub(crate) fn well_known(mutator: &mut Mutator, class: usize, fields: &[Init<'_>
     unsafe {
         for (index, field) in fields.iter().enumerate() {
             let value = match field {
-                Init::Int(value) => usize::from_ne_bytes(value.to_ne_bytes()),
-                Init::BoxedInt(_) | Init::Text(_) | Init::Big(_) => slots.add(index).read(),
+                Init::Int(value) => Value::int(*value),
+                Init::BoxedInt(_) | Init::Text(_) | Init::Big(_) => {
+                    Value::reference(slots.add(index).read())
+                }
             };
-            store(object + field_at(description, index), value);
+            set_field(object, description, index, value);
         }
     }
     object
@@ -369,29 +384,26 @@ pub(crate) fn context(mutator: &mut Mutator, error: usize, functions: &[&str]) -
     // SAFETY: each object is filled in before the next allocation, and
     // every reference is read back from its root after one.
     unsafe {
-        let frames = mutator.allocate(ARRAY_SIZE + STORAGE_ELEMENTS + count * WORD);
-        let storage = frames + ARRAY_SIZE;
-        store(frames, TYPE_ARRAY_OF_REFS);
-        store(frames + ARRAY_LENGTH, count);
-        store(frames + ARRAY_DATA, storage + STORAGE_ELEMENTS);
-        store(storage, TYPE_REFS);
-        store(storage + STORAGE_CAPACITY, count);
-        std::ptr::write_bytes((storage + STORAGE_ELEMENTS) as *mut usize, 0, count);
+        let frames = mutator.allocate(array::size(count));
+        array::format(frames, count);
         slots.add(1).write(frames);
         slots.add(2).write(string::from_str(mutator, ""));
         for (index, function) in functions.iter().rev().enumerate() {
             slots.add(3).write(string::from_str(mutator, function));
             let (frame, described) = blank(mutator, WELL_KNOWN_STACK_FRAME);
-            store(frame + field_at(described, 0), slots.add(2).read());
-            store(frame + field_at(described, 2), slots.add(3).read());
-            store(load(slots.add(1).read() + ARRAY_DATA) + index * WORD, frame);
+            set_field(frame, described, 0, Value::reference(slots.add(2).read()));
+            set_field(frame, described, 2, Value::reference(slots.add(3).read()));
+            Value::store(
+                array::element(slots.add(1).read(), index),
+                Value::reference(frame),
+            );
         }
         let (trace, described) = blank(mutator, WELL_KNOWN_STACK_TRACE);
-        store(trace + field_at(described, 0), slots.add(1).read());
+        set_field(trace, described, 0, Value::reference(slots.add(1).read()));
         slots.add(3).write(trace);
         let (context, described) = blank(mutator, WELL_KNOWN_CONTEXT);
-        store(context + field_at(described, 0), slots.add(0).read());
-        store(context + field_at(described, 1), slots.add(3).read());
+        set_field(context, described, 0, Value::reference(slots.add(0).read()));
+        set_field(context, described, 1, Value::reference(slots.add(3).read()));
         mutator.unroot(held.len());
         context
     }
@@ -407,18 +419,18 @@ pub(crate) unsafe fn context_functions<'a>(mutator: &Mutator, context: usize) ->
     // SAFETY: the caller's contract: the context's second field is its
     // stack trace, whose one field is its frames, whose third is a name.
     unsafe {
-        let field = |object: usize, class: usize, index: usize| {
+        let held = |object: usize, class: usize, index: usize| {
             let description = description(mutator, well_known_type(mutator, class))
                 .expect("a well-known type is a described class");
-            load(object + field_at(description, index))
+            field(object, description, index).payload
         };
-        let trace = field(context, WELL_KNOWN_CONTEXT, 1);
-        let frames = field(trace, WELL_KNOWN_STACK_TRACE, 0);
+        let trace = held(context, WELL_KNOWN_CONTEXT, 1);
+        let frames = held(trace, WELL_KNOWN_STACK_TRACE, 0);
         (0..load(frames + ARRAY_LENGTH))
             .rev()
             .map(|index| {
-                let frame = load(load(frames + ARRAY_DATA) + index * WORD);
-                string::text(field(frame, WELL_KNOWN_STACK_FRAME, 2))
+                let frame = Value::load(array::element(frames, index)).payload;
+                string::text(held(frame, WELL_KNOWN_STACK_FRAME, 2))
             })
             .collect()
     }
@@ -443,8 +455,8 @@ pub(crate) unsafe fn context_text(mutator: &Mutator, value: usize) -> Option<Str
         for function in context_functions(mutator, value).into_iter().rev() {
             let _ = writeln!(text, "  in {function}");
         }
-        let error = load(value + field_at(description(mutator, class)?, 0));
-        if error != 0 && load(error) & TYPE_ID_MASK < STRING_TYPES_END {
+        let error = field(value, description(mutator, class)?, 0).payload;
+        if error != 0 && load(error) & TYPE_ID_MASK < STRING_TAGS_END {
             text.push_str(string::text(error));
         } else {
             write_value(mutator, &mut text, error, None);

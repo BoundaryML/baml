@@ -103,7 +103,7 @@ impl NativeBamlUint8Array for Natives {
         let values: ArrRef<'_, Int> = array.get(scope);
         let mut bytes = Vec::with_capacity(values.len());
         let mut invalid = None;
-        for (index, &value) in values.as_slice().iter().enumerate() {
+        for (index, value) in values.iter().enumerate() {
             match u8::try_from(value) {
                 Ok(byte) => bytes.push(byte),
                 Err(_) => {

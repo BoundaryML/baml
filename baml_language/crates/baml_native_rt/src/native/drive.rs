@@ -575,7 +575,7 @@ mod tests {
     use super::*;
     use crate::{
         heap::{Program, load},
-        layout::RUNTIME_TYPES,
+        layout::VALUE,
     };
 
     /// A worker of a program with no compiled code. With `stress` every
@@ -583,7 +583,7 @@ mod tests {
     fn worker(stress: bool) -> Box<Mutator> {
         let program = Program {
             stack_maps: crate::tests::NO_STACK_MAPS.as_ptr() as usize,
-            types: RUNTIME_TYPES.to_vec().leak().as_ptr() as usize,
+            types: crate::tests::NO_TYPES.as_ptr() as usize,
             unwind: 0,
             functions: 0,
         };
@@ -671,7 +671,7 @@ mod tests {
                 panic!("the native holds one root, not {}", roots.len());
             };
             let before = load(root);
-            worker.allocate(crate::layout::WORD);
+            worker.allocate(VALUE);
             assert_ne!(load(root), before, "a collection moves the string");
             assert_eq!(crate::string::text(load(root)), TEXT);
 
@@ -725,7 +725,7 @@ mod tests {
             assert!(((*head).poll)(head).is_ready());
             drop_all(task);
             // Nothing holds the object now.
-            worker.allocate(crate::layout::WORD);
+            worker.allocate(VALUE);
             assert_eq!(DROPS.load(Ordering::Acquire), 2);
             worker.drop_owned();
             assert_eq!(DROPS.load(Ordering::Acquire), 2);

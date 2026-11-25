@@ -12,22 +12,15 @@
 
 use std::{collections::HashSet, fmt::Write as _};
 
-use super::{
-    Refused, STRING_MAP_REQUIRED,
-    out::{Elements, Out},
-    string_keyed, type_of, values_are_refs,
-};
+use super::{Refused, STRING_MAP_REQUIRED, out::Out, string_keyed, type_of};
 use crate::{
+    array,
     describe::{Desc, Types},
-    heap::load,
-    json_layout::{
-        HOOK_TO_JSON, KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_VARIANT, REPR_BOOL, REPR_BOXED,
-        REPR_FLOAT, REPR_INT, REPR_NULL, REPR_PAIR, REPR_REF,
-    },
+    heap::{Value, load},
+    json_layout::{HOOK_TO_JSON, KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_VARIANT},
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, BOX_VALUE, HEADER_BOOLS, HEADER_FLOATS, HEADER_INTS,
-        STRING_TYPES_END, TYPE_ARRAY_OF_REFS, TYPE_ARRAY_OF_VALUES, TYPE_BIGINT, TYPE_BOX_BOOL,
-        TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_MAP, WORD,
+        ARRAY_LENGTH, BOX_VALUE, STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_BOX_BOOL,
+        TAG_BOX_FLOAT, TAG_BOX_INT, TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL, TAG_STRING,
     },
     map,
 };
@@ -66,14 +59,14 @@ pub(super) trait Sink {
 pub(super) fn indent_text(indent: usize) -> Result<String, Refused> {
     // SAFETY: an `int | string` is a box or a string, never `null`.
     let refused = unsafe {
-        if indent != 0 && type_of(indent) == TYPE_BOX_INT {
+        if indent != 0 && type_of(indent) == TAG_BOX_INT {
             let count = load(indent + BOX_VALUE) as i64;
             match usize::try_from(count) {
                 Ok(count) if count <= MAX_INDENT => return Ok(" ".repeat(count)),
                 Ok(_) => format!("indent must be at most {MAX_INDENT} spaces, got {count}"),
                 Err(_) => format!("indent must not be negative, got {count}"),
             }
-        } else if indent != 0 && type_of(indent) < STRING_TYPES_END {
+        } else if indent != 0 && type_of(indent) < STRING_TAGS_END {
             let text = crate::string::text(indent);
             let width = text.chars().count();
             if width > MAX_INDENT {
@@ -119,12 +112,13 @@ enum Rest {
         elements: Option<Desc>,
     },
     Map {
-        entries: Vec<(usize, usize)>,
+        /// Each key, a string, and the slot of its value.
+        entries: Vec<(usize, Value)>,
         values: Option<Desc>,
     },
     Instance {
-        /// The key, the field's word and the one after it, and its type.
-        fields: Vec<(&'static str, usize, usize, Desc)>,
+        /// The key, the field's slot, and its type.
+        fields: Vec<(&'static str, Value, Desc)>,
     },
 }
 
@@ -137,33 +131,17 @@ struct Frame {
     /// variant in it is its declared name, and what has no JSON form is
     /// `null`.
     json: bool,
-    /// For an array or a map whose words are values no static type
-    /// describes, the flag its header has for what they are.
-    scalars: usize,
-}
-
-/// The flags of a header that say what the words of an array or a map are.
-const SCALARS: usize = HEADER_INTS | HEADER_FLOATS | HEADER_BOOLS;
-
-/// The value of the word `word` of an array or a map whose header has the
-/// flag `scalars`.
-fn scalar(scalars: usize, word: usize) -> Val {
-    match scalars {
-        HEADER_FLOATS => Val::Float(f64::from_bits(word as u64)),
-        HEADER_BOOLS => Val::Bool(word & 0xFF != 0),
-        _ => Val::Int(word as i64),
-    }
 }
 
 /// What the walk does at a value whose class has a `to_json` of its own.
 pub(super) enum Overrides {
     /// Write `null` and count it.
     Count(usize),
-    /// Write what its `to_json` returned. `held` is the address of the
-    /// words of `count` such values, in the order [`overriding`] found
-    /// them, and then of what the `to_json` of each returned; `next` is
-    /// which the walk meets next. A value that is not that one is written
-    /// by its fields, as in the interpreter.
+    /// Write what its `to_json` returned. `held` is an array of `count`
+    /// such values, in the order [`overriding`] found them, and then of
+    /// what the `to_json` of each returned; `next` is which the walk meets
+    /// next. A value that is not that one is written by its fields, as in
+    /// the interpreter.
     Splice {
         held: usize,
         count: usize,
@@ -184,18 +162,19 @@ struct Walker<'a> {
 /// Frames the walk is inside before a cycle is looked for in a set.
 const OPEN_SCANNED: usize = 32;
 
-/// Write `value` to `sink`. The value is as a union holds it, and
+/// Write `value` to `sink`. The value is as a slot holds it, and
 /// `described` is its static type when there is one. With `json` it is a
 /// `json` being copied.
 ///
 /// # Safety
 ///
-/// `value` is zero or a live object of the type described, nothing is
-/// allocated outside reserved room during the walk, and what `overrides`
-/// splices in is a live `json` for each value [`overriding`] finds.
+/// `value` is a scalar, `null`, or refers to a live object, of the type
+/// described; nothing is allocated outside reserved room during the walk;
+/// and what `overrides` splices in is a live `json` for each value
+/// [`overriding`] finds.
 pub(super) unsafe fn walk(
     types: &Types,
-    value: usize,
+    value: Value,
     described: Option<Desc>,
     options: Options,
     json: bool,
@@ -211,7 +190,7 @@ pub(super) unsafe fn walk(
     };
     // SAFETY: the caller's contract, for every value reached from it.
     unsafe {
-        let root = walker.of_reference(value, described, json);
+        let root = walker.of_value(value, described, json);
         walker.visit(root, json, sink)?;
         loop {
             let Some(frame) = walker.frames.last_mut() else {
@@ -236,38 +215,34 @@ pub(super) unsafe fn walk(
             let index = frame.next;
             frame.next += 1;
             let first = index == 0;
-            let (json, scalars) = (frame.json, frame.scalars);
-            // The word of the child, the one after it, and its type.
-            let (word, next, described) = match &frame.rest {
+            let json = frame.json;
+            // The slot of the child, and its type.
+            let (held, described) = match &frame.rest {
                 Rest::Array { elements } => {
                     sink.item(first);
-                    let word = load(load(frame.object + ARRAY_DATA) + index * WORD);
-                    (word, 1, *elements)
+                    (Value::load(array::element(frame.object, index)), *elements)
                 }
                 Rest::Map { entries, values } => {
                     let (key, value) = entries[index];
                     sink.key(first, crate::string::text(key), key);
-                    (value, 1, *values)
+                    (value, *values)
                 }
                 Rest::Instance { fields } => {
-                    let (key, word, next, described) = fields[index];
+                    let (key, held, described) = fields[index];
                     sink.key(first, key, 0);
-                    (word, next, Some(described))
+                    (held, Some(described))
                 }
             };
-            let child = match described {
-                Some(described) => walker.of_slot(word, next, described),
-                None if scalars != 0 => scalar(scalars, word),
-                None => walker.of_reference(word, None, json),
-            };
+            // What a static type describes is no part of a `json`.
+            let child = walker.of_value(held, described, json && described.is_none());
             walker.visit(child, json, sink)?;
         }
     }
 }
 
 /// The fields of the instance at `object` the walk writes: for each its
-/// key, its word and the one after it, and its type. Two fields under one
-/// key are one entry, where the first sits, holding the last value.
+/// key, its slot, and its type. Two fields under one key are one entry,
+/// where the first sits, holding the last value.
 ///
 /// # Safety
 ///
@@ -276,36 +251,21 @@ unsafe fn written_fields(
     object: usize,
     described: Desc,
     options: Options,
-) -> Vec<(&'static str, usize, usize, Desc)> {
-    let mut fields: Vec<(&'static str, usize, usize, Desc)> = Vec::new();
+) -> Vec<(&'static str, Value, Desc)> {
+    let mut fields: Vec<(&'static str, Value, Desc)> = Vec::new();
     for field in described.fields() {
         let Some(ty) = field.ty else { continue };
-        // SAFETY: the instance has the field, and the word after it when
-        // the field is two slots.
-        let (word, next) = unsafe {
-            let word = load(object + field.offset);
-            let next = if ty.repr() == REPR_PAIR {
-                load(object + field.offset + WORD)
-            } else {
-                1
-            };
-            (word, next)
-        };
-        let is_null = match ty.repr() {
-            REPR_NULL => true,
-            REPR_PAIR => next == 0,
-            REPR_INT | REPR_FLOAT | REPR_BOOL => false,
-            _ => word == 0,
-        };
-        let written =
-            field.shown(options.aliased) && !((options.omit_nulls || field.omit_null) && is_null);
+        // SAFETY: the instance has the field.
+        let held = unsafe { Value::load(object + field.offset) };
+        let written = field.shown(options.aliased)
+            && !((options.omit_nulls || field.omit_null) && held.is_null());
         if !written {
             continue;
         }
         let key = field.key(options.aliased);
         match fields.iter_mut().find(|(seen, ..)| *seen == key) {
-            Some(seen) => *seen = (key, word, next, ty),
-            None => fields.push((key, word, next, ty)),
+            Some(seen) => *seen = (key, held, ty),
+            None => fields.push((key, held, ty)),
         }
     }
     fields
@@ -389,55 +349,52 @@ pub(super) unsafe fn overriding(
 ///
 /// `object` is a live object.
 unsafe fn children(types: &Types, object: usize, options: Options) -> Vec<usize> {
-    let mut children = Vec::new();
+    let mut children: Vec<Value> = Vec::new();
     // SAFETY: the caller's contract: the header says what the object is.
     unsafe {
         match type_of(object) {
-            TYPE_ARRAY_OF_REFS => {
-                let data = load(object + ARRAY_DATA);
-                children.extend((0..load(object + ARRAY_LENGTH)).map(|i| load(data + i * WORD)));
-            }
-            TYPE_MAP if values_are_refs(object) && map::len(object) != 0 => {
-                map::for_each(object, |_, value| children.push(value));
-            }
+            TAG_ARRAY => children.extend(
+                (0..load(object + ARRAY_LENGTH))
+                    .map(|index| Value::load(array::element(object, index))),
+            ),
+            TAG_MAP => map::for_each(object, |_, value| children.push(value)),
             other => {
                 if let Some(described) = types.of_type_id(other).filter(|found| found.is_class()) {
                     children.extend(
                         written_fields(object, described, options)
                             .into_iter()
-                            .filter(|(.., ty)| matches!(ty.repr(), REPR_REF | REPR_BOXED))
-                            .map(|(_, word, ..)| word),
+                            .map(|(_, held, _)| held),
                     );
                 }
             }
         }
     }
+    // A slot that holds a scalar or `null` leads to no object.
     children
+        .into_iter()
+        .filter(|held| held.is_pointer())
+        .map(|held| held.payload)
+        .collect()
 }
 
 impl Walker<'_> {
-    /// What the slot holding `word`, and `next` after it, holds: a value
-    /// of the type described.
-    unsafe fn of_slot(&self, word: usize, next: usize, described: Desc) -> Val {
-        let scalar = |repr: u32, described: Desc, bits: usize| match repr {
-            REPR_FLOAT => Val::Float(f64::from_bits(bits as u64)),
-            REPR_BOOL => Val::Bool(bits & 0xFF != 0),
-            _ => match described.kind() {
-                KIND_ENUM => Val::Variant(described, bits),
-                KIND_VARIANT => Val::Variant(described.of_a(), bits),
+    /// What the slot `value` holds, which its tag says: a scalar, or what
+    /// its object is. `described` is the slot's static type when something
+    /// says it, which is what tells an enum's variant held in place from
+    /// an `int`. With `json` it is part of a `json` being copied.
+    unsafe fn of_value(&self, value: Value, described: Option<Desc>, json: bool) -> Val {
+        let bits = value.payload;
+        match value.id() {
+            TAG_NULL => Val::Null,
+            TAG_BOOL => Val::Bool(bits & 0xFF != 0),
+            TAG_FLOAT => Val::Float(f64::from_bits(bits as u64)),
+            TAG_INT => match described.map(Desc::not_null) {
+                Some(of) if of.kind() == KIND_ENUM => Val::Variant(of, bits),
+                Some(of) if of.kind() == KIND_VARIANT => Val::Variant(of.of_a(), bits),
                 _ => Val::Int(bits as i64),
             },
-        };
-        match described.repr() {
-            REPR_NULL => Val::Null,
-            REPR_PAIR if next == 0 => Val::Null,
-            REPR_PAIR => {
-                let inner = described.not_null();
-                scalar(inner.repr(), inner, word)
-            }
-            repr @ (REPR_INT | REPR_FLOAT | REPR_BOOL) => scalar(repr, described, word),
-            // SAFETY: the slot holds a reference, or zero.
-            _ => unsafe { self.of_reference(word, Some(described), false) },
+            // SAFETY: any other tag is of a reference to a live object.
+            _ => unsafe { self.of_reference(bits, described, json) },
         }
     }
 
@@ -468,32 +425,13 @@ impl Walker<'_> {
         // what it is.
         unsafe {
             match type_of(value) {
-                string if string < STRING_TYPES_END => Val::Str(value),
-                TYPE_BOX_INT => Val::Int(load(value + BOX_VALUE) as i64),
-                TYPE_BIGINT => Val::Bigint(value),
-                TYPE_BOX_FLOAT => Val::Float(f64::from_bits(load(value + BOX_VALUE) as u64)),
-                TYPE_BOX_BOOL => Val::Bool(load(value + BOX_VALUE) & 0xFF != 0),
-                array @ (TYPE_ARRAY_OF_REFS | TYPE_ARRAY_OF_VALUES) => {
-                    let elements = member(KIND_ARRAY).map(Desc::of_a);
-                    if elements.is_none()
-                        && array == TYPE_ARRAY_OF_VALUES
-                        && load(value + ARRAY_LENGTH) != 0
-                        && load(value) & SCALARS == 0
-                    {
-                        // Its elements are words only the static type
-                        // could tell apart: an enum's variants.
-                        return Self::no_form(json);
-                    }
-                    Val::Array(value, elements)
-                }
-                TYPE_MAP => {
-                    let described = member(KIND_MAP).map(|map| (map.of_a(), map.of_b()));
-                    if described.is_none() && !values_are_refs(value) && load(value) & SCALARS == 0
-                    {
-                        return Self::no_form(json);
-                    }
-                    Val::Map(value, described)
-                }
+                string if string < STRING_TAGS_END => Val::Str(value),
+                TAG_BOX_INT => Val::Int(load(value + BOX_VALUE) as i64),
+                TAG_BIGINT => Val::Bigint(value),
+                TAG_BOX_FLOAT => Val::Float(f64::from_bits(load(value + BOX_VALUE) as u64)),
+                TAG_BOX_BOOL => Val::Bool(load(value + BOX_VALUE) & 0xFF != 0),
+                TAG_ARRAY => Val::Array(value, member(KIND_ARRAY).map(Desc::of_a)),
+                TAG_MAP => Val::Map(value, member(KIND_MAP).map(|map| (map.of_a(), map.of_b()))),
                 other => match self.types.of_type_id(other) {
                     Some(found) if found.is_class() && !json => Val::Instance(value, found),
                     Some(found) if found.is_enum() => Val::Variant(found, load(value + BOX_VALUE)),
@@ -568,21 +506,12 @@ impl Walker<'_> {
         if let Some(open) = &mut self.open {
             open.insert(object);
         }
-        let scalars = match rest {
-            // SAFETY: a live array or map; only one whose words are values
-            // has one of the flags.
-            Rest::Array { elements: None } | Rest::Map { values: None, .. } => unsafe {
-                load(object) & SCALARS
-            },
-            _ => 0,
-        };
         self.frames.push(Frame {
             object,
             next: 0,
             length,
             rest,
             json,
-            scalars,
         });
         Ok(())
     }
@@ -604,16 +533,19 @@ impl Walker<'_> {
                         *met += 1;
                         (Val::Null, json)
                     }
-                    // SAFETY: the caller of `walk` has `count` values and
-                    // as many live `json` values there.
+                    // SAFETY: the caller of `walk` has an array of `count`
+                    // values and as many live `json` values there.
                     Overrides::Splice { held, count, next }
-                        if *next < *count && unsafe { load(*held + *next * WORD) } == object =>
+                        if *next < *count
+                            && unsafe { Value::load(array::element(*held, *next)) }.payload
+                                == object =>
                     {
                         // SAFETY: as above.
-                        let returned = unsafe { load(*held + (*count + *next) * WORD) };
+                        let returned =
+                            unsafe { Value::load(array::element(*held, *count + *next)) };
                         *next += 1;
                         // SAFETY: a live `json`.
-                        (unsafe { self.of_reference(returned, None, true) }, true)
+                        (unsafe { self.of_value(returned, None, true) }, true)
                     }
                     Overrides::Splice { .. } => (value, json),
                 }
@@ -671,7 +603,7 @@ impl Walker<'_> {
                 // SAFETY: as above.
                 unsafe {
                     if map::len(object) != 0 {
-                        map::for_each(object, |key, value| entries.push((key, value)));
+                        map::for_each(object, |key, value| entries.push((key.payload, value)));
                     }
                 }
                 let values = described.map(|(_, values)| values);
@@ -857,12 +789,12 @@ impl Sink for JsonSink {
     }
 
     fn bool(&mut self, value: bool) {
-        let boxed = self.out.boxed(TYPE_BOX_BOOL, usize::from(value));
+        let boxed = self.out.boxed(TAG_BOX_BOOL, usize::from(value));
         self.items.push(boxed);
     }
 
     fn int(&mut self, value: i64) {
-        let boxed = self.out.boxed(TYPE_BOX_INT, value as usize);
+        let boxed = self.out.boxed(TAG_BOX_INT, value as usize);
         self.items.push(boxed);
     }
 
@@ -873,7 +805,7 @@ impl Sink for JsonSink {
     }
 
     fn float(&mut self, value: f64) {
-        let boxed = self.out.boxed(TYPE_BOX_FLOAT, value.to_bits() as usize);
+        let boxed = self.out.boxed(TAG_BOX_FLOAT, value.to_bits() as usize);
         self.items.push(boxed);
     }
 
@@ -897,11 +829,12 @@ impl Sink for JsonSink {
 
     fn end_array(&mut self, _: bool) {
         let start = self.starts.pop().unwrap_or(0);
-        let array = self.out.array(
-            self.items.len() - start,
-            Elements::Refs,
-            &self.items[start..],
-        );
+        // SAFETY: each item is zero or a live object: built here, or a
+        // string or a `bigint` of the value being written.
+        let items = self.items[start..]
+            .iter()
+            .map(|item| unsafe { Value::reference(*item) });
+        let array = self.out.array(items);
         self.items.truncate(start);
         self.items.push(array);
     }
@@ -913,7 +846,7 @@ impl Sink for JsonSink {
     fn key(&mut self, _: bool, text: &str, object: usize) {
         // A key holds its own text.
         // SAFETY: `object` is zero or a live string.
-        let flat = object != 0 && unsafe { type_of(object) } == crate::layout::TYPE_STRING;
+        let flat = object != 0 && unsafe { type_of(object) } == TAG_STRING;
         let key = if flat && self.out.is_building() {
             object
         } else if flat {
@@ -926,13 +859,13 @@ impl Sink for JsonSink {
 
     fn end_object(&mut self, _: bool) {
         let start = self.starts.pop().unwrap_or(0);
-        let entries: Vec<(usize, usize)> = self.items[start..]
+        // SAFETY: as in `Self::end_array`.
+        let entries = self.items[start..]
             .as_chunks::<2>()
             .0
             .iter()
-            .map(|[key, value]| (*key, *value))
-            .collect();
-        let map = self.out.map(entries.len(), Elements::Refs, &entries);
+            .map(|[key, value]| (*key, unsafe { Value::reference(*value) }));
+        let map = self.out.map(entries);
         self.items.truncate(start);
         self.items.push(map);
     }

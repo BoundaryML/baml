@@ -36,13 +36,12 @@ use std::{cell::OnceCell, io::Write};
 
 use crate::{
     class::{self, Init},
-    heap::{Mutator, load, store},
+    heap::{Mutator, Value, load},
     layout::{
-        ARRAY_DATA, ARRAY_LENGTH, ARRAY_SIZE, HANDLER_BINDS_CONTEXT, HANDLER_MAY_RETHROW,
-        HANDLER_TAKES_ALL, HANDLER_TAKES_NULL, HANDLER_TAKES_OTHERS, HANDLER_TAKES_PANICS,
-        HEADER_INTS, HEADER_PANIC, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_TYPES_END,
-        TYPE_ARRAY_OF_VALUES, TYPE_ID_MASK, TYPE_STRING, TYPE_VALUES, WELL_KNOWN_CONTEXT,
-        WELL_KNOWN_DIVISION_BY_ZERO, WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_MAP_KEY_NOT_FOUND,
+        HANDLER_BINDS_CONTEXT, HANDLER_MAY_RETHROW, HANDLER_TAKES_ALL, HANDLER_TAKES_NULL,
+        HANDLER_TAKES_OTHERS, HANDLER_TAKES_PANICS, HEADER_PANIC, STRING_TAGS_END, TAG_STRING,
+        TYPE_ID_MASK, WELL_KNOWN_CONTEXT, WELL_KNOWN_DIVISION_BY_ZERO,
+        WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_MAP_KEY_NOT_FOUND,
         WELL_KNOWN_NEGATIVE_BIT_SHIFT, WELL_KNOWN_STACK_OVERFLOW, WORD,
     },
 };
@@ -119,8 +118,8 @@ impl Thrown {
         Self {
             is_null: false,
             is_panic: header & HEADER_PANIC != 0,
-            type_id: if type_id < STRING_TYPES_END {
-                TYPE_STRING
+            type_id: if type_id < STRING_TAGS_END {
+                TAG_STRING
             } else {
                 type_id
             },
@@ -301,17 +300,15 @@ fn frames(mutator: &Mutator) -> impl Iterator<Item = (usize, usize)> {
 /// An `int[]` of `addresses`. May collect.
 fn int_array(mutator: &mut Mutator, addresses: &[usize]) -> usize {
     let length = addresses.len();
-    let array = mutator.allocate(ARRAY_SIZE + STORAGE_ELEMENTS + length * WORD);
-    // SAFETY: the array and its storage are the bytes just allocated.
+    let array = mutator.allocate(crate::array::size(length));
+    // SAFETY: the array and its storage are the bytes just allocated, and
+    // nothing else reaches the array yet.
     unsafe {
-        let storage = array + ARRAY_SIZE;
-        let data = storage + STORAGE_ELEMENTS;
-        store(array, TYPE_ARRAY_OF_VALUES | HEADER_INTS);
-        store(array + ARRAY_LENGTH, length);
-        store(array + ARRAY_DATA, data);
-        store(storage, TYPE_VALUES);
-        store(storage + STORAGE_CAPACITY, length);
-        std::ptr::copy_nonoverlapping(addresses.as_ptr(), data as *mut usize, length);
+        crate::array::format(array, length);
+        let addresses = addresses
+            .iter()
+            .map(|address| Value::int(address.cast_signed() as i64));
+        crate::array::fill(array, addresses);
     }
     array
 }
@@ -587,11 +584,8 @@ unsafe fn thrown_through(mutator: &Mutator, trace: usize) -> Vec<&'static str> {
         if is_context(mutator, trace) {
             return class::context_functions(mutator, trace);
         }
-        let addresses = std::slice::from_raw_parts(
-            load(trace + ARRAY_DATA) as *const usize,
-            load(trace + ARRAY_LENGTH),
-        );
-        named(mutator, addresses.iter().copied())
+        let addresses = crate::array::values(trace);
+        named(mutator, addresses.iter().map(|address| address.payload))
     }
 }
 

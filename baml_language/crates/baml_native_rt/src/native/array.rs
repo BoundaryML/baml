@@ -1,25 +1,20 @@
 //! `baml.Array`.
 //!
-//! Every native here is generic: an element is the one word the array holds
-//! it in, moved without being looked at. Whether the words are references
-//! is the array's type, and for a value passed on its own the type id of
-//! the call's type argument.
+//! Every native here is generic: an element is the slot the array holds it
+//! in, moved without being looked at, tag and payload. What tag a value
+//! passed on its own has is said by the type id of the call's type
+//! argument.
 
 use super::{
     Arr, ArrRef, Elem, NativeBamlArray, Natives, Root, Scope, Slot, Str, StrRef, Thrown, TypeId,
     View, array_size, string::text_size,
 };
 use crate::{
-    heap::{load, store},
-    layout::{
-        ARRAY_DATA, ARRAY_LENGTH, STORAGE_CAPACITY, STORAGE_ELEMENTS, TYPE_BOX_BOOL,
-        TYPE_BOX_FLOAT, TYPE_BOX_INT, TYPE_ID_MASK, TYPE_STRING, WORD,
-    },
+    array::FIRST_CAPACITY,
+    heap::{Value, load, store},
+    layout::{ARRAY_LENGTH, TAG_BOX_BOOL, TAG_BOX_FLOAT, TAG_BOX_INT, TAG_STRING},
     string::{INT_DIGITS, float_text, int_digits},
 };
-
-/// The smallest storage an array grows into.
-const FIRST_CAPACITY: usize = 4;
 
 /// `index` as a position in a sequence of `length`, a negative one counting
 /// from the end.
@@ -48,49 +43,29 @@ fn slice_bound(bound: i64, length: usize) -> usize {
     usize::try_from(resolved.clamp(0, wide)).unwrap_or(length)
 }
 
-/// The elements of a live array, to change in place.
-///
-/// # Safety
-///
-/// `array` is a live array, and nothing else reads its elements or
-/// allocates while the slice is in use.
-pub(super) unsafe fn elements<'a>(array: usize) -> &'a mut [usize] {
-    // SAFETY: an array with elements has storage holding its length of
-    // them at its data address.
-    unsafe {
-        match load(array + ARRAY_LENGTH) {
-            0 => &mut [],
-            length => {
-                std::slice::from_raw_parts_mut(load(array + ARRAY_DATA) as *mut usize, length)
-            }
-        }
-    }
-}
-
-/// Drop the elements from `length` on. The vacated words are zeroed: the
-/// collector scans the whole of a storage of references.
+/// Drop the elements from `length` on. The slots given up are made `null`:
+/// the collector scans storage to its capacity.
 fn truncate(array: ArrRef<'_, Slot>, length: usize) {
     // SAFETY: a view is of a live array, and no native runs beside this.
     unsafe {
-        let elements = elements(array.raw());
-        if length < elements.len() {
-            elements[length..].fill(0);
+        if length < array.len() {
+            crate::array::clear(array.raw(), length, array.len());
             store(array.raw() + ARRAY_LENGTH, length);
         }
     }
 }
 
-/// Take the element at `index` out, closing the gap.
+/// Take the element at `index` out, closing the gap, and return its
+/// payload.
 fn remove(array: ArrRef<'_, Slot>, index: usize) -> usize {
     // SAFETY: as in `truncate`.
     let removed = unsafe {
-        let elements = elements(array.raw());
-        let removed = elements[index];
-        elements.copy_within(index + 1.., index);
+        let removed = Value::load(crate::array::element(array.raw(), index));
+        crate::array::shift(array.raw(), index + 1, index, array.len() - index - 1);
         removed
     };
     truncate(array, array.len() - 1);
-    removed
+    removed.payload
 }
 
 /// A new array holding `count` values of the type a call names by
@@ -99,12 +74,12 @@ fn build<'s>(
     scope: &mut Scope<'s>,
     count: usize,
     element: TypeId,
-    word: impl Fn(&super::Reservation<'_, 's>, usize) -> usize,
+    value: impl Fn(&super::Reservation<'_, 's>, usize) -> Value,
 ) -> Root<'s, Arr<Slot>> {
     let reservation = scope.reserve(array_size(count));
     let array = reservation.elements(count, element);
     for index in 0..count {
-        array.set(index, word(&reservation, index));
+        array.set_value(index, value(&reservation, index));
     }
     let built = array.keep();
     reservation.finish(built)
@@ -113,56 +88,33 @@ fn build<'s>(
 /// Give `array` storage for `needed` elements if it has less. May collect.
 fn ensure_capacity<'s>(scope: &mut Scope<'s>, array: Root<'s, Arr<Slot>>, needed: usize) {
     let length = array.get(scope).len();
-    // SAFETY: the root is of a live array; its storage, when it has one,
-    // has its capacity in the word before its elements.
+    // SAFETY: the root is of a live array, and its slot is where the
+    // collector keeps the array's address current.
     unsafe {
-        let data = load(array.raw(scope) + ARRAY_DATA);
-        let capacity = if data == 0 { 0 } else { load(data - WORD) };
-        if needed <= capacity {
+        if needed <= crate::array::capacity(array.raw(scope)) {
             return;
         }
         let capacity = needed.max(length * 2).max(FIRST_CAPACITY);
-        let reservation = scope.reserve(STORAGE_ELEMENTS + capacity * WORD);
-        let storage = reservation.take(STORAGE_ELEMENTS + capacity * WORD);
-        // Read after the reservation: the array may have moved.
-        let array = array.raw(reservation.scope);
-        let array_type = load(array) & TYPE_ID_MASK;
-        store(storage, reservation.scope.storage_type(array_type));
-        store(storage + STORAGE_CAPACITY, capacity);
-        let grown = (storage + STORAGE_ELEMENTS) as *mut usize;
-        let old = load(array + ARRAY_DATA);
-        if old != 0 {
-            std::ptr::copy_nonoverlapping(old as *const usize, grown, length);
-        }
-        std::ptr::write_bytes(grown.add(length), 0, capacity - length);
-        store(array + ARRAY_DATA, grown as usize);
+        crate::array::grow(scope.mutator(), array.0.as_ptr(), capacity);
     }
 }
 
-/// Replace elements `start..end` of `array` by `replacement`.
+/// Replace elements `start..end` of `array` by `replacement`. The slots
+/// the array gives up, when it gets shorter, are made `null`.
 ///
 /// # Safety
 ///
 /// `array` is a live array whose storage holds the new length, and
 /// `start <= end <= ` its length.
-unsafe fn replace(array: usize, start: usize, end: usize, replacement: &[usize]) {
-    // SAFETY: the caller's contract.
+unsafe fn replace(array: usize, start: usize, end: usize, replacement: &[Value]) {
+    // SAFETY: the caller's contract: the storage holds the longer of the
+    // array's two lengths.
     unsafe {
         let length = load(array + ARRAY_LENGTH);
         let after = length - (end - start) + replacement.len();
-        let data = load(array + ARRAY_DATA) as *mut usize;
-        if data.is_null() {
-            return;
-        }
-        std::ptr::copy(
-            data.add(end),
-            data.add(start + replacement.len()),
-            length - end,
-        );
-        std::ptr::copy_nonoverlapping(replacement.as_ptr(), data.add(start), replacement.len());
-        if after < length {
-            std::ptr::write_bytes(data.add(after), 0, length - after);
-        }
+        crate::array::shift(array, end, start + replacement.len(), length - end);
+        crate::array::put(array, start, replacement);
+        crate::array::clear(array, after, length.max(after));
         store(array + ARRAY_LENGTH, after);
     }
 }
@@ -179,7 +131,7 @@ fn insert<'s>(
     ensure_capacity(scope, array, length + 1);
     // SAFETY: the array has room for one more, and nothing allocates
     // between reading the item and storing it.
-    unsafe { replace(array.raw(scope), index, index, &[item.get(scope)]) };
+    unsafe { replace(array.raw(scope), index, index, &[item.value(scope)]) };
     i64::try_from(length + 1).unwrap_or(i64::MAX)
 }
 
@@ -216,7 +168,7 @@ impl NativeBamlArray for Natives {
     ) -> Root<'s, Arr<Slot>> {
         let length = array.get(scope).len();
         build(scope, length, types[0], |reservation, index| {
-            reservation.get(array).get(length - 1 - index).unwrap_or(0)
+            (reservation.get(array).value(length - 1 - index)).unwrap_or(Value::NULL)
         })
     }
 
@@ -231,7 +183,7 @@ impl NativeBamlArray for Natives {
         let start = slice_bound(start, length);
         let end = slice_bound(end, length).max(start);
         build(scope, end - start, types[0], |reservation, index| {
-            reservation.get(array).get(start + index).unwrap_or(0)
+            (reservation.get(array).value(start + index)).unwrap_or(Value::NULL)
         })
     }
 
@@ -244,12 +196,12 @@ impl NativeBamlArray for Natives {
         let first = array.get(scope).len();
         let second = other.get(scope).len();
         build(scope, first + second, types[0], |reservation, index| {
-            let word = if index < first {
-                reservation.get(array).get(index)
+            let value = if index < first {
+                reservation.get(array).value(index)
             } else {
-                reservation.get(other).get(index - first)
+                reservation.get(other).value(index - first)
             };
-            word.unwrap_or(0)
+            value.unwrap_or(Value::NULL)
         })
     }
 
@@ -260,7 +212,7 @@ impl NativeBamlArray for Natives {
     ) -> Root<'s, Arr<Slot>> {
         let length = array.get(scope).len();
         build(scope, length, types[0], |reservation, index| {
-            reservation.get(array).get(index).unwrap_or(0)
+            (reservation.get(array).value(index)).unwrap_or(Value::NULL)
         })
     }
 
@@ -270,7 +222,9 @@ impl NativeBamlArray for Natives {
         array: Root<'s, Arr<Slot>>,
     ) -> Root<'s, Arr<Slot>> {
         let length = array.get(scope).len();
-        build(scope, length, types[1], |_, _| 0)
+        let reservation = scope.reserve(array_size(length));
+        let results = reservation.elements(length, types[1]).keep();
+        reservation.finish(results)
     }
 
     fn filled<'s>(
@@ -281,7 +235,7 @@ impl NativeBamlArray for Natives {
     ) -> Root<'s, Arr<Slot>> {
         let length = usize::try_from(length).unwrap_or(0);
         build(scope, length, types[0], |reservation, _| {
-            value.get(&*reservation.scope)
+            value.value(&*reservation.scope)
         })
     }
 
@@ -333,7 +287,10 @@ impl NativeBamlArray for Natives {
         let added = replace.get(scope).len();
         ensure_capacity(scope, array, length - (end - start) + added);
         // Copied out first: the replacement may be the array itself.
-        let replacement: Vec<usize> = replace.get(scope).iter().collect();
+        let replace = replace.get(scope);
+        let replacement: Vec<Value> = (0..added)
+            .filter_map(|index| replace.value(index))
+            .collect();
         // SAFETY: the array has room, the bounds are in range, and nothing
         // allocates after the replacement is read.
         unsafe { self::replace(array.raw(scope), start, end, &replacement) };
@@ -356,21 +313,21 @@ impl NativeBamlArray for Natives {
         let mut digits = [0; INT_DIGITS];
         for word in view.iter() {
             let (more_bytes, more_chars) = match kind {
-                TYPE_STRING => {
+                TAG_STRING => {
                     // SAFETY: the compiler passes this id for an array of
                     // strings only.
                     let part = unsafe { StrRef::from_raw(word) };
                     (part.byte_len(), part.char_count())
                 }
-                TYPE_BOX_INT => {
+                TAG_BOX_INT => {
                     let length = int_digits(word.cast_signed() as i64, &mut digits).len();
                     (length, length)
                 }
-                TYPE_BOX_FLOAT => {
+                TAG_BOX_FLOAT => {
                     let length = float_text(f64::from_bits(word as u64)).len();
                     (length, length)
                 }
-                TYPE_BOX_BOOL => {
+                TAG_BOX_BOOL => {
                     let length = if word == 0 { 5 } else { 4 };
                     (length, length)
                 }
@@ -388,9 +345,9 @@ impl NativeBamlArray for Natives {
             }
             match kind {
                 // SAFETY: as above.
-                TYPE_STRING => joined.push(unsafe { StrRef::from_raw(word) }.as_str()),
-                TYPE_BOX_INT => joined.push(int_digits(word.cast_signed() as i64, &mut digits)),
-                TYPE_BOX_FLOAT => joined.push(&float_text(f64::from_bits(word as u64))),
+                TAG_STRING => joined.push(unsafe { StrRef::from_raw(word) }.as_str()),
+                TAG_BOX_INT => joined.push(int_digits(word.cast_signed() as i64, &mut digits)),
+                TAG_BOX_FLOAT => joined.push(&float_text(f64::from_bits(word as u64))),
                 _ => joined.push(if word == 0 { "false" } else { "true" }),
             }
         }

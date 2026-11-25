@@ -4,10 +4,10 @@
 //! and compares them.
 
 use crate::{
-    heap::{Mutator, store},
+    heap::{Mutator, Value, store},
     layout::{
-        BYTES_DATA, BYTES_LENGTH, BYTES_MAX, BYTES_SIZE, STORAGE_CAPACITY, STORAGE_ELEMENTS,
-        TYPE_BYTES, TYPE_VALUES, WORD, words,
+        BYTES_LENGTH, BYTES_MAX, BYTES_PTR, BYTES_SIZE, BYTES_STORAGE_CAPACITY, BYTES_STORAGE_DATA,
+        TAG_BYTES, TAG_BYTES_STORAGE, VALUE, bytes_storage_size,
     },
     native::{BytesRef, View},
 };
@@ -18,13 +18,13 @@ pub(crate) const fn size(length: usize) -> usize {
     if length == 0 {
         BYTES_SIZE
     } else {
-        BYTES_SIZE + STORAGE_ELEMENTS + words(length)
+        BYTES_SIZE + bytes_storage_size(length)
     }
 }
 
 /// Lay out a `uint8array` of `length` bytes at `object`, and return the
-/// address of its first byte. The bytes are left to be written, but for
-/// those of the last word, which are zero.
+/// address of its first byte, null when it has none. The bytes are left to
+/// be written, and those after them are zero.
 ///
 /// # Safety
 ///
@@ -36,20 +36,20 @@ pub(crate) unsafe fn init(object: usize, length: usize) -> *mut u8 {
     );
     // SAFETY: the caller's contract.
     unsafe {
-        store(object, TYPE_BYTES);
+        store(object, TAG_BYTES);
         store(object + BYTES_LENGTH, length);
+        store(object + BYTES_PTR + crate::layout::WORD, 0);
         if length == 0 {
-            store(object + BYTES_DATA, 0);
+            store(object + BYTES_PTR, 0);
             return std::ptr::null_mut();
         }
         let storage = object + BYTES_SIZE;
-        let data = storage + STORAGE_ELEMENTS;
-        store(storage, TYPE_VALUES);
-        // What the collector sizes the storage by, as it does any array's.
-        store(storage + STORAGE_CAPACITY, words(length) / WORD);
-        store(data + words(length) - WORD, 0);
-        store(object + BYTES_DATA, data);
-        data as *mut u8
+        // The end first, for the zeros after the bytes.
+        *((storage + bytes_storage_size(length) - VALUE) as *mut Value) = Value::NULL;
+        store(storage, TAG_BYTES_STORAGE);
+        store(storage + BYTES_STORAGE_CAPACITY, length);
+        store(object + BYTES_PTR, storage);
+        (storage + BYTES_STORAGE_DATA) as *mut u8
     }
 }
 
