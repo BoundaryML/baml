@@ -1115,7 +1115,7 @@ dependencies = [
 [[package]]
 name = "bcs-sdk"
 version = "0.1.1"
-source = "git+https://github.com/BoundaryML/bcs.git?rev=ced81d2564533f9111572092651ebd9f49d27e1e#ced81d2564533f9111572092651ebd9f49d27e1e"
+source = "git+https://github.com/BoundaryML/bcs.git?rev=834a0e7cf6d618a22a5dda9842cb23f7994e98fd#834a0e7cf6d618a22a5dda9842cb23f7994e98fd"
 dependencies = [
  "btel-core",
  "bytes",
@@ -1773,7 +1773,7 @@ dependencies = [
 [[package]]
 name = "btel-core"
 version = "0.1.1"
-source = "git+https://github.com/BoundaryML/bcs.git?rev=ced81d2564533f9111572092651ebd9f49d27e1e#ced81d2564533f9111572092651ebd9f49d27e1e"
+source = "git+https://github.com/BoundaryML/bcs.git?rev=834a0e7cf6d618a22a5dda9842cb23f7994e98fd#834a0e7cf6d618a22a5dda9842cb23f7994e98fd"
 dependencies = [
  "base64",
  "num-bigint",
