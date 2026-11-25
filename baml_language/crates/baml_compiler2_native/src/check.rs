@@ -8,6 +8,7 @@ use baml_compiler2_mir::{
     ShortCircuitKind, StatementKind, SwitchKey, Terminator, TyTemplate, TyTemplateInterface,
     TypeTest, UnaryOp, function_display_name,
 };
+use baml_type::CallLayout;
 
 use crate::{
     Blocker,
@@ -236,6 +237,50 @@ pub(crate) fn function_signature<'db>(
 ) -> Result<Signature<'db>, Blocker> {
     let mir = key.mir(db)?;
     signature(db, mir, body_of(mir)?, &key.arguments)
+}
+
+/// The value slots the parameters of one copy of a function read, in
+/// order: a required slot for each parameter without a default and a
+/// named one for each with. A bound method's are those after its
+/// receiver, which its closure holds.
+pub(crate) fn declared_layout<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    key: &FnKey<'db>,
+) -> Result<CallLayout, Blocker> {
+    let mir = key.mir(db)?;
+    let mut layout = if key.lambdas.is_empty() {
+        CallLayout::from_modes(
+            baml_compiler2_hir_ty::callable::callable_signature(db, DeclRef::Source(key.loc))
+                .params
+                .iter()
+                .map(|param| (param.name.clone(), param.mode)),
+        )
+    } else {
+        match &mir.signature {
+            Some(signature) => CallLayout(
+                signature
+                    .param_names
+                    .iter()
+                    .zip(&signature.param_has_default)
+                    .map(|(name, has_default)| has_default.then(|| baml_type::Name::new(name)))
+                    .collect(),
+            ),
+            None => CallLayout::positional(mir.arity),
+        }
+    };
+    if layout.len() != mir.arity {
+        return Err(Blocker::new(
+            "function whose parameters are not those it declares",
+            mir.identity.display_name(db),
+        ));
+    }
+    if key.entry == Entry::Bound {
+        if layout.0.first() != Some(&None) {
+            return Err(Blocker::new("bound method value", "without a receiver"));
+        }
+        layout.0.remove(0);
+    }
+    Ok(layout)
 }
 
 /// Which of its type arguments a copy of a function must be passed when
@@ -847,6 +892,7 @@ pub(crate) fn check_function<'db>(
     match body_of(mir) {
         Ok(body) => {
             checker.note(signature(db, mir, body, &key.arguments).map(drop));
+            checker.note(declared_layout(db, key).map(drop));
             if key.entry == Entry::Bound {
                 checker.note(bound_signature(db, key.loc).map(drop));
             }

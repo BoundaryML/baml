@@ -36,6 +36,7 @@ use baml_compiler2_mir::{
     MirFunctionBody, Operand, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
     Terminator, UnaryOp,
 };
+use baml_type::CallLayout;
 use cranelift_codegen::{
     Context,
     ir::{
@@ -55,8 +56,8 @@ use crate::{
     CompileError, CompileOptions,
     check::{
         Callee, Intrinsic, Operator, ScalarOp, TypeTestPlan, Virtual, body_of, call_target,
-        identified_arguments, is_intrinsic_call, narrow_bound, signature, type_test_plan,
-        virtual_target,
+        declared_layout, identified_arguments, is_intrinsic_call, narrow_bound, signature,
+        type_test_plan, virtual_target,
     },
     dispatch::{Slot, Target},
     flow::{Flow, ProvenIndexes},
@@ -536,6 +537,9 @@ struct Backend<'db> {
     tag_rows: HashMap<usize, DataId>,
     /// The classes the runtime makes instances of, once they are needed.
     well_known: Option<classes::WellKnown>,
+    /// The call layouts met, each known by its number: its place here,
+    /// counted from one. See [`Backend::layout_id`].
+    layouts: Vec<CallLayout>,
     /// The closure standing for each function used as a value without
     /// capturing anything.
     function_values: HashMap<FuncId, DataId>,
@@ -603,6 +607,7 @@ impl Backend<'_> {
             interface_columns: Vec::new(),
             tag_rows: HashMap::new(),
             well_known: None,
+            layouts: Vec::new(),
             function_values: HashMap::new(),
             strings: HashMap::new(),
             bigints: HashMap::new(),
@@ -697,14 +702,42 @@ impl Backend<'_> {
         self.module.define_data(id, &description).map_err(internal)
     }
 
+    /// The number of a call layout: of the value slots a function's
+    /// parameters read, or of those a call pushes. Every callable object
+    /// has its function's in its header, and so in the tag of every value
+    /// that refers to it, where a call through the value compares it with
+    /// its own. No layout is numbered zero, which is what the header of a
+    /// callable nothing here made says.
+    fn layout_id(&mut self, layout: &CallLayout) -> Result<usize, CompileError> {
+        let place = match self.layouts.iter().position(|known| known == layout) {
+            Some(place) => place,
+            None => {
+                self.layouts.push(layout.clone());
+                self.layouts.len() - 1
+            }
+        };
+        if place + 1 > layout::HEADER_PAYLOAD_MASK {
+            return Err(internal("more call layouts than a header can number"));
+        }
+        Ok(place + 1)
+    }
+
+    /// The header of a callable with the type id `tag` whose function has
+    /// the call layout `layout`: also the tag of a value that refers to
+    /// it.
+    fn callable_header(&mut self, tag: usize, layout: &CallLayout) -> Result<usize, CompileError> {
+        Ok(tag | self.layout_id(layout)? << layout::HEADER_PAYLOAD_SHIFT)
+    }
+
     /// The closure that stands for a function used as a value: an object in
-    /// the executable's data that captures nothing.
-    fn function_value(&mut self, function: FuncId) -> Result<DataId, CompileError> {
+    /// the executable's data that captures nothing, with the header
+    /// `header`.
+    fn function_value(&mut self, function: FuncId, header: usize) -> Result<DataId, CompileError> {
         if let Some(id) = self.function_values.get(&function) {
             return Ok(*id);
         }
         let mut bytes = vec![0; layout::closure_size(0)];
-        bytes[..layout::HEADER].copy_from_slice(&layout::TAG_CLOSURE.to_ne_bytes());
+        bytes[..layout::HEADER].copy_from_slice(&header.to_ne_bytes());
         let mut description = DataDescription::new();
         let code = self.module.declare_func_in_data(function, &mut description);
         description.write_function_addr(table_word(layout::CLOSURE_CODE), code);
@@ -922,6 +955,8 @@ struct Declared<'db> {
     id: FuncId,
     entry: Entry,
     signature: Signature<'db>,
+    /// The value slots its parameters read.
+    layout: CallLayout,
     /// How many type objects the function takes before its parameters: one
     /// per type parameter, or none.
     type_args: usize,
@@ -1046,6 +1081,7 @@ pub(crate) fn generate<'db>(
                 id,
                 entry: function.key.entry,
                 signature,
+                layout: declared_layout(db, &function.key).map_err(internal)?,
                 type_args,
                 checks_stack: checks_stack(db, body, &ArrayLoops::of(db, &typed))
                     || compares_out_of_line(db, body, &typed),
@@ -2721,11 +2757,11 @@ impl<'a, 'db> Translator<'a, 'db> {
     /// at `code`: the function value, a pair.
     fn closure(
         &mut self,
-        code: FuncId,
+        code: &FnKey<'db>,
         captured: &[(ir::Value, NativeTy<'db>)],
     ) -> Result<ir::Value, CompileError> {
         let closure = self.allocate(layout::closure_size(captured.len()))?;
-        let tag = self.callable(closure, layout::TAG_CLOSURE, code, captured.len());
+        let tag = self.callable(closure, layout::TAG_CLOSURE, code, captured.len())?;
         for (index, (value, ty)) in captured.iter().enumerate() {
             self.slot_init(
                 ty,
@@ -2742,33 +2778,36 @@ impl<'a, 'db> Translator<'a, 'db> {
     /// a pair: the method reads it as its own first parameter's type.
     fn bound_method(
         &mut self,
-        code: FuncId,
+        code: &FnKey<'db>,
         receiver: ir::Value,
         ty: &NativeTy<'db>,
     ) -> Result<ir::Value, CompileError> {
         // The receiver's tag is read after the allocation, which can
         // change the type id of what it refers to.
         let bound = self.allocate(layout::bound_size(0))?;
-        let tag = self.callable(bound, layout::TAG_BOUND_METHOD, code, 0);
+        let tag = self.callable(bound, layout::TAG_BOUND_METHOD, code, 0)?;
         self.slot_init(ty, receiver, bound, layout::BOUND_RECEIVER);
         Ok(self.pair(tag, bound))
     }
 
     /// Write the four words every callable made here starts with, at
-    /// `object`: its header, whose call layout id is zero, the address of
-    /// `code`, no function, and `count`, the number of what follows.
+    /// `object`: its header, which is the type id `tag` and the call
+    /// layout of the function `code`, the address of that function's
+    /// code, no function, and `count`, the number of what follows.
     /// Returns the tag of the function value the object is: its header.
     fn callable(
         &mut self,
         object: ir::Value,
-        header: usize,
-        code: FuncId,
+        tag: usize,
+        code: &FnKey<'db>,
         count: usize,
-    ) -> ir::Value {
+    ) -> Result<ir::Value, CompileError> {
         const _: () = assert!(layout::BOUND_CODE == layout::CLOSURE_CODE);
         const _: () = assert!(layout::BOUND_FUNCTION == layout::CLOSURE_FUNCTION);
         const _: () = assert!(layout::BOUND_TYPE_ARG_COUNT == layout::CLOSURE_CAPTURE_COUNT);
-        let code = self.function_ref(code);
+        let code = self.declared(code)?;
+        let header = self.backend.callable_header(tag, &code.layout)?;
+        let code = self.function_ref(code.id);
         let words = [
             (0, self.word_const(header)),
             (
@@ -2783,7 +2822,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 .ins()
                 .store(slot_access(), word, object, offset(at));
         }
-        words[0].1
+        Ok(words[0].1)
     }
 
     fn declared(&self, key: &FnKey<'db>) -> Result<&'a Declared<'db>, CompileError> {
@@ -2883,11 +2922,14 @@ impl<'a, 'db> Translator<'a, 'db> {
                 Ok(self.data_address(bigint))
             }
             Operand::Constant(Constant::Function(DeclRef::Source(function))) => {
-                let code = self.declared(&FnKey::new(*function, Entry::Value))?.id;
-                let closure = self.backend.function_value(code)?;
+                let code = self.declared(&FnKey::new(*function, Entry::Value))?;
+                let header = self
+                    .backend
+                    .callable_header(layout::TAG_CLOSURE, &code.layout)?;
+                let closure = self.backend.function_value(code.id, header)?;
                 let closure = self.data_address(closure);
                 // The header of the closure in the executable's data.
-                let tag = self.word_const(layout::TAG_CLOSURE);
+                let tag = self.word_const(header);
                 Ok(self.pair(tag, closure))
             }
             Operand::Constant(_) => Err(internal("a checked operand is a supported constant")),
@@ -3099,8 +3141,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                     .iter()
                     .map(|capture| Ok((self.operand(capture)?, self.operand_ty(capture)?)))
                     .collect::<Result<Vec<_>, CompileError>>()?;
-                let code = self.declared(&self.key.lambda(*lambda_idx))?.id;
-                self.closure(code, &cells)?
+                self.closure(&self.key.lambda(*lambda_idx), &cells)?
             }
             Rvalue::MakeBoundMethod {
                 func: DeclRef::Source(function),
@@ -3110,8 +3151,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let ty = self.operand_ty(receiver)?;
                 let receiver = self.operand(receiver)?;
                 let receiver = self.track(receiver, &ty);
-                let code = self.declared(&FnKey::new(*function, Entry::Bound))?.id;
-                self.bound_method(code, receiver, &ty)?
+                self.bound_method(&FnKey::new(*function, Entry::Bound), receiver, &ty)?
             }
             _ => return Err(internal("a checked rvalue is supported")),
         })
