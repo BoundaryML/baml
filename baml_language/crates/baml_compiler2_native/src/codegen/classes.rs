@@ -551,6 +551,17 @@ impl<'db> Backend<'db> {
         if let Some(known) = self.type_objects.get(&key) {
             return Ok(*known);
         }
+        // A union has the type objects of its members, an optional those
+        // of what it holds and of `null`.
+        let members = match ty {
+            NativeTy::Union(members) => members.clone(),
+            NativeTy::Optional(inner) => vec![(**inner).clone(), NativeTy::Null],
+            _ => Vec::new(),
+        };
+        let members = members
+            .iter()
+            .map(|member| Ok(self.type_object_of(db, member)?.0))
+            .collect::<Result<Vec<_>, CompileError>>()?;
         let (tag, class) = self.type_prefix(db, ty)?;
         let mut described = self.json.describe_native_if_any(db, ty);
         self.identify_described(db)?;
@@ -560,7 +571,7 @@ impl<'db> Backend<'db> {
             // What its class object has: how a thrown instance is written.
             described = self.class_objects[class].description;
         }
-        self.define_type_object(key, tag, class, described)
+        self.define_type_object(key, tag, class, described, &members)
     }
 
     /// The type object of the type `ty` as the program spells it, and
@@ -595,6 +606,13 @@ impl<'db> Backend<'db> {
         if let Some(known) = self.type_objects.get(&key) {
             return Ok(*known);
         }
+        let members = match ty {
+            RuntimeTy::Union(members) => members
+                .iter()
+                .map(|member| Ok(self.type_object_spelled(db, member)?.0))
+                .collect::<Result<Vec<_>, CompileError>>()?,
+            _ => Vec::new(),
+        };
         let described = self.json.describe_if_any(db, ty);
         self.identify_described(db)?;
         // A described type is decided by its description, which says more
@@ -603,7 +621,7 @@ impl<'db> Backend<'db> {
             Some(native) if described == 0 => self.type_prefix(db, native)?,
             _ => (0, None),
         };
-        self.define_type_object(key, tag, class, described)
+        self.define_type_object(key, tag, class, described, &members)
     }
 
     /// The type object no value is of the type of: what a call passes for
@@ -613,20 +631,43 @@ impl<'db> Backend<'db> {
         if let Some((known, _)) = self.type_objects.get(&key) {
             return Ok(*known);
         }
-        Ok(self.define_type_object(key, 0, None, 0)?.0)
+        Ok(self.define_type_object(key, 0, None, 0, &[])?.0)
     }
 
+    /// Place a type object. One with `members` is the union of them, and
+    /// is listed for the runtime, which gives it to code that asks for
+    /// the union of the same types when the program runs.
     fn define_type_object(
         &mut self,
         key: TypeKey<'db>,
         tag: usize,
         class: Option<usize>,
         described: u32,
+        members: &[DataId],
     ) -> Result<(DataId, u32), CompileError> {
-        let mut bytes = vec![0; layout::TYPE_SIZE];
+        let mut bytes = vec![0; layout::type_size(members.len())];
         put(&mut bytes, 0, layout::TAG_TYPE.to_ne_bytes());
         put(&mut bytes, layout::TYPE_TAG, tag.to_ne_bytes());
+        let kind = if members.is_empty() {
+            layout::TYPE_KIND_NAMED
+        } else {
+            layout::TYPE_KIND_UNION
+        };
+        put(&mut bytes, layout::TYPE_KIND, kind.to_ne_bytes());
+        put(
+            &mut bytes,
+            layout::TYPE_COUNT,
+            table_word(members.len()).to_ne_bytes(),
+        );
         let mut description = DataDescription::new();
+        for (index, member) in members.iter().enumerate() {
+            let member = self.module.declare_data_in_data(*member, &mut description);
+            description.write_data_addr(
+                table_word(layout::TYPE_ARGUMENTS + index * layout::WORD),
+                member,
+                0,
+            );
+        }
         if let Some(class) = class {
             let class = self.class_objects[class].data;
             let class = self.module.declare_data_in_data(class, &mut description);
@@ -648,6 +689,9 @@ impl<'db> Backend<'db> {
             .declare_anonymous_data(false, false)
             .map_err(internal)?;
         self.define_data(id, description, bytes)?;
+        if !members.is_empty() {
+            self.built_types.push(id);
+        }
         self.type_objects.insert(key, (id, described));
         Ok((id, described))
     }
@@ -760,6 +804,25 @@ impl<'db> Backend<'db> {
             let class = self.class_objects[*class].data;
             let class = self.module.declare_data_in_data(class, &mut description);
             description.write_data_addr(start + at, class, 0);
+        }
+        // The type objects placed for types with arguments, for the
+        // runtime to find when asked for one of those types.
+        let built = std::mem::take(&mut self.built_types);
+        if !built.is_empty() {
+            let mut listed = DataDescription::new();
+            let mut words = vec![0; (1 + built.len()) * layout::WORD];
+            put(&mut words, 0, built.len().to_ne_bytes());
+            for (index, ty) in built.iter().enumerate() {
+                let ty = self.module.declare_data_in_data(*ty, &mut listed);
+                listed.write_data_addr(table_word((1 + index) * layout::WORD), ty, 0);
+            }
+            let list = self
+                .module
+                .declare_anonymous_data(false, false)
+                .map_err(internal)?;
+            self.define_data(list, listed, words)?;
+            let list = self.module.declare_data_in_data(list, &mut description);
+            description.write_data_addr(table_word(layout::PROGRAM_BUILT_TYPES), list, 0);
         }
         let mut bytes = vec![0; layout::PROGRAM_DESCRIPTIONS];
         bytes.extend(json.section());

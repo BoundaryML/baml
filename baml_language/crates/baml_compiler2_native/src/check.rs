@@ -311,6 +311,37 @@ pub(crate) fn identified_arguments<'db>(
         .collect()
 }
 
+/// The type parameters `template` names, when it is a type the code of a
+/// function has the type object of from those of its own type parameters:
+/// a type parameter itself, or a union (an optional is one) whose members
+/// are each a type parameter or a whole type that a tag, a class object
+/// or a description decides. The object of such a union is made when the
+/// program runs.
+pub(crate) fn built_from(
+    db: &dyn baml_compiler2_mir::Db,
+    template: &TyTemplate,
+) -> Option<Vec<usize>> {
+    match template {
+        TyTemplate::TypeArgRef(slot) => Some(vec![*slot as usize]),
+        TyTemplate::Union(members) if !template.is_fully_concrete() => {
+            let mut slots = Vec::new();
+            for member in members {
+                match member {
+                    TyTemplate::TypeArgRef(slot) => slots.push(*slot as usize),
+                    whole
+                        if whole.is_fully_concrete()
+                            && (template_ty(db, whole, &[]).is_some_and(|ty| has_type_id(&ty))
+                                || decided_by_description(db, &whole.substitute_symbolic(&[]))) => {
+                    }
+                    _ => return None,
+                }
+            }
+            Some(slots)
+        }
+        _ => None,
+    }
+}
+
 /// A value is tested against the type argument.
 const TESTED: u8 = 1;
 /// The type argument is handed on to `baml.json`, which takes the
@@ -344,8 +375,10 @@ fn identified<'db>(
         let before = needed.clone();
         let mut found: Vec<(usize, u8)> = Vec::new();
         let mut test = |test: &TypeTest<'db>| {
-            if let TypeTest::Template(TyTemplate::TypeArgRef(slot)) = test {
-                found.push((*slot as usize, TESTED));
+            if let TypeTest::Template(template) = test
+                && let Some(slots) = built_from(db, template)
+            {
+                found.extend(slots.into_iter().map(|slot| (slot, TESTED)));
             }
         };
         let mut calls = Vec::new();
@@ -400,10 +433,16 @@ fn identified<'db>(
             let callee = FnKey::new(function, Entry::Direct);
             let wanted = identified(db, &callee, visiting, assumed);
             for (template, wanted) in templates.iter().zip(wanted) {
-                if wanted != 0
-                    && let TyTemplate::TypeArgRef(slot) = template
-                {
-                    found.push((*slot as usize, wanted));
+                match template {
+                    _ if wanted == 0 => {}
+                    TyTemplate::TypeArgRef(slot) => found.push((*slot as usize, wanted)),
+                    // A type made of this function's own, which a callee
+                    // tests values against: made when the program runs.
+                    _ if wanted == TESTED => {
+                        let slots = built_from(db, template).unwrap_or_default();
+                        found.extend(slots.into_iter().map(|slot| (slot, TESTED)));
+                    }
+                    _ => {}
                 }
             }
         }
@@ -1944,6 +1983,14 @@ fn terminator_supported<'db>(
                             // This function's own, which it is passed in
                             // turn.
                             Some(TyTemplate::TypeArgRef(_)) => true,
+                            // Made of this function's own when the program
+                            // runs, for a callee that tests values
+                            // against it.
+                            Some(template)
+                                if uses == TESTED && built_from(db, template).is_some() =>
+                            {
+                                true
+                            }
                             Some(template)
                                 if template_ty(db, template, body.arguments)
                                     .is_some_and(|ty| has_type_id(&ty)) =>

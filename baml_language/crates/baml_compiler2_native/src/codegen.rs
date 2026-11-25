@@ -537,6 +537,8 @@ struct Backend<'db> {
     /// The type object of each type passed as a type argument, with where
     /// its description is.
     type_objects: HashMap<classes::TypeKey<'db>, (DataId, u32)>,
+    /// Those of them that have arguments, which the runtime is told of.
+    built_types: Vec<DataId>,
     /// The interfaces type tests ask about, each with a column of its own
     /// after the columns of the dispatched methods, in their order.
     interface_columns: Vec<baml_compiler2_mir::TyTemplateInterface>,
@@ -621,6 +623,7 @@ impl Backend<'_> {
             class_objects_defined: false,
             packages: HashMap::new(),
             type_objects: HashMap::new(),
+            built_types: Vec::new(),
             interface_columns: Vec::new(),
             tag_rows: HashMap::new(),
             well_known: None,
@@ -1975,8 +1978,8 @@ impl<'a, 'db> Translator<'a, 'db> {
                 None => same,
             });
         };
-        if let TestKind::Argument(slot) = test {
-            let same = self.is_of_type_argument(*slot, tag, payload)?;
+        for slot in test.arguments() {
+            let same = self.is_of_type_argument(slot, tag, payload)?;
             also(self, same);
         }
         for wanted in tags {

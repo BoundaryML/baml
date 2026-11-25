@@ -3,10 +3,10 @@
 //! [`crate::json`].
 
 use baml_compiler2_mir::Operand;
-use cranelift_codegen::ir::{self, InstBuilder};
+use cranelift_codegen::ir::{self, AbiParam, InstBuilder, StackSlotData, StackSlotKind};
 
-use super::{Backend, Translator, WORD, classes::ClassLike, internal};
-use crate::{CompileError, json::Described, natives::Native, types::NativeTy};
+use super::{Backend, Translator, WORD, classes::ClassLike, internal, offset};
+use crate::{CompileError, json::Described, layout, natives::Native, types::NativeTy};
 
 pub(super) fn takes_descriptions(native: &Native) -> bool {
     crate::json::takes_descriptions(native)
@@ -50,10 +50,59 @@ impl<'db> Translator<'_, 'db> {
             .body
             .type_value(loaded)
             .ok_or_else(|| internal("a checked type argument is a type loaded once"))?;
-        if let baml_compiler2_mir::TyTemplate::TypeArgRef(slot) = template
+        self.type_object(template)
+    }
+
+    /// The type object of the type `template` names in this function: what
+    /// the function was passed for one of its own type parameters, an
+    /// object made when the program runs for a union of those, and
+    /// otherwise the object of the type the program names.
+    fn type_object(
+        &mut self,
+        template: &baml_compiler2_mir::TyTemplate,
+    ) -> Result<ir::Value, CompileError> {
+        use baml_compiler2_mir::TyTemplate;
+
+        if let TyTemplate::TypeArgRef(slot) = template
             && let Some(passed) = self.type_args.get(&(*slot as usize))
         {
             return Ok(self.builder.use_var(*passed));
+        }
+        if let TyTemplate::Union(members) = template
+            && let Some(slots) = crate::check::built_from(self.db, template)
+            && slots.iter().all(|slot| self.type_args.contains_key(slot))
+        {
+            // The members' objects go to the runtime in a frame slot. It
+            // is a leaf: nothing moves while it reads them.
+            let size = u32::try_from(members.len() * layout::WORD).map_err(internal)?;
+            let slot = self.builder.create_sized_stack_slot(StackSlotData::new(
+                StackSlotKind::ExplicitSlot,
+                size,
+                3,
+            ));
+            for (index, member) in members.iter().enumerate() {
+                let member = self.type_object(member)?;
+                self.builder
+                    .ins()
+                    .stack_store(member, slot, offset(index * layout::WORD));
+            }
+            let address = self.builder.ins().stack_addr(WORD, slot, 0);
+            let mutator = self.mutator();
+            let kind = self.word_const(layout::TYPE_KIND_UNION as usize);
+            let class = self.word_const(0);
+            let count = self.word_const(members.len());
+            let intern = self.import(
+                "baml_rt_type_intern",
+                vec![AbiParam::new(WORD); 5],
+                vec![AbiParam::new(WORD)],
+            )?;
+            let call = self
+                .builder
+                .ins()
+                .call(intern, &[mutator, kind, class, address, count]);
+            let object = self.builder.inst_results(call)[0];
+            self.builder.declare_value_needs_stack_map(object);
+            return Ok(object);
         }
         let object = if template.is_fully_concrete() {
             self.backend

@@ -55,11 +55,11 @@ use crate::layout::{
     TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_BYTES_STORAGE, TAG_CELL, TAG_CLASS,
     TAG_CLOSURE, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_FUTURE, TAG_INSTANCE, TAG_INT, TAG_MAP,
     TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OMITTED, TAG_OWNED, TAG_PACKAGE, TAG_PLAIN,
-    TAG_STRING, TAG_STRING_SLICE, TAG_TUPLE, TAG_TYPE, TUPLE_COUNT, TYPE_CLASS, TYPE_ID_MASK,
-    TYPE_SIZE, VALUE, VALUE_PAYLOAD, VARIANT_ENUM, VARIANT_NAME, VARIANT_SIZE, WORD, aligned,
-    bigint_size, bound_size, bytes_storage_size, class_columns, class_size, closure_size,
+    TAG_STRING, TAG_STRING_SLICE, TAG_TUPLE, TAG_TYPE, TUPLE_COUNT, TYPE_ARGUMENTS, TYPE_CLASS,
+    TYPE_COUNT, TYPE_ID_MASK, VALUE, VALUE_PAYLOAD, VARIANT_ENUM, VARIANT_NAME, VARIANT_SIZE, WORD,
+    aligned, bigint_size, bound_size, bytes_storage_size, class_columns, class_size, closure_size,
     entries_size, index_size, instance_size, is_pointer, plain_size, storage_size, string_size,
-    tag_of,
+    tag_of, type_size,
 };
 
 /// Set in the header of an object that has been copied; the rest of the
@@ -1063,7 +1063,7 @@ impl<'a> Copy<'a> {
                 TAG_ENUM_VARIANT => VARIANT_SIZE,
                 TAG_CLASS => class_size(class_columns(header)),
                 TAG_PACKAGE => PACKAGE_SIZE,
-                TAG_TYPE => TYPE_SIZE,
+                TAG_TYPE => type_size(read32(object + TYPE_COUNT) as usize),
                 id => unreachable!("an object of the tag {id}, which nothing makes"),
             }
         }
@@ -1478,7 +1478,12 @@ impl<'a> Copy<'a> {
                         }
                     }
                     TAG_PACKAGE => self.forward_word(scan + PACKAGE_NAME),
-                    TAG_TYPE => self.forward_word(scan + TYPE_CLASS),
+                    TAG_TYPE => {
+                        self.forward_word(scan + TYPE_CLASS);
+                        for index in 0..read32(scan + TYPE_COUNT) as usize {
+                            self.forward_word(scan + TYPE_ARGUMENTS + index * WORD);
+                        }
+                    }
                     _ => {}
                 }
                 scan += size;
@@ -1720,10 +1725,13 @@ mod tests {
             // From here on the variants are reached through their enum.
             mutator.unroot(VARIANTS.len());
 
-            let ty = mutator.allocate_object(TAG_TYPE, TYPE_SIZE);
+            // A type with one argument, itself.
+            let ty = mutator.allocate_object(TAG_TYPE, type_size(1));
             store(ty + TYPE_TAG, TAG_INSTANCE);
             store(ty + TYPE_CLASS, get(CLASS));
             store(ty + crate::layout::TYPE_DESCRIPTION, 0);
+            store(ty + crate::layout::TYPE_KIND, 1 << 32);
+            store(ty + TYPE_ARGUMENTS, ty);
             put(TYPE, ty);
 
             // Three instances: one the collector reaches before the class
@@ -1784,6 +1792,7 @@ mod tests {
             assert_eq!(load(ty), TAG_TYPE);
             assert_eq!(load(ty + TYPE_TAG), TAG_INSTANCE);
             assert_eq!(load(ty + TYPE_CLASS), class);
+            assert_eq!(load(ty + TYPE_ARGUMENTS), ty);
 
             let slot = |link: usize, index: usize| Value::load(link + field_offset(index));
             let middle = slot(get(EARLY), 1);
@@ -1814,7 +1823,7 @@ mod tests {
                     + class_size(1)
                     + PACKAGE_SIZE
                     + VARIANTS.len() * VARIANT_SIZE
-                    + TYPE_SIZE
+                    + type_size(1)
                     + names
                     + VALUE
             );

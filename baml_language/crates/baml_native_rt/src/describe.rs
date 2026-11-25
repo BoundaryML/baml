@@ -19,8 +19,9 @@ use crate::{
     },
     layout::{
         CLASS_DESCRIPTION, INSTANCE_CLASS, PROGRAM_CLASSES, PROGRAM_DESCRIPTIONS, STRING_TAGS_END,
-        TAG_BOOL, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_INSTANCE, TAG_INT, TAG_NULL, TYPE_DESCRIPTION,
-        TYPE_ID_MASK, VARIANT_ENUM, VARIANT_INDEX, WELL_KNOWN, WORD,
+        TAG_BOOL, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_INSTANCE, TAG_INT, TAG_NULL, TAG_STRING,
+        TYPE_CLASS, TYPE_DESCRIPTION, TYPE_ID_MASK, TYPE_KIND_UNION, TYPE_TAG, VARIANT_ENUM,
+        VARIANT_INDEX, WELL_KNOWN, WORD,
     },
     native::{Scope, TypeRef, drive::BamlFn},
 };
@@ -107,6 +108,40 @@ impl Types {
         }
         // SAFETY: a type a call names is a live type object.
         self.at(unsafe { load(ty.0 + TYPE_DESCRIPTION) })
+    }
+
+    /// Whether `value` is of the type the type object at `ty` is of. A
+    /// type with a description is decided by it, and a union without one,
+    /// which is one made when the program runs, by its members. Any other
+    /// is decided by the tag and the class object its type object names,
+    /// when it names a tag: an array of one element type or a function
+    /// type has no value this knows of.
+    ///
+    /// # Safety
+    ///
+    /// `ty` is a live type object, and `value` a value as a slot holds
+    /// one: when its tag is a pointer's, its payload is a live object.
+    pub(crate) unsafe fn admits(&self, ty: usize, value: Value) -> bool {
+        // SAFETY: the caller's contract; the arguments of a live type
+        // object are live type objects, and an instance and a variant hold
+        // the address of a class object in their second word.
+        unsafe {
+            if let Some(described) = self.described(TypeRef(ty)) {
+                return described.admits(value);
+            }
+            if crate::types::kind(ty) == TYPE_KIND_UNION {
+                return crate::types::arguments(ty)
+                    .iter()
+                    .any(|member| self.admits(*member, value));
+            }
+            let wanted = load(ty + TYPE_TAG);
+            let class = load(ty + TYPE_CLASS);
+            let is_string = value.is_pointer() && value.id() < STRING_TAGS_END;
+            let id = if is_string { TAG_STRING } else { value.id() };
+            wanted != 0
+                && id == wanted
+                && (class == 0 || load(value.payload + INSTANCE_CLASS) == class)
+        }
     }
 
     /// The description `baml.json` writes and reads the object at `object`
@@ -450,7 +485,6 @@ unsafe extern "C" fn baml_rt_is_type(
     tag: usize,
     payload: usize,
 ) -> u8 {
-    let described = Types::of_table(worker.types()).described(TypeRef(type_object));
     // SAFETY: the caller's contract.
-    u8::from(described.is_some_and(|described| unsafe { described.admits(Value { tag, payload }) }))
+    u8::from(unsafe { Types::of_table(worker.types()).admits(type_object, Value { tag, payload }) })
 }

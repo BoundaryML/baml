@@ -33,6 +33,7 @@ pub mod native;
 pub mod sched;
 pub mod string;
 pub mod stubs;
+mod types;
 pub mod unwind;
 
 use std::io::Write;

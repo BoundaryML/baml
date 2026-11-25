@@ -405,3 +405,42 @@ function gen_closures() -> string {
   ints[0] = ints[1] + ints[2];
   `${a(1) + 1} ${b(2)} ${c(1) * 2.0} ${d(1) == null} ${n} ${ints[0]}`
 }
+
+// A type made of a type parameter's is made when the program runs: the
+// same one however often, and whatever was allocated since.
+function gen_is_or_null<T>(x: unknown) -> bool {
+  let w = 0;
+  for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+  gen_is<T?>(x)
+}
+function gen_is_either<A, B>(x: unknown) -> bool {
+  let w = 0;
+  for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+  let before = gen_is<A | B>(x);
+  let made = gen_repeat<int>(w, 40);
+  gen_churn(30);
+  let after = gen_is<B | A | string>(x);
+  before && after && made.length() == 40
+}
+function gen_is_one_of<A, B>(x: unknown) -> bool {
+  let w = 0;
+  for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+  match (x) {
+    let found: A | B | null => true,
+    _ => false,
+  }
+}
+function gen_types_made_running() -> string {
+  let xs: unknown[] = [1, "a", 2.5, GenPoint { x: 1, y: 2 }, GenColor.Red, true, null, gen_text(1)];
+  let out = "";
+  for (let x in xs) {
+    let a = if gen_is_or_null<int>(x) { "i" } else { "-" };
+    let b = if gen_is_or_null<GenPoint>(x) { "p" } else { "-" };
+    let c = if gen_is_either<int, GenColor>(x) { "e" } else { "-" };
+    let d = if gen_is_either<float, bool>(x) { "f" } else { "-" };
+    let e = if gen_is_one_of<GenPoint, float>(x) { "o" } else { "-" };
+    let f = if gen_is_or_null<int | bool>(x) { "u" } else { "-" };
+    out = out + a + b + c + d + e + f + " ";
+  };
+  out
+}

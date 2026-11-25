@@ -153,9 +153,6 @@ impl<'db> TestKind<'db> {
                 for member in members {
                     match Self::of_template(db, member, arguments)? {
                         Self::AnyOf(inner) => tests.extend(inner),
-                        // Decided by a type object passed in: not one of
-                        // a fixed set.
-                        Self::Argument(_) => return None,
                         test => tests.push(test),
                     }
                 }
@@ -163,6 +160,16 @@ impl<'db> TestKind<'db> {
             }
             _ => return None,
         }))
+    }
+
+    /// The type parameters whose types pass: each is decided by the type
+    /// object the function is passed for it.
+    pub(crate) fn arguments(&self) -> Vec<usize> {
+        match self {
+            Self::Argument(slot) => vec![*slot],
+            Self::AnyOf(tests) => tests.iter().flat_map(Self::arguments).collect(),
+            _ => Vec::new(),
+        }
     }
 
     /// Whether the types that pass are known from the test alone.

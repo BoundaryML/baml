@@ -336,26 +336,61 @@ pub const PACKAGE_NAME: usize = WORD;
 pub const PACKAGE_SIZE: usize = 2 * WORD;
 
 /// A type object is what a type argument is passed as: its address. It is
-/// a header and three words. The first is the tag every value of the type
-/// has, when a value with that tag is one of the type as long as the
-/// second word allows: zero when it takes more to say, as for a union, an
-/// interface or an array of one element type. The second is the address
-/// of the class object an instance, or an enum's variant, of the type has,
-/// or zero. The third is the address of the type's description (see
-/// `json_layout.rs`), or zero for a type that has none.
+/// a header, three words, two halves and the type's arguments. The first
+/// word is the tag every value of the type has, when a value with that tag
+/// is one of the type as long as the second word allows: zero when it
+/// takes more to say, as for a union, an interface or an array of one
+/// element type. The second is the address of the class object an
+/// instance, or an enum's variant, of the type has, or zero. The third is
+/// the address of the type's description (see `json_layout.rs`), or zero
+/// for a type that has none.
+///
+/// ```text
+/// +32  u32  its kind, one of the `TYPE_KIND_` constants
+/// +36  u32  how many arguments it has
+/// +40  that many words: the address of the type object of each
+/// ```
+///
+/// A type made of other types has them as its arguments: the members of a
+/// union. Such a type can be made when the program runs, from type
+/// objects a function was passed (`T?` where `T` is a type parameter), and
+/// is then found or made by `baml_rt_type_intern`, which gives one object
+/// for one type however often and in whatever order it is asked. The
+/// compiler places the object of each such type the program names whole,
+/// and lists them ([`PROGRAM_BUILT_TYPES`]) so that asking for one of
+/// those finds it. An object made when the program runs is outside the
+/// heap, and is never moved or freed.
 pub const TYPE_TAG: usize = WORD;
 pub const TYPE_CLASS: usize = 2 * WORD;
 pub const TYPE_DESCRIPTION: usize = 3 * WORD;
-pub const TYPE_SIZE: usize = 4 * WORD;
+pub const TYPE_KIND: usize = 4 * WORD;
+pub const TYPE_COUNT: usize = 4 * WORD + 4;
+pub const TYPE_ARGUMENTS: usize = 5 * WORD;
+
+pub const fn type_size(arguments: usize) -> usize {
+    aligned(TYPE_ARGUMENTS + arguments * WORD)
+}
+
+/// A type with no arguments: what its tag, its class object and its
+/// description say is all of it.
+pub const TYPE_KIND_NAMED: u32 = 0;
+/// A union: a value is of it when it is of one of its arguments. An
+/// optional is the union of a type and `null`. No argument is itself a
+/// union, and none is there twice.
+pub const TYPE_KIND_UNION: u32 = 1;
 
 /// What the program tells the runtime of its types is one table. It starts
 /// with the address of the class object of each class of [`WELL_KNOWN`]
 /// and then of each of [`NAMED`], a word each, zero for a class of
-/// [`NAMED`] no native the program calls names in its declaration. The
-/// descriptions follow, at [`PROGRAM_DESCRIPTIONS`]: one section, laid out
-/// as `json_layout.rs` says.
+/// [`NAMED`] no native the program calls names in its declaration. Then
+/// one word ([`PROGRAM_BUILT_TYPES`]): the address of the list of the type
+/// objects the compiler placed for types with arguments, a count and then
+/// the address of each, or zero for a program with none. The descriptions
+/// follow, at [`PROGRAM_DESCRIPTIONS`]: one section, laid out as
+/// `json_layout.rs` says.
 pub const PROGRAM_CLASSES: usize = 0;
-pub const PROGRAM_DESCRIPTIONS: usize = aligned((WELL_KNOWN.len() + NAMED.len()) * WORD);
+pub const PROGRAM_BUILT_TYPES: usize = (WELL_KNOWN.len() + NAMED.len()) * WORD;
+pub const PROGRAM_DESCRIPTIONS: usize = aligned(PROGRAM_BUILT_TYPES + WORD);
 
 /// A `uint8array` is its length, in bytes, and the address of its storage
 /// object, zero when it is empty. The length never changes.
@@ -489,7 +524,7 @@ const _: () = {
     // tag has the bit that says thrown.
     assert!(CALLABLE_TAG_MASK == (1 << 59) - 1);
     assert!(THROWN & (CALLABLE_TAG_MASK | HEADER_PANIC | HEADER_BUSY) == 0);
-    assert!(VARIANT_SIZE.is_multiple_of(VALUE) && TYPE_SIZE.is_multiple_of(VALUE));
+    assert!(VARIANT_SIZE.is_multiple_of(VALUE) && type_size(0).is_multiple_of(VALUE));
     assert!(PACKAGE_SIZE.is_multiple_of(VALUE));
     assert!(SLICE_SIZE.is_multiple_of(VALUE));
     assert!(ARRAY_SIZE.is_multiple_of(VALUE));
