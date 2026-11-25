@@ -1174,12 +1174,12 @@ pub(crate) fn assignable(expected: &NativeTy<'_>, found: &NativeTy<'_>) -> bool 
             (NativeTy::Future(expected), NativeTy::Future(found)) => {
                 type_argument(Some((**expected).clone())) == type_argument(Some((**found).clone()))
             }
-            // The type checker has decided the two function types agree,
-            // and every call passes each argument and takes the result as
-            // a tag and a payload, whatever their types.
-            (NativeTy::Function(expected), NativeTy::Function(found)) => {
-                expected.params.len() == found.params.len()
-            }
+            // The type checker has decided the two function types agree.
+            // Every call passes each argument and takes the result as a
+            // tag and a payload, whatever their types, and a call through
+            // the value finds out how many parameters its callee has, and
+            // in what order.
+            (NativeTy::Function(_), NativeTy::Function(_)) => true,
             _ => false,
         }
 }

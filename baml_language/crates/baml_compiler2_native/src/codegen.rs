@@ -547,6 +547,9 @@ struct Backend<'db> {
     /// The call layouts met, each known by its number: its place here,
     /// counted from one. See [`Backend::layout_id`].
     layouts: Vec<CallLayout>,
+    /// The thunks calls through function values go through; see
+    /// [`layouts`].
+    remaps: layouts::Remaps,
     /// The closure standing for each function used as a value without
     /// capturing anything.
     function_values: HashMap<FuncId, DataId>,
@@ -618,6 +621,7 @@ impl Backend<'_> {
             tag_rows: HashMap::new(),
             well_known: None,
             layouts: Vec::new(),
+            remaps: layouts::Remaps::default(),
             function_values: HashMap::new(),
             strings: HashMap::new(),
             bigints: HashMap::new(),
@@ -1100,6 +1104,16 @@ pub(crate) fn generate<'db>(
         );
         bodies.push((function, mir, typed));
     }
+    // Every function value the program makes is of one of these, and so
+    // has its layout.
+    for function in &program.functions {
+        if function.key.entry != Entry::Direct {
+            let layout = backend.layout_id(&declared[&function.key].layout)?;
+            if !backend.remaps.of_values.contains(&layout) {
+                backend.remaps.of_values.push(layout);
+            }
+        }
+    }
     hooks::declare(&mut backend, program, &declared)?;
     // The stub of each native a row enters, declared while stubs are still
     // to be compiled.
@@ -1163,7 +1177,7 @@ pub(crate) fn generate<'db>(
             &mut backend,
             &mut context,
             this.id,
-            &function.name,
+            &Named::Traced(&function.name),
             &mut clif,
             &mut disassembly,
         )?;
@@ -1187,7 +1201,7 @@ pub(crate) fn generate<'db>(
         &mut backend,
         &mut context,
         entry_id,
-        ENTRY_SYMBOL,
+        &Named::Traced(ENTRY_SYMBOL),
         &mut clif,
         &mut disassembly,
     )?;
@@ -1205,11 +1219,18 @@ pub(crate) fn generate<'db>(
         &mut backend,
         &mut context,
         shim_id,
-        spawn::TASK_SHIM,
+        &Named::Traced(spawn::TASK_SHIM),
         &mut clif,
         &mut disassembly,
     )?;
     hooks::define_all(
+        &mut backend,
+        &mut context,
+        &mut builder_context,
+        &mut clif,
+        &mut disassembly,
+    )?;
+    layouts::define_remaps(
         &mut backend,
         &mut context,
         &mut builder_context,
@@ -1235,16 +1256,29 @@ pub(crate) fn generate<'db>(
     })
 }
 
+/// What a compiled function is called.
+enum Named<'a> {
+    /// A frame of a trace, under this name.
+    Traced(&'a str),
+    /// No frame of a trace: a listing says this of it.
+    Listed(&'a str),
+}
+
 /// Compile the function in `context` to machine code under `id`, and keep
 /// its stack maps.
 fn define(
     backend: &mut Backend<'_>,
     context: &mut Context,
     id: FuncId,
-    name: &str,
+    named: &Named<'_>,
     clif: &mut Option<String>,
     disassembly: &mut Option<String>,
 ) -> Result<(), CompileError> {
+    // A function with an empty name is left out of a trace.
+    let (name, traced) = match named {
+        Named::Traced(name) => (*name, *name),
+        Named::Listed(name) => (*name, ""),
+    };
     if let Some(text) = clif {
         let _ = writeln!(text, "; {name}\n{}", context.func.display());
     }
@@ -1297,7 +1331,7 @@ fn define(
         )));
     }
     backend.stack_maps.push((id, sites));
-    backend.unwind.record(id, name, code)?;
+    backend.unwind.record(id, traced, code)?;
     backend.functions.push((id, code.buffer.total_size()));
     backend.module.clear_context(context);
     Ok(())
@@ -4457,8 +4491,20 @@ impl<'a, 'db> Translator<'a, 'db> {
                         // argument does may collect.
                         let function = self.operand(callee)?;
                         self.builder.declare_value_needs_stack_map(function);
-                        let words =
-                            self.argument_words(args.iter().map(Some), &signature.params)?;
+                        // Each argument is passed as what it is: the slots
+                        // are the call's own, and a function type lists
+                        // its named parameters in an order of its own.
+                        let passed = args
+                            .iter()
+                            .map(|argument| {
+                                if crate::types::is_omitted(argument) {
+                                    Ok(NativeTy::Null)
+                                } else {
+                                    self.operand_ty(argument)
+                                }
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+                        let words = self.argument_words(args.iter().map(Some), &passed)?;
                         // An indirect call says which slots it pushes; one
                         // that does not pushes required ones.
                         let site = argument_layout

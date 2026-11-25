@@ -275,7 +275,8 @@ pub(super) fn define_all(
         entry_body(backend, target, values, &mut context.func, builder_context);
         // It has no name in a trace: the function it runs is the frame a
         // program knows.
-        super::define(backend, context, entry, "", clif, disassembly)?;
+        let named = super::Named::Listed("an entry a native calls");
+        super::define(backend, context, entry, &named, clif, disassembly)?;
     }
     let mut stubs: Vec<_> = backend
         .hooks
@@ -288,7 +289,14 @@ pub(super) fn define_all(
     for (path, (stub, native, params)) in stubs {
         context.func.signature = signature_of(backend, stub);
         stub_body(backend, native, &params, &mut context.func, builder_context)?;
-        super::define(backend, context, stub, path, clif, disassembly)?;
+        super::define(
+            backend,
+            context,
+            stub,
+            &super::Named::Traced(path),
+            clif,
+            disassembly,
+        )?;
     }
     Ok(())
 }

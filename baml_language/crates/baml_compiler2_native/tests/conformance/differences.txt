@@ -37,6 +37,8 @@ unwind_context_text (native-wrong): a native traceback has no file and line, and
   stdout "Traceback (most recent call last):\\n  in user.unwind_context_text\\n  in user.unwind_dive\\n  in user.unwind_dive\\ntext"\n
 unwind_context_line (native-wrong): a native frame has no line
   stdout 0\n
+layout_trace_through_a_thunk (native-wrong): a native traceback has no file and line, and names the copy of a function entered through a value so; the thunk between the two is no frame
+  stdout "Traceback (most recent call last):\\n  in user.layout_trace_through_a_thunk\\n  in user.layout_fails as a value\\n  in user.layout_fails\\nww13224"\n
 
 # What `baml.sys.argv` holds.
 sys_argv (interpreter-wrong): argv is to hold only the program's own arguments, as native does; `baml-cli run` still gives the binary and the target

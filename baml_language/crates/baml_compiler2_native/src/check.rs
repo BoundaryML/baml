@@ -1837,8 +1837,14 @@ fn terminator_supported<'db>(
                     if *ntypeargs != 0 {
                         return Err(Blocker::new("call with type arguments", "function value"));
                     }
-                    let slots: Vec<_> = (0..args.len()).map(Some).collect();
-                    let fits = arguments_fit(db, body, args, &expected.params, &slots)?
+                    // The call's slots are its layout's. The type lists its
+                    // named parameters in an order of its own, so what each
+                    // argument is passed for is the type checker's to say:
+                    // every one is passed as what it is.
+                    let fits = expected.params.len() == args.len()
+                        && argument_layout
+                            .as_ref()
+                            .is_none_or(|site| site.len() == args.len())
                         && assignable(&result, &expected.result);
                     if !fits {
                         return Err(Blocker::new(
@@ -1846,7 +1852,9 @@ fn terminator_supported<'db>(
                             "function value",
                         ));
                     }
-                    Ok(())
+                    args.iter()
+                        .filter(|argument| !crate::types::is_omitted(argument))
+                        .try_for_each(|argument| operand_ty(db, body, argument).map(drop))
                 }
                 Callee::Intrinsic(Intrinsic::TraceOptions) => {
                     if only_attached(db, body, place_local(destination)?, 0) {
