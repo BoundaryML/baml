@@ -13,14 +13,17 @@
 //!
 //! Compiled code calls an `async` native through a stub made here: a
 //! function with the convention of a BAML function, which drives the
-//! native. It calls the native's symbol, which makes the native's state,
+//! native. It takes each of the native's parameters as a tag and a payload
+//! and returns two words the same way, so the method table enters it as it
+//! enters any implementation. It calls the native's symbol with what the
+//! native takes of those words, which makes the native's state,
 //! and then the runtime's poll, again and again, doing between two polls
 //! what the native stopped for: calling the entry the native asked for, or
 //! waiting for its I/O. Both are done here, in compiled code, so that no
 //! frame of the runtime is on the stack while the task is stopped or runs
 //! BAML: every call into the runtime returns first. When the poll says the
-//! native is done the stub returns the value it left in its state, a pair,
-//! or throws again what the native says compiled code threw. Through the
+//! native is done the stub returns the value it left in its state, a tag
+//! and a payload, or throws again what the native says compiled code threw. Through the
 //! stub the native's caller sees a call that returns or unwinds, with the
 //! caller's handlers on record at its return address.
 
@@ -36,8 +39,8 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_module::{DataDescription, FuncId, Linkage, Module};
 
 use super::{
-    Backend, Declared, PAIR, Runtime, TRAP_AFTER_PANIC, WORD, internal, mutator_access, of_pair,
-    offset, unwind,
+    Backend, Declared, PAIR, Runtime, TRAP_AFTER_PANIC, WORD, internal, mutator_access, offset,
+    unwind,
 };
 use crate::{
     CompileError,
@@ -45,7 +48,7 @@ use crate::{
     layout,
     natives::Native,
     program::{FnKey, Program},
-    types::{Signature, class_layout},
+    types::class_layout,
 };
 
 // A stub tests for a native that is done by testing for zero.
@@ -56,14 +59,28 @@ const ENTRY_HANDLER: u32 = 0;
 
 #[derive(Default)]
 pub(super) struct Hooks<'db> {
-    /// Each entry a native calls, with the BAML function it runs and that
-    /// function's signature.
-    entries: Vec<(FuncId, FuncId, Signature<'db>)>,
+    /// Each entry a native calls, with the BAML function it runs and how
+    /// many values that function takes.
+    entries: Vec<(FuncId, FuncId, usize)>,
     /// The entry of the `eq` of each class that has one of its own.
     equals: Vec<(ClassRef<'db>, FuncId)>,
-    /// The stub each `async` native called so far is called through and
-    /// the native's own symbol, by the builtin's path.
-    stubs: HashMap<&'static str, (FuncId, FuncId)>,
+    /// The stub each `async` native called so far is called through, the
+    /// native's own symbol and what the stub takes, by the builtin's path.
+    stubs: HashMap<&'static str, (FuncId, FuncId, Vec<StubParam>)>,
+}
+
+/// What the stub of an `async` native takes for one parameter of the
+/// native's symbol after the worker.
+#[derive(Clone)]
+pub(super) enum StubParam {
+    /// A type id or the id of a description: 32 bits, passed on.
+    Id,
+    /// A value: its tag and its payload, both passed on.
+    Value,
+    /// A value of a type that fixes its tag, which the native takes as
+    /// this one parameter: its tag and its payload, of which the payload
+    /// is passed on.
+    Exact(AbiParam),
 }
 
 /// Declare an entry for each `to_json` and `from_json` the runtime calls,
@@ -97,7 +114,7 @@ pub(super) fn declare<'db>(
         backend
             .hooks
             .entries
-            .push((entry, target.id, target.signature.clone()));
+            .push((entry, target.id, target.signature.params.len()));
         Ok(entry)
     };
     for (class, functions) in &program.hooks {
@@ -155,27 +172,46 @@ impl<'db> Backend<'db> {
 
 impl<'db> Backend<'db> {
     /// The stub compiled code calls the `async` native `native` through,
-    /// whose symbol takes `params`, the worker first.
+    /// which takes `params`: what the native's symbol takes after the
+    /// worker.
     pub(super) fn async_stub(
         &mut self,
         native: &'static Native,
-        params: &[AbiParam],
+        params: &[StubParam],
     ) -> Result<FuncId, CompileError> {
-        if let Some((stub, _)) = self.hooks.stubs.get(native.path) {
+        if let Some((stub, _, _)) = self.hooks.stubs.get(native.path) {
             return Ok(*stub);
         }
+        let id = AbiParam::new(ir::types::I32);
+        let word = AbiParam::new(WORD);
         // The symbol makes the native's state and returns its address.
         let mut imported = ir::Signature::new(self.call_conv());
-        imported.params = params.to_vec();
-        imported.returns = vec![AbiParam::new(WORD)];
+        imported.params = vec![word];
+        // The stub returns what the native left in its state: a tag and a
+        // payload.
+        let mut signature = ir::Signature::new(CallConv::Tail);
+        signature.returns = vec![word; 2];
+        for param in params {
+            match param {
+                StubParam::Id => {
+                    imported.params.push(id);
+                    signature.params.push(id);
+                }
+                StubParam::Value => {
+                    imported.params.extend([word; 2]);
+                    signature.params.extend([word; 2]);
+                }
+                StubParam::Exact(taken) => {
+                    imported.params.push(*taken);
+                    signature.params.extend([word; 2]);
+                }
+            }
+        }
+        imported.returns = vec![word];
         let symbol = self
             .module
             .declare_function(native.symbol, Linkage::Import, &imported)
             .map_err(internal)?;
-        // The stub returns what the native left in its state: a pair.
-        let mut signature = ir::Signature::new(CallConv::Tail);
-        signature.params = params[1..].to_vec();
-        signature.returns = vec![AbiParam::new(PAIR)];
         let stub = self
             .module
             .declare_function(
@@ -184,7 +220,9 @@ impl<'db> Backend<'db> {
                 &signature,
             )
             .map_err(internal)?;
-        self.hooks.stubs.insert(native.path, (stub, symbol));
+        self.hooks
+            .stubs
+            .insert(native.path, (stub, symbol, params.to_vec()));
         Ok(stub)
     }
 
@@ -198,18 +236,28 @@ impl<'db> Backend<'db> {
     ) -> Result<FuncId, CompileError> {
         let (signature, _) = native.callable().map_err(internal)?;
         self.name_classes(db, native)?;
-        let mut params = vec![AbiParam::new(WORD)];
-        for ty in signature.params {
-            params.extend(super::native_call::abi_params(ty)?);
-        }
+        let params = signature
+            .params
+            .iter()
+            .map(StubParam::of)
+            .collect::<Result<Vec<_>, _>>()?;
         self.async_stub(native, &params)
     }
 }
 
+impl StubParam {
+    /// What a stub takes for a parameter its native declares as `ty`.
+    pub(super) fn of(ty: &crate::natives::Ty) -> Result<Self, CompileError> {
+        Ok(match super::native_call::abi_params(ty)?.as_slice() {
+            [taken] => Self::Exact(*taken),
+            _ => Self::Value,
+        })
+    }
+}
+
 /// Compile every entry and every stub declared.
-pub(super) fn define_all<'db>(
-    backend: &mut Backend<'db>,
-    db: &'db dyn baml_compiler2_mir::Db,
+pub(super) fn define_all(
+    backend: &mut Backend<'_>,
     context: &mut Context,
     builder_context: &mut FunctionBuilderContext,
     clif: &mut Option<String>,
@@ -223,16 +271,9 @@ pub(super) fn define_all<'db>(
             .signature
             .clone()
     };
-    for (entry, target, signature) in backend.hooks.entries.clone() {
+    for (entry, target, values) in backend.hooks.entries.clone() {
         context.func.signature = signature_of(backend, entry);
-        entry_body(
-            backend,
-            db,
-            target,
-            &signature,
-            &mut context.func,
-            builder_context,
-        )?;
+        entry_body(backend, target, values, &mut context.func, builder_context);
         // It has no name in a trace: the function it runs is the frame a
         // program knows.
         super::define(backend, context, entry, "", clif, disassembly)?;
@@ -241,46 +282,37 @@ pub(super) fn define_all<'db>(
         .hooks
         .stubs
         .iter()
-        .map(|(name, ids)| (*name, *ids))
+        .map(|(name, stub)| (*name, stub.clone()))
         .collect();
-    stubs.sort_unstable();
+    stubs.sort_unstable_by_key(|(name, _)| *name);
     // A stub is the native's frame in a trace, under the builtin's name.
-    for (path, (stub, native)) in stubs {
+    for (path, (stub, native, params)) in stubs {
         context.func.signature = signature_of(backend, stub);
-        stub_body(backend, native, &mut context.func, builder_context)?;
+        stub_body(backend, native, &params, &mut context.func, builder_context)?;
         super::define(backend, context, stub, path, clif, disassembly)?;
     }
     Ok(())
 }
 
-/// The body of an entry: call `target`, whose signature is `signature`,
-/// with as many of the values the entry was passed as it has parameters,
-/// each read as its parameter's type, and return what it returned as a
-/// pair, or what it threw with [`layout::THROWN`] set in the tag. The
-/// unwinder left the trace of a throw in the worker's scratch word, where
-/// the native reads it before anything else uses the word.
-fn entry_body<'db>(
-    backend: &mut Backend<'db>,
-    db: &'db dyn baml_compiler2_mir::Db,
+/// The body of an entry: call `target` with the first `values` of the
+/// values the entry was passed, each the tag and the payload it arrived as,
+/// and return the tag and the payload it returned, or what it threw with
+/// [`layout::THROWN`] set in the tag. The unwinder left the trace of a
+/// throw in the worker's scratch word, where the native reads it before
+/// anything else uses the word.
+fn entry_body(
+    backend: &mut Backend<'_>,
     target: FuncId,
-    signature: &Signature<'db>,
+    values: usize,
     function: &mut ir::Function,
     builder_context: &mut FunctionBuilderContext,
-) -> Result<(), CompileError> {
+) {
     let mut builder = FunctionBuilder::new(function, builder_context);
     let block = builder.create_block();
     builder.append_block_params_for_function_params(block);
     builder.switch_to_block(block);
     let passed = builder.block_params(block).to_vec();
-    let arguments: Vec<ir::Value> = signature
-        .params
-        .iter()
-        .zip(passed.as_chunks::<2>().0)
-        .map(|(ty, words)| {
-            let value = builder.ins().iconcat(words[0], words[1]);
-            of_pair(&mut builder, ty, value)
-        })
-        .collect();
+    let arguments = &passed[..2 * values];
     let target = backend.function_ref(target, builder.func);
     let caught = builder.create_block();
     builder.append_block_param(caught, PAIR);
@@ -290,17 +322,16 @@ fn entry_body<'db>(
         .unwind
         .catches
         .insert(ENTRY_HANDLER, unwind::Catch::handing_on());
-    let returned = unwind::try_call(
+    let (tag, payload) = unwind::try_call(
         &mut builder,
         &unwind::Called::Direct(target),
-        &arguments,
+        arguments,
         &[unwind::Edge {
             tag: Some(ENTRY_HANDLER),
             landing: caught,
             reads_context: false,
         }],
     );
-    let (tag, payload) = backend.pair_words(db, &mut builder, &signature.result, returned)?;
     builder.ins().return_(&[tag, payload]);
 
     builder.switch_to_block(caught);
@@ -310,11 +341,11 @@ fn entry_body<'db>(
     builder.ins().return_(&[tag, payload]);
     builder.seal_all_blocks();
     builder.finalize();
-    Ok(())
 }
 
-/// The body of a stub: start `native` with the worker and the stub's own
-/// arguments, and poll it until it is done, doing here what it stops for.
+/// The body of a stub: start `native` with the worker and what it takes
+/// of the stub's own arguments, which are `params`, and poll it until it
+/// is done, doing here what it stops for.
 ///
 /// The worker is read from the pinned register for every call: after a
 /// stop it is the one the task went on under. What the stub keeps across a
@@ -323,6 +354,7 @@ fn entry_body<'db>(
 fn stub_body(
     backend: &mut Backend<'_>,
     native: FuncId,
+    params: &[StubParam],
     function: &mut ir::Function,
     builder_context: &mut FunctionBuilderContext,
 ) -> Result<(), CompileError> {
@@ -353,7 +385,26 @@ fn stub_body(
     builder.switch_to_block(start);
     let worker = builder.ins().get_pinned_reg(WORD);
     let mut arguments = vec![worker];
-    arguments.extend_from_slice(builder.block_params(start));
+    let mut passed = builder.block_params(start).to_vec().into_iter();
+    let mut next = || passed.next().expect("a stub is passed what it takes");
+    for param in params {
+        match param {
+            StubParam::Id => arguments.push(next()),
+            StubParam::Value => arguments.extend([next(), next()]),
+            StubParam::Exact(taken) => {
+                let (_, payload) = (next(), next());
+                arguments.push(match taken.value_type {
+                    ir::types::F64 => {
+                        builder
+                            .ins()
+                            .bitcast(ir::types::F64, MemFlags::new(), payload)
+                    }
+                    ir::types::I8 => builder.ins().ireduce(ir::types::I8, payload),
+                    _ => payload,
+                });
+            }
+        }
+    }
     let native = backend.function_ref(native, builder.func);
     let started = builder.ins().call(native, &arguments);
     let state = builder.inst_results(started)[0];
@@ -390,8 +441,7 @@ fn stub_body(
 
     builder.switch_to_block(done);
     let (tag, payload) = left(&mut builder);
-    let value = builder.ins().iconcat(tag, payload);
-    builder.ins().return_(&[value]);
+    builder.ins().return_(&[tag, payload]);
 
     builder.switch_to_block(stopped);
     let is_throw = builder

@@ -11,7 +11,10 @@ use baml_compiler2_mir::Operand;
 use cranelift_codegen::ir::{self, AbiParam, InstBuilder, types};
 use cranelift_module::{Linkage, Module};
 
-use super::{Translator, WORD, internal, of_pair_words, of_payload, of_slot_words, slot_words};
+use super::{
+    Translator, WORD, hooks::StubParam, internal, of_pair_words, of_payload, of_slot_words,
+    slot_words,
+};
 use crate::{
     CompileError,
     check::native_type_arguments,
@@ -113,6 +116,11 @@ impl<'db> Translator<'_, 'db> {
 
         let mut params = Vec::new();
         let mut values = Vec::new();
+        // What the stub of an `async` native takes for the same arguments:
+        // the words that are ready, and each value of a type that fixes
+        // its tag, whose tag is made once every argument is evaluated.
+        let mut stub_params = Vec::new();
+        let mut stub_values = Vec::new();
         if takes_worker {
             params.push(AbiParam::new(WORD));
             values.push(self.mutator());
@@ -123,7 +131,7 @@ impl<'db> Translator<'_, 'db> {
         if native.type_ids != 0 {
             for (argument, ty) in type_arguments.iter().zip(&types) {
                 params.push(AbiParam::new(types::I32));
-                values.push(match ty {
+                let id = match ty {
                     _ if described => self.described_type(argument)?,
                     // An array has no type id of its own, and its words do
                     // not say what order they are sorted in: the sort is
@@ -133,7 +141,10 @@ impl<'db> Translator<'_, 'db> {
                         self.builder.ins().iconst(types::I32, super::imm(id))
                     }
                     _ => self.type_id(argument)?,
-                });
+                };
+                values.push(id);
+                stub_params.push(StubParam::Id);
+                stub_values.push((vec![id], None));
             }
         }
         for (argument, ty) in arguments.iter().zip(signature.params) {
@@ -160,11 +171,23 @@ impl<'db> Translator<'_, 'db> {
                     self.backend.describe_native_if_any(self.db, &found)
                 };
                 params.push(AbiParam::new(types::I32));
-                values.push(self.builder.ins().iconst(types::I32, super::imm(id)));
+                let id = self.builder.ins().iconst(types::I32, super::imm(id));
+                values.push(id);
+                stub_params.push(StubParam::Id);
+                stub_values.push((vec![id], None));
             }
             let value = self.operand_as(argument, &expected)?;
             params.extend(abi_params(ty)?);
-            values.extend(self.native_argument(ty, &expected, value)?);
+            if flags.is_async {
+                let param = StubParam::of(ty)?;
+                stub_values.push(match param {
+                    StubParam::Exact(_) => (Vec::new(), Some((expected, value))),
+                    _ => (self.native_argument(ty, &expected, value)?, None),
+                });
+                stub_params.push(param);
+            } else {
+                values.extend(self.native_argument(ty, &expected, value)?);
+            }
         }
         let returns = if native.throws || signature.result.is_value() {
             vec![AbiParam::new(WORD); 2]
@@ -186,10 +209,17 @@ impl<'db> Translator<'_, 'db> {
         let results = if flags.is_async {
             // It runs compiled code, which throws by unwinding, so it is
             // called as a BAML function is, through one.
-            let stub = self.backend.async_stub(native, &params)?;
+            let stub = self.backend.async_stub(native, &stub_params)?;
             let stub = self.function_ref(stub);
-            let returned = self.baml_call(&super::unwind::Called::Direct(stub), &values[1..])?;
-            let (tag, payload) = self.builder.ins().isplit(returned);
+            let mut words = Vec::new();
+            for (ready, exact) in stub_values {
+                words.extend(ready);
+                if let Some((expected, value)) = exact {
+                    let (tag, payload) = self.pair_words(&expected, value)?;
+                    words.extend([tag, payload]);
+                }
+            }
+            let (tag, payload) = self.baml_call(&super::unwind::Called::Direct(stub), &words)?;
             vec![tag, payload]
         } else {
             let callee = self.import(native.symbol, params, returns)?;

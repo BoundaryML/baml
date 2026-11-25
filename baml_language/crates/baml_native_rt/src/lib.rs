@@ -8,7 +8,8 @@
 //! and the two tables the collector reads: `baml_native_stack_maps`, where
 //! compiled frames keep their references, and `baml_native_types`, what
 //! each type of object holds. A throw reads two more, `baml_native_unwind`
-//! and `baml_native_functions`: see [`unwind`].
+//! and `baml_native_functions`: see [`unwind`]. A spawned task starts in
+//! `baml_native_task_shim`: see [`sched`].
 //!
 //! The standard library's natives are in [`native`]: their symbols are
 //! generated from the standard library's own declarations.
@@ -57,6 +58,9 @@ unsafe extern "C" {
     /// Defined by the compiled program: what its first task starts in. It
     /// runs the entry function and prints the result.
     fn baml_native_entry(mutator: *mut std::ffi::c_void);
+    /// Defined by the compiled program: what every task it spawns starts
+    /// in. It runs the task's closure and settles the task's future.
+    fn baml_native_task_shim(mutator: *mut std::ffi::c_void);
     /// Defined by the compiled program: the first word of its stack maps.
     static baml_native_stack_maps: usize;
     /// Defined by the compiled program: the first word of its type table.
@@ -122,6 +126,7 @@ pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
         let status = sched::run(
             &raw mut mutator,
             baml_native_entry as *const () as usize,
+            baml_native_task_shim as *const () as usize,
             migrate,
         );
         mutator.drop_owned();

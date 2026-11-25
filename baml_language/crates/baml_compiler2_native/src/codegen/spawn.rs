@@ -1,11 +1,11 @@
 //! `spawn` and `await`: starting a task and waiting for its future.
 //!
-//! A `spawn` calls the runtime with the closure to run and the address of
-//! the task shim: the compiled function a new task starts in, which calls
-//! the closure and settles the task's future with what it returns or throws.
-//! A closure returns a pair whatever its result's type, so one shim serves
-//! every task. The runtime switches to the new task before the call
-//! returns.
+//! A `spawn` calls the runtime with the closure to run. A new task starts
+//! in the task shim, a compiled function the runtime knows by its symbol,
+//! which calls the closure and settles the task's future with what it
+//! returns or throws. Every function returns a tag and a payload whatever
+//! its result's type, so one shim serves every task. The runtime switches
+//! to the new task before the call returns.
 //!
 //! An `await` reads the future's state itself, and loads the value when the
 //! state says it is there: the pair the task's closure returned, read as
@@ -15,9 +15,8 @@
 //! is.
 
 use baml_compiler2_mir::{BlockId, Operand, Place};
-use cranelift_codegen::ir::{self, AbiParam, InstBuilder, MemFlags, condcodes::IntCC, types};
+use cranelift_codegen::ir::{self, InstBuilder, MemFlags, condcodes::IntCC, types};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
-use cranelift_module::{FuncId, Linkage, Module};
 
 use super::{
     Backend, PAIR, Runtime, TRAP_AFTER_PANIC, Translator, WORD, closure_access, imm, internal,
@@ -30,30 +29,8 @@ use crate::{
     },
 };
 
-/// The symbol of the task shim.
-pub(super) const TASK_SHIM: &str = "baml_task_shim";
-
-impl Backend<'_> {
-    /// The shim tasks start in, declared the first time one is spawned.
-    fn task_shim(&mut self) -> Result<FuncId, CompileError> {
-        if let Some(shim) = self.task_shim {
-            return Ok(shim);
-        }
-        let mut signature = ir::Signature::new(self.call_conv());
-        signature.params.push(AbiParam::new(WORD));
-        let shim = self
-            .module
-            .declare_function(TASK_SHIM, Linkage::Local, &signature)
-            .map_err(internal)?;
-        self.task_shim = Some(shim);
-        Ok(shim)
-    }
-
-    /// The task shim, when the program spawns a task.
-    pub(super) fn declared_task_shim(&self) -> Option<FuncId> {
-        self.task_shim
-    }
-}
+/// The symbol of the task shim, which the object exports.
+pub(crate) const TASK_SHIM: &str = "baml_native_task_shim";
 
 /// The body of the task shim: what the runtime's boot code calls, on the
 /// new task's stack and with the worker in the pinned register, to run the
@@ -70,9 +47,8 @@ pub(super) fn task_shim(
     let start = backend.runtime(Runtime::TaskStart)?;
     let finish = backend.runtime(Runtime::TaskFinish)?;
     let fail = backend.runtime(Runtime::TaskFail)?;
-    let mut closure_signature = ir::Signature::new(cranelift_codegen::isa::CallConv::Tail);
-    closure_signature.params.push(AbiParam::new(WORD));
-    closure_signature.returns.push(AbiParam::new(PAIR));
+    // A task's closure takes nothing but itself.
+    let closure_signature = Backend::clif_signature(0, crate::program::Entry::Value, 0);
 
     let mut builder = FunctionBuilder::new(function, builder_context);
     let block = builder.create_block();
@@ -94,7 +70,7 @@ pub(super) fn task_shim(
     builder.append_block_param(uncaught, PAIR);
     builder.append_block_param(uncaught, WORD);
     builder.set_cold_block(uncaught);
-    let returned = unwind::try_call(
+    let (tag, payload) = unwind::try_call(
         &mut builder,
         &unwind::Called::Indirect(closure_signature, code),
         &[closure],
@@ -104,7 +80,6 @@ pub(super) fn task_shim(
             reads_context: true,
         }],
     );
-    let (tag, payload) = builder.ins().isplit(returned);
     // The worker is read again: the task may have parked since it started,
     // and gone on under another.
     let worker = builder.ins().get_pinned_reg(WORD);
@@ -172,11 +147,8 @@ impl<'db> Translator<'_, 'db> {
         self.builder.switch_to_block(start);
         let body = self.slot_load(&fields[PLAN_BODY], plan, layout::field_offset(PLAN_BODY));
         let (_, closure) = self.builder.ins().isplit(body);
-        let shim = self.backend.task_shim()?;
-        let shim = self.function_ref(shim);
-        let shim = self.builder.ins().func_addr(WORD, shim);
         let started = self
-            .call_runtime(Runtime::Spawn, &[closure, shim])?
+            .call_runtime(Runtime::Spawn, &[closure])?
             .ok_or_else(|| internal("a spawn returns the future"))?;
         self.builder.declare_value_needs_stack_map(started);
         self.write_place(future, started)?;
@@ -261,7 +233,7 @@ impl<'db> Translator<'_, 'db> {
         self.raise(error, Some(trace))?;
 
         self.builder.switch_to_block(load);
-        // What the task's closure returned: a pair, whatever its type.
+        // What the task's closure returned: a value, whatever its type.
         let value = self.pair_load(&value_ty, future, layout::FUTURE_VALUE);
         let value = self.coerce(value, &value_ty, &expected)?;
         self.write_local(destination, value);

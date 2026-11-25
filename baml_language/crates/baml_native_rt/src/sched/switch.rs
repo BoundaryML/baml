@@ -156,9 +156,8 @@ pub(crate) unsafe extern "C" fn baml_rt_resume(worker: *mut crate::heap::Mutator
     )
 }
 
-/// `spawn`: takes the closure to run and the compiled function a task
-/// running it starts in. Returns the new task's future, after the new task
-/// has run until it first parks or ends.
+/// `spawn`: takes the closure to run. Returns the new task's future, after
+/// the new task has run until it first parks or ends.
 ///
 /// # Safety
 ///
@@ -171,8 +170,8 @@ pub unsafe extern "C" fn baml_rt_spawn() {
         save!(),
         "mov x29, sp",
         "str xzr, [sp, #88]",
-        "mov x2, x21",
-        "mov x3, sp",
+        "mov x1, x21",
+        "mov x2, sp",
         "bl {prepare}",
         switch_in!(),
         prepare = sym spawn_prepare,
@@ -383,8 +382,8 @@ pub(crate) unsafe extern "C" fn baml_rt_resume(worker: *mut crate::heap::Mutator
 pub unsafe extern "C" fn baml_rt_spawn() {
     core::arch::naked_asm!(
         save!(),
-        "mov rdx, r15",
-        "mov rcx, rsp",
+        "mov rsi, r15",
+        "mov rdx, rsp",
         "call {prepare}",
         "mov rdi, rax",
         switch_in!(),

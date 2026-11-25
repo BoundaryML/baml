@@ -10,7 +10,9 @@
 //! an `unknown`, a function value) is a pair, one `i128` with its tag in
 //! the low half and its payload in the high one: the two words a slot of a
 //! heap object holds every value as. [`Translator::slot_store`] and
-//! [`Translator::slot_load`] go between a slot and a value.
+//! [`Translator::slot_load`] go between a slot and a value. Across a call
+//! every value is those two words, each in a register or a word of the
+//! stack of its own, whatever its type: see [`Backend::clif_signature`].
 //!
 //! One register is set aside for the whole program: it holds the address of
 //! the running thread's mutator, whose first two words drive inline
@@ -21,8 +23,9 @@
 //! a stack map names and are reloaded afterwards; the maps of all functions
 //! are emitted as one table, [`STACK_MAPS_SYMBOL`].
 //!
-//! The object exports one function, [`ENTRY_SYMBOL`], which calls the entry
-//! function and prints its result through the runtime.
+//! The object exports two functions: [`ENTRY_SYMBOL`], which calls the
+//! entry function and prints its result through the runtime, and the task
+//! shim every spawned task starts in ([`spawn`]).
 
 use std::{collections::HashMap, fmt::Write as _};
 
@@ -418,7 +421,7 @@ impl Runtime {
             Self::TaskStart => (vec![word], vec![word]),
             Self::TaskFinish | Self::Throw | Self::Rethrow => (vec![word, word, word], vec![]),
             Self::TaskFail | Self::Uncaught => (vec![word, word, word, word], vec![]),
-            Self::Spawn => (vec![word, word], vec![word]),
+            Self::Spawn => (vec![word], vec![word]),
             Self::AwaitError => (vec![word, word], vec![word, word]),
             Self::PrintFloat => (vec![float], vec![]),
             Self::PrintBool => (vec![byte], vec![]),
@@ -498,6 +501,8 @@ struct Backend<'db> {
     /// The type id of each enum's boxes, and the boxes of its variants.
     enum_types: HashMap<EnumRef<'db>, usize>,
     enum_boxes: HashMap<EnumRef<'db>, DataId>,
+    /// The box an omitted enum argument refers to, once a call omits one.
+    omitted_variant: Option<DataId>,
     /// The method table, once a call dispatches through it.
     methods: Option<DataId>,
     strings: HashMap<String, DataId>,
@@ -511,9 +516,6 @@ struct Backend<'db> {
     functions: Vec<(FuncId, u32)>,
     /// What the unwinder is told about them.
     unwind: unwind::Tables,
-    /// The function a spawned task starts in, once a task is spawned; see
-    /// [`spawn`].
-    task_shim: Option<FuncId>,
     /// The entries natives call, and the ones `async` natives are called
     /// through.
     hooks: hooks::Hooks<'db>,
@@ -560,6 +562,7 @@ impl<'db> Backend<'db> {
             function_values: HashMap::new(),
             enum_types: HashMap::new(),
             enum_boxes: HashMap::new(),
+            omitted_variant: None,
             methods: None,
             strings: HashMap::new(),
             bigints: HashMap::new(),
@@ -567,7 +570,6 @@ impl<'db> Backend<'db> {
             stack_maps: Vec::new(),
             functions: Vec::new(),
             unwind: unwind::Tables::default(),
-            task_shim: None,
             hooks: hooks::Hooks::default(),
             compares_values: false,
         })
@@ -624,48 +626,29 @@ impl<'db> Backend<'db> {
     /// A function entered through a value takes the closure first; one
     /// entered as a bound method finds its receiver there. Then come
     /// `type_ids` type ids, 32 bits each, one per type parameter of a
-    /// function that must be told its type arguments; then the declared
-    /// parameters.
-    ///
-    /// A function entered by a call that names it takes each parameter and
-    /// returns its result as a value of the type is held. One entered
-    /// through a value takes every parameter and returns its result as a
-    /// pair, whatever the types: the call was written for a function type,
-    /// which says how many arguments there are and no more of how the
-    /// function it reaches holds them.
-    fn clif_signature(signature: &Signature<'_>, entry: Entry, type_ids: usize) -> ir::Signature {
+    /// function that must be told its type arguments; then `values` values,
+    /// each two words, its tag and its payload, whatever its type. The
+    /// result is two words the same way. So every function of as many
+    /// parameters is entered alike, by a call that names it, through a
+    /// function value or through the method table, and none of them has
+    /// to know how the function holds what it is passed.
+    fn clif_signature(values: usize, entry: Entry, type_ids: usize) -> ir::Signature {
         let mut clif = ir::Signature::new(CallConv::Tail);
         let (closure, receiver) = match entry {
             Entry::Direct => (false, 0),
             Entry::Value => (true, 0),
             Entry::Bound => (true, 1),
         };
-        let held = |ty: &NativeTy<'_>| match entry {
-            Entry::Direct => clif_type(ty),
-            Entry::Value | Entry::Bound => PAIR,
-        };
         clif.params = closure
             .then(|| AbiParam::new(WORD))
             .into_iter()
             .chain(std::iter::repeat_n(AbiParam::new(types::I32), type_ids))
-            .chain(
-                signature
-                    .params
-                    .iter()
-                    .skip(receiver)
-                    .map(|ty| AbiParam::new(held(ty))),
-            )
+            .chain(std::iter::repeat_n(
+                AbiParam::new(WORD),
+                2 * (values - receiver),
+            ))
             .collect();
-        clif.returns = vec![AbiParam::new(held(&signature.result))];
-        clif
-    }
-
-    /// The signature of what is entered with nothing known of its types
-    /// but how many values it takes: each one a pair, and a pair returned.
-    fn uniform_signature(values: usize) -> ir::Signature {
-        let mut clif = ir::Signature::new(CallConv::Tail);
-        clif.params = vec![AbiParam::new(PAIR); values];
-        clif.returns = vec![AbiParam::new(PAIR)];
+        clif.returns = vec![AbiParam::new(WORD); 2];
         clif
     }
 
@@ -840,6 +823,25 @@ impl<'db> Backend<'db> {
         Ok(id)
     }
 
+    /// A box in the executable's data that holds the position no variant
+    /// of any enum is at: what a call passes for an enum parameter it
+    /// leaves to its default.
+    fn omitted_variant(&mut self) -> Result<DataId, CompileError> {
+        if let Some(id) = self.omitted_variant {
+            return Ok(id);
+        }
+        let mut bytes = Vec::with_capacity(layout::BOX_SIZE);
+        bytes.extend_from_slice(&layout::TAG_OMITTED.to_ne_bytes());
+        bytes.extend_from_slice(&(-1_i64).to_ne_bytes());
+        let id = self
+            .module
+            .declare_anonymous_data(false, false)
+            .map_err(internal)?;
+        self.define_data(id, DataDescription::new(), bytes)?;
+        self.omitted_variant = Some(id);
+        Ok(id)
+    }
+
     /// The closure that stands for a function used as a value: an object in
     /// the executable's data that captures nothing.
     fn function_value(&mut self, function: FuncId) -> Result<DataId, CompileError> {
@@ -875,34 +877,48 @@ impl<'db> Backend<'db> {
     /// Emit the method table: one row per `8` bytes of the type table, so
     /// that a type id shifted by the program's column shift is the offset
     /// of its type's row; a row is one code address per column, zero where
-    /// the type has no code for a method. The code is the thunk of the
-    /// type's implementation: `thunks` has one for each method of each of
-    /// the program's rows.
+    /// the type has no code for a method. The code is the implementation
+    /// itself, entered as a call that names it enters it: a dispatching
+    /// call passes the receiver and every argument as that call would.
     fn define_methods(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
         program: &Program<'db>,
-        thunks: &[Vec<FuncId>],
+        declared: &HashMap<FnKey<'db>, Declared<'db>>,
     ) -> Result<(), CompileError> {
         let Some(id) = self.methods else {
             return Ok(());
         };
         let mut entries = Vec::new();
-        for ((ty, methods), thunks) in program.rows.iter().zip(thunks) {
+        for (ty, methods) in &program.rows {
             let type_id = self
                 .type_id(db, ty)?
                 .ok_or_else(|| internal("a method table row is for a type with a type id"))?;
-            for ((slot, _), function) in methods.iter().zip(thunks) {
+            for (slot, code) in methods {
+                let function = match code {
+                    crate::program::Code::Function(key) => {
+                        let callee = declared
+                            .get(key)
+                            .ok_or_else(|| internal("an implementation is part of the program"))?;
+                        if callee.entry != Entry::Direct || callee.type_ids != 0 {
+                            return Err(internal(
+                                "an implementation is entered with its values alone",
+                            ));
+                        }
+                        callee.id
+                    }
+                    crate::program::Code::Native(native) => self.dispatched_stub(db, native)?,
+                };
                 let column = program.slots[*slot].column;
                 entries.push((
                     (type_id << program.column_shift) + column * layout::WORD,
-                    *function,
+                    function,
                 ));
                 if type_id == layout::TAG_STRING {
                     // A slice is a string: its row is the same.
                     entries.push((
                         (layout::TAG_STRING_SLICE << program.column_shift) + column * layout::WORD,
-                        *function,
+                        function,
                     ));
                 }
             }
@@ -1249,7 +1265,7 @@ pub(crate) fn generate<'db>(
             .declare_function(
                 &symbol_name(index, &function.name),
                 Linkage::Local,
-                &Backend::clif_signature(&signature, function.key.entry, type_ids),
+                &Backend::clif_signature(signature.params.len(), function.key.entry, type_ids),
             )
             .map_err(internal)?;
         let typed = Body::new(db, mir, body, &function.captures, &function.key);
@@ -1320,7 +1336,7 @@ pub(crate) fn generate<'db>(
     for (function, mir, body) in bodies {
         let this = &declared[&function.key];
         context.func.signature =
-            Backend::clif_signature(&this.signature, this.entry, this.type_ids);
+            Backend::clif_signature(this.signature.params.len(), this.entry, this.type_ids);
         Translator::new(
             db,
             &mut backend,
@@ -1363,33 +1379,26 @@ pub(crate) fn generate<'db>(
         &mut clif,
         &mut disassembly,
     )?;
-    if let Some(id) = backend.declared_task_shim() {
-        let mut shim_signature = ir::Signature::new(backend.call_conv());
-        shim_signature.params.push(AbiParam::new(WORD));
-        context.func.signature = shim_signature;
-        spawn::task_shim(&mut backend, &mut context.func, &mut builder_context)?;
-        define(
-            &mut backend,
-            &mut context,
-            id,
-            spawn::TASK_SHIM,
-            &mut clif,
-            &mut disassembly,
-        )?;
-    }
-    hooks::define_all(
+    // Every task but the first starts in the task shim, which the runtime
+    // knows by its symbol, as it knows the entry.
+    let mut shim_signature = ir::Signature::new(backend.call_conv());
+    shim_signature.params.push(AbiParam::new(WORD));
+    let shim_id = backend
+        .module
+        .declare_function(spawn::TASK_SHIM, Linkage::Export, &shim_signature)
+        .map_err(internal)?;
+    context.func.signature = shim_signature;
+    spawn::task_shim(&mut backend, &mut context.func, &mut builder_context)?;
+    define(
         &mut backend,
-        db,
         &mut context,
-        &mut builder_context,
+        shim_id,
+        spawn::TASK_SHIM,
         &mut clif,
         &mut disassembly,
     )?;
-    let thunks = method_thunks(
+    hooks::define_all(
         &mut backend,
-        db,
-        program,
-        &declared,
         &mut context,
         &mut builder_context,
         &mut clif,
@@ -1399,7 +1408,7 @@ pub(crate) fn generate<'db>(
     backend.define_stack_maps()?;
     backend.define_unwind()?;
     backend.define_functions()?;
-    backend.define_methods(db, program, &thunks)?;
+    backend.define_methods(db, program, &declared)?;
     backend.define_types(db)?;
 
     let object = backend.module.finish().emit().map_err(internal)?;
@@ -1408,144 +1417,6 @@ pub(crate) fn generate<'db>(
         clif,
         disassembly,
     })
-}
-
-/// The thunk of each method of each row of the method table, compiled
-/// here: what the table holds for the implementation a type has.
-///
-/// A dispatching call knows how many values a method takes and nothing of
-/// how the implementation it reaches holds them, so it passes the receiver
-/// and every argument as a pair and takes a pair back. The thunk reads
-/// each pair as the implementation's own parameter is held, calls it, and
-/// returns its result as a pair. A program that dispatches nothing has no
-/// table and no thunks.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "what compiling a function takes, and the program whose rows these are"
-)]
-fn method_thunks<'db>(
-    backend: &mut Backend<'db>,
-    db: &'db dyn baml_compiler2_mir::Db,
-    program: &Program<'db>,
-    declared: &HashMap<FnKey<'db>, Declared<'db>>,
-    context: &mut Context,
-    builder_context: &mut FunctionBuilderContext,
-    clif: &mut Option<String>,
-    disassembly: &mut Option<String>,
-) -> Result<Vec<Vec<FuncId>>, CompileError> {
-    if backend.methods.is_none() {
-        return Ok(Vec::new());
-    }
-    // The thunk of each implementation, by the function it calls.
-    let mut made: HashMap<FuncId, FuncId> = HashMap::new();
-    let mut rows = Vec::with_capacity(program.rows.len());
-    for (_, methods) in &program.rows {
-        let mut thunks = Vec::with_capacity(methods.len());
-        for (_, code) in methods {
-            let (target, values) = match code {
-                crate::program::Code::Function(key) => {
-                    let callee = declared
-                        .get(key)
-                        .ok_or_else(|| internal("an implementation is part of the program"))?;
-                    (callee.id, callee.signature.params.len())
-                }
-                crate::program::Code::Native(native) => {
-                    let (signature, _) = native.callable().map_err(internal)?;
-                    (backend.dispatched_stub(db, native)?, signature.params.len())
-                }
-            };
-            if let Some(thunk) = made.get(&target) {
-                thunks.push(*thunk);
-                continue;
-            }
-            let signature = Backend::uniform_signature(values);
-            let thunk = backend
-                .module
-                .declare_function(
-                    &format!("baml_method_{}", made.len()),
-                    Linkage::Local,
-                    &signature,
-                )
-                .map_err(internal)?;
-            context.func.signature = signature;
-            thunk_body(
-                backend,
-                db,
-                code,
-                target,
-                declared,
-                &mut context.func,
-                builder_context,
-            )?;
-            // It has no name in a trace: the implementation it calls is
-            // the frame a program knows.
-            define(backend, context, thunk, "", clif, disassembly)?;
-            made.insert(target, thunk);
-            thunks.push(thunk);
-        }
-        rows.push(thunks);
-    }
-    Ok(rows)
-}
-
-/// The body of the thunk of the implementation `code`, which is the
-/// function `target`: see [`method_thunks`].
-fn thunk_body<'db>(
-    backend: &mut Backend<'db>,
-    db: &'db dyn baml_compiler2_mir::Db,
-    code: &crate::program::Code<'db>,
-    target: FuncId,
-    declared: &HashMap<FnKey<'db>, Declared<'db>>,
-    function: &mut ir::Function,
-    builder_context: &mut FunctionBuilderContext,
-) -> Result<(), CompileError> {
-    let mut builder = FunctionBuilder::new(function, builder_context);
-    let block = builder.create_block();
-    builder.append_block_params_for_function_params(block);
-    builder.switch_to_block(block);
-    let passed = builder.block_params(block).to_vec();
-    let target = backend.function_ref(target, builder.func);
-    let result = match code {
-        crate::program::Code::Function(key) => {
-            let callee = declared
-                .get(key)
-                .ok_or_else(|| internal("an implementation is part of the program"))?;
-            let arguments: Vec<ir::Value> = callee
-                .signature
-                .params
-                .iter()
-                .zip(&passed)
-                .map(|(ty, value)| of_pair(&mut builder, ty, *value))
-                .collect();
-            let call = builder.ins().call(target, &arguments);
-            let returned = builder.inst_results(call)[0];
-            backend.as_pair(db, &mut builder, &callee.signature.result, returned)?
-        }
-        // The stub of an `async` native takes what the native does, less
-        // the worker, and returns a pair.
-        crate::program::Code::Native(native) => {
-            let (signature, _) = native.callable().map_err(internal)?;
-            let mut arguments = Vec::new();
-            for (ty, value) in signature.params.iter().zip(&passed) {
-                let expected = ty.native(db, &[]);
-                if ty.is_value() {
-                    let (tag, payload) = builder.ins().isplit(*value);
-                    arguments.extend([tag, payload]);
-                } else if expected.is_pair() {
-                    // The address of Rust state, held as any value is.
-                    arguments.push(builder.ins().isplit(*value).1);
-                } else {
-                    arguments.push(of_pair(&mut builder, &expected, *value));
-                }
-            }
-            let call = builder.ins().call(target, &arguments);
-            builder.inst_results(call)[0]
-        }
-    };
-    builder.ins().return_(&[result]);
-    builder.seal_all_blocks();
-    builder.finalize();
-    Ok(())
 }
 
 /// Compile the function in `context` to machine code under `id`, and keep
@@ -1643,7 +1514,7 @@ fn entry_shim(
     builder.append_block_param(uncaught, PAIR);
     builder.append_block_param(uncaught, WORD);
     builder.set_cold_block(uncaught);
-    let result = unwind::try_call(
+    let (tag, payload) = unwind::try_call(
         &mut builder,
         &unwind::Called::Direct(callee),
         &[],
@@ -1654,6 +1525,7 @@ fn entry_shim(
         }],
     );
     if let Some((print, enum_type)) = print {
+        let result = of_pair_words(&mut builder, &entry.signature.result, tag, payload);
         let print = backend.function_ref(print, builder.func);
         match enum_type {
             // An enum's variant is printed by name, which its type has.
@@ -1840,12 +1712,10 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let bound = self.builder.use_var(self.closure);
                 self.pair_load(content, bound, layout::BOUND_RECEIVER)
             } else {
-                let passed = arriving.next().expect("a parameter per argument");
-                match self.key.entry {
-                    Entry::Direct => passed,
-                    // Every argument arrives as a pair.
-                    Entry::Value | Entry::Bound => of_pair(&mut self.builder, content, passed),
-                }
+                // Every argument arrives as its tag and its payload.
+                let tag = arriving.next().expect("a tag per argument");
+                let payload = arriving.next().expect("a payload per argument");
+                of_pair_words(&mut self.builder, content, tag, payload)
             };
             if let NativeTy::Cell(content) = &ty {
                 if **content != NativeTy::Null {
@@ -2043,6 +1913,60 @@ impl<'a, 'db> Translator<'a, 'db> {
             // collector leaves what is outside the heap alone.
             _ => self.builder.ins().iconst(WORD, 8),
         }
+    }
+
+    /// The two words a call passes for a parameter of type `ty` it leaves
+    /// to its default: the tag no value has, and as the payload what the
+    /// callee reads as [`Self::omitted`]. A callee reads an enum variant
+    /// out of the box its payload refers to, so for an enum that is a box
+    /// holding the position no variant is at.
+    fn omitted_words(
+        &mut self,
+        ty: &NativeTy<'db>,
+    ) -> Result<(ir::Value, ir::Value), CompileError> {
+        let payload = match ty {
+            _ if ty.is_pair() => self.word_const(0),
+            NativeTy::Enum(_) => {
+                let variant = self.backend.omitted_variant()?;
+                self.data_address(variant)
+            }
+            _ if crate::types::has_omitted_form(ty) => {
+                let omitted = self.omitted(ty);
+                payload_of(&mut self.builder, omitted, ty)
+            }
+            _ => return Err(internal("a checked call omits what has an omitted form")),
+        };
+        Ok((self.word_const(layout::TAG_OMITTED), payload))
+    }
+
+    /// The words a call passes for `args`, the arguments of parameters of
+    /// the types `params`: the tag and the payload of each, in order.
+    ///
+    /// Every argument is evaluated before any tag is made: a tag read from
+    /// an object's header is good until the next call, and the call these
+    /// are for is the next one.
+    fn argument_words(
+        &mut self,
+        args: &[Operand<'db>],
+        params: &[NativeTy<'db>],
+    ) -> Result<Vec<ir::Value>, CompileError> {
+        let mut values = Vec::with_capacity(args.len());
+        for (argument, ty) in args.iter().zip(params) {
+            values.push(if crate::types::is_omitted(argument) {
+                None
+            } else {
+                Some(self.operand_as(argument, ty)?)
+            });
+        }
+        let mut words = Vec::with_capacity(2 * values.len());
+        for (value, ty) in values.into_iter().zip(params) {
+            let (tag, payload) = match value {
+                Some(value) => self.pair_words(ty, value)?,
+                None => self.omitted_words(ty)?,
+            };
+            words.extend([tag, payload]);
+        }
+        Ok(words)
     }
 
     /// Whether `value`, of type `ty`, is what a parameter left to its
@@ -4350,16 +4274,11 @@ impl<'a, 'db> Translator<'a, 'db> {
                 switch.emit(&mut self.builder, value, otherwise);
             }
             Terminator::Return => {
+                // Every caller takes the result as its tag and its payload.
                 let value = self.read_local(Local(0));
-                let value = match self.key.entry {
-                    Entry::Direct => value,
-                    // A call through a value takes the result as a pair.
-                    Entry::Value | Entry::Bound => {
-                        let ty = self.storage_ty(Local(0));
-                        self.as_pair(&ty, value)?
-                    }
-                };
-                self.builder.ins().return_(&[value]);
+                let ty = self.storage_ty(Local(0));
+                let (tag, payload) = self.pair_words(&ty, value)?;
+                self.builder.ins().return_(&[tag, payload]);
             }
             Terminator::Unreachable => {
                 self.builder.ins().trap(TRAP_UNREACHABLE);
@@ -4400,15 +4319,14 @@ impl<'a, 'db> Translator<'a, 'db> {
                         else {
                             return Err(internal("a checked call is of a function value"));
                         };
-                        // Every argument goes as a pair, whatever its type.
-                        let mut arguments = Vec::new();
-                        for (argument, ty) in args.iter().zip(&signature.params) {
-                            let argument = self.operand_as(argument, ty)?;
-                            arguments.push(self.as_pair(ty, argument)?);
-                        }
+                        // Read first and kept in the frame's map: what an
+                        // argument does may collect.
                         let function = self.operand(callee)?;
+                        self.builder.declare_value_needs_stack_map(function);
+                        let words = self.argument_words(args, &signature.params)?;
                         let (_, closure) = self.builder.ins().isplit(function);
-                        arguments.insert(0, closure);
+                        let mut arguments = vec![closure];
+                        arguments.extend(words);
                         // A load marked read-only can be moved above the
                         // test that proved the closure is not `null`.
                         let never_null = operand_local(callee).is_some_and(|local| {
@@ -4425,13 +4343,14 @@ impl<'a, 'db> Translator<'a, 'db> {
                             closure,
                             offset(layout::CLOSURE_CODE),
                         );
-                        let clif = Backend::clif_signature(&signature, Entry::Value, 0);
+                        let clif = Backend::clif_signature(signature.params.len(), Entry::Value, 0);
                         let clif = self.builder.import_signature(clif);
                         // The callee can collect, which moves storage.
                         self.forget_arrays();
                         let called = unwind::Called::Indirect(clif, code);
-                        let result = self.baml_call(&called, &arguments)?;
-                        let result = of_pair(&mut self.builder, &signature.result, result);
+                        let (tag, payload) = self.baml_call(&called, &arguments)?;
+                        let result =
+                            of_pair_words(&mut self.builder, &signature.result, tag, payload);
                         (result, signature.result)
                     }
                     Callee::Function(key) => {
@@ -4577,14 +4496,13 @@ impl<'a, 'db> Translator<'a, 'db> {
                 arguments.push(self.type_id(argument)?);
             }
         }
-        for (argument, ty) in args.iter().zip(&callee.signature.params) {
-            arguments.push(self.operand_as(argument, ty)?);
-        }
+        arguments.extend(self.argument_words(args, &callee.signature.params)?);
         let produced = callee.signature.result.clone();
         let callee = self.function_ref(callee.id);
         // The callee can collect, which moves storage.
         self.forget_arrays();
-        let result = self.baml_call(&unwind::Called::Direct(callee), &arguments)?;
+        let (tag, payload) = self.baml_call(&unwind::Called::Direct(callee), &arguments)?;
+        let result = of_pair_words(&mut self.builder, &produced, tag, payload);
         Ok((result, produced))
     }
 
@@ -4601,15 +4519,13 @@ impl<'a, 'db> Translator<'a, 'db> {
             .iter()
             .find(|known| known.slot == *slot)
             .ok_or_else(|| internal("a dispatched method has a slot"))?;
-        // The receiver and every argument go as pairs: the code the row
-        // holds takes them so, whatever the implementation's own types.
+        // The receiver is a value like any other: its tag picks the row,
+        // and the implementation reads it as its own first parameter.
         let receiver = self.operand_as(&args[0], &NativeTy::Unknown)?;
-        let mut arguments = vec![receiver];
-        for (argument, ty) in args[1..].iter().zip(&slot.signature.params) {
-            let argument = self.operand_as(argument, ty)?;
-            arguments.push(self.as_pair(ty, argument)?);
-        }
+        let rest = self.argument_words(&args[1..], &slot.signature.params)?;
         let (tag, payload) = self.builder.ins().isplit(receiver);
+        let mut arguments = vec![tag, payload];
+        arguments.extend(rest);
         let type_id = self.builder.ins().band_imm(tag, imm(layout::TYPE_ID_MASK));
         let methods = self.backend.methods()?;
         let methods = self.data_address(methods);
@@ -4624,15 +4540,16 @@ impl<'a, 'db> Translator<'a, 'db> {
             row,
             offset(slot.column * layout::WORD),
         );
-        let signature = Backend::uniform_signature(arguments.len());
+        let signature = Backend::clif_signature(arguments.len() / 2, Entry::Direct, 0);
         let signature = self.builder.import_signature(signature);
         // The callee can collect, which moves storage.
         self.forget_arrays();
         let called = unwind::Called::Indirect(signature, code);
         let produced = slot.signature.result.clone();
         if !slot.falls_back {
-            let result = self.baml_call(&called, &arguments)?;
-            return Ok((of_pair(&mut self.builder, &produced, result), produced));
+            let (tag, payload) = self.baml_call(&called, &arguments)?;
+            let result = of_pair_words(&mut self.builder, &produced, tag, payload);
+            return Ok((result, produced));
         }
         // A type that declares no `to_string` has no code in its row: the
         // runtime writes it out.
@@ -4653,8 +4570,8 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.builder.ins().jump(done, &[text.into()]);
 
         self.builder.switch_to_block(own);
-        let text = self.baml_call(&called, &arguments)?;
-        let text = of_pair(&mut self.builder, &NativeTy::String, text);
+        // A string's payload is the string.
+        let (_, text) = self.baml_call(&called, &arguments)?;
         self.builder.ins().jump(done, &[text.into()]);
 
         self.builder.seal_block(done);

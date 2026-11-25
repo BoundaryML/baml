@@ -232,6 +232,10 @@ pub(crate) struct Sched {
     /// Under migration stress, which of the two threads serves as the
     /// worker now: see `serve_in_turns`.
     migrate: Option<u32>,
+    /// The compiled function every spawned task starts in, which asks for
+    /// the task's closure back, calls it and settles the task's future.
+    /// Zero until the program runs.
+    task_shim: usize,
 }
 
 impl Sched {
@@ -254,6 +258,7 @@ impl Sched {
             on_io: 0,
             held_up: Vec::new(),
             migrate: None,
+            task_shim: 0,
         }
     }
 
@@ -725,11 +730,10 @@ pub(crate) fn fatal(message: &str) -> ! {
 /// spawning task ready to be resumed with the future. Returns the new task,
 /// which the stub switches to.
 ///
-/// `frame` is the switch frame the stub built, and `shim` the compiled
-/// function the new task starts in, which asks for `closure` back.
+/// `frame` is the switch frame the stub built. The new task starts in the
+/// program's task shim, which asks for `closure` back.
 pub(crate) unsafe extern "C" fn spawn_prepare(
     mut closure: usize,
-    shim: usize,
     worker: &mut Mutator,
     frame: usize,
 ) -> *mut Task {
@@ -740,6 +744,7 @@ pub(crate) unsafe extern "C" fn spawn_prepare(
         only_compiled_code_stops(worker, frame);
     }
     worker.enter_switch_frame(frame);
+    let shim = worker.sched.task_shim;
     let child = worker.sched.new_task(TASK_STACK, shim);
     worker.root(&mut closure);
     let future = worker.allocate_object(TAG_FUTURE, FUTURE_SIZE);
@@ -1134,8 +1139,8 @@ pub extern "C" fn baml_rt_spawn_unsupported() -> ! {
 }
 
 /// Run the program: `entry` on a task of its own, and every task it spawns,
-/// until none is left that can run. Returns the exit status of the process.
-/// With `migrate`, every task that stops goes on on another thread and
+/// each starting in `task_shim`, until none is left that can run. Returns
+/// the exit status of the process. With `migrate`, every task that stops goes on on another thread and
 /// under a worker at another address: see `serve_in_turns`. Only the
 /// runtime a test build links can, since a second thread costs every start
 /// of a program about 0.6 M instructions for the system symbols it imports,
@@ -1143,14 +1148,15 @@ pub extern "C" fn baml_rt_spawn_unsupported() -> ! {
 ///
 /// # Safety
 ///
-/// Called once, on the thread `worker` belongs to, with the address of the
-/// compiled program's entry function.
-pub unsafe fn run(worker: *mut Mutator, entry: usize, migrate: bool) -> i32 {
+/// Called once, on the thread `worker` belongs to, with the addresses of
+/// the compiled program's entry function and task shim.
+pub unsafe fn run(worker: *mut Mutator, entry: usize, task_shim: usize, migrate: bool) -> i32 {
     // SAFETY: the caller's contract. The worker is reached through its
     // address here because tasks reach it through their pinned register in
     // between.
     unsafe {
         WORKER.store(worker, Ordering::Release);
+        (*worker).sched.task_shim = task_shim;
         let main = (*worker).sched.new_task(MAIN_STACK, entry);
         (*main).flags = TASK_MAIN;
         (*worker).sched.queue.push_back(main);
@@ -1448,7 +1454,8 @@ pub(crate) mod tests {
             let status = unsafe {
                 let mut worker = Mutator::new(program, false);
                 let entry = sleeps_and_looks_task as *const () as usize;
-                run(&raw mut worker, entry, migrate)
+                // No task is spawned: there is no shim.
+                run(&raw mut worker, entry, 0, migrate)
             };
             assert_eq!(status, 0);
             let moved = std::mem::take(&mut *MOVED.lock().expect("no test panicked"));
@@ -1493,6 +1500,8 @@ pub(crate) mod tests {
             run(
                 &raw mut worker,
                 returns_at_once as *const () as usize,
+                // No task is spawned: there is no shim.
+                0,
                 false,
             )
         };

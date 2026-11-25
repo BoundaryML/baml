@@ -293,7 +293,7 @@ pub(super) enum Called {
 
 /// A `try_call` of `called` with an exception edge to each of `handlers`,
 /// innermost first, and the block the call returns to, which receives its
-/// result.
+/// result: a tag and a payload.
 ///
 /// Each edge lands in a block of its own, with the error's tag and payload
 /// in the two payload registers. The unwinder left the error's context in
@@ -311,18 +311,18 @@ pub(super) fn try_call(
     called: &Called,
     arguments: &[ir::Value],
     handlers: &[Edge],
-) -> ir::Value {
+) -> (ir::Value, ir::Value) {
     let signature = match called {
         Called::Direct(function) => builder.func.dfg.ext_funcs[*function].signature,
         Called::Indirect(signature, _) => *signature,
     };
-    let result = builder.func.dfg.signatures[signature].returns[0].value_type;
     let returned = builder.create_block();
-    builder.append_block_param(returned, result);
-    let normal = builder
-        .func
-        .dfg
-        .block_call(returned, &[BlockArg::TryCallRet(0)]);
+    builder.append_block_param(returned, WORD);
+    builder.append_block_param(returned, WORD);
+    let normal = builder.func.dfg.block_call(
+        returned,
+        &[BlockArg::TryCallRet(0), BlockArg::TryCallRet(1)],
+    );
     let landed: Vec<ir::Block> = handlers
         .iter()
         .map(|_| {
@@ -379,7 +379,8 @@ pub(super) fn try_call(
     }
     builder.seal_block(returned);
     builder.switch_to_block(returned);
-    builder.block_params(returned)[0]
+    let results = builder.block_params(returned);
+    (results[0], results[1])
 }
 
 /// The local an operand reads whole.
@@ -753,14 +754,14 @@ impl<'db> Translator<'_, 'db> {
         self.raise(error, Some(context))
     }
 
-    /// Call a BAML function and return its result. From a block that
-    /// unwinds to a handler the call carries the edge to it, and what
-    /// follows is generated in the block the call returns to.
+    /// Call a BAML function and return its result: a tag and a payload.
+    /// From a block that unwinds to a handler the call carries the edge to
+    /// it, and what follows is generated in the block the call returns to.
     pub(super) fn baml_call(
         &mut self,
         called: &Called,
         arguments: &[ir::Value],
-    ) -> Result<ir::Value, CompileError> {
+    ) -> Result<(ir::Value, ir::Value), CompileError> {
         let Some(pad) = self.pad() else {
             let call = match called {
                 Called::Direct(function) => self.builder.ins().call(*function, arguments),
@@ -769,7 +770,8 @@ impl<'db> Translator<'_, 'db> {
                     .ins()
                     .call_indirect(*signature, *code, arguments),
             };
-            return Ok(self.builder.inst_results(call)[0]);
+            let results = self.builder.inst_results(call);
+            return Ok((results[0], results[1]));
         };
         let handlers = self.handlers(pad)?;
         Ok(try_call(&mut self.builder, called, arguments, &handlers))

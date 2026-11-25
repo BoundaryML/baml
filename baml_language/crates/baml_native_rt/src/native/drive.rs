@@ -899,7 +899,7 @@ mod tests {
             let entry = keeps_its_thread_task as *const () as usize;
             // SAFETY: the worker is this test's, and the entry a task
             // function.
-            let status = unsafe { crate::sched::run(&raw mut *worker, entry, migrate) };
+            let status = unsafe { crate::sched::run(&raw mut *worker, entry, 0, migrate) };
             assert_eq!(status, 0);
             assert_eq!(SAME_THREAD.load(Ordering::Acquire), !migrate);
         }
@@ -940,7 +940,7 @@ mod tests {
             let entry = allocates_after_a_stop_task as *const () as usize;
             // SAFETY: the worker is this test's, and the entry a task
             // function.
-            let status = unsafe { crate::sched::run(&raw mut *worker, entry, migrate) };
+            let status = unsafe { crate::sched::run(&raw mut *worker, entry, 0, migrate) };
             assert_eq!(status, 0);
             assert!(INTACT.swap(false, Ordering::AcqRel), "migrating: {migrate}");
         }
@@ -985,7 +985,7 @@ mod tests {
             let entry = holds_forty_roots_task as *const () as usize;
             // SAFETY: the worker is this test's, and the entry a task
             // function.
-            let status = unsafe { crate::sched::run(&raw mut *worker, entry, migrate) };
+            let status = unsafe { crate::sched::run(&raw mut *worker, entry, 0, migrate) };
             assert_eq!(status, 0);
             assert!(
                 ALL_HELD.swap(false, Ordering::AcqRel),
@@ -1014,7 +1014,7 @@ mod tests {
         let mut worker = worker(false);
         let entry = panics_after_a_stop_task as *const () as usize;
         // SAFETY: the worker is this test's, and the entry a task function.
-        unsafe { crate::sched::run(&raw mut *worker, entry, true) };
+        unsafe { crate::sched::run(&raw mut *worker, entry, 0, true) };
     }
 
     /// The panic of a native is named whichever thread it is polled on: it
