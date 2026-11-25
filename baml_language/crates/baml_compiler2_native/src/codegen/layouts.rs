@@ -50,7 +50,8 @@ pub(super) struct ValueSite {
     /// with the thunk that enters such a callee from this call.
     remaps: Vec<(usize, ir::FuncRef)>,
     /// What says which two layouts met, where a callee has one the call
-    /// cannot enter: only a build with checks says.
+    /// cannot enter: only code compiled with checks says, and such code
+    /// also tells what it enters the number of its layout.
     report: Option<ir::FuncRef>,
 }
 
@@ -113,7 +114,8 @@ impl Backend<'_> {
             return Ok(*thunk);
         }
         self.thunks_open()?;
-        let signature = Self::clif_signature(self.layouts[site - 1].len(), Entry::Value, 0);
+        let signature =
+            Self::clif_signature(self.layouts[site - 1].len(), Entry::Value, 0, self.checks);
         let thunk = self
             .module
             .declare_function(
@@ -158,7 +160,7 @@ impl Backend<'_> {
             return Ok(*thunk);
         }
         self.thunks_open()?;
-        let signature = Self::clif_signature(site.len(), Entry::Direct, 0);
+        let signature = Self::clif_signature(site.len(), Entry::Direct, 0, false);
         let thunk = self
             .module
             .declare_function(
@@ -192,12 +194,14 @@ pub(super) fn define_thunks<'db>(
         site.map_to(callee)
             .map_err(|_| internal("a thunk is for a layout its caller's can be laid over"))
     };
-    for ((callee, site), thunk) in backend.remaps.thunks.clone() {
-        let (callee, site) = (&backend.layouts[callee - 1], &backend.layouts[site - 1]);
+    for ((callee_id, site), thunk) in backend.remaps.thunks.clone() {
+        let (callee, site) = (&backend.layouts[callee_id - 1], &backend.layouts[site - 1]);
         let slots = laid_over(site, callee)?;
         let listed = format!("remap {} from {}", described(callee), described(site));
-        context.func.signature = Backend::clif_signature(site.len(), Entry::Value, 0);
-        thunk_body(&slots, None, &mut context.func, builder_context);
+        context.func.signature =
+            Backend::clif_signature(site.len(), Entry::Value, 0, backend.checks);
+        let callee = Callee::Closure(backend.checks.then_some(callee_id));
+        thunk_body(&slots, &callee, &mut context.func, builder_context);
         let named = super::Named::Listed(&listed);
         super::define(backend, context, thunk, &named, clif, disassembly)?;
     }
@@ -213,11 +217,11 @@ pub(super) fn define_thunks<'db>(
             described(&callee.layout),
             described(site)
         );
-        context.func.signature = Backend::clif_signature(site.len(), Entry::Direct, 0);
+        context.func.signature = Backend::clif_signature(site.len(), Entry::Direct, 0, false);
         let implementation = backend.function_ref(implementation, &mut context.func);
         thunk_body(
             &slots,
-            Some(implementation),
+            &Callee::Implementation(implementation),
             &mut context.func,
             builder_context,
         );
@@ -240,13 +244,22 @@ fn described(layout: &CallLayout) -> String {
     format!("({})", slots.join(", "))
 }
 
-/// The body of a thunk. `slots` says, for each parameter of the callee,
-/// which of the arguments the thunk was passed fills it, if any does. The
-/// callee is `implementation`, or without one the callable the thunk was
-/// passed as its closure, which it passes on as the callee's.
+/// What a thunk calls.
+enum Callee {
+    /// The callable it was passed as its closure, which it passes on as
+    /// the callee's. In code compiled with checks it was passed the number
+    /// of its caller's layout after that, and passes this one in its
+    /// place: the number of the layout it lays the arguments out for.
+    Closure(Option<usize>),
+    /// A function it names: the implementation of an interface method.
+    Implementation(ir::FuncRef),
+}
+
+/// The body of a thunk. `slots` says, for each parameter of `callee`,
+/// which of the arguments the thunk was passed fills it, if any does.
 fn thunk_body(
     slots: &[Option<usize>],
-    implementation: Option<ir::FuncRef>,
+    callee: &Callee,
     function: &mut ir::Function,
     builder_context: &mut FunctionBuilderContext,
 ) {
@@ -255,11 +268,15 @@ fn thunk_body(
     builder.append_block_params_for_function_params(block);
     builder.switch_to_block(block);
     let passed = builder.block_params(block).to_vec();
-    let (closure, passed) = match implementation {
-        Some(_) => (None, &passed[..]),
-        None => (Some(passed[0]), &passed[1..]),
+    // What comes before the values, here and in the call.
+    let (mut arguments, passed) = match callee {
+        Callee::Implementation(_) => (Vec::new(), &passed[..]),
+        Callee::Closure(None) => (vec![passed[0]], &passed[1..]),
+        Callee::Closure(Some(layout)) => {
+            let layout = builder.ins().iconst(WORD, imm(*layout));
+            (vec![passed[0], layout], &passed[2..])
+        }
     };
-    let mut arguments: Vec<ir::Value> = closure.into_iter().collect();
     for slot in slots {
         match slot {
             Some(at) => arguments.extend([passed[2 * at], passed[2 * at + 1]]),
@@ -270,20 +287,19 @@ fn thunk_body(
             }
         }
     }
-    let call = match (implementation, closure) {
-        (Some(implementation), _) => builder.ins().call(implementation, &arguments),
-        (None, Some(closure)) => {
+    let call = match callee {
+        Callee::Implementation(implementation) => builder.ins().call(*implementation, &arguments),
+        Callee::Closure(said) => {
             let code = builder.ins().load(
                 WORD,
                 closure_access(),
-                closure,
+                arguments[0],
                 offset(layout::CLOSURE_CODE),
             );
-            let signature = Backend::clif_signature(slots.len(), Entry::Value, 0);
+            let signature = Backend::clif_signature(slots.len(), Entry::Value, 0, said.is_some());
             let signature = builder.import_signature(signature);
             builder.ins().call_indirect(signature, code, &arguments)
         }
-        (None, None) => unreachable!("a thunk without an implementation has a closure"),
     };
     let returned = builder.inst_results(call).to_vec();
     builder.ins().return_(&returned);
@@ -318,6 +334,13 @@ pub(super) fn call_value(
     access: MemFlags,
     handlers: Option<&[unwind::Edge]>,
 ) -> (ir::Value, ir::Value) {
+    // Code compiled with checks tells what it enters its layout.
+    let says = site.report.is_some();
+    let mut arguments = vec![closure];
+    if says {
+        arguments.push(builder.ins().iconst(WORD, imm(site.layout)));
+    }
+    arguments.extend(words);
     let fits = builder
         .ins()
         .icmp_imm(IntCC::Equal, callee, imm(site.layout));
@@ -333,10 +356,8 @@ pub(super) fn call_value(
     let code = builder
         .ins()
         .load(WORD, access, closure, offset(layout::CLOSURE_CODE));
-    let signature = Backend::clif_signature(words.len() / 2, Entry::Value, 0);
+    let signature = Backend::clif_signature(words.len() / 2, Entry::Value, 0, says);
     let signature = builder.import_signature(signature);
-    let mut arguments = vec![closure];
-    arguments.extend(words);
     let (tag, payload) = unwind::call(
         builder,
         &unwind::Called::Indirect(signature, code),

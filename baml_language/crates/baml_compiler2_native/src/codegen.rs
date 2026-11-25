@@ -644,7 +644,10 @@ impl Backend<'_> {
     /// edges for on every target.
     ///
     /// A function entered through a value takes the closure first; one
-    /// entered as a bound method finds its receiver there. Then come
+    /// entered as a bound method finds its receiver there. Where the code
+    /// is compiled with `checks`, such an entry takes one word more after
+    /// the closure: the number of the layout its caller's arguments are
+    /// in, which it compares with its own. Then come
     /// `type_args` type objects, a word each, one per type parameter of a
     /// function that must be told its type arguments; then `values` values,
     /// each two words, its tag and its payload, whatever its type. The
@@ -652,16 +655,19 @@ impl Backend<'_> {
     /// parameters is entered alike, by a call that names it, through a
     /// function value or through a row, and none of them has to know how
     /// the function holds what it is passed.
-    fn clif_signature(values: usize, entry: Entry, type_args: usize) -> ir::Signature {
+    fn clif_signature(
+        values: usize,
+        entry: Entry,
+        type_args: usize,
+        checks: bool,
+    ) -> ir::Signature {
         let mut clif = ir::Signature::new(CallConv::Tail);
         let (closure, receiver) = match entry {
-            Entry::Direct => (false, 0),
-            Entry::Value => (true, 0),
-            Entry::Bound => (true, 1),
+            Entry::Direct => (0, 0),
+            Entry::Value => (1 + usize::from(checks), 0),
+            Entry::Bound => (1 + usize::from(checks), 1),
         };
-        clif.params = closure
-            .then(|| AbiParam::new(WORD))
-            .into_iter()
+        clif.params = std::iter::repeat_n(AbiParam::new(WORD), closure)
             .chain(std::iter::repeat_n(AbiParam::new(WORD), type_args))
             .chain(std::iter::repeat_n(
                 AbiParam::new(WORD),
@@ -1086,7 +1092,12 @@ pub(crate) fn generate<'db>(
             .declare_function(
                 &symbol_name(index, &function.name),
                 Linkage::Local,
-                &Backend::clif_signature(signature.params.len(), function.key.entry, type_args),
+                &Backend::clif_signature(
+                    signature.params.len(),
+                    function.key.entry,
+                    type_args,
+                    backend.checks,
+                ),
             )
             .map_err(internal)?;
         let typed = Body::new(db, mir, body, &function.captures, &function.key);
@@ -1175,8 +1186,12 @@ pub(crate) fn generate<'db>(
     let mut builder_context = FunctionBuilderContext::new();
     for (function, mir, body) in bodies {
         let this = &declared[&function.key];
-        context.func.signature =
-            Backend::clif_signature(this.signature.params.len(), this.entry, this.type_args);
+        context.func.signature = Backend::clif_signature(
+            this.signature.params.len(),
+            this.entry,
+            this.type_args,
+            backend.checks,
+        );
         Translator::new(
             db,
             &mut backend,
@@ -1575,6 +1590,10 @@ impl<'a, 'db> Translator<'a, 'db> {
         if self.key.entry != Entry::Direct {
             let closure = arriving.next().expect("a closure parameter");
             self.builder.def_var(self.closure, closure);
+            if self.backend.checks {
+                let said = arriving.next().expect("the caller's layout");
+                self.check_layout(said)?;
+            }
         }
         for _ in 0..self.declared(self.key)?.type_args {
             // A type object can be one of the heap, which a collection
@@ -1677,6 +1696,29 @@ impl<'a, 'db> Translator<'a, 'db> {
         self.finish_landings()?;
         self.builder.seal_all_blocks();
         self.builder.finalize();
+        Ok(())
+    }
+
+    /// End the program unless `said`, the number of the layout the caller
+    /// of this function says its arguments are in, is the function's own:
+    /// what the caller compared with the tag of the function value, or
+    /// what a thunk laid the arguments out for. Only code compiled with
+    /// checks is passed it.
+    fn check_layout(&mut self, said: ir::Value) -> Result<(), CompileError> {
+        let own = self.declared(self.key)?;
+        let own = self.backend.layout_id(&own.layout)?;
+        let fits = self.builder.ins().icmp_imm(IntCC::Equal, said, imm(own));
+        let entered = self.builder.create_block();
+        let wrong = self.builder.create_block();
+        self.builder.set_cold_block(wrong);
+        self.builder.ins().brif(fits, entered, &[], wrong, &[]);
+        self.builder.seal_block(entered);
+        self.builder.seal_block(wrong);
+        self.builder.switch_to_block(wrong);
+        let own = self.word_const(own);
+        self.emit_runtime_call(Runtime::LayoutMismatch, &[own, said])?;
+        self.builder.ins().trap(TRAP_LAYOUT);
+        self.builder.switch_to_block(entered);
         Ok(())
     }
 
@@ -4778,7 +4820,7 @@ impl<'a, 'db> Translator<'a, 'db> {
 
         self.builder.switch_to_block(found);
         let code = self.builder.block_params(found)[0];
-        let signature = Backend::clif_signature(arguments.len() / 2, Entry::Direct, 0);
+        let signature = Backend::clif_signature(arguments.len() / 2, Entry::Direct, 0, false);
         let signature = self.builder.import_signature(signature);
         // The callee can collect, which moves storage.
         self.forget_arrays();
