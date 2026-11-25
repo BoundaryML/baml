@@ -184,6 +184,7 @@ Use `baml run <target> -- --help` to display the target's generated arguments.
 
 Use `--output-format json-envelope` to include reported token usage with a
 named function's JSON result. Usage is summed by provider and model.
+The `usage` field is null if child tasks are still running when the function returns.
 
 Examples:
   Run a function:
@@ -1252,7 +1253,7 @@ impl RunArgs {
                         &engine,
                         value,
                         output_format,
-                        &[],
+                        None,
                         &helper_context,
                         || log_output.print(logs.as_ref()),
                     )

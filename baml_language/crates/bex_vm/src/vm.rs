@@ -995,7 +995,7 @@ pub(crate) mod tests {
             impl_cache: std::cell::RefCell::default(),
             json_decode_cache: crate::package_baml::json::DecodeCache::default(),
             enum_equals_memo: crate::package_baml::EnumEqualsMemo::default(),
-            model_usage_collector: None,
+            model_usage_capture: None,
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
@@ -2413,7 +2413,7 @@ pub struct BexVm {
 
     /// VM-owned producer state. It deliberately has no transport or buffer.
     pub(crate) telemetry: Option<TelemetryState>,
-    pub(crate) model_usage_collector: Option<crate::ModelUsageCollector>,
+    pub(crate) model_usage_capture: Option<crate::model_usage::ModelUsageCapture>,
     pub(crate) trace_scope: btel_types::RecordingId,
     manual_activations: Vec<ManualActivation>,
 
@@ -3303,7 +3303,7 @@ impl BexVm {
             json_decode_cache: crate::package_baml::json::DecodeCache::default(),
             enum_equals_memo: crate::package_baml::EnumEqualsMemo::default(),
             telemetry,
-            model_usage_collector: None,
+            model_usage_capture: None,
             trace_scope,
             manual_activations: Vec::new(),
             pending_telemetry_wait: None,
@@ -15319,7 +15319,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             monitors: _,
             thread_id: _,
             telemetry,
-            model_usage_collector: _,
+            model_usage_capture: _,
             trace_scope: _,
             manual_activations: _,
             pending_telemetry_wait: _,

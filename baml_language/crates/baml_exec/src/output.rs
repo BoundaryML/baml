@@ -1,10 +1,10 @@
 // Output formatting for `BexExternalValue` — shared by `baml run` and
 // packaged binaries produced by `baml pack`.
 //
-// Two formats, chosen at run time with `--output-format` by both `baml run`
-// and packed binaries:
+// Formats selected at run time with `--output-format`:
 //   - Text: human-readable, with type annotations. The default.
 //   - Json: single JSON document, no wrapping; for pipelines, CI and agents.
+//   - JsonEnvelope: the return value and model usage, if complete.
 
 #![allow(clippy::print_stdout)]
 
@@ -37,7 +37,7 @@ pub async fn write_output_with_context(
     engine: &Arc<BexEngine>,
     value: BexExternalValue,
     format: OutputFormat,
-    usage: &[ModelUsage],
+    usage: Option<&[ModelUsage]>,
     helper_context: &HelperCallContext,
     before_print: impl FnOnce(),
 ) -> Result<()> {
@@ -58,21 +58,23 @@ pub async fn write_output_with_context(
             let mut text = serialize_via_baml_json(engine, value, helper_context).await?;
             if format == OutputFormat::JsonEnvelope {
                 let value: serde_json::Value = serde_json::from_str(&text)?;
-                let usage: Vec<_> = usage
-                    .iter()
-                    .map(|entry| {
-                        serde_json::json!({
-                            "provider": entry.provider,
-                            "model": entry.model,
-                            "calls": entry.calls,
-                            "input_tokens": entry.input_tokens,
-                            "output_tokens": entry.output_tokens,
-                            "cache_read_tokens": entry.cache_read_tokens,
-                            "cache_write_tokens": entry.cache_write_tokens,
-                            "reasoning_tokens": entry.reasoning_tokens,
+                let usage = usage.map(|entries| {
+                    entries
+                        .iter()
+                        .map(|entry| {
+                            serde_json::json!({
+                                "provider": entry.provider,
+                                "model": entry.model,
+                                "calls": entry.calls,
+                                "input_tokens": entry.input_tokens,
+                                "output_tokens": entry.output_tokens,
+                                "cache_read_tokens": entry.cache_read_tokens,
+                                "cache_write_tokens": entry.cache_write_tokens,
+                                "reasoning_tokens": entry.reasoning_tokens,
+                            })
                         })
-                    })
-                    .collect();
+                        .collect::<Vec<_>>()
+                });
                 text =
                     serde_json::to_string(&serde_json::json!({ "value": value, "usage": usage }))?;
             }

@@ -110,6 +110,7 @@ pub async fn dispatch_target_with_context(
     let result = engine
         .call_function_bound_args(target_name, args, call_context, true)
         .await;
+    let usage = usage.and_then(|collector| collector.finish());
     after_call();
 
     match result {
@@ -127,7 +128,7 @@ pub async fn dispatch_target_with_context(
                     &engine,
                     value,
                     output_format,
-                    &usage.map_or_else(Vec::new, |usage| usage.snapshot()),
+                    usage.as_deref(),
                     &helper_context,
                     after_call,
                 )

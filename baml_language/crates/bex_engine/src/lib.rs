@@ -5879,6 +5879,7 @@ impl BexEngine {
         thread: &mut ActiveHeapPermit<BexThread>,
         future_id: FutureId,
     ) -> Result<(), EngineError> {
+        thread.vm.finish_model_usage();
         let child_cancel = thread.vm_thread_cancel().clone();
         let mut guard = self.futures.acquire(thread.proof()).await;
         guard.cancel_future(future_id)?;
@@ -5897,6 +5898,7 @@ impl BexEngine {
         value: Value,
         trace: Vec<bex_vm::StackFrame>,
     ) -> Result<(), EngineError> {
+        thread.vm.finish_model_usage();
         let child_cancel = thread.vm_thread_cancel().clone();
         // Read before the error fires the task's own token below: whether the
         // task had been cancelled, by any route, when it failed.
@@ -6817,6 +6819,7 @@ impl BexEngine {
                     }
                     Err(bex_vm::errors::VmError::InternalError(err)) => {
                         if let Some(future_id) = thread.vm_thread_settles_future() {
+                            thread.vm.finish_model_usage();
                             let mut guard = self.futures.acquire(thread.proof()).await;
                             guard.internal_error_future(
                                 future_id,
@@ -6830,6 +6833,7 @@ impl BexEngine {
                     }
                     Err(bex_vm::errors::VmError::TracedInternalError { source, trace }) => {
                         if let Some(future_id) = thread.vm_thread_settles_future() {
+                            thread.vm.finish_model_usage();
                             let mut guard = self.futures.acquire(thread.proof()).await;
                             guard.internal_error_future(
                                 future_id,
@@ -6848,6 +6852,7 @@ impl BexEngine {
                         // registry and return SettledChild. The awaiter's
                         // next `Await` instruction picks up `FutureRead::Ready`.
                         if let Some(future_id) = thread.vm_thread_settles_future() {
+                            thread.vm.finish_model_usage();
                             let mut guard = self.futures.acquire(thread.proof()).await;
                             guard.fulfill_future(future_id, value)?;
                             return Ok(ThreadOutcome::SettledChild(InvocationOutcome::Ok));

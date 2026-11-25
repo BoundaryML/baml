@@ -23,7 +23,7 @@
 mod common;
 
 use std::{
-    io::Write as _,
+    io::{BufRead as _, BufReader, Write as _},
     path::{Path, PathBuf},
     process::{Command, Output, Stdio},
 };
@@ -102,8 +102,13 @@ fn pack_project(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn json_envelope_reports_model_usage_for_run_and_pack() {
+    use std::{
+        sync::{Mutex, mpsc},
+        time::Duration,
+    };
+
     use serde_json::{Value, json};
-    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::path};
+    use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers::path};
 
     let built = common::ensure_built();
     let server = MockServer::start().await;
@@ -114,12 +119,26 @@ async fn json_envelope_reports_model_usage_for_run_and_pack() {
     let mut with_usage = answer.clone();
     with_usage["usage"] = json!({"prompt_tokens": 4111, "completion_tokens": 4222});
     Mock::given(path("/metered/chat/completions"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(with_usage))
-        .expect(5)
+        .respond_with(ResponseTemplate::new(200).set_body_json(with_usage.clone()))
+        .expect(6)
         .mount(&server)
         .await;
     Mock::given(path("/unmetered/chat/completions"))
         .respond_with(ResponseTemplate::new(200).set_body_json(answer))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let (release_response, response_gate) = mpsc::channel();
+    let response_gate = Mutex::new(response_gate);
+    Mock::given(path("/background/chat/completions"))
+        .respond_with(move |_: &Request| {
+            response_gate
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(30))
+                .unwrap();
+            ResponseTemplate::new(200).set_body_json(&with_usage)
+        })
         .expect(1)
         .mount(&server)
         .await;
@@ -141,12 +160,23 @@ function Twice(x: string) -> string {{
     let _ = Metered(x);
     await pending
 }}
+
+function BackgroundModel(x: string) -> string {{
+    client: openai.GenericClient.new(model = "requested-model", base_url = "{uri}/background", api_key = "test", capture_wire = false)
+    prompt: `Echo ${{x}}`
+}}
+
+function Background(x: string) -> string {{
+    let value = Metered(x);
+    let _ = spawn {{ BackgroundModel(x) }};
+    value
+}}
 "#,
         uri = server.uri()
     );
     let (project, binary) = pack_project(built, &source, &["Metered"]);
 
-    let invoke = |cmd: &mut Command| -> Value {
+    let spawn = |cmd: &mut Command| {
         let mut child = cmd
             .args(["--json-args", "-"])
             .stdin(Stdio::piped())
@@ -160,6 +190,10 @@ function Twice(x: string) -> string {{
             .unwrap()
             .write_all(br#"{"x":"hi"}"#)
             .unwrap();
+        child
+    };
+    let invoke = |cmd: &mut Command| -> Value {
+        let child = spawn(cmd);
         let result = child.wait_with_output().unwrap();
         assert!(
             result.status.success(),
@@ -169,15 +203,16 @@ function Twice(x: string) -> string {{
         serde_json::from_slice(&result.stdout).unwrap()
     };
 
-    let run = |target: &str, format: &str| {
+    let run_command = |target: &str, format: &str| {
         let mut cmd = command(&built.baml_cli);
         cmd.current_dir(project.path())
             .env("BAML_HOME", common::shared_baml_home())
             .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
             .env("BAML_TELEMETRY", "off")
             .args(["run", "--output-format", format, "-f", target, "--", target]);
-        invoke(&mut cmd)
+        cmd
     };
+    let run = |target, format| invoke(&mut run_command(target, format));
     let expected = |calls: u64| {
         json!({
             "value": "ok",
@@ -203,6 +238,23 @@ function Twice(x: string) -> string {{
     assert_eq!(
         invoke(&mut command(&binary).args(["--output-format", "json-envelope"])),
         expected(1),
+    );
+
+    // Hold the background model's response until the CLI has emitted the envelope.
+    let mut child = spawn(&mut run_command("Background", "json-envelope"));
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut line = String::new();
+    stdout.read_line(&mut line).unwrap();
+    release_response.send(()).unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        serde_json::from_str::<Value>(&line).unwrap(),
+        json!({"value": "ok", "usage": null})
     );
 }
 
