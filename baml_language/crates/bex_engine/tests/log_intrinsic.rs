@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use bex_engine::{
     BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder,
-    logger::{TraceLogDrainReport, TraceLogger},
+    logger::{LogLevel, TraceLogDrainReport, TraceLogger},
 };
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
@@ -61,13 +61,13 @@ async fn structured_log_executes_without_faulting() {
     assert_eq!(result.unwrap(), BexExternalValue::Int(123));
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert_eq!(report.logs.len(), 4);
-    assert_eq!(report.logs[0].metadata.level.as_deref(), Some("info"));
+    assert_eq!(report.logs[0].metadata.level, LogLevel::Info);
     assert_eq!(report.logs[0].body, "hello");
-    assert_eq!(report.logs[1].metadata.level.as_deref(), Some("debug"));
+    assert_eq!(report.logs[1].metadata.level, LogLevel::Debug);
     assert_eq!(report.logs[1].body, "42");
-    assert_eq!(report.logs[2].metadata.level.as_deref(), Some("warn"));
+    assert_eq!(report.logs[2].metadata.level, LogLevel::Warn);
     assert_eq!(report.logs[2].body, "[1, 2, 3]");
-    assert_eq!(report.logs[3].metadata.level.as_deref(), Some("error"));
+    assert_eq!(report.logs[3].metadata.level, LogLevel::Error);
     assert_eq!(report.logs[3].body, r#"{"user": "ada", "role": "admin"}"#);
 }
 

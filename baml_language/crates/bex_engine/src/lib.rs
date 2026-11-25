@@ -5934,7 +5934,7 @@ impl BexEngine {
             .logger
             .capture_with(capture.boundary_id, call, |trace_heap| {
                 let metadata = TraceLogMetadata {
-                    level: Some(level.as_str().to_owned()),
+                    level,
                     event_name: event_name.map(str::to_owned),
                     source: Self::source_location_from_event(source_location),
                     timestamp_ms: epoch_ms(),

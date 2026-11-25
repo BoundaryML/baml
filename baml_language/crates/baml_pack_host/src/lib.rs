@@ -10,8 +10,9 @@ use std::{collections::HashMap, process::ExitCode, sync::Arc};
 use baml_exec::{
     CONTEXT_ENV, DispatchResult, Interrupts, PACK_SECTION_NAME, PackEnvelope, PackMode,
     clamp_exit_code, context_source_from_env, dispatch_target_with_context,
-    ensure_single_stdin_consumer, load_json_source, load_launch_context, parse_multi_target_argv,
-    parse_target_argv, print_error,
+    ensure_single_stdin_consumer, load_json_source, load_launch_context,
+    log_output::{LogFilter, LogOutput},
+    parse_multi_target_argv, parse_target_argv, print_error,
 };
 use bex_engine::{
     BexEngine, CallId, FunctionCallContextBuilder, UserFunctionCatalog, UserFunctionInfo,
@@ -242,6 +243,23 @@ fn launch(
     parsed: baml_exec::ParsedTargetArgs,
     compiled_bodies: Option<bex_engine::CompiledBodies>,
 ) -> ExitCode {
+    // A packed program's stdio is its own, so its `log.*` events stay off it
+    // unless the log variable asks; telemetry records them either way. On
+    // stderr: stdout stays the program's.
+    let log_env_var = match envelope.log.env_var() {
+        Ok(name) => name,
+        Err(e) => {
+            print_error(e);
+            return ExitCode::FAILURE;
+        }
+    };
+    let log_output = match LogFilter::from_env(log_env_var) {
+        Ok(filter) => LogOutput::status(filter.unwrap_or(LogFilter::Off), "packed program"),
+        Err(e) => {
+            print_error(e);
+            return ExitCode::FAILURE;
+        }
+    };
     let context_source = match context_source_from_env() {
         Ok(source) => source,
         Err(e) => {
@@ -312,6 +330,7 @@ fn launch(
         json_args,
         parsed.output_format.unwrap_or_default(),
         has_compiled_bodies,
+        log_output,
     )
 }
 
@@ -322,6 +341,7 @@ fn finalize_dispatch(
     json_args: Option<serde_json::Value>,
     output_format: baml_exec::OutputFormat,
     has_compiled_bodies: bool,
+    log_output: LogOutput,
 ) -> ExitCode {
     let mut builder = tokio::runtime::Builder::new_multi_thread();
     builder.enable_all();
@@ -343,24 +363,29 @@ fn finalize_dispatch(
             return ExitCode::FAILURE;
         }
     };
-    let result = rt.block_on(dispatch_target_with_context(
-        Arc::clone(engine),
-        target_name,
-        cli_values,
-        json_args,
-        output_format,
-        FunctionCallContextBuilder::new(CallId::next())
-            .with_cancel_token(interrupts.token())
-            .build(),
-        || {},
-    ));
+    let (call_context, logs) = log_output.call_context(
+        FunctionCallContextBuilder::new(CallId::next()).with_cancel_token(interrupts.token()),
+    );
+    let result = log_output.block_on(
+        &rt,
+        dispatch_target_with_context(
+            Arc::clone(engine),
+            target_name,
+            cli_values,
+            json_args,
+            output_format,
+            call_context,
+            || log_output.print(logs.as_ref()),
+        ),
+        logs.as_ref(),
+    );
     interrupts.root_finished();
     engine.record_process_exit(match &result {
         Ok(DispatchResult::Ok | DispatchResult::Exit(0)) => bex_engine::ProcessStatus::Success,
         _ if engine.root_panicked() => bex_engine::ProcessStatus::Panicked,
         _ => bex_engine::ProcessStatus::Error,
     });
-    rt.block_on(engine.shutdown());
+    log_output.block_on(&rt, engine.shutdown(), logs.as_ref());
     if let Some(error) = engine.initial_cloud_authorization_error() {
         print_error(format_args!("{error}"));
         return ExitCode::FAILURE;

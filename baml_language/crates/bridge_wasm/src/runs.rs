@@ -476,7 +476,7 @@ fn drain_wasm_logs(
     for encoded in report.logs {
         let event = LogEventRecord {
             call: encoded.call,
-            level: encoded.metadata.level.clone(),
+            level: Some(encoded.metadata.level.as_str().to_owned()),
             source: encoded.metadata.source.clone(),
             timestamp_ms: encoded.metadata.timestamp_ms,
             message_preview: encoded.metadata.message_preview.clone(),
@@ -523,7 +523,7 @@ fn drain_wasm_logs(
 
         if let Some(patch) = run_store.ingest_log_value_ref(
             encoded.boundary_id,
-            encoded.metadata.level,
+            Some(encoded.metadata.level.as_str().to_owned()),
             encoded
                 .metadata
                 .message_preview

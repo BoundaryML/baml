@@ -33,7 +33,6 @@ pub(crate) mod help_command;
 pub(crate) mod hot_reload;
 pub(crate) mod ide_command;
 pub(crate) mod init_command;
-pub(crate) mod log_output;
 pub(crate) mod lsp;
 pub(crate) mod optional_duration;
 pub(crate) mod output;

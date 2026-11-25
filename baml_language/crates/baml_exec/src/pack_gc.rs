@@ -19,6 +19,8 @@ use bex_engine::gc_settings::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 
+use crate::pack_env::{taken_names, valid_env_var};
+
 /// Serialized in [`crate::PackEnvelope`]. Raw numbers, validated again when the
 /// host turns them into an engine config, since a decoded artifact can bypass
 /// [`PackGc::from_manifest`].
@@ -50,14 +52,6 @@ impl Default for PackGc {
 pub struct PackGcError(pub String);
 
 const GC_FIELDS: &[&str] = &["growth", "min_growth"];
-/// Names the other `[pack.env_var_names]` bindings use by default; a GC
-/// variable may not share one.
-const OTHER_BINDINGS: &[&str] = &[
-    "BAML_TELEMETRY",
-    "BOUNDARY_PROJECT",
-    "BOUNDARY_API_KEY",
-    "BOUNDARY_API_URL",
-];
 
 impl PackGc {
     /// Read `[pack.gc]` and the GC entries of `[pack.env_var_names]`.
@@ -121,13 +115,7 @@ impl PackGc {
             gc.min_growth_bytes = min_growth.map(|bytes| bytes as u64);
         }
         if let Some(names) = pack.get("env_var_names").and_then(toml::Value::as_table) {
-            let mut taken: Vec<String> = OTHER_BINDINGS.iter().map(|&name| name.into()).collect();
-            taken.extend(
-                names
-                    .iter()
-                    .filter(|(key, _)| *key != GROWTH_ENV_VAR && *key != MIN_GROWTH_ENV_VAR)
-                    .filter_map(|(_, value)| value.as_str().map(str::to_owned)),
-            );
+            let taken = taken_names(Some(names), &[GROWTH_ENV_VAR, MIN_GROWTH_ENV_VAR]);
             for (key, output) in [
                 (GROWTH_ENV_VAR, &mut gc.growth_env_var),
                 (MIN_GROWTH_ENV_VAR, &mut gc.min_growth_env_var),
@@ -209,12 +197,6 @@ impl PackGc {
             min_growth_env_var: Some(self.min_growth_env_var.clone()),
         })
     }
-}
-
-fn valid_env_var(value: &str) -> bool {
-    let mut bytes = value.bytes();
-    matches!(bytes.next(), Some(b'a'..=b'z' | b'A'..=b'Z' | b'_'))
-        && bytes.all(|byte| matches!(byte, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_'))
 }
 
 #[cfg(test)]
@@ -300,6 +282,7 @@ mod tests {
             "BAML_GC_GROWTH = \"BAML_TELEMETRY\"",
             "BAML_GC_GROWTH = \"BAML_GC_MIN_GROWTH\"",
             "BAML_GC_MIN_GROWTH = \"BOUNDARY_API_KEY\"",
+            "BAML_GC_MIN_GROWTH = \"BAML_CONTEXT\"",
             "BAML_TELEMETRY = \"ACME\"\nBAML_GC_GROWTH = \"ACME\"",
         ] {
             assert!(

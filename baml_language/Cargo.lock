@@ -684,6 +684,7 @@ version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "baml_artifact",
+ "baml_env",
  "baml_tests",
  "baml_type",
  "bex_engine",

@@ -12,6 +12,7 @@ use bex_events::{
     ids::BoundaryId,
     run::{SourceLocation, ThreadRef},
 };
+pub use bex_vm::telemetry::LogLevel;
 
 use crate::{
     trace_heap::{TraceHeap, TraceSnapshotHandle},
@@ -20,7 +21,7 @@ use crate::{
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraceLogMetadata {
-    pub level: Option<String>,
+    pub level: LogLevel,
     pub event_name: Option<String>,
     pub source: Option<SourceLocation>,
     pub timestamp_ms: u64,
@@ -309,7 +310,7 @@ mod tests {
     };
 
     use crate::{
-        logger::{TraceLogMetadata, TraceLogger, TraceLoggerStats},
+        logger::{LogLevel, TraceLogMetadata, TraceLogger, TraceLoggerStats},
         trace_heap::{TraceSnapshot, TraceValue},
     };
 
@@ -332,7 +333,7 @@ mod tests {
                 ));
                 (
                     TraceLogMetadata {
-                        level: Some("info".to_string()),
+                        level: LogLevel::Info,
                         event_name: None,
                         source: None,
                         timestamp_ms: 1,

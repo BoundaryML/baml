@@ -43,7 +43,6 @@ baml run
   --include-generated [default: false]
   --list [default: false]
   --log <LEVEL> [default: info] [env: BAML_LOG]
-  --log-file <LOG_FILE>
   --shutdown-timeout <DURATION> [default: 15s]
   -F, --features <FEATURES>
   -e, --expression <EXPRESSION>

@@ -13,6 +13,7 @@
 //   - The target-identifier / `.baml` hermetic / `--function` paths
 //     each reach a working binary.
 //   - The baked-in `output-format` is honored, not ignored.
+//   - `log.*` reaches stdio only when `BAML_LOG` asks, and then on stderr.
 //   - `baml.sys.exit(n)` crosses the process boundary and becomes the
 //     shell exit code.
 //
@@ -34,14 +35,22 @@ use sys_native::SysOpsExt as _;
 // Helpers
 // ============================================================================
 
-/// GC variables the tests set on purpose and nowhere else.
-const GC_VARS: [&str; 3] = ["BAML_GC_GROWTH", "BAML_GC_MIN_GROWTH", "ACME_GC_GROWTH"];
+/// Variables a packed program reads that the tests set on purpose and nowhere
+/// else. CI sets `BAML_LOG` for other jobs.
+const CONTROLLED_VARS: [&str; 5] = [
+    "BAML_GC_GROWTH",
+    "BAML_GC_MIN_GROWTH",
+    "ACME_GC_GROWTH",
+    "BAML_LOG",
+    "ACME_LOG",
+];
 
-/// A command that does not inherit the developer's or CI's GC variables, so
-/// neither `baml pack` nor a packed program sees a value a test did not set.
+/// A command that does not inherit the developer's or CI's values for
+/// [`CONTROLLED_VARS`], so neither `baml pack` nor a packed program sees a
+/// value a test did not set.
 fn command(program: impl AsRef<std::ffi::OsStr>) -> Command {
     let mut command = Command::new(program);
-    for name in GC_VARS {
+    for name in CONTROLLED_VARS {
         command.env_remove(name);
     }
     command
@@ -567,6 +576,110 @@ fn pack_e2e_output_format_is_a_runtime_flag() {
     assert!(json.status.success(), "{json:?}");
     let parsed: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
     assert_eq!(parsed, serde_json::json!({"x": 42}));
+}
+
+/// A packed program's stdio is its own: its `log.*` events stay off it unless
+/// `BAML_LOG` sets a level, and then they go to stderr, leaving stdout to the
+/// program.
+#[test]
+fn pack_e2e_logs_stay_off_stdio_unless_baml_log_sets_a_level() {
+    let built = common::ensure_built();
+    let (_tmp, bin) = pack_project(
+        built,
+        "function main() -> string {\n    log.error(\"oops\");\n    log.info(\"hello\");\n    \"done\"\n}\n",
+        &["main"],
+    );
+    let run_with = |level: Option<&str>| {
+        let mut cmd = command(&bin);
+        if let Some(level) = level {
+            cmd.env("BAML_LOG", level);
+        }
+        cmd.output().expect("spawn packed binary")
+    };
+    let text = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap();
+
+    let silent = run_with(None);
+    assert!(silent.status.success(), "{silent:?}");
+    assert_eq!(text(silent.stdout).trim(), "\"done\"");
+    let stderr = text(silent.stderr);
+    assert!(
+        !stderr.contains("oops") && !stderr.contains("hello"),
+        "{stderr}"
+    );
+
+    let errors = run_with(Some("ERROR"));
+    assert!(errors.status.success(), "{errors:?}");
+    assert_eq!(text(errors.stdout).trim(), "\"done\"");
+    let stderr = text(errors.stderr);
+    assert!(stderr.contains("[ERROR] oops"), "{stderr}");
+    assert!(!stderr.contains("hello"), "{stderr}");
+
+    let info = run_with(Some("info"));
+    assert!(info.status.success(), "{info:?}");
+    assert_eq!(text(info.stdout).trim(), "\"done\"");
+    let stderr = text(info.stderr);
+    assert!(
+        stderr.contains("[ERROR] oops") && stderr.contains("[INFO] hello"),
+        "{stderr}"
+    );
+
+    let invalid = run_with(Some("loud"));
+    assert!(!invalid.status.success(), "{invalid:?}");
+    assert!(invalid.stdout.is_empty(), "{invalid:?}");
+    let stderr = text(invalid.stderr);
+    assert!(
+        stderr.contains(
+            r#"BAML_LOG must be one of off, error, warn, info, debug, trace, got "loud""#
+        ),
+        "{stderr}"
+    );
+}
+
+/// A publisher renames the log variable as it does the GC ones: the program
+/// reads only the name it carries.
+#[test]
+fn pack_e2e_publisher_renames_the_log_variable() {
+    let built = common::ensure_built();
+    let tmp = tempfile::tempdir().unwrap();
+    common::write_project(
+        tmp.path(),
+        "function main() -> string {\n    log.info(\"hello\");\n    \"done\"\n}\n",
+    );
+    std::fs::write(
+        tmp.path().join("baml.toml"),
+        "[package]\nname = \"pack_e2e\"\n\n[pack.env_var_names]\nBAML_LOG = \"ACME_LOG\"\n",
+    )
+    .unwrap();
+    let bin = pack(built, tmp.path(), &["main"]);
+    let run_with = |vars: &[(&str, &str)]| {
+        let mut cmd = command(&bin);
+        cmd.envs(vars.iter().copied());
+        cmd.output().expect("spawn packed binary")
+    };
+    let text = |bytes: Vec<u8>| String::from_utf8(bytes).unwrap();
+
+    // The standard name, even an invalid value, is someone else's variable.
+    for value in ["info", "loud"] {
+        let ignored = run_with(&[("BAML_LOG", value)]);
+        assert!(ignored.status.success(), "{value}: {ignored:?}");
+        assert_eq!(text(ignored.stdout).trim(), "\"done\"");
+        assert_eq!(text(ignored.stderr), "", "{value}");
+    }
+
+    let logged = run_with(&[("ACME_LOG", "info")]);
+    assert!(logged.status.success(), "{logged:?}");
+    assert_eq!(text(logged.stdout).trim(), "\"done\"");
+    assert!(text(logged.stderr).contains("[INFO] hello"));
+
+    let invalid = run_with(&[("ACME_LOG", "loud")]);
+    assert!(!invalid.status.success(), "{invalid:?}");
+    let stderr = text(invalid.stderr);
+    assert!(
+        stderr.contains(
+            r#"ACME_LOG must be one of off, error, warn, info, debug, trace, got "loud""#
+        ),
+        "{stderr}"
+    );
 }
 
 /// `baml.sys.exit(n)` must cross the subprocess boundary unchanged.
