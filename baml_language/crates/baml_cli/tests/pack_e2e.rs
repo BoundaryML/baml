@@ -23,8 +23,9 @@
 mod common;
 
 use std::{
+    io::Write as _,
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::{Command, Output, Stdio},
 };
 
 use common::BuiltPaths;
@@ -98,6 +99,112 @@ fn pack_project(
 // ============================================================================
 // Tests
 // ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn json_envelope_reports_model_usage_for_run_and_pack() {
+    use serde_json::{Value, json};
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::path};
+
+    let built = common::ensure_built();
+    let server = MockServer::start().await;
+    let answer = json!({
+        "model": "reported-model",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}],
+    });
+    let mut with_usage = answer.clone();
+    with_usage["usage"] = json!({"prompt_tokens": 4111, "completion_tokens": 4222});
+    Mock::given(path("/metered/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(with_usage))
+        .expect(5)
+        .mount(&server)
+        .await;
+    Mock::given(path("/unmetered/chat/completions"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(answer))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let source = format!(
+        r#"
+function Metered(x: string) -> string {{
+    client: openai.GenericClient.new(model = "requested-model", base_url = "{uri}/metered", api_key = "test", capture_wire = false)
+    prompt: `Echo ${{x}}`
+}}
+
+function Unmetered(x: string) -> string {{
+    client: openai.GenericClient.new(model = "requested-model", base_url = "{uri}/unmetered", api_key = "test", capture_wire = false)
+    prompt: `Echo ${{x}}`
+}}
+
+function Twice(x: string) -> string {{
+    let pending = spawn {{ Metered(x) }};
+    let _ = Metered(x);
+    await pending
+}}
+"#,
+        uri = server.uri()
+    );
+    let (project, binary) = pack_project(built, &source, &["Metered"]);
+
+    let invoke = |cmd: &mut Command| -> Value {
+        let mut child = cmd
+            .args(["--json-args", "-"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(br#"{"x":"hi"}"#)
+            .unwrap();
+        let result = child.wait_with_output().unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        serde_json::from_slice(&result.stdout).unwrap()
+    };
+
+    let run = |target: &str, format: &str| {
+        let mut cmd = command(&built.baml_cli);
+        cmd.current_dir(project.path())
+            .env("BAML_HOME", common::shared_baml_home())
+            .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+            .env("BAML_TELEMETRY", "off")
+            .args(["run", "--output-format", format, "-f", target, "--", target]);
+        invoke(&mut cmd)
+    };
+    let expected = |calls: u64| {
+        json!({
+            "value": "ok",
+            "usage": [{
+                "provider": "openai-generic",
+                "model": "reported-model",
+                "calls": calls,
+                "input_tokens": 4111 * calls,
+                "output_tokens": 4222 * calls,
+                "cache_read_tokens": null,
+                "cache_write_tokens": null,
+                "reasoning_tokens": null,
+            }],
+        })
+    };
+    assert_eq!(run("Metered", "json"), json!("ok"));
+    assert_eq!(run("Metered", "json-envelope"), expected(1));
+    assert_eq!(run("Twice", "json-envelope"), expected(2));
+    assert_eq!(
+        run("Unmetered", "json-envelope"),
+        json!({"value": "ok", "usage": []})
+    );
+    assert_eq!(
+        invoke(&mut command(&binary).args(["--output-format", "json-envelope"])),
+        expected(1),
+    );
+}
 
 /// The application has one version regardless of transport. Exercise source
 /// execution (including a warm cache), a real packed host, and generated SDK

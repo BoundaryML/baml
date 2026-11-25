@@ -140,6 +140,7 @@ use bex_heap::BexHeap;
 pub use bex_heap::GcStats;
 pub use bex_heap::{ActiveHeapPermit, HeapGuard, HeapPermitManager, InactiveHeapPermit};
 use bex_vm::{BexVm, VmEventSourceLocation, VmExecState};
+pub use bex_vm::{ModelUsage, ModelUsageCollector};
 use bex_vm_types::{
     Admission, AdmissionTicket, FunctionMeta, FunctionOrigin, GlobalPool, HeapPtr, LimitSet,
     Object, RealizedTy, SharedGlobals, SysOp, Value, ValueKind, VmGlobals,
@@ -571,12 +572,7 @@ enum CallableArgs {
 struct ActiveCall {
     cancel: TaskCancel,
     pending: bool,
-    frame: Option<(
-        btel_types::context::Context,
-        Option<bex_vm::telemetry::ThreadSpawnContext>,
-        u64,
-        bool,
-    )>,
+    frame: Option<InheritedInvocationState>,
 }
 
 /// Owns root-call registration and its work guard through completion or cancellation.
@@ -3890,6 +3886,7 @@ impl BexEngine {
             cancel,
             cancel_tokens,
             inherited_state,
+            model_usage_collector,
             trace_options,
             trace_reservation,
             host_environment,
@@ -3923,6 +3920,9 @@ impl BexEngine {
         let mut thread = self
             .new_entry_thread(CancellationToken::new(), inherited_state.as_ref())
             .await;
+        if let Some(collector) = model_usage_collector {
+            thread.vm.set_model_usage_collector(Some(collector));
+        }
         self.prepare_invocation_state(
             &mut thread,
             inherited_state.as_ref(),
@@ -4192,6 +4192,9 @@ impl BexEngine {
         // permit's `RootHaver` is the thread (delegating to the inner VM).
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         vm.set_root_context(self.launch_context.clone());
+        vm.set_model_usage_collector(
+            inherited.and_then(|state| state.model_usage_collector.clone()),
+        );
         let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
@@ -4830,6 +4833,7 @@ impl BexEngine {
             cancel,
             cancel_tokens,
             inherited_state,
+            model_usage_collector,
             trace_options,
             trace_reservation,
             host_environment,
@@ -4850,6 +4854,9 @@ impl BexEngine {
         let mut thread = self
             .new_entry_thread(CancellationToken::new(), inherited_state.as_ref())
             .await;
+        if let Some(collector) = model_usage_collector {
+            thread.vm.set_model_usage_collector(Some(collector));
+        }
 
         // Resolve the handle to the live heap object. The handle keeps it rooted.
         let entry_ptr = self
@@ -5311,12 +5318,15 @@ impl BexEngine {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get_mut(&call_id)
         {
-            call.frame = Some((
-                thread.vm.current_context().clone(),
-                thread.vm.invocation_ancestry(),
-                thread.host_environment,
-                thread.vm.hooks_suppressed(),
-            ));
+            call.frame = Some(InheritedInvocationState {
+                engine_id: self.engine_id,
+                cancellation: call.cancel.clone(),
+                context: thread.vm.current_context().clone(),
+                ancestry: thread.vm.invocation_ancestry(),
+                host_environment: thread.host_environment,
+                hook_suppression: thread.vm.hooks_suppressed(),
+                model_usage_collector: thread.vm.model_usage_collector().cloned(),
+            });
         }
     }
 
@@ -5334,18 +5344,9 @@ impl BexEngine {
             .get(&call_id)
             .filter(|call| !call.pending)
             .ok_or(EngineError::FunctionCallNotFound { call_id })?;
-        let frame = call
-            .frame
-            .as_ref()
-            .ok_or(EngineError::FunctionCallNotFound { call_id })?;
-        Ok(InheritedInvocationState {
-            engine_id: self.engine_id,
-            cancellation: call.cancel.clone(),
-            context: frame.0.clone(),
-            ancestry: frame.1.clone(),
-            host_environment: frame.2,
-            hook_suppression: frame.3,
-        })
+        call.frame
+            .clone()
+            .ok_or(EngineError::FunctionCallNotFound { call_id })
     }
 
     fn prepare_cancellation(
@@ -6470,6 +6471,7 @@ impl BexEngine {
                     thread.vm.hooks_suppressed(),
                     thread.host_environment,
                     log_capture.cloned(),
+                    thread.vm.model_usage_collector().cloned(),
                 )
                 .await?;
             future_ptr
@@ -6535,6 +6537,7 @@ impl BexEngine {
         hook_suppression: bool,
         host_environment: u64,
         log_capture: Option<LogCaptureContext>,
+        model_usage_collector: Option<ModelUsageCollector>,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<(), EngineError>> + Send + 'static>,
     > {
@@ -6550,6 +6553,7 @@ impl BexEngine {
             hook_suppression,
             host_environment,
             log_capture,
+            model_usage_collector,
         ))
     }
 
@@ -6576,6 +6580,7 @@ impl BexEngine {
         hook_suppression: bool,
         host_environment: u64,
         log_capture: Option<LogCaptureContext>,
+        model_usage_collector: Option<ModelUsageCollector>,
     ) -> Result<(), EngineError> {
         // Count the producer until its task exits, even if its future was
         // cancelled or removed earlier. Created before the task is scheduled.
@@ -6614,6 +6619,7 @@ impl BexEngine {
         }
 
         child_vm.inherit_hook_suppression(hook_suppression);
+        child_vm.set_model_usage_collector(model_usage_collector);
         child_vm.set_root_context(context);
         child_vm.set_entry_point(entry, &[]);
 
@@ -6998,6 +7004,7 @@ impl BexEngine {
                                 ancestry: thread.vm.invocation_ancestry(),
                                 host_environment: thread.host_environment,
                                 hook_suppression: thread.vm.hooks_suppressed(),
+                                model_usage_collector: thread.vm.model_usage_collector().cloned(),
                             };
                             let host_options = (operation == SysOp::BamlHostCallHostValue)
                                 .then(|| thread.vm.take_host_call_options());

@@ -3,23 +3,65 @@
 //! charged to the innermost span. Read natively, so it needs no value capture
 //! and works whether or not the invoke is a span.
 
-use bex_vm_types::{Value, ValueKind};
-use btel_records::ModelUsage;
+use std::sync::{Arc, Mutex, PoisonError};
 
-use crate::BexVm;
+use bex_vm_types::{Value, ValueKind};
+pub use btel_records::ModelUsage;
+
+use crate::{BexVm, telemetry::merge_usage};
+
+/// Opt-in usage summary shared by one invocation and its child tasks.
+#[derive(Clone, Debug, Default)]
+pub struct ModelUsageCollector(Arc<Mutex<Vec<ModelUsage>>>);
+
+impl ModelUsageCollector {
+    /// Snapshot the usage reported up to the time of this call.
+    pub fn snapshot(&self) -> Vec<ModelUsage> {
+        let mut entries = self
+            .0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        entries.sort_by(|a, b| (&a.provider, &a.model).cmp(&(&b.provider, &b.model)));
+        entries
+    }
+
+    fn record(&self, entries: Vec<ModelUsage>) {
+        merge_usage(
+            &mut self.0.lock().unwrap_or_else(PoisonError::into_inner),
+            entries,
+        );
+    }
+}
 
 impl BexVm {
+    pub fn model_usage_collector(&self) -> Option<&ModelUsageCollector> {
+        self.model_usage_collector.as_ref()
+    }
+
+    pub fn set_model_usage_collector(&mut self, collector: Option<ModelUsageCollector>) {
+        self.model_usage_collector = collector;
+    }
+
     /// Charge the model usage of `turn`, an `ai.ModelTurn`, to the innermost
     /// span. A value of another shape charges nothing.
     #[cold]
     pub(crate) fn charge_model_usage(&mut self, turn: Value) {
-        if self.telemetry.is_none() {
+        if self.telemetry.is_none() && self.model_usage_collector.is_none() {
             return;
         }
         let entries = self.turn_usage(turn);
-        if let Some(telemetry) = &mut self.telemetry
-            && !entries.is_empty()
-        {
+        if entries.is_empty() {
+            return;
+        }
+        if let Some(collector) = &self.model_usage_collector {
+            if self.telemetry.is_none() {
+                collector.record(entries);
+                return;
+            }
+            collector.record(entries.clone());
+        }
+        if let Some(telemetry) = &mut self.telemetry {
             telemetry.charge_model_usage(entries);
         }
     }

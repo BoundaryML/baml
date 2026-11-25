@@ -109,7 +109,8 @@ Global options:
           Print no status or progress on stderr
 
       --output-format <FORMAT>
-          What goes to stdout [default: text] [possible values: text, json, jsonl]
+          What goes to stdout [default: text] [possible values: text, json, jsonl, json-envelope
+          (run only)]
 
       --color <WHEN>
           Control ANSI colors [possible values: auto, always, never]
@@ -127,3 +128,6 @@ Global options:
           Display concise help for this command
 
 Use `baml run <target> -- --help` to display the target's generated arguments.
+
+Use `--output-format json-envelope` to include reported token usage with a
+named function's JSON result. Usage is summed by provider and model.

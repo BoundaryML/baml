@@ -11,7 +11,7 @@
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use bex_engine::{BexCallArg, BexEngine, BexExternalValue};
+use bex_engine::{BexCallArg, BexEngine, BexExternalValue, ModelUsage};
 
 use crate::HelperCallContext;
 
@@ -23,6 +23,8 @@ pub enum OutputFormat {
     Text,
     /// Single JSON document with no wrapping noise.
     Json,
+    /// JSON object with the return value and reported token usage by model.
+    JsonEnvelope,
 }
 
 /// Write a target's return value while preserving logger/cancellation context
@@ -35,6 +37,7 @@ pub async fn write_output_with_context(
     engine: &Arc<BexEngine>,
     value: BexExternalValue,
     format: OutputFormat,
+    usage: &[ModelUsage],
     helper_context: &HelperCallContext,
     before_print: impl FnOnce(),
 ) -> Result<()> {
@@ -51,8 +54,28 @@ pub async fn write_output_with_context(
             println!("{}", format_value(&value));
             Ok(())
         }
-        OutputFormat::Json => {
-            let text = serialize_via_baml_json(engine, value, helper_context).await?;
+        OutputFormat::Json | OutputFormat::JsonEnvelope => {
+            let mut text = serialize_via_baml_json(engine, value, helper_context).await?;
+            if format == OutputFormat::JsonEnvelope {
+                let value: serde_json::Value = serde_json::from_str(&text)?;
+                let usage: Vec<_> = usage
+                    .iter()
+                    .map(|entry| {
+                        serde_json::json!({
+                            "provider": entry.provider,
+                            "model": entry.model,
+                            "calls": entry.calls,
+                            "input_tokens": entry.input_tokens,
+                            "output_tokens": entry.output_tokens,
+                            "cache_read_tokens": entry.cache_read_tokens,
+                            "cache_write_tokens": entry.cache_write_tokens,
+                            "reasoning_tokens": entry.reasoning_tokens,
+                        })
+                    })
+                    .collect();
+                text =
+                    serde_json::to_string(&serde_json::json!({ "value": value, "usage": usage }))?;
+            }
             before_print();
             println!("{text}");
             Ok(())

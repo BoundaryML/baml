@@ -72,7 +72,7 @@ pub async fn dispatch_target_with_context(
     cli_values: HashMap<String, BexExternalValue>,
     json_args: Option<serde_json::Value>,
     output_format: OutputFormat,
-    call_context: FunctionCallContext,
+    mut call_context: FunctionCallContext,
     after_call: impl Fn(),
 ) -> Result<DispatchResult> {
     let func_info = engine
@@ -99,6 +99,13 @@ pub async fn dispatch_target_with_context(
     )
     .await?;
 
+    // Collect only the target's model calls. Argument decoding and output
+    // conversion can run user code through their own helper contexts.
+    let usage = (output_format == OutputFormat::JsonEnvelope)
+        .then(bex_engine::ModelUsageCollector::default);
+    if let Some(collector) = &usage {
+        call_context.model_usage_collector = Some(collector.clone());
+    }
     let host_cancel = call_context.cancel.clone();
     let result = engine
         .call_function_bound_args(target_name, args, call_context, true)
@@ -113,13 +120,14 @@ pub async fn dispatch_target_with_context(
             // Value-carrying types like `int?` print in both, even when null.
             let elide = match output_format {
                 OutputFormat::Text => func_info.return_type.is_unit(),
-                OutputFormat::Json => false,
+                OutputFormat::Json | OutputFormat::JsonEnvelope => false,
             };
             if !elide {
                 write_output_with_context(
                     &engine,
                     value,
                     output_format,
+                    &usage.map_or_else(Vec::new, |usage| usage.snapshot()),
                     &helper_context,
                     after_call,
                 )

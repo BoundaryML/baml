@@ -1,4 +1,5 @@
 use bex_events::ids::BoundaryId;
+use bex_vm::ModelUsageCollector;
 use indexmap::IndexMap;
 use sys_types::{CallId, CancellationToken};
 
@@ -24,6 +25,7 @@ pub struct InheritedInvocationState {
     pub(crate) ancestry: Option<bex_vm::telemetry::ThreadSpawnContext>,
     pub(crate) host_environment: u64,
     pub(crate) hook_suppression: bool,
+    pub(crate) model_usage_collector: Option<ModelUsageCollector>,
 }
 
 impl InheritedInvocationState {
@@ -118,6 +120,7 @@ pub struct FunctionCallContext {
     /// Actual generated `baml.spawn.CancelToken` handles, including composites.
     pub cancel_tokens: Vec<bex_external_types::BexExternalValue>,
     pub inherited_state: Option<InheritedInvocationState>,
+    pub model_usage_collector: Option<ModelUsageCollector>,
     pub trace_options: Option<bex_vm_types::trace::TraceOptionsData>,
     pub trace_reservation: Option<std::sync::Arc<bex_vm_types::trace::ReservedSpanData>>,
     pub host_environment: u64,
@@ -182,6 +185,7 @@ impl FunctionCallContextBuilder {
             cancel: self.cancel.unwrap_or_default(),
             cancel_tokens: self.cancel_tokens,
             inherited_state: self.inherited_state,
+            model_usage_collector: None,
             trace_options: self.trace_options,
             trace_reservation: self.trace_reservation,
             host_environment: self.host_environment,

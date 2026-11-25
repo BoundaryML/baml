@@ -26,6 +26,7 @@ pub mod kperf;
 pub mod lang_items;
 pub mod llm_shape;
 mod model_usage;
+pub use model_usage::{ModelUsage, ModelUsageCollector};
 #[cfg(feature = "kperf")]
 pub mod op_mix;
 #[cfg(debug_assertions)]
