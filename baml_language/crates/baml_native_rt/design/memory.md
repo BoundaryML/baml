@@ -278,7 +278,7 @@ pub enum RealizedTy {
     Media(MediaKind),
     Literal(Literal, Freshness),
     Class(NonNull<ClassObject>, CowSlice<RealizedTy>),
-    Interface(NonNull<InterfaceObject>, CowSlice<RealizedTy>, CowSlice<(AssocIndex, RealizedTy)>),
+    Interface(NonNull<InterfaceObject>, CowSlice<RealizedTy>, CowSlice<AssocBinding<RealizedTy>>),
     Enum(NonNull<ClassObject>),
     EnumVariant(NonNull<EnumVariantObject>),
     List(CowBox<RealizedTy>),
@@ -312,12 +312,17 @@ pub struct FunctionParamTy<T> { pub name: Option<Text>, pub ty: T, pub mode: Fun
 #[repr(C, u8)]
 pub enum Literal { Int(i64), Bigint(CowSlice<u64>), Float(Text), String(Text), Bool(bool) }
 
-/// An interface at given arguments, with the associated types it pins. A copy of `bex_vm_types`'s `InterfaceBound`.
+/// An associated type pinned to a type. A struct because a Rust tuple has no specified layout, so the compiler could not write one.
 #[repr(C)]
-pub struct InterfaceBound {
+pub struct AssocBinding<T> { pub member: AssocIndex, pub ty: T }
+
+/// An interface at given arguments, with the associated types it pins. A copy of `bex_vm_types`'s `InterfaceBound`.
+/// `InterfaceBound<RealizedTy>` is the realized form, which the copied normal form and the reduction of `Self.Item` take.
+#[repr(C)]
+pub struct InterfaceBound<T = TyTemplate> {
     pub interface: NonNull<InterfaceObject>,
-    pub args: CowSlice<TyTemplate>,
-    pub assoc: CowSlice<(AssocIndex, TyTemplate)>,
+    pub args: CowSlice<T>,
+    pub assoc: CowSlice<AssocBinding<T>>,
 }
 
 /// Can be aliased over an `Object` with a `RawFunction` layout
@@ -517,7 +522,7 @@ pub struct ImplRule {
     pub generic_param_bounds: CowSlice<CowSlice<InterfaceBound>>,
     pub interface_args: CowSlice<TyTemplate>,
     /// What `Self.Item` reduces through.
-    pub interface_assoc: CowSlice<(AssocIndex, TyTemplate)>,
+    pub interface_assoc: CowSlice<AssocBinding<TyTemplate>>,
     /// Indexed by the interface's method index. `None` adopts the interface's `default_fn`.
     pub methods: CowSlice<Option<MethodImpl>>,
     /// Interface field index to the implementor's slot.
@@ -823,7 +828,7 @@ The known alternative is what `get` already does: probe inline, store through th
 
 The structs in "Objects" are the intended shape. Where the code differs today:
 
-- None of the copies in "Types and rules are copies" exists.
+- Of the copies in "Types and rules are copies", two do not exist: matching a type against an interface's rules, and testing a value against a type. The others are in `src/ty`, the compiler can write them (`ty_emit.rs`), and nothing uses them yet.
 - `TypeObject` is not a `RealizedTy`. It is `{ tag, class, description, kind, count, arguments }`, built only for unions, found or made in a table outside the heap (`baml_rt_type_intern`, seeded from the program's `PROGRAM_BUILT_TYPES` list) that is never freed, with members ordered by address. To be replaced, and the collector does not yet drop a type object.
 - The `ty` word of an array and `key_ty`, `value_ty` of a map are written as zero, and an instance's type parameter slots as `(NULL, 0)`. So a type test against an array type or between two instantiations of one class is refused when compiled (`ideas/uniform-values-convention.md`, status).
 - A call of an interface method is to be resolved through the interface's rules every time. Remembering the answer comes only after type objects have canonical ids.
