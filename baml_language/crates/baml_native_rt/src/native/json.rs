@@ -10,9 +10,10 @@
 //! reservation: the roots are read again after it.
 //!
 //! A value is found by the tag of the slot that holds it and, when it is
-//! an object, by its header. Its static type, which a description gives
-//! (see [`crate::json_layout`]), adds what those do not say: which enum a
-//! variant held in place is of, and the names a class is written under.
+//! an object, by its header: an instance has its class's object, and an
+//! enum's variant its enum's, which name a description (see
+//! [`crate::json_layout`]). Its static type adds what those do not say:
+//! what an array or a map found empty is of.
 
 #![allow(
     clippy::cast_possible_wrap,
@@ -29,14 +30,14 @@ mod text;
 use out::Out;
 
 use super::{
-    Arr, Elem, NativeBamlJson, Natives, Root, Scope, Slot, Str, StrRef, Thrown, TypeId, array_size,
+    Arr, Elem, NativeBamlJson, Natives, Root, Scope, Slot, Str, StrRef, Thrown, TypeRef, array_size,
 };
 use crate::{
     describe::Types,
     heap::{Value, load},
     layout::{
-        BOX_VALUE, STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_FLOAT, TAG_INT, TAG_MAP,
-        TAG_NULL, TYPE_ID_MASK, WELL_KNOWN_JSON_DECODE_ERROR, WELL_KNOWN_JSON_PARSE_ERROR,
+        STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_INT,
+        TAG_MAP, TAG_NULL, TYPE_ID_MASK, WELL_KNOWN_JSON_DECODE_ERROR, WELL_KNOWN_JSON_PARSE_ERROR,
         WELL_KNOWN_JSON_PATH_ERROR, WELL_KNOWN_JSON_SERIALIZATION_ERROR,
     },
     map,
@@ -88,6 +89,16 @@ pub(super) unsafe fn type_of(object: usize) -> usize {
     unsafe { load(object) & TYPE_ID_MASK }
 }
 
+/// What a call says the static type of a value it writes is, when that is
+/// a type `baml.json` writes by. A class or an enum it has no form for
+/// says nothing: the value is then found by its own class object, which
+/// refuses it.
+fn static_type(types: &Types, ty: TypeRef) -> Option<crate::describe::Desc> {
+    types
+        .described(ty)
+        .filter(|described| !described.shown_only())
+}
+
 /// What a `json` value is, which its tag says: a scalar, or what its
 /// object is.
 #[derive(Clone, Copy)]
@@ -111,10 +122,9 @@ impl Node {
     ///
     /// `value` is a value as a slot holds one: `null`, a scalar, or a
     /// pointer to a live object.
-    unsafe fn of(types: &Types, value: Value) -> Self {
+    unsafe fn of(value: Value) -> Self {
         let object = value.payload;
-        // SAFETY: the caller's contract: an enum's box is a header and the
-        // variant's position.
+        // SAFETY: the caller's contract: a variant holds its name.
         unsafe {
             match value.id() {
                 TAG_NULL => Self::Null,
@@ -125,13 +135,9 @@ impl Node {
                 TAG_BIGINT => Self::Bigint(object),
                 TAG_ARRAY => Self::Array(object),
                 TAG_MAP => Self::Object(object),
-                other => match types.of_type_id(other) {
-                    Some(described) if described.is_enum() => described
-                        .variant(load(object + BOX_VALUE))
-                        .map_or(Self::Null, |variant| Self::Variant(variant.name)),
-                    // Anything else in a `json` value reads as `null`.
-                    _ => Self::Null,
-                },
+                TAG_ENUM_VARIANT => Self::Variant(crate::class::variant_name(object)),
+                // Anything else in a `json` value reads as `null`.
+                _ => Self::Null,
             }
         }
     }
@@ -195,7 +201,7 @@ impl NativeBamlJson for Natives {
 
     async fn _decode<'s>(
         scope: &mut Scope<'s>,
-        types: [TypeId; 1],
+        types: [TypeRef; 1],
         s: Root<'s, Str>,
         aliased: bool,
     ) -> Result<Value, Thrown<'s>> {
@@ -207,7 +213,7 @@ impl NativeBamlJson for Natives {
 
     async fn _stringify<'s>(
         scope: &mut Scope<'s>,
-        value_type: TypeId,
+        value_type: TypeRef,
         value: Elem<'s>,
         aliased: bool,
         indent: Elem<'s>,
@@ -230,7 +236,7 @@ impl NativeBamlJson for Natives {
                 encode::walk(
                     &types,
                     value.value(scope),
-                    types.described(value_type),
+                    static_type(&types, value_type),
                     options,
                     false,
                     overrides,
@@ -257,7 +263,7 @@ impl NativeBamlJson for Natives {
 
     async fn _from<'s>(
         scope: &mut Scope<'s>,
-        value_type: TypeId,
+        value_type: TypeRef,
         value: Elem<'s>,
         aliased: bool,
         omit_nulls: bool,
@@ -267,7 +273,7 @@ impl NativeBamlJson for Natives {
 
     async fn _to<'s>(
         scope: &mut Scope<'s>,
-        types: [TypeId; 1],
+        types: [TypeRef; 1],
         j: Elem<'s>,
         aliased: bool,
     ) -> Result<Value, Thrown<'s>> {
@@ -279,10 +285,9 @@ impl NativeBamlJson for Natives {
         j: Elem<'s>,
         selector: Root<'s, Str>,
     ) -> Result<Value, Thrown<'s>> {
-        let types = Types::of(scope);
         // SAFETY: a `json` value, and nothing is allocated while it is
         // walked.
-        let found = unsafe { text::select(&types, j.value(scope), selector.get(scope).as_str()) };
+        let found = unsafe { text::select(j.value(scope), selector.get(scope).as_str()) };
         found.map_err(|message| {
             let selector = selector.get(scope).as_str().to_owned();
             path_error(scope, &message, &selector)
@@ -381,7 +386,7 @@ async fn to_json_of_each<'s>(
 /// a `to_json` nothing overrides does.
 pub(super) async fn to_json_value<'s>(
     scope: &mut Scope<'s>,
-    value_type: TypeId,
+    value_type: TypeRef,
     value: Elem<'s>,
     aliased: bool,
     omit_nulls: bool,
@@ -398,7 +403,7 @@ pub(super) async fn to_json_value<'s>(
             encode::walk(
                 &types,
                 value.value(scope),
-                types.described(value_type),
+                static_type(&types, value_type),
                 options,
                 false,
                 overrides,

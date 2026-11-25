@@ -9,7 +9,6 @@
 
 use super::{MAX_DEPTH, Node, object_get, out::Out, string_keyed};
 use crate::{
-    describe::Types,
     heap::{Value, load},
     layout::ARRAY_LENGTH,
 };
@@ -409,7 +408,7 @@ pub(super) fn syntax_message(text: &str, stop: &Stop) -> String {
 ///
 /// `json` is a value as a slot holds one, and nothing is allocated while
 /// the result is in use.
-pub(super) unsafe fn select(types: &Types, json: Value, selector: &str) -> Result<Value, String> {
+pub(super) unsafe fn select(json: Value, selector: &str) -> Result<Value, String> {
     if !(selector.starts_with('.') || selector.starts_with('[')) {
         return Err(format!(
             "selector must start with '.' or '[' (jq style), got '{selector}'"
@@ -418,7 +417,7 @@ pub(super) unsafe fn select(types: &Types, json: Value, selector: &str) -> Resul
     let field = |current: Value, key: &str| {
         // SAFETY: the caller's contract.
         let found = unsafe {
-            match Node::of(types, current) {
+            match Node::of(current) {
                 Node::Object(map) if string_keyed(map) => Some(object_get(map, key)),
                 _ => None,
             }
@@ -492,7 +491,7 @@ pub(super) unsafe fn select(types: &Types, json: Value, selector: &str) -> Resul
             return Err(format!("bad bracket token '[{token}]'"));
         };
         // SAFETY: the caller's contract.
-        let Node::Array(array) = (unsafe { Node::of(types, current) }) else {
+        let Node::Array(array) = (unsafe { Node::of(current) }) else {
             return Err(format!("index [{index}] on a non-array"));
         };
         // SAFETY: a live array has its length, and storage for it.

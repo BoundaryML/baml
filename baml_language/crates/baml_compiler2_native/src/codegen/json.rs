@@ -1,107 +1,48 @@
-//! What compiled code passes `baml.json`: the description of a type, made
-//! the first time a call names the type. See [`crate::json`].
+//! What compiled code passes `baml.json` and anything else that takes a
+//! type: a type object, which says where the type's description is. See
+//! [`crate::json`].
 
-use baml_compiler2_mir::{Operand, TyTemplate};
-use cranelift_codegen::ir::{self, InstBuilder, types};
-use cranelift_module::{DataDescription, FuncId, Module};
+use baml_compiler2_mir::Operand;
+use cranelift_codegen::ir::{self, InstBuilder};
 
-use super::{Backend, Translator, imm, internal};
-use crate::{
-    CompileError,
-    json::Described,
-    json_layout::{DESCRIBED, JSON_SECTION},
-    natives::Native,
-    types::NativeTy,
-};
+use super::{Backend, Translator, WORD, classes::ClassLike, internal};
+use crate::{CompileError, json::Described, natives::Native, types::NativeTy};
 
 pub(super) fn takes_descriptions(native: &Native) -> bool {
     crate::json::takes_descriptions(native)
 }
 
 impl<'db> Backend<'db> {
-    /// Write the type id of every class and enum described since the last
-    /// call into its description.
-    pub(super) fn identify_described(&mut self, db: &'db dyn baml_compiler2_mir::Db) {
-        for pending in self.json.take_pending() {
-            let id = match pending.what {
-                Described::Class(class) => {
-                    self.class_type(db, class, &pending.arguments, &pending.layout)
-                }
-                Described::Enum(enum_ref) => self.enum_type(db, enum_ref),
-            };
-            self.json.identify(pending.at, id, pending.listed);
-        }
-    }
-
-    /// What a `baml.json` native is passed for the type `ty`.
-    pub(super) fn describe(
+    /// Have every description of a class or an enum made since the last
+    /// call say where its class object is. Making a class object describes
+    /// its class, which can describe more.
+    pub(super) fn identify_described(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
-        ty: &baml_compiler2_mir::RuntimeTy,
-    ) -> Result<usize, CompileError> {
-        let at = self.json.describe(db, ty).map_err(internal)?;
-        self.identify_described(db);
-        Ok((DESCRIBED | at) as usize)
-    }
-
-    /// What a `baml.json` native is passed for the static type of a value:
-    /// zero when only the value's tag says what it is.
-    pub(super) fn describe_native(
-        &mut self,
-        db: &'db dyn baml_compiler2_mir::Db,
-        ty: &NativeTy<'db>,
-    ) -> Result<usize, CompileError> {
-        let at = self.json.describe_native(db, ty).map_err(internal)?;
-        self.identify_described(db);
-        Ok(if at == 0 {
-            0
-        } else {
-            (DESCRIBED | at) as usize
-        })
-    }
-
-    /// [`Self::describe_native`], or zero for a type with no description.
-    pub(super) fn describe_native_if_any(
-        &mut self,
-        db: &'db dyn baml_compiler2_mir::Db,
-        ty: &NativeTy<'db>,
-    ) -> usize {
-        let at = self.json.describe_native_if_any(db, ty);
-        self.identify_described(db);
-        if at == 0 {
-            0
-        } else {
-            (DESCRIBED | at) as usize
+    ) -> Result<(), CompileError> {
+        loop {
+            let pending = self.json.take_pending();
+            if pending.is_empty() {
+                return Ok(());
+            }
+            for pending in pending {
+                let what = match pending.what {
+                    Described::Class(class) => ClassLike::Class(class),
+                    Described::Enum(enum_ref) => ClassLike::Enum(enum_ref),
+                };
+                let class = self.class_object(db, what)?;
+                self.json.identify(pending.at, class);
+            }
         }
-    }
-
-    /// End the type table with the descriptions, and say where they start.
-    /// Returns what the table needs of the linker: the address of each
-    /// entry a description names.
-    pub(super) fn append_descriptions(&mut self) -> DataDescription {
-        let json = std::mem::replace(&mut self.json, crate::json::JsonTypes::new());
-        self.align_types();
-        let start = super::table_word(self.types.len());
-        self.types[JSON_SECTION..JSON_SECTION + 4].copy_from_slice(&start.to_ne_bytes());
-        let mut description = DataDescription::new();
-        for (at, entry) in json.addresses() {
-            let entry = self
-                .module
-                .declare_func_in_data(FuncId::from_u32(*entry), &mut description);
-            description.write_function_addr(start + at, entry);
-        }
-        self.types.extend(json.section());
-        self.align_types();
-        description
     }
 }
 
 impl<'db> Translator<'_, 'db> {
-    /// The description of the type a local of type `type` holds, as a
-    /// `baml.json` native is passed it: what this function was itself
-    /// passed for one of its own type parameters, and otherwise the
-    /// description of the type the program names.
-    pub(super) fn described_type(
+    /// The type object of the type a local of type `type` holds, as a
+    /// function or a native that takes its type arguments is passed it:
+    /// what this function was itself passed for one of its own type
+    /// parameters, and otherwise the object of the type the program names.
+    pub(super) fn type_argument(
         &mut self,
         loaded: &Operand<'db>,
     ) -> Result<ir::Value, CompileError> {
@@ -109,52 +50,51 @@ impl<'db> Translator<'_, 'db> {
             .body
             .type_value(loaded)
             .ok_or_else(|| internal("a checked type argument is a type loaded once"))?;
-        if let TyTemplate::TypeArgRef(slot) = template
-            && let Some(passed) = self.type_ids.get(*slot as usize)
+        if let baml_compiler2_mir::TyTemplate::TypeArgRef(slot) = template
+            && let Some(passed) = self.type_args.get(*slot as usize)
         {
             return Ok(self.builder.use_var(*passed));
         }
-        // A copy of a function made for one type: that type.
-        if let TyTemplate::TypeArgRef(slot) = template {
-            let known = self.body.arguments.get(*slot as usize).cloned().flatten();
-            let known = known.ok_or_else(|| internal("a type argument with no type"))?;
-            let id = self.backend.describe_native(self.db, &known)?;
-            return Ok(self.builder.ins().iconst(types::I32, imm(id)));
-        }
-        if !template.is_fully_concrete() {
-            return Err(internal(
-                "a checked json type argument names no type parameter",
-            ));
-        }
-        let id = self
-            .backend
-            .describe(self.db, &template.substitute_symbolic(&[]))?;
-        Ok(self.builder.ins().iconst(types::I32, imm(id)))
+        let object = if template.is_fully_concrete() {
+            self.backend
+                .type_object_spelled(self.db, &template.substitute_symbolic(&[]))?
+                .0
+        } else {
+            // A copy of a function made for one type: that type.
+            match crate::types::template_ty(self.db, template, self.body.arguments) {
+                Some(ty) => self.backend.type_object_of(self.db, &ty)?.0,
+                None => self.backend.type_object_of_nothing()?,
+            }
+        };
+        Ok(self.data_address(object))
     }
 
-    /// Describe the type a call passes a function for one of its type
-    /// parameters, in case the function hands it on to `baml.json`: a type
-    /// with a type id is passed as that, and the runtime finds its
-    /// description by it.
-    pub(super) fn describe_type_argument(&mut self, loaded: &Operand<'db>) {
-        if let Some(template) = self.body.type_value(loaded)
-            && template.is_fully_concrete()
-            && self
-                .backend
-                .json
-                .describe(self.db, &template.substitute_symbolic(&[]))
-                .is_ok()
-        {
-            // A type id not yet in the table is added by this.
-            self.backend.identify_described(self.db);
+    /// What a native is passed for the static type `ty` of a value: its
+    /// type object, or zero when only the value's tag says what it is,
+    /// which is so of a type with no description unless `described`: a
+    /// native that reads descriptions is checked to be passed one.
+    pub(super) fn static_type(
+        &mut self,
+        ty: &NativeTy<'db>,
+        described: bool,
+    ) -> Result<ir::Value, CompileError> {
+        if *ty != NativeTy::Unknown {
+            let (object, at) = self.backend.type_object_of(self.db, ty)?;
+            if at != 0 {
+                return Ok(self.data_address(object));
+            }
+            if described {
+                return Err(internal("a checked json value has a described type"));
+            }
         }
+        Ok(self.builder.ins().iconst(WORD, 0))
     }
 
     /// Describe every class and enum the program makes values of: what a
     /// value written by its tag alone can be. One the runtime cannot
     /// write is left out, and writing a value of it is refused when the
     /// program runs.
-    pub(super) fn describe_program_types(&mut self) {
+    pub(super) fn describe_program_types(&mut self) -> Result<(), CompileError> {
         let program = self.program;
         for ty in &program.types {
             let described = match ty {
@@ -163,9 +103,9 @@ impl<'db> Translator<'_, 'db> {
                 _ => false,
             };
             if described {
-                let _ = self.backend.json.describe_native(self.db, ty);
+                self.backend.json.describe_native_if_any(self.db, ty);
             }
         }
-        self.backend.identify_described(self.db);
+        self.backend.identify_described(self.db)
     }
 }

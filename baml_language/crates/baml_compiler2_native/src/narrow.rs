@@ -45,7 +45,7 @@ pub(crate) enum TestKind<'db> {
     AnyArray,
     /// A value of the type this copy of the function was given for type
     /// parameter `.0`: one compiled for every reference type, so only the
-    /// type id it is passed says which.
+    /// type object it is passed says which.
     Argument(usize),
     /// A value that passes any of these tests: a union's members.
     AnyOf(Vec<TestKind<'db>>),
@@ -92,8 +92,9 @@ impl<'db> TestKind<'db> {
             .iter()
             .map(|argument| template_ty(db, argument, arguments))
             .collect();
-        // Instantiations at different reference types share a type id: a
-        // header cannot tell them apart.
+        // Instantiations at different reference types are one to the code
+        // compiled for them, and nothing an instance holds tells them
+        // apart.
         if arguments
             .iter()
             .any(|argument| !matches!(argument, Some(argument) if !argument.is_ref()))
@@ -155,8 +156,8 @@ impl<'db> TestKind<'db> {
                 for member in members {
                     match Self::of_template(db, member, arguments)? {
                         Self::AnyOf(inner) => tests.extend(inner),
-                        // Decided by a type id passed in: not one of a
-                        // fixed set.
+                        // Decided by a type object passed in: not one of
+                        // a fixed set.
                         Self::Argument(_) => return None,
                         test => tests.push(test),
                     }

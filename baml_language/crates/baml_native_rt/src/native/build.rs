@@ -1,8 +1,10 @@
 //! Making an instance of any class from Rust, by the class's description:
 //! where each field is and how its slot holds a value.
 //!
-//! A description is of one class at its type arguments, so a generic class
-//! is built like any other. A native comes by one in four ways: the type a
+//! A description is of one class whatever its type arguments, and a field
+//! of a type parameter's type is described as holding any value, so a
+//! generic class is built like any other. A native comes by one in four
+//! ways: the type a
 //! call names for a type parameter ([`Scope::class_from`]), the class of an
 //! object it has ([`Scope::class_of`]), the type of a field of a class it
 //! has ([`Class::field_class`]), and for the classes of the standard
@@ -12,18 +14,18 @@
 //! `baml.json` gives the fields of the instances it decodes, in room it
 //! has reserved, the values the same function makes: [`place`].
 
-use super::{Elem, Obj, Root, Scope, TypeId};
+use super::{Elem, Obj, Root, Scope, TypeRef};
 use crate::{
     describe::{Desc, Types},
-    heap::{self, load, store},
+    heap::{self, load},
     json_layout::{
         KIND_BOOL, KIND_BOOL_IS, KIND_CLASS, KIND_ENUM, KIND_FLOAT, KIND_INT, KIND_INT_IS,
         KIND_NULL, KIND_OPAQUE, KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS, KIND_UNION,
         KIND_VARIANT, REPR_BOXED,
     },
     layout::{
-        BOX_SIZE, BOX_VALUE, HEADER_PANIC, NAMED, STRING_TAGS_END, TAG_BOOL, TAG_FLOAT, TAG_INT,
-        TYPE_ID_MASK,
+        INSTANCE_CLASS, NAMED, STRING_TAGS_END, TAG_BOOL, TAG_ENUM_VARIANT, TAG_FLOAT,
+        TAG_INSTANCE, TAG_INT, VARIANT_ENUM,
     },
 };
 
@@ -35,7 +37,8 @@ pub(crate) enum Got {
     Bool(bool),
     Int(i64),
     Float(f64),
-    /// A variant of the enum whose boxes have this type id.
+    /// A variant of the enum whose class object is at this address, by
+    /// its position.
     Variant(usize, usize),
     /// A reference to an object.
     Ref(usize),
@@ -43,7 +46,7 @@ pub(crate) enum Got {
 
 impl Got {
     /// What the value `value` is, which its tag says. An enum's variant
-    /// in a box is the reference to its box.
+    /// is the reference to its object.
     pub(crate) fn of(value: heap::Value) -> Self {
         match value.id() {
             TAG_BOOL => Self::Bool(value.payload & 0xFF != 0),
@@ -55,12 +58,10 @@ impl Got {
     }
 }
 
-/// The value a slot of representation `repr` holds `got` as. A variant
-/// goes as its position into a slot of its enum's own type, and into any
-/// other as a box, which `boxed` makes of the enum's type id and the
-/// position: the address of the box, or zero from one that only counts,
-/// and the slot is then `null`.
-pub(crate) fn place(got: Got, repr: u32, boxed: impl FnOnce(usize, usize) -> usize) -> heap::Value {
+/// The value a slot holds `got` as: a slot of any type holds a value as
+/// its tag says. A variant is the reference to its object, which its
+/// enum's class object has.
+pub(crate) fn place(got: Got) -> heap::Value {
     match got {
         Got::Null => heap::Value::NULL,
         // SAFETY: what was got is zero or a live object.
@@ -68,15 +69,14 @@ pub(crate) fn place(got: Got, repr: u32, boxed: impl FnOnce(usize, usize) -> usi
         Got::Bool(value) => heap::Value::bool(value),
         Got::Int(value) => heap::Value::int(value),
         Got::Float(value) => heap::Value::float(value),
-        // SAFETY: zero or a box just made.
-        Got::Variant(type_id, index) if repr == REPR_BOXED => unsafe {
-            heap::Value::reference(boxed(type_id, index))
+        // SAFETY: the class object of an enum with that many variants.
+        Got::Variant(class, index) => unsafe {
+            heap::Value::reference(crate::class::variant(class, index))
         },
-        Got::Variant(_, index) => heap::Value::immediate(TAG_INT, index),
     }
 }
 
-/// A class at its type arguments, as the program describes it.
+/// A class, as the program describes it.
 #[derive(Clone, Copy)]
 pub struct Class(Desc);
 
@@ -180,7 +180,11 @@ impl<'s> Scope<'s> {
     /// native whose declaration names it.
     pub fn named_class(&self, index: usize) -> Class {
         let types = Types::of(self);
-        match types.named(index).and_then(|id| types.of_class(id)) {
+        // SAFETY: the program's table holds live class objects.
+        match types
+            .named(index)
+            .and_then(|class| unsafe { types.of_class(class) })
+        {
             Some(class) => Class(class),
             None => panic!(
                 "a native builds `baml.{}.{}`, which its declaration does not name",
@@ -191,17 +195,15 @@ impl<'s> Scope<'s> {
 
     /// The class `object` is an instance of.
     pub fn class_of(&self, object: super::ObjRef<'_>) -> Class {
-        // SAFETY: a view is of a live instance, whose header is its type.
-        let type_id = unsafe { load(super::View::raw(object)) } & TYPE_ID_MASK;
-        Class(
-            Types::of(self)
-                .of_class(type_id)
-                .expect("every class has a description"),
-        )
+        // SAFETY: a view is of a live instance, which holds its class
+        // object.
+        let described =
+            unsafe { Types::of(self).of_class(load(super::View::raw(object) + INSTANCE_CLASS)) };
+        Class(described.expect("every class has a description"))
     }
 
     /// The class a call names by `ty`, when it names one.
-    pub fn class_from(&self, ty: TypeId) -> Option<Class> {
+    pub fn class_from(&self, ty: TypeRef) -> Option<Class> {
         let types = Types::of(self);
         let described = types.described(ty).map(Desc::not_null)?;
         described.is_class().then_some(Class(described))
@@ -214,18 +216,13 @@ impl<'s> Scope<'s> {
             class.count() <= u64::BITS as usize,
             "a class built from Rust has at most 64 fields"
         );
-        let types = Types::of(self);
-        let type_id = class.a();
-        let size = types.instance_size(type_id);
-        let flags = if types.is_panic(type_id) {
-            HEADER_PANIC
-        } else {
-            0
-        };
-        let object = self.mutator().allocate(size);
-        // SAFETY: the instance is `size` bytes.
+        // SAFETY: a class's description names its live class object,
+        // which says how large an instance is.
         let object = unsafe {
-            crate::class::format(object, type_id | flags, size);
+            let object = self
+                .mutator()
+                .allocate(crate::class::size(class.class_object()));
+            crate::class::format(object, class.class_object());
             self.root_raw(object)
         };
         Build {
@@ -295,8 +292,6 @@ impl<'s> Build<'s> {
     }
 
     /// Give field `field`, by its position in the declaration, `value`.
-    /// May collect, when the field holds any of several types and the
-    /// value is an enum's variant.
     pub fn set(&mut self, scope: &mut Scope<'s>, field: usize, value: impl Into<Value<'s>>) {
         let Some((offset, ty)) = self.class.field_place(field) else {
             self.misfit(field, "set");
@@ -313,21 +308,35 @@ impl<'s> Build<'s> {
                 Got::Int(value)
             }
             Value::Float(value) if boxes || inner.kind() == KIND_FLOAT => Got::Float(value),
-            Value::Variant(index) if inner.kind() == KIND_ENUM && index < inner.count() => {
-                Got::Variant(inner.a(), index)
+            // SAFETY: an enum's description names its live class object,
+            // which says how many variants it has.
+            Value::Variant(index)
+                if inner.kind() == KIND_ENUM
+                    && index < unsafe { crate::class::slot_count(inner.class_object()) } =>
+            {
+                Got::Variant(inner.class_object(), index)
             }
             Value::Variant(index) if inner.kind() == KIND_VARIANT && index == inner.b() => {
-                Got::Variant(inner.of_a().a(), index)
+                Got::Variant(inner.of_a().class_object(), index)
             }
             Value::Ref(held) => {
                 let held = held.value(scope);
                 let (object, header) = (held.payload, held.id());
                 let fits = match inner.kind() {
                     _ if !held.is_pointer() => false,
-                    KIND_CLASS => header == inner.a(),
+                    // SAFETY: an instance holds its class object.
+                    KIND_CLASS => {
+                        header == TAG_INSTANCE
+                            && unsafe { load(object + INSTANCE_CLASS) } == inner.class_object()
+                    }
                     KIND_STRING | KIND_STRING_IS => header < STRING_TAGS_END,
-                    KIND_BOOL | KIND_INT | KIND_FLOAT | KIND_ENUM | KIND_NULL | KIND_BOOL_IS
-                    | KIND_INT_IS | KIND_VARIANT => false,
+                    // SAFETY: a variant holds its enum's class object.
+                    KIND_ENUM => {
+                        header == TAG_ENUM_VARIANT
+                            && unsafe { load(object + VARIANT_ENUM) } == inner.class_object()
+                    }
+                    KIND_BOOL | KIND_INT | KIND_FLOAT | KIND_NULL | KIND_BOOL_IS | KIND_INT_IS
+                    | KIND_VARIANT => false,
                     _ => true,
                 };
                 if !fits {
@@ -339,12 +348,7 @@ impl<'s> Build<'s> {
         };
         // A reference is placed as it is, so nothing is allocated between
         // reading it from its root and storing it.
-        let placed = place(got, ty.repr(), |type_id, position| {
-            let boxed = scope.mutator().allocate_object(type_id, BOX_SIZE);
-            // SAFETY: an enum's box is a header and the variant's position.
-            unsafe { store(boxed + BOX_VALUE, position) };
-            boxed
-        });
+        let placed = place(got);
         // SAFETY: the description says where the field is and how its
         // slot holds the value, which was checked to be one of its type.
         unsafe { heap::Value::store(self.object.raw(scope) + offset, placed) };

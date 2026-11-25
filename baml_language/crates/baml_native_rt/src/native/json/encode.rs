@@ -17,10 +17,10 @@ use crate::{
     array,
     describe::{Desc, Types},
     heap::{Value, load},
-    json_layout::{HOOK_TO_JSON, KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_VARIANT},
+    json_layout::{HOOK_TO_JSON, KIND_ARRAY, KIND_MAP},
     layout::{
-        ARRAY_LENGTH, BOX_VALUE, STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_FLOAT,
-        TAG_INT, TAG_MAP, TAG_NULL, TAG_STRING,
+        ARRAY_LENGTH, STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_ENUM_VARIANT,
+        TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL, TAG_STRING, VARIANT_INDEX, VARIANT_NAME,
     },
     map,
 };
@@ -282,9 +282,7 @@ pub(super) unsafe fn own_to_json(
     object: usize,
 ) -> Option<crate::native::drive::BamlFn> {
     // SAFETY: the caller's contract.
-    types
-        .of_type_id(unsafe { type_of(object) })
-        .and_then(|described| described.hook(HOOK_TO_JSON))
+    unsafe { types.of_object(object) }.and_then(|described| described.hook(HOOK_TO_JSON))
 }
 
 /// Hand `each` every value under `value` whose class has a `to_json` of
@@ -359,8 +357,8 @@ unsafe fn children(types: &Types, object: usize, options: Options) -> Vec<usize>
                     .map(|index| Value::load(array::element(object, index))),
             ),
             TAG_MAP => map::for_each(object, |_, value| children.push(value)),
-            other => {
-                if let Some(described) = types.of_type_id(other).filter(|found| found.is_class()) {
+            _ => {
+                if let Some(described) = types.of_object(object).filter(|found| found.is_class()) {
                     children.extend(
                         written_fields(object, described, options)
                             .into_iter()
@@ -381,19 +379,14 @@ unsafe fn children(types: &Types, object: usize, options: Options) -> Vec<usize>
 impl Walker<'_> {
     /// What the slot `value` holds, which its tag says: a scalar, or what
     /// its object is. `described` is the slot's static type when something
-    /// says it, which is what tells an enum's variant held in place from
-    /// an `int`. With `json` it is part of a `json` being copied.
+    /// says it. With `json` it is part of a `json` being copied.
     unsafe fn of_value(&self, value: Value, described: Option<Desc>, json: bool) -> Val {
         let bits = value.payload;
         match value.id() {
             TAG_NULL => Val::Null,
             TAG_BOOL => Val::Bool(bits & 0xFF != 0),
             TAG_FLOAT => Val::Float(f64::from_bits(bits as u64)),
-            TAG_INT => match described.map(Desc::not_null) {
-                Some(of) if of.kind() == KIND_ENUM => Val::Variant(of, bits),
-                Some(of) if of.kind() == KIND_VARIANT => Val::Variant(of.of_a(), bits),
-                _ => Val::Int(bits as i64),
-            },
+            TAG_INT => Val::Int(bits as i64),
             // SAFETY: any other tag is of a reference to a live object.
             _ => unsafe { self.of_reference(bits, described, json) },
         }
@@ -430,9 +423,13 @@ impl Walker<'_> {
                 TAG_BIGINT => Val::Bigint(value),
                 TAG_ARRAY => Val::Array(value, member(KIND_ARRAY).map(Desc::of_a)),
                 TAG_MAP => Val::Map(value, member(KIND_MAP).map(|map| (map.of_a(), map.of_b()))),
-                other => match self.types.of_type_id(other) {
+                // A `json` holding a variant reads it as its name.
+                TAG_ENUM_VARIANT if json => Val::Str(load(value + VARIANT_NAME)),
+                _ => match self.types.of_object(value) {
                     Some(found) if found.is_class() && !json => Val::Instance(value, found),
-                    Some(found) if found.is_enum() => Val::Variant(found, load(value + BOX_VALUE)),
+                    Some(found) if found.is_enum() => {
+                        Val::Variant(found, load(value + VARIANT_INDEX))
+                    }
                     _ => Self::no_form(json),
                 },
             }
@@ -565,8 +562,6 @@ impl Walker<'_> {
             // SAFETY: a live string.
             Val::Str(string) => sink.string(unsafe { crate::string::text(string) }, string),
             Val::Variant(described, index) => match described.variant(index) {
-                // A `json` holding a variant reads it as its declared name.
-                Some(variant) if json => sink.string(variant.name, 0),
                 Some(variant) if variant.shown(self.options.aliased) => {
                     sink.string(variant.key(self.options.aliased), 0);
                 }

@@ -3,8 +3,9 @@
 //! A program is compiled whole, so every type an interface value can hold is
 //! known when it is packed. A call on a receiver whose type is known where
 //! the call is written is resolved there, to a direct call. A call on a
-//! receiver that is only known to be some implementor loads its code from a
-//! table: the receiver's type id picks a row, the method a column.
+//! receiver that is only known to be some implementor loads its code from
+//! the receiver's row, which its class object or its tag locates: the
+//! method picks a column.
 //!
 //! Which implementation a type has is the type checker's own answer
 //! ([`resolve_implementation`]), asked with the native type mapped back to
@@ -49,7 +50,7 @@ pub(crate) enum Target<'db> {
     Sort(usize),
 }
 
-/// One method of one interface: what a column of the method table is for.
+/// One method of one interface: what a column of every row is for.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub(crate) struct Slot {
     /// The interface with its arguments, spelled out.

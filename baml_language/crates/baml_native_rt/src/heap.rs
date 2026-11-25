@@ -6,8 +6,12 @@
 //! is a [`Value`]: a tag word and a payload word. The tag says whether the
 //! payload is an address, and the type in an object's header says where its
 //! slots are and which of its other words are addresses. Objects the
-//! compiler places in the executable's data (string constants) have the
-//! same layout and are never moved or freed.
+//! compiler places in the executable's data (string constants, and the
+//! objects of classes, variants, packages and types) have the same layout
+//! and are never moved, freed or written to: the collector follows a
+//! reference, and writes where it was, only when it points into the space
+//! being collected. An instance is as large as its class object says, and
+//! a class object is an object like any other wherever it is.
 //!
 //! # Allocation
 //!
@@ -37,16 +41,19 @@ use std::alloc::{Layout, alloc, dealloc};
 
 use crate::layout::{
     ARRAY_PTR, ARRAY_SIZE, BIGINT_LIMB_COUNT, BOUND_RECEIVER, BOUND_TYPE_ARG_COUNT, BYTES_PTR,
-    BYTES_SIZE, BYTES_STORAGE_CAPACITY, CALLABLE_TAG_MASK, CELL_SIZE, CELL_VALUE,
+    BYTES_SIZE, BYTES_STORAGE_CAPACITY, CALLABLE_TAG_MASK, CELL_SIZE, CELL_VALUE, CLASS_KIND,
+    CLASS_KIND_ENUM, CLASS_KIND_MASK, CLASS_NAME, CLASS_PACKAGE, CLASS_SLOT_COUNT, CLASS_VARIANTS,
     CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_KEY,
-    ENTRY_SIZE, ENTRY_VALUE, FIRST_CLASS_TYPE, FUTURE_SIZE, FUTURE_TRACE, FUTURE_VALUE,
-    INDEX_SLOT_COUNT, INSTANCE_SLOTS, KIND_INSTANCE, MAP_ENTRIES, MAP_INDEX, MAP_SIZE, OWNED_KIND,
-    OWNED_SIZE, OWNED_VALUE, PLAIN_WORDS, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, STACK_MAP_VALUE,
-    STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TAG_ARRAY, TAG_ARRAY_STORAGE,
-    TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_BYTES_STORAGE, TAG_CELL, TAG_CLOSURE,
-    TAG_FLOAT, TAG_FUTURE, TAG_INT, TAG_MAP, TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OWNED,
-    TAG_PLAIN, TAG_STRING, TAG_STRING_SLICE, TAG_TUPLE, TUPLE_COUNT, TYPE_HEADER, TYPE_ID_MASK,
-    VALUE, VALUE_PAYLOAD, WORD, aligned, bigint_size, bound_size, bytes_storage_size, closure_size,
+    ENTRY_SIZE, ENTRY_VALUE, FUTURE_SIZE, FUTURE_TRACE, FUTURE_VALUE, INDEX_SLOT_COUNT,
+    INSTANCE_CLASS, INSTANCE_SLOTS, MAP_ENTRIES, MAP_INDEX, MAP_SIZE, OWNED_KIND, OWNED_SIZE,
+    OWNED_VALUE, PACKAGE_NAME, PACKAGE_SIZE, PLAIN_WORDS, SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE,
+    STACK_MAP_VALUE, STORAGE_CAPACITY, STORAGE_ELEMENTS, STRING_LENGTHS, STRING_TEXT, TAG_ARRAY,
+    TAG_ARRAY_STORAGE, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_BYTES_STORAGE,
+    TAG_CELL, TAG_CLASS, TAG_CLOSURE, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_FUTURE, TAG_INSTANCE,
+    TAG_INT, TAG_MAP, TAG_MAP_ENTRIES, TAG_MAP_INDEX, TAG_NULL, TAG_OWNED, TAG_PACKAGE, TAG_PLAIN,
+    TAG_STRING, TAG_STRING_SLICE, TAG_TUPLE, TAG_TYPE, TUPLE_COUNT, TYPE_CLASS, TYPE_ID_MASK,
+    TYPE_SIZE, VALUE, VALUE_PAYLOAD, VARIANT_ENUM, VARIANT_NAME, VARIANT_SIZE, WORD, aligned,
+    bigint_size, bound_size, bytes_storage_size, class_columns, class_size, closure_size,
     entries_size, index_size, instance_size, is_callable, is_pointer, plain_size, storage_size,
     string_size,
 };
@@ -103,20 +110,6 @@ const ROOT_IS_VALUE: usize = 1;
 /// the collector failed to update reads as garbage.
 const POISON: u8 = 0xA5;
 
-/// The type of a class or of an enum's boxes: an entry of the program's
-/// type table.
-#[repr(C)]
-struct TypeInfo {
-    kind: u32,
-    /// Bytes an object occupies, header included.
-    size: u32,
-    unused: u32,
-    /// Where an enum's names are, or a class's description.
-    extra: u32,
-}
-
-const _: () = assert!(size_of::<TypeInfo>() == TYPE_HEADER);
-
 /// Read the word at `address`.
 ///
 /// # Safety
@@ -125,6 +118,16 @@ const _: () = assert!(size_of::<TypeInfo>() == TYPE_HEADER);
 pub unsafe fn load(address: usize) -> usize {
     // SAFETY: the caller's contract.
     unsafe { *(address as *const usize) }
+}
+
+/// Read the 32-bit word at `address`.
+///
+/// # Safety
+///
+/// `address` is aligned for one and readable.
+unsafe fn read32(address: usize) -> u32 {
+    // SAFETY: the caller's contract.
+    unsafe { *(address as *const u32) }
 }
 
 /// Write the word at `address`.
@@ -444,7 +447,8 @@ impl StackMaps {
 pub struct Program {
     /// The address of its stack map table.
     pub stack_maps: usize,
-    /// The address of its type table.
+    /// The address of its table of types: the class objects the runtime
+    /// knows by name, and the descriptions.
     pub types: usize,
     /// The address of its table of calls with a handler.
     pub unwind: usize,
@@ -717,39 +721,9 @@ impl Mutator {
         self.roots.truncate(self.roots.len() - count);
     }
 
-    /// The address of the program's type table.
+    /// The address of the program's table of types.
     pub fn types(&self) -> usize {
         self.heap.types
-    }
-
-    /// The type at `type_id` of the program's type table.
-    ///
-    /// # Safety
-    ///
-    /// `type_id` is the id of a class or of an enum's boxes.
-    unsafe fn info(&self, type_id: usize) -> &'static TypeInfo {
-        // SAFETY: the caller's contract: the id is the offset of an entry
-        // of the type table, which lives in the executable's data.
-        unsafe { &*((self.heap.types + type_id) as *const TypeInfo) }
-    }
-
-    /// The name of variant `index` of the enum whose boxes have the type
-    /// `enum_type`.
-    pub fn variant_name(&self, enum_type: usize, index: usize) -> &'static str {
-        let types = self.heap.types;
-        // SAFETY: an enum's type id is an entry of the type table whose
-        // fourth word locates its names, which live in the executable's
-        // data.
-        unsafe {
-            let names = types + self.info(enum_type).extra as usize;
-            let word = |position: usize| *((names + position * 4) as *const u32) as usize;
-            assert!(index < word(0), "an enum value names one of its variants");
-            let (start, length) = (word(1 + 2 * index), word(2 + 2 * index));
-            std::str::from_utf8_unchecked(std::slice::from_raw_parts(
-                (types + start) as *const u8,
-                length,
-            ))
-        }
     }
 
     /// Allocate `size` bytes (a whole number of values) and return their
@@ -845,7 +819,7 @@ impl Mutator {
             _ => Space::new(size),
         };
         let base = self.base_frame();
-        let mut copy = Copy::new(&self.heap.space, to, self.heap.types);
+        let mut copy = Copy::new(&self.heap.space, to);
         // SAFETY: the stack between the anchor and `base` is the running
         // task's compiled frames, described by the stack maps; a task that
         // is not running has its top frame in its switch frame; and every
@@ -930,7 +904,6 @@ const OF_VALUE: usize = 1;
 struct Copy<'a> {
     from: &'a Space,
     to: Space,
-    types: usize,
     /// Where the next copied object goes.
     free: usize,
     /// The slots found holding a reference to a slice of a string that had
@@ -939,26 +912,37 @@ struct Copy<'a> {
 }
 
 impl<'a> Copy<'a> {
-    fn new(from: &'a Space, to: Space, types: usize) -> Self {
+    fn new(from: &'a Space, to: Space) -> Self {
         let free = to.start;
         Self {
             from,
             to,
-            types,
             free,
             parked: Vec::new(),
         }
     }
 
-    /// The type of an instance or of a box from its header.
+    /// How many slots the instance at `instance` has, which its class
+    /// object says: the copy of it, when it was in the space being copied
+    /// from and has been copied, whether or not the instance's word for it
+    /// has been made to point there.
     ///
     /// # Safety
     ///
-    /// `header` is the header of an object of a type of the program's.
-    unsafe fn info(&self, header: usize) -> &'static TypeInfo {
-        // SAFETY: a type id past the tags is the offset of an entry of the
-        // type table, which lives in the executable's data.
-        unsafe { &*((self.types + (header & TYPE_ID_MASK)) as *const TypeInfo) }
+    /// `instance` is an instance whose class object is live or copied.
+    unsafe fn slot_count(&self, instance: usize) -> usize {
+        // SAFETY: the caller's contract: the header of a copied object is
+        // where its copy is.
+        unsafe {
+            let mut class = load(instance + INSTANCE_CLASS);
+            if self.from.contains(class) {
+                let header = load(class);
+                if header & FORWARDED != 0 {
+                    class = header & !FORWARDED;
+                }
+            }
+            read32(class + CLASS_SLOT_COUNT) as usize
+        }
     }
 
     /// How many bytes the object at `object`, whose header is `header`,
@@ -991,9 +975,11 @@ impl<'a> Copy<'a> {
                 TAG_TUPLE => instance_size(count()),
                 TAG_OWNED => OWNED_SIZE,
                 TAG_PLAIN => plain_size(count()),
-                // An enum's box is the size its type says, as an instance
-                // is.
-                id if id >= FIRST_CLASS_TYPE => self.info(header).size as usize,
+                TAG_INSTANCE => instance_size(self.slot_count(object)),
+                TAG_ENUM_VARIANT => VARIANT_SIZE,
+                TAG_CLASS => class_size(class_columns(header)),
+                TAG_PACKAGE => PACKAGE_SIZE,
+                TAG_TYPE => TYPE_SIZE,
                 id => unreachable!("an object of the tag {id}, which nothing makes"),
             }
         }
@@ -1360,9 +1346,33 @@ impl<'a> Copy<'a> {
                     }
                     TAG_BOUND_METHOD => self.forward_value(scan + BOUND_RECEIVER),
                     TAG_TUPLE => self.values(scan + INSTANCE_SLOTS, load(scan + TUPLE_COUNT)),
-                    id if id >= FIRST_CLASS_TYPE && self.info(header).kind == KIND_INSTANCE => {
+                    // The size was read through the class object before
+                    // the word for it is made to point at its copy.
+                    TAG_INSTANCE => {
+                        self.forward_word(scan + INSTANCE_CLASS);
                         self.values(scan + INSTANCE_SLOTS, (size - INSTANCE_SLOTS) / VALUE);
                     }
+                    TAG_ENUM_VARIANT => {
+                        self.forward_word(scan + VARIANT_ENUM);
+                        self.forward_word(scan + VARIANT_NAME);
+                    }
+                    // An enum's table of variants is no object and is not
+                    // in the heap: each of its words is a reference. The
+                    // description and the row are not.
+                    TAG_CLASS => {
+                        self.forward_word(scan + CLASS_PACKAGE);
+                        self.forward_word(scan + CLASS_NAME);
+                        let variants = load(scan + CLASS_VARIANTS);
+                        if read32(scan + CLASS_KIND) & CLASS_KIND_MASK == CLASS_KIND_ENUM
+                            && variants != 0
+                        {
+                            for index in 0..read32(scan + CLASS_SLOT_COUNT) as usize {
+                                self.forward_word(variants + index * WORD);
+                            }
+                        }
+                    }
+                    TAG_PACKAGE => self.forward_word(scan + PACKAGE_NAME),
+                    TAG_TYPE => self.forward_word(scan + TYPE_CLASS),
                     _ => {}
                 }
                 scan += size;
@@ -1407,25 +1417,41 @@ mod tests {
         string,
     };
 
-    /// The id of a class of two slots, an int and a reference to another
-    /// instance, in [`types`].
-    const LINK: usize = FIRST_CLASS_TYPE;
+    /// Write the 32-bit word at `address`.
+    unsafe fn write32(address: usize, value: u32) {
+        // SAFETY: the caller's: a `u32` of an object being laid out.
+        unsafe { *(address as *mut u32) = value }
+    }
 
-    /// A type table holding `LINK`.
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "the size of a two-slot class"
-    )]
-    fn types() -> &'static [u32] {
-        let mut table = vec![0; FIRST_CLASS_TYPE / 4];
-        table.extend([KIND_INSTANCE, instance_size(2) as u32, 0, 0]);
-        table.leak()
+    /// The class object of a class of two slots, an int and a reference
+    /// to another instance: one outside the heap, as the compiler places
+    /// them, with no row.
+    fn link_class() -> usize {
+        static CLASS: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+        *CLASS.get_or_init(|| {
+            let class = vec![Value::NULL; class_size(0) / VALUE].leak().as_mut_ptr() as usize;
+            // SAFETY: the object is the size of a class object with no
+            // row, and zero but for what is written here.
+            unsafe {
+                store(class, TAG_CLASS);
+                write32(class + CLASS_SLOT_COUNT, 2);
+            }
+            class
+        })
+    }
+
+    /// A new instance of [`link_class`], its slots not yet written.
+    fn new_link(mutator: &mut Mutator, flags: usize) -> usize {
+        let link = mutator.allocate_object(TAG_INSTANCE | flags, instance_size(2));
+        // SAFETY: `link` is a fresh instance.
+        unsafe { store(link + INSTANCE_CLASS, link_class()) };
+        link
     }
 
     fn mutator(stress: bool) -> Mutator {
         let program = Program {
             stack_maps: crate::tests::NO_STACK_MAPS.as_ptr() as usize,
-            types: types().as_ptr() as usize,
+            types: crate::tests::NO_TYPES.as_ptr() as usize,
             unwind: 0,
             functions: 0,
         };
@@ -1435,11 +1461,10 @@ mod tests {
 
     /// Push a link holding `value` onto the list in `*head`.
     fn push_link(mutator: &mut Mutator, head: &mut usize, value: i64) {
-        let link = mutator.allocate_object(LINK, instance_size(2));
+        let link = new_link(mutator, 0);
         // SAFETY: `link` is a fresh instance of two slots, and `head` was
         // kept current across the allocation.
         unsafe {
-            store(link + INSTANCE_CLASS, 0);
             Value::store(link + field_offset(0), Value::int(value));
             Value::store(link + field_offset(1), Value::reference(*head));
         }
@@ -1449,14 +1474,15 @@ mod tests {
     fn list_values(mut link: usize) -> Vec<i64> {
         let mut values = Vec::new();
         while link != 0 {
-            // SAFETY: `link` is a live instance of `LINK`.
+            // SAFETY: `link` is a live instance of the class.
             unsafe {
                 let (value, next) = (
                     Value::load(link + field_offset(0)),
                     Value::load(link + field_offset(1)),
                 );
                 assert_eq!(value.tag, TAG_INT);
-                assert!(next == Value::NULL || next.tag == LINK);
+                assert!(next == Value::NULL || next.tag == TAG_INSTANCE);
+                assert_eq!(load(link + INSTANCE_CLASS), link_class());
                 values.push(value.payload.cast_signed() as i64);
                 link = next.payload;
             }
@@ -1481,10 +1507,9 @@ mod tests {
         use crate::layout::HEADER_PANIC;
 
         let mut mutator = mutator(true);
-        let mut flagged = mutator.allocate_object(LINK | HEADER_PANIC, instance_size(2));
+        let mut flagged = new_link(&mut mutator, HEADER_PANIC);
         // SAFETY: `flagged` is a fresh instance of two slots.
         unsafe {
-            store(flagged + INSTANCE_CLASS, 0);
             Value::store(flagged + field_offset(0), Value::int(7));
             Value::store(flagged + field_offset(1), Value::NULL);
         }
@@ -1497,8 +1522,197 @@ mod tests {
         assert_ne!(flagged, before, "every allocation collects");
         // SAFETY: `flagged` was kept current across the collection.
         let header = unsafe { load(flagged) };
-        assert_eq!(header & TYPE_ID_MASK, LINK);
+        assert_eq!(header & TYPE_ID_MASK, TAG_INSTANCE);
         assert_eq!(header & !TYPE_ID_MASK, HEADER_PANIC);
+    }
+
+    /// A class object, an enum's class object, its variants, a package, a
+    /// type object and their names are objects like any other when they
+    /// are in the heap: each is copied whole, what it refers to follows
+    /// it, and an instance is sized by its class object wherever that is
+    /// when the instance is reached, before it or after.
+    #[test]
+    fn classes_variants_and_types_in_the_heap_move_with_their_instances() {
+        use crate::layout::{
+            CLASS_DESCRIPTION, CLASS_KIND_CLASS, CLASS_METHODS, HEADER_PAYLOAD_SHIFT, TYPE_TAG,
+            VARIANT_INDEX,
+        };
+
+        // The roots, in the order the collector follows them: an instance,
+        // then its class, then another instance.
+        const EARLY: usize = 0;
+        const CLASS: usize = 1;
+        const LATE: usize = 2;
+        const ENUM: usize = 3;
+        const TYPE: usize = 4;
+        const SCRATCH: usize = 5;
+        const VARIANTS: [&str; 2] = ["Red", "Green"];
+
+        let mut mutator = mutator(true);
+        let mut held = [0_usize; 6];
+        let slots = held.as_mut_ptr();
+        let get = |index: usize| {
+            // SAFETY: `index` is within `held`.
+            unsafe { slots.add(index).read() }
+        };
+        let put = |index: usize, object: usize| {
+            // SAFETY: `index` is within `held`.
+            unsafe { slots.add(index).write(object) }
+        };
+        // An enum's table of variants is outside the heap.
+        let table = Box::leak(Box::new([0_usize; VARIANTS.len()])).as_mut_ptr();
+        // SAFETY: every object is laid out before the next allocation, and
+        // every reference is read back from its root after one.
+        unsafe {
+            for index in 0..held.len() {
+                mutator.root_at(slots.add(index) as usize);
+            }
+            for index in 0..VARIANTS.len() {
+                mutator.root_at(table.add(index) as usize);
+            }
+            put(SCRATCH, string::from_str(&mut mutator, "pkg"));
+            let package = mutator.allocate_object(TAG_PACKAGE, PACKAGE_SIZE);
+            store(package + PACKAGE_NAME, get(SCRATCH));
+            put(SCRATCH, package);
+
+            // A class of two slots whose row has three columns. The row
+            // and the description are not references: each is given an
+            // address in the heap, which a collection must leave as it is.
+            let class =
+                mutator.allocate_object(TAG_CLASS | 3 << HEADER_PAYLOAD_SHIFT, class_size(3));
+            let stale = get(SCRATCH);
+            std::ptr::write_bytes((class + WORD) as *mut u8, 0, class_size(3) - WORD);
+            store(class + CLASS_PACKAGE, stale);
+            write32(class + CLASS_SLOT_COUNT, 2);
+            write32(class + CLASS_KIND, CLASS_KIND_CLASS);
+            store(class + CLASS_DESCRIPTION, stale);
+            store(class + CLASS_METHODS, stale);
+            store(class + CLASS_METHODS + 2 * WORD, stale);
+            put(CLASS, class);
+            let name = string::from_str(&mut mutator, "Link");
+            store(get(CLASS) + CLASS_NAME, name);
+
+            let class =
+                mutator.allocate_object(TAG_CLASS | 1 << HEADER_PAYLOAD_SHIFT, class_size(1));
+            std::ptr::write_bytes((class + WORD) as *mut u8, 0, class_size(1) - WORD);
+            store(class + CLASS_PACKAGE, get(SCRATCH));
+            write32(class + CLASS_SLOT_COUNT, 2);
+            write32(class + CLASS_KIND, CLASS_KIND_ENUM);
+            store(class + CLASS_VARIANTS, table as usize);
+            put(ENUM, class);
+            let name = string::from_str(&mut mutator, "Color");
+            store(get(ENUM) + CLASS_NAME, name);
+            for (index, name) in VARIANTS.iter().enumerate() {
+                let variant = mutator.allocate_object(TAG_ENUM_VARIANT, VARIANT_SIZE);
+                store(variant + VARIANT_ENUM, get(ENUM));
+                store(variant + VARIANT_INDEX, index);
+                store(variant + VARIANT_NAME, 0);
+                table.add(index).write(variant);
+                let name = string::from_str(&mut mutator, name);
+                store(table.add(index).read() + VARIANT_NAME, name);
+            }
+            // From here on the variants are reached through their enum.
+            mutator.unroot(VARIANTS.len());
+
+            let ty = mutator.allocate_object(TAG_TYPE, TYPE_SIZE);
+            store(ty + TYPE_TAG, TAG_INSTANCE);
+            store(ty + TYPE_CLASS, get(CLASS));
+            store(ty + crate::layout::TYPE_DESCRIPTION, 0);
+            put(TYPE, ty);
+
+            // Three instances: one the collector reaches before the class
+            // object, one it reaches from that one, after the class object
+            // has been copied, and one from a root after the class's.
+            let link = |mutator: &mut Mutator, value: i64, next: &dyn Fn() -> usize| {
+                let link = mutator.allocate_object(TAG_INSTANCE, instance_size(2));
+                store(link + INSTANCE_CLASS, get(CLASS));
+                Value::store(link + field_offset(0), Value::int(value));
+                Value::store(link + field_offset(1), Value::reference(next()));
+                link
+            };
+            let late = link(&mut mutator, 3, &|| table.read());
+            put(LATE, late);
+            let middle = link(&mut mutator, 2, &|| table.add(1).read());
+            put(SCRATCH, middle);
+            let early = link(&mut mutator, 1, &|| get(SCRATCH));
+            put(EARLY, early);
+            // The package and the middle instance are reached through
+            // what refers to them.
+            put(SCRATCH, 0);
+
+            let before: Vec<usize> = (0..held.len()).map(get).collect();
+            for _ in 0..3 {
+                mutator.allocate(VALUE);
+            }
+            mutator.unroot(held.len());
+            for index in [EARLY, CLASS, LATE, ENUM, TYPE] {
+                assert_ne!(get(index), before[index], "every allocation collects");
+            }
+
+            let (class, colors) = (get(CLASS), get(ENUM));
+            assert_eq!(load(class), TAG_CLASS | 3 << HEADER_PAYLOAD_SHIFT);
+            assert_eq!(read32(class + CLASS_SLOT_COUNT), 2);
+            assert_eq!(string::text(load(class + CLASS_NAME)), "Link");
+            let package = load(class + CLASS_PACKAGE);
+            assert_ne!(package, stale);
+            assert_eq!(load(package), TAG_PACKAGE);
+            assert_eq!(string::text(load(package + PACKAGE_NAME)), "pkg");
+            assert_eq!(load(class + CLASS_DESCRIPTION), stale);
+            assert_eq!(load(class + CLASS_METHODS), stale);
+            assert_eq!(load(class + CLASS_METHODS + WORD), 0);
+            assert_eq!(load(class + CLASS_METHODS + 2 * WORD), stale);
+
+            assert_eq!(load(colors), TAG_CLASS | 1 << HEADER_PAYLOAD_SHIFT);
+            assert_eq!(load(colors + CLASS_PACKAGE), package);
+            assert_eq!(load(colors + CLASS_VARIANTS), table as usize);
+            assert_eq!(string::text(load(colors + CLASS_NAME)), "Color");
+            for (index, name) in VARIANTS.iter().enumerate() {
+                let variant = table.add(index).read();
+                assert_eq!(load(variant), TAG_ENUM_VARIANT);
+                assert_eq!(load(variant + VARIANT_ENUM), colors);
+                assert_eq!(load(variant + VARIANT_INDEX), index);
+                assert_eq!(string::text(load(variant + VARIANT_NAME)), *name);
+            }
+
+            let ty = get(TYPE);
+            assert_eq!(load(ty), TAG_TYPE);
+            assert_eq!(load(ty + TYPE_TAG), TAG_INSTANCE);
+            assert_eq!(load(ty + TYPE_CLASS), class);
+
+            let slot = |link: usize, index: usize| Value::load(link + field_offset(index));
+            let middle = slot(get(EARLY), 1);
+            assert_eq!(middle.tag, TAG_INSTANCE);
+            for (link, value) in [(get(EARLY), 1), (middle.payload, 2), (get(LATE), 3)] {
+                assert_eq!(load(link), TAG_INSTANCE);
+                assert_eq!(load(link + INSTANCE_CLASS), class);
+                assert_eq!(slot(link, 0), Value::int(value));
+            }
+            assert_eq!(
+                slot(middle.payload, 1),
+                Value::reference(table.add(1).read())
+            );
+            assert_eq!(slot(get(LATE), 1), Value::reference(table.read()));
+            assert_eq!(slot(get(LATE), 1).tag, TAG_ENUM_VARIANT);
+
+            // Each object took the room its tag and its class say, and
+            // nothing else was kept but the last allocation.
+            let names: usize = ["pkg", "Link", "Color", "Red", "Green"]
+                .iter()
+                .map(|name| string_size(name.len()))
+                .sum();
+            let live = mutator.alloc_ptr - mutator.heap.space.start;
+            assert_eq!(
+                live,
+                3 * instance_size(2)
+                    + class_size(3)
+                    + class_size(1)
+                    + PACKAGE_SIZE
+                    + VARIANTS.len() * VARIANT_SIZE
+                    + TYPE_SIZE
+                    + names
+                    + VALUE
+            );
+        }
     }
 
     #[test]
@@ -1805,7 +2019,7 @@ mod tests {
         };
         let program = Program {
             stack_maps: stack_maps.leak().as_ptr() as usize,
-            types: types().as_ptr() as usize,
+            types: crate::tests::NO_TYPES.as_ptr() as usize,
             unwind: 0,
             functions: functions.leak().as_ptr() as usize,
         };
@@ -1873,7 +2087,7 @@ mod tests {
             ];
             let program = Program {
                 stack_maps: stack_maps.leak().as_ptr() as usize,
-                types: types().as_ptr() as usize,
+                types: crate::tests::NO_TYPES.as_ptr() as usize,
                 unwind: 0,
                 functions: 0,
             };

@@ -17,7 +17,7 @@
 use std::collections::HashSet;
 
 use super::{
-    BytesRef, Elem, NativeBamlOps, Natives, Scope, Slot, Thrown, TypeId, View, array_size,
+    BytesRef, Elem, NativeBamlOps, Natives, Scope, Slot, Thrown, TypeRef, View, array_size,
     drive::BamlFn,
     json::{string_keyed, type_of},
     root::float_order,
@@ -27,30 +27,39 @@ use crate::{
     heap::{Value, load},
     json_layout::{KIND_ARRAY, KIND_MAP},
     layout::{
-        ARRAY_LENGTH, BOUND_CODE, BOUND_RECEIVER, BOUND_TYPE_ARG_COUNT, BOUND_TYPE_ARGS, BOX_VALUE,
-        CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, CLOSURE_CODE, FIRST_CLASS_TYPE, INSTANCE_SLOTS,
-        STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD, TAG_BYTES, TAG_CLOSURE,
-        TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL, TAG_TUPLE, TUPLE_COUNT, VALUE, WORD,
+        ARRAY_LENGTH, BOUND_CODE, BOUND_RECEIVER, BOUND_TYPE_ARG_COUNT, BOUND_TYPE_ARGS,
+        CLASS_INDEX, CLOSURE_CAPTURE_COUNT, CLOSURE_CAPTURES, CLOSURE_CODE, INSTANCE_CLASS,
+        INSTANCE_SLOTS, STRING_TAGS_END, TAG_ARRAY, TAG_BIGINT, TAG_BOOL, TAG_BOUND_METHOD,
+        TAG_BYTES, TAG_CLOSURE, TAG_FLOAT, TAG_INSTANCE, TAG_INT, TAG_MAP, TAG_NULL, TAG_TUPLE,
+        TUPLE_COUNT, VALUE, WORD,
     },
     map,
 };
 
 unsafe extern "C" {
     /// The classes with an `eq` of their own, which a program that calls
-    /// either native lists: a count, and for each class its type id and
-    /// the entry that calls its `eq`, sorted by type id.
+    /// either native lists: a count, and for each class the index its
+    /// class object has and the entry that calls its `eq`, sorted by
+    /// index.
     static baml_native_equals: u64;
 }
 
-/// The entry of the `eq` of the class whose instances have the type id
-/// `type_id`, when the class has one of its own.
-fn own_eq(type_id: usize) -> Option<BamlFn> {
-    // SAFETY: the list is in the executable's data, laid out as above.
+/// The entry of the `eq` of the class of the instance at `instance`, when
+/// the class has one of its own.
+///
+/// # Safety
+///
+/// `instance` is a live instance.
+unsafe fn own_eq(instance: usize) -> Option<BamlFn> {
+    // SAFETY: the caller's contract: an instance holds its class object,
+    // which has its index. The list is in the executable's data, laid out
+    // as above.
     unsafe {
+        let index = ((load(instance + INSTANCE_CLASS) + CLASS_INDEX) as *const u32).read();
         let list = &raw const baml_native_equals;
         let classes = std::slice::from_raw_parts(list.add(1).cast::<[u64; 2]>(), *list as usize);
         let found = classes
-            .binary_search_by_key(&(type_id as u64), |class| class[0])
+            .binary_search_by_key(&u64::from(index), |class| class[0])
             .ok()?;
         BamlFn::at(classes[found][1] as usize)
     }
@@ -61,7 +70,7 @@ fn own_eq(type_id: usize) -> Option<BamlFn> {
 enum Val {
     Null,
     Bool(bool),
-    /// An `int`, or the position of an enum's variant.
+    /// An `int`.
     Word(usize),
     Float(f64),
     /// An object, and its static type when something says it.
@@ -164,8 +173,11 @@ impl<F: FnMut(usize, usize)> Walk<'_, F> {
                         && (0..count).all(|index| type_arg(a, index) == type_arg(b, index))
                         && self.slots(a, b, BOUND_RECEIVER, 1)
                 }
-                class if class >= FIRST_CLASS_TYPE => self.instances(a, b, class),
-                // Any other object is what it is and nothing else.
+                TAG_INSTANCE => {
+                    load(a + INSTANCE_CLASS) == load(b + INSTANCE_CLASS) && self.instances(a, b)
+                }
+                // Any other object is what it is and nothing else: an
+                // enum's variant is the one object.
                 _ => false,
             }
         }
@@ -238,19 +250,16 @@ impl<F: FnMut(usize, usize)> Walk<'_, F> {
         }
     }
 
-    /// Two objects of one type of the program's: two instances of a class,
-    /// or two boxes of an enum's variants.
-    unsafe fn instances(&mut self, a: usize, b: usize, type_id: usize) -> bool {
-        if own_eq(type_id).is_some() {
-            (self.own)(a, b);
-            return true;
-        }
-        // SAFETY: two live objects of the type.
+    /// Two instances of one class.
+    unsafe fn instances(&mut self, a: usize, b: usize) -> bool {
+        // SAFETY: two live instances of the class.
         unsafe {
-            if self.types.is_enum(type_id) {
-                return load(a + BOX_VALUE) == load(b + BOX_VALUE);
+            if own_eq(a).is_some() {
+                (self.own)(a, b);
+                return true;
             }
-            if let Some(class) = self.types.of_class(type_id) {
+            let class = load(a + INSTANCE_CLASS);
+            if let Some(class) = self.types.of_class(class) {
                 let fields: Vec<_> = (0..class.count())
                     .filter_map(|field| class.field_place(field))
                     .collect();
@@ -263,8 +272,7 @@ impl<F: FnMut(usize, usize)> Walk<'_, F> {
                 return true;
             }
             // Nothing describes the fields: each slot says what it holds.
-            let count = (self.types.instance_size(type_id) - INSTANCE_SLOTS) / VALUE;
-            self.slots(a, b, INSTANCE_SLOTS, count)
+            self.slots(a, b, INSTANCE_SLOTS, crate::class::slot_count(class))
         }
     }
 }
@@ -295,11 +303,11 @@ unsafe fn walk(
 /// Whether `a` equals `b`.
 pub(super) async fn equals<'s>(
     scope: &mut Scope<'s>,
-    (a, a_type): (Elem<'s>, TypeId),
-    (b, b_type): (Elem<'s>, TypeId),
+    (a, a_type): (Elem<'s>, TypeRef),
+    (b, b_type): (Elem<'s>, TypeRef),
 ) -> Result<bool, Thrown<'s>> {
     let types = Types::of(scope);
-    let described = |ty: TypeId| types.described(ty).map(Desc::not_null);
+    let described = |ty: TypeRef| types.described(ty).map(Desc::not_null);
     let (a_type, b_type) = (described(a_type), described(b_type));
     let mut count = 0;
     // SAFETY: the values compiled code passed, and nothing is allocated.
@@ -343,7 +351,8 @@ pub(super) async fn equals<'s>(
         );
         // A pair the walk handed out: two live instances of a class that
         // has an `eq`.
-        let Some(eq) = own_eq(left.id()) else {
+        // SAFETY: as the comment above says.
+        let Some(eq) = (unsafe { own_eq(left.payload) }) else {
             continue;
         };
         // SAFETY: as above, and none of the three slots is used again.
@@ -364,9 +373,9 @@ pub(super) async fn equals<'s>(
 impl NativeBamlOps for Natives {
     async fn equals_equals<'s>(
         scope: &mut Scope<'s>,
-        a_type: TypeId,
+        a_type: TypeRef,
         a: Elem<'s>,
-        b_type: TypeId,
+        b_type: TypeRef,
         b: Elem<'s>,
     ) -> Result<bool, Thrown<'s>> {
         equals(scope, (a, a_type), (b, b_type)).await

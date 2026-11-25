@@ -27,11 +27,12 @@ pub const VALUE_PAYLOAD: usize = WORD;
 ///               object was copied to, bit 1 is a mark it keeps only while
 ///               it collects. Zero in a tag
 /// bits  3..=31  with the three below read as zeros, the type id: one of
-///               the `TAG_` constants, or the byte offset in the program's
-///               type table of the type of a class or of an enum's boxes
+///               the `TAG_` constants
 /// bits 32..=58  the payload of the header. A string caches its hash
 ///               here, zero while it has none ([`STRING_HASH_MASK`]). A
-///               callable holds its call layout id here ([`call_layout`])
+///               callable holds its call layout id here ([`call_layout`]),
+///               and a class object the number of its columns
+///               ([`class_columns`])
 /// bits 59..=61  free
 /// bit  62       [`HEADER_PANIC`]
 /// bit  63       [`HEADER_BUSY`]
@@ -117,9 +118,9 @@ pub const TAG_REALIZED_FUNCTION: usize = 27 << 3;
 pub const TAG_HOST_CLOSURE: usize = 28 << 3;
 pub const TAG_PACKAGE: usize = 29 << 3;
 pub const TAG_RUST_INSTANCE: usize = 30 << 3;
-/// Where the types of a program's classes and enums begin: every type id
-/// from here on is the byte offset of a type in the program's type table.
-pub const FIRST_CLASS_TYPE: usize = 31 << 3;
+/// One past the last tag: how many rows a table with a row per tag has,
+/// as a tag is a row's number times eight.
+pub const TAGS_END: usize = 31 << 3;
 
 /// Set in the tag a native that can throw returns, and in the one an entry
 /// a native calls returns, when the value is what was thrown. No tag of a
@@ -155,7 +156,10 @@ pub const fn aligned(bytes: usize) -> usize {
     (bytes + VALUE - 1) & !(VALUE - 1)
 }
 
-/// A class instance is a header, a word for its class, and its slots.
+/// A class instance is a header, the address of its class's object, and
+/// its slots: one per type parameter of the class, and then one per field.
+/// Every instance has the tag [`TAG_INSTANCE`], whatever its class, and
+/// [`HEADER_PANIC`] in its header when its class is a panic.
 pub const INSTANCE_CLASS: usize = HEADER;
 pub const INSTANCE_SLOTS: usize = VALUE;
 
@@ -248,42 +252,94 @@ pub const fn bound_size(type_args: usize) -> usize {
     aligned(BOUND_TYPE_ARGS + type_args * WORD)
 }
 
-/// Where the type of a value is only known when the program runs, an enum
-/// variant is a box: a header whose type says which enum, and the variant's
-/// position. The compiler places one per variant in the executable's data.
-pub const BOX_VALUE: usize = WORD;
-pub const BOX_SIZE: usize = VALUE;
-
-/// The kinds of the types of a program's type table.
+/// A class object says what a class is, or an enum: one per class,
+/// whatever its type arguments, and one per enum. It is a header, whose
+/// payload is the number of its columns, and:
 ///
-/// A class: an instance is `size` bytes, a header, a word for its class
-/// and slots.
-pub const KIND_INSTANCE: u32 = 0;
-/// An enum: the type is of its boxes.
-pub const KIND_ENUM: u32 = 1;
-
-/// Set in the fourth `u32` of a class's type; the other bits are the
-/// offset of the class's description in the section of descriptions that
-/// ends the type table (see `json_layout.rs`).
-pub const TYPE_DESCRIBED: u32 = 1 << 31;
-
-/// The type table starts with [`FIRST_CLASS_TYPE`] bytes no type lives at,
-/// so that no type of the program has the id of a tag. A type is four
-/// `u32`s: its kind; the size in bytes of an object; zero; and one more
-/// that depends on the kind.
+/// ```text
+/// +8   the address of its package's object
+/// +16  the address of its name, a string
+/// +24  u32  for a class, how many slots an instance has, its type
+///           parameters and then its fields: an instance is
+///           `instance_size` of that many. For an enum, how many variants
+///           it has
+/// +28  u32  how many type parameters it has
+/// +32  u32  its kind, one of the `CLASS_KIND_` constants, with
+///           [`CLASS_PANIC`] for a class of `baml.panics`
+/// +36  u32  its index: classes and enums are numbered from zero across
+///           the program
+/// +40  the address of its description (see `json_layout.rs`), or zero
+/// +48  for an enum, the address of its variants: the address of each
+///      one's object, a word each, in declaration order. Zero for a class
+/// +56  its row: a word per column of the program. A method's column
+///      holds the address of the class's code for it, zero where it has
+///      none; an interface's holds one where the class implements it
+/// ```
 ///
-/// The fourth `u32` of the type of an enum's boxes is the offset in the
-/// table of the enum's variant names: a `u32` count, then for each variant
-/// the offset in the table and the length in bytes of its name, a `u32`
-/// each.
-///
-/// The fourth `u32` of a class's type is [`TYPE_DESCRIBED`] and the offset
-/// of the class's description in the section of descriptions: its name,
-/// and the name, the place and the type of each of its fields. An uncaught
-/// throw of an instance is written from it, the runtime finds the fields
-/// of the instances it makes in it, and `baml.json` writes and reads
-/// instances by it.
-pub const TYPE_HEADER: usize = 16;
+/// The objects the compiler places in the executable's data are never
+/// moved, but nothing assumes a class object is one of them: an instance's
+/// word for its class is a reference like any other.
+pub const CLASS_PACKAGE: usize = WORD;
+pub const CLASS_NAME: usize = 2 * WORD;
+pub const CLASS_SLOT_COUNT: usize = 3 * WORD;
+pub const CLASS_GENERIC_COUNT: usize = 3 * WORD + 4;
+pub const CLASS_KIND: usize = 4 * WORD;
+pub const CLASS_INDEX: usize = 4 * WORD + 4;
+pub const CLASS_DESCRIPTION: usize = 5 * WORD;
+pub const CLASS_VARIANTS: usize = 6 * WORD;
+pub const CLASS_METHODS: usize = 7 * WORD;
+/// The bytes of a class object with a row of `columns` columns.
+pub const fn class_size(columns: usize) -> usize {
+    aligned(CLASS_METHODS + columns * WORD)
+}
+/// How many columns the row of the class object with this header has.
+pub const fn class_columns(header: usize) -> usize {
+    (header >> HEADER_PAYLOAD_SHIFT) & HEADER_PAYLOAD_MASK
+}
+pub const CLASS_KIND_CLASS: u32 = 0;
+pub const CLASS_KIND_ENUM: u32 = 1;
+pub const CLASS_KIND_RUST: u32 = 2;
+/// The bits of a class object's kind that are one of the three above.
+pub const CLASS_KIND_MASK: u32 = 0xFF;
+/// Set in the kind of a class of `baml.panics`.
+pub const CLASS_PANIC: u32 = 1 << 8;
+
+/// An enum's variant is an object, one per variant, and a value of the
+/// enum is its address: two values are the same variant when they are the
+/// same address. It is a header, the address of its enum's class object
+/// (where an instance has its class's, so that the row of either is found
+/// alike), its position in the declaration, and the address of its name, a
+/// string. What hashes a variant hashes its position: an object can move.
+pub const VARIANT_ENUM: usize = INSTANCE_CLASS;
+pub const VARIANT_INDEX: usize = 2 * WORD;
+pub const VARIANT_NAME: usize = 3 * WORD;
+pub const VARIANT_SIZE: usize = 4 * WORD;
+
+/// A package's object is a header and the address of its name, a string.
+pub const PACKAGE_NAME: usize = WORD;
+pub const PACKAGE_SIZE: usize = 2 * WORD;
+
+/// A type object is what a type argument is passed as: its address. It is
+/// a header and three words. The first is the tag every value of the type
+/// has, when a value with that tag is one of the type as long as the
+/// second word allows: zero when it takes more to say, as for a union, an
+/// interface or an array of one element type. The second is the address
+/// of the class object an instance, or an enum's variant, of the type has,
+/// or zero. The third is the address of the type's description (see
+/// `json_layout.rs`), or zero for a type that has none.
+pub const TYPE_TAG: usize = WORD;
+pub const TYPE_CLASS: usize = 2 * WORD;
+pub const TYPE_DESCRIPTION: usize = 3 * WORD;
+pub const TYPE_SIZE: usize = 4 * WORD;
+
+/// What the program tells the runtime of its types is one table. It starts
+/// with the address of the class object of each class of [`WELL_KNOWN`]
+/// and then of each of [`NAMED`], a word each, zero for a class of
+/// [`NAMED`] no native the program calls names in its declaration. The
+/// descriptions follow, at [`PROGRAM_DESCRIPTIONS`]: one section, laid out
+/// as `json_layout.rs` says.
+pub const PROGRAM_CLASSES: usize = 0;
+pub const PROGRAM_DESCRIPTIONS: usize = aligned((WELL_KNOWN.len() + NAMED.len()) * WORD);
 
 /// A `uint8array` is its length, in bytes, and the address of its storage
 /// object, zero when it is empty. The length never changes.
@@ -409,8 +465,12 @@ pub const STRING_HASH_MASK: u32 = HEADER_PAYLOAD_MASK as u32;
 
 const _: () = {
     assert!(STRING_TAGS_END == TAG_STRING_SLICE + 8);
-    assert!(TAG_RUST_INSTANCE + 8 == FIRST_CLASS_TYPE);
-    assert!(TYPE_HEADER.is_multiple_of(8));
+    assert!(TAG_RUST_INSTANCE + 8 == TAGS_END);
+    // An instance and an enum's variant are told from every other value
+    // by one comparison of the tag.
+    assert!(TAG_ENUM_VARIANT == TAG_INSTANCE + 8);
+    assert!(VARIANT_SIZE.is_multiple_of(VALUE) && TYPE_SIZE.is_multiple_of(VALUE));
+    assert!(PACKAGE_SIZE.is_multiple_of(VALUE));
     assert!(SLICE_SIZE.is_multiple_of(VALUE));
     assert!(ARRAY_SIZE.is_multiple_of(VALUE));
     assert!(MAP_SIZE.is_multiple_of(VALUE));
@@ -433,9 +493,9 @@ const _: () = {
 /// then the errors its natives throw and the classes of an error's context.
 /// The runtime gives the fields of one it makes in declaration order.
 /// Each is the namespace under `baml`
-/// and the class's name. The compiler emits the type id of each, in this
-/// order, as the `u32`s of its well-known table, after a `u32` count; the
-/// description of the type says where the fields are.
+/// and the class's name. The compiler emits the address of the class
+/// object of each, in this order ([`PROGRAM_CLASSES`]); the description of
+/// the class says where the fields are.
 pub const WELL_KNOWN: [(&str, &str); 25] = [
     ("panics", "DivisionByZero"),
     ("panics", "IndexOutOfBounds"),
@@ -468,9 +528,9 @@ pub const WELL_KNOWN: [(&str, &str); 25] = [
 /// class of an object it was passed, not the type of a field of a class it
 /// already has. Each is the namespace under `baml` and the class's name.
 ///
-/// The compiler writes the type id of each after those of [`WELL_KNOWN`],
-/// in this order, and writes zero for a class that no native the program
-/// calls names in its declaration, which is then not described either.
+/// The compiler writes the address of the class object of each after
+/// those of [`WELL_KNOWN`], in this order, and writes zero for a class
+/// that no native the program calls names in its declaration.
 pub const NAMED: [(&str, &str); 35] = [
     ("regex", "Regex"),
     ("regex", "Match"),
@@ -569,7 +629,10 @@ pub const WELL_KNOWN_IO: usize = 24;
 /// takes. A handler lands with an error when it takes every error, when it
 /// takes every panic and the error is one, when it takes every error that
 /// is not a panic and the error is not one, when it takes `null` and the
-/// error is that, or when the error's type id is in its list.
+/// error is that, or when its list holds the error's tag or, for an
+/// instance or an enum's variant, the address of its class object. A list
+/// is words of 64 bits; a string that is a slice has the tag of one that
+/// holds its text there.
 pub const HANDLER_TAKES_ALL: u32 = 1;
 pub const HANDLER_TAKES_PANICS: u32 = 2;
 pub const HANDLER_TAKES_OTHERS: u32 = 4;

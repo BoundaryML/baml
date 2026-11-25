@@ -30,8 +30,6 @@ task_overflow_caught (native-wrong): a task's stack does not grow natively, so t
 # JSON.
 json_to_deep (undecided): a native decode follows a value 128 levels down; the interpreter limits only the text it parses
   stdout "value nests more than 128 levels deep"\n
-json_unknown_enum_array (native-wrong): an array holds an enum variant as the int of its position, so one held as `unknown` is written as ints
-  stdout "[1,1]"\n
 
 # A native frame has no file and line, and a function inlined into its caller
 # no frame.

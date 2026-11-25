@@ -86,9 +86,10 @@ pub fn read_native_lists(dir: &Path) -> Result<Vec<NativeListEntry>, String> {
     Ok(entries)
 }
 
-/// The natives a call passes type ids to: one for each type parameter of
-/// the builtin, class parameters first. Every other native reads what it
-/// needs of a type from the tags of the values it is passed.
+/// The natives a call passes types to: for each type parameter of the
+/// builtin, class parameters first, the address of the type object of its
+/// argument. Every other native reads what it needs of a type from the
+/// tags of the values it is passed.
 const TAKES_TYPE_IDS: [&str; 6] = [
     "baml._rust_sort",
     "baml._is_primitive_array",
@@ -338,15 +339,16 @@ impl AbiTy {
 
     /// The symbol's parameters for a parameter `name` of this type: one
     /// for an exact type, and for any other the value's tag and then its
-    /// payload, after the id of its static type for an `unknown` of
-    /// `baml.json`.
+    /// payload, after the address of the type object of its static type
+    /// for an `unknown` of `baml.json`, zero when only the value's tag says
+    /// what it is.
     fn c_parameters(&self, name: &str) -> Vec<String> {
         if !self.is_value() {
             return vec![format!("r#{name}: {}", self.c())];
         }
         let mut parameters = vec![format!("{name}_tag: u64"), format!("r#{name}: u64")];
         if *self == Self::Typed {
-            parameters.insert(0, format!("{name}_type: u32"));
+            parameters.insert(0, format!("{name}_type: usize"));
         }
         parameters
     }
@@ -611,9 +613,8 @@ fn type_args(builtin: &NativeBuiltin) -> usize {
     builtin.generics.len()
 }
 
-/// How many type ids a call of the builtin passes: one for each of its
-/// type parameters when it is one of [`TAKES_TYPE_IDS`], and none
-/// otherwise.
+/// How many types a call of the builtin passes: one for each of its type
+/// parameters when it is one of [`TAKES_TYPE_IDS`], and none otherwise.
 fn type_ids(builtin: &NativeBuiltin) -> usize {
     if TAKES_TYPE_IDS.contains(&builtin.path.as_str()) {
         type_args(builtin)
@@ -779,14 +780,14 @@ pub fn generate_native_shims(
         if allocates {
             parameters.push("scope: &mut Scope<'s>".to_owned());
         }
-        // The type id of each type argument of the call, for the few
+        // The type object of each type argument of the call, for the few
         // natives that are passed them.
         if type_args != 0 {
-            parameters.push(format!("types: [TypeId; {type_args}]"));
+            parameters.push(format!("types: [TypeRef; {type_args}]"));
         }
         for (name, ty) in &abi.params {
             if *ty == AbiTy::Typed {
-                parameters.push(format!("{name}_type: TypeId"));
+                parameters.push(format!("{name}_type: TypeRef"));
             }
             parameters.push(format!("r#{name}: {}", ty.parameter(allocates)));
         }
@@ -810,7 +811,7 @@ pub fn generate_native_shims(
             c_parameters.push("mutator: &mut Mutator".to_owned());
         }
         for index in 0..type_args {
-            c_parameters.push(format!("type_{index}: u32"));
+            c_parameters.push(format!("type_{index}: usize"));
         }
         for (name, ty) in &abi.params {
             c_parameters.extend(ty.c_parameters(name));
@@ -834,7 +835,7 @@ pub fn generate_native_shims(
         }
         if type_args != 0 {
             let ids: Vec<_> = (0..type_args)
-                .map(|index| format!("TypeId(type_{index})"))
+                .map(|index| format!("TypeRef(type_{index})"))
                 .collect();
             let _ = writeln!(body, "    let types = [{}];", ids.join(", "));
         }
@@ -843,7 +844,7 @@ pub fn generate_native_shims(
         let mut rooting = String::new();
         for (name, ty) in &abi.params {
             if *ty == AbiTy::Typed {
-                arguments.push(format!("TypeId({name}_type)"));
+                arguments.push(format!("TypeRef({name}_type)"));
             }
             if ty.holds_object() || (allocates && ty.is_value()) {
                 let _ = writeln!(

@@ -109,8 +109,8 @@ pub(crate) struct ProgramFunction<'db> {
 /// One interface method that some call dispatches when it runs.
 pub(crate) struct SlotInfo<'db> {
     pub(crate) slot: Slot,
-    /// Its column in the method table. Methods no one type has both of
-    /// share a column.
+    /// Its column in every row. Methods no one type has both of share a
+    /// column.
     pub(crate) column: usize,
     /// The parameters after the receiver, and the result, of every
     /// implementation.
@@ -121,7 +121,7 @@ pub(crate) struct SlotInfo<'db> {
 }
 
 /// The code a type has for a dispatched method.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub(crate) enum Code<'db> {
     /// A function of the program.
     Function(FnKey<'db>),
@@ -131,9 +131,9 @@ pub(crate) enum Code<'db> {
 }
 
 /// The signature the stub of `native` is entered with by a dispatching
-/// call, without its receiver, when the method table can hold it: the
-/// table's entry passes the stub what a call of the native would, but for
-/// the description of a static type, which a dispatching call has none of.
+/// call, without its receiver, when a row can hold it: the call passes the
+/// stub what a call of the native would, but for the description of a
+/// static type, which a dispatching call has none of.
 fn dispatched_native<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     native: &'static crate::natives::Native,
@@ -158,15 +158,15 @@ pub(crate) struct Program<'db> {
     pub(crate) functions: Vec<ProgramFunction<'db>>,
     pub(crate) index: HashMap<FnKey<'db>, usize>,
     pub(crate) slots: Vec<SlotInfo<'db>>,
-    /// The method table's rows: for a type, the function behind each slot
-    /// (by position in `slots`) it implements in source.
+    /// The rows: for a type, the function behind each slot (by position in
+    /// `slots`) it implements in source. A class is here once, without
+    /// type arguments: its instantiations share its class object's row.
     pub(crate) rows: Vec<(NativeTy<'db>, Vec<(usize, Code<'db>)>)>,
-    /// Every type an interface value can hold: strings, the boxed scalars,
-    /// and each enum and class instantiation the program makes values of.
+    /// Every type an interface value can hold: strings, the scalars, and
+    /// each enum and class instantiation the program makes values of.
     pub(crate) types: Vec<NativeTy<'db>>,
-    /// A row is `8 << column_shift` bytes: the columns, rounded up to a
-    /// power of two.
-    pub(crate) column_shift: u8,
+    /// How many columns the dispatched methods take.
+    pub(crate) columns: usize,
     /// The classes the program makes values of that have a `to_json` or a
     /// `from_json` of their own, with those functions: what `baml.json`
     /// calls when it writes or reads one.
@@ -190,14 +190,23 @@ struct DispatchedMethod<'db> {
     type_arguments: Vec<TypeArg<'db>>,
 }
 
-/// A type as a row of the method table is for it: instantiations of a
-/// class that share a type id are one.
+/// A type as the program's list of types has it: instantiations of a
+/// class that one copy of generic code serves are one.
 fn row_type<'db>(ty: &NativeTy<'db>) -> NativeTy<'db> {
     match ty {
         NativeTy::Class(class, arguments) => NativeTy::Class(
             *class,
             arguments.iter().cloned().map(type_argument).collect(),
         ),
+        other => other.clone(),
+    }
+}
+
+/// The type whose row a value of type `ty` has: a class's whatever its
+/// type arguments, as its class object holds the row.
+fn row_of<'db>(ty: &NativeTy<'db>) -> NativeTy<'db> {
+    match ty {
+        NativeTy::Class(class, _) => NativeTy::Class(*class, Vec::new()),
         other => other.clone(),
     }
 }
@@ -212,7 +221,7 @@ pub(crate) fn collect<'db>(
         slots: Vec::new(),
         rows: Vec::new(),
         types: Vec::new(),
-        column_shift: 0,
+        columns: 0,
         hooks: Vec::new(),
         equals: Vec::new(),
         equals_unlisted: Vec::new(),
@@ -414,7 +423,7 @@ fn lay_out_methods<'db>(
     resolved: &[(usize, NativeTy<'db>, Option<Target<'db>>)],
 ) -> Vec<Blocker> {
     let mut blockers = Vec::new();
-    let mut implementors: Vec<Vec<&NativeTy<'db>>> = Vec::new();
+    let mut implementors: Vec<Vec<NativeTy<'db>>> = Vec::new();
     for (index, DispatchedMethod { slot, method, .. }) in calls.iter().enumerate() {
         let unsupported =
             |detail: &str| Blocker::new("interface method call", format!("{method}: {detail}"));
@@ -473,10 +482,23 @@ fn lay_out_methods<'db>(
                 }
                 Some(_) => {}
             }
-            with_code.push(ty);
-            match program.rows.iter_mut().find(|(row, _)| row == ty) {
-                Some((_, methods)) => methods.push((index, code)),
-                None => program.rows.push((ty.clone(), vec![(index, code)])),
+            let row = row_of(ty);
+            match program.rows.iter_mut().find(|(known, _)| *known == row) {
+                Some((_, methods)) => match methods.iter().find(|(slot, _)| *slot == index) {
+                    // One row serves every instantiation of a class.
+                    Some((_, known)) if *known != code => {
+                        blockers.push(unsupported(
+                            "implementations for one class at different type arguments",
+                        ));
+                        continue;
+                    }
+                    Some(_) => {}
+                    None => methods.push((index, code)),
+                },
+                None => program.rows.push((row.clone(), vec![(index, code)])),
+            }
+            if !with_code.contains(&row) {
+                with_code.push(row);
             }
         }
         let to_string = Slot::to_string_signature();
@@ -503,10 +525,12 @@ fn lay_out_methods<'db>(
             falls_back,
         });
     }
-    let columns = program.slots.iter().map(|slot| slot.column + 1).max();
-    program.column_shift = columns.map_or(0, |columns| {
-        u8::try_from(columns.next_power_of_two().trailing_zeros()).unwrap_or(u8::MAX)
-    });
+    program.columns = program
+        .slots
+        .iter()
+        .map(|slot| slot.column + 1)
+        .max()
+        .unwrap_or(0);
     for function in &mut program.functions {
         for call in &function.dispatched {
             let Some(slot) = program.slots.iter().find(|slot| slot.slot == call.slot) else {
@@ -532,7 +556,7 @@ fn lay_out_methods<'db>(
 }
 
 /// Whether a call written for one signature can enter code compiled for
-/// the other through the method table: each argument and the result is the
+/// the other through a row: each argument and the result is the
 /// same type, or a reference either way, which the type checker has let
 /// through.
 fn same_registers(left: &Signature<'_>, right: &Signature<'_>) -> bool {

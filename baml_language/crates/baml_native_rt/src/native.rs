@@ -30,7 +30,7 @@ use crate::{
         ARRAY_LENGTH, ARRAY_SIZE, BYTES_LENGTH, BYTES_PTR, BYTES_STORAGE_DATA, SLICE_MIN_BYTES,
         SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS,
         STRING_TAGS_END, STRING_TEXT, TAG_BOOL, TAG_BYTES, TAG_FLOAT, TAG_INT, TAG_STRING,
-        TAG_STRING_SLICE, THROWN, TYPE_ID_MASK, field_offset, instance_size, storage_size,
+        TAG_STRING_SLICE, THROWN, TYPE_ID_MASK, field_offset, storage_size,
     },
 };
 
@@ -91,14 +91,13 @@ pub struct Bool;
 /// names, each read as its slot holds it, tag and payload.
 pub struct Slot;
 
-/// The id a call passes to name a type: for a type parameter of one of the
-/// few builtins that are told theirs, and for the static type of an
-/// `unknown` argument of `baml.json`. It is the tag of an `int`, a `float`,
-/// a `bool` or a string, the type id of a class or of an enum, the offset
-/// of a description ([`crate::json_layout::DESCRIBED`]), or zero for a type
-/// with no one id.
+/// What a call passes to name a type: the address of a type object
+/// ([`crate::layout::TYPE_TAG`]). A type parameter of one of the few
+/// builtins that are told theirs is always named. The static type of an
+/// `unknown` argument of `baml.json` is zero when only the value's tag
+/// says what it is.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct TypeId(pub u32);
+pub struct TypeRef(pub usize);
 
 impl Managed for Str {
     type View<'a> = StrRef<'a>;
@@ -963,7 +962,7 @@ impl<'s> Scope<'s> {
         result
     }
 
-    /// The address of the program's type table.
+    /// The address of the program's table of types.
     pub(crate) fn type_table(&self) -> usize {
         // SAFETY: as in `Self::mutator`.
         unsafe { self.mutator.as_ref() }.types()
@@ -1140,24 +1139,6 @@ impl<'s> Scope<'s> {
         let reservation = self.reserve(array_size(length));
         let array = reservation.array::<E>(length).keep();
         reservation.finish(array)
-    }
-
-    /// A new instance of the class with the type id `type_id` and `slots`
-    /// slots, each `null`. May collect.
-    ///
-    /// # Safety
-    ///
-    /// `type_id` is the id of a class with that many slots, each of which
-    /// may hold `null`.
-    pub unsafe fn alloc_instance(&mut self, type_id: usize, slots: usize) -> Root<'s, Obj> {
-        let size = instance_size(slots);
-        let object = self.mutator().allocate(size);
-        // SAFETY: the object is the size of an instance of that many
-        // slots.
-        unsafe {
-            crate::class::format(object, type_id, size);
-            self.root_raw(object)
-        }
     }
 
     /// Room for objects of `bytes` bytes in all ([`str_size`],
@@ -1658,7 +1639,7 @@ mod generated {
     #[allow(unused_imports, reason = "what the listed natives need varies")]
     use super::{
         Arr, ArrRef, Big, BigRef, Bool, Bytes, BytesRef, Elem, Float, Int, Map, MapRef, Natives,
-        Obj, ObjRef, Opaque, OpaqueRef, Root, RootSlots, Scope, Slot, Str, StrRef, Thrown, TypeId,
+        Obj, ObjRef, Opaque, OpaqueRef, Root, RootSlots, Scope, Slot, Str, StrRef, Thrown, TypeRef,
         View,
     };
     use crate::{

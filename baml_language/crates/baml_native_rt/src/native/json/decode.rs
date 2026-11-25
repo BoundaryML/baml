@@ -33,12 +33,12 @@ use crate::{
     json_layout::{
         HOOK_FROM_JSON, KIND_ARRAY, KIND_BOOL, KIND_BOOL_IS, KIND_CLASS, KIND_ENUM, KIND_FLOAT,
         KIND_INT, KIND_INT_IS, KIND_MAP, KIND_NULL, KIND_OPTIONAL, KIND_STRING, KIND_STRING_IS,
-        KIND_UNION, KIND_VARIANT, REPR_BOXED,
+        KIND_UNION, KIND_VARIANT,
     },
     layout::{ARRAY_LENGTH, VALUE},
     map,
     native::{
-        Elem, Scope, Slot, Thrown, TypeId, array_size,
+        Elem, Scope, Slot, Thrown, TypeRef, array_size,
         build::{Got, place},
         drive::BamlFn,
     },
@@ -108,7 +108,7 @@ struct Decoder<'a> {
 /// named to read it as, and how.
 #[derive(Clone, Copy)]
 struct Asked<'s> {
-    ty: TypeId,
+    ty: TypeRef,
     json: Elem<'s>,
     aliased: bool,
     by_fields: bool,
@@ -151,13 +151,9 @@ fn run(
     // reserved room.
     let value = unsafe {
         match types.described(ty) {
-            Some(described) => decoder
-                .decode(json.value(scope), described)
-                .map(|got| decoder.place(got, REPR_BOXED)),
+            Some(described) => decoder.decode(json.value(scope), described).map(place),
             // A type the call does not describe is `unknown`.
-            None => decoder
-                .copy(json.value(scope))
-                .map(|got| decoder.place(got, REPR_BOXED)),
+            None => decoder.copy(json.value(scope)).map(place),
         }
     };
     (
@@ -167,7 +163,7 @@ fn run(
 }
 
 /// Decode the `json` value `json` as the type a call named by `ty`, and
-/// return it as a value: an enum's variant as a box. With `by_fields` the
+/// return it as a value. With `by_fields` the
 /// value itself is read by its fields whatever `from_json` its class has.
 ///
 /// Each `from_json` is called here, between runs of the decoder. A run
@@ -175,7 +171,7 @@ fn run(
 /// for that, which is nowhere a call of compiled code can be made from.
 pub(in crate::native) async fn to<'s>(
     scope: &mut Scope<'s>,
-    ty: TypeId,
+    ty: TypeRef,
     json: Elem<'s>,
     aliased: bool,
     by_fields: bool,
@@ -289,12 +285,6 @@ impl Decoder<'_> {
         result
     }
 
-    /// The value a slot of representation `repr` holds `got` as, with the
-    /// box of an enum's variant made where this run builds.
-    fn place(&mut self, got: Got, repr: u32) -> Value {
-        place(got, repr, |type_id, bits| self.out.boxed(type_id, bits))
-    }
-
     unsafe fn decode(&mut self, json: Value, described: Desc) -> Result<Got, Misfit> {
         if self.depth > MAX_DEPTH {
             return self.too_deep();
@@ -303,7 +293,11 @@ impl Decoder<'_> {
         // SAFETY: the caller's contract, for everything reached from the
         // value.
         unsafe {
-            let node = Node::of(self.types, json);
+            let node = Node::of(json);
+            if described.shown_only() {
+                // A class or an enum `baml.json` has no form for.
+                return self.fail("the type has no JSON form");
+            }
             match described.kind() {
                 KIND_NULL => match node {
                     Node::Null => Ok(Got::Null),
@@ -354,7 +348,7 @@ impl Decoder<'_> {
                         variant.shown(aliased) && variant.key(aliased) == written
                     });
                     match found {
-                        Some(index) => Ok(Got::Variant(described.a(), index)),
+                        Some(index) => Ok(Got::Variant(described.class_object(), index)),
                         None => self.fail(format!(
                             "unknown variant `{written}` for enum `{}`",
                             described.name()
@@ -375,7 +369,7 @@ impl Decoder<'_> {
                     }
                     let expected = variant.key(self.aliased);
                     if node.text() == Some(expected) {
-                        Ok(Got::Variant(of.a(), described.b()))
+                        Ok(Got::Variant(of.class_object(), described.b()))
                     } else {
                         self.fail(format!("expected enum variant `{expected}`"))
                     }
@@ -469,7 +463,7 @@ impl Decoder<'_> {
                     },
                     |this| this.decode(item, element),
                 )?;
-                items.push(self.place(got, element.repr()));
+                items.push(place(got));
             }
             Ok(Got::Ref(self.out.array(items.into_iter())))
         }
@@ -509,7 +503,7 @@ impl Decoder<'_> {
                     },
                     |this| this.decode(*value, values),
                 )?;
-                *value = self.place(got, values.repr());
+                *value = place(got);
             }
             Ok(Got::Ref(self.out.map(entries.into_iter())))
         }
@@ -563,7 +557,6 @@ impl Decoder<'_> {
             if !string_keyed(object) {
                 return self.fail(STRING_MAP_REQUIRED);
             }
-            let type_id = described.a();
             let mut slots = Vec::with_capacity(described.count());
             for field in described.fields() {
                 let Some(ty) = field.ty else { continue };
@@ -595,11 +588,9 @@ impl Decoder<'_> {
                         }
                     }
                 };
-                slots.push((field.offset, self.place(got, ty.repr())));
+                slots.push((field.offset, place(got)));
             }
-            let instance = self
-                .out
-                .instance(type_id, self.types.instance_size(type_id));
+            let instance = self.out.instance(described.class_object());
             if instance != 0 {
                 for (offset, placed) in slots {
                     Value::store(instance + offset, placed);

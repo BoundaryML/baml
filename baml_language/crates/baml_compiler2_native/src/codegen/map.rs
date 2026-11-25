@@ -81,8 +81,9 @@ impl<'db> Translator<'_, 'db> {
                     &[map, key, hash],
                 )
             }
-            NativeTy::Float => {
-                // The runtime makes the key canonical.
+            // The runtime makes a `float` key canonical, and hashes an
+            // enum's variant by the position its object holds.
+            NativeTy::Float | NativeTy::Enum(_) => {
                 let (tag, key) = slot_words(&mut self.builder, key_ty, key);
                 self.map_leaf(
                     "baml_rt_map_find",
@@ -266,7 +267,7 @@ impl<'db> Translator<'_, 'db> {
         self.builder.seal_block(read);
         self.builder.switch_to_block(read);
         let found = self.slot_load(&types[1], slot, 0);
-        let (tag, payload) = self.pair_words(&types[1], found)?;
+        let (tag, payload) = slot_words(&mut self.builder, &types[1], found);
         self.builder.ins().jump(done, &[tag.into(), payload.into()]);
         self.builder.seal_block(done);
         self.builder.switch_to_block(done);

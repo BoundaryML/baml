@@ -2,8 +2,8 @@
 //! thrown and nothing catches it, and how the runtime makes one of the
 //! standard library's panics and errors.
 //!
-//! Both read the description the compiler leaves with a class's type; see
-//! [`crate::layout::TYPE_HEADER`].
+//! Both read the class's object and the description it names; see
+//! [`crate::layout::CLASS_PACKAGE`].
 
 use std::fmt::Write as _;
 
@@ -12,13 +12,13 @@ use crate::{
     describe::{Desc, Types},
     float_text,
     heap::{Mutator, Value, load, store},
-    json_layout::{
-        KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_OPAQUE, KIND_VARIANT, REPR_BOOL, REPR_FLOAT, REPR_INT,
-    },
+    json_layout::{KIND_ARRAY, KIND_ENUM, KIND_MAP, KIND_OPAQUE, REPR_BOOL, REPR_FLOAT, REPR_INT},
     layout::{
-        ARRAY_LENGTH, BOX_VALUE, HEADER, HEADER_PANIC, STRING_TAGS_END, TAG_ARRAY, TAG_BOOL,
-        TAG_FLOAT, TAG_INT, TAG_MAP, TAG_NULL, TYPE_ID_MASK, WELL_KNOWN_CONTEXT, WELL_KNOWN_EXIT,
-        WELL_KNOWN_PANICS, WELL_KNOWN_STACK_FRAME, WELL_KNOWN_STACK_TRACE,
+        ARRAY_LENGTH, CLASS_KIND, CLASS_PANIC, CLASS_SLOT_COUNT, CLASS_VARIANTS, HEADER,
+        HEADER_PANIC, INSTANCE_CLASS, STRING_TAGS_END, TAG_ARRAY, TAG_BOOL, TAG_ENUM_VARIANT,
+        TAG_FLOAT, TAG_INSTANCE, TAG_INT, TAG_MAP, TAG_NULL, TYPE_ID_MASK, VARIANT_NAME,
+        WELL_KNOWN_CONTEXT, WELL_KNOWN_EXIT, WELL_KNOWN_STACK_FRAME, WELL_KNOWN_STACK_TRACE, WORD,
+        instance_size,
     },
     map, string,
 };
@@ -27,19 +27,79 @@ use crate::{
 ///
 /// # Safety
 ///
-/// `address` is inside the type table.
+/// `address` is a `u32` of a live class object.
 unsafe fn word(address: usize) -> usize {
     // SAFETY: the caller's contract.
-    unsafe { (address as *const u32).read_unaligned() as usize }
+    unsafe { (address as *const u32).read() as usize }
 }
 
-/// The description of the class whose instances have the type `type_id`.
+/// How many slots an instance of the class whose object is at `class` has,
+/// or how many variants the enum whose object it is has.
 ///
 /// # Safety
 ///
-/// `type_id` is an entry of the mutator's type table.
-unsafe fn description(mutator: &Mutator, type_id: usize) -> Option<Desc> {
-    Types::of_table(mutator.types()).of_class(type_id)
+/// `class` is a live class object.
+pub(crate) unsafe fn slot_count(class: usize) -> usize {
+    // SAFETY: the caller's contract.
+    unsafe { word(class + CLASS_SLOT_COUNT) }
+}
+
+/// The object of variant `index` of the enum whose class object is at
+/// `class`.
+///
+/// # Safety
+///
+/// `class` is the live class object of an enum with that many variants.
+pub(crate) unsafe fn variant(class: usize, index: usize) -> usize {
+    // SAFETY: the caller's contract: an enum's class object has the
+    // address of a word for each of its variants.
+    unsafe {
+        debug_assert!(index < slot_count(class));
+        load(load(class + CLASS_VARIANTS) + index * WORD)
+    }
+}
+
+/// The name of the enum variant whose object is at `variant`.
+///
+/// # Safety
+///
+/// `variant` is a live variant object, and the result is not used after
+/// the next allocation.
+pub(crate) unsafe fn variant_name<'a>(variant: usize) -> &'a str {
+    // SAFETY: the caller's contract: a variant holds its name, a string.
+    unsafe { string::text(load(variant + VARIANT_NAME)) }
+}
+
+/// The description of the class of the instance at `object`.
+///
+/// # Safety
+///
+/// `object` is a live instance.
+unsafe fn description(mutator: &Mutator, object: usize) -> Option<Desc> {
+    // SAFETY: the caller's contract: an instance holds its class object.
+    unsafe { Types::of_table(mutator.types()).of_class(load(object + INSTANCE_CLASS)) }
+}
+
+/// The description of the well-known class `class`.
+fn well_known_description(mutator: &Mutator, class: usize) -> Desc {
+    let types = Types::of_table(mutator.types());
+    // SAFETY: the program's table holds live class objects.
+    unsafe { types.of_class(types.well_known(class)) }
+        .expect("a well-known class has a description")
+}
+
+/// Whether the object at `object` is an instance of the well-known class
+/// `class`.
+///
+/// # Safety
+///
+/// `object` is a live object.
+pub(crate) unsafe fn is_well_known(mutator: &Mutator, object: usize, class: usize) -> bool {
+    // SAFETY: the caller's contract.
+    unsafe {
+        load(object) & TYPE_ID_MASK == TAG_INSTANCE
+            && load(object + INSTANCE_CLASS) == Types::of_table(mutator.types()).well_known(class)
+    }
 }
 
 /// The byte offset in an instance of field `index` of the class
@@ -76,46 +136,50 @@ unsafe fn set_field(object: usize, description: Desc, index: usize, value: Value
     unsafe { Value::store(object + field_at(description, index), value) }
 }
 
-/// Lay out an instance of `size` bytes whose header is `header` at
-/// `object`: its word for its class zero, and every slot `null`.
+/// The bytes of an instance of the class whose object is at `class`.
 ///
 /// # Safety
 ///
-/// `object` is `size` fresh bytes, the size of an instance.
-pub(crate) unsafe fn format(object: usize, header: usize, size: usize) {
+/// `class` is the live class object of a class.
+pub(crate) unsafe fn size(class: usize) -> usize {
+    // SAFETY: the caller's contract.
+    instance_size(unsafe { slot_count(class) })
+}
+
+/// Lay out an instance of the class whose object is at `class` at
+/// `object`: its header, with what says it is a panic when the class is
+/// one, its class, and every slot `null`.
+///
+/// # Safety
+///
+/// `object` is fresh bytes, as many as [`size`] says, and `class` the live
+/// class object of a class.
+pub(crate) unsafe fn format(object: usize, class: usize) {
     // SAFETY: the caller's contract. A zeroed slot is `null`.
     unsafe {
-        std::ptr::write_bytes((object + HEADER) as *mut u8, 0, size - HEADER);
-        store(object, header);
+        let panic = word(class + CLASS_KIND) & CLASS_PANIC as usize != 0;
+        std::ptr::write_bytes((object + HEADER) as *mut u8, 0, size(class) - HEADER);
+        store(object, TAG_INSTANCE | if panic { HEADER_PANIC } else { 0 });
+        store(object + INSTANCE_CLASS, class);
     }
 }
 
-/// Write the scalar `value`, of the type `ty` when something says it, as
-/// an uncaught throw writes it: an enum's variant by its name, and
-/// anything else as its tag says.
-fn write_scalar(mutator: &Mutator, out: &mut String, ty: Option<Desc>, value: Value) {
+/// Write the scalar `value` as an uncaught throw writes it.
+fn write_scalar(out: &mut String, value: Value) {
     let bits = value.payload;
-    // The enum a variant held as its position is of.
-    let variant_of = ty.and_then(|ty| match ty.kind() {
-        KIND_ENUM => Some(ty),
-        KIND_VARIANT => Some(ty.of_a()),
-        _ => None,
-    });
-    match (value.id(), variant_of) {
-        (TAG_INT, Some(of)) => out.push_str(mutator.variant_name(of.a(), bits)),
-        (TAG_INT, None) => {
+    match value.id() {
+        TAG_INT => {
             let _ = write!(out, "{}", bits.cast_signed());
         }
-        (TAG_FLOAT, _) => out.push_str(&float_text(f64::from_bits(bits as u64))),
-        (TAG_BOOL, _) => out.push_str(if bits & 0xFF != 0 { "true" } else { "false" }),
+        TAG_FLOAT => out.push_str(&float_text(f64::from_bits(bits as u64))),
+        TAG_BOOL => out.push_str(if bits & 0xFF != 0 { "true" } else { "false" }),
         _ => out.push_str("<object>"),
     }
 }
 
 /// Write `value` as an uncaught throw of it is reported: what its tag
-/// says it is and, for an object, what its header does, with what `ty`,
-/// the type of the place it was read from, says of the enum variants held
-/// there as their positions.
+/// says it is and, for an object, what its header does. `ty` is the type
+/// of the place it was read from, which says what nothing writes.
 ///
 /// # Safety
 ///
@@ -131,7 +195,7 @@ pub(crate) unsafe fn write_value(
     match value.id() {
         _ if ty.is_some_and(|ty| ty.kind() == KIND_OPAQUE) => out.push_str("<object>"),
         TAG_NULL => out.push_str("null"),
-        TAG_BOOL | TAG_INT | TAG_FLOAT => write_scalar(mutator, out, ty, value),
+        TAG_BOOL | TAG_INT | TAG_FLOAT => write_scalar(out, value),
         // SAFETY: the caller's contract: any other tag is of a pointer.
         _ => unsafe { write_object(mutator, out, value.payload, ty) },
     }
@@ -144,9 +208,8 @@ pub(crate) unsafe fn write_value(
 ///
 /// `value` is a live object, of the type `ty` when there is one.
 unsafe fn write_object(mutator: &Mutator, out: &mut String, value: usize, ty: Option<Desc>) {
-    // SAFETY: the caller's contract: an enum's box is a header and the
-    // variant's position, and an instance has the fields its type's
-    // description names.
+    // SAFETY: the caller's contract: a variant holds its name, and an
+    // instance has the fields its class's description names.
     unsafe {
         let type_id = load(value) & TYPE_ID_MASK;
         match type_id {
@@ -186,13 +249,9 @@ unsafe fn write_object(mutator: &Mutator, out: &mut String, value: usize, ty: Op
                 });
                 out.push('}');
             }
-            enum_type if Types::of_table(mutator.types()).is_enum(enum_type) => {
-                out.push_str(mutator.variant_name(enum_type, load(value + BOX_VALUE)));
-            }
-            class => {
-                let Some(description) = description(mutator, class) else {
-                    // The type table does not say how a tuple, a function
-                    // or a future is written.
+            TAG_ENUM_VARIANT => out.push_str(variant_name(value)),
+            TAG_INSTANCE => {
+                let Some(description) = description(mutator, value) else {
                     out.push_str("<object>");
                     return;
                 };
@@ -214,6 +273,8 @@ unsafe fn write_object(mutator: &Mutator, out: &mut String, value: usize, ty: Op
                 }
                 out.push('}');
             }
+            // Nothing says how a tuple, a function or a future is written.
+            _ => out.push_str("<object>"),
         }
     }
 }
@@ -233,21 +294,6 @@ pub(crate) enum Init<'a> {
 /// The most fields any class the runtime makes an instance of has.
 pub(crate) const MOST_FIELDS: usize = 3;
 
-/// The type id of the class `class` of [`crate::layout::WELL_KNOWN`].
-pub(crate) fn well_known_type(mutator: &Mutator, class: usize) -> usize {
-    let types = mutator.types();
-    // SAFETY: the type table starts with where its list of well-known
-    // types is: a count, then the type id of each.
-    unsafe {
-        let list = types + word(types);
-        assert!(
-            word(types) != 0 && class < word(list),
-            "the program names the standard library's panics and errors"
-        );
-        word(list + 4 + class * 4)
-    }
-}
-
 /// The status a `baml.panics.Exit` ends the process with, when `error` is
 /// one: its `code`, or the nearest status to it when it is past an `i32`.
 ///
@@ -258,43 +304,39 @@ pub(crate) unsafe fn exit_status(mutator: &Mutator, error: Value) -> Option<i32>
     // SAFETY: the caller's contract; an `Exit` has its code in its one
     // field, as an `int`.
     unsafe {
-        let class = well_known_type(mutator, WELL_KNOWN_EXIT);
-        if error.id() != class {
+        if !error.is_pointer() || !is_well_known(mutator, error.payload, WELL_KNOWN_EXIT) {
             return None;
         }
-        let code = field(error.payload, description(mutator, class)?, 0).payload;
+        let description = well_known_description(mutator, WELL_KNOWN_EXIT);
+        let code = field(error.payload, description, 0).payload;
         let code = i64::from_ne_bytes(code.to_ne_bytes());
         Some(i32::try_from(code).unwrap_or(if code < 0 { i32::MIN } else { i32::MAX }))
     }
 }
 
 /// A new instance of the well-known class `class` with every field the
-/// zero of its type, `0`, `0.0`, `false` or `null`, and where each of its
-/// fields is. May collect.
+/// zero of its type, `0`, `0.0`, `false`, an enum's first variant or
+/// `null`, and where each of its fields is. May collect.
 fn blank(mutator: &mut Mutator, class: usize) -> (usize, Desc) {
-    let type_id = well_known_type(mutator, class);
-    // SAFETY: a well-known type is a class's: its entry says how large an
-    // instance is.
+    let description = well_known_description(mutator, class);
+    // SAFETY: the program's table holds the live class object of each
+    // well-known class, which says how large an instance is. It is read
+    // again after the allocation, which may move it.
     unsafe {
-        let description =
-            description(mutator, type_id).expect("a well-known type is a described class");
-        let size = word(mutator.types() + type_id + 4);
-        let flags = if class < WELL_KNOWN_PANICS {
-            HEADER_PANIC
-        } else {
-            0
-        };
-        let object = mutator.allocate(size);
-        format(object, type_id | flags, size);
+        let types = Types::of_table(mutator.types());
+        let object = mutator.allocate(size(types.well_known(class)));
+        format(object, types.well_known(class));
         for field in description.fields() {
-            let zero = match field
-                .ty
-                .filter(|ty| ty.kind() != KIND_OPAQUE)
-                .map(Desc::repr)
-            {
-                Some(REPR_INT) => Value::int(0),
-                Some(REPR_FLOAT) => Value::float(0.0),
-                Some(REPR_BOOL) => Value::bool(false),
+            let Some(ty) = field.ty.filter(|ty| ty.kind() != KIND_OPAQUE) else {
+                continue;
+            };
+            let zero = match ty.repr() {
+                REPR_INT => Value::int(0),
+                REPR_FLOAT => Value::float(0.0),
+                REPR_BOOL => Value::bool(false),
+                _ if ty.kind() == KIND_ENUM && slot_count(ty.class_object()) != 0 => {
+                    Value::reference(variant(ty.class_object(), 0))
+                }
                 _ => continue,
             };
             Value::store(object + field.offset, zero);
@@ -393,9 +435,7 @@ pub(crate) unsafe fn context_functions<'a>(mutator: &Mutator, context: usize) ->
     // stack trace, whose one field is its frames, whose third is a name.
     unsafe {
         let held = |object: usize, class: usize, index: usize| {
-            let description = description(mutator, well_known_type(mutator, class))
-                .expect("a well-known type is a described class");
-            field(object, description, index).payload
+            field(object, well_known_description(mutator, class), index).payload
         };
         let trace = held(context, WELL_KNOWN_CONTEXT, 1);
         let frames = held(trace, WELL_KNOWN_STACK_TRACE, 0);
@@ -420,15 +460,18 @@ pub(crate) unsafe fn context_text(mutator: &Mutator, value: usize) -> Option<Str
     // SAFETY: the caller's contract; a context made by [`context`] has its
     // error in its first field.
     unsafe {
-        let class = well_known_type(mutator, WELL_KNOWN_CONTEXT);
-        if load(value) & TYPE_ID_MASK != class {
+        if !is_well_known(mutator, value, WELL_KNOWN_CONTEXT) {
             return None;
         }
         let mut text = String::from("Traceback (most recent call last):\n");
         for function in context_functions(mutator, value).into_iter().rev() {
             let _ = writeln!(text, "  in {function}");
         }
-        let error = field(value, description(mutator, class)?, 0);
+        let error = field(
+            value,
+            well_known_description(mutator, WELL_KNOWN_CONTEXT),
+            0,
+        );
         if error.is_pointer() && error.id() < STRING_TAGS_END {
             text.push_str(string::text(error.payload));
         } else {

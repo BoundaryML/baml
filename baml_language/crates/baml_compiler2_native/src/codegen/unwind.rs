@@ -31,7 +31,10 @@ use cranelift_codegen::{
 };
 use cranelift_module::{DataDescription, FuncId, Linkage, Module};
 
-use super::{Backend, PAIR, TRAP_AFTER_PANIC, Translator, WORD, internal, mutator_access, offset};
+use super::{
+    Backend, PAIR, TRAP_AFTER_PANIC, Translator, WORD, classes::Taken, internal, mutator_access,
+    offset,
+};
 use crate::{
     CompileError, layout,
     narrow::TestKind,
@@ -41,7 +44,7 @@ use crate::{
 /// The symbol of the table of call sites that have a handler.
 pub(crate) const UNWIND_SYMBOL: &str = "baml_native_unwind";
 /// The version of that table's format.
-const UNWIND_VERSION: u32 = 2;
+const UNWIND_VERSION: u32 = 3;
 
 /// Marks the instructions of a `defer` body, so that the ranges of code
 /// they become can be read back from the compiled function.
@@ -52,8 +55,9 @@ const SHIELDED: u32 = 1;
 #[derive(Clone, PartialEq, Eq)]
 pub(super) struct Catch {
     flags: u32,
-    /// The type ids it takes whatever its flags say.
-    ids: Vec<u32>,
+    /// What it takes whatever its flags say: the values with one of these
+    /// tags, and the instances and variants of these class objects.
+    taken: Vec<Taken>,
 }
 
 impl Catch {
@@ -64,7 +68,7 @@ impl Catch {
     pub(super) fn handing_on() -> Self {
         Self {
             flags: layout::HANDLER_TAKES_ALL | layout::HANDLER_MAY_RETHROW,
-            ids: Vec::new(),
+            taken: Vec::new(),
         }
     }
 
@@ -147,7 +151,7 @@ impl Tables {
                         *offset,
                         Catch {
                             flags: layout::HANDLER_TAKES_ALL | layout::HANDLER_BINDS_CONTEXT,
-                            ids: Vec::new(),
+                            taken: Vec::new(),
                         },
                     )),
                     FinalizedMachExceptionHandler::Context(_) => {}
@@ -201,7 +205,7 @@ impl Backend<'_> {
     /// little-endian and the table is aligned to 8 bytes:
     ///
     /// ```text
-    /// +0   u32  format version (2)
+    /// +0   u32  format version (3)
     /// +4   u32  F, the number of functions that have such a call
     /// then for each function:
     ///        +0   u64  address of the function's first instruction
@@ -223,10 +227,11 @@ impl Backend<'_> {
     ///                         panic, 4 takes every error that is not a
     ///                         panic, 8 takes `null`, 16 reads the context
     ///                         it lands with, 32 may throw the error again
-    ///               +8   u32  offset in the table of the type ids it
-    ///                         takes besides, a `u32` each
-    ///               +12  u32  how many type ids
-    /// then the type ids the handler records locate
+    ///               +8   u32  offset in the table of the list of what it
+    ///                         takes besides, a word of 64 bits each
+    ///               +12  u32  how many words
+    /// then the lists the handler records locate: a word is a tag, or the
+    /// address of a class object, whose instances or variants it takes
     /// ```
     pub(super) fn define_unwind(&mut self) -> Result<(), CompileError> {
         let functions = std::mem::take(&mut self.unwind.handled);
@@ -240,8 +245,8 @@ impl Backend<'_> {
             .iter()
             .map(|function| 16 + 16 * (function.sites.len() + function.handlers.len()))
             .sum();
-        let mut ids: Vec<u32> = Vec::new();
-        let first_id = bytes.len() + records;
+        let mut taken: Vec<Taken> = Vec::new();
+        let first = bytes.len() + records;
         for function in functions {
             let address = self
                 .module
@@ -264,17 +269,31 @@ impl Backend<'_> {
                 }
             }
             for (offset, catch) in function.handlers {
-                let listed = u32::try_from(first_id + 4 * ids.len()).map_err(internal)?;
-                let count = u32::try_from(catch.ids.len()).map_err(internal)?;
+                let listed = u32::try_from(first + layout::WORD * taken.len()).map_err(internal)?;
+                let count = u32::try_from(catch.taken.len()).map_err(internal)?;
                 for word in [offset, catch.flags, listed, count] {
                     bytes.extend_from_slice(&word.to_le_bytes());
                 }
-                ids.extend(catch.ids);
+                taken.extend(catch.taken);
             }
         }
-        debug_assert_eq!(bytes.len(), first_id);
-        for id in ids {
-            bytes.extend_from_slice(&id.to_le_bytes());
+        debug_assert_eq!(bytes.len(), first);
+        debug_assert!(first.is_multiple_of(layout::WORD));
+        for word in taken {
+            let tag = match word {
+                Taken::Tag(tag) => tag as u64,
+                Taken::Class(class) => {
+                    let class = self.class_data(class);
+                    let class = self.module.declare_data_in_data(class, &mut description);
+                    description.write_data_addr(
+                        u32::try_from(bytes.len()).map_err(internal)?,
+                        class,
+                        0,
+                    );
+                    0
+                }
+            };
+            bytes.extend_from_slice(&tag.to_le_bytes());
         }
         let id = self
             .module
@@ -285,7 +304,7 @@ impl Backend<'_> {
 }
 
 /// The BAML function a call names: one of this program by reference, or
-/// code loaded from a closure or the method table, with its signature.
+/// code loaded from a closure or a row, with its signature.
 pub(super) enum Called {
     Direct(ir::FuncRef),
     Indirect(ir::SigRef, ir::Value),
@@ -451,7 +470,7 @@ impl<'db> Translator<'_, 'db> {
         };
 
         let mut flags = 0;
-        let mut ids: Vec<usize> = Vec::new();
+        let mut taken: Vec<Taken> = Vec::new();
         let mut passed: Vec<BlockId> = Vec::new();
         // Whether panics have been passed on by the tests so far.
         let mut panics_pass = false;
@@ -531,7 +550,7 @@ impl<'db> Translator<'_, 'db> {
                 },
                 _ => None,
             };
-            let Some((test, taken, next)) = tested else {
+            let Some((test, arm, next)) = tested else {
                 // The rest of the handler: an arm that takes whatever
                 // reaches it, a `defer` body, or tests this does not read.
                 flags |= if panics_pass {
@@ -541,15 +560,20 @@ impl<'db> Translator<'_, 'db> {
                 };
                 break;
             };
-            let passing = self.passing(&test)?;
-            if let Some(taken) = taken.filter(|taken| passes(*taken)) {
+            let passing = self.passing(&test, false)?;
+            if let Some(arm) = arm.filter(|arm| passes(*arm)) {
                 // Only panics are passed on by a test of their own.
-                if !passing.panics || !passing.ids.is_empty() || passing.null || panics_pass {
+                if !passing.panics
+                    || !passing.tags.is_empty()
+                    || !passing.classes.is_empty()
+                    || passing.null
+                    || panics_pass
+                {
                     unreadable = true;
                     break;
                 }
                 panics_pass = true;
-                passed.push(taken);
+                passed.push(arm);
             } else {
                 if passing.panics && !panics_pass {
                     flags |= layout::HANDLER_TAKES_PANICS;
@@ -557,9 +581,11 @@ impl<'db> Translator<'_, 'db> {
                 if passing.null {
                     flags |= layout::HANDLER_TAKES_NULL;
                 }
-                for id in passing.ids {
-                    if !(panics_pass && self.is_panic_id(id)?) {
-                        ids.push(id);
+                taken.extend(passing.tags.into_iter().map(Taken::Tag));
+                let panics = self.panic_classes()?;
+                for class in passing.classes {
+                    if !(panics_pass && panics.contains(&class)) {
+                        taken.push(Taken::Class(class));
                     }
                 }
             }
@@ -584,7 +610,7 @@ impl<'db> Translator<'_, 'db> {
             return Ok((
                 Catch {
                     flags: layout::HANDLER_TAKES_ALL | layout::HANDLER_BINDS_CONTEXT,
-                    ids: Vec::new(),
+                    taken: Vec::new(),
                 },
                 None,
             ));
@@ -595,13 +621,9 @@ impl<'db> Translator<'_, 'db> {
         if binds_context(body, landing) {
             flags |= layout::HANDLER_BINDS_CONTEXT;
         }
-        ids.sort_unstable();
-        ids.dedup();
-        let ids = ids
-            .into_iter()
-            .map(|id| u32::try_from(id).map_err(internal))
-            .collect::<Result<_, _>>()?;
-        Ok((Catch { flags, ids }, around.flatten()))
+        taken.sort_unstable();
+        taken.dedup();
+        Ok((Catch { flags, taken }, around.flatten()))
     }
 
     /// The exception edges of a call in a block that unwinds to `pad`: to

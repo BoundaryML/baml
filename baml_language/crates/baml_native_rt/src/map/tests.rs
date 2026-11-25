@@ -1,7 +1,10 @@
 use super::*;
 use crate::{
     heap::Program,
-    layout::{SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, TAG_STRING_SLICE},
+    layout::{
+        SLICE_OFFSET, SLICE_PARENT, SLICE_SIZE, TAG_STRING_SLICE, VALUE, VARIANT_ENUM,
+        VARIANT_NAME, VARIANT_SIZE,
+    },
 };
 
 fn mutator(stress: bool) -> Mutator {
@@ -315,4 +318,53 @@ fn word_keys_are_found_by_their_bits() {
         );
     }
     mutator.unroot(2);
+}
+
+/// A key that is an enum's variant is found by its address, wherever a
+/// collection has moved its object since it was set: its hash is of its
+/// position. Two variants at one position, of two enums, are two keys.
+#[test]
+fn variant_keys_are_found_after_their_objects_move() {
+    const VARIANTS: usize = 40;
+    let mut mutator = mutator(true);
+    let mut map = new(&mut mutator, 0);
+    mutator.root(&mut map);
+    // Two variants at each position, in the heap, each a root.
+    let mut variants = [0_usize; 2 * VARIANTS];
+    let held = variants.as_mut_ptr();
+    // SAFETY: each variant is laid out before the next allocation and read
+    // back from its root after one, and `map` is a rooted live map.
+    unsafe {
+        for number in 0..2 * VARIANTS {
+            mutator.root_at(held.add(number) as usize);
+            let variant = mutator.allocate_object(TAG_ENUM_VARIANT, VARIANT_SIZE);
+            store(variant + VARIANT_ENUM, 0);
+            store(variant + VARIANT_INDEX, number / 2);
+            store(variant + VARIANT_NAME, 0);
+            held.add(number).write(variant);
+        }
+        let key = |number: usize| Value::reference(held.add(number).read());
+        assert_eq!(KeyKind::of_value(key(0)), KeyKind::Variant);
+        for number in 0..2 * VARIANTS {
+            assert_eq!(set(&mut mutator, map, key(number), int(number)), None);
+        }
+        // The last key was set where its object was then, and the first
+        // many collections ago.
+        let before = held.add(2 * VARIANTS - 1).read();
+        mutator.allocate(VALUE);
+        assert_ne!(held.add(2 * VARIANTS - 1).read(), before);
+        assert_eq!(len(map), 2 * VARIANTS);
+        for number in 0..2 * VARIANTS {
+            let slot = baml_rt_map_find(map, TAG_ENUM_VARIANT, held.add(number).read());
+            assert_ne!(slot, 0);
+            assert_eq!(Value::load(slot), int(number));
+        }
+        assert_eq!(delete(map, key(3)), Some(int(3)));
+        assert_eq!(
+            baml_rt_map_find(map, TAG_ENUM_VARIANT, held.add(3).read()),
+            0
+        );
+        assert_eq!(get(map, key(2)).map(|slot| Value::load(slot)), Some(int(2)));
+    }
+    mutator.unroot(1 + 2 * VARIANTS);
 }

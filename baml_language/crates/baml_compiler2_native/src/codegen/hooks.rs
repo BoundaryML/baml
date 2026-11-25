@@ -14,8 +14,8 @@
 //! Compiled code calls an `async` native through a stub made here: a
 //! function with the convention of a BAML function, which drives the
 //! native. It takes each of the native's parameters as a tag and a payload
-//! and returns two words the same way, so the method table enters it as it
-//! enters any implementation. It calls the native's symbol with what the
+//! and returns two words the same way, so a dispatching call enters it as
+//! it enters any implementation. It calls the native's symbol with what the
 //! native takes of those words, which makes the native's state,
 //! and then the runtime's poll, again and again, doing between two polls
 //! what the native stopped for: calling the entry the native asked for, or
@@ -48,7 +48,6 @@ use crate::{
     layout,
     natives::Native,
     program::{FnKey, Program},
-    types::class_layout,
 };
 
 // A stub tests for a native that is done by testing for zero.
@@ -73,8 +72,8 @@ pub(super) struct Hooks<'db> {
 /// native's symbol after the worker.
 #[derive(Clone)]
 pub(super) enum StubParam {
-    /// A type id or the id of a description: 32 bits, passed on.
-    Id,
+    /// A type object, or zero: a word, passed on.
+    Type,
     /// A value: its tag and its payload, both passed on.
     Value,
     /// A value of a type that fixes its tag, which the native takes as
@@ -139,8 +138,9 @@ const EQUALS_SYMBOL: &str = "baml_native_equals";
 
 impl<'db> Backend<'db> {
     /// Define the list of the classes with an `eq` of their own, for a
-    /// program that calls what reads it: a count, and for each class its
-    /// type id and the entry of its `eq`, sorted by type id.
+    /// program that calls what reads it: a count, and for each class the
+    /// index of its class object and the entry of its `eq`, sorted by
+    /// index.
     pub(super) fn define_equals(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
@@ -150,8 +150,8 @@ impl<'db> Backend<'db> {
         }
         let mut classes = Vec::new();
         for (class, entry) in self.hooks.equals.clone() {
-            let fields = class_layout(db, class, &[]).map_err(internal)?;
-            classes.push((self.class_type(db, class, &[], &fields), entry));
+            let class = self.class_object(db, super::classes::ClassLike::Class(class))?;
+            classes.push((class, entry));
         }
         classes.sort_unstable_by_key(|(id, _)| *id);
         let mut bytes = (classes.len() as u64).to_ne_bytes().to_vec();
@@ -182,7 +182,6 @@ impl<'db> Backend<'db> {
         if let Some((stub, _, _)) = self.hooks.stubs.get(native.path) {
             return Ok(*stub);
         }
-        let id = AbiParam::new(ir::types::I32);
         let word = AbiParam::new(WORD);
         // The symbol makes the native's state and returns its address.
         let mut imported = ir::Signature::new(self.call_conv());
@@ -193,9 +192,9 @@ impl<'db> Backend<'db> {
         signature.returns = vec![word; 2];
         for param in params {
             match param {
-                StubParam::Id => {
-                    imported.params.push(id);
-                    signature.params.push(id);
+                StubParam::Type => {
+                    imported.params.push(word);
+                    signature.params.push(word);
                 }
                 StubParam::Value => {
                     imported.params.extend([word; 2]);
@@ -227,8 +226,8 @@ impl<'db> Backend<'db> {
     }
 
     /// The stub of the `async` native `native`, which takes no type
-    /// arguments, for the method table to enter: the classes its
-    /// declaration names are described as for a call of it.
+    /// arguments, for a row to hold: the classes its declaration names are
+    /// described as for a call of it.
     pub(super) fn dispatched_stub(
         &mut self,
         db: &'db dyn baml_compiler2_mir::Db,
@@ -389,7 +388,7 @@ fn stub_body(
     let mut next = || passed.next().expect("a stub is passed what it takes");
     for param in params {
         match param {
-            StubParam::Id => arguments.push(next()),
+            StubParam::Type => arguments.push(next()),
             StubParam::Value => arguments.extend([next(), next()]),
             StubParam::Exact(taken) => {
                 let (_, payload) = (next(), next());

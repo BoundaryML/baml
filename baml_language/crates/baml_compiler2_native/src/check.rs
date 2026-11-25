@@ -238,10 +238,10 @@ pub(crate) fn function_signature<'db>(
     signature(db, mir, body_of(mir)?, &key.arguments)
 }
 
-/// Which of its type arguments a copy of a function must be told the type
-/// id of when it runs: those it was compiled for as "any reference" and
-/// tests a value against, itself or in a function it calls. A copy with
-/// any takes one type id for every type parameter of its frame.
+/// Which of its type arguments a copy of a function must be passed when
+/// it runs: those it was compiled for as "any reference" and tests a value
+/// against, itself or in a function it calls. A copy with any takes a type
+/// object for every type parameter of its frame.
 pub(crate) fn identified_arguments<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     key: &FnKey<'db>,
@@ -252,7 +252,7 @@ pub(crate) fn identified_arguments<'db>(
         .collect()
 }
 
-/// A value is tested against the type argument: it must have one type id.
+/// A value is tested against the type argument.
 const TESTED: u8 = 1;
 /// The type argument is handed on to `baml.json`, which takes the
 /// description of any type it can write and read.
@@ -373,18 +373,48 @@ fn identified<'db>(
     needed
 }
 
-/// The one type id of the values of a type, when they have one: what a
-/// function is passed for a type argument it must identify.
+/// Whether a value is of type `ty` exactly when it has the type's tag
+/// and, for an instance or an enum variant, its class object: what a type
+/// a function tests values against must be. An instantiation of a class
+/// with type parameters is not: its class object is every instantiation's.
 pub(crate) fn has_type_id(ty: &NativeTy<'_>) -> bool {
-    matches!(
-        ty,
-        NativeTy::Int
-            | NativeTy::Float
-            | NativeTy::Bool
-            | NativeTy::String
-            | NativeTy::Enum(_)
-            | NativeTy::Class(..)
-    )
+    match ty {
+        NativeTy::Int | NativeTy::Float | NativeTy::Bool | NativeTy::String | NativeTy::Enum(_) => {
+            true
+        }
+        NativeTy::Class(_, arguments) => arguments.is_empty(),
+        _ => false,
+    }
+}
+
+/// Whether the runtime says if a value is of type `ty` from the type's
+/// description: a union of types a tag and a class object decide, and of
+/// literals. It says no to every array and every map, so a type that
+/// names one is not decided.
+fn decided_by_description(db: &dyn baml_compiler2_mir::Db, ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::Int
+        | RuntimeTy::Float
+        | RuntimeTy::Bool
+        | RuntimeTy::Null
+        | RuntimeTy::String
+        | RuntimeTy::Enum(_)
+        | RuntimeTy::EnumVariant(..)
+        | RuntimeTy::Literal(
+            baml_type::Literal::Int(_)
+            | baml_type::Literal::Bool(_)
+            | baml_type::Literal::String(_),
+            _,
+        ) => true,
+        RuntimeTy::Class(head, arguments) => {
+            arguments.is_empty()
+                && baml_compiler2_hir_ty::layout::interface_ref_of(db, head).is_none()
+        }
+        RuntimeTy::Union(members) => members
+            .iter()
+            .all(|member| decided_by_description(db, member)),
+        _ => false,
+    }
 }
 
 /// The signature of the function value `function` bound to a receiver is:
@@ -571,9 +601,9 @@ pub(crate) enum Virtual<'db> {
     Operator(Operator),
     /// The receiver's type is known where the call is written.
     Static(Target<'db>),
-    /// The receiver is some implementor of this interface: its type id
-    /// picks the code, of the copy for these type arguments of the
-    /// method's own.
+    /// The receiver is some implementor of this interface: its row holds
+    /// the code, of the copy for these type arguments of the method's
+    /// own.
     Dynamic(Slot, TyTemplateInterface, Vec<TypeArg<'db>>),
 }
 
@@ -1326,7 +1356,7 @@ pub(crate) fn rvalue_ty<'db>(
             ..
         } => {
             // A lambda is compiled for its function's type arguments. What
-            // it cannot have is a type id passed to it.
+            // it cannot have is a type object passed to it.
             if identified_arguments(db, &body.key.lambda(*lambda_idx))
                 .iter()
                 .any(|needed| *needed)
@@ -1449,8 +1479,8 @@ pub(crate) enum TypeTestPlan<'db> {
     Always(bool),
     /// By whether an optional holds a value (`true`) or `null` (`false`).
     Present(bool),
-    /// By the type id in the header of the object a union's reference
-    /// names; `null` fails.
+    /// By the value's tag, and for an instance or an enum variant by its
+    /// class object; `null` fails.
     Header(TestKind<'db>),
     /// By whether the value, of the literal's own type, equals it.
     Equals(crate::narrow::Value),
@@ -1464,7 +1494,8 @@ pub(crate) fn type_test_plan<'db>(
     test: Option<TestKind<'db>>,
     coarse: bool,
 ) -> Result<TypeTestPlan<'db>, Blocker> {
-    let test = test.ok_or_else(|| Blocker::new("type test", "of a type without one type id"))?;
+    let test =
+        test.ok_or_else(|| Blocker::new("type test", "of a type no tag and class object decide"))?;
     if let TestKind::Is(value) = &test {
         use crate::narrow::Value;
         // A value whose type is a union of literals is held as their one
@@ -1485,6 +1516,22 @@ pub(crate) fn type_test_plan<'db>(
                 TestKind::Exactly(NativeTy::Null) => return Ok(TypeTestPlan::Present(false)),
                 TestKind::Exactly(NativeTy::Class(class, arguments)) => {
                     class_layout(db, *class, arguments)?;
+                    // Every instantiation of a class has its one class
+                    // object: the test is of the class, which decides only
+                    // where the value can be of no other instantiation.
+                    let others = match operand {
+                        NativeTy::Union(members) => members.iter().any(|member| {
+                            matches!(member, NativeTy::Class(other, given)
+                                if other == class && given != arguments)
+                        }),
+                        _ => true,
+                    };
+                    if !arguments.is_empty() && others {
+                        return Err(Blocker::new(
+                            "type test",
+                            "between instantiations of one class",
+                        ));
+                    }
                 }
                 TestKind::AnyOf(tests) => {
                     for test in tests {
@@ -1639,8 +1686,8 @@ fn terminator_supported<'db>(
             for (key, _) in arms {
                 match key {
                     SwitchKey::Int(_) if !on_tag => {}
-                    // A class's tag is the type id of its instances, which
-                    // a class with type parameters has several of.
+                    // An arm for a class with type parameters would be
+                    // for one instantiation, which no instance says.
                     SwitchKey::Class(class)
                         if on_tag
                             && baml_compiler2_hir_ty::layout::class_generic_params(db, *class)
@@ -1750,8 +1797,8 @@ fn terminator_supported<'db>(
                 }
                 Callee::Function(key) => {
                     let name = || function_display_name(db, DeclRef::Source(key.loc));
-                    // The callee is told the type id of each type argument
-                    // it tests values against.
+                    // The callee is passed each type argument it tests
+                    // values against.
                     for (slot, uses) in identified(db, &key, &mut Vec::new(), &mut Vec::new())
                         .into_iter()
                         .enumerate()
@@ -1769,9 +1816,15 @@ fn terminator_supported<'db>(
                                 true
                             }
                             // `baml.json` takes any type it has a
-                            // description of.
+                            // description of, and a test one whose
+                            // description decides it.
                             Some(template)
-                                if uses & TESTED == 0 && template.is_fully_concrete() =>
+                                if template.is_fully_concrete()
+                                    && (uses & TESTED == 0
+                                        || decided_by_description(
+                                            db,
+                                            &template.substitute_symbolic(&[]),
+                                        )) =>
                             {
                                 crate::json::JsonTypes::new()
                                     .describe(db, &template.substitute_symbolic(&[]))?;
@@ -1782,7 +1835,7 @@ fn terminator_supported<'db>(
                         if !known {
                             return Err(Blocker::new(
                                 "call with type arguments",
-                                format!("{}: a type without one type id", name()),
+                                format!("{}: a type no tag and class object decide", name()),
                             ));
                         }
                     }

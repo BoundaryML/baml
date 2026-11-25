@@ -113,13 +113,17 @@ impl<'db> Translator<'_, 'db> {
         let plan_ty = narrowed(self.operand_ty(plan)?);
         let (fields, _) =
             plan_body(self.db, &plan_ty).ok_or_else(|| internal("a checked spawn is of a plan"))?;
+        let NativeTy::Class(plan_class, _) = plan_ty else {
+            return Err(internal("a checked spawn is of a plan"));
+        };
         let plan = self.operand_object(plan)?;
 
         // A task waits for no semaphore and hears of no cancellation yet,
         // so a plan that names either cannot be started.
         let mut limited = None;
         for index in [PLAN_SEMAPHORES, PLAN_CANCEL_TOKENS] {
-            let array = self.slot_load(&fields[index], plan, layout::field_offset(index));
+            let at = self.field_offset(plan_class, index);
+            let array = self.slot_load(&fields[index], plan, at);
             let length = self.builder.ins().load(
                 types::I64,
                 slot_access(),
@@ -145,7 +149,8 @@ impl<'db> Translator<'_, 'db> {
         self.builder.ins().trap(TRAP_AFTER_PANIC);
 
         self.builder.switch_to_block(start);
-        let body = self.slot_load(&fields[PLAN_BODY], plan, layout::field_offset(PLAN_BODY));
+        let at = self.field_offset(plan_class, PLAN_BODY);
+        let body = self.slot_load(&fields[PLAN_BODY], plan, at);
         let (_, closure) = self.builder.ins().isplit(body);
         let started = self
             .call_runtime(Runtime::Spawn, &[closure])?
@@ -235,7 +240,7 @@ impl<'db> Translator<'_, 'db> {
         self.builder.switch_to_block(load);
         // What the task's closure returned: a value, whatever its type.
         let value = self.pair_load(&value_ty, future, layout::FUTURE_VALUE);
-        let value = self.coerce(value, &value_ty, &expected)?;
+        let value = self.coerce(value, &value_ty, &expected);
         self.write_local(destination, value);
         let target = self.block(target);
         self.builder.ins().jump(target, &[]);

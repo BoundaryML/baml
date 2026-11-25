@@ -3,7 +3,7 @@
 
 use crate::{
     heap::{Value, store},
-    layout::{BOX_SIZE, BOX_VALUE, STRING_TEXT, TAG_BIGINT},
+    layout::{STRING_TEXT, TAG_BIGINT},
     map,
     native::{array_size, str_size},
 };
@@ -82,21 +82,6 @@ impl Out {
         string
     }
 
-    /// A box of the enum whose boxes have the type `type_id`, holding the
-    /// variant at `position`.
-    pub(super) fn boxed(&mut self, type_id: usize, position: usize) -> usize {
-        let object = self.take(BOX_SIZE);
-        if object != 0 {
-            // SAFETY: an enum's box is a header and the variant's
-            // position.
-            unsafe {
-                store(object, type_id);
-                store(object + BOX_VALUE, position);
-            }
-        }
-        object
-    }
-
     /// A `bigint` holding `value`.
     pub(super) fn bigint(&mut self, value: &num_bigint::BigInt) -> usize {
         let bytes = value.to_signed_bytes_le();
@@ -147,14 +132,21 @@ impl Out {
         object
     }
 
-    /// An instance of `size` bytes of the type `type_id`, every slot
+    /// An instance of the class whose object is at `class`, every slot
     /// `null`.
-    pub(super) fn instance(&mut self, type_id: usize, size: usize) -> usize {
-        let object = self.take(size);
-        if object != 0 {
-            // SAFETY: the instance is `size` bytes.
-            unsafe { crate::class::format(object, type_id, size) };
+    ///
+    /// # Safety
+    ///
+    /// `class` is the live class object of a class.
+    pub(super) unsafe fn instance(&mut self, class: usize) -> usize {
+        // SAFETY: the caller's contract: the class object says how large
+        // an instance is.
+        unsafe {
+            let object = self.take(crate::class::size(class));
+            if object != 0 {
+                crate::class::format(object, class);
+            }
+            object
         }
-        object
     }
 }

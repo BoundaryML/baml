@@ -4,31 +4,27 @@
 //!
 //! The compiler includes this file by path, as it does `layout.rs`.
 //!
-//! The descriptions are one section of the type table, past every type.
-//! The `u32` at [`JSON_SECTION`] of the table is the section's offset in
-//! the table, zero when the program has none. Every offset inside the
-//! section is from the section's start; every field is a `u32`.
+//! The descriptions are one section of the program's table of types, at
+//! `PROGRAM_DESCRIPTIONS` of `layout.rs`. Every offset inside the section
+//! is from the section's start; every field is a `u32` unless it says
+//! otherwise.
 //!
 //! ```text
-//! +0   u32  format version (1)
-//! +4   u32  offset of the directory
-//! +8   u32  N, the number of directory entries
-//! +12  u32  zero
+//! +0   u32  format version (2)
+//! +4   three `u32`s, zero
 //! +16  descriptions, their records and their text, in no order
-//! directory: N entries of 8 bytes, sorted by type id:
-//!        +0  u32  the type id of a class, or of an enum's boxes
-//!        +4  u32  the offset of its description
 //! ```
 //!
-//! The directory is how `baml.json` describes a value whose static type
-//! says nothing (an `unknown`, a member of a union): by the type id in its
-//! header. It holds the classes and enums `baml.json` can write and read.
+//! A class object and a type object hold the address of a description,
+//! not an offset. That is how `baml.json` describes a value whose static
+//! type says nothing (an `unknown`, a member of a union): an instance has
+//! its class object, and an enum's variant its enum's.
 //!
-//! Every class has a description, which the fourth `u32` of its type
-//! locates (`TYPE_DESCRIBED` of `layout.rs`). One with [`FLAG_SHOWN_ONLY`]
-//! says only how an instance is written when it is thrown: `baml.json`
-//! has no form for the class, or it is a generic class at some type
-//! arguments, and the directory leaves it out.
+//! Every class has one description, whatever its type arguments. One with
+//! [`FLAG_SHOWN_ONLY`] says only how an instance is written when it is
+//! thrown and where its fields are: `baml.json` has no form for the
+//! class, or it is a generic class, whose fields of a type parameter's
+//! type are described as holding any value.
 //!
 //! A description is [`DESCRIPTION`] bytes:
 //!
@@ -47,8 +43,8 @@
 //! | kind          | a                  | b                 | c        |
 //! |---------------|--------------------|-------------------|----------|
 //! | `UNKNOWN`     |                    |                   |          |
-//! | `ENUM`        | type id of boxes   | variant records   | count    |
-//! | `CLASS`       | type id            | field records     | count    |
+//! | `ENUM`        | class object       | variant records   | count    |
+//! | `CLASS`       | class object       | field records     | count    |
 //! | `ARRAY`       | element            |                   |          |
 //! | `MAP`         | key                | value             |          |
 //! | `OPTIONAL`    | the type but null  |                   |          |
@@ -61,7 +57,9 @@
 //!
 //! `UNKNOWN` with [`FLAG_JSON`] is the `json` alias. `OPAQUE` is a field
 //! of a class shown only that nothing says how to write. An enum shown
-//! only has its type id and no records. A member list is one
+//! only has its class object and no records. The class object of a class
+//! or an enum is named by the offset of a word of 64 bits, aligned as
+//! one, that holds its address. A member list is one
 //! `u32` description offset per member. `OPTIONAL` is a union of `null`
 //! and one other type; a `UNION` is any other, its members as declared.
 //! Text is UTF-8, padded to four bytes.
@@ -102,17 +100,8 @@
 //! is an entry the compiler makes for natives to call, not the function
 //! itself.
 
-/// Where in the type table the offset of the JSON section is: the second
-/// half of the eight bytes no type lives at.
-pub const JSON_SECTION: usize = 4;
-pub const JSON_VERSION: u32 = 1;
-pub const JSON_DIRECTORY_AT: usize = 4;
-pub const JSON_DIRECTORY_COUNT: usize = 8;
+pub const JSON_VERSION: u32 = 2;
 pub const JSON_BODY: usize = 16;
-
-/// Set in a type id a `baml.json` native is passed when the rest is the
-/// offset of a description, not a type id.
-pub const DESCRIBED: u32 = 1 << 31;
 
 pub const DESCRIPTION: usize = 32;
 pub const DESCRIPTION_REPR: usize = 4;
@@ -140,20 +129,19 @@ pub const KIND_BOOL_IS: u32 = 14;
 pub const KIND_VARIANT: u32 = 15;
 pub const KIND_OPAQUE: u32 = 16;
 
-/// An `int`, or the position of a variant in a slot of its enum's own
-/// type: the slot has the tag of an `int`, and its payload is the value.
+/// An `int`: the slot has the tag of one, and its payload is the value.
 pub const REPR_INT: u32 = 0;
 /// A `float`: the slot has the tag of one, and its payload is the bits.
 pub const REPR_FLOAT: u32 = 1;
 /// A `bool`: the slot has the tag of one, and its payload is zero or one.
 pub const REPR_BOOL: u32 = 2;
 /// A reference to an object of the type, with the tag of its object;
-/// `null` is the `null` value.
+/// `null` is the `null` value. An enum's variant is a reference to its
+/// object.
 pub const REPR_REF: u32 = 3;
 /// A value of any type, which its tag says: `null`, an `int`, a `float` or
-/// a `bool` as itself, an enum's variant as a pointer to a box of the
-/// enum's type, and any other as a pointer to its object. What a union, an
-/// `unknown` and an optional enum are held as.
+/// a `bool` as itself, and any other as a pointer to its object. What a
+/// union and an `unknown` are held as.
 pub const REPR_BOXED: u32 = 4;
 /// An optional `int`, `float` or `bool`: the `null` value, or the scalar
 /// with its own tag.

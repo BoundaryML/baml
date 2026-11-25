@@ -42,15 +42,15 @@ use crate::{
     heap::{Mutator, Value, load},
     layout::{
         HANDLER_BINDS_CONTEXT, HANDLER_MAY_RETHROW, HANDLER_TAKES_ALL, HANDLER_TAKES_NULL,
-        HANDLER_TAKES_OTHERS, HANDLER_TAKES_PANICS, HEADER_PANIC, TAG_STRING, TAG_STRING_SLICE,
-        TYPE_ID_MASK, WELL_KNOWN_CONTEXT, WELL_KNOWN_DIVISION_BY_ZERO,
-        WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_MAP_KEY_NOT_FOUND,
+        HANDLER_TAKES_OTHERS, HANDLER_TAKES_PANICS, HEADER_PANIC, INSTANCE_CLASS, TAG_ENUM_VARIANT,
+        TAG_INSTANCE, TAG_STRING, TAG_STRING_SLICE, WELL_KNOWN_CONTEXT,
+        WELL_KNOWN_DIVISION_BY_ZERO, WELL_KNOWN_INDEX_OUT_OF_BOUNDS, WELL_KNOWN_MAP_KEY_NOT_FOUND,
         WELL_KNOWN_NEGATIVE_BIT_SHIFT, WELL_KNOWN_STACK_OVERFLOW, WORD,
     },
 };
 
 /// The versions of the compiler's tables this reads.
-const UNWIND_VERSION: usize = 2;
+const UNWIND_VERSION: usize = 3;
 const FUNCTIONS_VERSION: usize = 2;
 
 /// Where compiled code goes on after a throw, as the stub reads it.
@@ -88,9 +88,10 @@ struct Handler {
     /// Its first instruction.
     address: usize,
     flags: u32,
-    /// The type ids it takes whatever its flags say: the address of the
-    /// first, and how many.
-    ids: usize,
+    /// What it takes whatever its flags say, a word each: a tag, or the
+    /// address of the class object of the instances or of the enum's
+    /// variants it takes. The address of the first, and how many.
+    list: usize,
     count: usize,
 }
 
@@ -101,6 +102,9 @@ struct Thrown {
     is_panic: bool,
     /// The type id of its tag; a string's is that of one holding its text.
     type_id: usize,
+    /// The class object of an instance, or of an enum's variant; zero for
+    /// any other value.
+    class: usize,
 }
 
 impl Thrown {
@@ -121,6 +125,13 @@ impl Thrown {
             } else {
                 type_id
             },
+            class: if matches!(type_id, TAG_INSTANCE | TAG_ENUM_VARIANT) {
+                // SAFETY: the caller's contract: both hold the address of
+                // a class object in their second word.
+                unsafe { load(error.payload + INSTANCE_CLASS) }
+            } else {
+                0
+            },
         }
     }
 }
@@ -137,9 +148,13 @@ impl Handler {
         if self.flags & by_flags != 0 {
             return true;
         }
-        // SAFETY: the table holds `count` ids at `ids`.
+        // No tag is the address of a class object, so one list holds both.
+        // SAFETY: the table holds `count` words at `list`.
         !thrown.is_null
-            && (0..self.count).any(|index| unsafe { word(self.ids + index * 4) } == thrown.type_id)
+            && (0..self.count).any(|index| {
+                let taken = unsafe { load(self.list + index * WORD) };
+                taken == thrown.type_id || (thrown.class != 0 && taken == thrown.class)
+            })
     }
 }
 
@@ -209,7 +224,7 @@ impl Unwinder {
                         tables.handlers.push(Handler {
                             address: function + word(cursor),
                             flags: ((cursor + 4) as *const u32).read_unaligned(),
-                            ids: self.table + word(cursor + 8),
+                            list: self.table + word(cursor + 8),
                             count: word(cursor + 12),
                         });
                         cursor += 16;
@@ -622,7 +637,7 @@ fn named(mutator: &Mutator, addresses: impl Iterator<Item = usize>) -> Vec<&'sta
 /// `trace` is a live trace or `baml.errors.Context`.
 unsafe fn is_context(mutator: &Mutator, trace: usize) -> bool {
     // SAFETY: the caller's contract.
-    unsafe { load(trace) & TYPE_ID_MASK == class::well_known_type(mutator, WELL_KNOWN_CONTEXT) }
+    unsafe { class::is_well_known(mutator, trace, WELL_KNOWN_CONTEXT) }
 }
 
 crate::stubs::anchored! {

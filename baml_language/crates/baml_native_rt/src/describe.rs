@@ -1,59 +1,46 @@
-//! Reading the descriptions the compiler leaves in the type table: what
-//! `baml.json` writes and reads values by, and what an uncaught throw of
-//! an instance is written from. See [`crate::json_layout`].
+//! Reading the descriptions the compiler leaves in the program's table of
+//! types: what `baml.json` writes and reads values by, and what an uncaught
+//! throw of an instance is written from. See [`crate::json_layout`].
 
 #![allow(
     clippy::cast_possible_truncation,
-    reason = "every word read here is a `u32` of the type table"
+    reason = "every word read here is a `u32` of a description"
 )]
 
 use crate::{
-    heap::load,
+    heap::{Mutator, Value, load},
     json_layout::{
-        DESCRIBED, DESCRIPTION_A, DESCRIPTION_B, DESCRIPTION_C, DESCRIPTION_FLAGS,
-        DESCRIPTION_NAME, DESCRIPTION_REPR, FIELD_FLAGS, FIELD_MAY_BE_ABSENT, FIELD_OFFSET,
-        FIELD_OMIT_NULL, FIELD_RECORD, FIELD_TYPE, FLAG_HOOKS, HOOKS, JSON_DIRECTORY_AT,
-        JSON_DIRECTORY_COUNT, JSON_SECTION, KIND_CLASS, KIND_ENUM, KIND_OPTIONAL, KIND_STRING,
-        KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, MEMBER_ALIASED, MEMBER_DECLARED, MEMBER_SKIP,
-        REPR_REF, VARIANT_FLAGS, VARIANT_RECORD,
+        DESCRIPTION_A, DESCRIPTION_B, DESCRIPTION_C, DESCRIPTION_FLAGS, DESCRIPTION_NAME,
+        DESCRIPTION_REPR, FIELD_FLAGS, FIELD_MAY_BE_ABSENT, FIELD_OFFSET, FIELD_OMIT_NULL,
+        FIELD_RECORD, FIELD_TYPE, FLAG_HOOKS, FLAG_SHOWN_ONLY, HOOKS, KIND_BOOL, KIND_BOOL_IS,
+        KIND_CLASS, KIND_ENUM, KIND_FLOAT, KIND_INT, KIND_INT_IS, KIND_NULL, KIND_OPTIONAL,
+        KIND_STRING, KIND_STRING_IS, KIND_UNION, KIND_UNKNOWN, KIND_VARIANT, MEMBER_ALIASED,
+        MEMBER_DECLARED, MEMBER_SKIP, VARIANT_FLAGS, VARIANT_RECORD,
     },
     layout::{
-        FIRST_CLASS_TYPE, KIND_INSTANCE, TAG_STRING, TYPE_DESCRIBED, WELL_KNOWN, WELL_KNOWN_PANICS,
+        CLASS_DESCRIPTION, INSTANCE_CLASS, PROGRAM_CLASSES, PROGRAM_DESCRIPTIONS, STRING_TAGS_END,
+        TAG_BOOL, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_INSTANCE, TAG_INT, TAG_NULL, TYPE_DESCRIPTION,
+        TYPE_ID_MASK, VARIANT_ENUM, VARIANT_INDEX, WELL_KNOWN, WORD,
     },
-    native::{Scope, TypeId, drive::BamlFn},
+    native::{Scope, TypeRef, drive::BamlFn},
 };
 
 /// Read the `u32` at `address`.
 ///
 /// # Safety
 ///
-/// `address` is inside the type table.
+/// `address` is inside the section of descriptions.
 unsafe fn word(address: usize) -> usize {
     // SAFETY: the caller's contract.
     unsafe { (address as *const u32).read_unaligned() as usize }
 }
 
-/// The description of `string`, for a call that names the type by its
-/// type id: a section of its own, the name after the description.
-static STRING: [u32; 10] = [
-    KIND_STRING,
-    REPR_REF,
-    0,
-    0,
-    0,
-    32,
-    6,
-    0,
-    u32::from_le_bytes(*b"stri"),
-    u32::from_le_bytes(*b"ng\0\0"),
-];
-
 /// The descriptions of a program.
 #[derive(Clone, Copy)]
 pub(crate) struct Types {
-    /// The type table.
+    /// The program's table of types.
     table: usize,
-    /// The section of descriptions, zero when the program has none.
+    /// The section of descriptions.
     section: usize,
 }
 
@@ -94,120 +81,87 @@ impl Types {
         Self::of_table(scope.type_table())
     }
 
-    /// The descriptions of the program whose type table is at `table`.
+    /// The descriptions of the program whose table of types is at `table`.
     pub(crate) fn of_table(table: usize) -> Self {
-        // SAFETY: the table starts with eight bytes no type lives at, the
-        // last four of which locate the section.
-        let section = unsafe { word(table + JSON_SECTION) };
         Self {
             table,
-            section: if section == 0 { 0 } else { table + section },
+            section: table + PROGRAM_DESCRIPTIONS,
         }
     }
 
-    /// What a call passed for a type: a description, the type id of a
-    /// class, an enum or `string`, or nothing.
-    pub(crate) fn described(&self, id: TypeId) -> Option<Desc> {
-        let id = id.0;
-        if id & DESCRIBED != 0 && self.section != 0 {
-            return Some(Desc {
-                section: self.section,
-                at: self.section + (id & !DESCRIBED) as usize,
-            });
-        }
-        match id as usize {
-            0 => None,
-            TAG_STRING => Some(Desc {
-                section: STRING.as_ptr() as usize,
-                at: STRING.as_ptr() as usize,
-            }),
-            other => self.of_type_id(other),
-        }
-    }
-
-    /// The description of the class or enum whose instances or boxes have
-    /// the type id `type_id`.
-    pub(crate) fn of_type_id(&self, type_id: usize) -> Option<Desc> {
-        if self.section == 0 {
-            return None;
-        }
-        // SAFETY: the section's header locates its directory, which is
-        // sorted by type id.
-        unsafe {
-            let directory = self.section + word(self.section + JSON_DIRECTORY_AT);
-            let (mut low, mut high) = (0, word(self.section + JSON_DIRECTORY_COUNT));
-            while low < high {
-                let middle = usize::midpoint(low, high);
-                let found = word(directory + middle * 8);
-                if found == type_id {
-                    return Some(Desc {
-                        section: self.section,
-                        at: self.section + word(directory + middle * 8 + 4),
-                    });
-                }
-                if found < type_id {
-                    low = middle + 1;
-                } else {
-                    high = middle;
-                }
-            }
-        }
-        None
-    }
-
-    /// The description of the class whose instances have the type id
-    /// `type_id`, which the class's type locates: every class has one,
-    /// whether or not `baml.json` can write its instances. Nothing for a
-    /// type id that is not a class's.
-    pub(crate) fn of_class(&self, type_id: usize) -> Option<Desc> {
-        if self.section == 0 || type_id < FIRST_CLASS_TYPE {
-            return None;
-        }
-        // SAFETY: a type of the program's is four words: the first its
-        // kind, and the last of a class's where its description is.
-        let (kind, described) =
-            unsafe { (word(self.table + type_id), word(self.table + type_id + 12)) };
-        (kind == KIND_INSTANCE as usize && described & TYPE_DESCRIBED as usize != 0).then(|| Desc {
+    /// The description at the address `at`, which a class object or a type
+    /// object holds: nothing for zero.
+    fn at(&self, at: usize) -> Option<Desc> {
+        (at != 0).then_some(Desc {
             section: self.section,
-            at: self.section + (described & !(TYPE_DESCRIBED as usize)),
+            at,
         })
     }
 
-    /// Whether `type_id` is the type of an enum's boxes.
-    pub(crate) fn is_enum(&self, type_id: usize) -> bool {
-        // SAFETY: a type of the program's is four words, the first its
-        // kind.
-        type_id >= FIRST_CLASS_TYPE
-            && unsafe { word(self.table + type_id) } == crate::layout::KIND_ENUM as usize
+    /// The description of the type a call named, when the call named one
+    /// and it has one. That of a class or an enum can be one `baml.json`
+    /// does not write or read by ([`Desc::shown_only`]).
+    pub(crate) fn described(&self, ty: TypeRef) -> Option<Desc> {
+        if ty.0 == 0 {
+            return None;
+        }
+        // SAFETY: a type a call names is a live type object.
+        self.at(unsafe { load(ty.0 + TYPE_DESCRIPTION) })
     }
 
-    /// The list of types the runtime knows by position, which the table's
-    /// first word locates: a count, then the type id of each.
-    fn listed(&self, position: usize) -> Option<usize> {
-        // SAFETY: the type table starts with where the list is.
+    /// The description `baml.json` writes and reads the object at `object`
+    /// by: that of the class of an instance or of the enum of a variant,
+    /// when it has one that is not shown only. Nothing for any other
+    /// object.
+    ///
+    /// # Safety
+    ///
+    /// `object` is a live object.
+    pub(crate) unsafe fn of_object(&self, object: usize) -> Option<Desc> {
+        // SAFETY: the caller's contract: an instance and a variant hold
+        // the address of a class object in their second word.
         unsafe {
-            let list = self.table + word(self.table);
-            (word(self.table) != 0 && position < word(list)).then(|| word(list + 4 + position * 4))
+            if !matches!(load(object) & TYPE_ID_MASK, TAG_INSTANCE | TAG_ENUM_VARIANT) {
+                return None;
+            }
+            self.of_class(load(object + INSTANCE_CLASS))
+                .filter(|described| !described.shown_only())
         }
     }
 
-    /// The type id of the class at `index` of [`crate::layout::NAMED`],
-    /// when the program describes it.
+    /// The description of the class, or of the enum, whose class object is
+    /// at `class`, when it has one: one shown only included.
+    ///
+    /// # Safety
+    ///
+    /// `class` is a live class object.
+    pub(crate) unsafe fn of_class(&self, class: usize) -> Option<Desc> {
+        // SAFETY: the caller's contract.
+        self.at(unsafe { load(class + CLASS_DESCRIPTION) })
+    }
+
+    /// The class object of the class at `position` of the program's list:
+    /// those of [`WELL_KNOWN`], and then those of
+    /// [`crate::layout::NAMED`]. Zero for one the program does not name.
+    fn listed(&self, position: usize) -> usize {
+        // SAFETY: the table starts with a word for each.
+        unsafe { load(self.table + PROGRAM_CLASSES + position * WORD) }
+    }
+
+    /// The class object of the class at `index` of [`WELL_KNOWN`].
+    pub(crate) fn well_known(&self, index: usize) -> usize {
+        let class = self.listed(index);
+        assert!(
+            class != 0,
+            "the program names the standard library's panics and errors"
+        );
+        class
+    }
+
+    /// The class object of the class at `index` of
+    /// [`crate::layout::NAMED`], when the program names it.
     pub(crate) fn named(&self, index: usize) -> Option<usize> {
-        self.listed(WELL_KNOWN.len() + index).filter(|id| *id != 0)
-    }
-
-    /// Whether `type_id` is the type of a panic: one of the first of
-    /// [`WELL_KNOWN`].
-    pub(crate) fn is_panic(&self, type_id: usize) -> bool {
-        (0..WELL_KNOWN_PANICS).any(|class| self.listed(class) == Some(type_id))
-    }
-
-    /// The size in bytes of an instance of the class whose type id is
-    /// `type_id`.
-    pub(crate) fn instance_size(&self, type_id: usize) -> usize {
-        // SAFETY: a class's type is four words, the second its size.
-        unsafe { word(self.table + type_id + 4) }
+        Some(self.listed(WELL_KNOWN.len() + index)).filter(|class| *class != 0)
     }
 }
 
@@ -245,6 +199,22 @@ impl Desc {
 
     pub(crate) fn a(self) -> usize {
         self.field(DESCRIPTION_A)
+    }
+
+    /// The class object of a class or of an enum, whose address is in the
+    /// word `a` locates.
+    pub(crate) fn class_object(self) -> usize {
+        debug_assert!(self.is_class() || self.is_enum());
+        // SAFETY: the `a` of a class and of an enum is the offset in the
+        // section of a word that holds the address.
+        unsafe { load(self.section + self.a()) }
+    }
+
+    /// Whether the description of a class or an enum says only how a value
+    /// is written when it is thrown: `baml.json` has no form for it.
+    pub(crate) fn shown_only(self) -> bool {
+        (self.is_class() || self.is_enum())
+            && self.field(DESCRIPTION_FLAGS) as u32 & FLAG_SHOWN_ONLY != 0
     }
 
     pub(crate) fn b(self) -> usize {
@@ -407,6 +377,52 @@ impl Desc {
         }
     }
 
+    /// Whether `value` is a value of the type, as far as a description
+    /// says: nothing says what an array or a map holds, or what is behind
+    /// a field nothing writes, so no value is taken to be one of those.
+    ///
+    /// # Safety
+    ///
+    /// `value` is a value as a slot holds one: when its tag is a
+    /// pointer's, its payload is a live object.
+    pub(crate) unsafe fn admits(self, value: Value) -> bool {
+        let (tag, payload) = (value.id(), value.payload);
+        let is_string = value.is_pointer() && tag < STRING_TAGS_END;
+        // SAFETY: the caller's contract: an instance and a variant hold
+        // the address of a class object in their second word.
+        unsafe {
+            match self.kind() {
+                KIND_UNKNOWN => true,
+                KIND_NULL => tag == TAG_NULL,
+                KIND_BOOL => tag == TAG_BOOL,
+                KIND_INT => tag == TAG_INT,
+                KIND_FLOAT => tag == TAG_FLOAT,
+                KIND_STRING => is_string,
+                KIND_CLASS => {
+                    tag == TAG_INSTANCE && load(payload + INSTANCE_CLASS) == self.class_object()
+                }
+                KIND_ENUM => {
+                    tag == TAG_ENUM_VARIANT && load(payload + VARIANT_ENUM) == self.class_object()
+                }
+                KIND_VARIANT => {
+                    tag == TAG_ENUM_VARIANT
+                        && load(payload + VARIANT_ENUM) == self.of_a().class_object()
+                        && load(payload + VARIANT_INDEX) == self.b()
+                }
+                KIND_STRING_IS => is_string && crate::string::text(payload) == self.literal(),
+                KIND_INT_IS => tag == TAG_INT && payload == self.a() | self.b() << 32,
+                KIND_BOOL_IS => tag == TAG_BOOL && payload & 0xFF == self.a(),
+                KIND_OPTIONAL => tag == TAG_NULL || self.of_a().admits(value),
+                KIND_UNION => {
+                    let mut members = Vec::new();
+                    self.members(&mut members);
+                    members.into_iter().any(|member| member.admits(value))
+                }
+                _ => false,
+            }
+        }
+    }
+
     /// The type with `null` taken out, when it is an optional.
     pub(crate) fn not_null(self) -> Self {
         if self.kind() == KIND_OPTIONAL {
@@ -415,4 +431,26 @@ impl Desc {
             self
         }
     }
+}
+
+/// Whether the value of tag `tag` and payload `payload` is of the type
+/// whose type object is at `type_object`, for a type whose values no one
+/// tag and class object tell: a union, an optional, a literal. Its
+/// description says, and a type with none has no value this knows of. A
+/// leaf: it neither allocates nor throws.
+///
+/// # Safety
+///
+/// Called from compiled code with its mutator, a live type object and a
+/// value: when the tag is a pointer's, the payload is a live object.
+#[unsafe(no_mangle)]
+unsafe extern "C" fn baml_rt_is_type(
+    worker: &Mutator,
+    type_object: usize,
+    tag: usize,
+    payload: usize,
+) -> u8 {
+    let described = Types::of_table(worker.types()).described(TypeRef(type_object));
+    // SAFETY: the caller's contract.
+    u8::from(described.is_some_and(|described| unsafe { described.admits(Value { tag, payload }) }))
 }

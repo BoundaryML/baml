@@ -30,14 +30,11 @@
 use std::{collections::HashMap, fmt::Write as _};
 
 use baml_compiler2_hir::loc::DeclRef;
-use baml_compiler2_hir_ty::{
-    extern_loc::{ClassRef, EnumRef},
-    layout::enum_variants,
-};
+use baml_compiler2_hir_ty::{extern_loc::ClassRef, layout::class_generic_params};
 use baml_compiler2_mir::{
     AggregateKind, BinOp, BlockId, CellId, Constant, IndexKind, IntrinsicOp, Local, MirFunction,
     MirFunctionBody, Operand, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
-    Terminator, TyTemplate, UnaryOp,
+    Terminator, UnaryOp,
 };
 use cranelift_codegen::{
     Context,
@@ -68,8 +65,8 @@ use crate::{
     program::{Entry, FnKey, Program},
     types::{
         BinaryMode, Body, NativeTy, Signature, TypeArg, binary_typing, class_layout, is_comparison,
-        local_ty, narrowed, operand_ty, place_local, place_ty, storage_ty, template_ty,
-        tuple_element, type_argument, unary_typing,
+        local_ty, narrowed, operand_ty, place_local, place_ty, storage_ty, tuple_element,
+        unary_typing,
     },
 };
 
@@ -91,9 +88,7 @@ pub(crate) const STACK_MAPS_SYMBOL: &str = "baml_native_stack_maps";
 pub(crate) const FUNCTIONS_SYMBOL: &str = "baml_native_functions";
 /// The version of the function table's format.
 const FUNCTIONS_VERSION: u32 = 2;
-/// The symbol of the table interface method calls load their code from.
-const METHODS_SYMBOL: &str = "baml_native_methods";
-/// The symbol of the table of types the collector reads.
+/// The symbol of the program's table of types, which the runtime reads.
 pub(crate) const TYPES_SYMBOL: &str = "baml_native_types";
 
 /// The trap after a call into a runtime function that does not return.
@@ -124,10 +119,11 @@ const PAIR: ir::Type = types::I128;
 
 fn clif_type(ty: &NativeTy<'_>) -> ir::Type {
     match ty {
-        NativeTy::Int | NativeTy::Enum(_) => types::I64,
+        NativeTy::Int => types::I64,
         NativeTy::Float => types::F64,
         NativeTy::Bool | NativeTy::Null => types::I8,
-        NativeTy::String
+        NativeTy::Enum(_)
+        | NativeTy::String
         | NativeTy::Bigint
         | NativeTy::Bytes
         | NativeTy::Class(..)
@@ -194,13 +190,12 @@ fn of_payload(builder: &mut FunctionBuilder<'_>, bits: ir::Value, ty: &NativeTy<
     }
 }
 
-/// The tag of a value of type `ty` whose bits are its payload. An enum
-/// variant in a slot of its enum's type is the `int` of its position.
+/// The tag of a value of type `ty` whose bits are its payload.
 fn immediate_tag(ty: &NativeTy<'_>) -> Option<usize> {
     match ty {
         NativeTy::Null => Some(layout::TAG_NULL),
         NativeTy::Bool => Some(layout::TAG_BOOL),
-        NativeTy::Int | NativeTy::Enum(_) => Some(layout::TAG_INT),
+        NativeTy::Int => Some(layout::TAG_INT),
         NativeTy::Float => Some(layout::TAG_FLOAT),
         _ => None,
     }
@@ -209,8 +204,8 @@ fn immediate_tag(ty: &NativeTy<'_>) -> Option<usize> {
 /// The two words a slot of type `ty` holds for `value`: the tag and the
 /// payload. A pair is its own two words. The tag of anything else is a
 /// constant where every value of the type has the same one, and is read
-/// from the object's header otherwise: a string may be a slice, and a
-/// class's id is its own. `null`'s payload is zero.
+/// from the object's header otherwise: a string may be a slice. `null`'s
+/// payload is zero.
 ///
 /// A tag read here is good until the next call: a collection can change
 /// the type id of what a reference points at.
@@ -232,6 +227,8 @@ fn slot_words(
         NativeTy::Bigint => layout::TAG_BIGINT,
         NativeTy::Bytes => layout::TAG_BYTES,
         NativeTy::Tuple(_) => layout::TAG_TUPLE,
+        NativeTy::Class(..) => layout::TAG_INSTANCE,
+        NativeTy::Enum(_) => layout::TAG_ENUM_VARIANT,
         other => match immediate_tag(other) {
             Some(tag) => tag,
             // The type id is the low half of the header.
@@ -260,33 +257,13 @@ fn of_slot_words(
     }
 }
 
-/// The value of type `ty` that the pair of `tag` and `payload` holds: the
-/// pair itself, or the one word a value of the type is. An enum variant
-/// is read from its box.
-fn of_pair_words(
-    builder: &mut FunctionBuilder<'_>,
-    ty: &NativeTy<'_>,
-    tag: ir::Value,
-    payload: ir::Value,
-) -> ir::Value {
-    match ty {
-        NativeTy::Enum(_) => builder.ins().load(
-            types::I64,
-            slot_access(),
-            payload,
-            offset(layout::BOX_VALUE),
-        ),
-        _ => of_slot_words(builder, ty, tag, payload),
-    }
-}
-
 /// The pair `value` as a value of type `ty`.
 fn of_pair(builder: &mut FunctionBuilder<'_>, ty: &NativeTy<'_>, value: ir::Value) -> ir::Value {
     if ty.is_pair() {
         return value;
     }
     let (tag, payload) = builder.ins().isplit(value);
-    of_pair_words(builder, ty, tag, payload)
+    of_slot_words(builder, ty, tag, payload)
 }
 
 /// A function of the runtime library, called by symbol.
@@ -297,7 +274,6 @@ enum Runtime {
     PrintBool,
     PrintString,
     PrintEnum,
-    StringFromEnum,
     PanicDivisionByZero,
     PanicNegativeShift,
     PanicIndexOutOfBounds,
@@ -351,7 +327,6 @@ impl Runtime {
             Self::PrintBool => "baml_rt_print_bool",
             Self::PrintString => "baml_rt_print_string",
             Self::PrintEnum => "baml_rt_print_enum",
-            Self::StringFromEnum => "baml_rt_string_from_enum",
             Self::PanicDivisionByZero => "baml_rt_panic_division_by_zero",
             Self::PanicNegativeShift => "baml_rt_panic_negative_shift",
             Self::PanicIndexOutOfBounds => "baml_rt_panic_index_out_of_bounds",
@@ -405,9 +380,12 @@ impl Runtime {
         // register.
         let byte = AbiParam::new(types::I8).uext();
         let (params, returns) = match self {
-            Self::PrintInt | Self::PrintString | Self::PrintBigint | Self::Sleep | Self::IoWait => {
-                (vec![word], vec![])
-            }
+            Self::PrintInt
+            | Self::PrintString
+            | Self::PrintEnum
+            | Self::PrintBigint
+            | Self::Sleep
+            | Self::IoWait => (vec![word], vec![]),
             Self::BigintBinary | Self::NativePoll => {
                 (vec![word, word, word, word], vec![word, word])
             }
@@ -438,10 +416,7 @@ impl Runtime {
             Self::StringFromInt | Self::StringFromBigint => (vec![word, word], vec![word]),
             Self::StringFromFloat => (vec![word, float], vec![word]),
             Self::ArrayNew => (vec![word, word], vec![word]),
-            Self::BytesNew | Self::StringConcat | Self::StringFromEnum => {
-                (vec![word, word, word], vec![word])
-            }
-            Self::PrintEnum => (vec![word, word, word], vec![]),
+            Self::BytesNew | Self::StringConcat => (vec![word, word, word], vec![word]),
             Self::ArrayPushSlow => (vec![word, word, word, word], vec![]),
             Self::StringEq | Self::BytesEq => (vec![word, word], vec![AbiParam::new(types::I8)]),
             Self::StringCmp => (vec![word, word], vec![word]),
@@ -484,27 +459,33 @@ type FunctionStackMaps = Vec<(u32, Vec<u32>)>;
 struct Backend<'db> {
     module: ObjectModule,
     runtime: HashMap<Runtime, FuncId>,
-    /// The program's type table so far: the bytes no type lives at, then
-    /// one entry per class and enum met.
-    types: Vec<u8>,
+    /// The program's table of types, which is defined last.
+    types: DataId,
     /// The descriptions of the program's classes, and of the types calls
-    /// of `baml.json` name: the last section of the type table.
+    /// of `baml.json` name: the section that ends the table of types.
     json: crate::json::JsonTypes<'db>,
-    /// The type id of each class met, at each tuple of type arguments it is
-    /// met at: the offset of its entry in `types`.
-    class_types: HashMap<(ClassRef<'db>, Vec<TypeArg<'db>>), usize>,
+    /// The class object of each class and enum met, and the number of
+    /// each: its place here, which is its index.
+    class_objects: Vec<classes::ClassObject<'db>>,
+    class_ids: HashMap<classes::ClassLike<'db>, usize>,
+    /// Whether the class objects are defined: no other can be met then.
+    class_objects_defined: bool,
+    /// The object of each package a class object names.
+    packages: HashMap<String, DataId>,
+    /// The type object of each type passed as a type argument, with where
+    /// its description is.
+    type_objects: HashMap<classes::TypeKey<'db>, (DataId, u32)>,
+    /// The interfaces type tests ask about, each with a column of its own
+    /// after the columns of the dispatched methods, in their order.
+    interface_columns: Vec<baml_compiler2_mir::TyTemplateInterface>,
+    /// The table of what each tag has in a column, for each column a call
+    /// or a test reads by tag.
+    tag_rows: HashMap<usize, DataId>,
     /// The classes the runtime makes instances of, once they are needed.
     well_known: Option<classes::WellKnown>,
     /// The closure standing for each function used as a value without
     /// capturing anything.
     function_values: HashMap<FuncId, DataId>,
-    /// The type id of each enum's boxes, and the boxes of its variants.
-    enum_types: HashMap<EnumRef<'db>, usize>,
-    enum_boxes: HashMap<EnumRef<'db>, DataId>,
-    /// The box an omitted enum argument refers to, once a call omits one.
-    omitted_variant: Option<DataId>,
-    /// The method table, once a call dispatches through it.
-    methods: Option<DataId>,
     strings: HashMap<String, DataId>,
     /// The bytes of the byte string literals emitted so far.
     byte_strings: HashMap<Vec<u8>, DataId>,
@@ -524,7 +505,7 @@ struct Backend<'db> {
     compares_values: bool,
 }
 
-impl<'db> Backend<'db> {
+impl Backend<'_> {
     /// A backend for the machine the compiler runs on, using every CPU
     /// feature that machine has.
     fn new() -> Result<Self, CompileError> {
@@ -552,18 +533,24 @@ impl<'db> Backend<'db> {
         let isa = isa.finish(settings::Flags::new(flags)).map_err(internal)?;
         let builder =
             ObjectBuilder::new(isa, "baml_program", default_libcall_names()).map_err(internal)?;
+        let mut module = ObjectModule::new(builder);
+        let types = module
+            .declare_data(TYPES_SYMBOL, Linkage::Export, false, false)
+            .map_err(internal)?;
         Ok(Self {
-            module: ObjectModule::new(builder),
+            module,
             runtime: HashMap::new(),
-            types: vec![0; layout::FIRST_CLASS_TYPE],
+            types,
             json: crate::json::JsonTypes::new(),
-            class_types: HashMap::new(),
+            class_objects: Vec::new(),
+            class_ids: HashMap::new(),
+            class_objects_defined: false,
+            packages: HashMap::new(),
+            type_objects: HashMap::new(),
+            interface_columns: Vec::new(),
+            tag_rows: HashMap::new(),
             well_known: None,
             function_values: HashMap::new(),
-            enum_types: HashMap::new(),
-            enum_boxes: HashMap::new(),
-            omitted_variant: None,
-            methods: None,
             strings: HashMap::new(),
             bigints: HashMap::new(),
             byte_strings: HashMap::new(),
@@ -579,60 +566,20 @@ impl<'db> Backend<'db> {
         self.module.isa().default_call_conv()
     }
 
-    /// The two words of `value`, of type `ty`, held as a pair: what it is
-    /// where nothing but its tag says its type. They are the words a slot
-    /// of the type holds ([`slot_words`]) but for an enum variant, which
-    /// as a pair is a reference to its box, tagged with the box's type.
-    fn pair_words(
-        &mut self,
-        db: &'db dyn baml_compiler2_mir::Db,
-        builder: &mut FunctionBuilder<'_>,
-        ty: &NativeTy<'db>,
-        value: ir::Value,
-    ) -> Result<(ir::Value, ir::Value), CompileError> {
-        let NativeTy::Enum(enum_ref) = ty else {
-            return Ok(slot_words(builder, ty, value));
-        };
-        let tag = self.enum_type(db, *enum_ref);
-        let boxes = self.enum_boxes(db, *enum_ref)?;
-        let boxes = self.module.declare_data_in_func(boxes, builder.func);
-        let boxes = builder.ins().symbol_value(WORD, boxes);
-        let scaled = builder.ins().imul_imm(value, imm(layout::BOX_SIZE));
-        Ok((
-            builder.ins().iconst(WORD, imm(tag)),
-            builder.ins().iadd(boxes, scaled),
-        ))
-    }
-
-    /// `value`, of type `ty`, as a pair.
-    fn as_pair(
-        &mut self,
-        db: &'db dyn baml_compiler2_mir::Db,
-        builder: &mut FunctionBuilder<'_>,
-        ty: &NativeTy<'db>,
-        value: ir::Value,
-    ) -> Result<ir::Value, CompileError> {
-        if ty.is_pair() {
-            return Ok(value);
-        }
-        let (tag, payload) = self.pair_words(db, builder, ty, value)?;
-        Ok(builder.ins().iconcat(tag, payload))
-    }
-
     /// The signature of a BAML function. Functions call each other with the
     /// tail convention, the one Cranelift has both tail calls and exception
     /// edges for on every target.
     ///
     /// A function entered through a value takes the closure first; one
     /// entered as a bound method finds its receiver there. Then come
-    /// `type_ids` type ids, 32 bits each, one per type parameter of a
+    /// `type_args` type objects, a word each, one per type parameter of a
     /// function that must be told its type arguments; then `values` values,
     /// each two words, its tag and its payload, whatever its type. The
     /// result is two words the same way. So every function of as many
     /// parameters is entered alike, by a call that names it, through a
-    /// function value or through the method table, and none of them has
-    /// to know how the function holds what it is passed.
-    fn clif_signature(values: usize, entry: Entry, type_ids: usize) -> ir::Signature {
+    /// function value or through a row, and none of them has to know how
+    /// the function holds what it is passed.
+    fn clif_signature(values: usize, entry: Entry, type_args: usize) -> ir::Signature {
         let mut clif = ir::Signature::new(CallConv::Tail);
         let (closure, receiver) = match entry {
             Entry::Direct => (false, 0),
@@ -642,7 +589,7 @@ impl<'db> Backend<'db> {
         clif.params = closure
             .then(|| AbiParam::new(WORD))
             .into_iter()
-            .chain(std::iter::repeat_n(AbiParam::new(types::I32), type_ids))
+            .chain(std::iter::repeat_n(AbiParam::new(WORD), type_args))
             .chain(std::iter::repeat_n(
                 AbiParam::new(WORD),
                 2 * (values - receiver),
@@ -697,151 +644,6 @@ impl<'db> Backend<'db> {
         self.module.define_data(id, &description).map_err(internal)
     }
 
-    /// The type id in the tag of a value of type `ty` held as a pair, when
-    /// every such value has the same one. A string that is a slice has
-    /// the id after the one given here.
-    fn type_id(
-        &mut self,
-        db: &'db dyn baml_compiler2_mir::Db,
-        ty: &NativeTy<'db>,
-    ) -> Result<Option<usize>, CompileError> {
-        Ok(Some(match ty {
-            NativeTy::Int => layout::TAG_INT,
-            NativeTy::Float => layout::TAG_FLOAT,
-            NativeTy::Bool => layout::TAG_BOOL,
-            NativeTy::String => layout::TAG_STRING,
-            NativeTy::Bigint => layout::TAG_BIGINT,
-            NativeTy::Bytes => layout::TAG_BYTES,
-            NativeTy::Enum(enum_ref) => self.enum_type(db, *enum_ref),
-            NativeTy::Class(class, arguments) => {
-                let fields = class_layout(db, *class, arguments).map_err(internal)?;
-                self.class_type(db, *class, arguments, &fields)
-            }
-            _ => return Ok(None),
-        }))
-    }
-
-    /// The type id of a class, adding its entry to the type table the first
-    /// time: what the collector needs to copy an instance, and what the
-    /// runtime needs to write one.
-    fn class_type(
-        &mut self,
-        db: &'db dyn baml_compiler2_mir::Db,
-        class: ClassRef<'db>,
-        arguments: &[TypeArg<'db>],
-        fields: &[NativeTy<'db>],
-    ) -> usize {
-        let key = (
-            class,
-            arguments.iter().cloned().map(type_argument).collect(),
-        );
-        if let Some(id) = self.class_types.get(&key) {
-            return *id;
-        }
-        let id = self.add_type([
-            layout::KIND_INSTANCE,
-            table_word(layout::instance_size(fields.len())),
-            0,
-            0,
-        ]);
-        self.class_types.insert(key, id);
-        self.describe_class(db, id, class, arguments, fields);
-        id
-    }
-
-    /// A new type of the type table, and its id.
-    fn add_type(&mut self, entry: [u32; layout::TYPE_HEADER / 4]) -> usize {
-        let id = self.types.len();
-        for word in entry {
-            self.types.extend_from_slice(&word.to_ne_bytes());
-        }
-        id
-    }
-
-    /// End what follows a type on a word: the next type's id leaves the low
-    /// header bits to the collector.
-    fn align_types(&mut self) {
-        self.types
-            .resize(self.types.len().next_multiple_of(layout::WORD), 0);
-    }
-
-    /// The type id of the boxes of an enum's variants. The type carries the
-    /// variants' names, for the runtime to print.
-    fn enum_type(&mut self, db: &'db dyn baml_compiler2_mir::Db, enum_ref: EnumRef<'db>) -> usize {
-        if let Some(id) = self.enum_types.get(&enum_ref) {
-            return *id;
-        }
-        let variants = enum_variants(db, enum_ref);
-        let names = self.types.len() + layout::TYPE_HEADER;
-        let id = self.add_type([
-            layout::KIND_ENUM,
-            table_word(layout::BOX_SIZE),
-            0,
-            table_word(names),
-        ]);
-        let mut text = names + 4 * (1 + 2 * variants.len());
-        let mut words = vec![table_word(variants.len())];
-        for variant in &variants {
-            words.extend([table_word(text), table_word(variant.as_str().len())]);
-            text += variant.as_str().len();
-        }
-        for word in words {
-            self.types.extend_from_slice(&word.to_ne_bytes());
-        }
-        for variant in &variants {
-            self.types.extend_from_slice(variant.as_str().as_bytes());
-        }
-        self.align_types();
-        self.enum_types.insert(enum_ref, id);
-        id
-    }
-
-    /// The boxes of an enum's variants in the executable's data, one
-    /// after another in declaration order, each holding its variant's
-    /// position: what a variant held as a pair refers to.
-    fn enum_boxes(
-        &mut self,
-        db: &'db dyn baml_compiler2_mir::Db,
-        enum_ref: EnumRef<'db>,
-    ) -> Result<DataId, CompileError> {
-        if let Some(id) = self.enum_boxes.get(&enum_ref) {
-            return Ok(*id);
-        }
-        let box_type = self.enum_type(db, enum_ref);
-        let count = enum_variants(db, enum_ref).len();
-        let mut bytes = Vec::with_capacity(count * layout::BOX_SIZE);
-        for position in 0..count {
-            bytes.extend_from_slice(&box_type.to_ne_bytes());
-            bytes.extend_from_slice(&position.to_ne_bytes());
-        }
-        let id = self
-            .module
-            .declare_anonymous_data(false, false)
-            .map_err(internal)?;
-        self.define_data(id, DataDescription::new(), bytes)?;
-        self.enum_boxes.insert(enum_ref, id);
-        Ok(id)
-    }
-
-    /// A box in the executable's data that holds the position no variant
-    /// of any enum is at: what a call passes for an enum parameter it
-    /// leaves to its default.
-    fn omitted_variant(&mut self) -> Result<DataId, CompileError> {
-        if let Some(id) = self.omitted_variant {
-            return Ok(id);
-        }
-        let mut bytes = Vec::with_capacity(layout::BOX_SIZE);
-        bytes.extend_from_slice(&layout::TAG_OMITTED.to_ne_bytes());
-        bytes.extend_from_slice(&(-1_i64).to_ne_bytes());
-        let id = self
-            .module
-            .declare_anonymous_data(false, false)
-            .map_err(internal)?;
-        self.define_data(id, DataDescription::new(), bytes)?;
-        self.omitted_variant = Some(id);
-        Ok(id)
-    }
-
     /// The closure that stands for a function used as a value: an object in
     /// the executable's data that captures nothing.
     fn function_value(&mut self, function: FuncId) -> Result<DataId, CompileError> {
@@ -860,90 +662,6 @@ impl<'db> Backend<'db> {
         self.define_data(id, description, bytes)?;
         self.function_values.insert(function, id);
         Ok(id)
-    }
-
-    fn methods(&mut self) -> Result<DataId, CompileError> {
-        if let Some(id) = self.methods {
-            return Ok(id);
-        }
-        let id = self
-            .module
-            .declare_data(METHODS_SYMBOL, Linkage::Local, false, false)
-            .map_err(internal)?;
-        self.methods = Some(id);
-        Ok(id)
-    }
-
-    /// Emit the method table: one row per `8` bytes of the type table, so
-    /// that a type id shifted by the program's column shift is the offset
-    /// of its type's row; a row is one code address per column, zero where
-    /// the type has no code for a method. The code is the implementation
-    /// itself, entered as a call that names it enters it: a dispatching
-    /// call passes the receiver and every argument as that call would.
-    fn define_methods(
-        &mut self,
-        db: &'db dyn baml_compiler2_mir::Db,
-        program: &Program<'db>,
-        declared: &HashMap<FnKey<'db>, Declared<'db>>,
-    ) -> Result<(), CompileError> {
-        let Some(id) = self.methods else {
-            return Ok(());
-        };
-        let mut entries = Vec::new();
-        for (ty, methods) in &program.rows {
-            let type_id = self
-                .type_id(db, ty)?
-                .ok_or_else(|| internal("a method table row is for a type with a type id"))?;
-            for (slot, code) in methods {
-                let function = match code {
-                    crate::program::Code::Function(key) => {
-                        let callee = declared
-                            .get(key)
-                            .ok_or_else(|| internal("an implementation is part of the program"))?;
-                        if callee.entry != Entry::Direct || callee.type_ids != 0 {
-                            return Err(internal(
-                                "an implementation is entered with its values alone",
-                            ));
-                        }
-                        callee.id
-                    }
-                    crate::program::Code::Native(native) => self.dispatched_stub(db, native)?,
-                };
-                let column = program.slots[*slot].column;
-                entries.push((
-                    (type_id << program.column_shift) + column * layout::WORD,
-                    function,
-                ));
-                if type_id == layout::TAG_STRING {
-                    // A slice is a string: its row is the same.
-                    entries.push((
-                        (layout::TAG_STRING_SLICE << program.column_shift) + column * layout::WORD,
-                        function,
-                    ));
-                }
-            }
-        }
-        let mut description = DataDescription::new();
-        for (offset, function) in entries {
-            let function = self.module.declare_func_in_data(function, &mut description);
-            description.write_function_addr(table_word(offset), function);
-        }
-        let bytes = vec![0; self.types.len() << program.column_shift];
-        self.define_data(id, description, bytes)
-    }
-
-    /// Emit the type table.
-    fn define_types(&mut self, db: &'db dyn baml_compiler2_mir::Db) -> Result<(), CompileError> {
-        self.finish_types(db)?;
-        let id = self
-            .module
-            .declare_data(TYPES_SYMBOL, Linkage::Export, false, false)
-            .map_err(internal)?;
-        // The method table has a row for every word of types, and is
-        // already laid out: what follows them costs it nothing.
-        let description = self.append_descriptions();
-        let types = std::mem::take(&mut self.types);
-        self.define_data(id, description, types)
     }
 
     /// A string object in the executable's data. The collector leaves
@@ -1151,9 +869,9 @@ struct Declared<'db> {
     id: FuncId,
     entry: Entry,
     signature: Signature<'db>,
-    /// How many type ids the function takes before its parameters: one per
-    /// type parameter, or none.
-    type_ids: usize,
+    /// How many type objects the function takes before its parameters: one
+    /// per type parameter, or none.
+    type_args: usize,
     /// Whether the function checks the stack limit on entry.
     checks_stack: bool,
 }
@@ -1255,7 +973,7 @@ pub(crate) fn generate<'db>(
             .ok_or_else(|| internal(format!("`{}` has no MIR", function.name)))?;
         let body = body_of(mir).map_err(internal)?;
         let signature = signature(db, mir, body, &function.key.arguments).map_err(internal)?;
-        let type_ids = if identified_arguments(db, &function.key).contains(&true) {
+        let type_args = if identified_arguments(db, &function.key).contains(&true) {
             function.key.arguments.len()
         } else {
             0
@@ -1265,7 +983,7 @@ pub(crate) fn generate<'db>(
             .declare_function(
                 &symbol_name(index, &function.name),
                 Linkage::Local,
-                &Backend::clif_signature(signature.params.len(), function.key.entry, type_ids),
+                &Backend::clif_signature(signature.params.len(), function.key.entry, type_args),
             )
             .map_err(internal)?;
         let typed = Body::new(db, mir, body, &function.captures, &function.key);
@@ -1275,7 +993,7 @@ pub(crate) fn generate<'db>(
                 id,
                 entry: function.key.entry,
                 signature,
-                type_ids,
+                type_args,
                 checks_stack: checks_stack(db, body, &ArrayLoops::of(db, &typed))
                     || compares_out_of_line(db, body, &typed),
             },
@@ -1283,8 +1001,8 @@ pub(crate) fn generate<'db>(
         bodies.push((function, mir, typed));
     }
     hooks::declare(&mut backend, program, &declared)?;
-    // The stub of each native the method table enters, declared while
-    // stubs are still to be compiled.
+    // The stub of each native a row enters, declared while stubs are still
+    // to be compiled.
     for (_, methods) in &program.rows {
         for (_, code) in methods {
             if let crate::program::Code::Native(native) = code {
@@ -1302,21 +1020,15 @@ pub(crate) fn generate<'db>(
         return Err(CompileError::EntryTakesArguments);
     }
     let print = match entry.signature.result {
-        NativeTy::Enum(enum_ref) => {
-            Some((Runtime::PrintEnum, Some(backend.enum_type(db, enum_ref))))
-        }
-        _ => None,
-    };
-    let print = match entry.signature.result {
-        _ if print.is_some() => print,
-        NativeTy::Int => Some((Runtime::PrintInt, None)),
-        NativeTy::Float => Some((Runtime::PrintFloat, None)),
-        NativeTy::Bool => Some((Runtime::PrintBool, None)),
-        NativeTy::String => Some((Runtime::PrintString, None)),
-        NativeTy::Bigint => Some((Runtime::PrintBigint, None)),
+        NativeTy::Int => Some(Runtime::PrintInt),
+        NativeTy::Float => Some(Runtime::PrintFloat),
+        NativeTy::Bool => Some(Runtime::PrintBool),
+        NativeTy::String => Some(Runtime::PrintString),
+        NativeTy::Bigint => Some(Runtime::PrintBigint),
+        // An enum's variant is printed by name, which its object has.
+        NativeTy::Enum(_) => Some(Runtime::PrintEnum),
         NativeTy::Null => None,
-        NativeTy::Enum(_)
-        | NativeTy::Union(_)
+        NativeTy::Union(_)
         | NativeTy::Unknown
         | NativeTy::Bytes
         | NativeTy::Class(..)
@@ -1336,7 +1048,7 @@ pub(crate) fn generate<'db>(
     for (function, mir, body) in bodies {
         let this = &declared[&function.key];
         context.func.signature =
-            Backend::clif_signature(this.signature.params.len(), this.entry, this.type_ids);
+            Backend::clif_signature(this.signature.params.len(), this.entry, this.type_args);
         Translator::new(
             db,
             &mut backend,
@@ -1404,11 +1116,15 @@ pub(crate) fn generate<'db>(
         &mut clif,
         &mut disassembly,
     )?;
+    // Every class object is met by now, but for those the runtime knows
+    // by position: their rows can be laid out.
+    backend.well_known(db)?;
     backend.define_equals(db)?;
+    backend.identify_described(db)?;
     backend.define_stack_maps()?;
     backend.define_unwind()?;
     backend.define_functions()?;
-    backend.define_methods(db, program, &declared)?;
+    backend.define_rows(db, program, &declared)?;
     backend.define_types(db)?;
 
     let object = backend.module.finish().emit().map_err(internal)?;
@@ -1496,13 +1212,11 @@ fn define(
 fn entry_shim(
     backend: &mut Backend<'_>,
     entry: &Declared<'_>,
-    print: Option<(Runtime, Option<usize>)>,
+    print: Option<Runtime>,
     function: &mut ir::Function,
     builder_context: &mut FunctionBuilderContext,
 ) -> Result<(), CompileError> {
-    let print = print
-        .map(|(print, enum_type)| Ok((backend.runtime(print)?, enum_type)))
-        .transpose()?;
+    let print = print.map(|print| backend.runtime(print)).transpose()?;
     let mut builder = FunctionBuilder::new(function, builder_context);
     let block = builder.create_block();
     builder.append_block_params_for_function_params(block);
@@ -1524,20 +1238,10 @@ fn entry_shim(
             reads_context: true,
         }],
     );
-    if let Some((print, enum_type)) = print {
-        let result = of_pair_words(&mut builder, &entry.signature.result, tag, payload);
+    if let Some(print) = print {
+        let result = of_slot_words(&mut builder, &entry.signature.result, tag, payload);
         let print = backend.function_ref(print, builder.func);
-        match enum_type {
-            // An enum's variant is printed by name, which its type has.
-            Some(enum_type) => {
-                let worker = builder.ins().get_pinned_reg(WORD);
-                let enum_type = builder.ins().iconst(WORD, imm(enum_type));
-                builder.ins().call(print, &[worker, enum_type, result]);
-            }
-            None => {
-                builder.ins().call(print, &[result]);
-            }
-        }
+        builder.ins().call(print, &[result]);
     }
     builder.ins().return_(&[]);
 
@@ -1568,8 +1272,9 @@ struct Translator<'a, 'db> {
     builder: FunctionBuilder<'a>,
     /// The closure this function was entered through, when it was.
     closure: Variable,
-    /// The type id of each type argument, when the function is passed them.
-    type_ids: Vec<Variable>,
+    /// The type object of each type argument, when the function is passed
+    /// them.
+    type_args: Vec<Variable>,
     /// The variable of each local that carries a value; `None` for a `null`
     /// local and for a local of a type outside the subset, which a checked
     /// body never reads or writes.
@@ -1601,9 +1306,9 @@ struct Translator<'a, 'db> {
     chains: HashMap<usize, Option<BlockId>>,
 }
 
-/// A size, offset or count as the 32 bits the type table stores it in.
+/// A size, offset or count as the 32 bits a table stores it in.
 fn table_word(value: usize) -> u32 {
-    u32::try_from(value).expect("type table entries fit 32 bits")
+    u32::try_from(value).expect("table entries fit 32 bits")
 }
 
 impl<'a, 'db> Translator<'a, 'db> {
@@ -1663,7 +1368,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             body,
             builder,
             closure,
-            type_ids: Vec::new(),
+            type_args: Vec::new(),
             variables,
             blocks,
             function_refs: HashMap::new(),
@@ -1692,11 +1397,14 @@ impl<'a, 'db> Translator<'a, 'db> {
             let closure = arriving.next().expect("a closure parameter");
             self.builder.def_var(self.closure, closure);
         }
-        for _ in 0..self.declared(self.key)?.type_ids {
-            let type_id = self.builder.declare_var(types::I32);
-            let passed = arriving.next().expect("a type id per type parameter");
-            self.builder.def_var(type_id, passed);
-            self.type_ids.push(type_id);
+        for _ in 0..self.declared(self.key)?.type_args {
+            // A type object can be one of the heap, which a collection
+            // moves.
+            let type_arg = self.builder.declare_var(WORD);
+            self.builder.declare_var_needs_stack_map(type_arg);
+            let passed = arriving.next().expect("a type object per type parameter");
+            self.builder.def_var(type_arg, passed);
+            self.type_args.push(type_arg);
         }
         // A captured parameter waits in a variable of its own until its
         // cell can be allocated.
@@ -1715,7 +1423,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 // Every argument arrives as its tag and its payload.
                 let tag = arriving.next().expect("a tag per argument");
                 let payload = arriving.next().expect("a payload per argument");
-                of_pair_words(&mut self.builder, content, tag, payload)
+                of_slot_words(&mut self.builder, content, tag, payload)
             };
             if let NativeTy::Cell(content) = &ty {
                 if **content != NativeTy::Null {
@@ -1863,22 +1571,15 @@ impl<'a, 'db> Translator<'a, 'db> {
     }
 
     /// `value`, of type `ty`, as a pair, which the collector is told of.
-    fn as_pair(&mut self, ty: &NativeTy<'db>, value: ir::Value) -> Result<ir::Value, CompileError> {
-        let pair = self
-            .backend
-            .as_pair(self.db, &mut self.builder, ty, value)?;
+    fn as_pair(&mut self, ty: &NativeTy<'db>, value: ir::Value) -> ir::Value {
+        let pair = if ty.is_pair() {
+            value
+        } else {
+            let (tag, payload) = slot_words(&mut self.builder, ty, value);
+            self.builder.ins().iconcat(tag, payload)
+        };
         self.builder.declare_value_needs_stack_map(pair);
-        Ok(pair)
-    }
-
-    /// The two words of `value`, of type `ty`, as a pair.
-    fn pair_words(
-        &mut self,
-        ty: &NativeTy<'db>,
-        value: ir::Value,
-    ) -> Result<(ir::Value, ir::Value), CompileError> {
-        self.backend
-            .pair_words(self.db, &mut self.builder, ty, value)
+        pair
     }
 
     /// The value of type `ty` every bit of which is zero: `0`, `0.0`,
@@ -1905,8 +1606,6 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let nothing = self.word_const(0);
                 self.pair(tag, nothing)
             }
-            // No variant is at this position.
-            NativeTy::Enum(_) => self.builder.ins().iconst(WORD, -1),
             // Neither `false` nor `true`.
             NativeTy::Bool => self.builder.ins().iconst(types::I8, 2),
             // No object is at this address, and it is not `null`. The
@@ -1917,19 +1616,13 @@ impl<'a, 'db> Translator<'a, 'db> {
 
     /// The two words a call passes for a parameter of type `ty` it leaves
     /// to its default: the tag no value has, and as the payload what the
-    /// callee reads as [`Self::omitted`]. A callee reads an enum variant
-    /// out of the box its payload refers to, so for an enum that is a box
-    /// holding the position no variant is at.
+    /// callee reads as [`Self::omitted`].
     fn omitted_words(
         &mut self,
         ty: &NativeTy<'db>,
     ) -> Result<(ir::Value, ir::Value), CompileError> {
         let payload = match ty {
             _ if ty.is_pair() => self.word_const(0),
-            NativeTy::Enum(_) => {
-                let variant = self.backend.omitted_variant()?;
-                self.data_address(variant)
-            }
             _ if crate::types::has_omitted_form(ty) => {
                 let omitted = self.omitted(ty);
                 payload_of(&mut self.builder, omitted, ty)
@@ -1961,7 +1654,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         let mut words = Vec::with_capacity(2 * values.len());
         for (value, ty) in values.into_iter().zip(params) {
             let (tag, payload) = match value {
-                Some(value) => self.pair_words(ty, value)?,
+                Some(value) => slot_words(&mut self.builder, ty, value),
                 None => self.omitted_words(ty)?,
             };
             words.extend([tag, payload]);
@@ -1989,20 +1682,15 @@ impl<'a, 'db> Translator<'a, 'db> {
     /// payload where it is known to hold a value of one type. Two types
     /// both held as one word, or both as a pair, hold a value the same
     /// way.
-    fn coerce(
-        &mut self,
-        value: ir::Value,
-        from: &NativeTy<'db>,
-        to: &NativeTy<'db>,
-    ) -> Result<ir::Value, CompileError> {
+    fn coerce(&mut self, value: ir::Value, from: &NativeTy<'db>, to: &NativeTy<'db>) -> ir::Value {
         let held = match (from.is_pair(), to.is_pair()) {
-            (false, true) => self.as_pair(from, value)?,
+            (false, true) => self.as_pair(from, value),
             (true, false) => of_pair(&mut self.builder, to, value),
-            _ => return Ok(value),
+            _ => return value,
         };
         // A new value, which the collector has to be told of like the one
         // it was made from.
-        Ok(self.track(held, to))
+        self.track(held, to)
     }
 
     /// Whether `value`, of static type `ty`, passes a type test decided as
@@ -2048,10 +1736,12 @@ impl<'a, 'db> Translator<'a, 'db> {
         };
         debug_assert!(ty.is_pair(), "a test by tag is of a pair");
         let classes::Passing {
-            ids,
+            tags,
+            classes,
+            interfaces,
             panics,
             null: null_passes,
-        } = self.passing(test)?;
+        } = self.passing(test, true)?;
         // The tag is in a register: nothing is loaded to compare it.
         let (tag, payload) = self.builder.ins().isplit(value);
         let id = self.builder.ins().ireduce(types::I32, tag);
@@ -2067,22 +1757,10 @@ impl<'a, 'db> Translator<'a, 'db> {
             });
         };
         if let TestKind::Argument(slot) = test {
-            let type_id = self
-                .type_ids
-                .get(*slot)
-                .ok_or_else(|| internal("a tested type argument has its type id"))?;
-            let type_id = self.builder.use_var(*type_id);
-            // The id passed for `string` is that of one holding its text.
-            let is_string = self.is_string_id(id);
-            let flat = self
-                .builder
-                .ins()
-                .iconst(types::I32, imm(layout::TAG_STRING));
-            let id = self.builder.ins().select(is_string, flat, id);
-            let same = self.builder.ins().icmp(IntCC::Equal, id, type_id);
+            let same = self.is_of_type_argument(*slot, tag, payload)?;
             also(self, same);
         }
-        for wanted in ids {
+        for wanted in tags {
             let same = if wanted == layout::TAG_STRING {
                 self.is_string_id(id)
             } else {
@@ -2090,35 +1768,9 @@ impl<'a, 'db> Translator<'a, 'db> {
             };
             also(self, same);
         }
-        if panics {
-            // Every panic passes. Whether an instance is one is a flag of
-            // its own header: a tag does not say.
-            let is_pointer = self.builder.ins().icmp_imm(
-                IntCC::UnsignedGreaterThan,
-                id,
-                imm(layout::TAG_OMITTED),
-            );
-            let read = self.builder.create_block();
-            let done = self.builder.create_block();
-            self.builder.append_block_param(done, types::I8);
-            let no = self.bool_const(false);
-            self.builder
-                .ins()
-                .brif(is_pointer, read, &[], done, &[no.into()]);
-            self.builder.seal_block(read);
-            self.builder.switch_to_block(read);
-            let header = self.builder.ins().load(WORD, slot_access(), payload, 0);
-            let flag = self
-                .builder
-                .ins()
-                .ushr_imm(header, i64::from(layout::HEADER_PANIC_BIT));
-            let flag = self.builder.ins().band_imm(flag, 1);
-            let flag = self.builder.ins().ireduce(types::I8, flag);
-            self.builder.ins().jump(done, &[flag.into()]);
-            self.builder.seal_block(done);
-            self.builder.switch_to_block(done);
-            let is_panic = self.builder.block_params(done)[0];
-            also(self, is_panic);
+        if !classes.is_empty() || !interfaces.is_empty() || panics {
+            let same = self.is_of_classes(id, payload, &classes, &interfaces, panics)?;
+            also(self, same);
         }
         Ok(match passes {
             Some(passes) => passes,
@@ -2127,50 +1779,264 @@ impl<'a, 'db> Translator<'a, 'db> {
         })
     }
 
-    /// Branch on the tag a type tag read gave: to the first arm whose key
-    /// is the tag's type. A class's type id is its own, so an arm that
-    /// takes every panic class takes each by its id.
+    /// Whether the value of tag `tag` and payload `payload` is of the type
+    /// this function was passed for its type parameter `slot`. A type
+    /// object whose tag word is not zero says it: a value is of the type
+    /// when it has that tag and, where the object names a class object,
+    /// is an instance or a variant of it. The runtime decides for any
+    /// other, by the type's description.
+    fn is_of_type_argument(
+        &mut self,
+        slot: usize,
+        tag: ir::Value,
+        payload: ir::Value,
+    ) -> Result<ir::Value, CompileError> {
+        let passed = self
+            .type_args
+            .get(slot)
+            .ok_or_else(|| internal("a tested type argument has its type object"))?;
+        let passed = self.builder.use_var(*passed);
+        let flags = MemFlags::trusted();
+        let wanted = self
+            .builder
+            .ins()
+            .load(WORD, flags, passed, offset(layout::TYPE_TAG));
+        let by_tag = self.builder.create_block();
+        let by_class = self.builder.create_block();
+        let compare = self.builder.create_block();
+        let slow = self.builder.create_block();
+        let done = self.builder.create_block();
+        self.builder.append_block_param(done, types::I8);
+        self.builder.set_cold_block(slow);
+        self.builder.ins().brif(wanted, by_tag, &[], slow, &[]);
+
+        self.builder.switch_to_block(by_tag);
+        // The tag a type object has for `string` is that of one holding
+        // its text.
+        let id = self.builder.ins().ireduce(types::I32, tag);
+        let is_string = self.is_string_id(id);
+        let flat = self
+            .builder
+            .ins()
+            .iconst(types::I32, imm(layout::TAG_STRING));
+        let id = self.builder.ins().select(is_string, flat, id);
+        let wanted = self.builder.ins().ireduce(types::I32, wanted);
+        let same = self.builder.ins().icmp(IntCC::Equal, id, wanted);
+        let no = self.bool_const(false);
+        self.builder
+            .ins()
+            .brif(same, by_class, &[], done, &[no.into()]);
+
+        self.builder.switch_to_block(by_class);
+        let class = self
+            .builder
+            .ins()
+            .load(WORD, flags, passed, offset(layout::TYPE_CLASS));
+        let yes = self.bool_const(true);
+        self.builder
+            .ins()
+            .brif(class, compare, &[], done, &[yes.into()]);
+
+        // A type object that names a class object has the tag of an
+        // instance or of a variant: the payload is an object.
+        self.builder.switch_to_block(compare);
+        let own =
+            self.builder
+                .ins()
+                .load(WORD, slot_access(), payload, offset(layout::INSTANCE_CLASS));
+        let same = self.builder.ins().icmp(IntCC::Equal, own, class);
+        self.builder.ins().jump(done, &[same.into()]);
+
+        self.builder.switch_to_block(slow);
+        let mutator = self.mutator();
+        let is_type = self.import(
+            "baml_rt_is_type",
+            vec![AbiParam::new(WORD); 4],
+            vec![AbiParam::new(types::I8)],
+        )?;
+        let call = self
+            .builder
+            .ins()
+            .call(is_type, &[mutator, passed, tag, payload]);
+        let decided = self.builder.inst_results(call)[0];
+        self.builder.ins().jump(done, &[decided.into()]);
+
+        self.builder.switch_to_block(done);
+        Ok(self.builder.block_params(done)[0])
+    }
+
+    /// Whether the value whose tag has the type id `id` is an instance or
+    /// a variant of one of the class objects `classes`, or is of a type
+    /// with something in one of the columns `interfaces`, or, when
+    /// `panics`, is a panic.
+    ///
+    /// An instance and a variant hold their class object where the other
+    /// does, and no class object is both a class's and an enum's, so one
+    /// comparison of that word decides either. A value that is neither has
+    /// its row in the tables of tags.
+    fn is_of_classes(
+        &mut self,
+        id: ir::Value,
+        payload: ir::Value,
+        classes: &[usize],
+        interfaces: &[usize],
+        panics: bool,
+    ) -> Result<ir::Value, CompileError> {
+        let from_instance = self.builder.ins().iadd_imm(id, -imm(layout::TAG_INSTANCE));
+        let has_class = self.builder.ins().icmp_imm(
+            IntCC::UnsignedLessThanOrEqual,
+            from_instance,
+            imm(layout::TAG_ENUM_VARIANT - layout::TAG_INSTANCE),
+        );
+        let by_class = self.builder.create_block();
+        let by_tag = self.builder.create_block();
+        let done = self.builder.create_block();
+        self.builder.append_block_param(done, types::I8);
+        self.builder
+            .ins()
+            .brif(has_class, by_class, &[], by_tag, &[]);
+
+        self.builder.switch_to_block(by_class);
+        let mut passes = self.bool_const(false);
+        let class =
+            self.builder
+                .ins()
+                .load(WORD, slot_access(), payload, offset(layout::INSTANCE_CLASS));
+        for wanted in classes {
+            let wanted = self.backend.class_data(*wanted);
+            let wanted = self.data_address(wanted);
+            let same = self.builder.ins().icmp(IntCC::Equal, class, wanted);
+            passes = self.builder.ins().bor(passes, same);
+        }
+        for column in interfaces {
+            let held = self.builder.ins().load(
+                WORD,
+                MemFlags::trusted(),
+                class,
+                offset(layout::CLASS_METHODS + column * layout::WORD),
+            );
+            let holds = self.builder.ins().icmp_imm(IntCC::NotEqual, held, 0);
+            passes = self.builder.ins().bor(passes, holds);
+        }
+        if panics {
+            // Whether an instance is a panic is a flag of its own header:
+            // a tag does not say.
+            let header = self.builder.ins().load(WORD, slot_access(), payload, 0);
+            let flag = self
+                .builder
+                .ins()
+                .ushr_imm(header, i64::from(layout::HEADER_PANIC_BIT));
+            let flag = self.builder.ins().band_imm(flag, 1);
+            let flag = self.builder.ins().ireduce(types::I8, flag);
+            passes = self.builder.ins().bor(passes, flag);
+        }
+        self.builder.ins().jump(done, &[passes.into()]);
+
+        self.builder.switch_to_block(by_tag);
+        let mut passes = self.bool_const(false);
+        let at = self.builder.ins().uextend(WORD, id);
+        for column in interfaces {
+            let held = self.tag_row_word(*column, at)?;
+            let holds = self.builder.ins().icmp_imm(IntCC::NotEqual, held, 0);
+            passes = self.builder.ins().bor(passes, holds);
+        }
+        self.builder.ins().jump(done, &[passes.into()]);
+
+        self.builder.switch_to_block(done);
+        Ok(self.builder.block_params(done)[0])
+    }
+
+    /// What the tag `tag`, with no bits but its type id, has in `column`:
+    /// the word of the column's table of tags at the offset the tag is.
+    fn tag_row_word(&mut self, column: usize, tag: ir::Value) -> Result<ir::Value, CompileError> {
+        let table = self.backend.tag_row(column)?;
+        let table = self.data_address(table);
+        let at = self.builder.ins().iadd(table, tag);
+        Ok(self
+            .builder
+            .ins()
+            .load(WORD, MemFlags::trusted().with_readonly(), at, 0))
+    }
+
+    /// Branch on the tag and the payload of a value whose type tag was
+    /// read: to the first arm whose key is the value's type. An arm of a
+    /// tag is found by the tag; an arm of a class by the index of the
+    /// instance's class object, so an arm that takes every panic class
+    /// takes each by its own.
     fn switch_on_tag(
         &mut self,
         tag: ir::Value,
+        payload: ir::Value,
         arms: &[(SwitchKey<'db>, BlockId)],
         otherwise: BlockId,
     ) -> Result<(), CompileError> {
-        // The type ids each arm takes, first arm first.
-        let mut taken: Vec<(usize, BlockId)> = Vec::new();
+        // What each arm takes, first arm first.
+        let mut taken: Vec<(classes::Taken, BlockId)> = Vec::new();
         for (key, target) in arms {
-            let ids = match key {
-                SwitchKey::Class(class) => vec![self.plain_class(*class)?],
+            let keys = match key {
+                SwitchKey::Class(class) => vec![classes::Taken::Class(self.plain_class(*class)?)],
                 SwitchKey::Int(tag) => {
                     let test = TestKind::of_tag(*tag)
                         .ok_or_else(|| internal("a checked type tag names a type"))?;
-                    let mut ids = Vec::new();
-                    if self.passing_ids(&test, &mut ids)? {
-                        ids.push(layout::TAG_NULL);
+                    let passing = self.passing(&test, false)?;
+                    let mut keys = Vec::new();
+                    if passing.null {
+                        keys.push(classes::Taken::Tag(layout::TAG_NULL));
                     }
-                    if ids.contains(&layout::TAG_STRING) {
-                        ids.push(layout::TAG_STRING_SLICE);
+                    for tag in passing.tags {
+                        keys.push(classes::Taken::Tag(tag));
+                        if tag == layout::TAG_STRING {
+                            keys.push(classes::Taken::Tag(layout::TAG_STRING_SLICE));
+                        }
                     }
-                    if ids.contains(&classes::ANY_PANIC) {
-                        ids.retain(|id| *id != classes::ANY_PANIC);
-                        ids.extend(self.panic_ids()?);
+                    keys.extend(passing.classes.into_iter().map(classes::Taken::Class));
+                    if passing.panics {
+                        let panics = self.panic_classes()?;
+                        keys.extend(panics.into_iter().map(classes::Taken::Class));
                     }
-                    ids
+                    keys
                 }
             };
-            for id in ids {
-                if !taken.iter().any(|(seen, _)| *seen == id) {
-                    taken.push((id, *target));
+            for key in keys {
+                if !taken.iter().any(|(seen, _)| *seen == key) {
+                    taken.push((key, *target));
                 }
             }
         }
-        let type_id = self.builder.ins().ireduce(types::I32, tag);
-        let mut switch = Switch::new();
-        for (id, target) in taken {
-            switch.set_entry(id as u128, self.block(target));
-        }
         let otherwise = self.block(otherwise);
-        switch.emit(&mut self.builder, type_id, otherwise);
+        let mut by_tag = Switch::new();
+        let mut by_class = Switch::new();
+        let mut instances = None;
+        for (key, target) in taken {
+            match key {
+                classes::Taken::Tag(tag) => by_tag.set_entry(tag as u128, self.block(target)),
+                classes::Taken::Class(index) => {
+                    instances.get_or_insert_with(|| self.builder.create_block());
+                    by_class.set_entry(index as u128, self.block(target));
+                }
+            }
+        }
+        if let Some(instances) = instances {
+            by_tag.set_entry(layout::TAG_INSTANCE as u128, instances);
+        }
+        let id = self.builder.ins().ireduce(types::I32, tag);
+        by_tag.emit(&mut self.builder, id, otherwise);
+        if let Some(instances) = instances {
+            self.builder.switch_to_block(instances);
+            let class = self.builder.ins().load(
+                WORD,
+                slot_access(),
+                payload,
+                offset(layout::INSTANCE_CLASS),
+            );
+            let index = self.builder.ins().load(
+                types::I32,
+                MemFlags::trusted(),
+                class,
+                offset(layout::CLASS_INDEX),
+            );
+            by_class.emit(&mut self.builder, index, otherwise);
+        }
         Ok(())
     }
 
@@ -2183,52 +2049,6 @@ impl<'a, 'db> Translator<'a, 'db> {
             from_first,
             imm(layout::STRING_TAGS_END - layout::TAG_STRING),
         )
-    }
-
-    /// Add to `ids` the type id of every type whose values pass `test`, and
-    /// say whether `null` passes.
-    fn passing_ids(
-        &mut self,
-        test: &TestKind<'db>,
-        ids: &mut Vec<usize>,
-    ) -> Result<bool, CompileError> {
-        match test {
-            TestKind::Exactly(NativeTy::Null) => return Ok(true),
-            TestKind::AnyArray => {
-                ids.push(layout::TAG_ARRAY);
-            }
-            TestKind::Exactly(ty) => ids.push(
-                self.backend
-                    .type_id(self.db, ty)?
-                    .ok_or_else(|| internal("a checked type test has a type id"))?,
-            ),
-            // Compared with the type id the function was passed.
-            TestKind::Argument(_) => {}
-            TestKind::Panic => ids.push(classes::ANY_PANIC),
-            TestKind::Is(_) => {
-                return Err(internal("a checked literal test compares values"));
-            }
-            TestKind::AnyOf(tests) => {
-                let mut null_passes = false;
-                for test in tests {
-                    null_passes |= self.passing_ids(test, ids)?;
-                }
-                return Ok(null_passes);
-            }
-            // The program is whole: the implementors are the types it makes
-            // values of.
-            TestKind::Implements(interface) => {
-                let program = self.program;
-                for ty in &program.types {
-                    if crate::dispatch::implements(self.db, ty, interface)
-                        && let Some(id) = self.backend.type_id(self.db, ty)?
-                    {
-                        ids.push(id);
-                    }
-                }
-            }
-        }
-        Ok(false)
     }
 
     /// Whether a pair holds a value, as a word that is zero for `null`:
@@ -2244,7 +2064,13 @@ impl<'a, 'db> Translator<'a, 'db> {
             return Err(internal("a checked field access is on a class instance"));
         };
         let layout = class_layout(self.db, class, &arguments).map_err(internal)?;
-        Ok((layout[field].clone(), layout::field_offset(field)))
+        Ok((layout[field].clone(), self.field_offset(class, field)))
+    }
+
+    /// The byte offset of field `field` of an instance of `class`, whose
+    /// slots are one per type parameter of the class and then its fields.
+    fn field_offset(&self, class: ClassRef<'db>, field: usize) -> usize {
+        layout::field_offset(class_generic_params(self.db, class).len() + field)
     }
 
     /// The type and byte offset of the element the local `index` names of
@@ -2392,7 +2218,7 @@ impl<'a, 'db> Translator<'a, 'db> {
     /// receiver and a future's value are held so.
     fn pair_load(&mut self, ty: &NativeTy<'db>, base: ir::Value, bytes: usize) -> ir::Value {
         let (tag, payload) = self.load_words(base, bytes);
-        let value = of_pair_words(&mut self.builder, ty, tag, payload);
+        let value = of_slot_words(&mut self.builder, ty, tag, payload);
         self.track(value, ty)
     }
 
@@ -2560,7 +2386,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         let ty = self.place_ty(place)?;
         let value = self.read_place(place)?;
         let held = narrowed(ty.clone());
-        self.coerce(value, &ty, &held)
+        Ok(self.coerce(value, &ty, &held))
     }
 
     /// [`Self::read_object`] of what an operand names.
@@ -2568,7 +2394,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         let ty = self.operand_ty(operand)?;
         let value = self.operand(operand)?;
         let held = narrowed(ty.clone());
-        self.coerce(value, &ty, &held)
+        Ok(self.coerce(value, &ty, &held))
     }
 
     fn read_place(&mut self, place: &Place) -> Result<ir::Value, CompileError> {
@@ -2579,7 +2405,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let kept = self.storage_ty(*local);
                 let known = self.local_ty(*local)?;
                 let value = self.read_local(*local);
-                let value = self.coerce(value, &kept, &known)?;
+                let value = self.coerce(value, &kept, &known);
                 Ok(self.track(value, &known))
             }
             Place::Field { base, field } => {
@@ -2698,7 +2524,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         // change the type id of what it refers to.
         let bound = self.allocate(layout::bound_size(0))?;
         let tag = self.callable(bound, layout::TAG_BOUND_METHOD, code, 0);
-        let words = self.pair_words(ty, receiver)?;
+        let words = slot_words(&mut self.builder, ty, receiver);
         self.slot_store_words(ty, words, bound, layout::BOUND_RECEIVER);
         Ok(self.pair(tag, bound))
     }
@@ -2801,8 +2627,17 @@ impl<'a, 'db> Translator<'a, 'db> {
             Operand::Constant(Constant::Int(value)) => {
                 Ok(self.builder.ins().iconst(types::I64, *value))
             }
-            Operand::Constant(Constant::EnumVariant { index, .. }) => {
-                Ok(self.builder.ins().iconst(types::I64, i64::from(*index)))
+            // The address of the variant's object.
+            Operand::Constant(Constant::EnumVariant {
+                enum_ref, index, ..
+            }) => {
+                let class = self
+                    .backend
+                    .class_object(self.db, classes::ClassLike::Enum(*enum_ref))?;
+                let variants = self.backend.variants_data(class)?;
+                let variants = self.data_address(variants);
+                let at = imm(*index as usize * layout::VARIANT_SIZE);
+                Ok(self.builder.ins().iadd_imm(variants, at))
             }
             Operand::Constant(Constant::Float(value)) => Ok(self.builder.ins().f64const(*value)),
             Operand::Constant(Constant::Bool(value)) => Ok(self.bool_const(*value)),
@@ -2846,7 +2681,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         }
         let found = self.operand_ty(operand)?;
         let value = self.operand(operand)?;
-        self.coerce(value, &found, expected)
+        Ok(self.coerce(value, &found, expected))
     }
 
     fn statement(&mut self, statement: &StatementKind<'db>) -> Result<(), CompileError> {
@@ -2873,7 +2708,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                     return self.write_place(destination, value);
                 }
                 let (value, found) = self.rvalue(value, &expected)?;
-                let value = self.coerce(value, &found, &expected)?;
+                let value = self.coerce(value, &found, &expected);
                 self.write_place(destination, value)
             }
             StatementKind::FreshCell { local, carry_value } => {
@@ -2932,11 +2767,18 @@ impl<'a, 'db> Translator<'a, 'db> {
                     .collect::<Result<Vec<_>, _>>()?;
                 self.concat(&parts)?
             }
+            // An enum's variant says its own position.
             Rvalue::Discriminant(place) => {
                 let ty = self.place_ty(place)?;
                 let value = self.read_place(place)?;
                 let held = narrowed(ty.clone());
-                self.coerce(value, &ty, &held)?
+                let variant = self.coerce(value, &ty, &held);
+                self.builder.ins().load(
+                    types::I64,
+                    MemFlags::trusted(),
+                    variant,
+                    offset(layout::VARIANT_INDEX),
+                )
             }
             // What a switch on the tag reads: the tag of the pair as its
             // variable holds it, whatever the block knows it to be.
@@ -3322,59 +3164,35 @@ impl<'a, 'db> Translator<'a, 'db> {
             .zip(&layout)
             .map(|(field, ty)| self.operand_as(field, ty))
             .collect::<Result<Vec<_>, _>>()?;
-        let class_type = self.backend.class_type(self.db, class, arguments, &layout);
-        let header = Backend::class_header(self.db, class, class_type);
-        let object = self.allocate(layout::instance_size(layout.len()))?;
+        let generics = class_generic_params(self.db, class).len();
+        let class_object = self
+            .backend
+            .class_object(self.db, classes::ClassLike::Class(class))?;
+        let class_object = self.backend.class_data(class_object);
+        let object = self.allocate(layout::instance_size(generics + layout.len()))?;
         // The flags are the top bits of the word, so it is no size.
-        let class_type = self
+        let header = Backend::class_header(self.db, class);
+        let header = self
             .builder
             .ins()
             .iconst(WORD, i64::from_ne_bytes(header.to_ne_bytes()));
-        self.builder
-            .ins()
-            .store(slot_access(), class_type, object, 0);
-        let no_class = self.word_const(0);
+        self.builder.ins().store(slot_access(), header, object, 0);
+        let class_object = self.data_address(class_object);
         self.builder.ins().store(
             slot_access(),
-            no_class,
+            class_object,
             object,
             offset(layout::INSTANCE_CLASS),
         );
+        // The slots of the type parameters hold nothing yet.
+        let null = self.null();
+        for slot in 0..generics {
+            self.slot_store(&NativeTy::Null, null, object, layout::field_offset(slot));
+        }
         for (slot, (ty, value)) in layout.iter().zip(values).enumerate() {
-            self.slot_store(ty, value, object, layout::field_offset(slot));
+            self.slot_store(ty, value, object, layout::field_offset(generics + slot));
         }
         Ok(object)
-    }
-
-    /// The type id of the type a local of type `type` holds, as a function
-    /// that must identify its type arguments is passed it; zero for a type
-    /// whose values do not share one type id.
-    fn type_id(&mut self, loaded: &Operand<'db>) -> Result<ir::Value, CompileError> {
-        let template = self
-            .body
-            .type_value(loaded)
-            .ok_or_else(|| internal("a checked type argument is a type loaded once"))?;
-        if let TyTemplate::TypeArgRef(slot) = template
-            && let Some(passed) = self.type_ids.get(*slot as usize)
-        {
-            return Ok(self.builder.use_var(*passed));
-        }
-        let id = match template_ty(self.db, template, self.body.arguments) {
-            Some(ty) => self.backend.type_id(self.db, &ty)?,
-            None => None,
-        };
-        let id = match id {
-            Some(id) => id,
-            // A type whose values share no one type id is passed as its
-            // description, when it has one: `baml.json` reads it, and a
-            // type test finds no header equal to it.
-            None if template.is_fully_concrete() => self
-                .backend
-                .describe(self.db, &template.substitute_symbolic(&[]))
-                .unwrap_or(0),
-            None => 0,
-        };
-        Ok(self.builder.ins().iconst(types::I32, imm(id)))
     }
 
     /// A new array holding `elements`.
@@ -4051,11 +3869,16 @@ impl<'a, 'db> Translator<'a, 'db> {
                     NativeTy::Float => self
                         .call_runtime(Runtime::StringFromFloat, &[mutator, value])?
                         .ok_or_else(|| internal("float to string returns a string")),
-                    NativeTy::Enum(enum_ref) => {
-                        let enum_type = self.backend.enum_type(self.db, enum_ref);
-                        let enum_type = self.word_const(enum_type);
-                        self.call_runtime(Runtime::StringFromEnum, &[mutator, enum_type, value])?
-                            .ok_or_else(|| internal("enum to string returns a string"))
+                    // A variant's object holds its name.
+                    NativeTy::Enum(_) => {
+                        let name = self.builder.ins().load(
+                            WORD,
+                            MemFlags::trusted(),
+                            value,
+                            offset(layout::VARIANT_NAME),
+                        );
+                        self.builder.declare_value_needs_stack_map(name);
+                        Ok(name)
                     }
                     NativeTy::Bool => {
                         let yes = self.backend.string_constant("true")?;
@@ -4199,8 +4022,8 @@ impl<'a, 'db> Translator<'a, 'db> {
                 self.builder.switch_to_block(bind);
                 let bound_ty = narrow_bound(&source_ty, &plan);
                 let kept = self.storage_ty(*destination);
-                let bound = self.coerce(value, &source_ty, &bound_ty)?;
-                let bound = self.coerce(bound, &bound_ty, &kept)?;
+                let bound = self.coerce(value, &source_ty, &bound_ty);
+                let bound = self.coerce(bound, &bound_ty, &kept);
                 self.write_local(*destination, bound);
                 self.builder.ins().jump(then_block, &[]);
             }
@@ -4228,12 +4051,12 @@ impl<'a, 'db> Translator<'a, 'db> {
                         .brif(presence, present, &[], eval_rhs, &[]);
                     self.builder.seal_block(present);
                     self.builder.switch_to_block(present);
-                    let result = self.coerce(value, &operand_ty, &destination_ty)?;
+                    let result = self.coerce(value, &operand_ty, &destination_ty);
                     self.write_place(destination, result)?;
                     self.builder.ins().jump(join, &[]);
                     return Ok(());
                 }
-                let result = self.coerce(value, &operand_ty, &destination_ty)?;
+                let result = self.coerce(value, &operand_ty, &destination_ty);
                 self.write_place(destination, result)?;
                 match kind {
                     ShortCircuitKind::And => {
@@ -4254,10 +4077,27 @@ impl<'a, 'db> Translator<'a, 'db> {
                 otherwise,
                 ..
             } => {
-                let value = self.operand(discriminant)?;
+                // A type tag is read where it is switched on: the value it
+                // is of is read again here, for what its tag does not say.
                 if crate::check::switched_tag(self.body, self.current).is_some() {
-                    return self.switch_on_tag(value, arms, *otherwise);
+                    let read = self.body.blocks[self.current].statements.last();
+                    let Some(StatementKind::Assign {
+                        value: Rvalue::TypeTag(place),
+                        ..
+                    }) = read.map(|statement| &statement.kind)
+                    else {
+                        return Err(internal("a switched type tag is read where it is switched"));
+                    };
+                    let value = match place {
+                        Place::Local(local) if self.storage_ty(*local).is_pair() => {
+                            self.read_local(*local)
+                        }
+                        _ => self.read_place(place)?,
+                    };
+                    let (tag, payload) = self.builder.ins().isplit(value);
+                    return self.switch_on_tag(tag, payload, arms, *otherwise);
                 }
+                let value = self.operand(discriminant)?;
                 let mut switch = Switch::new();
                 let mut seen = Vec::with_capacity(arms.len());
                 for (key, target) in arms {
@@ -4277,7 +4117,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 // Every caller takes the result as its tag and its payload.
                 let value = self.read_local(Local(0));
                 let ty = self.storage_ty(Local(0));
-                let (tag, payload) = self.pair_words(&ty, value)?;
+                let (tag, payload) = slot_words(&mut self.builder, &ty, value);
                 self.builder.ins().return_(&[tag, payload]);
             }
             Terminator::Unreachable => {
@@ -4350,7 +4190,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                         let called = unwind::Called::Indirect(clif, code);
                         let (tag, payload) = self.baml_call(&called, &arguments)?;
                         let result =
-                            of_pair_words(&mut self.builder, &signature.result, tag, payload);
+                            of_slot_words(&mut self.builder, &signature.result, tag, payload);
                         (result, signature.result)
                     }
                     Callee::Function(key) => {
@@ -4358,7 +4198,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                     }
                 };
                 let result = self.track(result, &produced);
-                let result = self.coerce(result, &produced, &expected)?;
+                let result = self.coerce(result, &produced, &expected);
                 self.write_local(destination, result);
                 let target = self.block(*target);
                 self.builder.ins().jump(target, &[]);
@@ -4418,7 +4258,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                     Virtual::Dynamic(slot, ..) => self.dispatch(&slot, args)?,
                 };
                 let result = self.track(result, &produced);
-                let result = self.coerce(result, &produced, &expected)?;
+                let result = self.coerce(result, &produced, &expected);
                 self.write_local(destination, result);
                 let target = self.block(*target);
                 self.builder.ins().jump(target, &[]);
@@ -4449,7 +4289,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             {
                 let (value, produced) = self.native_call_out_of_line(native, args, 0)?;
                 let expected = self.place_ty(destination)?;
-                let value = self.coerce(value, &produced, &expected)?;
+                let value = self.coerce(value, &produced, &expected);
                 self.write_place(destination, value)?;
                 let target = self.block(*target);
                 self.builder.ins().jump(target, &[]);
@@ -4467,7 +4307,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                 self.call_runtime(Runtime::Sleep, &[nanos])?;
                 let null = self.null();
                 let expected = self.place_ty(destination)?;
-                let null = self.coerce(null, &NativeTy::Null, &expected)?;
+                let null = self.coerce(null, &NativeTy::Null, &expected);
                 self.write_place(destination, null)?;
                 let target = self.block(*target);
                 self.builder.ins().jump(target, &[]);
@@ -4490,10 +4330,9 @@ impl<'a, 'db> Translator<'a, 'db> {
     ) -> Result<(ir::Value, NativeTy<'db>), CompileError> {
         let callee = self.declared(key)?;
         let mut arguments = Vec::new();
-        if callee.type_ids != 0 {
+        if callee.type_args != 0 {
             for argument in types {
-                self.describe_type_argument(argument);
-                arguments.push(self.type_id(argument)?);
+                arguments.push(self.type_argument(argument)?);
             }
         }
         arguments.extend(self.argument_words(args, &callee.signature.params)?);
@@ -4502,12 +4341,15 @@ impl<'a, 'db> Translator<'a, 'db> {
         // The callee can collect, which moves storage.
         self.forget_arrays();
         let (tag, payload) = self.baml_call(&unwind::Called::Direct(callee), &arguments)?;
-        let result = of_pair_words(&mut self.builder, &produced, tag, payload);
+        let result = of_slot_words(&mut self.builder, &produced, tag, payload);
         Ok((result, produced))
     }
 
-    /// Call the code the receiver's type has for an interface method: its
-    /// type id picks a row of the method table, the method a column.
+    /// Call the code the receiver's type has for an interface method. An
+    /// instance's class object holds its row, and an enum's variant's
+    /// enum's, where the other holds its own; a value of any other type
+    /// has what its tag has in the method's table of tags. The method's
+    /// column says where in the row.
     fn dispatch(
         &mut self,
         slot: &Slot,
@@ -4519,27 +4361,49 @@ impl<'a, 'db> Translator<'a, 'db> {
             .iter()
             .find(|known| known.slot == *slot)
             .ok_or_else(|| internal("a dispatched method has a slot"))?;
-        // The receiver is a value like any other: its tag picks the row,
-        // and the implementation reads it as its own first parameter.
+        // The receiver is a value like any other: its tag says where its
+        // row is, and the implementation reads it as its own first
+        // parameter.
         let receiver = self.operand_as(&args[0], &NativeTy::Unknown)?;
         let rest = self.argument_words(&args[1..], &slot.signature.params)?;
         let (tag, payload) = self.builder.ins().isplit(receiver);
         let mut arguments = vec![tag, payload];
         arguments.extend(rest);
-        let type_id = self.builder.ins().band_imm(tag, imm(layout::TYPE_ID_MASK));
-        let methods = self.backend.methods()?;
-        let methods = self.data_address(methods);
-        let row = self
-            .builder
+        let id = self.builder.ins().ireduce(types::I32, tag);
+        let from_instance = self.builder.ins().iadd_imm(id, -imm(layout::TAG_INSTANCE));
+        let has_class = self.builder.ins().icmp_imm(
+            IntCC::UnsignedLessThanOrEqual,
+            from_instance,
+            imm(layout::TAG_ENUM_VARIANT - layout::TAG_INSTANCE),
+        );
+        let by_class = self.builder.create_block();
+        let by_tag = self.builder.create_block();
+        let found = self.builder.create_block();
+        self.builder.append_block_param(found, WORD);
+        self.builder
             .ins()
-            .ishl_imm(type_id, i64::from(program.column_shift));
-        let row = self.builder.ins().iadd(methods, row);
+            .brif(has_class, by_class, &[], by_tag, &[]);
+
+        self.builder.switch_to_block(by_class);
+        let class =
+            self.builder
+                .ins()
+                .load(WORD, slot_access(), payload, offset(layout::INSTANCE_CLASS));
         let code = self.builder.ins().load(
             WORD,
-            MemFlags::trusted().with_readonly(),
-            row,
-            offset(slot.column * layout::WORD),
+            MemFlags::trusted(),
+            class,
+            offset(layout::CLASS_METHODS + slot.column * layout::WORD),
         );
+        self.builder.ins().jump(found, &[code.into()]);
+
+        self.builder.switch_to_block(by_tag);
+        let at = self.builder.ins().uextend(WORD, id);
+        let code = self.tag_row_word(slot.column, at)?;
+        self.builder.ins().jump(found, &[code.into()]);
+
+        self.builder.switch_to_block(found);
+        let code = self.builder.block_params(found)[0];
         let signature = Backend::clif_signature(arguments.len() / 2, Entry::Direct, 0);
         let signature = self.builder.import_signature(signature);
         // The callee can collect, which moves storage.
@@ -4548,7 +4412,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         let produced = slot.signature.result.clone();
         if !slot.falls_back {
             let (tag, payload) = self.baml_call(&called, &arguments)?;
-            let result = of_pair_words(&mut self.builder, &produced, tag, payload);
+            let result = of_slot_words(&mut self.builder, &produced, tag, payload);
             return Ok((result, produced));
         }
         // A type that declares no `to_string` has no code in its row: the

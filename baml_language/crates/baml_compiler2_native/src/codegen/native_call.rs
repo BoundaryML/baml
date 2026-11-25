@@ -11,14 +11,10 @@ use baml_compiler2_mir::Operand;
 use cranelift_codegen::ir::{self, AbiParam, InstBuilder, types};
 use cranelift_module::{Linkage, Module};
 
-use super::{
-    Translator, WORD, hooks::StubParam, internal, of_pair_words, of_payload, of_slot_words,
-    slot_words,
-};
+use super::{Translator, WORD, hooks::StubParam, internal, of_payload, of_slot_words, slot_words};
 use crate::{
     CompileError,
     check::native_type_arguments,
-    layout,
     natives::{Native, Ty},
     types::NativeTy,
 };
@@ -27,8 +23,8 @@ use crate::{
 /// type argument is the type of the array.
 const RUST_SORT: &str = "baml._rust_sort";
 
-/// What a native takes for a parameter of type `ty`, without the id a
-/// [`Ty::Typed`] is preceded by: one word, or the two of a value.
+/// What a native takes for a parameter of type `ty`, without the type
+/// object a [`Ty::Typed`] is preceded by: one word, or the two of a value.
 pub(super) fn abi_params(ty: &Ty) -> Result<Vec<AbiParam>, CompileError> {
     Ok(match ty {
         _ if ty.is_value() => vec![AbiParam::new(WORD); 2],
@@ -68,17 +64,16 @@ impl<'db> Translator<'_, 'db> {
         ty: &Ty,
         expected: &NativeTy<'db>,
         value: ir::Value,
-    ) -> Result<Vec<ir::Value>, CompileError> {
-        let (tag, payload) = match ty {
-            // As a slot of the type holds it: an array or a map the native
-            // puts it in is of that type.
-            Ty::Elem(_) | Ty::Optional(_) => slot_words(&mut self.builder, expected, value),
-            _ if ty.is_value() => self.pair_words(expected, value)?,
+    ) -> Vec<ir::Value> {
+        match ty {
+            _ if ty.is_value() => {
+                let (tag, payload) = slot_words(&mut self.builder, expected, value);
+                vec![tag, payload]
+            }
             // The address of Rust state, which is held as any value is.
-            _ if expected.is_pair() => return Ok(vec![self.builder.ins().isplit(value).1]),
-            _ => return Ok(vec![value]),
-        };
-        Ok(vec![tag, payload])
+            _ if expected.is_pair() => vec![self.builder.ins().isplit(value).1],
+            _ => vec![value],
+        }
     }
 
     /// Call `native` with `arguments` and return its result and the type it
@@ -125,26 +120,24 @@ impl<'db> Translator<'_, 'db> {
             params.push(AbiParam::new(WORD));
             values.push(self.mutator());
         }
-        // The type id of each type argument, for a native that is passed
-        // them: after the worker and before the values.
+        // The type object of each type argument, for a native that is
+        // passed them: after the worker and before the values.
         let described = super::json::takes_descriptions(native);
         if native.type_ids != 0 {
             for (argument, ty) in type_arguments.iter().zip(&types) {
-                params.push(AbiParam::new(types::I32));
-                let id = match ty {
-                    _ if described => self.described_type(argument)?,
-                    // An array has no type id of its own, and its words do
-                    // not say what order they are sorted in: the sort is
-                    // told what the elements are.
+                params.push(AbiParam::new(WORD));
+                let object = match ty {
+                    // An array's words do not say what order they are
+                    // sorted in: the sort is told what the elements are.
                     NativeTy::Array(element) if native.path == RUST_SORT => {
-                        let id = self.backend.type_id(self.db, element)?.unwrap_or(0);
-                        self.builder.ins().iconst(types::I32, super::imm(id))
+                        let (object, _) = self.backend.type_object_of(self.db, element)?;
+                        self.data_address(object)
                     }
-                    _ => self.type_id(argument)?,
+                    _ => self.type_argument(argument)?,
                 };
-                values.push(id);
-                stub_params.push(StubParam::Id);
-                stub_values.push((vec![id], None));
+                values.push(object);
+                stub_params.push(StubParam::Type);
+                stub_values.push((vec![object], None));
             }
         }
         for (argument, ty) in arguments.iter().zip(signature.params) {
@@ -152,13 +145,12 @@ impl<'db> Translator<'_, 'db> {
             if matches!(ty, Ty::Typed) {
                 // What the value is, as far as its static type says.
                 let found = self.operand_ty(argument)?;
-                if found.holds_any() && described {
-                    // Only its tag will say what the value is.
-                    self.describe_program_types();
+                if described {
+                    // A value held as `unknown` somewhere inside this one
+                    // is described by its tag alone.
+                    self.describe_program_types()?;
                 }
-                let id = if described {
-                    self.backend.describe_native(self.db, &found)?
-                } else {
+                if !described {
                     // What compares two values: it reads the description
                     // it is given, and the value's tag for the rest.
                     if let Some(class) = self.program.equals_unlisted.first() {
@@ -168,13 +160,12 @@ impl<'db> Translator<'_, 'db> {
                         )));
                     }
                     self.backend.compares_values = true;
-                    self.backend.describe_native_if_any(self.db, &found)
-                };
-                params.push(AbiParam::new(types::I32));
-                let id = self.builder.ins().iconst(types::I32, super::imm(id));
-                values.push(id);
-                stub_params.push(StubParam::Id);
-                stub_values.push((vec![id], None));
+                }
+                params.push(AbiParam::new(WORD));
+                let object = self.static_type(&found, described)?;
+                values.push(object);
+                stub_params.push(StubParam::Type);
+                stub_values.push((vec![object], None));
             }
             let value = self.operand_as(argument, &expected)?;
             params.extend(abi_params(ty)?);
@@ -182,11 +173,11 @@ impl<'db> Translator<'_, 'db> {
                 let param = StubParam::of(ty)?;
                 stub_values.push(match param {
                     StubParam::Exact(_) => (Vec::new(), Some((expected, value))),
-                    _ => (self.native_argument(ty, &expected, value)?, None),
+                    _ => (self.native_argument(ty, &expected, value), None),
                 });
                 stub_params.push(param);
             } else {
-                values.extend(self.native_argument(ty, &expected, value)?);
+                values.extend(self.native_argument(ty, &expected, value));
             }
         }
         let returns = if native.throws || signature.result.is_value() {
@@ -215,7 +206,7 @@ impl<'db> Translator<'_, 'db> {
             for (ready, exact) in stub_values {
                 words.extend(ready);
                 if let Some((expected, value)) = exact {
-                    let (tag, payload) = self.pair_words(&expected, value)?;
+                    let (tag, payload) = slot_words(&mut self.builder, &expected, value);
                     words.extend([tag, payload]);
                 }
             }
@@ -233,24 +224,10 @@ impl<'db> Translator<'_, 'db> {
             }
         };
         let result = match (&signature.result, results.as_slice()) {
-            // The value of a type parameter as a slot of the type holds
-            // it: an array or a map the native took it from is of that
-            // type.
-            (Ty::Elem(_), [tag, payload]) => {
-                of_slot_words(&mut self.builder, &produced, *tag, *payload)
-            }
-            // `null`, or the value of a type parameter as a slot of the
-            // type holds it, which for an enum variant is not how a pair
-            // holds one.
-            (Ty::Optional(Ty::Elem(index)), [tag, payload])
-                if matches!(types[*index], NativeTy::Enum(_)) =>
-            {
-                self.optional_variant(&types[*index], *tag, *payload)?
-            }
             // A pair, or what one known to hold a value of the result's
             // type holds.
             (ty, [tag, payload]) if ty.is_value() => {
-                of_pair_words(&mut self.builder, &produced, *tag, *payload)
+                of_slot_words(&mut self.builder, &produced, *tag, *payload)
             }
             // The result of a native that can throw, which is not a pair:
             // its payload.
@@ -263,20 +240,5 @@ impl<'db> Translator<'_, 'db> {
             _ => self.builder.ins().iconst(types::I8, 0),
         };
         Ok((result, produced))
-    }
-
-    /// The pair an optional enum variant is, from the two words a slot of
-    /// the enum's type holds a variant as, or those of `null`.
-    fn optional_variant(
-        &mut self,
-        variant: &NativeTy<'db>,
-        tag: ir::Value,
-        position: ir::Value,
-    ) -> Result<ir::Value, CompileError> {
-        let (held, boxed) = self.pair_words(variant, position)?;
-        let null = self.word_const(layout::TAG_NULL);
-        let held = self.builder.ins().select(tag, held, null);
-        let boxed = self.builder.ins().select(tag, boxed, null);
-        Ok(self.pair(held, boxed))
     }
 }

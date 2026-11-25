@@ -4,9 +4,9 @@
 use crate::{
     heap::{Mutator, Value, load, store},
     layout::{
-        BOX_VALUE, SLICE_OFFSET, SLICE_PARENT, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS,
-        STRING_TAGS_END, STRING_TEXT, TAG_BOOL, TAG_FLOAT, TAG_INT, TAG_NULL, TAG_STRING,
-        TYPE_ID_MASK, VALUE, WORD, string_size,
+        SLICE_OFFSET, SLICE_PARENT, STRING_CHAR_COUNT_SHIFT, STRING_LENGTHS, STRING_TAGS_END,
+        STRING_TEXT, TAG_BOOL, TAG_FLOAT, TAG_INT, TAG_NULL, TAG_STRING, TYPE_ID_MASK, VALUE, WORD,
+        string_size,
     },
     native::View as _,
 };
@@ -257,33 +257,14 @@ unsafe extern "C" fn string_from_float(mutator: &mut Mutator, value: f64) -> usi
 }
 
 crate::stubs::anchored! {
-    /// The symbol of [`string_from_enum`].
-    baml_rt_string_from_enum => string_from_enum
-}
-
-/// The name of variant `index` of the enum whose boxes have the type
-/// `enum_type`, as a string.
-///
-/// # Safety
-///
-/// Called from compiled code with its mutator.
-unsafe extern "C" fn string_from_enum(
-    mutator: &mut Mutator,
-    enum_type: usize,
-    index: usize,
-) -> usize {
-    let name = mutator.variant_name(enum_type, index);
-    from_str(mutator, name)
-}
-
-crate::stubs::anchored! {
     /// The symbol of [`string_from_any`].
     baml_rt_string_from_any => string_from_any
 }
 
 /// The text of the value of tag `tag` and payload `payload`, whose type
 /// declares no `to_string` of its own: a string is itself, and an `int`, a
-/// `float`, a `bool`, `null` or an enum's variant is its text.
+/// `float`, a `bool` or `null` is its text. An enum's variant is its name,
+/// the string its object holds.
 ///
 /// # Safety
 ///
@@ -313,11 +294,8 @@ unsafe extern "C" fn string_from_any(mutator: &mut Mutator, tag: usize, payload:
             let bytes = unsafe { crate::native::BytesRef::from_raw(payload) }.to_vec();
             from_str(mutator, &String::from_utf8_lossy(&bytes))
         }
-        enum_type if crate::describe::Types::of_table(mutator.types()).is_enum(enum_type) => {
-            // SAFETY: an enum's box is a header and the variant's position.
-            let name = mutator.variant_name(enum_type, unsafe { load(payload + BOX_VALUE) });
-            from_str(mutator, name)
-        }
+        // SAFETY: the tag says it is a variant, which holds its name.
+        crate::layout::TAG_ENUM_VARIANT => unsafe { load(payload + crate::layout::VARIANT_NAME) },
         // Anything else is written as an uncaught throw of it is.
         _ => {
             // SAFETY: the caller's contract.

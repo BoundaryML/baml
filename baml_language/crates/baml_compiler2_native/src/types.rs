@@ -48,7 +48,9 @@ pub(crate) enum NativeTy<'db> {
     /// The one value of the unit type. It carries no information, so it is
     /// never kept in a variable.
     Null,
-    /// A variant of this enum: its position in the declaration, as an int.
+    /// A variant of this enum: a reference to the variant's object, of
+    /// which there is one, so that two are the same variant when they are
+    /// the same reference.
     Enum(EnumRef<'db>),
     /// A reference to an immutable string object.
     String,
@@ -59,8 +61,8 @@ pub(crate) enum NativeTy<'db> {
     /// length, whose header says that it is one.
     Bytes,
     /// A reference to an instance of a class at these type arguments.
-    /// Instantiations whose arguments are the same under [`type_argument`]
-    /// are laid out alike and share a type id.
+    /// Every instantiation is laid out alike and has the class's one
+    /// class object.
     Class(ClassRef<'db>, Vec<TypeArg<'db>>),
     /// A reference to a tuple of these element types: an object with one
     /// slot per element, as a class instance has for its fields.
@@ -79,8 +81,7 @@ pub(crate) enum NativeTy<'db> {
     /// Never the type of a source value: only of the local itself.
     Cell(Box<NativeTy<'db>>),
     /// One of these types, none of them a union and at most one `null`: a
-    /// pair whose tag says which. An enum variant is a reference to a box
-    /// of its enum.
+    /// pair whose tag says which.
     Union(Vec<NativeTy<'db>>),
     /// Any value at all: a pair.
     Unknown,
@@ -93,9 +94,9 @@ pub(crate) enum NativeTy<'db> {
 }
 
 impl NativeTy<'_> {
-    /// Whether a value is a reference or `null`, and never an `int`, a
-    /// `float`, a `bool` or an enum variant held as its position. Code
-    /// that only moves such a value is the same for every such type.
+    /// Whether a value is a reference or `null` that code compiled once
+    /// for every such type can hold: never an `int`, a `float` or a
+    /// `bool`, and not an enum variant, which has a copy of its own.
     pub(crate) fn is_ref(&self) -> bool {
         match self {
             Self::String
@@ -133,9 +134,10 @@ impl NativeTy<'_> {
     }
 
     /// Whether the collector must know where a value is held: a pair,
-    /// whose tag says whether its payload is a reference, or a reference.
+    /// whose tag says whether its payload is a reference, or a reference,
+    /// which an enum variant is.
     pub(crate) fn is_traced(&self) -> bool {
-        self.is_pair() || self.is_ref()
+        self.is_pair() || self.is_ref() || matches!(self, Self::Enum(_))
     }
 }
 
@@ -1083,12 +1085,11 @@ pub(crate) fn is_omitted(operand: &Operand<'_>) -> bool {
 
 /// Whether a parameter of type `ty` can be passed as left to its default:
 /// there is a word no value of the type is. A pair has a tag no value has,
-/// an enum a position no variant is at, a `bool` a byte that is neither,
-/// and a reference an address no object is at. Every word is an `int` or a
-/// `float`.
+/// a `bool` a byte that is neither, and a reference an address no object
+/// is at. Every word is an `int` or a `float`.
 pub(crate) fn has_omitted_form(ty: &NativeTy<'_>) -> bool {
     match ty {
-        NativeTy::Enum(_) | NativeTy::Bool => true,
+        NativeTy::Bool => true,
         NativeTy::Cell(_) => false,
         other => other.is_traced(),
     }

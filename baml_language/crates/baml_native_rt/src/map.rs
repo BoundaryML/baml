@@ -32,11 +32,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::{
     heap::{Mutator, Value, load, store},
     layout::{
-        BOX_VALUE, ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_KEY, ENTRY_SIZE, ENTRY_VALUE, HASH_SET,
+        ENTRIES_CAPACITY, ENTRIES_RECORDS, ENTRY_KEY, ENTRY_SIZE, ENTRY_VALUE, HASH_SET,
         INDEX_SLOT_COUNT, INDEX_SLOTS, MAP_ENTRIES, MAP_EPOCH, MAP_INDEX, MAP_KEY_TY, MAP_LEN,
         MAP_MASK, MAP_SIZE, MAP_USED, MAP_VALUE_TY, SMALL_ENTRIES, STRING_HASH_MASK,
-        STRING_LENGTHS, STRING_TAGS_END, TAG_FLOAT, TAG_MAP, TAG_MAP_ENTRIES, TAG_MAP_INDEX,
-        TAG_STRING, TYPE_ID_MASK, VALUE_PAYLOAD, WORD, entries_size,
+        STRING_LENGTHS, STRING_TAGS_END, TAG_ENUM_VARIANT, TAG_FLOAT, TAG_MAP, TAG_MAP_ENTRIES,
+        TAG_MAP_INDEX, TAG_STRING, TYPE_ID_MASK, VALUE_PAYLOAD, VARIANT_INDEX, WORD, entries_size,
     },
     string,
 };
@@ -85,8 +85,12 @@ pub enum KeyKind {
     Str,
     /// The bits of a `float`: every NaN is one key, and so are both zeros.
     Float,
-    /// The bits of an `int`, a `bool` or an enum variant.
+    /// The bits of an `int` or a `bool`.
     Word,
+    /// The address of an enum's variant: two keys are one when they are
+    /// the same address, and a key is hashed by the variant's position,
+    /// which stays what it is when the variant's object moves.
+    Variant,
 }
 
 impl KeyKind {
@@ -94,6 +98,7 @@ impl KeyKind {
     fn of_value(key: Value) -> Self {
         match key.id() {
             TAG_FLOAT => Self::Float,
+            TAG_ENUM_VARIANT => Self::Variant,
             string if string < STRING_TAGS_END && key.is_pointer() => Self::Str,
             _ => Self::Word,
         }
@@ -120,11 +125,14 @@ impl KeyKind {
     ///
     /// # Safety
     ///
-    /// A `Str` key is a live string object.
+    /// A `Str` key is a live string object, and a `Variant` key a live
+    /// variant object.
     pub unsafe fn hash(self, key: usize) -> u32 {
         match self {
             // SAFETY: the caller's contract.
             Self::Str => unsafe { str_hash(key) | HASH_SET },
+            // SAFETY: the caller's contract.
+            Self::Variant => int_hash(unsafe { load(key + VARIANT_INDEX) } as u64),
             _ => int_hash(key as u64),
         }
     }
@@ -584,9 +592,10 @@ unsafe fn grow(mutator: &mut Mutator, map: *const usize) {
 unsafe fn insert_new(mutator: &mut Mutator, map: usize, key: Value, hash: u32, value: Value) {
     let mut held = [map, key.payload, value.payload];
     let key_is_string = KeyKind::of_value(key) == KeyKind::Str;
-    let roots = 1 + usize::from(key_is_string) + usize::from(value.is_pointer());
+    // A key that is an object is a string or an enum's variant.
+    let roots = 1 + usize::from(key.is_pointer()) + usize::from(value.is_pointer());
     mutator.root(&mut held[0]);
-    if key_is_string {
+    if key.is_pointer() {
         mutator.root(&mut held[1]);
     }
     if value.is_pointer() {
@@ -831,8 +840,9 @@ pub unsafe extern "C" fn baml_rt_map_find(map: usize, key_tag: usize, key_payloa
 
 /// Whether two maps have the same keys with equal values, in whatever
 /// order. Two values are equal when both are strings of the same text,
-/// both are floats that compare equal, both are the same variant of one
-/// enum, or they have the same tag and the same payload.
+/// both are floats that compare equal, or they have the same tag and the
+/// same payload: two variants of an enum are equal when they are the same
+/// object.
 ///
 /// # Safety
 ///
@@ -863,8 +873,7 @@ pub unsafe extern "C" fn baml_rt_map_eq(left: usize, right: usize) -> u8 {
 /// Each is a value as a slot holds one.
 unsafe fn value_eq(value: Value, other: Value) -> bool {
     let is_string = |value: Value| value.is_pointer() && value.id() < STRING_TAGS_END;
-    // SAFETY: the caller's contract: a pointer is to a live object, and an
-    // enum's box is a header and the variant's position.
+    // SAFETY: the caller's contract: a pointer is to a live object.
     unsafe {
         if is_string(value) && is_string(other) {
             return string::baml_rt_string_eq(value.payload, other.payload) != 0;
@@ -875,15 +884,7 @@ unsafe fn value_eq(value: Value, other: Value) -> bool {
         if value.id() == TAG_FLOAT {
             return f64::from_bits(value.payload as u64) == f64::from_bits(other.payload as u64);
         }
-        // Two boxes of one variant are equal wherever each was made. The
-        // caller passes no worker, and the type table is the program's
-        // whichever worker says where it is.
-        let worker = crate::sched::WORKER.load(Ordering::Acquire);
         value.payload == other.payload
-            || (value.is_pointer()
-                && !worker.is_null()
-                && crate::describe::Types::of_table((*worker).types()).is_enum(value.id())
-                && load(value.payload + BOX_VALUE) == load(other.payload + BOX_VALUE))
     }
 }
 

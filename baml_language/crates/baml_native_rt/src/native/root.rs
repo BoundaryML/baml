@@ -1,11 +1,11 @@
 //! The free functions of `baml`.
 
 use super::{
-    Arr, ArrRef, Elem, Float, Int, NativeBaml, Natives, Root, Scope, Slot, Thrown, TypeId, json,
+    Arr, ArrRef, Elem, Float, Int, NativeBaml, Natives, Root, Scope, Slot, Thrown, TypeRef, json,
 };
 use crate::{
-    heap::Value,
-    layout::{TAG_BIGINT, TAG_FLOAT, TAG_INT, TAG_STRING},
+    heap::{Value, load},
+    layout::{TAG_BIGINT, TAG_FLOAT, TAG_INT, TAG_STRING, TYPE_TAG},
 };
 
 impl NativeBaml for Natives {
@@ -13,7 +13,7 @@ impl NativeBaml for Natives {
     /// fields, with declared names, each field by its own `from_json`.
     async fn _from_json_structural_default<'s>(
         scope: &mut Scope<'s>,
-        types: [TypeId; 1],
+        types: [TypeRef; 1],
         j: Elem<'s>,
     ) -> Result<Value, Thrown<'s>> {
         json::decode::to(scope, types[0], j, false, true).await
@@ -23,7 +23,7 @@ impl NativeBaml for Natives {
     /// declared names and every field.
     async fn _to_json_default<'s>(
         scope: &mut Scope<'s>,
-        types: [TypeId; 1],
+        types: [TypeRef; 1],
         value: Elem<'s>,
     ) -> Result<Value, Thrown<'s>> {
         json::to_json_value(scope, types[0], value, false, false).await
@@ -32,9 +32,9 @@ impl NativeBaml for Natives {
     /// The `eq` of a class that writes none: its fields, compared.
     async fn _equals_structural_default<'s>(
         scope: &mut Scope<'s>,
-        a_type: TypeId,
+        a_type: TypeRef,
         a: Elem<'s>,
-        b_type: TypeId,
+        b_type: TypeRef,
         b: Elem<'s>,
     ) -> Result<bool, Thrown<'s>> {
         super::structural::equals(scope, (a, a_type), (b, b_type)).await
@@ -53,21 +53,21 @@ impl NativeBaml for Natives {
 
     /// Whether `_rust_sort` sorts arrays of the element type: an `int`, a
     /// `float`, a `string` or a `bigint`.
-    fn _is_primitive_array(types: [TypeId; 1], _arr: ArrRef<'_, Slot>) -> bool {
-        matches!(
-            types[0].0 as usize,
-            TAG_INT | TAG_FLOAT | TAG_STRING | TAG_BIGINT
-        )
+    fn _is_primitive_array(types: [TypeRef; 1], _arr: ArrRef<'_, Slot>) -> bool {
+        // SAFETY: a call names the element type by its type object.
+        let tag = unsafe { load(types[0].0 + TYPE_TAG) };
+        matches!(tag, TAG_INT | TAG_FLOAT | TAG_STRING | TAG_BIGINT)
     }
 
     /// Sort `arr` in place by the order of its elements, and return it. The
     /// sort is stable. The call names the type of the elements, where any
     /// other names the type of its argument.
-    fn _rust_sort(types: [TypeId; 1], arr: Value) -> Value {
+    fn _rust_sort(types: [TypeRef; 1], arr: Value) -> Value {
         let array = arr.payload;
         // SAFETY: the compiler passes an array.
         let mut elements = unsafe { crate::array::values(array) };
-        match types[0].0 as usize {
+        // SAFETY: a call names the element type by its type object.
+        match unsafe { load(types[0].0 + TYPE_TAG) } {
             TAG_INT => elements.sort_by_key(|element| element.payload.cast_signed()),
             TAG_FLOAT => elements.sort_by(|a, b| {
                 float_order(
@@ -91,7 +91,7 @@ impl NativeBaml for Natives {
                     *element = sorted;
                 }
             }
-            other => unreachable!("_rust_sort is compiled for no element type with id {other}"),
+            other => unreachable!("_rust_sort is compiled for no element type with tag {other}"),
         }
         // SAFETY: the array has the elements just read.
         unsafe { crate::array::put(array, 0, &elements) };

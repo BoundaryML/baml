@@ -6,8 +6,9 @@
 //! other direction: `baml_native_entry`, which runs the program's entry
 //! function and hands its result to one of the `baml_rt_print_*` functions,
 //! and the two tables the collector reads: `baml_native_stack_maps`, where
-//! compiled frames keep their references, and `baml_native_types`, what
-//! each type of object holds. A throw reads two more, `baml_native_unwind`
+//! compiled frames keep their references, and `baml_native_types`, the
+//! class objects the runtime knows by name and the descriptions of the
+//! program's types. A throw reads two more, `baml_native_unwind`
 //! and `baml_native_functions`: see [`unwind`]. A spawned task starts in
 //! `baml_native_task_shim`: see [`sched`].
 //!
@@ -63,7 +64,8 @@ unsafe extern "C" {
     fn baml_native_task_shim(mutator: *mut std::ffi::c_void);
     /// Defined by the compiled program: the first word of its stack maps.
     static baml_native_stack_maps: usize;
-    /// Defined by the compiled program: the first word of its type table.
+    /// Defined by the compiled program: the first word of its table of
+    /// types.
     static baml_native_types: usize;
     /// Defined by the compiled program: its table of calls with a handler.
     static baml_native_unwind: usize;
@@ -195,12 +197,11 @@ pub unsafe extern "C" fn baml_rt_print_string(value: usize) {
 ///
 /// # Safety
 ///
-/// Called from compiled code with its mutator, the type of the enum's boxes
-/// and a variant of that enum.
-#[cfg(not(test))]
+/// Called from compiled code with a live variant object.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn baml_rt_print_enum(mutator: &Mutator, enum_type: usize, index: usize) {
-    print_line(mutator.variant_name(enum_type, index));
+pub unsafe extern "C" fn baml_rt_print_enum(variant: usize) {
+    // SAFETY: the caller's contract.
+    print_line(unsafe { class::variant_name(variant) });
 }
 
 /// Float remainder with the sign of the dividend, the `%` of `float`.
@@ -212,14 +213,20 @@ pub extern "C" fn baml_rt_float_rem(left: f64, right: f64) -> f64 {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::{
+        json_layout::JSON_BODY,
+        layout::{PROGRAM_DESCRIPTIONS, WORD},
+    };
 
     /// A stack map table of a program with no compiled code: no call holds
     /// a reference, and no call holds none.
     pub(crate) static NO_STACK_MAPS: [usize; 2] = [0; 2];
 
-    /// The type table of a program with no class and no enum.
-    pub(crate) static NO_TYPES: [u32; crate::layout::FIRST_CLASS_TYPE / 4] =
-        [0; crate::layout::FIRST_CLASS_TYPE / 4];
+    /// The table of types of a program with no class and no enum: no
+    /// class object, and a section of descriptions that is only its
+    /// header.
+    pub(crate) static NO_TYPES: [usize; (PROGRAM_DESCRIPTIONS + JSON_BODY) / WORD] =
+        [0; (PROGRAM_DESCRIPTIONS + JSON_BODY) / WORD];
 
     /// Run the ignored test at `path` in a process of its own, which it
     /// does not survive, and return what it wrote to stderr.
