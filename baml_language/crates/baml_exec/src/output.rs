@@ -57,7 +57,6 @@ pub async fn write_output_with_context(
         OutputFormat::Json | OutputFormat::JsonEnvelope => {
             let mut text = serialize_via_baml_json(engine, value, helper_context).await?;
             if format == OutputFormat::JsonEnvelope {
-                let value: serde_json::Value = serde_json::from_str(&text)?;
                 let usage = usage.map(|entries| {
                     entries
                         .iter()
@@ -75,8 +74,10 @@ pub async fn write_output_with_context(
                         })
                         .collect::<Vec<_>>()
                 });
-                text =
-                    serde_json::to_string(&serde_json::json!({ "value": value, "usage": usage }))?;
+                // BAML already produced JSON. Embed it directly to preserve
+                // values deeper than serde_json's parser can read.
+                let usage = serde_json::to_string(&usage)?;
+                text = format!(r#"{{"value":{text},"usage":{usage}}}"#);
             }
             before_print();
             println!("{text}");

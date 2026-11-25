@@ -139,6 +139,37 @@ fn run_logs_stay_off_a_structured_stdout() {
     );
 }
 
+#[test]
+fn json_envelope_preserves_deeply_nested_results() {
+    let dir = project(
+        r#"
+function main() -> unknown {
+    let value: unknown = 7;
+    let depth = 0;
+    while (depth < 140) {
+        value = [value];
+        depth = depth + 1;
+    }
+    value
+}
+"#,
+    );
+    let plain = baml(dir.path(), &["run", "main", "--output-format", "json"]);
+    assert!(plain.status.success(), "{plain:?}");
+    let nested = format!("{}7{}", "[".repeat(140), "]".repeat(140));
+    assert_eq!(String::from_utf8_lossy(&plain.stdout).trim(), nested);
+
+    let envelope = baml(
+        dir.path(),
+        &["run", "main", "--output-format", "json-envelope"],
+    );
+    assert!(envelope.status.success(), "{envelope:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&envelope.stdout),
+        format!("{{\"value\":{nested},\"usage\":[]}}\n")
+    );
+}
+
 /// A help path that names no command is a usage error.
 #[test]
 fn help_for_an_unknown_command_is_a_usage_error() {
