@@ -920,10 +920,19 @@ fn call_fits<'db>(
 ) -> Result<(), Blocker> {
     // A callee outside the subset is reported as its own blocked function;
     // only a callee that will be compiled constrains the call.
-    if let (Ok(expected), Ok(declared)) = (
-        function_signature_at(db, key, frame),
-        declared_layout(db, key),
-    ) {
+    if let (Ok(_), Ok(declared)) = (function_signature(db, key), declared_layout(db, key)) {
+        // The callee is compiled, whatever it is called with: it is this
+        // call that names a type no value of which native code holds.
+        let expected = function_signature_at(db, key, frame).map_err(|blocker| {
+            Blocker::new(
+                "call with type arguments",
+                format!(
+                    "{}: {}",
+                    function_display_name(db, DeclRef::Source(key.loc)),
+                    blocker.construct
+                ),
+            )
+        })?;
         let fits = match call_slots(site, args.len(), &declared) {
             Some(slots) => {
                 arguments_fit(db, body, args, &expected.params, &slots)?

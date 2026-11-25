@@ -444,3 +444,60 @@ function gen_types_made_running() -> string {
   };
   out
 }
+
+// The standard library's own code with type parameters, called from code
+// that has them too: array methods that take a function, an iterator's
+// adapters, and `baml.json`, which is passed the type it reads.
+function gen_kept<T>(xs: T[], keep: (T) -> bool throws never) -> T[] {
+  let w = 0;
+  for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+  xs.filter((x) -> { keep(x) })
+}
+function gen_pairs_of<T>(xs: T[]) -> GenPair<T, int>[] {
+  let w = 0;
+  for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+  let n = 0;
+  xs.map((x) -> { n += 1; GenPair<T, int> { first: x, second: n } })
+}
+function gen_last_of<T>(xs: T[], other: T) -> T {
+  let w = 0;
+  for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+  xs.reduce((kept, x) -> { x }, other)
+}
+function gen_array_methods() -> string {
+  let ints = gen_kept<int>([1, gen_count(8), 3, 12], (x) -> { x > 2 });
+  let texts = gen_kept<string>([gen_text(1), "c", gen_text(2)], (s) -> { s.length() > 1 });
+  let pairs = gen_pairs_of<float>([0.5, 1.5]);
+  let named = gen_pairs_of<string>(["a", gen_text(1)]);
+  let last = gen_last_of<int>([4, gen_count(6)], 0);
+  let none = gen_last_of<string>([], "none");
+  `${ints.length()} ${ints[0]} ${ints[2]} ${texts[1]} ${pairs[1].first + 1.0} ${pairs[1].second} ${named[1].first}${named[0].second} ${last} ${none}`
+}
+function gen_total<T>(xs: T[], weigh: (T) -> int throws never) -> int {
+  let w = 0;
+  for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+  let total = 0;
+  for (let n in xs.iter().map((x) -> { weigh(x) })) { total += n; };
+  total
+}
+function gen_iterators() -> string {
+  let a = gen_total<int>([1, gen_count(4), 9], (x) -> { x * 2 });
+  let b = gen_total<string>([gen_text(2), "x"], (s) -> { s.length() });
+  let c = gen_total<GenPoint>([GenPoint { x: 1, y: 2 }, GenPoint { x: 3, y: 4 }], (p) -> { p.x * p.y });
+  `${a} ${b} ${c}`
+}
+function gen_read<T>(text: string) -> T {
+  let w = 0;
+  for (let i = 0; i < 2; i += 1) { w += gen_count(i); w += gen_churn(1) % 5; w -= i; if w > 1000 { w = 0; } };
+  baml.json.decode<T>(text)
+}
+function gen_json() -> string {
+  let n = gen_read<int>(gen_text(0) + "41");
+  let s = gen_read<string>("\"text\"");
+  let p = gen_read<GenPoint>("{\"x\": 3, \"y\": 4}");
+  let xs = gen_read<int[]>("[1, 2, 3]");
+  let bad = `${gen_read<int>("\"no\"")}` catch (e) {
+    baml.json.DecodeError => "refused",
+  };
+  `${n + 1} ${s} ${p.x * p.y} ${xs.length()} ${bad}`
+}
