@@ -120,7 +120,7 @@ function net_udp_closed() -> string {
 // Connecting to a listener whose queue is full waits until the limit
 // passes.
 function net_tcp_connect_times_out() -> string {
-  let stream = baml.net.TcpStream.connect("127.0.0.1:{full}", timeout = baml.time.Duration.from_milliseconds(150)) catch (e) {
+  let stream = baml.net.TcpStream.connect("{full}", timeout = baml.time.Duration.from_milliseconds(150)) catch (e) {
     baml.errors.Io => { return `io: ${e.message}`; },
     baml.errors.Timeout => { return `timeout: ${e.message} ${e.duration?.to_milliseconds() ?? 0n} ${e.timeout_type}`; },
   };

@@ -940,14 +940,23 @@ fn closed_port() -> u16 {
     listener.local_addr().expect("a bound address").port()
 }
 
-/// A loopback port where connecting neither succeeds nor is refused: a
-/// listener that accepts nothing, whose queue of connections this fills.
-/// The system drops what asks to connect after that, so a connect waits
-/// until its limit passes. The listener and the connections that fill its
-/// queue stay open until the test process ends.
-fn full_port() -> u16 {
-    static PORT: std::sync::OnceLock<u16> = std::sync::OnceLock::new();
-    *PORT.get_or_init(|| {
+/// A loopback address where connecting neither succeeds nor is refused, so
+/// a connect waits until its limit passes. Where the system drops what is
+/// sent to a loopback address it has not been given (macOS), that is one.
+/// Elsewhere it is a listener that accepts nothing and whose queue of
+/// connections this fills; the listener and those connections stay open
+/// until the test process ends.
+fn stalled_address() -> std::net::SocketAddr {
+    static ADDRESS: std::sync::OnceLock<std::net::SocketAddr> = std::sync::OnceLock::new();
+    *ADDRESS.get_or_init(|| {
+        let limit = std::time::Duration::from_millis(300);
+        let timed_out = |address: &std::net::SocketAddr| {
+            std::net::TcpStream::connect_timeout(address, limit).map_err(|error| error.kind())
+        };
+        let unassigned = "127.0.0.2:9".parse().expect("an address");
+        if matches!(timed_out(&unassigned), Err(std::io::ErrorKind::TimedOut)) {
+            return unassigned;
+        }
         let socket = tokio::net::TcpSocket::new_v4().expect("a socket");
         socket
             .bind("127.0.0.1:0".parse().expect("an address"))
@@ -956,12 +965,9 @@ fn full_port() -> u16 {
         let address = listener.local_addr().expect("a bound address");
         std::mem::forget(listener);
         for _ in 0..64 {
-            let limit = std::time::Duration::from_millis(300);
-            match std::net::TcpStream::connect_timeout(&address, limit) {
+            match timed_out(&address) {
                 Ok(queued) => std::mem::forget(queued),
-                Err(error) if error.kind() == std::io::ErrorKind::TimedOut => {
-                    return address.port();
-                }
+                Err(std::io::ErrorKind::TimedOut) => return address,
                 Err(error) => panic!("cannot fill the queue of `{address}`: {error}"),
             }
         }
@@ -999,7 +1005,7 @@ async fn http_requests_end_as_the_interpreter_does() {
     let source = include_str!("conformance/http.baml.in")
         .replace("{open}", &format!("http://127.0.0.1:{}", serve_http()))
         .replace("{closed}", &format!("http://127.0.0.1:{}", closed_port()))
-        .replace("{full}", &format!("http://127.0.0.1:{}", full_port()));
+        .replace("{full}", &format!("http://{}", stalled_address()));
     cases_agree("http.baml.in", &source);
 }
 
@@ -1035,7 +1041,7 @@ async fn sockets_end_as_the_interpreter_does() {
     let source = include_str!("conformance/net.baml.in")
         .replace("{tcp}", &closed_port().to_string())
         .replace("{closed}", &closed_port().to_string())
-        .replace("{full}", &full_port().to_string())
+        .replace("{full}", &stalled_address().to_string())
         .replace("{udp_a}", &free_udp_port().to_string())
         .replace("{udp_b}", &free_udp_port().to_string());
     cases_agree("net.baml.in", &source);
