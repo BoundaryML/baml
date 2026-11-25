@@ -12,10 +12,11 @@ use baml_type::CallLayout;
 use crate::{
     Blocker,
     check::{
-        Dispatched, OPT, check_function, declared_layout, function_signature, identified_arguments,
+        Dispatched, OPT, Operator, check_function, declared_layout, function_signature,
+        identified_arguments,
     },
     dispatch::{self, Slot, Target},
-    types::{NativeTy, Signature, TypeArg, assignable, type_argument},
+    types::{NativeTy, held_as},
 };
 
 /// How a compiled function is entered.
@@ -31,7 +32,8 @@ pub(crate) enum Entry {
 }
 
 /// One compiled function: a declared function or a lambda inside one,
-/// entered one way.
+/// entered one way. A function with type parameters is compiled once,
+/// whatever types it is called with.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct FnKey<'db> {
     pub(crate) loc: FunctionLoc<'db>,
@@ -39,9 +41,6 @@ pub(crate) struct FnKey<'db> {
     /// from `loc`; empty for `loc` itself.
     pub(crate) lambdas: Vec<usize>,
     pub(crate) entry: Entry,
-    /// The type arguments of the function's frame this copy is compiled
-    /// for; a lambda has its parent's.
-    pub(crate) arguments: Vec<TypeArg<'db>>,
 }
 
 impl<'db> FnKey<'db> {
@@ -50,13 +49,7 @@ impl<'db> FnKey<'db> {
             loc,
             lambdas: Vec::new(),
             entry,
-            arguments: Vec::new(),
         }
-    }
-
-    pub(crate) fn with_arguments(mut self, arguments: Vec<TypeArg<'db>>) -> Self {
-        self.arguments = arguments;
-        self
     }
 
     /// Lambda `index` of this function. A lambda is only ever entered
@@ -68,7 +61,6 @@ impl<'db> FnKey<'db> {
             loc: self.loc,
             lambdas,
             entry: Entry::Value,
-            arguments: self.arguments.clone(),
         }
     }
 
@@ -103,14 +95,14 @@ pub(crate) struct ProgramFunction<'db> {
     /// What the cells a lambda captures hold, in capture order.
     pub(crate) captures: Vec<NativeTy<'db>>,
     pub(crate) blockers: Vec<Blocker>,
-    dispatched: Vec<Dispatched<'db>>,
+    dispatched: Vec<Dispatched>,
     constructed: Vec<NativeTy<'db>>,
     /// Whether it has the runtime compare two values.
     compares: bool,
 }
 
 /// One interface method that some call dispatches when it runs.
-pub(crate) struct SlotInfo<'db> {
+pub(crate) struct SlotInfo {
     pub(crate) slot: Slot,
     /// Its column in every row. Methods no one type has both of share a
     /// column.
@@ -118,10 +110,10 @@ pub(crate) struct SlotInfo<'db> {
     /// The value slots every dispatching call pushes, the receiver's
     /// first: the layout of the interface's method. What a row holds is
     /// entered with these, whatever more its implementation declares.
+    /// Each is a tag and a payload whatever the implementation holds it
+    /// as, and so is the result: a call passes each argument as what it
+    /// is and reads the result as what it keeps.
     pub(crate) layout: CallLayout,
-    /// The parameters after the receiver that a dispatching call passes,
-    /// and the result, of every implementation.
-    pub(crate) signature: Signature<'db>,
     /// Whether some type leaves the method to the language's own
     /// `to_string`, for which its row holds no code.
     pub(crate) falls_back: bool,
@@ -135,36 +127,34 @@ pub(crate) enum Code<'db> {
     /// An `async` native of the runtime, entered through its stub, which
     /// is called as a function of the program is.
     Native(&'static crate::natives::Native),
+    /// An operator the standard library declares in Rust for the first
+    /// of these types, with a right operand of the second: a function
+    /// made of the operator's own instructions.
+    Operator(Operator, NativeTy<'db>, NativeTy<'db>),
 }
 
-/// The signature the stub of `native` is entered with by a dispatching
-/// call, without its receiver, when a row can hold it: the call passes the
-/// stub what a call of the native would, but for the description of a
+/// How many values the stub of `native` is entered with by a dispatching
+/// call, its receiver among them, when a row can hold it: the call passes
+/// the stub what a call of the native would, but for the description of a
 /// static type, which a dispatching call has none of.
-fn dispatched_native<'db>(
-    db: &'db dyn baml_compiler2_mir::Db,
-    native: &'static crate::natives::Native,
-) -> Option<Signature<'db>> {
+fn dispatched_native(native: &'static crate::natives::Native) -> Option<usize> {
     use crate::natives::Ty;
     let (signature, flags) = native.callable().ok()?;
     let fits = flags.is_async
         && native.type_args == 0
+        && !signature.params.is_empty()
         && !signature
             .params
             .iter()
             .any(|ty| matches!(ty, Ty::Typed | Ty::Null));
-    let (_, params) = signature.params.split_first()?;
-    fits.then(|| Signature {
-        params: params.iter().map(|ty| ty.native(db, &[])).collect(),
-        result: signature.result.native(db, &[]),
-    })
+    fits.then_some(signature.params.len())
 }
 
 /// Reachable functions in breadth-first order; the entry is first.
 pub(crate) struct Program<'db> {
     pub(crate) functions: Vec<ProgramFunction<'db>>,
     pub(crate) index: HashMap<FnKey<'db>, usize>,
-    pub(crate) slots: Vec<SlotInfo<'db>>,
+    pub(crate) slots: Vec<SlotInfo>,
     /// The rows: for a type, the function behind each slot (by position in
     /// `slots`) it implements in source. A class is here once, without
     /// type arguments: its instantiations share its class object's row.
@@ -188,25 +178,22 @@ pub(crate) struct Program<'db> {
     pub(crate) equals_unlisted: Vec<String>,
 }
 
-/// One interface method some call dispatches when it runs, at one set of
-/// the method's own type arguments.
-struct DispatchedMethod<'db> {
+/// One interface method some call dispatches when it runs.
+struct DispatchedMethod {
     slot: Slot,
     interface: baml_compiler2_mir::TyTemplateInterface,
     method: String,
-    type_arguments: Vec<TypeArg<'db>>,
     /// The layout of the first call met, which every other has too.
     layout: CallLayout,
 }
 
 /// A type as the program's list of types has it: instantiations of a
-/// class that one copy of generic code serves are one.
+/// class at different reference types are one.
 fn row_type<'db>(ty: &NativeTy<'db>) -> NativeTy<'db> {
     match ty {
-        NativeTy::Class(class, arguments) => NativeTy::Class(
-            *class,
-            arguments.iter().cloned().map(type_argument).collect(),
-        ),
+        NativeTy::Class(class, arguments) => {
+            NativeTy::Class(*class, arguments.iter().cloned().map(held_as).collect())
+        }
         other => other.clone(),
     }
 }
@@ -242,7 +229,7 @@ pub(crate) fn collect<'db>(
     // Each dispatched method, and what it runs on each type an interface
     // value can hold. An implementation is itself a function to compile,
     // which can make more types and dispatch more methods.
-    let mut calls: Vec<DispatchedMethod<'db>> = Vec::new();
+    let mut calls: Vec<DispatchedMethod> = Vec::new();
     let mut resolved: Vec<(usize, NativeTy<'db>, Option<Target<'db>>)> = Vec::new();
     let mut unsupported = Vec::new();
     // The classes whose own `to_json` and `from_json` have been looked for.
@@ -272,33 +259,33 @@ pub(crate) fn collect<'db>(
                         slot: call.slot.clone(),
                         interface: call.interface.clone(),
                         method: call.method.clone(),
-                        type_arguments: call.type_arguments.clone(),
                         layout: call.layout.clone(),
                     }),
                 }
             }
         }
+        // An operator has a row for each type the standard library
+        // declares it for in Rust, whether or not the program is seen to
+        // make a value of the type.
+        let operands = [NativeTy::Bigint, NativeTy::Bytes];
         for (index, call) in calls.iter().enumerate() {
-            for ty in &types {
+            for ty in types.iter().chain(&operands) {
                 if resolved
                     .iter()
                     .any(|(slot, known, _)| *slot == index && known == ty)
                 {
                     continue;
                 }
-                let target = dispatch::resolve(
-                    db,
-                    ty,
-                    &call.interface,
-                    &call.method,
-                    &[],
-                    &call.type_arguments,
-                )
-                .unwrap_or_else(|blocker| {
-                    unsupported.push(blocker);
-                    None
-                });
-                if let Some(Target::Function(key)) = &target {
+                let target = match Operator::of(db, &call.interface, &call.method, ty) {
+                    Some(operator) => Some(Target::Operator(operator)),
+                    None if operands.contains(ty) => None,
+                    None => dispatch::resolve(db, ty, &call.interface, &call.method, &[], &[])
+                        .unwrap_or_else(|blocker| {
+                            unsupported.push(blocker);
+                            None
+                        }),
+                };
+                if let Some(Target::Function(key, _)) = &target {
                     queue.push_back(Needed {
                         key: key.clone(),
                         captures: Vec::new(),
@@ -429,12 +416,12 @@ fn check_hooks<'db>(db: &'db dyn baml_compiler2_mir::Db, program: &Program<'db>)
     blockers
 }
 
-/// Give each dispatched method its signature and its column, each type its
-/// row, and check every dispatching call against the signature.
+/// Give each dispatched method its column and each type its row, and check
+/// every dispatching call against the method's layout.
 fn lay_out_methods<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     program: &mut Program<'db>,
-    calls: &[DispatchedMethod<'db>],
+    calls: &[DispatchedMethod],
     resolved: &[(usize, NativeTy<'db>, Option<Target<'db>>)],
 ) -> Vec<Blocker> {
     let mut blockers = Vec::new();
@@ -443,20 +430,31 @@ fn lay_out_methods<'db>(
         index,
         DispatchedMethod {
             slot,
+            interface,
             method,
             layout,
-            ..
         },
     ) in calls.iter().enumerate()
     {
         let unsupported =
             |detail: &str| Blocker::new("interface method call", format!("{method}: {detail}"));
-        let mut signature = None;
         let mut falls_back = false;
         let mut with_code = Vec::new();
         for (_, ty, target) in resolved.iter().filter(|(slot, ..)| *slot == index) {
             let code = match target {
-                Some(Target::Function(key)) => Code::Function(key.clone()),
+                Some(Target::Function(key, _)) => Code::Function(key.clone()),
+                Some(Target::Operator(operator)) => {
+                    // The right operand is of the type the interface
+                    // names, and of the receiver's own where it names
+                    // none or a type parameter.
+                    let other = interface
+                        .generics
+                        .first()
+                        .and_then(|named| crate::types::template_ty(db, named, &[]))
+                        .filter(|named| *named != NativeTy::Unknown)
+                        .unwrap_or_else(|| ty.clone());
+                    Code::Operator(*operator, ty.clone(), other)
+                }
                 Some(Target::ToString) => {
                     falls_back = true;
                     continue;
@@ -469,7 +467,9 @@ fn lay_out_methods<'db>(
                 Some(Target::Native(native)) => Code::Native(native),
                 None => continue,
             };
-            let found = match &code {
+            // What a row holds is entered with the values the call pushes
+            // and nothing else.
+            let enters = match &code {
                 Code::Function(key) => {
                     if identified_arguments(db, key).contains(&true) {
                         blockers.push(unsupported("a default body that tests its type argument"));
@@ -485,34 +485,20 @@ fn lay_out_methods<'db>(
                         blockers.push(unsupported("without a receiver"));
                         continue;
                     }
-                    // What a dispatching call passes the implementation,
-                    // which may declare more: parameters with defaults the
-                    // interface does not have.
-                    let Ok(slots) = layout.map_to(&declared) else {
-                        blockers.push(unsupported("implementations with different layouts"));
-                        continue;
-                    };
-                    let passed = |pushed: usize| {
-                        slots
-                            .iter()
-                            .position(|slot| *slot == Some(pushed))
-                            .map(|parameter| found.params[parameter].clone())
-                    };
-                    let Some(params) = (1..layout.len()).map(passed).collect() else {
-                        blockers.push(unsupported("implementations with different layouts"));
-                        continue;
-                    };
-                    Signature {
-                        params,
-                        result: found.result,
-                    }
+                    // The implementation may declare more than the call
+                    // pushes: parameters with defaults the interface does
+                    // not have.
+                    layout.map_to(&declared).is_ok()
+                }
+                Code::Operator(operator, receiver, other) => {
+                    let operands = [receiver.clone(), other.clone()];
+                    *layout == CallLayout::positional(operator.operands())
+                        && operator.result(&operands[..operator.operands()]).is_ok()
                 }
                 // Only the stub of an `async` native is called as the
                 // table's functions are.
-                Code::Native(native) => match dispatched_native(db, native)
-                    .filter(|found| *layout == CallLayout::positional(found.params.len() + 1))
-                {
-                    Some(found) => found,
+                Code::Native(native) => match dispatched_native(native) {
+                    Some(values) => *layout == CallLayout::positional(values),
                     None => {
                         blockers.push(unsupported(
                             "implemented in Rust for a type only known when it runs",
@@ -521,13 +507,9 @@ fn lay_out_methods<'db>(
                     }
                 },
             };
-            match &signature {
-                None => signature = Some(found),
-                Some(known) if !same_registers(known, &found) => {
-                    blockers.push(unsupported("implementations with different layouts"));
-                    continue;
-                }
-                Some(_) => {}
+            if !enters {
+                blockers.push(unsupported("implementations with different layouts"));
+                continue;
             }
             let row = row_of(ty);
             match program.rows.iter_mut().find(|(known, _)| *known == row) {
@@ -548,11 +530,13 @@ fn lay_out_methods<'db>(
                 with_code.push(row);
             }
         }
-        let to_string = Slot::to_string_signature();
-        if falls_back && signature.as_ref().is_some_and(|known| *known != to_string) {
+        // The language's own `to_string` takes the receiver alone.
+        if falls_back && layout.len() != 1 {
             blockers.push(unsupported("implementations with different layouts"));
         }
-        // Methods share a column when no type has code for both.
+        // Methods share a column when no type has code for both. One some
+        // type leaves to the language shares with none: nothing in its
+        // column is what says so of a type.
         let column = (0..=program.slots.len())
             .find(|column| {
                 !program
@@ -560,7 +544,10 @@ fn lay_out_methods<'db>(
                     .iter()
                     .zip(&implementors)
                     .any(|(other, theirs)| {
-                        other.column == *column && theirs.iter().any(|ty| with_code.contains(ty))
+                        other.column == *column
+                            && (falls_back
+                                || other.falls_back
+                                || theirs.iter().any(|ty| with_code.contains(ty)))
                     })
             })
             .unwrap_or(0);
@@ -569,7 +556,6 @@ fn lay_out_methods<'db>(
             slot: slot.clone(),
             column,
             layout: layout.clone(),
-            signature: signature.unwrap_or(to_string),
             falls_back,
         });
     }
@@ -584,17 +570,7 @@ fn lay_out_methods<'db>(
             let Some(slot) = program.slots.iter().find(|slot| slot.slot == call.slot) else {
                 continue;
             };
-            let fits =
-                slot.signature.params.len() == call.arguments.len()
-                    && slot.signature.params.iter().zip(&call.arguments).all(
-                        |(expected, found)| {
-                            found
-                                .as_ref()
-                                .is_none_or(|found| assignable(expected, found))
-                        },
-                    )
-                    && assignable(&call.result, &slot.signature.result);
-            if !fits {
+            if slot.layout.len() != call.layout.len() {
                 function.blockers.push(Blocker::new(
                     "call that does not match its callee's layout",
                     call.method.clone(),
@@ -603,24 +579,6 @@ fn lay_out_methods<'db>(
         }
     }
     blockers
-}
-
-/// Whether a call written for one signature can enter code compiled for
-/// the other through a row: each argument and the result is the
-/// same type, or a reference either way, which the type checker has let
-/// through.
-fn same_registers(left: &Signature<'_>, right: &Signature<'_>) -> bool {
-    let alike = |left: &NativeTy<'_>, right: &NativeTy<'_>| {
-        let reference = |ty: &NativeTy<'_>| ty.is_ref() && !matches!(ty, NativeTy::Cell(_));
-        left == right || (reference(left) && reference(right))
-    };
-    left.params.len() == right.params.len()
-        && left
-            .params
-            .iter()
-            .zip(&right.params)
-            .all(|(left, right)| alike(left, right))
-        && alike(&left.result, &right.result)
 }
 
 /// Check and record every function waiting in `queue`, and those they need.
@@ -646,15 +604,7 @@ fn visit<'db>(
             Ok(mir) => {
                 let checked = check_function(db, &key, mir, &captures);
                 queue.extend(checked.needed);
-                let mut name = mir.identity.display_name(db);
-                if !key.arguments.is_empty() {
-                    let arguments: Vec<&str> = key
-                        .arguments
-                        .iter()
-                        .map(|argument| argument.as_ref().map_or("_", crate::types::describe))
-                        .collect();
-                    name = format!("{name}<{}>", arguments.join(", "));
-                }
+                let name = mir.identity.display_name(db);
                 ProgramFunction {
                     name: match key.entry {
                         Entry::Direct => name,

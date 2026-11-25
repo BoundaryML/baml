@@ -56,8 +56,8 @@ use crate::{
     CompileError, CompileOptions,
     check::{
         Callee, Intrinsic, Operator, ScalarOp, TypeTestPlan, Virtual, body_of, call_slots,
-        call_target, declared_layout, identified_arguments, is_intrinsic_call, narrow_bound,
-        signature, type_test_plan, virtual_target,
+        call_target, declared_layout, function_signature_at, identified_arguments,
+        is_intrinsic_call, narrow_bound, signature, type_test_plan, virtual_target,
     },
     dispatch::{Slot, Target},
     flow::{Flow, ProvenIndexes},
@@ -78,6 +78,7 @@ mod json;
 mod layouts;
 mod map;
 mod native_call;
+mod operators;
 mod spawn;
 mod string_slice;
 mod unwind;
@@ -550,6 +551,9 @@ struct Backend<'db> {
     /// The thunks calls through function values go through; see
     /// [`layouts`].
     remaps: layouts::Remaps,
+    /// The functions rows hold for the operators the standard library
+    /// declares in Rust; see [`operators`].
+    operators: Vec<operators::OperatorCode<'db>>,
     /// The closure standing for each function used as a value without
     /// capturing anything.
     function_values: HashMap<FuncId, DataId>,
@@ -622,6 +626,7 @@ impl Backend<'_> {
             well_known: None,
             layouts: Vec::new(),
             remaps: layouts::Remaps::default(),
+            operators: Vec::new(),
             function_values: HashMap::new(),
             strings: HashMap::new(),
             bigints: HashMap::new(),
@@ -648,8 +653,8 @@ impl Backend<'_> {
     /// is compiled with `checks`, such an entry takes one word more after
     /// the closure: the number of the layout its caller's arguments are
     /// in, which it compares with its own. Then come
-    /// `type_args` type objects, a word each, one per type parameter of a
-    /// function that must be told its type arguments; then `values` values,
+    /// `type_args` type objects, a word each, one per type parameter the
+    /// function must be told the type of; then `values` values,
     /// each two words, its tag and its payload, whatever its type. The
     /// result is two words the same way. So every function of as many
     /// parameters is entered alike, by a call that names it, through a
@@ -978,9 +983,9 @@ struct Declared<'db> {
     signature: Signature<'db>,
     /// The value slots its parameters read.
     layout: CallLayout,
-    /// How many type objects the function takes before its parameters: one
-    /// per type parameter, or none.
-    type_args: usize,
+    /// The type parameters the function takes a type object for, before
+    /// its parameters and in this order: those it needs when it runs.
+    type_args: Vec<usize>,
     /// Whether the function checks the stack limit on entry.
     checks_stack: bool,
 }
@@ -1081,12 +1086,12 @@ pub(crate) fn generate<'db>(
             .mir
             .ok_or_else(|| internal(format!("`{}` has no MIR", function.name)))?;
         let body = body_of(mir).map_err(internal)?;
-        let signature = signature(db, mir, body, &function.key.arguments).map_err(internal)?;
-        let type_args = if identified_arguments(db, &function.key).contains(&true) {
-            function.key.arguments.len()
-        } else {
-            0
-        };
+        let signature = signature(db, mir, body, &[]).map_err(internal)?;
+        let type_args: Vec<usize> = identified_arguments(db, &function.key)
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, needed)| needed.then_some(slot))
+            .collect();
         let id = backend
             .module
             .declare_function(
@@ -1095,7 +1100,7 @@ pub(crate) fn generate<'db>(
                 &Backend::clif_signature(
                     signature.params.len(),
                     function.key.entry,
-                    type_args,
+                    type_args.len(),
                     backend.checks,
                 ),
             )
@@ -1135,6 +1140,9 @@ pub(crate) fn generate<'db>(
             match code {
                 crate::program::Code::Native(native) => {
                     backend.dispatched_stub(db, native)?;
+                }
+                crate::program::Code::Operator(operator, receiver, other) => {
+                    backend.operator_code(*operator, receiver, other)?;
                 }
                 crate::program::Code::Function(key) => {
                     let implementation = declared
@@ -1189,7 +1197,7 @@ pub(crate) fn generate<'db>(
         context.func.signature = Backend::clif_signature(
             this.signature.params.len(),
             this.entry,
-            this.type_args,
+            this.type_args.len(),
             backend.checks,
         );
         Translator::new(
@@ -1251,6 +1259,15 @@ pub(crate) fn generate<'db>(
         &Named::Traced(spawn::TASK_SHIM),
         &mut clif,
         &mut disassembly,
+    )?;
+    operators::define_all(
+        db,
+        &mut backend,
+        program,
+        &declared,
+        &mut context,
+        &mut builder_context,
+        (&mut clif, &mut disassembly),
     )?;
     hooks::define_all(
         &mut backend,
@@ -1445,9 +1462,9 @@ struct Translator<'a, 'db> {
     builder: FunctionBuilder<'a>,
     /// The closure this function was entered through, when it was.
     closure: Variable,
-    /// The type object of each type argument, when the function is passed
-    /// them.
-    type_args: Vec<Variable>,
+    /// The type object of each type parameter the function is passed
+    /// one for, by the parameter's position.
+    type_args: HashMap<usize, Variable>,
     /// The variable of each local that carries a value; `None` for a `null`
     /// local and for a local of a type outside the subset, which a checked
     /// body never reads or writes.
@@ -1560,7 +1577,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             body,
             builder,
             closure,
-            type_args: Vec::new(),
+            type_args: HashMap::new(),
             variables,
             tagged,
             omitted_cells: HashMap::new(),
@@ -1595,14 +1612,14 @@ impl<'a, 'db> Translator<'a, 'db> {
                 self.check_layout(said)?;
             }
         }
-        for _ in 0..self.declared(self.key)?.type_args {
+        for slot in &self.declared(self.key)?.type_args {
             // A type object can be one of the heap, which a collection
             // moves.
             let type_arg = self.builder.declare_var(WORD);
             self.builder.declare_var_needs_stack_map(type_arg);
             let passed = arriving.next().expect("a type object per type parameter");
             self.builder.def_var(type_arg, passed);
-            self.type_args.push(type_arg);
+            self.type_args.insert(*slot, type_arg);
         }
         // A captured parameter waits in a variable of its own until its
         // cell can be allocated.
@@ -1744,7 +1761,7 @@ impl<'a, 'db> Translator<'a, 'db> {
                             }) => {
                                 self.body.enter(block);
                                 match call_target(self.db, self.body, callee, args, *ntypeargs) {
-                                    Ok(Callee::Function(key)) => self
+                                    Ok(Callee::Function(key, _)) => self
                                         .declared
                                         .get(&key)
                                         .is_some_and(|callee| callee.checks_stack),
@@ -1995,7 +2012,7 @@ impl<'a, 'db> Translator<'a, 'db> {
     ) -> Result<ir::Value, CompileError> {
         let passed = self
             .type_args
-            .get(slot)
+            .get(&slot)
             .ok_or_else(|| internal("a tested type argument has its type object"))?;
         let passed = self.builder.use_var(*passed);
         let flags = MemFlags::trusted();
@@ -2752,7 +2769,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             } => {
                 let map_ty = self.place_ty(base)?;
                 let map = self.read_object(base)?;
-                let key = self.read_local(*index);
+                let key = self.map_key(&map_ty, *index)?;
                 self.map_index(map, &map_ty, key)
             }
             Place::Index { base, index, .. } => {
@@ -2963,7 +2980,7 @@ impl<'a, 'db> Translator<'a, 'db> {
             } => {
                 let map_ty = self.place_ty(base)?;
                 let map = self.read_object(base)?;
-                let key = self.read_local(*index);
+                let key = self.map_key(&map_ty, *index)?;
                 self.map_store(map, &map_ty, key, value)?;
             }
             Place::Index { base, index, .. } => {
@@ -3029,19 +3046,33 @@ impl<'a, 'db> Translator<'a, 'db> {
                 let bigint = self.backend.bigint_constant(value)?;
                 Ok(self.data_address(bigint))
             }
-            Operand::Constant(Constant::Function(DeclRef::Source(function))) => {
-                let code = self.declared(&FnKey::new(*function, Entry::Value))?;
-                let header = self
-                    .backend
-                    .callable_header(layout::TAG_CLOSURE, &code.layout)?;
-                let closure = self.backend.function_value(code.id, header)?;
-                let closure = self.data_address(closure);
-                // The header of the closure in the executable's data.
-                let tag = self.word_const(header);
-                Ok(self.pair(tag, closure))
-            }
+            Operand::Constant(
+                Constant::Function(DeclRef::Source(function))
+                | Constant::GenericFunction {
+                    func: DeclRef::Source(function),
+                    ..
+                },
+            ) => self.function_value(*function),
             Operand::Constant(_) => Err(internal("a checked operand is a supported constant")),
         }
+    }
+
+    /// The value the function `function` is: the closure in the
+    /// executable's data that captures nothing and is entered where the
+    /// function entered through a value is.
+    fn function_value(
+        &mut self,
+        function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    ) -> Result<ir::Value, CompileError> {
+        let code = self.declared(&FnKey::new(function, Entry::Value))?;
+        let header = self
+            .backend
+            .callable_header(layout::TAG_CLOSURE, &code.layout)?;
+        let closure = self.backend.function_value(code.id, header)?;
+        let closure = self.data_address(closure);
+        // The header of the closure in the executable's data.
+        let tag = self.word_const(header);
+        Ok(self.pair(tag, closure))
     }
 
     /// `operand` in the representation of `expected`.
@@ -3251,6 +3282,10 @@ impl<'a, 'db> Translator<'a, 'db> {
                     .collect::<Result<Vec<_>, CompileError>>()?;
                 self.closure(&self.key.lambda(*lambda_idx), &cells)?
             }
+            Rvalue::MakeGenericFunction {
+                func: DeclRef::Source(function),
+                ..
+            } => self.function_value(*function)?,
             Rvalue::MakeBoundMethod {
                 func: DeclRef::Source(function),
                 receiver,
@@ -4595,8 +4630,8 @@ impl<'a, 'db> Translator<'a, 'db> {
                             of_slot_words(&mut self.builder, &signature.result, tag, payload);
                         (result, signature.result)
                     }
-                    Callee::Function(key) => self.call_function(
-                        &key,
+                    Callee::Function(key, frame) => self.call_function(
+                        (&key, &frame),
                         argument_layout.as_ref(),
                         &args[..*ntypeargs],
                         &args[*ntypeargs..],
@@ -4655,13 +4690,16 @@ impl<'a, 'db> Translator<'a, 'db> {
                         self.call_runtime(Runtime::ArraySort, &[array, kind])?;
                         (array, ty)
                     }
-                    Virtual::Static(Target::Function(key)) => {
-                        self.call_function(&key, argument_layout.as_ref(), &[], args)?
+                    Virtual::Static(Target::Function(key, frame)) => {
+                        self.call_function((&key, &frame), argument_layout.as_ref(), &[], args)?
+                    }
+                    Virtual::Static(Target::Operator(_)) => {
+                        return Err(internal("a checked operator is on its own type"));
                     }
                     Virtual::Static(Target::Native(native)) => {
                         self.native_call_out_of_line(native, args, 0)?
                     }
-                    Virtual::Dynamic(slot, ..) => self.dispatch(&slot, args)?,
+                    Virtual::Dynamic(slot, ..) => self.dispatch(&slot, args, &expected)?,
                 };
                 let result = self.track(result, &produced);
                 let result = self.coerce(result, &produced, &expected);
@@ -4727,14 +4765,17 @@ impl<'a, 'db> Translator<'a, 'db> {
         Ok(())
     }
 
-    /// Call one copy of a function with these type and value arguments,
-    /// from a call checked against the layout `site`. The function is
-    /// known, so the call's slots are laid over its own here: it is
-    /// passed each of its parameters, those the call does not have as
-    /// left to their defaults.
+    /// Call a function with these type and value arguments, from a call
+    /// checked against the layout `site`. The function is known, so the
+    /// call's slots are laid over its own here: it is passed each of its
+    /// parameters, those the call does not have as left to their
+    /// defaults. The call reads the function's signature at the types
+    /// `frame` it names for the type parameters: every value crosses as a
+    /// tag and a payload, so what the call holds as an `int` the function
+    /// holds as any value, with nothing in between.
     fn call_function(
         &mut self,
-        key: &FnKey<'db>,
+        (key, frame): (&FnKey<'db>, &[TypeArg<'db>]),
         site: Option<&CallLayout>,
         types: &[Operand<'db>],
         args: &[Operand<'db>],
@@ -4742,17 +4783,19 @@ impl<'a, 'db> Translator<'a, 'db> {
         let callee = self.declared(key)?;
         let slots = call_slots(site, args.len(), &callee.layout)
             .ok_or_else(|| internal("a checked call can be laid over its callee"))?;
+        let signature = function_signature_at(self.db, key, frame).map_err(internal)?;
         let mut arguments = Vec::new();
-        if callee.type_args != 0 {
-            for argument in types {
-                arguments.push(self.type_argument(argument)?);
-            }
+        for slot in &callee.type_args {
+            let argument = types
+                .get(*slot)
+                .ok_or_else(|| internal("a checked call names each type its callee needs"))?;
+            arguments.push(self.type_argument(argument)?);
         }
         arguments.extend(self.argument_words(
             slots.iter().map(|slot| slot.map(|at| &args[at])),
-            &callee.signature.params,
+            &signature.params,
         )?);
-        let produced = callee.signature.result.clone();
+        let produced = signature.result;
         let callee = self.function_ref(callee.id);
         // The callee can collect, which moves storage.
         self.forget_arrays();
@@ -4765,11 +4808,14 @@ impl<'a, 'db> Translator<'a, 'db> {
     /// instance's class object holds its row, and an enum's variant's
     /// enum's, where the other holds its own; a value of any other type
     /// has what its tag has in the method's table of tags. The method's
-    /// column says where in the row.
+    /// column says where in the row. Each argument is passed as what it
+    /// is, and the result read as a value of type `kept`, the type of
+    /// where it goes: an implementation holds either as its own types say.
     fn dispatch(
         &mut self,
         slot: &Slot,
         args: &[Operand<'db>],
+        kept: &NativeTy<'db>,
     ) -> Result<(ir::Value, NativeTy<'db>), CompileError> {
         let program = self.program;
         let slot = program
@@ -4781,7 +4827,17 @@ impl<'a, 'db> Translator<'a, 'db> {
         // row is, and the implementation reads it as its own first
         // parameter.
         let receiver = self.operand_as(&args[0], &NativeTy::Unknown)?;
-        let rest = self.argument_words(args[1..].iter().map(Some), &slot.signature.params)?;
+        let passed = args[1..]
+            .iter()
+            .map(|argument| {
+                if crate::types::is_omitted(argument) {
+                    Ok(NativeTy::Null)
+                } else {
+                    self.operand_ty(argument)
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let rest = self.argument_words(args[1..].iter().map(Some), &passed)?;
         let (tag, payload) = self.builder.ins().isplit(receiver);
         let mut arguments = vec![tag, payload];
         arguments.extend(rest);
@@ -4825,7 +4881,7 @@ impl<'a, 'db> Translator<'a, 'db> {
         // The callee can collect, which moves storage.
         self.forget_arrays();
         let called = unwind::Called::Indirect(signature, code);
-        let produced = slot.signature.result.clone();
+        let produced = kept.clone();
         if !slot.falls_back {
             let (tag, payload) = self.baml_call(&called, &arguments)?;
             let result = of_slot_words(&mut self.builder, &produced, tag, payload);

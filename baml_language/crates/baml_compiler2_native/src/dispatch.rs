@@ -29,15 +29,20 @@ use baml_type::{
 use crate::{
     Blocker,
     program::{Entry, FnKey},
-    types::{NativeTy, Signature, TypeArg, native_ty, template_ty, type_argument},
+    types::{NativeTy, TypeArg, held_as, native_ty, template_ty},
 };
 
 /// What runs for an interface method on a receiver of one type.
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) enum Target<'db> {
     /// A function written in source: what the type's implementation
-    /// provides, or the interface's default body.
-    Function(FnKey<'db>),
+    /// provides, or the interface's default body. With it, the types its
+    /// type parameters stand for on this receiver, which is how a call
+    /// that names the receiver's type reads the function's signature.
+    Function(FnKey<'db>, Vec<TypeArg<'db>>),
+    /// An operator of `baml.ops` the standard library declares in Rust
+    /// for the receiver's type: the instructions of the operator itself.
+    Operator(crate::check::Operator),
     /// A method the runtime implements in Rust, called where the
     /// receiver's type is known.
     Native(&'static crate::natives::Native),
@@ -56,30 +61,13 @@ pub(crate) struct Slot {
     /// The interface with its arguments, spelled out.
     pub(crate) interface: String,
     pub(crate) method: String,
-    /// The method's own type arguments, spelled out: each set of them is
-    /// another copy of every implementation.
-    pub(crate) arguments: String,
 }
 
 impl Slot {
-    pub(crate) fn new(
-        interface: &TyTemplateInterface,
-        method: &str,
-        arguments: &[TypeArg<'_>],
-    ) -> Self {
+    pub(crate) fn new(interface: &TyTemplateInterface, method: &str) -> Self {
         Self {
             interface: format!("{interface:?}"),
             method: method.to_owned(),
-            arguments: format!("{arguments:?}"),
-        }
-    }
-
-    /// The parameters after the receiver and the result every
-    /// implementation of the language's `to_string` has.
-    pub(crate) fn to_string_signature<'db>() -> Signature<'db> {
-        Signature {
-            params: Vec::new(),
-            result: NativeTy::String,
         }
     }
 }
@@ -142,29 +130,11 @@ pub(crate) fn associated<'db>(
     native(db, interface, bound)
 }
 
-/// `interface` as a copy of a function compiled for `arguments` names it:
-/// with the frame's types in place of its type parameters. One held as any
-/// reference is `unknown`, which is how [`resolve`] compares it. `None`
-/// when the frame has no such type.
-pub(crate) fn in_frame<'db>(
-    db: &'db dyn baml_compiler2_mir::Db,
-    interface: &TyTemplateInterface,
-    arguments: &[TypeArg<'db>],
-) -> Option<TyTemplateInterface> {
-    let mut known = true;
-    let mut filled = |slot: u32| match arguments.get(slot as usize) {
-        Some(Some(NativeTy::Int)) => TyTemplate::Int,
-        Some(Some(NativeTy::Float)) => TyTemplate::Float,
-        Some(Some(NativeTy::Bool)) => TyTemplate::Bool,
-        Some(Some(NativeTy::Enum(enum_ref))) => TyTemplate::Enum(layout::enum_head(db, *enum_ref)),
-        Some(Some(ty)) if ty.is_ref() => TyTemplate::Unknown,
-        // No value of the argument is held: `never`.
-        Some(None) => TyTemplate::Never,
-        _ => {
-            known = false;
-            TyTemplate::TypeArgRef(slot)
-        }
-    };
+/// `interface` as the one copy of a function names it: each type
+/// parameter of the function's frame is any type, `unknown`, which
+/// [`resolve`] takes every binding for.
+pub(crate) fn in_frame(interface: &TyTemplateInterface) -> TyTemplateInterface {
+    let mut filled = |_: u32| TyTemplate::Unknown;
     let mut interface = interface.clone();
     for generic in &mut interface.generics {
         generic.replace_type_arg_refs(&mut filled);
@@ -172,7 +142,7 @@ pub(crate) fn in_frame<'db>(
     for (_, bound) in &mut interface.associated_types {
         bound.replace_type_arg_refs(&mut filled);
     }
-    known.then_some(interface)
+    interface
 }
 
 /// The checker's view of an interface whose arguments are whole types.
@@ -211,11 +181,52 @@ pub(crate) fn implements(
     }
 }
 
+/// The body `interface` gives its method `name`, when it gives one.
+fn default_body<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    interface: &TyTemplateInterface,
+    name: &Name,
+) -> Option<baml_compiler2_hir::loc::FunctionLoc<'db>> {
+    let DeclRef::Source(declaring) = layout::interface_ref_of(db, &interface.name)? else {
+        return None;
+    };
+    interface_data(db, declaring)
+        .methods
+        .iter()
+        .copied()
+        .find(|&declared| {
+            function_data(db, declared).name == *name && function_has_body(db, declared)
+        })
+}
+
+/// The types the type parameters of an interface's default body stand for
+/// on a receiver of type `receiver`: `Self`, the interface's arguments and
+/// then the method's own. A class is `Self` whole: what it binds the
+/// interface's associated types to is part of the body's types.
+fn default_frame<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    receiver: &NativeTy<'db>,
+    interface: &TyTemplateInterface,
+    arguments: &[TypeArg<'db>],
+    method_arguments: &[TypeArg<'db>],
+) -> Vec<TypeArg<'db>> {
+    std::iter::once(Some(receiver.clone()))
+        .chain(
+            interface
+                .generics
+                .iter()
+                .map(|generic| template_ty(db, generic, arguments)),
+        )
+        .chain(method_arguments.iter().cloned())
+        .collect()
+}
+
 /// What `interface`'s `method` runs on a receiver of type `receiver`:
 /// `None` when the type does not implement the interface, a blocker when it
 /// does in a way native code is not generated for. `arguments` are those of
 /// the frame the interface is written in, and `method_arguments` the
-/// method's own, which end the frame of the function that runs.
+/// method's own, which end the frame the function that runs is typed with
+/// where the call names its receiver's type.
 pub(crate) fn resolve<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     receiver: &NativeTy<'db>,
@@ -257,17 +268,32 @@ pub(crate) fn resolve<'db>(
         {
             Ok(Some(Target::ToString))
         }
+        // The language's own implementation of any other interface is the
+        // interface's default body, where it has one.
         Some(ResolvedImplementation::StructuralDefault(_)) => {
-            Err(unsupported("the language's own implementation"))
+            match default_body(db, interface, &name) {
+                Some(function) => Ok(Some(Target::Function(
+                    FnKey::new(function, Entry::Direct),
+                    default_frame(db, receiver, interface, arguments, method_arguments),
+                ))),
+                None => Err(unsupported("the language's own implementation")),
+            }
         }
         Some(ResolvedImplementation::Explicit(resolved)) => {
             let subject = Ty::from_plain(&concrete);
             let view = resolved.implemented_view(db, &subject);
-            let held = |ty: &Ty| type_argument(native(db, &interface.name, ty));
+            // An associated type named or bound as `unknown` is one a
+            // type parameter stands for, of the code that calls or of the
+            // code that made the receiver: it is whatever the other is.
+            let held = |ty: &Ty| held_as(native(db, &interface.name, ty));
+            let any = Some(NativeTy::Unknown);
             let differs = goal.associated_types.iter().any(|(member, wanted)| {
-                view.associated_types
-                    .iter()
-                    .any(|(bound, found)| bound == member && held(found) != held(wanted))
+                let wanted = held(wanted);
+                wanted != any
+                    && view.associated_types.iter().any(|(bound, found)| {
+                        let found = held(found);
+                        bound == member && found != any && found != wanted
+                    })
             });
             if differs {
                 return Ok(None);
@@ -293,49 +319,23 @@ pub(crate) fn resolve<'db>(
                             let bound = resolved.bindings.get(parameter).ok_or_else(|| {
                                 unsupported("an implementation with a type parameter left open")
                             })?;
-                            Ok(type_argument(native(db, &interface.name, bound)))
+                            Ok(native(db, &interface.name, bound))
                         })
                         .chain(method_arguments.iter().cloned().map(Ok))
                         .collect::<Result<_, Blocker>>()?;
                     Ok(Some(Target::Function(
-                        FnKey::new(function, Entry::Direct).with_arguments(frame),
+                        FnKey::new(function, Entry::Direct),
+                        frame,
                     )))
                 }
                 Some(DeclRef::External(_)) => Err(unsupported("an implementation without source")),
-                // The interface's default body, whose frame is `Self`, the
-                // interface's arguments and then the method's own. A class
-                // is `Self` whole: what it binds the interface's associated
-                // types to is part of the body's types.
+                // The interface's default body.
                 None => {
-                    let Some(DeclRef::Source(declaring)) =
-                        layout::interface_ref_of(db, &interface.name)
-                    else {
-                        return Err(unsupported("a default body without source"));
-                    };
-                    let function = interface_data(db, declaring)
-                        .methods
-                        .iter()
-                        .copied()
-                        .find(|&declared| {
-                            function_data(db, declared).name == name
-                                && function_has_body(db, declared)
-                        })
-                        .ok_or_else(|| unsupported("no body"))?;
-                    let own = match receiver {
-                        NativeTy::Class(..) => Some(receiver.clone()),
-                        other => type_argument(Some(other.clone())),
-                    };
-                    let frame = std::iter::once(own)
-                        .chain(
-                            interface
-                                .generics
-                                .iter()
-                                .map(|generic| type_argument(template_ty(db, generic, arguments))),
-                        )
-                        .chain(method_arguments.iter().cloned())
-                        .collect();
+                    let function =
+                        default_body(db, interface, &name).ok_or_else(|| unsupported("no body"))?;
                     Ok(Some(Target::Function(
-                        FnKey::new(function, Entry::Direct).with_arguments(frame),
+                        FnKey::new(function, Entry::Direct),
+                        default_frame(db, receiver, interface, arguments, method_arguments),
                     )))
                 }
             }

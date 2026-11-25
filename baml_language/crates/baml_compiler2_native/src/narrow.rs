@@ -43,9 +43,8 @@ pub(crate) enum TestKind<'db> {
     Exactly(NativeTy<'db>),
     /// Any array, whatever its elements.
     AnyArray,
-    /// A value of the type this copy of the function was given for type
-    /// parameter `.0`: one compiled for every reference type, so only the
-    /// type object it is passed says which.
+    /// A value of the type the function was called with for its type
+    /// parameter `.0`, which only the type object it is passed says.
     Argument(usize),
     /// A value that passes any of these tests: a union's members.
     AnyOf(Vec<TestKind<'db>>),
@@ -92,9 +91,8 @@ impl<'db> TestKind<'db> {
             .iter()
             .map(|argument| template_ty(db, argument, arguments))
             .collect();
-        // Instantiations at different reference types are one to the code
-        // compiled for them, and nothing an instance holds tells them
-        // apart.
+        // Nothing an instance holds tells instantiations at different
+        // reference types apart.
         if arguments
             .iter()
             .any(|argument| !matches!(argument, Some(argument) if !argument.is_ref()))
@@ -127,12 +125,11 @@ impl<'db> TestKind<'db> {
                 return Some(Self::Is(Value::Bool(*value)));
             }
             TyTemplate::List(_) => return Some(Self::AnyArray),
-            TyTemplate::TypeArgRef(slot) => match arguments.get(*slot as usize)?.clone()? {
-                NativeTy::Unknown => return Some(Self::Argument(*slot as usize)),
-                scalar @ (NativeTy::Int | NativeTy::Float | NativeTy::Bool | NativeTy::Enum(_)) => {
-                    scalar
-                }
-                _ => return None,
+            // The function's own: only the type object it is passed says
+            // what it is.
+            TyTemplate::TypeArgRef(slot) => match arguments.get(*slot as usize) {
+                None => return Some(Self::Argument(*slot as usize)),
+                Some(_) => return None,
             },
             TyTemplate::Enum(head) => NativeTy::Enum(enum_ref_of(db, head)?),
             TyTemplate::Class(head, args) => {

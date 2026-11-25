@@ -51,7 +51,7 @@ impl<'db> Translator<'_, 'db> {
             .type_value(loaded)
             .ok_or_else(|| internal("a checked type argument is a type loaded once"))?;
         if let baml_compiler2_mir::TyTemplate::TypeArgRef(slot) = template
-            && let Some(passed) = self.type_args.get(*slot as usize)
+            && let Some(passed) = self.type_args.get(&(*slot as usize))
         {
             return Ok(self.builder.use_var(*passed));
         }
@@ -60,7 +60,8 @@ impl<'db> Translator<'_, 'db> {
                 .type_object_spelled(self.db, &template.substitute_symbolic(&[]))?
                 .0
         } else {
-            // A copy of a function made for one type: that type.
+            // A type that names a type parameter this function is not
+            // passed the type of: each parameter is any type.
             match crate::types::template_ty(self.db, template, self.body.arguments) {
                 Some(ty) => self.backend.type_object_of(self.db, &ty)?.0,
                 None => self.backend.type_object_of_nothing()?,

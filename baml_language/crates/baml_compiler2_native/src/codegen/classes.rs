@@ -314,7 +314,7 @@ impl<'db> Backend<'db> {
                         let callee = declared
                             .get(key)
                             .ok_or_else(|| internal("an implementation is part of the program"))?;
-                        if callee.entry != Entry::Direct || callee.type_args != 0 {
+                        if callee.entry != Entry::Direct || !callee.type_args.is_empty() {
                             return Err(internal(
                                 "an implementation is entered with its values alone",
                             ));
@@ -322,6 +322,9 @@ impl<'db> Backend<'db> {
                         self.row_code(callee.id, &callee.layout, &program.slots[*slot].layout)?
                     }
                     Code::Native(native) => self.dispatched_stub(db, native)?,
+                    Code::Operator(operator, receiver, other) => {
+                        self.operator_code(*operator, receiver, other)?
+                    }
                 };
                 let column = program.slots[*slot].column;
                 match (fixed_tag(ty), class_like(ty)) {

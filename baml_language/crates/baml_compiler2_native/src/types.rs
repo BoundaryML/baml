@@ -22,7 +22,7 @@ use baml_type::Literal;
 
 use crate::{
     Blocker,
-    check::{Callee, call_target, function_signature},
+    check::{Callee, call_target, function_signature, function_signature_at},
     flow::terminator_destination,
     loops::ArrayLoops,
     program::{Entry, FnKey},
@@ -94,9 +94,8 @@ pub(crate) enum NativeTy<'db> {
 }
 
 impl NativeTy<'_> {
-    /// Whether a value is a reference or `null` that code compiled once
-    /// for every such type can hold: never an `int`, a `float` or a
-    /// `bool`, and not an enum variant, which has a copy of its own.
+    /// Whether a value is a reference or `null`: never an `int`, a
+    /// `float` or a `bool`, and not an enum variant.
     pub(crate) fn is_ref(&self) -> bool {
         match self {
             Self::String
@@ -141,21 +140,19 @@ impl NativeTy<'_> {
     }
 }
 
-/// A type argument as compiled code is keyed by it: `None` for a type with
-/// no native representation, which a function may still be given as long
-/// as it holds no value of it (the type of what it throws, say).
+/// A type argument as a call or a class instantiation names it: `None`
+/// for a type with no native representation, which a function may still
+/// be given as long as it holds no value of it (the type of what it
+/// throws, say).
 pub(crate) type TypeArg<'db> = Option<NativeTy<'db>>;
 
-/// A type as a type argument: every reference type is `unknown`, since code
-/// that only moves a reference is the same for all of them. An `int`,
-/// `float`, `bool`, enum or optional scalar stays itself.
-pub(crate) fn type_argument(ty: Option<NativeTy<'_>>) -> TypeArg<'_> {
+/// A type argument as far as two instantiations hold their values alike
+/// where a slot's own type says how: every reference type is `unknown`. An
+/// `int`, `float`, `bool`, enum or optional scalar stays itself.
+pub(crate) fn held_as(ty: Option<NativeTy<'_>>) -> TypeArg<'_> {
     ty.map(|ty| if ty.is_ref() { NativeTy::Unknown } else { ty })
 }
 
-/// `RuntimeTy` and `TyTemplate` are one family of types with the same
-/// variant names; the native type of either is found the same way, apart
-/// from how each names a type parameter.
 /// Whether the native runtime hashes and compares keys of this type
 /// itself: every other key type has a `hash` and an `equals` to call.
 pub(crate) fn is_map_key(ty: &NativeTy<'_>) -> bool {
@@ -165,6 +162,14 @@ pub(crate) fn is_map_key(ty: &NativeTy<'_>) -> bool {
     )
 }
 
+/// `RuntimeTy` and `TyTemplate` are one family of types with the same
+/// variant names; the native type of either is found the same way, apart
+/// from how each names a type parameter.
+///
+/// `arguments` are the types a call or an instantiation gives the type
+/// parameters. A function's own body is typed with none: a value whose
+/// type is a type parameter is then any value, a pair, as the one copy of
+/// the function holds it whatever it is called with.
 macro_rules! native_type_of {
     ($name:ident, $family:ident, $parameter:pat => $slot:expr) => {
         pub(crate) fn $name<'db>(
@@ -194,16 +199,24 @@ macro_rules! native_type_of {
                 $family::String | $family::Literal(Literal::String(_), _) => NativeTy::String,
                 $family::Bigint | $family::Literal(Literal::Bigint(_), _) => NativeTy::Bigint,
                 $family::Uint8Array => NativeTy::Bytes,
-                $parameter => arguments.get($slot)?.clone()?,
-                // What the type `Self` is, where the function is compiled
-                // for one, binds the associated type to.
+                $parameter => match arguments.get($slot) {
+                    Some(argument) => argument.clone()?,
+                    None => NativeTy::Unknown,
+                },
+                // What the type `Self` is binds the associated type to.
+                // Over a type parameter it is whatever the implementor
+                // found when the program runs binds it to: any value.
                 $family::AssociatedTypeProjection {
                     base,
                     interface,
                     member,
                 } if interface.generics.is_empty() && interface.associated_types.is_empty() => {
                     let base = $name(db, base, arguments)?;
-                    crate::dispatch::associated(db, &base, &interface.name, member)?
+                    match crate::dispatch::associated(db, &base, &interface.name, member) {
+                        Some(bound) => bound,
+                        None if base == NativeTy::Unknown => NativeTy::Unknown,
+                        None => return None,
+                    }
                 }
                 // `self` in an interface's default body is declared with
                 // the interface's own name: any implementor.
@@ -222,24 +235,38 @@ macro_rules! native_type_of {
                 {
                     let element = match class_arguments.first() {
                         Some(element) => $name(db, element, arguments)?,
-                        None => arguments.first()?.clone()?,
+                        None => match arguments.first() {
+                            Some(element) => element.clone()?,
+                            None => NativeTy::Unknown,
+                        },
                     };
                     NativeTy::Array(Box::new(element))
                 }
                 $family::Class(head, class_arguments) => {
                     let class = class_ref_of(db, head)?;
-                    // Every type parameter has its argument, or there is no
-                    // layout.
-                    if class_generic_params(db, class).len() != class_arguments.len() {
-                        return None;
-                    }
-                    NativeTy::Class(
-                        class,
+                    let parameters = class_generic_params(db, class).len();
+                    let given = if class_arguments.is_empty() {
+                        // `self` in a method of a class with type
+                        // parameters is declared with the class's name:
+                        // its type arguments are the first of the
+                        // method's frame.
+                        (0..parameters)
+                            .map(|slot| match arguments.get(slot) {
+                                Some(argument) => argument.clone(),
+                                None => Some(NativeTy::Unknown),
+                            })
+                            .collect()
+                    } else if parameters == class_arguments.len() {
                         class_arguments
                             .iter()
                             .map(|argument| $name(db, argument, arguments))
-                            .collect(),
-                    )
+                            .collect()
+                    } else {
+                        // Every type parameter has its argument, or there
+                        // is no layout.
+                        return None;
+                    };
+                    NativeTy::Class(class, given)
                 }
                 $family::Tuple(elements) => NativeTy::Tuple(
                     elements
@@ -251,9 +278,20 @@ macro_rules! native_type_of {
                     NativeTy::Array(Box::new($name(db, element, arguments)?))
                 }
                 $family::Map { key, value, .. } => {
+                    let of_parameter = {
+                        #[allow(
+                            unused_variables,
+                            reason = "the pattern of a type parameter names its slot"
+                        )]
+                        let of_parameter = matches!(&**key, $parameter);
+                        of_parameter
+                    };
                     let key = $name(db, key, arguments)?;
                     let value = $name(db, value, arguments)?;
-                    if !is_map_key(&key) {
+                    // A key whose type is a type parameter is one of the
+                    // key types when the program runs, and the runtime
+                    // goes by its tag.
+                    if !is_map_key(&key) && !(of_parameter && key == NativeTy::Unknown) {
                         return None;
                     }
                     NativeTy::Map(Box::new(key), Box::new(value))
@@ -324,6 +362,9 @@ fn names_type_parameter(ty: &RuntimeTy) -> bool {
         RuntimeTy::TypeVar(_) => true,
         RuntimeTy::Class(_, arguments) => arguments.iter().any(names_type_parameter),
         RuntimeTy::List(element) => names_type_parameter(element),
+        RuntimeTy::Map { key, value, .. } => {
+            names_type_parameter(key) || names_type_parameter(value)
+        }
         RuntimeTy::Tuple(elements) => elements.iter().any(names_type_parameter),
         RuntimeTy::Union(members) => members.iter().any(names_type_parameter),
         RuntimeTy::Function { params, ret, .. } => {
@@ -461,16 +502,22 @@ pub(crate) struct Body<'a, 'db> {
     inner: &'a MirFunctionBody<'db>,
     /// What the cells a lambda captures hold, in capture order.
     captures: &'a [NativeTy<'db>],
-    /// The copy of the function being typed.
+    /// The function being typed, and how it is entered.
     pub(crate) key: &'a FnKey<'db>,
-    /// The type arguments this copy of the function is compiled for.
+    /// The types the function's type parameters are typed with: none, so
+    /// that each is any value.
     pub(crate) arguments: &'a [TypeArg<'db>],
     inferred: Vec<Option<NativeTy<'db>>>,
     /// The locals declared with a type that names a type parameter and are
     /// not parameters. An inlined function's locals keep naming *its* type
     /// parameters, which are not this function's, so such a declaration says
-    /// nothing: the local has the type of what is written to it, or none.
+    /// only how the local is held: it has the type of what is written to
+    /// it, where that is one type.
     undeclared: Vec<bool>,
+    /// Whether the types of those locals have been looked for. Until
+    /// then one that has none found yet has no type at all, so that what
+    /// is copied from it waits for its type.
+    settled: Cell<bool>,
     /// The type each local of type `type` is loaded with, when it is loaded
     /// once.
     type_values: Vec<Option<&'a TyTemplate>>,
@@ -510,7 +557,7 @@ impl<'a, 'db> Body<'a, 'db> {
         captures: &'a [NativeTy<'db>],
         key: &'a FnKey<'db>,
     ) -> Self {
-        let arguments = &key.arguments[..];
+        let arguments: &[TypeArg<'db>] = &[];
         let type_values = loaded_types(body);
         let mut typed = Self {
             mir,
@@ -524,6 +571,7 @@ impl<'a, 'db> Body<'a, 'db> {
                 .enumerate()
                 .map(|(index, local)| index > mir.arity && names_type_parameter(&local.ty))
                 .collect(),
+            settled: Cell::new(false),
             type_values,
             inferred: vec![None; body.locals.len()],
             loop_locals: vec![false; body.locals.len()],
@@ -663,6 +711,16 @@ impl<'a, 'db> Body<'a, 'db> {
                             None => continue,
                         }
                     }
+                    Written::Value(Rvalue::Map(key, value, _)) => {
+                        let map = TyTemplate::Map {
+                            key: Box::new(key.clone()),
+                            value: Box::new(value.clone()),
+                        };
+                        match template_ty(db, &map, arguments) {
+                            Some(map) => Ok(map),
+                            None => continue,
+                        }
+                    }
                     Written::Result(
                         Terminator::Call {
                             has_trace,
@@ -673,9 +731,8 @@ impl<'a, 'db> Body<'a, 'db> {
                         },
                         _,
                     ) => match call_target(db, &typed, callee, args, *ntypeargs) {
-                        Ok(Callee::Function(key)) => {
-                            function_signature(db, &key).map(|signature| signature.result)
-                        }
+                        Ok(Callee::Function(key, frame)) => function_signature_at(db, &key, &frame)
+                            .map(|signature| signature.result),
                         Ok(Callee::Value) => match operand_ty(db, &typed, callee).map(narrowed) {
                             Ok(NativeTy::Function(signature)) => Ok(signature.result),
                             _ => continue,
@@ -760,6 +817,7 @@ impl<'a, 'db> Body<'a, 'db> {
                 break;
             }
         }
+        typed.settled.set(true);
         let loops = ArrayLoops::of(db, &typed);
         for (local, is_loop_local) in typed.loop_locals.iter_mut().enumerate() {
             *is_loop_local =
@@ -943,10 +1001,13 @@ pub(crate) fn storage_ty<'db>(
     }
     match &body.inferred[local.0] {
         Some(inferred) if !body.local(local).is_captured => Ok(inferred.clone()),
-        _ if body.undeclared[local.0] => Err(Blocker::new(
+        _ if body.undeclared[local.0] && !body.settled.get() => Err(Blocker::new(
             "type variable value",
-            format!("{local} has no one type"),
+            format!("{local} has no type yet"),
         )),
+        // A declaration that names a type parameter, this function's or
+        // an inlined one's, holds whatever is written to the local: each
+        // parameter is any value.
         _ => declared_ty(db, body, local, body.arguments),
     }
 }
@@ -1015,7 +1076,9 @@ pub(crate) fn place_ty<'db>(
             index,
             kind: IndexKind::Map,
         } => match narrowed(place_ty(db, body, base)?) {
-            NativeTy::Map(key, value) if local_ty(db, body, *index)? == *key => Ok(*value),
+            NativeTy::Map(key, value) if assignable(&key, &local_ty(db, body, *index)?) => {
+                Ok(*value)
+            }
             NativeTy::Map(..) => Err(Blocker::new(
                 "map index that is not of the key type",
                 place.to_string(),
@@ -1101,7 +1164,19 @@ pub(crate) fn constant_ty<'db>(
         Constant::Function(DeclRef::External(_)) => {
             Err(Blocker::new("function value", "a function without source"))
         }
-        Constant::GenericFunction { .. } => Err(Blocker::new("function value", "generic")),
+        // A function with type parameters is one function whatever types
+        // it is named with: its value is that function's, which takes and
+        // returns a value of a type parameter's type as any value.
+        Constant::GenericFunction {
+            func: DeclRef::Source(function),
+            ..
+        } => Ok(NativeTy::Function(Box::new(function_signature(
+            db,
+            &FnKey::new(*function, Entry::Direct),
+        )?))),
+        Constant::GenericFunction { .. } => {
+            Err(Blocker::new("function value", "a function without source"))
+        }
         Constant::GlobalItem(_) => Err(Blocker::new("global read", "")),
         Constant::EnumVariant { enum_ref, .. } => Ok(NativeTy::Enum(*enum_ref)),
     }
@@ -1154,14 +1229,15 @@ pub(crate) fn assignable(expected: &NativeTy<'_>, found: &NativeTy<'_>) -> bool 
                             || (expected.is_ref() && found.is_ref() && assignable(expected, found))
                     })
             }
-            // A function compiled once for every reference type takes and
-            // gives an instance or an array at any of them.
+            // An instance or an array is held alike at every reference
+            // type.
             (NativeTy::Class(expected, wanted), NativeTy::Class(found, given)) => {
                 expected == found
                     && wanted.len() == given.len()
-                    && wanted.iter().zip(given).all(|(wanted, given)| {
-                        type_argument(wanted.clone()) == type_argument(given.clone())
-                    })
+                    && wanted
+                        .iter()
+                        .zip(given)
+                        .all(|(wanted, given)| held_as(wanted.clone()) == held_as(given.clone()))
             }
             (NativeTy::Array(expected), NativeTy::Array(found)) => {
                 expected.is_ref() && found.is_ref()
@@ -1172,7 +1248,7 @@ pub(crate) fn assignable(expected: &NativeTy<'_>, found: &NativeTy<'_>) -> bool 
             // As for a class at its type arguments: a future's slot holds
             // any reference the same way.
             (NativeTy::Future(expected), NativeTy::Future(found)) => {
-                type_argument(Some((**expected).clone())) == type_argument(Some((**found).clone()))
+                held_as(Some((**expected).clone())) == held_as(Some((**found).clone()))
             }
             // The type checker has decided the two function types agree.
             // Every call passes each argument and takes the result as a

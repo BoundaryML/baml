@@ -19,7 +19,7 @@ use crate::{
     types::{
         Body, NativeTy, Signature, TypeArg, assignable, binary_typing, class_layout, declared_ty,
         describe, loaded_types, local_ty, narrowed, operand_ty, passed, place_local, place_ty,
-        storage_ty, template_ty, type_argument, unary_typing,
+        storage_ty, template_ty, unary_typing,
     },
 };
 
@@ -182,8 +182,9 @@ impl Intrinsic {
 
 /// What a call terminator calls.
 pub(crate) enum Callee<'db> {
-    /// The copy of a function compiled for the call's type arguments.
-    Function(FnKey<'db>),
+    /// A function of the program, and the types the call names for its
+    /// type parameters: what the call reads the function's signature at.
+    Function(FnKey<'db>, Vec<TypeArg<'db>>),
     Intrinsic(Intrinsic),
     /// A standard library builtin the native runtime implements in Rust.
     Native(&'static crate::natives::Native),
@@ -230,16 +231,29 @@ pub(crate) fn signature<'db>(
     Ok(Signature { params, result })
 }
 
-/// The signature of one copy of a function.
+/// The signature a function is compiled with: a parameter or a result
+/// whose type is a type parameter is any value.
 pub(crate) fn function_signature<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     key: &FnKey<'db>,
 ) -> Result<Signature<'db>, Blocker> {
-    let mir = key.mir(db)?;
-    signature(db, mir, body_of(mir)?, &key.arguments)
+    function_signature_at(db, key, &[])
 }
 
-/// The value slots the parameters of one copy of a function read, in
+/// The signature of a function as a call that names the types `frame` for
+/// its type parameters reads it. The function itself is compiled once, and
+/// takes and returns every value as a tag and a payload, so the call
+/// passes what it has and keeps what it is given as these types say.
+pub(crate) fn function_signature_at<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    key: &FnKey<'db>,
+    frame: &[TypeArg<'db>],
+) -> Result<Signature<'db>, Blocker> {
+    let mir = key.mir(db)?;
+    signature(db, mir, body_of(mir)?, frame)
+}
+
+/// The value slots the parameters of a function read, in
 /// order: a required slot for each parameter without a default and a
 /// named one for each with. A bound method's are those after its
 /// receiver, which its closure holds.
@@ -283,10 +297,10 @@ pub(crate) fn declared_layout<'db>(
     Ok(layout)
 }
 
-/// Which of its type arguments a copy of a function must be passed when
-/// it runs: those it was compiled for as "any reference" and tests a value
-/// against, itself or in a function it calls. A copy with any takes a type
-/// object for every type parameter of its frame.
+/// Which of its type arguments a function must be passed when it runs, by
+/// type parameter: those it tests a value against or hands to `baml.json`,
+/// itself or in a function it calls. It takes a type object for each of
+/// them, in order. The list ends at the last one it needs.
 pub(crate) fn identified_arguments<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     key: &FnKey<'db>,
@@ -309,11 +323,7 @@ fn identified<'db>(
     visiting: &mut Vec<FnKey<'db>>,
     assumed: &mut Vec<(FnKey<'db>, Vec<u8>)>,
 ) -> Vec<u8> {
-    let any_reference = |slot: usize| key.arguments.get(slot) == Some(&Some(NativeTy::Unknown));
-    let mut needed = vec![0; key.arguments.len()];
-    if !(0..key.arguments.len()).any(any_reference) {
-        return needed;
-    }
+    let mut needed: Vec<u8> = Vec::new();
     // A function that calls itself needs what it needs: start from nothing
     // and go round until the answer stops growing.
     if visiting.contains(key) {
@@ -332,11 +342,10 @@ fn identified<'db>(
     visiting.push(key.clone());
     loop {
         let before = needed.clone();
+        let mut found: Vec<(usize, u8)> = Vec::new();
         let mut test = |test: &TypeTest<'db>| {
-            if let TypeTest::Template(TyTemplate::TypeArgRef(slot)) = test
-                && any_reference(*slot as usize)
-            {
-                needed[*slot as usize] |= TESTED;
+            if let TypeTest::Template(TyTemplate::TypeArgRef(slot)) = test {
+                found.push((*slot as usize, TESTED));
             }
         };
         let mut calls = Vec::new();
@@ -371,9 +380,7 @@ fn identified<'db>(
                         (Some(templates), Some(native), _) => {
                             if crate::json::takes_descriptions(native) {
                                 for template in templates {
-                                    if let TyTemplate::TypeArgRef(slot) = template
-                                        && any_reference(*slot as usize)
-                                    {
+                                    if let TyTemplate::TypeArgRef(slot) = template {
                                         handed_on.push(*slot as usize);
                                     }
                                 }
@@ -388,25 +395,23 @@ fn identified<'db>(
                 _ => {}
             }
         }
-        for slot in handed_on {
-            needed[slot] |= DESCRIBED;
-        }
+        found.extend(handed_on.into_iter().map(|slot| (slot, DESCRIBED)));
         for (function, templates) in calls {
-            let callee = FnKey::new(function, Entry::Direct).with_arguments(
-                templates
-                    .iter()
-                    .map(|template| type_argument(template_ty(db, template, &key.arguments)))
-                    .collect(),
-            );
+            let callee = FnKey::new(function, Entry::Direct);
             let wanted = identified(db, &callee, visiting, assumed);
             for (template, wanted) in templates.iter().zip(wanted) {
                 if wanted != 0
                     && let TyTemplate::TypeArgRef(slot) = template
-                    && any_reference(*slot as usize)
                 {
-                    needed[*slot as usize] |= wanted;
+                    found.push((*slot as usize, wanted));
                 }
             }
+        }
+        for (slot, uses) in found {
+            if needed.len() <= slot {
+                needed.resize(slot + 1, 0);
+            }
+            needed[slot] |= uses;
         }
         if needed == before {
             break;
@@ -463,12 +468,14 @@ fn decided_by_description(db: &dyn baml_compiler2_mir::Db, ty: &RuntimeTy) -> bo
 }
 
 /// The signature of the function value `function` bound to a receiver is:
-/// the function's, less its first parameter, which is returned beside it.
+/// the function's at the types `frame`, less its first parameter, which is
+/// returned beside it.
 fn bound_signature<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     function: FunctionLoc<'db>,
+    frame: &[TypeArg<'db>],
 ) -> Result<(NativeTy<'db>, Signature<'db>), Blocker> {
-    let mut signature = function_signature(db, &FnKey::new(function, Entry::Direct))?;
+    let mut signature = function_signature_at(db, &FnKey::new(function, Entry::Direct), frame)?;
     if signature.params.is_empty() {
         return Err(Blocker::new("bound method value", "without a receiver"));
     }
@@ -500,9 +507,9 @@ pub(crate) fn is_intrinsic_call<'db>(
         if Intrinsic::named(&function_display_name(db, *function)).is_some())
 }
 
-/// What a call names directly: a function written in BAML source, compiled
-/// for the call's type arguments (its first `ntypeargs` arguments), or a
-/// builtin native code has its own implementation of.
+/// What a call names directly: a function written in BAML source, with the
+/// call's type arguments (its first `ntypeargs` arguments), or a builtin
+/// native code has its own implementation of.
 pub(crate) fn call_target<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     body: &Body<'_, 'db>,
@@ -525,7 +532,7 @@ pub(crate) fn call_target<'db>(
                     .map(|argument| operand_ty(db, body, argument))
                     .collect();
                 if let Some(eq) = operands.ok().and_then(|found| own_enum_eq(db, &found)) {
-                    return Ok(Callee::Function(FnKey::new(eq, Entry::Direct)));
+                    return Ok(Callee::Function(FnKey::new(eq, Entry::Direct), Vec::new()));
                 }
             }
             // A method written in Rust that takes a closure has a loop form
@@ -541,7 +548,7 @@ pub(crate) fn call_target<'db>(
             }
             match &function {
                 DeclRef::Source(function) => {
-                    let arguments = args
+                    let frame = args
                         .iter()
                         .take(ntypeargs)
                         .map(|argument| {
@@ -551,11 +558,12 @@ pub(crate) fn call_target<'db>(
                                     "that are not types loaded once",
                                 )
                             })?;
-                            Ok(type_argument(template_ty(db, template, body.arguments)))
+                            Ok(template_ty(db, template, body.arguments))
                         })
                         .collect::<Result<_, Blocker>>()?;
                     Ok(Callee::Function(
-                        FnKey::new(*function, Entry::Direct).with_arguments(arguments),
+                        FnKey::new(*function, Entry::Direct),
+                        frame,
                     ))
                 }
                 DeclRef::External(_) => Err(Blocker::new(
@@ -647,9 +655,8 @@ pub(crate) enum Virtual<'db> {
     /// The receiver's type is known where the call is written.
     Static(Target<'db>),
     /// The receiver is some implementor of this interface: its row holds
-    /// the code, of the copy for these type arguments of the method's
-    /// own.
-    Dynamic(Slot, TyTemplateInterface, Vec<TypeArg<'db>>),
+    /// the code.
+    Dynamic(Slot, TyTemplateInterface),
 }
 
 /// What a method of a `baml.ops` interface computes on primitives.
@@ -664,7 +671,7 @@ impl Operator {
     /// `receiver`, when that is an `int`, a `float`, a `bool` or a
     /// `bigint`, or for `Equals` a `string` or a `uint8array`: the types
     /// whose implementations the standard library declares in Rust.
-    fn of(
+    pub(crate) fn of(
         db: &dyn baml_compiler2_mir::Db,
         interface: &TyTemplateInterface,
         method: &str,
@@ -702,6 +709,14 @@ impl Operator {
         (equals || !only_equals).then_some(operator)
     }
 
+    /// How many operands it takes.
+    pub(crate) fn operands(self) -> usize {
+        match self {
+            Self::Binary(_) => 2,
+            Self::Unary(_) => 1,
+        }
+    }
+
     /// The type of the result on operands of these types.
     pub(crate) fn result<'db>(self, operands: &[NativeTy<'db>]) -> Result<NativeTy<'db>, Blocker> {
         match (self, operands) {
@@ -729,8 +744,7 @@ pub(crate) fn virtual_target<'db>(
 ) -> Result<Virtual<'db>, Blocker> {
     let unsupported =
         |detail: &str| Blocker::new("interface method call", format!("{method}: {detail}"));
-    let interface = &dispatch::in_frame(db, interface, body.arguments)
-        .ok_or_else(|| unsupported("on an interface of a type parameter with no one type"))?;
+    let interface = &dispatch::in_frame(interface);
     let method_arguments = args
         .iter()
         .take(ntypeargs)
@@ -738,7 +752,7 @@ pub(crate) fn virtual_target<'db>(
             let template = body
                 .type_value(argument)
                 .ok_or_else(|| unsupported("with type arguments that are not types loaded once"))?;
-            Ok(type_argument(template_ty(db, template, body.arguments)))
+            Ok(template_ty(db, template, body.arguments))
         })
         .collect::<Result<Vec<_>, Blocker>>()?;
     let receiver = args
@@ -756,9 +770,8 @@ pub(crate) fn virtual_target<'db>(
             return Err(unsupported("dispatched on a later argument"));
         }
         return Ok(Virtual::Dynamic(
-            Slot::new(interface, method, &method_arguments),
+            Slot::new(interface, method),
             interface.clone(),
-            method_arguments,
         ));
     }
     match dispatch::resolve(
@@ -775,19 +788,13 @@ pub(crate) fn virtual_target<'db>(
 }
 
 /// An interface method call whose receiver is only known when it runs.
-pub(crate) struct Dispatched<'db> {
+pub(crate) struct Dispatched {
     pub(crate) slot: Slot,
     pub(crate) interface: TyTemplateInterface,
     pub(crate) method: String,
-    /// The method's own type arguments.
-    pub(crate) type_arguments: Vec<TypeArg<'db>>,
     /// The value slots the call pushes, the receiver's first: those of
     /// the method the call was checked against.
     pub(crate) layout: CallLayout,
-    /// The types of the arguments after the receiver, none for one left
-    /// to its default, and of the place the result goes.
-    pub(crate) arguments: Vec<Option<NativeTy<'db>>>,
-    pub(crate) result: NativeTy<'db>,
 }
 
 /// Whether a call of `native` with `passed` value arguments, keeping what
@@ -862,19 +869,22 @@ fn arguments_fit<'db>(
 }
 
 /// Whether a call checked against the layout `site`, with these value
-/// arguments and storing a `result`, can be laid over the copy of the
-/// function it calls.
+/// arguments and storing a `result`, can be laid over the function it
+/// calls, whose signature it reads at the types `frame`.
 fn call_fits<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     body: &Body<'_, 'db>,
-    key: &FnKey<'db>,
+    (key, frame): (&FnKey<'db>, &[TypeArg<'db>]),
     site: Option<&CallLayout>,
     args: &[Operand<'db>],
     result: &NativeTy<'db>,
 ) -> Result<(), Blocker> {
     // A callee outside the subset is reported as its own blocked function;
     // only a callee that will be compiled constrains the call.
-    if let (Ok(expected), Ok(declared)) = (function_signature(db, key), declared_layout(db, key)) {
+    if let (Ok(expected), Ok(declared)) = (
+        function_signature_at(db, key, frame),
+        declared_layout(db, key),
+    ) {
         let fits = match call_slots(site, args.len(), &declared) {
             Some(slots) => {
                 arguments_fit(db, body, args, &expected.params, &slots)?
@@ -896,7 +906,7 @@ fn call_fits<'db>(
 /// from being compiled.
 pub(crate) struct Checked<'db> {
     /// The interface method calls it dispatches when it runs.
-    pub(crate) dispatched: Vec<Dispatched<'db>>,
+    pub(crate) dispatched: Vec<Dispatched>,
     /// The types it makes values of that an interface value can hold.
     pub(crate) constructed: Vec<NativeTy<'db>>,
     /// Every unsupported construct, in block order, without repeats.
@@ -924,10 +934,17 @@ pub(crate) fn check_function<'db>(
     };
     match body_of(mir) {
         Ok(body) => {
-            checker.note(signature(db, mir, body, &key.arguments).map(drop));
+            checker.note(signature(db, mir, body, &[]).map(drop));
             checker.note(declared_layout(db, key).map(drop));
+            // Only a call that names a function passes it type objects.
+            if key.entry != Entry::Direct && identified_arguments(db, key).contains(&true) {
+                checker.note(Err(Blocker::new(
+                    "function value that tests a type argument",
+                    "",
+                )));
+            }
             if key.entry == Entry::Bound {
-                checker.note(bound_signature(db, key.loc).map(drop));
+                checker.note(bound_signature(db, key.loc, &[]).map(drop));
             }
             let body = &Body::new(db, mir, body, captures, key);
             let loops = ArrayLoops::of(db, body);
@@ -966,7 +983,7 @@ struct Checker<'a, 'db> {
     key: &'a FnKey<'db>,
     blockers: Vec<Blocker>,
     needed: Vec<Needed<'db>>,
-    dispatched: Vec<Dispatched<'db>>,
+    dispatched: Vec<Dispatched>,
     constructed: Vec<NativeTy<'db>>,
     compares: bool,
 }
@@ -1003,7 +1020,13 @@ impl<'db> Checker<'_, 'db> {
     /// A function named where a value is expected is needed as one.
     fn operand_needs(&mut self, operand: &Operand<'db>) {
         match operand {
-            Operand::Constant(Constant::Function(DeclRef::Source(function))) => {
+            Operand::Constant(
+                Constant::Function(DeclRef::Source(function))
+                | Constant::GenericFunction {
+                    func: DeclRef::Source(function),
+                    ..
+                },
+            ) => {
                 self.need(FnKey::new(*function, Entry::Value), Vec::new());
             }
             Operand::Constant(Constant::EnumVariant { enum_ref, .. }) => {
@@ -1074,6 +1097,10 @@ impl<'db> Checker<'_, 'db> {
                 func: DeclRef::Source(function),
                 ..
             } => self.need(FnKey::new(*function, Entry::Bound), Vec::new()),
+            Rvalue::MakeGenericFunction {
+                func: DeclRef::Source(function),
+                ..
+            } => self.need(FnKey::new(*function, Entry::Value), Vec::new()),
             _ => {}
         }
     }
@@ -1105,7 +1132,7 @@ impl<'db> Checker<'_, 'db> {
         {
             let args = passed(args, *has_trace);
             match call_target(self.db, body, callee, args, *ntypeargs) {
-                Ok(Callee::Function(key)) => self.need(key, Vec::new()),
+                Ok(Callee::Function(key, _)) => self.need(key, Vec::new()),
                 // What `baml.json` decodes is made by the runtime.
                 Ok(Callee::Native(native)) => {
                     self.native_constructs(native);
@@ -1142,45 +1169,26 @@ impl<'db> Checker<'_, 'db> {
             args,
             ntypeargs,
             self_arg,
-            destination,
             ..
         } = terminator
             && !in_loop
         {
             let args = passed(args, *has_trace);
             match virtual_target(self.db, body, iface, method, args, *ntypeargs, *self_arg) {
-                Ok(Virtual::Static(Target::Function(key))) => self.need(key, Vec::new()),
+                Ok(Virtual::Static(Target::Function(key, _))) => self.need(key, Vec::new()),
                 Ok(Virtual::Static(Target::Native(native))) => self.native_constructs(native),
-                Ok(Virtual::Dynamic(slot, interface, type_arguments)) => {
-                    let arguments = args
-                        .iter()
-                        .skip(*ntypeargs + 1)
-                        .map(|argument| {
-                            if crate::types::is_omitted(argument) {
-                                Ok(None)
-                            } else {
-                                operand_ty(self.db, body, argument).map(Some)
-                            }
-                        })
-                        .collect::<Result<Vec<_>, _>>();
-                    let result =
-                        place_local(destination).and_then(|local| local_ty(self.db, body, local));
-                    if let (Ok(arguments), Ok(result)) = (arguments, result) {
-                        // A call the compiler made itself pushes required
-                        // slots.
-                        let layout = argument_layout
-                            .clone()
-                            .unwrap_or_else(|| CallLayout::positional(arguments.len() + 1));
-                        self.dispatched.push(Dispatched {
-                            slot,
-                            interface,
-                            method: method.clone(),
-                            type_arguments,
-                            layout,
-                            arguments,
-                            result,
-                        });
-                    }
+                Ok(Virtual::Dynamic(slot, interface)) => {
+                    // A call the compiler made itself pushes required
+                    // slots.
+                    let layout = argument_layout.clone().unwrap_or_else(|| {
+                        CallLayout::positional(args.len().saturating_sub(*ntypeargs))
+                    });
+                    self.dispatched.push(Dispatched {
+                        slot,
+                        interface,
+                        method: method.clone(),
+                        layout,
+                    });
                 }
                 _ => {}
             }
@@ -1452,8 +1460,8 @@ pub(crate) fn rvalue_ty<'db>(
             captures,
             ..
         } => {
-            // A lambda is compiled for its function's type arguments. What
-            // it cannot have is a type object passed to it.
+            // A lambda names its function's type parameters. What it
+            // cannot have is a type object passed to it.
             if identified_arguments(db, &body.key.lambda(*lambda_idx))
                 .iter()
                 .any(|needed| *needed)
@@ -1490,20 +1498,35 @@ pub(crate) fn rvalue_ty<'db>(
             if !matches!(frame, BoundFrame::Receiver) {
                 return Err(Blocker::new("bound method value", "with type arguments"));
             }
-            let (expected, signature) = bound_signature(db, *function)?;
             let found = operand_ty(db, body, receiver)?;
+            // The method's type parameters are those of its receiver's
+            // class, as the receiver's type gives them.
+            let frame = match narrowed(found.clone()) {
+                NativeTy::Class(_, arguments) => arguments,
+                _ => Vec::new(),
+            };
+            let (expected, signature) = bound_signature(db, *function, &frame)?;
             if !assignable(&expected, &found) {
                 return Err(Blocker::new("bound method value", describe(&found)));
             }
             Ok(NativeTy::Function(Box::new(signature)))
         }
+        // The function itself: one function whatever types it is named
+        // with.
+        Rvalue::MakeGenericFunction {
+            func: DeclRef::Source(function),
+            ..
+        } => Ok(NativeTy::Function(Box::new(function_signature(
+            db,
+            &FnKey::new(*function, Entry::Direct),
+        )?))),
         other => Err(Blocker::new(rvalue_name(other), "")),
     }
 }
 
-/// A local of type `type` holds a type argument. Native code is compiled per
-/// concrete type, so the value is never needed: the local is supported only
-/// as an argument of an intrinsic, which ignores it.
+/// A local of type `type` holds a type argument. It is never a value of
+/// its own: a call that needs the type reads the template the local was
+/// loaded with, and passes the type's object.
 fn is_type_value(body: &Body<'_, '_>, place: &Place) -> bool {
     matches!(place, Place::Local(local) if matches!(body.local(*local).ty, RuntimeTy::Type))
 }
@@ -1907,7 +1930,7 @@ fn terminator_supported<'db>(
                         "argument",
                     )
                 }
-                Callee::Function(key) => {
+                Callee::Function(key, frame) => {
                     let name = || function_display_name(db, DeclRef::Source(key.loc));
                     // The callee is passed each type argument it tests
                     // values against.
@@ -1916,11 +1939,11 @@ fn terminator_supported<'db>(
                         .enumerate()
                         .filter(|(_, uses)| *uses != 0)
                     {
-                        let known = match body.type_value(&args[slot]) {
-                            Some(TyTemplate::TypeArgRef(own)) => body
-                                .arguments
-                                .get(*own as usize)
-                                .is_some_and(Option::is_some),
+                        let passed = args[..*ntypeargs].get(slot);
+                        let known = match passed.and_then(|passed| body.type_value(passed)) {
+                            // This function's own, which it is passed in
+                            // turn.
+                            Some(TyTemplate::TypeArgRef(_)) => true,
                             Some(template)
                                 if template_ty(db, template, body.arguments)
                                     .is_some_and(|ty| has_type_id(&ty)) =>
@@ -1954,7 +1977,7 @@ fn terminator_supported<'db>(
                     call_fits(
                         db,
                         body,
-                        &key,
+                        (&key, &frame),
                         argument_layout.as_ref(),
                         &args[*ntypeargs..],
                         &result,
@@ -2014,15 +2037,28 @@ fn terminator_supported<'db>(
                         ))
                     }
                 }
-                Virtual::Static(Target::Function(key)) => {
+                Virtual::Static(Target::Function(key, frame)) => {
                     if identified_arguments(db, &key).contains(&true) {
                         return Err(Blocker::new(
                             "interface method call",
                             format!("{method}: a default body that tests its type argument"),
                         ));
                     }
-                    call_fits(db, body, &key, argument_layout.as_ref(), args, &result)
+                    call_fits(
+                        db,
+                        body,
+                        (&key, &frame),
+                        argument_layout.as_ref(),
+                        args,
+                        &result,
+                    )
                 }
+                // Only a row holds one: a receiver whose type is known has
+                // the operator itself.
+                Virtual::Static(Target::Operator(_)) => Err(Blocker::new(
+                    "operator method call",
+                    format!("{method}: on a type that is not the operator's"),
+                )),
                 Virtual::Static(Target::Native(native)) => {
                     let (signature, _) = native.callable()?;
                     if *ntypeargs != 0 || native.type_args != 0 {

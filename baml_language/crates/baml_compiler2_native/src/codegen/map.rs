@@ -29,6 +29,19 @@ impl<'db> Translator<'_, 'db> {
         }
     }
 
+    /// The key the local `index` holds, as a map of type `map_ty` holds
+    /// its keys.
+    pub(super) fn map_key(
+        &mut self,
+        map_ty: &NativeTy<'db>,
+        index: baml_compiler2_mir::Local,
+    ) -> Result<ir::Value, CompileError> {
+        let (key_ty, _) = Self::map_types(map_ty)?;
+        let found = self.local_ty(index)?;
+        let key = self.read_place(&baml_compiler2_mir::Place::Local(index))?;
+        Ok(self.coerce(key, &found, &key_ty))
+    }
+
     /// Call a leaf of the runtime: it neither allocates nor throws.
     fn map_leaf(
         &mut self,
@@ -82,8 +95,10 @@ impl<'db> Translator<'_, 'db> {
                 )
             }
             // The runtime makes a `float` key canonical, and hashes an
-            // enum's variant by the position its object holds.
-            NativeTy::Float | NativeTy::Enum(_) => {
+            // enum's variant by the position its object holds. A key
+            // whose type is a type parameter is of whichever key type its
+            // tag says.
+            NativeTy::Float | NativeTy::Enum(_) | NativeTy::Unknown => {
                 let (tag, key) = slot_words(&mut self.builder, key_ty, key);
                 self.map_leaf(
                     "baml_rt_map_find",
