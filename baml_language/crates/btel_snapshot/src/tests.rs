@@ -159,7 +159,7 @@ fn a_thread_serving_another_pool_gives_its_storages_back() {
     let first_stats = first.stats();
     assert_eq!(first_stats.allocated, 2);
     assert_eq!(first_stats.allocated_bytes, first_stats.idle_bytes);
-    // Another thread finds them on the first pool's return stack.
+    // Another thread finds them in the first pool.
     let misses = first_stats.allocation_misses;
     let other = first.clone();
     std::thread::spawn(move || drop(scalar(&other, 5)))
@@ -169,6 +169,138 @@ fn a_thread_serving_another_pool_gives_its_storages_back() {
     // A pool dropped while its storages are idle frees them.
     drop(first);
     drop(second);
+}
+fn large(pool: &SnapshotPool, len: usize) -> Snapshot {
+    let mut b = pool.try_acquire().unwrap();
+    let (object, _) = bytes(&mut b, &vec![7; len]);
+    let id = b.leaves().object(object).unwrap();
+    b.finish(SnapshotValue::Object(id), &mut Shaper::default())
+}
+fn local_storages() -> usize {
+    super::pool::local_storages()
+}
+#[test]
+#[cfg_attr(miri, ignore = "captures megabytes")]
+fn a_thread_that_went_quiet_does_not_keep_what_others_need() {
+    // A burst on one thread fills the retention budget, then that thread
+    // takes once more and stays alive without capturing again.
+    let pool = SnapshotPool::unbounded(Limits::default());
+    let (park, parked) = std::sync::mpsc::channel::<()>();
+    let (ready, is_ready) = std::sync::mpsc::channel::<()>();
+    let burst = pool.clone();
+    let quiet = std::thread::spawn(move || {
+        let held: Vec<_> = (0..72).map(|_| large(&burst, 120_000)).collect();
+        drop(held);
+        drop(scalar(&burst, 0));
+        assert!(local_storages() <= PoolConfig::default().max_local_storages);
+        ready.send(()).unwrap();
+        parked.recv().unwrap();
+    });
+    is_ready.recv().unwrap();
+    // Another thread keeping two such captures in flight reuses the pool's
+    // storages instead of allocating on every cycle.
+    let before = pool.stats().allocation_misses;
+    for _ in 0..1000 {
+        let x = large(&pool, 120_000);
+        let y = large(&pool, 120_000);
+        drop((x, y));
+    }
+    let misses = pool.stats().allocation_misses - before;
+    park.send(()).unwrap();
+    quiet.join().unwrap();
+    assert!(
+        misses <= 2,
+        "{misses} allocations while the quiet thread kept the storages"
+    );
+}
+#[test]
+fn a_thread_keeps_at_most_its_cap_however_much_comes_back() {
+    let pool = SnapshotPool::unbounded(Limits::default());
+    let other = SnapshotPool::unbounded(Limits::default());
+    let held: Vec<_> = (0..4000).map(|n| scalar(&pool, n)).collect();
+    drop(held);
+    drop(scalar(&pool, 0));
+    let cap = PoolConfig::default().max_local_storages;
+    assert!(local_storages() <= cap);
+    let allocated = pool.stats().allocated;
+    // Alternating pools moves at most that cap each way, and loses nothing.
+    for n in 0..100 {
+        drop(scalar(&pool, n));
+        drop(scalar(&other, n));
+        assert!(local_storages() <= cap);
+    }
+    assert_eq!(pool.stats().allocated, allocated);
+    assert_eq!(other.stats().allocated, 1);
+    let stats = pool.stats();
+    assert_eq!(stats.allocated_bytes, stats.idle_bytes);
+}
+#[test]
+#[cfg_attr(miri, ignore = "hundreds of threads")]
+fn producers_switching_pools_and_exiting_account_every_storage_once() {
+    let pool = SnapshotPool::new(256 * 1024, Limits::default());
+    let other = SnapshotPool::unbounded(Limits::default());
+    let (send, receive) = std::sync::mpsc::channel::<Snapshot>();
+    let returning = std::thread::spawn(move || {
+        for snapshot in receive {
+            snapshot.uncharge();
+        }
+    });
+    let barrier = Arc::new(std::sync::Barrier::new(16));
+    let producers: Vec<_> = (0..16_i64)
+        .map(|t| {
+            let (pool, other, send, barrier) = (
+                pool.clone(),
+                other.clone(),
+                send.clone(),
+                Arc::clone(&barrier),
+            );
+            std::thread::spawn(move || {
+                barrier.wait();
+                // Each producer runs short-lived threads one after another.
+                for round in 0..20 {
+                    let (pool, other, send) = (pool.clone(), other.clone(), send.clone());
+                    std::thread::spawn(move || {
+                        for i in 0..500 {
+                            let builder = loop {
+                                if let Some(builder) = pool.try_acquire() {
+                                    break builder;
+                                }
+                                std::thread::yield_now();
+                            };
+                            let snapshot =
+                                builder.finish(SnapshotValue::Int(i), &mut Shaper::default());
+                            if (i + t + round) % 7 == 0 {
+                                drop(scalar(&other, i));
+                            }
+                            if i % 3 == 0 {
+                                drop(snapshot);
+                            } else {
+                                send.send(snapshot).unwrap();
+                            }
+                        }
+                    })
+                    .join()
+                    .unwrap();
+                }
+            })
+        })
+        .collect();
+    drop(send);
+    for producer in producers {
+        producer.join().unwrap();
+    }
+    returning.join().unwrap();
+    for pool in [&pool, &other] {
+        let stats = pool.stats();
+        assert_eq!(stats.in_use, 0);
+        assert_eq!(stats.held_bytes, 0);
+        assert_eq!(stats.allocated_bytes, stats.idle_bytes);
+    }
+    let allocated = pool.stats().allocated;
+    assert!(
+        allocated < 1_000,
+        "{allocated} storages for 160,000 captures"
+    );
 }
 #[test]
 fn immutable_leaves_and_pool_survive_the_original_owners() {

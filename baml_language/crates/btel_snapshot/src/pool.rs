@@ -11,18 +11,27 @@
 //! budget: that memory is bounded by whatever holds it there. No capture is
 //! refused for its size, and growth never waits.
 //!
-//! No lock is taken. The processor and any other thread that drops a storage
-//! push it onto the pool's return stack with one compare-and-swap. A producer
-//! takes from a free list of its own thread, and when that is empty swaps the
-//! whole return stack into it, one atomic instruction. So the processor's
-//! work never makes a producer wait, and producers never wait for each other.
-//! The budget's charges, the idle bytes and the counts are atomics.
+//! The processor, and any other thread that drops a storage, pushes it onto
+//! the pool's return stack with one compare-and-swap. A producer takes from a
+//! short free list of its own thread, with no lock and no shared write but
+//! the counts. When that list is empty the producer refills it from the
+//! pool's spare list, which it first tops up by swapping in the whole return
+//! stack. Only producers lock the spare list, once per refill, so the
+//! processor's work never makes a producer wait. The budget's charges, the
+//! idle bytes and the counts are atomics.
+//!
+//! The free lists are capped ([`PoolConfig::max_local_storages`],
+//! [`PoolConfig::max_local_bytes`]), so a thread that stops capturing keeps
+//! little of what other threads could reuse. A thread gives its list back
+//! when it serves another pool, and frees it once its pool is gone, the next
+//! time it takes or returns any storage. A thread that does neither keeps its
+//! list, at most that cap, until it exits.
 use std::{
     cell::RefCell,
     mem::ManuallyDrop,
     ptr,
     sync::{
-        Arc, Weak,
+        Arc, Mutex, Weak,
         atomic::{AtomicPtr, AtomicUsize, Ordering},
     },
 };
@@ -73,6 +82,10 @@ pub struct PoolConfig {
     pub initial_bytes: usize,
     pub retention_budget_bytes: usize,
     pub max_retained_allocation_bytes: usize,
+    /// Idle storages one thread keeps for itself, by count and by
+    /// structural bytes; at least one is always kept.
+    pub max_local_storages: usize,
+    pub max_local_bytes: usize,
 }
 impl Default for PoolConfig {
     fn default() -> Self {
@@ -84,6 +97,8 @@ impl Default for PoolConfig {
             initial_bytes: settings::INITIAL_BYTES,
             retention_budget_bytes: settings::RETENTION_BUDGET_BYTES,
             max_retained_allocation_bytes: settings::MAX_RETAINED_ALLOCATION_BYTES,
+            max_local_storages: settings::LOCAL_FREE_STORAGES,
+            max_local_bytes: settings::LOCAL_FREE_BYTES,
         }
     }
 }
@@ -118,6 +133,9 @@ pub struct PoolStats {
     pub growths: usize,
 }
 
+/// Idle storages, boxed: a lease holds the box, so a storage never moves.
+type Storages = Vec<Box<Storage>>;
+
 /// What both sides change on every take and return, on one line so that
 /// either side's turn moves it once.
 struct Shared {
@@ -125,8 +143,8 @@ struct Shared {
     /// through [`Storage::next`]. Pushed one at a time, only ever emptied
     /// whole, so it has no ABA problem and no node is read by two threads.
     returned: AtomicPtr<Storage>,
-    /// Structural capacity of the storages waiting to be reused, on the
-    /// return stack or in a thread's free list.
+    /// Structural capacity of the storages waiting to be reused: on the
+    /// return stack, on the spare list, or in a thread's free list.
     idle_bytes: AtomicUsize,
     in_use: AtomicUsize,
     allocated: AtomicUsize,
@@ -134,6 +152,10 @@ struct Shared {
 }
 pub(crate) struct Pool {
     shared: Padded<Shared>,
+    /// Storages taken off the return stack and not yet handed to a thread.
+    /// Locked only by producers refilling their free lists and by threads
+    /// giving theirs back, never by the processor.
+    spare: Mutex<Storages>,
     /// Structural capacity the captures with the producers may hold.
     budget: usize,
     /// What they hold now: the sum of every storage's `charged`. On a line of
@@ -256,6 +278,7 @@ impl SnapshotPool {
                 allocated: AtomicUsize::new(0),
                 misses: AtomicUsize::new(0),
             }),
+            spare: Mutex::new(Vec::new()),
             budget: budget_bytes,
             held: Padded(AtomicUsize::new(0)),
             #[cfg(any(test, feature = "stats"))]
@@ -308,7 +331,7 @@ impl SnapshotPool {
                 let mut local = local.try_borrow_mut().ok()?;
                 local.serve(pool);
                 if local.free.is_empty() {
-                    pool.take_returned(&mut local.free);
+                    pool.refill(&mut local.free);
                 }
                 local.free.pop()
             })
@@ -410,8 +433,7 @@ impl Pool {
         unsafe_code,
         reason = "the return stack links boxed storages by raw pointer"
     )]
-    #[expect(clippy::vec_box, reason = "a lease holds the box; storages never move")]
-    fn take_returned(&self, free: &mut Vec<Box<Storage>>) {
+    fn take_returned(&self, free: &mut Storages) {
         let mut node = self
             .shared
             .0
@@ -425,21 +447,51 @@ impl Pool {
             free.push(storage);
         }
     }
+    /// Fill a thread's empty free list from the spare list, topping that up
+    /// from the return stack first if it is empty: as many storages as the
+    /// thread may keep, and at least one if there is any.
+    fn refill(&self, free: &mut Storages) {
+        let mut spare = self.lock_spare();
+        if spare.is_empty() {
+            self.take_returned(&mut spare);
+        }
+        let mut bytes = 0usize;
+        while let Some(storage) = spare.last() {
+            let next = bytes.saturating_add(storage.capacity_bytes());
+            if !free.is_empty()
+                && (free.len() >= self.config.max_local_storages
+                    || next > self.config.max_local_bytes)
+            {
+                break;
+            }
+            bytes = next;
+            free.extend(spare.pop());
+        }
+    }
+    fn lock_spare(&self) -> std::sync::MutexGuard<'_, Storages> {
+        self.spare
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
 }
 impl Drop for Pool {
     fn drop(&mut self) {
-        let mut free = Vec::new();
-        self.take_returned(&mut free);
-        free.into_iter().for_each(discard);
+        let mut spare = std::mem::take(
+            self.spare
+                .get_mut()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        self.take_returned(&mut spare);
+        spare.into_iter().for_each(discard);
     }
 }
 
-/// The storages one thread has taken from a pool's return stack and not yet
-/// used. A thread serves one pool at a time; serving another gives these back.
+/// The storages one thread has taken from a pool and not yet used, at most
+/// the pool's local cap. A thread serves one pool at a time; serving another
+/// gives these back.
 struct Local {
     pool: Weak<Pool>,
-    #[expect(clippy::vec_box, reason = "a lease holds the box; storages never move")]
-    free: Vec<Box<Storage>>,
+    free: Storages,
 }
 impl Local {
     /// Hold storages for `pool` from now on.
@@ -450,13 +502,21 @@ impl Local {
             self.pool = Arc::downgrade(pool);
         }
     }
-    /// Return the unused storages to their pool, where they stay counted as
-    /// idle, or free them if it is gone.
+    /// Return the unused storages to their pool's spare list, where they stay
+    /// counted as idle, or free them if it is gone.
     fn give_back(&mut self) {
-        let free = std::mem::take(&mut self.free);
+        if self.free.is_empty() {
+            return;
+        }
         match self.pool.upgrade() {
-            Some(pool) => free.into_iter().for_each(|s| pool.push_returned(s)),
-            None => free.into_iter().for_each(discard),
+            Some(pool) => pool.lock_spare().append(&mut self.free),
+            None => self.free.drain(..).for_each(discard),
+        }
+    }
+    /// Free the storages of a pool that is gone.
+    fn release_if_orphaned(&mut self) {
+        if !self.free.is_empty() && self.pool.strong_count() == 0 {
+            self.free.drain(..).for_each(discard);
         }
     }
 }
@@ -474,6 +534,12 @@ thread_local! {
     };
 }
 
+/// How many storages this thread's free list holds.
+#[cfg(test)]
+pub(crate) fn local_storages() -> usize {
+    LOCAL.with(|local| local.borrow().free.len())
+}
+
 /// Free a storage its pool no longer counts.
 fn discard(storage: Box<Storage>) {
     #[cfg(any(test, feature = "stats"))]
@@ -485,6 +551,13 @@ fn discard(storage: Box<Storage>) {
 /// idle budget allows. A storage still charged to the budget is uncharged:
 /// it left the producers without reaching the processor.
 fn recycle(mut storage: Box<Storage>) {
+    // This thread may hold storages of a pool that has gone since it last
+    // took one: free them now rather than when the thread exits.
+    let _ = LOCAL.try_with(|local| {
+        if let Ok(mut local) = local.try_borrow_mut() {
+            local.release_if_orphaned();
+        }
+    });
     storage.graph.clear();
     storage.shape.clear();
     let bytes = storage.capacity_bytes();

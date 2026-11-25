@@ -9,6 +9,11 @@ pub const INITIAL_VALUES: usize = 4;
 pub const RETENTION_BUDGET_BYTES: usize = 8 * 1024 * 1024;
 /// Discard unusually large returned allocations, regardless of remaining budget.
 pub const MAX_RETAINED_ALLOCATION_BYTES: usize = 256 * 1024;
+/// Idle storages one producer thread keeps for itself between refills, by
+/// count and by structural bytes (at least one is always kept). The rest
+/// stay in the pool where every thread can take them.
+pub const LOCAL_FREE_STORAGES: usize = 32;
+pub const LOCAL_FREE_BYTES: usize = 512 * 1024;
 
 /// **Tune first under backpressure.** Structural capture memory one runtime's
 /// producers may hold before a capture waits for the processor: the captures
