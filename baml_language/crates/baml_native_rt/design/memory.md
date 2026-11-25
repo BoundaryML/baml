@@ -14,16 +14,20 @@ Header format:
 |---|---|
 | 0..2 | collector: bit 0 forwarded, bit 1 a mark used only while slices are settled |
 | 3..31 | type id |
-| 32..59 | free. A string caches its hash here |
-| 60..63 | flags: bit 63 panic class, bit 62 busy bit |
+| 32..58 | payload of the header. A string caches its hash here (27 bits); a function value holds its call layout id here (see "Tags") |
+| 59..61 | kind, if the candidate in [type-header-fast-path.md](ideas/type-header-fast-path.md) is taken; free otherwise |
+| 62 | panic class |
+| 63 | busy bit |
 
-The type id determines how the payload is interpreted: the payload is either an inline scalar primitive (`null`, `int`, `float`, `bool`) or a heap pointer. Except for the scalar primitives, the type id is a fast path only, per [type-header.md](ideas/type-header.md).
+The type id determines how the payload is interpreted: the payload is either an inline scalar primitive (`null`, `int`, `float`, `bool`) or a heap pointer. Except for the scalar primitives, the type id is a fast path only, per [type-header-fast-path.md](ideas/type-header-fast-path.md).
 
-The busy bit is used to avoid tearing on targets where 128-bit atomics are not supported; it is set before any changes that could potentially tear:
+The busy bit is a lock on the slot, so that its two words are never seen torn when several workers read and write it. Whoever reads or writes a slot's header holds the bit while it touches the payload, readers included; the exact sequences, the orderings and why a reader cannot merely re-check the header are in [uniform-values-convention.md](ideas/uniform-values-convention.md), "The busy bit protocol".
 
-- An assignment to a slot whose type is `string` requires the busy bit to be set atomically (acquire), the pointer payload is swapped, then the busy bit is released and the cached hash is replaced atomically (release).
-- An assignment to a slot whose type is `int` does not require the busy bit since the header does not need to change. The `i64` payload is updated atomically.
-- An assignment to a slot whose type is `int | bool` requires the busy bit to be set atomically, similar to the `string` case except that here the type id in the header is swapped instead of the hash.
+- A store to a slot whose header may change (a union, `unknown`, an optional, a generic slot, any pointer) sets the bit with an atomic or, retrying while it was already set, stores the payload, then stores the new header with the bit clear.
+- A read of such a slot that needs the tag takes the bit the same way, loads the payload, and stores the header back unchanged.
+- A slot whose declared type is exactly `int`, `float` or `bool` never changes its header: a store is one atomic store of the payload, a read one atomic load.
+- A read that needs only the payload, because the static type fixes the type id, is one atomic load of the payload.
+- Not under the protocol: the slots of an object nobody else can reach yet, a future's value (its state word is the lock), frames and registers, and the collector, which runs with the world stopped, never sets the bit and asserts in checked builds that no slot it scans has it.
 
 ```rust
 #[repr(C, align(16))]
@@ -33,6 +37,49 @@ pub struct Value {
 }
 const _: () = assert!(::std::mem::size_of::<Value>() == 16);
 ```
+
+## Tags
+
+A tag is the header word of a value, written `id << 3`. Its type id says how to read the payload, and for a pointer it is always exactly the id in the header of the object pointed at: when the collector makes a string of a slice it rewrites the tag of every slot that points at it. A function value's tag also carries its call layout id, always exactly. Nothing else in a tag is trusted: its collector bits are zero, and code that needs a string's cached hash or the panic bit reads the object. The ids below are fixed when the runtime is compiled and are the same in every program: the collector and the Rust runtime `match` on them with no program in hand, and compiled code compares against them as constants.
+
+Immediates. The payload is the value itself, never an address:
+
+| tag | payload | notes |
+|---|---|---|
+| `NULL` = 0 | always 0 | `T?` has no representation of its own; a `null` is this tag. A zeroed 16 bytes is a `null` |
+| `BOOL` = 1 | 0 or 1 | |
+| `INT` = 2 | the 64 bits | |
+| `FLOAT` = 3 | the 64 bits | |
+| `OMITTED` = 4 | unused | an argument left to its default. Exists only in a call's arguments; never stored to memory, never a value a program holds ([default-arguments.md](ideas/default-arguments.md)) |
+
+Everything else is a pointer (an id above 4), and its tag names the layout of the object, one id per struct in "Objects" below. That is the least the collector needs: which struct to read the object as, and so its size and where its slots and pointers are.
+
+| tag | object | from |
+|---|---|---|
+| `INSTANCE` | `InstanceObject` | below |
+| `RUST_INSTANCE` | `RustInstanceObject` | below |
+| `ARRAY`, `ARRAY_STORAGE` | `ArrayObject`, `ArrayStorageObject` | below |
+| `MAP`, `MAP_ENTRIES`, `MAP_INDEX` | `MapObject`, `MapEntriesObject`, `MapIndexObject` | below |
+| `STRING`, `STRING_SLICE` | `StringObject`, `StringSliceObject` | below. Kept next to each other so "is a string" is one range test, as today |
+| `TYPE` | `TypeObject` | below |
+| `RAW_FUNCTION`, `REALIZED_FUNCTION` | `RawFunctionObject`, `RealizedFunctionObject` | below |
+| `CLOSURE`, `BOUND_METHOD`, `HOST_CLOSURE` | `ClosureObject`, `BoundMethodObject`, `HostClosureObject` | below |
+| `CELL` | `CellObject` | below |
+| `FUTURE` | `FutureObject` | below |
+| `BIGINT` | `BigintObject` | below |
+| `BYTES`, `BYTES_STORAGE` | `BytesObject`, `BytesStorageObject` | below. A `uint8array`, packed |
+| `TUPLE` | `TupleObject` | below |
+| `ENUM_VARIANT` | `EnumVariantObject` | below. An enum value is a pointer to its variant; not an immediate |
+| `CLASS`, `PACKAGE` | `ClassObject`, `PackageObject` | below |
+| `OWNED`, `PLAIN` | `OwnedObject`, `PlainObject` | below. Rust data with and without a destructor; `RustInstanceObject` may replace them later |
+
+Gone from today's runtime: the boxes (`TYPE_BOX_INT`, `TYPE_BOX_FLOAT`, `TYPE_BOX_BOOL`), the three cell types and the four map-entry types that differed only in which words were pointers, and the array types split by element kind. A slot's own tag now says whether it is a pointer.
+
+Function values carry one more thing in the header. A call through a function value has to know whether the callee takes exactly the arguments the site pushes, because a function with defaulted parameters can stand where a type with fewer parameters is expected ([default-arguments.md](ideas/default-arguments.md)). So the header payload (bits 32..58) of every callable object, `CLOSURE`, `BOUND_METHOD`, `REALIZED_FUNCTION`, `HOST_CLOSURE` and a `RAW_FUNCTION` used as a value, holds its call layout id: a number the compiler gives each distinct parameter layout in the program (the required slots in order, then the named optional ones). A function value's tag carries the same id, so the caller already has it in the register that holds the tag, and every call through a function value compares it with the site's layout, with no load. This is required for correctness, not a later optimization. The id is written when the object is made and never changes.
+
+Not a fixed id: a class or an enum of the program. Every instance has the one id `INSTANCE`, and the truth about it is its `class_ptr`: `x is Foo` is a tag compare, a load and a pointer compare, and interface dispatch loads the method from the class object's row. A class object or an enum variant may live in the heap (they cannot be made at run time today, but will be), so `class_ptr` is traced and nothing hashes or orders by a class's or a variant's address. A per-class id is the kind of shortcut [type-header-fast-path.md](ideas/type-header-fast-path.md) is about.
+
+Also fixed, though not type ids: the classes of the standard library that the runtime builds instances of and must be able to find without being handed them, 25 today (`WELL_KNOWN` in `src/layout.rs`: the panics, `errors.InvalidArgument`, the `json` errors, `errors.Io` and so on). The runtime finds each one's class object in a table of class object addresses the compiler emits, in the order of `WELL_KNOWN` then `NAMED`, zero for a `NAMED` class the program does not name. Bit 62 of the header marks an instance of a panic class.
 
 ## Objects
 
@@ -107,11 +154,11 @@ pub struct MapEntriesObject {
     pub records: [MapRecord]
 }
 
+/// The hashes are not here: they follow the records as `capacity` `u32`s, so a small map's probe compares all eight at once.
+/// The key is a whole `Value`, so the collector scans entries with no map in hand.
 #[repr(C, align(16))]
 struct MapRecord {
-    /// Key type is always concrete so it don't need a `ValueHeader`
-    pub key: ValuePayload,
-    pub hash: u32,
+    pub key: Value,
     pub value: Value,
 }
 
@@ -148,6 +195,10 @@ pub struct StringSliceObject {
 #[repr(C, align(16))]
 pub struct TypeObject {
     pub header: ObjectHeader,
+    /// The tag its values have, when a tag compare decides `x is T`; zero when it takes more.
+    pub tag: u64,
+    /// The class object to compare `class_ptr` with, or null.
+    pub class: *const ClassObject,
     // /// Once better caching is introduced
     // canonical_id: u64,
     pub ty: RealizedTy,
@@ -164,9 +215,12 @@ pub struct RawFunctionObject {
 
 /// Can be aliased over an `Object` with a `Closure` layout
 #[repr(C, align(16))]
+/// Header payload: the call layout id. Every callable has its code address at offset 8 and is itself the closure word, so one call sequence serves all of them.
 pub struct ClosureObject {
     pub header: ObjectHeader,
+    pub code: usize,
     pub function: NonNull<RawFunctionObject>,
+    pub capture_count: u64,
     /// [generics ++ variable cells]
     pub captures: [Value],
 }
@@ -181,10 +235,13 @@ pub struct CellObject {
 
 /// Can be aliased over an `Object` with a `BoundMethod` layout
 #[repr(C, align(16))]
+/// Header payload: the layout of the method without its receiver.
 pub struct BoundMethodObject {
     pub header: ObjectHeader,
+    pub code: usize,
     pub function: NonNull<RawFunctionObject>,
-    pub reciever: Value,
+    pub type_arg_count: u64,
+    pub receiver: Value,
     pub type_args: [NonNull<TypeObject>],
 }
 
@@ -193,6 +250,7 @@ pub struct BoundMethodObject {
 #[repr(C, align(16))]
 pub struct RealizedFunctionObject {
     pub header: ObjectHeader,
+    pub code: usize,
     pub function: NonNull<RawFunctionObject>,
     pub type_args: [NonNull<TypeObject>],
 }
@@ -201,6 +259,7 @@ pub struct RealizedFunctionObject {
 #[repr(C, align(16))]
 pub struct HostClosureObject {
     pub header: ObjectHeader,
+    pub code: usize,
     pub handle: ::std::sync::Arc<HostValuePayload>,
     pub return_ty: NonNull<TypeObject>,
     pub throws_ty: NonNull<TypeObject>,
@@ -215,12 +274,101 @@ pub struct FutureObject {
     pub state: AtomicUsize,
     pub value: Value,
     pub task: *mut Task,
+    /// Whether an `await` has thrown its error. The value's own tag says whether it is a reference.
     pub flags: usize,
     pub trace: usize,
 }
 
-// ... and more
+/// Tag `BIGINT`. A count and that many limbs, two's complement, least significant first.
+#[repr(C, align(16))]
+pub struct BigintObject {
+    pub header: ObjectHeader,
+    pub limb_count: u64,
+    pub limbs: [u64],
+}
+
+/// Tag `BYTES`. The length never changes; the bytes are in a storage object.
+#[repr(C, align(16))]
+pub struct BytesObject {
+    pub header: ObjectHeader,
+    pub length: u64,
+    pub ptr: NonNull<BytesStorageObject>,
+}
+
+/// Tag `BYTES_STORAGE`. Packed bytes, no slots.
+#[repr(C, align(16))]
+pub struct BytesStorageObject {
+    pub header: ObjectHeader,
+    pub capacity: u64,
+    pub data: [u8],
+}
+
+/// Tag `TUPLE`.
+#[repr(C, align(16))]
+pub struct TupleObject {
+    pub header: ObjectHeader,
+    pub count: u64,
+    pub slots: [Value],
+}
+
+/// Tag `ENUM_VARIANT`. One object per variant; an enum value is its address, and equality is the address.
+/// A map hashes an enum key by `index`, never by the address.
+#[repr(C, align(16))]
+pub struct EnumVariantObject {
+    pub header: ObjectHeader,
+    /// At offset 8, where an instance has `class_ptr`: dispatch reads the method row the same way.
+    pub enum_ptr: NonNull<ClassObject>,
+    pub index: u64,
+    pub name: NonNull<StringObject>,
+}
+
+/// Tag `CLASS`. Also describes an enum (`kind`).
+#[repr(C, align(16))]
+pub struct ClassObject {
+    pub header: ObjectHeader,
+    pub package: NonNull<PackageObject>,
+    pub name: NonNull<StringObject>,
+    /// Generics then fields: an instance is `16 + 16 * slot_count` bytes.
+    pub slot_count: u32,
+    pub generic_count: u32,
+    /// Class, enum, Rust-backed; panic class.
+    pub kind: u32,
+    /// Dense, for a `match` over classes.
+    pub index: u32,
+    /// Field names, places and types: what JSON and the uncaught report read. Program data.
+    pub description: *const u8,
+    /// An enum's variants, or null.
+    pub variants: *const NonNull<EnumVariantObject>,
+    /// One code address per method column of the program, zero where the class has none.
+    pub methods: [usize],
+}
+
+/// Tag `PACKAGE`.
+#[repr(C, align(16))]
+pub struct PackageObject {
+    pub header: ObjectHeader,
+    pub name: NonNull<StringObject>,
+}
+
+/// Tag `OWNED`. A Rust value with a destructor, dropped when the object is not copied.
+#[repr(C, align(16))]
+pub struct OwnedObject {
+    pub header: ObjectHeader,
+    pub value: *const (),
+    pub kind: &'static RustKind,
+}
+
+/// Tag `PLAIN`. `Copy` Rust data held inline.
+#[repr(C, align(16))]
+pub struct PlainObject {
+    pub header: ObjectHeader,
+    pub words: u64,
+    pub kind: &'static RustKind,
+    pub data: [u64],
+}
 ```
+
+Everything from the table below to the end of this file was measured on the layout before two-word values and is rewritten when that change is built.
 
 | object | bytes | Go equivalent | Go bytes |
 |---|---|---|---|
