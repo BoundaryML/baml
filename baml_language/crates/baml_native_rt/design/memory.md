@@ -2,20 +2,225 @@
 
 Object layouts, allocation, field and index access, maps, strings. The collector is in `gc.md`. Numbers are instructions retired per operation, measured unless marked estimated; method in `README.md`.
 
-## Layouts
+## Values
 
-Everything is 8-byte words and 8-byte aligned. A reference is a plain address, zero for `null`. Nothing is tagged. `src/layout.rs` is included by the compiler by path, so both sides use the same constants.
+Value slots are the counterpart to the VM's `Value`. They are 16 bytes and 16-byte-aligned.
 
-Header, one word in every object:
+The first 8 bytes are a header, while the remaining bytes are the payload.
+
+Header format:
 
 | bits | meaning |
 |---|---|
 | 0..2 | collector: bit 0 forwarded, bit 1 a mark used only while slices are settled |
-| 3..31 | type id: byte offset of the type in the program's type table |
+| 3..31 | type id |
 | 32..59 | free. A string caches its hash here |
-| 60..63 | flags: bit 63 panic class, bit 60 float elements |
+| 60..63 | flags: bit 63 panic class, bit 62 busy bit |
 
-Compiled code reads the type id as the 32-bit word at the object's address and writes the whole header as one constant.
+The type id determines how the payload is interpreted: the payload is either an inline scalar primitive (`null`, `int`, `float`, `bool`) or a heap pointer. Except for the scalar primitives, the type id is a fast path only, per [type-header.md](ideas/type-header.md).
+
+The busy bit is used to avoid tearing on targets where 128-bit atomics are not supported; it is set before any changes that could potentially tear:
+
+- An assignment to a slot whose type is `string` requires the busy bit to be set atomically (acquire), the pointer payload is swapped, then the busy bit is released and the cached hash is replaced atomically (release).
+- An assignment to a slot whose type is `int` does not require the busy bit since the header does not need to change. The `i64` payload is updated atomically.
+- An assignment to a slot whose type is `int | bool` requires the busy bit to be set atomically, similar to the `string` case except that here the type id in the header is swapped instead of the hash.
+
+```rust
+#[repr(C, align(16))]
+pub struct Value {
+    pub header: ValueHeader,
+    pub payload: ValuePayload,
+}
+const _: () = assert!(::std::mem::size_of::<Value>() == 16);
+```
+
+## Objects
+
+An object is a 16-byte-aligned dynamically sized type which lives on the heap. It needs to be 16-bit-aligned so it can be aliased with more specific layouts which hold `Value` slots:
+
+```rust
+#[repr(C, align(16))]
+pub struct Object {
+    pub header: ObjectHeader,
+    _payload: [Slot64],
+}
+
+/// Can be aliased over an `Object` with an `Instance` layout
+#[repr(C, align(16))]
+pub struct InstanceObject {
+    pub header: ObjectHeader,
+    pub class_ptr: NonNull<ClassObject>,
+    /// `[generics ++ fields]`
+    pub slots: [Value],
+}
+
+/// Can be aliased over an `Object` with a `RustInstance` layout
+#[repr(C, align(16))]
+pub struct RustInstanceObject {
+    pub header: ObjectHeader,
+    pub class_ptr: NonNull<ClassObject>,
+    /// An enum or something here
+    pub data: RustInstanceData,
+    /// No need for `Value` headers since they are all type objects
+    pub generics: [NonNull<TypeObject>],
+}
+
+/// Can be aliased over an `Object` with an `Array` layout
+#[repr(C, align(16))]
+pub struct ArrayObject {
+    pub header: ObjectHeader,
+    pub length: u64,
+    pub ty: NonNull<TypeObject>,
+    pub ptr: NonNull<ArrayStorageObject>,
+}
+
+/// Can be aliased over an `Object` with an `ArrayStorage` layout
+#[repr(C, align(16))]
+pub struct ArrayStorageObject {
+    pub header: ObjectHeader,
+    pub capacity: u64,
+    /// Length is `capacity`
+    pub data: [Value],
+}
+
+/// Can be aliased over an `Object` with a `Map` layout
+#[repr(C, align(16))]
+pub struct MapObject {
+    pub header: ObjectHeader,
+    pub key_ty: NonNull<TypeObject>,
+    pub value_ty: NonNull<TypeObject>,
+    pub len: u32,
+    pub used: u32,
+    pub entries: NonNull<MapEntriesObject>,
+    pub index: NonNull<MapIndexObject>,
+    /// 2 * capacity - 1
+    pub mask: u32,
+    pub epoch: u32,
+}
+
+/// Can be aliased over an `Object` with a `MapEntries` layout
+#[repr(C, align(16))]
+pub struct MapEntriesObject {
+    pub header: ObjectHeader,
+    pub capacity: u64,
+    /// Length is `capacity`
+    pub records: [MapRecord]
+}
+
+#[repr(C, align(16))]
+struct MapRecord {
+    /// Key type is always concrete so it don't need a `ValueHeader`
+    pub key: ValuePayload,
+    pub hash: u32,
+    pub value: Value,
+}
+
+/// Can be aliased over an `Object` with a `MapIndex` layout
+#[repr(C, align(16))]
+pub struct MapIndexObject {
+    pub header: ObjectHeader,
+    /// 2 * capacity
+    pub slot_count: u64,
+    pub slots: [u64],
+}
+
+/// Can be aliased over an `Object` with a `String` layout
+#[repr(C, align(16))]
+pub struct StringObject {
+    pub header: ObjectHeader,
+    pub byte_len: u32,
+    pub char_len: u32,
+    pub data: str,
+}
+
+/// Can be aliased over an `Object` with a `StringSlice` layout
+#[repr(C, align(16))]
+pub struct StringSliceObject {
+    pub header: ObjectHeader,
+    pub byte_len: u32,
+    pub char_len: u32,
+    pub parent: NonNull<StringObject>,
+    pub offset: u32,
+    // padding: u32
+}
+
+/// Can be aliased over an `Object` with a `Type` layout
+#[repr(C, align(16))]
+pub struct TypeObject {
+    pub header: ObjectHeader,
+    // /// Once better caching is introduced
+    // canonical_id: u64,
+    pub ty: RealizedTy,
+}
+
+/// Can be aliased over an `Object` with a `RawFunction` layout
+/// Equivalent to `bex_vm_types::types::Function`
+#[repr(C, align(16))]
+pub struct RawFunctionObject {
+    pub header: ObjectHeader,
+    pub owner: NonNull<PackageObject>,
+    // ... other fields
+}
+
+/// Can be aliased over an `Object` with a `Closure` layout
+#[repr(C, align(16))]
+pub struct ClosureObject {
+    pub header: ObjectHeader,
+    pub function: NonNull<RawFunctionObject>,
+    /// [generics ++ variable cells]
+    pub captures: [Value],
+}
+
+/// Can be aliased over an `Object` with a `Cell` layout
+#[repr(C, align(16))]
+pub struct CellObject {
+    pub header: ObjectHeader,
+    // padding: u64,
+    pub value: Value,
+}
+
+/// Can be aliased over an `Object` with a `BoundMethod` layout
+#[repr(C, align(16))]
+pub struct BoundMethodObject {
+    pub header: ObjectHeader,
+    pub function: NonNull<RawFunctionObject>,
+    pub reciever: Value,
+    pub type_args: [NonNull<TypeObject>],
+}
+
+/// Can be aliased over an `Object` with a `RealizedFunction` layout
+/// Equivalent to `bex_vm_types::types::GenericFunction`
+#[repr(C, align(16))]
+pub struct RealizedFunctionObject {
+    pub header: ObjectHeader,
+    pub function: NonNull<RawFunctionObject>,
+    pub type_args: [NonNull<TypeObject>],
+}
+
+/// Can be aliased over an `Object` with a `HostClosure` layout
+#[repr(C, align(16))]
+pub struct HostClosureObject {
+    pub header: ObjectHeader,
+    pub handle: ::std::sync::Arc<HostValuePayload>,
+    pub return_ty: NonNull<TypeObject>,
+    pub throws_ty: NonNull<TypeObject>,
+    pub arity: usize,
+    pub params: [FunctionParam]
+}
+
+/// Can be aliased over an `Object` with a `Future` layout
+#[repr(C, align(16))]
+pub struct FutureObject {
+    pub header: ObjectHeader,
+    pub state: AtomicUsize,
+    pub value: Value,
+    pub task: *mut Task,
+    pub flags: usize,
+    pub trace: usize,
+}
+
+// ... and more
+```
 
 | object | bytes | Go equivalent | Go bytes |
 |---|---|---|---|
@@ -27,7 +232,6 @@ Compiled code reads the type id as the 32-bit word at the object's address and w
 | string of b bytes | 16 + b rounded up to 8 (header, byte length u32 and char count u32) | string header + bytes | 16 + b |
 | string slice | 32 (header, lengths, parent, offset) | string header | 16 |
 | closure | 24 (header, code, captures) | funcval + captures | 8 + captures |
-| box of `int`/`float`/`bool` in a union | 16 | interface word pair + boxed value | 16 + 8 |
 | map | 40 (header, len u32 + used u32, entries, index, mask u32 + epoch u32) | `map` header (swiss) | 48 |
 | map entries, capacity c | 16 + 16c + 4c rounded to 8 | group of 8 slots | 8 + 8 x (key + value) |
 | map entry, `map<string,int>` | 20 per slot of capacity, plus an index slot once past 8 entries | `map[string]int` slot | 25 per slot of capacity |
