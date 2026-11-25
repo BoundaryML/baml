@@ -1138,6 +1138,18 @@ pub extern "C" fn baml_rt_spawn_unsupported() -> ! {
     fatal("a spawn with semaphores or cancel tokens is not supported by native code yet")
 }
 
+/// A call through a function value met a callable whose call layout,
+/// numbered `callee`, is not one a call checked against the layout
+/// numbered `site` can enter. The compiler numbers the layouts of a
+/// program, and only a mistake of its own lets the two meet.
+#[unsafe(no_mangle)]
+pub extern "C" fn baml_rt_layout_mismatch(callee: usize, site: usize) -> ! {
+    fatal(&format!(
+        "a call through a function value of call layout {site} met a callable of call layout \
+         {callee}"
+    ))
+}
+
 /// Run the program: `entry` on a task of its own, and every task it spawns,
 /// each starting in `task_shim`, until none is left that can run. Returns
 /// the exit status of the process. With `migrate`, every task that stops goes on on another thread and

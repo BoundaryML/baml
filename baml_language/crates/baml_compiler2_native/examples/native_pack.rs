@@ -4,7 +4,8 @@
 //! native_pack <file.baml> <function> <out>   compile and link an executable
 //!     [--emit-clif]                          also write <out>.clif
 //!     [--emit-asm]                           also write <out>.s
-//!     [--checked]                            link the runtime tests link
+//!     [--checked]                            compile with checks and link the
+//!                                            runtime tests link
 //! native_pack --coverage <file.baml> <function>
 //!                                            report what blocks compilation
 //! native_pack --mir <file.baml> <function>   print the optimized MIR of every
@@ -160,6 +161,7 @@ fn run(arguments: &Arguments, out: &mut impl Write) -> Result<(), String> {
     let options = CompileOptions {
         emit_clif: arguments.emit_clif,
         emit_disassembly: arguments.emit_asm,
+        checks: arguments.runtime == RuntimeBuild::Checked,
     };
     let started = Instant::now();
     let compiled = compile(&db, entry, options).map_err(|error| error.to_string())?;

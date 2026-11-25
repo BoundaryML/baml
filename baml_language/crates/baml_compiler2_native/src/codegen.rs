@@ -75,6 +75,7 @@ use crate::{
 mod classes;
 mod hooks;
 mod json;
+mod layouts;
 mod map;
 mod native_call;
 mod spawn;
@@ -97,6 +98,9 @@ pub(crate) const TYPES_SYMBOL: &str = "baml_native_types";
 const TRAP_AFTER_PANIC: TrapCode = TrapCode::unwrap_user(1);
 /// The trap for a MIR `Unreachable` terminator.
 const TRAP_UNREACHABLE: TrapCode = TrapCode::unwrap_user(2);
+/// The trap for a call through a function value whose call layout is not
+/// one the call can enter.
+const TRAP_LAYOUT: TrapCode = TrapCode::unwrap_user(3);
 
 /// Shift counts at or above this give a result that no longer depends on the
 /// count.
@@ -340,6 +344,7 @@ enum Runtime {
     Throw,
     Rethrow,
     Uncaught,
+    LayoutMismatch,
     FloatRem,
     PanicStackOverflow,
     PollSlow,
@@ -393,6 +398,7 @@ impl Runtime {
             Self::Throw => "baml_rt_throw",
             Self::Rethrow => "baml_rt_rethrow",
             Self::Uncaught => "baml_rt_uncaught",
+            Self::LayoutMismatch => "baml_rt_layout_mismatch",
             Self::FloatRem => "baml_rt_float_rem",
             Self::PanicStackOverflow => "baml_rt_panic_stack_overflow",
             Self::PollSlow => "baml_rt_poll_slow",
@@ -445,9 +451,10 @@ impl Runtime {
             }
             Self::BigintNeg => (vec![word, word], vec![word, word]),
             Self::BigintCmp => (vec![word, word, word], vec![word]),
-            Self::PanicDivisionByZero | Self::PanicNegativeShift | Self::PanicStackOverflow => {
-                (vec![word, word], vec![])
-            }
+            Self::PanicDivisionByZero
+            | Self::PanicNegativeShift
+            | Self::PanicStackOverflow
+            | Self::LayoutMismatch => (vec![word, word], vec![]),
             Self::PollSlow | Self::AllocSlow | Self::SpawnUnsupported => (vec![], vec![]),
             Self::Await => (vec![word], vec![]),
             Self::TaskStart => (vec![word], vec![word]),
@@ -560,12 +567,15 @@ struct Backend<'db> {
     /// Whether the program calls what compares two values of any type,
     /// which reads the list of the classes with an `eq` of their own.
     compares_values: bool,
+    /// Whether the code checks what only a wrong compiler breaks; see
+    /// [`CompileOptions::checks`].
+    checks: bool,
 }
 
 impl Backend<'_> {
     /// A backend for the machine the compiler runs on, using every CPU
     /// feature that machine has.
-    fn new() -> Result<Self, CompileError> {
+    fn new(options: CompileOptions) -> Result<Self, CompileError> {
         let mut flags = settings::builder();
         flags.set("opt_level", "speed").map_err(internal)?;
         flags.set("is_pic", "true").map_err(internal)?;
@@ -617,6 +627,7 @@ impl Backend<'_> {
             unwind: unwind::Tables::default(),
             hooks: hooks::Hooks::default(),
             compares_values: false,
+            checks: options.checks,
         })
     }
 
@@ -1048,7 +1059,7 @@ pub(crate) fn generate<'db>(
     program: &Program<'db>,
     options: CompileOptions,
 ) -> Result<Output, CompileError> {
-    let mut backend = Backend::new()?;
+    let mut backend = Backend::new(options)?;
     let mut clif = options.emit_clif.then(String::new);
     let mut disassembly = options.emit_disassembly.then(String::new);
 
@@ -4448,9 +4459,14 @@ impl<'a, 'db> Translator<'a, 'db> {
                         self.builder.declare_value_needs_stack_map(function);
                         let words =
                             self.argument_words(args.iter().map(Some), &signature.params)?;
-                        let (_, closure) = self.builder.ins().isplit(function);
-                        let mut arguments = vec![closure];
-                        arguments.extend(words);
+                        // An indirect call says which slots it pushes; one
+                        // that does not pushes required ones.
+                        let site = argument_layout
+                            .clone()
+                            .unwrap_or_else(|| CallLayout::positional(args.len()));
+                        let site = self.backend.value_site(&site, self.builder.func)?;
+                        let (tag, closure) = self.builder.ins().isplit(function);
+                        let callee_layout = layouts::layout_of(&mut self.builder, tag);
                         // A load marked read-only can be moved above the
                         // test that proved the closure is not `null`.
                         let never_null = operand_local(callee).is_some_and(|local| {
@@ -4461,18 +4477,17 @@ impl<'a, 'db> Translator<'a, 'db> {
                         } else {
                             slot_access()
                         };
-                        let code = self.builder.ins().load(
-                            WORD,
-                            access,
-                            closure,
-                            offset(layout::CLOSURE_CODE),
-                        );
-                        let clif = Backend::clif_signature(signature.params.len(), Entry::Value, 0);
-                        let clif = self.builder.import_signature(clif);
                         // The callee can collect, which moves storage.
                         self.forget_arrays();
-                        let called = unwind::Called::Indirect(clif, code);
-                        let (tag, payload) = self.baml_call(&called, &arguments)?;
+                        let handlers = self.handlers_here()?;
+                        let (tag, payload) = layouts::call_value(
+                            &mut self.builder,
+                            &site,
+                            (callee_layout, closure),
+                            &words,
+                            access,
+                            handlers.as_deref(),
+                        );
                         let result =
                             of_slot_words(&mut self.builder, &signature.result, tag, payload);
                         (result, signature.result)

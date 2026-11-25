@@ -173,3 +173,23 @@ function default_known_implementation() -> string {
   let square = DefaultSquare { side: count(3) };
   default_measure(square, count(2)) + default_measure(count(5), count(3)) + default_measure_often(count(7), count(2)) + ` ${square.area(count(1))} ${square.area(count(1), pad = count(5))} ${square.name("the ", suffix = "?")} ${square.name("one ", again = count(5))}`
 }
+
+// A call through a function value compares its own layout with the one in
+// the value's tag. A value whose type names the function's own parameters
+// with defaults is called with them or without.
+function default_named(a: int, y: int = count(3)) -> int throws never {
+  if a > 100 { return default_named(a - 100, y = y + 1) };
+  a * 10 + y
+}
+function default_named_too(a: int, y: int = count(4)) -> int throws never {
+  if a > 100 { return default_named_too(a - 100) };
+  a * 100 + y
+}
+function default_through_a_value_of_its_own_layout() -> string {
+  let fs: ((int, y?: int) -> int throws never)[] = [];
+  fs.push(default_named);
+  fs.push(default_named_too);
+  let out = "";
+  for (let f in fs) { out = out + `${f(count(1))} ${f(count(2), y = count(7))} ${f(count(201))},`; };
+  out
+}

@@ -83,16 +83,21 @@ pub(crate) fn build(
         .flat_map(|file| file_functions(db, file).iter().copied())
         .find(|candidate| function_data(db, *candidate).name.as_str() == function)
         .ok_or_else(|| format!("no function `{function}`"))?;
-    let compiled = compile(db, entry, CompileOptions::default())
-        .map_err(|error| format!("does not compile: {error}"))?;
     let built = Built {
         lean: directory.join(function),
         checked: directory.join(format!("{function}.checked")),
     };
+    // The program that runs on the runtime with checks has its own.
     for (executable, runtime) in [
         (&built.lean, RuntimeBuild::Lean),
         (&built.checked, RuntimeBuild::Checked),
     ] {
+        let options = CompileOptions {
+            checks: runtime == RuntimeBuild::Checked,
+            ..CompileOptions::default()
+        };
+        let compiled =
+            compile(db, entry, options).map_err(|error| format!("does not compile: {error}"))?;
         link(&compiled.object, executable, runtime)
             .map_err(|error| format!("does not link: {error}"))?;
     }

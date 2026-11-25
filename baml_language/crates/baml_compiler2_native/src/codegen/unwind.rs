@@ -402,6 +402,27 @@ pub(super) fn try_call(
     (results[0], results[1])
 }
 
+/// A call of `called` under `handlers`, if it is under any: a plain call,
+/// or a [`try_call`]. Returns the tag and the payload of the result.
+pub(super) fn call(
+    builder: &mut cranelift_frontend::FunctionBuilder<'_>,
+    called: &Called,
+    arguments: &[ir::Value],
+    handlers: Option<&[Edge]>,
+) -> (ir::Value, ir::Value) {
+    if let Some(handlers) = handlers {
+        return try_call(builder, called, arguments, handlers);
+    }
+    let call = match called {
+        Called::Direct(function) => builder.ins().call(*function, arguments),
+        Called::Indirect(signature, code) => {
+            builder.ins().call_indirect(*signature, *code, arguments)
+        }
+    };
+    let results = builder.inst_results(call);
+    (results[0], results[1])
+}
+
 /// The local an operand reads whole.
 fn read_local(operand: &Operand<'_>) -> Option<Local> {
     match operand {
@@ -776,6 +797,13 @@ impl<'db> Translator<'_, 'db> {
         self.raise(error, Some(context))
     }
 
+    /// The handlers a call in the block being translated is under,
+    /// innermost first: none where a throw there unwinds out of the
+    /// function.
+    pub(super) fn handlers_here(&mut self) -> Result<Option<Vec<Edge>>, CompileError> {
+        self.pad().map(|pad| self.handlers(pad)).transpose()
+    }
+
     /// Call a BAML function and return its result: a tag and a payload.
     /// From a block that unwinds to a handler the call carries the edge to
     /// it, and what follows is generated in the block the call returns to.
@@ -784,18 +812,12 @@ impl<'db> Translator<'_, 'db> {
         called: &Called,
         arguments: &[ir::Value],
     ) -> Result<(ir::Value, ir::Value), CompileError> {
-        let Some(pad) = self.pad() else {
-            let call = match called {
-                Called::Direct(function) => self.builder.ins().call(*function, arguments),
-                Called::Indirect(signature, code) => self
-                    .builder
-                    .ins()
-                    .call_indirect(*signature, *code, arguments),
-            };
-            let results = self.builder.inst_results(call);
-            return Ok((results[0], results[1]));
-        };
-        let handlers = self.handlers(pad)?;
-        Ok(try_call(&mut self.builder, called, arguments, &handlers))
+        let handlers = self.handlers_here()?;
+        Ok(call(
+            &mut self.builder,
+            called,
+            arguments,
+            handlers.as_deref(),
+        ))
     }
 }

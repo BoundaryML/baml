@@ -20,7 +20,7 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 
 use super::{
     Backend, PAIR, Runtime, TRAP_AFTER_PANIC, Translator, WORD, closure_access, imm, internal,
-    of_slot_words, offset, slot_access, unwind,
+    layouts, of_slot_words, offset, slot_access, unwind,
 };
 use crate::{
     CompileError, layout,
@@ -47,8 +47,6 @@ pub(super) fn task_shim(
     let start = backend.runtime(Runtime::TaskStart)?;
     let finish = backend.runtime(Runtime::TaskFinish)?;
     let fail = backend.runtime(Runtime::TaskFail)?;
-    // A task's closure takes nothing but itself.
-    let closure_signature = Backend::clif_signature(0, crate::program::Entry::Value, 0);
 
     let mut builder = FunctionBuilder::new(function, builder_context);
     let block = builder.create_block();
@@ -59,26 +57,27 @@ pub(super) fn task_shim(
     let call = builder.ins().call(start, &[worker]);
     let closure = builder.inst_results(call)[0];
     builder.declare_value_needs_stack_map(closure);
-    let code = builder.ins().load(
-        WORD,
-        closure_access(),
-        closure,
-        offset(layout::CLOSURE_CODE),
-    );
-    let closure_signature = builder.import_signature(closure_signature);
+    // A task's closure is called with no argument, as a call through a
+    // function value that pushes no slot is: its header says whether it
+    // takes none.
+    let site = backend.value_site(&baml_type::CallLayout::default(), builder.func)?;
+    let header = builder.ins().load(WORD, closure_access(), closure, 0);
+    let callee = layouts::layout_of(&mut builder, header);
     let uncaught = builder.create_block();
     builder.append_block_param(uncaught, PAIR);
     builder.append_block_param(uncaught, WORD);
     builder.set_cold_block(uncaught);
-    let (tag, payload) = unwind::try_call(
+    let (tag, payload) = layouts::call_value(
         &mut builder,
-        &unwind::Called::Indirect(closure_signature, code),
-        &[closure],
-        &[unwind::Edge {
+        &site,
+        (callee, closure),
+        &[],
+        closure_access(),
+        Some(&[unwind::Edge {
             tag: None,
             landing: uncaught,
             reads_context: true,
-        }],
+        }]),
     );
     // The worker is read again: the task may have parked since it started,
     // and gone on under another.

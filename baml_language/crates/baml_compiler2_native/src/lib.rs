@@ -142,6 +142,10 @@ pub struct CompileOptions {
     pub emit_clif: bool,
     /// Keep the machine code of every function, as an assembly listing.
     pub emit_disassembly: bool,
+    /// Have the code check what only a wrong compiler breaks, and say
+    /// what it found before it stops: for a program linked against
+    /// [`RuntimeBuild::Checked`]. A program that ships has no such code.
+    pub checks: bool,
 }
 
 /// A program compiled for the host.
