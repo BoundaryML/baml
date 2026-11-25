@@ -4435,8 +4435,8 @@ impl<'a, 'db> Translator<'a, 'db> {
                 .map_err(internal)?;
                 let value = self.operand(source)?;
                 let passes = self.type_test(value, &source_ty, &plan)?;
-                // Bound where the test passes: taking a value out of its
-                // box is only right there.
+                // Bound where the test passes: reading the payload as a
+                // value of the tested type is only right there.
                 let bind = self.builder.create_block();
                 let (then_block, else_block) = (self.block(*then_block), self.block(*else_block));
                 self.builder.ins().brif(passes, bind, &[], else_block, &[]);

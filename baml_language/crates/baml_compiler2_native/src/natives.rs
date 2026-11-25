@@ -151,8 +151,8 @@ pub(crate) struct Native {
     pub(crate) flags: Option<Flags>,
     /// How many type parameters the builtin has.
     pub(crate) type_args: usize,
-    /// How many type ids a call passes before the declared parameters: one
-    /// per type parameter, or none.
+    /// How many type objects a call passes, by address, before the declared
+    /// parameters: one per type parameter, or none.
     pub(crate) type_ids: usize,
     /// The classes its declaration names in what it takes, returns and
     /// throws: what it can be passed or make an instance of, each of which

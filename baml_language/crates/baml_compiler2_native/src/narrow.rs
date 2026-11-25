@@ -1,10 +1,10 @@
 //! Which member of a union a local holds, block by block.
 //!
 //! MIR reads a local of a union type as the member the type checker proved
-//! it holds: after `if (v is int)`, `v + 1` adds the local itself. Values
-//! have no tags here, so code generation must know that member to take the
-//! value out of its box. This module finds it again from the tests MIR
-//! kept: a forward data flow over the type tests, null tests and narrowing
+//! it holds: after `if (v is int)`, `v + 1` adds the local itself. MIR
+//! does not say which member that is, and code generation must know it to
+//! read the payload of the local's pair as a value of that type. This
+//! module finds it again from the tests MIR kept: a forward data flow over the type tests, null tests and narrowing
 //! binds that reach each block, their negations and their short-circuit
 //! combinations.
 //!
@@ -36,7 +36,7 @@ use crate::{
     types::{Body, NativeTy, TypeArg, constant_ty, storage_ty, template_ty},
 };
 
-/// What a type test asks of a value in a box.
+/// What a type test asks of a value whose type its tag says.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) enum TestKind<'db> {
     /// A value of exactly this type.
@@ -227,8 +227,8 @@ struct State<'db> {
     constants: HashMap<usize, bool>,
     /// Locals holding the type tag just read of another local.
     tags: HashMap<usize, usize>,
-    /// Boxed locals holding the value another boxed local holds: assigned
-    /// from it, with neither assigned since. A `match` that binds tests the
+    /// Locals of a union or `unknown` type holding the value another such
+    /// local holds: assigned from it, with neither assigned since. A `match` that binds tests the
     /// copy and reads the original in the arm the test leaves.
     copies: HashMap<usize, usize>,
 }
@@ -236,8 +236,8 @@ struct State<'db> {
 struct Analysis<'a, 'b, 'db> {
     db: &'db dyn baml_compiler2_mir::Db,
     body: &'a Body<'b, 'db>,
-    /// The type of each local kept in a box, by local.
-    boxed: Vec<Option<NativeTy<'db>>>,
+    /// The type of each local that is a union or `unknown`, by local.
+    any: Vec<Option<NativeTy<'db>>>,
 }
 
 impl<'db> Analysis<'_, '_, 'db> {
@@ -246,13 +246,13 @@ impl<'db> Analysis<'_, '_, 'db> {
         TestKind::of(self.db, test, self.body.arguments).filter(TestKind::is_static)
     }
 
-    fn is_boxed(&self, local: usize) -> bool {
-        self.boxed[local].is_some()
+    fn holds_any(&self, local: usize) -> bool {
+        self.any[local].is_some()
     }
 
     /// Every member `local` can hold, when its type lists them.
     fn members(&self, local: usize) -> Option<Vec<NativeTy<'db>>> {
-        match &self.boxed[local] {
+        match &self.any[local] {
             Some(NativeTy::Union(members)) => Some(members.clone()),
             _ => None,
         }
@@ -277,7 +277,7 @@ impl<'db> Analysis<'_, '_, 'db> {
     }
 
     fn refine(&self, state: &mut State<'db>, local: usize, test: &TestKind<'db>, passes: bool) {
-        if !self.is_boxed(local) {
+        if !self.holds_any(local) {
             return;
         }
         // What is learnt of a copy is learnt of what it copies.
@@ -336,7 +336,7 @@ impl<'db> Analysis<'_, '_, 'db> {
         let ty = match operand {
             Operand::Constant(constant) => constant_ty(self.db, constant).ok()?,
             Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
-                if self.is_boxed(local.0) {
+                if self.holds_any(local.0) {
                     return self.fact(state, local.0);
                 }
                 storage_ty(self.db, self.body, *local).ok()?
@@ -354,7 +354,7 @@ impl<'db> Analysis<'_, '_, 'db> {
         let tested = |operand: &Operand<'db>| {
             operand_local(operand)
                 .map(|local| local.0)
-                .filter(|local| self.is_boxed(*local))
+                .filter(|local| self.holds_any(*local))
         };
         match value {
             Rvalue::IsType { operand, test } => Some(Condition {
@@ -431,7 +431,7 @@ impl<'db> Analysis<'_, '_, 'db> {
             return;
         };
         let fact = match value {
-            Rvalue::Use(operand) if self.is_boxed(destination.0) => {
+            Rvalue::Use(operand) if self.holds_any(destination.0) => {
                 self.operand_fact(state, operand)
             }
             _ => None,
@@ -444,8 +444,8 @@ impl<'db> Analysis<'_, '_, 'db> {
         }
         if let Rvalue::Use(Operand::Copy(Place::Local(original))) = value
             && original != destination
-            && self.is_boxed(destination.0)
-            && self.is_boxed(original.0)
+            && self.holds_any(destination.0)
+            && self.holds_any(original.0)
         {
             // A copy of a copy is a copy of the first.
             let original = state.copies.get(&original.0).copied().unwrap_or(original.0);
@@ -508,11 +508,11 @@ impl<'db> Analysis<'_, '_, 'db> {
                     // The destination is bound only where the test passes.
                     if source != Some(destination.0) {
                         let fact = source
-                            .filter(|source| passes && self.is_boxed(*source))
+                            .filter(|source| passes && self.holds_any(*source))
                             .and_then(|source| self.fact(state, source));
                         Self::kill(state, destination.0);
                         if let Some(fact) = fact
-                            && self.is_boxed(destination.0)
+                            && self.holds_any(destination.0)
                         {
                             state.facts.insert(destination.0, fact);
                         }
@@ -652,14 +652,14 @@ pub(crate) fn block_types<'db>(
         narrowed: Vec::new(),
         reachable: vec![true; body.blocks.len()],
     };
-    let boxed: Vec<Option<NativeTy<'db>>> = (0..body.locals.len())
+    let any: Vec<Option<NativeTy<'db>>> = (0..body.locals.len())
         .map(|local| {
             storage_ty(db, body, Local(local))
                 .ok()
                 .filter(NativeTy::holds_any)
         })
         .collect();
-    let analysis = Analysis { db, body, boxed };
+    let analysis = Analysis { db, body, any };
 
     let mut entry_states: Vec<Option<State<'db>>> = vec![None; body.blocks.len()];
     entry_states[body.entry.0] = Some(State::default());

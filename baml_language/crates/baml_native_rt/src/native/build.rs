@@ -297,17 +297,17 @@ impl<'s> Build<'s> {
             self.misfit(field, "set");
         };
         let inner = ty.not_null();
-        let boxes = ty.repr() == REPR_BOXED;
+        let any = ty.repr() == REPR_BOXED;
         let got = match value.into() {
             Value::Null if admits_null(ty) => Got::Null,
             Value::Null => self.misfit(field, "gave `null` to a field that holds none"),
-            Value::Bool(value) if boxes || matches!(inner.kind(), KIND_BOOL | KIND_BOOL_IS) => {
+            Value::Bool(value) if any || matches!(inner.kind(), KIND_BOOL | KIND_BOOL_IS) => {
                 Got::Bool(value)
             }
-            Value::Int(value) if boxes || matches!(inner.kind(), KIND_INT | KIND_INT_IS) => {
+            Value::Int(value) if any || matches!(inner.kind(), KIND_INT | KIND_INT_IS) => {
                 Got::Int(value)
             }
-            Value::Float(value) if boxes || inner.kind() == KIND_FLOAT => Got::Float(value),
+            Value::Float(value) if any || inner.kind() == KIND_FLOAT => Got::Float(value),
             // SAFETY: an enum's description names its live class object,
             // which says how many variants it has.
             Value::Variant(index)

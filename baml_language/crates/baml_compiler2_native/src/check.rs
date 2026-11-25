@@ -1374,7 +1374,7 @@ pub(crate) fn rvalue_ty<'db>(
             all_assignable(db, body, parts, |_| Some(NativeTy::String), "string part")?;
             Ok(NativeTy::String)
         }
-        // An enum value is its variant's position already.
+        // The position of an enum value's variant.
         Rvalue::Discriminant(place) => match narrowed(place_ty(db, body, place)?) {
             NativeTy::Enum(_) => Ok(NativeTy::Int),
             other => Err(Blocker::new(
@@ -1729,7 +1729,7 @@ pub(crate) fn type_test_plan<'db>(
                 | TestKind::Argument(_)
                 | TestKind::Implements(_)
                 | TestKind::Panic => {}
-                // Arrays of different element types share their type ids.
+                // Arrays of different element types have one tag.
                 TestKind::AnyArray => {
                     let arrays = match operand {
                         NativeTy::Union(members) => members

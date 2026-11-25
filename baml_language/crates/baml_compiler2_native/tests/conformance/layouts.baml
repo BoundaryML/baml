@@ -217,15 +217,15 @@ function layout_of_a_spawned_function() -> string {
 // the interface's slots and checks nothing: the row of a type whose
 // implementation declares more holds a thunk that leaves them out.
 interface LayoutShape {
-  function area(self, scale: int) -> int throws never
+  function layout_area(self, scale: int) -> int throws never
   function label(self, prefix: string, n: int) -> string throws never
 }
 class LayoutSquare {
   side: int
 
   implements LayoutShape {
-    function area(self, scale: int, pad: int = layout_count(1)) -> int throws never {
-      if scale > 100 { return self.area(scale - 100, pad = pad + 1) };
+    function layout_area(self, scale: int, pad: int = layout_count(1)) -> int throws never {
+      if scale > 100 { return self.layout_area(scale - 100, pad = pad + 1) };
       self.side * self.side * scale + pad
     }
     function label(self, prefix: string, n: int, suffix: string = rep("!", 2), again: int = layout_count(1)) -> string throws never {
@@ -238,13 +238,13 @@ class LayoutCircle {
   radius: int
 
   implements LayoutShape {
-    function area(self, scale: int) -> int throws never { self.radius * self.radius * 3 * scale }
+    function layout_area(self, scale: int) -> int throws never { self.radius * self.radius * 3 * scale }
     function label(self, prefix: string, n: int) -> string throws never { `${prefix}circle ${self.radius} ${n}` }
   }
 }
 implements LayoutShape for int {
-  function area(self, scale: int, pad: int = layout_count(2), more: int = layout_count(3)) -> int throws never {
-    if scale > 100 { return self.area(scale - 100, more = more + 1) };
+  function layout_area(self, scale: int, pad: int = layout_count(2), more: int = layout_count(3)) -> int throws never {
+    if scale > 100 { return self.layout_area(scale - 100, more = more + 1) };
     self * scale + pad * 10 + more
   }
   function label(self, prefix: string, n: int, suffix: string = rep("#", 1)) -> string throws never {
@@ -253,7 +253,7 @@ implements LayoutShape for int {
   }
 }
 implements LayoutShape for string {
-  function area(self, scale: int, pad: string = rep("p", 4), held: string[] = layout_strings(2)) -> int throws never {
+  function layout_area(self, scale: int, pad: string = rep("p", 4), held: string[] = layout_strings(2)) -> int throws never {
     let churned = layout_churn(20);
     self.length() * scale + pad.length() + held.length() + churned
   }
@@ -267,14 +267,14 @@ function layout_shape(i: int) -> LayoutShape {
 }
 function layout_measure<T extends LayoutShape>(shape: T, scale: int) -> string {
   let out = "";
-  for (let i = 0; i < 2; i += 1) { out = out + `${shape.label("a ", i)} ${shape.area(scale + i * 100)};`; };
+  for (let i = 0; i < 2; i += 1) { out = out + `${shape.label("a ", i)} ${shape.layout_area(scale + i * 100)};`; };
   out
 }
 function layout_dispatch_to_more_parameters() -> string {
   let out = "";
   for (let i = 0; i < 8; i += 1) {
     let shape = layout_shape(i);
-    out = out + `${shape.label("the ", i)} ${shape.area(layout_count(i))} ${shape.area(layout_count(i) + 200)},`;
+    out = out + `${shape.label("the ", i)} ${shape.layout_area(layout_count(i))} ${shape.layout_area(layout_count(i) + 200)},`;
   };
   out
 }
