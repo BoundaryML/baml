@@ -8,8 +8,8 @@
 import { LOGO_ASPECT } from './og-assets';
 
 export const OG_SIZE = { height: 630, width: 1200 };
-// The logo's height, with the lamb rising above the wordmark.
-const LOGO_HEIGHT = 60;
+// The logo's height. The gate logo is wide (649 by 111), so this keeps it about 260px across.
+const LOGO_HEIGHT = 44;
 export const OG_CONTENT_TYPE = 'image/png';
 
 const BLACK = '#0F0F0F';

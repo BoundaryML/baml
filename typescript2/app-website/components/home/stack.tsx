@@ -14,7 +14,7 @@ import {
   SiV8,
 } from 'react-icons/si';
 import { section } from '@/components/home/analytics';
-import { ALT_MARK } from '@/components/home/boundary-alt';
+import { GATE_MARK } from '@/components/home/boundary-gate';
 import { BoundaryLogo, BoundaryMark } from '@/components/home/boundary-logo';
 import { LAMB_PATHS } from '@/components/home/lamb';
 import { MarkTile } from '@/components/home/mark';
@@ -287,7 +287,7 @@ function LambArt({ glow }: { glow?: boolean }) {
 // the BAML lamb on the right. The lamb slides right to make room, growing to LOGO_H, and the mark
 // rises out of the layer where it stood.
 const LOGO_H = 80;
-const MARK_W = LOGO_H * (86 / 144);
+const MARK_W = LOGO_H * (GATE_MARK.width / GATE_MARK.height);
 const BIG_LAMB_W = LOGO_H * (356 / 422);
 const LOGO_GAP = 18;
 // The logos' feet, on the top layer's face.
@@ -321,9 +321,9 @@ function LogoArt({
     >
       <g
         fill="#fff"
-        transform={`translate(${boundary ? MARK_X : BIG_LAMB_X} ${LOGO_BASE - LOGO_H}) scale(${LOGO_H / (boundary ? 144 : 422)})`}
+        transform={`translate(${boundary ? MARK_X : BIG_LAMB_X} ${LOGO_BASE - LOGO_H}) scale(${LOGO_H / (boundary ? GATE_MARK.height : 422)})`}
       >
-        {(boundary ? ALT_MARK.paths : LAMB_PATHS).map((d) => (
+        {(boundary ? GATE_MARK.paths : LAMB_PATHS).map((d) => (
           <path d={d} key={d} />
         ))}
       </g>

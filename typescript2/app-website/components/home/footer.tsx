@@ -43,7 +43,7 @@ export default function Footer() {
       <div className={`${WRAP} pt-20 pb-10 flex flex-col gap-16 lg:gap-[72px]`}>
         <div className={LANES}>
           <div className={`${LEFT} flex flex-col gap-[18px]`}>
-            <BoundaryLogo className="self-start h-[62px] w-auto text-white" />
+            <BoundaryLogo className="self-start h-[44px] w-auto text-white sm:h-[62px]" />
           </div>
           {/* Three nowrap columns at 72px gaps need more room than the 528px copy lane leaves
               them at 1024, and the overflow put a horizontal scrollbar on the whole page. They go
