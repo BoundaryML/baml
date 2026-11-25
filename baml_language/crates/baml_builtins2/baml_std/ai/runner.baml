@@ -42,6 +42,11 @@ class _AcceptedTurn {
 /// output type. `Out` lives on `run`, where it is inferred from the spec
 /// argument, so no call site needs to name it.
 ///
+/// By default (`schema_attempts = 1`) a complete reply that does not fit the
+/// output type throws `errors.ParseFailed` carrying that reply, so a direct
+/// call makes one request. `schema_attempts = 2` or more opts in to
+/// correction re-asks.
+///
 /// `on_event` gets every event of the run's journal, in journal order, one
 /// time each. A run that ends with an error has delivered everything it
 /// recorded before the error leaves `run`: the reply that did not parse (and
@@ -50,8 +55,10 @@ class _AcceptedTurn {
 /// with `FinalProduced`, a failed one with the error.
 class Agent {
     max_steps: int,
-    // Total model invocations allowed for one schema candidate. The default
-    // preserves the existing initial attempt plus one correction re-ask.
+    // Total model invocations allowed for one schema candidate. The default,
+    // 1, makes one request and throws `ParseFailed` with that reply when it
+    // does not parse. Set 2 or more to re-ask with a correction before giving
+    // up.
     schema_attempts: int,
     client: Client?,
     tool_errors: root.tools.ErrorMode,
@@ -59,7 +66,7 @@ class Agent {
 
     function new(
         max_steps: int = 12,
-        schema_attempts: int = 2,
+        schema_attempts: int = 1,
         client: Client? = null,
         tool_errors: root.tools.ErrorMode = root.tools.ErrorMode.Report,
         on_event: ((root.events.Event) -> void)? = null,
@@ -261,10 +268,10 @@ class Agent {
 
     /// (internal) One accepted model turn, with the within-turn repair loop: when a
     /// Complete turn's candidate does not parse, commit the failed turn and a
-    /// correction request as ordinary events and invoke again, under a fixed
-    /// attempt budget. Everything that happened is on the record; a repair
-    /// attempt does not consume a step. Token usage of every attempt is
-    /// added to `total`.
+    /// correction request as ordinary events and invoke again, under the
+    /// `schema_attempts` budget (1 by default, which never re-asks).
+    /// Everything that happened is on the record; a repair attempt does not
+    /// consume a step. Token usage of every attempt is added to `total`.
     function _attempt_turn<Out>(
         self,
         c: Client,
