@@ -40,6 +40,7 @@ pub struct Mutator {
     pub(crate) unwind: Unwinder,
     on_worker_stack: bool,
     pub(crate) polling: Option<&'static str>,
+    pub(crate) spent_native: *mut Head,       // the `async` native that ended last; freed when the next one ends
 }
 ```
 
