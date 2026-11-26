@@ -1,0 +1,95 @@
+# gcbench configuration: the rows to compare and the workloads to run.
+#
+# A variant is a label plus how to pack and how to run:
+#   baml_cli    the CLI that packs, relative to baml_language/ or absolute; `${VAR}`
+#               and `~` are expanded (default target/release/baml-cli)
+#   pack_host   the host embedded in the packed program (default: the
+#               baml-pack-host next to baml_cli)
+#   pack_toml   text appended to the packed project's baml.toml, for settings
+#               baked in at pack time, e.g. pack_toml = "[pack.gc]\ngrowth = 2"
+#   env         environment for every run, e.g. { BAML_TELEMETRY = "low" }
+#   sweep       run the variant once per value of one environment variable:
+#               sweep = { var = "NAME", values = [1.5, 2, 4] }. Each value is a row
+#               labelled `<label>@<value>`.
+#   relative_to the variant the sweep tables compare against (default: `baseline`).
+#   kind        "vm" (the default), "native" or "go": see the README, "Native code
+#               and Go". A native row takes native_pack (default
+#               target/fasttest/examples/native_pack) and flags; a Go row takes
+#               only env. baml_cli, pack_host and pack_toml are for vm rows.
+#
+# Every run gets a fresh, empty BAML_HOME (a variant cannot change it), and
+# BAML_TELEMETRY=off unless the variant's env sets it. Inherited BAML_GC_*,
+# BAML_TELEMETRY, MALLOC_*, GLIBC_TUNABLES and every swept variable are dropped:
+# only a variant sets them.
+# Variants with the same baml_cli, pack_host and pack_toml share packed programs.
+
+baseline = "vm"
+
+# Iterations of the steady-state build (the cold build is always 1). The steady
+# cost per iteration is (cost(N) - cost(1)) / (N - 1). The counts below give a
+# steady run of about one second on a recent laptop; redo them for another
+# machine with `gcbench.py calibrate --target 1.0`, and keep them fixed while
+# comparing.
+iters = 20
+
+# The default set: the memory workloads, plus five that allocate little or in
+# another shape, so a cost on code that does not allocate shows too.
+workloads = [
+  "memory/binary-trees-14",
+  "memory/live-heap",
+  "memory/allocation-low-retention",
+  "memory/allocation-high-retention",
+  "memory/cyclic-churn",
+  "memory/cycles-into-live",
+  "memory/splay-2k",
+  "memory/heap-calls",
+  "memory/live-walk",
+  "compute/nbody-20k",
+  "compute/fib32-recursive",
+  "compute/json-ndjson-events",
+  "programs/richards-50",
+  "programs/agent-loop-300",
+]
+
+[iters_override]
+"memory/binary-trees-14" = 5
+"memory/live-heap" = 40
+"memory/allocation-low-retention" = 22
+"memory/allocation-high-retention" = 20
+"memory/cyclic-churn" = 170
+"memory/cycles-into-live" = 35
+"memory/splay-2k" = 24
+"memory/heap-calls" = 1200
+"memory/live-walk" = 50
+"compute/nbody-20k" = 22
+"compute/fib32-recursive" = 12
+"compute/json-ndjson-events" = 600
+"programs/richards-50" = 13
+"programs/agent-loop-300" = 100
+
+[groups]
+growth = ["vm-growth"]
+min-growth = ["vm-min-growth"]
+
+# The collector settings: after each collection the next one waits until the heap
+# has grown by BAML_GC_GROWTH times the data that survived, and by at least
+# BAML_GC_MIN_GROWTH. A build without these settings ignores the variables, and
+# every row then matches the baseline.
+
+# This checkout's release build at its default settings: the baseline.
+[[variant]]
+label = "vm"
+
+# Growth 4 is the default: that row repeats the baseline, so it shows the noise.
+[[variant]]
+label = "vm-growth"
+sweep = { var = "BAML_GC_GROWTH", values = [1.5, 2, 4, 8] }
+
+[[variant]]
+label = "vm-min-growth"
+sweep = { var = "BAML_GC_MIN_GROWTH", values = ["2MiB", "8MiB", "32MiB"] }
+
+# Both at once, as a memory-tight deployment would set them.
+[[variant]]
+label = "vm-tight"
+env = { BAML_GC_GROWTH = "2", BAML_GC_MIN_GROWTH = "2MiB" }

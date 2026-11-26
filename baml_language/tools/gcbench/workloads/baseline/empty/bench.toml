@@ -1,0 +1,2 @@
+# gcbench baseline: a program that allocates nothing.
+expect = "1"

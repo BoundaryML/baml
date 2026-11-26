@@ -1,0 +1,16 @@
+# Self-test of the sweep path: `vm-standin` sweeps a variable the VM ignores, so
+# every row should come out at about 1.000x of `vm`, noise aside. Not a benchmark.
+baseline = "vm"
+workloads = ["memory/binary-trees-14", "memory/live-heap", "memory/splay-2k"]
+
+[iters_override]  # as in variants.toml
+"memory/binary-trees-14" = 5
+"memory/live-heap" = 40
+"memory/splay-2k" = 24
+
+[[variant]]
+label = "vm"
+
+[[variant]]
+label = "vm-standin"
+sweep = { var = "GCBENCH_STANDIN", values = [1.5, 2, 4] }
