@@ -3,7 +3,9 @@
 
 Each workload is packed with `baml-cli pack` and run by the VM, once per row:
 a build of the CLI and pack host, plus environment variables (for example a
-collector setting swept over several values).
+collector setting swept over several values). A row of kind `native` compiles
+the workload to machine code with `native_pack` instead, and a row of kind `go`
+builds and runs the workload's Go port.
 
     gcbench.py build     pack, verify and count collections (no timing)
     gcbench.py run       build what is missing, then measure and summarise
@@ -38,12 +40,18 @@ WORKLOADS = BAML_LANGUAGE / "tools/speedtest/workloads"
 # used when an id is not found under speedtest's.
 OWN_WORKLOADS = HERE / "workloads"
 DEFAULT_CLI = "target/release/baml-cli"
+DEFAULT_NATIVE_PACK = "target/fasttest/examples/native_pack"
+GO_DRIVERS = BAML_LANGUAGE / "tools/speedtest/src/speedtest/drivers/go"
+KINDS = ("vm", "native", "go")
+STATS_PREFIX = "baml-gc-stats "
 ENTRY = "gcbench_entry"
 # Inherited variables that would change a collector's behaviour: only a variant's
 # own env may set them. BAML_TELEMETRY and BAML_HOME are set per run; a swept
 # variable is dropped too (see clean_env), so an inherited value cannot leak into
-# the baseline. glibc's malloc tunables change the footprint on Linux.
-CONTROLLED_ENV = re.compile(r"^(BAML_GC_|BAML_TELEMETRY$|BAML_HOME$|MALLOC_|GLIBC_TUNABLES$)")
+# the baseline. glibc's malloc tunables change the footprint on Linux; the GO*
+# variables change the Go rows' collector.
+CONTROLLED_ENV = re.compile(r"^(BAML_GC_|BAML_TELEMETRY$|BAML_HOME$|MALLOC_|GLIBC_TUNABLES$|BAML_MIGRATE_STRESS$"
+                            r"|GODEBUG$|GOGC$|GOMEMLIMIT$|GOMAXPROCS$)")
 # Set by a job queue that runs gcbench while it holds back other work: when the
 # machine still looks busy, measure after a short wait, with a warning.
 QUEUED_ENV = "GCBENCH_QUEUED"
@@ -89,6 +97,9 @@ class Variant:
     sweep_var: str | None = None    # run once per value of this environment variable
     sweep_values: list = field(default_factory=list)
     relative_to: str | None = None  # the sweep tables' reference variant (default: the baseline)
+    kind: str = "vm"                # "vm", "native" (native_pack) or "go"
+    native_pack: Path | None = None
+    flags: list = field(default_factory=list)  # native_pack's own flags, e.g. ["--checked"]
 
     @property
     def env_vars(self):
@@ -97,6 +108,8 @@ class Variant:
         return {"BAML_TELEMETRY": "off"} | self.env
 
     def describe(self):
+        if self.kind != "vm":
+            return describe_other(self)
         d = {"label": self.label, "env": self.env_vars, "pack_toml": self.pack_toml,
              "baml_cli": binary_identity(self.baml_cli, version=True), "pack_host": binary_identity(self.pack_host)}
         if self.sweep_var:
@@ -146,10 +159,14 @@ def load_config(path):
     variants = []
     for v in raw.get("variant", []):
         var, values = parse_sweep(v["label"], v.get("sweep"))
+        kind = v.get("kind", "vm")
+        if kind not in KINDS:
+            sys.exit(f"variant {v['label']}: kind is one of {', '.join(KINDS)}, not {kind!r}")
         cli = config_path(v.get("baml_cli", DEFAULT_CLI))
         variant = Variant(v["label"], cli, config_path(v["pack_host"]) if "pack_host" in v else cli.parent / "baml-pack-host",
                           str(v.get("pack_toml", "")), {k: str(x) for k, x in v.get("env", {}).items()},
-                          var, values, v.get("relative_to"))
+                          var, values, v.get("relative_to"), kind,
+                          config_path(v.get("native_pack", DEFAULT_NATIVE_PACK)), list(v.get("flags", [])))
         try:
             tomllib.loads(pack_project_toml(variant))
         except tomllib.TOMLDecodeError as e:
@@ -180,7 +197,7 @@ def load_config(path):
 
 def missing_binaries(variants):
     """Exit, naming every selected variant whose baml-cli or pack host is missing."""
-    missing = [f"{v.label}: no {what} at {path}" for v in variants
+    missing = [f"{v.label}: no {what} at {path}" for v in variants if v.kind == "vm"
                for what, path in (("baml-cli", v.baml_cli), ("baml-pack-host", v.pack_host)) if not path.is_file()]
     if missing:
         sys.exit("missing binaries (cargo build --release -p baml_cli -p baml_pack_host):\n  " + "\n  ".join(missing))
@@ -359,6 +376,215 @@ def build_vm(variant, w, n, cache):
     return Exe(final / "exe", key)
 
 
+# ------------------------------------------------------------ native and Go rows
+
+
+def available(variants):
+    """The variants whose toolchain is here. A native or Go row without its tool
+    (no native_pack, no `go`, native code on a machine it does not target) is
+    reported and left out, never an error; the vm rows are checked by
+    missing_binaries as before."""
+    out = []
+    for v in variants:
+        why = None
+        if v.kind == "native":
+            if platform.machine().lower() not in ("arm64", "aarch64"):
+                why = f"native code targets arm64 only, this machine is {platform.machine()}"
+            elif not v.native_pack.is_file():
+                why = (f"no native_pack at {v.native_pack} (cargo build --profile fasttest -p baml_compiler2_native "
+                       "--example native_pack)")
+        elif v.kind == "go" and goroot() is None:
+            why = "no Go toolchain (GCBENCH_GOROOT, or the GOROOT of `go` in this repository)"
+        if why:
+            warn_loudly(f"{v.label}: unavailable, its rows are skipped: {why}")
+        else:
+            out.append(v)
+    return out
+
+
+def describe_other(v):
+    d = {"label": v.label, "kind": v.kind, "env": v.env_vars}
+    if v.kind == "native":
+        d |= {"native_pack": native_identity(v.native_pack), "flags": v.flags}
+    else:
+        d["go"] = go_version()
+    return d
+
+
+def run_args(kind, exe, k):
+    """How an executable runs k iterations. The vm and native programs have the
+    count built in; speedtest's Go driver takes the timed calls and the untimed
+    ones, `./workload JOBS WARMUP`, and makes WARMUP + JOBS calls in all."""
+    return [exe, str(k - 1), "1"] if kind == "go" else [exe]
+
+
+def build_exe(variant, w, n, cache):
+    if variant.kind == "native":
+        return build_native(variant, w, n, cache)
+    if variant.kind == "go":
+        return build_go(w, cache)  # one executable for every count: see run_args
+    return build_vm(variant, w, n, cache)
+
+
+def native_identity(pack):
+    """What native_pack produces depends on its binary and on the runtime archives
+    it links by path (baked in when it was built), so both go into the cache key."""
+    if pack in _identities:
+        return _identities[pack]
+    blob = pack.read_bytes()
+    archives = sorted({m.decode() for m in re.findall(rb"/(?:[A-Za-z0-9_.+-]+/)*?libbaml_native_rt[A-Za-z0-9_]*\.a", blob)})
+    ident = {"path": str(pack), "sha256": hashlib.sha256(blob).hexdigest()[:16],
+             "built": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(pack.stat().st_mtime)), **git_info(pack),
+             "archives": {a: file_digest(a) for a in archives if Path(a).exists()}}
+    _identities[pack] = ident
+    return ident
+
+
+def build_native(variant, w, n, cache):
+    """Compile the workload's main.baml with the generated entry appended, as one
+    file in a directory of its own (native_pack opens the directory as a project),
+    to an executable. Cached by native_pack's content, its runtime archives, its
+    flags and the source."""
+    try:
+        source = w.baml + wrapper(w, n)
+    except ValueError as e:
+        return Exe(None, "", str(e))
+    ident = native_identity(variant.native_pack)
+    key = digest("native", ident["sha256"], ident["archives"], variant.flags, source)
+    d = cache / "native" / key
+    meta = d / "meta.json"
+    if meta.exists():
+        m = json.loads(meta.read_text())
+        return Exe(d / "exe" if m["ok"] else None, key, m.get("error"))
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "prog.baml").write_text(source)
+    cmd = [str(variant.native_pack), *variant.flags, str(d / "prog.baml"), ENTRY, str(d / "exe")]
+    start = time.perf_counter()
+    r = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                       env={**cli_env(), "BAML_TELEMETRY": "off"})
+    ok = r.returncode == 0 and (d / "exe").exists()
+    error = None if ok else (r.stderr.strip() or r.stdout.strip() or f"exit {r.returncode}")[-2000:]
+    meta.write_text(json.dumps({"ok": ok, "error": error, "cmd": cmd, "workload": w.id, "n": n,
+                                "seconds": round(time.perf_counter() - start, 2)}, indent=1))
+    return Exe(d / "exe" if ok else None, key, error)
+
+
+_goroot = []
+
+
+def goroot():
+    """The Go toolchain: GCBENCH_GOROOT, or the one `go` picks in this repository
+    (a version manager's shim picks it by directory). None when there is none."""
+    if not _goroot:
+        root = os.environ.get("GCBENCH_GOROOT")
+        if not root:
+            env = {k: v for k, v in os.environ.items() if k != "GOROOT"}
+            try:
+                r = subprocess.run(["go", "env", "GOROOT"], capture_output=True, text=True,
+                                   cwd=BAML_LANGUAGE.parent, env=env, stdin=subprocess.DEVNULL)
+                root = r.stdout.strip() if r.returncode == 0 else None
+            except OSError:
+                root = None
+        _goroot.append(root if root and Path(root, "bin/go").exists() else None)
+    return _goroot[0]
+
+
+def go_env():
+    """The environment Go builds and runs in: that toolchain, pinned."""
+    root = goroot()
+    return {**os.environ, "GOROOT": root, "GOTOOLCHAIN": "local", "PATH": f"{root}/bin{os.pathsep}{os.environ['PATH']}"}
+
+
+def go_version():
+    return subprocess.run([f"{goroot()}/bin/go", "version"], capture_output=True, text=True, env=go_env()).stdout.strip()
+
+
+def build_go(w, cache):
+    """Build the workload's main.go with speedtest's Go driver: report.go and the
+    entry that calls Setup() once, untimed, when the port has Setup and Run, as the
+    BAML entry calls setup() once. Default flags. Cached by the Go version and the
+    sources."""
+    go = w.dir / "main.go"
+    if not go.exists():
+        return Exe(None, "", "no main.go")
+    go_src = go.read_text()
+    setup = bool(re.search(r"^func Setup\(", go_src, re.M) and re.search(r"^func Run\(", go_src, re.M))
+    entry = GO_DRIVERS / ("entry_setup.go" if setup else "entry_main.go")
+    key = digest("go", go_version(), go_src, (GO_DRIVERS / "report.go").read_text(), entry.read_text())
+    d = cache / "go" / key
+    if (d / "meta.json").exists():
+        m = json.loads((d / "meta.json").read_text())
+        return Exe(d / "workload" if m["ok"] else None, key, m.get("error"))
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "go.mod").write_text("module workload\n\ngo 1.22\n")
+    shutil.copy(go, d / "main.go")
+    shutil.copy(GO_DRIVERS / "report.go", d / "report.go")
+    shutil.copy(entry, d / "entry.go")
+    r = subprocess.run([f"{goroot()}/bin/go", "build", "-o", "workload", "."], cwd=d, capture_output=True,
+                       text=True, env=go_env(), stdin=subprocess.DEVNULL)
+    ok = r.returncode == 0
+    error = None if ok else r.stderr.strip()[-2000:]
+    (d / "meta.json").write_text(json.dumps({"ok": ok, "error": error, "workload": w.id}, indent=1))
+    return Exe(d / "workload" if ok else None, key, error)
+
+
+# Go's GODEBUG=gctrace=1 line: the wall-clock times of its phases, the first and
+# the last stopping the world, and the heap at the start of the cycle.
+GCTRACE = re.compile(r"^gc \d+ @[\d.]+s \d+%: ([\d.]+)\+[\d.]+\+([\d.]+) ms clock.*? (\d+)->\d+->\d+ MB")
+
+
+def parse_stats(stderr):
+    """The native runtime's `baml-gc-stats {json}` line, or Go's gctrace lines in
+    the same shape (a pause = the two stop-the-world phases). None when there is
+    neither."""
+    pauses, heap = [], 0
+    for line in stderr.splitlines():
+        if line.startswith(STATS_PREFIX):
+            return json.loads(line[len(STATS_PREFIX):])
+        m = GCTRACE.match(line)
+        if m:
+            pauses.append(round((float(m.group(1)) + float(m.group(2))) * 1e6))
+            heap = max(heap, int(m.group(3)) * MIB)
+    if not pauses:
+        return None
+    return {"collections": len(pauses), "pause_ns_total": sum(pauses), "pause_ns_max": max(pauses),
+            "pause_ns": pauses, "go_heap_peak": heap}
+
+
+def gc_probe_other(inst, w, cmd, timeout):
+    """GC counts and pauses of a native or Go program, from one untimed run that
+    asks for them: BAML_GC_STATS=1 for native code (a runtime without it prints
+    nothing, and the row has no GC numbers), GODEBUG=gctrace=1 for Go, which
+    reports nothing when nothing was collected. The timed runs ask for nothing.
+    Cached next to the executable."""
+    v = inst.variant
+    ask = {"BAML_GC_STATS": "1"} if v.kind == "native" else {"GODEBUG": "gctrace=1"}
+    env_vars = v.env_vars | inst.setting | ask
+    marker = Path(cmd[0]).parent / f"gcprobe-{digest(env_vars, [str(c) for c in cmd[1:]])}.json"
+    if marker.exists():
+        return json.loads(marker.read_text())
+    p = subprocess.Popen(list(map(str, cmd)), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
+                         env=run_env(inst) | ask, text=True, start_new_session=True)
+    start = time.perf_counter_ns()
+    try:
+        out, err = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.communicate()
+        return {"error": "probe run timed out"}
+    t = {"exit": p.returncode, "wall_ns": time.perf_counter_ns() - start, "kind": v.kind,
+         "stdout": ([line for line in out.splitlines() if line.strip()] or [""])[-1], "stderr_tail": err[-1500:]}
+    if outcome(w, t)[0] != "ok":
+        return {"error": f"probe run failed: {describe_failure(t)}"}
+    stats = parse_stats(err)
+    if stats is None and v.kind == "native":
+        return {"error": "the program printed no baml-gc-stats line (its runtime does not report collections)"}
+    stats = stats or {"collections": 0, "pause_ns_total": 0, "pause_ns_max": 0, "pause_ns": []}
+    stats |= {"probe_wall_ns": t["wall_ns"]}
+    marker.write_text(json.dumps(stats))
+    return stats
+
+
 # ---------------------------------------------------------------------- running
 
 TIME_FIELDS = {
@@ -483,6 +709,11 @@ def check_output(w, trial):
     """(ok, acc): the program prints "<first result> <acc>"."""
     if trial["exit"] != 0:
         return False, None
+    if trial.get("kind") == "go":  # speedtest's Go driver prints a JSON report, without an accumulator
+        try:
+            return str(json.loads(trial["stdout"])["result"]) == w.expect, None
+        except (ValueError, KeyError, TypeError):
+            return False, None
     out = trial["stdout"]
     if out.startswith('"'):  # a string result prints JSON-quoted, as `baml run` prints it
         try:
@@ -516,7 +747,7 @@ def verify(inst, w, cmd, timeout):
 GC_QUERY = "SELECT duration, context_metadata FROM spans WHERE span_name = 'baml.gc'"
 
 
-def gc_probe(inst, w, exe, timeout):
+def gc_probe(inst, w, cmd, timeout):
     """GC counts and pauses for a program, from one untimed run with telemetry
     on: the engine records every collection as a `baml.gc` span (its duration is
     the pause, from the request to the end of the collection, parking included;
@@ -525,6 +756,9 @@ def gc_probe(inst, w, exe, timeout):
     probe's own counts can differ slightly from a telemetry-off run. The
     collection at shutdown is left out. Cached next to the executable."""
     v = inst.variant
+    if v.kind != "vm":
+        return gc_probe_other(inst, w, cmd, timeout)
+    exe = cmd[0]
     env_vars = v.env_vars | inst.setting
     marker = Path(exe).parent / f"gcprobe-{digest(env_vars)}.json"
     if marker.exists():
@@ -580,11 +814,15 @@ def apply_probe(a, probe, n):
         a[phase]["pause_share_med"] = s["pause_ns_total"] / s["probe_wall_ns"] if s["probe_wall_ns"] else None
     if "steady" in a and n > 1:
         a["steady"]["collections_per_iter"] = (steady["collections"] - cold["collections"]) / (n - 1)
+    for key in ("bytes_copied", "heap_capacity_peak"):  # the native runtime's own counts, when it gives them
+        if key in steady and "steady" in a:
+            a["steady"][key] = steady[key]
 
 
-def command(exes, phase, n):
+def command(exes, phase, n, kind="vm"):
     """The command line for one phase: cold = one iteration, steady = n iterations."""
-    return [exes[1 if phase == "cold" else n]]
+    k = 1 if phase == "cold" else n
+    return run_args(kind, exes[k], k)
 
 
 SWEPT_VARS = set()  # every variable any configured variant sweeps (filled by main)
@@ -595,7 +833,8 @@ def clean_env(base):
 
 
 def run_env(inst):
-    return {**clean_env(os.environ), **inst.variant.env_vars, **inst.setting}
+    base = go_env() if inst.variant.kind == "go" else os.environ
+    return {**clean_env(base), **inst.variant.env_vars, **inst.setting}
 
 
 _home_root = None
@@ -615,7 +854,10 @@ def run_trial(inst, cmd, timeout=None):
     home = _home_root / "home"
     shutil.rmtree(home, ignore_errors=True)
     home.mkdir()
-    return run_once(cmd, env | {"BAML_HOME": str(home)}, timeout)
+    trial = run_once(cmd, env | {"BAML_HOME": str(home)}, timeout)
+    if inst.variant.kind == "go":
+        trial["kind"] = "go"
+    return trial
 
 
 # ------------------------------------------------------------------ machine load
@@ -685,7 +927,10 @@ def prepare(cfg, args, cache):
     """Pack, verify and probe everything. Returns the plan. A row that fails
     verification on a workload is dropped from that workload (and reported
     loudly); the rest of its variant still runs."""
-    variants = select_variants(cfg, args.variants)
+    variants = available(select_variants(cfg, args.variants))
+    if not variants:
+        log("nothing to run: every selected row is unavailable (see above)")
+        sys.exit(0)
     missing_binaries(variants)
     if cfg["baseline"] not in {v.label for v in variants}:
         warn_loudly(f"the baseline variant {cfg['baseline']!r} is not configured: ratios will be empty")
@@ -700,38 +945,39 @@ def prepare(cfg, args, cache):
             insts = [i for i in rows if i.variant is v]
             if not insts:
                 continue
-            built = {k: build_vm(v, w, k, cache) for k in (1, n)}
+            built = {k: build_exe(v, w, k, cache) for k in (1, n)}
             bad = [e for e in built.values() if e.error]
             if bad:
                 problems.append(f"{v.label}: does not compile: {bad[0].error.splitlines()[-1][:300]}")
                 continue
             for inst in insts:
                 for k, e in built.items():
-                    t = verify(inst, w, [e.path], args.timeout)
+                    t = verify(inst, w, run_args(v.kind, e.path, k), args.timeout)
                     if not t["ok"]:
                         problems.append(f"{inst.label}: N={k} FAILED verification ({t['outcome']}): "
                                         f"{t['failure'] if t['outcome'] != 'wrong' else repr(t['stdout'][:80])}")
                         dropped.add((inst.label, wid))
                         break
-                    accs.setdefault(k, {})[inst.label] = t["acc"]
+                    if v.kind != "go":  # Go's driver prints no accumulator
+                        accs.setdefault((v.kind, k), {})[inst.label] = t["acc"]
                 if args.gc_probe and (inst.label, wid) not in dropped:
-                    probe = {phase: gc_probe(inst, w, built[k].path, args.timeout)
+                    probe = {phase: gc_probe(inst, w, run_args(v.kind, built[k].path, k), args.timeout)
                              for phase, k in (("cold", 1), ("steady", n))}
                     errors = [p["error"] for p in probe.values() if "error" in p]
                     if errors:
                         log(f"  {wid}: {inst.label}: no GC numbers: {errors[0]}")
                     probes[(inst.label, wid)] = probe
             exes[(v.label, wid)] = {k: e.path for k, e in built.items()}
-        # Every row must compute the same accumulated result, in the cold program
-        # and in the steady one: the baseline's (or, without one, the most
-        # common). A row that disagrees is dropped.
-        for k, by_label in accs.items():
+        # Every row of a kind must compute the same accumulated result, in the
+        # cold program and in the steady one: the baseline's (or, without one,
+        # the most common). A row that disagrees is dropped.
+        for (kind, k), by_label in accs.items():
             live = {label: acc for label, acc in by_label.items() if (label, wid) not in dropped}
             if not live:
                 continue
             ref = (live[cfg["baseline"]] if cfg["baseline"] in live
                    else max(set(live.values()), key=list(live.values()).count))
-            ref_accs.setdefault(wid, {})[k] = ref
+            ref_accs.setdefault(wid, {})[(kind, k)] = ref
             for label, acc in live.items():
                 if acc != ref:
                     problems.append(f"{label}: N={k} FAILED verification (accumulated result {acc!r}, "
@@ -835,9 +1081,9 @@ def measure(cfg, args, cache):
                 if exes is None or (inst.label, w.id) in skip:
                     continue
                 for phase in ("cold", "steady"):
-                    t = run_trial(inst, command(exes, phase, n), timeout=args.timeout)
+                    t = run_trial(inst, command(exes, phase, n, inst.variant.kind), timeout=args.timeout)
                     t["outcome"], acc = outcome(w, t)
-                    expected = plan["accs"].get(w.id, {}).get(1 if phase == "cold" else n)
+                    expected = plan["accs"].get(w.id, {}).get((inst.variant.kind, 1 if phase == "cold" else n))
                     if t["outcome"] == "ok" and expected is not None and acc != expected:
                         t["outcome"] = "wrong"
                         t["stderr_tail"] = f"accumulated result {acc!r}, expected {expected!r}"
@@ -1018,9 +1264,14 @@ def summarize(results):
     origin = lambda p: (f"(checkout at {p['commit'][:10] if p.get('commit') else '?'}{'+dirty' if p.get('dirty') else ''}, "
                         f"sha256 {p['sha256']})")
     for v in meta["variants"]:
-        extra = (f" baml-cli {v['baml_cli']['path']} {origin(v['baml_cli'])}"
-                 f"{' ' + repr(v['baml_cli']['version']) if v['baml_cli'].get('version') else ''},"
-                 f" pack host ({v['pack_host']['sha256']})")
+        if v.get("kind") == "native":
+            extra = f" native_pack {v['native_pack']['path']} {origin(v['native_pack'])} flags {v['flags']}"
+        elif v.get("kind") == "go":
+            extra = f" {v['go']}"
+        else:
+            extra = (f" baml-cli {v['baml_cli']['path']} {origin(v['baml_cli'])}"
+                     f"{' ' + repr(v['baml_cli']['version']) if v['baml_cli'].get('version') else ''},"
+                     f" pack host ({v['pack_host']['sha256']})")
         sweep = v.get("sweep")
         sweep = f" sweeps {sweep['var']} over {', '.join(sweep['values'])}" if sweep else ""
         lines.append(f"- `{v['label']}`: env {v['env']}{sweep}{extra}")
@@ -1029,9 +1280,12 @@ def summarize(results):
               + ("milliseconds of user + system CPU time (wait4 resource usage)" if cpu_ns else "million cycles")
               + " (summed over threads), best of the rounds, median in brackets. Peak = "
               + ("peak resident set size (ru_maxrss)" if cpu_ns else "peak memory footprint")
-              + " of the N-iteration run. GC columns come from the untimed telemetry probe run (each `baml.gc` "
-              "span; its pause includes parking the VM's threads; the shutdown collection is left out); pauses "
-              "are from the N-iteration run. fails counts runs that did not finish or gave a wrong result.", ""]
+              + " of the N-iteration run. GC columns come from one untimed probe run per program: for the VM, "
+              "with telemetry on (each `baml.gc` span; its pause includes parking the VM's threads; the shutdown "
+              "collection is left out); for native code, the `baml-gc-stats` line of BAML_GC_STATS=1 (a pause "
+              "leaves out dropping owned values); for Go, GODEBUG=gctrace=1 (a pause is the two stop-the-world "
+              "phases). Pauses are from the N-iteration run. fails counts runs that did not finish or gave a "
+              "wrong result.", ""]
     for wid, info in meta["workloads"].items():
         lines += [f"## {wid} (N = {info['iters']})", "",
                   f"| variant | steady {cpu_unit}/iter | cold {cpu_unit} | steady wall ms/iter | peak MiB "
@@ -1089,6 +1343,8 @@ def calibrate(cfg, args, cache):
     if not cfg["variants"]:
         sys.exit("calibrate needs a variant in the config")
     v = next((v for v in cfg["variants"] if v.label == cfg["baseline"]), cfg["variants"][0])
+    if not available([v]):
+        sys.exit(f"calibrate needs {v.label}'s toolchain")
     missing_binaries([v])
     k = args.iters or 6
     if k < 2:
@@ -1102,11 +1358,11 @@ def calibrate(cfg, args, cache):
             for n in (1, kk):
                 if n in walls:
                     continue
-                e = build_vm(v, w, n, cache)
+                e = build_exe(v, w, n, cache)
                 if e.error:
                     error = f"does not build: {e.error.splitlines()[-1][:200]}"
                     break
-                ts = [run_trial(Instance(v), [e.path]) for _ in range(2)]
+                ts = [run_trial(Instance(v), run_args(v.kind, e.path, n)) for _ in range(2)]
                 if any(outcome(w, t)[0] != "ok" for t in ts):
                     error = "FAILED a calibration run"
                     break
@@ -1181,9 +1437,9 @@ def memtrace(cfg, args, cache):
         for name, extra in sets.items():
             import tempfile
             env = run_env(Instance(v)) | extra | {"BAML_HOME": tempfile.mkdtemp(prefix="gcbench-home-")}
-            r = trace_rss([exes[n]], env, args.interval)
+            r = trace_rss(command(exes, "steady", n, v.kind), env, args.interval)
             shutil.rmtree(env["BAML_HOME"], ignore_errors=True)
-            ok, _ = check_output(w, {"exit": r["exit"], "stdout": r["stdout"]})
+            ok, _ = check_output(w, {"exit": r["exit"], "stdout": r["stdout"], "kind": v.kind})
             kib = [k for _, k in r["samples"]]
             peak_at = kib.index(max(kib)) if kib else 0
             drops = [a - b for a, b in zip(kib, kib[1:]) if a - b >= 1024]

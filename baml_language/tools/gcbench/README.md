@@ -53,6 +53,61 @@ are relative to `baml_language/`. `${VAR}` and `~` are expanded. The keys are
 described at the top of `variants.toml`. A variant can also bake settings in at
 pack time with `pack_toml`, for example `"[pack.gc]\ngrowth = 2"`.
 
+## Native code and Go
+
+Two more kinds of row run the same workloads outside the VM. A variant picks one
+with `kind`:
+
+- `kind = "native"` compiles the workload's `main.baml`, with the generated
+  N-iteration entry appended, to an executable with `native_pack`, the native
+  backend's compiler (`native_pack = "<path>"`, default
+  `target/fasttest/examples/native_pack`; `flags` are passed to it, for example
+  `["--checked"]`). Native code targets arm64 only.
+- `kind = "go"` builds the workload's Go port, `main.go` next to `main.baml`,
+  with speedtest's Go driver (`tools/speedtest/src/speedtest/drivers/go`), using
+  the Go toolchain `go` picks in this repository, or `GCBENCH_GOROOT`.
+
+A workload's `setup()` runs once, before the iterations, in both languages: the
+BAML entry calls it before its loop, and the Go driver calls `Setup()` before
+`Run()` when the port has both.
+
+When a kind's tool is missing (no `native_pack` at the path, no Go toolchain,
+or a machine native code does not target), its rows are reported as unavailable
+and skipped. That is never an error, and the other rows run. A workload that does
+not compile for a kind, or has no `main.go`, skips that kind's rows for that
+workload, with the compiler's message.
+
+Every run is still verified. A native or Go program must print the workload's
+expected first result. Rows of one kind must agree on the accumulated result.
+Speedtest's Go driver prints the first result only, so a Go row has no
+accumulated result to compare.
+
+GC numbers come from the same untimed probe run as the VM's, asked for in each
+language's own way:
+
+- native: `BAML_GC_STATS=1`, which makes a runtime that has it print one
+  `baml-gc-stats {json}` line at exit. Its pauses leave out dropping owned Rust
+  values. The probe also keeps `bytes_copied` and `heap_capacity_peak` in
+  `results.json`. A runtime without the line gives the row no GC numbers.
+- Go: `GODEBUG=gctrace=1`. A pause is the two stop-the-world phases of a cycle.
+
+The timed runs ask for neither. Inherited `GODEBUG`, `GOGC`, `GOMEMLIMIT`,
+`GOMAXPROCS` and `BAML_MIGRATE_STRESS` are dropped, like `BAML_GC_*`.
+
+### Native against Go
+
+```sh
+cargo build --profile fasttest -p baml_compiler2_native --example native_pack
+python3 tools/gcbench/gcbench.py build --config tools/gcbench/configs/native-vs-go.toml
+python3 tools/gcbench/gcbench.py run --config tools/gcbench/configs/native-vs-go.toml --rounds 5
+```
+
+`configs/native-vs-go.toml` has `native` as the baseline and one `go` row. The
+ratios in the tables are Go against native. Peak memory is the whole process in
+both languages, runtime included. CPU is summed over threads, and Go's collector
+runs on threads of its own while the native collector runs on the program's
+thread, so read wall time per iteration next to it.
+
 ## What a run does
 
 Each workload from `tools/speedtest/workloads/` is packed twice per build: one

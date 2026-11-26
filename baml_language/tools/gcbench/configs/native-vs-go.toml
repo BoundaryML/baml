@@ -1,0 +1,61 @@
+# Natively compiled BAML against the workloads' Go ports: what the native
+# collector costs end to end (CPU, wall time, peak memory, collections, pauses).
+# Build native_pack first (README, "Native code and Go"); Go comes from the
+# repository's toolchain. The ratios in the tables are Go against native.
+#
+#   python3 tools/gcbench/gcbench.py run --config tools/gcbench/configs/native-vs-go.toml --rounds 5
+baseline = "native"
+
+# Counts for a native steady run of about one second on an Apple M5 Max
+# (`gcbench.py calibrate --target 1.0` with this config). Go runs the same count.
+iters = 20
+
+# The nine memory workloads, then workloads that allocate little or in another
+# shape: numeric code, deep recursion, JSON, and three small programs. Every one
+# compiles natively and has a Go port.
+workloads = [
+  "memory/binary-trees-14",
+  "memory/live-heap",
+  "memory/allocation-low-retention",
+  "memory/allocation-high-retention",
+  "memory/cyclic-churn",
+  "memory/cycles-into-live",
+  "memory/splay-2k",
+  "memory/heap-calls",
+  "memory/live-walk",
+  "compute/nbody-20k",
+  "compute/fib32-recursive",
+  "compute/json-ndjson-events",
+  "compute/merge-sort-20k",
+  "programs/richards-50",
+  "programs/agent-loop-300",
+  "programs/json-parser-15",
+  "programs/request-handler-2k",
+]
+
+[iters_override]
+"memory/binary-trees-14" = 60
+"memory/live-heap" = 150
+"memory/allocation-low-retention" = 140
+"memory/allocation-high-retention" = 100
+"memory/cyclic-churn" = 3000
+"memory/cycles-into-live" = 260
+"memory/splay-2k" = 220
+"memory/heap-calls" = 44000
+"memory/live-walk" = 1300
+"compute/nbody-20k" = 480
+"compute/fib32-recursive" = 150
+"compute/json-ndjson-events" = 350
+"compute/merge-sort-20k" = 30
+"programs/richards-50" = 240
+"programs/agent-loop-300" = 200
+"programs/json-parser-15" = 180
+"programs/request-handler-2k" = 630
+
+[[variant]]
+label = "native"
+kind = "native"
+
+[[variant]]
+label = "go"
+kind = "go"

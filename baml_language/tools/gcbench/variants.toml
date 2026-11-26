@@ -12,6 +12,10 @@
 #               sweep = { var = "NAME", values = [1.5, 2, 4] }. Each value is a row
 #               labelled `<label>@<value>`.
 #   relative_to the variant the sweep tables compare against (default: `baseline`).
+#   kind        "vm" (the default), "native" or "go": see the README, "Native code
+#               and Go". A native row takes native_pack (default
+#               target/fasttest/examples/native_pack) and flags; a Go row takes
+#               only env. baml_cli, pack_host and pack_toml are for vm rows.
 #
 # Every run gets a fresh, empty BAML_HOME (a variant cannot change it), and
 # BAML_TELEMETRY=off unless the variant's env sets it. Inherited BAML_GC_*,
