@@ -54,6 +54,15 @@ use crate::{
     lower_type_expr::{check_throws_wildcard, check_wildcard_type},
 };
 
+/// Whether the file declares a top-level `test` or `testset`.
+pub fn has_top_level_tests(tree: &FileTree) -> bool {
+    let v = View::new(tree);
+    v.tree
+        .list(v.node(v.tree.root()).items)
+        .iter()
+        .any(|item| matches!(item, AnyItem::Test(_)))
+}
+
 /// Lower a source file's items. `file_path` names the `$init_test_<path>`
 /// registrar and, with `test_owner` absent, the tests' owner.
 pub fn lower_file(
@@ -130,8 +139,12 @@ fn lower_file_on(
             &mut items.diags,
             &mut items.env_var_refs,
         );
-        let test_file =
-            synthesize_test_file_let(&init_fn, &mut items.diags, &mut items.env_var_refs);
+        let test_file = synthesize_test_file_let(
+            &init_fn,
+            file_path,
+            &mut items.diags,
+            &mut items.env_var_refs,
+        );
         out.push(Item::Function(init_fn));
         // A session's file-scope bindings are its persistent locals, so a
         // submission declares no global for its tests.

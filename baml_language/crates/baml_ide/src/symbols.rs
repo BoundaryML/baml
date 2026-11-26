@@ -75,7 +75,10 @@ pub(crate) fn surface_of(
         return Surface::LanguageInternal;
     }
     if let Definition::Let(binding) = def
-        && let_data(db, binding).origin == baml_compiler2_ast::LetOrigin::TestFile
+        && matches!(
+            let_data(db, binding).origin,
+            baml_compiler2_ast::LetOrigin::TestFile | baml_compiler2_ast::LetOrigin::TestList
+        )
     {
         return Surface::LanguageInternal;
     }

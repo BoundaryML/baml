@@ -415,9 +415,9 @@ class CompileArtifact {
     _inner: unknown,
 }
 
-/// (internal) A global through which a package's tests are reached. The
+/// (internal) A value through which a package's tests are reached. The
 /// testing package depends on this one, not the other way round, so
-/// `Package.tests` asks the first such global the package declares.
+/// `Package.tests` asks the first entry of the package's test list.
 interface _TestSource {
     function package_tests(
         self,
@@ -661,12 +661,19 @@ class Package {
 
     /// Bundled tests as directly invocable zero-argument callables.
     function tests(self) -> map<string, () -> null throws unknown> throws unknown {
-        // An index loop: `reflect` cannot depend on `baml`, which declares
-        // the list's `Iterable` implementation.
-        let globals = self.globals().values();
-        for (let i = 0; i < globals.length(); i += 1) {
-            if let source: _TestSource = globals[i] {
-                return source.package_tests(self);
+        // The package's test list is the one global named `$tests`, in
+        // whichever namespace its first test file is. An index loop:
+        // `reflect` cannot depend on `baml`, which declares the list's
+        // `Iterable` implementation.
+        let globals = self.globals();
+        let names = globals.keys();
+        for (let i = 0; i < names.length(); i += 1) {
+            if (names[i].ends_with(".$tests")) {
+                if let sources: _TestSource[] = globals[names[i]] {
+                    if (sources.length() > 0) {
+                        return sources[0].package_tests(self);
+                    }
+                }
             }
         }
         {}

@@ -193,17 +193,64 @@ pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
             baml_compiler2_ast::Item::Function(function) => {
                 function.metadata.origin != baml_compiler2_ast::FunctionOrigin::TestInitializer
             }
-            baml_compiler2_ast::Item::Let(binding) => {
-                binding.origin != baml_compiler2_ast::LetOrigin::TestFile
-            }
+            baml_compiler2_ast::Item::Let(binding) => !matches!(
+                binding.origin,
+                baml_compiler2_ast::LetOrigin::TestFile | baml_compiler2_ast::LetOrigin::TestList
+            ),
             _ => true,
         });
+    } else if !file.is_session_submission(db)
+        && baml_compiler2_ast::lower_tree::items::has_top_level_tests(&tree)
+        && package_test_files(db, package.root).first() == Some(&file)
+    {
+        // The package's first test file also declares the package's list of
+        // them. Only a file with tests asks, so a file without depends on
+        // nothing package-wide here.
+        let listed = package_test_files(db, package.root)
+            .iter()
+            .map(|&listed| {
+                let segments = std::iter::once(baml_base::Name::new("root"))
+                    .chain(file_package::file_package(db, listed).namespace_path)
+                    .chain(std::iter::once(baml_base::Name::new(
+                        baml_compiler2_ast::test_file_global_name(
+                            &file_package::root_relative_path(db, listed),
+                        ),
+                    )))
+                    .collect();
+                baml_base::Path::new(segments)
+            })
+            .collect::<Vec<_>>();
+        items.push(baml_compiler2_ast::Item::Let(
+            baml_compiler2_ast::synthesize_test_list_let(&listed),
+        ));
     }
     FileAst {
         items,
         diagnostics,
         env_var_refs,
     }
+}
+
+/// The files of package `root` that declare top-level tests, ordered by
+/// root-relative path: the order the package's `$tests` lists them in, and so
+/// the order their tests are discovered in. A Session submission declares no
+/// test global and is not listed.
+#[salsa::tracked(returns(ref))]
+pub fn package_test_files(db: &dyn Db, root: baml_base::SourceRoot) -> Vec<SourceFile> {
+    let mut files: Vec<(std::path::PathBuf, SourceFile)> = root
+        .files(db)
+        .iter()
+        .copied()
+        .filter(|&file| {
+            !file.is_session_submission(db)
+                && baml_compiler2_ast::lower_tree::items::has_top_level_tests(
+                    &baml_parser::typed_tree(db, file),
+                )
+        })
+        .map(|file| (file_package::root_relative_path(db, file), file))
+        .collect();
+    files.sort_by(|a, b| a.0.cmp(&b.0));
+    files.into_iter().map(|(_, file)| file).collect()
 }
 
 // ── file_semantic_index ───────────────────────────────────────────────────────

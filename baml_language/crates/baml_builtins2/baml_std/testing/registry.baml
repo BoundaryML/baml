@@ -145,8 +145,9 @@ function _claim_test_name(counts: map<string, int>, full_name: string) -> string
 }
 
 /// One source file's top-level `test` / `testset` blocks. The compiler
-/// declares one per file with tests, as a global of the declaring package:
-/// `register` registers the file's blocks on the collector it is given.
+/// declares one per file with tests, as a global of the declaring package,
+/// and lists them all in that package's `$tests`: `register` registers the
+/// file's blocks on the collector it is given.
 class TestFile {
     register: TestSetBody,
 
@@ -168,14 +169,24 @@ implements reflect._TestSource for TestFile {
     }
 }
 
-/// The tests `package` declares, unexpanded: every `TestFile` among its
-/// globals, registered in declaration order. Defaults to the program's root
-/// package, which is what a host that runs tests asks for.
+/// The tests `package` declares, unexpanded. The compiler lists a package's
+/// `TestFile`s in one global named `$tests`, in file order, declared in the
+/// namespace of the package's first test file; each listed registrar is run
+/// against one collector. A package with no tests has no list. Defaults
+/// to the program's root package, which is what a host that runs tests asks
+/// for.
 function registry(package: reflect.Package = reflect.Package.root()) -> TestRegistry {
     let collector = TestCollector.new("");
-    for (let global in package.globals().values()) {
-        if let file: TestFile = global {
-            (file.register)(collector)
+    let globals = package.globals();
+    for (let name in globals.keys()) {
+        if (name.ends_with(".$tests")) {
+            if let sources: reflect._TestSource[] = globals[name] {
+                for (let source in sources) {
+                    if let file: TestFile = source {
+                        (file.register)(collector)
+                    }
+                }
+            }
         }
     }
     TestRegistry.new(collector)

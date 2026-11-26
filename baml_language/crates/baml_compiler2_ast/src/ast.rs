@@ -1589,8 +1589,12 @@ pub enum LetOrigin {
     Client,
     /// The global lowering synthesizes for a file with tests
     /// (`$tests_<file>`): a `testing.TestFile` holding the file's registrar,
-    /// which is how the testing package finds a package's tests.
+    /// listed by the package's `$tests`.
     TestFile,
+    /// The global one file of a package with tests also declares (`$tests`):
+    /// every file's `$tests_<file>`, in file order. It is how the testing
+    /// package finds a package's tests.
+    TestList,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

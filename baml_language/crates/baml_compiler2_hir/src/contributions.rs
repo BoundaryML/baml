@@ -123,7 +123,9 @@ impl<'db> Definition<'db> {
         match item_tree.lets.get(&loc.id(db)).map(|item| item.origin) {
             Some(baml_compiler2_ast::LetOrigin::Client) => DefinitionKind::Client,
             Some(
-                baml_compiler2_ast::LetOrigin::Source | baml_compiler2_ast::LetOrigin::TestFile,
+                baml_compiler2_ast::LetOrigin::Source
+                | baml_compiler2_ast::LetOrigin::TestFile
+                | baml_compiler2_ast::LetOrigin::TestList,
             )
             | None => DefinitionKind::Let,
         }

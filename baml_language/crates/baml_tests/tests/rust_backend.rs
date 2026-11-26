@@ -111,9 +111,10 @@ test "other initializer" { assert.equal(LATER.length(), 3) }
                 _ => {}
             }
         }
-        // Ten source globals and a test file global for each of the two files
-        // with tests, all written by the one `$init`.
-        assert_eq!(helpers, 12);
+        // Ten source globals, a test file global for each of the two files
+        // with tests, and the package's list of those, all written by the one
+        // `$init`.
+        assert_eq!(helpers, 13);
         assert_eq!(chainers, 1);
         assert!(body_of(&module, "user.calls.GlobalCalls").contains("vm.indirect_callee("));
         syn::parse_file(&module.source).expect("generated initializers parse as Rust");
