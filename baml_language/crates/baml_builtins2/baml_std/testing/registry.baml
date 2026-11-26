@@ -205,11 +205,13 @@ class TestRegistry {
     function run_testset(self, name: string) -> TestSetReport {
         for (let ts in self.collector.testsets) {
             if (ts.name == name) {
-                let pool = root._test_pool(0, root._default_test_timeout_ms());
+                root._start_run(0);
                 return root._run_testset(
-                    root._testset_children(self._expand_testset_registry(ts), pool),
+                    root._testset_children(
+                        self._expand_testset_registry(ts),
+                        root._default_test_timeout_ms(),
+                    ),
                     ts.runner,
-                    pool,
                 );
             }
         }
@@ -223,19 +225,8 @@ class TestRegistry {
     }
 
     function run_all(self) -> TestSetReport {
-        self._run_all_pooled(root._test_pool(0, root._default_test_timeout_ms()))
-    }
-
-    function _run_all_pooled(self, pool: _TestPool) -> TestSetReport {
-        root._run_testset(root._testset_children(self, pool), null, pool)
-    }
-
-    function _run_selected(self, names: string[]) -> TestSetReport {
-        self._run_selected_pooled(names, root._test_pool(0, root._default_test_timeout_ms()))
-    }
-
-    function _run_selected_pooled(self, names: string[], pool: _TestPool) -> TestSetReport {
-        root._run_testset(root._testset_children_selected(self, names, pool), null, pool)
+        root._start_run(0);
+        root._run_testset(root._testset_children(self, root._default_test_timeout_ms()), null)
     }
 
     /// CLI entry point: glob-filter in BAML, run (honoring testset runners), and
@@ -256,16 +247,19 @@ class TestRegistry {
         // console identities, this makes structural registration errors actionable
         // even when the unfiltered execution path preserves run_all semantics.
         let selected_names = root._select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude);
-        let pool = root._test_pool(max_concurrency, timeout_ms);
+        root._start_run(max_concurrency);
         let report = if (
             profile_include.length() == 0
                 && profile_exclude.length() == 0
                 && cli_include.length() == 0
                 && cli_exclude.length() == 0
         ) {
-            self._run_all_pooled(pool)
+            root._run_testset(root._testset_children(self, timeout_ms), null)
         } else {
-            self._run_selected_pooled(selected_names, pool)
+            root._run_testset(
+                root._testset_children_selected(self, selected_names, timeout_ms),
+                null,
+            )
         };
         root._flatten_with_tolerated(report, selected_names)
     }
@@ -325,13 +319,13 @@ class TestRegistry {
     }
 }
 
-function _testset_children(registry: TestRegistry, pool: _TestPool) -> TestSetChild[] {
+function _testset_children(registry: TestRegistry, timeout_ms: int) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
-        children.push(root._test_child(t.name, t.body, t.runner, pool.timeout_ms))
+        children.push(root._test_child(t.name, t.body, t.runner, timeout_ms))
     }
     for (let ts in registry.collector.testsets) {
-        children.push(root._testset_child(registry, ts, pool))
+        children.push(root._testset_child(registry, ts, timeout_ms))
     }
     children
 }
@@ -339,12 +333,12 @@ function _testset_children(registry: TestRegistry, pool: _TestPool) -> TestSetCh
 function _testset_children_selected(
     registry: TestRegistry,
     names: string[],
-    pool: _TestPool,
+    timeout_ms: int,
 ) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
         if (names.includes(t.name)) {
-            children.push(root._test_child(t.name, t.body, t.runner, pool.timeout_ms))
+            children.push(root._test_child(t.name, t.body, t.runner, timeout_ms))
         } else {
             null
         }
@@ -361,7 +355,7 @@ function _testset_children_selected(
                 n.starts_with(prefix)
             })
         ) {
-            children.push(root._testset_child_selected(registry, ts, names, pool))
+            children.push(root._testset_child_selected(registry, ts, names, timeout_ms))
         } else {
             null
         }
@@ -387,16 +381,15 @@ function _test_child(
 function _testset_child(
     registry: TestRegistry,
     ts: TestSetRegistration,
-    pool: _TestPool,
+    timeout_ms: int,
 ) -> TestSetChild {
     TestSetChild {
         name: ts.name,
         is_container: true,
         run: () -> ChildReport {
             root._run_testset(
-                root._testset_children(registry._expand_testset_registry(ts), pool),
+                root._testset_children(registry._expand_testset_registry(ts), timeout_ms),
                 ts.runner,
-                pool,
             ) catch_all (e) {
                 baml.panics.Panic => root._expansion_error_report(ts.name),
                 _ => root._expansion_error_report(ts.name),
@@ -409,16 +402,19 @@ function _testset_child_selected(
     registry: TestRegistry,
     ts: TestSetRegistration,
     names: string[],
-    pool: _TestPool,
+    timeout_ms: int,
 ) -> TestSetChild {
     TestSetChild {
         name: ts.name,
         is_container: true,
         run: () -> ChildReport {
             root._run_testset(
-                root._testset_children_selected(registry._expand_testset_registry(ts), names, pool),
+                root._testset_children_selected(
+                    registry._expand_testset_registry(ts),
+                    names,
+                    timeout_ms,
+                ),
                 ts.runner,
-                pool,
             ) catch_all (e) {
                 baml.panics.Panic => root._expansion_error_report(ts.name),
                 _ => root._expansion_error_report(ts.name),
@@ -484,68 +480,53 @@ function _aggregate_reports(named_results: _NamedChildReport[]) -> TestSetReport
     }
 }
 
-/// (internal) Global gate on concurrently RUNNING leaf test bodies. A leaf acquires a
-/// slot BEFORE its body is spawned, so a gated test costs nothing — no VM
-/// thread, no watchdog timer — until a slot frees. One pool is shared by the
-/// whole run (threaded down through every nested testset), so the limit is a
-/// run-wide invariant rather than a per-testset one.
-class _TestPool {
-    // Token bucket. `pop` and `push` are single locked array operations, so
-    // concurrent dispatchers race safely; an empty `pop` means "no slot free".
-    tokens: int[],
-    // Per-test deadline in milliseconds, carried here so it travels down the
-    // same path as the slot budget. Zero or negative means no deadline.
-    timeout_ms: int,
-
-    function acquire(self) -> null throws never {
-        while (true) {
-            if let _slot: int = self.tokens.pop() {
-                return null;
-            }
-            // Saturated: park briefly rather than spin. Only starved
-            // dispatchers poll, and there is at most one dispatcher per
-            // currently-expanding testset, so the wakeup load is bounded by
-            // testset nesting, not by test count.
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(10));
-        }
-    }
-
-    function release(self) -> null throws never {
-        self.tokens.push(1);
-        null
-    }
+/// (internal) Holder for the gate on concurrently RUNNING leaf test bodies.
+/// A leaf is spawned `with` the semaphore, so a gated test costs nothing (no
+/// VM thread, no watchdog timer) until a slot frees. The holder is a global so
+/// every nested testset, and every testset runner, shares the one budget
+/// without it being threaded through them.
+class _TestSlots {
+    semaphore: baml.sync.Semaphore,
 }
+
+/// (internal) The current run's slots. Each run entry point installs a fresh
+/// semaphore (`_start_run`); the one built here serves children run without
+/// one, such as a testset runner called directly.
+const _TEST_SLOTS = _TestSlots { semaphore: root._test_semaphore(0) };
 
 /// (internal) The per-test deadline when the caller does not choose one: 5 minutes.
 function _default_test_timeout_ms() -> int {
     300000
 }
 
-/// (internal) A pool admitting `max_concurrency` leaves at once, each with a
-/// `timeout_ms` deadline. A zero or negative `max_concurrency` means
-/// "no explicit budget": fall back to a bound that keeps a pathological
-/// fan-out from creating thousands of live VM threads while staying above any
-/// real machine's core count (the CLI always passes an explicit budget).
-
-function _test_pool(max_concurrency: int, timeout_ms: int) -> _TestPool {
-    let limit = if (max_concurrency > 0) {
+/// (internal) A semaphore admitting `max_concurrency` leaves at once. A zero
+/// or negative `max_concurrency` means "no explicit budget": fall back to a
+/// bound that keeps a pathological fan-out from creating thousands of live VM
+/// threads while staying above any real machine's core count (the CLI always
+/// passes an explicit budget).
+function _test_semaphore(max_concurrency: int) -> baml.sync.Semaphore {
+    let capacity = if (max_concurrency > 0) {
         max_concurrency
     } else {
         64
     };
-    let tokens: int[] = [];
-    let i = 0;
-    while (i < limit) {
-        tokens.push(1);
-        i = i + 1;
+    baml.sync.Semaphore.new(capacity) catch (_) {
+        baml.errors.InvalidArgument { message } => {
+            baml.sys.panic("testing: test semaphore: " + message)
+        },
     }
-    _TestPool { tokens: tokens, timeout_ms: timeout_ms }
 }
 
-function _run_children_parallel(
-    children: TestSetChild[],
-    pool: _TestPool,
-) -> TestSetReport throws never {
+/// (internal) Begin a run admitting `max_concurrency` leaves at once. The
+/// semaphore is replaced, never resized or reused: a test body that itself
+/// starts a run holds a slot of the outer semaphore while it waits, and inner
+/// leaves gated on that same semaphore could wait on it forever.
+function _start_run(max_concurrency: int) -> void {
+    _TEST_SLOTS.semaphore = root._test_semaphore(max_concurrency);
+}
+
+function _run_children_parallel(children: TestSetChild[]) -> TestSetReport throws never {
+    let slots = _TEST_SLOTS.semaphore;
     let futures: baml.future.Future<_NamedChildReport, never>[] = [];
     for (let child in children) {
         if (child.is_container) {
@@ -554,16 +535,11 @@ function _run_children_parallel(
             // slots their own leaves need.
             futures.push(spawn { _NamedChildReport { name: child.name, report: (child.run)() } })
         } else {
-            // Acquire on the dispatcher, before the spawn exists: the whole
-            // point is that an inadmissible leaf has no thread yet.
-            pool.acquire();
-            futures.push(spawn {
-                let named = _NamedChildReport { name: child.name, report: (child.run)() };
-                // `run` is total: a leaf is `run_test`, whose runner arm
-                // catches middleware panics precisely so this release is
-                // reached on every outcome.
-                pool.release();
-                named
+            // The slot is held for the whole task and released however it
+            // ends. `run` is total: a leaf is `run_test`, whose runner arm
+            // catches middleware panics.
+            futures.push(spawn with slots {
+                _NamedChildReport { name: child.name, report: (child.run)() }
             })
         }
     }
@@ -573,38 +549,39 @@ function _run_children_parallel(
     root._aggregate_reports(named_results)
 }
 
+/// (internal) Run a test body once, turning every way it can end into a report.
+function _run_body(body: TestBody) -> RunReport throws never {
+    {
+        body();
+        RunReport { outcome: "pass", duration_ms: 0, message: null }
+    } catch_all (e, ctx) {
+        let p: baml.panics.UserPanic => {
+            RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+        },
+        let p: baml.panics.AssertionFailed => {
+            RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+        },
+        baml.panics.Panic => {
+            RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
+        },
+        _ => {
+            RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
+        }
+    }
+}
+
 /// (internal) Run a single test with error handling and optional runner middleware.
-/// Every test races against a `timeout_ms` deadline (a non-positive value
-/// means no deadline, so no timer is spawned; the CLI defaults it to 5
-/// minutes and `--test-timeout` overrides): a hung test — a stalled network read, a
-/// deadlocked await — becomes a FAIL with a "timed out" message instead of
-/// hanging the whole run. `baml.future.race` cancels the losers when one
-/// side settles (BEP-034), so a timed-out body is actively cancelled and a
-/// finished test's leftover timer doesn't linger.
+/// With a positive `timeout_ms` the body runs in a task of its own, raced
+/// against that deadline (the CLI defaults it to 5 minutes and
+/// `--test-timeout` overrides): a hung test (a stalled network read, a
+/// deadlocked await) becomes a FAIL with a "timed out" message instead of
+/// hanging the whole run. A non-positive value means no deadline: the body is
+/// called directly, in this task, with no spawn, timer, race or cancellation.
 function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> TestReport {
     let base_run: TestReportThunk = () -> TestReport {
         let start = baml.time.Instant.now();
-        let work: baml.future.Future<RunReport, never> = spawn {
-            {
-                body();
-                RunReport { outcome: "pass", duration_ms: 0, message: null }
-            } catch_all (e, ctx) {
-                let p: baml.panics.UserPanic => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: p.message }
-                },
-                let p: baml.panics.AssertionFailed => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: p.message }
-                },
-                baml.panics.Panic => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
-                },
-                _ => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
-                }
-            }
-        };
-        let racers: baml.future.Future<RunReport, never>[] = [work];
-        if (timeout_ms > 0) {
+        let result = if (timeout_ms > 0) {
+            let work: baml.future.Future<RunReport, never> = spawn { root._run_body(body) };
             let timer: baml.future.Future<RunReport, never> = spawn {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms));
                 // Read before the race cancels the body: where it is stuck,
@@ -624,19 +601,20 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
                         + stuck,
                 }
             };
-            racers.push(timer);
-        }
-        // Race the body against the deadline, if any; race cancels the loser
-        // on settle (BEP-034), so a timed-out body is actively cancelled and a
-        // finished test's timer does not linger.
-        let result = (await baml.future.race(racers)) catch_all (e) {
-            _ => {
-                RunReport {
-                    outcome: "fail",
-                    duration_ms: 0,
-                    message: "test task failed unexpectedly",
+            // `race` cancels the loser when one side settles, so a timed-out
+            // body is actively cancelled and a finished test's timer does not
+            // linger.
+            (await baml.future.race([work, timer])) catch_all (e) {
+                _ => {
+                    RunReport {
+                        outcome: "fail",
+                        duration_ms: 0,
+                        message: "test task failed unexpectedly",
+                    }
                 }
             }
+        } else {
+            root._run_body(body)
         };
         // `duration_ms` is an `int`; see the note in expand_testset_registry for
         // why narrowing the bigint millisecond count cannot fail here.
@@ -654,10 +632,9 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
         null => base_run(),
         let r: TestRunner => {
             // Runner middleware is user code with no totality contract of its
-            // own. Catching here is what makes `run_test` total — the leaf
-            // dispatcher's pool slot is released after this returns, so a
-            // panicking runner must become a failed report, never an escaped
-            // throw that strands the slot.
+            // own. Catching here is what makes `run_test` total: a panicking
+            // runner becomes a failed report, never a throw that escapes the
+            // leaf's task.
             {
                 let wrapped: TestReportThunk = r(base_run);
                 wrapped()
@@ -682,15 +659,11 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
 /// (internal) Run all children of a testset with optional runner middleware.
 ///
 /// A custom `TestSetRunner` receives the children as a plain closure and runs
-/// them however it likes, outside the pool's budget — the built-in runners are
-/// sequential (inherently capped) or take a local fallback pool (`PassRate`).
-function _run_testset(
-    children: TestSetChild[],
-    runner: TestSetRunner?,
-    pool: _TestPool,
-) -> TestSetReport {
+/// them however it likes. The built-in runners are sequential (inherently
+/// capped) or share the run's slots (`PassRate`).
+function _run_testset(children: TestSetChild[], runner: TestSetRunner?) -> TestSetReport {
     match (runner) {
-        null => root._run_children_parallel(children, pool),
+        null => root._run_children_parallel(children),
         let r: TestSetRunner => r(children),
     }
 }

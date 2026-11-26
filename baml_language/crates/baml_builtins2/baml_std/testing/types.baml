@@ -64,8 +64,8 @@ class TestSetChild {
     name: string,
     run: ChildReportThunk,
     // Whether `run` coordinates a nested testset (true) or executes one leaf
-    // test body (false). The scheduler admits containers freely — they only
-    // spawn and await — and gates leaves on the shared `TestPool`, which is
+    // test body (false). The scheduler admits containers freely (they only
+    // spawn and await) and gates leaves on the run's semaphore, which is
     // what keeps nesting deadlock-free: a container waiting on its children
     // can never be holding the slot those children need.
     is_container: bool,
