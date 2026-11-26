@@ -25,25 +25,27 @@ class TestCollector {
     prefix: string,
     tests: TestRegistration[],
     testsets: TestSetRegistration[],
+    // How many registered names count as duplicates of each id, for tests
+    // and for testsets. Registration keeps them; editing `tests` or
+    // `testsets` directly does not.
+    test_counts: map<string, int>,
+    testset_counts: map<string, int>,
 
     function new(prefix: string) -> TestCollector {
-        TestCollector { prefix: prefix, tests: [], testsets: [] }
+        TestCollector {
+            prefix: prefix,
+            tests: [],
+            testsets: [],
+            test_counts: {},
+            testset_counts: {},
+        }
     }
 
     function register_test(self, name: string, body: TestBody, runner: TestRunner?) -> void {
         let full_name = root._qualified_test_name("test", self.prefix, name);
-        // Scans the current records on every call: the arrays and the names
-        // in them are public and can change in place between registrations.
-        let suffixed = full_name + "#";
-        let count = 0;
-        for (let t in self.tests) {
-            if (t.name == full_name || t.name.starts_with(suffixed)) {
-                count += 1
-            }
-        }
         let _ = self.tests.push(
             TestRegistration {
-                name: root._numbered_test_name(full_name, count),
+                name: root._claim_test_name(self.test_counts, full_name),
                 body: body,
                 runner: runner,
             },
@@ -57,16 +59,46 @@ class TestCollector {
         runner: TestSetRunner?,
     ) -> void {
         let full_name = root._qualified_test_name("testset", self.prefix, name);
-        let suffixed = full_name + "#";
-        let count = 0;
-        for (let ts in self.testsets) {
-            if (ts.name == full_name || ts.name.starts_with(suffixed)) {
-                count += 1
-            }
-        }
         let _ = self.testsets.push(
             TestSetRegistration {
-                name: root._numbered_test_name(full_name, count),
+                name: root._claim_test_name(self.testset_counts, full_name),
+                collector: collector,
+                runner: runner,
+            },
+        );
+    }
+
+    /// Compiler-only top-level registration entry points. The owner is derived
+    /// from the declaring file (`root` plus its BAML namespaces); nested items use
+    /// the ordinary methods above and inherit this canonical prefix.
+    function register_test_at(
+        self,
+        owner: string,
+        name: string,
+        body: TestBody,
+        runner: TestRunner?,
+    ) -> void {
+        let full_name = root._qualified_test_name("test", owner, name);
+        let _ = self.tests.push(
+            TestRegistration {
+                name: root._claim_test_name(self.test_counts, full_name),
+                body: body,
+                runner: runner,
+            },
+        );
+    }
+
+    function register_test_set_at(
+        self,
+        owner: string,
+        name: string,
+        collector: TestSetBody,
+        runner: TestSetRunner?,
+    ) -> void {
+        let full_name = root._qualified_test_name("testset", owner, name);
+        let _ = self.testsets.push(
+            TestSetRegistration {
+                name: root._claim_test_name(self.testset_counts, full_name),
                 collector: collector,
                 runner: runner,
             },
@@ -97,56 +129,9 @@ function _numbered_test_name(full_name: string, count: int) -> string {
     }
 }
 
-/// (internal) What a file's registrar registers its top-level blocks on: the
-/// package's collector, and how many registered names count as duplicates of
-/// each id. An entry counts toward its own name and toward its prefix before
-/// every `#`, the same rule `TestCollector.register_test` applies by scanning.
-/// The scan is not needed here: between two top-level registrations nothing
-/// can reach this collector, so the counts cannot go stale.
-class _TopLevelCollector {
-    collector: TestCollector,
-    test_counts: map<string, int>,
-    testset_counts: map<string, int>,
-
-    /// The owner is derived from the declaring file (`root` plus its BAML
-    /// namespaces); nested items register on a `TestCollector` and inherit
-    /// this canonical prefix.
-    function register_test_at(
-        self,
-        owner: string,
-        name: string,
-        body: TestBody,
-        runner: TestRunner?,
-    ) -> void {
-        let full_name = root._qualified_test_name("test", owner, name);
-        let _ = self.collector.tests.push(
-            TestRegistration {
-                name: root._claim_test_name(self.test_counts, full_name),
-                body: body,
-                runner: runner,
-            },
-        );
-    }
-
-    function register_test_set_at(
-        self,
-        owner: string,
-        name: string,
-        collector: TestSetBody,
-        runner: TestSetRunner?,
-    ) -> void {
-        let full_name = root._qualified_test_name("testset", owner, name);
-        let _ = self.collector.testsets.push(
-            TestSetRegistration {
-                name: root._claim_test_name(self.testset_counts, full_name),
-                collector: collector,
-                runner: runner,
-            },
-        );
-    }
-}
-
 /// (internal) Number `full_name` against `counts`, and count the id it takes.
+/// An id counts toward itself and toward its prefix before every `#`, so an
+/// explicit `name#x` is a duplicate of `name`.
 function _claim_test_name(counts: map<string, int>, full_name: string) -> string {
     let final_name = root._numbered_test_name(full_name, counts.get(full_name) ?? 0);
     let parts = final_name.split("#");
@@ -169,9 +154,9 @@ function $invoke_collector(collector: TestSetBody, c: TestCollector) -> void {
 /// declares one per file with tests, as a global of the declaring package:
 /// `register` registers the file's blocks on the collector it is given.
 class TestFile {
-    register: (_TopLevelCollector) -> void throws unknown,
+    register: TestSetBody,
 
-    function new(register: (_TopLevelCollector) -> void throws unknown) -> TestFile {
+    function new(register: TestSetBody) -> TestFile {
         TestFile { register: register }
     }
 }
@@ -193,13 +178,13 @@ implements reflect._TestSource for TestFile {
 /// globals, registered in declaration order. Defaults to the program's root
 /// package, which is what a host that runs tests asks for.
 function registry(package: reflect.Package = reflect.Package.root()) -> TestRegistry {
-    let top_level = _TopLevelCollector { collector: TestCollector.new(""), test_counts: {}, testset_counts: {} };
+    let collector = TestCollector.new("");
     for (let global in package.globals().values()) {
         if let file: TestFile = global {
-            (file.register)(top_level)
+            (file.register)(collector)
         }
     }
-    TestRegistry.new(top_level.collector)
+    TestRegistry.new(collector)
 }
 
 // --- Serialization wire types ---
@@ -375,7 +360,7 @@ class TestRegistry {
             let existing: TestRegistry => existing,
             null => {
                 let start = baml.time.Instant.now();
-                let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] };
+                let sub_collector = TestCollector.new(ts.name);
                 (ts.collector)(sub_collector);
                 // `loading_time_ms` is an `int`, so narrowing the bigint millisecond
                 // count is declared fallible. An expansion would have to run for

@@ -416,13 +416,13 @@ pub(crate) fn synthesize_init_test_function<R: TestRegistration>(
     diags.extend(finish_diags);
     env_var_refs.extend(finish_env_refs);
 
-    // The single parameter: `__registry: testing._TopLevelCollector`,
-    // spelled with a leading space so no test body can name it.
+    // The single parameter: `__registry: testing.TestCollector`, spelled
+    // with a leading space so no test body can name it.
     let registry_param = Param {
         name: Name::new(" __registry"),
         type_expr: Some(
             crate::ast::TypeExprKind::Path {
-                path: baml_base::compiler_path!(testing._TopLevelCollector),
+                path: baml_base::compiler_path!(testing.TestCollector),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
             }
