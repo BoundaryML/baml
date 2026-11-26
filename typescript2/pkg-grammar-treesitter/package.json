@@ -5,8 +5,9 @@
   "description": "tree-sitter grammar for BAML (single source of truth, mirrored read-only to BoundaryML/baml-treesitter for Neovim/Zed/Helix consumers).",
   "scripts": {
     "generate": "tree-sitter generate",
-    "test": "tree-sitter generate && tree-sitter test && pnpm run parse-fixtures",
+    "test": "tree-sitter generate && tree-sitter test && pnpm run parse-fixtures && pnpm run check-ranges",
     "parse-fixtures": "sh -c 'fail=0; for f in ../pkg-grammar/tests/fixtures/*.baml; do n=$(tree-sitter parse \"$f\" | grep -cE \"ERROR|MISSING\"); if [ \"$n\" != 0 ]; then fail=1; echo \"FAIL($n) $f\"; fi; done; [ $fail = 0 ] && echo \"all fixtures parse clean\"; exit $fail' -",
+    "check-ranges": "sh -c 'fail=0; for f in ../pkg-grammar/tests/fixtures/*.baml; do n=$(tree-sitter query scripts/no-leading-whitespace.scm \"$f\" | grep -cE \"text: .[[:space:]]\"); if [ \"$n\" != 0 ]; then fail=1; echo \"FAIL($n) $f\"; fi; done; [ $fail = 0 ] && echo \"all ranges check clean\"; exit $fail' -",
     "assemble-mirror": "node scripts/assemble-mirror.mjs"
   },
   "devDependencies": {

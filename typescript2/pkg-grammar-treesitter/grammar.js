@@ -106,6 +106,8 @@ module.exports = grammar({
 
   word: ($) => $.identifier,
 
+  externals: ($) => [$._companion_at],
+
   extras: ($) => [/\s/, $.comment, $.block_comment],
 
   supertypes: ($) => [$._expression, $._type, $._pattern, $._statement],
@@ -935,14 +937,14 @@ module.exports = grammar({
       ),
 
     // `Extract@spec(raw)`, `Extract @parse(reply)`: a function's companion.
-    // The real parser accepts exactly these names, with spaces but no newline
-    // before `@`; the immediate token skips no extras, so it can't cross one.
+    // Uses src/scanner.c to accept names with spaces but no newline before '@',
+    // just like the real parser.
     companion_expression: ($) =>
       prec(
         PREC.MEMBER,
         seq(
           field('function', $._expression),
-          token.immediate(/[ \t]*@/),
+          $._companion_at,
           field(
             'companion',
             alias(
