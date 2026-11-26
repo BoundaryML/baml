@@ -185,12 +185,18 @@ pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
     let (mut items, diagnostics, env_var_refs) =
         lower(&tree, Some(path.as_path()), Some(&test_owner));
     if package.root.exclude_tests(db) {
-        // Both test forms lower into per-file registrars. Remove them before
+        // Both test forms lower into a per-file registrar and the global that
+        // holds it. Remove them before
         // building HIR so their entire subtree (including nested/catch
         // lambdas) is absent from code, constants, and package interfaces.
-        items.retain(|item| {
-            !matches!(item, baml_compiler2_ast::Item::Function(function)
-                if function.metadata.origin == baml_compiler2_ast::FunctionOrigin::TestInitializer)
+        items.retain(|item| match item {
+            baml_compiler2_ast::Item::Function(function) => {
+                function.metadata.origin != baml_compiler2_ast::FunctionOrigin::TestInitializer
+            }
+            baml_compiler2_ast::Item::Let(binding) => {
+                binding.origin != baml_compiler2_ast::LetOrigin::TestFile
+            }
+            _ => true,
         });
     }
     FileAst {

@@ -103,8 +103,8 @@ pub fn file_outline(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Ou
             Definition::Class(_)
             | Definition::Enum(_)
             | Definition::Interface(_)
-            | Definition::TypeAlias(_)
-            | Definition::Let(_) => false,
+            | Definition::TypeAlias(_) => false,
+            Definition::Let(loc) => let_data(db, loc).origin == LetOrigin::TestFile,
         };
         if is_internal {
             continue;
@@ -120,7 +120,7 @@ pub fn file_outline(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Ou
         let kind = match contrib.definition {
             Definition::Let(loc) => match let_data(db, loc).origin {
                 LetOrigin::Client => DefinitionKind::Client,
-                LetOrigin::Source => DefinitionKind::Let,
+                LetOrigin::Source | LetOrigin::TestFile => DefinitionKind::Let,
             },
             Definition::Class(_)
             | Definition::Enum(_)

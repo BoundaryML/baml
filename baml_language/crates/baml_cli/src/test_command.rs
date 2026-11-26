@@ -435,7 +435,7 @@ impl TestArgs {
         // Warm `--list` fast path. The fully-expanded test leaf names are a pure
         // function of the compiled
         // Program, cached under its key. On a hit we render + select directly
-        // and skip engine boot, `$init`/`$init_test`, and in-VM testset
+        // and skip engine boot, `$init`, registration, and in-VM testset
         // expansion entirely — the whole `--list` discovery floor. Gated off
         // under DEV_BAML_BUILD_CACHE_VERIFY=always (the oracle must run honest
         // discovery); any miss/corruption falls through to the
@@ -562,17 +562,25 @@ impl TestArgs {
         };
 
         // ── 5. Resolve the testset registry handle ─────────────────────────
-        // `collect_tests` runs `$init_test`, returning a live `testing.TestRegistry`
-        // handle (or `Null` when the project declares no tests). All testset
+        // `testing.registry()` returns a live `testing.TestRegistry` handle
+        // for the root package (empty when it declares no tests). All
         // discovery/filtering/execution then happens inside that package via
         // `run_filtered` / `list_filtered`.
         reporter.spin("Discovering", "tests");
-        let registry = match rt.block_on(engine.collect_tests(CallId::next(), cancel.clone())) {
-            Ok(BexExternalValue::Null) => None,
+        let registry = match rt.block_on(
+            engine.call_function_bound_args(
+                "testing.registry",
+                vec![bex_engine::BexCallArg::OmittedDefault],
+                FunctionCallContextBuilder::new(CallId::next())
+                    .with_cancel_token(cancel.clone())
+                    .build(),
+                false, // a handle to the live registry, not a deep copy
+            ),
+        ) {
             Ok(handle @ BexExternalValue::Handle(_)) => Some(handle),
             Ok(other) => {
                 reporter.warning(format_args!(
-                    "unexpected collect_tests result: {}",
+                    "unexpected testing.registry result: {}",
                     other.type_name()
                 ));
                 None

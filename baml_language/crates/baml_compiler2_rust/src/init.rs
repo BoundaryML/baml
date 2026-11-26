@@ -29,14 +29,13 @@ pub(crate) fn compile_chainers(
         if !matches!(function.kind, FunctionKind::Bytecode) {
             continue;
         }
-        let test = match function.identity {
-            FunctionIdentity::Init => false,
-            FunctionIdentity::InitTest => true,
-            FunctionIdentity::InitLet(_) if function.bytecode.block_pcs.is_empty() => false,
+        match function.identity {
+            FunctionIdentity::Init => {}
+            FunctionIdentity::InitLet(_) if function.bytecode.block_pcs.is_empty() => {}
             _ => continue,
-        };
+        }
         let symbol = format!("init_chain_{object}");
-        match generate(program, function, &symbol, test) {
+        match generate(program, function, &symbol) {
             Some(source) => {
                 bodies.push_str(&source);
                 functions.push(CompiledFunction {
@@ -45,7 +44,7 @@ pub(crate) fn compile_chainers(
                     symbol,
                     object,
                     arity: function.arity,
-                    slots: u32::from(test),
+                    slots: 0,
                     cause_slot: None,
                     framed: true,
                 });
@@ -58,9 +57,9 @@ pub(crate) fn compile_chainers(
     }
 }
 
-fn generate(program: &Program, function: &Function, symbol: &str, test: bool) -> Option<String> {
+fn generate(program: &Program, function: &Function, symbol: &str) -> Option<String> {
     let bytecode = &function.bytecode;
-    if function.arity != usize::from(test)
+    if function.arity != 0
         || !function.type_param_names.is_empty()
         || function.trace_passthrough
         || function.body_meta.is_some()
@@ -82,32 +81,22 @@ fn generate(program: &Program, function: &Function, symbol: &str, test: bool) ->
     let mut source = format!(
         "pub fn {symbol}(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> R<Value> {{\n"
     );
-    if test {
-        source.push_str("vm.reserve_slots(fr, 1)?;\nvm.set_slot(fr, 0, args[0]);\n");
-    }
-    let width = if test { 3 } else { 2 };
+    let width = 2;
     if !steps.len().is_multiple_of(width) {
         return None;
     }
     for (step, instructions) in steps.chunks_exact(width).enumerate() {
-        let (callee, target, call_pc) = match instructions {
-            [
-                Instruction::Call {
-                    callee,
-                    ntypeargs: 0,
-                },
-                Instruction::StoreGlobal(target),
-            ] if !test => (*callee, Some(*target), step * width),
-            [
-                Instruction::LoadVar(1),
-                Instruction::Call {
-                    callee,
-                    ntypeargs: 0,
-                },
-                Instruction::Pop(1),
-            ] if test => (*callee, None, step * width + 1),
-            _ => return None,
+        let [
+            Instruction::Call {
+                callee,
+                ntypeargs: 0,
+            },
+            Instruction::StoreGlobal(target),
+        ] = instructions
+        else {
+            return None;
         };
+        let call_pc = step * width;
         let call_pc = u32::try_from(call_pc).ok()?;
         let ConstValue::Object(callee_object) = program.globals.get(callee.raw())? else {
             return None;
@@ -115,9 +104,7 @@ fn generate(program: &Program, function: &Function, symbol: &str, test: bool) ->
         let Object::Function(callee_function) = program.objects.get(callee_object.raw())? else {
             return None;
         };
-        if callee_function.arity != usize::from(test)
-            || target.is_some_and(|slot| slot.raw() >= program.globals.len())
-        {
+        if callee_function.arity != 0 || target.raw() >= program.globals.len() {
             return None;
         }
         writeln!(source, "fr.note_pc({call_pc});").ok()?;
@@ -127,24 +114,14 @@ fn generate(program: &Program, function: &Function, symbol: &str, test: bool) ->
             callee.raw()
         )
         .ok()?;
-        if test {
-            source.push_str("vm.push_arg(vm.slot(fr, 0))?;\n");
-        }
+        source.push_str("let value = vm.suspend(Step::Call { callee, argc: 0 })?;\n");
+        writeln!(source, "fr.note_pc({});", call_pc + 1).ok()?;
         writeln!(
             source,
-            "let value = vm.suspend(Step::Call {{ callee, argc: {} }})?;",
-            usize::from(test)
+            "vm.store_global(fr.function(), {}, value)?;",
+            target.raw()
         )
         .ok()?;
-        if let Some(target) = target {
-            writeln!(source, "fr.note_pc({});", call_pc + 1).ok()?;
-            writeln!(
-                source,
-                "vm.store_global(fr.function(), {}, value)?;",
-                target.raw()
-            )
-            .ok()?;
-        }
     }
     let return_pc = u32::try_from(bytecode.instructions.len() - 1).ok()?;
     writeln!(source, "fr.note_pc({return_pc});\nOk(Value::NULL)\n}}\n").ok()?;

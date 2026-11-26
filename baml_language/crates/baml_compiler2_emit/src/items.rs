@@ -2,7 +2,7 @@
 //! enum, an interface, or a recursive alias from its declaration; an
 //! `implements` block's rule with its references kept as identities; and a
 //! package's synthesized functions — a `let` initializer's helper, the
-//! `$init` that runs them, the `$init_test` chainer.
+//! `$init` that runs them.
 //!
 //! None of them knows how the emitter lays a pool out. A builder answers with
 //! the object; the caller pools it and resolves the identities a rule
@@ -1166,45 +1166,4 @@ pub(crate) fn build_init_function(steps: &[InitStep]) -> Function {
             ..Bytecode::default()
         },
     )
-}
-
-/// A package's `$init_test` chainer: calls each per-file test initializer
-/// (`parts`, in layout order) with the registry it was itself called with.
-///
-/// Per part: `LoadVar 1` (the registry param — slot 1 is the first arg,
-/// slot 0 the reserved fn ref), `Call`, `Pop 1` (discard the null return).
-pub(crate) fn build_init_test_chainer(parts: &[GlobalIndex]) -> Function {
-    let mut instructions = Vec::new();
-    let mut constants: Vec<ConstValue> = Vec::new();
-    for &callee in parts {
-        instructions.push(Instruction::LoadVar(1));
-        instructions.push(Instruction::Call {
-            callee,
-            ntypeargs: 0,
-        });
-        instructions.push(Instruction::Pop(1));
-    }
-    let null_const_idx = constants.len();
-    constants.push(ConstValue::Null);
-    instructions.push(Instruction::LoadConst(null_const_idx));
-    instructions.push(Instruction::Return);
-    Function {
-        arity: 1,
-        real_local_count: 1, // the registry param
-        // local_names is indexed by slot number: slot 0 = fn ref (reserved,
-        // empty placeholder), slot 1 = first param "registry".
-        local_names: vec![String::new(), "registry".to_string()],
-        param_names: vec!["registry".to_string()],
-        param_types: vec![TyTemplate::Unknown], // type not needed for chainer dispatch
-        param_has_default: vec![false],
-        display_param_types: vec!["unknown".to_string()],
-        ..synthesized_function(
-            bex_vm_types::types::FunctionIdentity::InitTest,
-            Bytecode {
-                instructions,
-                constants,
-                ..Bytecode::default()
-            },
-        )
-    }
 }

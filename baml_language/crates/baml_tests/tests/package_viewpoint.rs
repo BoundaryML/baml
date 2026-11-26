@@ -59,16 +59,19 @@ async fn a_root_without_files_is_still_the_program_root() {
         root_package.edges
     );
     // Booting resolves the builtin error classes through the root's prelude
-    // edges; a root with no test blocks collects nothing.
+    // edges, and the testing package's registry is callable from a root that
+    // declares nothing.
     let engine = engine(program);
     let registry = engine
-        .collect_tests(
-            sys_types::CallId::next(),
-            sys_types::CancellationToken::default(),
+        .call_function_bound_args(
+            "testing.registry",
+            vec![bex_engine::BexCallArg::OmittedDefault],
+            bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
         )
         .await
         .expect("collection runs");
-    assert_eq!(registry, BexExternalValue::Null);
+    assert!(matches!(registry, BexExternalValue::Handle(_)));
 }
 
 /// A function's display signature — what `baml run --list` and a host's

@@ -248,7 +248,12 @@ use sha2::{Digest, Sha256};
 /// Version 34: `Rng.random_int` draws all 64 bits, and the stdlib's
 /// `int.random` and `float.random` read draws that way; a stdlib compiled
 /// earlier would misread them.
-pub const FORMAT_VERSION: u32 = 34;
+///
+/// Version 35: a package has no `$init_test` and its tail no test part
+/// (`InitTail` lost three fields, `Package` its `test_init`, and
+/// `FunctionIdentity` its `InitTest`). A file's tests are a `testing.TestFile`
+/// global the package's `$init` writes.
+pub const FORMAT_VERSION: u32 = 35;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

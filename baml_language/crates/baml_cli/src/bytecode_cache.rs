@@ -430,7 +430,7 @@ impl CacheContext {
 /// This is a pure function of the compiled Program (same sources + compiler
 /// build ⇒ same tests), so it is keyed by the Program's own cache key
 /// ([`test_discovery_key`]). A warm hit renders directly from this and skips
-/// engine boot, `$init`/`$init_test`, and in-VM testset expansion entirely.
+/// engine boot, `$init`, registration, and in-VM testset expansion entirely.
 ///
 /// R1 (design §5): a testset generator running IO/LLM could make discovery
 /// depend on state outside the cache key. Posture 1 mitigations: the

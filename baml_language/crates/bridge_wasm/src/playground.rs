@@ -379,7 +379,7 @@ struct InstalledRegistry {
     generation: u64,
     collection_epoch: u64,
     /// `Some` when the project has tests; `None` when collection finished and
-    /// found none (`$init_test` absent) — a different state from "not yet
+    /// produced no registry — a different state from "not yet
     /// collected", which is `registry == None`.
     handle: Option<bex_project::Handle>,
     /// One mutation owner per registry: expansions mutate the registry object

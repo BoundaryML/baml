@@ -43,7 +43,7 @@ use crate::{
     lower_cst::{
         ClassMethodContext, TestRegistration, append_spec_client_param, append_spec_on_event_param,
         check_missing_type, classify_client_string, reject_reserved_llm_params,
-        reject_unquoted_client_shorthand, synthesize_init_test_function,
+        reject_unquoted_client_shorthand, synthesize_init_test_function, synthesize_test_file_let,
         warn_quoted_prompt_interpolation,
     },
     lower_expr_body::{
@@ -130,7 +130,14 @@ fn lower_file_on(
             &mut items.diags,
             &mut items.env_var_refs,
         );
+        let test_file =
+            synthesize_test_file_let(&init_fn, &mut items.diags, &mut items.env_var_refs);
         out.push(Item::Function(init_fn));
+        // A session's file-scope bindings are its persistent locals, so a
+        // submission declares no global for its tests.
+        if surface == TopLevelLetSurface::Source {
+            out.push(Item::Let(test_file));
+        }
     }
     (out, items.diags, items.env_var_refs)
 }

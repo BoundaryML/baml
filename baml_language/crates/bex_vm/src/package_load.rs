@@ -538,9 +538,6 @@ fn fill_package_slots(
             init: pkg
                 .init
                 .map(|index| heap.compile_time_ptr(index.into_raw())),
-            test_init: pkg
-                .test_init
-                .map(|index| heap.compile_time_ptr(index.into_raw())),
             diagnostics: Vec::new(),
             session: None,
         };

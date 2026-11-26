@@ -1186,9 +1186,6 @@ pub struct BexEngine {
     _globals_permit: bex_heap::InactiveHeapPermit<SharedGlobals>,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
-    /// The world's root package — the one the program was compiled for:
-    /// whose tests a run collects.
-    root_package: HeapPtr,
     /// The class that owns each method, from the classes' own method
     /// tables: what tells a callee's class-generic prefix from its own.
     method_owners: HashMap<HeapPtr, HeapPtr>,
@@ -2032,7 +2029,6 @@ impl BexEngine {
         // Shared with every VM so spawned workers see the same package index
         // without re-resolving it.
         let packages = Arc::new(package_index);
-        let root_package = packages.root();
         let method_owners: HashMap<HeapPtr, HeapPtr> = packages
             .package_ptrs()
             .flat_map(|package_ptr| {
@@ -2433,7 +2429,6 @@ impl BexEngine {
             globals,
             _globals_permit: globals_permit,
             resolved_function_names,
-            root_package,
             method_owners,
             resolved_class_names,
             #[cfg(not(target_arch = "wasm32"))]
@@ -3625,7 +3620,7 @@ impl BexEngine {
     }
 
     /// Call a function resolved by identity — the name boundary is
-    /// [`Self::lookup_function`]; a package's `$init_test`, which no host
+    /// [`Self::lookup_function`]; a package's `$init`, which no host
     /// names, arrives here straight from its package table. `function_name`
     /// labels diagnostics only.
     async fn call_resolved_with_trace(
@@ -5197,85 +5192,6 @@ impl BexEngine {
                 }
             })
             .collect()
-    }
-
-    // ========================================================================
-    // Test Collection API
-    // ========================================================================
-
-    /// The root package's `$init_test` chainer: `None` when the root declares
-    /// no test blocks.
-    fn root_test_init(&self) -> Option<HeapPtr> {
-        // SAFETY: the package index holds compile-time package objects.
-        match unsafe { self.root_package.get() } {
-            Object::Package(package) => package.test_init,
-            _ => None,
-        }
-    }
-
-    /// Collect the root package's tests by invoking its `$init_test(collector)`.
-    ///
-    /// Returns a `BexExternalValue::Handle` pointing to a live `testing.TestRegistry`
-    /// heap object (GC-rooted), or `BexExternalValue::Null` if the package has no tests.
-    ///
-    /// If the root has no test blocks, `$init_test` will not exist in the program
-    /// and `Null` is returned immediately.
-    ///
-    /// # Arguments
-    ///
-    /// - `cancel`: A [`CancellationToken`] for caller-controlled cancellation.
-    pub async fn collect_tests(
-        self: &Arc<Self>,
-        call_id: CallId,
-        cancel: CancellationToken,
-    ) -> Result<BexExternalValue, EngineError> {
-        // A root with no test blocks has no `$init_test`.
-        let Some(test_init) = self.root_test_init() else {
-            return Ok(BexExternalValue::Null);
-        };
-
-        let ctx = || {
-            FunctionCallContextBuilder::new(call_id)
-                .with_cancel_token(cancel.clone())
-                .build()
-        };
-
-        // Step 1: Create a live TestCollector on the heap
-        let collector = self
-            .call_function(
-                "testing.TestCollector.new",
-                vec![BexExternalValue::String("".into())],
-                ctx(),
-                false, // return Handle, not deep copy
-            )
-            .await?;
-
-        // Step 2: Populate the collector in-place via $init_test. The call's
-        // outer error is the entry failing to start; its `value` is the run
-        // itself, where a registration throw (a reserved `::` in a test name)
-        // surfaces and must fail discovery rather than yield an empty registry.
-        self.call_resolved_with_trace(
-            test_init,
-            bex_vm_types::FunctionKind::Bytecode,
-            "$init_test",
-            vec![BexCallArg::Provided(Box::new(collector.clone()))],
-            ctx(),
-            true, // return value is null, doesn't matter
-        )
-        .await?
-        .value?;
-
-        // Step 3: Wrap in a TestRegistry
-        let registry = self
-            .call_function(
-                "testing.TestRegistry.new",
-                vec![collector],
-                ctx(),
-                false, // return Handle to live registry
-            )
-            .await?;
-
-        Ok(registry)
     }
 
     /// Run GC if conditions are met (called at safepoints),

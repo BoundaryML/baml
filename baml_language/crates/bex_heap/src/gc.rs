@@ -680,7 +680,6 @@ impl BexHeap {
                 worklist.extend(package.type_aliases.values().copied());
                 worklist.extend(package.edges.values().map(|edge| edge.target));
                 worklist.extend(package.init);
-                worklist.extend(package.test_init);
                 for (interface, rules) in &package.impl_rules {
                     worklist.push(*interface);
                     worklist.extend(rules.iter().copied());
@@ -927,7 +926,7 @@ impl BexHeap {
                         *ptr = new_ptr;
                     }
                 }
-                for ptr in package.init.iter_mut().chain(package.test_init.iter_mut()) {
+                for ptr in package.init.iter_mut() {
                     if let Some(&new_ptr) = forwarding.get(ptr) {
                         *ptr = new_ptr;
                     }

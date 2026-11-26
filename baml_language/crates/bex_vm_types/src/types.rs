@@ -319,14 +319,9 @@ impl Program {
                     )))
                 }
             };
-            for (role, index) in [
-                ("`$init`", package.init),
-                ("`$init_test`", package.test_init),
-            ] {
-                if let Some(index) = index {
-                    function(index, &format!("package `{name}` {role}"), false)?;
-                    placed_here(index, &format!("package `{name}` {role}"))?;
-                }
+            if let Some(index) = package.init {
+                function(index, &format!("package `{name}` `$init`"), false)?;
+                placed_here(index, &format!("package `{name}` `$init`"))?;
             }
             for (path, ordinal) in &package.globals {
                 let slot = package.slot_base.raw() + *ordinal as usize;
@@ -397,9 +392,6 @@ impl Program {
             }
             if let Some(init) = package.init {
                 function(init, &format!("package `{name}` `$init`"), false)?;
-            }
-            if let Some(test_init) = package.test_init {
-                function(test_init, &format!("package `{name}` `$init_test`"), false)?;
             }
             for (path, &ordinal) in &package.globals {
                 if !path.owns_global_slot() {

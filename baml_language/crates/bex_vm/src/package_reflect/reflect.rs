@@ -590,20 +590,6 @@ fn package_interface_type(vm: &mut BexVm, interface_ptr: HeapPtr) -> Value {
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Interface, ty_value)
 }
 
-/// `testing.TestCollector.new`: the class by identity in the `testing`
-/// language package, the constructor through the class's method table.
-fn test_collector_constructor(vm: &BexVm) -> Option<HeapPtr> {
-    let class_ptr = vm.lang_declaration(crate::lang_items::TESTING_TEST_COLLECTOR)?;
-    let Object::Class(class) = vm.get_object(class_ptr) else {
-        return None;
-    };
-    let constructor = class
-        .methods
-        .get(&baml_type::Name::new("new"))?
-        .function_ptr;
-    (!constructor.is_null()).then_some(constructor)
-}
-
 fn package_function_value(vm: &mut BexVm, package_ptr: HeapPtr, name: &LocalName) -> Option<Value> {
     // The slot map is the one road for both kinds of package; `slots` says
     // which table its ordinal addresses.
@@ -1063,94 +1049,6 @@ impl Continuation for FinishPackage {
     }
 }
 
-fn test_function_ty() -> RealizedTy {
-    RealizedTy::Function {
-        params: Box::new([]),
-        ret: Box::new(RealizedTy::null()),
-        throws: Box::new(RealizedTy::unknown()),
-    }
-}
-
-fn empty_tests(vm: &mut BexVm) -> Value {
-    Value::object(
-        vm.tlab
-            .alloc_map(RealizedTy::string(), test_function_ty(), IndexMap::new()),
-    )
-}
-
-struct RegisterPackageTests {
-    test_init: HeapPtr,
-}
-
-impl RootHaver for RegisterPackageTests {
-    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
-        let Self { test_init } = self;
-        test_init.visit_roots(visitor);
-    }
-}
-
-impl Continuation for RegisterPackageTests {
-    fn call(self: Box<Self>, vm: &mut BexVm, collector: Value) -> NativeCallResult {
-        let Some(collector_ptr) = collector.as_object_ptr() else {
-            return invalid_argument(vm, "testing.TestCollector.new returned a non-instance")
-                .into();
-        };
-        NativeCallResult::YieldToCall {
-            callee: self.test_init,
-            args: vec![collector],
-            type_args: Vec::new(),
-            continuation: Box::new(FinishPackageTests { collector_ptr }),
-        }
-    }
-}
-
-struct FinishPackageTests {
-    collector_ptr: HeapPtr,
-}
-
-impl RootHaver for FinishPackageTests {
-    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
-        let Self { collector_ptr } = self;
-        collector_ptr.visit_roots(visitor);
-    }
-}
-
-impl Continuation for FinishPackageTests {
-    fn call(self: Box<Self>, vm: &mut BexVm, _value: Value) -> NativeCallResult {
-        let tests_value = match vm.get_object(self.collector_ptr) {
-            Object::Instance(collector) => collector.load_field(1),
-            _ => {
-                return invalid_argument(vm, "test collector changed kind during registration")
-                    .into();
-            }
-        };
-        let registrations = match vm.as_array(&tests_value) {
-            Ok(tests) => tests.to_vec(),
-            Err(error) => return error.into(),
-        };
-        let mut tests = IndexMap::new();
-        for registration in registrations {
-            let Some(ptr) = registration.as_object_ptr() else {
-                continue;
-            };
-            let Object::Instance(registration) = vm.get_object(ptr) else {
-                continue;
-            };
-            let name_value = registration.load_field(0);
-            let body = registration.load_field(1);
-            let Ok(name) = vm.as_string(&name_value) else {
-                continue;
-            };
-            tests.insert(name.clone(), body);
-        }
-        NativeCallResult::Done(Value::object(vm.tlab.alloc_map(
-            RealizedTy::string(),
-            test_function_ty(),
-            tests,
-        )))
-    }
-}
-
 impl BamlClassPackage for PackageReflectImpl {
     fn _finish(
         vm: &mut BexVm,
@@ -1198,7 +1096,6 @@ impl BamlClassPackage for PackageReflectImpl {
             objects: Objects::Own(Box::new([])),
             surface: ExportSurface::Compiled(artifact.interface_blob),
             init: None,
-            test_init: None,
             diagnostics: artifact.diagnostics,
             session: None,
         };
@@ -1402,7 +1299,6 @@ impl BamlClassPackage for PackageReflectImpl {
             objects: Objects::Own(Box::new([])),
             surface: ExportSurface::Projected,
             init: None,
-            test_init: None,
             diagnostics: Vec::new(),
             session: None,
         };
@@ -1560,26 +1456,12 @@ impl BamlClassPackage for PackageReflectImpl {
         find_global(vm, *package, name)
     }
 
-    fn tests(vm: &mut BexVm, package: &Value) -> NativeCallResult {
-        let package_ptr = match package_ptr(vm, *package) {
-            Ok(package) => package,
-            Err(error) => return error.into(),
-        };
-        // A view's tests are its base's.
-        let test_init = find_export(vm, package_ptr, |_, _, package| package.test_init);
-        let Some(test_init) = test_init else {
-            return NativeCallResult::Done(empty_tests(vm));
-        };
-        let Some(constructor) = test_collector_constructor(vm) else {
-            return NativeCallResult::Done(empty_tests(vm));
-        };
-        let prefix = Value::object(vm.alloc_string(""));
-        NativeCallResult::YieldToCall {
-            callee: constructor,
-            args: vec![prefix],
-            type_args: Vec::new(),
-            continuation: Box::new(RegisterPackageTests { test_init }),
+    fn root(vm: &mut BexVm) -> Value {
+        let package = vm.packages.root();
+        copy::Package {
+            _inner: Value::object(package),
         }
+        .to_value(vm)
     }
 
     fn diagnostics(vm: &mut BexVm, package: &Value) -> Vec<Value> {
@@ -1869,7 +1751,6 @@ impl BamlClassSession for PackageReflectImpl {
             // replaces this before any code of the session can observe it.
             surface: ExportSurface::Compiled(Vec::new()),
             init: None,
-            test_init: None,
             diagnostics: Vec::new(),
             session: Some(Box::new(SessionState {
                 history: IndexMap::new(),

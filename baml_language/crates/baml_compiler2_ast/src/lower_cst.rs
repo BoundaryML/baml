@@ -458,6 +458,50 @@ pub(crate) fn synthesize_init_test_function<R: TestRegistration>(
     }
 }
 
+/// The global that makes a file's registrar discoverable:
+///
+/// ```baml
+/// const $tests_<file> = testing.TestFile.new($init_test_<file>);
+/// ```
+///
+/// The testing package reads a package's tests off its globals, so this
+/// declaration is all that ties `registrar` to the package.
+pub(crate) fn synthesize_test_file_let(
+    registrar: &FunctionDef,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
+) -> crate::ast::LetDef {
+    let span = text_size::TextRange::default();
+    let key = registrar
+        .name
+        .as_str()
+        .strip_prefix("$init_test")
+        .unwrap_or_default();
+    let mut ctx = lower_expr_body::InitTestContext::new();
+    let constructor = ctx.alloc_expr(Expr::Path(compiler_path!(testing.TestFile.new)), span);
+    let registrar_ref = ctx.alloc_expr(Expr::Path(Path::bare(registrar.name.clone())), span);
+    let file = ctx.alloc_expr(
+        Expr::Call {
+            callee: constructor,
+            type_args: vec![],
+            args: vec![CallArg::positional(registrar_ref)],
+        },
+        span,
+    );
+    let (body, source_map, finish_diags, finish_env_refs) = ctx.finish(Some(file));
+    diags.extend(finish_diags);
+    env_var_refs.extend(finish_env_refs);
+    crate::ast::LetDef {
+        name: Name::new(format!("$tests{key}")),
+        type_annotation: None,
+        initializer: Some((body, source_map)),
+        origin: crate::ast::LetOrigin::TestFile,
+        docstring: None,
+        span,
+        name_span: span,
+    }
+}
+
 /// A top-level `test` or `testset` as the registrar synthesis reads it,
 /// whichever tree it came from: the pieces lower into the registrar's arena
 /// at the point the call needs them, so the arenas fill in one order.

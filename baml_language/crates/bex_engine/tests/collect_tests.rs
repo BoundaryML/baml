@@ -1,15 +1,13 @@
-//! Integration tests for `BexEngine::collect_tests`.
-//!
-//! Verifies that:
-//! - A project with `test` blocks produces a `Handle` (non-null) `BexExternalValue`
-//! - A project with no tests produces `BexExternalValue::Null`
-//! - A project with a `testset` block produces a non-null registry
+//! Integration tests for test collection: `testing.registry()` called the
+//! way a host calls it, and the registry's entry points run through it.
 
 mod common;
 
 use std::sync::Arc;
 
-use bex_engine::{BexEngine, BexExternalValue, CallId, CancellationToken};
+use bex_engine::{
+    BexCallArg, BexEngine, BexExternalValue, CallId, EngineError, FunctionCallContextBuilder,
+};
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -26,6 +24,18 @@ fn make_engine(source: &str) -> Arc<BexEngine> {
     )
 }
 
+/// The root package's live `testing.TestRegistry`, as a host asks for it.
+async fn collect_tests(engine: &Arc<BexEngine>) -> Result<BexExternalValue, EngineError> {
+    engine
+        .call_function_bound_args(
+            "testing.registry",
+            vec![BexCallArg::OmittedDefault],
+            FunctionCallContextBuilder::new(CallId::next()).build(),
+            false,
+        )
+        .await
+}
+
 /// A project with two top-level tests should produce a non-null registry Handle.
 #[tokio::test]
 async fn collect_tests_returns_registry_handle() {
@@ -40,8 +50,7 @@ async fn collect_tests_returns_registry_handle() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -51,21 +60,38 @@ async fn collect_tests_returns_registry_handle() {
     );
 }
 
-/// A project with no test blocks should produce `BexExternalValue::Null`.
+/// A project with no test blocks still answers with a registry: an empty one.
 #[tokio::test]
-async fn collect_tests_no_tests_returns_null() {
-    // No test or testset blocks — $init_test will not exist.
+async fn collect_tests_no_tests_returns_an_empty_registry() {
     let source = "";
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
+    let no_patterns = || BexExternalValue::Array {
+        element_type: bex_engine::WireTy::string(),
+        items: Vec::new(),
+    };
+    let names = engine
+        .call_function(
+            "testing.TestRegistry.list_filtered",
+            vec![
+                registry,
+                no_patterns(),
+                no_patterns(),
+                no_patterns(),
+                no_patterns(),
+            ],
+            FunctionCallContextBuilder::new(CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("listing an empty registry succeeds");
     assert!(
-        matches!(registry, BexExternalValue::Null),
-        "expected Null for empty project, got: {registry:?}"
+        matches!(&names, BexExternalValue::Array { items, .. } if items.is_empty()),
+        "expected no test names for an empty project, got: {names:?}"
     );
 }
 
@@ -81,8 +107,7 @@ async fn collect_tests_with_testset_returns_handle() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -104,8 +129,7 @@ async fn collect_tests_nested_testset_returns_handle() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -127,8 +151,7 @@ async fn collect_tests_dynamic_name_returns_handle() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -266,8 +289,7 @@ async fn collect_tests_run_test_catches_typed_throwing_body() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -309,8 +331,7 @@ async fn collect_tests_run_test_catches_assertion_panic() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -341,8 +362,7 @@ async fn collect_tests_quorum_runner_passes_and_fails() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
     expand_testset(&engine, registry.clone(), "root::suite")
@@ -375,8 +395,7 @@ async fn collect_tests_retry_stops_after_first_success() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
     expand_testset(&engine, registry.clone(), "root::suite")
@@ -407,8 +426,7 @@ async fn collect_tests_pass_rate_runner_uses_child_outcomes() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -437,8 +455,7 @@ async fn collect_tests_fail_fast_stops_after_first_failure() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -476,8 +493,7 @@ async fn collect_tests_sequential_runs_children_in_source_order() {
     .replace("__PATH__", &path);
 
     let engine = make_engine(&source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -504,8 +520,7 @@ async fn collect_tests_testset_inline_for_loop_expands() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -535,8 +550,7 @@ async fn collect_tests_testset_let_then_for_loop_expands() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -563,8 +577,7 @@ async fn collect_tests_testset_let_array_index_in_name_and_body() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -596,8 +609,7 @@ async fn collect_tests_testset_let_then_while_loop() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -628,8 +640,7 @@ async fn collect_tests_testset_let_used_in_test_name_concat() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -658,8 +669,7 @@ async fn collect_tests_testset_let_then_if_condition() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -688,8 +698,7 @@ async fn collect_tests_multiple_testsets_returns_handle() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -711,8 +720,7 @@ async fn serialize_registry_with_unexpanded_testsets() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -753,8 +761,7 @@ async fn collect_tests_testset_for_loop_with_nested_testset_variable_name() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -789,8 +796,7 @@ async fn collect_tests_testset_for_loop_test_uses_loop_var() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -826,8 +832,7 @@ async fn collect_tests_top_level_testset_with_string_concat_name() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -877,8 +882,7 @@ async fn collect_tests_testset_with_function_call_and_field_access() {
     "##;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -966,8 +970,7 @@ async fn collect_tests_user_exact_file_full_lifecycle() {
     let engine = make_engine(source);
 
     // Step 1: Collect tests
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -1039,8 +1042,7 @@ async fn collect_tests_expand_nested_testsets_full_depth() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -1088,8 +1090,7 @@ async fn test_body_let_local_resolves_to_binding() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -1150,8 +1151,7 @@ async fn collect_tests_run_all_parallel_class_spreads_keep_local_slots_in_bounds
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -1195,8 +1195,7 @@ async fn test_bodies_reuse_same_let_name_without_conflict() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 
@@ -1228,8 +1227,7 @@ async fn testset_let_capture_and_shadowing_resolve_correctly() {
     "#;
 
     let engine = make_engine(source);
-    let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+    let registry = collect_tests(&engine)
         .await
         .expect("collect_tests should succeed");
 

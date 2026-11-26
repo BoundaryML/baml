@@ -1,6 +1,6 @@
-// root.TestCollector — collector for tests and testsets.
-// The runtime creates a TestCollector, calls $init_test(collector), then reads
-// collector.tests and collector.testsets.
+// root.TestCollector: collector for tests and testsets.
+// `registry` creates a TestCollector, runs every `TestFile` the package
+// declares against it, then reads collector.tests and collector.testsets.
 
 class TestRegistration {
     name: string,
@@ -107,6 +107,43 @@ class TestCollector {
 // call_function is name-based, so we need this thin wrapper to call closures.
 function $invoke_collector(collector: TestSetBody, c: TestCollector) -> void {
     collector(c)
+}
+
+/// One source file's top-level `test` / `testset` blocks. The compiler
+/// declares one per file with tests, as a global of the declaring package:
+/// `register` registers the file's blocks on the collector it is given.
+class TestFile {
+    register: TestSetBody,
+
+    function new(register: TestSetBody) -> TestFile {
+        TestFile { register: register }
+    }
+}
+
+implements reflect._TestSource for TestFile {
+    function package_tests(
+        self,
+        package: reflect.Package,
+    ) -> map<string, () -> null throws unknown> throws unknown {
+        let tests: map<string, () -> null throws unknown> = {};
+        for (let registered in root.registry(package = package).collector.tests) {
+            tests.set(registered.name, registered.body);
+        }
+        tests
+    }
+}
+
+/// The tests `package` declares, unexpanded: every `TestFile` among its
+/// globals, registered in declaration order. Defaults to the program's root
+/// package, which is what a host that runs tests asks for.
+function registry(package: reflect.Package = reflect.Package.root()) -> TestRegistry {
+    let collector = TestCollector.new("");
+    for (let global in package.globals().values()) {
+        if let file: TestFile = global {
+            (file.register)(collector)
+        }
+    }
+    TestRegistry.new(collector)
 }
 
 // --- Serialization wire types ---

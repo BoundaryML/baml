@@ -153,7 +153,7 @@ struct InstalledRegistry {
     generation: u64,
     collection_epoch: u64,
     /// `Some` when the project has tests; `None` when collection completed
-    /// and found none (`$init_test` absent). Distinguished from "not yet
+    /// and produced no registry. Distinguished from "not yet
     /// collected", which is `RuntimeState::registry == None`.
     handle: Option<Handle>,
     /// Serializes expansion mutations: the registry heap object has exactly

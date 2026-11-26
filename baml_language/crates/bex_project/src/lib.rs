@@ -20,9 +20,9 @@ pub use bex_engine::HostCapture;
 #[cfg(target_arch = "wasm32")]
 pub use bex_engine::configure_workerd_runtime;
 pub use bex_engine::{
-    BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext, FunctionCallContextBuilder,
-    InheritedInvocationState, InvocationCapture, UnhandledSpawnError, UnhandledSpawnErrorHandler,
-    is_cancelled_engine_error,
+    BexCallArg, BexEngine, CANCELLED_PANIC_CLASS, EngineError, FunctionCallContext,
+    FunctionCallContextBuilder, InheritedInvocationState, InvocationCapture, UnhandledSpawnError,
+    UnhandledSpawnErrorHandler, is_cancelled_engine_error,
     logger::{TraceLogDrainReport, TraceLogMetadata, TraceLogger},
 };
 #[cfg(not(target_arch = "wasm32"))]

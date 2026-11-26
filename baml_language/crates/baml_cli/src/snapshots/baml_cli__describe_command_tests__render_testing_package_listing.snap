@@ -7,10 +7,12 @@ class            testing.TestSetRegistration      <builtin>/testing/registry.bam
 class            testing.InvalidTestName          <builtin>/testing/registry.baml:20
 class            testing.TestCollector            <builtin>/testing/registry.baml:24
 function         testing.$invoke_collector        <builtin>/testing/registry.baml:108
-class            testing.SerializedTest           <builtin>/testing/registry.baml:114
-class            testing.SerializedTestSet        <builtin>/testing/registry.baml:119
-type             testing.SerializedTestDef        <builtin>/testing/registry.baml:125
-class            testing.TestRegistry             <builtin>/testing/registry.baml:129
+class            testing.TestFile                 <builtin>/testing/registry.baml:115
+function         testing.registry                 <builtin>/testing/registry.baml:139
+class            testing.SerializedTest           <builtin>/testing/registry.baml:151
+class            testing.SerializedTestSet        <builtin>/testing/registry.baml:156
+type             testing.SerializedTestDef        <builtin>/testing/registry.baml:162
+class            testing.TestRegistry             <builtin>/testing/registry.baml:166
 function         testing.Quorum                   <builtin>/testing/runners.baml:14
 function         testing.Retry                    <builtin>/testing/runners.baml:50
 function         testing.PassRate                 <builtin>/testing/runners.baml:85

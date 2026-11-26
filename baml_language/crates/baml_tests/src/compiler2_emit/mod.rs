@@ -237,12 +237,25 @@ fn let_binding_global_slot_and_init_function() {
     );
 }
 
-// ─── Phase 4.6 $init_test chainer tests ───────────────────────────────────────
+// ─── Test file globals ──────────────────────────────────────────────────────
 
-/// Verify that when a file contains `test` blocks, a root `$init_test` chainer
-/// is the user package's `test_init`, with `arity: 1`.
+/// A file with `test` blocks declares one `$tests_<file>` global, written by
+/// the package's `$init`: the declaration the testing package finds a
+/// package's tests through. A file without tests declares none.
 #[test]
-fn init_test_chainer_synthesized_when_tests_present() {
+fn test_blocks_declare_one_test_file_global() {
+    let test_globals = |program: &bex_vm_types::Program| -> usize {
+        user_package(program)
+            .1
+            .globals
+            .keys()
+            .filter(|path| {
+                matches!(path, bex_vm_types::DeclPath::Let(name)
+                    if name.name.as_str().starts_with("$tests_"))
+            })
+            .count()
+    };
+
     let mut db = make_db();
     db.file(
         "test.baml",
@@ -256,54 +269,19 @@ fn init_test_chainer_synthesized_when_tests_present() {
         }
         "#,
     );
-
     let program = compile(&db);
-
-    // The root $init_test chainer is the user package's test init, and it
-    // owns a global slot.
-    let (_, user) = user_package(&program);
-    let test_init = user
-        .test_init
-        .expect("expected the user package to own an `$init_test` after test block synthesis");
+    assert_eq!(test_globals(&program), 1);
     assert!(
-        program
-            .globals
-            .contains(&bex_vm_types::ConstValue::Object(test_init)),
-        "expected `$init_test` to own a global slot"
+        user_package(&program).1.init.is_some(),
+        "the package's `$init` writes the test file global"
     );
 
-    // Verify the chainer function has arity 1 (takes the registry parameter)
-    let fn_obj_idx = test_init.raw();
-    // program.objects derefs to Vec<Object> via Deref, so a plain usize index works.
-    let fn_obj = &(*program.objects)[fn_obj_idx];
-    let bex_vm_types::Object::Function(chainer) = fn_obj else {
-        panic!("expected $init_test to be a Function object, got: {fn_obj:?}");
-    };
-    assert_eq!(
-        chainer.arity, 1,
-        "expected $init_test chainer to have arity 1, got: {}",
-        chainer.arity
-    );
-    assert_eq!(chainer.param_names, vec!["registry"]);
-    assert_eq!(chainer.param_types.len(), 1);
-    assert_eq!(chainer.param_has_default, vec![false]);
-}
-
-/// Verify that when a file has NO test blocks, no `$init_test` chainer is synthesized.
-#[test]
-fn no_init_test_chainer_when_no_tests() {
     let mut db = make_db();
     db.file(
         "test.baml",
         "function greet(name: string) -> string { return name; }",
     );
-
-    let program = compile(&db);
-
-    assert!(
-        user_package(&program).1.test_init.is_none(),
-        "expected no `$init_test` when no test blocks are present"
-    );
+    assert_eq!(test_globals(&compile(&db)), 0);
 }
 
 /// Verify that multiple client declarations:

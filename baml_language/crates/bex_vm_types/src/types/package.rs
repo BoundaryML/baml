@@ -169,8 +169,6 @@ pub struct Package {
     pub surface: ExportSurface,
     /// The package's `$init`, when it has `let`s to run.
     pub init: Option<HeapPtr>,
-    /// Compiler-synthesized test registrar for this package, when it has tests.
-    pub test_init: Option<HeapPtr>,
     /// Compiler warnings retained on the package. A static package's were
     /// reported at compile time; it retains none.
     pub diagnostics: Vec<RuntimeCompileDiagnostic>,
@@ -318,7 +316,6 @@ impl Package {
             objects: Objects::Own(Box::new([])),
             surface: ExportSurface::Projected,
             init: None,
-            test_init: None,
             diagnostics: Vec::new(),
             session: None,
         }
@@ -429,8 +426,6 @@ pub struct ProgramPackage {
     pub interface_blob: Vec<u8>,
     /// What the compile recorded about the package ([`Package::metadata`]).
     pub metadata: Option<crate::identity::PackageMetadata>,
-    /// The package's synthesized `$init_test`, if present.
-    pub test_init: Option<ObjectIndex>,
     /// The package's synthesized `$init`, if it has `let`s.
     pub init: Option<ObjectIndex>,
     /// The package's own cells by declaration — every named function (free

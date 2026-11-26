@@ -415,6 +415,16 @@ class CompileArtifact {
     _inner: unknown,
 }
 
+/// (internal) A global through which a package's tests are reached. The
+/// testing package depends on this one, not the other way round, so
+/// `Package.tests` asks the first such global the package declares.
+interface _TestSource {
+    function package_tests(
+        self,
+        package: Package,
+    ) -> map<string, () -> null throws unknown> throws unknown;
+}
+
 /// An isolated runtime-compiled package.
 class Package {
     _inner: unknown,
@@ -422,6 +432,13 @@ class Package {
     /// The package lexically enclosing this call site.
     function current() -> Package throws never {
         $compiler_intrinsic
+    }
+
+    /// The program's root package: the one the host loaded, whichever
+    /// package the call is written in.
+    //baml:mut_vm
+    function root() -> Package throws never {
+        $rust_function
     }
 
     /// Compiles `files` into an isolated package, resolving its dependencies
@@ -643,10 +660,16 @@ class Package {
     }
 
     /// Bundled tests as directly invocable zero-argument callables.
-    //baml:mut_vm
-    //baml:may_yield
     function tests(self) -> map<string, () -> null throws unknown> throws unknown {
-        $rust_function
+        // An index loop: `reflect` cannot depend on `baml`, which declares
+        // the list's `Iterable` implementation.
+        let globals = self.globals().values();
+        for (let i = 0; i < globals.length(); i += 1) {
+            if let source: _TestSource = globals[i] {
+                return source.package_tests(self);
+            }
+        }
+        {}
     }
 
     /// Diagnostics produced while compiling this package.

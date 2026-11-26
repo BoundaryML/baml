@@ -105,14 +105,16 @@ test "other initializer" { assert.equal(LATER.length(), 3) }
                         "initializer helpers carry the same MIR positions as ordinary functions"
                     );
                 }
-                FunctionIdentity::Init | FunctionIdentity::InitTest => {
+                FunctionIdentity::Init => {
                     chainers += 1;
                 }
                 _ => {}
             }
         }
-        assert_eq!(helpers, 10);
-        assert_eq!(chainers, 2);
+        // Ten source globals and a test file global for each of the two files
+        // with tests, all written by the one `$init`.
+        assert_eq!(helpers, 12);
+        assert_eq!(chainers, 1);
         assert!(body_of(&module, "user.calls.GlobalCalls").contains("vm.indirect_callee("));
         syn::parse_file(&module.source).expect("generated initializers parse as Rust");
     }
@@ -673,7 +675,16 @@ fn entry_points_prune_admission_to_what_they_reach() {
             *entry == "main"
         );
         if *entry == "fib" {
-            assert_eq!(module.functions.len(), 1);
+            // Package initializers run outside the entry points, so the
+            // testing package's (it holds a global) are admitted with it.
+            assert_eq!(
+                module
+                    .functions
+                    .iter()
+                    .filter(|f| f.name.starts_with("user."))
+                    .count(),
+                1
+            );
             assert!(module.rejected.iter().any(
                 |(name, why)| !name.starts_with("user.") && matches!(why, Rejection::Unreached)
             ));
@@ -727,7 +738,7 @@ fn unsupported_programs_remain_bytecode() {
             module.rejected
         );
         if name == "answer" {
-            assert!(module.functions.is_empty());
+            assert!(!module.functions.iter().any(|f| f.name.starts_with("user.")));
         }
     }
 }

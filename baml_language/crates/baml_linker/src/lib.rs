@@ -38,16 +38,15 @@
 //!
 //! # Layout
 //!
-//! Package-major, in set order: each package's buckets, then its init part,
-//! then its test part —
+//! Package-major, in set order: each package's buckets, then its tail —
 //!
 //! ```text
-//! objects:  [classes][enums][interfaces][aliases][code][init part][test part] per package
-//! globals:  [functions + bodies][lets][init-part slots][test-part slots]      per package
+//! objects:  [classes][enums][interfaces][aliases][code][tail] per package
+//! globals:  [functions + bodies][lets][tail slots]        per package
 //! ```
 //!
 //! — so a package's objects are one contiguous range and its position in the
-//! set is its position in the image. Init parts EXECUTE in package
+//! set is its position in the image. Tails EXECUTE in package
 //! initialization order — each package with `let`s after every package with
 //! `let`s it reaches, ties by position in the set — which
 //! `Program::init_order` records as package ordinals; placement

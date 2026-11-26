@@ -70,7 +70,6 @@ pub const REFLECT_INTERFACE_IMPLEMENTATION: LangItem =
     lang_item!(Reflect: interface.Implementation);
 pub const REFLECT_META: LangItem = lang_item!(Reflect: Meta);
 pub const REFLECT_WITH_META: LangItem = lang_item!(Reflect: WithMeta);
-pub const TESTING_TEST_COLLECTOR: LangItem = lang_item!(Testing: TestCollector);
 pub const TRACE_MODE: LangItem = lang_item!(Trace: Mode);
 
 /// Every item this module names.
@@ -135,7 +134,6 @@ pub const ALL: &[LangItem] = &[
     REFLECT_INTERFACE_IMPLEMENTATION,
     REFLECT_META,
     REFLECT_WITH_META,
-    TESTING_TEST_COLLECTOR,
     TRACE_MODE,
 ];
 

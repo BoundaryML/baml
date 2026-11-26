@@ -234,6 +234,12 @@ pub fn global_init_deps<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     binding: LetLoc<'db>,
 ) -> GlobalDeps<'db> {
+    // A file's test global holds its registrar without calling it: nothing
+    // the tests reach runs during `$init`, so it waits on no other global.
+    // Walking the registrar would visit every function the file's tests call.
+    if let_data(db, binding).origin == baml_compiler2_ast::LetOrigin::TestFile {
+        return GlobalDeps(Vec::new());
+    }
     let refs = let_init_refs(db, binding);
     let mut deps = Vec::new();
     let mut seen_globals = FxHashSet::default();

@@ -456,8 +456,8 @@ fn generic_values_are_interned_by_base_slot_across_packages_and_tails() {
     };
     user.exports.objects.push((free_fn("g"), LocalRef::Code(2)));
     user.exports.globals.push((free_fn("g"), 0));
-    // The user tail carries a third copy of `f<int>` and one of `f<string>`
-    // in its init part, plus an `$init` that references them.
+    // The user tail carries a third copy of `f<int>` and one of `f<string>`,
+    // plus an `$init` that references them.
     let tail = InitTail {
         dependencies: vec![direct("lib", fingerprint_of(&record))],
         objects: vec![
@@ -468,8 +468,6 @@ fn generic_values_are_interned_by_base_slot_across_packages_and_tails() {
         global_imports: vec![import(1, free_fn("f"))],
         slot_objects: vec![2],
         init: Some(2),
-        test_objects_start: 3,
-        test_slots_start: 1,
         ..InitTail::default()
     };
     let mut set = LinkSet {
@@ -662,8 +660,6 @@ fn let_bearing_tail(name: &str) -> InitTail {
         objects: vec![func(&format!("{name}.$init"), vec![Instruction::Return])],
         slot_objects: vec![0],
         init: Some(0),
-        test_objects_start: 1,
-        test_slots_start: 1,
         ..InitTail::default()
     }
 }
@@ -789,8 +785,6 @@ fn init_order_is_topological_with_ties_by_position() {
             objects: vec![func(&format!("{name}.$init"), vec![Instruction::Return])],
             slot_objects: vec![0],
             init: Some(0),
-            test_objects_start: 1,
-            test_slots_start: 1,
             ..InitTail::default()
         })
         .collect();
@@ -1071,8 +1065,6 @@ fn a_tail_reaches_its_own_packages_declarations_as_imports() {
         object_imports: vec![import(0, DeclPath::Class(item("Widget")))],
         slot_objects: vec![0],
         init: Some(0),
-        test_objects_start: 1,
-        test_slots_start: 1,
         ..InitTail::default()
     };
     let mut user = package("user", vec![], &unit, &record);
@@ -1416,7 +1408,6 @@ fn a_unit_whose_buckets_hold_another_kind_is_refused() {
     let unit = unit_with_fn("user.f", vec![Instruction::Return]);
     let mut tail = let_bearing_tail("user");
     tail.objects.push(class("Stray"));
-    tail.test_objects_start = 2;
     assert!(refused(&unit, Some(&tail), &record).contains("of `objects`"));
 }
 
