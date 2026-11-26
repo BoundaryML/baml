@@ -9,18 +9,19 @@ What a compiled program costs before its first line runs, and how large it is. I
 ```rust
 #[unsafe(no_mangle)]
 pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
+    for stop in [SIGINT, SIGTERM] { ... }          // exit with 128 + the signal, unless it was ignored at start
     let stress = std::env::var_os("BAML_GC_STRESS").is_some();
     let migrate = std::env::var_os("BAML_MIGRATE_STRESS").is_some();
     let program = Program { stack_maps: ..., types: ..., unwind: ..., functions: ... };
     map::randomize_seed();                         // CCRandomGenerateBytes
     let mut mutator = Mutator::new(program, stress);   // 8 MB space, decode the stack maps
-    let status = sched::run(&raw mut mutator, baml_native_entry as usize, migrate);
+    let status = sched::run(&raw mut mutator, baml_native_entry as usize, baml_native_task_shim as usize, migrate);
     mutator.drop_owned();
     status
 }
 ```
 
-`Mutator::new` allocates the first space (8 MB, untouched until used) and decodes the stack maps (`gc.md`). `sched::run` maps the main task's 8 MB stack and switches to it. `baml_native_entry` is compiled code: it calls the user's `main` inside a handler that takes everything, and prints the result. The handler table and the function table are decoded lazily, on the first throw.
+`Mutator::new` allocates the first space (8 MB, untouched until used) and decodes the stack maps (`gc.md`). `sched::run` records the task shim, makes the entry a task with an 8 MB stack of its own, queues it and serves the queue: the entry runs as a task, like everything it spawns. `baml_native_entry` is compiled code: it calls the user's `main` inside a handler that takes everything, and prints the result. The handler table and the function table are decoded lazily, on the first throw.
 
 The link is against one of four runtime archives (`link.rs`): with or without `baml.http`, lean or checked. A program that names no `baml_rt_baml_http_*` symbol gets the archive without reqwest and rustls. Dead code is stripped by the linker (`-dead_strip`).
 

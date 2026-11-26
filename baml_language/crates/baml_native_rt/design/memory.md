@@ -623,7 +623,7 @@ store(end, mutator + MUTATOR_ALLOC_PTR);
 // slow (cold): scratch = size; call baml_rt_alloc_slow; object = scratch
 ```
 
-The memory is not zeroed. The caller writes the header, the class object's address and then both words of every slot, with plain stores: nobody else can reach the object yet. There is one span and it is the whole space (8 MB to start), so the limit check fails only when a collection is due.
+The memory is not zeroed. The caller writes the header, the class object's address and then both words of every slot, with plain stores: nobody else can reach the object yet. There is one span and it is the whole space (8 MB to start), so the limit check fails only when a collection is due. Under `BAML_GC_STRESS` the limit equals `alloc_ptr`, so every allocation takes the slow path.
 
 ```baml
 class P { x: int }
