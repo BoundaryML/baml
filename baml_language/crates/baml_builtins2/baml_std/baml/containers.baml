@@ -748,6 +748,20 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
         $rust_function
     }
 
+    /// (internal) Returns every entry in one step, as the flat array
+    /// `[key0, value0, key1, value1, ...]` in insertion order.
+    ///
+    /// The compiler copies the operand of a map spread (`{ ...m }`) from this
+    /// snapshot. One read under the map's lock means the copied entries are
+    /// one state of the map: reading `keys()` and then `values()` would let
+    /// another task change the map between the two reads, and pair a key with
+    /// a value it never had. The values are not copied: a reference type is
+    /// shared with the map.
+    //baml:local_twin
+    function _entries(self) -> unknown[] throws never {
+        $rust_function
+    }
+
     /// Inserts or replaces the entry for `key` and returns the previous value,
     /// or `null` if `key` was absent. `O(1)`.
     ///

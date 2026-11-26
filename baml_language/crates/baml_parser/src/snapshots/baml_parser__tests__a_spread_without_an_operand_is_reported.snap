@@ -1,0 +1,89 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: "tree(\"function f() -> int {\\n  let a = [...];\\n  let b = [..., 1];\\n  let c = { ... };\\n  let d = { ..., \\\"k\\\": 1 };\\n  1\\n}\\n\")"
+---
+SourceFile@0..110
+  items: FunctionDef@0..110
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..12
+      l: LParen "(" @10..11
+      r: RParen ")" @11..12
+    ret: ReturnType@13..19
+      arrow: Arrow "->" @13..15
+      ty: PathType@16..19
+        head: Name@16..19
+          token: Word "int" @16..19
+    body: Block@20..110
+      l: LBrace "{" @20..21
+      stmts: LetStmt@24..38
+        introducer: Let "let" @24..27
+        pattern: BindingPattern@28..29
+          name: Name@28..29
+            token: Word "a" @28..29
+        eq: Equals "=" @30..31
+        init: ArrayLiteral@32..37
+          l: LBracket "[" @32..33
+          value: SpreadElement@33..36
+            dots: DotDotDot "..." @33..36
+            value: <missing @36>
+          r: RBracket "]" @36..37
+        semi: Semicolon ";" @37..38
+      stmts: LetStmt@41..58
+        introducer: Let "let" @41..44
+        pattern: BindingPattern@45..46
+          name: Name@45..46
+            token: Word "b" @45..46
+        eq: Equals "=" @47..48
+        init: ArrayLiteral@49..57
+          l: LBracket "[" @49..50
+          value: SpreadElement@50..53
+            dots: DotDotDot "..." @50..53
+            value: <missing @53>
+          comma: Comma "," @53..54
+          value: LiteralExpr@55..56
+            token: Integer "1" @55..56
+          r: RBracket "]" @56..57
+        semi: Semicolon ";" @57..58
+      stmts: LetStmt@61..77
+        introducer: Let "let" @61..64
+        pattern: BindingPattern@65..66
+          name: Name@65..66
+            token: Word "c" @65..66
+        eq: Equals "=" @67..68
+        init: MapLiteral@69..76
+          l: LBrace "{" @69..70
+          entries: SpreadElement@71..74
+            dots: DotDotDot "..." @71..74
+            value: <missing @75>
+          r: RBrace "}" @75..76
+        semi: Semicolon ";" @76..77
+      stmts: LetStmt@80..104
+        introducer: Let "let" @80..83
+        pattern: BindingPattern@84..85
+          name: Name@84..85
+            token: Word "d" @84..85
+        eq: Equals "=" @86..87
+        init: MapLiteral@88..103
+          l: LBrace "{" @88..89
+          entries: SpreadElement@90..94
+            dots: DotDotDot "..." @90..93
+            value: <missing @93>
+            comma: Comma "," @93..94
+          entries: MapEntry@95..101
+            key: StringLit@95..98
+              token: String "\"k\"" @95..98
+            colon: Colon ":" @98..99
+            value: LiteralExpr@100..101
+              token: Integer "1" @100..101
+          r: RBrace "}" @102..103
+        semi: Semicolon ";" @103..104
+      tail: LiteralExpr@107..108
+        token: Integer "1" @107..108
+      r: RBrace "}" @109..110
+---
+UnexpectedToken { expected: "expression", found: "']'", range: 36..37 }
+UnexpectedToken { expected: "expression", found: "','", range: 53..54 }
+UnexpectedToken { expected: "expression", found: "'}'", range: 75..76 }
+UnexpectedToken { expected: "expression", found: "','", range: 93..94 }

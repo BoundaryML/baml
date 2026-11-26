@@ -11,10 +11,11 @@ use text_size::TextRange;
 use crate::{
     LoweringDiagnostic,
     ast::{
-        AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause, CatchClauseKind, Expr,
-        ExprBody, ExprId, FunctionDefaults, LambdaDef, LambdaKind, LetOrigin, Literal, LoopOrigin,
-        MapExprEntry, MatchArm, MatchArmId, ObjectExprField, Param, PatId, Pattern, Stmt, StmtId,
-        TemplateIfBranch, TemplateSegment, TypeAnnotId, TypeExpr, TypeExprKind,
+        ArrayExprElement, AstSourceMap, BinaryOp, CallArg, CatchArm, CatchArmId, CatchClause,
+        CatchClauseKind, Expr, ExprBody, ExprId, FunctionDefaults, LambdaDef, LambdaKind,
+        LetOrigin, Literal, LoopOrigin, MapExprMember, MatchArm, MatchArmId, ObjectExprField,
+        Param, PatId, Pattern, Stmt, StmtId, TemplateIfBranch, TemplateSegment, TypeAnnotId,
+        TypeExpr, TypeExprKind,
     },
 };
 
@@ -265,7 +266,7 @@ pub(crate) fn synthesize_llm_spec_body(
     };
 
     // args: { "p": p, ... }
-    let entries: Vec<MapExprEntry> = param_names
+    let members: Vec<MapExprMember> = param_names
         .iter()
         .map(|name| {
             let key = ctx.alloc_expr(
@@ -273,10 +274,10 @@ pub(crate) fn synthesize_llm_spec_body(
                 span,
             );
             let value = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(name.clone())), span);
-            MapExprEntry::explicit(key, value)
+            MapExprMember::entry(key, value)
         })
         .collect();
-    let args_map = ctx.alloc_expr(Expr::Map { entries }, span);
+    let args_map = ctx.alloc_expr(Expr::Map { members }, span);
 
     // prompt_template: ( __spec_output_format: ai.OutputFormat) -> ai.Prompt { ... }
     //
@@ -638,6 +639,7 @@ fn synthesize_shorthand_prefixes(ctx: &mut LoweringContext, span: TextRange) -> 
         .map(|(prefix, _)| {
             ctx.alloc_expr(Expr::Literal(Literal::String((*prefix).to_string())), span)
         })
+        .map(ArrayExprElement::Item)
         .collect();
     ctx.alloc_expr(Expr::Array { elements }, span)
 }

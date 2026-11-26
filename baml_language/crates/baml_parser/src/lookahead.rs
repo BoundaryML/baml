@@ -328,13 +328,15 @@ pub(crate) fn looks_like_upcast(cur: Cursor<'_>) -> bool {
 
 /// Whether the `{` at the cursor opens a map literal rather than a block: a
 /// top-level `:` before any `,`/`;`/statement keyword says map; `{}` is an
-/// empty map; a `//#` header right inside says block.
+/// empty map; a `//#` header right inside says block. A `...` right inside
+/// says map too (`{ ...base }`): no statement or expression begins with one,
+/// so a block could never have continued there.
 pub(crate) fn looks_like_map(cur: Cursor<'_>) -> bool {
     debug_assert!(cur.at(TokenKind::LBrace));
     if cur.nth_is(1, TokenKind::HeaderComment) {
         return false;
     }
-    if cur.nth_is(1, TokenKind::RBrace) {
+    if cur.nth_is(1, TokenKind::RBrace) || cur.nth_is(1, TokenKind::DotDotDot) {
         return true;
     }
     let mut stack: Vec<TokenKind> = Vec::new();

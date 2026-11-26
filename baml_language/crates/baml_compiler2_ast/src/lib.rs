@@ -2347,14 +2347,20 @@ function build(name: string) -> unknown {
         let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
             panic!("expected expression body");
         };
-        let entries = body
+        let entries: Vec<_> = body
             .exprs
             .iter()
             .find_map(|(_, expr)| match expr {
-                Expr::Map { entries } => Some(entries),
+                Expr::Map { members } => Some(members),
                 _ => None,
             })
-            .expect("map");
+            .expect("map")
+            .iter()
+            .map(|member| match member {
+                crate::ast::MapExprMember::Entry(entry) => entry,
+                crate::ast::MapExprMember::Spread(_) => panic!("no spread was written"),
+            })
+            .collect();
         assert_eq!(entries.len(), 6);
         assert!(
             matches!(&body.exprs[entries[0].key], Expr::Path(path) if path.segments() == [baml_base::Name::new("name")])
@@ -2368,6 +2374,63 @@ function build(name: string) -> unknown {
         assert!(matches!(&body.exprs[entries[3].key], Expr::Binary { .. }));
         assert!(matches!(&body.exprs[entries[4].key], Expr::Call { .. }));
         assert!(matches!(&body.exprs[entries[5].key], Expr::Index { .. }));
+    }
+
+    /// A spread keeps its source position among the plain elements: the
+    /// order is what the literal means.
+    #[test]
+    fn list_and_map_spreads_lower_in_source_order() {
+        use crate::ast::{ArrayExprElement, MapExprMember};
+
+        let function = first_function(parse_and_lower(
+            r#"
+function build(xs: int[], m: map<string, int>) -> unknown {
+  let list = [...xs, 1, ...xs, 2,];
+  { ...m, "k": 1, ...m }
+}
+"#,
+        ));
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let elements = body
+            .exprs
+            .iter()
+            .find_map(|(_, expr)| match expr {
+                Expr::Array { elements } => Some(elements),
+                _ => None,
+            })
+            .expect("list");
+        assert!(matches!(
+            elements.as_slice(),
+            [
+                ArrayExprElement::Spread(_),
+                ArrayExprElement::Item(_),
+                ArrayExprElement::Spread(_),
+                ArrayExprElement::Item(_),
+            ]
+        ));
+        let members = body
+            .exprs
+            .iter()
+            .find_map(|(_, expr)| match expr {
+                Expr::Map { members } => Some(members),
+                _ => None,
+            })
+            .expect("map");
+        assert!(matches!(
+            members.as_slice(),
+            [
+                MapExprMember::Spread(_),
+                MapExprMember::Entry(_),
+                MapExprMember::Spread(_),
+            ]
+        ));
+        for member in members {
+            if let MapExprMember::Spread(operand) = member {
+                assert!(matches!(&body.exprs[*operand], Expr::Path(_)));
+            }
+        }
     }
 }
 
@@ -2402,6 +2465,12 @@ mod traverse_coverage_tests {
             r#"function h(xs: int[]) -> int throws never {
   if let [first, ..rest] = xs { return first }
   return 0
+}"#,
+            // A spread operand is a child of its literal like any element.
+            r#"function s(xs: int[], m: map<string, int>) -> int throws string {
+  let list = [0, ...xs, ...[throw "list"]]
+  let merged = { "a": 1, ...m, ...{ "b": xs.length() } }
+  return list.length() + merged.length()
 }"#,
             // Backtick templates carry their expressions twice — once in
             // `segments`, once in the desugared tag payload — from the same

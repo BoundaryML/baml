@@ -1046,8 +1046,10 @@ module.exports = grammar({
     array_expression: ($) =>
       seq('[', commaSep(choice($._expression, $.spread_element)), ']'),
 
-    // `{ "a": 1, "b": [2] }` — JSON-ish map literal (keys are strings).
-    map_expression: ($) => seq('{', commaSep1($.map_entry), '}'),
+    // `{ "a": 1, "b": [2] }` — JSON-ish map literal (keys are strings). A
+    // `...m` member copies another map's entries in: `{ ...m, "a": 1 }`.
+    map_expression: ($) =>
+      seq('{', commaSep1(choice($.map_entry, $.spread_element)), '}'),
 
     map_entry: ($) =>
       seq(field('key', $.string), ':', field('value', $._expression)),

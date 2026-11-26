@@ -894,3 +894,61 @@ function F(t: (int, (string, bool))?) -> (int,) {
               (tuple_index)))
           (arguments
             (identifier)))))))
+
+==================
+spread in array literals and map literals
+==================
+
+function f() -> json {
+  let a = [0, ...xs, ...ys.slice(0, 1), 3];
+  let m = { ...defaults, "type": 3, ...{ "k": [...xs] } };
+  { ...m }
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (array_expression
+          (number)
+          (spread_element
+            (identifier))
+          (spread_element
+            (call_expression
+              (member_expression
+                (identifier)
+                (property_identifier))
+              (arguments
+                (number)
+                (number))))
+          (number)))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (map_expression
+          (spread_element
+            (identifier))
+          (map_entry
+            (string)
+            (number))
+          (spread_element
+            (map_expression
+              (map_entry
+                (string)
+                (array_expression
+                  (spread_element
+                    (identifier))))))))
+      (expression_statement
+        (map_expression
+          (spread_element
+            (identifier)))))))

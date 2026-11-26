@@ -475,6 +475,11 @@ pub enum DiagnosticId {
     /// `while let` scrutinee or a C-style `for` update expression - which
     /// the loop evaluates itself; a loop is left from its body.
     LoopControlInLoopHeader,
+    /// The operand of a `...spread` in a list literal is statically no list,
+    /// or in a map literal no map (E0190). A nullable container, a union with
+    /// any other member and `unknown` are all rejected: nothing is spread
+    /// dynamically.
+    InvalidSpreadOperand,
 }
 
 impl DiagnosticId {
@@ -700,6 +705,7 @@ impl DiagnosticId {
             DiagnosticId::LoopControlOutsideLoop => "E0187",
             DiagnosticId::LoopControlInLoopHeader => "E0188",
             DiagnosticId::RustTypeClassHasFields => "E0189",
+            DiagnosticId::InvalidSpreadOperand => "E0190",
         }
     }
 }

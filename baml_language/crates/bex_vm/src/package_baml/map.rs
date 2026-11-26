@@ -311,6 +311,13 @@ impl BamlClassMap for PackageBamlImpl {
         map.values().copied().collect()
     }
 
+    /// `[key0, value0, key1, value1, ...]`. The glue hands this one view of
+    /// the map, read under its lock, so every key is beside the value it had
+    /// in that state: the one snapshot a map spread copies from.
+    fn _entries(map: MapView<'_>) -> Vec<Value> {
+        map.iter().flat_map(|(key, value)| [*key, *value]).collect()
+    }
+
     fn __entry_has(vm: &mut BexVm, map: Value, key: Value) -> NativeCallResult {
         MapDriver::start(vm, &[map, key], Operation::Has, false)
     }

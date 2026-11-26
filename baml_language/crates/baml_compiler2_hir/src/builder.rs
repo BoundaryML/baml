@@ -751,15 +751,21 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(spread.expr, body, source_map, true);
                 }
             }
-            ast::Expr::Array { elements } | ast::Expr::Tuple { elements } => {
+            ast::Expr::Array { elements } => {
+                for element in elements {
+                    self.walk_expr(element.expr(), body, source_map, true);
+                }
+            }
+            ast::Expr::Tuple { elements } => {
                 for &element in elements {
                     self.walk_expr(element, body, source_map, true);
                 }
             }
-            ast::Expr::Map { entries } => {
-                for entry in entries {
-                    self.walk_expr(entry.key, body, source_map, true);
-                    self.walk_expr(entry.value, body, source_map, true);
+            ast::Expr::Map { members } => {
+                for member in members {
+                    for expr in member.exprs() {
+                        self.walk_expr(expr, body, source_map, true);
+                    }
                 }
             }
             ast::Expr::MemberAccess { base, .. }

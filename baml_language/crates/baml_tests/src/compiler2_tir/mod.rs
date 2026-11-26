@@ -12,6 +12,8 @@ mod explicit_type_args;
 #[cfg(test)]
 mod inference;
 #[cfg(test)]
+mod list_map_spread;
+#[cfg(test)]
 // Archived tests for the superseded TIR PackageInterface API. Re-enabling
 // requires porting the fixtures and assertions to hir_ty; keeping the module
 // disconnected makes that separate repair explicit instead of compiling a
@@ -282,7 +284,15 @@ pub(crate) mod support {
                 format!("{tn} {{ {} }}", field_strs.join(", "))
             }
             Expr::Array { elements } => {
-                let elem_strs: Vec<String> = elements.iter().map(|e| expr_desc(*e, body)).collect();
+                let elem_strs: Vec<String> = elements
+                    .iter()
+                    .map(|e| match e {
+                        baml_compiler2_ast::ArrayExprElement::Item(e) => expr_desc(*e, body),
+                        baml_compiler2_ast::ArrayExprElement::Spread(e) => {
+                            format!("...{}", expr_desc(*e, body))
+                        }
+                    })
+                    .collect();
                 format!("[{}]", elem_strs.join(", "))
             }
             Expr::Tuple { elements } => baml_type::render_tuple(
@@ -291,15 +301,18 @@ pub(crate) mod support {
                     .map(|e| expr_desc(*e, body))
                     .collect::<Vec<_>>(),
             ),
-            Expr::Map { entries } => {
-                let entry_strs: Vec<String> = entries
+            Expr::Map { members } => {
+                let entry_strs: Vec<String> = members
                     .iter()
-                    .map(|entry| {
-                        format!(
+                    .map(|member| match member {
+                        baml_compiler2_ast::MapExprMember::Entry(entry) => format!(
                             "{}: {}",
                             expr_desc(entry.key, body),
                             expr_desc(entry.value, body)
-                        )
+                        ),
+                        baml_compiler2_ast::MapExprMember::Spread(e) => {
+                            format!("...{}", expr_desc(*e, body))
+                        }
                     })
                     .collect();
                 format!("map {{ {} }}", entry_strs.join(", "))
@@ -1876,7 +1889,14 @@ pub(crate) mod support {
                 Expr::Array { elements } => {
                     let elem_strs: Vec<String> = elements
                         .iter()
-                        .map(|e| expr_desc_hir(*e, body, prefix, local_type_names))
+                        .map(|e| match e {
+                            baml_compiler2_ast::ArrayExprElement::Item(e) => {
+                                expr_desc_hir(*e, body, prefix, local_type_names)
+                            }
+                            baml_compiler2_ast::ArrayExprElement::Spread(e) => {
+                                format!("...{}", expr_desc_hir(*e, body, prefix, local_type_names))
+                            }
+                        })
                         .collect();
                     format!("[{}]", elem_strs.join(", "))
                 }
@@ -1886,15 +1906,18 @@ pub(crate) mod support {
                         .map(|e| expr_desc_hir(*e, body, prefix, local_type_names))
                         .collect::<Vec<_>>(),
                 ),
-                Expr::Map { entries } => {
-                    let entry_strs: Vec<String> = entries
+                Expr::Map { members } => {
+                    let entry_strs: Vec<String> = members
                         .iter()
-                        .map(|entry| {
-                            format!(
+                        .map(|member| match member {
+                            baml_compiler2_ast::MapExprMember::Entry(entry) => format!(
                                 "{}: {}",
                                 expr_desc_hir(entry.key, body, prefix, local_type_names),
                                 expr_desc_hir(entry.value, body, prefix, local_type_names)
-                            )
+                            ),
+                            baml_compiler2_ast::MapExprMember::Spread(e) => {
+                                format!("...{}", expr_desc_hir(*e, body, prefix, local_type_names))
+                            }
                         })
                         .collect();
                     format!("map {{ {} }}", entry_strs.join(", "))

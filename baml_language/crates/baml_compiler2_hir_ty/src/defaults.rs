@@ -245,27 +245,33 @@ fn collect_default_expr_forward_references(
                 );
             }
         }
-        Expr::Array { elements } | Expr::Tuple { elements } => {
+        Expr::Array { elements } => {
+            for element in elements {
+                collect_default_expr_forward_references(
+                    element.expr(),
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
+        }
+        Expr::Tuple { elements } => {
             for expr in elements {
                 collect_default_expr_forward_references(*expr, body, later_params, shadowed, refs);
             }
         }
-        Expr::Map { entries } => {
-            for entry in entries {
-                collect_default_expr_forward_references(
-                    entry.key,
-                    body,
-                    later_params,
-                    shadowed,
-                    refs,
-                );
-                collect_default_expr_forward_references(
-                    entry.value,
-                    body,
-                    later_params,
-                    shadowed,
-                    refs,
-                );
+        Expr::Map { members } => {
+            for member in members {
+                for expr in member.exprs() {
+                    collect_default_expr_forward_references(
+                        expr,
+                        body,
+                        later_params,
+                        shadowed,
+                        refs,
+                    );
+                }
             }
         }
         Expr::Block { stmts, tail_expr } => {

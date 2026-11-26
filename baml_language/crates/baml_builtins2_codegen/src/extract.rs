@@ -1115,7 +1115,7 @@ fn is_empty_map_default(func: &FunctionDef, param: &baml_compiler2_ast::Param) -
     param.default.is_some_and(|default| {
         matches!(
             &func.defaults.exprs.exprs[default.expr()],
-            baml_compiler2_ast::Expr::Map { entries } if entries.is_empty()
+            baml_compiler2_ast::Expr::Map { members } if members.is_empty()
         )
     })
 }

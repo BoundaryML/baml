@@ -29,12 +29,12 @@
 use baml_syntax::{
     Token,
     nodes::{
-        AnyExpr, AnyId, AnyObjectKey, AnyObjectMember, Arg, ArgList, ArrayLiteral, AwaitExpr,
-        BinaryExpr, BreakExpr, CallExpr, ContinueExpr, EnvAccessExpr, FieldAccessExpr, FileTree,
-        GenericApplyExpr, IndexExpr, IsExpr, LiteralExpr, MapEntry, MapLiteral, ObjectField,
-        ObjectLiteral, OptionalCallExpr, OptionalFieldAccessExpr, OptionalIndexExpr, ParenExpr,
-        PathExpr, ReturnExpr, SpecExpr, SpreadElement, StringLit, TaggedTemplateExpr, ThrowExpr,
-        TupleExpr, TupleFieldExpr, UnaryExpr, UpcastExpr,
+        AnyExpr, AnyId, AnyMapMember, AnyObjectKey, AnyObjectMember, Arg, ArgList, ArrayLiteral,
+        AwaitExpr, BinaryExpr, BreakExpr, CallExpr, ContinueExpr, EnvAccessExpr, FieldAccessExpr,
+        FileTree, GenericApplyExpr, IndexExpr, IsExpr, LiteralExpr, MapEntry, MapLiteral,
+        ObjectField, ObjectLiteral, OptionalCallExpr, OptionalFieldAccessExpr, OptionalIndexExpr,
+        ParenExpr, PathExpr, ReturnExpr, SpecExpr, SpreadElement, StringLit, TaggedTemplateExpr,
+        ThrowExpr, TupleExpr, TupleFieldExpr, UnaryExpr, UpcastExpr,
     },
     ops::{BinaryOp, BinaryOpTok},
     token::{Token, TokenIdx, TokenKind, punct},
@@ -805,12 +805,13 @@ fn map_parts<'a>(f: &Formatter<'a>, id: Id<MapLiteral>) -> Doc<'a> {
         .list(node.entries)
         .iter()
         .enumerate()
-        .map(|(i, &entry)| {
-            f.list_item(
-                AnyNodeId::of(entry),
-                f.tree.get(entry).comma.map(|comma| comma.idx),
-                i == 0,
-            )
+        .map(|(i, &member)| {
+            let comma = match member {
+                AnyMapMember::Entry(entry) => f.tree.get(entry).comma,
+                AnyMapMember::Spread(spread) => f.tree.get(spread).comma,
+                AnyMapMember::Bogus(bogus) => f.tree.absent(bogus),
+            };
+            f.list_item(member.node_id(), comma.map(|comma| comma.idx), i == 0)
         })
         .collect();
     f.list_parts(

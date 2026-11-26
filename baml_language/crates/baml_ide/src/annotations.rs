@@ -59,7 +59,7 @@
 use baml_base::{LangPackage, SourceFile};
 use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
-    ast::{AstSourceMap, ExprBody, FunctionOrigin},
+    ast::{ArrayExprElement, AstSourceMap, ExprBody, FunctionOrigin},
 };
 use baml_compiler2_hir::{
     body::FunctionBody,
@@ -427,7 +427,16 @@ fn initializer_makes_type_obvious(body: &ExprBody, expr: ExprId) -> bool {
     match &body.exprs[expr] {
         Expr::Object { .. } | Expr::Literal(_) | Expr::ByteStringLiteral(_) | Expr::Null => true,
         Expr::Unary { .. } => primitive_literal_kind(body, expr).is_some(),
-        Expr::Array { elements } => array_elements_make_type_obvious(body, elements),
+        // A spread's element type is its operand's, which the literal does
+        // not show: the hint stays.
+        Expr::Array { elements } => elements
+            .iter()
+            .map(|element| match element {
+                ArrayExprElement::Item(item) => Some(*item),
+                ArrayExprElement::Spread(_) => None,
+            })
+            .collect::<Option<Vec<ExprId>>>()
+            .is_some_and(|items| array_elements_make_type_obvious(body, &items)),
         _ => false,
     }
 }

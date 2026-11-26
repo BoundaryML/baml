@@ -1548,15 +1548,19 @@ impl LlmSpecSource for TypedLlmSpecSource<'_> {
                 let elements: Vec<_> = self.v.tree.list(self.v.node(array).elements).to_vec();
                 let elements = elements
                     .into_iter()
-                    .map(|element| {
-                        // A bare function reference: normalized through ai.tool().
-                        let is_bare_ref = matches!(element.value, AnyExpr::Path(_));
-                        let id = body::expression(ctx, self.v, element.value);
-                        if is_bare_ref {
-                            wrap_bare_ref(ctx, id)
-                        } else {
-                            id
-                        }
+                    .filter_map(|element| {
+                        // A spread operand (`...more_tools`) is an ordinary
+                        // expression that must already produce an `ai.Tool[]`.
+                        body::array_element(ctx, self.v, element.value, |ctx, v, value| {
+                            // A bare function reference: normalized through ai.tool().
+                            let is_bare_ref = matches!(value, AnyExpr::Path(_));
+                            let id = body::expression(ctx, v, value);
+                            if is_bare_ref {
+                                wrap_bare_ref(ctx, id)
+                            } else {
+                                id
+                            }
+                        })
                     })
                     .collect();
                 ctx.alloc_expr(Expr::Array { elements }, span)

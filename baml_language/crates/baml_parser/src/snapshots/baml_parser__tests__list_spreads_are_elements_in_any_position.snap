@@ -1,0 +1,92 @@
+---
+source: crates/baml_parser/src/tests.rs
+expression: tree(text)
+---
+SourceFile@0..101
+  items: FunctionDef@0..53
+    kw: Function "function" @0..8
+    name: Name@9..10
+      token: Word "f" @9..10
+    params: ParamList@10..12
+      l: LParen "(" @10..11
+      r: RParen ")" @11..12
+    ret: ReturnType@13..21
+      arrow: Arrow "->" @13..15
+      ty: ArrayType@16..21
+        inner: PathType@16..19
+          head: Name@16..19
+            token: Word "int" @16..19
+        l: LBracket "[" @19..20
+        r: RBracket "]" @20..21
+    body: Block@22..53
+      l: LBrace "{" @22..23
+      tail: ArrayLiteral@26..51
+        l: LBracket "[" @26..27
+        value: SpreadElement@27..31
+          dots: DotDotDot "..." @27..30
+          value: PathExpr@30..31
+            head: Name@30..31
+              token: Word "a" @30..31
+        comma: Comma "," @31..32
+        value: LiteralExpr@33..34
+          token: Integer "1" @33..34
+        comma: Comma "," @34..35
+        value: SpreadElement@36..40
+          dots: DotDotDot "..." @36..39
+          value: PathExpr@39..40
+            head: Name@39..40
+              token: Word "b" @39..40
+        comma: Comma "," @40..41
+        value: LiteralExpr@42..43
+          token: Integer "2" @42..43
+        comma: Comma "," @43..44
+        value: SpreadElement@45..49
+          dots: DotDotDot "..." @45..48
+          value: PathExpr@48..49
+            head: Name@48..49
+              token: Word "c" @48..49
+        comma: Comma "," @49..50
+        r: RBracket "]" @50..51
+      r: RBrace "}" @52..53
+  items: FunctionDef@54..101
+    kw: Function "function" @54..62
+    name: Name@63..64
+      token: Word "g" @63..64
+    params: ParamList@64..66
+      l: LParen "(" @64..65
+      r: RParen ")" @65..66
+    ret: ReturnType@67..75
+      arrow: Arrow "->" @67..69
+      ty: ArrayType@70..75
+        inner: PathType@70..73
+          head: Name@70..73
+            token: Word "int" @70..73
+        l: LBracket "[" @73..74
+        r: RBracket "]" @74..75
+    body: Block@76..101
+      l: LBrace "{" @76..77
+      tail: ArrayLiteral@80..99
+        l: LBracket "[" @80..81
+        value: LiteralExpr@81..82
+          token: Integer "0" @81..82
+        value: SpreadElement@83..87
+          dots: DotDotDot "..." @83..86
+          value: PathExpr@86..87
+            head: Name@86..87
+              token: Word "a" @86..87
+        value: SpreadElement@88..96
+          dots: DotDotDot "..." @88..91
+          value: CallExpr@91..96
+            callee: PathExpr@91..94
+              head: Name@91..92
+                token: Word "b" @91..92
+              dot: Dot "." @92..93
+              name: Name@93..94
+                token: Word "c" @93..94
+            args: ArgList@94..96
+              l: LParen "(" @94..95
+              r: RParen ")" @95..96
+        value: LiteralExpr@97..98
+          token: Integer "1" @97..98
+        r: RBracket "]" @98..99
+      r: RBrace "}" @100..101

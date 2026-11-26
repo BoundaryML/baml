@@ -72,8 +72,8 @@ crate::define_tree! {
         // separator-led arms and segments
         UnionArm, PatternArm, BoundArm,
         AnyItem, AnyLlmField, AnyClassMember, AnyEnumMember, AnyInterfaceMember, AnyImplMember,
-        AnyStmt, AnyObjectMember, AnyTemplatePart,
-        AnyDoc, Id<Attribute>, Id<CatchClause>, Id<CatchArm>, Id<MatchArm>, Id<MapEntry>,
+        AnyStmt, AnyObjectMember, AnyMapMember, AnyTemplatePart,
+        AnyDoc, Id<Attribute>, Id<CatchClause>, Id<CatchArm>, Id<MatchArm>,
         Id<TemplateElif>,
         PathSegment, ArrayElement,
         SepItem<AnyType, punct::Comma>,

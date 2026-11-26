@@ -410,7 +410,7 @@ pub struct LambdaExpr {
     pub body: Result<Id<Block>, Missing>,
 }
 
-/// `[a, b]` — commas between elements are optional.
+/// `[a, b, ...rest]` — commas between elements are optional.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ArrayLiteral {
     pub l: Token!["["],
@@ -420,17 +420,35 @@ pub struct ArrayLiteral {
 
 #[derive(Walk, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ArrayElement {
-    pub value: AnyExpr,
+    pub value: AnyArrayElement,
     pub comma: Option<Token![","]>,
 }
 
-/// `map { k: v }` or `{ "k": v }`.
+/// An element of a list literal: a value, or a `...list` whose elements are
+/// copied in at that position.
+#[derive(AnyNode, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AnyArrayElement {
+    Expr(AnyExpr),
+    Spread(Id<SpreadElement>),
+    Bogus(Id<Bogus>),
+}
+
+/// `map { k: v }` or `{ "k": v, ...rest }`.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MapLiteral {
     pub map_kw: Option<Token!["map"]>,
     pub l: Token!["{"],
-    pub entries: List<Id<MapEntry>>,
+    pub entries: List<AnyMapMember>,
     pub r: Result<Token!["}"], Missing>,
+}
+
+/// A member of a map literal: a `key: value` entry, or a `...map` whose
+/// entries are copied in at that position.
+#[derive(AnyNode, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AnyMapMember {
+    Entry(Id<MapEntry>),
+    Spread(Id<SpreadElement>),
+    Bogus(Id<Bogus>),
 }
 
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -485,7 +503,9 @@ pub struct FieldValue {
     pub value: Result<AnyExpr, Missing>,
 }
 
-/// `...expr`
+/// `...expr`, in a constructed object, a map literal or a list literal. In a
+/// list literal the comma after it is the [`ArrayElement`]'s, as it is for
+/// every other element, and `comma` is `None`.
 #[derive(Node, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SpreadElement {
     pub dots: Token!["..."],
