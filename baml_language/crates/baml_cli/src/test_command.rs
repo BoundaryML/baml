@@ -19,11 +19,9 @@ use sys_native::CallId;
 
 use crate::{
     ExitCode,
-    bytecode_cache::CacheContext,
     log_output::{LogLevel as TestLogLevel, LogOutput},
     output::{Command, CommandContext, Outcome, Report, Style},
     reporter::Reporter,
-    test_filter::TestFilter,
 };
 
 /// Run BAML tests.
@@ -233,20 +231,6 @@ impl TestOutputOverrides {
     }
 }
 
-impl TestInvocation {
-    fn includes_id(&self, id: &str) -> bool {
-        TestFilter::includes_patterns(id, &self.profile_include, &self.profile_exclude)
-            && TestFilter::includes_patterns(id, &self.cli_include, &self.cli_exclude)
-    }
-
-    fn has_filters(&self) -> bool {
-        !self.profile_include.is_empty()
-            || !self.profile_exclude.is_empty()
-            || !self.cli_include.is_empty()
-            || !self.cli_exclude.is_empty()
-    }
-}
-
 fn validate_selectors<'a>(selectors: impl Iterator<Item = &'a String>) -> Result<()> {
     for selector in selectors {
         let is_canonical_root =
@@ -432,20 +416,6 @@ impl TestArgs {
             return Ok(crate::ExitCode::Failure);
         }
 
-        // Warm `--list` fast path. The fully-expanded test leaf names are a pure
-        // function of the compiled
-        // Program, cached under its key. On a hit we render + select directly
-        // and skip engine boot, `$init`, registration, and in-VM testset
-        // expansion entirely — the whole `--list` discovery floor. Gated off
-        // under DEV_BAML_BUILD_CACHE_VERIFY=always (the oracle must run honest
-        // discovery); any miss/corruption falls through to the
-        // honest path below.
-        if invocation.list {
-            if let Some(names) = self.try_cached_list(session.cache.as_ref(), &invocation) {
-                return Ok(list_tests(&reporter, names, report));
-            }
-        }
-
         let cached_program = session.try_cached_program();
 
         let cached_engine = cached_program.and_then(|program| {
@@ -611,30 +581,6 @@ impl TestArgs {
 
             if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Success) != 0 {
                 return Ok(crate::ExitCode::Failure);
-            }
-
-            // Write-through the discovery cache (+ DEV_BAML_BUILD_CACHE_VERIFY=always oracle) so a
-            // later `--list` skips engine boot entirely. The cached datum is the
-            // UNFILTERED flattened list, so any -i/-x is served from one entry;
-            // with no filters the display list above already IS the unfiltered
-            // list, so no extra VM call. Written only from an error-free
-            // discovery (never-save-on-error).
-            // A filtered/profiled discovery may have deliberately pruned lazy,
-            // expensive testsets. Do not defeat that guarantee by expanding the
-            // excluded tree merely to populate an unfiltered cache entry. A
-            // cache produced by an earlier unfiltered run can still serve this
-            // invocation through the fast path above.
-            if let Some(ctx) = &session.cache
-                && !invocation.has_filters()
-                && !testset_names
-                    .iter()
-                    .any(|name| name.ends_with("::(failed to expand)"))
-            {
-                let disco = crate::bytecode_cache::TestDiscovery {
-                    testset_leaf_names: testset_names.clone(),
-                };
-                ctx.verify_test_discovery(&disco)?;
-                ctx.store_test_discovery(&disco);
             }
 
             return Ok(list_tests(&reporter, testset_names, report));
@@ -873,35 +819,9 @@ impl TestArgs {
             output,
         }))
     }
-
-    /// Warm `--list` fast path: render the flattened test list straight from the
-    /// discovery cache and skip engine boot entirely. The include/exclude filter
-    /// is re-applied live in Rust via [`TestFilter`] — which mirrors the BAML
-    /// `testing.leaf_selected` used on the honest path, so the selection (and
-    /// hence stdout) is byte-identical to a cold run. Returns `None` when the
-    /// cache is absent/disabled, under `DEV_BAML_BUILD_CACHE_VERIFY=always`, or on a discovery
-    /// miss/corruption — every case falls through to honest discovery.
-    fn try_cached_list(
-        &self,
-        cache: Option<&CacheContext>,
-        invocation: &TestInvocation,
-    ) -> Option<Vec<String>> {
-        if CacheContext::verify_enabled() {
-            return None;
-        }
-        let disco = cache?.load_test_discovery()?;
-        Some(
-            disco
-                .testset_leaf_names
-                .into_iter()
-                .filter(|name| invocation.includes_id(name))
-                .collect(),
-        )
-    }
 }
 
-/// Record the selected `--list` IDs. Shared by the honest path and the warm
-/// discovery-cache path so both produce byte-identical stdout.
+/// Record the selected `--list` IDs.
 fn list_tests(reporter: &Reporter, names: Vec<String>, report: &mut TestReport) -> ExitCode {
     if names.is_empty() {
         reporter.finish("Finished", "no tests selected");
