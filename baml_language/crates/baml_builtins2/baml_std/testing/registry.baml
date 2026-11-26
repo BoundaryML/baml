@@ -1093,12 +1093,20 @@ function _flatten_with_tolerated(
             tolerated_ms: [],
         }
     };
+    // A testset runner can fail the aggregate without marking any child
+    // failed. That verdict counts as one failure, so a failed run never
+    // reports "0 failed".
+    let verdict_failures = if (report.outcome != "pass" && counts.failed == 0) {
+        1
+    } else {
+        0
+    };
     FlatTestReport {
         outcome: report.outcome,
         passed: counts.passed,
-        failed: counts.failed,
+        failed: counts.failed + verdict_failures,
         tolerated: counts.tolerated,
-        total: counts.total,
+        total: counts.total + verdict_failures,
         passed_names: identities.passed,
         failed_names: identities.failed,
         tolerated_names: identities.tolerated,

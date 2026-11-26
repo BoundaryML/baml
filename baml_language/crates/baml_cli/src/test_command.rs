@@ -969,17 +969,7 @@ fn consume_flat_report(
         }
     }
     summary.messages.extend(flat.messages);
-    if aggregate_passed {
-        return false;
-    }
-    // A testset runner can fail the aggregate without marking any child
-    // failed. Count that verdict as one failure so the summary does not read
-    // "0 failed" when the aggregate itself failed.
-    if flat.failed == 0 {
-        summary.failed += 1;
-        summary.total += 1;
-    }
-    true
+    !aggregate_passed
 }
 
 fn pluralize(n: usize, singular: &str, plural: &str) -> String {
@@ -1272,13 +1262,12 @@ mod tests {
 
     #[test]
     fn consume_empty_report_with_fail_outcome_still_propagates_failure() {
-        // The vacuous-pass skip must NOT swallow a zero-test report that
-        // reports a failure. A `total == 0 && outcome == "fail"` report has to
-        // fall through to the FAIL branch: it sets `command_failed` and
-        // synthesizes one displayed failure (so the summary isn't "0 failed"
-        // while the aggregate failed). Regression guard for the narrowed guard.
+        // The vacuous-pass skip must NOT swallow a report with no leaf that
+        // reports a failure: it has to fall through to the FAIL branch and
+        // set `command_failed`. The stdlib counts the failed verdict itself
+        // as one failure, which is the count this report carries.
         let parsed =
-            parse_flat_report(&flat_report("fail", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
+            parse_flat_report(&flat_report("fail", 0, 1, 0, 1, Vec::new(), Vec::new())).unwrap();
         assert_eq!(consume(parsed), (0, 1, 0, 1, true));
     }
 
@@ -1304,14 +1293,6 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(consume(parsed), (1, 1, 1, 3, true));
-    }
-
-    #[test]
-    fn consume_fail_with_zero_hard_failed_synthesizes_one() {
-        // Runner fails the aggregate without marking any child failed.
-        let parsed =
-            parse_flat_report(&flat_report("fail", 1, 0, 0, 1, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(parsed), (1, 1, 0, 2, true));
     }
 
     #[test]
