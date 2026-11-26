@@ -124,13 +124,18 @@ pub(super) fn assert_leaf_contexts(
             }
         }
     }
+    // The completions are the invocations; a start record, written for a call
+    // still open when its file sealed, carries the same context.
     assert!(
-        entries.len() >= minimum,
-        "missing entry contexts: {}",
-        entries.len()
+        completions.len() >= minimum,
+        "missing completion contexts: {}",
+        completions.len()
     );
-    assert_eq!(
-        entries, completions,
-        "each invocation must retain the same scoped context at completion"
-    );
+    for (id, context) in &entries {
+        assert_eq!(
+            completions.get(id),
+            Some(context),
+            "each invocation must retain the same scoped context at completion"
+        );
+    }
 }

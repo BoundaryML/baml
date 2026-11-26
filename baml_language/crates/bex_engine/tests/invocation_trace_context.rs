@@ -185,14 +185,10 @@ async fn retained_callback_context_and_ancestry_survive_parent_completion() {
             }
             for section in file.spans.unwrap().sections {
                 for event in section.events {
-                    match event.event.unwrap() {
-                        proto::span_event::Event::FunctionAnnouncement(entry) => {
-                            entries.push((section.thread_id, entry));
-                        }
-                        proto::span_event::Event::FunctionCompletion(done) => {
-                            completions.push(done);
-                        }
-                        _ => {}
+                    if let proto::span_event::Event::FunctionCompletion(done) = event.event.unwrap()
+                    {
+                        entries.push((section.thread_id, start_of(&done)));
+                        completions.push(done);
                     }
                 }
             }
@@ -212,9 +208,10 @@ async fn retained_callback_context_and_ancestry_survive_parent_completion() {
         let (_, parent) = find("parent");
         let (thread, child) = find("child");
         assert_eq!(threads[thread], Some(parent.id));
-        assert!(parent.inputs_cas_id.is_some());
-        assert!(child.inputs_cas_id.is_none());
         let completion = |id| completions.iter().find(|done| done.id == id).unwrap();
+        // The completions carry the inputs; the start records are slim.
+        assert!(completion(parent.id).inputs_cas_id.is_some());
+        assert!(completion(child.id).inputs_cas_id.is_none());
         assert!(completion(parent.id).value_cas_id.is_some());
         assert!(completion(child.id).value_cas_id.is_none());
     }
@@ -238,4 +235,16 @@ async fn retained_callback_context_and_ancestry_survive_parent_completion() {
         Err(EngineError::ShuttingDown)
     ));
     drop(frame);
+}
+
+/// A span's start as its end record carries it: since recording minor 17 a
+/// start record is written only for a span still open when its file seals.
+fn start_of(done: &proto::FunctionCompletion) -> proto::FunctionAnnouncement {
+    proto::FunctionAnnouncement {
+        id: done.id,
+        parent_id: done.parent_id,
+        call_path_id: u32::try_from(done.node >> 1).unwrap(),
+        entered_at_ticks: done.entered_at_ticks,
+        ..Default::default()
+    }
 }

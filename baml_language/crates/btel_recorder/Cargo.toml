@@ -24,3 +24,4 @@ web-time = { workspace = true }
 
 [dev-dependencies]
 bex_chunkedringbuffer = { workspace = true }
+btel-core = { workspace = true, features = [ "reader" ] }

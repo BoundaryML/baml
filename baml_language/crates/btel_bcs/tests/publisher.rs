@@ -42,15 +42,18 @@ fn capture_at(
         SnapshotValue::Int(value),
         &mut btel_snapshot::Shaper::default(),
     );
+    // A completed call's value: its completion carries what its start
+    // captured, and no start record is written for a call that completed.
     publisher.span(
         thread,
-        &mut SpanRecord::<Snapshot, Snapshot>::FunctionSpanAnnouncement {
+        &mut SpanRecord::<Snapshot, Snapshot>::FunctionSpanCompletionOk {
             id: allocate_telemetry_id(),
             parent_id: thread,
             call_path,
             entered_at: ClockInstant::from_ticks(1),
-            captured_inputs: Some(snapshot),
-            captured_type_args: None,
+            exited_at: ClockInstant::from_ticks(2),
+            await_time: btel_types::AwaitDuration::ZERO,
+            captured_value: Some(snapshot),
         },
     );
 }
@@ -212,7 +215,7 @@ async fn delivery_failure_clears_the_open_window_and_returns_pool_owners() {
 }
 
 #[tokio::test]
-async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_events() {
+async fn a_file_after_a_lost_one_defines_what_it_references_and_reoffers_cas() {
     let server = MockServer::start().await;
     let base = server.uri();
     Mock::given(method("POST"))
@@ -317,7 +320,6 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
     assert_eq!(finish(delivery).await, Err(DeliveryError::Http));
     assert_eq!(pool.stats().in_use, 0);
     assert_eq!(handle.loss_count(), 1);
-    assert_eq!(handle.metadata_replay_evictions(), 0);
 
     let requests = server.received_requests().await.unwrap();
     let prepares = prepare_requests(&requests);
@@ -352,7 +354,10 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
         btel_recorder::proto::RecordingFile::decode(envelope.recording_file.as_deref().unwrap())
             .unwrap();
     let definitions = recovered.definitions.unwrap();
-    assert_eq!(definitions.functions.len(), 1);
+    // The function's full definition was in the lost file: this one names
+    // it with its slim one.
+    assert!(definitions.functions.is_empty());
+    assert_eq!(definitions.slim_functions.len(), 1);
     assert_eq!(definitions.call_paths.len(), 1);
     assert_eq!(definitions.call_paths[0].call_path_id, call_path.get());
     assert_eq!(definitions.threads.len(), 1);

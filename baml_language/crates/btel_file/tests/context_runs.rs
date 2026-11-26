@@ -137,10 +137,14 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
 
     let read = btel_core::recording::read_directory(&directory).unwrap();
     assert!(read.issues.is_empty(), "{:?}", read.issues);
+    // Start records are written as their file seals, each under the context
+    // it started in; a selection materializes its section when it arrives, so
+    // a file can hold one without events. Those carry no span.
     let sections: Vec<_> = read
         .files
         .iter()
         .flat_map(|file| file.spans.iter().flat_map(|spans| &spans.sections))
+        .filter(|section| !section.events.is_empty())
         .collect();
     assert_eq!(sections.len(), 4);
     assert_eq!(reference(sections[0]), ContextReference::Snapshot(id));
@@ -161,7 +165,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
             0
         };
         file.header.as_ref().unwrap().format_minor
-            == btel_core::recording::minor::BASE.max(required)
+            == btel_core::recording::minor::SELF_CONTAINED.max(required)
     }));
 
     let cas = CasStore::new(root.path().join("cas"), CasLimits::default());

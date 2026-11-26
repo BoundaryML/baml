@@ -65,8 +65,22 @@ pub(crate) struct ManualSpan {
 }
 
 /// Model usage charged to an owned span by the threads that ran under it,
-/// written just before its completion.
-type OwnedUsage = Arc<Mutex<Vec<btel_records::ModelUsage>>>;
+/// and the totals of the spans that completed under it, written just before
+/// its completion.
+type OwnedUsage = Arc<Mutex<super::NodeUsage>>;
+
+/// Where an owned span hands its total usage when it completes: an owned
+/// parent's, or the node of the thread that started it, which may have
+/// completed by then (`SharedUsage`).
+#[derive(Clone)]
+#[cfg_attr(
+    target_arch = "wasm32",
+    expect(dead_code, reason = "wasm publishes no completions")
+)]
+enum ParentUsage {
+    Owned(OwnedUsage),
+    Shared(Arc<super::SharedUsage>),
+}
 
 #[derive(Clone)]
 struct ManualContext {
@@ -106,15 +120,14 @@ impl ManualScope {
     }
 
     pub(crate) fn restore(self, state: &mut TelemetryState) {
-        if let Some((id, usage)) = &self.usage
-            && let Some(entries) = state.take_model_usage(*id)
-        {
-            super::merge_usage(
-                &mut usage
+        if let Some((id, usage)) = &self.usage {
+            state.exit_owned(*id);
+            if let Some(charged) = state.take_model_usage(*id) {
+                usage
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner),
-                entries,
-            );
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .merge(charged);
+            }
         }
         state.thread.active_id = self.parent_id;
         state.thread.active_call_path = self.call_path;
@@ -129,6 +142,7 @@ impl ManualScope {
 struct Recording {
     await_time: Arc<Mutex<AwaitDuration>>,
     usage: Option<OwnedUsage>,
+    parent_usage: Option<ParentUsage>,
     options: OperationOptions,
     thread: btel_types::TelemetryId,
     context: ContextReference,
@@ -208,7 +222,13 @@ impl ManualSpan {
                 state.set_context(old_context);
                 let await_time = Arc::new(Mutex::new(AwaitDuration::ZERO));
                 let usage = (options.mode == InvocationMode::Span)
-                    .then(|| Arc::new(Mutex::new(Vec::new())));
+                    .then(|| Arc::new(Mutex::new(super::NodeUsage::default())));
+                let parent_usage = (options.mode == InvocationMode::Span).then(|| {
+                    match parent.and_then(|parent| parent.usage.clone()) {
+                        Some(owned) => ParentUsage::Owned(owned),
+                        None => ParentUsage::Shared(state.shared_usage()),
+                    }
+                });
                 template = Some(ManualContext {
                     await_time: await_time.clone(),
                     usage: usage.clone(),
@@ -226,6 +246,7 @@ impl ManualSpan {
                 Recording {
                     await_time,
                     usage,
+                    parent_usage,
                     options,
                     thread: state.thread.id,
                     context: recorded_context,
@@ -307,6 +328,9 @@ impl ManualSpan {
         };
         state.thread.active_id = template.id;
         state.thread.active_call_path = template.call_path;
+        if let Some(usage) = &template.usage {
+            state.enter_owned(template.id, Arc::clone(usage));
+        }
         state.set_context(self.context.clone());
         Some(saved)
     }
@@ -472,18 +496,35 @@ impl Recording {
         } else {
             SpanRecord::ManualSpanCompletion(Box::new(completion))
         };
-        // The usage rides the completion written next.
-        let entries = self.usage.as_ref().map_or_else(Vec::new, |usage| {
-            std::mem::take(
-                &mut *usage
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner),
-            )
-        });
-        if !entries.is_empty() {
+        // The usage rides the completion written next, and its total goes up
+        // to the parent.
+        let charged = self
+            .usage
+            .as_ref()
+            .map_or_else(super::NodeUsage::default, |usage| {
+                std::mem::take(
+                    &mut *usage
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                )
+            });
+        let total = charged.total();
+        if !total.is_empty() {
+            match &self.parent_usage {
+                Some(ParentUsage::Owned(parent)) => super::merge_usage(
+                    &mut parent
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .below,
+                    total.clone(),
+                ),
+                Some(ParentUsage::Shared(parent)) => parent.add(&total),
+                None => {}
+            }
             let usage = SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
                 node: self.completion.id,
-                entries,
+                entries: charged.own,
+                total,
             }));
             if deferred {
                 self.runtime.defer_span(self.thread, self.context, usage);

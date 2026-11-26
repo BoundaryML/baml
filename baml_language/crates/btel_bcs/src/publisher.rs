@@ -11,10 +11,7 @@ use btel_records::SpanRecord;
 use btel_snapshot::{BlobIndex, CasId, Leaf, Snapshot, Split, Structure};
 use btel_types::TelemetryId;
 
-use crate::{
-    delivery::{BcsDeliveryHandle, Candidate, DeliveryError, Source, Window},
-    metadata::MetadataJournal,
-};
+use crate::delivery::{BcsDeliveryHandle, Candidate, DeliveryError, Source, Window};
 
 #[derive(Clone, Debug)]
 pub struct CloudPublisherConfig {
@@ -92,7 +89,6 @@ pub struct CloudPublisher {
     offered_order: VecDeque<CasId>,
     /// Blob IDs queued or staged, whatever `offered` retains.
     inflight: HashSet<CasId>,
-    metadata: MetadataJournal,
     /// Captures that queued blobs are written from, oldest first;
     /// `first_owner` numbers the front.
     owners: VecDeque<Owner>,
@@ -255,13 +251,12 @@ impl CloudPublisher {
             return Err(RecordingError::InvalidConfig);
         }
         Ok(Self {
-            recording: RecordingBuilder::new(id, recording)?.with_metadata_replay(),
+            recording: RecordingBuilder::new(id, recording)?,
             recording_target: recording.target_bytes.get(),
             config,
             offered: HashSet::new(),
             offered_order: VecDeque::new(),
             inflight: HashSet::new(),
-            metadata: MetadataJournal::new(limits.max_recording_body_bytes),
             owners: VecDeque::new(),
             first_owner: 0,
             next_owner: 0,
@@ -360,7 +355,6 @@ impl CloudPublisher {
         self.offered.clear();
         self.offered_order.clear();
         self.inflight.clear();
-        self.metadata = MetadataJournal::new(self.delivery.config().max_recording_body_bytes);
         self.retained_snapshots = 0;
         self.retained_bytes = 0;
         self.staged_recording_bytes = 0;
@@ -387,7 +381,6 @@ impl CloudPublisher {
 
     fn progress(&mut self) {
         let progress = self.delivery.take_progress();
-        self.metadata.acknowledge(progress.recording_acked_through);
         if progress.reset_cas {
             // Queued and staged blobs stay protected by `inflight`.
             self.offered.clear();
@@ -628,7 +621,7 @@ impl CloudPublisher {
     }
 
     fn stage_file(&mut self, sealed: Result<Option<SealedFile>, RecordingError>) {
-        let mut file = match sealed {
+        let file = match sealed {
             Ok(Some(file)) => file,
             Ok(None) => return,
             Err(_) => {
@@ -647,18 +640,11 @@ impl CloudPublisher {
         {
             // The file is lost; queued blobs wait for the next one. It took
             // no blob from the queue, so no definition group is lost with it.
-            let evictions = self.metadata.retain(&file);
-            self.delivery.record_metadata_replay_evictions(evictions);
             self.delivery
                 .record_payload_loss(DeliveryError::Capacity, false);
             self.progress();
             return;
         }
-        let body_limit = limits
-            .max_recording_body_bytes
-            .min(remaining_bytes.saturating_sub(std::mem::size_of::<SealedFile>()));
-        let evictions = self.metadata.prepare(&mut file, body_limit);
-        self.delivery.record_metadata_replay_evictions(evictions);
         self.staged_recording_bytes += file.retained_bytes();
         let window = self.take_window();
         self.staged.push(PendingFile { file, window });
@@ -695,8 +681,21 @@ impl CloudPublisher {
                 || self.recording.encoded_size_hint() >= self.recording_target)
         {
             let sealed = self.recording.flush_recording();
-            self.stage(sealed);
+            self.carry_alone(sealed);
             self.carry(Carry::Pressure);
+        }
+    }
+
+    /// Stage `sealed`, or when nothing was pending to seal, a carrier for the
+    /// queued blobs. A start record is written only when its file seals, and
+    /// carries no capture (format minor 17), so the captures a call starts
+    /// with can wait with nothing else to seal; they must not wait for its end.
+    fn carry_alone(&mut self, sealed: Result<Option<SealedFile>, RecordingError>) {
+        let empty = matches!(sealed, Ok(None));
+        self.stage(sealed);
+        if empty && !self.queue.is_empty() {
+            let carrier = self.recording.flush_carrier();
+            self.stage(carrier);
         }
     }
 
@@ -714,8 +713,13 @@ impl CloudPublisher {
         if self.failure.is_none() {
             match seal {
                 Seal::IfDue => {
+                    let due = self.recording.deadline().is_some_and(|due| now >= due);
                     let sealed = self.recording.flush_if_due(now);
-                    self.stage(sealed);
+                    if due {
+                        self.carry_alone(sealed);
+                    } else {
+                        self.stage(sealed);
+                    }
                     self.carry(Carry::Pressure);
                 }
                 Seal::Now => {
@@ -982,6 +986,7 @@ mod tests {
         for detached in [false, true] {
             let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
             let thread = allocate_telemetry_id();
+            announce(&mut publisher, thread);
             let deliver = |publisher: &mut CloudPublisher, mut record: SpanRecord<_, _>| {
                 if detached {
                     publisher.before_detached_span(&record);
@@ -1017,6 +1022,7 @@ mod tests {
                 &mut publisher,
                 SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
                     node: owned,
+                    total: Vec::new(),
                     entries: vec![btel_records::ModelUsage {
                         provider: "openai".into(),
                         model: Some("gpt-6-sol".into()),
@@ -1053,40 +1059,66 @@ mod tests {
                 .flat_map(|section| &section.events)
                 .filter_map(|event| event.event.clone())
                 .collect();
-            // The owned span is announced under its thread, what it holds hangs under it, and
-            // it closes without an outcome, carrying the usage charged to it.
-            assert!(events.iter().any(|event| matches!(
-                event,
-                Event::FunctionAnnouncement(entry)
-                    if entry.id == owned.get() && entry.parent_id == thread.get()
-            )));
-            assert!(events.iter().any(|event| matches!(
-                event,
-                Event::FunctionAnnouncement(entry)
-                    if entry.id == child.get() && entry.parent_id == owned.get()
-            )));
+            // The child never completed: the file carries only its slim start record,
+            // as it was still open when the file sealed. The owned span closes without
+            // an outcome, under its thread, carrying the usage charged to it.
+            let starts: Vec<u64> = events
+                .iter()
+                .filter_map(|event| match event {
+                    Event::FunctionAnnouncement(start) => Some(start.id),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(starts, [child.get()]);
             let completion = events.iter().find_map(|event| match event {
                 Event::FunctionCompletion(done) if done.id == owned.get() => Some(done),
                 _ => None,
             });
             let completion = completion.expect("the owned span's completion is delivered");
+            assert_eq!(completion.parent_id, thread.get());
             assert_eq!(completion.completion_flags, 16);
             assert_eq!(completion.usage.len(), 1);
             assert_eq!(completion.usage[0].input_tokens, Some(100));
         }
     }
 
-    fn offer(publisher: &mut CloudPublisher, snapshot: Snapshot) {
-        let thread = allocate_telemetry_id();
+    /// A capture, in a record a recording for an upload writes: a log's data.
+    /// (A call's start record carries its inputs in memory, and is not
+    /// written for an upload.)
+    /// A defined thread, so a file can carry its records.
+    fn announce(publisher: &mut CloudPublisher, thread: TelemetryId) {
+        static CLOCK: std::sync::LazyLock<Arc<btel_clock::ClockEpoch>> =
+            std::sync::LazyLock::new(|| {
+                btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run()
+            });
         publisher.span(
             thread,
-            &mut SpanRecord::FunctionSpanAnnouncement {
-                id: allocate_telemetry_id(),
+            &mut SpanRecord::ThreadSpanAnnouncement {
+                id: thread,
+                parent_id: None,
+                spawn_call_path: CallPathId::ROOT,
+                started_at: ClockInstant::from_ticks(1),
+                clock: Arc::clone(&CLOCK),
+                name: None,
+            },
+        );
+    }
+
+    fn offer(publisher: &mut CloudPublisher, snapshot: Snapshot) {
+        let thread = allocate_telemetry_id();
+        announce(publisher, thread);
+        publisher.span(
+            thread,
+            &mut SpanRecord::Log {
                 parent_id: thread,
-                call_path: CallPathId::ROOT,
-                entered_at: ClockInstant::from_ticks(1),
-                captured_inputs: Some(snapshot),
-                captured_type_args: None,
+                function: btel_types::FunctionIdAllocator::default()
+                    .allocate()
+                    .unwrap(),
+                pc: 0,
+                at: ClockInstant::from_ticks(1),
+                level: btel_records::LogLevel::Info,
+                event_name: None,
+                captured_data: Some(snapshot),
             },
         );
     }
@@ -1998,135 +2030,6 @@ mod tests {
             .chain(publisher.queue.iter().map(|queued| queued.id))
             .collect();
         assert!(sent.contains(&group), "the group is still to be sent");
-    }
-
-    #[test]
-    fn metadata_pressure_is_observable_without_disabling_recordings() {
-        let (delivery, mut publisher) = publisher(CloudPublisherConfig::default());
-        publisher.metadata = MetadataJournal::new(1);
-        publisher.span(
-            allocate_telemetry_id(),
-            &mut SpanRecord::CallPathDefined {
-                call_path: CallPathId::new_non_root(1).unwrap(),
-                parent_call_path: CallPathId::ROOT,
-                visible_caller: None,
-                caller_pc: 0,
-                callee: btel_types::FunctionIdAllocator::default()
-                    .allocate()
-                    .unwrap(),
-                edge: btel_types::CallPathEdge::Synchronous,
-            },
-        );
-        let sealed = publisher.recording.flush_recording();
-        publisher.stage(sealed);
-        assert_eq!(publisher.failure, None);
-        assert_eq!(publisher.staged.len(), 1);
-        assert_eq!(delivery.handle().metadata_replay_evictions(), 1);
-        assert_eq!(delivery.handle().loss_count(), 0);
-        assert!(!delivery.handle().is_disabled());
-    }
-
-    #[test]
-    fn rejected_recordings_preserve_prior_metadata_for_a_later_small_file() {
-        use prost::Message;
-
-        for rejection in ["body", "plans", "bytes"] {
-            let delivery = BcsDelivery::new(
-                DeliveryConfig {
-                    max_recording_body_bytes: 512,
-                    ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
-                },
-                |_| panic!("payload rejection must not disable delivery"),
-            )
-            .unwrap();
-            let mut publisher = CloudPublisher::new(
-                btel_types::new_recording_id(),
-                RecordingConfig {
-                    target_bytes: NonZeroUsize::new(512).unwrap(),
-                    ..RecordingConfig::default()
-                },
-                CloudPublisherConfig {
-                    // Sixteen captures seal the file the "body" case watches.
-                    candidate_target: 16,
-                    ..CloudPublisherConfig::default()
-                },
-                delivery.handle(),
-            )
-            .unwrap();
-            publisher.recording_target = usize::MAX;
-            let thread = allocate_telemetry_id();
-            let define = |publisher: &mut CloudPublisher, path| {
-                publisher.span(
-                    thread,
-                    &mut SpanRecord::CallPathDefined {
-                        call_path: CallPathId::new_non_root(path).unwrap(),
-                        parent_call_path: CallPathId::ROOT,
-                        visible_caller: None,
-                        caller_pc: 0,
-                        callee: btel_types::FunctionIdAllocator::default()
-                            .allocate()
-                            .unwrap(),
-                        edge: btel_types::CallPathEdge::Synchronous,
-                    },
-                );
-            };
-            define(&mut publisher, 1);
-            let first = publisher.recording.flush_recording();
-            publisher.stage(first);
-            assert_eq!(publisher.staged.len(), 1);
-            if rejection == "plans" {
-                while publisher.staged.len() < delivery.handle().config().max_pending_plans {
-                    publisher.aggregate(AggregateDelta {
-                        count: 1,
-                        ..AggregateDelta::default()
-                    });
-                    let sealed = publisher.recording.flush_recording();
-                    publisher.stage(sealed);
-                }
-            } else if rejection == "bytes" {
-                publisher.staged_recording_bytes =
-                    delivery.handle().config().recording_reserved_bytes;
-            }
-            define(&mut publisher, 2);
-            let pool = SnapshotPool::unbounded(Limits::default());
-            if rejection == "body" {
-                for value in 0..16 {
-                    capture(&mut publisher, &pool, value);
-                }
-            } else {
-                let sealed = publisher.recording.flush_recording();
-                publisher.stage(sealed);
-            }
-            assert_eq!(delivery.handle().loss_count(), 1, "{rejection}");
-            assert_eq!(
-                delivery.handle().metadata_replay_evictions(),
-                0,
-                "{rejection}"
-            );
-
-            // Discard the earlier staged payloads without acknowledging them.
-            publisher.staged.clear();
-            publisher.staged_recording_bytes = 0;
-            publisher.aggregate(AggregateDelta {
-                count: 1,
-                ..AggregateDelta::default()
-            });
-            let sealed = publisher.recording.flush_recording();
-            publisher.stage(sealed);
-            assert_eq!(publisher.staged.len(), 1);
-            let decoded =
-                btel_recorder::proto::RecordingFile::decode(publisher.staged[0].file.bytes())
-                    .unwrap();
-            let paths: Vec<_> = decoded
-                .definitions
-                .unwrap()
-                .call_paths
-                .into_iter()
-                .map(|path| path.call_path_id)
-                .collect();
-            assert_eq!(paths, [1, 2], "{rejection}");
-            assert!(!delivery.handle().is_disabled());
-        }
     }
 
     #[test]

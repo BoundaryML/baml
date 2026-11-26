@@ -876,7 +876,11 @@ fn inline_observed_model_invokes_charge_usage_before_completion() {
                 .span_records()
                 .iter()
                 .filter_map(|record| {
-                    if let SpanRecord::SpanUsage(usage) = record {
+                    // The invoke's own usage; the spans above it carry it only
+                    // in their totals.
+                    if let SpanRecord::SpanUsage(usage) = record
+                        && !usage.entries.is_empty()
+                    {
                         Some(&usage.entries)
                     } else {
                         None

@@ -132,10 +132,12 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
             for event in &section.events {
                 match event.event.as_ref().unwrap() {
                     proto::span_event::Event::FunctionAnnouncement(a) => {
-                        assert_cas_blob(root.path(), a.inputs_cas_id.unwrap());
+                        // A slim start record: the completion carries the inputs.
+                        assert!(a.inputs_cas_id.is_none());
                         announcements += 1;
                     }
                     proto::span_event::Event::FunctionCompletion(c) => {
+                        assert_cas_blob(root.path(), c.inputs_cas_id.unwrap());
                         assert_cas_blob(root.path(), c.value_cas_id.unwrap());
                         spans += 1;
                         *span_counts.entry(c.node).or_default() += 1;
@@ -146,7 +148,9 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
             }
         }
     }
-    assert_eq!((announcements, spans), (4, 4));
+    // Start records only for spans open when their file sealed.
+    assert_eq!(spans, 4);
+    assert!(announcements <= spans);
     assert!(threads >= 4 && aggregate_count > 4 && clocks > 0);
     for (node, count) in span_counts {
         assert_eq!(aggregates[&node], count);

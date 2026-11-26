@@ -1,10 +1,10 @@
 //! Context evidence is independent of call reconciliation and shared by both
 //! ingestion paths. No section or file inherits a previous section's context.
-//! Announcements are authoritative even when explicitly unavailable. Function
-//! completions restore the frame's entry context; future completions restore
-//! the launch context. They are fallbacks, never overrides. Running markers
-//! supply timing, not another context capture. A network span has only its
-//! announcement's context.
+//! A local recording's start records are authoritative even when explicitly
+//! unavailable. A completion is written under the context its span started
+//! in: a function's entry context, a future's launch context, the context of
+//! the frame that sent a request. It is the fallback for both slots, never an
+//! override, so a span recorded only by its completion has its context.
 use std::collections::BTreeMap;
 
 use btel_core::{
@@ -42,6 +42,7 @@ impl Contexts {
                         // Completions carry the captured entry context, not the
                         // context in effect when the function returned.
                         self.select(done.id, 0, 1, context);
+                        self.select(done.id, 1, 1, context);
                     }
                     Some(Event::ThreadAnnouncement(_)) => {
                         self.select(section.thread_id, 0, 2, context);
@@ -49,16 +50,19 @@ impl Contexts {
                     }
                     Some(Event::ThreadCompletion(_)) => {
                         self.select(section.thread_id, 0, 1, context);
+                        self.select(section.thread_id, 1, 1, context);
                     }
-                    // A request's context is the sending frame's, at its
-                    // announcement; its events and completion can be read
-                    // on other threads, under other contexts.
+                    // A request's context is the sending frame's: its start
+                    // record's, and its completion's, which is written under it.
                     Some(Event::NetworkAnnouncement(span)) => {
                         self.select(span.id, 0, 2, context);
                         self.select(span.id, 1, 2, context);
                     }
-                    Some(Event::NetworkEvent(event)) => self.unknown(event.span_id),
-                    Some(Event::NetworkCompletion(done)) => self.unknown(done.span_id),
+                    Some(Event::NetworkCompletion(done)) => {
+                        self.unknown(done.span_id);
+                        self.select(done.span_id, 0, 1, context);
+                        self.select(done.span_id, 1, 1, context);
+                    }
                     _ => {}
                 }
             }

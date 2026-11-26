@@ -202,45 +202,48 @@ fn spans(files: &[proto::RecordingFile]) -> BTreeMap<String, Span> {
     use proto::span_event::Event;
     let mut spans = BTreeMap::<u64, Span>::new();
     for file in files {
-        for event in file
+        for (section, event) in file
             .spans
             .iter()
             .flat_map(|spans| &spans.sections)
-            .flat_map(|section| &section.events)
+            .flat_map(|section| section.events.iter().map(move |event| (section, event)))
         {
-            let (id, minor) = match &event.event {
+            match &event.event {
+                // A local recording's slim start record: the end record is
+                // the whole span.
                 Some(Event::NetworkAnnouncement(span)) => {
-                    spans.entry(span.id).or_default().announcement = Some(span.clone());
-                    (span.id, true)
+                    assert!(span.request_cas_id.is_none());
                 }
-                Some(Event::NetworkEvent(network)) => {
-                    let span = spans.entry(network.span_id).or_default();
-                    span.events.push(network.clone());
-                    span.written.push(network.name.clone());
-                    (network.span_id, true)
-                }
+                Some(Event::NetworkEvent(_)) => panic!("events ride their request's completion"),
                 Some(Event::NetworkCompletion(done)) => {
+                    assert_ne!(done.span_id, 0);
+                    assert_eq!(section.thread_id, done.thread_id);
+                    assert!(
+                        file.header.as_ref().unwrap().format_minor
+                            >= btel_core::recording::minor::SELF_CONTAINED
+                    );
                     let span = spans.entry(done.span_id).or_default();
                     assert!(span.completion.is_none(), "a span ends once");
-                    span.completion = Some(*done);
+                    span.announcement = Some(proto::NetworkAnnouncement {
+                        id: done.span_id,
+                        parent_id: done.parent_id,
+                        call_path_id: done.call_path_id,
+                        started_at_ticks: done.started_at_ticks,
+                        method: done.method.clone(),
+                        url: done.url.clone(),
+                        request_cas_id: done.request_cas_id,
+                    });
+                    span.events.clone_from(&done.events);
+                    span.written = done.events.iter().map(|event| event.name.clone()).collect();
                     span.written.push("completion".to_owned());
-                    (done.span_id, true)
+                    span.completion = Some(done.clone());
                 }
-                _ => (0, false),
-            };
-            if minor {
-                assert_ne!(id, 0);
-                // Other additive features, such as process launch context, can
-                // require a newer minor than network spans alone.
-                assert!(
-                    file.header.as_ref().unwrap().format_minor
-                        >= btel_core::recording::minor::NETWORK
-                );
+                _ => {}
             }
         }
     }
-    // One span's events can be written by different VM threads, into
-    // different sections: order them by time, as `baml query` does.
+    // One span's events can be written by different VM threads: order them
+    // by time, as `baml query` does.
     for span in spans.values_mut() {
         span.events.sort_by_key(|event| event.at_ticks);
     }
@@ -682,13 +685,14 @@ async fn a_request_task_starts_running_before_its_handler_calls() {
             .push(section.context);
         for event in &section.events {
             match &event.event {
-                Some(Event::ThreadRunning(run)) => {
-                    running.entry(section.thread_id).or_insert(run.at_ticks);
-                }
+                Some(Event::ThreadRunning(_)) => panic!("a thread's completion says when it ran"),
                 Some(Event::ThreadCompletion(done)) => {
+                    if let Some(at) = done.running_at_ticks {
+                        running.insert(section.thread_id, at);
+                    }
                     completed.insert(section.thread_id, done.completed_at_ticks);
                 }
-                Some(Event::FunctionAnnouncement(call)) if call.parent_id == section.thread_id => {
+                Some(Event::FunctionCompletion(call)) if call.parent_id == section.thread_id => {
                     entered
                         .entry(section.thread_id)
                         .or_default()

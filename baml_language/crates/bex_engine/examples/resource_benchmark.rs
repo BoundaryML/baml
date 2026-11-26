@@ -122,6 +122,7 @@ fn run(args: Run) -> Result<()> {
     let config = btel_recorder::RecordingConfig {
         target_bytes: NonZeroUsize::new(1024 * 1024).unwrap(),
         flush_interval_duration: Duration::from_secs(1),
+        ..btel_recorder::RecordingConfig::default()
     };
     let recording = match args.mode {
         Mode::Off | Mode::AutoNoSink => None,

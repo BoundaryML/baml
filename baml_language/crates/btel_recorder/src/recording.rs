@@ -33,7 +33,6 @@ pub struct SealedFile {
     id: RecordingId,
     sequence: NonZeroU64,
     bytes: Vec<u8>,
-    metadata: std::ops::Range<usize>,
 }
 impl SealedFile {
     pub fn recording_id(&self) -> RecordingId {
@@ -47,29 +46,6 @@ impl SealedFile {
     }
     pub fn retained_bytes(&self) -> usize {
         std::mem::size_of::<Self>().saturating_add(self.bytes.capacity())
-    }
-
-    /// Encoded definitions and clock states introduced by this file, without events.
-    /// Empty unless the builder enabled metadata replay.
-    pub fn metadata_bytes(&self) -> &[u8] {
-        &self.bytes[self.metadata.clone()]
-    }
-
-    /// Prepend older metadata from this recording before its newer definitions.
-    /// Call before preparing uploads: the resulting bytes must remain immutable.
-    pub fn prepend_metadata<'a>(&mut self, segments: impl Iterator<Item = &'a [u8]> + Clone) {
-        let prefix_len: usize = segments.clone().map(<[u8]>::len).sum();
-        if prefix_len == 0 {
-            return;
-        }
-        let mut bytes = Vec::with_capacity(prefix_len + self.bytes.len());
-        for segment in segments {
-            bytes.extend_from_slice(segment);
-        }
-        bytes.extend_from_slice(&self.bytes);
-        self.bytes = bytes;
-        self.metadata.start += prefix_len;
-        self.metadata.end += prefix_len;
     }
 }
 
@@ -114,7 +90,6 @@ pub struct RecordingBuilder {
     deadline: Option<Instant>,
     pending_span_reservation: usize,
     span_credit: usize,
-    metadata_replay: bool,
     ended: bool,
 }
 impl RecordingBuilder {
@@ -130,22 +105,24 @@ impl RecordingBuilder {
             config,
             source_snapshot_id: None,
             process: None,
-            buffer: ConversionBuffer::default(),
+            buffer: ConversionBuffer {
+                max_request_events: config.max_request_events,
+                ..ConversionBuffer::default()
+            },
             captures: btel_processor::CaptureProcessor::default(),
             pending_captures: Vec::new(),
             next_sequence: NonZeroU64::new(1),
             deadline: None,
             pending_span_reservation: 0,
             span_credit: 0,
-            metadata_replay: false,
             ended: false,
         })
     }
-    /// Expose essential metadata separately for a bounded best-effort cloud journal.
-    #[must_use]
-    pub fn with_metadata_replay(mut self) -> Self {
-        self.metadata_replay = true;
-        self
+
+    /// Tests of encoding alone: write records of undefined paths and threads.
+    #[cfg(test)]
+    pub(crate) fn write_undefined(&mut self) {
+        self.buffer.write_undefined = true;
     }
 
     /// Optional source fingerprint, fixed for this recording before processing.
@@ -245,13 +222,16 @@ impl RecordingBuilder {
         let sequence = self
             .next_sequence
             .ok_or(RecordingError::SequenceExhausted)?;
-        let ready = self.buffer.take();
+        let ready = self.buffer.take(end);
+        let dropped_spans = std::mem::take(&mut self.buffer.dropped_spans);
+        let dropped_network_events = std::mem::take(&mut self.buffer.dropped_network_events)
+            .saturating_add(self.buffer.open.take_late_events());
         let process_exit = end
             .then(|| self.process.as_ref().and_then(|p| p.exit.get()))
             .flatten();
         let identity = self.process.as_ref();
         let platform = identity.filter(|p| !p.info.os.is_empty() || !p.info.arch.is_empty());
-        let mut file = proto::RecordingFile {
+        let file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
                 format_major: btel_core::recording::FORMAT_MAJOR,
                 format_minor: self
@@ -315,7 +295,11 @@ impl RecordingBuilder {
             sequence: sequence.get(),
             definitions: Some(ready.definitions),
             aggregates: Some(ready.aggregates),
-            spans: self.buffer.spans.is_empty().then(proto::SpanBatch::default),
+            spans: self.buffer.spans.is_empty().then(|| proto::SpanBatch {
+                dropped_spans,
+                dropped_network_events,
+                ..proto::SpanBatch::default()
+            }),
             clock_states: Some(ready.clock_states),
             end: end.then(|| proto::RecordingEnd {
                 process_end: process_exit.map(|exit| proto::ProcessEnd {
@@ -341,23 +325,10 @@ impl RecordingBuilder {
         };
         let length = file.encoded_len() + errors_len;
         self.reserve_encoding(length)?;
-        let mut bytes = self.buffer.spans.finish();
-        let metadata_start = bytes.len();
-        if self.metadata_replay {
-            let metadata = proto::RecordingFile {
-                definitions: file
-                    .definitions
-                    .take()
-                    .filter(|value| value.encoded_len() != 0),
-                clock_states: file
-                    .clock_states
-                    .take()
-                    .filter(|value| value.encoded_len() != 0),
-                ..Default::default()
-            };
-            metadata.encode_raw(&mut bytes);
-        }
-        let metadata = metadata_start..bytes.len();
+        let mut bytes = self
+            .buffer
+            .spans
+            .finish(dropped_spans, dropped_network_events);
         file.encode_raw(&mut bytes);
         if errors_len != 0 {
             prost::encoding::encode_key(
@@ -372,7 +343,6 @@ impl RecordingBuilder {
             id: self.id,
             sequence,
             bytes,
-            metadata,
         };
         drop(file); // Release converted metadata before potentially blocking delivery.
         self.next_sequence = sequence.get().checked_add(1).and_then(NonZeroU64::new);
@@ -456,7 +426,7 @@ impl RecordingBuilder {
         if self.span_credit == 0 {
             terminal(self.admit_spans());
         }
-        let strings = string_bytes(record);
+        let strings = string_bytes(record).saturating_add(carried_bytes(&self.buffer, record));
         if strings != 0 {
             // Preserve the outstanding fixed-record reservation after
             // variable-length strings; later completion writes use that credit.
@@ -489,7 +459,10 @@ impl RecordingBuilder {
     }
     /// Release all open-file allocations and capture owners after terminal failure.
     pub fn discard_pending(&mut self) {
-        self.buffer = ConversionBuffer::default();
+        self.buffer = ConversionBuffer {
+            max_request_events: self.config.max_request_events,
+            ..ConversionBuffer::default()
+        };
         self.pending_captures.clear();
         self.deadline = None;
         self.clear_batch();
@@ -532,6 +505,24 @@ fn string_bytes(record: &SpanRecord<Snapshot, Snapshot>) -> usize {
             span.method.len().saturating_add(span.url.len())
         }
         SpanRecord::NetworkEvent(event) => event.name.as_str().len(),
+        _ => 0,
+    }
+}
+
+/// Bytes a record's end record writes beyond the fixed per-event bound from
+/// what the recorder kept of its span: a lineage of up to
+/// `LINEAGE_ANCESTORS` IDs, and a request's text and events.
+fn carried_bytes(buffer: &ConversionBuffer, record: &SpanRecord<Snapshot, Snapshot>) -> usize {
+    const LINEAGE_BYTES: usize = 16 + btel_core::recording::LINEAGE_ANCESTORS * 10;
+    match record {
+        SpanRecord::NetworkSpanCompletion(done) => {
+            LINEAGE_BYTES + buffer.open.request_text(done.span.get())
+        }
+        SpanRecord::ThreadSpanCompletion { name, .. } => {
+            LINEAGE_BYTES + name.as_ref().map_or(0, |name| name.len()) + 64
+        }
+        SpanRecord::ManualSpanCompletion(_) => LINEAGE_BYTES + 40,
+        record if record.completion().is_some() => LINEAGE_BYTES + 40,
         _ => 0,
     }
 }

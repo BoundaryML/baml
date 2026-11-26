@@ -45,6 +45,8 @@ struct PendingRaise {
     raise: TelemetryId,
     origin: Option<RaiseOrigin>,
     frames: Vec<proto::ErrorFrame>,
+    /// The functions `frames` name, for the file that writes the raise.
+    frame_functions: Vec<FunctionId>,
     inherited: Vec<proto::InheritedFrame>,
     inherited_count: u32,
 }
@@ -100,6 +102,7 @@ impl PendingRaise {
             raise,
             origin: None,
             frames: Vec::new(),
+            frame_functions: Vec::new(),
             inherited: Vec::new(),
             inherited_count: 0,
         }
@@ -116,14 +119,73 @@ impl ConversionBuffer {
             .saturating_add(self.pending.errors.len() - before);
     }
 
+    /// The raises whose threads are now defined, written; the others wait,
+    /// up to [`crate::MAX_HOLDS`] seals and never past the `last` file, then
+    /// are dropped and counted with the span records.
+    pub(crate) fn write_held_raises(&mut self, last: bool) {
+        if self.held_raises.is_empty() {
+            return;
+        }
+        for mut held in std::mem::take(&mut self.held_raises) {
+            if self.ready(held.message.thread_id, 0) {
+                self.write_raise(&held);
+            } else if !last && held.holds < crate::MAX_HOLDS {
+                held.holds += 1;
+                self.held_raises.push(held);
+            } else {
+                self.dropped_spans += 1;
+            }
+        }
+    }
+
+    /// A raise, in the file that defines its thread and the functions it
+    /// and its frames name.
+    fn write_raise(&mut self, held: &crate::HeldRaise) {
+        self.reference_thread(held.message.thread_id);
+        for function in &held.functions {
+            self.define_function(*function);
+        }
+        self.push_error(field::error_batch::RAISES, &held.message);
+        for evidence in &held.after {
+            self.write_evidence(evidence);
+        }
+    }
+
+    /// Evidence that names raise `raise`: written now, or after the raise
+    /// when the raise is held.
+    fn evidence(&mut self, raise: TelemetryId, evidence: RaiseEvidence) {
+        if !self.held_raises.is_empty()
+            && let Some(held) = self
+                .held_raises
+                .iter_mut()
+                .find(|held| held.message.raise_id == raise.get())
+        {
+            held.after.push(evidence);
+            return;
+        }
+        self.write_evidence(&evidence);
+    }
+
+    fn write_evidence(&mut self, evidence: &RaiseEvidence) {
+        match evidence {
+            RaiseEvidence::Link(link) => self.push_error(field::error_batch::CALL_LINKS, link),
+            RaiseEvidence::End(end, handler) => {
+                if let Some(function) = handler {
+                    self.define_function(*function);
+                }
+                self.push_error(field::error_batch::UNWIND_ENDS, end);
+            }
+        }
+    }
+
     fn link(&mut self, raise: TelemetryId, call: TelemetryId, role: proto::ErrorLinkRole) {
-        self.push_error(
-            field::error_batch::CALL_LINKS,
-            &proto::ErrorCallLink {
+        self.evidence(
+            raise,
+            RaiseEvidence::Link(proto::ErrorCallLink {
                 raise_id: raise.get(),
                 call_id: call.get(),
                 role: role as i32,
-            },
+            }),
         );
     }
 
@@ -158,12 +220,14 @@ impl ConversionBuffer {
     }
 
     pub(crate) fn error_raise_stack(&mut self, thread: TelemetryId, stack: &RaiseStack) {
-        // A call path's functions were defined with it; an explicit stack
-        // names functions of its own.
-        for function in stack.frames.iter().filter_map(|frame| frame.function) {
-            self.define_function(function);
-        }
+        // An explicit stack names functions of its own: the file that writes
+        // the raise defines them.
         let pending = self.unwinds.pending_mut(thread, stack.raise_id);
+        pending.frame_functions = stack
+            .frames
+            .iter()
+            .filter_map(|frame| frame.function)
+            .collect();
         pending.frames = stack
             .frames
             .iter()
@@ -251,12 +315,15 @@ impl ConversionBuffer {
         let pending = self.unwinds.take_pending(thread, raise_id);
         // A previous raise on this thread without an end keeps no claim.
         self.unwinds.clear_thread(thread);
-        // A call path published its callee, the raise function, with it.
-        if call_path == CallPathId::ROOT
-            && let Some(function) = function
-        {
-            self.define_function(function);
-        }
+        // The file defines the raising thread, function and call path. A
+        // call path whose definitions have not all arrived yet is left out:
+        // it is optional evidence, and a file defines what it references.
+        let call_path = if self.ready(0, call_path.get()) {
+            self.reference_path(call_path.get());
+            call_path
+        } else {
+            CallPathId::ROOT
+        };
         let mut message = proto::ErrorRaise {
             raise_id: raise_id.get(),
             thread_id: thread.get(),
@@ -273,12 +340,25 @@ impl ConversionBuffer {
             .and_then(|pending| pending.origin)
             .unwrap_or(RaiseOrigin::Fresh);
         set_origin(&mut message, origin);
+        let mut functions: Vec<FunctionId> = function.into_iter().collect();
         if let Some(pending) = pending {
             message.frames = pending.frames;
             message.inherited_frames = pending.inherited;
             message.inherited_frame_count = pending.inherited_count;
+            functions.extend(pending.frame_functions);
         }
-        self.push_error(field::error_batch::RAISES, &message);
+        let held = crate::HeldRaise {
+            message,
+            functions,
+            after: Vec::new(),
+            holds: 0,
+        };
+        if self.ready(thread.get(), 0) {
+            self.write_raise(&held);
+        } else {
+            // Its thread's definition has not arrived yet: a later file.
+            self.held_raises.push(held);
+        }
         if let Some(call) = raise_call {
             self.link(raise_id, call, proto::ErrorLinkRole::RaiseFrame);
         }
@@ -318,25 +398,32 @@ impl ConversionBuffer {
         unwound_frames: u32,
     ) {
         self.unwinds.clear_thread(thread);
-        if let Some(function) = handler_function {
-            self.define_function(function);
-        }
-        self.push_error(
-            field::error_batch::UNWIND_ENDS,
-            &proto::ErrorUnwindEnd {
-                raise_id: raise.get(),
-                result: match result {
-                    UnwindResult::Caught => proto::UnwindResult::Caught,
-                    UnwindResult::Unhandled => proto::UnwindResult::Unhandled,
-                    UnwindResult::EscapedToNative => proto::UnwindResult::EscapedToNative,
-                    UnwindResult::Aborted => proto::UnwindResult::Aborted,
-                } as i32,
-                handler_function_id: handler_function.map(FunctionId::get),
-                handler_pc,
-                unwound_frames,
-            },
+        self.evidence(
+            raise,
+            RaiseEvidence::End(
+                proto::ErrorUnwindEnd {
+                    raise_id: raise.get(),
+                    result: match result {
+                        UnwindResult::Caught => proto::UnwindResult::Caught,
+                        UnwindResult::Unhandled => proto::UnwindResult::Unhandled,
+                        UnwindResult::EscapedToNative => proto::UnwindResult::EscapedToNative,
+                        UnwindResult::Aborted => proto::UnwindResult::Aborted,
+                    } as i32,
+                    handler_function_id: handler_function.map(FunctionId::get),
+                    handler_pc,
+                    unwound_frames,
+                },
+                handler_function,
+            ),
         );
     }
+}
+
+/// Error evidence that names a raise: a link of a call to it, or the end of
+/// its unwind with the handler's function.
+pub(crate) enum RaiseEvidence {
+    Link(proto::ErrorCallLink),
+    End(proto::ErrorUnwindEnd, Option<FunctionId>),
 }
 
 fn via(via: OriginVia) -> proto::OriginVia {
@@ -480,6 +567,8 @@ mod tests {
         let mut builder =
             RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
                 .unwrap();
+        // Error evidence alone: its records name paths and threads no record defines.
+        builder.write_undefined();
         let [a, b] = [allocate_telemetry_id(), allocate_telemetry_id()];
         let [ra, rb] = [allocate_telemetry_id(), allocate_telemetry_id()];
         let calls: Vec<TelemetryId> = (0..6).map(|_| allocate_telemetry_id()).collect();
@@ -520,6 +609,8 @@ mod tests {
         let mut builder =
             RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
                 .unwrap();
+        // Error evidence alone: its records name paths and threads no record defines.
+        builder.write_undefined();
         let thread = allocate_telemetry_id();
         let [first, second] = [allocate_telemetry_id(), allocate_telemetry_id()];
         let calls: Vec<TelemetryId> = (0..3).map(|_| allocate_telemetry_id()).collect();
@@ -559,6 +650,8 @@ mod tests {
         let mut builder =
             RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
                 .unwrap();
+        // Error evidence alone: its records name paths and threads no record defines.
+        builder.write_undefined();
         let thread = allocate_telemetry_id();
         let [promoted, plain] = [allocate_telemetry_id(), allocate_telemetry_id()];
         let [late, outer, other] = [
@@ -601,6 +694,8 @@ mod tests {
         let mut builder =
             RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
                 .unwrap();
+        // Error evidence alone: its records name paths and threads no record defines.
+        builder.write_undefined();
         let thread = allocate_telemetry_id();
         builder.span_reference(thread, &failed(allocate_telemetry_id(), thread, false));
         assert!(file(&mut builder).errors.is_none());
@@ -634,6 +729,8 @@ mod tests {
         let mut builder =
             RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
                 .unwrap();
+        // Error evidence alone: its records name paths and threads no record defines.
+        builder.write_undefined();
         let [a, b] = [allocate_telemetry_id(), allocate_telemetry_id()];
         let [stale, listed, other] = [
             allocate_telemetry_id(),
@@ -694,6 +791,8 @@ mod tests {
         let mut builder =
             RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
                 .unwrap();
+        // Error evidence alone: its records name paths and threads no record defines.
+        builder.write_undefined();
         let thread = allocate_telemetry_id();
         let raise_id = allocate_telemetry_id();
         builder.span_reference(
@@ -737,5 +836,74 @@ mod tests {
                 1
             )
         );
+    }
+
+    #[test]
+    fn a_raise_waits_for_its_threads_definition_and_one_never_defined_is_counted() {
+        let mut builder =
+            RecordingBuilder::new(btel_types::new_recording_id(), RecordingConfig::default())
+                .unwrap();
+        let (late, never) = (allocate_telemetry_id(), allocate_telemetry_id());
+        let (first, second) = (allocate_telemetry_id(), allocate_telemetry_id());
+        let (first_call, second_call) = (allocate_telemetry_id(), allocate_telemetry_id());
+        builder.span_reference(late, &raise(first, false, Some(first_call)));
+        builder.span_reference(never, &raise(second, false, Some(second_call)));
+        builder.span_reference(never, &end(second));
+        let held = file(&mut builder);
+        // Neither raise, nor the links and the end that name them.
+        assert!(held.errors.is_none());
+        // `late` is defined now: its raise rides the next file, without the
+        // call path no record defined.
+        builder.span_reference(
+            late,
+            &SpanRecord::ThreadSpanAnnouncement {
+                id: late,
+                parent_id: None,
+                spawn_call_path: CallPathId::ROOT,
+                started_at: ClockInstant::from_ticks(1),
+                clock: btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+                name: None,
+            },
+        );
+        let mut files = vec![held, file(&mut builder)];
+        let raises = files[1].errors.as_ref().unwrap().raises.clone();
+        assert_eq!(raises.len(), 1);
+        assert_eq!(
+            (raises[0].thread_id, raises[0].call_path_id),
+            (late.get(), None)
+        );
+        assert_eq!(
+            links(&files[1]),
+            [(
+                first.get(),
+                first_call.get(),
+                proto::ErrorLinkRole::RaiseFrame as i32
+            )]
+        );
+        // `never` waits its holds out, then is counted.
+        for _ in 1..crate::MAX_HOLDS {
+            files.push(file(&mut builder));
+        }
+        let dropped: Vec<u64> = files
+            .iter()
+            .map(|f| f.spans.as_ref().map_or(0, |s| s.dropped_spans))
+            .collect();
+        assert_eq!(dropped, [0, 0, 0, 0, 1]);
+        // The dropped raise's link and end went with it.
+        assert!(files.iter().all(|f| {
+            f.errors.as_ref().is_none_or(|errors| {
+                errors.call_links.iter().all(|l| l.raise_id != second.get())
+                    && errors
+                        .unwind_ends
+                        .iter()
+                        .all(|e| e.raise_id != second.get())
+            })
+        }));
+        for f in &files {
+            assert_eq!(
+                btel_core::recording::unresolved_definitions(f),
+                Vec::<(&str, u64)>::new()
+            );
+        }
     }
 }

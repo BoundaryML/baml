@@ -13172,7 +13172,7 @@ impl BexVm {
                                         )
                                     },
                                 ),
-                                None => telemetry.hidden_spawn_context(),
+                                None => telemetry.hidden_spawn_context_for_task(),
                             })
                         } else {
                             None
