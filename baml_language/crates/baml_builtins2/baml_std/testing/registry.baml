@@ -265,11 +265,10 @@ class TestRegistry {
     function run_testset(self, name: string) -> TestSetReport {
         for (let ts in self.collector.testsets) {
             if (ts.name == name) {
-                root._start_run(0);
                 return root._run_testset(
                     root._testset_children(
                         self._expand_testset_registry(ts),
-                        root._default_test_timeout_ms(),
+                        root._test_run(0, root._default_test_timeout_ms()),
                     ),
                     ts.runner,
                 );
@@ -285,8 +284,10 @@ class TestRegistry {
     }
 
     function run_all(self) -> TestSetReport {
-        root._start_run(0);
-        root._run_testset(root._testset_children(self, root._default_test_timeout_ms()), null)
+        root._run_testset(
+            root._testset_children(self, root._test_run(0, root._default_test_timeout_ms())),
+            null,
+        )
     }
 
     /// CLI entry point: glob-filter in BAML, run (honoring testset runners), and
@@ -307,19 +308,16 @@ class TestRegistry {
         // console identities, this makes structural registration errors actionable
         // even when the unfiltered execution path preserves run_all semantics.
         let selected_names = root._select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude);
-        root._start_run(max_concurrency);
+        let run = root._test_run(max_concurrency, timeout_ms);
         let report = if (
             profile_include.length() == 0
                 && profile_exclude.length() == 0
                 && cli_include.length() == 0
                 && cli_exclude.length() == 0
         ) {
-            root._run_testset(root._testset_children(self, timeout_ms), null)
+            root._run_testset(root._testset_children(self, run), null)
         } else {
-            root._run_testset(
-                root._testset_children_selected(self, selected_names, timeout_ms),
-                null,
-            )
+            root._run_testset(root._testset_children_selected(self, selected_names, run), null)
         };
         root._flatten_with_tolerated(report, selected_names)
     }
@@ -379,13 +377,13 @@ class TestRegistry {
     }
 }
 
-function _testset_children(registry: TestRegistry, timeout_ms: int) -> TestSetChild[] {
+function _testset_children(registry: TestRegistry, run: _TestRun) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
-        children.push(root._test_child(t.name, t.body, t.runner, timeout_ms))
+        children.push(root._test_child(t.name, t.body, t.runner, run))
     }
     for (let ts in registry.collector.testsets) {
-        children.push(root._testset_child(registry, ts, timeout_ms))
+        children.push(root._testset_child(registry, ts, run))
     }
     children
 }
@@ -393,12 +391,12 @@ function _testset_children(registry: TestRegistry, timeout_ms: int) -> TestSetCh
 function _testset_children_selected(
     registry: TestRegistry,
     names: string[],
-    timeout_ms: int,
+    run: _TestRun,
 ) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
         if (names.includes(t.name)) {
-            children.push(root._test_child(t.name, t.body, t.runner, timeout_ms))
+            children.push(root._test_child(t.name, t.body, t.runner, run))
         } else {
             null
         }
@@ -415,7 +413,7 @@ function _testset_children_selected(
                 n.starts_with(prefix)
             })
         ) {
-            children.push(root._testset_child_selected(registry, ts, names, timeout_ms))
+            children.push(root._testset_child_selected(registry, ts, names, run))
         } else {
             null
         }
@@ -427,28 +425,28 @@ function _test_child(
     name: string,
     body: TestBody,
     runner: TestRunner?,
-    timeout_ms: int,
+    run: _TestRun,
 ) -> TestSetChild {
     TestSetChild {
         name: name,
         run: () -> ChildReport {
-            root._run_test(body, runner, timeout_ms)
+            root._run_test(body, runner, run.timeout_ms)
         },
-        is_container: false,
+        slots: run.slots,
     }
 }
 
 function _testset_child(
     registry: TestRegistry,
     ts: TestSetRegistration,
-    timeout_ms: int,
+    run: _TestRun,
 ) -> TestSetChild {
     TestSetChild {
         name: ts.name,
-        is_container: true,
+        slots: null,
         run: () -> ChildReport {
             root._run_testset(
-                root._testset_children(registry._expand_testset_registry(ts), timeout_ms),
+                root._testset_children(registry._expand_testset_registry(ts), run),
                 ts.runner,
             ) catch_all (e) {
                 baml.panics.Panic => root._expansion_error_report(ts.name),
@@ -462,18 +460,14 @@ function _testset_child_selected(
     registry: TestRegistry,
     ts: TestSetRegistration,
     names: string[],
-    timeout_ms: int,
+    run: _TestRun,
 ) -> TestSetChild {
     TestSetChild {
         name: ts.name,
-        is_container: true,
+        slots: null,
         run: () -> ChildReport {
             root._run_testset(
-                root._testset_children_selected(
-                    registry._expand_testset_registry(ts),
-                    names,
-                    timeout_ms,
-                ),
+                root._testset_children_selected(registry._expand_testset_registry(ts), names, run),
                 ts.runner,
             ) catch_all (e) {
                 baml.panics.Panic => root._expansion_error_report(ts.name),
@@ -540,67 +534,57 @@ function _aggregate_reports(named_results: _NamedChildReport[]) -> TestSetReport
     }
 }
 
-/// (internal) Holder for the gate on concurrently RUNNING leaf test bodies.
-/// A leaf is spawned `with` the semaphore, so a gated test costs nothing (no
-/// VM thread, no watchdog timer) until a slot frees. The holder is a global so
-/// every nested testset, and every testset runner, shares the one budget
-/// without it being threaded through them.
-class _TestSlots {
-    semaphore: baml.sync.Semaphore,
+/// (internal) One run's state, created by the run's entry point and passed
+/// down to every child it builds: the gate on concurrently RUNNING leaf test
+/// bodies, and the per-test deadline. A test body that starts a run of its
+/// own gets a state, and so a budget, of its own.
+class _TestRun {
+    slots: baml.sync.Semaphore,
+    // Per-test deadline in milliseconds. Zero or negative means no deadline.
+    timeout_ms: int,
 }
-
-/// (internal) The current run's slots. Each run entry point installs a fresh
-/// semaphore (`_start_run`); the one built here serves children run without
-/// one, such as a testset runner called directly.
-const _TEST_SLOTS = _TestSlots { semaphore: root._test_semaphore(0) };
 
 /// (internal) The per-test deadline when the caller does not choose one: 5 minutes.
 function _default_test_timeout_ms() -> int {
     300000
 }
 
-/// (internal) A semaphore admitting `max_concurrency` leaves at once. A zero
-/// or negative `max_concurrency` means "no explicit budget": fall back to a
-/// bound that keeps a pathological fan-out from creating thousands of live VM
-/// threads while staying above any real machine's core count (the CLI always
-/// passes an explicit budget).
-function _test_semaphore(max_concurrency: int) -> baml.sync.Semaphore {
+/// (internal) A run admitting `max_concurrency` leaves at once, each with a
+/// `timeout_ms` deadline. A zero or negative `max_concurrency` means "no
+/// explicit budget": fall back to a bound that keeps a pathological fan-out
+/// from creating thousands of live VM threads while staying above any real
+/// machine's core count (the CLI always passes an explicit budget).
+function _test_run(max_concurrency: int, timeout_ms: int) -> _TestRun {
     let capacity = if (max_concurrency > 0) {
         max_concurrency
     } else {
         64
     };
-    baml.sync.Semaphore.new(capacity) catch (_) {
+    let slots = baml.sync.Semaphore.new(capacity) catch (_) {
         baml.errors.InvalidArgument { message } => {
             baml.sys.panic("testing: test semaphore: " + message)
         },
-    }
-}
-
-/// (internal) Begin a run admitting `max_concurrency` leaves at once. The
-/// semaphore is replaced, never resized or reused: a test body that itself
-/// starts a run holds a slot of the outer semaphore while it waits, and inner
-/// leaves gated on that same semaphore could wait on it forever.
-function _start_run(max_concurrency: int) -> void {
-    _TEST_SLOTS.semaphore = root._test_semaphore(max_concurrency);
+    };
+    _TestRun { slots: slots, timeout_ms: timeout_ms }
 }
 
 function _run_children_parallel(children: TestSetChild[]) -> TestSetReport throws never {
-    let slots = _TEST_SLOTS.semaphore;
     let futures: baml.future.Future<_NamedChildReport, never>[] = [];
     for (let child in children) {
-        if (child.is_container) {
-            // Containers only spawn and await; admitting them freely cannot
-            // oversubscribe the machine, and gating them could deadlock the
-            // slots their own leaves need.
-            futures.push(spawn { _NamedChildReport { name: child.name, report: (child.run)() } })
-        } else {
-            // The slot is held for the whole task and released however it
-            // ends. `run` is total: a leaf is `run_test`, whose runner arm
+        if let slots: baml.sync.Semaphore = child.slots {
+            // A leaf is spawned `with` its run's semaphore, so a gated test
+            // costs nothing (no VM thread, no watchdog timer) until a slot
+            // frees. The slot is held for the whole task and released however
+            // it ends. `run` is total: a leaf is `run_test`, whose runner arm
             // catches middleware panics.
             futures.push(spawn with slots {
                 _NamedChildReport { name: child.name, report: (child.run)() }
             })
+        } else {
+            // Containers only spawn and await; admitting them freely cannot
+            // oversubscribe the machine, and gating them could deadlock the
+            // slots their own leaves need.
+            futures.push(spawn { _NamedChildReport { name: child.name, report: (child.run)() } })
         }
     }
     // No catch: the children's bodies cannot throw, so the futures are

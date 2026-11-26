@@ -30,5 +30,5 @@ type             testing.TestSetReportThunk       <builtin>/testing/types.baml:5
 type             testing.ChildReportThunk         <builtin>/testing/types.baml:58
 type             testing.TestRunner               <builtin>/testing/types.baml:60
 class            testing.TestSetChild             <builtin>/testing/types.baml:63
-type             testing.TestSetRunner            <builtin>/testing/types.baml:75
-class            testing.FlatTestReport           <builtin>/testing/types.baml:91
+type             testing.TestSetRunner            <builtin>/testing/types.baml:76
+class            testing.FlatTestReport           <builtin>/testing/types.baml:92
