@@ -363,11 +363,6 @@ fn is_listed(
 ) -> bool {
     match crate::symbols::surface_of(db, item_name, def) {
         Surface::LanguageInternal => false,
-        // `$invoke_collector` is hand-written stdlib that resolves from
-        // source, so an addressing view keeps it. The predicate this
-        // replaced also asked whether the declaration was a function; that
-        // branch was vestigial.
-        Surface::Synthetic => true,
         // `Foo@spec` is written in real BAML source and resolves, so an
         // addressing view lists it.
         Surface::Companion => true,

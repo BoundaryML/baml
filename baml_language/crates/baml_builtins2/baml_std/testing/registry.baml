@@ -144,12 +144,6 @@ function _claim_test_name(counts: map<string, int>, full_name: string) -> string
     final_name
 }
 
-// Bridge function for the runtime to invoke a testset collector closure.
-// call_function is name-based, so we need this thin wrapper to call closures.
-function $invoke_collector(collector: TestSetBody, c: TestCollector) -> void {
-    collector(c)
-}
-
 /// One source file's top-level `test` / `testset` blocks. The compiler
 /// declares one per file with tests, as a global of the declaring package:
 /// `register` registers the file's blocks on the collector it is given.
