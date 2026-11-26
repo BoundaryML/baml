@@ -382,10 +382,6 @@ type NativeResolver = fn(&str) -> Option<NativeFunction>;
 const VM_NATIVE_PACKAGES: &[(&str, NativeResolver)] = &[
     ("baml.", PackageBamlImpl::get_native_fn),
     (
-        "testing.",
-        <crate::package_testing::PackageTestingImpl as crate::package_testing::BamlPackageTesting>::get_native_fn,
-    ),
-    (
         "ai.",
         <crate::package_ai::PackageAiImpl as crate::package_ai::BamlPackageAi>::get_native_fn,
     ),

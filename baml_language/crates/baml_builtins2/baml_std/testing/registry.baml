@@ -31,23 +31,23 @@ class TestCollector {
     }
 
     function register_test(self, name: string, body: TestBody, runner: TestRunner?) -> void {
-        if (name.includes("::")) {
-            throw InvalidTestName { message: "test name may not contain reserved separator `::`: " + name }
-        } else {
-            null
+        let full_name = root._qualified_test_name("test", self.prefix, name);
+        // Scans the current records on every call: the arrays and the names
+        // in them are public and can change in place between registrations.
+        let suffixed = full_name + "#";
+        let count = 0;
+        for (let t in self.tests) {
+            if (t.name == full_name || t.name.starts_with(suffixed)) {
+                count += 1
+            }
         }
-        let full_name = if (self.prefix == "") {
-            name
-        } else {
-            self.prefix + "::" + name
-        };
-        let count = root._test_name_count(self.tests, full_name);
-        let final_name = if (count > 0) {
-            full_name + "#" + string.from(count + 1)
-        } else {
-            full_name
-        };
-        let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner });
+        let _ = self.tests.push(
+            TestRegistration {
+                name: root._numbered_test_name(full_name, count),
+                body: body,
+                runner: runner,
+            },
+        );
     }
 
     function register_test_set(
@@ -56,30 +56,61 @@ class TestCollector {
         collector: TestSetBody,
         runner: TestSetRunner?,
     ) -> void {
-        if (name.includes("::")) {
-            throw InvalidTestName { message: "testset name may not contain reserved separator `::`: " + name }
-        } else {
-            null
+        let full_name = root._qualified_test_name("testset", self.prefix, name);
+        let suffixed = full_name + "#";
+        let count = 0;
+        for (let ts in self.testsets) {
+            if (ts.name == full_name || ts.name.starts_with(suffixed)) {
+                count += 1
+            }
         }
-        let full_name = if (self.prefix == "") {
-            name
-        } else {
-            self.prefix + "::" + name
-        };
-        let count = root._testset_name_count(self.testsets, full_name);
-        let final_name = if (count > 0) {
-            full_name + "#" + string.from(count + 1)
-        } else {
-            full_name
-        };
         let _ = self.testsets.push(
-            TestSetRegistration { name: final_name, collector: collector, runner: runner },
+            TestSetRegistration {
+                name: root._numbered_test_name(full_name, count),
+                collector: collector,
+                runner: runner,
+            },
         );
     }
+}
 
-    /// Compiler-only top-level registration entry points. The owner is derived
-    /// from the declaring file (`root` plus its BAML namespaces); nested items use
-    /// the ordinary methods above and inherit this canonical prefix.
+/// (internal) `name` under `prefix`, the canonical id before any duplicate
+/// suffix. `kind` is "test" or "testset", for the error.
+function _qualified_test_name(kind: string, prefix: string, name: string) -> string {
+    if (name.includes("::")) {
+        throw InvalidTestName { message: kind + " name may not contain reserved separator `::`: " + name }
+    }
+    if (prefix == "") {
+        name
+    } else {
+        prefix + "::" + name
+    }
+}
+
+/// (internal) The id a registration takes when `count` earlier ones already
+/// count as duplicates of `full_name`: `name`, then `name#2`, `name#3`, ...
+function _numbered_test_name(full_name: string, count: int) -> string {
+    if (count > 0) {
+        full_name + "#" + string.from(count + 1)
+    } else {
+        full_name
+    }
+}
+
+/// (internal) What a file's registrar registers its top-level blocks on: the
+/// package's collector, and how many registered names count as duplicates of
+/// each id. An entry counts toward its own name and toward its prefix before
+/// every `#`, the same rule `TestCollector.register_test` applies by scanning.
+/// The scan is not needed here: between two top-level registrations nothing
+/// can reach this collector, so the counts cannot go stale.
+class _TopLevelCollector {
+    collector: TestCollector,
+    test_counts: map<string, int>,
+    testset_counts: map<string, int>,
+
+    /// The owner is derived from the declaring file (`root` plus its BAML
+    /// namespaces); nested items register on a `TestCollector` and inherit
+    /// this canonical prefix.
     function register_test_at(
         self,
         owner: string,
@@ -87,8 +118,14 @@ class TestCollector {
         body: TestBody,
         runner: TestRunner?,
     ) -> void {
-        let scoped = TestCollector { prefix: owner, tests: self.tests, testsets: self.testsets };
-        scoped.register_test(name, body, runner)
+        let full_name = root._qualified_test_name("test", owner, name);
+        let _ = self.collector.tests.push(
+            TestRegistration {
+                name: root._claim_test_name(self.test_counts, full_name),
+                body: body,
+                runner: runner,
+            },
+        );
     }
 
     function register_test_set_at(
@@ -98,9 +135,28 @@ class TestCollector {
         collector: TestSetBody,
         runner: TestSetRunner?,
     ) -> void {
-        let scoped = TestCollector { prefix: owner, tests: self.tests, testsets: self.testsets };
-        scoped.register_test_set(name, collector, runner)
+        let full_name = root._qualified_test_name("testset", owner, name);
+        let _ = self.collector.testsets.push(
+            TestSetRegistration {
+                name: root._claim_test_name(self.testset_counts, full_name),
+                collector: collector,
+                runner: runner,
+            },
+        );
     }
+}
+
+/// (internal) Number `full_name` against `counts`, and count the id it takes.
+function _claim_test_name(counts: map<string, int>, full_name: string) -> string {
+    let final_name = root._numbered_test_name(full_name, counts.get(full_name) ?? 0);
+    let parts = final_name.split("#");
+    let counted = parts[0];
+    for (let i = 1; i < parts.length(); i += 1) {
+        counts.set(counted, (counts.get(counted) ?? 0) + 1);
+        counted = counted + "#" + parts[i];
+    }
+    counts.set(counted, (counts.get(counted) ?? 0) + 1);
+    final_name
 }
 
 // Bridge function for the runtime to invoke a testset collector closure.
@@ -113,9 +169,9 @@ function $invoke_collector(collector: TestSetBody, c: TestCollector) -> void {
 /// declares one per file with tests, as a global of the declaring package:
 /// `register` registers the file's blocks on the collector it is given.
 class TestFile {
-    register: TestSetBody,
+    register: (_TopLevelCollector) -> void throws unknown,
 
-    function new(register: TestSetBody) -> TestFile {
+    function new(register: (_TopLevelCollector) -> void throws unknown) -> TestFile {
         TestFile { register: register }
     }
 }
@@ -137,13 +193,13 @@ implements reflect._TestSource for TestFile {
 /// globals, registered in declaration order. Defaults to the program's root
 /// package, which is what a host that runs tests asks for.
 function registry(package: reflect.Package = reflect.Package.root()) -> TestRegistry {
-    let collector = TestCollector.new("");
+    let top_level = _TopLevelCollector { collector: TestCollector.new(""), test_counts: {}, testset_counts: {} };
     for (let global in package.globals().values()) {
         if let file: TestFile = global {
-            (file.register)(collector)
+            (file.register)(top_level)
         }
     }
-    TestRegistry.new(collector)
+    TestRegistry.new(top_level.collector)
 }
 
 // --- Serialization wire types ---
@@ -1235,20 +1291,4 @@ function _collect_leaf_messages(results: ChildReport[], out: string[]) -> void {
             },
         }
     }
-}
-
-/// (internal) Count the current names that the registration suffix rule treats
-/// as duplicates. Registration records and their arrays are publicly mutable,
-/// so these scans deliberately read the current data instead of caching names.
-//baml:vm
-function _test_name_count(entries: TestRegistration[], full_name: string) -> int throws never {
-    $rust_function
-}
-
-//baml:vm
-function _testset_name_count(
-    entries: TestSetRegistration[],
-    full_name: string,
-) -> int throws never {
-    $rust_function
 }

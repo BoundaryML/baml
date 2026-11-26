@@ -767,7 +767,7 @@ fn is_primitive_key(ty: &RuntimeTy) -> bool {
 }
 
 /// Keep aligned with `bex_vm::package_baml::VM_NATIVE_PACKAGES`.
-const VM_PACKAGES: &[&str] = &["baml", "testing", "ai", "reflect", "trace"];
+const VM_PACKAGES: &[&str] = &["baml", "ai", "reflect", "trace"];
 
 fn builtin_metadata() -> Result<&'static HashMap<String, bool>, &'static str> {
     static TABLE: OnceLock<Result<HashMap<String, bool>, String>> = OnceLock::new();
