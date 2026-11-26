@@ -130,6 +130,8 @@ Weak points: the table is 8 bytes per entry where 4 would do, it is decoded eage
 
 `baml.sys.collect_garbage()` forces one. All probes call it N times.
 
+A program run with `BAML_GC_STATS=1` measures its own collections and writes one line on stderr when it ends, `baml-gc-stats {json}` (`src/gc_stats.rs`, `natives/README.md`). The fields: `collections`; `pause_ns_total`, `pause_ns_max` and `pause_ns`, the pauses themselves (the first 20,000), each the wall time of one call of `collect` on the mutator's thread, both copying passes when it resizes, without the time spent dropping owned values; `bytes_copied`, what every copying pass moved; `heap_capacity_peak`, the most bytes the spaces held from the allocator at once (both, while one is copied into the other); `owned_dropped_by_collections` and `owned_drop_ns_total`, the owned Rust values collections found dead and the time their destructors took, reported apart from the pauses; and `owned_dropped_at_exit`, the owned values still held when the program ended. Without the variable a collection pays one load and one predictable branch. The numbers below were counted without it.
+
 ```baml
 class Node { v int  next Node? }
 let head: Node? = null;

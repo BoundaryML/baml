@@ -248,6 +248,28 @@ code that has no entry is a map the compiler lost, and the collection that
 meets one ends the program naming the function. Without the check such a
 frame reads as one that holds no roots, and its objects are lost quietly.
 
+## Collector statistics
+
+With `BAML_GC_STATS` set to anything but `0` when it starts, a program
+writes one line on stderr as it ends: `baml-gc-stats ` and a JSON object.
+It does when its entry returns, when it throws uncaught and when it exits
+with a code; not when a signal kills it or the runtime stops on a fatal
+error. Both builds of the runtime have it.
+
+One line; here broken where commas are, from the `live-heap` workload:
+
+```
+baml-gc-stats {"collections":4,"pause_ns_total":9842460,"pause_ns_max":4263000,
+"bytes_copied":75496832,"heap_capacity_peak":138410176,
+"owned_dropped_by_collections":0,"owned_drop_ns_total":0,
+"owned_dropped_at_exit":0,"pause_ns":[1027959,1131834,3419667,4263000]}
+```
+
+The fields are described in `design/gc.md`, under "Cost of a collection"
+(`src/gc_stats.rs`). The variable is read once, in `main`; without it a
+collection pays one load and one predictable branch, and nothing is
+written.
+
 ## These files are temporary
 
 The same facts belong on the BAML declarations, as annotations. Today the

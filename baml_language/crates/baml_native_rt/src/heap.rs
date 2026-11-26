@@ -881,17 +881,33 @@ impl Mutator {
 
     /// How many Rust values the heap owns, dead ones not yet dropped
     /// included.
-    #[cfg(test)]
     pub(crate) fn owned(&self) -> usize {
         self.heap.owned.len()
+    }
+
+    /// Write the `BAML_GC_STATS` line, when collections are reported: the
+    /// program is over. `owned_at_exit` is how many Rust values the heap
+    /// held when it ended, dead ones no collection had found yet included.
+    pub fn report_gc_stats(&self, owned_at_exit: usize) {
+        if crate::gc_stats::enabled() {
+            let spare = self.heap.spare.as_ref().map_or(0, |spare| spare.size);
+            crate::gc_stats::heap_bytes(self.heap.space.size + spare);
+            crate::gc_stats::report(owned_at_exit);
+        }
     }
 
     /// Copy everything reachable into another space, leaving room for
     /// `needed` more bytes, and abandon the old one.
     pub(crate) fn collect(&mut self, needed: usize) {
+        // One predictable branch when collections are not reported. A
+        // pause is the whole call: both copying passes when it resizes.
+        let started = crate::gc_stats::start();
         let used = self.alloc_ptr - self.heap.space.start;
         if self.heap.stress {
             self.copy_into(used + needed);
+            if let Some(started) = started {
+                crate::gc_stats::pause(started);
+            }
             return;
         }
         // Everything may be live, so the other space holds at least all of
@@ -910,6 +926,9 @@ impl Mutator {
         if (self.heap.spare.as_ref()).is_some_and(|spare| spare.size < self.heap.next_space) {
             self.heap.spare = None;
         }
+        if let Some(started) = started {
+            crate::gc_stats::pause(started);
+        }
     }
 
     /// Copy everything reachable into a space of at least `least` bytes and
@@ -920,6 +939,11 @@ impl Mutator {
             Some(spare) if spare.size >= size => spare,
             _ => Space::new(size),
         };
+        let timing = crate::gc_stats::enabled();
+        if timing {
+            // Both spaces are held while one is copied into the other.
+            crate::gc_stats::heap_bytes(self.heap.space.size + to.size);
+        }
         let base = self.base_frame();
         let mut copy = Copy::new(&self.heap.space, to);
         // SAFETY: the stack between the anchor and `base` is the running
@@ -951,23 +975,39 @@ impl Mutator {
         }
         // An owned value whose object was not copied is dropped, and one
         // whose object was is followed to where it is now. The space the
-        // objects were in is still whole but for their headers.
+        // objects were in is still whole but for their headers. When
+        // collections are reported, the time dropping values takes is left
+        // out of the pause and reported apart.
+        let (mut dropped, mut drop_nanos) = (0, 0_u64);
         self.heap.owned.retain_mut(|object| {
             // SAFETY: an object in the space copied from, whose header is
             // its type id or where it was copied to.
             unsafe {
                 let header = load(*object);
                 if header & FORWARDED == 0 {
-                    drop_value(*object);
+                    if timing {
+                        let started = std::time::Instant::now();
+                        drop_value(*object);
+                        drop_nanos += crate::gc_stats::nanos_since(started);
+                        dropped += 1;
+                    } else {
+                        drop_value(*object);
+                    }
                     return false;
                 }
                 *object = header & !FORWARDED;
                 true
             }
         });
+        if dropped != 0 {
+            crate::gc_stats::dropped(drop_nanos, dropped);
+        }
         self.heap.owned_since = 0;
         self.heap.owned_trigger = OWNED_FLOOR.max(self.heap.owned.len() * OWNED_PER_LIVE);
         let live = copy.free - copy.to.start;
+        if timing {
+            crate::gc_stats::copied(live);
+        }
         debug_assert!(copy.free <= copy.to.end());
         let to = copy.to;
         let from = std::mem::replace(&mut self.heap.space, to);
@@ -2597,6 +2637,72 @@ mod tests {
         assert_eq!(dropped + mutator.owned(), drops.len());
         mutator.drop_owned();
         assert!(drops.iter().all(|counter| *counter == 1));
+    }
+
+    /// `BAML_GC_STATS` counts every collection and nothing else, and off
+    /// it counts nothing. The counts are the process's, so the test runs
+    /// alone in a process of its own.
+    #[test]
+    fn collections_are_counted_only_when_reported() {
+        let path = "heap::tests::counts_collections_in_a_process_of_its_own";
+        let output = std::process::Command::new(std::env::current_exe().expect("the test binary"))
+            .args(["--exact", path, "--ignored", "--nocapture"])
+            .output()
+            .expect("the test binary starts");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "`{path}` failed:\n{stderr}");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("1 passed"),
+            "`{path}` did not run:\n{stdout}"
+        );
+    }
+
+    #[test]
+    #[ignore = "run alone by `collections_are_counted_only_when_reported`"]
+    fn counts_collections_in_a_process_of_its_own() {
+        const COLLECTIONS: u64 = 25;
+        const LINKS: usize = 1_000;
+        let mut mutator = mutator(false);
+        let mut head = 0;
+        mutator.root(&mut head);
+        for value in 0..LINKS {
+            push_link(
+                &mut mutator,
+                &mut head,
+                i64::try_from(value).expect("a small count"),
+            );
+        }
+        // Off: collections happen and nothing is counted.
+        assert!(!crate::gc_stats::enabled());
+        for _ in 0..COLLECTIONS {
+            mutator.collect(0);
+        }
+        assert_eq!(crate::gc_stats::stats().collections, 0);
+
+        crate::gc_stats::set_enabled(true);
+        let drops = counters(3);
+        for counter in drops {
+            mutator.allocate_owned(std::ptr::from_ref(counter) as usize, &COUNTED);
+        }
+        for _ in 0..COLLECTIONS {
+            mutator.collect(0);
+        }
+        mutator.unroot(1);
+        assert_eq!(list_values(head).len(), LINKS);
+        assert!(drops.iter().all(|counter| *counter == 1));
+        let stats = crate::gc_stats::stats();
+        assert_eq!(stats.collections, COLLECTIONS);
+        assert_eq!(stats.pauses.len() as u64, COLLECTIONS);
+        assert_eq!(stats.pause_total, stats.pauses.iter().sum::<u64>());
+        assert_eq!(Some(&stats.pause_max), stats.pauses.iter().max());
+        // Every collection copies the whole list, and nothing else lives.
+        let list = (LINKS * instance_size(2)) as u64;
+        assert_eq!(stats.bytes_copied, COLLECTIONS * list);
+        assert!(stats.heap_peak >= 2 * INITIAL_SPACE);
+        assert_eq!(stats.owned_dropped, 3);
+        drop(stats);
+        mutator.drop_owned();
     }
 
     /// A slot several threads read and write: two atomic words have the
