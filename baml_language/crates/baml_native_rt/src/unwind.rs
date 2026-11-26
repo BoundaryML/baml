@@ -736,11 +736,14 @@ pub unsafe extern "C" fn baml_rt_uncaught(
 }
 
 /// End the process with `status`, from whichever task: report the errors
-/// of tasks no `await` took, drop what the heap owns and flush stdout.
+/// of tasks no `await` took, drop what the heap owns, flush stdout and
+/// write the `BAML_GC_STATS` line when collections are reported.
 #[expect(clippy::exit, reason = "the program is over")]
 pub(crate) fn end(mutator: &mut Mutator, status: i32) -> ! {
     crate::sched::report_unhandled(mutator);
+    let owned_at_exit = mutator.owned();
     mutator.drop_owned();
     let _ = std::io::stdout().flush();
+    mutator.report_gc_stats(owned_at_exit);
     std::process::exit(status)
 }

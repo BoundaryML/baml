@@ -25,6 +25,7 @@ pub mod bigint;
 pub mod bytes;
 mod class;
 mod describe;
+mod gc_stats;
 pub mod heap;
 pub mod json_layout;
 pub mod layout;
@@ -114,6 +115,7 @@ pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
             }
         }
     }
+    gc_stats::init();
     let stress = std::env::var_os(GC_STRESS_VARIABLE).is_some();
     let migrate = std::env::var_os(MIGRATE_STRESS_VARIABLE).is_some();
     // SAFETY: the linked program defines both symbols as declared.
@@ -133,7 +135,9 @@ pub extern "C" fn main(_argc: i32, _argv: *const *const u8) -> i32 {
             baml_native_task_shim as *const () as usize,
             migrate,
         );
+        let owned_at_exit = mutator.owned();
         mutator.drop_owned();
+        mutator.report_gc_stats(owned_at_exit);
         status
     }
 }
