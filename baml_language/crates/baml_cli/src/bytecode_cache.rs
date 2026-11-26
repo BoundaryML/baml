@@ -440,7 +440,7 @@ impl CacheContext {
 #[derive(Debug, Clone, PartialEq, Eq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub(crate) struct TestDiscovery {
     /// Fully-expanded testset leaf names (canonical `root...::...` ids), unfiltered, in
-    /// `collect_leaf_names` order.
+    /// `select_names_layered` order.
     pub(crate) testset_leaf_names: Vec<String>,
 }
 

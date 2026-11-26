@@ -101,24 +101,6 @@ class TestCollector {
         let scoped = TestCollector { prefix: owner, tests: self.tests, testsets: self.testsets };
         scoped.register_test_set(name, collector, runner)
     }
-
-    function _find_testset(self, name: string) -> TestSetRegistration {
-        for (let ts in self.testsets) {
-            if (ts.name == name) {
-                return ts;
-            }
-        }
-        throw ("TestSet not found: " + name)
-    }
-
-    function _find_test(self, name: string) -> TestRegistration {
-        for (let t in self.tests) {
-            if (t.name == name) {
-                return t;
-            }
-        }
-        throw ("Test not found: " + name)
-    }
 }
 
 // Bridge function for the runtime to invoke a testset collector closure.
@@ -232,7 +214,7 @@ class TestRegistry {
     /// CLI entry point: glob-filter in BAML, run (honoring testset runners), and
     /// flatten into a tolerated-aware flat report the Rust driver prints directly.
     ///   * no filters -> run_all (whole tree)
-    ///   * any filter -> glob the leaf names, then run_selected (parent runners
+    ///   * any filter -> glob the leaf names, then run the selection (parent runners
     ///                   still apply to the selected subset)
     function run_filtered(
         self,
@@ -686,7 +668,7 @@ function _expansion_error_report(name: string) -> TestSetReport {
         // it. The catch in testset_child(_selected) routes
         // runner/execution panics here too — not just expansion failures — so the
         // label stays generic ("testset error") rather than claiming an expansion
-        // failure specifically. (collect_subtree_names, which is purely an expansion
+        // failure specifically. (collect_subtree_names_layered, which is purely an expansion
         // step, keeps the more precise "failed to expand".)
         failed_names: [name + "::(testset error)"],
         results: [],
@@ -861,38 +843,6 @@ function _select_names_layered(
     out
 }
 
-/// (internal) Compatibility helper for internal callers: one ordinary filter layer.
-function _select_names(registry: TestRegistry, include: string[], exclude: string[]) -> string[] {
-    root._select_names_layered(registry, [], [], include, exclude)
-}
-
-/// (internal) Fully expand the registry and collect every leaf test's canonical id.
-function _collect_leaf_names(registry: TestRegistry) -> string[] {
-    let out: string[] = [];
-    for (let t in registry.collector.tests) {
-        out.push(t.name);
-    }
-    for (let ts in registry.collector.testsets) {
-        for (let name in root._collect_subtree_names(registry, ts)) {
-            out.push(name);
-        }
-    }
-    out
-}
-
-/// (internal) Expand one testset to its leaf names, containing failures: a testset whose
-/// generator throws or panics during expansion is represented by a sentinel leaf
-/// *under* its own path ("root::suite::(failed to expand)") so canonical-id
-/// filters select it like a real
-/// leaf, then `run_selected` runs it and surfaces the error.
-function _collect_subtree_names(registry: TestRegistry, ts: TestSetRegistration) -> string[] {
-    root._collect_leaf_names(registry._expand_testset_registry(ts)) catch_all (e) {
-        let err: InvalidTestName => throw err,
-        baml.panics.Panic => [ts.name + "::(failed to expand)"],
-        _ => [ts.name + "::(failed to expand)"],
-    }
-}
-
 function _collect_subtree_names_layered(
     registry: TestRegistry,
     ts: TestSetRegistration,
@@ -1012,7 +962,7 @@ function _count_leaves(results: ChildReport[], tolerated_by_parent: bool) -> _Le
     _LeafCounts { passed: passed, failed: failed, tolerated: tolerated, total: total }
 }
 
-/// (internal) Flatten a run_all()/run_selected() TestSetReport into the CLI flat report.
+/// (internal) Flatten a whole-tree or selected-run TestSetReport into the CLI flat report.
 /// Aggregate outcome is preserved (honoring testset runners); counts split hard
 /// vs tolerated failures; failed_names are the report's (hard) failed names; and
 /// failure messages are gathered from every failing run.
