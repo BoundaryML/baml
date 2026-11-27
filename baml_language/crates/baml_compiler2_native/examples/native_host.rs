@@ -52,8 +52,35 @@ const TAG_STRING: u64 = 5;
 const THROWN: u64 = 1 << 59;
 const HANDLE: u64 = 1 << 61;
 
-type OnDone = unsafe extern "C" fn(*mut c_void, u64, u64, u64);
-type WakeFn = unsafe extern "C" fn(*mut c_void);
+/// What the library is given at init (`baml_lib_init`).
+#[repr(C)]
+struct Callbacks {
+    size: u32,
+    ctx: *mut c_void,
+    on_done: unsafe extern "C" fn(*mut c_void, u64, u32, u64, u64),
+    on_unhandled: unsafe extern "C" fn(*mut c_void, u64, u64, u64),
+    wake: unsafe extern "C" fn(*mut c_void),
+}
+
+impl Callbacks {
+    fn new(
+        on_done: unsafe extern "C" fn(*mut c_void, u64, u32, u64, u64),
+        wake: unsafe extern "C" fn(*mut c_void),
+    ) -> Self {
+        Self {
+            size: u32::try_from(size_of::<Self>()).expect("small"),
+            ctx: std::ptr::null_mut(),
+            on_done,
+            on_unhandled,
+            wake,
+        }
+    }
+}
+
+/// A failure nobody awaited: say so and let go of the error.
+unsafe extern "C" fn on_unhandled(_ctx: *mut c_void, call: u64, _tag: u64, payload: u64) {
+    eprintln!("call {call}: a task it spawned failed and nothing awaited it (handle {payload})");
+}
 
 unsafe extern "C" {
     fn dlopen(path: *const c_char, mode: c_int) -> *mut c_void;
@@ -67,7 +94,7 @@ const RTLD_NOW: c_int = 2;
 
 /// The library's functions.
 struct Lib {
-    init: unsafe extern "C" fn(OnDone, WakeFn, *mut c_void) -> i32,
+    init: unsafe extern "C" fn(*const Callbacks) -> i32,
     find: unsafe extern "C" fn(*const u8, usize) -> i64,
     export_count: unsafe extern "C" fn() -> u64,
     export_info: unsafe extern "C" fn(u64, *mut u32, *mut u64, *mut u8, usize) -> i64,
@@ -166,8 +193,10 @@ impl Shared {
 
 static SHARED: std::sync::OnceLock<Arc<Shared>> = std::sync::OnceLock::new();
 
-unsafe extern "C" fn on_done(_ctx: *mut c_void, call: u64, tag: u64, payload: u64) {
+unsafe extern "C" fn on_done(_ctx: *mut c_void, call: u64, status: u32, tag: u64, payload: u64) {
     let shared = SHARED.get().expect("set before init");
+    // Anything but a return is an error here, kept as a value with THROWN.
+    let tag = if status == 0 { tag } else { tag | THROWN };
     shared
         .ended
         .lock()
@@ -322,7 +351,13 @@ fn show(lib: &Lib, value: Value) -> String {
 
 static SUM: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-unsafe extern "C" fn sum_done(_ctx: *mut c_void, _call: u64, _tag: u64, payload: u64) {
+unsafe extern "C" fn sum_done(
+    _ctx: *mut c_void,
+    _call: u64,
+    _status: u32,
+    _tag: u64,
+    payload: u64,
+) {
     SUM.fetch_add(payload, std::sync::atomic::Ordering::Relaxed);
 }
 
@@ -332,7 +367,8 @@ unsafe extern "C" fn ignore_wake(_ctx: *mut c_void) {}
 fn bench(lib: &Lib, n: u64, batch: bool) {
     // SAFETY: the library's contract, on this thread alone.
     unsafe {
-        assert_eq!((lib.init)(sum_done, ignore_wake, std::ptr::null_mut()), 0);
+        let callbacks = Callbacks::new(sum_done, ignore_wake);
+        assert_eq!((lib.init)(&raw const callbacks), 0);
         let add = (lib.find)(b"add".as_ptr(), 3).cast_unsigned();
         let started = Instant::now();
         for i in 0..n {
@@ -377,8 +413,9 @@ fn main() {
         return;
     }
     let _ = SHARED.set(Arc::new(Shared::default()));
+    let callbacks = Callbacks::new(on_done, wake);
     // SAFETY: once, before anything else of the library.
-    let status = unsafe { (lib.init)(on_done, wake, std::ptr::null_mut()) };
+    let status = unsafe { (lib.init)(&raw const callbacks) };
     assert_eq!(status, 0, "init");
 
     // SAFETY: the library's contract.
@@ -421,20 +458,24 @@ fn main() {
         }),
         Box::pin(async {
             let value = call(&lib, "env_or", &[home, fallback]).await;
+            let value = value.expect("env_or");
             println!(
                 "  env_or(\"HOME\", ..) = {} after {:?}",
-                show(&lib, value.expect("env_or")),
+                show(&lib, value),
                 started.elapsed()
             );
+            free(&lib, value);
             order.lock().expect("no panic").push("env_or HOME");
         }),
         Box::pin(async {
             let value = call(&lib, "env_or", &[missing, fallback]).await;
+            let value = value.expect("env_or");
             println!(
                 "  env_or(unset, ..) = {} after {:?}",
-                show(&lib, value.expect("env_or")),
+                show(&lib, value),
                 started.elapsed()
             );
+            free(&lib, value);
             order.lock().expect("no panic").push("env_or unset");
         }),
         Box::pin(async {
@@ -517,9 +558,25 @@ fn main() {
     let message = string(&lib, "no luck");
     let mut futures: Vec<Job<'_>> = vec![Box::pin(async {
         match call(&lib, "fail", &[message]).await {
-            Ok(value) => println!("fail returned {}", show(&lib, value)),
-            Err(error) => println!("fail(\"no luck\") threw {}", show(&lib, error)),
+            Ok(value) => {
+                println!("fail returned {}", show(&lib, value));
+                free(&lib, value);
+            }
+            Err(error) => {
+                println!("fail(\"no luck\") threw {}", show(&lib, error));
+                free(&lib, error);
+            }
         }
     })];
     run(&lib, &mut futures);
+    drop(futures);
+    free(&lib, message);
+}
+
+/// Let go of `value`'s handle, if it has one.
+fn free(lib: &Lib, value: Value) {
+    if value.tag & HANDLE != 0 {
+        // SAFETY: a handle this program owns, outside a turn.
+        unsafe { (lib.handle_free)(value.payload) };
+    }
 }

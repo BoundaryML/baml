@@ -2,7 +2,7 @@
 
 A bridge lets a program in another language call a BAML function and get a typed result back. This note says how that works when BAML is compiled to machine code: what is decided, what is built, and what comes next.
 
-Status, at `4f8fc6fc97` (branch `antoniosarosi/native-bridges-poc`):
+Status, on branch `antoniosarosi/native-bridges-poc` after the review fixes of step 1:
 
 | Part | State |
 |---|---|
@@ -84,17 +84,31 @@ A call does not return its result. It starts, and finishes later.
 ```
 host                                 the library
 ----                                 -----------
-load, init(on_done, wake)  ──────▶   create the worker; no main, no thread of its own
+load, init(callbacks)      ──────▶   create the worker; no main, no thread of its own
 call_start(fn, args)       ──────▶   queue a task for the call        ──▶ a call id
 turn()                     ──────▶   run BAML until every task is done or waiting
-      ◀────── on_done(call id, value)      a call finished
-      ◀────── wake()                       from the I/O thread: "turn me again"
+      ◀────── on_done(call id, status, value)   a call finished
+      ◀────── on_unhandled(call id, error)      a task it spawned failed, unawaited
+      ◀────── wake()                            from the I/O thread: "turn me again"
 ```
 
 - BAML runs on the host's own thread, inside `turn()`. Nothing runs in between.
 - `turn()` never sleeps. It returns how long until the next BAML timer, and the host arms its own timer for that.
-- `on_done` is called after the run, on the host's stack, never on a task's stack.
+- `on_done` and `on_unhandled` are called after the run, inside `turn()`, on the caller's thread and stack, never on a task's stack. `wake` may come from any thread. A callback must not call into the library, and the host frees every handle a callback gives it.
 - A generated function wraps this in the host's async type: an `async def`, a `Promise`, a `Future`.
+
+How a call can end, as `on_done` says:
+
+| Status | Meaning | Value |
+|---|---|---|
+| 0 returned | The function returned | Its result |
+| 1 threw | It threw, and nothing in it caught the throw | What it threw |
+| 2 stuck | It can never finish: nothing can run, no timer is set, no I/O can complete | `null`. The call is over for the host; a result that came later would be dropped |
+| 3 panicked | A `baml.panics` error reached the top of the call, `baml.panics.Exit` included | The panic |
+
+No BAML code can end the host's process. `baml.panics.Exit` from the call's own task is status 3. From a task the call spawned, it is a failure like any other.
+
+A task the call spawned that fails, with nothing awaiting it, is reported through `on_unhandled` once the call has finished, because nothing can await it after that. The task is then freed.
 
 ## The exported functions (built)
 
@@ -102,7 +116,8 @@ In `src/sched/host.rs`, feature `host-lib`. The library exports these and nothin
 
 | Function | Does | May collect |
 |---|---|---|
-| `baml_lib_init(on_done, wake, ctx)` | Builds the worker and the handle table | no |
+| `baml_lib_abi_version()` | The version of this interface (2) | no |
+| `baml_lib_init(callbacks)` | Builds the worker and the handle table. `callbacks` starts with its own size; a struct too small is refused | no |
 | `baml_lib_find(name, len)` | The number of an exported function, or -1 | no |
 | `baml_lib_export_count()`, `baml_lib_export_info(...)` | Per export: arity, signature hash, signature text | no |
 | `baml_lib_interface_hash()` | One hash for the whole exported interface | no |
@@ -110,7 +125,7 @@ In `src/sched/host.rs`, feature `host-lib`. The library exports these and nothin
 | `baml_lib_turn()` | Runs every runnable task, then calls `on_done` for each finished call | yes |
 | `baml_lib_string_new`, `_string_len`, `_string_copy` | Make a string; read one by copying it out | `new`: yes |
 | `baml_lib_handle_tag`, `_describe`, `_handle_free` | An object's tag; its text form; release a handle | no |
-| `baml_lib_collect`, `_debug_address` | Test aids | yes / no |
+| `baml_lib_collect`, `_debug_address`, `_debug_task_count` | Test aids | yes / no / no |
 
 ## Values across the boundary (built)
 
@@ -120,7 +135,7 @@ A value is two words, `{tag, payload}`, the same 16 bytes a heap slot holds.
 |---|---|---|
 | `int`, `float`, `bool`, `null` | As in memory, for example `INT` = 2 | The value itself |
 | Any object | Its real tag (`STRING`, `INSTANCE`, ...) with bit 61 set | A **handle** |
-| A call that threw | Bit 59 set as well | The thrown value |
+| An argument | As above. A scalar's tag must have no other bit set, and `OMITTED` is refused | |
 
 A handle is a slot in a fixed table (4096 slots) that never moves. Every slot is registered with the collector, which rewrites it when the object moves. So a handle stays valid until it is released, across any number of collections.
 
@@ -143,7 +158,9 @@ How one call runs:
 1. `call_start` puts the arguments in a BAML array held by the new task, where the collector can see them.
 2. The task starts in the host shim, which calls the export entry.
 3. When the function ends, the result is recorded. Nothing calls the host from a task's stack.
-4. After the run, `turn` calls `on_done` for each finished call.
+4. After the run, `turn` reports what ended: each finished call, each call found stuck, each failure nobody awaits.
+
+The call id lives in the task (`wait_value`), and every task the call spawns inherits it. The entry's address waits in the first slot of the argument array. So starting a call allocates nothing but the array and, when none is free, a task.
 
 ## Copying a result (next)
 
@@ -177,7 +194,7 @@ The first number was estimated at 330 before it was measured. The likely extras 
 | A class exists at run time only if compiled code uses it | Library mode must include every class in an exported signature. Not done |
 | An array does not record its element type | A result typed `int[] \| string[]` cannot be told apart by its tag |
 | The trace of a throw is dropped | Errors arrive as a value and its text |
-| `baml.panics.Exit` in a spawned task still ends the process | Must be reported to the host instead |
+| A stuck call's tasks stay parked for the life of the process | A task parked on I/O may still be named by the job it waits for, so it is not freed |
 | Timers end about 3 ms late | Executables do too; not a bridge problem |
 | arm64 macOS only | As for all native code today |
 

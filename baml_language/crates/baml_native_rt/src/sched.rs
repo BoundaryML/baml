@@ -762,6 +762,10 @@ pub(crate) unsafe extern "C" fn spawn_prepare(
         format_future(future, child);
         (*child).future = future;
         (*child).entry = closure;
+        // In the library form a task belongs to the host call it was
+        // spawned under.
+        #[cfg(all(feature = "host-lib", not(test)))]
+        host::inherit_call(worker.cur_task, child);
         store(frame + SWITCH_FRAME_RESULT, future);
         let parent = worker.cur_task;
         (*parent).sp = frame;
@@ -843,7 +847,8 @@ pub extern "C" fn baml_rt_task_finish(worker: &mut Mutator, tag: usize, payload:
 /// in the task would have, and for the report of an error no `await` took.
 ///
 /// A `baml.panics.Exit` ends the process here with its code, whether or
-/// not anything awaits the task: its `defer`s have run.
+/// not anything awaits the task: its `defer`s have run. In the library form
+/// it does not: the host's process is not the program's.
 #[unsafe(no_mangle)]
 pub extern "C" fn baml_rt_task_fail(
     worker: &mut Mutator,
@@ -852,13 +857,17 @@ pub extern "C" fn baml_rt_task_fail(
     trace: usize,
 ) {
     let error = Value { tag, payload };
-    // SAFETY: what the task threw is a value.
+    // SAFETY: what the task threw is a value. A library never ends its
+    // host's process: there the exit is a failure like any other.
+    #[cfg(not(all(feature = "host-lib", not(test))))]
     if let Some(status) = unsafe { crate::class::exit_status(worker, error) } {
         crate::unwind::end(worker, status);
     }
     // SAFETY: called on a task.
     unsafe { (*worker.cur_task).flags |= TASK_FAILED };
     settle(worker, error, trace, FUTURE_ERROR);
+    #[cfg(all(feature = "host-lib", not(test)))]
+    host::task_failed();
 }
 
 /// Run `run` on the worker's own stack, whose top free address is `stack`,
