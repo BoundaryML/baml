@@ -191,6 +191,12 @@ impl<'p, 's> Walk<'p, 's> {
     }
 
     fn kind(&self, value: Value) -> Result<Kind, ArgError> {
+        self.kind_expecting(value, false)
+    }
+
+    /// The value's kind; `instance_first` when a class is expected, so the
+    /// usual value, an instance, is told with one read.
+    fn kind_expecting(&self, value: Value, instance_first: bool) -> Result<Kind, ArgError> {
         let env = self.env;
         Ok(match js::type_of(env, value) {
             ValueType::napi_undefined | ValueType::napi_null => Kind::Null,
@@ -202,7 +208,7 @@ impl<'p, 's> Walk<'p, 's> {
             ValueType::napi_bigint => Kind::BigInt,
             ValueType::napi_string => Kind::String,
             ValueType::napi_object if js::is_array(env, value) => Kind::Array,
-            ValueType::napi_object => self.plans.object_kind(env, value)?,
+            ValueType::napi_object => self.plans.object_kind(env, value, instance_first)?,
             _ => Kind::Other,
         })
     }
@@ -213,7 +219,7 @@ impl<'p, 's> Walk<'p, 's> {
 
     fn value(&mut self, ty: &'p Type, value: Value) -> Result<BamlValue<'s>, ArgError> {
         let env = self.env;
-        let kind = self.kind(value)?;
+        let kind = self.kind_expecting(value, expects_class(ty))?;
         match ty {
             Type::Int => match kind {
                 Kind::Number(n, true) =>
@@ -655,23 +661,42 @@ fn rank(kind: Kind, member: &Type) -> Option<Rank> {
     }
 }
 
+/// Whether a class may be what the value is meant to be.
+fn expects_class(ty: &Type) -> bool {
+    match ty {
+        Type::Class(_) => true,
+        Type::Union(members) => members.iter().any(expects_class),
+        _ => false,
+    }
+}
+
 impl Plans {
+    /// The interface number of the generated class whose prototype `value`
+    /// inherits, read from the tag `bind` set.
+    fn class_tag_of(&self, env: Env, value: Value) -> Result<Option<u32>, ArgError> {
+        let tag = js::get_property(env, value, js::deref(env, self.class_tag))?;
+        if js::type_of(env, tag) == ValueType::napi_number {
+            return Ok(js::whole(env, tag).and_then(|n| u32::try_from(n).ok()));
+        }
+        Ok(None)
+    }
+
     /// What an object is: a plain object (its prototype is `Object.prototype`,
     /// another realm's, or `null`), an instance of a generated class of the
     /// interface (its prototype carries the class tag `bind` set), or another
     /// kind of object.
-    fn object_kind(&self, env: Env, value: Value) -> Result<Kind, ArgError> {
+    fn object_kind(&self, env: Env, value: Value, instance_first: bool) -> Result<Kind, ArgError> {
+        if instance_first && let Some(class) = self.class_tag_of(env, value)? {
+            return Ok(Kind::Instance(class));
+        }
         let prototype = js::prototype(env, value)?;
         if js::type_of(env, prototype) == ValueType::napi_null
             || js::strict_equals(env, prototype, js::deref(env, self.object_prototype))
         {
             return Ok(Kind::PlainObject);
         }
-        let tag = js::get_property(env, value, js::deref(env, self.class_tag))?;
-        if js::type_of(env, tag) == ValueType::napi_number {
-            if let Some(class) = js::whole(env, tag).and_then(|n| u32::try_from(n).ok()) {
-                return Ok(Kind::Instance(class));
-            }
+        if !instance_first && let Some(class) = self.class_tag_of(env, value)? {
+            return Ok(Kind::Instance(class));
         }
         // Another realm's `Object.prototype`: the root of its chain, whose
         // constructor is that realm's `Object`.
