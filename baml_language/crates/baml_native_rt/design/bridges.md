@@ -2,13 +2,15 @@
 
 A bridge lets a program in another language call a BAML function and get a typed result back. This note says how that works when BAML is compiled to machine code: what is decided, what is built, and what comes next.
 
-Status, on branch `antoniosarosi/native-bridges-poc` after the review fixes of step 1:
+Status, on branch `antoniosarosi/native-bridges-poc`, step 1:
 
 | Part | State |
 |---|---|
-| The compiled program as a shared library, and the C functions it exports | Built as a spike, behind the runtime feature `host-lib` |
+| The compiled program as a shared library, and the C functions it exports | Built, behind the runtime feature `host-lib` |
 | A Rust host that loads the library and awaits calls | Built, as an example |
-| Copying results into host objects | Next. Not built |
+| Reading any exported value out and building any argument in, checked | Built |
+| The library's interface as data: numbers, fields, variants, hash (`native_pack --lib --describe`) | Built |
+| Copying results into host objects | Next: the Rust support crate and bindings |
 | Generated bindings for Rust, Python and Node | Next. Not built |
 | Calls from BAML into the host, streaming, cancellation | Not designed |
 
@@ -112,20 +114,31 @@ A task the call spawned that fails, with nothing awaiting it, is reported throug
 
 ## The exported functions (built)
 
-In `src/sched/host.rs`, feature `host-lib`. The library exports these and nothing else.
+In `src/sched/host.rs` and `src/sched/host/`, feature `host-lib`. The library exports these and nothing else. Every function that takes a handle checks it: in range, live, of the right kind. A wrong one gets the function's error value, never undefined behaviour, and `baml_lib_last_error` says why. No function consumes a handle: the host frees every handle it was given.
 
 | Function | Does | May collect |
 |---|---|---|
 | `baml_lib_abi_version()` | The version of this interface (2) | no |
-| `baml_lib_init(callbacks)` | Builds the worker and the handle table. `callbacks` starts with its own size; a struct too small is refused | no |
-| `baml_lib_find(name, len)` | The number of an exported function, or -1 | no |
+| `baml_lib_init(callbacks)` | Builds the worker, the handle table and the interface. `callbacks` starts with its own size; a struct too small is refused | no |
+| `baml_lib_find(name, len)` | The number of an exported function (`complex_models.round_trip_complex_profile`), or -1 | no |
 | `baml_lib_export_count()`, `baml_lib_export_info(...)` | Per export: arity, signature hash, signature text | no |
 | `baml_lib_interface_hash()` | One hash for the whole exported interface | no |
-| `baml_lib_call_start(fn, args, n)` | Queues a task for the call; returns the call id, or 0 | yes |
-| `baml_lib_turn()` | Runs every runnable task, then calls `on_done` for each finished call | yes |
+| `baml_lib_call_start(fn, args, n)` | Checks the arguments against the parameters, queues a task for the call; returns the call id, or 0 | yes |
+| `baml_lib_turn()` | Runs every runnable task, then reports what ended | yes |
+| `baml_lib_last_error(buf, cap)` | Why the last refusal refused | no |
 | `baml_lib_string_new`, `_string_len`, `_string_copy` | Make a string; read one by copying it out | `new`: yes |
+| `baml_lib_class_of(h)` | The number of an instance's class, or of an enum value's enum, in the interface | no |
+| `baml_lib_field_get(h, field, out)` | A field by its position in declaration order | no |
+| `baml_lib_array_len(h)`, `_array_get(h, i, out)` | An array's length and elements | no |
+| `baml_lib_map_len(h)`, `_map_next(h, cursor, key, value)` | A map's length; its entries in insertion order | no |
+| `baml_lib_variant_index(h)`, `_variant(enum, index, out)` | An enum value's position; the value at a position | no |
+| `baml_lib_instance_new(class, fields, n, bad_field)` | An instance, all fields at once, each checked against its field's type | yes |
+| `baml_lib_array_new(values, n)` | An array, all elements at once | yes |
+| `baml_lib_map_new(keys, values, n)` | A map from strings the host made, all entries at once | yes |
 | `baml_lib_handle_tag`, `_describe`, `_handle_free` | An object's tag; its text form; release a handle | no |
-| `baml_lib_collect`, `_debug_address`, `_debug_task_count` | Test aids | yes / no / no |
+| `baml_lib_collect`, `_debug_address`, `_debug_task_count`, `_debug_handle_count` | Test aids | yes / no / no / no |
+
+Reads return objects as new handles: reading a field that holds an instance gives a handle to it, which the reader frees.
 
 ## Values across the boundary (built)
 
@@ -135,13 +148,33 @@ A value is two words, `{tag, payload}`, the same 16 bytes a heap slot holds.
 |---|---|---|
 | `int`, `float`, `bool`, `null` | As in memory, for example `INT` = 2 | The value itself |
 | Any object | Its real tag (`STRING`, `INSTANCE`, ...) with bit 61 set | A **handle** |
-| An argument | As above. A scalar's tag must have no other bit set, and `OMITTED` is refused | |
+| An argument | As above. A scalar's tag must have no other bit set. `OMITTED` is taken only for a parameter with a default | |
 
-A handle is a slot in a fixed table (4096 slots) that never moves. Every slot is registered with the collector, which rewrites it when the object moves. So a handle stays valid until it is released, across any number of collections.
+A handle is a slot in a table that grows by chunks of 4096 slots. A chunk never moves and never goes away. The collector walks every chunk (`heap.rs`, `copy_into`) and rewrites a slot when its object moves. So a handle stays valid until it is released, across any number of collections. Slot zero is never handed out: zero is what every function returns when it refuses.
 
 ```
  bindings ──▶ handle slot ──▶ Person      (the slot is rewritten when Person moves)
 ```
+
+## Checked writes (built)
+
+Compiled code trusts static types: a slot typed `int` that held a string would be read as a number, and a slot typed as a class that held an `int` would be read as an address. So a value from the host is checked where it lands in a typed place, and refused if it does not fit:
+
+- `call_start` checks each argument against its parameter's type, and `instance_new` each field against its field's type.
+- The check is deep, against the type descriptions the compiler leaves in the library (`json_layout.rs`), read once at init: scalars by tag, string literals by text, enum values by their enum, optionals and unions by trying each member, arrays and maps element by element.
+- An instance is checked by its class alone. Every instance in memory was made by compiled code or by a checked `instance_new`, so its fields are already right. Generic classes are refused when packing, because `Box<string>` and `Box<int>` have one class.
+- **An array or a map is accepted once**, right after `array_new` or `map_new` made it, and never again. BAML arrays and maps are invariant (`int[]` is not a `(int | string)[]`), but one array landing in two places could still be written through one place's type and read through the other's. The host cannot change a container after making it.
+
+Every build function checks all its inputs first, then allocates once, then turns handles into addresses: an allocation can move every object, and the handles are where the collector leaves the new addresses.
+
+## The interface as data (built)
+
+`interface.rs` in the compiler turns the exported functions into plain data: their numbers, names, parameters (name, type, whether it has a default), result and throws type, and every class and enum the signatures reach, numbered, with fields in slot order and variants in order. One hash covers all of it. The table of exports is emitted from it, and `native_pack --lib --describe` prints it as JSON for bindings.
+
+- `native_pack --lib <dir> <out>` takes a directory as the source root and exports every function that can be exported. Each one that cannot is printed with the reason, for example `a generic class 'generics.Box'` or `a bigint`. A list of names exports just those, in that order.
+- A type the boundary cannot carry is refused when packing, naming the function and the type: bigint, uint8array, tuples, functions, generic classes, classes of the standard library, maps whose keys are not strings, recursive aliases, `json`.
+- A thrown value is only read, never built, so a throws type that cannot cross does not block a function: its errors arrive described, without a type.
+- The table records each function's and each class's number of type parameters, zero for now. Type arguments are to travel first in the values a call or an instance takes.
 
 ## Inside the library (built)
 
@@ -150,7 +183,9 @@ A handle is a slot in a fixed table (4096 slots) that never moves. Every slot is
 | Library form | `baml_compiler2_native`: `native_pack --lib`, `link.rs` | A `.dylib` linked against a runtime archive without `main` |
 | Export entry | `codegen/host.rs` | Per exported function, an entry with the C convention. It reads the arguments, calls the function under a catch-all, and returns the result or what was thrown |
 | Host shim | `codegen/host.rs` | Compiled code that every host-started task begins in, so no Rust frame sits under a parked task |
-| Export table | `codegen/host.rs` | Names, arities and hashes, read by `find` and `export_info` |
+| Export table | `codegen/host.rs` | Per function its entry, hash, name, signature and the descriptions of its parameters, result and throws type; per class or enum its class object and description |
+| The interface | `interface.rs` | The numbers and the hash, as plain data |
+| Values and checks | `sched/host/values.rs`, `types.rs`, `table.rs` | Reads, builds, the check against descriptions, the handle table |
 | The turn | `sched/host.rs` | `serve`'s loop, returning where `serve` would sleep |
 
 How one call runs:
@@ -164,14 +199,7 @@ The call id lives in the task (`wait_value`), and every task the call spawns inh
 
 ## Copying a result (next)
 
-Generated code knows each type, so the copy is straight-line code: read each field once, build the host object.
-
-- A field's position in an instance is its declaration order, after any type parameters (`codegen.rs`).
-- The compiler writes, next to the library, the facts bindings need: the number of each function, the position of each field in its class, the order of each enum's variants.
-- Bindings and library both store a hash of the program's interface. At load, a mismatch is refused.
-- In Python and Node the copy should be one native call per result, not one call per field.
-
-Arguments go the other way: the bindings build the BAML value bottom-up, and everything under construction is held by a handle, because any allocation may move what was built before.
+Generated code knows each type, so the copy is straight-line code: read each field once, build the host object. The numbers it uses come from `--describe`; the interface hash makes a library and bindings of different versions refuse each other at load. Arguments go the other way, bottom-up, each part a handle until it is built into its parent.
 
 ## Measured
 
@@ -189,10 +217,10 @@ The first number was estimated at 330 before it was measured. The likely extras 
 | Limit | Consequence |
 |---|---|
 | One worker per process | Two BAML libraries cannot be loaded together. Calls into the library must come one at a time; nothing enforces it |
-| Argument types are not checked by the library | Compiled code trusts static types. Generated bindings and the interface hash are the guard |
-| Only `int` and `string` cross | No accessors yet for instances, arrays or maps |
-| A class exists at run time only if compiled code uses it | Library mode must include every class in an exported signature. Not done |
-| An array does not record its element type | A result typed `int[] \| string[]` cannot be told apart by its tag |
+| Generic classes and functions with type parameters are refused when packing | Type arguments would have to cross; the table leaves room for them |
+| bigint, uint8array, tuples, functions, `json`, maps whose keys are not strings, classes of the standard library do not cross | Refused when packing, with the reason |
+| An array does not record its element type | A result typed `int[] \| string[]` cannot be told apart when it is empty |
+| An array or a map from the host can be passed once | Bindings build a fresh one for each place, which is what copying does anyway |
 | The trace of a throw is dropped | Errors arrive as a value and its text |
 | A stuck call's tasks stay parked for the life of the process | A task parked on I/O may still be named by the job it waits for, so it is not freed |
 | Timers end about 3 ms late | Executables do too; not a bridge problem |

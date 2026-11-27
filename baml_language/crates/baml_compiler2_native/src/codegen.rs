@@ -1132,9 +1132,16 @@ pub(crate) enum Form<'a, 'db> {
     /// An executable: its first function is the entry, whose result is
     /// printed.
     Executable,
-    /// A library a host program loads, exporting these functions, which
-    /// are the program's first.
-    Library(&'a [baml_compiler2_hir::loc::FunctionLoc<'db>]),
+    /// A library a host program loads.
+    Library(&'a Library<'a, 'db>),
+}
+
+/// A library: the functions it exports, which are the program's first,
+/// and its interface.
+pub(crate) struct Library<'a, 'db> {
+    pub(crate) exports: &'a [baml_compiler2_hir::loc::FunctionLoc<'db>],
+    pub(crate) interface: &'a crate::interface::LibraryInterface,
+    pub(crate) detail: &'a crate::interface::Detail<'db>,
 }
 
 pub(crate) fn generate<'db>(
@@ -1305,11 +1312,11 @@ pub(crate) fn generate<'db>(
                 &mut disassembly,
             )?;
         }
-        (None, Form::Library(exports)) => host::define_library(
+        (None, Form::Library(library)) => host::define_library(
             db,
             &mut backend,
             &declared,
-            exports,
+            library,
             &mut context,
             &mut builder_context,
             &mut clif,

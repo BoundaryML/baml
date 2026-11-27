@@ -1,24 +1,57 @@
 //! The library form's compiled code: what a host program calls through the
 //! runtime's `baml_lib_*` functions (`baml_native_rt/src/sched/host.rs`).
 //!
-//! A spike. For each exported function, an entry with the C convention
-//! that takes the address of its arguments, a tag and a payload each, and
-//! returns the function's value the same way, with [`layout::THROWN`] in
-//! the tag when it threw: the hook natives call (`hooks.rs`) for any number
-//! of values. Its handler takes every error, so nothing unwinds past it.
+//! For each exported function, an entry with the C convention that takes
+//! the address of its arguments, a tag and a payload each, and returns the
+//! function's value the same way, with [`layout::THROWN`] in the tag when
+//! it threw: the hook natives call (`hooks.rs`) for any number of values.
+//! Its handler takes every error, so nothing unwinds past it.
 //!
 //! A task the host starts begins in the host shim, which asks the runtime
 //! for its entry and arguments, calls the entry and hands the runtime what
 //! it returned. It is compiled code, so that no Rust frame is under a task
 //! that parks and every frame has a stack map.
 //!
-//! The table of exports tells the runtime, and through it the host, each
-//! export's name, entry, arity and signature, with a hash of each signature
-//! and one of the whole interface, for bindings to check they match.
+//! The table of exports is the library's interface (`interface.rs`) as the
+//! runtime reads it:
+//!
+//! ```text
+//! +0   u32  version (2)
+//! +4   u32  how many functions
+//! +8   u64  the interface hash
+//! +16  u32  how many classes and enums
+//! +20  u32  where their records are
+//! +24  u64  zero
+//! +32  a record per function, 56 bytes:
+//!      +0  u64  the entry's address
+//!      +8  u64  the signature's hash
+//!      +16 u32  arity
+//!      +20 u32  name: offset, then +24 length
+//!      +28 u32  signature text: offset, then +32 length
+//!      +36 u32  the result's description
+//!      +40 u32  the throws type's description, zero for none
+//!      +44 u32  where its parameters' records are, 8 bytes each: the
+//!               description, then flags (1: it has a default)
+//!      +48 u32  how many type parameters it has, zero for now: their type
+//!               arguments are to come first in a call's values
+//!      +52 u32  zero
+//!      a record per class or enum, 32 bytes:
+//!      +0  u64  its class object's address
+//!      +8  u32  name: offset, then +12 length
+//!      +16 u32  kind: 0 a class, 1 an enum
+//!      +20 u32  its description
+//!      +24 u32  how many fields or variants
+//!      +28 u32  how many type parameters it has, zero for now: their
+//!               type arguments are to come first in an instance's values
+//!      then the parameters' records and the texts
+//! ```
+//!
+//! Offsets are from the table's start. A description is named by its
+//! offset in the section of descriptions (`json_layout.rs`), whose records
+//! give a class's fields with their slots and an enum's variants.
 
 use std::collections::HashMap;
 
-use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use cranelift_codegen::{
     Context,
     ir::{self, AbiParam, InstBuilder, MemFlags},
@@ -26,9 +59,14 @@ use cranelift_codegen::{
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_module::{DataDescription, Linkage, Module};
 
-use super::{Backend, Declared, Named, PAIR, Runtime, WORD, imm, internal, unwind};
+use super::{
+    Backend, Declared, Library, Named, PAIR, Runtime, WORD, classes::ClassLike, imm, internal,
+    unwind,
+};
 use crate::{
-    CompileError, layout,
+    CompileError,
+    interface::{Reached, TypeKind},
+    layout,
     program::{Entry, FnKey},
 };
 
@@ -37,62 +75,25 @@ const HOST_SHIM: &str = "baml_native_host_shim";
 /// The symbol of the table of exports.
 const EXPORTS: &str = "baml_native_exports";
 /// The version of its format, which the runtime checks.
-const EXPORTS_VERSION: u32 = 1;
-/// The bytes of one record of it.
-const RECORD: usize = 40;
+const EXPORTS_VERSION: u32 = 2;
+const HEADER: usize = 32;
+const FUNCTION_RECORD: usize = 56;
+const TYPE_RECORD: usize = 32;
+const PARAM_RECORD: usize = 8;
 
-/// FNV-1a, 64 bits: a hash both sides can compute with no dependency. It
-/// tells a stale binding from a fresh one; it is not a defense.
-fn fnv(bytes: &[u8], mut hash: u64) -> u64 {
-    for byte in bytes {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    hash
-}
-const FNV_START: u64 = 0xcbf2_9ce4_8422_2325;
-
-/// The signature of an exported function as text: its name, each
-/// parameter's name and type, and its result type.
-fn signature_text(
-    db: &dyn baml_compiler2_mir::Db,
-    function: FunctionLoc<'_>,
-    name: &str,
-) -> String {
-    let signature =
-        baml_compiler2_hir_ty::callable::callable_signature(db, DeclRef::Source(function));
-    let view = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
-    let params: Vec<String> = signature
-        .params
-        .iter()
-        .map(|param| {
-            let name = param
-                .name
-                .as_ref()
-                .map(ToString::to_string)
-                .unwrap_or_default();
-            let default = match param.mode {
-                baml_type::FunctionParamMode::Required => "",
-                baml_type::FunctionParamMode::Optional => " = default",
-            };
-            format!("{name}: {}{default}", view.labelled_text(&param.ty))
-        })
-        .collect();
-    format!(
-        "{name}({}) -> {}",
-        params.join(", "),
-        view.labelled_text(&signature.return_type)
-    )
+fn word(value: usize) -> Result<u32, CompileError> {
+    u32::try_from(value).map_err(internal)
 }
 
-/// Compile an entry for each of `exports`, the host shim and the table of
-/// exports.
+/// Compile an entry for each export of `library`, the host shim and the
+/// table of exports. Every class and enum the interface reaches gets a
+/// class object and a description.
 #[expect(clippy::too_many_arguments, reason = "what every define takes")]
 pub(super) fn define_library<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     backend: &mut Backend<'db>,
     declared: &HashMap<FnKey<'db>, Declared<'db>>,
-    exports: &[FunctionLoc<'db>],
+    library: &Library<'_, 'db>,
     context: &mut Context,
     builder_context: &mut FunctionBuilderContext,
     clif: &mut Option<String>,
@@ -102,17 +103,17 @@ pub(super) fn define_library<'db>(
     entry_signature.params.push(AbiParam::new(WORD));
     entry_signature.returns = vec![AbiParam::new(WORD); 2];
 
-    // (entry, name, signature text, arity)
-    let mut records = Vec::new();
-    for (index, function) in exports.iter().enumerate() {
-        let name = baml_compiler2_hir::item_data::function_data(db, *function)
-            .name
-            .to_string();
+    let interface = library.interface;
+    let mut entries = Vec::new();
+    for (index, function) in library.exports.iter().enumerate() {
         let target = declared
             .get(&FnKey::new(*function, Entry::Direct))
             .ok_or_else(|| internal("an export is part of the program"))?;
         if !target.type_args.is_empty() {
-            return Err(CompileError::ExportIsGeneric(name));
+            return Err(CompileError::NotExportable(
+                interface.functions[index].name.clone(),
+                "it takes type arguments".to_owned(),
+            ));
         }
         let entry = backend
             .module
@@ -132,8 +133,7 @@ pub(super) fn define_library<'db>(
             clif,
             disassembly,
         )?;
-        let text = signature_text(db, *function, &name);
-        records.push((entry, name, text, target.signature.params.len()));
+        entries.push(entry);
     }
 
     let mut shim_signature = ir::Signature::new(backend.call_conv());
@@ -158,36 +158,120 @@ pub(super) fn define_library<'db>(
         disassembly,
     )?;
 
-    // The table: a header, a record per export, then the texts.
+    // Descriptions, and the class object of every class and enum reached.
+    let describe = |backend: &mut Backend<'db>, ty: &baml_compiler2_mir::RuntimeTy| {
+        backend
+            .json
+            .describe(db, ty)
+            .map_err(|blocker| internal(format!("an exported type has a description: {blocker}")))
+    };
+    let mut functions = Vec::new();
+    for detail in &library.detail.functions {
+        let params = detail
+            .params
+            .iter()
+            .map(|ty| describe(backend, ty))
+            .collect::<Result<Vec<_>, _>>()?;
+        let result = describe(backend, &detail.result)?;
+        let throws = match &detail.throws {
+            Some(ty) => describe(backend, ty)?,
+            None => 0,
+        };
+        functions.push((params, result, throws));
+    }
+    let mut types = Vec::new();
+    for reached in &library.detail.types {
+        let (what, ty) = match reached {
+            Reached::Class(class, ty) => (ClassLike::Class(*class), ty),
+            Reached::Enum(enum_ref, ty) => (ClassLike::Enum(*enum_ref), ty),
+        };
+        let described = describe(backend, ty)?;
+        let class = backend.class_object(db, what)?;
+        types.push((backend.class_data(class), described));
+    }
+
+    // The table: the header, the records, then the parameters and the texts.
     let mut description = DataDescription::new();
     let mut bytes: Vec<u8> = Vec::new();
-    let count = u32::try_from(records.len()).map_err(internal)?;
-    let interface = records.iter().fold(FNV_START, |hash, (_, _, text, _)| {
-        fnv(&[0], fnv(text.as_bytes(), hash))
-    });
-    bytes.extend_from_slice(&EXPORTS_VERSION.to_le_bytes());
-    bytes.extend_from_slice(&count.to_le_bytes());
-    bytes.extend_from_slice(&interface.to_le_bytes());
-    let mut text_at = bytes.len() + RECORD * records.len();
+    let types_at = HEADER + FUNCTION_RECORD * interface.functions.len();
+    let params_at = types_at + TYPE_RECORD * interface.types.len();
+    let param_count: usize = interface.functions.iter().map(|f| f.params.len()).sum();
+    let mut text_at = params_at + PARAM_RECORD * param_count;
     let mut texts: Vec<u8> = Vec::new();
-    for (entry, name, text, arity) in &records {
+    let mut text = |piece: &str, texts: &mut Vec<u8>| -> Result<[u32; 2], CompileError> {
+        let at = [word(text_at)?, word(piece.len())?];
+        texts.extend_from_slice(piece.as_bytes());
+        text_at += piece.len();
+        Ok(at)
+    };
+    let push = |bytes: &mut Vec<u8>, words: &[u32]| {
+        for word in words {
+            bytes.extend_from_slice(&word.to_le_bytes());
+        }
+    };
+    push(
+        &mut bytes,
+        &[EXPORTS_VERSION, word(interface.functions.len())?],
+    );
+    bytes.extend_from_slice(&interface.hash.to_le_bytes());
+    push(
+        &mut bytes,
+        &[word(interface.types.len())?, word(types_at)?, 0, 0],
+    );
+    let mut param_records: Vec<u8> = Vec::new();
+    let mut next_param = params_at;
+    for ((function, entry), (params, result, throws)) in
+        interface.functions.iter().zip(&entries).zip(&functions)
+    {
         let entry = backend
             .module
             .declare_func_in_data(*entry, &mut description);
-        description.write_function_addr(u32::try_from(bytes.len()).map_err(internal)?, entry);
+        description.write_function_addr(word(bytes.len())?, entry);
         bytes.extend_from_slice(&0_u64.to_le_bytes());
-        bytes.extend_from_slice(&fnv(text.as_bytes(), FNV_START).to_le_bytes());
-        bytes.extend_from_slice(&u32::try_from(*arity).map_err(internal)?.to_le_bytes());
-        for piece in [name, text] {
-            let offset = u32::try_from(text_at).map_err(internal)?;
-            let length = u32::try_from(piece.len()).map_err(internal)?;
-            bytes.extend_from_slice(&offset.to_le_bytes());
-            bytes.extend_from_slice(&length.to_le_bytes());
-            texts.extend_from_slice(piece.as_bytes());
-            text_at += piece.len();
+        bytes.extend_from_slice(&function.hash.to_le_bytes());
+        let name = text(&function.name, &mut texts)?;
+        let signature = text(&function.signature, &mut texts)?;
+        push(
+            &mut bytes,
+            &[
+                word(params.len())?,
+                name[0],
+                name[1],
+                signature[0],
+                signature[1],
+                *result,
+                *throws,
+                word(next_param)?,
+                0,
+                0,
+            ],
+        );
+        for (described, param) in params.iter().zip(&function.params) {
+            push(
+                &mut param_records,
+                &[*described, u32::from(param.has_default)],
+            );
         }
-        bytes.extend_from_slice(&0_u32.to_le_bytes());
+        next_param += PARAM_RECORD * params.len();
     }
+    for (ty, (class, described)) in interface.types.iter().zip(&types) {
+        let class = backend
+            .module
+            .declare_data_in_data(*class, &mut description);
+        description.write_data_addr(word(bytes.len())?, class, 0);
+        bytes.extend_from_slice(&0_u64.to_le_bytes());
+        let name = text(&ty.name, &mut texts)?;
+        let (kind, count) = match &ty.kind {
+            TypeKind::Class(fields) => (0, fields.len()),
+            TypeKind::Enum(variants) => (1, variants.len()),
+        };
+        push(
+            &mut bytes,
+            &[name[0], name[1], kind, *described, word(count)?, 0],
+        );
+    }
+    debug_assert_eq!(bytes.len(), params_at);
+    bytes.extend_from_slice(&param_records);
     bytes.extend_from_slice(&texts);
     let id = backend
         .module

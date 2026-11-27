@@ -69,3 +69,7 @@ function quits_in_a_task(code: int) -> int {
 function boom_export(n: int) -> int {
   boom(n)
 }
+
+function greet_default(name: string = "you") -> string {
+  "hi " + name
+}

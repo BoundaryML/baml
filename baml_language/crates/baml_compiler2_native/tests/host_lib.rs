@@ -69,6 +69,8 @@ struct Lib {
     collect: unsafe extern "C" fn(),
     describe: unsafe extern "C" fn(u64, *mut u8, usize) -> i64,
     task_count: unsafe extern "C" fn() -> u64,
+    array_len: unsafe extern "C" fn(u64) -> i64,
+    last_error: unsafe extern "C" fn(*mut u8, usize) -> i64,
 }
 
 /// How a call ended: its status and value.
@@ -167,6 +169,8 @@ fn lib() -> &'static Lib {
                 collect: std::mem::transmute(symbol("baml_lib_collect")),
                 describe: std::mem::transmute(symbol("baml_lib_describe")),
                 task_count: std::mem::transmute(symbol("baml_lib_debug_task_count")),
+                array_len: std::mem::transmute(symbol("baml_lib_array_len")),
+                last_error: std::mem::transmute(symbol("baml_lib_last_error")),
             }
         }
     })
@@ -261,6 +265,14 @@ impl Lib {
         // SAFETY: a buffer of its length.
         let length = unsafe { (self.describe)(handle, buffer.as_mut_ptr(), buffer.len()) };
         buffer.truncate(usize::try_from(length).expect("a live handle"));
+        String::from_utf8(buffer).expect("UTF-8")
+    }
+
+    fn last_error(&self) -> String {
+        let mut buffer = vec![0_u8; 256];
+        // SAFETY: a buffer of its length.
+        let length = unsafe { (self.last_error)(buffer.as_mut_ptr(), buffer.len()) };
+        buffer.truncate(usize::try_from(length).expect("a length"));
         String::from_utf8(buffer).expect("UTF-8")
     }
 
@@ -427,4 +439,40 @@ fn a_throw_is_told_from_a_return() {
     assert_eq!(ending.status, STATUS_THREW, "{ending:?}");
     assert_eq!(lib.text(ending.value.payload), "boom");
     lib.free(ending.value);
+}
+
+/// `OMITTED` is taken for a parameter with a default, and refused for one
+/// without.
+#[test]
+fn omitted_is_taken_where_a_default_is_declared() {
+    let (_turn, lib) = take_turns();
+    let omitted = Value {
+        tag: TAG_OMITTED,
+        payload: 0,
+    };
+    let greeting = lib.finish(lib.start("greet_default", &[omitted]));
+    assert_eq!(lib.text(greeting.payload), "hi you");
+    lib.free(greeting);
+    assert_eq!(lib.start("add", &[omitted, int(1)]), 0);
+    assert!(lib.last_error().contains("OMITTED"), "{}", lib.last_error());
+}
+
+/// A handle of the wrong kind is refused, with a reason, never read as
+/// what it is not.
+#[test]
+fn a_handle_of_the_wrong_kind_is_refused() {
+    let (_turn, lib) = take_turns();
+    let text = lib.string("not an array");
+    // SAFETY: a live handle, outside a turn.
+    assert_eq!(unsafe { (lib.array_len)(text.payload) }, -1);
+    assert!(lib.last_error().contains("not 10"), "{}", lib.last_error());
+    lib.free(text);
+    // SAFETY: as above.
+    assert_eq!(
+        unsafe { (lib.array_len)(text.payload) },
+        -1,
+        "a freed handle"
+    );
+    // SAFETY: as above.
+    assert_eq!(unsafe { (lib.array_len)(u64::MAX) }, -1, "no such handle");
 }

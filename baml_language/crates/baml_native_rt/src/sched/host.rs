@@ -56,7 +56,13 @@
 //! another thread. The turn runs on the host's stack, which is the worker's
 //! own stack for its duration.
 
+mod table;
+mod types;
+pub mod values;
+
 use std::ffi::c_void;
+
+pub(crate) use table::each_slot;
 
 use super::{
     DEAD, NOTIFIED, PARKED, PARKING, RUNNABLE, RUNNING, TASK_FAILED, TASK_STACK, Task, WORKER,
@@ -66,8 +72,7 @@ use crate::{
     heap::{Mutator, Program, Value},
     layout::{
         ARRAY_PTR, FUTURE_FLAGS, FUTURE_OBSERVED, FUTURE_TASK, FUTURE_VALUE, HEADER_PANIC,
-        STORAGE_ELEMENTS, STRING_TAGS_END, TAG_INSTANCE, TAG_INT, TAG_OMITTED, TAG_STRING, THROWN,
-        TYPE_ID_MASK, VALUE, is_pointer,
+        STORAGE_ELEMENTS, STRING_TAGS_END, TAG_INSTANCE, TAG_INT, TAG_STRING, THROWN, VALUE,
     },
 };
 
@@ -85,9 +90,6 @@ pub const STATUS_RETURNED: u32 = 0;
 pub const STATUS_THREW: u32 = 1;
 pub const STATUS_STUCK: u32 = 2;
 pub const STATUS_PANICKED: u32 = 3;
-
-/// How many handles a host can hold at once.
-const HANDLES: usize = 4096;
 
 /// Set in a task's flags when the host started it: its call id is in its
 /// `wait_value`, which every task it spawns inherits.
@@ -128,17 +130,6 @@ unsafe extern "C" {
     static baml_native_functions: usize;
 }
 
-/// The table of exports the compiler writes (`codegen/host.rs`): a version,
-/// a count, the interface hash, then a record per export.
-const EXPORTS_VERSION: u32 = 1;
-const EXPORTS_RECORDS: usize = 16;
-const EXPORT_RECORD: usize = 40;
-const EXPORT_ENTRY: usize = 0;
-const EXPORT_HASH: usize = 8;
-const EXPORT_ARITY: usize = 16;
-const EXPORT_NAME: usize = 20;
-const EXPORT_SIGNATURE: usize = 28;
-
 /// A call that ended in this turn, for `on_done` after it.
 struct Ended {
     call: u64,
@@ -151,11 +142,8 @@ struct Host {
     /// through its pinned register while a turn runs, so no Rust reference
     /// to it outlives a call of this module.
     worker: *mut Mutator,
-    /// The handle table, [`HANDLES`] values made once and never freed or
-    /// moved: every slot is a root of the worker, which the collector
-    /// rewrites through its address.
-    handles: *mut Value,
-    free: Vec<u32>,
+    /// The library's functions, classes and enums, read at init.
+    interface: types::Interface,
     /// Calls that ended in this turn, reported after it, and the vector
     /// they are swapped with so that neither is made again each turn.
     ended: Vec<Ended>,
@@ -166,6 +154,23 @@ struct Host {
     /// await it: set when a task fails, cleared once none is left waiting
     /// for its call to finish.
     failures: bool,
+    /// Why the last call that refused something refused it.
+    error: String,
+}
+
+impl Host {
+    fn worker(&mut self) -> &mut Mutator {
+        // SAFETY: made at init and never freed; see the field.
+        unsafe { &mut *self.worker }
+    }
+}
+
+/// Keep `why` for `baml_lib_last_error`, and return `value`: what the
+/// refusing function returns.
+fn refuse<T>(why: String, value: T) -> T {
+    // SAFETY: a short write of the host's state.
+    unsafe { host().error = why };
+    value
 }
 
 static HOST: std::sync::atomic::AtomicPtr<Host> =
@@ -255,15 +260,6 @@ unsafe fn copy_out(bytes: &[u8], out: *mut u8, capacity: usize) {
     }
 }
 
-/// Whether `tag`, the tag of an object, and `other`, a tag the host gave,
-/// say the same type. A string's tag says whether it is a slice, which a
-/// collection may change (a slice whose parent died becomes a string), so
-/// any string tag stands for any string.
-fn same_type(tag: usize, other: usize) -> bool {
-    let is_string = |tag: usize| (TAG_STRING..STRING_TAGS_END).contains(&tag);
-    tag == other || (is_string(tag) && is_string(other))
-}
-
 fn exports() -> usize {
     &raw const baml_native_exports as usize
 }
@@ -274,7 +270,7 @@ fn export_count() -> usize {
 }
 
 fn record(index: usize) -> usize {
-    exports() + EXPORTS_RECORDS + index * EXPORT_RECORD
+    types::function_record(exports(), index)
 }
 
 /// The text at the `(offset, length)` pair of `u32`s at `at`.
@@ -290,67 +286,6 @@ fn text_at(at: usize) -> &'static str {
     }
 }
 
-impl Host {
-    /// A handle to `value`, which is a pointer.
-    fn hold(&mut self, value: Value) -> usize {
-        let Some(slot) = self.free.pop() else {
-            super::fatal("the host holds every handle: free some");
-        };
-        // SAFETY: a slot of the table.
-        unsafe { self.handles.add(slot as usize).write(value) };
-        slot as usize
-    }
-
-    /// What handle slot `handle` holds, if it is one.
-    fn slot(&self, handle: usize) -> Option<Value> {
-        // SAFETY: a slot of the table.
-        (handle < HANDLES).then(|| unsafe { self.handles.add(handle).read() })
-    }
-
-    fn worker(&mut self) -> &mut Mutator {
-        // SAFETY: made at init and never freed; see the field.
-        unsafe { &mut *self.worker }
-    }
-
-    /// What the host sees of `value`: itself when it is a scalar, its tag
-    /// with [`HANDLE_BIT`] and a handle when it is an object.
-    fn crossing(&mut self, value: Value) -> Value {
-        if is_pointer(value.tag) {
-            Value {
-                tag: value.tag | HANDLE_BIT,
-                payload: self.hold(value),
-            }
-        } else {
-            value
-        }
-    }
-
-    /// The value the host passed: a handle's object, or the scalar itself.
-    /// A tag with a bit set outside its type id, but [`HANDLE_BIT`] on a
-    /// handle, is refused: a slot must never hold the busy bit or `THROWN`.
-    /// So is an argument left to its default, which only compiled code may
-    /// pass.
-    fn resolve(&self, value: Value) -> Option<Value> {
-        if value.tag & HANDLE_BIT == 0 {
-            let plain = value.tag & !TYPE_ID_MASK == 0
-                && !is_pointer(value.tag)
-                && value.tag != TAG_OMITTED;
-            return plain.then_some(value);
-        }
-        let tag = value.tag & !HANDLE_BIT;
-        if tag & !TYPE_ID_MASK != 0 {
-            return None;
-        }
-        let held = self.held(value.payload as u64)?;
-        same_type(held.tag, tag).then_some(held)
-    }
-
-    fn held(&self, handle: u64) -> Option<Value> {
-        let value = self.slot(usize::try_from(handle).ok()?)?;
-        is_pointer(value.tag).then_some(value)
-    }
-}
-
 /// The version of this interface ([`ABI_VERSION`]).
 #[unsafe(no_mangle)]
 pub extern "C" fn baml_lib_abi_version() -> u32 {
@@ -358,7 +293,9 @@ pub extern "C" fn baml_lib_abi_version() -> u32 {
 }
 
 /// Build the worker. Returns zero; -1 when it was built already; -2 when
-/// `callbacks` is null or older than this library's [`Callbacks`].
+/// `callbacks` is null or older than this library's [`Callbacks`]; -3 when
+/// the library's table of exports is of another version than this
+/// runtime reads.
 ///
 /// # Safety
 ///
@@ -391,33 +328,30 @@ pub unsafe extern "C" fn baml_lib_init(callbacks: *const Callbacks) -> i32 {
             stress,
         )
     });
-    let handles = Box::into_raw(vec![Value::NULL; HANDLES].into_boxed_slice()).cast::<Value>();
-    for slot in 0..HANDLES {
-        // SAFETY: a slot of the table, which never moves.
-        worker.root_value_at(unsafe { handles.add(slot) } as usize);
+    // SAFETY: just checked at init below, before anything reads it.
+    let version = unsafe { (exports() as *const u32).read() };
+    if version != types::EXPORTS_VERSION {
+        return -3;
     }
+    table::init();
+    // SAFETY: the library's own tables.
+    let interface =
+        unsafe { types::Interface::read(exports(), &raw const baml_native_types as usize) };
     worker.sched.task_shim = baml_native_task_shim as *const () as usize;
     let worker = Box::into_raw(worker);
     WORKER.store(worker, std::sync::atomic::Ordering::Release);
     let _ = WAKE.set((callbacks.wake, callbacks.ctx as usize));
     let host = Box::new(Host {
         worker,
-        handles,
-        free: (0..u32::try_from(HANDLES).expect("few handles"))
-            .rev()
-            .collect(),
+        interface,
         ended: Vec::new(),
         reporting: Vec::new(),
         next_call: 1,
         callbacks,
         failures: false,
+        error: String::new(),
     });
     HOST.store(Box::into_raw(host), std::sync::atomic::Ordering::Release);
-    // SAFETY: just built.
-    let version = unsafe { (exports() as *const u32).read() };
-    if version != EXPORTS_VERSION {
-        super::fatal("the library's table of exports is of another version");
-    }
     0
 }
 
@@ -431,7 +365,7 @@ pub unsafe extern "C" fn baml_lib_find(name: *const u8, length: usize) -> i64 {
     // SAFETY: the caller's contract.
     let name = unsafe { items(name, length) };
     (0..export_count())
-        .find(|index| text_at(record(*index) + EXPORT_NAME).as_bytes() == name)
+        .find(|index| text_at(record(*index) + types::FUNCTION_NAME).as_bytes() == name)
         .map_or(-1, |index| i64::try_from(index).unwrap_or(-1))
 }
 
@@ -463,11 +397,11 @@ pub unsafe extern "C" fn baml_lib_export_info(
         return -1;
     }
     let at = record(index);
-    let signature = text_at(at + EXPORT_SIGNATURE);
+    let signature = text_at(at + types::FUNCTION_SIGNATURE);
     // SAFETY: the table's record, and the caller's contract.
     unsafe {
-        *arity = ((at + EXPORT_ARITY) as *const u32).read();
-        *hash = ((at + EXPORT_HASH) as *const u64).read();
+        *arity = ((at + types::FUNCTION_ARITY) as *const u32).read();
+        *hash = ((at + types::FUNCTION_HASH) as *const u64).read();
         copy_out(signature.as_bytes(), text, capacity);
     }
     i64::try_from(signature.len()).unwrap_or(-1)
@@ -482,9 +416,12 @@ pub extern "C" fn baml_lib_interface_hash() -> u64 {
 }
 
 /// Start export `index` with the `count` values at `args`, each a scalar
-/// or an object's handle (its tag with [`HANDLE_BIT`]). Returns the call's
-/// id, never zero, or zero when the export or the arguments are wrong. The
-/// call runs in the next turn. The handles passed stay the host's.
+/// or an object's handle (its tag with [`HANDLE_BIT`]), checked against
+/// the parameters' types; `OMITTED` for a parameter with a default.
+/// Returns the call's id, never zero, or zero when the export or an
+/// argument is refused (see `baml_lib_last_error`). The call runs in the
+/// next turn. The handles passed stay the host's, but for an array or a
+/// map, which is taken: it can be passed once.
 ///
 /// # Safety
 ///
@@ -492,30 +429,20 @@ pub extern "C" fn baml_lib_interface_hash() -> u64 {
 /// during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_call_start(index: u64, args: *const Value, count: usize) -> u64 {
-    // SAFETY: the caller's contract.
-    let host = unsafe { host() };
-    let Ok(index) = usize::try_from(index) else {
-        return 0;
+    let Some(index) = usize::try_from(index)
+        .ok()
+        .filter(|index| *index < export_count())
+    else {
+        return refuse(format!("no export {index}"), 0);
     };
-    if index >= export_count() {
-        return 0;
-    }
-    let at = record(index);
-    // SAFETY: the table's record.
-    let (entry, arity) = unsafe {
-        (
-            load(at + EXPORT_ENTRY),
-            ((at + EXPORT_ARITY) as *const u32).read() as usize,
-        )
-    };
-    if count != arity {
-        return 0;
-    }
     // SAFETY: the caller's contract.
     let passed = unsafe { items(args, count) };
-    if passed.iter().any(|value| host.resolve(*value).is_none()) {
-        return 0;
+    if let Err(why) = values::check_arguments(index, passed) {
+        return refuse(why, 0);
     }
+    // SAFETY: the caller's contract; no call out follows.
+    let host = unsafe { host() };
+    let entry = host.interface.functions[index].entry;
     host.worker().clear_anchor();
     // The entry and the arguments wait in an array, which the task holds as
     // what it is to run: a root until the task takes it. Making it may
@@ -535,7 +462,7 @@ pub unsafe extern "C" fn baml_lib_call_start(index: u64, args: *const Value, cou
             },
         );
         for (place, value) in passed.iter().enumerate() {
-            let value = host.resolve(*value).expect("checked above");
+            let value = values::resolve(*value, true).expect("checked above");
             Value::init(elements + (1 + place) * VALUE, value);
         }
     }
@@ -599,9 +526,9 @@ pub extern "C" fn baml_rt_host_finish(worker: &mut Mutator, tag: usize, payload:
     } else {
         STATUS_THREW
     };
+    let value = values::crossing(value);
     // SAFETY: called on a task the host started; no call out follows.
     let host = unsafe { host() };
-    let value = host.crossing(value);
     host.ended.push(Ended {
         call,
         status,
@@ -776,7 +703,7 @@ fn take_unhandled(host: &mut Host, unhandled: &mut Vec<(u64, Value)>) {
             store(future + FUTURE_TASK, 0);
             let call = (*task).wait_value as u64;
             sched.release(task);
-            unhandled.push((call, host.crossing(error)));
+            unhandled.push((call, values::crossing(error)));
         }
     }
     host.failures = waiting;
@@ -831,38 +758,55 @@ pub unsafe extern "C" fn baml_lib_debug_task_count() -> u64 {
     host.worker().sched.tasks().count() as u64
 }
 
-/// A handle to a new string holding the UTF-8 text at `text`, or `u64::MAX`
+/// A handle to a new string holding the UTF-8 text at `text`, or zero
 /// when it is not UTF-8. May collect.
 ///
 /// # Safety
 ///
-/// `text` is `length` readable bytes. Not during a turn.
+/// `text` is `length` readable bytes (null when `length` is zero). Not
+/// during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_string_new(text: *const u8, length: usize) -> u64 {
     // SAFETY: the caller's contract.
-    let (host, bytes) = unsafe { (host(), items(text, length)) };
+    let bytes = unsafe { items(text, length) };
     let Ok(text) = std::str::from_utf8(bytes) else {
-        return u64::MAX;
+        return refuse("a string that is not UTF-8".to_owned(), 0);
     };
-    host.worker().clear_anchor();
-    let string = crate::string::from_str(host.worker(), text);
-    host.hold(Value {
-        tag: TAG_STRING,
-        payload: string,
-    }) as u64
+    // SAFETY: as above; no reference to the host's state is held across
+    // the allocation.
+    let string = unsafe {
+        let worker = host().worker();
+        worker.clear_anchor();
+        crate::string::from_str(worker, text)
+    };
+    table::hold(
+        Value {
+            tag: TAG_STRING,
+            payload: string,
+        },
+        0,
+    ) as u64
 }
 
 /// The tag of the object `handle` holds (without [`HANDLE_BIT`]), or
-/// `u64::MAX` for a free or wrong handle.
+/// `u64::MAX` for a handle that is not live.
 ///
 /// # Safety
 ///
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_handle_tag(handle: u64) -> u64 {
-    // SAFETY: the caller's contract.
-    let host = unsafe { host() };
-    host.held(handle).map_or(u64::MAX, |value| value.tag as u64)
+    table::get(handle).map_or(u64::MAX, |value| value.tag as u64)
+}
+
+/// The string `handle` holds, if it holds one.
+fn string_of(handle: u64) -> Result<&'static str, String> {
+    let value = table::get(handle).ok_or_else(|| format!("handle {handle} is not live"))?;
+    if !(TAG_STRING..STRING_TAGS_END).contains(&value.tag) {
+        return Err(format!("handle {handle} holds no string"));
+    }
+    // SAFETY: a live string, read before anything can move it.
+    Ok(unsafe { crate::string::text(value.payload) })
 }
 
 /// The bytes of UTF-8 text of the string `handle` holds, or -1.
@@ -872,15 +816,9 @@ pub unsafe extern "C" fn baml_lib_handle_tag(handle: u64) -> u64 {
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_string_len(handle: u64) -> i64 {
-    // SAFETY: the caller's contract.
-    let host = unsafe { host() };
-    match host.held(handle) {
-        Some(value) if (value.tag & TYPE_ID_MASK) < STRING_TAGS_END && value.tag >= TAG_STRING => {
-            // SAFETY: a live string.
-            let text = unsafe { crate::string::text(value.payload) };
-            i64::try_from(text.len()).unwrap_or(-1)
-        }
-        _ => -1,
+    match string_of(handle) {
+        Ok(text) => i64::try_from(text.len()).unwrap_or(-1),
+        Err(why) => refuse(why, -1),
     }
 }
 
@@ -890,21 +828,17 @@ pub unsafe extern "C" fn baml_lib_string_len(handle: u64) -> i64 {
 ///
 /// # Safety
 ///
-/// `out` is `capacity` writable bytes. Not during a turn.
+/// `out` is `capacity` writable bytes (null when `capacity` is zero). Not
+/// during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_string_copy(handle: u64, out: *mut u8, capacity: usize) -> i64 {
-    // SAFETY: the caller's contract.
-    let host = unsafe { host() };
-    match host.held(handle) {
-        Some(value) if (value.tag & TYPE_ID_MASK) < STRING_TAGS_END && value.tag >= TAG_STRING => {
-            // SAFETY: a live string, and the caller's contract.
-            unsafe {
-                let text = crate::string::text(value.payload);
-                copy_out(text.as_bytes(), out, capacity);
-                i64::try_from(text.len()).unwrap_or(-1)
-            }
+    match string_of(handle) {
+        Ok(text) => {
+            // SAFETY: the caller's contract.
+            unsafe { copy_out(text.as_bytes(), out, capacity) };
+            i64::try_from(text.len()).unwrap_or(-1)
         }
-        _ => -1,
+        Err(why) => refuse(why, -1),
     }
 }
 
@@ -914,38 +848,47 @@ pub unsafe extern "C" fn baml_lib_string_copy(handle: u64, out: *mut u8, capacit
 ///
 /// # Safety
 ///
-/// `out` is `capacity` writable bytes. Not during a turn.
+/// `out` is `capacity` writable bytes (null when `capacity` is zero). Not
+/// during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_describe(handle: u64, out: *mut u8, capacity: usize) -> i64 {
-    // SAFETY: the caller's contract.
-    let host = unsafe { host() };
-    let Some(value) = host.held(handle) else {
-        return -1;
+    let Some(value) = table::get(handle) else {
+        return refuse(format!("handle {handle} is not live"), -1);
     };
     let mut text = String::new();
-    // SAFETY: a live value.
+    // SAFETY: a live value; the caller's contract.
     unsafe {
-        crate::class::write_value(host.worker(), &mut text, value, None);
+        crate::class::write_value(host().worker(), &mut text, value, None);
         copy_out(text.as_bytes(), out, capacity);
     }
     i64::try_from(text.len()).unwrap_or(-1)
 }
 
-/// Let go of `handle`.
+/// Why the last function that refused something refused it, copied into
+/// `out`, at most `capacity` bytes. Returns the text's full length.
+///
+/// # Safety
+///
+/// `out` is `capacity` writable bytes (null when `capacity` is zero). Not
+/// during a turn.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_lib_last_error(out: *mut u8, capacity: usize) -> i64 {
+    // SAFETY: the caller's contract.
+    unsafe {
+        let error = &host().error;
+        copy_out(error.as_bytes(), out, capacity);
+        i64::try_from(error.len()).unwrap_or(-1)
+    }
+}
+
+/// Let go of `handle`. A handle that is not live is ignored.
 ///
 /// # Safety
 ///
 /// Not during a turn. `handle` is not used again.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_handle_free(handle: u64) {
-    // SAFETY: the caller's contract.
-    let host = unsafe { host() };
-    if host.held(handle).is_some() {
-        let slot = usize::try_from(handle).expect("checked");
-        // SAFETY: a slot of the table.
-        unsafe { host.handles.add(slot).write(Value::NULL) };
-        host.free.push(u32::try_from(slot).expect("few handles"));
-    }
+    table::free(handle);
 }
 
 /// Collect now: every object moves. For tests of handles.
@@ -956,9 +899,9 @@ pub unsafe extern "C" fn baml_lib_handle_free(handle: u64) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_collect() {
     // SAFETY: the caller's contract.
-    let host = unsafe { host() };
-    host.worker().clear_anchor();
-    host.worker().collect(0);
+    let worker = unsafe { host().worker() };
+    worker.clear_anchor();
+    worker.collect(0);
 }
 
 /// The address of the object `handle` holds now: for a test that a
@@ -969,7 +912,15 @@ pub unsafe extern "C" fn baml_lib_collect() {
 /// Not during a turn.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_lib_debug_address(handle: u64) -> u64 {
-    // SAFETY: the caller's contract.
-    let host = unsafe { host() };
-    host.held(handle).map_or(0, |value| value.payload as u64)
+    table::get(handle).map_or(0, |value| value.payload as u64)
+}
+
+/// How many handles are live: for a test that a host frees them all.
+///
+/// # Safety
+///
+/// Not during a turn.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_lib_debug_handle_count() -> u64 {
+    table::live() as u64
 }

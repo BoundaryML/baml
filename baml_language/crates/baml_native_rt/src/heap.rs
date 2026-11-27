@@ -956,6 +956,9 @@ impl Mutator {
                     copy.forward_value(slot & !ROOT_IS_VALUE);
                 }
             }
+            // In the library form, the objects the host holds.
+            #[cfg(all(feature = "host-lib", not(test)))]
+            crate::sched::host::each_slot(&mut |slot| copy.forward_value(slot));
             copy.finish();
         }
         // An owned value whose object was not copied is dropped, and one
