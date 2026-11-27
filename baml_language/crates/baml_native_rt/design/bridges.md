@@ -238,26 +238,27 @@ The bindings for the type-shapes fixture are in `baml_native_host/tests/type_sha
 
 ## Measured
 
-On the Rust host, Apple M5 Max, through `perfq --bench`: the median of eight interleaved rounds, with outside load at 0.37 cores. Instructions per call come from running each case at two sizes. "Today's SDK" is the generated Rust SDK of the same fixture over the VM (`bridge_cffi`, release), called the same way.
+On the Rust host, Apple M5 Max, through `perfq --bench` (#1092): the median of eight interleaved rounds, outside load 0.33 cores. Instructions per call come from running each case at two sizes. "Today's SDK" is the generated Rust SDK of the same fixture over the VM (`bridge_cffi`, release), called the same way.
 
 | One call, one after another | Native: instructions | Native: time | Today's SDK: instructions | Today's SDK: time |
 |---|---|---|---|---|
-| `add(int, int)` through the C functions alone | 953 | 38 ns | | |
-| `add(int, int)` through the bindings | 3,910 | 137 ns | | |
-| `round_trip_int(int)` | 3,770 | 131 ns | 211,703 | 21.3 µs |
-| `round_trip_inner(Inner)`, a class of one `int` | 5,773 | 200 ns | 264,865 | 26.0 µs |
-| `round_trip_complex_profile`, the SDK tests' nested profile | 237,111 | 9.1 µs | 4,212,191 | 211 µs |
+| `add(int, int)` through the C functions alone | 1,037 | 39 ns | | |
+| `add(int, int)` through the bindings | 2,772 | 95 ns | | |
+| `round_trip_int(int)` | 2,619 | 89 ns | 212,053 | 21.4 µs |
+| `round_trip_inner(Inner)`, a class of one `int` | 4,646 | 160 ns | 265,468 | 26.0 µs |
+| `round_trip_complex_profile`, the SDK tests' nested profile | 238,303 | 9.3 µs | 4,214,833 | 213 µs |
 
 | Arrays, per element | C calls per element | Instructions | Time |
 |---|---|---|---|
-| `int[]` out of BAML, 100,000 to 600,000 | 1 (`array_get`) | 235 | 100 ns, mostly BAML building the array and first touches of new memory |
-| `int[]` into BAML | 0 (one `array_new`) | 193 | 8.4 ns |
-| `int[]` round trip | 1 | 316 | 13 ns; today's SDK 4,149 and 322 ns |
-| `Point[]` out, 10,000 to 60,000 | 5 (`array_get`, `class_of`, two `field_get`, a free) | 1,050 | 88 ns |
-| `Point[]` in | 2 (`instance_new`, a free) | 1,844 | 60 ns |
+| `int[]` out of BAML, 100,000 to 600,000 | 1 (`array_get`) | 240 | 99 ns, mostly BAML building the array and first touches of new memory |
+| `int[]` into BAML | 0 (one `array_new`) | 203 | 8.8 ns |
+| `int[]` round trip | 1 | 331 | 14 ns; today's SDK 4,281 and 342 ns |
+| `Point[]` out, 10,000 to 60,000 | 5 (`array_get`, `class_of`, two `field_get`, a free) | 1,066 | 88 ns |
+| `Point[]` in | 2 (`instance_new`, a free) | 1,942 | 63 ns |
 
-- The C surface's own cost fell from 1,680 to 953 instructions per `add` when the per-call hash map and the vector made per turn went. The bindings add about 2,950 more: the crate's locks, its map of waiting calls, the argument vectors and the executor.
-- Reading costs one C call per field and per element, with a handle for each object read. Bulk reads (a range of an array, all fields at once) are not built; the per-element numbers above are what they would save.
+- The C surface costs 1,037 instructions per `add`: 1,680 in the spike, 953 once the per-call map went, 84 more for the per-call record of live tasks that makes the unhandled rule exact.
+- The bindings add about 1,700 more: the lock, the map of waiting calls, the executor. Splitting the crate first cost 4,752; keeping the events in a cell under the lock, skipping the deferred frees when there are none, passing few arguments from the stack, hashing call ids by a multiplication and waking one call without a vector took it to 2,772, under the 3,910 before the split.
+- Reading costs one C call per field and per element, with a handle for each object read. Bulk reads are not built; the per-element numbers above are what they would save.
 - With 12,000 calls started before the first turn, each costs about 20,000 instructions: each waiting task maps a fresh stack.
 
 ## Limits today
