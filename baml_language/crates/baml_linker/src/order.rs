@@ -1,6 +1,5 @@
 //! The layout: package-major in set order — each package's buckets, then
-//! its init part, then its test part — and, separately, the order the init
-//! parts execute in.
+//! its tail — and, separately, the order the tails' `$init`s execute in.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -10,7 +9,7 @@ use baml_linker_types::InitTail;
 use super::{
     LinkError, LinkPackageId, LinkSet, PerPackage,
     bind::Tables,
-    layout::{Bucket, HeadKeys, Interner, Placed, SlotLayout, TailPart, TailSlots, UnitObjects},
+    layout::{Bucket, HeadKeys, Interner, Placed, SlotLayout, TailSlots, UnitObjects},
     space::{Resolved, global_operand},
 };
 
@@ -30,57 +29,34 @@ impl LayoutOrder {
             }
         }
         let members: Vec<LinkPackageId> = set.ids().collect();
-        let with_part = |part: TailPart| -> Vec<LinkPackageId> {
-            members
-                .iter()
-                .copied()
-                .filter(|&id| {
-                    set.package(id)
-                        .tail
-                        .is_some_and(|tail| part.named(tail).is_some())
-                })
-                .collect()
-        };
-        let init = init_order(set, &with_part(TailPart::Init))?;
+        let with_init: Vec<LinkPackageId> = members
+            .iter()
+            .copied()
+            .filter(|&id| Self::has_tail(set, id))
+            .collect();
+        let init = init_order(set, &with_init)?;
         Ok(Self { members, init })
     }
 
     fn validate_tail(name: &Name, tail: &InitTail) -> Result<(), LinkError> {
-        let split_ok = tail.test_objects_start as usize <= tail.objects.len()
-            && tail.test_slots_start as usize <= tail.slot_objects.len();
-        if !split_ok {
-            return Err(LinkError::invalid(format!(
-                "package `{name}` has a malformed init tail"
-            )));
-        }
-        let init_ok = tail
-            .init
-            .is_none_or(|k| TailPart::Init.objects(tail).contains(&(k as usize)));
-        let test_ok = tail
-            .init_test
-            .is_none_or(|k| TailPart::Test.objects(tail).contains(&(k as usize)));
+        let init_ok = tail.init.is_none_or(|k| (k as usize) < tail.objects.len());
         let slots_ok = tail
             .slot_objects
             .iter()
             .all(|&object| (object as usize) < tail.objects.len());
-        if !(init_ok && test_ok && slots_ok) {
+        if !(init_ok && slots_ok) {
             return Err(LinkError::invalid(format!(
                 "package `{name}` has a malformed init tail"
             )));
         }
-        // A part is placed only when its `$init` names it. Objects in a part
-        // nothing names would go unplaced while operands still reached for
-        // them — the shape a session submission has, which never links
-        // statically — so the linker refuses it outright.
-        for part in [TailPart::Init, TailPart::Test] {
-            if part.named(tail).is_none()
-                && !(part.objects(tail).is_empty() && part.slots(tail).is_empty())
-            {
-                return Err(LinkError::invalid(format!(
-                    "package `{name}` has objects in a tail part with no `{}` to run them",
-                    part.synthesized_name()
-                )));
-            }
+        // A tail is placed only when its `$init` names it. Objects nothing
+        // names would go unplaced while operands still reached for them — the
+        // shape a session submission has, which never links statically — so
+        // the linker refuses it outright.
+        if tail.init.is_none() && !(tail.objects.is_empty() && tail.slot_objects.is_empty()) {
+            return Err(LinkError::invalid(format!(
+                "package `{name}` has objects in its tail with no `$init` to run them"
+            )));
         }
         Ok(())
     }
@@ -90,18 +66,14 @@ impl LayoutOrder {
         &self.members
     }
 
-    /// The order init parts execute in.
+    /// The order the tails' `$init`s execute in.
     pub(super) fn init_order(&self) -> &[LinkPackageId] {
         &self.init
     }
 
-    /// The tail parts of `id` in placement order: its init part, then its
-    /// test part, each only if the package has it.
-    pub(super) fn parts(set: &LinkSet<'_>, id: LinkPackageId) -> impl Iterator<Item = TailPart> {
-        let tail = set.package(id).tail;
-        [TailPart::Init, TailPart::Test]
-            .into_iter()
-            .filter(move |part| tail.is_some_and(|tail| part.named(tail).is_some()))
+    /// Whether `id` has a tail to place: one its `$init` names.
+    pub(super) fn has_tail(set: &LinkSet<'_>, id: LinkPackageId) -> bool {
+        set.package(id).tail.is_some_and(|tail| tail.init.is_some())
     }
 }
 
@@ -214,13 +186,9 @@ impl Slots {
             cursor += units[id].func_count;
             units[id].let_base = cursor;
             cursor += units[id].let_count;
-            for part in LayoutOrder::parts(set, id) {
-                let tail = tail_of(set, id);
-                match part {
-                    TailPart::Init => tails[id].init_base = cursor,
-                    TailPart::Test => tails[id].test_base = cursor,
-                }
-                cursor += part.slots(tail).len();
+            if LayoutOrder::has_tail(set, id) {
+                tails[id].base = cursor;
+                cursor += tail_of(set, id).slot_objects.len();
             }
         }
         Ok(Self {
@@ -234,7 +202,7 @@ impl Slots {
 /// Every unit's and tail's object layout.
 pub(super) struct Objects {
     pub(super) units: PerPackage<UnitObjects>,
-    /// Each tail object's place, in tail order (both parts).
+    /// Each tail object's place, in tail order.
     pub(super) tails: PerPackage<Vec<Placed>>,
     pub(super) total: usize,
 }
@@ -286,23 +254,17 @@ impl Objects {
                 }
                 cursor += bucket.objects(package.unit).len();
             }
-            for part in LayoutOrder::parts(set, id) {
+            if LayoutOrder::has_tail(set, id) {
                 let tail = tail_of(set, id);
-                let range = part.objects(tail);
                 let base_slot = |raw: usize| {
                     global_operand(&package.name, raw, &globals.tails[id], |local| {
                         slots.tails[id].local(tail, local)
                     })
                 };
                 let keys = HeadKeys::of_tail(tail, &tables[id].tail);
-                let (placed, count) = interner.place(
-                    &package.name,
-                    &tail.objects[range.clone()],
-                    base_slot,
-                    &keys,
-                    cursor,
-                )?;
-                tails[id][range].copy_from_slice(&placed);
+                let (placed, count) =
+                    interner.place(&package.name, &tail.objects, base_slot, &keys, cursor)?;
+                tails[id].copy_from_slice(&placed);
                 cursor += count;
             }
         }

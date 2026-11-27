@@ -1,6 +1,6 @@
-// root.TestCollector — collector for tests and testsets.
-// The runtime creates a TestCollector, calls $init_test(collector), then reads
-// collector.tests and collector.testsets.
+// root.TestCollector: collector for tests and testsets.
+// `registry` creates a TestCollector, runs every `TestFile` the package
+// declares against it, then reads collector.tests and collector.testsets.
 
 class TestRegistration {
     name: string,
@@ -25,29 +25,31 @@ class TestCollector {
     prefix: string,
     tests: TestRegistration[],
     testsets: TestSetRegistration[],
+    // How many registered names count as duplicates of each id, for tests
+    // and for testsets. Registration keeps them; editing `tests` or
+    // `testsets` directly does not.
+    test_counts: map<string, int>,
+    testset_counts: map<string, int>,
 
     function new(prefix: string) -> TestCollector {
-        TestCollector { prefix: prefix, tests: [], testsets: [] }
+        TestCollector {
+            prefix: prefix,
+            tests: [],
+            testsets: [],
+            test_counts: {},
+            testset_counts: {},
+        }
     }
 
     function register_test(self, name: string, body: TestBody, runner: TestRunner?) -> void {
-        if (name.includes("::")) {
-            throw InvalidTestName { message: "test name may not contain reserved separator `::`: " + name }
-        } else {
-            null
-        }
-        let full_name = if (self.prefix == "") {
-            name
-        } else {
-            self.prefix + "::" + name
-        };
-        let count = root._test_name_count(self.tests, full_name);
-        let final_name = if (count > 0) {
-            full_name + "#" + string.from(count + 1)
-        } else {
-            full_name
-        };
-        let _ = self.tests.push(TestRegistration { name: final_name, body: body, runner: runner });
+        let full_name = root._qualified_test_name("test", self.prefix, name);
+        let _ = self.tests.push(
+            TestRegistration {
+                name: root._claim_test_name(self.test_counts, full_name),
+                body: body,
+                runner: runner,
+            },
+        );
     }
 
     function register_test_set(
@@ -56,24 +58,13 @@ class TestCollector {
         collector: TestSetBody,
         runner: TestSetRunner?,
     ) -> void {
-        if (name.includes("::")) {
-            throw InvalidTestName { message: "testset name may not contain reserved separator `::`: " + name }
-        } else {
-            null
-        }
-        let full_name = if (self.prefix == "") {
-            name
-        } else {
-            self.prefix + "::" + name
-        };
-        let count = root._testset_name_count(self.testsets, full_name);
-        let final_name = if (count > 0) {
-            full_name + "#" + string.from(count + 1)
-        } else {
-            full_name
-        };
+        let full_name = root._qualified_test_name("testset", self.prefix, name);
         let _ = self.testsets.push(
-            TestSetRegistration { name: final_name, collector: collector, runner: runner },
+            TestSetRegistration {
+                name: root._claim_test_name(self.testset_counts, full_name),
+                collector: collector,
+                runner: runner,
+            },
         );
     }
 
@@ -87,8 +78,14 @@ class TestCollector {
         body: TestBody,
         runner: TestRunner?,
     ) -> void {
-        let scoped = TestCollector { prefix: owner, tests: self.tests, testsets: self.testsets };
-        scoped.register_test(name, body, runner)
+        let full_name = root._qualified_test_name("test", owner, name);
+        let _ = self.tests.push(
+            TestRegistration {
+                name: root._claim_test_name(self.test_counts, full_name),
+                body: body,
+                runner: runner,
+            },
+        );
     }
 
     function register_test_set_at(
@@ -98,33 +95,101 @@ class TestCollector {
         collector: TestSetBody,
         runner: TestSetRunner?,
     ) -> void {
-        let scoped = TestCollector { prefix: owner, tests: self.tests, testsets: self.testsets };
-        scoped.register_test_set(name, collector, runner)
-    }
-
-    function _find_testset(self, name: string) -> TestSetRegistration {
-        for (let ts in self.testsets) {
-            if (ts.name == name) {
-                return ts;
-            }
-        }
-        throw ("TestSet not found: " + name)
-    }
-
-    function _find_test(self, name: string) -> TestRegistration {
-        for (let t in self.tests) {
-            if (t.name == name) {
-                return t;
-            }
-        }
-        throw ("Test not found: " + name)
+        let full_name = root._qualified_test_name("testset", owner, name);
+        let _ = self.testsets.push(
+            TestSetRegistration {
+                name: root._claim_test_name(self.testset_counts, full_name),
+                collector: collector,
+                runner: runner,
+            },
+        );
     }
 }
 
-// Bridge function for the runtime to invoke a testset collector closure.
-// call_function is name-based, so we need this thin wrapper to call closures.
-function $invoke_collector(collector: TestSetBody, c: TestCollector) -> void {
-    collector(c)
+/// (internal) `name` under `prefix`, the canonical id before any duplicate
+/// suffix. `kind` is "test" or "testset", for the error.
+function _qualified_test_name(kind: string, prefix: string, name: string) -> string {
+    if (name.includes("::")) {
+        throw InvalidTestName { message: kind + " name may not contain reserved separator `::`: " + name }
+    }
+    if (prefix == "") {
+        name
+    } else {
+        prefix + "::" + name
+    }
+}
+
+/// (internal) The id a registration takes when `count` earlier ones already
+/// count as duplicates of `full_name`: `name`, then `name#2`, `name#3`, ...
+function _numbered_test_name(full_name: string, count: int) -> string {
+    if (count > 0) {
+        full_name + "#" + string.from(count + 1)
+    } else {
+        full_name
+    }
+}
+
+/// (internal) Number `full_name` against `counts`, and count the id it takes.
+/// An id counts toward itself and toward its prefix before every `#`, so an
+/// explicit `name#x` is a duplicate of `name`.
+function _claim_test_name(counts: map<string, int>, full_name: string) -> string {
+    let final_name = root._numbered_test_name(full_name, counts.get(full_name) ?? 0);
+    let parts = final_name.split("#");
+    let counted = parts[0];
+    for (let i = 1; i < parts.length(); i += 1) {
+        counts.set(counted, (counts.get(counted) ?? 0) + 1);
+        counted = counted + "#" + parts[i];
+    }
+    counts.set(counted, (counts.get(counted) ?? 0) + 1);
+    final_name
+}
+
+/// One source file's top-level `test` / `testset` blocks. The compiler
+/// declares one per file with tests, as a global of the declaring package,
+/// and lists them all in that package's `$tests`: `register` registers the
+/// file's blocks on the collector it is given.
+class TestFile {
+    register: TestSetBody,
+
+    function new(register: TestSetBody) -> TestFile {
+        TestFile { register: register }
+    }
+}
+
+implements reflect._TestSource for TestFile {
+    function package_tests(
+        self,
+        package: reflect.Package,
+    ) -> map<string, () -> null throws unknown> throws unknown {
+        let tests: map<string, () -> null throws unknown> = {};
+        for (let registered in root.registry(package = package).collector.tests) {
+            tests.set(registered.name, registered.body);
+        }
+        tests
+    }
+}
+
+/// The tests `package` declares, unexpanded. The compiler lists a package's
+/// `TestFile`s in one global named `$tests`, in file order, declared in the
+/// namespace of the package's first test file; each listed registrar is run
+/// against one collector. A package with no tests has no list. Defaults
+/// to the program's root package, which is what a host that runs tests asks
+/// for.
+function registry(package: reflect.Package = reflect.Package.root()) -> TestRegistry {
+    let collector = TestCollector.new("");
+    let globals = package.globals();
+    for (let name in globals.keys()) {
+        if (name.ends_with(".$tests")) {
+            if let sources: reflect._TestSource[] = globals[name] {
+                for (let source in sources) {
+                    if let file: TestFile = source {
+                        (file.register)(collector)
+                    }
+                }
+            }
+        }
+    }
+    TestRegistry.new(collector)
 }
 
 // --- Serialization wire types ---
@@ -205,11 +270,12 @@ class TestRegistry {
     function run_testset(self, name: string) -> TestSetReport {
         for (let ts in self.collector.testsets) {
             if (ts.name == name) {
-                let pool = root._test_pool(0, root._default_test_timeout_ms());
                 return root._run_testset(
-                    root._testset_children(self._expand_testset_registry(ts), pool),
+                    root._testset_children(
+                        self._expand_testset_registry(ts),
+                        root._test_run(0, root._default_test_timeout_ms()),
+                    ),
                     ts.runner,
-                    pool,
                 );
             }
         }
@@ -223,25 +289,16 @@ class TestRegistry {
     }
 
     function run_all(self) -> TestSetReport {
-        self._run_all_pooled(root._test_pool(0, root._default_test_timeout_ms()))
-    }
-
-    function _run_all_pooled(self, pool: _TestPool) -> TestSetReport {
-        root._run_testset(root._testset_children(self, pool), null, pool)
-    }
-
-    function _run_selected(self, names: string[]) -> TestSetReport {
-        self._run_selected_pooled(names, root._test_pool(0, root._default_test_timeout_ms()))
-    }
-
-    function _run_selected_pooled(self, names: string[], pool: _TestPool) -> TestSetReport {
-        root._run_testset(root._testset_children_selected(self, names, pool), null, pool)
+        root._run_testset(
+            root._testset_children(self, root._test_run(0, root._default_test_timeout_ms())),
+            null,
+        )
     }
 
     /// CLI entry point: glob-filter in BAML, run (honoring testset runners), and
     /// flatten into a tolerated-aware flat report the Rust driver prints directly.
     ///   * no filters -> run_all (whole tree)
-    ///   * any filter -> glob the leaf names, then run_selected (parent runners
+    ///   * any filter -> glob the leaf names, then run the selection (parent runners
     ///                   still apply to the selected subset)
     function run_filtered(
         self,
@@ -256,16 +313,16 @@ class TestRegistry {
         // console identities, this makes structural registration errors actionable
         // even when the unfiltered execution path preserves run_all semantics.
         let selected_names = root._select_names_layered(self, profile_include, profile_exclude, cli_include, cli_exclude);
-        let pool = root._test_pool(max_concurrency, timeout_ms);
+        let run = root._test_run(max_concurrency, timeout_ms);
         let report = if (
             profile_include.length() == 0
                 && profile_exclude.length() == 0
                 && cli_include.length() == 0
                 && cli_exclude.length() == 0
         ) {
-            self._run_all_pooled(pool)
+            root._run_testset(root._testset_children(self, run), null)
         } else {
-            self._run_selected_pooled(selected_names, pool)
+            root._run_testset(root._testset_children_selected(self, selected_names, run), null)
         };
         root._flatten_with_tolerated(report, selected_names)
     }
@@ -306,7 +363,7 @@ class TestRegistry {
             let existing: TestRegistry => existing,
             null => {
                 let start = baml.time.Instant.now();
-                let sub_collector = TestCollector { prefix: ts.name, tests: [], testsets: [] };
+                let sub_collector = TestCollector.new(ts.name);
                 (ts.collector)(sub_collector);
                 // `loading_time_ms` is an `int`, so narrowing the bigint millisecond
                 // count is declared fallible. An expansion would have to run for
@@ -325,13 +382,13 @@ class TestRegistry {
     }
 }
 
-function _testset_children(registry: TestRegistry, pool: _TestPool) -> TestSetChild[] {
+function _testset_children(registry: TestRegistry, run: _TestRun) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
-        children.push(root._test_child(t.name, t.body, t.runner, pool.timeout_ms))
+        children.push(root._test_child(t.name, t.body, t.runner, run))
     }
     for (let ts in registry.collector.testsets) {
-        children.push(root._testset_child(registry, ts, pool))
+        children.push(root._testset_child(registry, ts, run))
     }
     children
 }
@@ -339,12 +396,12 @@ function _testset_children(registry: TestRegistry, pool: _TestPool) -> TestSetCh
 function _testset_children_selected(
     registry: TestRegistry,
     names: string[],
-    pool: _TestPool,
+    run: _TestRun,
 ) -> TestSetChild[] {
     let children: TestSetChild[] = [];
     for (let t in registry.collector.tests) {
         if (names.includes(t.name)) {
-            children.push(root._test_child(t.name, t.body, t.runner, pool.timeout_ms))
+            children.push(root._test_child(t.name, t.body, t.runner, run))
         } else {
             null
         }
@@ -361,7 +418,7 @@ function _testset_children_selected(
                 n.starts_with(prefix)
             })
         ) {
-            children.push(root._testset_child_selected(registry, ts, names, pool))
+            children.push(root._testset_child_selected(registry, ts, names, run))
         } else {
             null
         }
@@ -373,30 +430,29 @@ function _test_child(
     name: string,
     body: TestBody,
     runner: TestRunner?,
-    timeout_ms: int,
+    run: _TestRun,
 ) -> TestSetChild {
     TestSetChild {
         name: name,
         run: () -> ChildReport {
-            root._run_test(body, runner, timeout_ms)
+            root._run_test(body, runner, run.timeout_ms)
         },
-        is_container: false,
+        slots: run.slots,
     }
 }
 
 function _testset_child(
     registry: TestRegistry,
     ts: TestSetRegistration,
-    pool: _TestPool,
+    run: _TestRun,
 ) -> TestSetChild {
     TestSetChild {
         name: ts.name,
-        is_container: true,
+        slots: null,
         run: () -> ChildReport {
             root._run_testset(
-                root._testset_children(registry._expand_testset_registry(ts), pool),
+                root._testset_children(registry._expand_testset_registry(ts), run),
                 ts.runner,
-                pool,
             ) catch_all (e) {
                 baml.panics.Panic => root._expansion_error_report(ts.name),
                 _ => root._expansion_error_report(ts.name),
@@ -409,16 +465,15 @@ function _testset_child_selected(
     registry: TestRegistry,
     ts: TestSetRegistration,
     names: string[],
-    pool: _TestPool,
+    run: _TestRun,
 ) -> TestSetChild {
     TestSetChild {
         name: ts.name,
-        is_container: true,
+        slots: null,
         run: () -> ChildReport {
             root._run_testset(
-                root._testset_children_selected(registry._expand_testset_registry(ts), names, pool),
+                root._testset_children_selected(registry._expand_testset_registry(ts), names, run),
                 ts.runner,
-                pool,
             ) catch_all (e) {
                 baml.panics.Panic => root._expansion_error_report(ts.name),
                 _ => root._expansion_error_report(ts.name),
@@ -484,36 +539,14 @@ function _aggregate_reports(named_results: _NamedChildReport[]) -> TestSetReport
     }
 }
 
-/// (internal) Global gate on concurrently RUNNING leaf test bodies. A leaf acquires a
-/// slot BEFORE its body is spawned, so a gated test costs nothing — no VM
-/// thread, no watchdog timer — until a slot frees. One pool is shared by the
-/// whole run (threaded down through every nested testset), so the limit is a
-/// run-wide invariant rather than a per-testset one.
-class _TestPool {
-    // Token bucket. `pop` and `push` are single locked array operations, so
-    // concurrent dispatchers race safely; an empty `pop` means "no slot free".
-    tokens: int[],
-    // Per-test deadline in milliseconds, carried here so it travels down the
-    // same path as the slot budget. Zero or negative means no deadline.
+/// (internal) One run's state, created by the run's entry point and passed
+/// down to every child it builds: the gate on concurrently RUNNING leaf test
+/// bodies, and the per-test deadline. A test body that starts a run of its
+/// own gets a state, and so a budget, of its own.
+class _TestRun {
+    slots: baml.sync.Semaphore,
+    // Per-test deadline in milliseconds. Zero or negative means no deadline.
     timeout_ms: int,
-
-    function acquire(self) -> null throws never {
-        while (true) {
-            if let _slot: int = self.tokens.pop() {
-                return null;
-            }
-            // Saturated: park briefly rather than spin. Only starved
-            // dispatchers poll, and there is at most one dispatcher per
-            // currently-expanding testset, so the wakeup load is bounded by
-            // testset nesting, not by test count.
-            baml.sys.sleep(baml.time.Duration.from_milliseconds(10));
-        }
-    }
-
-    function release(self) -> null throws never {
-        self.tokens.push(1);
-        null
-    }
 }
 
 /// (internal) The per-test deadline when the caller does not choose one: 5 minutes.
@@ -521,50 +554,42 @@ function _default_test_timeout_ms() -> int {
     300000
 }
 
-/// (internal) A pool admitting `max_concurrency` leaves at once, each with a
-/// `timeout_ms` deadline. A zero or negative `max_concurrency` means
-/// "no explicit budget": fall back to a bound that keeps a pathological
-/// fan-out from creating thousands of live VM threads while staying above any
-/// real machine's core count (the CLI always passes an explicit budget).
-
-function _test_pool(max_concurrency: int, timeout_ms: int) -> _TestPool {
-    let limit = if (max_concurrency > 0) {
+/// (internal) A run admitting `max_concurrency` leaves at once, each with a
+/// `timeout_ms` deadline. A zero or negative `max_concurrency` means "no
+/// explicit budget": fall back to a bound that keeps a pathological fan-out
+/// from creating thousands of live VM threads while staying above any real
+/// machine's core count (the CLI always passes an explicit budget).
+function _test_run(max_concurrency: int, timeout_ms: int) -> _TestRun {
+    let capacity = if (max_concurrency > 0) {
         max_concurrency
     } else {
         64
     };
-    let tokens: int[] = [];
-    let i = 0;
-    while (i < limit) {
-        tokens.push(1);
-        i = i + 1;
-    }
-    _TestPool { tokens: tokens, timeout_ms: timeout_ms }
+    let slots = baml.sync.Semaphore.new(capacity) catch (_) {
+        baml.errors.InvalidArgument { message } => {
+            baml.sys.panic("testing: test semaphore: " + message)
+        },
+    };
+    _TestRun { slots: slots, timeout_ms: timeout_ms }
 }
 
-function _run_children_parallel(
-    children: TestSetChild[],
-    pool: _TestPool,
-) -> TestSetReport throws never {
+function _run_children_parallel(children: TestSetChild[]) -> TestSetReport throws never {
     let futures: baml.future.Future<_NamedChildReport, never>[] = [];
     for (let child in children) {
-        if (child.is_container) {
+        if let slots: baml.sync.Semaphore = child.slots {
+            // A leaf is spawned `with` its run's semaphore, so a gated test
+            // costs nothing (no VM thread, no watchdog timer) until a slot
+            // frees. The slot is held for the whole task and released however
+            // it ends. `run` is total: a leaf is `run_test`, whose runner arm
+            // catches middleware panics.
+            futures.push(spawn with slots {
+                _NamedChildReport { name: child.name, report: (child.run)() }
+            })
+        } else {
             // Containers only spawn and await; admitting them freely cannot
             // oversubscribe the machine, and gating them could deadlock the
             // slots their own leaves need.
             futures.push(spawn { _NamedChildReport { name: child.name, report: (child.run)() } })
-        } else {
-            // Acquire on the dispatcher, before the spawn exists: the whole
-            // point is that an inadmissible leaf has no thread yet.
-            pool.acquire();
-            futures.push(spawn {
-                let named = _NamedChildReport { name: child.name, report: (child.run)() };
-                // `run` is total: a leaf is `run_test`, whose runner arm
-                // catches middleware panics precisely so this release is
-                // reached on every outcome.
-                pool.release();
-                named
-            })
         }
     }
     // No catch: the children's bodies cannot throw, so the futures are
@@ -573,38 +598,39 @@ function _run_children_parallel(
     root._aggregate_reports(named_results)
 }
 
+/// (internal) Run a test body once, turning every way it can end into a report.
+function _run_body(body: TestBody) -> RunReport throws never {
+    {
+        body();
+        RunReport { outcome: "pass", duration_ms: 0, message: null }
+    } catch_all (e, ctx) {
+        let p: baml.panics.UserPanic => {
+            RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+        },
+        let p: baml.panics.AssertionFailed => {
+            RunReport { outcome: "fail", duration_ms: 0, message: p.message }
+        },
+        baml.panics.Panic => {
+            RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
+        },
+        _ => {
+            RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
+        }
+    }
+}
+
 /// (internal) Run a single test with error handling and optional runner middleware.
-/// Every test races against a `timeout_ms` deadline (a non-positive value
-/// means no deadline, so no timer is spawned; the CLI defaults it to 5
-/// minutes and `--test-timeout` overrides): a hung test — a stalled network read, a
-/// deadlocked await — becomes a FAIL with a "timed out" message instead of
-/// hanging the whole run. `baml.future.race` cancels the losers when one
-/// side settles (BEP-034), so a timed-out body is actively cancelled and a
-/// finished test's leftover timer doesn't linger.
+/// With a positive `timeout_ms` the body runs in a task of its own, raced
+/// against that deadline (the CLI defaults it to 5 minutes and
+/// `--test-timeout` overrides): a hung test (a stalled network read, a
+/// deadlocked await) becomes a FAIL with a "timed out" message instead of
+/// hanging the whole run. A non-positive value means no deadline: the body is
+/// called directly, in this task, with no spawn, timer, race or cancellation.
 function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> TestReport {
     let base_run: TestReportThunk = () -> TestReport {
         let start = baml.time.Instant.now();
-        let work: baml.future.Future<RunReport, never> = spawn {
-            {
-                body();
-                RunReport { outcome: "pass", duration_ms: 0, message: null }
-            } catch_all (e, ctx) {
-                let p: baml.panics.UserPanic => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: p.message }
-                },
-                let p: baml.panics.AssertionFailed => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: p.message }
-                },
-                baml.panics.Panic => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
-                },
-                _ => {
-                    RunReport { outcome: "fail", duration_ms: 0, message: ctx.to_string() }
-                }
-            }
-        };
-        let racers: baml.future.Future<RunReport, never>[] = [work];
-        if (timeout_ms > 0) {
+        let result = if (timeout_ms > 0) {
+            let work: baml.future.Future<RunReport, never> = spawn { root._run_body(body) };
             let timer: baml.future.Future<RunReport, never> = spawn {
                 baml.sys.sleep(baml.time.Duration.from_milliseconds(timeout_ms));
                 // Read before the race cancels the body: where it is stuck,
@@ -624,19 +650,20 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
                         + stuck,
                 }
             };
-            racers.push(timer);
-        }
-        // Race the body against the deadline, if any; race cancels the loser
-        // on settle (BEP-034), so a timed-out body is actively cancelled and a
-        // finished test's timer does not linger.
-        let result = (await baml.future.race(racers)) catch_all (e) {
-            _ => {
-                RunReport {
-                    outcome: "fail",
-                    duration_ms: 0,
-                    message: "test task failed unexpectedly",
+            // `race` cancels the loser when one side settles, so a timed-out
+            // body is actively cancelled and a finished test's timer does not
+            // linger.
+            (await baml.future.race([work, timer])) catch_all (e) {
+                _ => {
+                    RunReport {
+                        outcome: "fail",
+                        duration_ms: 0,
+                        message: "test task failed unexpectedly",
+                    }
                 }
             }
+        } else {
+            root._run_body(body)
         };
         // `duration_ms` is an `int`; see the note in expand_testset_registry for
         // why narrowing the bigint millisecond count cannot fail here.
@@ -654,10 +681,9 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
         null => base_run(),
         let r: TestRunner => {
             // Runner middleware is user code with no totality contract of its
-            // own. Catching here is what makes `run_test` total — the leaf
-            // dispatcher's pool slot is released after this returns, so a
-            // panicking runner must become a failed report, never an escaped
-            // throw that strands the slot.
+            // own. Catching here is what makes `run_test` total: a panicking
+            // runner becomes a failed report, never a throw that escapes the
+            // leaf's task.
             {
                 let wrapped: TestReportThunk = r(base_run);
                 wrapped()
@@ -682,15 +708,11 @@ function _run_test(body: TestBody, runner: TestRunner?, timeout_ms: int) -> Test
 /// (internal) Run all children of a testset with optional runner middleware.
 ///
 /// A custom `TestSetRunner` receives the children as a plain closure and runs
-/// them however it likes, outside the pool's budget — the built-in runners are
-/// sequential (inherently capped) or take a local fallback pool (`PassRate`).
-function _run_testset(
-    children: TestSetChild[],
-    runner: TestSetRunner?,
-    pool: _TestPool,
-) -> TestSetReport {
+/// them however it likes. The built-in runners are sequential (inherently
+/// capped) or share the run's slots (`PassRate`).
+function _run_testset(children: TestSetChild[], runner: TestSetRunner?) -> TestSetReport {
     match (runner) {
-        null => root._run_children_parallel(children, pool),
+        null => root._run_children_parallel(children),
         let r: TestSetRunner => r(children),
     }
 }
@@ -713,7 +735,7 @@ function _expansion_error_report(name: string) -> TestSetReport {
         // it. The catch in testset_child(_selected) routes
         // runner/execution panics here too — not just expansion failures — so the
         // label stays generic ("testset error") rather than claiming an expansion
-        // failure specifically. (collect_subtree_names, which is purely an expansion
+        // failure specifically. (collect_subtree_names_layered, which is purely an expansion
         // step, keeps the more precise "failed to expand".)
         failed_names: [name + "::(testset error)"],
         results: [],
@@ -888,38 +910,6 @@ function _select_names_layered(
     out
 }
 
-/// (internal) Compatibility helper for internal callers: one ordinary filter layer.
-function _select_names(registry: TestRegistry, include: string[], exclude: string[]) -> string[] {
-    root._select_names_layered(registry, [], [], include, exclude)
-}
-
-/// (internal) Fully expand the registry and collect every leaf test's canonical id.
-function _collect_leaf_names(registry: TestRegistry) -> string[] {
-    let out: string[] = [];
-    for (let t in registry.collector.tests) {
-        out.push(t.name);
-    }
-    for (let ts in registry.collector.testsets) {
-        for (let name in root._collect_subtree_names(registry, ts)) {
-            out.push(name);
-        }
-    }
-    out
-}
-
-/// (internal) Expand one testset to its leaf names, containing failures: a testset whose
-/// generator throws or panics during expansion is represented by a sentinel leaf
-/// *under* its own path ("root::suite::(failed to expand)") so canonical-id
-/// filters select it like a real
-/// leaf, then `run_selected` runs it and surfaces the error.
-function _collect_subtree_names(registry: TestRegistry, ts: TestSetRegistration) -> string[] {
-    root._collect_leaf_names(registry._expand_testset_registry(ts)) catch_all (e) {
-        let err: InvalidTestName => throw err,
-        baml.panics.Panic => [ts.name + "::(failed to expand)"],
-        _ => [ts.name + "::(failed to expand)"],
-    }
-}
-
 function _collect_subtree_names_layered(
     registry: TestRegistry,
     ts: TestSetRegistration,
@@ -1039,7 +1029,7 @@ function _count_leaves(results: ChildReport[], tolerated_by_parent: bool) -> _Le
     _LeafCounts { passed: passed, failed: failed, tolerated: tolerated, total: total }
 }
 
-/// (internal) Flatten a run_all()/run_selected() TestSetReport into the CLI flat report.
+/// (internal) Flatten a whole-tree or selected-run TestSetReport into the CLI flat report.
 /// Aggregate outcome is preserved (honoring testset runners); counts split hard
 /// vs tolerated failures; failed_names are the report's (hard) failed names; and
 /// failure messages are gathered from every failing run.
@@ -1103,12 +1093,20 @@ function _flatten_with_tolerated(
             tolerated_ms: [],
         }
     };
+    // A testset runner can fail the aggregate without marking any child
+    // failed. That verdict counts as one failure, so a failed run never
+    // reports "0 failed".
+    let verdict_failures = if (report.outcome != "pass" && counts.failed == 0) {
+        1
+    } else {
+        0
+    };
     FlatTestReport {
         outcome: report.outcome,
         passed: counts.passed,
-        failed: counts.failed,
+        failed: counts.failed + verdict_failures,
         tolerated: counts.tolerated,
-        total: counts.total,
+        total: counts.total + verdict_failures,
         passed_names: identities.passed,
         failed_names: identities.failed,
         tolerated_names: identities.tolerated,
@@ -1275,20 +1273,4 @@ function _collect_leaf_messages(results: ChildReport[], out: string[]) -> void {
             },
         }
     }
-}
-
-/// (internal) Count the current names that the registration suffix rule treats
-/// as duplicates. Registration records and their arrays are publicly mutable,
-/// so these scans deliberately read the current data instead of caching names.
-//baml:vm
-function _test_name_count(entries: TestRegistration[], full_name: string) -> int throws never {
-    $rust_function
-}
-
-//baml:vm
-function _testset_name_count(
-    entries: TestSetRegistration[],
-    full_name: string,
-) -> int throws never {
-    $rust_function
 }

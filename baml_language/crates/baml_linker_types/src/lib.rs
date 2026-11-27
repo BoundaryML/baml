@@ -315,14 +315,12 @@ pub struct PackageRecord {
     pub metadata: Option<bex_vm_types::identity::PackageMetadata>,
 }
 
-/// One package's `$init` / `$init_test` tail: the package's
-/// `$init_let.<global>` helpers and `$init` (its init part), then its
-/// `$init_test` chainer (its test part), with tables of its own in the unit
-/// convention.
+/// One package's `$init` tail: the package's `$init_let.<global>` helpers
+/// and `$init`, with tables of its own in the unit convention.
 ///
 /// A tail is kept apart from the unit because it is placed apart: the linker
-/// lays the image out package-major, each package's buckets then its init
-/// part then its test part, and records the order init parts EXECUTE in
+/// lays the image out package-major, each package's buckets then its tail,
+/// and records the order tails EXECUTE in
 /// separately (`Program::init_order`) — an `$init` cannot reach another
 /// package's `let`s through a slot its own package has no edge for.
 ///
@@ -336,26 +334,17 @@ pub struct PackageRecord {
 pub struct InitTail {
     /// The packages this tail reaches, by slot (see [`DepSlot`]).
     pub dependencies: Vec<Locator>,
-    /// Tail objects in pool order: the init part `[0, test_objects_start)`
-    /// then the test part.
+    /// Tail objects in pool order.
     pub objects: Vec<Object>,
     /// Every foreign object reference, by ordinal.
     pub object_imports: Vec<ImportEntry>,
     /// Every foreign global-slot reference, by ordinal.
     pub global_imports: Vec<ImportEntry>,
     /// Tail-local object index of each tail object that owns a global slot,
-    /// in slot order: init-part slots `[0, test_slots_start)` then test-part
-    /// slots. Every such slot holds `Object(that object)`.
+    /// in slot order. Every such slot holds `Object(that object)`.
     pub slot_objects: Vec<u32>,
     /// Tail-local index of the package's `$init`, when it has `let`s.
     pub init: Option<u32>,
-    /// Tail-local index of the package's `$init_test` chainer, when it has
-    /// tests.
-    pub init_test: Option<u32>,
-    /// Where the test part of [`Self::objects`] begins.
-    pub test_objects_start: u32,
-    /// Where the test part of [`Self::slot_objects`] begins.
-    pub test_slots_start: u32,
 }
 
 /// One package's compiled output for one link: what the emitter produces for

@@ -27,10 +27,10 @@ interface        reflect.AnyClass                 <builtin>/reflect/reflect.baml
 class            reflect.Signature                <builtin>/reflect/reflect.baml:384
 class            reflect.InvalidArgumentError     <builtin>/reflect/reflect.baml:407
 class            reflect.CompileArtifact          <builtin>/reflect/reflect.baml:414
-class            reflect.Package                  <builtin>/reflect/reflect.baml:419
-class            reflect.Session                  <builtin>/reflect/reflect.baml:662
-function         reflect.signature                <builtin>/reflect/reflect.baml:744
-function         reflect.call_any                 <builtin>/reflect/reflect.baml:761
+class            reflect.Package                  <builtin>/reflect/reflect.baml:429
+class            reflect.Session                  <builtin>/reflect/reflect.baml:692
+function         reflect.signature                <builtin>/reflect/reflect.baml:774
+function         reflect.call_any                 <builtin>/reflect/reflect.baml:791
 class            reflect.Type                     <builtin>/reflect/type.baml:8
 class            reflect.class.Field              <builtin>/reflect/ns_class/class.baml:8
 class            reflect.class.Builder            <builtin>/reflect/ns_class/class.baml:38

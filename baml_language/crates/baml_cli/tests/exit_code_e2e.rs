@@ -1443,7 +1443,7 @@ test "streams" {
 "#,
     );
 
-    // Warm the compile/discovery cache without executing the sleeping test.
+    // Warm the compile cache without executing the sleeping test.
     let listed = run_baml_cli(built, tmp.path(), &["test", "--project-dir", ".", "--list"]);
     assert!(
         listed.status.success(),

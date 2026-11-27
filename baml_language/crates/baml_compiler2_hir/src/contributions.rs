@@ -122,7 +122,12 @@ impl<'db> Definition<'db> {
         let item_tree = crate::file_item_tree(db, loc.file(db));
         match item_tree.lets.get(&loc.id(db)).map(|item| item.origin) {
             Some(baml_compiler2_ast::LetOrigin::Client) => DefinitionKind::Client,
-            Some(baml_compiler2_ast::LetOrigin::Source) | None => DefinitionKind::Let,
+            Some(
+                baml_compiler2_ast::LetOrigin::Source
+                | baml_compiler2_ast::LetOrigin::TestFile
+                | baml_compiler2_ast::LetOrigin::TestList,
+            )
+            | None => DefinitionKind::Let,
         }
     }
 

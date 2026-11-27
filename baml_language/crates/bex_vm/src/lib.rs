@@ -31,7 +31,6 @@ pub mod package_ai;
 pub mod package_baml;
 pub mod package_load;
 pub mod package_reflect;
-pub mod package_testing;
 pub mod package_trace;
 pub mod reachable;
 pub mod telemetry;

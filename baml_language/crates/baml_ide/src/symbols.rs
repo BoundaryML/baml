@@ -5,7 +5,7 @@
 
 use baml_compiler2_hir::{
     contributions::Definition,
-    item_data::{function_data, function_llm_meta, function_source_map},
+    item_data::{function_data, function_llm_meta, function_source_map, let_data},
     package::package_items,
 };
 use baml_compiler2_hir_ty::package_interface::package_interface;
@@ -28,25 +28,14 @@ use crate::{
 /// decides what to do with it.
 ///
 /// Variants are ordered by how far off-surface they are, strongest claim
-/// first, because a declaration can satisfy several and the strongest wins:
-/// `$init_test` is language-internal *and* synthetic, and calling it
-/// language-internal is the more useful answer.
+/// first, because a declaration can satisfy several and the strongest wins.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Surface {
-    /// Outside the language entirely (`$init_test`, the shim test lowering
-    /// mints). No source position can name one, and `is_language_internal`
-    /// documents that no language-surface view lists them.
+    /// Outside the language entirely: the registrar (`$init_test_<file>`)
+    /// and the test global (`$tests_<file>`) that test lowering mints. No
+    /// source position can name one, and `is_language_internal` documents
+    /// that no language-surface view lists them.
     LanguageInternal,
-    /// Spelled with `$`. The lexer takes `$` both leading (the form
-    /// `$rust_function` uses) and infix, so these are ordinary identifiers:
-    /// `testing.$invoke_collector` compiles, and a user-written `Doc$partial`
-    /// is a real type (`expected int, found Doc$partial`).
-    ///
-    /// A NAME heuristic, not a provenance fact — and a weak one. Corpus-wide
-    /// it has exactly one inhabitant, `testing.$invoke_collector`, which is
-    /// hand-written stdlib with `UserDefined` origin: the compiler's own
-    /// provenance says it is ordinary, and only its spelling says otherwise.
-    Synthetic,
     /// Genuinely compiler-generated: the `@` companions (`summarize@spec`),
     /// which carry `FunctionOrigin::Companion`, so this one IS provenance.
     /// Real source references them — the test corpus writes `OaiEcho@spec`
@@ -85,8 +74,13 @@ pub(crate) fn surface_of(
     if metadata.is_some_and(|metadata| metadata.is_language_internal) {
         return Surface::LanguageInternal;
     }
-    if name.as_str().contains('$') {
-        return Surface::Synthetic;
+    if let Definition::Let(binding) = def
+        && matches!(
+            let_data(db, binding).origin,
+            baml_compiler2_ast::LetOrigin::TestFile | baml_compiler2_ast::LetOrigin::TestList
+        )
+    {
+        return Surface::LanguageInternal;
     }
     if let Some(metadata) = metadata {
         use baml_compiler2_ast::ast::FunctionOrigin;
@@ -148,10 +142,7 @@ pub(crate) fn offered_in_completion(
     def: Definition<'_>,
 ) -> bool {
     match surface_of(db, name, def) {
-        Surface::LanguageInternal
-        | Surface::Synthetic
-        | Surface::Companion
-        | Surface::AliasedCarrier => false,
+        Surface::LanguageInternal | Surface::Companion | Surface::AliasedCarrier => false,
         Surface::StdlibInternal | Surface::Public => true,
     }
 }

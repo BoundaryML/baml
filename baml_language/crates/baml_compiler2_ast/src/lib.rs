@@ -24,7 +24,9 @@ pub use ast::*;
 /// callers don't need to change their import path.
 pub use baml_base::escape::unescape_string_literal;
 pub use companions::is_injected_llm_param;
-pub use lower_cst::{SHORTHAND_PROVIDERS, is_init_test_function};
+pub use lower_cst::{
+    SHORTHAND_PROVIDERS, is_init_test_function, synthesize_test_list_let, test_file_global_name,
+};
 pub use lower_expr_body::EnvVarRef;
 pub use lowering_diagnostic::LoweringDiagnostic;
 // Re-exported so callers of `TypeExprKind::at(span)` can name the span type

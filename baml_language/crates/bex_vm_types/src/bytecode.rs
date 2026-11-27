@@ -398,7 +398,7 @@ pub enum Instruction {
     ///
     /// # Init-only invariant
     ///
-    /// Only `$init` (or `$init_test`) functions may emit `StoreGlobal`. The
+    /// Only `$init` functions may emit `StoreGlobal`. The
     /// compiler enforces this by emitting `StoreGlobal` exclusively from
     /// `compile_init_function`. Post-`$init` globals are shared across VMs as a
     /// frozen `Arc<[Value]>`; the runtime treats a `StoreGlobal` against that

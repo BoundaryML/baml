@@ -1368,7 +1368,9 @@ fn type_info_for_source_definition(
             let data = baml_compiler2_hir::item_data::let_data(db, loc);
             let kind = match data.origin {
                 baml_compiler2_ast::ast::LetOrigin::Client => "client",
-                baml_compiler2_ast::ast::LetOrigin::Source => "const",
+                baml_compiler2_ast::ast::LetOrigin::Source
+                | baml_compiler2_ast::ast::LetOrigin::TestFile
+                | baml_compiler2_ast::ast::LetOrigin::TestList => "const",
             };
             // A global reads as the binding it is: its keyword, name, and the
             // one type every reader sees (the annotation, or the widened

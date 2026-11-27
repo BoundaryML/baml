@@ -235,12 +235,8 @@ pub(super) fn load_package(
             LoadedTail::default()
         }
     };
-    let LoadedTail {
-        init,
-        test_init,
-        commits,
-    } = tail;
-    publish(vm, package_ptr, image, init, test_init);
+    let LoadedTail { init, commits } = tail;
+    publish(vm, package_ptr, image, init);
     Ok(Loaded { init, commits })
 }
 
@@ -248,12 +244,11 @@ pub(super) fn load_package(
 #[derive(Default)]
 struct LoadedTail {
     init: Option<HeapPtr>,
-    test_init: Option<HeapPtr>,
     commits: Vec<(HeapPtr, usize)>,
 }
 
 /// Graft a package's tail after its unit: the `let` helpers, `$init`, and
-/// `$init_test` chainer, each in a slot of its own, and each recorded commit
+/// each in a slot of its own, and each recorded commit
 /// bound to the cell it writes.
 fn load_tail(
     vm: &mut BexVm,
@@ -299,7 +294,6 @@ fn load_tail(
             .ok_or_else(|| link_error(format!("tail object {index} is outside the tail")))
     };
     let init = tail.init.map(tail_object).transpose()?;
-    let test_init = tail.init_test.map(tail_object).transpose()?;
     let mut bound = Vec::with_capacity(commits.len());
     for commit in commits {
         let helper = tail
@@ -326,20 +320,13 @@ fn load_tail(
     }
     Ok(LoadedTail {
         init,
-        test_init,
         commits: bound,
     })
 }
 
 /// The one write of a load into its package: every table, the cells and
-/// objects, the rules, and the tail's `$init`s.
-fn publish(
-    vm: &mut BexVm,
-    package_ptr: HeapPtr,
-    image: Image,
-    init: Option<HeapPtr>,
-    test_init: Option<HeapPtr>,
-) {
+/// objects, the rules, and the tail's `$init`.
+fn publish(vm: &mut BexVm, package_ptr: HeapPtr, image: Image, init: Option<HeapPtr>) {
     // SAFETY: a package being loaded is reachable through its pointer, but no
     // reader consults its tables until this write makes the load visible. A
     // session package is the exception: see the `BUG:` on
@@ -368,7 +355,6 @@ fn publish(
     };
     package.objects = Objects::Own(image.objects.into_boxed_slice());
     package.init = init;
-    package.test_init = test_init;
     // The package's rule tables changed in place, under the same pointer
     // every cached resolver answer keys this world by.
     vm.dynamic_dispatch.bump_generation();

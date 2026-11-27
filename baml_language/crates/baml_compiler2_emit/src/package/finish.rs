@@ -7,8 +7,8 @@ use baml_base::{SourceFile, SourceRoot, SourceRootKind};
 use baml_compiler2_hir::{
     contributions::Definition,
     item_data::{
-        class_data, file_classes, file_functions, file_impls, file_interfaces, function_data,
-        interface_data, let_data,
+        class_data, file_classes, file_impls, file_interfaces, function_data, interface_data,
+        let_data,
     },
     loc::{DeclRef, FunctionLoc, LetLoc},
     package::edge_table,
@@ -36,10 +36,7 @@ use super::{
 };
 use crate::{
     ClassFieldSnapshot, LoweringError, OptLevel,
-    items::{
-        InitStep, bake_impl_rule, build_init_function, build_init_test_chainer, compile_let_helper,
-        impl_rule_target,
-    },
+    items::{InitStep, bake_impl_rule, build_init_function, compile_let_helper, impl_rule_target},
     refs::{LocalTables, Own, PackageRefs, item_path},
 };
 
@@ -80,7 +77,7 @@ pub(super) fn finish<'db>(
     fill_class_methods(db, &files, &tables, &mut classes, &placed);
     let mut refs = refs.attach(db, root, scope.own(&tables));
     let impl_rules = bake_rules(db, root, &files, &offsets, &mut refs);
-    let (tail, initializers) = match emit_tail(db, class_fields, root, &files, &lets, opt, scope)? {
+    let (tail, initializers) = match emit_tail(db, class_fields, root, &lets, opt, scope)? {
         Some(parts) => (
             Some(seal_tail(db, (parts.tail, parts.refs))),
             parts.initializers,
@@ -366,16 +363,15 @@ struct TailParts {
     initializers: Vec<SessionInitializer>,
 }
 
-/// The package's `$init` / `$init_test` tail, compiled against a resolver of
+/// The package's `$init` tail, compiled against a resolver of
 /// its own in which the package's declarations are imports at `SELF`.
-/// `None` when the package has neither `let`s nor tests. A submission's
+/// `None` when the package has no `let`s. A submission's
 /// tail holds the helpers of ITS `let`s only, recorded as initializers in
 /// dependency order instead of chained by an `$init`.
 fn emit_tail<'db>(
     db: &'db dyn crate::Db,
     class_fields: &ClassFieldSnapshot<'db>,
     root: SourceRoot,
-    files: &[SourceFile],
     lets: &[LetLoc<'db>],
     opt: OptLevel,
     scope: Scope,
@@ -438,34 +434,6 @@ fn emit_tail<'db>(
         }
     }
 
-    // The test part: the chainer over the package's per-file test
-    // initializers, in file order.
-    let test_objects_start = u32::try_from(objects.len()).expect("tail fits u32");
-    let test_slots_start = u32::try_from(slot_objects.len()).expect("tail slots fit u32");
-    let mut parts = Vec::new();
-    for &file in files {
-        for &function in file_functions(db, file) {
-            if function_data(db, function).metadata.origin
-                != baml_compiler2_ast::FunctionOrigin::TestInitializer
-            {
-                continue;
-            }
-            let slot = refs
-                .function_slot(DeclRef::Source(function))
-                .unwrap_or_else(|| unreachable!("a test initializer owns a slot"));
-            parts.push(slot);
-        }
-    }
-    let mut init_test = None;
-    if !parts.is_empty() {
-        let (index, _) = pool(
-            &mut objects,
-            &mut slot_objects,
-            build_init_test_chainer(&parts),
-        );
-        init_test = Some(index);
-    }
-
     if objects.is_empty() {
         return Ok(None);
     }
@@ -477,9 +445,6 @@ fn emit_tail<'db>(
             global_imports: Vec::new(),
             slot_objects,
             init,
-            init_test,
-            test_objects_start,
-            test_slots_start,
         },
         refs: RefTables::of(refs),
         initializers,

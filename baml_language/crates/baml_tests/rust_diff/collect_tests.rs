@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use bex_engine::{
-    BexEngine, CallId, CancellationToken, EngineConfig, EngineError, FunctionCallContextBuilder,
-};
+use bex_engine::{BexEngine, CallId, EngineConfig, EngineError, FunctionCallContextBuilder};
 use sys_native::SysOpsExt;
 
 pub fn main(artifact: &[u8], table: &'static bex_vm::CompiledBodyTable) -> std::process::ExitCode {
@@ -45,7 +43,12 @@ async fn collect(
         config,
     )?);
     let registry = engine
-        .collect_tests(CallId::next(), CancellationToken::default())
+        .call_function_bound_args(
+            "testing.registry",
+            vec![bex_engine::BexCallArg::OmittedDefault],
+            FunctionCallContextBuilder::new(CallId::next()).build(),
+            false,
+        )
         .await?;
     let serialized = engine
         .call_function(

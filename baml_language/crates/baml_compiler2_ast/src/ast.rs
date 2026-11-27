@@ -1587,6 +1587,14 @@ pub type Literal = baml_base::Literal;
 pub enum LetOrigin {
     Source,
     Client,
+    /// The global lowering synthesizes for a file with tests
+    /// (`$tests_<file>`): a `testing.TestFile` holding the file's registrar,
+    /// listed by the package's `$tests`.
+    TestFile,
+    /// The global one file of a package with tests also declares (`$tests`):
+    /// every file's `$tests_<file>`, in file order. It is how the testing
+    /// package finds a package's tests.
+    TestList,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1598,8 +1606,8 @@ pub enum FunctionOrigin {
     /// methods generated on every user class).
     AutoDerive,
     /// The per-file test registrar lowering synthesizes for a file with
-    /// tests (`$init_test_<file>`): the one function a package's
-    /// `$init_test` chainer calls per file.
+    /// tests (`$init_test_<file>`): the function the file's
+    /// `$tests_<file>` global holds.
     TestInitializer,
 }
 

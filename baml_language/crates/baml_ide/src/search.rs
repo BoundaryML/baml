@@ -318,7 +318,7 @@ struct Candidate {
 /// alike in one place.
 fn is_searchable(db: &dyn baml_compiler2_hir::Db, name: &Name, def: Definition<'_>) -> bool {
     match surface_of(db, name, def) {
-        Surface::LanguageInternal | Surface::Synthetic | Surface::Companion => false,
+        Surface::LanguageInternal | Surface::Companion => false,
         Surface::AliasedCarrier | Surface::StdlibInternal | Surface::Public => true,
     }
 }

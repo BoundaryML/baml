@@ -224,8 +224,6 @@ pub enum FunctionIdentity {
     /// calls before storing the result. It is identified by its binding, so a
     /// trace through a failing initializer names the global.
     InitLet(ItemPath),
-    /// A package's `$init_test` chainer.
-    InitTest,
     /// A trampoline the VM synthesizes at run time to enter a callee from the
     /// host; `callee` is the callee's rendered name, display only. Never in
     /// an executable: `Program::validate` refuses one.
@@ -271,11 +269,7 @@ impl FunctionIdentity {
             Self::Declared(FnPath::Method { name, .. }) => Some(name),
             Self::InterfaceBody(BodyKey::Default { method, .. }) => Some(method),
             Self::InterfaceBody(BodyKey::ImplMethod(body)) => Some(&body.method),
-            Self::Synthetic { .. }
-            | Self::Init
-            | Self::InitLet(_)
-            | Self::InitTest
-            | Self::Entry(_) => None,
+            Self::Synthetic { .. } | Self::Init | Self::InitLet(_) | Self::Entry(_) => None,
         }
     }
 
@@ -300,7 +294,6 @@ impl FunctionIdentity {
             | Self::Synthetic { .. }
             | Self::Init
             | Self::InitLet(_)
-            | Self::InitTest
             | Self::Entry(_) => &[],
         }
     }
@@ -345,7 +338,6 @@ impl FunctionIdentity {
             }
             Self::Init => "$init".to_string(),
             Self::InitLet(path) => crate::init_let_helper_name(&path.render_under(label)),
-            Self::InitTest => "$init_test".to_string(),
             Self::Entry(callee) => format!("$entry::{callee}"),
         }
     }
@@ -369,7 +361,7 @@ impl FunctionIdentity {
                 segments.join(".")
             }
             Self::Synthetic { .. } => format!(".{}", self.tail(label)),
-            Self::Init | Self::InitLet(_) | Self::InitTest | Self::Entry(_) => self.tail(label),
+            Self::Init | Self::InitLet(_) | Self::Entry(_) => self.tail(label),
         }
     }
 }
@@ -863,7 +855,6 @@ impl Function {
             | FunctionIdentity::Synthetic { .. }
             | FunctionIdentity::Init
             | FunctionIdentity::InitLet(_)
-            | FunctionIdentity::InitTest
             | FunctionIdentity::Entry(_) => None,
         };
         let (parent_function, lambda_path) = match &self.identity {

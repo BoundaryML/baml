@@ -248,7 +248,12 @@ use sha2::{Digest, Sha256};
 /// Version 34: `Rng.random_int` draws all 64 bits, and the stdlib's
 /// `int.random` and `float.random` read draws that way; a stdlib compiled
 /// earlier would misread them.
-pub const FORMAT_VERSION: u32 = 34;
+///
+/// Version 35: a package has no `$init_test` and its tail no test part
+/// (`InitTail` lost three fields, `Package` its `test_init`, and
+/// `FunctionIdentity` its `InitTest`). A file's tests are a `testing.TestFile`
+/// global the package's `$init` writes.
+pub const FORMAT_VERSION: u32 = 35;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -521,30 +526,6 @@ pub fn stdlib_interface_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> C
 /// the entry header.
 pub fn stdlib_diagnostics_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
     fingerprint_opt_key(b"stdlib-diagnostics", compiler_fingerprint, opt_level)
-}
-
-/// Key for the cached `baml test --list` **discovery output** — the flattened,
-/// unfiltered test list (legacy function-attached tests + fully-expanded testset
-/// leaf names) that a `--list` invocation renders.
-///
-/// Derived deterministically from the Program blob's own key: the discovery
-/// output is a pure function of that Program (same sources + compiler build ⇒
-/// same tests), so it shares the Program's invalidation for free (Go model:
-/// different inputs → different program key → different discovery key → miss).
-/// The `b"test-discovery"` domain separator keeps it a distinct entry from the
-/// Program blob stored under that same program key, mirroring how the other
-/// derived entries ([`package_key`], [`stdlib_interface_key`]) separate themselves
-/// from blobs that share their key inputs. A warm `--list` serves the rendered
-/// list from this entry and skips engine boot + in-VM discovery entirely.
-///
-/// The stored payload's typed form lives in the CLI (`borsh`-encoded opaque
-/// bytes, like the per-file diagnostics blob), so `bex_cache` does not depend on
-/// its shape; a change to that wire format is covered by [`FORMAT_VERSION`],
-/// which is folded into this key and the entry header.
-pub fn test_discovery_key(program_key: &[u8; 32]) -> CacheKey {
-    let mut h = keyed_hasher(b"test-discovery");
-    h.update(program_key);
-    CacheKey(h.finalize().into())
 }
 
 /// Identity of the running compiler build: SHA-256 of the current executable's
@@ -1226,38 +1207,6 @@ mod tests {
         // Sensitive to both keying inputs.
         assert_ne!(base, stdlib_diagnostics_key(&[4u8; 32], 2), "fingerprint");
         assert_ne!(base, stdlib_diagnostics_key(&fp, 0), "opt level");
-    }
-
-    #[test]
-    fn test_discovery_key_is_distinct_and_derived_from_program_key() {
-        let program_key = [5u8; 32];
-        let base = test_discovery_key(&program_key);
-
-        // Never collides with the Program blob stored under the program key
-        // itself (a distinct domain separator).
-        assert_ne!(
-            base.0, program_key,
-            "discovery key must not equal the raw program key"
-        );
-        // A different Program yields a different discovery entry.
-        assert_ne!(base, test_discovery_key(&[6u8; 32]), "program key");
-    }
-
-    #[test]
-    fn test_discovery_entry_roundtrips_opaque_bytes() {
-        // The discovery blob is stored via the payload-agnostic `store_raw` /
-        // `load_raw` seam, so it inherits the header + checksum integrity that
-        // `store_load_roundtrip_and_rejections` already pins for every entry.
-        // This pins only what is specific to the discovery kind: CLI-owned
-        // opaque bytes survive the raw round-trip byte-for-byte.
-        let dir = tempfile::tempdir().expect("tempdir");
-        let cache = BytecodeCache::open(dir.path().to_path_buf());
-        let key = test_discovery_key(&[1u8; 32]);
-
-        assert!(cache.load_raw(&key).is_none(), "miss on empty cache");
-        let payload = b"opaque-discovery-bytes".to_vec();
-        cache.store_raw(&key, &payload).expect("store");
-        assert_eq!(cache.load_raw(&key).as_deref(), Some(payload.as_slice()));
     }
 
     #[test]

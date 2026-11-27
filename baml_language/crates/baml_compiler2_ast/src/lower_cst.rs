@@ -458,6 +458,100 @@ pub(crate) fn synthesize_init_test_function<R: TestRegistration>(
     }
 }
 
+/// The name of the global that holds the registrar of the file at `path`
+/// (root-relative): `$tests_<file>`.
+pub fn test_file_global_name(path: &std::path::Path) -> String {
+    format!("$tests_{}", init_test_key_from_path(path))
+}
+
+/// The global that lists a package's test files, declared by one of them:
+///
+/// ```baml
+/// const $tests: reflect._TestSource[] = [root.a.$tests_a_main, root.b.$tests_b_main];
+/// ```
+///
+/// `files` are the `$tests_<file>` globals as paths from the package root, in
+/// the order the package lists its test files. The initializer reads those
+/// globals and runs nothing else. The testing package reads this one global
+/// to find a package's tests. Its element type is the interface `reflect`
+/// declares because arrays are matched by their exact element type at run
+/// time, and `reflect.Package.tests` cannot name `testing.TestFile`.
+pub fn synthesize_test_list_let(files: &[Path]) -> crate::ast::LetDef {
+    let span = text_size::TextRange::default();
+    let mut ctx = lower_expr_body::InitTestContext::new();
+    let elements = files
+        .iter()
+        .map(|file| ctx.alloc_expr(Expr::Path(file.clone()), span))
+        .collect();
+    let list = ctx.alloc_expr(Expr::Array { elements }, span);
+    // An array of paths lowers without diagnostics or environment reads.
+    let (body, source_map, _, _) = ctx.finish(Some(list));
+    crate::ast::LetDef {
+        name: Name::new("$tests"),
+        type_annotation: Some(
+            crate::ast::TypeExprKind::List {
+                inner: Box::new(
+                    crate::ast::TypeExprKind::Path {
+                        path: compiler_path!(reflect._TestSource),
+                        generic_args: vec![],
+                        associated_type_bindings: vec![],
+                    }
+                    .at(span),
+                ),
+            }
+            .at(span),
+        ),
+        initializer: Some((body, source_map)),
+        origin: crate::ast::LetOrigin::TestList,
+        docstring: None,
+        span,
+        name_span: span,
+    }
+}
+
+/// The global that holds a file's registrar:
+///
+/// ```baml
+/// const $tests_<file> = testing.TestFile.new($init_test_<file>);
+/// ```
+///
+/// The package's `$tests` lists it, which is all that ties `registrar` to
+/// the package.
+pub(crate) fn synthesize_test_file_let(
+    registrar: &FunctionDef,
+    file_path: Option<&std::path::Path>,
+    diags: &mut Vec<LoweringDiagnostic>,
+    env_var_refs: &mut Vec<crate::EnvVarRef>,
+) -> crate::ast::LetDef {
+    let span = text_size::TextRange::default();
+    let mut ctx = lower_expr_body::InitTestContext::new();
+    let constructor = ctx.alloc_expr(Expr::Path(compiler_path!(testing.TestFile.new)), span);
+    let registrar_ref = ctx.alloc_expr(Expr::Path(Path::bare(registrar.name.clone())), span);
+    let file = ctx.alloc_expr(
+        Expr::Call {
+            callee: constructor,
+            type_args: vec![],
+            args: vec![CallArg::positional(registrar_ref)],
+        },
+        span,
+    );
+    let (body, source_map, finish_diags, finish_env_refs) = ctx.finish(Some(file));
+    diags.extend(finish_diags);
+    env_var_refs.extend(finish_env_refs);
+    crate::ast::LetDef {
+        name: Name::new(match file_path {
+            Some(path) => test_file_global_name(path),
+            None => "$tests_".to_string(),
+        }),
+        type_annotation: None,
+        initializer: Some((body, source_map)),
+        origin: crate::ast::LetOrigin::TestFile,
+        docstring: None,
+        span,
+        name_span: span,
+    }
+}
+
 /// A top-level `test` or `testset` as the registrar synthesis reads it,
 /// whichever tree it came from: the pieces lower into the registrar's arena
 /// at the point the call needs them, so the arenas fill in one order.

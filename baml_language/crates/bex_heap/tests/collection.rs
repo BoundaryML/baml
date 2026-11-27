@@ -48,7 +48,6 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
             objects: Objects::Own(Box::new([])),
             surface: ExportSurface::Projected,
             init: None,
-            test_init: None,
             diagnostics: Vec::new(),
             session: None,
         };
@@ -379,7 +378,6 @@ fn empty_package() -> Package {
         objects: Objects::Own(Box::new([])),
         surface: ExportSurface::Projected,
         init: None,
-        test_init: None,
         diagnostics: Vec::new(),
         session: None,
     }

@@ -109,7 +109,7 @@ pub fn compile_program(
         // Chainers run outside the selected entry points. Keep their callees
         // and the closures those bodies register reachable as well.
         for package in &program.packages {
-            for object in [package.init, package.test_init].into_iter().flatten() {
+            if let Some(object) = package.init {
                 let bex_vm_types::Object::Function(function) = &program.objects[object] else {
                     continue;
                 };

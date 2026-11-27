@@ -19,11 +19,9 @@ use sys_native::CallId;
 
 use crate::{
     ExitCode,
-    bytecode_cache::CacheContext,
     log_output::{LogLevel as TestLogLevel, LogOutput},
     output::{Command, CommandContext, Outcome, Report, Style},
     reporter::Reporter,
-    test_filter::TestFilter,
 };
 
 /// Run BAML tests.
@@ -233,20 +231,6 @@ impl TestOutputOverrides {
     }
 }
 
-impl TestInvocation {
-    fn includes_id(&self, id: &str) -> bool {
-        TestFilter::includes_patterns(id, &self.profile_include, &self.profile_exclude)
-            && TestFilter::includes_patterns(id, &self.cli_include, &self.cli_exclude)
-    }
-
-    fn has_filters(&self) -> bool {
-        !self.profile_include.is_empty()
-            || !self.profile_exclude.is_empty()
-            || !self.cli_include.is_empty()
-            || !self.cli_exclude.is_empty()
-    }
-}
-
 fn validate_selectors<'a>(selectors: impl Iterator<Item = &'a String>) -> Result<()> {
     for selector in selectors {
         let is_canonical_root =
@@ -432,20 +416,6 @@ impl TestArgs {
             return Ok(crate::ExitCode::Failure);
         }
 
-        // Warm `--list` fast path. The fully-expanded test leaf names are a pure
-        // function of the compiled
-        // Program, cached under its key. On a hit we render + select directly
-        // and skip engine boot, `$init`/`$init_test`, and in-VM testset
-        // expansion entirely — the whole `--list` discovery floor. Gated off
-        // under DEV_BAML_BUILD_CACHE_VERIFY=always (the oracle must run honest
-        // discovery); any miss/corruption falls through to the
-        // honest path below.
-        if invocation.list {
-            if let Some(names) = self.try_cached_list(session.cache.as_ref(), &invocation) {
-                return Ok(list_tests(&reporter, names, report));
-            }
-        }
-
         let cached_program = session.try_cached_program();
 
         let cached_engine = cached_program.and_then(|program| {
@@ -562,17 +532,25 @@ impl TestArgs {
         };
 
         // ── 5. Resolve the testset registry handle ─────────────────────────
-        // `collect_tests` runs `$init_test`, returning a live `testing.TestRegistry`
-        // handle (or `Null` when the project declares no tests). All testset
+        // `testing.registry()` returns a live `testing.TestRegistry` handle
+        // for the root package (empty when it declares no tests). All
         // discovery/filtering/execution then happens inside that package via
         // `run_filtered` / `list_filtered`.
         reporter.spin("Discovering", "tests");
-        let registry = match rt.block_on(engine.collect_tests(CallId::next(), cancel.clone())) {
-            Ok(BexExternalValue::Null) => None,
+        let registry = match rt.block_on(
+            engine.call_function_bound_args(
+                "testing.registry",
+                vec![bex_engine::BexCallArg::OmittedDefault],
+                FunctionCallContextBuilder::new(CallId::next())
+                    .with_cancel_token(cancel.clone())
+                    .build(),
+                false, // a handle to the live registry, not a deep copy
+            ),
+        ) {
             Ok(handle @ BexExternalValue::Handle(_)) => Some(handle),
             Ok(other) => {
                 reporter.warning(format_args!(
-                    "unexpected collect_tests result: {}",
+                    "unexpected testing.registry result: {}",
                     other.type_name()
                 ));
                 None
@@ -603,30 +581,6 @@ impl TestArgs {
 
             if finish_engine(&run_ctx, &reporter, bex_engine::ProcessStatus::Success) != 0 {
                 return Ok(crate::ExitCode::Failure);
-            }
-
-            // Write-through the discovery cache (+ DEV_BAML_BUILD_CACHE_VERIFY=always oracle) so a
-            // later `--list` skips engine boot entirely. The cached datum is the
-            // UNFILTERED flattened list, so any -i/-x is served from one entry;
-            // with no filters the display list above already IS the unfiltered
-            // list, so no extra VM call. Written only from an error-free
-            // discovery (never-save-on-error).
-            // A filtered/profiled discovery may have deliberately pruned lazy,
-            // expensive testsets. Do not defeat that guarantee by expanding the
-            // excluded tree merely to populate an unfiltered cache entry. A
-            // cache produced by an earlier unfiltered run can still serve this
-            // invocation through the fast path above.
-            if let Some(ctx) = &session.cache
-                && !invocation.has_filters()
-                && !testset_names
-                    .iter()
-                    .any(|name| name.ends_with("::(failed to expand)"))
-            {
-                let disco = crate::bytecode_cache::TestDiscovery {
-                    testset_leaf_names: testset_names.clone(),
-                };
-                ctx.verify_test_discovery(&disco)?;
-                ctx.store_test_discovery(&disco);
             }
 
             return Ok(list_tests(&reporter, testset_names, report));
@@ -865,35 +819,9 @@ impl TestArgs {
             output,
         }))
     }
-
-    /// Warm `--list` fast path: render the flattened test list straight from the
-    /// discovery cache and skip engine boot entirely. The include/exclude filter
-    /// is re-applied live in Rust via [`TestFilter`] — which mirrors the BAML
-    /// `testing.leaf_selected` used on the honest path, so the selection (and
-    /// hence stdout) is byte-identical to a cold run. Returns `None` when the
-    /// cache is absent/disabled, under `DEV_BAML_BUILD_CACHE_VERIFY=always`, or on a discovery
-    /// miss/corruption — every case falls through to honest discovery.
-    fn try_cached_list(
-        &self,
-        cache: Option<&CacheContext>,
-        invocation: &TestInvocation,
-    ) -> Option<Vec<String>> {
-        if CacheContext::verify_enabled() {
-            return None;
-        }
-        let disco = cache?.load_test_discovery()?;
-        Some(
-            disco
-                .testset_leaf_names
-                .into_iter()
-                .filter(|name| invocation.includes_id(name))
-                .collect(),
-        )
-    }
 }
 
-/// Record the selected `--list` IDs. Shared by the honest path and the warm
-/// discovery-cache path so both produce byte-identical stdout.
+/// Record the selected `--list` IDs.
 fn list_tests(reporter: &Reporter, names: Vec<String>, report: &mut TestReport) -> ExitCode {
     if names.is_empty() {
         reporter.finish("Finished", "no tests selected");
@@ -1041,17 +969,7 @@ fn consume_flat_report(
         }
     }
     summary.messages.extend(flat.messages);
-    if aggregate_passed {
-        return false;
-    }
-    // A testset runner can fail the aggregate without marking any child
-    // failed. Count that verdict as one failure so the summary does not read
-    // "0 failed" when the aggregate itself failed.
-    if flat.failed == 0 {
-        summary.failed += 1;
-        summary.total += 1;
-    }
-    true
+    !aggregate_passed
 }
 
 fn pluralize(n: usize, singular: &str, plural: &str) -> String {
@@ -1344,13 +1262,12 @@ mod tests {
 
     #[test]
     fn consume_empty_report_with_fail_outcome_still_propagates_failure() {
-        // The vacuous-pass skip must NOT swallow a zero-test report that
-        // reports a failure. A `total == 0 && outcome == "fail"` report has to
-        // fall through to the FAIL branch: it sets `command_failed` and
-        // synthesizes one displayed failure (so the summary isn't "0 failed"
-        // while the aggregate failed). Regression guard for the narrowed guard.
+        // The vacuous-pass skip must NOT swallow a report with no leaf that
+        // reports a failure: it has to fall through to the FAIL branch and
+        // set `command_failed`. The stdlib counts the failed verdict itself
+        // as one failure, which is the count this report carries.
         let parsed =
-            parse_flat_report(&flat_report("fail", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
+            parse_flat_report(&flat_report("fail", 0, 1, 0, 1, Vec::new(), Vec::new())).unwrap();
         assert_eq!(consume(parsed), (0, 1, 0, 1, true));
     }
 
@@ -1376,14 +1293,6 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(consume(parsed), (1, 1, 1, 3, true));
-    }
-
-    #[test]
-    fn consume_fail_with_zero_hard_failed_synthesizes_one() {
-        // Runner fails the aggregate without marking any child failed.
-        let parsed =
-            parse_flat_report(&flat_report("fail", 1, 0, 0, 1, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(parsed), (1, 1, 0, 2, true));
     }
 
     #[test]

@@ -11,7 +11,7 @@ use bex_vm_types::{
 
 use super::{
     LinkError, LinkPackageId, LinkSet, PerPackage,
-    layout::{Bucket, TailPart},
+    layout::Bucket,
     order::{LayoutOrder, Objects, Slots, tail_of},
     resolve::PathKey,
     space::{Imports, OperandSpace, TailSpace, UnitSpace, relocate, relocate_template_heads},
@@ -115,9 +115,9 @@ impl Assembler<'_, '_> {
                     program.objects.push(object);
                 }
             }
-            for part in LayoutOrder::parts(self.set, id) {
+            if LayoutOrder::has_tail(self.set, id) {
                 let space = self.tail_space(id);
-                for k in part.objects(space.tail) {
+                for k in 0..space.tail.objects.len() {
                     if space.objects[k].is_shadow() {
                         continue;
                     }
@@ -298,50 +298,35 @@ impl Assembler<'_, '_> {
         packages: &mut [ProgramPackage],
     ) -> Result<(), LinkError> {
         for &id in self.order.members() {
-            for part in LayoutOrder::parts(self.set, id) {
+            if LayoutOrder::has_tail(self.set, id) {
                 let space = self.tail_space(id);
-                let slot_base = space.slots.base(part);
-                let slots = part.slots(space.tail);
+                let slot_base = space.slots.base;
+                let slots = &space.tail.slot_objects;
                 for (ordinal, &object) in slots.iter().enumerate() {
                     program.globals[slot_base + ordinal] = ConstValue::Object(
                         ObjectIndex::from_raw(space.objects[object as usize].abs()),
                     );
                 }
-                let named = part
-                    .named(space.tail)
-                    .unwrap_or_else(|| unreachable!("ordered parts are named"));
+                let named = space
+                    .tail
+                    .init
+                    .unwrap_or_else(|| unreachable!("a placed tail is named"));
                 let Some(ordinal) = slots.iter().position(|&object| object == named) else {
                     return Err(LinkError::invalid(format!(
-                        "package `{}` {} owns no tail slot",
-                        space.name,
-                        part.synthesized_name()
+                        "package `{}` $init owns no tail slot",
+                        space.name
                     )));
                 };
                 let abs = space.objects[named as usize].abs();
                 debug_assert_eq!(
                     program.globals[slot_base + ordinal],
                     ConstValue::Object(ObjectIndex::from_raw(abs)),
-                    "the named part's slot holds its object"
+                    "the `$init` slot holds its object"
                 );
-                let package = &mut packages[id.0 as usize];
-                match part {
-                    TailPart::Init => package.init = Some(ObjectIndex::from_raw(abs)),
-                    TailPart::Test => package.test_init = Some(ObjectIndex::from_raw(abs)),
-                }
+                packages[id.0 as usize].init = Some(ObjectIndex::from_raw(abs));
             }
         }
         program.init_order = self.order.init_order().iter().map(|id| id.0).collect();
-        debug_assert!(
-            self.set.ids().all(|id| {
-                let has_test_part = self
-                    .set
-                    .package(id)
-                    .tail
-                    .is_some_and(|tail| tail.init_test.is_some());
-                has_test_part == packages[id.0 as usize].test_init.is_some()
-            }),
-            "every test part was placed, and nothing else got one"
-        );
         Ok(())
     }
 }

@@ -615,7 +615,12 @@ async fn collect_tests(
 
     let registry = match ticket
         .engine
-        .collect_tests(call_id, sys_types::CancellationToken::new())
+        .call_function_bound_args(
+            "testing.registry",
+            vec![bex_project::BexCallArg::OmittedDefault],
+            bex_project::FunctionCallContextBuilder::new(call_id).build(),
+            false, // a handle to the live registry, not a deep copy
+        )
         .await
     {
         Ok(registry) => registry,
@@ -630,8 +635,8 @@ async fn collect_tests(
         }
     };
 
-    // Null means the project has no tests (`$init_test` absent), which is a
-    // different state from "not collected yet".
+    // `testing.registry` always answers with a handle; a project with no
+    // tests gets an empty registry.
     let handle = match &registry {
         bex_project::BexExternalValue::Handle(handle) => Some(handle.clone()),
         bex_project::BexExternalValue::Null => None,

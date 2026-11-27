@@ -1,7 +1,7 @@
 //! Where things land: the bucket vocabulary, each object's placement, and
 //! the slot and object layouts of one unit or tail.
 
-use std::{collections::HashMap, ops::Range};
+use std::collections::HashMap;
 
 use baml_base::Name;
 use baml_linker_types::{CompilationUnit, InitTail, LocalRef, import_ordinal};
@@ -318,30 +318,15 @@ impl SlotLayout {
     }
 }
 
-/// A tail's global slots: its init part's, then its test part's.
+/// Where a tail's global slots start.
 #[derive(Clone, Copy, Default)]
 pub(super) struct TailSlots {
-    pub(super) init_base: usize,
-    pub(super) test_base: usize,
+    pub(super) base: usize,
 }
 
 impl TailSlots {
-    pub(super) fn base(&self, part: TailPart) -> usize {
-        match part {
-            TailPart::Init => self.init_base,
-            TailPart::Test => self.test_base,
-        }
-    }
-
-    pub(super) fn local(&self, tail: &InitTail, raw: usize) -> Option<usize> {
-        let split = tail.test_slots_start as usize;
-        if raw < split {
-            Some(self.init_base + raw)
-        } else if raw < tail.slot_objects.len() {
-            Some(self.test_base + (raw - split))
-        } else {
-            None
-        }
+    pub(super) fn local(self, tail: &InitTail, raw: usize) -> Option<usize> {
+        (raw < tail.slot_objects.len()).then(|| self.base + raw)
     }
 }
 
@@ -391,44 +376,5 @@ impl UnitObjects {
             return None;
         }
         self.at(unit, bucket, k)
-    }
-}
-
-/// The two halves of a tail, each laid out and placed as its own run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum TailPart {
-    Init,
-    Test,
-}
-
-impl TailPart {
-    pub(super) fn objects(self, tail: &InitTail) -> Range<usize> {
-        let split = tail.test_objects_start as usize;
-        match self {
-            Self::Init => 0..split,
-            Self::Test => split..tail.objects.len(),
-        }
-    }
-
-    pub(super) fn slots(self, tail: &InitTail) -> &[u32] {
-        let split = tail.test_slots_start as usize;
-        match self {
-            Self::Init => &tail.slot_objects[..split],
-            Self::Test => &tail.slot_objects[split..],
-        }
-    }
-
-    pub(super) fn named(self, tail: &InitTail) -> Option<u32> {
-        match self {
-            Self::Init => tail.init,
-            Self::Test => tail.init_test,
-        }
-    }
-
-    pub(super) fn synthesized_name(self) -> &'static str {
-        match self {
-            Self::Init => "$init",
-            Self::Test => "$init_test",
-        }
     }
 }
