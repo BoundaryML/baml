@@ -47,7 +47,7 @@ use std::fmt;
 
 use baml_compiler2_hir::loc::FunctionLoc;
 
-pub use crate::link::{LinkError, RuntimeBuild, link};
+pub use crate::link::{LinkError, RuntimeBuild, link, link_library};
 
 /// A MIR construct native code is not generated for yet.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -168,6 +168,8 @@ pub enum CompileError {
     EntryTakesArguments,
     #[error("the entry function of a native program returns an int, float, bool, string or null")]
     EntryResultNotPrintable,
+    #[error("an exported function cannot have type parameters: `{0}`")]
+    ExportIsGeneric(String),
     /// A failure inside the backend: never the program's fault.
     #[error("native code generation failed: {0}")]
     Codegen(String),
@@ -184,7 +186,29 @@ pub fn compile<'db>(
     if !coverage.is_supported() {
         return Err(CompileError::Unsupported(coverage));
     }
-    let output = codegen::generate(db, &program, options)?;
+    let output = codegen::generate(db, &program, options, &codegen::Form::Executable)?;
+    Ok(Compiled {
+        object: output.object,
+        functions: program.functions.len(),
+        clif: output.clif,
+        disassembly: output.disassembly,
+    })
+}
+
+/// Compile `exports` and everything they reach into one object file for a
+/// shared library a host program loads (see [`link_library`]): no entry
+/// function, and each export callable by name. A spike.
+pub fn compile_library<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    exports: &[FunctionLoc<'db>],
+    options: CompileOptions,
+) -> Result<Compiled, CompileError> {
+    let program = program::collect_all(db, exports);
+    let coverage = coverage_of(&program);
+    if !coverage.is_supported() {
+        return Err(CompileError::Unsupported(coverage));
+    }
+    let output = codegen::generate(db, &program, options, &codegen::Form::Library(exports))?;
     Ok(Compiled {
         object: output.object,
         functions: program.functions.len(),

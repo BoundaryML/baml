@@ -65,6 +65,9 @@
 //! frame record is the top of its chain of compiled frames and whose result
 //! word is a root.
 
+// A test build has no compiled library to link the host module against.
+#[cfg(all(feature = "host-lib", not(test)))]
+pub mod host;
 pub mod switch;
 
 use std::{
@@ -200,6 +203,10 @@ impl Inbox {
         self.filled.store(true, Ordering::Release);
         drop(woken);
         self.arrived.notify_one();
+        // In the library form nobody sleeps on the condition variable: the
+        // host is told to give the worker a turn.
+        #[cfg(all(feature = "host-lib", not(test)))]
+        host::wake_host();
     }
 }
 

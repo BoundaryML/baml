@@ -21,6 +21,10 @@ default = [ "aws-crypto" ]
 # a parking task's stack and of a frame without a stack map. A build with
 # debug assertions has them too. See `build.rs`.
 checks = [  ]
+# The library form: no `main`, and the `baml_lib_*` functions a host
+# program calls to start BAML functions and run them in turns. See
+# `src/sched/host.rs`.
+host-lib = [  ]
 # `baml.http`. The compiler builds the runtime with it and without, and
 # links the one without into a program that calls no native of `baml.http`:
 # see `natives/README.md`.

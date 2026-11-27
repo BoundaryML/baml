@@ -115,3 +115,42 @@ pub fn link(object: &[u8], output: &Path, runtime: RuntimeBuild) -> Result<(), L
         })
     }
 }
+
+/// The runtime archive of the library form (`host-lib`), with the system
+/// libraries it needs.
+const LIBRARY_RUNTIME: (&str, &str) = (
+    env!("BAML_NATIVE_RT_LIB_ARCHIVE"),
+    env!("BAML_NATIVE_RT_LIB_LINK_LIBS"),
+);
+
+/// Write `object` beside `output` and link it into the shared library
+/// `output`, which a host program loads: the runtime's library form, with
+/// no `main`. Only the `baml_lib_*` functions are exported, so the linker
+/// still drops what nothing reaches. A spike: no `baml.http`, macOS only.
+pub fn link_library(object: &[u8], output: &Path) -> Result<(), LinkError> {
+    let mut object_path = output.as_os_str().to_owned();
+    object_path.push(".o");
+    let object_path = PathBuf::from(object_path);
+    std::fs::write(&object_path, object).map_err(|source| LinkError::WriteObject {
+        path: object_path.clone(),
+        source,
+    })?;
+    let (archive, libs) = LIBRARY_RUNTIME;
+    let driver = std::env::var_os("CC").unwrap_or_else(|| "cc".into());
+    let mut command = Command::new(&driver);
+    command.arg("-dynamiclib").arg(&object_path).arg(archive);
+    command.args(libs.split_whitespace());
+    command.args(["-Wl,-dead_strip", "-Wl,-exported_symbol,_baml_lib_*"]);
+    command.arg("-o").arg(output);
+    let result = command.output();
+    let _ = std::fs::remove_file(&object_path);
+    let result = result.map_err(|source| LinkError::RunLinker { driver, source })?;
+    if result.status.success() {
+        Ok(())
+    } else {
+        Err(LinkError::LinkerFailed {
+            status: result.status,
+            stderr: String::from_utf8_lossy(&result.stderr).into_owned(),
+        })
+    }
+}

@@ -76,6 +76,7 @@ use crate::{
 
 mod classes;
 mod hooks;
+mod host;
 mod json;
 mod layouts;
 mod map;
@@ -379,6 +380,8 @@ enum Runtime {
     TaskFail,
     NativePoll,
     IoWait,
+    HostStart,
+    HostFinish,
 }
 
 impl Runtime {
@@ -433,6 +436,8 @@ impl Runtime {
             Self::TaskFail => "baml_rt_task_fail",
             Self::NativePoll => "baml_rt_native_poll",
             Self::IoWait => "baml_rt_io_wait",
+            Self::HostStart => "baml_rt_host_start",
+            Self::HostFinish => "baml_rt_host_finish",
         }
     }
 
@@ -461,7 +466,10 @@ impl Runtime {
             Self::PollSlow | Self::AllocSlow | Self::SpawnUnsupported => (vec![], vec![]),
             Self::Await => (vec![word], vec![]),
             Self::TaskStart => (vec![word], vec![word]),
-            Self::TaskFinish | Self::Throw | Self::Rethrow => (vec![word, word, word], vec![]),
+            Self::HostStart => (vec![word], vec![word, word]),
+            Self::TaskFinish | Self::HostFinish | Self::Throw | Self::Rethrow => {
+                (vec![word, word, word], vec![])
+            }
             Self::TaskFail | Self::Uncaught => (vec![word, word, word, word], vec![]),
             Self::Spawn => (vec![word], vec![word]),
             Self::AwaitError => (vec![word, word], vec![word, word]),
@@ -1119,10 +1127,21 @@ fn symbol_name(index: usize, display_name: &str) -> String {
     format!("baml.{readable}.{index}")
 }
 
+/// What a program is compiled into.
+pub(crate) enum Form<'a, 'db> {
+    /// An executable: its first function is the entry, whose result is
+    /// printed.
+    Executable,
+    /// A library a host program loads, exporting these functions, which
+    /// are the program's first.
+    Library(&'a [baml_compiler2_hir::loc::FunctionLoc<'db>]),
+}
+
 pub(crate) fn generate<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     program: &Program<'db>,
     options: CompileOptions,
+    form: &Form<'_, 'db>,
 ) -> Result<Output, CompileError> {
     let mut backend = Backend::new(options)?;
     let mut clif = options.emit_clif.then(String::new);
@@ -1226,36 +1245,9 @@ pub(crate) fn generate<'db>(
         }
     }
 
-    let entry = program
-        .functions
-        .first()
-        .and_then(|function| declared.get(&function.key))
-        .ok_or_else(|| internal("a program has an entry function"))?;
-    if !entry.signature.params.is_empty() {
-        return Err(CompileError::EntryTakesArguments);
-    }
-    let print = match entry.signature.result {
-        NativeTy::Int => Some(Runtime::PrintInt),
-        NativeTy::Float => Some(Runtime::PrintFloat),
-        NativeTy::Bool => Some(Runtime::PrintBool),
-        NativeTy::String => Some(Runtime::PrintString),
-        NativeTy::Bigint => Some(Runtime::PrintBigint),
-        // An enum's variant is printed by name, which its object has.
-        NativeTy::Enum(_) => Some(Runtime::PrintEnum),
-        NativeTy::Null => None,
-        NativeTy::Union(_)
-        | NativeTy::Unknown
-        | NativeTy::Bytes
-        | NativeTy::Class(..)
-        | NativeTy::Tuple(_)
-        | NativeTy::Array(_)
-        | NativeTy::Map(..)
-        | NativeTy::Function(_)
-        | NativeTy::Cell(_)
-        | NativeTy::Future(_)
-        | NativeTy::Optional(_) => {
-            return Err(CompileError::EntryResultNotPrintable);
-        }
+    let executable = match form {
+        Form::Executable => Some(executable_entry(program, &declared)?),
+        Form::Library(_) => None,
     };
 
     let mut context = backend.module.make_context();
@@ -1288,28 +1280,43 @@ pub(crate) fn generate<'db>(
         )?;
     }
 
-    let mut entry_signature = ir::Signature::new(backend.call_conv());
-    entry_signature.params.push(AbiParam::new(WORD));
-    let entry_id = backend
-        .module
-        .declare_function(ENTRY_SYMBOL, Linkage::Export, &entry_signature)
-        .map_err(internal)?;
-    context.func.signature = entry_signature;
-    entry_shim(
-        &mut backend,
-        entry,
-        print,
-        &mut context.func,
-        &mut builder_context,
-    )?;
-    define(
-        &mut backend,
-        &mut context,
-        entry_id,
-        &Named::Traced(ENTRY_SYMBOL),
-        &mut clif,
-        &mut disassembly,
-    )?;
+    match (executable, form) {
+        (Some((entry, print)), _) => {
+            let mut entry_signature = ir::Signature::new(backend.call_conv());
+            entry_signature.params.push(AbiParam::new(WORD));
+            let entry_id = backend
+                .module
+                .declare_function(ENTRY_SYMBOL, Linkage::Export, &entry_signature)
+                .map_err(internal)?;
+            context.func.signature = entry_signature;
+            entry_shim(
+                &mut backend,
+                entry,
+                print,
+                &mut context.func,
+                &mut builder_context,
+            )?;
+            define(
+                &mut backend,
+                &mut context,
+                entry_id,
+                &Named::Traced(ENTRY_SYMBOL),
+                &mut clif,
+                &mut disassembly,
+            )?;
+        }
+        (None, Form::Library(exports)) => host::define_library(
+            db,
+            &mut backend,
+            &declared,
+            exports,
+            &mut context,
+            &mut builder_context,
+            &mut clif,
+            &mut disassembly,
+        )?,
+        (None, Form::Executable) => return Err(internal("an executable has an entry")),
+    }
     // Every task but the first starts in the task shim, which the runtime
     // knows by its symbol, as it knows the entry.
     let mut shim_signature = ir::Signature::new(backend.call_conv());
@@ -1369,6 +1376,46 @@ pub(crate) fn generate<'db>(
         clif,
         disassembly,
     })
+}
+
+/// The entry function of an executable, which takes nothing, and how its
+/// result is printed.
+fn executable_entry<'a, 'db>(
+    program: &Program<'db>,
+    declared: &'a HashMap<FnKey<'db>, Declared<'db>>,
+) -> Result<(&'a Declared<'db>, Option<Runtime>), CompileError> {
+    let entry = program
+        .functions
+        .first()
+        .and_then(|function| declared.get(&function.key))
+        .ok_or_else(|| internal("a program has an entry function"))?;
+    if !entry.signature.params.is_empty() {
+        return Err(CompileError::EntryTakesArguments);
+    }
+    let print = match entry.signature.result {
+        NativeTy::Int => Some(Runtime::PrintInt),
+        NativeTy::Float => Some(Runtime::PrintFloat),
+        NativeTy::Bool => Some(Runtime::PrintBool),
+        NativeTy::String => Some(Runtime::PrintString),
+        NativeTy::Bigint => Some(Runtime::PrintBigint),
+        // An enum's variant is printed by name, which its object has.
+        NativeTy::Enum(_) => Some(Runtime::PrintEnum),
+        NativeTy::Null => None,
+        NativeTy::Union(_)
+        | NativeTy::Unknown
+        | NativeTy::Bytes
+        | NativeTy::Class(..)
+        | NativeTy::Tuple(_)
+        | NativeTy::Array(_)
+        | NativeTy::Map(..)
+        | NativeTy::Function(_)
+        | NativeTy::Cell(_)
+        | NativeTy::Future(_)
+        | NativeTy::Optional(_) => {
+            return Err(CompileError::EntryResultNotPrintable);
+        }
+    };
+    Ok((entry, print))
 }
 
 /// What a compiled function is called.

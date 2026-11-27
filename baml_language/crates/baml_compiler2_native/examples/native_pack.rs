@@ -10,6 +10,10 @@
 //!                                            report what blocks compilation
 //! native_pack --mir <file.baml> <function>   print the optimized MIR of every
 //!                                            function in the file
+//! native_pack --lib <file.baml> <out.dylib> <function>...
+//!                                            compile and link a shared library
+//!                                            a host program loads, exporting
+//!                                            the functions named (a spike)
 //! ```
 //!
 //! `--coverage` prints one tab-separated line per blocker
@@ -23,7 +27,9 @@ use std::{
     time::Instant,
 };
 
-use baml_compiler2_native::{CompileOptions, RuntimeBuild, compile, coverage, link};
+use baml_compiler2_native::{
+    CompileOptions, RuntimeBuild, compile, compile_library, coverage, link, link_library,
+};
 use baml_db::{
     ProjectDatabase, SourceRootKind, SourceRootSpec,
     baml_compiler_diagnostics::Severity,
@@ -41,6 +47,7 @@ enum Mode {
     Pack,
     Coverage,
     Mir,
+    Library,
 }
 
 struct Arguments {
@@ -63,6 +70,7 @@ fn parse_arguments() -> Arguments {
         match argument.as_str() {
             "--coverage" => arguments.mode = Mode::Coverage,
             "--mir" => arguments.mode = Mode::Mir,
+            "--lib" => arguments.mode = Mode::Library,
             "--emit-clif" => arguments.emit_clif = true,
             "--emit-asm" => arguments.emit_asm = true,
             "--checked" => arguments.runtime = RuntimeBuild::Checked,
@@ -108,7 +116,52 @@ fn find_function<'db>(db: &'db ProjectDatabase, name: &str) -> Result<FunctionLo
         .ok_or_else(|| format!("no function `{name}`"))
 }
 
+/// Compile the functions named into a shared library.
+fn run_library(arguments: &Arguments, out: &mut impl Write) -> Result<(), String> {
+    let [path, output, functions @ ..] = arguments.positional.as_slice() else {
+        return Err("usage: native_pack --lib <file.baml> <out.dylib> <function>...".to_owned());
+    };
+    if functions.is_empty() {
+        return Err("a library exports at least one function".to_owned());
+    }
+    let started = Instant::now();
+    let db = load(Path::new(path))?;
+    let exports = functions
+        .iter()
+        .map(|name| find_function(&db, name))
+        .collect::<Result<Vec<_>, _>>()?;
+    let options = CompileOptions {
+        emit_clif: arguments.emit_clif,
+        emit_disassembly: arguments.emit_asm,
+        checks: false,
+    };
+    let compiled = compile_library(&db, &exports, options).map_err(|error| error.to_string())?;
+    let output = PathBuf::from(output);
+    for (text, extension) in [(&compiled.clif, "clif"), (&compiled.disassembly, "s")] {
+        if let Some(text) = text {
+            let mut listing = output.clone().into_os_string();
+            listing.push(format!(".{extension}"));
+            std::fs::write(&listing, text)
+                .map_err(|error| format!("cannot write `{}`: {error}", listing.display()))?;
+        }
+    }
+    link_library(&compiled.object, &output).map_err(|error| error.to_string())?;
+    let _ = writeln!(
+        out,
+        "{}: {} functions, {} exported, {} byte object; {:.1} ms",
+        output.display(),
+        compiled.functions,
+        exports.len(),
+        compiled.object.len(),
+        started.elapsed().as_secs_f64() * 1e3,
+    );
+    Ok(())
+}
+
 fn run(arguments: &Arguments, out: &mut impl Write) -> Result<(), String> {
+    if arguments.mode == Mode::Library {
+        return run_library(arguments, out);
+    }
     let (path, function) = match arguments.positional.as_slice() {
         [path, function] if arguments.mode != Mode::Pack => (path, function),
         [path, function, _] if arguments.mode == Mode::Pack => (path, function),
