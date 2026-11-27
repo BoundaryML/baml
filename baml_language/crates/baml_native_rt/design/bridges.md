@@ -16,7 +16,7 @@ Status, on branch `antoniosarosi/native-bridges-poc`:
 
 ## The decision
 
-**Results are copied.** When a call returns, its result is copied once, directly from BAML memory, into an ordinary host object: a pydantic model, a plain TypeScript object, a Rust struct. There is no protobuf and no other wire format in between.
+**Results are copied.** When a call returns, its result is copied once, directly from BAML memory, into an ordinary host object: a pydantic model, an instance of the generated TypeScript class, a Rust struct. There is no protobuf and no other wire format in between.
 
 User code does not get references into BAML memory. That idea, and why it waits, is in [ideas/host-handles-and-refs.md](ideas/host-handles-and-refs.md). In short:
 
