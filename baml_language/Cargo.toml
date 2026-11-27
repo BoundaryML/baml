@@ -108,6 +108,7 @@ baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_rust = { path = "crates/baml_compiler2_rust" }
 baml_compiler2_native = { path = "crates/baml_compiler2_native" }
+baml_native_host = { path = "crates/baml_native_host" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 bex_cache = { path = "crates/bex_cache", default-features = false }
@@ -346,6 +347,7 @@ pyo3-stub-gen = { version = "0.22", default-features = false }
 napi = { version = "3.9.0", default-features = false }
 napi-derive = "3.5.6"
 napi-build = "2.3.2"
+napi-sys = { version = "3.2.1", default-features = false }
 windows-sys = "0.61.2"
 wiremock = "0.6"
 vfs = "0.12"
