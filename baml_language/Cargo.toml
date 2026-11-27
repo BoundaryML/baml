@@ -109,6 +109,7 @@ baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_rust = { path = "crates/baml_compiler2_rust" }
 baml_compiler2_native = { path = "crates/baml_compiler2_native" }
 baml_native_host = { path = "crates/baml_native_host" }
+sdk_test_codegen = { path = "sdk_tests/codegen" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 bex_cache = { path = "crates/bex_cache", default-features = false }

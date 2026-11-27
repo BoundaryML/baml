@@ -318,8 +318,9 @@ fn start_call(
     export: Value,
     args: Value,
 ) -> Result<u64, Value> {
-    let export = u32::try_from(js::get_f64(env, export) as i64)
-        .map_err(|_| js::error(env, None, "no such export"))?;
+    let export = js::whole(env, export)
+        .and_then(|export| u32::try_from(export).ok())
+        .ok_or_else(|| js::error(env, None, "an export is numbered by a whole number"))?;
     let built = plans.arguments(env, session, export, args)?;
     let call = session
         .start(export, &built)
@@ -382,7 +383,7 @@ unsafe extern "C" fn bind(env: Env, info: sys::napi_callback_info) -> Value {
     let [constructors, factories, enum_values, make_map, mode] = js::arguments::<5>(env, info);
     entry(env, || {
         let library = library(env)?;
-        let mode = js::get_f64(env, mode) as u32;
+        let mode = js::whole(env, mode).unwrap_or(0);
         let plans = Plans::build(
             env,
             library,
@@ -454,7 +455,7 @@ unsafe extern "C" fn drive(env: Env, info: sys::napi_callback_info) -> Value {
         let _busy = Busy::enter(env)?;
         let plans = plans(env)?;
         let library = library(env)?;
-        let want = js::get_f64(env, id) as u64;
+        let want = js::whole(env, id).unwrap_or(0);
         let mut events = Events::new(env);
         loop {
             *SHARED

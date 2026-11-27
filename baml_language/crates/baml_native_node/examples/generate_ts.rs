@@ -24,6 +24,7 @@
 //! at today's bridge or at the native runtime (`js/`).
 #![allow(
     clippy::print_stdout,
+    clippy::print_stderr,
     clippy::disallowed_methods,
     reason = "a command-line tool that writes files and says where"
 )]

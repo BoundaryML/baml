@@ -131,7 +131,7 @@ impl From<SdkError> for CopyError {
 /// Why an argument could not be built.
 enum ArgError {
     Js(Value),
-    /// Where, and why: `argument \`x\`.inner: expected int, found string`.
+    /// Where, and why, as in ``argument `x`.inner: expected int, found a string``.
     Unfit(String),
 }
 
@@ -169,13 +169,13 @@ pub(crate) fn describe_types(env: Env, library: &Library) -> Value {
         };
         let list = js::array(env, names.len());
         for (i, name) in names.iter().enumerate() {
-            let _ = js::set_element(env, list, i as u32, js::string(env, name));
+            let _ = js::set_element(env, list, js::index(i), js::string(env, name));
         }
         let row = js::array(env, 3);
         let _ = js::set_element(env, row, 0, js::string(env, &def.name));
         let _ = js::set_element(env, row, 1, js::boolean(env, is_enum));
         let _ = js::set_element(env, row, 2, list);
-        let _ = js::set_element(env, out, index as u32, row);
+        let _ = js::set_element(env, out, js::index(index), row);
     }
     out
 }
@@ -188,14 +188,19 @@ pub(crate) fn describe_functions(env: Env, library: &Library) -> Value {
         let names = js::array(env, function.params.len());
         let defaults = js::array(env, function.params.len());
         for (i, param) in function.params.iter().enumerate() {
-            let _ = js::set_element(env, names, i as u32, js::string(env, &param.name));
-            let _ = js::set_element(env, defaults, i as u32, js::boolean(env, param.has_default));
+            let _ = js::set_element(env, names, js::index(i), js::string(env, &param.name));
+            let _ = js::set_element(
+                env,
+                defaults,
+                js::index(i),
+                js::boolean(env, param.has_default),
+            );
         }
         let row = js::array(env, 3);
         let _ = js::set_element(env, row, 0, js::string(env, &function.name));
         let _ = js::set_element(env, row, 1, names);
         let _ = js::set_element(env, row, 2, defaults);
-        let _ = js::set_element(env, out, index as u32, row);
+        let _ = js::set_element(env, out, js::index(index), row);
     }
     out
 }
@@ -222,7 +227,7 @@ impl Plans {
         factories: Value,
         enum_values: Value,
         make_map: Value,
-        mode: u32,
+        mode: u64,
     ) -> JsResult<Self> {
         let interface: &Interface = library.interface();
         let build = match mode {
@@ -232,7 +237,7 @@ impl Plans {
         };
         let mut types = Vec::with_capacity(interface.types.len());
         for (number, def) in interface.types.iter().enumerate() {
-            let number = number as u32;
+            let number = js::index(number);
             types.push(match &def.kind {
                 TypeDefKind::Class { fields } => TypePlan::Class {
                     name: def.name.clone(),
@@ -263,7 +268,7 @@ impl Plans {
                     for (i, variant) in variants.iter().enumerate() {
                         let value = match given {
                             Some(list) if js::type_of(env, list) == ValueType::napi_object => {
-                                let value = js::get_element(env, list, i as u32)?;
+                                let value = js::get_element(env, list, js::index(i))?;
                                 if js::type_of(env, value) == ValueType::napi_undefined {
                                     js::string(env, variant)
                                 } else {
@@ -281,7 +286,7 @@ impl Plans {
                         index: variants
                             .iter()
                             .enumerate()
-                            .map(|(i, variant)| (variant.clone(), i as u32))
+                            .map(|(i, variant)| (variant.clone(), js::index(i)))
                             .collect(),
                     }
                 }
@@ -338,7 +343,7 @@ impl Plans {
                 let array = js::array(env, length);
                 for (i, element) in elements.enumerate() {
                     let element = self.copy(env, element_out, &element?)?;
-                    js::set_element(env, array, i as u32, element)?;
+                    js::set_element(env, array, js::index(i), element)?;
                 }
                 array
             }
@@ -405,7 +410,7 @@ impl Plans {
             &mut many
         };
         for (index, field) in fields.iter().enumerate() {
-            let item = value.field(index as u32)?;
+            let item = value.field(js::index(index))?;
             values[index] = self.copy(env, &field.out, &item)?;
         }
         if let (Some(factory), Some(_)) = (factory, constructor) {
@@ -485,8 +490,8 @@ impl Plans {
         let mut built = Vec::with_capacity(function.params.len());
         let mut buffer = Vec::new();
         for (index, (name, ty, has_default)) in function.params.iter().enumerate() {
-            let arg = if (index as u32) < given {
-                js::get_element(env, args, index as u32).map_err(|thrown| thrown.0)?
+            let arg = if js::index(index) < given {
+                js::get_element(env, args, js::index(index)).map_err(|thrown| thrown.0)?
             } else {
                 js::undefined(env)
             };
@@ -567,6 +572,10 @@ impl Plans {
                 if kind == ValueType::napi_number {
                     let n = js::get_f64(env, value);
                     if n.fract() == 0.0 && n.abs() <= 9.223_372_036_854_775e18 {
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "a whole number within the range of an int: exact"
+                        )]
                         return Ok(session.int(n as i64));
                     }
                 }
@@ -611,8 +620,18 @@ impl Plans {
                 )))
             }
             Type::LiteralInt(expected) => {
-                if kind == ValueType::napi_number && js::get_f64(env, value) == *expected as f64 {
-                    return Ok(session.int(*expected));
+                if kind == ValueType::napi_number {
+                    let n = js::get_f64(env, value);
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "compared only when whole and within the range of an int"
+                    )]
+                    if n.fract() == 0.0
+                        && n.abs() <= 9.223_372_036_854_775e18
+                        && n as i64 == *expected
+                    {
+                        return Ok(session.int(*expected));
+                    }
                 }
                 Err(ArgError::Unfit(format!(
                     "{path}: {} does not fit the literal type {expected}",
@@ -668,12 +687,19 @@ impl Plans {
                 }
                 let length = js::array_length(env, value);
                 let mut elements = Vec::with_capacity(length as usize);
-                let base = path.len();
                 for i in 0..length {
                     let item = js::get_element(env, value, i)?;
-                    path.push_str(&format!("[{i}]"));
-                    elements.push(self.arg(env, session, element, item, path, buffer)?);
-                    path.truncate(base);
+                    let built = self.arg(env, session, element, item, path, buffer);
+                    elements.push(self.placed(
+                        env,
+                        session,
+                        element,
+                        item,
+                        path,
+                        buffer,
+                        built,
+                        || format!("[{i}]"),
+                    )?);
                 }
                 session
                     .array(elements)
@@ -686,14 +712,15 @@ impl Plans {
                 let keys = js::keys(env, value)?;
                 let length = js::array_length(env, keys);
                 let mut entries = Vec::with_capacity(length as usize);
-                let base = path.len();
                 for i in 0..length {
                     let key = js::get_element(env, keys, i)?;
                     let item = js::get_property(env, value, key)?;
                     let text = js::get_string(env, key, buffer).to_owned();
-                    path.push_str(&format!("[{text:?}]"));
-                    let item = self.arg(env, session, item_type, item, path, buffer)?;
-                    path.truncate(base);
+                    let built = self.arg(env, session, item_type, item, path, buffer);
+                    let item =
+                        self.placed(env, session, item_type, item, path, buffer, built, || {
+                            format!("[{text:?}]")
+                        })?;
                     entries.push((
                         session
                             .string(&text)
@@ -705,6 +732,33 @@ impl Plans {
             }
             Type::Class(class) => self.arg_class(env, session, *class, ty, value, path, buffer),
             Type::Union(members) => self.arg_union(env, session, ty, members, value, path, buffer),
+        }
+    }
+
+    /// An element or entry built with the container's path: when it is
+    /// refused, it is walked again with its place added, for the message.
+    /// The place is only formatted then, not for every element.
+    #[expect(clippy::too_many_arguments, reason = "the walk's state")]
+    fn placed<'s>(
+        &self,
+        env: Env,
+        session: &'s Session,
+        ty: &Type,
+        value: Value,
+        path: &mut String,
+        buffer: &mut Vec<u8>,
+        built: Result<BamlValue<'s>, ArgError>,
+        place: impl FnOnce() -> String,
+    ) -> Result<BamlValue<'s>, ArgError> {
+        match built {
+            Err(ArgError::Unfit(why)) => {
+                let base = path.len();
+                path.push_str(&place());
+                let again = self.arg(env, session, ty, value, path, buffer);
+                path.truncate(base);
+                Err(again.err().unwrap_or(ArgError::Unfit(why)))
+            }
+            other => other,
         }
     }
 

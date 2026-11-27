@@ -47,6 +47,28 @@ fn check(env: Env, status: sys::napi_status) -> JsResult<()> {
     }
 }
 
+/// A Rust index as a JavaScript array index. JavaScript arrays hold fewer
+/// than 2^32 elements, and so do the interface's lists.
+pub(crate) fn index(i: usize) -> u32 {
+    u32::try_from(i).unwrap_or(u32::MAX)
+}
+
+/// A JavaScript number that is a whole number from 0 to 2^53, as an
+/// integer: call ids, export numbers, modes.
+pub(crate) fn whole(env: Env, value: Value) -> Option<u64> {
+    let n = get_f64(env, value);
+    if n >= 0.0 && n.fract() == 0.0 && n <= 9_007_199_254_740_992.0 {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "whole, not negative and at most 2^53: exact"
+        )]
+        Some(n as u64)
+    } else {
+        None
+    }
+}
+
 pub(crate) fn undefined(env: Env) -> Value {
     let mut value = ptr::null_mut();
     // SAFETY: as above.
@@ -82,7 +104,7 @@ pub(crate) fn string(env: Env, text: &str) -> Value {
         sys::napi_create_string_utf8(
             env,
             text.as_ptr().cast(),
-            text.len() as isize,
+            isize::try_from(text.len()).unwrap_or(isize::MAX),
             &raw mut value,
         )
     };
@@ -201,7 +223,7 @@ pub(crate) fn get_bool(env: Env, value: Value) -> bool {
 }
 
 /// The text of a JavaScript string, into `buffer` (reused between calls).
-pub(crate) fn get_string<'b>(env: Env, value: Value, buffer: &'b mut Vec<u8>) -> &'b str {
+pub(crate) fn get_string(env: Env, value: Value, buffer: &mut Vec<u8>) -> &str {
     let mut length = 0;
     // SAFETY: as above; the first call measures, the second copies into a
     // buffer of that length plus the terminator Node writes.
@@ -322,7 +344,7 @@ pub(crate) fn export(
         sys::napi_create_function(
             env,
             name.as_ptr(),
-            name.count_bytes() as isize,
+            isize::try_from(name.count_bytes()).unwrap_or(isize::MAX),
             Some(function),
             ptr::null_mut(),
             &raw mut value,

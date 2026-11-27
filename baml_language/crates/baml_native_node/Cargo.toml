@@ -24,8 +24,8 @@ napi-sys = { workspace = true, features = [ "napi6" ] }
 napi-build = { workspace = true }
 
 [dev-dependencies]
-sdk_test_codegen = { path = "../../sdk_tests/codegen" }
 sdkgen_typescript_shared = { workspace = true }
+sdk_test_codegen = { workspace = true }
 
 [lints]
 workspace = true

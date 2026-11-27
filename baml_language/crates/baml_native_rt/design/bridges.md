@@ -261,6 +261,80 @@ On the Rust host, Apple M5 Max, through `perfq --bench` (#1092): the median of e
 - Reading costs one C call per field and per element, with a handle for each object read. Bulk reads are not built; the per-element numbers above are what they would save.
 - With 12,000 calls started before the first turn, each costs about 20,000 instructions: each waiting task maps a fresh stack.
 
+## Node (built)
+
+The crate `baml_native_node` is a Node addon built on the core layer of `baml_native_host`, and `baml_native_node/js` is the runtime that generated TypeScript SDKs import. User code does not change: the generated classes, enums and functions are today's, and results are what today's SDK returns.
+
+```ts
+const o = new Outer({ inner: new Inner({ value: 9 }) });
+const r = await round_trip_outer(o);       // an Outer, as today
+const s = round_trip_outer_sync(o);        // the _sync twin works too
+```
+
+| Piece | What it is |
+|---|---|
+| The addon (`src/lib.rs`) | A Node-API module written against the C functions directly (`napi-sys`, Node-API version 10). It loads the library through `Library::load`, checks the interface hash, and holds the plans |
+| Plans (`src/copy.rs`) | Built once, at the first call, from `Library::interface()`: per export its parameter types and result plan; per class its field names (kept as JavaScript strings), field plans and generated class; per enum its generated members |
+| The runtime (`js/index.js`) | Exports the names `@boundaryml/baml-bridge` exports. `defineFunction` (async and sync), the type map and the error classes are real. The rest (instance methods, media, streams, tracing, `$baml` options) are stubs that throw when used, so a whole generated SDK imports |
+| The bindings | Today's generated package, unchanged except `_inlinedbaml.ts`, which names the library and its hash instead of embedding bytecode, and two lines of `index.ts` (the initializer's import and call: `initializeNativeLibrary(_inlinedbaml.LIBRARY, _inlinedbaml.INTERFACE_HASH)`). Its `package.json` points `@boundaryml/baml-bridge` at the native runtime |
+
+How Node's loop is joined:
+
+```
+JavaScript (main thread)                      the library
+------------------------                      -----------
+f(args)  ── start(export, args) ─▶ build args by declared type, call_start
+queueMicrotask ── turn() ───────▶ run BAML
+         ◀── [delay, pending, id, status, value, ...] ── results copied in the turn
+setTimeout(delay) ── turn() ─────▶ a BAML timer is due
+onWake() ── turn() ─────────────▶ ◀── wake() from the I/O thread, through a thread-safe function
+f_sync(args) ── start + drive(id) ▶ turns until call id ends, sleeping on the timer or a wake in between
+```
+
+- BAML runs on Node's main thread, inside `call`, `turn` or `drive`. A call schedules one turn by `queueMicrotask`, so calls started together share a turn. With `BAML_NATIVE_TURN=eager` it runs a turn at once instead (`call`); the two cost the same per call (below).
+- The thread-safe function is referenced only while calls are pending, and the timer for the next BAML timer is unreferenced when none is: a script whose last call has ended exits, even with a BAML task still sleeping.
+- `drive` hands back every event of its turns, so calls that end while a `_sync` call waits are settled too.
+- An entry point entered while another holds the library (a constructor that calls a binding while a result is copied) throws instead of waiting for the core's lock.
+
+Copying: a turn copies each result in the same native call, by its export's plan, through the core's reads (`field`, `elements`, `entries`, `variant_index`, `string`). A class instance is built by one call into a small per-class JavaScript function made at bind, `(v0, v1, ..) => { const o = new C(E); o.f0 = v0; ..; return o }`; that was the fastest of three ways measured. An `int` becomes a number, a map a null-prototype object, an enum value its generated member, a union by its value's tag. Arguments are built by the parameter's declared type: a class from a generated instance or a plain object (a missing nullable field is `null`, a missing required one is refused with today's words), a union by the JavaScript value's kind and, for objects, its constructor first.
+
+How a call ends, in JavaScript:
+
+| End | Error | As today's SDK |
+|---|---|---|
+| returned | the promise resolves, the `_sync` function returns | yes |
+| threw | `BamlError` (`.value` the thrown value, a declared class as its generated class; `.className`; message `baml error: <class>[: <message>]`) | yes, without `.bamlTrace` (traces are dropped) |
+| panicked | `BamlPanic`, message `baml panic: <class>[: <message>]` | the same message and `.className`; `.value` is the value's text (`baml.panics.DivisionByZero {dividend: 1}`), not an object, because the standard library's classes are not in the interface |
+| stuck | `BamlPanic`, `baml panic: the call can never finish: ...` | today's SDK never settles such a call |
+| refused, by the bindings or the library | `BamlInvalidArgumentError`, `argument \`r\`: class user.optional.Resume requires field \`name\`` | yes, for the bindings' checks |
+| a constructor threw while copying | that exception | yes |
+| a task failed and nothing awaits it | thrown on Node's loop | yes |
+
+Measured on the same Mac (Apple M5 Max) through `perfq --bench` (#1149, #1151): today's SDK is the generated TypeScript SDK of the same staged fixture over today's bridge (`bridge_typescript`, release), and both run the same script (`js/bench/bench.ts`). Time is the median of three interleaved rounds, each the median of nine batches; instructions per call come from two call counts. Outside load 0.28 and 0.33 cores. The plain-JavaScript column builds (or reads) the same objects with no bridge.
+
+| Async, one `await f()` after another | Today's SDK | Native | Plain JavaScript |
+|---|---|---|---|
+| `round_trip_int` | 28.2 µs, 372,753 instructions | 495 ns, 18,090 | 0 ns |
+| `round_trip_inner` | 35.8 µs, 493,629 | 693 ns, 23,840 | 10 ns |
+| `round_trip_complex_profile` | 327 µs, 8,704,231 | 23.3 µs, 749,576 | 405 ns |
+| `int[]` of 100,000 out | 35.4 ms (354 ns each) | 13.1 ms (131 ns each) | 88 µs |
+| `int[]` of 100,000 in | 45.2 ms (452 ns each) | 2.75 ms (27.5 ns each) | 45 µs (reading them) |
+| `Point[]` of 10,000 out | 12.2 ms (1.2 µs each) | 1.91 ms (191 ns each) | 125 µs |
+| `Point[]` of 10,000 in | 36.9 ms (3.7 µs each) | 1.44 ms (144 ns each) | 9 µs (reading them) |
+
+- Sync against sync: `round_trip_int` 11.1 µs today, 397 ns native; `round_trip_inner` 17.8 µs and 573 ns; the profile 313 µs and 23.3 µs; the arrays as in the table.
+- The eager turn and the microtask turn cost the same: 511 and 495 ns for `round_trip_int`.
+- Building instances, three ways (`round_trip_complex_profile`; `Point[]` of 10,000): setting each property from native code 26.8 µs and 2.64 ms; one call into a per-class function taking the values in order 23.7 µs and 1.92 ms; one call into a per-class `new C({..})`, as today's bridge builds them, 24.0 µs and 2.14 ms. The second is used; today's tests pass with it.
+- Where the time goes: a call costs about 18,000 instructions against 2,619 for Rust's bindings: the promise, the generated wrapper, and about ten Node-API calls (the arguments, the events array). Reading costs 1,300 instructions per `int` out more than in Rust, mostly `napi_set_element` and a number per element; creating the objects is the smallest part (the plain-JavaScript column).
+
+Try it, from `baml_language`, after building `native_pack`, the addon and today's bridge in release:
+
+```sh
+crates/baml_native_node/scripts/stage.sh    # pack the fixture, generate both packages
+crates/baml_native_node/scripts/test.sh     # today's tests + the bridge's own, then under BAML_GC_STRESS=1
+crates/baml_native_node/scripts/bench.sh prepare && crates/baml_native_node/scripts/bench.sh time
+```
+
 ## Limits today
 
 | Limit | Consequence |

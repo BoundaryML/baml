@@ -37,6 +37,8 @@ import {
 import { Inner, round_trip_inner } from "./baml_sdk/class_refs/index.js";
 import { round_trip_complex_profile } from "./baml_sdk/complex_models/index.js";
 import { round_trip_resume } from "./baml_sdk/optional/index.js";
+import { round_trip_ints } from "./baml_sdk/lists/index.js";
+import { round_trip_simple_map } from "./baml_sdk/maps/index.js";
 
 const children = fileURLToPath(new URL("../dist/children/", import.meta.url));
 
@@ -147,6 +149,14 @@ describe("native bridge: how calls end", () => {
     // @ts-expect-error as above
     await expect(add("1", 2)).rejects.toThrow("argument `a`: expected int, found a string");
     await expect(add(1.5, 2)).rejects.toThrow("argument `a`: expected int, found a number");
+    // @ts-expect-error a string in an int[]
+    await expect(round_trip_ints([1, "x"])).rejects.toThrow(
+      "argument `xs`[1]: expected int, found a string",
+    );
+    // @ts-expect-error a string where a map value is an int
+    await expect(round_trip_simple_map({ a: 1, b: "x" })).rejects.toThrow(
+      'argument `m`["b"]: expected int, found a string',
+    );
     // @ts-expect-error `name` is required
     await expect(round_trip_resume({})).rejects.toThrow(
       "argument `r`: class user.optional.Resume requires field `name`",

@@ -8,10 +8,11 @@
 // that throws when it is used, so a generated SDK imports cleanly.
 //
 // How calls run: BAML runs on Node's main thread, inside the addon. A call
-// either starts and runs a turn at once (the "eager" turn, default) or starts
-// and schedules one turn by `queueMicrotask` (`BAML_NATIVE_TURN=microtask`),
-// so that calls started together share a turn. A turn returns what ended,
-// copied into JavaScript, and when the next BAML timer fires; the library's
+// starts and schedules one turn by `queueMicrotask`, so that calls started
+// together share a turn (default), or starts and runs a turn at once
+// (`BAML_NATIVE_TURN=eager`). Both cost the same per call (bridges.md). A
+// turn returns what ended, copied into JavaScript, and when the next BAML
+// timer fires; the library's
 // wake (its I/O thread) arrives through a thread-safe function. A `_sync`
 // function drives turns on the spot until its call ends.
 
@@ -179,8 +180,8 @@ const addon = addonModule.exports;
 /** How a class instance is built: `props`, `positional` or `init`. */
 const BUILD = process.env.BAML_NATIVE_BUILD ?? "positional";
 const BUILD_MODE = { props: 0, positional: 1, init: 2 }[BUILD] ?? 1;
-/** When a turn runs after a call starts: `eager` or `microtask`. */
-const EAGER = (process.env.BAML_NATIVE_TURN ?? "eager") !== "microtask";
+/** When a turn runs after a call starts: `microtask` or `eager`. */
+const EAGER = process.env.BAML_NATIVE_TURN === "eager";
 
 let loaded = false;
 let bound = false;

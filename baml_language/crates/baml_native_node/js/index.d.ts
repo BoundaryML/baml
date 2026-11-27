@@ -76,16 +76,16 @@ export type BamlPromptCallOptions = any;
 export type BamlFunctionSpecBuildRequestOptions = any;
 export type BamlFunctionSpecCallOptions = any;
 export declare const BamlRuntime: any;
-export declare class BamlHandle { [key: string]: any }
-export declare class BamlImage { [key: string]: any; static [key: string]: any }
-export declare class BamlAudio { [key: string]: any; static [key: string]: any }
-export declare class BamlVideo { [key: string]: any; static [key: string]: any }
-export declare class BamlPdf { [key: string]: any; static [key: string]: any }
-export declare class BamlStream<T = any, R = any> { [key: string]: any }
-export declare class BamlFunctionSpec { [key: string]: any }
-export declare class BamlPrompt { [key: string]: any }
-export declare class BamlReference { [key: string]: any }
-export declare class BamlType { [key: string]: any; static [key: string]: any }
+export declare class BamlHandle<A = any, B = any> { constructor(...args: any[]); [key: string]: any; static [key: string]: any }
+export declare class BamlImage<A = any, B = any> { constructor(...args: any[]); [key: string]: any; static [key: string]: any }
+export declare class BamlAudio<A = any, B = any> { constructor(...args: any[]); [key: string]: any; static [key: string]: any }
+export declare class BamlVideo<A = any, B = any> { constructor(...args: any[]); [key: string]: any; static [key: string]: any }
+export declare class BamlPdf<A = any, B = any> { constructor(...args: any[]); [key: string]: any; static [key: string]: any }
+export declare class BamlStream<A = any, B = any> { constructor(...args: any[]); [key: string]: any; static [key: string]: any }
+export declare class BamlFunctionSpec<A = any, B = any> { constructor(...args: any[]); [key: string]: any; static [key: string]: any }
+export declare class BamlPrompt<A = any, B = any> { constructor(...args: any[]); [key: string]: any; static [key: string]: any }
+export declare class BamlReference<A = any, B = any> { constructor(...args: any[]); [key: string]: any; static [key: string]: any }
+export declare class BamlType<A = any, B = any> { constructor(...args: any[]); [key: string]: any; static [key: string]: any }
 export declare const Never: any;
 export declare class TraceUsageError extends Error {}
 export declare const FunctionResult: any;
