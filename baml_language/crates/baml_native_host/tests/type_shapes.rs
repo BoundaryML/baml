@@ -25,11 +25,13 @@ use std::{
     time::Duration,
 };
 
-use baml_compiler2_native::{CompileOptions, compile_library, export_name, link_library};
+use baml_compiler2_native::{
+    CompileOptions, compile_library, export_name, export_refusal, library_interface, link_library,
+};
 use baml_db::{
     ProjectDatabase, SourceRootKind, SourceRootSpec, baml_compiler2_hir::item_data::file_functions,
 };
-use baml_native_host::{Error, FromBaml, Library, SdkError};
+use baml_native_host::{Error, FromBaml, Interface, Library, SdkError, Type, TypeDefKind};
 use bindings::{
     Map, bridge_test, class_refs, complex_models, enums, lists, maps, optional, primitives, unions,
 };
@@ -87,40 +89,7 @@ fn library_path() -> &'static Path {
         if let Some(path) = std::env::var_os("BAML_NATIVE_TEST_LIBRARY") {
             return PathBuf::from(path);
         }
-        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../sdk_tests/fixtures/type_shapes/baml_src")
-            .canonicalize()
-            .expect("the fixture");
-        let mut db = ProjectDatabase::new();
-        db.ensure_stdlib_sources();
-        let root = db
-            .add_source_root(SourceRootSpec::new(&fixture, SourceRootKind::Workspace))
-            .expect("a source root");
-        let mut files = Vec::new();
-        let mut pending = vec![fixture.clone()];
-        while let Some(directory) = pending.pop() {
-            for entry in std::fs::read_dir(&directory).expect("the fixture") {
-                let entry = entry.expect("an entry").path();
-                if entry.is_dir() {
-                    pending.push(entry);
-                } else if entry
-                    .extension()
-                    .is_some_and(|extension| extension == "baml")
-                {
-                    files.push(entry);
-                }
-            }
-        }
-        files.push(fixture.join("ns_bridge_test/types.baml"));
-        files.sort();
-        for file in files {
-            let text = if file.ends_with("ns_bridge_test/types.baml") {
-                include_str!("type_shapes/bridge_test.baml").to_owned()
-            } else {
-                std::fs::read_to_string(&file).expect("a fixture file")
-            };
-            db.add_or_update_file_in(root, &file, &text);
-        }
+        let db = fixture_database();
         let functions: Vec<_> = db
             .workspace_files()
             .into_iter()
@@ -142,6 +111,45 @@ fn library_path() -> &'static Path {
         link_library(&compiled.object, &path).expect("the library links");
         path
     })
+}
+
+/// The fixture's sources and `bridge_test`, in a database.
+fn fixture_database() -> ProjectDatabase {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../sdk_tests/fixtures/type_shapes/baml_src")
+        .canonicalize()
+        .expect("the fixture");
+    let mut db = ProjectDatabase::new();
+    db.ensure_stdlib_sources();
+    let root = db
+        .add_source_root(SourceRootSpec::new(&fixture, SourceRootKind::Workspace))
+        .expect("a source root");
+    let mut files = Vec::new();
+    let mut pending = vec![fixture.clone()];
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(&directory).expect("the fixture") {
+            let entry = entry.expect("an entry").path();
+            if entry.is_dir() {
+                pending.push(entry);
+            } else if entry
+                .extension()
+                .is_some_and(|extension| extension == "baml")
+            {
+                files.push(entry);
+            }
+        }
+    }
+    files.push(fixture.join("ns_bridge_test/types.baml"));
+    files.sort();
+    for file in files {
+        let text = if file.ends_with("ns_bridge_test/types.baml") {
+            include_str!("type_shapes/bridge_test.baml").to_owned()
+        } else {
+            std::fs::read_to_string(&file).expect("a fixture file")
+        };
+        db.add_or_update_file_in(root, &file, &text);
+    }
+    db
 }
 
 /// The library, for one test at a time.
@@ -806,4 +814,176 @@ fn dropping_a_woken_call_hands_the_turn_over() {
         bridge_test::add(1, 1).await.expect("add");
     });
     assert_eq!(library.handle_count(), before);
+}
+
+/// The library carries its interface as a typed tree: every export, its
+/// parameters, result and throws type, and the classes and enums by the
+/// numbers `class_of` returns.
+#[test]
+fn the_interface_is_a_typed_tree() {
+    let (_turn, library) = library();
+    let interface = library.interface();
+    assert_eq!(interface.hash, bindings::INTERFACE_HASH);
+    assert_eq!(interface.functions.len(), EXPORTS.len());
+    for (function, name) in interface.functions.iter().zip(EXPORTS) {
+        assert_eq!(function.name, name);
+        assert!(
+            function.signature.starts_with(name),
+            "{}",
+            function.signature
+        );
+    }
+    let function = |name: &str| {
+        interface
+            .functions
+            .iter()
+            .find(|function| function.name == name)
+            .unwrap_or_else(|| panic!("no export {name}"))
+    };
+    let add = function("bridge_test.add");
+    assert_eq!(
+        add.params.iter().map(|param| &param.ty).collect::<Vec<_>>(),
+        [&Type::Int, &Type::Int]
+    );
+    assert_eq!(add.result, Type::Int);
+    assert_eq!(add.throws, None);
+    assert_eq!(function("primitives.round_trip_float").result, Type::Float);
+    assert_eq!(function("primitives.round_trip_bool").result, Type::Bool);
+    assert_eq!(
+        function("primitives.round_trip_string").result,
+        Type::String
+    );
+    assert_eq!(function("primitives.return_null").result, Type::Null);
+    assert_eq!(
+        function("lists.round_trip_ints").result,
+        Type::List(Box::new(Type::Int))
+    );
+    assert_eq!(
+        function("maps.round_trip_simple_map").result,
+        Type::Map(Box::new(Type::Int))
+    );
+    assert_eq!(
+        function("optional.round_trip_optional_int").result,
+        Type::Union(vec![Type::Int, Type::Null])
+    );
+    // A class or enum by its name; the bindings were written with the same
+    // numbers.
+    let number = |name: &str| {
+        u32::try_from(
+            interface
+                .types
+                .iter()
+                .position(|ty| ty.name == name)
+                .unwrap_or_else(|| panic!("no type {name}")),
+        )
+        .expect("a small number")
+    };
+    let point = number("bridge_test.Point");
+    assert_eq!(point, 1);
+    assert_eq!(
+        function("bridge_test.make_points").result,
+        Type::List(Box::new(Type::Class(point)))
+    );
+    let lookup = function("bridge_test.lookup");
+    assert_eq!(
+        lookup.throws,
+        Some(Type::Class(number("bridge_test.LookupFailed")))
+    );
+    let sentiment = number("enums.Sentiment");
+    assert_eq!(
+        function("enums.round_trip_sentiment").result,
+        Type::Enum(sentiment)
+    );
+    let class = |number: u32| &interface.types[number as usize];
+    let TypeDefKind::Class { fields } = &class(point).kind else {
+        panic!("Point is a class");
+    };
+    assert_eq!(
+        fields
+            .iter()
+            .map(|field| (field.name.as_str(), &field.ty))
+            .collect::<Vec<_>>(),
+        [("x", &Type::Int), ("y", &Type::Int)]
+    );
+    let TypeDefKind::Enum { variants } = &class(sentiment).kind else {
+        panic!("Sentiment is an enum");
+    };
+    assert_eq!(variants, &["Positive", "Negative"]);
+    // `Enums.variant_as_type` is `Sentiment.Positive`.
+    let TypeDefKind::Class { fields } = &class(number("enums.Enums")).kind else {
+        panic!("Enums is a class");
+    };
+    assert_eq!(
+        fields[1].ty,
+        Type::EnumVariant {
+            of: sentiment,
+            index: 0
+        }
+    );
+    // `Invoice.status` is `"draft" | "sent" | "paid"`.
+    let TypeDefKind::Class { fields } = &class(number("complex_models.Invoice")).kind else {
+        panic!("Invoice is a class");
+    };
+    assert_eq!(
+        fields[1].ty,
+        Type::Union(vec![
+            Type::LiteralString("draft".to_owned()),
+            Type::LiteralString("sent".to_owned()),
+            Type::LiteralString("paid".to_owned()),
+        ])
+    );
+}
+
+/// Every function of the fixture that can be exported gives a tree, and
+/// the literal kinds the library above does not reach read back as
+/// written.
+#[test]
+fn every_exportable_function_of_the_fixture_has_a_tree() {
+    let db = fixture_database();
+    let exportable: Vec<_> = db
+        .workspace_files()
+        .into_iter()
+        .flat_map(|file| file_functions(&db, file).iter().copied())
+        .filter(|function| export_refusal(&db, *function).is_none())
+        .collect();
+    let json = library_interface(&db, &exportable)
+        .expect("an interface")
+        .to_json();
+    let interface = Interface::from_json(&json).expect("every tree parses");
+    assert_eq!(interface.functions.len(), exportable.len());
+    assert!(
+        interface.functions.len() > 100,
+        "{}",
+        interface.functions.len()
+    );
+    let result = |name: &str| {
+        &interface
+            .functions
+            .iter()
+            .find(|function| function.name == name)
+            .unwrap_or_else(|| panic!("no export {name}"))
+            .result
+    };
+    assert_eq!(result("literals.return_literal42"), &Type::LiteralInt(42));
+    assert_eq!(
+        result("literals.return_literal_neg_one"),
+        &Type::LiteralInt(-1)
+    );
+    assert_eq!(
+        result("literals.return_literal_true"),
+        &Type::LiteralBool(true)
+    );
+    assert_eq!(
+        result("literals.return_literal_false"),
+        &Type::LiteralBool(false)
+    );
+    assert_eq!(
+        result("literals.return_literal_escaped"),
+        &Type::LiteralString("has \"quotes\"".to_owned())
+    );
+    let Type::EnumVariant { of, index } = result("enums.round_trip_sentiment_positive") else {
+        panic!("a variant");
+    };
+    assert_eq!(interface.types[*of as usize].name, "enums.Sentiment");
+    assert_eq!(*index, 0);
 }

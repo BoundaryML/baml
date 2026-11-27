@@ -880,6 +880,7 @@ dependencies = [
  "baml_compiler2_native",
  "baml_db",
  "indexmap",
+ "serde_json",
  "tempfile",
  "tokio",
 ]
