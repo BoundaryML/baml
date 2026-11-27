@@ -12481,9 +12481,10 @@ impl<'db> InferenceContext<'db> {
             self.plain_finalized(&declared)
         };
         // Finalizing a union expands its alias members (`SendError |
-        // string` becomes `BaseError | LimitError | string`), so the aliases
-        // come from the written surface and the members they stand for
-        // leave the per-fact judgment below.
+        // string` becomes `BaseError | LimitError | string`, and an alias
+        // nested in a container is normalized too), so the aliases come
+        // from the written surface and every fact equivalent to a member
+        // they stand for leaves the per-fact judgment below.
         let written_aliases: Vec<baml_type::Ty> =
             crate::package_interface::flatten_ty_to_facts(&rendered_plain(&declared))
                 .into_iter()
@@ -12502,7 +12503,12 @@ impl<'db> InferenceContext<'db> {
                     .filter(|fact| {
                         crate::throw_facts::flatten_declared_ty_to_facts(fact)
                             .iter()
-                            .any(|leaf| !alias_members.contains(leaf))
+                            .any(|leaf| {
+                                !alias_members.contains(leaf)
+                                    && !alias_members.iter().any(|member| {
+                                        baml_type::normalize::equivalent(leaf, member, &self.facts)
+                                    })
+                            })
                     }),
             )
             .collect();

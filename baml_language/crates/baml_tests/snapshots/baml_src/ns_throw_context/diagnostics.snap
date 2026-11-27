@@ -19,3 +19,12 @@ source: crates/baml_tests/src/corpus.rs
  170 │ │       1
  171 │ ╰─▶ }
      ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: ElementCodes
+     ╭─[throw_context.baml:234:64]
+ 234 │ ╭─▶ function throwOnlyString() -> int throws ElementCodes | string {
+ 235 │ │       throw "only";
+ 236 │ ╰─▶ }
+     ╰────

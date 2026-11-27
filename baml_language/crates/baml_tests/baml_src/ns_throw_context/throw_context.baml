@@ -230,3 +230,48 @@ test "throw_context_alias_in_union_and_container" {
     };
     assert.equal(size, 2)
 }
+
+function throwOnlyString() -> int throws ElementCodes | string {
+    throw "only";
+}
+
+type CodeTree = int | CodeTree[];
+
+type Ping = string | Pong[];
+
+type Pong = int | Ping[];
+
+function throwTreeLeaf() -> int throws CodeTree {
+    throw 1;
+}
+
+function throwTreeBranch(branch: CodeTree[]) -> int throws CodeTree {
+    throw branch;
+}
+
+function throwPongs(pongs: Pong[]) -> int throws Ping {
+    throw pongs;
+}
+
+test "throw_context_recursive_aliases" {
+    let leaf = throwTreeLeaf() catch (e) {
+        int => e,
+        CodeTree[] => -1,
+    };
+    assert.equal(leaf, 1)
+    let branch = throwTreeBranch([1, [2, 3]]) catch (e) {
+        int => -1,
+        CodeTree[] => e.length(),
+    };
+    assert.equal(branch, 2)
+    let pongs = throwPongs([1, ["a"]]) catch (e) {
+        string => -1,
+        Pong[] => e.length(),
+    };
+    assert.equal(pongs, 2)
+    let only = throwOnlyString() catch (e) {
+        ElementCodes => "wrong",
+        string => e,
+    };
+    assert.equal(only, "only")
+}
