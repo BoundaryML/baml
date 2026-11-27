@@ -61,3 +61,20 @@ function env_or(name: string, fallback: string) -> string {
   let value = baml.env.get(name);
   if (value != null) { value } else { fallback }
 }
+
+function two_lists(a: int[], b: int[]) -> int {
+  a.length() + b.length()
+}
+
+function explode(n: int) -> int {
+  if (n > 0) {
+    throw "exploded";
+  }
+  n
+}
+
+// Starts a task that fails, and never awaits it.
+function fail_quietly() -> int {
+  let t = spawn { explode(1) };
+  1
+}

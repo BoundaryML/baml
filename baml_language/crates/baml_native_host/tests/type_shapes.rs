@@ -29,13 +29,13 @@ use baml_compiler2_native::{CompileOptions, compile_library, export_name, link_l
 use baml_db::{
     ProjectDatabase, SourceRootKind, SourceRootSpec, baml_compiler2_hir::item_data::file_functions,
 };
-use baml_native_host::{Error, Library, SdkError};
+use baml_native_host::{Error, FromBaml, Library, SdkError};
 use bindings::{
     Map, bridge_test, class_refs, complex_models, enums, lists, maps, optional, primitives, unions,
 };
 
 /// The exports, in the order their numbers in the bindings say.
-const EXPORTS: [&str; 39] = [
+const EXPORTS: [&str; 41] = [
     "bridge_test.add",
     "bridge_test.lookup",
     "bridge_test.round_trip_points",
@@ -75,6 +75,8 @@ const EXPORTS: [&str; 39] = [
     "primitives.round_trip_string",
     "primitives.round_trip_bool",
     "primitives.return_null",
+    "bridge_test.two_lists",
+    "bridge_test.fail_quietly",
 ];
 
 /// The fixture and `bridge_test`, compiled and linked into a library once
@@ -387,25 +389,27 @@ fn every_round_trip_returns_what_went_in() {
     assert_eq!(library.handle_count(), before, "every handle is freed");
 }
 
-/// The same, in a process of its own that collects on every allocation.
+/// The same, and ten thousand instances (more handles than one chunk of
+/// the table), in processes of their own that collect on every allocation.
 #[test]
 fn every_round_trip_returns_what_went_in_collecting_always() {
-    let output = std::process::Command::new(std::env::current_exe().expect("the test binary"))
-        .args([
-            "--exact",
-            "every_round_trip_returns_what_went_in",
-            "--nocapture",
-        ])
-        .env("BAML_GC_STRESS", "1")
-        .env("BAML_NATIVE_TEST_LIBRARY", library_path())
-        .output()
-        .expect("the test binary runs");
-    assert!(
-        output.status.success(),
-        "under BAML_GC_STRESS:\n{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    for test in [
+        "every_round_trip_returns_what_went_in",
+        "ten_thousand_instances_round_trip",
+    ] {
+        let output = std::process::Command::new(std::env::current_exe().expect("the test binary"))
+            .args(["--exact", test, "--nocapture"])
+            .env("BAML_GC_STRESS", "1")
+            .env("BAML_NATIVE_TEST_LIBRARY", library_path())
+            .output()
+            .expect("the test binary runs");
+        assert!(
+            output.status.success(),
+            "{test} under BAML_GC_STRESS:\n{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }
 
 /// A function that throws a class: the error is typed.
@@ -439,7 +443,7 @@ fn a_thrown_class_arrives_typed() {
 fn a_library_with_another_interface_is_refused() {
     let (_turn, _library) = library();
     let path = library_path().to_str().expect("UTF-8");
-    match Library::load(path, bindings::INTERFACE_HASH ^ 1) {
+    match baml_native_host::futures::load(path, bindings::INTERFACE_HASH ^ 1) {
         Err(SdkError::Load(why)) => assert!(why.contains("interface hash"), "{why}"),
         Ok(_) => panic!("a mismatched hash is accepted"),
         Err(other) => panic!("{other}"),
@@ -564,4 +568,242 @@ fn checked_writes_and_one_use_containers() {
         Err(SdkError::Refused(why)) => assert!(why.contains("passed once"), "{why}"),
         other => panic!("an array passed twice: {:?}", other.map(|v| v.raw())),
     }
+}
+
+/// Run a call started with the core alone, turning until it ends, and copy
+/// its value out with `read` on the spot.
+fn run_raw<T>(
+    session: &baml_native_host::Session,
+    call: u64,
+    read: impl Fn(baml_native_host::BamlValue<'_>) -> T,
+) -> (baml_native_host::Outcome, T) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let mut ended = None;
+        session.turn(|event| {
+            if let baml_native_host::Event::Ended {
+                call: which,
+                outcome,
+                value,
+            } = event
+                && which == call
+            {
+                ended = Some((outcome, read(value)));
+            }
+        });
+        if let Some(ended) = ended {
+            return ended;
+        }
+        assert!(std::time::Instant::now() < deadline, "the call ends");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+/// Maps: a key that is not a string is refused; of a key given twice the
+/// later value is kept; a value of the wrong type is refused where the map
+/// lands.
+#[test]
+fn map_values_are_checked() {
+    let (_turn, library) = library();
+    let session = library.session();
+    let int_key = session.map(vec![(session.int(1), session.int(2))]);
+    assert!(matches!(int_key, Err(SdkError::Refused(why)) if why.contains("key 0")));
+    let twice = session
+        .map(vec![
+            (session.string("a").expect("a key"), session.int(1)),
+            (session.string("a").expect("a key"), session.int(2)),
+        ])
+        .expect("a map");
+    let export = library
+        .find("maps.round_trip_simple_map")
+        .expect("an export");
+    let call = session.start(export, &[twice]).expect("started");
+    let (outcome, back) = run_raw(&session, call, |value| {
+        Map::<String, i64>::from_baml(value).expect("a map")
+    });
+    assert_eq!(outcome, baml_native_host::Outcome::Returned);
+    assert_eq!(back, Map::from([("a".to_owned(), 2)]));
+    let wrong = session
+        .map(vec![(
+            session.string("a").expect("a key"),
+            session.string("not an int").expect("a value"),
+        )])
+        .expect("a map");
+    let refused = session.start(export, &[wrong]);
+    assert!(matches!(refused, Err(SdkError::Refused(why)) if why.contains("argument 0")));
+}
+
+/// Scalars and nested values of the wrong type are refused where they
+/// land: an `int` for a `float`, a literal that does not match, a wrong
+/// value two levels deep, a variant out of range.
+#[test]
+fn values_of_the_wrong_type_are_refused() {
+    let (_turn, library) = library();
+    let session = library.session();
+    let export = library
+        .find("primitives.round_trip_float")
+        .expect("an export");
+    let float = session.start(export, &[session.int(1)]);
+    assert!(
+        matches!(float, Err(SdkError::Refused(_))),
+        "an int for a float"
+    );
+
+    // An invoice whose status is no literal of its union.
+    let invoice = session.instance(
+        11,
+        vec![
+            session.string("inv").expect("id"),
+            session.string("nope").expect("status"),
+            session.array(vec![]).expect("items"),
+            session.null(),
+            session.null(),
+        ],
+    );
+    assert!(matches!(invoice, Err(SdkError::Refused(why)) if why.contains("field 1")));
+
+    // A line item whose tags hold an int: two levels down.
+    let item = session.instance(
+        12,
+        vec![
+            session.string("sku").expect("sku"),
+            session.int(1),
+            session.float(1.0),
+            session.array(vec![session.int(5)]).expect("tags"),
+            session.map(vec![]).expect("attributes"),
+        ],
+    );
+    assert!(matches!(item, Err(SdkError::Refused(why)) if why.contains("field 3")));
+
+    assert!(
+        matches!(session.variant(16, 9), Err(SdkError::Refused(_))),
+        "no variant 9"
+    );
+}
+
+/// Loading another library in the same process is an error, never the
+/// first one returned in silence.
+#[test]
+fn a_second_library_is_refused() {
+    let (_turn, _library) = library();
+    match baml_native_host::futures::load("/no/such/other/library.dylib", bindings::INTERFACE_HASH)
+    {
+        Err(SdkError::Load(why)) => assert!(why.contains("loaded already"), "{why}"),
+        other => panic!("a second library: {:?}", other.map(|_| ())),
+    }
+}
+
+/// The hook for failures nobody awaited runs with nothing of the library
+/// held: it can call a binding. One that panics changes nothing.
+#[test]
+fn the_unhandled_hook_may_call_bindings_and_panic() {
+    let (_turn, _library) = library();
+    runtime().block_on(async {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let sender = Mutex::new(sender);
+        baml_native_host::futures::set_on_unhandled(move |error| {
+            let sender = sender.lock().expect("one hook at a time").clone();
+            let error = error.to_owned();
+            tokio::spawn(async move {
+                let sum = bridge_test::add(2, 3).await.expect("a call from the hook");
+                let _ = sender.send((error, sum));
+            });
+        });
+        assert_eq!(bridge_test::fail_quietly().await.expect("returns"), 1);
+        let (error, sum) = tokio::task::spawn_blocking(move || {
+            receiver
+                .recv_timeout(Duration::from_secs(10))
+                .expect("the hook ran")
+        })
+        .await
+        .expect("received");
+        assert!(error.contains("exploded"), "{error}");
+        assert_eq!(sum, 5);
+
+        baml_native_host::futures::set_on_unhandled(|_| panic!("a hook that panics"));
+        assert_eq!(bridge_test::fail_quietly().await.expect("returns"), 1);
+        assert_eq!(bridge_test::add(1, 1).await.expect("still usable"), 2);
+        baml_native_host::futures::set_on_unhandled(|_| {});
+    });
+}
+
+/// A call dropped after it was woken, before it gave the turn it was woken
+/// for, hands the turn to another call, which still finishes.
+#[test]
+fn dropping_a_woken_call_hands_the_turn_over() {
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        task::{Context, Poll, Wake, Waker},
+    };
+
+    struct Flag(AtomicBool);
+    impl Wake for Flag {
+        fn wake(self: Arc<Self>) {
+            self.0.store(true, Ordering::Release);
+        }
+    }
+
+    let (_turn, library) = library();
+    let before = library.handle_count();
+    let flags = [
+        Arc::new(Flag(AtomicBool::new(false))),
+        Arc::new(Flag(AtomicBool::new(false))),
+    ];
+    let wakers: Vec<Waker> = flags
+        .iter()
+        .map(|flag| Waker::from(Arc::clone(flag)))
+        .collect();
+    let mut calls = vec![
+        Some(Box::pin(bridge_test::nap(20))),
+        Some(Box::pin(bridge_test::nap(60))),
+    ];
+    for (call, waker) in calls.iter_mut().zip(&wakers) {
+        let call = call.as_mut().expect("a call");
+        assert!(
+            call.as_mut()
+                .poll(&mut Context::from_waker(waker))
+                .is_pending()
+        );
+    }
+    // The timer fires: one call is woken. Drop it without polling it.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let woken = loop {
+        if let Some(index) = flags
+            .iter()
+            .position(|flag| flag.0.swap(false, Ordering::AcqRel))
+        {
+            break index;
+        }
+        assert!(std::time::Instant::now() < deadline, "a call is woken");
+        std::thread::sleep(Duration::from_millis(1));
+    };
+    calls[woken] = None;
+    // The other is woken in its place, and finishes.
+    let other = 1 - woken;
+    let expected = if other == 0 { 20 } else { 60 };
+    loop {
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !flags[other].0.swap(false, Ordering::AcqRel) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the other call is woken"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let call = calls[other].as_mut().expect("a call");
+        if let Poll::Ready(result) = call.as_mut().poll(&mut Context::from_waker(&wakers[other])) {
+            assert_eq!(result.expect("nap"), expected);
+            break;
+        }
+    }
+    drop(calls);
+    // The dropped call's result is freed when it arrives.
+    runtime().block_on(async {
+        tokio::time::sleep(Duration::from_millis(80)).await;
+        bridge_test::add(1, 1).await.expect("add");
+    });
+    assert_eq!(library.handle_count(), before);
 }

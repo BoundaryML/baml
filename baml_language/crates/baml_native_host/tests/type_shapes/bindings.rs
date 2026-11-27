@@ -16,19 +16,19 @@
 pub use baml_native_host::Map;
 
 /// The interface hash of the library these bindings are for.
-pub const INTERFACE_HASH: u64 = 0x2d1e_5897_03f1_7ee7;
+pub const INTERFACE_HASH: u64 = 0x6933_8fd0_293f_2b04;
 
 pub mod _runtime {
     use std::sync::OnceLock;
 
-    use baml_native_host::{Library, SdkError};
+    use baml_native_host::{Library, SdkError, futures};
 
     static LIBRARY: OnceLock<&'static Library> = OnceLock::new();
 
     /// Load the library at `path`, refusing one generated for another
     /// version of the program.
     pub fn init(path: &str) -> Result<&'static Library, SdkError> {
-        let library = Library::load(path, super::INTERFACE_HASH)?;
+        let library = futures::load(path, super::INTERFACE_HASH)?;
         Ok(*LIBRARY.get_or_init(|| library))
     }
 
@@ -80,6 +80,8 @@ mod numbers {
     pub const FN_ROUND_TRIP_STRING: u32 = 36;
     pub const FN_ROUND_TRIP_BOOL: u32 = 37;
     pub const FN_RETURN_NULL: u32 = 38;
+    pub const FN_TWO_LISTS: u32 = 39;
+    pub const FN_FAIL_QUIETLY: u32 = 40;
 
     pub const LOOKUP_FAILED: u32 = 0;
     pub const POINT: u32 = 1;
@@ -210,8 +212,7 @@ macro_rules! function {
     ($name:ident($($arg:ident: $ty:ty as $kind:tt),*) -> $result:ty, $throws:ty = $number:expr) => {
         pub async fn $name($($arg: $ty),*) -> ::std::result::Result<$result, ::baml_native_host::Error<$throws>> {
             let library = crate::bindings::_runtime::library()?;
-            library
-                .call::<$result, $throws>($number, |session| {
+            ::baml_native_host::futures::call::<$result, $throws>(library, $number, |session| {
                     let _ = session;
                     ::std::result::Result::Ok(::std::vec![$(argument!($kind, $arg, session)),*])
                 })
@@ -252,6 +253,8 @@ pub mod bridge_test {
     function!(count_ints(xs: Vec<i64> as value) -> i64, ::std::convert::Infallible = FN_COUNT_INTS);
     function!(nap(milliseconds: i64 as value) -> i64, ::std::convert::Infallible = FN_NAP);
     function!(env_or(name: String as value, fallback: String as value) -> String, ::std::convert::Infallible = FN_ENV_OR);
+    function!(two_lists(a: Vec<i64> as value, b: Vec<i64> as value) -> i64, ::std::convert::Infallible = FN_TWO_LISTS);
+    function!(fail_quietly() -> i64, ::std::convert::Infallible = FN_FAIL_QUIETLY);
 }
 
 pub mod class_refs {

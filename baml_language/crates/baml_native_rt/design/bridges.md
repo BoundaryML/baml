@@ -205,17 +205,34 @@ The call id lives in the task (`wait_value`), and every task the call spawns inh
 
 Generated code knows each type, so the copy is straight-line code: read each field once, build the host object. The numbers it uses come from `--describe`; the interface hash makes a library and bindings of different versions refuse each other at load. Arguments go the other way, bottom-up, each part a handle until it is built into its parent.
 
-The crate `baml_native_host` is what Rust bindings sit on:
+The crate `baml_native_host` is in two layers.
+
+**The core** is what any host builds on: a Python or Node module written in Rust drives it from its own event loop. It has no executor types and no thread of its own.
 
 | Piece | What it is |
 |---|---|
-| `Library::load(path, hash)` | Opens the library, refuses one whose interface hash is not the bindings', builds its worker. One per process |
-| `Library::call(export, args)` | Builds the arguments and starts the call. Returns a `Call<T, E>`, the future of `Result<T, Error<E>>` |
-| `ToBaml`, `FromBaml` | Copy a Rust value into BAML memory and out of it. Implemented for `i64`, `f64`, `bool`, `String`, `()`, `Option<T>`, `Vec<T>`, `IndexMap<String, V>`; generated structs and enums implement them with the interface's numbers |
-| `Session`, `BamlValue` | The library's lock held by one thread, and a value inside it. A `BamlValue` frees its handle when dropped and cannot outlive the session, so no handle reaches user code |
+| `Library::load(path, hash, wake)` | Opens the library, refuses one whose interface hash is not the bindings', builds its worker. `wake` is called from any thread when the library wants a turn. One library per process: the same path again returns it, another path is an error |
+| `Library::exports()`, `interface_json()`, `find(name)` | The interface as data: the exports, and the JSON `--describe` prints |
+| `Library::session()` | The library's lock, held by this thread: a `Session`. Neither `Send` nor `Sync`, nor is a `BamlValue` |
+| `Session::start(export, args)` | Starts a call from values built in the session; its id |
+| `Session::turn(each)` | Runs a turn, then hands `each` every `Event` that ended (a call with its `Outcome` and value, or an unhandled failure) while the session still holds the library, so the values are copied on the spot. Returns how long until the next BAML timer. Allocates nothing when nothing ended |
+| `BamlValue`, `ToBaml`, `FromBaml`, `Session::instance`, `array`, `map`, `string`, `variant` | Reading and building values. A `BamlValue` frees its handle when dropped |
+| `BamlValue::detach`, `Session::attach` | Carry a value past its session; dropped without attach, its handle is freed at the next session |
+
+**The futures layer**, `baml_native_host::futures`, is built on the core's public functions alone, which shows the core is enough.
+
+| Piece | What it is |
+|---|---|
+| `futures::load(path, hash)` | `Library::load` with this layer's `wake`, and its timer thread (one per process) |
+| `futures::call(library, export, args)` | Builds the arguments and starts the call. Returns a `Call<T, E>`, the future of `Result<T, Error<E>>` |
+| `futures::set_on_unhandled(hook)` | What is done with an unhandled failure, given as text. The default prints it to stderr |
 | `Error<E>` | `Thrown` (the declared type), `Runtime` (anything else thrown, described), `Panic`, `Stuck`, `Sdk` |
 
-How calls are driven: any `Call` that is polled gives the library a turn when it asked for one (a call started, `wake` came, a timer fired), on the polling thread, under the library's lock. So any executor drives the calls, a multi-thread tokio runtime included, and BAML runs on whichever thread polls, one at a time. The runtime has no state tied to a thread: no thread-locals, no signal stack, and the worker's register and stack are set on every resume. A `wake` from the I/O thread and the library's timer wake every pending call; the first to poll turns. A `Call` that is dropped does not cancel the BAML call: its result is freed when it arrives, and the other calls are woken in its place.
+How calls are driven: a `Call` that is polled gives the library a turn when one is owed (a call started, `wake` came, a timer fired), on the polling thread, under the library's lock. So any executor drives the calls, a multi-thread tokio runtime included, and BAML runs on whichever thread polls, one at a time. The runtime has no state tied to a thread: no thread-locals, no signal stack, and the worker's register and stack are set on every resume.
+
+- When a turn becomes owed, **one** waiting call is woken. If that call is dropped, or ends, while the turn is still owed, it wakes another in its place.
+- Nothing of the user's runs while the library is held. Wakers are woken, and the unhandled hook is called, after the session is dropped. The hook gets the error as text, may call any binding, and a panic in it is caught.
+- A `Call` that is dropped does not cancel the BAML call: its result is freed when it arrives.
 
 The bindings for the type-shapes fixture are in `baml_native_host/tests/type_shapes/bindings.rs`: plain structs, enums and union enums with the names `sdkgen_rust` emits, and one async function per export under its own name, with its arguments taken as `sdkgen_rust` takes them (today's SDK also emits a `_sync` twin, which these leave out).
 

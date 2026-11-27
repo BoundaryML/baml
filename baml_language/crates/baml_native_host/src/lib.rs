@@ -1,22 +1,25 @@
-//! Calling a BAML program compiled to a native library from Rust.
+//! Calling a BAML program compiled to a native library from a host
+//! program.
 //!
 //! `native_pack --lib` makes a shared library that exports the C functions
 //! of `baml_native_rt/src/sched/host.rs` (`baml_native_rt/design/bridges.md`).
-//! This crate is what generated Rust bindings sit on:
+//! This crate is in two layers:
 //!
-//! - [`Library::load`] opens the library, checks its interface hash against
-//!   the bindings' and builds its worker. One library per process.
-//! - [`Library::call`] starts an exported function and returns a [`Call`],
-//!   a future of its result. Any executor drives it: polling a call runs
-//!   the library's turns when it asked for one, on the polling thread, one
-//!   thread at a time.
-//! - [`ToBaml`] and [`FromBaml`] copy a Rust value into BAML memory and out
-//!   of it. Generated structs implement them with the class and field
-//!   numbers of the library's interface (`native_pack --lib --describe`).
+//! - **The core**, here: loading the library and checking its interface
+//!   hash ([`Library::load`]), the lock every call into it takes
+//!   ([`Session`]), starting a call from built values ([`Session::start`]),
+//!   running a turn and taking what ended ([`Session::turn`]), reading and
+//!   building values ([`BamlValue`], [`ToBaml`], [`FromBaml`]), and the
+//!   interface as data ([`Library::interface_json`]). No executor and no
+//!   thread of its own: a Python or Node module drives it from its own
+//!   event loop.
+//! - **The futures layer**, [`futures`]: [`futures::Call`], a Rust future
+//!   per call, a timer thread, and who is woken. It is built on the core's
+//!   public functions alone.
 //!
-//! User code never holds a handle: a [`BamlValue`] lives only inside a
-//! [`Session`], the lock every call into the library takes, and frees its
-//! handle when dropped.
+//! User code never holds a handle: a [`BamlValue`] lives inside a
+//! [`Session`] and frees its handle when dropped; [`Detached`] carries one
+//! past a session, and frees it at the next one if dropped.
 
 #![expect(
     unsafe_code,
@@ -25,22 +28,20 @@
               transmuted to the type of the field it is kept in"
 )]
 
+pub mod futures;
+mod values;
+
 use std::{
-    collections::{HashMap, HashSet},
     ffi::{CString, c_char, c_int, c_void},
-    future::Future,
     marker::PhantomData,
-    pin::Pin,
-    sync::{
-        Arc, Condvar, Mutex, MutexGuard, OnceLock, RwLock,
-        atomic::{AtomicBool, Ordering},
-    },
-    task::{Context, Poll, Waker},
-    time::{Duration, Instant},
+    sync::{Mutex, MutexGuard, OnceLock},
+    time::Duration,
 };
 
+pub use futures::Error;
 /// The map type generated bindings use, as today's Rust SDK does.
 pub use indexmap::IndexMap as Map;
+pub use values::{BamlValue, Detached, FromBaml, ToBaml};
 
 /// A value as it crosses the C boundary: a tag and a payload.
 #[repr(C, align(16))]
@@ -72,12 +73,6 @@ pub mod tag {
 /// The version of the C interface this crate speaks.
 const ABI_VERSION: u32 = 2;
 
-/// How a call ended, as the library says.
-const STATUS_RETURNED: u32 = 0;
-const STATUS_THREW: u32 = 1;
-const STATUS_STUCK: u32 = 2;
-const STATUS_PANICKED: u32 = 3;
-
 /// What went wrong on this side of the boundary.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SdkError {
@@ -101,47 +96,42 @@ impl std::fmt::Display for SdkError {
 
 impl std::error::Error for SdkError {}
 
-/// How a call failed. `E` is the function's declared `throws` type.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Error<E = std::convert::Infallible> {
-    /// It threw a value of its declared `throws` type.
-    Thrown {
-        value: Box<E>,
-    },
-    /// It threw something else: the class's name when it is an instance,
-    /// and the value as text.
-    Runtime {
-        class_name: Option<String>,
-        message: String,
-    },
-    /// It panicked (`baml.panics`, `baml.panics.Exit` included).
-    Panic {
-        message: String,
-    },
-    /// It can never finish: nothing can run, no timer is set, and no I/O
-    /// can complete.
+/// How a call ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    /// It returned its value.
+    Returned,
+    /// It threw the value.
+    Threw,
+    /// It can never finish: nothing can run, no timer is set and no I/O
+    /// can complete. The value is `null`.
     Stuck,
-    Sdk(SdkError),
+    /// It panicked (`baml.panics`, `baml.panics.Exit` included) with the
+    /// value.
+    Panicked,
 }
 
-impl<E: std::fmt::Debug> std::fmt::Display for Error<E> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Thrown { value } => write!(f, "BAML threw {value:?}"),
-            Self::Runtime { message, .. } => write!(f, "BAML threw {message}"),
-            Self::Panic { message } => write!(f, "BAML panicked: {message}"),
-            Self::Stuck => write!(f, "the BAML call can never finish"),
-            Self::Sdk(error) => write!(f, "{error}"),
-        }
-    }
+/// What a turn reports.
+pub enum Event<'s> {
+    /// The call `call` ended.
+    Ended {
+        call: u64,
+        outcome: Outcome,
+        value: BamlValue<'s>,
+    },
+    /// A task the call `call` spawned failed, and nothing can await it
+    /// any more.
+    Unhandled { call: u64, error: BamlValue<'s> },
 }
 
-impl<E: std::fmt::Debug> std::error::Error for Error<E> {}
-
-impl<E> From<SdkError> for Error<E> {
-    fn from(error: SdkError) -> Self {
-        Self::Sdk(error)
-    }
+/// One exported function, as the library describes it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Export {
+    pub name: String,
+    pub arity: u32,
+    /// The signature as text: `add(a: int, b: int) -> int`.
+    pub signature: String,
+    pub hash: u64,
 }
 
 #[repr(C)]
@@ -160,152 +150,159 @@ unsafe extern "C" {
 }
 
 /// The library's C functions.
-struct Fns {
+pub(crate) struct Fns {
+    init: unsafe extern "C" fn(*const Callbacks) -> i32,
     find: unsafe extern "C" fn(*const u8, usize) -> i64,
+    export_count: unsafe extern "C" fn() -> u64,
+    export_info: unsafe extern "C" fn(u64, *mut u32, *mut u64, *mut u8, usize) -> i64,
     interface_hash: unsafe extern "C" fn() -> u64,
+    interface_json: unsafe extern "C" fn(*mut u8, usize) -> i64,
     call_start: unsafe extern "C" fn(u64, *const RawValue, usize) -> u64,
     turn: unsafe extern "C" fn() -> i64,
     last_error: unsafe extern "C" fn(*mut u8, usize) -> i64,
-    handle_free: unsafe extern "C" fn(u64),
-    describe: unsafe extern "C" fn(u64, *mut u8, usize) -> i64,
+    pub(crate) handle_free: unsafe extern "C" fn(u64),
+    pub(crate) describe: unsafe extern "C" fn(u64, *mut u8, usize) -> i64,
     collect: unsafe extern "C" fn(),
     handle_count: unsafe extern "C" fn() -> u64,
     string_new: unsafe extern "C" fn(*const u8, usize) -> u64,
-    string_copy: unsafe extern "C" fn(u64, *mut u8, usize) -> i64,
-    class_of: unsafe extern "C" fn(u64) -> i64,
-    field_get: unsafe extern "C" fn(u64, u32, *mut RawValue) -> i32,
-    array_len: unsafe extern "C" fn(u64) -> i64,
-    array_get: unsafe extern "C" fn(u64, u64, *mut RawValue) -> i32,
-    map_next: unsafe extern "C" fn(u64, u64, *mut RawValue, *mut RawValue) -> i64,
-    variant_index: unsafe extern "C" fn(u64) -> i64,
+    pub(crate) string_copy: unsafe extern "C" fn(u64, *mut u8, usize) -> i64,
+    pub(crate) class_of: unsafe extern "C" fn(u64) -> i64,
+    pub(crate) field_get: unsafe extern "C" fn(u64, u32, *mut RawValue) -> i32,
+    pub(crate) array_len: unsafe extern "C" fn(u64) -> i64,
+    pub(crate) array_get: unsafe extern "C" fn(u64, u64, *mut RawValue) -> i32,
+    pub(crate) map_next: unsafe extern "C" fn(u64, u64, *mut RawValue, *mut RawValue) -> i64,
+    pub(crate) variant_index: unsafe extern "C" fn(u64) -> i64,
     variant: unsafe extern "C" fn(u32, u32, *mut RawValue) -> i32,
     instance_new: unsafe extern "C" fn(u32, *const RawValue, usize, *mut i32) -> u64,
     array_new: unsafe extern "C" fn(*const RawValue, usize) -> u64,
     map_new: unsafe extern "C" fn(*const RawValue, *const RawValue, usize) -> u64,
 }
 
-/// What the library's callbacks leave for the calls, under its own lock,
-/// which a callback can take while the turn lock is held.
-#[derive(Default)]
-struct Inbox {
-    ended: HashMap<u64, (u32, RawValue)>,
-    waiting: HashMap<u64, Waker>,
-    /// Calls whose `Call` was dropped: their results are freed.
-    abandoned: HashSet<u64>,
-    /// Handles to free at the next turn lock.
-    frees: Vec<u64>,
-    /// Errors of tasks nobody awaited, for the hook.
-    unhandled: Vec<RawValue>,
+/// What the library's callbacks report during a turn, before it is handed
+/// over.
+#[derive(Clone, Copy)]
+enum RawEvent {
+    Ended(u64, u32, RawValue),
+    Unhandled(u64, RawValue),
 }
 
-/// When the library's next timer fires, for the timer thread.
-#[derive(Default)]
-struct Timer {
-    deadline: Mutex<Option<Instant>>,
-    changed: Condvar,
-}
-
-type Hook = Box<dyn Fn(&str) + Send + Sync>;
+type WakeFn = Box<dyn Fn() + Send + Sync>;
 
 /// A loaded library. One per process.
 pub struct Library {
     fns: Fns,
-    /// Every call into the library holds it: one thread at a time, and
-    /// never two at once.
+    path: String,
+    /// Every call into the library holds it: one thread at a time.
     lock: Mutex<()>,
-    inbox: Mutex<Inbox>,
-    /// The library asked for a turn: a call started, a task was woken, or
-    /// a timer fired.
-    need_turn: AtomicBool,
-    timer: Arc<Timer>,
-    on_unhandled: RwLock<Hook>,
+    /// What the callbacks reported in the turn running now. A callback
+    /// takes it while the turn holds `lock`; the vector keeps its room
+    /// from turn to turn.
+    events: Mutex<Vec<RawEvent>>,
+    /// Handles of [`Detached`] values dropped outside a session, freed at
+    /// the next one.
+    frees: Mutex<Vec<u64>>,
+    /// What the library calls, from any thread, when it wants a turn.
+    wake: WakeFn,
+    exports: Vec<Export>,
+    interface_json: String,
 }
 
 static LIBRARY: OnceLock<Library> = OnceLock::new();
-
-/// What is done with the error of a task nobody awaited, unless the user
-/// says otherwise.
-#[expect(clippy::print_stderr, reason = "the default the user can replace")]
-fn print_unhandled(error: &str) {
-    eprintln!("baml: a task failed and nothing awaited it: {error}");
-}
+/// Held while a library loads, so that two first loads do not race.
+static LOADING: Mutex<()> = Mutex::new(());
 
 unsafe extern "C" fn on_done(_ctx: *mut c_void, call: u64, status: u32, tag: u64, payload: u64) {
-    let Some(library) = LIBRARY.get() else { return };
-    let value = RawValue { tag, payload };
-    let waker = {
-        let mut inbox = library
-            .inbox
+    if let Some(library) = LIBRARY.get() {
+        library
+            .events
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if inbox.abandoned.remove(&call) {
-            if tag & tag::HANDLE != 0 {
-                inbox.frees.push(payload);
-            }
-            None
-        } else {
-            inbox.ended.insert(call, (status, value));
-            inbox.waiting.remove(&call)
-        }
-    };
-    if let Some(waker) = waker {
-        waker.wake();
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(RawEvent::Ended(call, status, RawValue { tag, payload }));
     }
 }
 
-unsafe extern "C" fn on_unhandled(_ctx: *mut c_void, _call: u64, tag: u64, payload: u64) {
+unsafe extern "C" fn on_unhandled(_ctx: *mut c_void, call: u64, tag: u64, payload: u64) {
     if let Some(library) = LIBRARY.get() {
         library
-            .inbox
+            .events
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .unhandled
-            .push(RawValue { tag, payload });
+            .push(RawEvent::Unhandled(call, RawValue { tag, payload }));
     }
 }
 
 unsafe extern "C" fn wake(_ctx: *mut c_void) {
     if let Some(library) = LIBRARY.get() {
-        library.wake_all();
+        (library.wake)();
     }
 }
 
 impl Library {
     /// Open the library at `path`, refuse it when its interface hash is not
-    /// `expected_hash` (the bindings'), and build its worker. Loading again
-    /// returns the library already loaded, if its hash matches.
-    pub fn load(path: &str, expected_hash: u64) -> Result<&'static Self, SdkError> {
+    /// `expected_hash` (the bindings'), and build its worker. `wake` is
+    /// called from any thread when the library wants a turn: the host then
+    /// takes a [`Session`] and calls [`Session::turn`] on its own thread.
+    ///
+    /// One library per process. Loading the same path again returns it,
+    /// after checking the hash (the first `wake` stays); another path is an
+    /// error.
+    pub fn load(
+        path: &str,
+        expected_hash: u64,
+        wake: impl Fn() + Send + Sync + 'static,
+    ) -> Result<&'static Self, SdkError> {
+        let _loading = LOADING
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(library) = LIBRARY.get() {
+            if library.path != path {
+                return Err(SdkError::Load(format!(
+                    "a library is loaded already, from {}: one per process",
+                    library.path
+                )));
+            }
             return library.check_hash(expected_hash).map(|()| library);
         }
         let fns = open(path)?;
+        // SAFETY: reads the library's table of exports, which needs no init.
+        let actual = unsafe { (fns.interface_hash)() };
+        if actual != expected_hash {
+            return Err(hash_mismatch(actual, expected_hash));
+        }
+        let exports = exports_of(&fns);
+        // SAFETY: as above; a buffer of its length.
+        let interface_json =
+            unsafe { text_from(|out, capacity| (fns.interface_json)(out, capacity)) }
+                .unwrap_or_default();
         let library = LIBRARY.get_or_init(|| Self {
             fns,
+            path: path.to_owned(),
             lock: Mutex::new(()),
-            inbox: Mutex::new(Inbox::default()),
-            need_turn: AtomicBool::new(false),
-            timer: Arc::new(Timer::default()),
-            on_unhandled: RwLock::new(Box::new(print_unhandled)),
+            events: Mutex::new(Vec::new()),
+            frees: Mutex::new(Vec::new()),
+            wake: Box::new(wake),
+            exports,
+            interface_json,
         });
-        library.check_hash(expected_hash)?;
         let callbacks = Callbacks {
             size: u32::try_from(size_of::<Callbacks>()).expect("a small struct"),
             ctx: std::ptr::null_mut(),
             on_done,
             on_unhandled,
-            wake,
+            wake: self::wake,
         };
-        let init: unsafe extern "C" fn(*const Callbacks) -> i32 =
-            // SAFETY: the library exports it with this type.
-            unsafe { std::mem::transmute::<*mut c_void, _>(symbol_of(path, "baml_lib_init")?) };
         let _guard = library.lock();
         // SAFETY: once per process, before any other call into the library.
-        let status = unsafe { init(&raw const callbacks) };
-        if status != 0 && status != -1 {
+        let status = unsafe { (library.fns.init)(&raw const callbacks) };
+        if status != 0 {
             return Err(SdkError::Load(format!("init failed with {status}")));
         }
-        library.start_timer();
         Ok(library)
+    }
+
+    /// The library loaded in this process, if one is.
+    pub fn loaded() -> Option<&'static Self> {
+        LIBRARY.get()
     }
 
     fn check_hash(&self, expected: u64) -> Result<(), SdkError> {
@@ -314,20 +311,20 @@ impl Library {
         if actual == expected {
             Ok(())
         } else {
-            Err(SdkError::Load(format!(
-                "the library's interface hash is {actual:016x}, the bindings' {expected:016x}: \
-                 the bindings were generated for another version of the program"
-            )))
+            Err(hash_mismatch(actual, expected))
         }
     }
 
-    /// Set what is done with the error of a task nobody awaited. The
-    /// default prints it to stderr.
-    pub fn set_on_unhandled(&self, hook: impl Fn(&str) + Send + Sync + 'static) {
-        *self
-            .on_unhandled
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Box::new(hook);
+    /// Its exported functions, numbered by their place here.
+    pub fn exports(&self) -> &[Export] {
+        &self.exports
+    }
+
+    /// Its interface as JSON, as `native_pack --lib --describe` prints it:
+    /// every export with its parameters, and every class and enum with its
+    /// fields and variants, numbered.
+    pub fn interface_json(&self) -> &str {
+        &self.interface_json
     }
 
     fn lock(&self) -> MutexGuard<'_, ()> {
@@ -336,16 +333,16 @@ impl Library {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// The library, for one thread: every call into it goes through a
-    /// session. Handles freed while it was not held are freed now.
+    /// The library, held by this thread: every call into it goes through a
+    /// session. Handles of [`Detached`] values dropped since the last one
+    /// are freed now.
     pub fn session(&'static self) -> Session {
         let guard = self.lock();
         let frees = std::mem::take(
-            &mut self
-                .inbox
+            &mut *self
+                .frees
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .frees,
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
         for handle in frees {
             // SAFETY: a handle this crate owned, under the lock.
@@ -354,110 +351,21 @@ impl Library {
         Session {
             library: self,
             _guard: guard,
+            not_send: PhantomData,
         }
     }
 
-    /// Wake every call that waits: one of them gives the library a turn.
-    fn wake_all(&self) {
-        self.need_turn.store(true, Ordering::Release);
-        let wakers: Vec<Waker> = self
-            .inbox
+    /// Free `handle` at the next session.
+    pub(crate) fn free_later(&self, handle: u64) {
+        self.frees
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .waiting
-            .values()
-            .cloned()
-            .collect();
-        for waker in wakers {
-            waker.wake();
-        }
+            .push(handle);
     }
 
-    /// The thread that wakes the calls when the library's next timer fires.
-    fn start_timer(&'static self) {
-        let timer = Arc::clone(&self.timer);
-        std::thread::Builder::new()
-            .name("baml-host-timer".to_owned())
-            .spawn(move || {
-                let mut deadline = timer
-                    .deadline
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                loop {
-                    match *deadline {
-                        None => {
-                            deadline = timer
-                                .changed
-                                .wait(deadline)
-                                .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        }
-                        Some(when) => {
-                            let now = Instant::now();
-                            if now >= when {
-                                *deadline = None;
-                                drop(deadline);
-                                self.wake_all();
-                                deadline = timer
-                                    .deadline
-                                    .lock()
-                                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                            } else {
-                                deadline = timer
-                                    .changed
-                                    .wait_timeout(deadline, when - now)
-                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                    .0;
-                            }
-                        }
-                    }
-                }
-            })
-            .expect("the timer thread starts");
-    }
-
-    /// Start export `export` with the arguments `args` builds, and return
-    /// the future of its result.
-    pub fn call<T: FromBaml, E: FromBaml>(
-        &'static self,
-        export: u32,
-        args: impl FnOnce(&Session) -> Result<Vec<BamlValue<'_>>, SdkError>,
-    ) -> Call<T, E> {
-        let session = self.session();
-        let started = args(&session).and_then(|args| {
-            let raw: Vec<RawValue> = args.iter().map(BamlValue::raw).collect();
-            // SAFETY: `raw` is its length of values, under the lock.
-            let id = unsafe { (self.fns.call_start)(u64::from(export), raw.as_ptr(), raw.len()) };
-            drop(args);
-            if id == 0 {
-                Err(SdkError::Refused(session.last_error()))
-            } else {
-                Ok(id)
-            }
-        });
-        drop(session);
-        self.need_turn.store(true, Ordering::Release);
-        match started {
-            Ok(id) => Call {
-                library: self,
-                id,
-                failed: None,
-                done: false,
-                result: PhantomData,
-            },
-            Err(error) => Call {
-                library: self,
-                id: 0,
-                failed: Some(error),
-                done: false,
-                result: PhantomData,
-            },
-        }
-    }
-
-    /// The number of an export, by name: for bindings that check theirs.
-    pub fn find(&'static self, name: &str) -> Option<u32> {
-        let _session = self.session();
-        // SAFETY: a name.
+    /// The number of an export, by name.
+    pub fn find(&self, name: &str) -> Option<u32> {
+        // SAFETY: reads the table of exports.
         let index = unsafe { (self.fns.find)(name.as_ptr(), name.len()) };
         u32::try_from(index).ok()
     }
@@ -475,6 +383,36 @@ impl Library {
         // SAFETY: under the lock.
         unsafe { (self.fns.handle_count)() }
     }
+}
+
+fn hash_mismatch(actual: u64, expected: u64) -> SdkError {
+    SdkError::Load(format!(
+        "the library's interface hash is {actual:016x}, the bindings' {expected:016x}: \
+         the bindings were generated for another version of the program"
+    ))
+}
+
+fn exports_of(fns: &Fns) -> Vec<Export> {
+    // SAFETY: reads the table of exports.
+    let count = unsafe { (fns.export_count)() };
+    (0..count)
+        .filter_map(|index| {
+            let (mut arity, mut hash) = (0, 0);
+            // SAFETY: as above; buffers of their lengths.
+            let signature = unsafe {
+                text_from(|out, capacity| {
+                    (fns.export_info)(index, &raw mut arity, &raw mut hash, out, capacity)
+                })
+            }?;
+            let name = signature.split('(').next().unwrap_or_default().to_owned();
+            Some(Export {
+                name,
+                arity,
+                signature,
+                hash,
+            })
+        })
+        .collect()
 }
 
 fn symbol_of(path: &str, name: &str) -> Result<*mut c_void, SdkError> {
@@ -500,7 +438,7 @@ fn symbol_of(path: &str, name: &str) -> Result<*mut c_void, SdkError> {
 fn open(path: &str) -> Result<Fns, SdkError> {
     let version: unsafe extern "C" fn() -> u32 =
         // SAFETY: the library exports it with this type.
-        unsafe { std::mem::transmute::<*mut c_void, _>(symbol_of(path, "baml_lib_abi_version")?) };
+        unsafe { std::mem::transmute(symbol_of(path, "baml_lib_abi_version")?) };
     // SAFETY: as above.
     let version = unsafe { version() };
     if version != ABI_VERSION {
@@ -511,12 +449,16 @@ fn open(path: &str) -> Result<Fns, SdkError> {
     macro_rules! function {
         ($name:literal) => {
             // SAFETY: the library exports it with the field's type.
-            unsafe { std::mem::transmute::<*mut c_void, _>(symbol_of(path, $name)?) }
+            unsafe { std::mem::transmute(symbol_of(path, $name)?) }
         };
     }
     Ok(Fns {
+        init: function!("baml_lib_init"),
         find: function!("baml_lib_find"),
+        export_count: function!("baml_lib_export_count"),
+        export_info: function!("baml_lib_export_info"),
         interface_hash: function!("baml_lib_interface_hash"),
+        interface_json: function!("baml_lib_interface_json"),
         call_start: function!("baml_lib_call_start"),
         turn: function!("baml_lib_turn"),
         last_error: function!("baml_lib_last_error"),
@@ -539,16 +481,41 @@ fn open(path: &str) -> Result<Fns, SdkError> {
     })
 }
 
-/// The library held by one thread: what reads and builds values. A
-/// [`BamlValue`] cannot outlive it.
+/// The library held by one thread: what starts calls, runs turns, and
+/// reads and builds values. A [`BamlValue`] cannot outlive it. Neither can
+/// cross to another thread: the library is entered by one thread at a
+/// time.
 pub struct Session {
     library: &'static Library,
     _guard: MutexGuard<'static, ()>,
+    not_send: PhantomData<*const ()>,
 }
 
+/// `Session` is neither `Send` nor `Sync`, and so a `BamlValue`, which
+/// holds a `&Session`, is neither either.
+const _: () = {
+    trait AmbiguousIfImplemented<A> {
+        fn some_item() {}
+    }
+    impl<T: ?Sized> AmbiguousIfImplemented<()> for T {}
+    struct Send_;
+    struct Sync_;
+    impl<T: ?Sized + Send> AmbiguousIfImplemented<Send_> for T {}
+    impl<T: ?Sized + Sync> AmbiguousIfImplemented<Sync_> for T {}
+    // Each line fails to compile, as ambiguous, if the type is Send or
+    // Sync.
+    let _ = <Session as AmbiguousIfImplemented<_>>::some_item;
+    let _ = <BamlValue<'static> as AmbiguousIfImplemented<_>>::some_item;
+};
+
 impl Session {
-    fn fns(&self) -> &Fns {
+    pub(crate) fn fns(&self) -> &Fns {
         &self.library.fns
+    }
+
+    /// The library it holds.
+    pub fn library(&self) -> &'static Library {
+        self.library
     }
 
     /// Why the library refused the last thing it refused.
@@ -558,12 +525,72 @@ impl Session {
             .unwrap_or_default()
     }
 
-    fn refused(&self) -> SdkError {
+    pub(crate) fn refused(&self) -> SdkError {
         SdkError::Refused(self.last_error())
     }
 
-    fn owned(&self, raw: RawValue) -> BamlValue<'_> {
-        BamlValue { raw, session: self }
+    pub(crate) fn owned(&self, raw: RawValue) -> BamlValue<'_> {
+        BamlValue::new(raw, self)
+    }
+
+    /// Bring a value carried past its session back into this one.
+    pub fn attach(&self, value: Detached) -> BamlValue<'_> {
+        self.owned(value.into_raw())
+    }
+
+    /// Start export `export` with `args`, each built in this session.
+    /// Returns the call's id. The arguments stay the caller's, but an
+    /// array or a map is taken: it can be passed once.
+    pub fn start(&self, export: u32, args: &[BamlValue<'_>]) -> Result<u64, SdkError> {
+        let raw: Vec<RawValue> = args.iter().map(BamlValue::raw).collect();
+        // SAFETY: `raw` is its length of values, under the lock.
+        let id = unsafe { (self.fns().call_start)(u64::from(export), raw.as_ptr(), raw.len()) };
+        if id == 0 { Err(self.refused()) } else { Ok(id) }
+    }
+
+    /// Give the library a turn: run BAML until every task has ended or
+    /// waits. Then hand `each` what ended, in order, while this session
+    /// still holds the library, so the values can be copied on the spot.
+    /// Returns how long until the next BAML timer fires, or `None` when
+    /// none is set: the host turns again then, or when `wake` comes.
+    pub fn turn(&self, mut each: impl FnMut(Event<'_>)) -> Option<Duration> {
+        // SAFETY: under the lock.
+        let next = unsafe { (self.fns().turn)() };
+        let mut events = std::mem::take(
+            &mut *self
+                .library
+                .events
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        for event in events.drain(..) {
+            each(match event {
+                RawEvent::Ended(call, status, raw) => Event::Ended {
+                    call,
+                    outcome: match status {
+                        0 => Outcome::Returned,
+                        1 => Outcome::Threw,
+                        2 => Outcome::Stuck,
+                        _ => Outcome::Panicked,
+                    },
+                    value: self.owned(raw),
+                },
+                RawEvent::Unhandled(call, raw) => Event::Unhandled {
+                    call,
+                    error: self.owned(raw),
+                },
+            });
+        }
+        // The emptied vector keeps its room for the next turn.
+        let mut kept = self
+            .library
+            .events
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if kept.is_empty() {
+            *kept = events;
+        }
+        u64::try_from(next).ok().map(Duration::from_nanos)
     }
 
     /// A scalar.
@@ -656,40 +683,6 @@ impl Session {
         }
         Ok(self.owned(raw))
     }
-
-    /// Give the library a turn, and deal with what it reported.
-    fn turn(&self) {
-        // SAFETY: under the lock.
-        let next = unsafe { (self.fns().turn)() };
-        let unhandled = std::mem::take(
-            &mut self
-                .library
-                .inbox
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .unhandled,
-        );
-        if !unhandled.is_empty() {
-            let hook = self
-                .library
-                .on_unhandled
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            for raw in unhandled {
-                let value = self.owned(raw);
-                hook(&value.describe());
-            }
-        }
-        if let Ok(nanos) = u64::try_from(next) {
-            let timer = &self.library.timer;
-            *timer
-                .deadline
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                Some(Instant::now() + Duration::from_nanos(nanos));
-            timer.changed.notify_one();
-        }
-    }
 }
 
 /// Read text out of the library with `read(out, capacity)`, which returns
@@ -698,7 +691,7 @@ impl Session {
 /// # Safety
 ///
 /// `read` writes at most `capacity` bytes to `out`.
-unsafe fn text_from(read: impl Fn(*mut u8, usize) -> i64) -> Option<String> {
+pub(crate) unsafe fn text_from(mut read: impl FnMut(*mut u8, usize) -> i64) -> Option<String> {
     let mut buffer = vec![0_u8; 64];
     let length = usize::try_from(read(buffer.as_mut_ptr(), buffer.len())).ok()?;
     if length > buffer.len() {
@@ -707,418 +700,4 @@ unsafe fn text_from(read: impl Fn(*mut u8, usize) -> i64) -> Option<String> {
     }
     buffer.truncate(length);
     String::from_utf8(buffer).ok()
-}
-
-/// A value inside a [`Session`]: a scalar, or an object it holds a handle
-/// to, which is freed when the value is dropped.
-pub struct BamlValue<'s> {
-    raw: RawValue,
-    session: &'s Session,
-}
-
-impl Drop for BamlValue<'_> {
-    fn drop(&mut self) {
-        if self.raw.tag & tag::HANDLE != 0 {
-            // SAFETY: a handle this value owns, under the session's lock.
-            unsafe { (self.session.fns().handle_free)(self.raw.payload) };
-        }
-    }
-}
-
-fn decode(what: impl Into<String>) -> SdkError {
-    SdkError::Decode(what.into())
-}
-
-impl<'s> BamlValue<'s> {
-    pub fn raw(&self) -> RawValue {
-        self.raw
-    }
-
-    /// Its type, without the handle bit.
-    pub fn kind(&self) -> u64 {
-        self.raw.tag & tag::TYPE
-    }
-
-    fn handle(&self) -> Result<u64, SdkError> {
-        if self.raw.tag & tag::HANDLE == 0 {
-            Err(decode(format!(
-                "a scalar of tag {} where an object was expected",
-                self.kind()
-            )))
-        } else {
-            Ok(self.raw.payload)
-        }
-    }
-
-    fn fns(&self) -> &'s Fns {
-        self.session.fns()
-    }
-
-    pub fn is_null(&self) -> bool {
-        self.raw.tag == tag::NULL
-    }
-
-    pub fn int(&self) -> Result<i64, SdkError> {
-        (self.raw.tag == tag::INT)
-            .then(|| self.raw.payload.cast_signed())
-            .ok_or_else(|| decode(format!("tag {} where an int was expected", self.kind())))
-    }
-
-    pub fn float(&self) -> Result<f64, SdkError> {
-        (self.raw.tag == tag::FLOAT)
-            .then(|| f64::from_bits(self.raw.payload))
-            .ok_or_else(|| decode(format!("tag {} where a float was expected", self.kind())))
-    }
-
-    pub fn bool(&self) -> Result<bool, SdkError> {
-        (self.raw.tag == tag::BOOL)
-            .then_some(self.raw.payload & 0xFF != 0)
-            .ok_or_else(|| decode(format!("tag {} where a bool was expected", self.kind())))
-    }
-
-    pub fn is_string(&self) -> bool {
-        matches!(self.kind(), tag::STRING | tag::STRING_SLICE) && self.raw.tag & tag::HANDLE != 0
-    }
-
-    pub fn string(&self) -> Result<String, SdkError> {
-        let handle = self.handle()?;
-        // SAFETY: under the lock; a buffer of its length.
-        unsafe { text_from(|out, capacity| (self.fns().string_copy)(handle, out, capacity)) }
-            .ok_or_else(|| decode("not a string"))
-    }
-
-    /// The value as an uncaught throw of it is written.
-    pub fn describe(&self) -> String {
-        let Ok(handle) = self.handle() else {
-            return format!("{:?}", self.raw);
-        };
-        // SAFETY: as above.
-        unsafe { text_from(|out, capacity| (self.fns().describe)(handle, out, capacity)) }
-            .unwrap_or_default()
-    }
-
-    /// The number of its class or enum in the library's interface.
-    pub fn class_of(&self) -> Option<u32> {
-        let handle = self.handle().ok()?;
-        // SAFETY: under the lock.
-        u32::try_from(unsafe { (self.fns().class_of)(handle) }).ok()
-    }
-
-    /// Check that it is an instance of the class numbered `class`.
-    pub fn expect_class(&self, class: u32) -> Result<(), SdkError> {
-        if self.class_of() == Some(class) {
-            Ok(())
-        } else {
-            Err(decode(format!("expected an instance of class {class}")))
-        }
-    }
-
-    /// Field `index`, in declaration order.
-    pub fn field(&self, index: u32) -> Result<BamlValue<'s>, SdkError> {
-        let mut raw = RawValue { tag: 0, payload: 0 };
-        // SAFETY: under the lock.
-        if unsafe { (self.fns().field_get)(self.handle()?, index, &raw mut raw) } != 0 {
-            return Err(self.session.refused());
-        }
-        Ok(self.session.owned(raw))
-    }
-
-    /// Its elements, when it is an array.
-    pub fn elements(
-        &self,
-    ) -> Result<impl Iterator<Item = Result<BamlValue<'s>, SdkError>> + '_, SdkError> {
-        let handle = self.handle()?;
-        // SAFETY: under the lock.
-        let length = u64::try_from(unsafe { (self.fns().array_len)(handle) })
-            .map_err(|_| self.session.refused())?;
-        Ok((0..length).map(move |index| {
-            let mut raw = RawValue { tag: 0, payload: 0 };
-            // SAFETY: under the lock.
-            if unsafe { (self.fns().array_get)(handle, index, &raw mut raw) } != 0 {
-                return Err(self.session.refused());
-            }
-            Ok(self.session.owned(raw))
-        }))
-    }
-
-    /// Its entries in insertion order, when it is a map.
-    pub fn entries(&self) -> Result<Vec<(BamlValue<'s>, BamlValue<'s>)>, SdkError> {
-        let handle = self.handle()?;
-        let mut entries = Vec::new();
-        let mut cursor = 0;
-        loop {
-            let mut key = RawValue { tag: 0, payload: 0 };
-            let mut value = RawValue { tag: 0, payload: 0 };
-            // SAFETY: under the lock.
-            let next =
-                unsafe { (self.fns().map_next)(handle, cursor, &raw mut key, &raw mut value) };
-            match next {
-                -1 => return Ok(entries),
-                next if next < 0 => return Err(self.session.refused()),
-                next => {
-                    entries.push((self.session.owned(key), self.session.owned(value)));
-                    cursor = next.cast_unsigned();
-                }
-            }
-        }
-    }
-
-    /// Its position in its enum, when it is an enum value.
-    pub fn variant_index(&self) -> Result<u32, SdkError> {
-        // SAFETY: under the lock.
-        u32::try_from(unsafe { (self.fns().variant_index)(self.handle()?) })
-            .map_err(|_| self.session.refused())
-    }
-}
-
-/// Copying a Rust value into BAML memory.
-pub trait ToBaml {
-    fn to_baml<'s>(&self, session: &'s Session) -> Result<BamlValue<'s>, SdkError>;
-}
-
-/// Copying a value out of BAML memory into a Rust value.
-pub trait FromBaml: Sized {
-    fn from_baml(value: BamlValue<'_>) -> Result<Self, SdkError>;
-}
-
-impl ToBaml for i64 {
-    fn to_baml<'s>(&self, session: &'s Session) -> Result<BamlValue<'s>, SdkError> {
-        Ok(session.int(*self))
-    }
-}
-
-impl FromBaml for i64 {
-    fn from_baml(value: BamlValue<'_>) -> Result<Self, SdkError> {
-        value.int()
-    }
-}
-
-impl ToBaml for f64 {
-    fn to_baml<'s>(&self, session: &'s Session) -> Result<BamlValue<'s>, SdkError> {
-        Ok(session.float(*self))
-    }
-}
-
-impl FromBaml for f64 {
-    fn from_baml(value: BamlValue<'_>) -> Result<Self, SdkError> {
-        value.float()
-    }
-}
-
-impl ToBaml for bool {
-    fn to_baml<'s>(&self, session: &'s Session) -> Result<BamlValue<'s>, SdkError> {
-        Ok(session.bool(*self))
-    }
-}
-
-impl FromBaml for bool {
-    fn from_baml(value: BamlValue<'_>) -> Result<Self, SdkError> {
-        value.bool()
-    }
-}
-
-impl ToBaml for String {
-    fn to_baml<'s>(&self, session: &'s Session) -> Result<BamlValue<'s>, SdkError> {
-        session.string(self)
-    }
-}
-
-impl ToBaml for str {
-    fn to_baml<'s>(&self, session: &'s Session) -> Result<BamlValue<'s>, SdkError> {
-        session.string(self)
-    }
-}
-
-impl FromBaml for String {
-    fn from_baml(value: BamlValue<'_>) -> Result<Self, SdkError> {
-        value.string()
-    }
-}
-
-impl ToBaml for () {
-    fn to_baml<'s>(&self, session: &'s Session) -> Result<BamlValue<'s>, SdkError> {
-        Ok(session.null())
-    }
-}
-
-impl FromBaml for () {
-    fn from_baml(value: BamlValue<'_>) -> Result<Self, SdkError> {
-        if value.is_null() {
-            Ok(())
-        } else {
-            Err(decode("a value where null was expected"))
-        }
-    }
-}
-
-impl<T: ToBaml> ToBaml for Option<T> {
-    fn to_baml<'s>(&self, session: &'s Session) -> Result<BamlValue<'s>, SdkError> {
-        match self {
-            Some(value) => value.to_baml(session),
-            None => Ok(session.null()),
-        }
-    }
-}
-
-impl<T: FromBaml> FromBaml for Option<T> {
-    fn from_baml(value: BamlValue<'_>) -> Result<Self, SdkError> {
-        if value.is_null() {
-            Ok(None)
-        } else {
-            T::from_baml(value).map(Some)
-        }
-    }
-}
-
-impl<T: ToBaml> ToBaml for Vec<T> {
-    fn to_baml<'s>(&self, session: &'s Session) -> Result<BamlValue<'s>, SdkError> {
-        let elements = self
-            .iter()
-            .map(|element| element.to_baml(session))
-            .collect::<Result<Vec<_>, _>>()?;
-        session.array(elements)
-    }
-}
-
-impl<T: FromBaml> FromBaml for Vec<T> {
-    fn from_baml(value: BamlValue<'_>) -> Result<Self, SdkError> {
-        value
-            .elements()?
-            .map(|element| T::from_baml(element?))
-            .collect()
-    }
-}
-
-impl<V: ToBaml> ToBaml for Map<String, V> {
-    fn to_baml<'s>(&self, session: &'s Session) -> Result<BamlValue<'s>, SdkError> {
-        let entries = self
-            .iter()
-            .map(|(key, value)| Ok((session.string(key)?, value.to_baml(session)?)))
-            .collect::<Result<Vec<_>, SdkError>>()?;
-        session.map(entries)
-    }
-}
-
-impl<V: FromBaml> FromBaml for Map<String, V> {
-    fn from_baml(value: BamlValue<'_>) -> Result<Self, SdkError> {
-        value
-            .entries()?
-            .into_iter()
-            .map(|(key, value)| Ok((key.string()?, V::from_baml(value)?)))
-            .collect()
-    }
-}
-
-/// What a function that declares no `throws` cannot throw: anything it
-/// throws arrives as [`Error::Runtime`].
-impl FromBaml for std::convert::Infallible {
-    fn from_baml(_value: BamlValue<'_>) -> Result<Self, SdkError> {
-        Err(decode("a function that throws nothing threw"))
-    }
-}
-
-/// A call in flight: the future of its result. Dropping it does not
-/// cancel the BAML call; its result is freed when it arrives.
-pub struct Call<T, E> {
-    library: &'static Library,
-    id: u64,
-    failed: Option<SdkError>,
-    done: bool,
-    result: PhantomData<fn() -> (T, E)>,
-}
-
-impl<T: FromBaml, E: FromBaml> Call<T, E> {
-    /// Copy what the call ended with into Rust values.
-    fn finish(&self, status: u32, raw: RawValue) -> Result<T, Error<E>> {
-        let session = self.library.session();
-        let value = session.owned(raw);
-        match status {
-            STATUS_RETURNED => T::from_baml(value).map_err(Error::Sdk),
-            STATUS_THREW => {
-                let message = value.describe();
-                let class_name = (value.kind() == tag::INSTANCE).then(|| {
-                    message
-                        .split([' ', '{'])
-                        .next()
-                        .unwrap_or_default()
-                        .to_owned()
-                });
-                match E::from_baml(value) {
-                    Ok(thrown) => Err(Error::Thrown {
-                        value: Box::new(thrown),
-                    }),
-                    Err(_) => Err(Error::Runtime {
-                        class_name,
-                        message,
-                    }),
-                }
-            }
-            STATUS_STUCK => Err(Error::Stuck),
-            STATUS_PANICKED => Err(Error::Panic {
-                message: value.describe(),
-            }),
-            other => Err(Error::Sdk(decode(format!(
-                "a call ended with status {other}"
-            )))),
-        }
-    }
-}
-
-impl<T: FromBaml, E: FromBaml> Future for Call<T, E> {
-    type Output = Result<T, Error<E>>;
-
-    fn poll(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
-        if let Some(error) = self.failed.take() {
-            self.done = true;
-            return Poll::Ready(Err(Error::Sdk(error)));
-        }
-        let library = self.library;
-        loop {
-            let ended = {
-                let mut inbox = library
-                    .inbox
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let ended = inbox.ended.remove(&self.id);
-                if ended.is_none() {
-                    // Registered before the turn is tried, so no wake is lost.
-                    inbox.waiting.insert(self.id, context.waker().clone());
-                }
-                ended
-            };
-            if let Some((status, raw)) = ended {
-                self.done = true;
-                return Poll::Ready(self.finish(status, raw));
-            }
-            if library.need_turn.swap(false, Ordering::AcqRel) {
-                library.session().turn();
-                continue;
-            }
-            return Poll::Pending;
-        }
-    }
-}
-
-impl<T, E> Drop for Call<T, E> {
-    fn drop(&mut self) {
-        if self.done || self.id == 0 {
-            return;
-        }
-        let mut inbox = self
-            .library
-            .inbox
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        inbox.waiting.remove(&self.id);
-        match inbox.ended.remove(&self.id) {
-            Some((_, raw)) if raw.tag & tag::HANDLE != 0 => inbox.frees.push(raw.payload),
-            Some(_) => {}
-            None => {
-                inbox.abandoned.insert(self.id);
-            }
-        }
-        drop(inbox);
-        // Another call may be waiting for the turn this one would have run.
-        self.library.wake_all();
-    }
 }
