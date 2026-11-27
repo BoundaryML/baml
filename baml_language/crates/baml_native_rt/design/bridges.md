@@ -213,18 +213,31 @@ The crate `baml_native_host` is what Rust bindings sit on:
 
 How calls are driven: any `Call` that is polled gives the library a turn when it asked for one (a call started, `wake` came, a timer fired), on the polling thread, under the library's lock. So any executor drives the calls, a multi-thread tokio runtime included, and BAML runs on whichever thread polls, one at a time. The runtime has no state tied to a thread: no thread-locals, no signal stack, and the worker's register and stack are set on every resume. A `wake` from the I/O thread and the library's timer wake every pending call; the first to poll turns. A `Call` that is dropped does not cancel the BAML call: its result is freed when it arrives, and the other calls are woken in its place.
 
-The bindings for the type-shapes fixture are in `baml_native_host/tests/type_shapes/bindings.rs`: plain structs, enums and union enums with the names `sdkgen_rust` emits, and one `*_async` function per export with its arguments taken as `sdkgen_rust` takes them.
+The bindings for the type-shapes fixture are in `baml_native_host/tests/type_shapes/bindings.rs`: plain structs, enums and union enums with the names `sdkgen_rust` emits, and one async function per export under its own name, with its arguments taken as `sdkgen_rust` takes them (today's SDK also emits a `_sync` twin, which these leave out).
 
 ## Measured
 
-On the Rust host, Apple M5 Max:
+On the Rust host, Apple M5 Max, through `perfq --bench`: the median of eight interleaved rounds, with outside load at 0.37 cores. Instructions per call come from running each case at two sizes. "Today's SDK" is the generated Rust SDK of the same fixture over the VM (`bridge_cffi`, release), called the same way.
 
-| | Instructions |
-|---|---|
-| One `add(int, int)`: start, one turn, completion | 1,680 |
-| The same, with 12,000 calls started before the first turn | about 20,000 per call (each waiting task maps a fresh stack) |
+| One call, one after another | Native: instructions | Native: time | Today's SDK: instructions | Today's SDK: time |
+|---|---|---|---|---|
+| `add(int, int)` through the C functions alone | 953 | 38 ns | | |
+| `add(int, int)` through the bindings | 3,910 | 137 ns | | |
+| `round_trip_int(int)` | 3,770 | 131 ns | 211,703 | 21.3 µs |
+| `round_trip_inner(Inner)`, a class of one `int` | 5,773 | 200 ns | 264,865 | 26.0 µs |
+| `round_trip_complex_profile`, the SDK tests' nested profile | 237,111 | 9.1 µs | 4,212,191 | 211 µs |
 
-The first number was estimated at 330 before it was measured. The likely extras are bookkeeping in the spike (a hash map per call, a vector reallocated per turn), not yet profiled.
+| Arrays, per element | C calls per element | Instructions | Time |
+|---|---|---|---|
+| `int[]` out of BAML, 100,000 to 600,000 | 1 (`array_get`) | 235 | 100 ns, mostly BAML building the array and first touches of new memory |
+| `int[]` into BAML | 0 (one `array_new`) | 193 | 8.4 ns |
+| `int[]` round trip | 1 | 316 | 13 ns; today's SDK 4,149 and 322 ns |
+| `Point[]` out, 10,000 to 60,000 | 5 (`array_get`, `class_of`, two `field_get`, a free) | 1,050 | 88 ns |
+| `Point[]` in | 2 (`instance_new`, a free) | 1,844 | 60 ns |
+
+- The C surface's own cost fell from 1,680 to 953 instructions per `add` when the per-call hash map and the vector made per turn went. The bindings add about 2,950 more: the crate's locks, its map of waiting calls, the argument vectors and the executor.
+- Reading costs one C call per field and per element, with a handle for each object read. Bulk reads (a range of an array, all fields at once) are not built; the per-element numbers above are what they would save.
+- With 12,000 calls started before the first turn, each costs about 20,000 instructions: each waiting task maps a fresh stack.
 
 ## Limits today
 

@@ -165,19 +165,16 @@ fn runtime() -> tokio::runtime::Runtime {
 async fn every_round_trip() {
     let profile = profile::complex_profile();
     assert_eq!(
-        complex_models::round_trip_complex_profile_async(&profile)
+        complex_models::round_trip_complex_profile(&profile)
             .await
             .expect("round trip"),
         profile
     );
 
     let root = bindings::Foo { v: 7 };
+    assert_eq!(bindings::round_trip_foo(&root).await.expect("foo"), root);
     assert_eq!(
-        bindings::round_trip_foo_async(&root).await.expect("foo"),
-        root
-    );
-    assert_eq!(
-        bindings::make_foo_async(3).await.expect("make"),
+        bindings::make_foo(3).await.expect("make"),
         bindings::Foo { v: 3 }
     );
 
@@ -185,25 +182,23 @@ async fn every_round_trip() {
         inner: class_refs::Inner { value: 9 },
     };
     assert_eq!(
-        class_refs::round_trip_outer_async(&outer)
-            .await
-            .expect("outer"),
+        class_refs::round_trip_outer(&outer).await.expect("outer"),
         outer
     );
-    assert_eq!(class_refs::make_outer_async(9).await.expect("make"), outer);
+    assert_eq!(class_refs::make_outer(9).await.expect("make"), outer);
     assert_eq!(
-        class_refs::round_trip_inner_async(class_refs::Inner { value: -4 })
+        class_refs::round_trip_inner(class_refs::Inner { value: -4 })
             .await
             .expect("inner"),
         class_refs::Inner { value: -4 }
     );
 
     assert_eq!(
-        enums::pick_sentiment_async(false).await.expect("pick"),
+        enums::pick_sentiment(false).await.expect("pick"),
         enums::Sentiment::Negative
     );
     assert_eq!(
-        enums::round_trip_sentiment_async(enums::Sentiment::Positive)
+        enums::round_trip_sentiment(enums::Sentiment::Positive)
             .await
             .expect("sentiment"),
         enums::Sentiment::Positive
@@ -212,24 +207,19 @@ async fn every_round_trip() {
         bare_enum: enums::Sentiment::Negative,
         variant_as_type: enums::Sentiment::Positive,
     };
-    assert_eq!(
-        enums::round_trip_enums_async(&both).await.expect("enums"),
-        both
-    );
+    assert_eq!(enums::round_trip_enums(&both).await.expect("enums"), both);
 
     assert_eq!(
-        lists::round_trip_ints_async(vec![1, -2, 3])
-            .await
-            .expect("ints"),
+        lists::round_trip_ints(vec![1, -2, 3]).await.expect("ints"),
         [1, -2, 3]
     );
     assert_eq!(
-        lists::round_trip_ints_async(vec![]).await.expect("none"),
+        lists::round_trip_ints(vec![]).await.expect("none"),
         Vec::<i64>::new()
     );
     let strings = vec![Some("a".to_owned()), None, Some(String::new())];
     assert_eq!(
-        lists::round_trip_optional_strings_async(strings.clone())
+        lists::round_trip_optional_strings(strings.clone())
             .await
             .expect("strings"),
         strings
@@ -239,7 +229,7 @@ async fn every_round_trip() {
         lists::IntOrString::String("two".to_owned()),
     ];
     assert_eq!(
-        lists::round_trip_union_list_async(mixed.clone())
+        lists::round_trip_union_list(mixed.clone())
             .await
             .expect("mixed"),
         mixed
@@ -250,7 +240,7 @@ async fn every_round_trip() {
         union_list: mixed,
     };
     assert_eq!(
-        lists::round_trip_list_container_async(&container)
+        lists::round_trip_list_container(&container)
             .await
             .expect("lists"),
         container
@@ -258,7 +248,7 @@ async fn every_round_trip() {
 
     let simple = Map::from([("a".to_owned(), 1), ("b".to_owned(), 2)]);
     assert_eq!(
-        maps::round_trip_simple_map_async(simple.clone())
+        maps::round_trip_simple_map(simple.clone())
             .await
             .expect("map"),
         simple
@@ -270,14 +260,14 @@ async fn every_round_trip() {
         },
     )]);
     assert_eq!(
-        maps::round_trip_enum_keyed_map_async(resumes.clone())
+        maps::round_trip_enum_keyed_map(resumes.clone())
             .await
             .expect("resumes"),
         resumes
     );
     let lists_of = Map::from([("xs".to_owned(), vec![1, 2]), ("empty".to_owned(), vec![])]);
     assert_eq!(
-        maps::round_trip_list_valued_map_async(lists_of.clone())
+        maps::round_trip_list_valued_map(lists_of.clone())
             .await
             .expect("lists"),
         lists_of
@@ -288,7 +278,7 @@ async fn every_round_trip() {
         list_valued: lists_of,
     };
     assert_eq!(
-        maps::round_trip_map_container_async(&maps_container)
+        maps::round_trip_map_container(&maps_container)
             .await
             .expect("maps"),
         maps_container
@@ -296,7 +286,7 @@ async fn every_round_trip() {
 
     for value in [None, Some(0), Some(i64::MIN)] {
         assert_eq!(
-            optional::round_trip_optional_int_async(value)
+            optional::round_trip_optional_int(value)
                 .await
                 .expect("int?"),
             value
@@ -306,19 +296,19 @@ async fn every_round_trip() {
         name: "Grace".to_owned(),
     });
     assert_eq!(
-        optional::round_trip_optional_resume_async(resume.clone())
+        optional::round_trip_optional_resume(resume.clone())
             .await
             .expect("resume?"),
         resume
     );
     assert_eq!(
-        optional::round_trip_optional_union_async(None)
+        optional::round_trip_optional_union(None)
             .await
             .expect("union?"),
         None
     );
     assert_eq!(
-        optional::round_trip_optional_union_async(optional::IntOrString::String("s".to_owned()))
+        optional::round_trip_optional_union(optional::IntOrString::String("s".to_owned()))
             .await
             .expect("union?"),
         Some(optional::IntOrString::String("s".to_owned()))
@@ -329,14 +319,14 @@ async fn every_round_trip() {
         optional_union: Some(optional::IntOrString::Int(5)),
     };
     assert_eq!(
-        optional::round_trip_optional_container_async(&optional_container)
+        optional::round_trip_optional_container(&optional_container)
             .await
             .expect("optionals"),
         optional_container
     );
 
     assert_eq!(
-        unions::round_trip_null_to_end_async(unions::IntOrString::Int(3))
+        unions::round_trip_null_to_end(unions::IntOrString::Int(3))
             .await
             .expect("union"),
         Some(unions::IntOrString::Int(3))
@@ -348,7 +338,7 @@ async fn every_round_trip() {
         optional_plus_null: Some(unions::TOrString::T(unions::T { v: 2 })),
     };
     assert_eq!(
-        unions::round_trip_union_container_async(&union_container)
+        unions::round_trip_union_container(&union_container)
             .await
             .expect("unions"),
         union_container
@@ -358,39 +348,35 @@ async fn every_round_trip() {
         unions::StringListOrIntList::StringList(vec!["a".to_owned()]),
     ] {
         assert_eq!(
-            unions::round_trip_str_or_int_list_async(value.clone())
+            unions::round_trip_str_or_int_list(value.clone())
                 .await
                 .expect("lists"),
             value
         );
     }
     assert_eq!(
-        unions::round_trip_optional_plus_null_async(unions::TOrString::String("t".to_owned()))
+        unions::round_trip_optional_plus_null(unions::TOrString::String("t".to_owned()))
             .await
             .expect("t or string"),
         Some(unions::TOrString::String("t".to_owned()))
     );
 
     assert_eq!(
-        primitives::round_trip_int_async(i64::MAX)
-            .await
-            .expect("int"),
+        primitives::round_trip_int(i64::MAX).await.expect("int"),
         i64::MAX
     );
     assert_eq!(
-        primitives::round_trip_float_async(-0.5)
-            .await
-            .expect("float"),
+        primitives::round_trip_float(-0.5).await.expect("float"),
         -0.5
     );
     assert_eq!(
-        primitives::round_trip_string_async("héllo, wörld".to_owned())
+        primitives::round_trip_string("héllo, wörld".to_owned())
             .await
             .expect("string"),
         "héllo, wörld"
     );
-    assert!(primitives::round_trip_bool_async(true).await.expect("bool"));
-    primitives::return_null_async().await.expect("null");
+    assert!(primitives::round_trip_bool(true).await.expect("bool"));
+    primitives::return_null().await.expect("null");
 }
 
 #[test]
@@ -429,12 +415,10 @@ fn a_thrown_class_arrives_typed() {
     let before = library.handle_count();
     runtime().block_on(async {
         assert_eq!(
-            bridge_test::lookup_async("here".to_owned())
-                .await
-                .expect("found"),
+            bridge_test::lookup("here".to_owned()).await.expect("found"),
             "here"
         );
-        let error = bridge_test::lookup_async("missing".to_owned())
+        let error = bridge_test::lookup("missing".to_owned())
             .await
             .expect_err("missing");
         assert_eq!(
@@ -471,7 +455,7 @@ fn ten_thousand_instances_round_trip() {
         .map(|i| bridge_test::Point { x: i, y: -i })
         .collect();
     let back = runtime()
-        .block_on(bridge_test::round_trip_points_async(points.clone()))
+        .block_on(bridge_test::round_trip_points(points.clone()))
         .expect("points");
     assert_eq!(back, points);
     assert_eq!(library.handle_count(), before);
@@ -488,12 +472,12 @@ fn calls_park_and_resume_across_threads() {
         let mut tasks = Vec::new();
         for i in 0..16_i64 {
             tasks.push(tokio::spawn(async move {
-                let slept = bridge_test::nap_async(1 + i % 4).await.expect("nap");
-                let home = bridge_test::env_or_async("HOME".to_owned(), "?".to_owned())
+                let slept = bridge_test::nap(1 + i % 4).await.expect("nap");
+                let home = bridge_test::env_or("HOME".to_owned(), "?".to_owned())
                     .await
                     .expect("env");
                 let profile = profile::complex_profile();
-                let back = complex_models::round_trip_complex_profile_async(&profile)
+                let back = complex_models::round_trip_complex_profile(&profile)
                     .await
                     .expect("profile");
                 (slept, home, back == profile)
@@ -523,19 +507,19 @@ fn a_dropped_call_loses_no_wake() {
     let (_turn, library) = library();
     let before = library.handle_count();
     runtime().block_on(async {
-        let long = bridge_test::nap_async(30);
+        let long = bridge_test::nap(30);
         let short = tokio::time::timeout(
             Duration::from_millis(5),
-            bridge_test::env_or_async("HOME".to_owned(), "?".to_owned()),
+            bridge_test::env_or("HOME".to_owned(), "?".to_owned()),
         );
-        let dropped = tokio::time::timeout(Duration::from_millis(1), bridge_test::nap_async(20));
+        let dropped = tokio::time::timeout(Duration::from_millis(1), bridge_test::nap(20));
         let (long, short, dropped) = tokio::join!(long, short, dropped);
         assert_eq!(long.expect("the long nap"), 30);
         assert!(short.is_ok(), "the short call finished in time");
         assert!(dropped.is_err(), "the dropped call timed out");
         // The dropped call's task still ends; then nothing is held.
         tokio::time::sleep(Duration::from_millis(40)).await;
-        bridge_test::add_async(1, 1).await.expect("add");
+        bridge_test::add(1, 1).await.expect("add");
     });
     assert_eq!(library.handle_count(), before);
 }

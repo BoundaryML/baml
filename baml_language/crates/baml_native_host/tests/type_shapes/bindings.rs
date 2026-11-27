@@ -9,6 +9,7 @@
     dead_code,
     unreachable_pub,
     clippy::struct_field_names,
+    clippy::wildcard_imports,
     reason = "bindings for every export, public as generated code is; each test calls some"
 )]
 
@@ -234,23 +235,23 @@ macro_rules! argument {
 use numbers::*;
 
 class!(Foo = FOO; v: i64 = 0);
-function!(make_foo_async(v: i64 as value) -> Foo, ::std::convert::Infallible = FN_MAKE_FOO);
-function!(round_trip_foo_async(f: impl ::std::borrow::Borrow<Foo> as (borrow Foo)) -> Foo, ::std::convert::Infallible = FN_ROUND_TRIP_FOO);
+function!(make_foo(v: i64 as value) -> Foo, ::std::convert::Infallible = FN_MAKE_FOO);
+function!(round_trip_foo(f: impl ::std::borrow::Borrow<Foo> as (borrow Foo)) -> Foo, ::std::convert::Infallible = FN_ROUND_TRIP_FOO);
 
 pub mod bridge_test {
     use super::numbers::*;
 
     class!(LookupFailed = LOOKUP_FAILED; key: String = 0, code: i64 = 1);
     class!(Point = POINT; x: i64 = 0, y: i64 = 1);
-    function!(add_async(a: i64 as value, b: i64 as value) -> i64, ::std::convert::Infallible = FN_ADD);
-    function!(lookup_async(key: String as value) -> String, LookupFailed = FN_LOOKUP);
-    function!(round_trip_points_async(points: Vec<Point> as value) -> Vec<Point>, ::std::convert::Infallible = FN_ROUND_TRIP_POINTS);
-    function!(make_points_async(n: i64 as value) -> Vec<Point>, ::std::convert::Infallible = FN_MAKE_POINTS);
-    function!(count_points_async(points: Vec<Point> as value) -> i64, ::std::convert::Infallible = FN_COUNT_POINTS);
-    function!(make_ints_async(n: i64 as value) -> Vec<i64>, ::std::convert::Infallible = FN_MAKE_INTS);
-    function!(count_ints_async(xs: Vec<i64> as value) -> i64, ::std::convert::Infallible = FN_COUNT_INTS);
-    function!(nap_async(milliseconds: i64 as value) -> i64, ::std::convert::Infallible = FN_NAP);
-    function!(env_or_async(name: String as value, fallback: String as value) -> String, ::std::convert::Infallible = FN_ENV_OR);
+    function!(add(a: i64 as value, b: i64 as value) -> i64, ::std::convert::Infallible = FN_ADD);
+    function!(lookup(key: String as value) -> String, LookupFailed = FN_LOOKUP);
+    function!(round_trip_points(points: Vec<Point> as value) -> Vec<Point>, ::std::convert::Infallible = FN_ROUND_TRIP_POINTS);
+    function!(make_points(n: i64 as value) -> Vec<Point>, ::std::convert::Infallible = FN_MAKE_POINTS);
+    function!(count_points(points: Vec<Point> as value) -> i64, ::std::convert::Infallible = FN_COUNT_POINTS);
+    function!(make_ints(n: i64 as value) -> Vec<i64>, ::std::convert::Infallible = FN_MAKE_INTS);
+    function!(count_ints(xs: Vec<i64> as value) -> i64, ::std::convert::Infallible = FN_COUNT_INTS);
+    function!(nap(milliseconds: i64 as value) -> i64, ::std::convert::Infallible = FN_NAP);
+    function!(env_or(name: String as value, fallback: String as value) -> String, ::std::convert::Infallible = FN_ENV_OR);
 }
 
 pub mod class_refs {
@@ -258,9 +259,9 @@ pub mod class_refs {
 
     class!(Inner = INNER; value: i64 = 0);
     class!(Outer = OUTER; inner: Inner = 0);
-    function!(make_outer_async(value: i64 as value) -> Outer, ::std::convert::Infallible = FN_MAKE_OUTER);
-    function!(round_trip_inner_async(i: impl ::std::borrow::Borrow<Inner> as (borrow Inner)) -> Inner, ::std::convert::Infallible = FN_ROUND_TRIP_INNER);
-    function!(round_trip_outer_async(o: impl ::std::borrow::Borrow<Outer> as (borrow Outer)) -> Outer, ::std::convert::Infallible = FN_ROUND_TRIP_OUTER);
+    function!(make_outer(value: i64 as value) -> Outer, ::std::convert::Infallible = FN_MAKE_OUTER);
+    function!(round_trip_inner(i: impl ::std::borrow::Borrow<Inner> as (borrow Inner)) -> Inner, ::std::convert::Infallible = FN_ROUND_TRIP_INNER);
+    function!(round_trip_outer(o: impl ::std::borrow::Borrow<Outer> as (borrow Outer)) -> Outer, ::std::convert::Infallible = FN_ROUND_TRIP_OUTER);
 }
 
 pub mod complex_models {
@@ -395,7 +396,7 @@ pub mod complex_models {
         }
     }
 
-    function!(round_trip_complex_profile_async(profile: impl ::std::borrow::Borrow<ComplexProfile> as (borrow ComplexProfile)) -> ComplexProfile, ::std::convert::Infallible = FN_ROUND_TRIP_COMPLEX_PROFILE);
+    function!(round_trip_complex_profile(profile: impl ::std::borrow::Borrow<ComplexProfile> as (borrow ComplexProfile)) -> ComplexProfile, ::std::convert::Infallible = FN_ROUND_TRIP_COMPLEX_PROFILE);
 }
 
 pub mod enums {
@@ -403,9 +404,9 @@ pub mod enums {
 
     enumeration!(Sentiment = SENTIMENT; Positive = 0, Negative = 1);
     class!(Enums = ENUMS; bare_enum: Sentiment = 0, variant_as_type: Sentiment = 1);
-    function!(pick_sentiment_async(b: bool as value) -> Sentiment, ::std::convert::Infallible = FN_PICK_SENTIMENT);
-    function!(round_trip_sentiment_async(s: Sentiment as value) -> Sentiment, ::std::convert::Infallible = FN_ROUND_TRIP_SENTIMENT);
-    function!(round_trip_enums_async(e: impl ::std::borrow::Borrow<Enums> as (borrow Enums)) -> Enums, ::std::convert::Infallible = FN_ROUND_TRIP_ENUMS);
+    function!(pick_sentiment(b: bool as value) -> Sentiment, ::std::convert::Infallible = FN_PICK_SENTIMENT);
+    function!(round_trip_sentiment(s: Sentiment as value) -> Sentiment, ::std::convert::Infallible = FN_ROUND_TRIP_SENTIMENT);
+    function!(round_trip_enums(e: impl ::std::borrow::Borrow<Enums> as (borrow Enums)) -> Enums, ::std::convert::Infallible = FN_ROUND_TRIP_ENUMS);
 }
 
 /// `int | string`, as several namespaces have it.
@@ -450,10 +451,10 @@ pub mod lists {
         optional_strings: Vec<Option<String>> = 1,
         union_list: Vec<IntOrString> = 2,
     );
-    function!(round_trip_ints_async(xs: Vec<i64> as value) -> Vec<i64>, ::std::convert::Infallible = FN_ROUND_TRIP_INTS);
-    function!(round_trip_optional_strings_async(xs: Vec<Option<String>> as value) -> Vec<Option<String>>, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_STRINGS);
-    function!(round_trip_union_list_async(xs: Vec<IntOrString> as value) -> Vec<IntOrString>, ::std::convert::Infallible = FN_ROUND_TRIP_UNION_LIST);
-    function!(round_trip_list_container_async(c: impl ::std::borrow::Borrow<ListContainer> as (borrow ListContainer)) -> ListContainer, ::std::convert::Infallible = FN_ROUND_TRIP_LIST_CONTAINER);
+    function!(round_trip_ints(xs: Vec<i64> as value) -> Vec<i64>, ::std::convert::Infallible = FN_ROUND_TRIP_INTS);
+    function!(round_trip_optional_strings(xs: Vec<Option<String>> as value) -> Vec<Option<String>>, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_STRINGS);
+    function!(round_trip_union_list(xs: Vec<IntOrString> as value) -> Vec<IntOrString>, ::std::convert::Infallible = FN_ROUND_TRIP_UNION_LIST);
+    function!(round_trip_list_container(c: impl ::std::borrow::Borrow<ListContainer> as (borrow ListContainer)) -> ListContainer, ::std::convert::Infallible = FN_ROUND_TRIP_LIST_CONTAINER);
 }
 
 pub mod maps {
@@ -465,10 +466,10 @@ pub mod maps {
         enum_keyed: Map<String, Resume> = 1,
         list_valued: Map<String, Vec<i64>> = 2,
     );
-    function!(round_trip_simple_map_async(m: Map<String, i64> as value) -> Map<String, i64>, ::std::convert::Infallible = FN_ROUND_TRIP_SIMPLE_MAP);
-    function!(round_trip_enum_keyed_map_async(m: Map<String, Resume> as value) -> Map<String, Resume>, ::std::convert::Infallible = FN_ROUND_TRIP_ENUM_KEYED_MAP);
-    function!(round_trip_list_valued_map_async(m: Map<String, Vec<i64>> as value) -> Map<String, Vec<i64>>, ::std::convert::Infallible = FN_ROUND_TRIP_LIST_VALUED_MAP);
-    function!(round_trip_map_container_async(c: impl ::std::borrow::Borrow<MapContainer> as (borrow MapContainer)) -> MapContainer, ::std::convert::Infallible = FN_ROUND_TRIP_MAP_CONTAINER);
+    function!(round_trip_simple_map(m: Map<String, i64> as value) -> Map<String, i64>, ::std::convert::Infallible = FN_ROUND_TRIP_SIMPLE_MAP);
+    function!(round_trip_enum_keyed_map(m: Map<String, Resume> as value) -> Map<String, Resume>, ::std::convert::Infallible = FN_ROUND_TRIP_ENUM_KEYED_MAP);
+    function!(round_trip_list_valued_map(m: Map<String, Vec<i64>> as value) -> Map<String, Vec<i64>>, ::std::convert::Infallible = FN_ROUND_TRIP_LIST_VALUED_MAP);
+    function!(round_trip_map_container(c: impl ::std::borrow::Borrow<MapContainer> as (borrow MapContainer)) -> MapContainer, ::std::convert::Infallible = FN_ROUND_TRIP_MAP_CONTAINER);
 }
 
 pub mod optional {
@@ -481,10 +482,10 @@ pub mod optional {
         optional_class: Option<Resume> = 1,
         optional_union: Option<IntOrString> = 2,
     );
-    function!(round_trip_optional_int_async(x: Option<i64> as value) -> Option<i64>, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_INT);
-    function!(round_trip_optional_resume_async(r: Option<Resume> as value) -> Option<Resume>, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_RESUME);
-    function!(round_trip_optional_union_async(u: impl Into<Option<IntOrString>> as (into Option<IntOrString>)) -> Option<IntOrString>, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_UNION);
-    function!(round_trip_optional_container_async(c: impl ::std::borrow::Borrow<OptionalContainer> as (borrow OptionalContainer)) -> OptionalContainer, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_CONTAINER);
+    function!(round_trip_optional_int(x: Option<i64> as value) -> Option<i64>, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_INT);
+    function!(round_trip_optional_resume(r: Option<Resume> as value) -> Option<Resume>, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_RESUME);
+    function!(round_trip_optional_union(u: impl Into<Option<IntOrString>> as (into Option<IntOrString>)) -> Option<IntOrString>, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_UNION);
+    function!(round_trip_optional_container(c: impl ::std::borrow::Borrow<OptionalContainer> as (borrow OptionalContainer)) -> OptionalContainer, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_CONTAINER);
 }
 
 pub mod unions {
@@ -553,18 +554,18 @@ pub mod unions {
         singleton_unwrap: i64 = 2,
         optional_plus_null: Option<TOrString> = 3,
     );
-    function!(round_trip_null_to_end_async(u: impl Into<Option<IntOrString>> as (into Option<IntOrString>)) -> Option<IntOrString>, ::std::convert::Infallible = FN_ROUND_TRIP_NULL_TO_END);
-    function!(round_trip_union_container_async(c: impl ::std::borrow::Borrow<UnionContainer> as (borrow UnionContainer)) -> UnionContainer, ::std::convert::Infallible = FN_ROUND_TRIP_UNION_CONTAINER);
-    function!(round_trip_str_or_int_list_async(x: impl Into<StringListOrIntList> as (into StringListOrIntList)) -> StringListOrIntList, ::std::convert::Infallible = FN_ROUND_TRIP_STR_OR_INT_LIST);
-    function!(round_trip_optional_plus_null_async(u: impl Into<Option<TOrString>> as (into Option<TOrString>)) -> Option<TOrString>, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_PLUS_NULL);
+    function!(round_trip_null_to_end(u: impl Into<Option<IntOrString>> as (into Option<IntOrString>)) -> Option<IntOrString>, ::std::convert::Infallible = FN_ROUND_TRIP_NULL_TO_END);
+    function!(round_trip_union_container(c: impl ::std::borrow::Borrow<UnionContainer> as (borrow UnionContainer)) -> UnionContainer, ::std::convert::Infallible = FN_ROUND_TRIP_UNION_CONTAINER);
+    function!(round_trip_str_or_int_list(x: impl Into<StringListOrIntList> as (into StringListOrIntList)) -> StringListOrIntList, ::std::convert::Infallible = FN_ROUND_TRIP_STR_OR_INT_LIST);
+    function!(round_trip_optional_plus_null(u: impl Into<Option<TOrString>> as (into Option<TOrString>)) -> Option<TOrString>, ::std::convert::Infallible = FN_ROUND_TRIP_OPTIONAL_PLUS_NULL);
 }
 
 pub mod primitives {
     use super::numbers::*;
 
-    function!(round_trip_int_async(x: i64 as value) -> i64, ::std::convert::Infallible = FN_ROUND_TRIP_INT);
-    function!(round_trip_float_async(x: f64 as value) -> f64, ::std::convert::Infallible = FN_ROUND_TRIP_FLOAT);
-    function!(round_trip_string_async(x: String as value) -> String, ::std::convert::Infallible = FN_ROUND_TRIP_STRING);
-    function!(round_trip_bool_async(x: bool as value) -> bool, ::std::convert::Infallible = FN_ROUND_TRIP_BOOL);
-    function!(return_null_async() -> (), ::std::convert::Infallible = FN_RETURN_NULL);
+    function!(round_trip_int(x: i64 as value) -> i64, ::std::convert::Infallible = FN_ROUND_TRIP_INT);
+    function!(round_trip_float(x: f64 as value) -> f64, ::std::convert::Infallible = FN_ROUND_TRIP_FLOAT);
+    function!(round_trip_string(x: String as value) -> String, ::std::convert::Infallible = FN_ROUND_TRIP_STRING);
+    function!(round_trip_bool(x: bool as value) -> bool, ::std::convert::Infallible = FN_ROUND_TRIP_BOOL);
+    function!(return_null() -> (), ::std::convert::Infallible = FN_RETURN_NULL);
 }
